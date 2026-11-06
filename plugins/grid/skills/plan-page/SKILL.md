@@ -57,6 +57,8 @@ A page is written at one moment and read later. Grid replaces the blocks that ca
 
 Progress carries live state too: the counts of C-02, C-03 (`.ring`), C-23 (`.bign`), C-04 (`.chaps`) and C-38 (`.dots`) are rewritten by Grid from their classes (keep the library's classes and the "n of m" and "n/m" shapes), so they need no marker. A sentence that says nothing has started or that the build waits for the accept ("No step has started; the build runs once you accept the plan", the ring's `.fg1` line, a C-23 `.txt b`) gets `live-headline`, so it is written in the header's words once the plan is accepted, shipped or closed. Write it in the library's own element, never as free text beside the component.
 
+A sentence in the R2 answer block that says what accepting does ("Once you accept the plan, step 2 writes the line") is plan-time text: put `live-next` on it, so after approval, during the build and after land Grid writes where things stand in its place (the step running, or when it landed). Grid also rewrites such a sentence in `#answer` that carries no marker.
+
 The header's status line (C-18's `.amber.b` span and the `.dim` span beside it) and the progress section's own `.micro` status line ("research done 19:32 · next: step 1") are rewritten by class as well, while the task builds, reviews or ships, so write them with those classes (or mark them `live-status` / `live-next`); a section made only of C-38 `.dots` counts as a progress section.
 
 Never mark a block that records a decision already taken (C-29), a finding, a step or a risk: those are the plan and stay. When writing or revising a page, and when the deliver skill refreshes it, check every wait and every Approve is inside one of these markers.
