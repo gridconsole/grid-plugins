@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "toBox": [
+    "task.md",
+    "intent.md",
+    "history.md",
+    "plan.md",
+    "questions/**",
+    "inputs/**"
+  ],
+  "toMac": [
+    "history.md",
+    "plan.md",
+    "task.md",
+    "artifacts/**",
+    "views/**",
+    "subagents/**",
+    "brain-proposals/**",
+    "memory/**",
+    "research.md",
+    "spec.md",
+    "sessions/**"
+  ],
+  "exclude": [
+    ".git/**",
+    "node_modules/**",
+    "worktrees/**",
+    ".claude/worktrees/**",
+    "target/**",
+    "**/.DS_Store",
+    "**/.env",
+    "**/.env.*",
+    "**/*.key",
+    "**/*.pem",
+    "**/*token*",
+    "**/*secret*",
+    "**/id_rsa*",
+    "**/id_ed25519*"
+  ],
+  "launch": {
+    "claude": {
+      "command": "claude",
+      "args": [
+        "-p",
+        "--input-format", "stream-json",
+        "--output-format", "stream-json",
+        "--verbose",
+        "--permission-prompt-tool", "stdio",
+        "--resume", "{session}",
+        "--plugin-dir", "{plugin}",
+        "--permission-mode", "{mode}",
+        "--name", "{name}",
+        "--forward-subagent-text",
+        "--include-hook-events"
+      ],
+      "newSessionFlag": "--session-id",
+      "firstTurn": "/grid:resume {task}"
+    },
+    "codex": {
+      "command": "codex",
+      "args": ["app-server", "--listen", "stdio://"],
+      "firstTurn": "/grid:resume {task}"
+    }
+  },
+  "launchSsh": {
+    "claude": {
+      "command": "claude",
+      "args": ["--session-id", "{session}", "--permission-mode", "{mode}", "{firstTurn}"],
+      "firstTurn": "/grid:resume {task}",
+      "plugin": { "id": "grid@grid", "marketplace": "gridconsole/grid-plugins" }
+    },
+    "codex": {
+      "command": "codex",
+      "args": ["{firstTurn}"],
+      "firstTurn": "/grid:resume {task}"
+    }
+  }
+}
