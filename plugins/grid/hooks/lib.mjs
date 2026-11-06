@@ -402,15 +402,38 @@ export const pointerFile = (input, ext = '', data = process.env.CLAUDE_PLUGIN_DA
 };
 
 // The latest 20, but a task the plan guard holds is never dropped: writes into other task folders
-// must not push it out and so lift the hold.
-export function rememberTask(input, dir) {
-  const file = pointerFile(input);
-  if (!file) return;
-  const dirs = [...(readText(file) ?? '').split('\n').filter(Boolean).filter((d) => d !== dir), dir];
-  const keep = new Set([dir, ...dirs.filter(isHeld)]);
+// must not push it out and so lift the hold. `dir` may be left out to only rewrite the list.
+function writePointer(file, text, dir) {
+  const dirs = [...text.split('\n').filter(Boolean).filter((d) => d !== dir), ...(dir ? [dir] : [])];
+  const keep = new Set([...(dir ? [dir] : []), ...dirs.filter(isHeld)]);
   for (const d of [...dirs].reverse()) if (keep.size < 20) keep.add(d);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${dirs.filter((d) => keep.has(d)).join('\n')}\n`);
+}
+
+// The agent a hook fired in: agent_id for a subagent, empty for the main thread (also one started with
+// --agent, which has an agent_type but no agent_id). Safe as a file name.
+export const agentKey = (input) => str(input?.agent_id).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120);
+
+// Three lists of the task folders written into: the session's (`sessions/<session_id>`, every agent's,
+// which core reads), the main thread's own (`.tasks`) and each subagent's own (`.tasks-<agent_id>`), so
+// the plan guard and the stop check hold an agent only to the tasks it wrote into itself. The main
+// thread's list starts as the session's list before the first write, so a session that began before
+// these lists keeps its hold; a session's first write by a subagent leaves it empty.
+export function rememberTask(input, dir) {
+  const file = pointerFile(input);
+  if (!file) return;
+  const session = readText(file) ?? '';
+  writePointer(file, session, dir);
+  const key = agentKey(input);
+  const main = pointerFile(input, '.tasks');
+  const mainText = readText(main);
+  if (!key) writePointer(main, mainText ?? session, dir);
+  else {
+    if (mainText === null) writePointer(main, session);
+    const own = pointerFile(input, `.tasks-${key}`);
+    writePointer(own, readText(own) ?? '', dir);
+  }
   touchSession(input, dir, { create: true });
 }
 
@@ -454,10 +477,36 @@ export function touchSession(input, dir, { create = false, end = false, now = Da
   } catch { return false; }
 }
 
+const taskDirs = (text, projects) => text.split('\n').filter(Boolean).filter((d) => taskAt(d, projects)?.rel === '' && fs.existsSync(d));
+
+// Every task folder the session wrote into, whichever agent did.
 export function sessionTasks(input, projects) {
   const file = pointerFile(input);
-  const dirs = file ? (readText(file) ?? '').split('\n').filter(Boolean) : [];
-  return dirs.filter((d) => taskAt(d, projects)?.rel === '' && fs.existsSync(d));
+  return taskDirs(file ? readText(file) ?? '' : '', projects);
+}
+
+// The main thread's list, or the session's when the main thread has none yet (a session from before the lists).
+function mainTasks(input, projects) {
+  const file = pointerFile(input, '.tasks');
+  const text = file ? readText(file) : null;
+  return text !== null ? taskDirs(text, projects) : sessionTasks(input, projects);
+}
+
+// The task folders the agent of this hook call wrote into itself (see rememberTask): a subagent's own list,
+// or the main thread's.
+export function agentTasks(input, projects) {
+  const key = agentKey(input);
+  if (!key) return mainTasks(input, projects);
+  const file = pointerFile(input, `.tasks-${key}`);
+  return taskDirs(file ? readText(file) ?? '' : '', projects);
+}
+
+// The task folders that hold this agent to the plan guard: its own, and for a subagent the main thread's too, so a
+// worker started before the plan is accepted is held like the thread that started it. Another subagent's list is
+// never read, so one subagent's smoke task does not hold its siblings.
+export function heldTasks(input, projects) {
+  const own = agentTasks(input, projects);
+  return agentKey(input) ? [...new Set([...own, ...mainTasks(input, projects)])] : own;
 }
 
 // A number from a hook's input or a tool response, or null: finite and not negative. Used where an

@@ -1,7 +1,8 @@
 // Stop and SubagentStop: block once (exit 2, the reason on stderr goes to Claude) when the work
 // is not written down. stop_hook_active true means Claude is already continuing because of a stop
 // hook, so it is allowed through.
-//   - Stop: for each task folder this session wrote into (or has as its cwd): task.md has a
+//   - Stop: for each task folder the main thread wrote into itself (or has as its cwd; a subagent's writes
+//     are its own, see rememberTask in lib): task.md has a
 //     summary and a next, and a brief in subagents/ with status done or blocked has an Outcome.
 //     briefed and running briefs are left alone: they are not finished yet.
 //     Also the approve gate: when the task's current step is an approve step and its finished worker
@@ -9,7 +10,7 @@
 //     told to start grid-reviewer on that brief. The execute skill sometimes reports and stops
 //     instead (status may still be running, or waiting). It blocks once per session per brief, so a
 //     reviewer that cannot be started does not trap the session. The task folder is found only from
-//     the session's own writes into it or from cwd.
+//     the main thread's own writes into it or from cwd.
 //     Also the carry-on gate: a running or reworking task whose current step is a run or check step
 //     nobody has to answer (no open question, no blocked brief, not the finished last step, not a task
 //     just created) is told to carry on with it. stop_hook_active ends the push, so one push per chain.
@@ -23,7 +24,7 @@
 //     falls back to the brief's role alone.
 import fs from 'node:fs';
 import path from 'node:path';
-import { main, readInput, str, taskAt, frontmatter, isEmpty, section, readText, sessionTasks, briefFor, agentName, unreviewedApproval, carryOnStep, reviewerCalled, firstGate, projectsRoot, REVIEWER_ROLES, NON_WRITERS } from './lib.mjs';
+import { main, readInput, str, taskAt, frontmatter, isEmpty, section, readText, agentTasks, briefFor, agentName, unreviewedApproval, carryOnStep, reviewerCalled, firstGate, projectsRoot, REVIEWER_ROLES, NON_WRITERS } from './lib.mjs';
 
 main(async () => {
   const input = await readInput();
@@ -41,7 +42,7 @@ const noVerdict = (file, projects) => `${label(file, projects)}: the "## Verdict
 const noReview = (gate, projects) => `${label(gate.file, projects)}: step "${gate.step}" is an approve step and this finished brief has an Outcome but no Verdict. Start grid-reviewer on this brief now; set "status: waiting" only after its Verdict is written.`;
 
 function stopProblems(input, projects) {
-  const dirs = [...new Set([taskAt(str(input.cwd), projects)?.dir, ...sessionTasks(input, projects)].filter(Boolean))];
+  const dirs = [...new Set([taskAt(str(input.cwd), projects)?.dir, ...agentTasks(input, projects)].filter(Boolean))];
   const out = [];
   for (const dir of dirs) {
     const task = path.join(dir, 'task.md');

@@ -6,9 +6,12 @@
 //   paused or pausing, and its step is the plan approval (the first approve step whose name has "plan",
 //   as gateEvent in core) or one before it, or task.md cannot be read for sure: missing, no step, an
 //   odd key, a workflow item that is not a {step, kind} pair, a step named twice (lib's parser is
-//   core's, kept equal by tests/hooks/frontmatter-parity.test.mjs). While any task of the session is
-//   held (the one cwd is in, and every one it wrote into, which the pointer file never drops while
-//   held), the session writes only in the Grid projects folder.
+//   core's, kept equal by tests/hooks/frontmatter-parity.test.mjs). While any task of the agent is
+//   held (the one cwd is in, and every one this agent wrote into, which its list never drops while
+//   held), the agent writes only in the Grid projects folder. The hold is per agent: the main thread is held by
+//   the tasks it wrote into itself, a subagent (agent_id) by the ones it wrote into itself and the main thread's,
+//   so a worker started before the plan is accepted is held, while a subagent working on a task whose plan is
+//   not accepted does not stop the other agents of the session.
 // - A grid-planner writes only in the session's task folders, a task folder whose plan is not accepted
 //   (to start a task), a project's or any task's artifacts folder (not a history.md or task.md in it;
 //   a change asked on an artifact goes to a planner), the brain (a project's `knowledge/` folder or the
@@ -35,15 +38,15 @@
 // Paths are expanded (~), resolved against cwd and through symlinks (realpath.native, a link that
 // points nowhere followed from its own real folder) before they are compared.
 // Not protected: a Bash write; a repo inside the projects folder (GRID_PROJECTS or GRID_HOME/projects);
-// a session before it first writes into a task folder or works in one (the app starts it in the repo);
-// a file changed between this check and the write. A held task left unaccepted keeps its session out
+// an agent before it first writes into a task folder or works in one (the app starts it in the repo);
+// a file changed between this check and the write. A held task left unaccepted keeps its agent out
 // of the repo until the person accepts, closes or pauses it. GRID_PLAN_GUARD=off (any case) in the
 // environment Claude Code starts with turns the guard off, for a plugin-only user who has no app to
 // accept the plan; with no GRID_PROJECTS or GRID_HOME it does nothing.
 import os from 'node:os';
 import path from 'node:path';
 import {
-  main, readInput, str, gridFolders, taskAt, readText, sessionTasks, agentName, planStage, heldStage, inactive, isHeld,
+  main, readInput, str, gridFolders, taskAt, readText, agentTasks, heldTasks, agentName, planStage, heldStage, inactive, isHeld,
   gateLike, PLAN_ACCEPTED, realNative,
 } from './lib.mjs';
 
@@ -108,7 +111,7 @@ main(async () => {
     return deny(`Only a grid-curator (or a grid-planner) writes the brain; a ${agent} writes a proposal in its task's brain-proposals/ folder instead of ${given}.`);
   }
   const here = cwd ? taskAt(realNative(cwd), root)?.dir : undefined;
-  const tasks = [...new Set([here, ...sessionTasks(input, projects)].filter(Boolean))];
+  const tasks = [...new Set([here, ...agentTasks(input, projects)].filter(Boolean))];
   if (tasks.some((d) => inside(d, target))) return;
   if (role === 'grid-curator') {
     // The curator writes the brain and its task folder, nothing else, with or without Grid's folders set.
@@ -119,7 +122,7 @@ main(async () => {
     if (unaccepted || (!owner && !tasks.length && inside(root, target)) || artifact(root, target, owner) || brainFile(root, target, home)) return;
     return deny(`A planner writes only inside a task folder (its own, or one whose plan is not accepted yet), an artifacts folder or a brain folder. Write inside ${tasks.length ? tasks.join(' or ') : root}, not ${given}.${OFF}`);
   }
-  const held = tasks.filter(isHeld);
+  const held = [...new Set([...tasks, ...heldTasks(input, projects)])].filter(isHeld);
   if (!held.length || inside(root, target)) return;
   return deny(`A task whose plan is not accepted yet writes only inside its task folder or the Grid projects folder. Write inside ${held.join(' or ')}, not ${given}. Writes elsewhere start once the person accepts the plan in Grid.${OFF}`);
 });
