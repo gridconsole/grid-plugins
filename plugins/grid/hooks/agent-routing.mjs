@@ -26,7 +26,22 @@ function routing(dir = agentsDir) {
     const what = firstSentence(fs.readFileSync(path.join(dir, f), 'utf8'));
     return `- grid:${f.slice(0, -3)}${what ? `: ${what}` : ''}`;
   });
-  return `Delegate work by role to the Grid plugin's agents (subagent_type "grid:<name>"), not general-purpose. Use general-purpose only for a one-off that fits none of them.\n${rows.join('\n')}`;
+  return [
+    'Subagents: for every delegated job in this session, whether or not it belongs to a Grid task, use the Grid plugin\'s agents',
+    '(subagent_type "grid:<name>"). Do not use general-purpose, Explore or Plan for a job one of them covers; their',
+    '"Grid task" wording does not limit them to task folders. Pick by the job:',
+    '- find where something is in the code, how a flow runs, a codebase map: grid:grid-scout',
+    '- facts from docs, source or the web: grid:grid-researcher',
+    '- write or change code, docs or files: grid:grid-worker',
+    '- run a build, test, lint or read CI logs: grid:grid-runner',
+    '- review code or finished work: grid:grid-reviewer',
+    '- a design spec before UI is built: grid:grid-designer',
+    '- check a page in a browser without changing it: grid:grid-checker; browser work that changes state: grid:grid-operator',
+    '- plan a task: grid:grid-planner; write a brief: grid:grid-brief-writer; curate brain proposals: grid:grid-curator',
+    'With no brief, put the job in the prompt. Use general-purpose only for a job that fits none of these.',
+    'All Grid agents:',
+    ...rows,
+  ].join('\n');
 }
 
 main(() => {
