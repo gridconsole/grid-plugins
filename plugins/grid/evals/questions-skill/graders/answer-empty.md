@@ -1,0 +1,6 @@
+---
+type: regex
+pattern: '^Answer: —$'
+flags: m
+target: { source: file, path: "ws/projects/notes-app/tasks/T-01-sample/questions/sam.md" }
+---

@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: deliver-refuses-closed
+description: Asked to deliver a task whose status is closed, the deliver skill says so and stops, leaving task.md, history.md, the project files and artifacts/ as they were.
+context:
+  scaffold_script: fixture.sh

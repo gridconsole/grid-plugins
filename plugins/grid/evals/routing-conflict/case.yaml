@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: routing-conflict
+description: Asked which agent a step goes to when two routing rows of the same rank clash, the routing skill names both rows and asks the person instead of picking one, and leaves routing.md unchanged.
+context:
+  scaffold_script: fixture.sh

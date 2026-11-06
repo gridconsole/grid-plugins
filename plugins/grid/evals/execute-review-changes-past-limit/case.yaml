@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: execute-review-changes-past-limit
+description: A reviewer's Verdict of CHANGES when the workflow's review rounds are used up raises one blocking question to the owner naming the open must-fix items, with no money in it; the task waits on it and no worker starts.
+context:
+  scaffold_script: fixture.sh

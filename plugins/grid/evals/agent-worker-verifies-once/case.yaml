@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: agent-worker-verifies-once
+description: The worker runs the brief's verify command once, after its last edit, and quotes the output in its Outcome.
+context:
+  scaffold_script: fixture.sh

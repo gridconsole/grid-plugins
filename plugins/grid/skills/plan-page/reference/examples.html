@@ -1,0 +1,1045 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Plan and task components — reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap"><link rel="stylesheet" href="tokens.css"><style>html,body{margin:0;background:var(--ob-bg);color:var(--ob-fg2);font-family:var(--font-sans);-webkit-font-smoothing:antialiased}*{box-sizing:border-box}button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}</style><link rel="stylesheet" href="components.css"></head><body>
+
+<div class="g">
+<div class="lib">
+  <header style="display:flex;flex-direction:column;gap:10px">
+    <span class="eb">Grid · plan and task components · v0.3</span>
+    <h1>Containers the planner picks from, so every plan reads the same way</h1>
+    <p class="lead">A plan is an HTML page the agent writes. The skill that writes it must include the required parts below, in that order, and may use any of these components for the rest. Each example is filled with T-01's real data. Codes are stable: the skill refers to them by code.</p>
+  </header>
+
+  <section class="lsec">
+    <span class="eb">0 · The contract</span>
+    <h2>Required in every task page, in this order</h2>
+    <div class="req">
+      <div class="r"><span class="k">R1</span><div><b>Header</b><span>id, project, title, one status sentence, phase track, token use against its limit. C-18.</span></div></div>
+      <div class="r"><span class="k">R2</span><div><b>Answer first</b><span>one headline that states the conclusion, one paragraph, at most four stat tiles. C-17 optional.</span></div></div>
+      <div class="r"><span class="k">R3</span><div><b>Where it stands</b><span>progress in one of C-02, C-03, C-04; never a raw count alone.</span></div></div>
+      <div class="r"><span class="k">R4</span><div><b>Needs you</b><span>open decisions as C-09 or C-10; empty = leave it out, never "nothing yet".</span></div></div>
+      <div class="r"><span class="k">R5</span><div><b>Steps</b><span>any of C-05, C-06, C-07, C-08; a table only above 40 steps, and then paged by chapter.</span></div></div>
+      <div class="r"><span class="k">R6</span><div><b>Risks</b><span>C-16, each with the step that retires it.</span></div></div>
+      <div class="r opt"><span class="k">O1</span><div><b>Architecture, effort, research, files</b><span>optional: C-15, C-08, C-13, C-14, C-12 as the content needs.</span></div></div>
+      <div class="r opt"><span class="k">O2</span><div><b>Result</b><span>appears at Deliver: C-12 checks, C-14 files, one paragraph.</span></div></div>
+    </div>
+  </section>
+
+  <section class="lsec">
+    <span class="eb">1 · Where we are</span>
+    <h2>Workflow position and progress</h2>
+    <section class="entry" id="c-01">
+      <div class="lab"><span class="code">C-01</span><b>Phase track with gates</b><p>The workflow's steps as a bar, gates between them. Use in every header; the amber gate is the one waiting on a person.</p></div>
+      <div class="body">
+          <div class="track" role="img" aria-label="Research skipped, Plan current, gate waits on you, then Preview, Execute, Deliver">
+            <div class="ph2 skip"><div class="bar"></div><div class="lb"><span>Research</span><span>skipped</span></div></div>
+            <span class="gate ok">✓</span>
+            <div class="ph2 cur"><div class="bar"></div><div class="lb"><span>Plan</span><span>rev 3</span></div></div>
+            <span class="gate you">!</span>
+            <div class="ph2"><div class="bar"></div><div class="lb"><span>Preview</span><span>you approve</span></div></div>
+            <span class="gate"></span>
+            <div class="ph2"><div class="bar"></div><div class="lb"><span>Execute</span><span>~9 d</span></div></div>
+            <span class="gate"></span>
+            <div class="ph2"><div class="bar"></div><div class="lb"><span>Deliver</span><span>ship 17:00</span></div></div>
+          </div>
+          <div class="gatenote live-next">● Accept gate: waits on you since 07:40 · 3 blocking questions, then accept the plan</div>
+        <div class="var"><span class="vlab">Variant<b>a plan was added after Execute, and Execute ran in two parallel lanes</b></span>
+          <div class="track" role="img" aria-label="Research skipped, Plan done, Preview done, Execute in two parallel lanes, a second Plan inserted after it, Deliver to come">
+            <div class="ph2 skip"><div class="bar"></div><div class="lb"><span>Research</span><span>skipped</span></div></div><span class="gate ok">✓</span>
+            <div class="ph2 done"><div class="bar"></div><div class="lb"><span>Plan</span><span>rev 3</span></div></div><span class="gate ok">✓</span>
+            <div class="ph2 done"><div class="bar"></div><div class="lb"><span>Preview</span><span>Kim</span></div></div><span class="gate ok">✓</span>
+            <div class="par"><div class="ph2 done"><div class="bar"></div><div class="lb"><span>Execute · backend</span><span>done</span></div></div><div class="ph2 cur"><div class="bar"></div><div class="lb"><span>Execute · frontend</span><span>step 27</span></div></div></div><span class="gate"></span>
+            <div class="ph2 ins"><div class="bar"></div><div class="lb"><span>Plan 2</span><span>added Wed</span></div></div><span class="gate you">!</span>
+            <div class="ph2"><div class="bar"></div><div class="lb"><span>Deliver</span><span>ship</span></div></div>
+          </div>
+          <span class="loopb live-next">Plan 2 inserted after Execute: the frontend lane found a missing API; its gate waits on you</span>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-41">
+      <div class="lab"><span class="code">C-41</span><b>Pill timeline</b><p>Phases as capsules whose length is their time; the current one breathes. Use in a header where C-01 would be too tall.</p></div>
+      <div class="body">
+        <div class="pills2" role="img" aria-label="Research skipped, Plan current 2 days, Preview 1 day, Execute 5 days, Deliver 1 day">
+          <span class="pill2" style="--f:1;text-decoration:line-through">Research</span>
+          <span class="pill2 cur" style="--f:2">Plan · now</span>
+          <span class="pill2 ask" style="--f:1">Preview · Kim</span>
+          <span class="pill2" style="--f:5">Execute · ~5 d</span>
+          <span class="pill2" style="--f:1">Deliver</span>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>parallel work: two lanes under one axis, joined at a gate</b></span>
+          <div class="pills2" role="img" aria-label="Plan done, then two parallel Execute lanes, then Deliver"><span class="pill2 done" style="--f:2">Plan ✓</span><div style="display:flex;flex-direction:column;gap:4px;flex:5 1 0"><span class="pill2 done">Execute · backend ✓</span><span class="pill2 cur">Execute · frontend · step 27 of 31</span></div><span class="pill2 ask" style="--f:1">join · you</span><span class="pill2" style="--f:1">Deliver</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-42">
+      <div class="lab"><span class="code">C-42</span><b>Phase ring</b><p>The workflow as a ring: each arc one phase, sized by effort, the current one in accent. Use as the one visual on a project or task tile.</p></div>
+      <div class="body">
+        <div class="pring">
+          <div class="ringw" role="img" aria-label="Ring of five phases; Plan is current"><b><strong>Plan</strong>2 of 5 · day 4</b></div>
+          <div class="rlg"><span><i style="background:var(--ob-line2)"></i>Research · skipped</span><span><i style="background:var(--ob-acc)"></i>Plan · now, waits on you</span><span><i style="background:var(--ob-track)"></i>Preview · Kim</span><span><i style="background:var(--ob-track)"></i>Execute · ~5 d</span><span><i style="background:var(--ob-track)"></i>Deliver · ship</span></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>an eight-phase custom workflow</b></span>
+          <div class="pring"><div class="ringw eight" role="img" aria-label="Ring of eight phases; the third is current"><b><strong>Draft</strong>3 of 8</b></div><div class="rlg"><span><i style="background:var(--ob-ok)"></i>Brief · Research · done</span><span><i style="background:var(--ob-acc)"></i>Draft · now</span><span><i style="background:var(--ob-track)"></i>Legal · Review · Customer · Schedule · Post</span></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-19">
+      <div class="lab"><span class="code">C-19</span><b>Workflow strip</b><p>The task's own workflow from workflows.md, not a fixed five phases: each step with its kind, who acts, what moves it on, and where a rejection goes back to. C-01 is drawn from this.</p></div>
+      <div class="body">
+          <div class="wfmeta"><span>workflow: Social post · 4 steps · matched by project studio-site</span><span>·</span><span>task T-16 · Social posts, week 44</span></div>
+          <div class="chev" role="img" aria-label="Build done by Sam with an agent; Lee review is the current step; Customer approves next; then Scheduled posts at 19:00">
+            <div class="cv done"><span class="k">1 · Pair</span><b>Build</b><span class="w">Sam with an agent · moved on 09:20</span></div>
+            <div class="cv cur"><span class="k">2 · Review</span><b>Lee review</b><span class="w">Lee · waiting 20 min</span><span class="rj">on reject → Build</span></div>
+            <div class="cv"><span class="k">3 · Customer</span><b>Customer</b><span class="w">Noor, on her relay page · approves the week</span><span class="rj">on reject → Build</span></div>
+            <div class="cv"><span class="k">4 · Wait</span><b>Scheduled</b><span class="w">the scheduler · posts at 19:00</span></div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>two reviews happen at once and join before the customer</b></span>
+          <div class="chev" role="img" aria-label="Build done; Lee review and Legal review in parallel; then Customer; then Scheduled">
+            <div class="cv done"><span class="k">1 · Pair</span><b>Build</b><span class="w">Sam with an agent</span></div>
+            <div class="col2"><div class="cv cur"><span class="k">2a · Review</span><b>Lee review</b><span class="w">waiting 20 min</span></div><div class="cv done"><span class="k">2b · Review</span><b>Legal check</b><span class="w">Sanne · done 09:31</span></div></div>
+            <div class="cv"><span class="k">3 · Customer</span><b>Customer</b><span class="w">after both reviews</span></div>
+            <div class="cv"><span class="k">4 · Wait</span><b>Scheduled</b><span class="w">19:00</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-20">
+      <div class="lab"><span class="code">C-20</span><b>Approvals</b><p>Every gate in this task and who passes it, from team.md and the workflow. Use in the header area of any task with more than one approver; your own gate is amber.</p></div>
+      <div class="body">
+          <div class="apr live-gates">
+            <span class="h">Gate</span><span class="h">Who passes it</span><span class="h" style="text-align:right">State</span>
+            <div class="row"><span class="gate">Accept the plan</span><span class="p"><span class="av">Sa</span>Sam, operator</span><span class="s you">waits on you</span></div>
+            <div class="row"><span class="gate">Approve the preview</span><span class="p"><span class="av">Ki</span>Kim, member · set by Q-3</span><span class="s wait">after Execute</span></div>
+            <div class="row"><span class="gate">Ship v2.8.1</span><span class="p"><span class="av">Sa</span>Sam, operator</span><span class="s wait">due 17:00</span></div>
+            <div class="row"><span class="gate">Customer sign-off</span><span class="p"><span class="av">No</span>Noor, client · relay page</span><span class="s wait">not in this workflow</span></div>
+            <div class="row"><span class="gate">Plan rev 2 accepted</span><span class="p"><span class="av">Sa</span>Sam</span><span class="s ok">Mon 16:25</span></div>
+          </div>
+          <div class="micro">Agents never pass a gate; a hook refuses it and writes one sentence to History.</div>
+        <div class="var"><span class="vlab">Variant<b>a quorum gate and a delegated approver</b></span>
+          <div class="apr live-gates">
+            <span class="h">Gate</span><span class="h">Who passes it</span><span class="h" style="text-align:right">State</span>
+            <div class="row"><span class="gate">Ship v2.8.1 · any 2 of 3</span><span class="p"><span class="av">Sa</span><span class="av">Ki</span><span class="av">Le</span>Sam ✓ · Kim · Lee</span><span class="s wait">1 of 2</span></div>
+            <div class="row"><span class="gate">Approve the preview</span><span class="p"><span class="av">Sa</span>Sam <span class="deleg" style="font-family:var(--font-mono);font-size:var(--t-micro);line-height:var(--lh-micro);color:var(--ob-vio)">for Kim, away until Mon</span></span><span class="s deleg">delegated</span></div>
+            <div class="row"><span class="gate">Customer sign-off · relay</span><span class="p"><span class="av">No</span>Noor · expires 24 h after sending</span><span class="s wait">not sent</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-21">
+      <div class="lab"><span class="code">C-21</span><b>Workflow in words</b><p>The same workflow as one sentence per step, for the Summary of a task whose workflow the reader does not know. Use once, above the steps.</p></div>
+      <div class="body">
+          <div class="stepper">
+            <div class="sp ok"><span class="dot">1</span><div><div class="t">Sam builds the post with an agent, then marks it ready.</div></div><span class="s">done</span></div>
+            <div class="sp cur"><span class="dot">2</span><div><div class="t">Lee reviews it; a rejection goes back to Build.</div></div><span class="s">now</span></div>
+            <div class="sp"><span class="dot">3</span><div><div class="t">Noor approves the week in one batch on her relay page.</div></div><span class="s">next</span></div>
+            <div class="sp"><span class="dot">4</span><div><div class="t">The scheduler posts it at 19:00 and closes the task.</div></div><span class="s">then</span></div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>a loop: repeat until approved, with a cap</b></span>
+          <div class="stepper">
+            <div class="sp ok"><span class="dot">1</span><div><div class="t">Sam builds the post with an agent.</div></div><span class="s">done</span></div>
+            <div class="sp cur"><span class="dot">↻</span><div><div class="t">Lee reviews; on reject it goes back to Build. At most three rounds, then it comes to you.</div><div class="m">round 2 of 3 · rejected once: "tone"</div></div><span class="s">now</span></div>
+            <div class="sp"><span class="dot">3</span><div><div class="t">Noor approves the week in one batch.</div></div><span class="s">next</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-37">
+      <div class="lab"><span class="code">C-37</span><b>Subway map</b><p>Steps as stations on a line, the reject loop drawn as a loop. Use for a chapter or a short workflow where the reader thinks in "stops".</p></div>
+      <div class="body">
+        <div class="sub"><span class="fill" style="height:104px"></span>
+          <div class="stn done"><div><b>Build</b><br><span>Sam with an agent · 09:20</span></div></div>
+          <div class="stn cur"><span class="loop" aria-hidden="true"></span><div><b>Lee review</b><br><span>waiting 20 min · a reject loops back to Build</span></div></div>
+          <div class="stn ask"><div><b>Customer approves the week</b><br><span>Noor, relay page · a person's gate</span></div></div>
+          <div class="stn"><div><b>Scheduled</b><br><span>the scheduler posts at 19:00</span></div></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>a branch: two lines leave Build and merge at Customer</b></span>
+          <div class="sub" style="padding-left:80px"><span class="fill" style="height:52px"></span><span class="sub2line" style="top:52px;height:52px"></span>
+            <div class="stn done"><div><b>Build</b><br><span>done 09:20</span></div></div>
+            <div class="stn cur"><div><b>Lee review</b><br><span>line A · waiting</span></div></div>
+            <div class="stn done b2" style="margin-top:-52px;margin-left:0"><div style="padding-left:40px"><b>Legal check</b><br><span>line B · done 09:31</span></div></div>
+            <div class="stn ask"><div><b>Customer</b><br><span>both lines merge here</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-40">
+      <div class="lab"><span class="code">C-40</span><b>Gate flow with diamonds</b><p>Boxes do the work, diamonds are the gates a person passes; the "no" branch says where work goes back. Use to explain a workflow with rejections.</p></div>
+      <div class="body">
+        <div class="dflow" role="img" aria-label="Build, then the Lee review gate; yes leads to the customer gate; no returns to Build; yes leads to Scheduled">
+          <div class="dbox"><b>Build</b>Sam + agent</div>
+          <div class="dlink">then</div>
+          <div class="dia"><span>Lee<br>approves?</span></div>
+          <div class="dlink">yes</div>
+          <div class="dia"><span>Noor<br>approves?</span></div>
+          <div class="dlink">yes</div>
+          <div class="dbox"><b>Scheduled</b>posts 19:00</div>
+          <div class="dlink no">no →</div>
+          <div class="dbox" style="border-color:var(--ob-askBd)"><b>back to Build</b>with the reason</div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>a three-way gate: yes, no, or snooze</b></span>
+          <div class="dflow"><div class="dbox"><b>Preview ready</b>3 screens</div><div class="dlink">then</div><div class="dia tri"><span>Kim<br>decides</span></div><div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center"><div class="dlink">yes</div><div class="dbox"><b>Execute</b></div></div><div style="display:flex;align-items:center"><div class="dlink no">no</div><div class="dbox" style="border-color:var(--ob-askBd)"><b>back to Plan</b>with notes</div></div><div style="display:flex;align-items:center"><div class="dlink" style="color:var(--ob-vio)">snooze</div><div class="dbox" style="border-color:var(--ob-vio)"><b>ask again Mon 09:00</b></div></div></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-02">
+      <div class="lab"><span class="code">C-02</span><b>Stacked progress</b><p>All steps as one bar split by state. Use when the reader wants one glance, not a per-chapter view.</p></div>
+      <div class="body">
+          <div class="stack" role="img" aria-label="3 tested, 1 next, 4 wait on an answer, 26 planned"><i class="d" style="width:9%"></i><i class="c" style="width:3%"></i><i class="a" style="width:12%"></i></div>
+          <div class="legend"><span><i style="background:var(--ob-ok)"></i>3 tested</span><span><i style="background:var(--ob-acc)"></i>1 next</span><span><i style="background:var(--ob-ask)"></i>4 wait on an answer</span><span><i style="background:var(--ob-track)"></i>26 planned</span></div>
+          <div class="micro">34 steps · nothing runs while you decide</div>
+        <div class="var"><span class="vlab">Variant<b>a step failed and one chapter was rolled back</b></span>
+          <div class="stack" role="img" aria-label="12 tested, 1 failed, 4 rolled back, 2 next, 15 planned"><i class="d" style="width:35%"></i><i class="e" style="width:3%"></i><i class="r" style="width:12%"></i><i class="c" style="width:6%"></i></div>
+          <div class="legend"><span><i style="background:var(--ob-ok)"></i>12 tested</span><span><i style="background:var(--ob-err)"></i>1 failed · step 14</span><span><i style="background:repeating-linear-gradient(135deg,var(--ob-line2) 0 2px,transparent 2px 4px)"></i>4 rolled back</span><span><i style="background:var(--ob-acc)"></i>2 running</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-03">
+      <div class="lab"><span class="code">C-03</span><b>Progress ring with the one sentence</b><p>Use at the top of Where it stands when the plan is long; the sentence says what the number means.</p></div>
+      <div class="body">
+          <div class="ring"><div class="r"><b>3/34<small>steps</small></b></div><div><div class="fg1 b">Chapter 1 is half done; chapters 2 to 6 wait on your three answers.</div><div class="micro" style="margin-top:6px">last step tested 08:40 · next: step 3, idle hook</div></div></div>
+        <div class="var"><span class="vlab">Variant<b>a task that is mostly waiting, not working</b></span>
+          <div class="ring"><div class="r" style="background:conic-gradient(var(--ob-ok) 0 9%,var(--ob-ask) 9% 70%,var(--ob-track) 70% 100%)"><b>61%<small>waiting</small></b></div><div><div class="fg1 b">Most of this task's time has been waiting on people, not on agents.</div><div class="micro" style="margin-top:6px">2 h 40 of 4 h 20 total · longest wait: Q-3, 2 h</div></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-23">
+      <div class="lab"><span class="code">C-23</span><b>Big number with a sparkline</b><p>One number set large, the sentence that gives it meaning, and the last seven days underneath. Use in Answer first when one figure carries the status.</p></div>
+      <div class="body">
+        <div class="bign"><span class="n">3<small>/34</small></span><div class="txt"><b>steps done, and nothing runs until you answer three questions</b><span class="micro">chapter 1 half done · last step tested 08:40</span></div></div>
+        <div class="spark" role="img" aria-label="Steps done per day over the last 7 days: 0, 0, 0, 1, 0, 2, 0"><i style="height:8%"></i><i style="height:8%"></i><i style="height:8%"></i><i style="height:45%"></i><i style="height:8%"></i><i class="c" style="height:100%"></i><i style="height:8%"></i></div>
+        <div class="micro">steps tested per day · Mon to today</div>
+        <div class="var"><span class="vlab">Variant<b>a number going the wrong way, with a countdown</b></span>
+          <div class="bign"><span class="n">7<small>/34</small></span><div class="txt"><b>steps done, two fewer than yesterday: chapter 3 was rolled back</b><div style="display:flex;gap:8px"><span class="trend down">−2 since Wed</span><span class="trend due">ship due in 7 h</span></div></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-04">
+      <div class="lab"><span class="code">C-04</span><b>Chapter tiles</b><p>One tile per chapter: count, bar, state in words. Use when chapters are the natural unit; each tile links to its chapter.</p></div>
+      <div class="body">
+          <div class="chaps">
+            <div class="chp"><div class="ct"><span>Chapter 1</span><span class="accent">2 of 6</span></div><b>Start sessions</b><div class="trk"><i style="width:33%"></i></div><span class="micro">in progress</span></div>
+            <div class="chp"><div class="ct"><span>Chapter 2</span><span>0 of 6</span></div><b>Read the task folder</b><div class="trk"><i style="width:0"></i></div><span class="micro">planned</span></div>
+            <div class="chp"><div class="ct"><span>Chapter 3</span><span class="accent">1 of 6</span></div><b>Gates and history</b><div class="trk"><i style="width:17%"></i></div><span class="micro">in progress</span></div>
+            <div class="chp"><div class="ct"><span>Chapter 4</span><span class="amber">0 of 6</span></div><b>Route the team</b><div class="trk"><i style="width:0"></i></div><span class="micro amber">2 steps wait on an answer</span></div>
+            <div class="chp"><div class="ct"><span>Chapter 5</span><span class="amber">0 of 5</span></div><b>Preview</b><div class="trk"><i style="width:0"></i></div><span class="micro amber">1 step waits on an answer</span></div>
+            <div class="chp"><div class="ct"><span>Chapter 6</span><span>0 of 5</span></div><b>Deliver</b><div class="trk"><i style="width:0"></i></div><span class="micro">planned</span></div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>a chapter skipped on purpose and one added in rev 4</b></span>
+          <div class="chaps">
+            <div class="chp"><div class="ct"><span>Chapter 1</span><span class="okc">6 of 6</span></div><b>Start sessions</b><div class="trk"><i style="width:100%"></i></div><span class="micro">done</span></div>
+            <div class="chp skip"><div class="ct"><span>Chapter 2</span><span>skipped</span></div><b>Read the task folder</b><div class="trk"><i style="width:0"></i></div><span class="micro">covered by an earlier task · your call, Wed</span></div>
+            <div class="chp"><div class="ct"><span>Chapter 3</span><span class="accent">4 of 6</span></div><b>Gates and history</b><div class="trk"><i style="width:66%"></i></div><span class="micro">in progress</span></div>
+            <div class="chp ins"><div class="ct"><span>Chapter 3b</span><span>0 of 4</span></div><b>Missing API for the hook</b><div class="trk"><i style="width:0"></i></div><span class="micro" style="color:var(--ob-vio)">added in rev 4 · needs your accept</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-22">
+      <div class="lab"><span class="code">C-22</span><b>Week strip</b><p>The task on a calendar: gates, due times and who is away. Use when dates matter more than steps (shipping, customers, schedules).</p></div>
+      <div class="body">
+        <div class="week">
+          <div class="day"><div class="dn"><span>Mon 19</span><span>w43</span></div><div class="ev">created · plan rev 1</div><div class="ev">Q-1 asked</div></div>
+          <div class="day"><div class="dn"><span>Tue 20</span></div></div>
+          <div class="day"><div class="dn"><span>Wed 21</span></div><div class="ev">Q-2 asked, answered</div></div>
+          <div class="day today"><div class="dn"><span>Thu 22</span><span>today</span></div><div class="ev you">accept the plan · you</div><div class="ev">round 3 asked 07:40</div></div>
+          <div class="day"><div class="dn"><span>Fri 23</span></div><div class="ev">Kim away</div></div>
+          <div class="day"><div class="dn"><span>Mon 26</span></div><div class="ev gate">preview gate · Kim</div></div>
+          <div class="day"><div class="dn"><span>Wed 28</span></div><div class="ev gate">ship · you · 17:00</div></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>a deadline band across two weeks</b></span>
+          <div class="week" style="grid-template-columns:repeat(10,minmax(0,1fr))">
+            <div class="day today"><div class="dn"><span>Thu 22</span></div><div class="ev you">accept plan</div></div><div class="day"><div class="dn"><span>Fri 23</span></div></div><div class="day"><div class="dn"><span>Mon 26</span></div><div class="ev gate">preview</div></div><div class="day"><div class="dn"><span>Tue 27</span></div></div><div class="day band"><div class="dn"><span>Wed 28</span></div><div class="ev you">ship window</div></div><div class="day band"><div class="dn"><span>Thu 29</span></div><div class="ev you">ship window</div></div><div class="day band"><div class="dn"><span>Fri 30</span></div><div class="ev">last day</div></div><div class="day"><div class="dn"><span>Mon 2</span></div><div class="ev">Noor demo</div></div><div class="day"><div class="dn"><span>Tue 3</span></div></div><div class="day"><div class="dn"><span>Wed 4</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-27">
+      <div class="lab"><span class="code">C-27</span><b>Meters with limits</b><p>Token use, context and time against their limits, with the warning mark on the track. Use on Sessions and in the header; never a bare percentage.</p></div>
+      <div class="body">
+        <div class="meters">
+          <div class="meter"><div class="mh"><span>Task tokens</span><span>45k of 500k</span></div><div class="mt"><i style="width:9%"></i><em style="left:80%"></em></div><div class="mm">~380k if the plan runs · alert at 80%</div></div>
+          <div class="meter"><div class="mh"><span>Planner context</span><span>82k of 200k</span></div><div class="mt"><i style="width:41%"></i><em style="left:60%"></em></div><div class="mm">compacts at 60% · 3 compactions so far</div></div>
+          <div class="meter"><div class="mh"><span>Waiting on you</span><span>2 h of 4 h</span></div><div class="mt"><i class="warn" style="width:50%"></i><em style="left:100%"></em></div><div class="mm">at 4 h Grid marks the task stuck and tells Kim</div></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>a limit was hit: the meter overflows and says what happened</b></span>
+          <div class="meters"><div class="meter"><div class="mh"><span>Worker 1 context</span><span>120k of 120k</span></div><div class="mt over"><i class="over"></i></div><div class="mm errc">read-cap refused the read at 09:12 · the worker compacted and continued</div></div><div class="meter"><div class="mh"><span>Task tokens</span><span>490k of 500k</span></div><div class="mt"><i class="warn" style="width:98%"></i><em style="left:80%"></em></div><div class="mm amber">alert sent at 80% · raise the limit or the next step stops</div></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-39">
+      <div class="lab"><span class="code">C-39</span><b>Arc gauges</b><p>Half-circle gauges for the three things with a limit: tokens, context, waiting time. The amber needle is the alert mark.</p></div>
+      <div class="body">
+        <div class="gauges">
+          <div class="gauge" style="--v:16deg;--m:54deg"><div class="arc" role="img" aria-label="Task tokens 9 percent of the limit, alert at 80"><i></i></div><b>45k</b><span>of 500k task tokens<br>alert at 80%</span></div>
+          <div class="gauge" style="--v:74deg;--m:18deg"><div class="arc" role="img" aria-label="Context 41 percent, compacts at 60"><i></i></div><b>41%</b><span>planner context<br>compacts at 60%</span></div>
+          <div class="gauge warn" style="--v:90deg;--m:90deg"><div class="arc" role="img" aria-label="Waiting 2 of 4 hours"><i></i></div><b>2 h</b><span>waiting on you<br>stuck at 4 h</span></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>one big gauge with a target band</b></span>
+          <div class="gauges"><div class="gauge big" style="--v:126deg;--m:150deg"><div class="arc" role="img" aria-label="Steps per day 2.4, target band 2 to 2.5"><span class="band"></span><i></i></div><b>2.4 / day</b><span>steps tested per day · target band 2.0 to 2.5 · at this pace Deliver lands Wed 28</span></div></div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <section class="lsec">
+    <span class="eb">2 · Steps</span>
+    <h2>Ways to show steps that are not a long table</h2>
+    <section class="entry" id="c-05">
+      <div class="lab"><span class="code">C-05</span><b>Stepper</b><p>A vertical checklist with state per step. The default for a chapter of up to 8 steps.</p></div>
+      <div class="body">
+          <div class="stepper">
+            <div class="sp ok"><span class="dot">✓</span><div><div class="t">Start one planner per task in the background</div><div class="m">grid-worker 1 · tested 08:22 on 2.1.236</div></div><span class="s">tested</span></div>
+            <div class="sp ok"><span class="dot">✓</span><div><div class="t">The planner runs as grid:grid-planner; CLAUDE.md still loads</div><div class="m">grid-worker 1 · tested 08:40</div></div><span class="s">tested</span></div>
+            <div class="sp cur"><span class="dot">3</span><div><div class="t">Tell Grid when the planner goes idle</div><div class="m">grid-worker 2 · hook on stop, drafted 09:38</div></div><span class="s">next</span></div>
+            <div class="sp ask"><span class="dot">4</span><div><div class="t">Sign-in: claude, then /login, once per machine</div><div class="m">you · <a href="#q5">Q-5 decides how</a></div></div><span class="s">needs Q-5</span></div>
+            <div class="sp ask"><span class="dot">5</span><div><div class="t">Version floor check before any planner starts</div><div class="m">grid-worker 2 · <a href="#q4">Q-4 decides the floor</a></div></div><span class="s">needs Q-4</span></div>
+            <div class="sp"><span class="dot">6</span><div><div class="t">Record the session id in task.md</div><div class="m">grid-worker 2</div></div><span class="s">planned</span></div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>a step failed and is retrying, with its attempts nested</b></span>
+          <div class="stepper">
+            <div class="sp ok"><span class="dot">✓</span><div><div class="t">approval-gate guards history.md</div><div class="m">grid-worker 1 · tested 09:50</div></div><span class="s">tested</span></div>
+            <div class="sp err"><span class="dot">!</span><div><div class="t">stop-check waits for evidence before a phase ends</div><div class="m">grid-worker 2 · failed twice, retry 3 of 3 running</div><div class="retry"><span>× 10:02 · hook fired before the log was written</span><span>× 10:11 · same, with a 1 s delay</span><span class="accent">↻ 10:19 · waiting for the file instead of sleeping…</span></div></div><span class="s">retrying</span></div>
+            <div class="sp"><span class="dot">16</span><div><div class="t">Refusals written as sentences, never codes</div></div><span class="s">planned</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-06">
+      <div class="lab"><span class="code">C-06</span><b>State lanes</b><p>Steps grouped by what they wait for. Use when the question is "what is stuck and why", across chapters.</p></div>
+      <div class="body">
+          <div class="cols4">
+            <div class="lane"><div class="lh"><b>Done</b><span>3</span></div><div class="tile"><span class="n">1</span>Start one planner per task</div><div class="tile"><span class="n">2</span>Runs as grid:grid-planner</div><div class="tile"><span class="n">13</span>One grid-hook script</div></div>
+            <div class="lane"><div class="lh"><b>Next</b><span>1</span></div><div class="tile cur"><span class="n">3</span>Idle hook on stop</div></div>
+            <div class="lane"><div class="lh"><b>Waits on you</b><span>4</span></div><div class="tile ask"><span class="n">4</span>Sign-in · Q-5</div><div class="tile ask"><span class="n">5</span>Version floor · Q-4</div><div class="tile ask"><span class="n">24</span>Member role · Q-3</div><div class="tile ask"><span class="n">26</span>Preview approver · Q-3</div></div>
+            <div class="lane"><div class="lh"><b>Planned</b><span>26</span></div><div class="tile"><span class="n">6</span>Record session id</div><div class="tile"><span class="n">7–12</span>Read the task folder</div><div class="tile"><span class="n">14–18</span>Gates and history</div><div class="tile dim">+ 13 more</div></div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>a lane for steps blocked by other tasks</b></span>
+          <div class="cols4"><div class="lane"><div class="lh"><b>Blocked by a task</b><span>3</span></div><div class="tile blk"><span class="n">19</span>team.md table<span class="tid">T-04 Step bar</span></div><div class="tile blk"><span class="n">30</span>check suite<span class="tid">T-07 CSV export</span></div><div class="tile blk"><span class="n">31</span>tag and ship<span class="tid">T-03 Sync fix</span></div></div><div class="lane"><div class="lh"><b>Waits on you</b><span>1</span></div><div class="tile ask"><span class="n">26</span>preview approver</div></div><div class="lane"><div class="lh"><b>Running</b><span>2</span></div><div class="tile cur"><span class="n">14</span>approval-gate</div><div class="tile cur"><span class="n">15</span>stop-check</div></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-07">
+      <div class="lab"><span class="code">C-07</span><b>Owner swimlanes</b><p>Who does what, step numbers as cells. Use when the reader is balancing load or wants to see their own steps.</p></div>
+      <div class="body">
+          <div class="swim">
+            <div class="who" style="--pc:var(--ob-p1)"><i></i>grid-planner</div><div class="row"><span class="st">32</span><span class="st">33</span><span class="st">34</span></div>
+            <div class="who" style="--pc:var(--ob-p6)"><i></i>grid-worker 1</div><div class="row"><span class="st ok">1</span><span class="st ok">2</span><span class="st">7</span><span class="st">8</span><span class="st">11</span><span class="st ok">13</span><span class="st">14</span><span class="st">17</span><span class="st">19</span><span class="st">20</span><span class="st">23</span><span class="st ask">24</span><span class="st">25</span><span class="st">29</span><span class="st">31</span></div>
+            <div class="who" style="--pc:var(--ob-p4)"><i></i>grid-worker 2</div><div class="row"><span class="st cur">3</span><span class="st ask">5</span><span class="st">6</span><span class="st">9</span><span class="st">10</span><span class="st">12</span><span class="st">15</span><span class="st">16</span><span class="st">18</span><span class="st ask">21</span><span class="st">22</span><span class="st">27</span><span class="st">28</span></div>
+            <div class="who" style="--pc:var(--ob-ask)"><i></i>you</div><div class="row"><span class="st ask">4</span><span class="st ask">26</span></div>
+            <div class="who" style="--pc:var(--ob-p5)"><i></i>grid-runner</div><div class="row"><span class="st">30</span></div>
+          </div>
+          <div class="legend"><span><i style="background:var(--ob-ok)"></i>tested</span><span><i style="background:var(--ob-acc)"></i>next</span><span><i style="background:var(--ob-ask)"></i>waits on an answer</span><span><i style="border:1px solid var(--ob-line2)"></i>planned</span></div>
+        <div class="var"><span class="vlab">Variant<b>a worker away and steps nobody owns</b></span>
+          <div class="swim">
+            <div class="who away" style="--pc:var(--ob-p6)"><i></i><b>grid-worker 1</b> · stopped</div><div class="row"><span class="st ok">1</span><span class="st ok">2</span><span class="st conf">7</span><span class="st conf">8</span></div>
+            <div class="who" style="--pc:var(--ob-p4)"><i></i>grid-worker 2</div><div class="row"><span class="st cur">3</span><span class="st">6</span><span class="st">9</span><span class="st">10</span></div>
+            <div class="who" style="--pc:var(--ob-err)"><i></i>unassigned</div><div class="row"><span class="st conf">11</span><span class="st conf">12</span><span class="st conf">14</span></div>
+          </div><div class="micro errc">worker 1 stopped at 09:12 (context limit); its 2 open steps and 3 unassigned ones need a worker · <a href="#a">start one</a></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-08">
+      <div class="lab"><span class="code">C-08</span><b>Chapter timeline</b><p>Chapters on a day axis with gates as amber lines. Use for effort and sequence; replaces the bar chart when order matters.</p></div>
+      <div class="body">
+          <div class="gantt">
+            <div class="gl">Chapter 1 · Start sessions</div><div class="gr"><span class="gb cur" style="left:0;width:30%"></span></div>
+            <div class="gl">Chapter 2 · Read the folder</div><div class="gr"><span class="gb" style="left:30%;width:20%"></span></div>
+            <div class="gl">Chapter 3 · Gates and history</div><div class="gr"><span class="gb" style="left:30%;width:40%"></span></div>
+            <div class="gl">Chapter 4 · Route the team</div><div class="gr"><span class="gb" style="left:50%;width:30%"></span></div>
+            <div class="gl">Chapter 5 · Preview</div><div class="gr"><span class="gg" style="left:80%"></span><span class="gb" style="left:80%;width:12%"></span></div>
+            <div class="gl">Chapter 6 · Deliver</div><div class="gr"><span class="gb" style="left:92%;width:8%"></span></div>
+            <div></div><div class="ax"><span>day 1</span><span>day 2</span><span>day 3</span><span>day 4</span><span>day 5</span></div>
+          </div>
+          <div class="micro">amber line = a gate that waits on a person · about 9 agent-days with 2 workers</div>
+        <div class="var"><span class="vlab">Variant<b>two tasks share one worker: the conflict is drawn</b></span>
+          <div class="gantt"><div class="gl">T-01 · Grid on Claude</div><div class="gr"><span class="gb cur" style="left:20%;width:40%"></span></div><div class="gl">T-07 · CSV export</div><div class="gr"><span class="gb conf" style="left:40%;width:30%"></span></div><div class="gl micro errc">grid-worker 2 on both</div><div class="gr"><span class="gg" style="left:40%"></span><span class="gg" style="left:60%"></span></div><div></div><div class="ax"><span>Thu</span><span>Fri</span><span>Mon</span><span>Tue</span><span>Wed</span></div></div><div class="micro">overlap Fri to Mon · T-07 is due first · <a href="#r">move T-01 chapter 3 to worker 1</a></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-24">
+      <div class="lab"><span class="code">C-24</span><b>Dependency graph</b><p>Which steps block which, with the question that unblocks them. Use when the reader asks "why is nothing moving"; at most ten nodes, else C-06.</p></div>
+      <div class="body">
+        <div class="dag" role="img" aria-label="Step 1 and 2 done lead to step 3 next; steps 4 and 5 wait on Q-5 and Q-4; they lead to step 6 and then chapter 2">
+          <div class="dnode ok"><b>1 · start planner</b>tested</div><div class="dnode ok"><b>2 · agent body</b>tested</div><div class="dnode cur"><b>3 · idle hook</b>next</div><div class="dnode ask"><span class="q">Q-5</span><b>4 · sign-in</b>waits on you</div><div class="dnode end"><b>6 · session id</b>planned</div>
+          <div></div><div></div><div></div><div class="dnode ask"><span class="q">Q-4</span><b>5 · version floor</b>waits on you</div><div class="dnode end"><b>Chapter 2</b>6 steps, planned</div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>a rework loop drawn as an arc back</b></span>
+          <div class="dag" style="grid-template-columns:repeat(4,minmax(0,1fr))"><div class="dnode ok"><b>25 · render previews</b>done</div><div class="dnode ask"><span class="q">gate</span><b>26 · Kim approves</b>rejected once</div><div class="dnode loop"><span class="back"></span><b>back to 25</b>with notes · round 2</div><div class="dnode end"><b>27 · record approval</b>planned</div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-32">
+      <div class="lab"><span class="code">C-32</span><b>Chapter table with inline bars</b><p>One row per chapter: progress bar, owners, what it waits on. The table form for plans over 40 steps; steps open per row, never all at once.</p></div>
+      <div class="body">
+        <table class="ct"><thead><tr><th>#</th><th>Chapter</th><th style="width:34%">Progress</th><th>Owners</th><th>Waits on</th></tr></thead><tbody>
+          <tr><td class="n">1</td><td><b>Start sessions</b></td><td><div class="ib"><div class="trk"><i style="width:33%"></i></div><span>2 / 6</span></div></td><td><div class="ow"><i>W1</i><i>W2</i><i>Sa</i></div></td><td class="amber">Q-4, Q-5</td></tr>
+          <tr><td class="n">2</td><td><b>Read the task folder</b></td><td><div class="ib"><div class="trk"><i style="width:0"></i></div><span>0 / 6</span></div></td><td><div class="ow"><i>W1</i><i>W2</i></div></td><td class="meta">chapter 1</td></tr>
+          <tr><td class="n">3</td><td><b>Gates and history</b></td><td><div class="ib"><div class="trk"><i style="width:17%"></i></div><span>1 / 6</span></div></td><td><div class="ow"><i>W1</i><i>W2</i></div></td><td class="meta">—</td></tr>
+          <tr><td class="n">4</td><td><b>Route the team</b></td><td><div class="ib"><div class="trk"><i style="width:0"></i></div><span>0 / 6</span></div></td><td><div class="ow"><i>W1</i><i>W2</i></div></td><td class="amber">Q-3, Q-7</td></tr>
+          <tr><td class="n">5</td><td><b>Preview</b></td><td><div class="ib"><div class="trk"><i style="width:0"></i></div><span>0 / 5</span></div></td><td><div class="ow"><i>W1</i><i>Ki</i></div></td><td class="amber">Q-3</td></tr>
+          <tr><td class="n">6</td><td><b>Deliver</b></td><td><div class="ib"><div class="trk"><i style="width:0"></i></div><span>0 / 5</span></div></td><td><div class="ow"><i>R</i><i>P</i><i>Sa</i></div></td><td class="meta">chapter 5</td></tr>
+        </tbody></table>
+        <div class="var"><span class="vlab">Variant<b>rows grouped by phase, for a 120-step plan</b></span>
+          <table class="ct"><tbody>
+            <tr class="ph"><td colspan="5">Plan · 3 chapters · done</td></tr>
+            <tr><td class="n">1</td><td><b>Intent and scope</b></td><td><div class="ib"><div class="trk"><i style="width:100%"></i></div><span>8 / 8</span></div></td><td><div class="ow"><i>P</i></div></td><td class="meta">—</td></tr>
+            <tr class="ph"><td colspan="5">Execute · 9 chapters · 2 running</td></tr>
+            <tr><td class="n">4</td><td><b>Gates and history</b></td><td><div class="ib"><div class="trk"><i style="width:66%"></i></div><span>12 / 18</span></div></td><td><div class="ow"><i>W1</i><i>W2</i></div></td><td class="amber">Q-9</td></tr>
+            <tr><td class="n">5</td><td><b>Route the team</b></td><td><div class="ib"><div class="trk"><i style="width:10%"></i></div><span>2 / 20</span></div></td><td><div class="ow"><i>W2</i></div></td><td class="meta">chapter 4</td></tr>
+            <tr class="ph"><td colspan="5">Deliver · 2 chapters · planned</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-38">
+      <div class="lab"><span class="code">C-38</span><b>Dot matrix</b><p>All 34 steps as dots, chapters separated by a dashed dot. The densest honest progress view; hover a dot for its step.</p></div>
+      <div class="body">
+        <div class="dots" role="img" aria-label="34 step dots: 2 done, 1 current, 2 waiting in chapter 1; 1 done in chapter 3; 2 waiting in chapter 4; 1 waiting in chapter 5">
+          <i class="ok"></i><i class="ok"></i><i class="cur"></i><i class="ask"></i><i class="ask"></i><i></i><i class="chap"></i>
+          <i></i><i></i><i></i><i></i><i></i><i></i><i class="chap"></i>
+          <i class="ok"></i><i></i><i></i><i></i><i></i><i></i><i class="chap"></i>
+          <i></i><i></i><i class="ask"></i><i></i><i></i><i class="ask"></i><i class="chap"></i>
+          <i></i><i class="ask"></i><i></i><i></i><i></i><i class="chap"></i>
+          <i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <div class="legend"><span><i style="background:var(--ob-ok)"></i>done</span><span><i style="background:var(--ob-acc)"></i>next</span><span><i style="background:var(--ob-askBg);border:1px solid var(--ob-ask)"></i>waits on an answer</span><span><i style="background:var(--ob-track)"></i>planned</span><span><i style="border:1px dashed var(--ob-line2)"></i>chapter break</span></div>
+        <div class="var"><span class="vlab">Variant<b>120 steps: smaller dots, chapters as gaps</b></span>
+          <div class="dots dense" role="img" aria-label="120 step dots, about a third done"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="chap"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="chap"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="cur"></i><i class="cur"></i><i class="ask"></i><i></i><i></i><i></i><i class="chap"></i><i class="ask"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="chap"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="chap"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="chap"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <section class="lsec">
+    <span class="eb">3 · Decisions</span>
+    <h2>What needs a person, written completely</h2>
+    <section class="entry" id="c-09">
+      <div class="lab"><span class="code">C-09</span><b>Decision table</b><p>Decision, recommendation, why; one row each. Use when there are more than three open; the full question opens on click.</p></div>
+      <div class="body">
+          <table class="dt live-needs"><thead><tr><th>Decision</th><th>Recommendation</th><th>Why</th><th>Blocks</th></tr></thead><tbody>
+            <tr><td class="dq">Who passes the gates?</td><td class="rec">The operator or the task's member</td><td>team.md lists Kim as member, Noor as client</td><td class="errc">steps 24, 26 · the plan</td></tr>
+            <tr><td class="dq">Q-4 · Which Claude Code version is the floor?</td><td class="rec">2.1.236</td><td>step 1 passed on it on laptop-1</td><td class="errc">step 5</td></tr>
+            <tr><td class="dq">Q-5 · How does Grid sign in?</td><td class="rec">claude, then /login, once per machine</td><td>spike 1 used it; no key file exists</td><td class="errc">step 4</td></tr>
+            <tr><td class="dq">Q-6 · Idle timeout before stuck?</td><td class="rec">20 minutes</td><td>longest check in spike 2 took 11 min</td><td class="meta">nothing</td></tr>
+          </tbody></table>
+          <div class="micro">Take the recommended for the 43 that can wait · the 3 blocking need their own answer</div>
+        <div class="var"><span class="vlab">Variant<b>a decision the planner took on your behalf, with undo</b></span>
+          <table class="dt"><thead><tr><th>Decision</th><th>Recommendation</th><th>Why</th><th>Taken by</th></tr></thead><tbody>
+            <tr class="auto"><td class="dq">Q-7 · CSV encoding for T-07</td><td class="rec">UTF-8 with BOM · taken</td><td>Kim was offline 30 min; the step could not wait</td><td>the planner, 09:12 · <a href="#u">undo</a> · 8 min left</td></tr>
+            <tr><td class="dq">Who passes the gates?</td><td class="rec">The operator or the task's member</td><td>team.md</td><td class="amber">you</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-10">
+      <div class="lab"><span class="code">C-10</span><b>Decision card</b><p>One question, options written out, the recommended one first and tinted. Use for a blocking question, always with the consequence line.</p></div>
+      <div class="body">
+          <div class="live-needs">
+          <div class="qa"><span class="tag block">Blocking</span><span class="eb">Q-4 · chapter 1 · asked 07:40</span></div>
+          <div class="h3">Which Claude Code version is the floor?</div>
+          <div class="fg3">Chapter 1 checks it before any planner starts. It stops one agent: this planner.</div>
+          <div class="cmpare">
+            <div class="opt2 rec"><span class="tag rec" style="align-self:flex-start">Recommended</span><b>2.1.236</b><span>The version step 1 tested both planner bodies on.</span></div>
+            <div class="opt2"><b>Whatever is installed</b><span>Grid warns but starts anyway.</span></div>
+            <div class="opt2"><b>Always the latest</b><span>Grid updates Claude Code before each task.</span></div>
+          </div>
+          <div class="qa"><span class="btn pri sm">Use recommended</span><span class="btn sm">Answer in words</span><span class="btn sm">Later</span></div>
+          <div class="micro"><b class="fg3">Then:</b> step 5 can run. Q-5 opens next.</div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>options that are pictures</b></span>
+          <div class="qa"><span class="tag block">Blocking</span><span class="eb">Q-11 · chapter 5 · asked 09:15</span></div><div class="h3">Which phase bar goes in the header?</div>
+          <div class="picks"><div class="pick rec"><div class="im" role="img" aria-label="Option A preview"></div><div class="cap"><b>A · segmented bar with gates</b>recommended · matches C-01</div></div><div class="pick"><div class="im" role="img" aria-label="Option B preview"></div><div class="cap"><b>B · pills</b>shorter; loses the gate marks</div></div><div class="pick"><div class="im" role="img" aria-label="Option C preview"></div><div class="cap"><b>C · ring</b>fits a tile, not a header</div></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-11">
+      <div class="lab"><span class="code">C-11</span><b>Callouts</b><p>Three tones only: needs you (amber), the planner found (accent), stopped (red). Never a fourth, never a left stripe.</p></div>
+      <div class="body">
+          <div class="co you live-needs"><span class="ci">!</span><div><b>Needs you: accept the plan after Q-3, Q-4, Q-5</b><span>The planner stays idle until then; four other tasks keep going.</span></div></div>
+          <div class="co found"><span class="ci">i</span><div><b>The planner found: --agent beats every settings file</b><span>So Grid can start the planner the same way every time, whatever the project settings say.</span></div></div>
+          <div class="co stop"><span class="ci">×</span><div><b>Stopped: approval-gate refused the move to Execute</b><span>The plan changed after it was accepted. Re-accept rev 3, or skip the gate.</span></div></div>
+        <div class="var"><span class="vlab">Variant<b>a callout that carries its action and a countdown</b></span>
+          <div class="co you"><span class="ci">!</span><div><b>Ship window closes in 6 h 40</b><span>v2.8.1 is ready: 4 of 4 checks pass. After 17:00 the release waits until Monday.</span><div class="cta"><span class="btn pri sm">Ship now</span><span class="btn sm">Hold until Monday</span><span class="cd">17:00 · Europe/Amsterdam</span></div></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-34">
+      <div class="lab"><span class="code">C-34</span><b>What you can do now</b><p>Two to four actions with their consequence, the primary one tinted. Use at the end of a Needs-you section; a button never stands alone without its consequence.</p></div>
+      <div class="body">
+        <div class="acts live-needs">
+          <div class="act2 pri"><b>Answer the 3 blocking questions</b><span>About 4 minutes. The planner resumes within a minute of the last one.</span><kbd>↵</kbd></div>
+          <div class="act2"><b>Accept the plan as it stands</b><span>Steps 4, 5, 24 and 26 stay parked until their questions are answered; everything else runs.</span><kbd>a</kbd></div>
+          <div class="act2"><b>Ask for a rev 4</b><span>Write what should change; the planner rewrites and asks again. Nothing runs meanwhile.</span><kbd>r</kbd></div>
+          <div class="act2"><b>Snooze until tomorrow 09:00</b><span>Four other tasks keep going; this one shows as snoozed on Home.</span><kbd>s</kbd></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>only one thing can be done: a single bar, no choice</b></span>
+          <div class="acts"><div class="act2 pri only"><div><b>Accept plan rev 4</b><span>Chapter 3b was added for the missing API. Nothing runs until you accept; reversible for 10 minutes.</span></div><span class="btn pri">Accept rev 4</span></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-29">
+      <div class="lab"><span class="code">C-29</span><b>Decision ledger</b><p>Every decision as one line: when, who, what and why. Use in History and at the end of Questions; it is what history.md reads like.</p></div>
+      <div class="body">
+        <div class="ledger">
+          <div class="lg"><span class="at">08:50</span><span class="by">Sa</span><span class="tx"><b>Q-2</b> a client does not see the History tab <em>· because relay pages are for approvals, not operations</em></span></div>
+          <div class="lg"><span class="at">Wed 16:05</span><span class="by">Sa</span><span class="tx"><b>Q-1</b> the view pages live in views/ beside task.md <em>· as the spikes did</em></span></div>
+          <div class="lg"><span class="at">Mon 16:25</span><span class="by ag">P</span><span class="tx"><b>plan rev 2</b> written after your note on the Summary <em>· keep the planner in the background</em></span></div>
+          <div class="lg"><span class="at">Mon 16:11</span><span class="by ag">H</span><span class="tx"><b>Research skipped</b> two spikes from an earlier task already answered its question <em>· gate: phase set to Plan</em></span></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>a decision undone, kept in the ledger with the reason</b></span>
+          <div class="ledger"><div class="lg undone"><span class="at">09:12</span><span class="by ag">P</span><span class="tx"><b>Q-7</b> UTF-8 with BOM, taken for you <em>· undone 09:18 by Sam: the accountant wants plain UTF-8</em></span></div><div class="lg"><span class="at">09:18</span><span class="by">Sa</span><span class="tx"><b>Q-7</b> plain UTF-8 <em>· replaces the planner's choice</em></span></div></div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <section class="lsec">
+    <span class="eb">4 · Evidence and context</span>
+    <h2>Checks, findings, options, files, flows, risks, facts</h2>
+    <section class="entry" id="c-12">
+      <div class="lab"><span class="code">C-12</span><b>Checks</b><p>What passed and what did not, each with its evidence link. Use in Result and on a Ship gate.</p></div>
+      <div class="body">
+          <div class="chk">
+            <div class="c ok"><i>✓</i><span>4 of 4 steps match the plan</span><a href="#r">review.md</a></div>
+            <div class="c ok"><i>✓</i><span>Check suite: 12 tests pass</span><a href="#r">checks.html</a></div>
+            <div class="c ok"><i>✓</i><span>No file outside the task folder was written</span><a href="#r">read-cap log</a></div>
+            <div class="c no"><i>×</i><span>Preview not yet approved by the Q-3 approver</span><a href="#r">gate</a></div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>a check that is flaky and retrying</b></span>
+          <div class="chk"><div class="c ok"><i>✓</i><span>12 tests pass</span><a href="#r">checks.html</a></div><div class="c retry"><i>↻</i><span>Hook fires within 2 s · passed 2 of 3 runs · retry 3 running</span><a href="#r">live</a></div><div class="c no"><i>×</i><span>Preview approved · not yet</span><a href="#r">gate</a></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-26">
+      <div class="lab"><span class="code">C-26</span><b>Evidence well</b><p>A command and the lines that prove a step, nothing more. Use under a tested step or a passed check; the terminal look is reserved for this.</p></div>
+      <div class="body">
+        <div class="wellh"><span>step 1 · tested 08:22 · grid-worker 1 · laptop-1</span><a href="#log">full log · 212 lines</a></div>
+        <pre class="well"><span class="cmd">$ claude --agent grid-planner --print "which body are you"</span>
+grid-planner v3 · CLAUDE.md loaded · 2.1.236
+<span class="ok">✓ body present</span>   <span class="ok">✓ project rules apply</span>   <span class="err">× empty body drops tools (risk 1)</span></pre>
+        <div class="var"><span class="vlab">Variant<b>a diff as the evidence</b></span>
+          <div class="wellh"><span>step 14 · approval-gate · what the hook changed in history.md</span><a href="#d">full diff</a></div><pre class="well"><span class="del">- phase: execute</span>
+<span class="add">+ phase: plan</span>
+<span class="add">+ 09:05 approval-gate refused the move to Execute: the plan changed after it was accepted (rev 3 ≠ accepted rev 2)</span></pre>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-33">
+      <div class="lab"><span class="code">C-33</span><b>Findings</b><p>What the planner or a spike found, numbered large, each with its evidence. Use in Research and in Answer first when the plan rests on a few facts.</p></div>
+      <div class="body">
+        <div class="finds">
+          <div class="fnd"><span class="num">01</span><b>--agent beats every settings file</b><p>So Grid can start the planner the same way every time, whatever the project settings say.</p><span class="ev">spike 1 · 20 runs</span></div>
+          <div class="fnd"><span class="num">02</span><b>A main agent replaces the system prompt; CLAUDE.md still loads</b><p>Project rules keep applying while the planner body is swapped.</p><span class="ev">spike 1 · run 7</span></div>
+          <div class="fnd"><span class="num">03</span><b>A stop hook fires within 2 seconds</b><p>Reliable enough to mark a planner idle without polling.</p><span class="ev">spike 2 · 20 runs</span></div>
+          <div class="fnd"><span class="num">04</span><b>An empty body drops model and tools</b><p>The one failure; it became risk 1 and step 1 tests both bodies.</p><span class="ev">spike 1 · run 12</span></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>a finding that overturns an earlier one</b></span>
+          <div class="finds"><div class="fnd warn"><span class="num">05</span><b>The stop hook can fire twice on a crash</b><p>Seen once in 40 runs. Overturns finding 03 ("fires reliably"): reliable, but not exactly once.</p><span class="ev warn">⚠ replaces 03 · spike 3 · run 31</span></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-13">
+      <div class="lab"><span class="code">C-13</span><b>Option comparison</b><p>Two to four options with pluses and minuses. Use in research and before a decision with trade-offs; the recommended one is tinted.</p></div>
+      <div class="body">
+          <div class="cmpare">
+            <div class="opt2 rec"><b>/login per machine</b><ul><li class="p">no key stored anywhere</li><li class="p">spike 1 proved it</li><li class="m">one manual step per machine</li></ul></div>
+            <div class="opt2"><b>API key in workspace.md</b><ul><li class="p">zero manual steps</li><li class="m">a key in a shared folder</li><li class="m">one key for every machine</li></ul></div>
+            <div class="opt2"><b>Ask every time</b><ul><li class="p">safest</li><li class="m">every task waits on you first</li></ul></div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>four options scored against criteria</b></span>
+          <div class="matrix"><span class="mh">option</span><span class="mh">safe</span><span class="mh">fast</span><span class="mh">no key</span><span class="mh">proven</span>
+            <span class="mo rec">/login per machine</span><span class="mc"><i class="f"></i><i class="f"></i><i class="f"></i></span><span class="mc"><i class="f"></i><i></i><i></i></span><span class="mc"><i class="f"></i><i class="f"></i><i class="f"></i></span><span class="mc"><i class="f"></i><i class="f"></i><i class="f"></i></span>
+            <span class="mo">API key in workspace</span><span class="mc"><i class="f"></i><i></i><i></i></span><span class="mc"><i class="f"></i><i class="f"></i><i class="f"></i></span><span class="mc"><i></i><i></i><i></i></span><span class="mc"><i class="f"></i><i class="f"></i><i></i></span>
+            <span class="mo">Ask every time</span><span class="mc"><i class="f"></i><i class="f"></i><i class="f"></i></span><span class="mc"><i></i><i></i><i></i></span><span class="mc"><i class="f"></i><i class="f"></i><i class="f"></i></span><span class="mc"><i class="f"></i><i></i><i></i></span>
+            <span class="mo">Keychain</span><span class="mc"><i class="f"></i><i class="f"></i><i></i></span><span class="mc"><i class="f"></i><i class="f"></i><i></i></span><span class="mc"><i class="f"></i><i class="f"></i><i></i></span><span class="mc"><i></i><i></i><i></i></span></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-25">
+      <div class="lab"><span class="code">C-25</span><b>What changed between revisions</b><p>Added, removed and moved lines between plan rev 2 and rev 3, in three columns. Use after every revision, above the plan; never a raw diff.</p></div>
+      <div class="body">
+        <div class="rev">
+          <div class="col"><h4 class="add">Added · 4</h4><div class="ln add">step 17 · undo window of 10 minutes on every gate</div><div class="ln add">step 18 · needs-you brings idle prompts to Home</div><div class="ln add">risk 3 · size L needs a Preview</div><div class="ln add">chapter 5 · Preview</div></div>
+          <div class="col"><h4 class="del">Removed · 2</h4><div class="ln del">step · open a terminal window for the planner</div><div class="ln del">chapter · Research</div></div>
+          <div class="col"><h4>Moved · 1</h4><div class="ln mv">step 13 · one grid-hook script, from chapter 1 to chapter 3</div><div class="micro" style="margin-top:6px">because of your note on Mon 16:20: keep the planner in the background</div></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>three revisions as a chain, each with what it changed</b></span>
+          <div class="revs"><div class="revc"><b>rev 1 · Mon 16:10</b><span>28 steps · first draft</span></div><div class="ar" aria-hidden="true"></div><div class="revc"><b>rev 2 · Mon 16:25</b><span>+2 −1 · your note: no window</span></div><div class="ar" aria-hidden="true"></div><div class="revc cur"><b>rev 3 · 09:00</b><span>+4 −2 ~1 · Research skipped</span></div><div class="ar" aria-hidden="true"></div><div class="revc" style="border-style:dashed;color:var(--ob-vio)"><b style="color:var(--ob-vio)">rev 4 · asked</b><span>you asked at 09:41</span></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-14">
+      <div class="lab"><span class="code">C-14</span><b>File tiles</b><p>Sub-pages, previews and files the planner wrote, with a real preview and a type chip. Use in Sub-pages and Result.</p></div>
+      <div class="body">
+          <div class="arts">
+            <div class="art"><div class="pv"><span class="tp">html</span></div><b>views/hooks.html</b><span>the four rules, with examples</span></div>
+            <div class="art"><div class="pv"><span class="tp">html</span></div><b>views/team.html</b><span>role, agent and model table</span></div>
+            <div class="art"><div class="pv"><span class="tp">png ×3</span></div><b>preview/phase-bar</b><span>3 screens · opens in a light box</span></div>
+            <div class="art"><div class="pv"><span class="tp">diff</span></div><b>plan.md rev 2 → 3</b><span>chapter 1 reordered</span></div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>thirty files: a list, not tiles</b></span>
+          <div class="flist"><div class="frow"><span class="fk page">html</span><b>views/plan.html</b><span class="micro">grid-planner · 09:00</span><span class="micro">64 KB</span></div><div class="frow"><span class="fk md">md</span><b>questions/round-3.md</b><span class="micro">grid-planner · 07:40</span><span class="micro">9 KB</span></div><div class="frow"><span class="fk spec">md</span><b>spec/acceptance.md</b><span class="micro">you · Wed 16:05</span><span class="micro">2 KB</span></div><div class="frow"><span class="fk log">log</span><b>tests/step-1.log</b><span class="micro">grid-worker 1 · 08:22</span><span class="micro">3 KB</span></div><div class="micro" style="padding:6px 4px">+ 26 more · sorted by updated</div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-30">
+      <div class="lab"><span class="code">C-30</span><b>Preview strip</b><p>Screens the planner rendered, side by side with captions, each opening in a light box. Use at a Preview gate and in Result.</p></div>
+      <div class="body">
+        <div class="strip">
+          <div class="shot2"><div class="img" role="img" aria-label="Preview screen 1"></div><b>1 · Home with the phase bar</b><span>1440 × 900 · dark</span></div>
+          <div class="shot2"><div class="img" role="img" aria-label="Preview screen 2"></div><b>2 · Task header, Plan current</b><span>1440 × 900 · dark</span></div>
+          <div class="shot2"><div class="img" role="img" aria-label="Preview screen 3"></div><b>3 · The same, light theme</b><span>1440 × 900 · light</span></div>
+          <div class="shot2"><div class="img" role="img" aria-label="Preview screen 4"></div><b>4 · Phone width</b><span>390 × 844</span></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>before and after pairs</b></span>
+          <div class="ba"><div class="shot2"><div class="img" role="img" aria-label="before"></div><b>before · rev 2</b><span>five chips, no gates</span></div><div class="shot2"><div class="img after" role="img" aria-label="after"></div><b>after · rev 3</b><span>segmented bar, gates, skipped phase</span></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-15">
+      <div class="lab"><span class="code">C-15</span><b>Flow diagram</b><p>Boxes and arrows, at most six boxes, the one that matters outlined. Use for architecture; built from elements, never one image.</p></div>
+      <div class="body">
+          <div class="dg"><div class="nd"><b>tasks/T-01/</b><span>the folder</span></div><div class="ar"></div><div class="nd"><b>grid-planner</b><span>one session</span></div><div class="ar"></div><div class="nd hot"><b>grid-hook</b><span>4 rules</span></div><div class="ar"></div><div class="nd"><b>Home</b><span>waiting on you</span></div></div>
+        <div class="var"><span class="vlab">Variant<b>a loop and a fork</b></span>
+          <div class="dg"><div class="nd"><b>Build</b></div><div class="ar" aria-hidden="true"></div><div class="nd hot loop"><b>Review</b><span>Lee</span></div><div class="ar" aria-hidden="true"></div><div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:120px"><div class="nd"><b>Customer</b><span>Noor</span></div><div class="nd"><b>Legal</b><span>Sanne</span></div></div><div class="ar" aria-hidden="true"></div><div class="nd"><b>Scheduled</b></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-16">
+      <div class="lab"><span class="code">C-16</span><b>Risks</b><p>Level, the risk, and the step that retires it. Use in every plan; two levels of tone only.</p></div>
+      <div class="body">
+          <div class="rk"><span class="lv med">Medium</span><div><b>An empty planner body may drop its model and tools</b><span>Retired by step 1: tests both bodies before chapter 2 starts.</span></div></div>
+          <div class="rk"><span class="lv low">Low</span><div><b>The trust prompt under --settings is not documented</b><span>Retired by step 1: tries it before Setup relies on it.</span></div></div>
+          <div class="rk" style="border:0"><span class="lv low">Low</span><div><b>Size L needs a Preview before Execute</b><span>Chapter 5 is the preview; its approver is whoever Q-3 names.</span></div></div>
+        <div class="var"><span class="vlab">Variant<b>a risk retired and one raised</b></span>
+          <div class="rk ret"><span class="lv low">Retired</span><div><b>An empty planner body may drop its model and tools</b><span>Retired by step 1 at 08:22: both bodies tested.</span></div></div><div class="rk" style="border:0"><span class="lv high">High</span><div><b>The stop hook can fire twice on a crash</b><span>Raised from Low after spike 3. Step 15 now waits for the file, not the event.</span></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-17">
+      <div class="lab"><span class="code">C-17</span><b>Facts</b><p>Key and value pairs, mono values. Use for the small numbers that do not deserve a stat tile.</p></div>
+      <div class="body">
+          <div class="kv">
+            <div><span>size</span><span>L · preview before execute</span></div><div><span>agent time</span><span>~9 d · 2 workers</span></div>
+            <div><span>files touched</span><span>~60</span></div><div><span>tokens so far</span><span>45k of 500k</span></div>
+            <div><span>plan revision</span><span>3 · 09:00</span></div><div><span>machine</span><span>laptop-1</span></div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>values that changed in the last revision</b></span>
+          <div class="kv"><div><span>steps</span><span><span class="old">32</span>34</span></div><div><span>agent time</span><span><span class="old">~7 d</span>~9 d</span></div><div><span>chapters</span><span><span class="old">5</span>6</span></div><div><span>estimated tokens</span><span><span class="old">0.9M</span>1.1M</span></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-28">
+      <div class="lab"><span class="code">C-28</span><b>Roster</b><p>Who is on this task, from team.md: people and agents, what each may do. Use once in a task; the Approvals component (C-20) reads from it.</p></div>
+      <div class="body">
+        <div class="roster">
+          <div class="person"><span class="av">Sa</span><div><b>Sam</b><span>operator · laptop-1</span><div class="may"><i>accept</i><i>approve</i><i>ship</i><i>stop</i></div></div></div>
+          <div class="person"><span class="av">Ki</span><div><b>Kim</b><span>member · away Fri</span><div class="may"><i>approve previews</i></div></div></div>
+          <div class="person"><span class="av">No</span><div><b>Noor</b><span>client · relay page</span><div class="may"><i>see preview</i></div></div></div>
+          <div class="person"><span class="av ag">P</span><div><b>grid-planner</b><span>Opus · plans, asks, never passes a gate</span><div class="may"><i>plan</i><i>ask</i></div></div></div>
+          <div class="person"><span class="av ag">W</span><div><b>grid-worker ×2</b><span>Sonnet · task branch only</span><div class="may"><i>build</i><i>test</i></div></div></div>
+          <div class="person"><span class="av ag">S</span><div><b>grid-scout</b><span>Haiku · research only</span><div class="may"><i>read</i></div></div></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>someone away, with a delegate</b></span>
+          <div class="roster"><div class="person away"><span class="av">Ki</span><div><b>Kim</b><span>member · away until Mon 26</span><div class="may"><i>approve previews</i><i class="deleg">→ Sam</i></div></div></div><div class="person"><span class="av">Sa</span><div><b>Sam</b><span>operator · also approving for Kim</span><div class="may"><i>accept</i><i>approve</i><i>ship</i></div></div></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-31">
+      <div class="lab"><span class="code">C-31</span><b>Activity heat</b><p>Agents per hour over the last days, amber where a person was needed. Use on Sessions and Agents to show rhythm, not on a task summary.</p></div>
+      <div class="body">
+        <div class="heat" role="img" aria-label="Agent activity by hour for Mon, Wed and today; today shows work from 7 to 9 and a wait on you since 7:40">
+          <span class="hl">Mon 19</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="l2"></i><i class="l3"></i><i class="l1"></i><i></i>
+          <span class="hl">Wed 21</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="l1"></i><i></i><i></i><i class="l1"></i>
+          <span class="hl">Thu 22</span><i></i><i class="l1"></i><i class="l3"></i><i class="l3"></i><i class="ask"></i><i class="ask"></i><i class="ask"></i><i></i><i></i><i></i><i></i><i></i>
+          <span></span><div class="hx"><span>06</span><span>07</span><span>08</span><span>09</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span><span>17</span></div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>by machine, not by day</b></span>
+          <div class="heat"><span class="hl m">laptop-1</span><i></i><i class="l1"></i><i class="l3"></i><i class="l3"></i><i class="ask"></i><i class="ask"></i><i class="ask"></i><i></i><i></i><i></i><i></i><i></i><span class="hl m">build-box</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span></span><div class="hx"><span>06</span><span>07</span><span>08</span><span>09</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span><span>17</span></div></div><div class="micro">build-box offline since 07:12 · its queued task T-10 can move</div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <section class="lsec">
+    <span class="eb">5 · Vocabulary</span>
+    <h2>What is the same everywhere</h2>
+    <section class="entry" id="c-18">
+      <div class="lab"><span class="code">C-18</span><b>Task header</b><p>Required, first, always the same shape: id and project, title, one status sentence, phase track, token use. Everything else can vary.</p></div>
+      <div class="body">
+          <div class="hd">
+            <div>
+              <div class="eb" style="display:flex;gap:10px;align-items:center"><span>T-01</span><span style="--pc:var(--ob-p1);display:inline-flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0"><i style="width:8px;height:8px;border-radius:50%;background:var(--pc);display:block"></i>gridconsole-os</span><span style="text-transform:none;letter-spacing:0">size L</span></div>
+              <h3 style="margin-top:4px">Grid on Claude</h3>
+              <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px"><span class="amber b live-status">● Needs you: 3 blocking questions, then accept the plan</span><span class="dim live-next">waiting since 07:40 (2 h) · planner idle · laptop-1</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;min-width:280px"><div class="micro">Tokens 45k of 500k · ~380k if the plan runs</div><div class="trk"><i style="width:9%"></i></div><div class="track" role="img" aria-label="Research skipped, Plan current, then Preview, Execute, Deliver"><div class="ph2 skip"><div class="bar"></div><div class="lb"><span>Research</span><span>skipped</span></div></div><span class="gate ok">✓</span><div class="ph2 cur"><div class="bar"></div><div class="lb"><span>Plan</span><span>rev 3</span></div></div><span class="gate you">!</span><div class="ph2"><div class="bar"></div><div class="lb"><span>Preview</span></div></div><span class="gate"></span><div class="ph2"><div class="bar"></div><div class="lb"><span>Execute</span></div></div><span class="gate"></span><div class="ph2"><div class="bar"></div><div class="lb"><span>Deliver</span></div></div></div></div>
+          </div>
+        <div class="var"><span class="vlab">Variant<b>a stuck task: same shape, red status line, the remedy in the header</b></span>
+          <div class="hd stuck"><div><div class="eb" style="display:flex;gap:10px"><span>T-08</span><span style="--pc:var(--ob-p4);display:inline-flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0"><i style="width:8px;height:8px;border-radius:50%;background:var(--pc);display:block"></i>helios</span></div><h3 style="margin-top:4px">Welcome emails</h3><div class="st-line" style="margin-top:6px"><b>■ Stuck: approval-gate refused the move to Execute</b> <span class="dim">· the plan changed after it was accepted · retry 1 of 2 failed · since 09:05</span></div></div><div style="display:flex;gap:8px;align-items:flex-end"><span class="btn pri">Re-accept rev 3</span><span class="btn">Skip this gate</span><span class="btn danger">Stop task</span></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-35">
+      <div class="lab"><span class="code">C-35</span><b>State vocabulary</b><p>The only words and colours for a state, anywhere in Grid. The skill may not invent a fifth tone; the glyph and the word always travel together.</p></div>
+      <div class="body">
+        <div class="vocab">
+          <span><i style="background:var(--ob-ok)"></i>tested · done · finished</span>
+          <span><i style="background:var(--ob-acc)"></i>next · running · now</span>
+          <span><i style="background:var(--ob-ask)"></i>waits on you · waits on a person · due</span>
+          <span><i style="background:var(--ob-err)"></i>stuck · refused · stopped</span>
+          <span><i></i>planned · queued · can wait</span>
+          <span><i style="background:repeating-linear-gradient(135deg,var(--ob-line2) 0 2px,transparent 2px 4px)"></i>skipped</span>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>glyph-only, for a 16-pixel space</b></span>
+          <div class="vocab"><span><span class="gl okc">✓</span>done</span><span><span class="gl accent">●</span>running</span><span><span class="gl amber">!</span>waits on a person</span><span><span class="gl errc">■</span>stuck</span><span><span class="gl dim">○</span>planned</span><span><span class="gl dim">⌀</span>skipped</span><span><span class="gl" style="color:var(--ob-vio)">+</span>added</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-36">
+      <div class="lab"><span class="code">C-36</span><b>Absence, in one line</b><p>When something does not exist yet, say so in one line with the next step. Never an empty box, a zero, or "nothing yet" on a first screen.</p></div>
+      <div class="body">
+        <div class="absent"><b>No result yet.</b><span>It appears at Deliver, after the Preview gate on Mon 26.</span><span style="flex:1"></span><a href="#plan" class="lnk">what Deliver will write ›</a></div>
+        <div class="var"><span class="vlab">Variant<b>skipped on purpose: the reason and who decided</b></span>
+          <div class="absent"><b>Research skipped.</b><span>Two spikes from an earlier task already answered its question; decided by the planner on Mon 16:11, you can reopen it.</span><span style="flex:1"></span><a href="#r" class="lnk">reopen Research ›</a></div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <section class="lsec">
+    <span class="eb">6 · Architecture and code</span>
+    <h2>How the system is built and what the task changes in it</h2>
+    <section class="entry" id="c-43">
+      <div class="lab"><span class="code">C-43</span><b>Component diagram</b><p>Modules as boxes inside their repo, ports where they connect, the touched ones outlined. Use for "what talks to what" at the level of the plan; at most twelve boxes.</p></div>
+      <div class="body">
+        <div class="cmpd" role="img" aria-label="grid-cli with planner, folder, hooks and team; grid-ui with home and task; Claude Code outside; arrows between them">
+          <div class="grp2"><span class="gl">grid-cli</span><div class="box hot"><b>planner</b><span>start · idle · version</span><span class="port"></span></div><div class="box hot"><b>folder</b><span>read · watch · cache</span><span class="port"></span></div><div class="box hot"><b>hooks</b><span>grid-hook · refuse</span><span class="port"></span></div><div class="box"><b>team</b><span>table · read-cap</span><span class="port"></span></div></div>
+          <div class="grp2"><span class="gl">tasks/T-01/</span><div class="box"><b>task.md · plan.md</b><span>what the planner reads</span><span class="port in"></span></div><div class="box"><b>questions/</b><span>round-3.md · sam.md</span><span class="port in"></span></div><div class="box hot"><b>history.md</b><span>one sentence per event</span><span class="port in"></span><span class="port"></span></div><div class="edge">writes, guarded by hooks</div></div>
+          <div class="grp2"><span class="gl">grid-ui · Claude Code</span><div class="box new"><b>home · waiting</b><span>reads the folder</span><span class="port in"></span></div><div class="box new"><b>task · approvals · preview</b><span>chapter 5</span><span class="port in"></span></div><div class="box"><b>claude --agent</b><span>one session per task</span><span class="port in"></span></div><div class="edge">stop hook → planner idle</div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-44">
+      <div class="lab"><span class="code">C-44</span><b>Sequence diagram</b><p>Who calls whom, in order, for one scenario; your own step in amber, a refusal in red. Use for a gate or a hook; built from lifelines and arrows, never an image.</p></div>
+      <div class="body">
+        <div class="seq" role="img" aria-label="Sequence: you accept the plan on Home; Home asks the hook; the hook reads history.md and refuses because the plan changed; Home shows the refusal; you re-accept rev 3; the hook writes history and tells the planner to resume">
+          <div class="life"><span class="who you">you</span><span class="ln"></span></div><div class="life"><span class="who">Home</span><span class="ln"></span></div><div class="life"><span class="who">grid-hook</span><span class="ln"></span></div><div class="life"><span class="who">history.md</span><span class="ln"></span></div><div class="life"><span class="who">grid-planner</span><span class="ln"></span></div>
+          <div class="msgs">
+            <div class="m"><span class="l you" style="left:10%;width:20%"></span><span class="t" style="left:12%">accept the plan</span></div>
+            <div class="m"><span class="l" style="left:30%;width:20%"></span><span class="t" style="left:32%">approval-gate(rev 2)</span></div>
+            <div class="m"><span class="l" style="left:50%;width:20%"></span><span class="t" style="left:52%">read accepted rev</span></div>
+            <div class="m"><span class="l back" style="left:50%;width:20%"></span><span class="t" style="left:52%">rev 3 ≠ rev 2</span></div>
+            <div class="m"><span class="l no back" style="left:30%;width:20%"></span><span class="t" style="left:32%">refused: plan changed after accept</span></div>
+            <div class="m"><span class="l back" style="left:10%;width:20%"></span><span class="t" style="left:12%">shows the sentence + Re-accept rev 3</span></div>
+            <div class="m"><span class="l you" style="left:10%;width:40%"></span><span class="t" style="left:18%">re-accept rev 3</span></div>
+            <div class="m"><span class="l" style="left:50%;width:20%"></span><span class="t" style="left:52%">write "accepted rev 3 by Sam"</span></div>
+            <div class="m"><span class="l" style="left:50%;width:40%"></span><span class="t" style="left:62%">resume</span></div>
+            <div class="m"><span class="l back" style="left:10%;width:80%"></span><span class="t" style="left:40%">planner running · Home updates</span></div>
+          </div>
+        </div>
+        <div class="var"><span class="vlab">Variant<b>two workers in parallel, joined by the planner</b></span>
+          <div class="seq" style="grid-template-columns:repeat(4,minmax(0,1fr))" role="img" aria-label="planner starts two workers at once, both report, planner merges"><div class="life"><span class="who">grid-planner</span><span class="ln" style="min-height:180px"></span></div><div class="life"><span class="who">worker 1</span><span class="ln" style="min-height:180px"></span></div><div class="life"><span class="who">worker 2</span><span class="ln" style="min-height:180px"></span></div><div class="life"><span class="who">task branch</span><span class="ln" style="min-height:180px"></span></div>
+            <div class="msgs"><div class="m"><span class="l" style="left:12%;width:25%"></span><span class="t" style="left:14%">test steps 1, 2</span></div><div class="m"><span class="l" style="left:12%;width:50%"></span><span class="t" style="left:30%">draft the idle hook</span></div><div class="m"><span class="l" style="left:37%;width:50%"></span><span class="t" style="left:55%">commit step-1, step-2</span></div><div class="m"><span class="l back" style="left:12%;width:25%"></span><span class="t" style="left:14%">done 08:40</span></div><div class="m"><span class="l back" style="left:12%;width:50%"></span><span class="t" style="left:30%">draft written 09:38</span></div><div class="m"><span class="l" style="left:12%;width:75%"></span><span class="t" style="left:40%">merge · rev 3</span></div></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-45">
+      <div class="lab"><span class="code">C-45</span><b>Diff map</b><p>Every file the task changes on one screen: kind, name, size of change as bars, and why in one line. Predicted files are dashed. Use in Code and at a Ship gate.</p></div>
+      <div class="body">
+        <div class="dmsum"><span>14 files</span><span>+216 −156 so far</span><span>~+265 predicted</span><span>2 repos</span></div>
+        <div class="dmap">
+          <div class="dm"><span class="k M">M</span><span class="p">cli/src/planner/start.ts</span><span class="bars"><i class="a" style="width:41px"></i><i class="d" style="width:12px"></i></span><span class="w">--agent, background, no window</span></div>
+          <div class="dm"><span class="k A">A</span><span class="p">cli/src/planner/idle.ts</span><span class="bars"><i class="a" style="width:88px"></i></span><span class="w">planner idle → Home, via the stop hook</span></div>
+          <div class="dm"><span class="k M">M</span><span class="p">cli/src/hooks/grid-hook.sh</span><span class="bars"><i class="a" style="width:23px"></i><i class="d" style="width:4px"></i></span><span class="w">named rules; refusals as sentences</span></div>
+          <div class="dm"><span class="k T">T</span><span class="p">cli/tests/planner.test.ts</span><span class="bars"><i class="a" style="width:64px"></i></span><span class="w">proof for steps 1 to 3</span></div>
+          <div class="dm"><span class="k D">D</span><span class="p">cli/src/terminal/open.ts</span><span class="bars"><i class="d" style="width:120px"></i></span><span class="w">no terminal window any more</span></div>
+          <div class="dm pred"><span class="k M">M</span><span class="p">cli/src/folder/read.ts</span><span class="bars"><i class="a" style="width:60px"></i><i class="d" style="width:20px"></i></span><span class="w">predicted · chapter 2 · cache and invalidate</span></div>
+          <div class="dm pred"><span class="k A">A</span><span class="p">ui/src/task/approvals.tsx</span><span class="bars"><i class="a" style="width:70px"></i></span><span class="w">predicted · chapter 5 · waits on Q-3</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-46">
+      <div class="lab"><span class="code">C-46</span><b>Annotated snippet</b><p>The lines that matter, with numbered notes beside them saying how it works and why. Use to explain a mechanism once; never paste a whole file.</p></div>
+      <div class="body">
+        <div class="snip">
+          <pre class="code2"><span class="n">17</span><span class="kw">export async function</span> start(task: TaskId) {
+<span class="n">18</span>  <span class="kw">const</span> args = [<span class="st">'--print'</span>, prompt(task)]
+<span class="hl"><span class="n">19</span>  args.push(<span class="st">'--agent'</span>, <span class="st">'grid-planner'</span>)<span class="mark">1</span></span>
+<span class="hl"><span class="n">20</span>  <span class="kw">const</span> child = spawn(<span class="st">'claude'</span>, args, { detached: <span class="kw">true</span>, stdio: <span class="st">'ignore'</span> })<span class="mark">2</span></span>
+<span class="ln"><span class="n">21</span>  <span class="kw">await</span> folder.write(task, <span class="st">'task.md'</span>, { session: child.pid })<span class="mark">3</span></span><span class="ln"><span class="n">22</span>  child.unref()</span><span class="ln"><span class="n">23</span>}</span></pre>
+          <div class="notes">
+            <div class="note"><span class="mark">1</span><div><b>--agent beats every settings file.</b> Spike 1 showed the body is applied whatever the project settings say, so Grid starts the planner the same way every time.</div></div>
+            <div class="note"><span class="mark">2</span><div><b>Detached, no stdio.</b> No terminal window; the planner lives in the background until the stop hook says it is idle (step 3).</div></div>
+            <div class="note"><span class="mark">3</span><div><b>The session id goes into task.md</b> (step 6), so Home and the hooks find the session from the folder alone.</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-47">
+      <div class="lab"><span class="code">C-47</span><b>Before → after</b><p>The same lines before and after, with one sentence on why. Use for a decision that changed code, or to show a worker what to do; keep each side under fifteen lines.</p></div>
+      <div class="body">
+        <div class="bafter">
+          <div><div class="cap">before · rev 2</div><pre class="code2"><span class="n">18</span><span class="kw">const</span> cmd = <span class="st">`claude --print "${prompt}"`</span>
+<span class="del"><span class="n">19</span>openTerminal(cmd)</span>
+<span class="n">20</span><span class="cm">// the user closes the window when done</span></pre></div>
+          <div class="ar2">→</div>
+          <div><div class="cap">after · rev 3</div><pre class="code2 aft"><span class="n">18</span><span class="kw">const</span> args = [<span class="st">'--print'</span>, prompt, <span class="st">'--agent'</span>, <span class="st">'grid-planner'</span>]
+<span class="add"><span class="n">19</span>spawn(<span class="st">'claude'</span>, args, { detached: <span class="kw">true</span>, stdio: <span class="st">'ignore'</span> })</span>
+<span class="n">20</span><span class="cm">// the stop hook tells Grid when it is idle</span></pre></div>
+        </div>
+        <div class="micro" style="margin-top:8px">why: your note on Mon 16:20, "keep the planner in the background; I never want a terminal window for it"</div>
+        <div class="var"><span class="vlab">Variant<b>the same change across three files, as a strip</b></span>
+          <div class="dmap"><div class="dm"><span class="k M">M</span><span class="p">cli/src/planner/start.ts</span><span class="bars"><i class="d" style="width:10px"></i><i class="a" style="width:14px"></i></span><span class="w">openTerminal(cmd) → spawn(…, detached)</span></div><div class="dm"><span class="k M">M</span><span class="p">cli/src/commands/task.ts</span><span class="bars"><i class="d" style="width:6px"></i><i class="a" style="width:6px"></i></span><span class="w">drop the --window flag</span></div><div class="dm"><span class="k D">D</span><span class="p">cli/src/terminal/open.ts</span><span class="bars"><i class="d" style="width:120px"></i></span><span class="w">nothing calls it now</span></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-48">
+      <div class="lab"><span class="code">C-48</span><b>Call graph</b><p>What calls what, left to right, the touched functions outlined, the removed one struck. Use when a change ripples; at most twelve nodes, else C-43.</p></div>
+      <div class="body">
+        <div class="cg" role="img" aria-label="task command calls planner.start, which calls sessions.claude and folder.write; idle hook calls history.write and home.refresh; openTerminal is removed">
+          <div class="gn">commands/task<small>grid task start</small></div><div class="gn hot">planner.start<small>+41 −12</small></div><div class="gn">sessions.claude<small>unchanged</small></div><div class="gn end">folder.write<small>task.md</small></div>
+          <div class="gn">hooks/on-stop.sh<small>new · step 3</small></div><div class="gn new">planner.onIdle<small>new</small></div><div class="gn">history.write<small>unchanged</small></div><div class="gn end hot">home.refresh<small>step 18</small></div>
+          <div class="gn gone end">terminal.open<small>removed</small></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-49">
+      <div class="lab"><span class="code">C-49</span><b>State machine</b><p>States as circles, transitions with their guard; the current state glows. Use for a task, a session or a gate whose rules the reader must trust.</p></div>
+      <div class="body">
+        <div class="sm" role="img" aria-label="Task states: created, planning, waiting on you, executing, previewing, delivered; guards on each transition">
+          <div class="st2"><b>created</b><small>Mon 16:10</small></div><div class="tr">plan written<br>planner</div><div class="st2 cur"><b>planning</b><small>rev 3</small></div><div class="tr guard">3 blocking<br>answered by you</div><div class="st2"><b>executing</b><small>workers</small></div><div class="tr guard">preview approved<br>by Q-3's person</div><div class="st2"><b>previewing</b><small>3 screens</small></div><div class="tr guard">checks pass<br>ship by you</div><div class="st2 end"><b>delivered</b><small>closed</small></div>
+        </div>
+        <div class="micro">a hook refuses any transition whose guard is not met and writes one sentence to history.md</div>
+      </div>
+    </section>
+    <section class="entry" id="c-50">
+      <div class="lab"><span class="code">C-50</span><b>Contract table</b><p>Commands, hooks or endpoints with what goes in and out; changed rows tinted, new rows green. Use when a task touches an interface other code depends on.</p></div>
+      <div class="body">
+        <table class="ct2"><thead><tr><th>Interface</th><th>In</th><th>Out</th><th>Who calls it</th><th>Change</th></tr></thead><tbody>
+          <tr class="chg"><td class="c">grid task start &lt;id&gt;</td><td>task id</td><td>session id in task.md</td><td>you, Home</td><td><span class="pill3">modified</span> no --window</td></tr>
+          <tr class="newr"><td class="c">grid idle --task --session --reason</td><td>task, session, reason</td><td>history line · Home refresh</td><td>hooks/on-stop.sh</td><td><span class="pill3">new</span> step 3</td></tr>
+          <tr><td class="c">grid-hook approval-gate</td><td>phase, accepted rev</td><td>allow | refuse + sentence</td><td>claude (hook)</td><td><span class="pill3">unchanged</span></td></tr>
+          <tr class="chg"><td class="c">grid-hook read-cap</td><td>tokens read</td><td>warn at 50k · refuse at 120k</td><td>claude (hook)</td><td><span class="pill3">modified</span> waits on Q-7</td></tr>
+        </tbody></table>
+      </div>
+    </section>
+    <section class="entry" id="c-51">
+      <div class="lab"><span class="code">C-51</span><b>File tree with markers</b><p>The repo tree, collapsed to what the task touches, each file marked A, M, D or predicted. Use when the reader knows the codebase and wants the shape of the change.</p></div>
+      <div class="body">
+        <div class="ftree">
+          <div class="ft d"><span class="mk"></span>grid-cli/<span class="cnt">11 files</span></div>
+          <div class="ft d i1"><span class="mk"></span>src/planner/</div>
+          <div class="ft i2"><span class="mk M">M</span>start.ts</div><div class="ft i2"><span class="mk A">A</span>idle.ts</div><div class="ft i2"><span class="mk P">○</span>version.ts <span class="cnt">predicted</span></div>
+          <div class="ft d i1"><span class="mk"></span>src/hooks/</div>
+          <div class="ft i2"><span class="mk M">M</span>grid-hook.sh</div><div class="ft i2"><span class="mk P">○</span>refuse.ts <span class="cnt">predicted</span></div>
+          <div class="ft d i1"><span class="mk"></span>src/folder/</div><div class="ft i2"><span class="mk P">○</span>read.ts <span class="cnt">predicted</span></div>
+          <div class="ft d i1"><span class="mk"></span>src/terminal/</div><div class="ft i2"><span class="mk D">D</span>open.ts</div>
+          <div class="ft d i1"><span class="mk"></span>tests/</div><div class="ft i2"><span class="mk A">A</span>planner.test.ts</div><div class="ft i2"><span class="mk P">○</span>hooks.test.ts</div>
+          <div class="ft d"><span class="mk"></span>grid-ui/<span class="cnt">3 files, all predicted</span></div>
+          <div class="ft d i1"><span class="mk"></span>src/home/</div><div class="ft i2"><span class="mk P">○</span>waiting.tsx</div>
+          <div class="ft d i1"><span class="mk"></span>src/task/</div><div class="ft i2"><span class="mk P">○</span>approvals.tsx</div><div class="ft i2"><span class="mk P">○</span>preview.tsx</div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-52">
+      <div class="lab"><span class="code">C-52</span><b>Layer diagram</b><p>The stack from the person down to Claude Code, with the layers this task touches outlined and a count. Use in Architecture when the question is "how deep does this go".</p></div>
+      <div class="body">
+        <div class="layers">
+          <div class="layer"><b>you · Kim · Noor</b><span>Home, the task page, the relay page</span><span class="cnt">—</span></div>
+          <div class="layer hot"><b>grid-ui</b><span>Home waiting column · approvals · preview</span><span class="cnt">3 files · ch 2, 5</span></div>
+          <div class="layer hot"><b>grid-cli</b><span>planner · folder · hooks · team</span><span class="cnt">11 files · ch 1–4</span></div>
+          <div class="layer hot"><b>tasks/T-01/</b><span>task.md · plan.md · questions/ · history.md</span><span class="cnt">read and written</span></div>
+          <div class="layer quiet"><b>Claude Code</b><span>claude --agent · hooks · sessions</span><span class="cnt">unchanged · 2.1.236</span></div>
+          <div class="layer quiet"><b>laptop-1</b><span>one machine; build-box offline</span><span class="cnt">unchanged</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-53">
+      <div class="lab"><span class="code">C-53</span><b>Commit timeline</b><p>Commits on the task branch with the step each one closes; predicted commits dashed. Use at Deliver and in Code to connect steps to git.</p></div>
+      <div class="body">
+        <div class="commits">
+          <div class="cm2 ok"><span class="h">8d04be · 08:22</span><span class="m">planner: start with --agent in the background<small>step 1 · grid-worker 1 · 3 files</small></span><span class="s">tested</span></div>
+          <div class="cm2 ok"><span class="h">c71f20 · 08:40</span><span class="m">planner: keep CLAUDE.md with a swapped body<small>step 2 · grid-worker 1 · 2 files</small></span><span class="s">tested</span></div>
+          <div class="cm2 ok"><span class="h">3f9a1c · 09:50</span><span class="m">hooks: one grid-hook with named rules<small>step 13 · grid-worker 1</small></span><span class="s">tested</span></div>
+          <div class="cm2 cur"><span class="h">working</span><span class="m">planner: idle hook on stop<small>step 3 · grid-worker 2 · draft</small></span><span class="s">next</span></div>
+          <div class="cm2 pred"><span class="h">predicted</span><span class="m">planner: version floor<small>step 5 · after Q-4</small></span><span class="s">planned</span></div>
+          <div class="cm2 pred"><span class="h">predicted</span><span class="m">folder: read, watch, cache<small>chapter 2 · 6 steps</small></span><span class="s">planned</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-54">
+      <div class="lab"><span class="code">C-54</span><b>Test matrix</b><p>Tests down, steps across; green where a step is proven, red where it fails, hatched where a test is still to be written. Use before a Ship gate.</p></div>
+      <div class="body">
+        <div class="tm" role="img" aria-label="Test matrix for steps 1 to 6">
+          <span></span><span class="th">1</span><span class="th">2</span><span class="th">3</span><span class="th">4</span><span class="th">5</span><span class="th">6</span>
+          <span class="rl">starts with --agent</span><i class="ok"></i><i></i><i></i><i></i><i></i><i></i>
+          <span class="rl">CLAUDE.md loads</span><i class="ok"></i><i class="ok"></i><i></i><i></i><i></i><i></i>
+          <span class="rl">idle within 2 s</span><i></i><i></i><i class="run"></i><i></i><i></i><i></i>
+          <span class="rl">sign-in once per machine</span><i></i><i></i><i></i><i class="p"></i><i></i><i></i>
+          <span class="rl">version floor refuses</span><i></i><i></i><i></i><i></i><i class="p"></i><i></i>
+          <span class="rl">empty body keeps tools</span><i class="no"></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <div class="micro">red: step 1 with an empty body dropped tools · risk 1 · the test stays red on purpose until step 5 guards it</div>
+      </div>
+    </section>
+    <section class="entry" id="c-55">
+      <div class="lab"><span class="code">C-55</span><b>Error → fix</b><p>The error as it appeared, the cause in one line, and the fix as code. Use under a retried step and in Result; the error text is verbatim, never paraphrased.</p></div>
+      <div class="body">
+        <div class="efix">
+          <div><div class="cap micro" style="margin-bottom:6px">error · 10:02 · grid-worker 2</div><pre class="code2"><span class="cm">$ ./hooks/on-stop.sh</span>
+grid idle: history.md not found for session 7f3a
+<span class="kw">exit 2</span></pre></div>
+          <div><div class="cap micro" style="margin-bottom:6px">fix · 10:19 · step 15</div><pre class="code2 aft"><span class="del">sleep 1</span>
+<span class="add">until [ -s "$TASK/history.md" ]; do sleep 0.2; done</span>
+grid idle --task "$TASK" --session "$CLAUDE_SESSION"</pre></div>
+          <div class="cause"><b>cause</b><span>the stop hook fires before the planner's last write lands (spike 3: not exactly once, and early). Waiting for the file instead of sleeping fixes both.</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="entry" id="c-56">
+      <div class="lab"><span class="code">C-56</span><b>Config and flag diff</b><p>Settings, flags and environment that change, as key · old → new · why. Use whenever a task touches configuration; never bury it in a diff.</p></div>
+      <div class="body">
+        <table class="ct2"><thead><tr><th>Key</th><th>Before</th><th>After</th><th>Why</th></tr></thead><tbody>
+          <tr class="chg"><td class="c">planner.window</td><td>true</td><td class="c">false</td><td>no terminal window (your note Mon 16:20)</td></tr>
+          <tr class="newr"><td class="c">planner.agent</td><td>—</td><td class="c">grid-planner</td><td>--agent beats settings (spike 1)</td></tr>
+          <tr class="newr"><td class="c">claude.floor</td><td>—</td><td class="c">2.1.236 · waits on Q-4</td><td>the version step 1 tested on</td></tr>
+          <tr class="chg"><td class="c">hooks.read_cap</td><td>warn 80k</td><td class="c">warn 50k · refuse 120k · waits on Q-7</td><td>largest honest read in T-07 was 38k</td></tr>
+          <tr><td class="c">GRID_HOME</td><td>~/.grid</td><td>~/.grid</td><td>unchanged</td></tr>
+        </tbody></table>
+      </div>
+    </section>
+  </section>
+
+  <section class="lsec">
+    <span class="eb">7 · Pages around the task</span>
+    <h2>Lists, queues and panels for Home, Inbox, Project and Sessions</h2>
+
+    <section class="entry" id="c-57"><div class="lab"><span class="code">C-57</span><b>Task row</b><p>One task in a list: state colour, id, title, project, what it waits on, age. The whole row opens the task.</p><p>Use when: a page lists tasks (Home, Project, Inbox done lately).</p><p>Do not use: inside a task page; there the steps are C-08.</p></div><div class="body">
+      <div class="trows">
+        <a class="trw" href="#c-57"><span class="stdot ask"></span><span class="id">T-11</span><span class="w"><b>Pricing page</b><span><span class="pjd" style="--pc:var(--ob-p4)">helios</span><span class="on ask">Waits on you · pick the annual discount</span></span></span><span class="age">2h</span></a>
+        <a class="trw" href="#c-57"><span class="stdot stuck"></span><span class="id">T-03</span><span class="w"><b>Sync fix</b><span><span class="pjd" style="--pc:var(--ob-p2)">vertex</span><span class="on stuck">Stuck · test fails twice</span></span></span><span class="age">1d</span></a>
+        <a class="trw" href="#c-57"><span class="stdot run"></span><span class="id">T-01</span><span class="w"><b>Grid on Claude</b><span><span class="pjd" style="--pc:var(--ob-p1)">gridconsole-os</span><span class="on">Running · step 4 of 7</span></span></span><span class="age">12m</span></a>
+        <a class="trw" href="#c-57"><span class="stdot"></span><span class="id">T-13</span><span class="w"><b>CSV import</b><span><span class="pjd" style="--pc:var(--ob-p2)">vertex</span><span class="on">Can wait · not started</span></span></span><span class="age">3d</span></a>
+      </div>
+      <div class="var"><span class="vlab">Variant<b>grouped by project</b></span>
+        <div class="trows">
+          <div class="trh"><span class="pjd" style="--pc:var(--ob-p1)"><b>gridconsole-os</b></span><span class="n">3 open · 1 waits on you</span></div>
+          <a class="trw" href="#c-57"><span class="stdot ask"></span><span class="id">T-02</span><span class="w"><b>Hook script</b><span><span class="on ask">Waits on you · approve the hook list</span></span></span><span class="age">40m</span></a>
+          <a class="trw" href="#c-57"><span class="stdot run"></span><span class="id">T-04</span><span class="w"><b>Step bar</b><span><span class="on">Running · review</span></span></span><span class="age">5m</span></a>
+          <a class="trw done" href="#c-57"><span class="stdot done"></span><span class="id">T-06</span><span class="w"><b>Doctor command</b><span><span class="on">Done · merged</span></span></span><span class="age">2d</span></a>
+        </div>
+      </div>
+    </div></section>
+
+    <section class="entry" id="c-58"><div class="lab"><span class="code">C-58</span><b>Needs-you queue item</b><p>What is asked, the recommended answer and what it leads to, and the one action that takes it. Answer without opening the task.</p><p>Use when: Home or Inbox lists questions across tasks.</p><p>Do not use: inside a task; the full decision with its options is C-10.</p></div><div class="body">
+      <div class="needs">
+        <div class="ni"><div class="nk"><span class="eb">T-11 · helios · question</span><span class="tag wait">waits on you</span><span class="micro">asked 2h ago</span></div>
+          <div><p class="nq">Which annual discount goes on the pricing page?</p><div class="nr"><b><span class="tag rec">recommended</span> 15% off yearly</b><span>Matches the billing export; no change to T-05.</span></div></div>
+          <div class="nact"><button class="btn pri" type="button">Use recommended</button><a class="lnk" href="#c-58">Answer differently</a></div></div>
+      </div>
+      <div class="var"><span class="vlab">Variant<b>answered</b></span>
+        <div class="needs"><div class="ni done"><div class="nk"><span class="eb">T-02 · gridconsole-os · approval</span><span class="micro">answered 10m ago</span></div><div><p class="nq">Approve the hook list for the plugin?</p></div><div class="nact"><a class="lnk" href="#c-58">Undo</a></div></div></div>
+      </div>
+    </div></section>
+
+    <section class="entry" id="c-59"><div class="lab"><span class="code">C-59</span><b>Project tile</b><p>One project at a glance: name, its repos, open tasks, what waits on you, tokens this week. Opens the project page.</p><p>Use when: Home or Projects shows several projects side by side.</p><p>Do not use: as the head of the project page; that is C-67.</p></div><div class="body">
+      <div class="ptiles">
+        <div class="ptile ask"><div class="pn"><span class="pjd" style="--pc:var(--ob-p4)"></span><b>helios</b><a class="lnk" href="#c-59">open ›</a></div><div class="repos"><span>helios-web</span><span>helios-api</span></div><div class="pnum"><div><b>3</b><span>open</span></div><div class="ask"><b>2</b><span>wait on you</span></div><div><b>2.1M</b><span>tokens this week</span></div></div></div>
+        <div class="ptile stuck"><div class="pn"><span class="pjd" style="--pc:var(--ob-p2)"></span><b>vertex</b><a class="lnk" href="#c-59">open ›</a></div><div class="repos"><span>vertex-app</span><span>vertex-sync</span><span>vertex-maps</span></div><div class="pnum"><div><b>5</b><span>open</span></div><div class="stuck"><b>1</b><span>stuck</span></div><div><b>3.6M</b><span>tokens this week</span></div></div></div>
+      </div>
+      <div class="var"><span class="vlab">Variant<b>quiet</b></span>
+        <div class="ptiles"><div class="ptile"><div class="pn"><span class="pjd" style="--pc:var(--ob-p5)"></span><b>kestrel</b><a class="lnk" href="#c-59">open ›</a></div><div class="repos"><span>kestrel</span></div><p class="pl">Nothing waits on you. Last closed 4d ago.</p></div></div>
+      </div>
+    </div></section>
+
+    <section class="entry" id="c-60"><div class="lab"><span class="code">C-60</span><b>Live session tile</b><p>One running agent: who, on which task, model, running time, tokens, context left and its last line.</p><p>Use when: Home or Sessions shows what runs now.</p><p>Do not use: for a finished run; that is a line in C-21.</p></div><div class="body">
+      <div class="stiles">
+        <div class="stile"><div class="sa"><span class="livdot"></span><b>grid-worker</b><span class="mdl">sonnet</span></div><div class="st2"><span class="id">T-01</span><span>Grid on Claude · step 4</span></div><p class="ln">editing skills/plan-page/reference/components.css</p><div class="snum"><div><b>12m</b><span>running</span></div><div><b>184k</b><span>tokens</span></div><div><b>5/8</b><span>steps</span></div><div><b>61%</b><span>context</span></div></div><div class="trk"><i style="width:61%"></i></div><p class="who">started by Sam · this Mac</p></div>
+        <div class="stile ask"><div class="sa"><span class="livdot ask"></span><b>grid-planner</b><span class="mdl">opus</span></div><div class="st2"><span class="id">T-11</span><span>Pricing page · plan</span></div><p class="ln">Waits on you: pick the annual discount</p><div class="snum"><div><b>31m</b><span>running</span></div><div><b>96k</b><span>tokens</span></div><div><b>2/6</b><span>steps</span></div><div><b>38%</b><span>context</span></div></div><div class="trk"><i style="width:38%"></i></div><p class="who">started by Kim · CI runner</p></div>
+      </div>
+      <div class="var"><span class="vlab">Variant<b>stuck</b></span>
+        <div class="stiles"><div class="stile stuck"><div class="sa"><span class="livdot stuck"></span><b>grid-runner</b><span class="mdl">haiku</span></div><div class="st2"><span class="id">T-03</span><span>Sync fix · verify</span></div><p class="ln">FAIL sync.test.ts › retries once (2nd time)</p><div class="snum"><div><b>48m</b><span>running</span></div><div><b>22k</b><span>tokens</span></div><div><b>1/4</b><span>steps</span></div><div><b>9%</b><span>context</span></div></div></div></div>
+      </div>
+    </div></section>
+
+    <section class="entry" id="c-61"><div class="lab"><span class="code">C-61</span><b>Machine panel</b><p>The machine the sessions run on: CPU, memory, disk and sessions running, each with a bar. Amber when it is near the limit.</p><p>Use when: Home or Sessions needs to say whether there is room for another run.</p><p>Do not use: for plan limits or money; that is C-62.</p></div><div class="body">
+      <div class="gpan"><div class="gph"><b>This Mac</b><span>updated 5s ago</span></div>
+        <div class="mrows">
+          <div class="mr"><span class="k">CPU</span><span class="v"><b>42%</b> · load 3.1</span><span class="trk"><i style="width:42%"></i></span></div>
+          <div class="mr"><span class="k">Memory</span><span class="v"><b>27.4</b> of 32 GB</span><span class="trk"><i class="hi" style="width:86%"></i></span></div>
+          <div class="mr"><span class="k">Disk</span><span class="v"><b>310</b> of 1000 GB</span><span class="trk"><i style="width:31%"></i></span></div>
+          <div class="mr"><span class="k">Sessions</span><span class="v"><b>3</b> running · room for 2 more</span><span class="trk"><i style="width:60%"></i></span></div>
+        </div>
+      </div>
+      <div class="var"><span class="vlab">Variant<b>offline</b></span>
+        <div class="gpan"><div class="mhd"><span class="lamp off"></span><b>ci-runner-2</b><span class="meta">offline since 09:12</span></div><p class="dim">No sessions can start here. Its 1 session was moved to This Mac.</p><div><button class="btn sm" type="button">Check again</button></div></div>
+      </div>
+    </div></section>
+
+    <section class="entry" id="c-62"><div class="lab"><span class="code">C-62</span><b>Usage panel</b><p>Plan limits as meters, the week so far as one figure, and tokens by project as bars.</p><p>Use when: Home or Sessions answers "how much is left and where did it go".</p><p>Do not use: for one task's usage; that sits in C-18.</p></div><div class="body">
+      <div class="gpan"><div class="gph"><b>Usage</b><span>Max plan · resets Mon</span></div>
+        <div class="meters">
+          <div class="meter"><div class="mh"><span>5-hour window</span><span>48%</span></div><div class="mt"><i style="width:48%"></i></div><div class="mm">resets 14:00</div></div>
+          <div class="meter"><div class="mh"><span>Week</span><span>81%</span></div><div class="mt"><i class="warn" style="width:81%"></i></div><div class="mm"><span class="amber">near the limit · resets Mon</span></div></div>
+        </div>
+        <div class="sep"></div>
+        <div class="ubig"><b>18.4M</b><span>tokens this week so far · 2.3M today</span></div>
+        <ul class="hbars">
+          <li><span class="pjd" style="--pc:var(--ob-p2)">vertex</span><span class="br"><i style="width:100%;--pc:var(--ob-p2)"></i></span><span class="v">7.9M</span></li>
+          <li><span class="pjd" style="--pc:var(--ob-p4)">helios</span><span class="br"><i style="width:59%;--pc:var(--ob-p4)"></i></span><span class="v">4.7M</span></li>
+          <li><span class="pjd" style="--pc:var(--ob-p1)">gridconsole-os</span><span class="br"><i style="width:40%;--pc:var(--ob-p1)"></i></span><span class="v">3.1M</span></li>
+          <li><span class="pjd" style="--pc:var(--ob-p3)">northwind</span><span class="br"><i style="width:8%;--pc:var(--ob-p3)"></i></span><span class="v">0.6M</span></li>
+        </ul>
+      </div>
+    </div></section>
+
+    <section class="entry" id="c-63"><div class="lab"><span class="code">C-63</span><b>Grid health panel</b><p>Is Grid itself set up right: plugin version, hooks, skills, agents, and when it was last checked. A failing row says how to fix it.</p><p>Use when: Home or Settings shows whether Grid can be trusted to run.</p><p>Do not use: for a task's own checks; those are C-12.</p></div><div class="body">
+      <div class="gpan"><div class="gph"><b>Grid health</b><span>last check 09:38</span></div>
+        <ul class="health">
+          <li><span class="gl okc">✓</span><span class="k">Plugin</span><span class="v"><b>0.9.2</b> · up to date</span></li>
+          <li><span class="gl okc">✓</span><span class="k">Hooks</span><span class="v"><b>6 of 6</b> installed</span></li>
+          <li><span class="gl okc">✓</span><span class="k">Skills</span><span class="v"><b>14</b> loaded</span></li>
+          <li><span class="gl okc">✓</span><span class="k">Agents</span><span class="v"><b>5</b> · grid-planner, grid-runner, grid-worker, grid-reviewer, grid-brief</span></li>
+        </ul>
+        <p class="micro">Also <span class="mono">grid doctor</span> in a terminal.</p>
+      </div>
+      <div class="var"><span class="vlab">Variant<b>a check fails</b></span>
+        <div class="gpan"><div class="gph"><b>Grid health</b><span>last check 09:38</span></div>
+          <ul class="health">
+            <li><span class="gl okc">✓</span><span class="k">Plugin</span><span class="v"><b>0.9.2</b> · up to date</span></li>
+            <li class="bad"><span class="gl errc">✕</span><span class="k">Hooks</span><span class="v"><b>5 of 6</b> · stop hook missing, sessions will not report back</span><span class="fix"><button class="btn sm pri" type="button">Run grid doctor</button><a class="lnk" href="#c-63">What it changes</a></span></li>
+          </ul>
+        </div>
+      </div>
+    </div></section>
+
+    <section class="entry" id="c-64"><div class="lab"><span class="code">C-64</span><b>Agent roster card</b><p>One agent Grid can send: name, role, model, last run, pass rate. Amber when its pass rate drops.</p><p>Use when: the Agents or Roster page lists who can do the work.</p><p>Do not use: for the people and agents on one task; that is C-28.</p></div><div class="body">
+      <div class="agcards">
+        <div class="agc"><div class="ah"><span class="av">W</span><div><b>grid-worker</b><span>builds one step</span></div><span class="mdl">sonnet</span></div><div class="afacts"><span class="k">Last run</span><span>T-01 · 12m ago</span><span class="k">Runs</span><span>48 this week</span></div><div class="pr"><div class="ph3"><span>Pass first time</span><b>92%</b></div><div class="trk"><i style="width:92%"></i></div></div></div>
+        <div class="agc low"><div class="ah"><span class="av">R</span><div><b>grid-runner</b><span>runs checks</span></div><span class="mdl">haiku</span></div><div class="afacts"><span class="k">Last run</span><span>T-03 · 48m ago</span><span class="k">Runs</span><span>31 this week</span></div><div class="pr"><div class="ph3"><span class="amber">Pass first time</span><b>58%</b></div><div class="trk"><i style="width:58%"></i></div></div></div>
+      </div>
+      <div class="var"><span class="vlab">Variant<b>never run</b></span>
+        <div class="agcards"><div class="agc"><div class="ah"><span class="av">B</span><div><b>grid-brief</b><span>writes briefs</span></div><span class="mdl">opus</span></div><p class="dim">Not run yet. Grid sends it when a task needs a brief.</p></div></div>
+      </div>
+    </div></section>
+
+    <section class="entry" id="c-65"><div class="lab"><span class="code">C-65</span><b>Empty, absent and loading list</b><p>What a list shows when it has nothing: calm empty, not set up, filtered out, loading, or failed. Each says what comes next.</p><p>Use when: any C-57 to C-64 list can be empty.</p><p>Do not use: for a missing section inside a task; that is C-36.</p></div><div class="body">
+      <div class="trows"><div class="lnone"><b>Nothing waits on you.</b><span>Grid will ask here when a task needs you.</span></div></div>
+      <div class="var"><span class="vlab">Variant<b>not set up</b></span><div class="lnone unset"><b>No projects yet.</b><span>Add a repo and Grid makes the project.</span><span class="grow"></span><button class="btn sm pri" type="button">Add a repo</button></div></div>
+      <div class="var"><span class="vlab">Variant<b>filtered out</b></span><div class="trows"><div class="lnone"><span>No tasks match <b>helios · stuck</b>.</span><a class="lnk" href="#c-65">Clear the filter</a></div></div></div>
+      <div class="var"><span class="vlab">Variant<b>loading</b></span><div class="trows" aria-busy="true"><div class="lskel"><i></i><i></i><i></i><i></i></div><div class="lskel"><i></i><i></i><i></i><i></i></div></div></div>
+      <div class="var"><span class="vlab">Variant<b>failed</b></span><div class="lnone err"><b>Could not read the task folders.</b><span>tasks/ is not readable.</span><span class="grow"></span><button class="btn sm" type="button">Try again</button></div></div>
+    </div></section>
+
+    <section class="entry" id="c-66"><div class="lab"><span class="code">C-66</span><b>View chips with counts</b><p>Switch between views of one list; each chip carries its count, amber when it waits on you.</p><p>Use when: a list has two to five views (Inbox: To decide, Snoozed, Done lately).</p><p>Do not use: for page navigation; that is the rail.</p></div><div class="body">
+      <div class="vchips" role="group" aria-label="Inbox view"><button type="button" aria-pressed="true">To decide <span class="n ask">4</span></button><button type="button" aria-pressed="false">Snoozed <span class="n">2</span></button><button type="button" aria-pressed="false">Done lately <span class="n">9</span></button></div>
+    </div></section>
+
+    <section class="entry" id="c-67"><div class="lab"><span class="code">C-67</span><b>Page head</b><p>Title, one sentence of where things stand, and the counts that matter. The counterpart of C-18 for pages that are not a task.</p><p>Use when: Home, Inbox, Project or Sessions opens.</p><p>Do not use: on a task page; that is C-18.</p></div><div class="body">
+      <div class="phd"><div class="pt"><span class="pjd micro" style="--pc:var(--ob-p4)">project</span><h3>helios</h3><p class="ps"><span class="amber">2 wait on you</span><span>T-10 running</span><span>last closed T-08 yesterday</span></p></div><div class="pk"><div><b>3</b><span>open</span></div><div class="ask"><b>2</b><span>wait on you</span></div><div><b>2.1M</b><span>tokens this week</span></div></div></div>
+    </div></section>
+  </section>
+
+</div>
+</div>
+</body></html>

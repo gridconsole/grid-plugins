@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: agent-checker-read-only
+description: The checker does not submit the form; the Acceptance line that needs a submit is NOT VERIFIED with Needs grid-operator, and every row has evidence. Needs a connected browser, so CI only.
+context:
+  scaffold_script: fixture.sh

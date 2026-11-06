@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: routing-skill
+description: A request for one agent rule makes the routing skill add exactly that row to routing.md and leave the rest alone.
+context:
+  scaffold_script: fixture.sh

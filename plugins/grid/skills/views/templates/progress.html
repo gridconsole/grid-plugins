@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en" data-ob-theme="grid">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{T-NN}} progress</title>
+<link rel="stylesheet" href="../ds/tokens.css">
+<link rel="stylesheet" href="../ds/components.css">
+<link rel="stylesheet" href="../ds/views.css">
+</head>
+<body>
+<header class="v-head">
+  <span class="v-kicker">{{T-NN}} · {{project}} · {{owner}}</span>
+  <h1>{{headline: the conclusion, for example "Step 2 of 3 is running; nothing waits on you"}}</h1>
+  <p class="v-meta">{{status in words, and since when}}</p>
+</header>
+
+<!-- The task's own workflow from task.md, one item per step, in order. aria-current="step" on the current one; data-wait="true" on a step that waits on a person. -->
+<section class="v-section" id="workflow">
+  <h2>Where it stands</h2>
+  <p>{{one sentence: which step is running, what kind it is, who acts}}</p>
+  <ol class="v-track">
+    <li class="v-step" aria-current="step"><span class="v-mono">{{step name}}</span> · {{kind}} · ● {{state}}</li>
+  </ol>
+</section>
+
+<!-- Plan items from plan.md, ticked or not, each with an id. Leave this section out when there is no plan.md. -->
+<section class="v-section" id="items">
+  <h2>Plan items</h2>
+  <p>{{n of m plan items are done}}</p>
+  <ul class="v-list">
+    <li class="v-row" id="s-1">{{✓ or ○}} {{plan item title}}</li>
+  </ul>
+</section>
+
+<!-- What waits on a person, from task.md needs. Leave the whole section out when nothing does. -->
+<section class="v-section" id="needs">
+  <h2>Needs you</h2>
+  <ul class="v-list">
+    <li class="v-row" data-state="waits" id="q-1">! {{question or approval, written completely}}</li>
+  </ul>
+</section>
+
+<section class="v-section" id="history">
+  <h2>What happened</h2>
+  <ul class="v-list">
+    <li class="v-row"><span class="v-mono">{{time}}</span> {{line from history.md}}</li>
+  </ul>
+</section>
+</body>
+</html>

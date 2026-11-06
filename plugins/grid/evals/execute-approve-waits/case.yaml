@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: execute-approve-waits
+description: Running a task whose current step is an approve step makes the execute skill start grid-reviewer on the finished work first, then set status waiting and stop, without moving step or writing an approval line.
+context:
+  scaffold_script: fixture.sh

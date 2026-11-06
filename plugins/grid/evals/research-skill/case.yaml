@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: research-skill
+description: A research ask makes the research skill have a brief written, start the researcher and leave research.md in the task folder.
+context:
+  scaffold_script: fixture.sh

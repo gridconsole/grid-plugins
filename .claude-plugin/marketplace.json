@@ -1,0 +1,14 @@
+{
+  "name": "grid",
+  "owner": { "name": "Grid" },
+  "metadata": {
+    "description": "Grid: task folders, a planner per task, plan pages built from a component library."
+  },
+  "plugins": [
+    {
+      "name": "grid",
+      "source": "./plugins/grid",
+      "description": "Grid: task folders, a planner per task, plan pages built from a component library."
+    }
+  ]
+}

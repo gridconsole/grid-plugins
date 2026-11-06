@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: agent-report-cap
+description: The worker writes a 300-line generated file under artifacts/ and replies in at most 40 lines without pasting the file.
+context:
+  scaffold_script: fixture.sh

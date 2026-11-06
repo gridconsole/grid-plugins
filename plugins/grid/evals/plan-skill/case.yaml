@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: plan-skill
+description: Asking for a plan makes the plan skill write plan.md with its revision line, the situation, options and risks before steps that each say why, and a review before it waits.
+context:
+  scaffold_script: fixture.sh

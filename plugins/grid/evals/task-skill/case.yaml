@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: task-skill
+description: A natural ask to start a task makes the task skill create the folder, intent.md and task.md.
+context:
+  scaffold_script: fixture.sh

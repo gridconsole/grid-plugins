@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: execute-check-after-make-together
+description: A check step after a make-together step (so a rework needs the person, as in generated story T-41) that fails on a file the task may edit, where intent.md says what to fix after a failure, makes the execute skill run only the check (the brief tells the runner to edit nothing), leave the project file unchanged and send the task back to the make-together step as a rework (round 2, reworking), instead of letting the check fix it.
+context:
+  scaffold_script: fixture.sh

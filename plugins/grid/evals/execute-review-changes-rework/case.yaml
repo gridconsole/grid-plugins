@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: execute-review-changes-rework
+description: A reviewer's Verdict of CHANGES with must-fix items, under the workflow's review rounds, goes back to the build step and the worker starts again in the same turn, with no question to the owner and no money in any file.
+context:
+  scaffold_script: fixture.sh

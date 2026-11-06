@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: execute-skill
+description: Running a run step makes the execute skill look up routing.md, have a brief written, start the agent that routing.md names for the step (the designer, not the default worker), and move the step on only after that agent is done.
+context:
+  scaffold_script: fixture.sh

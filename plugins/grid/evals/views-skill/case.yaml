@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: views-skill
+description: Asking for the progress view makes the views skill write views/progress.html from the template with the design system files beside it.
+context:
+  scaffold_script: fixture.sh

@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: visual-review-faults
+description: A visual design review of a small page finds both planted faults (a time later than the page clock, a table clipped at 390px) and changes no source.
+context:
+  scaffold_script: fixture.sh

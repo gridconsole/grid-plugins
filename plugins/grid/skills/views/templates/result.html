@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en" data-ob-theme="grid">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{T-NN}} result</title>
+<link rel="stylesheet" href="../ds/tokens.css">
+<link rel="stylesheet" href="../ds/components.css">
+<link rel="stylesheet" href="../ds/views.css">
+</head>
+<body>
+<header class="v-head">
+  <span class="v-kicker">{{T-NN}} · {{project}} · result</span>
+  <h1>{{headline: what was made, in one sentence}}</h1>
+  <p class="v-meta">{{when it was finished and by which agent}}</p>
+</header>
+
+<section class="v-section" id="made">
+  <h2>What was made</h2>
+  <p>{{one paragraph from the briefs' Outcome}}</p>
+  <ul class="v-list">
+    <li class="v-row"><span class="v-mono">artifacts/{{file}}</span> {{what it is}}</li>
+  </ul>
+</section>
+
+<!-- Checks, with the evidence file copied verbatim or linked. Only checks that were run. -->
+<section class="v-section" id="checks">
+  <h2>Checks</h2>
+  <ul class="v-list">
+    <li class="v-row">✓ {{check}} <span class="v-mono">evidence/{{file}}</span></li>
+  </ul>
+</section>
+</body>
+</html>

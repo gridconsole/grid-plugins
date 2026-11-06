@@ -1,0 +1,19 @@
+/* Page frame for the task views. Tokens and components come from tokens.css and components.css; this file only lays a page out. */
+html { background: var(--ob-bg); color: var(--ob-fg1); font-family: var(--font-sans); font-size: var(--t-body); line-height: var(--lh-body); }
+body { margin: 0 auto; padding: var(--space-16); max-width: var(--page-max); display: flex; flex-direction: column; gap: var(--space-16); }
+.v-head { display: flex; flex-direction: column; gap: var(--space-6); border-bottom: 1px solid var(--ob-line); padding-bottom: var(--space-12); }
+.v-kicker { font-family: var(--font-mono); font-size: var(--t-eyebrow); letter-spacing: var(--ls-eyebrow); text-transform: uppercase; color: var(--ob-fg3); }
+.v-head h1 { margin: 0; font-size: var(--t-page); line-height: var(--lh-page); font-weight: var(--fw-page); }
+.v-section { display: flex; flex-direction: column; gap: var(--space-8); max-width: var(--measure); }
+.v-section h2 { margin: 0; font-size: var(--t-section); line-height: var(--lh-section); font-weight: var(--fw-section); }
+.v-section p { margin: 0; }
+.v-track { display: flex; flex-wrap: wrap; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
+.v-step { background: var(--ob-panel); border: 1px solid var(--ob-line); border-radius: var(--radius-8); padding: var(--space-8) var(--space-12); font-size: var(--t-meta); }
+.v-step[aria-current="step"] { border-color: var(--ob-acc); }
+.v-step[data-wait="true"] { border-color: var(--ob-ask); }
+.v-list { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
+.v-row { background: var(--ob-panel); border: 1px solid var(--ob-line); border-radius: var(--radius-8); padding: var(--space-10) var(--space-12); }
+.v-row[data-state="waits"] { border-color: var(--ob-ask); }
+.v-mono { font-family: var(--font-mono); font-size: var(--t-data); }
+.v-meta { color: var(--ob-fg2); font-size: var(--t-meta); line-height: var(--lh-meta); }
+@media (max-width: 480px) { body { padding: var(--space-10); } }

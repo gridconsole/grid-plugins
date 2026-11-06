@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: execute-check-fails-out-of-scope
+description: A check step that fails only on files the task's intent says to leave alone makes the execute skill raise a blocking question to the owner and wait (step and round unchanged), instead of sending the task back to rework what it may not touch.
+context:
+  scaffold_script: fixture.sh

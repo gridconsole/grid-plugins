@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: memory-skill
+description: Asking to remember something makes the memory skill append a dated line to the task's memory/build.md and nothing else.
+context:
+  scaffold_script: fixture.sh

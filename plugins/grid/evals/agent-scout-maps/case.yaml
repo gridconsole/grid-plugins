@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: agent-scout-maps
+description: A "where is X" ask about a project makes grid-scout answer with path:line ranges, say "not found" for what is not there, and edit nothing.
+context:
+  scaffold_script: fixture.sh

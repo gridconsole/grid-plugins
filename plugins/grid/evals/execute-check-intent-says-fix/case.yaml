@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: execute-check-intent-says-fix
+description: A check step that fails on a file the task may edit, where intent.md says what to fix after a failure, makes the execute skill run only the check (the brief tells the runner to edit nothing), send the task back to the step before as a rework (round 2 or later), instead of letting the check fix it; the write step's own worker may then carry on and fix the file.
+context:
+  scaffold_script: fixture.sh

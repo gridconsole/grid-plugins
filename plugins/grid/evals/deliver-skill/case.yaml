@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: deliver-skill
+description: Finished work makes the deliver skill write the outcome into task.md, put the file into artifacts/ and add a history line, without closing the task.
+context:
+  scaffold_script: fixture.sh

@@ -1,0 +1,222 @@
+// PreToolUse on Write|Edit|MultiEdit|NotebookEdit: no session builds in the repo before a person
+// accepts the plan. Grid's `plan accepted` line is the gate: the planner plans in normal mode, and
+// this keeps its file edits out of the repo until then. Every rule runs in every permission mode.
+// - A task is held while history.md has no `plan accepted` line of Grid's own shape ("- <time> · plan
+//   accepted · ..."; a name a hook logged in the detail's place does not count), it is not closed,
+//   paused or pausing, and its step is the plan approval (the first approve step whose name has "plan",
+//   as gateEvent in core) or one before it, or task.md cannot be read for sure: missing, no step, an
+//   odd key, a workflow item that is not a {step, kind} pair, a step named twice (lib's parser is
+//   core's, kept equal by tests/hooks/frontmatter-parity.test.mjs). While any task of the session is
+//   held (the one cwd is in, and every one it wrote into, which the pointer file never drops while
+//   held), the session writes only in the Grid projects folder.
+// - A grid-planner writes only in the session's task folders, a task folder whose plan is not accepted
+//   (to start a task), a project's or any task's artifacts folder (not a history.md or task.md in it;
+//   a change asked on an artifact goes to a planner), the brain (a project's `knowledge/` folder or the
+//   Grid home's, GRID_HOME/knowledge), or the projects folder while the session has no task.
+// - A grid-curator writes only the brain and its task folder (with or without Grid's folders set); only it and a
+//   grid-planner write the brain.
+// - Any other subagent never writes the brain: it writes a proposal in its task's brain-proposals/.
+// - In a task whose plan is not accepted, whatever its status, history.md and task.md (any letter
+//   case) are not changed to add the `· plan accepted ·` marker anywhere in a line (core still reads it
+//   there, so this is stricter than the hold), a step past the approval or unknown, a workflow
+//   without the approval, a closed or paused status, or a task.md that cannot be read for sure (unless
+//   it could not be before), as Grid records the acceptance. Every way Claude Code could apply an edit
+//   is tried (old_string as written or after CRLF to LF, new_string literal or with `$&` patterns); an
+//   edit whose result cannot be told (no match, input that is not text) and a notebook edit of those
+//   files are denied.
+// - In such a task a top-level name with a character outside printable ASCII, and any name with a
+//   colon or a part ending in a dot or space, is denied: on macOS or Windows it can open history.md or
+//   task.md under another spelling. So is such a name, or tasks in other letters, for the folder in a
+//   project's tasks folder's place, which could open a task unseen.
+// - In any task, a top-level name that reads as a gate event (plan accepted, preview approved, ship
+//   approved; any case, spaces trimmed) is denied: history.md logs the names written.
+// - A grid-reviewer or grid-checker writes only inside the projects folder, in any mode (its Verdict);
+//   GRID_PLAN_GUARD=off turns this off too.
+// Paths are expanded (~), resolved against cwd and through symlinks (realpath.native, a link that
+// points nowhere followed from its own real folder) before they are compared.
+// Not protected: a Bash write; a repo inside the projects folder (GRID_PROJECTS or GRID_HOME/projects);
+// a session before it first writes into a task folder or works in one (the app starts it in the repo);
+// a file changed between this check and the write. A held task left unaccepted keeps its session out
+// of the repo until the person accepts, closes or pauses it. GRID_PLAN_GUARD=off (any case) in the
+// environment Claude Code starts with turns the guard off, for a plugin-only user who has no app to
+// accept the plan; with no GRID_PROJECTS or GRID_HOME it does nothing.
+import os from 'node:os';
+import path from 'node:path';
+import {
+  main, readInput, str, gridFolders, taskAt, readText, sessionTasks, agentName, planStage, heldStage, inactive, isHeld,
+  gateLike, PLAN_ACCEPTED, realNative,
+} from './lib.mjs';
+
+const WRITES = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+const GUARDED_FILES = new Set(['history.md', 'task.md']);
+// The two roles that write the brain, matched on the exact agent_type (`grid-curator`, or with the plugin's `grid:` prefix),
+// never on agentName's looser reading, so `other:grid-curator` or "Grid Curator" is not one.
+const BRAIN_ROLES = new Set(['grid-curator', 'grid-planner']);
+const brainRole = (raw) => { const t = str(raw).trim(); const r = t.startsWith('grid:') ? t.slice(5) : t; return BRAIN_ROLES.has(r) ? r : ''; };
+const READ_ONLY = new Set(['grid-reviewer', 'grid-checker']);
+const ODD_NAME = /[^\x20-\x7e]|:|[. ](?:\/|$)/;
+const ODD_PART = /:|[. ](?:\/|$)/;
+const NOT_ASCII = /[^\x20-\x7e]/;
+
+const OFF = ' To turn this guard off, start Claude Code with GRID_PLAN_GUARD=off.';
+
+main(async () => {
+  const input = await readInput();
+  const { home, projects, set } = gridFolders(process.env, str(input?.cwd));
+  if (!input || !projects || !WRITES.has(input.tool_name)) return;
+  if (str(process.env.GRID_PLAN_GUARD).trim().toLowerCase() === 'off') return;
+  const toolInput = input.tool_input && typeof input.tool_input === 'object' ? input.tool_input : {};
+  const given = str(input.tool_name === 'NotebookEdit' ? toolInput.notebook_path : toolInput.file_path);
+  if (!given) return;
+  const cwd = str(input.cwd);
+  const target = realNative(path.resolve(cwd, expandHome(given)));
+  const root = realNative(projects);
+  const owner = taskAt(target, root);
+  const taskText = owner ? readText(path.join(owner.dir, 'task.md')) : null;
+  const historyText = owner ? readText(path.join(owner.dir, 'history.md')) : null;
+  const unaccepted = owner && heldStage(planStage(taskText, historyText));
+  const slot = path.relative(root, target).split(path.sep);
+  if (!owner && inside(root, target) && slot.length > 2 && slot[1] !== 'tasks' && (ODD_NAME.test(slot[1]) || slot[1].toLowerCase() === 'tasks')) {
+    return deny(`A folder beside a project's tasks folder keeps a plain name (printable ASCII, no colon, no dot or space at the end, not tasks in other letters): on macOS or Windows it can be the tasks folder under another spelling, so ${given} is not written.${OFF}`);
+  }
+  const top = owner ? owner.rel.split('/')[0] : '';
+  if (owner && gateLike(top)) {
+    return deny(`${given} is not written: a name at the top of a task folder is not plan accepted, preview approved or ship approved, as history.md would log it like a person's approval.${OFF}`);
+  }
+  if (unaccepted && (NOT_ASCII.test(top) || ODD_PART.test(owner.rel))) {
+    return deny(`This task's plan is not accepted yet, so ${given} is not written: until then its files keep plain names (printable ASCII at the top of the task folder, no colon, no dot or space at the end).${OFF}`);
+  }
+  const forged = unaccepted ? leavesPlan(input.tool_name, toolInput, owner.rel.toLowerCase(), taskText, historyText) : '';
+  if (forged === 'status') {
+    return deny(`This task's plan is not accepted yet, so ${given} is not changed to close or pause the task: the person does that in Grid.${OFF}`);
+  }
+  if (forged === 'unreadable') {
+    return deny(`This task's plan is not accepted yet, so ${given} is not changed to a task.md whose step or workflow cannot be read for sure: give it a step and a workflow of {step, kind} items with plain lower-case names, each named once.${OFF}`);
+  }
+  if (forged === 'unclear') {
+    return deny(`This task's plan is not accepted yet: Grid records the acceptance, and what ${given} would hold after this edit cannot be told (an old_string not in the file, or input that is not text), so it is not changed. Read it and edit it again.${OFF}`);
+  }
+  if (forged) {
+    return deny(`This task's plan is not accepted yet: Grid records the acceptance, so ${given} is not changed to say so or to move the task past its plan step.${OFF}`);
+  }
+  if (set && READ_ONLY.has(agentName(input.agent_type)) && !inside(root, target)) {
+    return deny(`A ${agentName(input.agent_type)} writes only its Verdict inside a task folder; ${target} is outside it.`);
+  }
+  const agent = str(input.agent_type).trim() ? agentName(input.agent_type) : '';
+  const role = brainRole(input.agent_type);
+  if (agent && !role && brainFile(root, target, home)) {
+    return deny(`Only a grid-curator (or a grid-planner) writes the brain; a ${agent} writes a proposal in its task's brain-proposals/ folder instead of ${given}.`);
+  }
+  const here = cwd ? taskAt(realNative(cwd), root)?.dir : undefined;
+  const tasks = [...new Set([here, ...sessionTasks(input, projects)].filter(Boolean))];
+  if (tasks.some((d) => inside(d, target))) return;
+  if (role === 'grid-curator') {
+    // The curator writes the brain and its task folder, nothing else, with or without Grid's folders set.
+    if (brainFile(root, target, home)) return;
+    return deny(`A curator writes only the brain (a project's knowledge/ folder or the Grid home's) and its task folder. Write inside ${tasks.length ? tasks.join(' or ') : root}, not ${given}.${OFF}`);
+  }
+  if (set && role === 'grid-planner') {
+    if (unaccepted || (!owner && !tasks.length && inside(root, target)) || artifact(root, target, owner) || brainFile(root, target, home)) return;
+    return deny(`A planner writes only inside a task folder (its own, or one whose plan is not accepted yet), an artifacts folder or a brain folder. Write inside ${tasks.length ? tasks.join(' or ') : root}, not ${given}.${OFF}`);
+  }
+  const held = tasks.filter(isHeld);
+  if (!held.length || inside(root, target)) return;
+  return deny(`A task whose plan is not accepted yet writes only inside its task folder or the Grid projects folder. Write inside ${held.join(' or ')}, not ${given}. Writes elsewhere start once the person accepts the plan in Grid.${OFF}`);
+});
+
+const deny = (reason) => ({ stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } }) });
+
+// Whether file is root or under it, both resolved through symlinks.
+function inside(root, file) {
+  const rel = path.relative(realNative(root), file);
+  return rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));
+}
+
+// A file under a project's artifacts folder or a task's, other than a history.md or task.md.
+function artifact(root, target, owner) {
+  if (!inside(root, target) || GUARDED_FILES.has(path.basename(target).toLowerCase())) return false;
+  if (owner) return owner.rel.startsWith('artifacts/');
+  const slot = path.relative(root, target).split(path.sep);
+  return slot.length > 2 && slot[1] === 'artifacts';
+}
+
+// A file in the brain: a project's knowledge folder (<projects>/<project>/knowledge/) or the Grid home's (GRID_HOME/knowledge/).
+// A project's brain/ folder is the Notes tab's, not the brain.
+// Any letter case, and the folder's own name as a file: on macOS or Windows `Knowledge/` is the same folder.
+function brainFile(root, target, gridHome) {
+  const slot = path.relative(root, target).split(path.sep);
+  if (inside(root, target) && slot.length >= 2 && slot[1].toLowerCase() === 'knowledge') return true;
+  const home = str(gridHome).trim();
+  if (!home) return false;
+  const homeReal = realNative(path.resolve(expandHome(home)));
+  // target is already resolved, so a knowledge link that points elsewhere lands outside the Grid home's knowledge.
+  return inside(homeReal, target) && path.relative(homeReal, target).split(path.sep)[0].toLowerCase() === 'knowledge';
+}
+
+// The lines with the accepted marker anywhere in them, as core/lifecycle.mjs reads history.md.
+const marked = (text) => str(text).split(/\r?\n/).filter((l) => l.includes(PLAN_ACCEPTED));
+
+// Whether next has a marked line that text does not, each line of text matched once.
+function addsMark(text, next) {
+  const left = marked(text);
+  return marked(next).some((l) => {
+    const i = left.indexOf(l);
+    if (i < 0) return true;
+    left.splice(i, 1);
+    return false;
+  });
+}
+
+// A leading ~ is the home folder; Claude Code passes the path as the model wrote it.
+const expandHome = (p) => (p === '~' || /^~[\\/]/.test(p) ? path.join(os.homedir(), p.slice(1)) : p);
+
+// Every text the file could hold after the call, or null when it cannot be told. Claude Code matches
+// old_string in the text it read (line ends made LF) and may read `$&` in new_string as a pattern, so
+// each start and each reading gives a candidate; a reading where an edit does not fit gives none.
+function after(tool, toolInput, text) {
+  if (tool === 'Write') return typeof toolInput.content === 'string' ? [toolInput.content] : null;
+  const edits = tool === 'MultiEdit' ? toolInput.edits : [toolInput];
+  if (!Array.isArray(edits) || !edits.length) return null;
+  const bad = (e) => !e || typeof e !== 'object' || typeof e.old_string !== 'string' || typeof e.new_string !== 'string'
+    || (e.replace_all !== undefined && typeof e.replace_all !== 'boolean');
+  if (edits.some(bad)) return null;
+  const out = [];
+  for (const start of new Set([text ?? '', (text ?? '').replace(/\r\n/g, '\n')])) {
+    for (const literal of [true, false]) {
+      let cur = start;
+      for (const e of edits) if (cur !== null) cur = applyEdit(cur, e, literal);
+      if (cur !== null) out.push(cur);
+    }
+  }
+  return out.length ? out : null;
+}
+
+// One edit, or null when it does not fit: an empty old_string only fits a file with no text yet.
+function applyEdit(text, e, literal) {
+  if (e.old_string === '') return text === '' ? e.new_string : null;
+  if (!text.includes(e.old_string)) return null;
+  if (!literal) return e.replace_all ? text.replaceAll(e.old_string, e.new_string) : text.replace(e.old_string, e.new_string);
+  return e.replace_all ? text.split(e.old_string).join(e.new_string) : text.replace(e.old_string, () => e.new_string);
+}
+
+// A write to history.md or task.md of a task whose plan is not accepted that would leave the plan:
+// 'accepted' for the accepted line or a step or workflow that ends the hold, 'status' for a status
+// that lifts it, 'unreadable' for a task.md that could be read before (or was missing) and no longer
+// can, 'unclear' when the text after it cannot be told, '' when it is fine. A new task.md
+// whose workflow has no plan approval is fine: the task has no plan to accept.
+function leavesPlan(tool, toolInput, file, taskText, historyText) {
+  if (!GUARDED_FILES.has(file)) return '';
+  if (tool === 'NotebookEdit') return 'unclear';
+  const isTask = file === 'task.md';
+  const texts = after(tool, toolInput, isTask ? taskText : historyText);
+  if (!texts) return 'unclear';
+  const wasUnreadable = planStage(taskText, historyText) === 'unreadable';
+  for (const next of texts) {
+    if (!isTask && addsMark(historyText, next)) return 'accepted';
+    const stage = isTask ? planStage(next, historyText) : planStage(taskText, next);
+    if (!heldStage(stage) && !(isTask && !taskText && stage === '')) return 'accepted';
+    if (isTask && stage === 'unreadable' && !wasUnreadable) return 'unreadable';
+    if (isTask && inactive(next) && !inactive(taskText)) return 'status';
+  }
+  return '';
+}

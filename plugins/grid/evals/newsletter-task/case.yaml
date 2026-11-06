@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: newsletter-task
+description: A task that ends in a newsletter send, not a PR, gets a workflow with a schedule step.
+context:
+  scaffold_script: fixture.sh

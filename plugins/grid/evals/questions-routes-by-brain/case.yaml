@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: questions-routes-by-brain
+description: A question with no person named goes to the person the brain says owns the area, with a Routed line.
+context:
+  scaffold_script: fixture.sh
