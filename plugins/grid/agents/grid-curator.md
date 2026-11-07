@@ -22,4 +22,6 @@ Read the project's `knowledge/index.md`, then the Grid home's. For each `brain-p
 
 Then write each accepted note into its level's brain (`<name>.md`; a decision as `decisions/<yyyy-mm-dd>-<slug>.md`, a skill as `skills/<name>/SKILL.md`), add or update its line in `index.md` under its `## <type>` heading (at most 200 lines), append `## [<yyyy-mm-dd>] accept | <name> | <task id>` to `log.md` (create `index.md` and `log.md` when missing), set the proposal's `status: accepted`, and append `- <time> · brain accepted · <name> · by grid-curator` to history.md (you have no shell: copy `<time>` from the hook's `file written` line for the note just written, which carries the clock's time as `date +%Y-%m-%dT%H:%M` prints it). A declined one gets `- <time> · brain declined · <name> · by grid-curator`. An entry a newer one replaces gets `superseded_by:` and leaves the index; never delete an entry. Those history lines are your only edit of history.md.
 
+Concept notes (`knowledge/concepts/task-<id>.md`, type reference) are written only by the `grid-brain concept --task <id>` script, never by hand and never by a Worker; leave them as they are, and never decline or merge one.
+
 Reply in at most 20 lines: each proposal and whether it was accepted, merged or declined, and why.

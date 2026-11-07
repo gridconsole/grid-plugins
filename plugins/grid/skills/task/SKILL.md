@@ -90,7 +90,8 @@ round: 2
 ```
 
 6. **history.md.** Create it with the Write tool, never a shell heredoc or redirect, with the first line: `- <time> · created · by <owner>`. Every `<time>` in history.md is the output of `date +%Y-%m-%dT%H:%M`, run just before the write, never a guess. Append only. Write only these events: created, plan ready, question asked, question answered, question withdrawn, delivered (the deliver skill writes that one). Never write `plan accepted`, `preview approved`, `ship approved` or `phase set`; those are a person's approvals and Grid's.
-7. Tell the person the folder path, the id and the workflow you chose, with each step's kind.
+7. **Concept note.** Run `grid-brain concept --task <id>` (the plugin's `bin/`): it writes the task's concept note into the project brain (`knowledge/concepts/task-<id>.md`, with its index and log line). Run it again whenever the task's step or status moves; it replaces the note. This is the brain's own script; Workers never run it.
+8. Tell the person the folder path, the id and the workflow you chose, with each step's kind.
 
 Do not plan, research or build in this skill. Starting a task only makes the folder.
 

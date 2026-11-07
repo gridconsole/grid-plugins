@@ -4,13 +4,14 @@
 //   grid-feed read  --task T-12 [--since <post id or at>] [--type result] [--job J-1]
 //   grid-feed state --task T-12
 //   grid-feed types [--task T-12]
+//   grid-feed sync  --task T-12 --host <ssh host> [--remote-dir <task folder on the host>]   (rsync of feed/*.jsonl both ways, append-only)
 // The task may also come first as a bare argument. The result is JSON on stdout; an error is a line on stderr and exit 1, a usage error exit 2.
 // Written with dynamic import only, so it runs the same whether Node reads an extensionless file as CommonJS or as a module.
 (async () => {
-  const TOOL = { post: 'feed_post', read: 'feed_read', state: 'feed_state', types: 'feed_types' };
-  const FLAGS = { post: ['task', 'type', 'body', 're', 'job'], read: ['task', 'since', 'type', 'job'], state: ['task'], types: ['task'] };
+  const TOOL = { post: 'feed_post', read: 'feed_read', state: 'feed_state', types: 'feed_types', sync: 'feed_sync' };
+  const FLAGS = { post: ['task', 'type', 'body', 're', 'job'], read: ['task', 'since', 'type', 'job'], state: ['task'], types: ['task'], sync: ['task', 'host', 'remote-dir'] };
   const usage = (msg) => {
-    process.stderr.write(`${msg ? `${msg}\n` : ''}usage: grid-feed post --task T-12 --type <type> --body '<json>' [--re <id>] [--job <id>]\n       grid-feed read --task T-12 [--since <id|at>] [--type <type>] [--job <id>]\n       grid-feed state --task T-12\n       grid-feed types [--task T-12]\n`);
+    process.stderr.write(`${msg ? `${msg}\n` : ''}usage: grid-feed post --task T-12 --type <type> --body '<json>' [--re <id>] [--job <id>]\n       grid-feed read --task T-12 [--since <id|at>] [--type <type>] [--job <id>]\n       grid-feed state --task T-12\n       grid-feed types [--task T-12]\n       grid-feed sync --task T-12 --host <ssh host> [--remote-dir <dir>]\n`);
     process.exit(msg ? 2 : 0);
   };
   const [cmd, ...rest] = process.argv.slice(2);
@@ -18,7 +19,7 @@
   if (!TOOL[cmd]) usage(`unknown command ${cmd}`);
   const args = {};
   for (let i = 0; i < rest.length; i++) {
-    const m = /^--([a-z]+)(?:=([\s\S]*))?$/.exec(rest[i]);
+    const m = /^--([a-z-]+)(?:=([\s\S]*))?$/.exec(rest[i]);
     if (!m) {
       if (args.task === undefined && !rest[i].startsWith('-')) { args.task = rest[i]; continue; }
       usage(`unexpected argument ${rest[i]}`);
@@ -38,6 +39,14 @@
       process.stdin.on('error', reject);
     });
     try { args.body = JSON.parse(text); } catch { process.stderr.write('grid-feed: --body is not JSON\n'); process.exit(1); }
+  }
+  if (cmd === 'sync') {
+    if (!args.host) usage('--host is required');
+    const { syncTool } = await import('../feed/sync.mjs');
+    const out = syncTool(args, { env: process.env, cwd: process.cwd() });
+    if (!out.ok) { process.stderr.write(`grid-feed: ${out.errors.join('; ')}\n`); process.exit(1); }
+    process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+    return;
   }
   const { callTool } = await import('../feed/lib.mjs');
   const result = callTool(TOOL[cmd], args, { env: process.env, cwd: process.cwd() });

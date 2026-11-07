@@ -13,6 +13,7 @@ Every task has a Feed: posts in `<projects folder>/<project>/tasks/<task>/feed/`
 | read | `feed_read {task, since?, type?, job?}` | `grid-feed read --task T-12 --since <post id>` |
 | state of the Jobs | `feed_state {task}` | `grid-feed state --task T-12` |
 | the types and their fields | `feed_types {task?}` | `grid-feed types` |
+| sync with another of your Hosts | none | `grid-feed sync --task T-12 --host <ssh host> [--remote-dir <task folder there>]` (rsync over ssh, both ways, files only grow) |
 
 `task` is a task id such as `T-12` or the path of the task folder. Your name, machine and role come from `GRID_MEMBER`, `GRID_HOST` and `GRID_ROLE` (default `worker`), your worker id from `GRID_WORKER`; do not set them yourself. An error comes back as a result, never as a crash: read it and post again.
 

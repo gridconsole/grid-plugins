@@ -1,0 +1,12 @@
+#!/usr/bin/env node
+// grid-brain concept --task T-12: write or replace the task's concept note in the project brain.
+// The brain's own path: run by the Brain agent (grid-curator) and the task skill, never by a Worker. Prints JSON; error on stderr, exit 1; usage exit 2.
+(async () => {
+  const a = process.argv.slice(2);
+  const task = a[0] === 'concept' ? (a[1] === '--task' ? a[2] : a[1]) : undefined;
+  if (!task) { process.stderr.write('usage: grid-brain concept --task T-12\n'); process.exit(a.length ? 2 : 0); }
+  const { conceptFor } = await import('../brain/brain.mjs');
+  const r = conceptFor(task);
+  if (!r.ok) { process.stderr.write(`${r.error}\n`); process.exit(1); }
+  process.stdout.write(`${JSON.stringify({ path: r.path, created: r.created, changed: r.changed })}\n`);
+})();
