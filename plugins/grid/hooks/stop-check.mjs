@@ -102,7 +102,9 @@ function subagentProblems(input, projects) {
 // can name a sibling's, so those only feed the push. The brief's real path must be the task's own
 // subagents/<brief>.md. One read straight before the write, and the write is a rename of a temp file
 // created with 'wx' (a name already taken, a planted symlink included, aborts the mark), so a reader
-// never sees a half-written file and no link is followed.
+// never sees a half-written file and no link is followed. A temp older than STALE_TEMP_MS is a killed
+// hook's leftover: it is removed and the write retried once.
+const STALE_TEMP_MS = 30_000;
 function markBrief(input, projects) {
   const type = agentName(input.agent_type);
   if (NON_WRITERS.has(type) || BRIEFLESS.has(type)) return;
@@ -120,8 +122,18 @@ function markBrief(input, projects) {
   const next = text.replace(/^(status:[ \t]*).*$/m, `$1${status}`);
   if (next === text) return;
   const tmp = path.join(path.dirname(file), `.${found.brief}.md.tmp`);
-  try {
-    fs.writeFileSync(tmp, next, { flag: 'wx' });
-    fs.renameSync(tmp, file);
-  } catch (e) { if (e?.code !== 'EEXIST') try { fs.unlinkSync(tmp); } catch { /* none */ } }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      fs.writeFileSync(tmp, next, { flag: 'wx' });
+      fs.renameSync(tmp, file);
+      return;
+    } catch (e) {
+      if (e?.code !== 'EEXIST') { try { fs.unlinkSync(tmp); } catch { /* none */ } return; }
+      // A temp left by a killed hook must not block every later mark; a fresh one is a live writer.
+      try {
+        if (Date.now() - fs.lstatSync(tmp).mtimeMs < STALE_TEMP_MS) return;
+        fs.unlinkSync(tmp);
+      } catch { return; }
+    }
+  }
 }
