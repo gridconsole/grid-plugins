@@ -304,7 +304,7 @@ function squashOnto({ repo, tmp, dir, start, jobSha, task, job }, c, folders) {
   if (!add.ok) return add;
   const merge = g(dir, ['merge', '--squash', jobSha], c);
   const unmerged = list(dir, ['diff', '--name-only', '--diff-filter=U', '-z'], c);
-  if (unmerged.ok && unmerged.items.length) return fail(`${job} conflicts with the head of ${task} in ${named(unmerged.items)}; the head is unchanged`);
+  if (unmerged.ok && unmerged.items.length) return { ...fail(`${job} conflicts with the head of ${task} in ${named(unmerged.items)}; the head is unchanged`), conflict: true };
   if (!merge.ok) return merge;
   const tree = g(dir, ['write-tree'], c);
   if (!tree.ok) return tree;

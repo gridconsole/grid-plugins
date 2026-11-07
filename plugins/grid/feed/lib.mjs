@@ -85,7 +85,7 @@ const shortHost = (h) => cleanName(str(h).split('.')[0]);
 const userName = () => { try { return os.userInfo().username; } catch { return ''; } };
 
 // member, host, role and worker of a post: the call's own values, else GRID_MEMBER, GRID_HOST, GRID_ROLE (worker) and GRID_WORKER, else the user and machine name.
-function identity(ctx) {
+export function identity(ctx) {
   const env = ctx.env ?? process.env;
   return {
     member: cleanName(ctx.member ?? (str(env.GRID_MEMBER) || userName())) || 'unknown',
