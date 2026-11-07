@@ -14,6 +14,8 @@ Every task has a Feed: posts in `<projects folder>/<project>/tasks/<task>/feed/`
 | state of the Jobs | `feed_state {task}` | `grid-feed state --task T-12` |
 | the types and their fields | `feed_types {task?}` | `grid-feed types` |
 | sync with another of your Hosts | none | `grid-feed sync --task T-12 --host <ssh host> [--remote-dir <task folder there>]` (rsync over ssh, both ways, files only grow) |
+| sync a task's Job refs with another of your Hosts | none | `node "${CLAUDE_PLUGIN_ROOT}/feed/refs-ssh.mjs" sync T-12 --repo <clone> --host <ssh host> [--remote-repo <clone there>]` (git over ssh, never forced; the Host's refs arrive under `refs/grid-remotes/host-<name>/`) |
+| sweep the refs of closed tasks on your Hosts | none | `node "${CLAUDE_PLUGIN_ROOT}/feed/refs-ssh.mjs" sweep --repo <clone> --tasks <tasks folder> --host <ssh host> [--host ...] [--task T-12]` (an unreachable Host is skipped with a line and found again by the next sweep) |
 
 `task` is a task id such as `T-12` or the path of the task folder. Your name, machine and role come from `GRID_MEMBER`, `GRID_HOST` and `GRID_ROLE` (default `worker`), your worker id from `GRID_WORKER`; do not set them yourself. An error comes back as a result, never as a crash: read it and post again.
 

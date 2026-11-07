@@ -27,4 +27,4 @@ A real-task drive polls the task state every 60 s for up to 15 min before callin
 
 A row without a `Console:` line (the console log read for that check) is NOT VERIFIED. A self-contradicting state, for example a task shown as running with no session, is reported FAIL at once, with what was seen; do not wait for it to resolve.
 
-On a pass for plan items (the brief has `item:`), run `node "$CLAUDE_PLUGIN_ROOT/skills/execute/scripts/item-record.mjs" <task folder> testing|deployed <N[,N]> --by operator [--env <environment id from environments.json>]` once, and on a fail on local `failed`. It appends the history line; write no history line by hand.
+On a pass for plan items (the brief has `item:`), run `node "$CLAUDE_PLUGIN_ROOT/skills/execute/scripts/item-record.mjs" <task folder> testing|deployed <N[,N]> --by operator [--env <environment id from the project's environments>]` once, and on a fail on local `failed`. It appends the history line; write no history line by hand.

@@ -9,7 +9,8 @@
 // Each operation takes { remote = 'origin', env = process.env, timeoutMs, gitVersion } and returns { ok: true, ... } or { ok: false, errors }.
 // It writes refs and nothing else, with one exception: ensureRefspec adds the fetch refspec to the repo's config once.
 // A call that reaches a remote never waits for a person: no terminal prompt, ssh in BatchMode, a time limit (30 s unless timeoutMs
-// says otherwise), and a git older than 2.29 is refused up front (fetchRefs needs --no-write-fetch-head).
+// says otherwise; the ssh child git leaves behind is stopped with it), and a git older than 2.29 is refused up front (fetchRefs needs
+// --no-write-fetch-head). The four remote calls take `url` too: an scp-style ssh address (a Host's repo) that stands for the remote `label`.
 import { spawnSync } from 'node:child_process';
 
 const TASK_RE = /^T-\d+$/;
@@ -57,21 +58,48 @@ function tooOld(env, injected) {
   return `git ${v.text} is too old: git ${MIN_GIT.major}.${MIN_GIT.minor} or later is needed for --no-write-fetch-head`;
 }
 
-// The ssh command a remote call uses: the person's own (GIT_SSH_COMMAND, else core.sshCommand) with -o BatchMode=yes put straight
-// after the program, because ssh keeps the first value of an option. Their other options stay as they were.
+// The ssh command a remote call uses: the person's own (GIT_SSH_COMMAND, else core.sshCommand, else GIT_SSH, else ssh) with
+// -o BatchMode=yes at the end. Git appends the host and the remote command to this string itself, so the end is what a wrapper
+// such as `env X=1 ssh` passes on to ssh; the person's own options come first and ssh keeps the first value of an option.
+// GIT_SSH is taken to be OpenSSH-compatible (a plink-style program has no -o).
 function batchSsh(repo, env) {
   let own = typeof env.GIT_SSH_COMMAND === 'string' ? env.GIT_SSH_COMMAND.trim() : '';
   if (!own) {
     const c = spawnSync('git', ['-C', repo, 'config', '--get', 'core.sshCommand'], { encoding: 'utf8', env });
     own = c.status === 0 ? c.stdout.trim() : '';
   }
-  const m = /^("[^"]*"|'[^']*'|\S+)([\s\S]*)$/.exec(own || 'ssh');
-  return `${m[1]} -o BatchMode=yes${m[2]}`;
+  if (!own && typeof env.GIT_SSH === 'string' && env.GIT_SSH.trim()) own = `'${env.GIT_SSH.trim().replace(/'/g, "'\\''")}'`;
+  return `${own || 'ssh'} -o BatchMode=yes`;
+}
+
+// Stops what a timed-out git left behind: its ssh child. POSIX: git's process group (runGit starts a remote call in its own group).
+// Windows has no process group, so taskkill takes the process tree; its result is ignored, the timeout error stays as it is.
+function stopLeftovers(pid, platform, spawn) {
+  if (!Number.isInteger(pid) || pid <= 1) return;
+  if (platform === 'win32') {
+    try { spawn('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore', windowsHide: true }); } catch { /* nothing to stop */ }
+    return;
+  }
+  try { process.kill(-pid, 'SIGKILL'); } catch { /* the group is already gone */ }
+}
+
+// A Host's repo as git is given it: an scp-style ssh address, `[user@]host:path` (the path is relative to the login's home folder
+// unless it starts with a slash). Never an option, another transport (ext::, file://, https://) or a `..` path.
+const SSH_ADDRESS_RE = /^(?:[A-Za-z0-9_][A-Za-z0-9._-]{0,63}@)?[A-Za-z0-9_][A-Za-z0-9._-]{0,127}:(?!-|\/\/)[A-Za-z0-9_.@+/-]+$/;
+
+// Where a remote call goes: the remote's name, or `url` standing for the remote `label`; { to, env } or { ok: false, errors }.
+// With a url git may use ssh and nothing else, whatever the person's own settings allow.
+function target(remote, url, env) {
+  if (!okRemote(remote)) return fail(`${String(remote)} is not a remote name`);
+  if (url === undefined || url === null) return { to: remote, env };
+  if (typeof url !== 'string' || !SSH_ADDRESS_RE.test(url) || url.includes('..')) return fail(`${String(url)} is not an ssh address: [user@]host:path`);
+  return { to: url, env: { ...env, GIT_ALLOW_PROTOCOL: 'ssh' } };
 }
 
 // Runs git in repo and returns { ok: true, out } or { ok: false, errors }. `remote` is the remote's name when the call can reach one
 // (push, fetch, ls-remote); it turns on the headless settings above and names the remote in an error.
-export function runGit(repo, argv, { env = process.env, remote = null, timeoutMs, gitVersion } = {}) {
+// `platform` and `spawn` (the one that runs git and taskkill) are test seams; no caller sets them.
+export function runGit(repo, argv, { env = process.env, remote = null, timeoutMs, gitVersion, platform = process.platform, spawn = spawnSync } = {}) {
   if (typeof repo !== 'string' || !repo) return fail('repo is required: the path of a git work tree or repository');
   // Never wait for a password prompt: the Orchestrator runs headless.
   const childEnv = { ...env, GIT_TERMINAL_PROMPT: '0' };
@@ -82,9 +110,15 @@ export function runGit(repo, argv, { env = process.env, remote = null, timeoutMs
     if (old) return fail(old);
     childEnv.GIT_SSH_COMMAND = batchSsh(repo, env);
     run.timeout = limit;
+    // Its own process group (and no terminal for ssh to prompt on), so a timeout can stop the ssh child too. Not on Windows: a
+    // timeout stops the process tree with taskkill instead.
+    if (platform !== 'win32') run.detached = true;
   }
-  const r = spawnSync('git', ['-C', repo, ...argv], run);
-  if (r.error?.code === 'ETIMEDOUT') return fail(`remote ${remote} did not answer within ${limit} ms: git ${argv[0]} was stopped`);
+  const r = spawn('git', ['-C', repo, ...argv], run);
+  if (r.error?.code === 'ETIMEDOUT') {
+    stopLeftovers(r.pid, platform, spawn);
+    return fail(`remote ${remote} did not answer within ${limit} ms: git ${argv[0]} was stopped`);
+  }
   if (r.error) return fail(`git did not run: ${r.error.message}`);
   if (r.status !== 0) return fail(`git ${argv[0]} failed${remote === null ? '' : ` on remote ${remote}`}: ${(r.stderr || r.stdout || '').trim() || `exit ${r.status}`}`);
   return { ok: true, out: r.stdout };
@@ -131,30 +165,34 @@ export function deleteRef(repo, ref, { env = process.env } = {}) {
 }
 
 // Pushes local refs/grid/... refs to the same names on the remote; force replaces a ref that moved elsewhere.
-export function pushRefs(repo, refs, { remote = 'origin', force = false, env = process.env, timeoutMs, gitVersion } = {}) {
+export function pushRefs(repo, refs, { remote = 'origin', url, force = false, env = process.env, timeoutMs, gitVersion } = {}) {
   const bad = badRefs(refs);
   if (bad) return bad;
-  if (!okRemote(remote)) return fail(`${String(remote)} is not a remote name`);
-  const r = runGit(repo, ['push', '-q', remote, ...refs.map((ref) => `${force ? '+' : ''}${ref}:${ref}`)], { env, remote, timeoutMs, gitVersion });
+  const t = target(remote, url, env);
+  if (t.ok === false) return t;
+  const r = runGit(repo, ['push', '-q', t.to, ...refs.map((ref) => `${force ? '+' : ''}${ref}:${ref}`)], { env: t.env, remote, timeoutMs, gitVersion });
   return r.ok ? { ok: true, pushed: refs } : r;
 }
 
 // Fetches the remote's refs/grid/ (or one task's part) into refs/grid-remotes/<remote>/ and prunes copies whose ref is gone.
 // The refspec is given on the command line, so this works without ensureRefspec and prunes nothing outside it; no tags,
 // no FETCH_HEAD, so a Grid fetch leaves the user's own fetch state as it was.
-export function fetchRefs(repo, { remote = 'origin', task = null, env = process.env, timeoutMs, gitVersion } = {}) {
+export function fetchRefs(repo, { remote = 'origin', url, task = null, env = process.env, timeoutMs, gitVersion } = {}) {
   const refspec = fetchRefspec(remote, task);
   if (!refspec) return fail(`${String(remote)} is not a remote name or ${String(task)} is not a task id`);
-  const r = runGit(repo, ['fetch', '-q', '--prune', '--no-tags', '--no-write-fetch-head', remote, refspec], { env, remote, timeoutMs, gitVersion });
+  const t = target(remote, url, env);
+  if (t.ok === false) return t;
+  const r = runGit(repo, ['fetch', '-q', '--prune', '--no-tags', '--no-write-fetch-head', t.to, refspec], { env: t.env, remote, timeoutMs, gitVersion });
   return r.ok ? { ok: true, refspec } : r;
 }
 
 // The remote's refs under refs/grid/ (or refs/grid/<task>/), as [{ ref, sha }] sorted by name.
-export function remoteRefs(repo, { remote = 'origin', task = null, env = process.env, timeoutMs, gitVersion } = {}) {
-  if (!okRemote(remote)) return fail(`${String(remote)} is not a remote name`);
+export function remoteRefs(repo, { remote = 'origin', url, task = null, env = process.env, timeoutMs, gitVersion } = {}) {
+  const t = target(remote, url, env);
+  if (t.ok === false) return t;
   if (task !== null && !okTask(task)) return fail(`${String(task)} is not a task id`);
   const prefix = task === null ? 'refs/grid/' : `refs/grid/${task}/`;
-  const r = runGit(repo, ['ls-remote', '--refs', remote, `${prefix}*`], { env, remote, timeoutMs, gitVersion });
+  const r = runGit(repo, ['ls-remote', '--refs', t.to, `${prefix}*`], { env: t.env, remote, timeoutMs, gitVersion });
   return r.ok ? { ok: true, refs: refLines(r.out, prefix) } : r;
 }
 
@@ -168,10 +206,11 @@ export function localRefs(repo, prefix, { env = process.env } = {}) {
   return r.ok ? { ok: true, refs: refLines(r.out, p) } : r;
 }
 
-export function deleteRemoteRefs(repo, refs, { remote = 'origin', env = process.env, timeoutMs, gitVersion } = {}) {
+export function deleteRemoteRefs(repo, refs, { remote = 'origin', url, env = process.env, timeoutMs, gitVersion } = {}) {
   const bad = badRefs(refs);
   if (bad) return bad;
-  if (!okRemote(remote)) return fail(`${String(remote)} is not a remote name`);
-  const r = runGit(repo, ['push', '-q', remote, '--delete', ...refs], { env, remote, timeoutMs, gitVersion });
+  const t = target(remote, url, env);
+  if (t.ok === false) return t;
+  const r = runGit(repo, ['push', '-q', t.to, '--delete', ...refs], { env: t.env, remote, timeoutMs, gitVersion });
   return r.ok ? { ok: true, deleted: refs } : r;
 }

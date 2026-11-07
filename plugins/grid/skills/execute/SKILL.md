@@ -125,9 +125,9 @@ Move `step` only when the step is finished. A `run` step with a plan is finished
 
 Item records. When the brief has an `item:` line, record where its plan items stand with `node "$CLAUDE_PLUGIN_ROOT/skills/execute/scripts/item-record.mjs" <task folder> <state> <N[,N]> --by <role> [--env <id>]`, which appends the `- <time> · item N <state> ...` history line itself (never write these lines by hand):
 - a worker or operator brief `done` whose items are built and now run on the local environment: `testing` (always `local`);
-- a `check` brief (grid-checker or operator) whose Verdict or Outcome passed for those items: `testing` if nothing was recorded yet, and `deployed --env <id>` when the check ran on that environment of the project's `environments.json`, with `--by` the checker's role. The checker is read-only, so you run the script for it after reading its ACCEPTED Verdict;
+- a `check` brief (grid-checker or operator) whose Verdict or Outcome passed for those items: `testing` if nothing was recorded yet, and `deployed --env <id>` when the check ran on that environment of the project's environments (project.md, else `environments.json`), with `--by` the checker's role. The checker is read-only, so you run the script for it after reading its ACCEPTED Verdict;
 - a check that failed on local: `failed`.
-Skip it when the brief has no `item:`. Never invent an environment id: it must be one in `environments.json`, else the script refuses and you leave the line out.
+Skip it when the brief has no `item:`. Never invent an environment id: it must be one of the project's environments, else the script refuses and you leave the line out.
 
 After that edit, run `grid-brain concept --task <id>` (the plugin's `bin/`) once, so the task's concept note in the project brain follows the new step and status. It is the one place this skill runs it; Workers never do. If it exits non-zero, carry on and add one history line saying it failed; it never stops the step.
 

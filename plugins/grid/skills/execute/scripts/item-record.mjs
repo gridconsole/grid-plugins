@@ -4,12 +4,13 @@
 //   - <time> · item N deployed <env id> · by <role>
 //   - <time> · item N failed local · by <role>
 // Usage: node item-record.mjs <task folder> testing|deployed|failed <N[,N...]> --by <role> [--env <id>]
-//   testing and failed always say `local`; deployed needs --env, an id in the project's environments.json
+//   testing and failed always say `local`; deployed needs --env, an id in the project's environments (project.md, else environments.json)
 //   (the project folder is two levels above the task folder). Exit 2 on a refused call, nothing written.
-// Writes only the task's history.md, never creates it, never follows a symlink. Node built-ins only.
+// Writes only the task's history.md, never creates it, never follows a symlink. Node built-ins and the deliver skill's project.md reader only.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseEnvironments } from '../../deliver/scripts/project-md.mjs';
 
 const STATES = new Set(['testing', 'deployed', 'failed']);
 const ID = /^[a-z0-9][a-z0-9-]*$/;
@@ -20,6 +21,10 @@ const stamp = (d = new Date()) => {
 };
 
 export function environmentIds(projectDir) {
+  try {
+    const section = parseEnvironments(fs.readFileSync(path.join(projectDir, 'project.md'), 'utf8'));
+    if (section) return section.map((e) => e.id);
+  } catch { /* no project.md: the environments.json below */ }
   try {
     const doc = JSON.parse(fs.readFileSync(path.join(projectDir, 'environments.json'), 'utf8'));
     return (Array.isArray(doc?.items) ? doc.items : []).map((e) => e?.id).filter((x) => typeof x === 'string');
@@ -38,7 +43,7 @@ export function record(taskDir, state, items, role, env = '', now = new Date()) 
   if (!ID.test(role || '')) throw new Error('--by needs a role such as worker, checker or operator');
   if (state === 'deployed') {
     if (!ID.test(env || '')) throw new Error('deployed needs --env <environment id>');
-    if (!environmentIds(path.resolve(taskDir, '..', '..')).includes(env)) throw new Error(`no environment "${env}" in the project's environments.json`);
+    if (!environmentIds(path.resolve(taskDir, '..', '..')).includes(env)) throw new Error(`no environment "${env}" in the project's environments`);
   }
   const file = path.join(taskDir, 'history.md');
   let text;
