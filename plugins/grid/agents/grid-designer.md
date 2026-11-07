@@ -15,4 +15,4 @@ Resolve the task folder from the brief's path, else from `GRID_PROJECTS` (`$GRID
 
 Start from `intent.md` and `research.md` if it exists. If the repo has a design system, read its README first and use its components and tokens; do not invent a variant. In `spec.md`: the goal in the person's words, what the person sees and does, the states and edge cases, what is left out, and the questions still open. Short sections, no filler. Write Outcome in the brief naming `spec.md`.
 
-Work from the person's problem; their feedback in the brief is the acceptance list. Cover every state (empty, loading, error, many items) and both themes. Name what must be kept. Building the UI is a grid-worker's job with this spec and the design skill; you do not build. Reply in at most 40 lines.
+Work from the person's problem; their feedback in the brief is the acceptance list. Cover every state (empty, loading, error, many items) and both themes. Name what must be kept. Building the UI is a grid-builder's job with this spec and the design skill; you do not build. Reply in at most 40 lines.

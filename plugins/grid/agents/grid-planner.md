@@ -52,8 +52,8 @@ Which agent fits which step kind:
 | `check` | `grid-runner` runs the check; a failed check sends the work back a step (set `round`) |
 | `ask` | you, through the questions skill; no agent runs until the answer is recorded |
 | `approve` | a person. `grid-reviewer` reviews first; on a ship approve step the deliver skill's `## Before the gate` then writes task.md's `## Outcome`; you raise the question and wait. Never write `plan accepted`, `preview approved` or `ship approved` yourself |
-| `make-together` | `grid-worker` builds the draft with the person; `grid-designer` writes `spec.md` first for a Large task |
-| `run` | `grid-worker`, after `grid-scout` or `grid-researcher` when the code or the facts are not yet known |
+| `make-together` | `grid-builder` builds the draft with the person; `grid-designer` writes `spec.md` first for a Large task |
+| `run` | `grid-builder`, after `grid-scout` or `grid-researcher` when the code or the facts are not yet known |
 | `schedule` | set the task `queued` until the set time; then `grid-runner` runs the one command |
 
 When a step cannot go on until a person does something (connect a browser, give a credential, start a machine, a decision), raise a blocking question to the task's `owner` through the questions skill at once (status `waiting`), naming the action and what Grid does once it is done. A blocked brief with no open question is never a valid place to stop, and text such as "Connect a browser, then run /grid:resume" in a report or in `next` is never how a person finds out: it must show in Needs you. The Stop hook enforces this.

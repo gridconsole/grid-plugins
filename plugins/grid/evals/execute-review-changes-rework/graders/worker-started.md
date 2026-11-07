@@ -1,5 +1,5 @@
 ---
 type: regex
-pattern: '"subagent_type":\s*"(?:grid:)?grid-worker"'
+pattern: '"subagent_type":\s*"(?:grid:)?grid-builder"'
 target: trace
 ---

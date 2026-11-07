@@ -38,7 +38,9 @@ The task folder is `<projects folder>/<project>/tasks/T-NN-slug/`. The projects 
 
 The step's own `agent` decides, then `routing.md`, then the step's kind.
 
-1. If the step's item in `workflow` has an `agent` (`{step: build, kind: run, agent: grid-worker}`), the person chose it in the workflow, and that agent runs the step. It wins over `routing.md` and the table below:
+`grid-worker` is the old name of `grid-builder`: an `agent: grid-worker` in a workflow or a `grid-worker` row in `routing.md` means `grid-builder`.
+
+1. If the step's item in `workflow` has an `agent` (`{step: build, kind: run, agent: grid-builder}`), the person chose it in the workflow, and that agent runs the step. It wins over `routing.md` and the table below:
    - `run`, `check`: that agent runs it. A `check` stays a check: it runs the check and never fixes.
    - `make-together`: that agent builds the draft with the person.
    - `ask`: that agent works out the question; put it with the questions skill and wait for the answer.
@@ -53,8 +55,8 @@ The step's own `agent` decides, then `routing.md`, then the step's kind.
 | `check` | `grid-runner` runs the check; a failed check sends the work back a step, or asks the owner when a rework cannot fix it (section 5) |
 | `ask` | no agent: use the questions skill, then wait for the answer |
 | `approve` | a person, after `grid-reviewer` reviews the finished work; for UI or website work also `grid-checker` on its own `checker` brief, after the reviewer accepts. On a ship approve step (after the build) the deliver skill's `## Before the gate` writes task.md's `## Outcome` before the gate is raised. Raise the question and wait. Never write `plan accepted`, `preview approved` or `ship approved` |
-| `make-together` | `grid-worker` builds the draft with the person; `grid-worker` builds UI when the brief names the design skill; `grid-designer` writes `spec.md` only, first for a large task |
-| `run` | `grid-worker`, after `grid-scout` or `grid-researcher` when the files or facts are not known and `research.md` does not already hold them |
+| `make-together` | `grid-builder` builds the draft with the person; `grid-builder` builds UI when the brief names the design skill; `grid-designer` writes `spec.md` only, first for a large task |
+| `run` | `grid-builder`, after `grid-scout` or `grid-researcher` when the files or facts are not known and `research.md` does not already hold them |
 | `browse` | `grid-operator`: browser work that changes state, or a check marked `Needs grid-operator` |
 | `schedule` | set `status: queued` and `next` to the set time; at that time `grid-runner` runs the one command |
 

@@ -19,7 +19,7 @@ cat > ws/projects/notes-app/routing.md <<'R'
 
 | Applies to | Agent | Why |
 |---|---|---|
-| kind: run, project: notes-app | grid-worker | Notes-app builds go to a worker |
+| kind: run, project: notes-app | grid-builder | Notes-app builds go to a worker |
 | kind: check | grid-runner | Checks are commands |
 | project: notes-app | grid-reviewer | Fallback for other notes-app steps |
 R

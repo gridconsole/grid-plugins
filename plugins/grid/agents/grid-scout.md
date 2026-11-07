@@ -1,6 +1,6 @@
 ---
 name: grid-scout
-description: Read-only map maker for a Grid task. Use before a worker, reviewer or designer reads code, to find where something is, how a flow runs and which lines matter, as path:line ranges with short excerpts.
+description: Read-only map maker for a Grid task. Use before a builder, reviewer or designer reads code, to find where something is, how a flow runs and which lines matter, as path:line ranges with short excerpts.
 model: haiku
 effort: low
 maxTurns: 25

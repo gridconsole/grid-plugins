@@ -1,5 +1,5 @@
 ---
 type: tool_used
 tool: Agent
-input_match: 'grid-worker'
+input_match: 'grid-builder'
 ---

@@ -33,7 +33,7 @@ Pages use the Grid Console design tokens (`tokens.css`) and the small page frame
 
 ## Who writes them
 
-The planner writes the pages, through this skill, with the Write tool, one page at a time. `grid-worker` never writes them and never edits task.md; there are no briefs for views. Before you say it is done, check parts 2 and 3 above on each page.
+The planner writes the pages, through this skill, with the Write tool, one page at a time. `grid-builder` never writes them and never edits task.md; there are no briefs for views. Before you say it is done, check parts 2 and 3 above on each page.
 
 Afterwards task.md gets `updated` (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess) and a body line `- <D Mon> · <step> · views refreshed`. history.md is not touched by this skill.
 

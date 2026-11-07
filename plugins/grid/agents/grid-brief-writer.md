@@ -1,6 +1,6 @@
 ---
 name: grid-brief-writer
-description: Writes one brief in a Grid task folder from the planner's ask. Use when the planner has a step to hand to a scout, researcher, runner, worker, reviewer or designer and needs the brief file written first.
+description: Writes one brief in a Grid task folder from the planner's ask. Use when the planner has a step to hand to a scout, researcher, runner, builder, reviewer or designer and needs the brief file written first.
 model: sonnet
 effort: medium
 maxTurns: 20

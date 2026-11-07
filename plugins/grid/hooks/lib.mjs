@@ -390,8 +390,12 @@ export function appendHistory(dir, event, detail, who, via = '') {
   return true;
 }
 
-// agent_type "grid:grid-builder" -> "grid-builder".
-export const agentName = (t) => str(t).split(':').pop().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'subagent';
+// Agents renamed since older task folders were written: the old name reads as the new one.
+const AGENT_ALIASES = new Map([['grid-worker', 'grid-builder']]);
+export const canonicalAgent = (name) => AGENT_ALIASES.get(name) ?? name;
+
+// agent_type "grid:grid-builder" -> "grid-builder"; the old "grid:grid-worker" reads as "grid-builder" too.
+export const agentName = (t) => canonicalAgent(str(t).split(':').pop().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')) || 'subagent';
 
 // The task folders a session has written into (CLAUDE_PLUGIN_DATA/sessions/<session_id>, one
 // per line, latest last). They let Stop and SubagentStop find the task when cwd is the project.
@@ -789,7 +793,7 @@ export function dispatchBrief(input, projects) {
   if (!file || !str(input.agent_type)) return null;
   const type = agentName(input.agent_type);
   let calls = (readText(file) ?? '').split('\n').flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } })
-    .filter((e) => e && typeof e === 'object' && e.type === type);
+    .filter((e) => e && typeof e === 'object' && canonicalAgent(e.type) === type);
   const tasks = Array.isArray(input.background_tasks) ? input.background_tasks : [];
   const own = tasks.find((t) => t && t.id === input.agent_id)?.description;
   if (typeof own === 'string' && calls.some((e) => e.description === own)) calls = calls.filter((e) => e.description === own);

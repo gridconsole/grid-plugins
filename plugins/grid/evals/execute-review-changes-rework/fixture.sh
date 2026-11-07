@@ -21,7 +21,7 @@ review rounds: 3
 
 | # | step | kind | who | on reject, back to |
 |---|---|---|---|---|
-| 1 | Build | run | grid-worker |  |
+| 1 | Build | run | grid-builder |  |
 | 2 | Review | approve | alex |  |
 W
 cat > "$t/intent.md" <<'I'

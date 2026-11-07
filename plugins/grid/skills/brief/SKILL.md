@@ -1,6 +1,6 @@
 ---
 name: brief
-description: The brief file format and when a task needs one. Use when a step is about to be handed to a scout, researcher, runner, worker, reviewer, designer, checker or operator, when the person asks what a brief is or where one goes, or before writing or reading a file in a task's subagents/ folder.
+description: The brief file format and when a task needs one. Use when a step is about to be handed to a scout, researcher, runner, builder, reviewer, designer, checker or operator, when the person asks what a brief is or where one goes, or before writing or reading a file in a task's subagents/ folder.
 ---
 
 <!-- Decision source: Q43 item 8 (the brief skill ships with the plugin, like brief-lint); Q27 item 1 (briefs are written by a subagent, grid-brief-writer, not the planner). This is the one place the format is written down. It matches BRIEF_KEYS and BRIEF_SECTIONS in hooks/lib.mjs, which hooks/brief-lint.mjs and the task-folder contract check enforce. -->
@@ -13,7 +13,7 @@ The task folder is `<projects folder>/<project>/tasks/T-NN-slug/`. The projects 
 
 ## When a brief is needed
 
-Every time a step is handed to another agent: a scout, researcher, runner, worker, reviewer or designer. No brief for a job you do yourself, for an `ask` step (the questions skill) or for a person's `approve` step. A review of a worker's brief needs no brief of its own: the reviewer writes its Verdict into the worker's.
+Every time a step is handed to another agent: a scout, researcher, runner, builder, reviewer or designer. No brief for a job you do yourself, for an `ask` step (the questions skill) or for a person's `approve` step. A review of a builder's brief needs no brief of its own: the reviewer writes its Verdict into the worker's.
 
 The brief comes first. The planner asks `grid-brief-writer` for it, gives the task folder path, the step, the role and the job in a sentence, then starts the agent with the brief's path. The hook `brief-lint` refuses to start a subagent on a brief that is not complete.
 
@@ -26,7 +26,7 @@ Frontmatter, all five keys filled:
 | Key | Holds |
 |---|---|
 | `id` | the file name without `.md` |
-| `role` | scout, researcher, runner, worker, reviewer, designer, checker or operator |
+| `role` | scout, researcher, runner, builder, reviewer, designer, checker or operator; `worker`, the old name of `builder`, stays valid |
 | `status` | `briefed` when written, then `running`, `done` or `blocked` |
 | `verify` | what proves the job done: a command, or the id of the brief that checks it |
 | `follow_up` | what comes next, or `none` |
@@ -48,7 +48,7 @@ Sections, in this order, all present, each a `## ` heading:
 
 ## Rules
 
-- The writer leaves Outcome, Verdict and Follow-up empty but present. A brief with role `reviewer` is for a review that has no brief of its own; its Outcome stays empty by design and its result is the Verdict. A `checker` brief is like a reviewer's: its Outcome stays empty and its Verdict is the checker's table. An `operator` brief is like a worker's: it gets an Outcome.
+- The writer leaves Outcome, Verdict and Follow-up empty but present. A brief with role `reviewer` is for a review that has no brief of its own; its Outcome stays empty by design and its result is the Verdict. A `checker` brief is like a reviewer's: its Outcome stays empty and its Verdict is the checker's table. An `operator` brief is like a builder's: it gets an Outcome.
 - The planner sets `status` (an Edit of that line only): `running` when the agent starts, `done` or `blocked` when it ends. `done` needs an Outcome (a reviewer's brief needs a Verdict instead).
 - Keep the brief short. The writer is Write-only: one Write, never an edit of an earlier brief.
 - Job names exactly what to change and how. Where it leaves a choice open, the agent stops and asks; it never decides. Write the choice into the Job.

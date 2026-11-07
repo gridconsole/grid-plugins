@@ -20,13 +20,15 @@ The file already has a title, a table of topics and who answers them, and `## Me
 |---|---|---|
 | kind: check | grid-runner | Checks are commands |
 | kind: make-together, project: notes-app | grid-designer | The person steers a mock |
-| project: notes-app | grid-worker | Default builder here |
-| kind: check, project: notes-app | grid-checker | UI change in `app/`: `grid-worker` with the design skill, then `grid-checker` |
+| project: notes-app | grid-builder | Default builder here |
+| kind: check, project: notes-app | grid-checker | UI change in `app/`: `grid-builder` with the design skill, then `grid-checker` |
 ```
 
 - **Applies to**: `kind: <kind>` (check, ask, approve, make-together, run, schedule), `project: <name>`, or both separated by a comma.
-- **Agent**: one of `grid-scout`, `grid-researcher`, `grid-runner`, `grid-worker`, `grid-reviewer`, `grid-designer`, `grid-checker`, `grid-operator`. Not `grid-planner` (one per task, it runs the task) not `grid-brief-writer` (it writes briefs, nothing else) and not `grid-curator` (the planner starts it for brain proposals). Nothing here limits whether an agent may start others.
+- **Agent**: one of `grid-scout`, `grid-researcher`, `grid-runner`, `grid-builder`, `grid-reviewer`, `grid-designer`, `grid-checker`, `grid-operator`. Not `grid-planner` (one per task, it runs the task) not `grid-brief-writer` (it writes briefs, nothing else) and not `grid-curator` (the planner starts it for brain proposals). Nothing here limits whether an agent may start others.
 - **Why**: a few words. Never empty.
+
+`grid-worker` is the old name of `grid-builder`: a `grid-worker` row, or an `agent: grid-worker` in a workflow, means `grid-builder`.
 
 ## Look up the agent for a step
 

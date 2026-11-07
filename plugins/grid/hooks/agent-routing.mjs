@@ -32,7 +32,7 @@ function routing(dir = agentsDir) {
     '"Grid task" wording does not limit them to task folders. Pick by the job:',
     '- find where something is in the code, how a flow runs, a codebase map: grid:grid-scout',
     '- facts from docs, source or the web: grid:grid-researcher',
-    '- write or change code, docs or files: grid:grid-worker',
+    '- write or change code, docs or files: grid:grid-builder',
     '- run a build, test, lint or read CI logs: grid:grid-runner',
     '- review code or finished work: grid:grid-reviewer',
     '- a design spec before UI is built: grid:grid-designer',

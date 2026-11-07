@@ -287,17 +287,17 @@
       <div class="lab"><span class="code">C-05</span><b>Stepper</b><p>A vertical checklist with state per step. The default for a chapter of up to 8 steps.</p></div>
       <div class="body">
           <div class="stepper">
-            <div class="sp ok"><span class="dot">✓</span><div><div class="t">Start one planner per task in the background</div><div class="m">grid-worker 1 · tested 08:22 on 2.1.236</div></div><span class="s">tested</span></div>
-            <div class="sp ok"><span class="dot">✓</span><div><div class="t">The planner runs as grid:grid-planner; CLAUDE.md still loads</div><div class="m">grid-worker 1 · tested 08:40</div></div><span class="s">tested</span></div>
-            <div class="sp cur"><span class="dot">3</span><div><div class="t">Tell Grid when the planner goes idle</div><div class="m">grid-worker 2 · hook on stop, drafted 09:38</div></div><span class="s">next</span></div>
+            <div class="sp ok"><span class="dot">✓</span><div><div class="t">Start one planner per task in the background</div><div class="m">grid-builder 1 · tested 08:22 on 2.1.236</div></div><span class="s">tested</span></div>
+            <div class="sp ok"><span class="dot">✓</span><div><div class="t">The planner runs as grid:grid-planner; CLAUDE.md still loads</div><div class="m">grid-builder 1 · tested 08:40</div></div><span class="s">tested</span></div>
+            <div class="sp cur"><span class="dot">3</span><div><div class="t">Tell Grid when the planner goes idle</div><div class="m">grid-builder 2 · hook on stop, drafted 09:38</div></div><span class="s">next</span></div>
             <div class="sp ask"><span class="dot">4</span><div><div class="t">Sign-in: claude, then /login, once per machine</div><div class="m">you · <a href="#q5">Q-5 decides how</a></div></div><span class="s">needs Q-5</span></div>
-            <div class="sp ask"><span class="dot">5</span><div><div class="t">Version floor check before any planner starts</div><div class="m">grid-worker 2 · <a href="#q4">Q-4 decides the floor</a></div></div><span class="s">needs Q-4</span></div>
-            <div class="sp"><span class="dot">6</span><div><div class="t">Record the session id in task.md</div><div class="m">grid-worker 2</div></div><span class="s">planned</span></div>
+            <div class="sp ask"><span class="dot">5</span><div><div class="t">Version floor check before any planner starts</div><div class="m">grid-builder 2 · <a href="#q4">Q-4 decides the floor</a></div></div><span class="s">needs Q-4</span></div>
+            <div class="sp"><span class="dot">6</span><div><div class="t">Record the session id in task.md</div><div class="m">grid-builder 2</div></div><span class="s">planned</span></div>
           </div>
         <div class="var"><span class="vlab">Variant<b>a step failed and is retrying, with its attempts nested</b></span>
           <div class="stepper">
-            <div class="sp ok"><span class="dot">✓</span><div><div class="t">approval-gate guards history.md</div><div class="m">grid-worker 1 · tested 09:50</div></div><span class="s">tested</span></div>
-            <div class="sp err"><span class="dot">!</span><div><div class="t">stop-check waits for evidence before a phase ends</div><div class="m">grid-worker 2 · failed twice, retry 3 of 3 running</div><div class="retry"><span>× 10:02 · hook fired before the log was written</span><span>× 10:11 · same, with a 1 s delay</span><span class="accent">↻ 10:19 · waiting for the file instead of sleeping…</span></div></div><span class="s">retrying</span></div>
+            <div class="sp ok"><span class="dot">✓</span><div><div class="t">approval-gate guards history.md</div><div class="m">grid-builder 1 · tested 09:50</div></div><span class="s">tested</span></div>
+            <div class="sp err"><span class="dot">!</span><div><div class="t">stop-check waits for evidence before a phase ends</div><div class="m">grid-builder 2 · failed twice, retry 3 of 3 running</div><div class="retry"><span>× 10:02 · hook fired before the log was written</span><span>× 10:11 · same, with a 1 s delay</span><span class="accent">↻ 10:19 · waiting for the file instead of sleeping…</span></div></div><span class="s">retrying</span></div>
             <div class="sp"><span class="dot">16</span><div><div class="t">Refusals written as sentences, never codes</div></div><span class="s">planned</span></div>
           </div>
         </div>
@@ -322,16 +322,16 @@
       <div class="body">
           <div class="swim">
             <div class="who" style="--pc:var(--ob-p1)"><i></i>grid-planner</div><div class="row"><span class="st">32</span><span class="st">33</span><span class="st">34</span></div>
-            <div class="who" style="--pc:var(--ob-p6)"><i></i>grid-worker 1</div><div class="row"><span class="st ok">1</span><span class="st ok">2</span><span class="st">7</span><span class="st">8</span><span class="st">11</span><span class="st ok">13</span><span class="st">14</span><span class="st">17</span><span class="st">19</span><span class="st">20</span><span class="st">23</span><span class="st ask">24</span><span class="st">25</span><span class="st">29</span><span class="st">31</span></div>
-            <div class="who" style="--pc:var(--ob-p4)"><i></i>grid-worker 2</div><div class="row"><span class="st cur">3</span><span class="st ask">5</span><span class="st">6</span><span class="st">9</span><span class="st">10</span><span class="st">12</span><span class="st">15</span><span class="st">16</span><span class="st">18</span><span class="st ask">21</span><span class="st">22</span><span class="st">27</span><span class="st">28</span></div>
+            <div class="who" style="--pc:var(--ob-p6)"><i></i>grid-builder 1</div><div class="row"><span class="st ok">1</span><span class="st ok">2</span><span class="st">7</span><span class="st">8</span><span class="st">11</span><span class="st ok">13</span><span class="st">14</span><span class="st">17</span><span class="st">19</span><span class="st">20</span><span class="st">23</span><span class="st ask">24</span><span class="st">25</span><span class="st">29</span><span class="st">31</span></div>
+            <div class="who" style="--pc:var(--ob-p4)"><i></i>grid-builder 2</div><div class="row"><span class="st cur">3</span><span class="st ask">5</span><span class="st">6</span><span class="st">9</span><span class="st">10</span><span class="st">12</span><span class="st">15</span><span class="st">16</span><span class="st">18</span><span class="st ask">21</span><span class="st">22</span><span class="st">27</span><span class="st">28</span></div>
             <div class="who" style="--pc:var(--ob-ask)"><i></i>you</div><div class="row"><span class="st ask">4</span><span class="st ask">26</span></div>
             <div class="who" style="--pc:var(--ob-p5)"><i></i>grid-runner</div><div class="row"><span class="st">30</span></div>
           </div>
           <div class="legend"><span><i style="background:var(--ob-ok)"></i>tested</span><span><i style="background:var(--ob-acc)"></i>next</span><span><i style="background:var(--ob-ask)"></i>waits on an answer</span><span><i style="border:1px solid var(--ob-line2)"></i>planned</span></div>
         <div class="var"><span class="vlab">Variant<b>a worker away and steps nobody owns</b></span>
           <div class="swim">
-            <div class="who away" style="--pc:var(--ob-p6)"><i></i><b>grid-worker 1</b> · stopped</div><div class="row"><span class="st ok">1</span><span class="st ok">2</span><span class="st conf">7</span><span class="st conf">8</span></div>
-            <div class="who" style="--pc:var(--ob-p4)"><i></i>grid-worker 2</div><div class="row"><span class="st cur">3</span><span class="st">6</span><span class="st">9</span><span class="st">10</span></div>
+            <div class="who away" style="--pc:var(--ob-p6)"><i></i><b>grid-builder 1</b> · stopped</div><div class="row"><span class="st ok">1</span><span class="st ok">2</span><span class="st conf">7</span><span class="st conf">8</span></div>
+            <div class="who" style="--pc:var(--ob-p4)"><i></i>grid-builder 2</div><div class="row"><span class="st cur">3</span><span class="st">6</span><span class="st">9</span><span class="st">10</span></div>
             <div class="who" style="--pc:var(--ob-err)"><i></i>unassigned</div><div class="row"><span class="st conf">11</span><span class="st conf">12</span><span class="st conf">14</span></div>
           </div><div class="micro errc">worker 1 stopped at 09:12 (context limit); its 2 open steps and 3 unassigned ones need a worker · <a href="#a">start one</a></div>
         </div>
@@ -351,7 +351,7 @@
           </div>
           <div class="micro">amber line = a gate that waits on a person · about 9 agent-days with 2 workers</div>
         <div class="var"><span class="vlab">Variant<b>two tasks share one worker: the conflict is drawn</b></span>
-          <div class="gantt"><div class="gl">T-01 · Grid on Claude</div><div class="gr"><span class="gb cur" style="left:20%;width:40%"></span></div><div class="gl">T-07 · CSV export</div><div class="gr"><span class="gb conf" style="left:40%;width:30%"></span></div><div class="gl micro errc">grid-worker 2 on both</div><div class="gr"><span class="gg" style="left:40%"></span><span class="gg" style="left:60%"></span></div><div></div><div class="ax"><span>Thu</span><span>Fri</span><span>Mon</span><span>Tue</span><span>Wed</span></div></div><div class="micro">overlap Fri to Mon · T-07 is due first · <a href="#r">move T-01 chapter 3 to worker 1</a></div>
+          <div class="gantt"><div class="gl">T-01 · Grid on Claude</div><div class="gr"><span class="gb cur" style="left:20%;width:40%"></span></div><div class="gl">T-07 · CSV export</div><div class="gr"><span class="gb conf" style="left:40%;width:30%"></span></div><div class="gl micro errc">grid-builder 2 on both</div><div class="gr"><span class="gg" style="left:40%"></span><span class="gg" style="left:60%"></span></div><div></div><div class="ax"><span>Thu</span><span>Fri</span><span>Mon</span><span>Tue</span><span>Wed</span></div></div><div class="micro">overlap Fri to Mon · T-07 is due first · <a href="#r">move T-01 chapter 3 to worker 1</a></div>
         </div>
       </div>
     </section>
@@ -512,7 +512,7 @@
     <section class="entry" id="c-26">
       <div class="lab"><span class="code">C-26</span><b>Evidence well</b><p>A command and the lines that prove a step, nothing more. Use under a tested step or a passed check; the terminal look is reserved for this.</p></div>
       <div class="body">
-        <div class="wellh"><span>step 1 · tested 08:22 · grid-worker 1 · laptop-1</span><a href="#log">full log · 212 lines</a></div>
+        <div class="wellh"><span>step 1 · tested 08:22 · grid-builder 1 · laptop-1</span><a href="#log">full log · 212 lines</a></div>
         <pre class="well"><span class="cmd">$ claude --agent grid-planner --print "which body are you"</span>
 grid-planner v3 · CLAUDE.md loaded · 2.1.236
 <span class="ok">✓ body present</span>   <span class="ok">✓ project rules apply</span>   <span class="err">× empty body drops tools (risk 1)</span></pre>
@@ -577,7 +577,7 @@ grid-planner v3 · CLAUDE.md loaded · 2.1.236
             <div class="art"><div class="pv"><span class="tp">diff</span></div><b>plan.md rev 2 → 3</b><span>chapter 1 reordered</span></div>
           </div>
         <div class="var"><span class="vlab">Variant<b>thirty files: a list, not tiles</b></span>
-          <div class="flist"><div class="frow"><span class="fk page">html</span><b>views/plan.html</b><span class="micro">grid-planner · 09:00</span><span class="micro">64 KB</span></div><div class="frow"><span class="fk md">md</span><b>questions/round-3.md</b><span class="micro">grid-planner · 07:40</span><span class="micro">9 KB</span></div><div class="frow"><span class="fk spec">md</span><b>spec/acceptance.md</b><span class="micro">you · Wed 16:05</span><span class="micro">2 KB</span></div><div class="frow"><span class="fk log">log</span><b>tests/step-1.log</b><span class="micro">grid-worker 1 · 08:22</span><span class="micro">3 KB</span></div><div class="micro" style="padding:6px 4px">+ 26 more · sorted by updated</div></div>
+          <div class="flist"><div class="frow"><span class="fk page">html</span><b>views/plan.html</b><span class="micro">grid-planner · 09:00</span><span class="micro">64 KB</span></div><div class="frow"><span class="fk md">md</span><b>questions/round-3.md</b><span class="micro">grid-planner · 07:40</span><span class="micro">9 KB</span></div><div class="frow"><span class="fk spec">md</span><b>spec/acceptance.md</b><span class="micro">you · Wed 16:05</span><span class="micro">2 KB</span></div><div class="frow"><span class="fk log">log</span><b>tests/step-1.log</b><span class="micro">grid-builder 1 · 08:22</span><span class="micro">3 KB</span></div><div class="micro" style="padding:6px 4px">+ 26 more · sorted by updated</div></div>
         </div>
       </div>
     </section>
@@ -636,7 +636,7 @@ grid-planner v3 · CLAUDE.md loaded · 2.1.236
           <div class="person"><span class="av">Ki</span><div><b>Kim</b><span>member · away Fri</span><div class="may"><i>approve previews</i></div></div></div>
           <div class="person"><span class="av">No</span><div><b>Noor</b><span>client · relay page</span><div class="may"><i>see preview</i></div></div></div>
           <div class="person"><span class="av ag">P</span><div><b>grid-planner</b><span>Opus · plans, asks, never passes a gate</span><div class="may"><i>plan</i><i>ask</i></div></div></div>
-          <div class="person"><span class="av ag">W</span><div><b>grid-worker ×2</b><span>Sonnet · task branch only</span><div class="may"><i>build</i><i>test</i></div></div></div>
+          <div class="person"><span class="av ag">B</span><div><b>grid-builder ×2</b><span>Sonnet · task branch only</span><div class="may"><i>build</i><i>test</i></div></div></div>
           <div class="person"><span class="av ag">S</span><div><b>grid-scout</b><span>Haiku · research only</span><div class="may"><i>read</i></div></div></div>
         </div>
         <div class="var"><span class="vlab">Variant<b>someone away, with a delegate</b></span>
@@ -858,10 +858,10 @@ grid-planner v3 · CLAUDE.md loaded · 2.1.236
       <div class="lab"><span class="code">C-53</span><b>Commit timeline</b><p>Commits on the task branch with the step each one closes; predicted commits dashed. Use at Deliver and in Code to connect steps to git.</p></div>
       <div class="body">
         <div class="commits">
-          <div class="cm2 ok"><span class="h">8d04be · 08:22</span><span class="m">planner: start with --agent in the background<small>step 1 · grid-worker 1 · 3 files</small></span><span class="s">tested</span></div>
-          <div class="cm2 ok"><span class="h">c71f20 · 08:40</span><span class="m">planner: keep CLAUDE.md with a swapped body<small>step 2 · grid-worker 1 · 2 files</small></span><span class="s">tested</span></div>
-          <div class="cm2 ok"><span class="h">3f9a1c · 09:50</span><span class="m">hooks: one grid-hook with named rules<small>step 13 · grid-worker 1</small></span><span class="s">tested</span></div>
-          <div class="cm2 cur"><span class="h">working</span><span class="m">planner: idle hook on stop<small>step 3 · grid-worker 2 · draft</small></span><span class="s">next</span></div>
+          <div class="cm2 ok"><span class="h">8d04be · 08:22</span><span class="m">planner: start with --agent in the background<small>step 1 · grid-builder 1 · 3 files</small></span><span class="s">tested</span></div>
+          <div class="cm2 ok"><span class="h">c71f20 · 08:40</span><span class="m">planner: keep CLAUDE.md with a swapped body<small>step 2 · grid-builder 1 · 2 files</small></span><span class="s">tested</span></div>
+          <div class="cm2 ok"><span class="h">3f9a1c · 09:50</span><span class="m">hooks: one grid-hook with named rules<small>step 13 · grid-builder 1</small></span><span class="s">tested</span></div>
+          <div class="cm2 cur"><span class="h">working</span><span class="m">planner: idle hook on stop<small>step 3 · grid-builder 2 · draft</small></span><span class="s">next</span></div>
           <div class="cm2 pred"><span class="h">predicted</span><span class="m">planner: version floor<small>step 5 · after Q-4</small></span><span class="s">planned</span></div>
           <div class="cm2 pred"><span class="h">predicted</span><span class="m">folder: read, watch, cache<small>chapter 2 · 6 steps</small></span><span class="s">planned</span></div>
         </div>
@@ -886,7 +886,7 @@ grid-planner v3 · CLAUDE.md loaded · 2.1.236
       <div class="lab"><span class="code">C-55</span><b>Error → fix</b><p>The error as it appeared, the cause in one line, and the fix as code. Use under a retried step and in Result; the error text is verbatim, never paraphrased.</p></div>
       <div class="body">
         <div class="efix">
-          <div><div class="cap micro" style="margin-bottom:6px">error · 10:02 · grid-worker 2</div><pre class="code2"><span class="cm">$ ./hooks/on-stop.sh</span>
+          <div><div class="cap micro" style="margin-bottom:6px">error · 10:02 · grid-builder 2</div><pre class="code2"><span class="cm">$ ./hooks/on-stop.sh</span>
 grid idle: history.md not found for session 7f3a
 <span class="kw">exit 2</span></pre></div>
           <div><div class="cap micro" style="margin-bottom:6px">fix · 10:19 · step 15</div><pre class="code2 aft"><span class="del">sleep 1</span>
@@ -954,7 +954,7 @@ grid idle --task "$TASK" --session "$CLAUDE_SESSION"</pre></div>
 
     <section class="entry" id="c-60"><div class="lab"><span class="code">C-60</span><b>Live session tile</b><p>One running agent: who, on which task, model, running time, tokens, context left and its last line.</p><p>Use when: Home or Sessions shows what runs now.</p><p>Do not use: for a finished run; that is a line in C-21.</p></div><div class="body">
       <div class="stiles">
-        <div class="stile"><div class="sa"><span class="livdot"></span><b>grid-worker</b><span class="mdl">sonnet</span></div><div class="st2"><span class="id">T-01</span><span>Grid on Claude · step 4</span></div><p class="ln">editing skills/plan-page/reference/components.css</p><div class="snum"><div><b>12m</b><span>running</span></div><div><b>184k</b><span>tokens</span></div><div><b>5/8</b><span>steps</span></div><div><b>61%</b><span>context</span></div></div><div class="trk"><i style="width:61%"></i></div><p class="who">started by Sam · this Mac</p></div>
+        <div class="stile"><div class="sa"><span class="livdot"></span><b>grid-builder</b><span class="mdl">sonnet</span></div><div class="st2"><span class="id">T-01</span><span>Grid on Claude · step 4</span></div><p class="ln">editing skills/plan-page/reference/components.css</p><div class="snum"><div><b>12m</b><span>running</span></div><div><b>184k</b><span>tokens</span></div><div><b>5/8</b><span>steps</span></div><div><b>61%</b><span>context</span></div></div><div class="trk"><i style="width:61%"></i></div><p class="who">started by Sam · this Mac</p></div>
         <div class="stile ask"><div class="sa"><span class="livdot ask"></span><b>grid-planner</b><span class="mdl">opus</span></div><div class="st2"><span class="id">T-11</span><span>Pricing page · plan</span></div><p class="ln">Waits on you: pick the annual discount</p><div class="snum"><div><b>31m</b><span>running</span></div><div><b>96k</b><span>tokens</span></div><div><b>2/6</b><span>steps</span></div><div><b>38%</b><span>context</span></div></div><div class="trk"><i style="width:38%"></i></div><p class="who">started by Kim · CI runner</p></div>
       </div>
       <div class="var"><span class="vlab">Variant<b>stuck</b></span>
@@ -999,7 +999,7 @@ grid idle --task "$TASK" --session "$CLAUDE_SESSION"</pre></div>
           <li><span class="gl okc">✓</span><span class="k">Plugin</span><span class="v"><b>0.9.2</b> · up to date</span></li>
           <li><span class="gl okc">✓</span><span class="k">Hooks</span><span class="v"><b>6 of 6</b> installed</span></li>
           <li><span class="gl okc">✓</span><span class="k">Skills</span><span class="v"><b>14</b> loaded</span></li>
-          <li><span class="gl okc">✓</span><span class="k">Agents</span><span class="v"><b>5</b> · grid-planner, grid-runner, grid-worker, grid-reviewer, grid-brief</span></li>
+          <li><span class="gl okc">✓</span><span class="k">Agents</span><span class="v"><b>5</b> · grid-planner, grid-runner, grid-builder, grid-reviewer, grid-brief</span></li>
         </ul>
         <p class="micro">Also <span class="mono">grid doctor</span> in a terminal.</p>
       </div>
@@ -1015,7 +1015,7 @@ grid idle --task "$TASK" --session "$CLAUDE_SESSION"</pre></div>
 
     <section class="entry" id="c-64"><div class="lab"><span class="code">C-64</span><b>Agent roster card</b><p>One agent Grid can send: name, role, model, last run, pass rate. Amber when its pass rate drops.</p><p>Use when: the Agents or Roster page lists who can do the work.</p><p>Do not use: for the people and agents on one task; that is C-28.</p></div><div class="body">
       <div class="agcards">
-        <div class="agc"><div class="ah"><span class="av">W</span><div><b>grid-worker</b><span>builds one step</span></div><span class="mdl">sonnet</span></div><div class="afacts"><span class="k">Last run</span><span>T-01 · 12m ago</span><span class="k">Runs</span><span>48 this week</span></div><div class="pr"><div class="ph3"><span>Pass first time</span><b>92%</b></div><div class="trk"><i style="width:92%"></i></div></div></div>
+        <div class="agc"><div class="ah"><span class="av">B</span><div><b>grid-builder</b><span>builds one step</span></div><span class="mdl">sonnet</span></div><div class="afacts"><span class="k">Last run</span><span>T-01 · 12m ago</span><span class="k">Runs</span><span>48 this week</span></div><div class="pr"><div class="ph3"><span>Pass first time</span><b>92%</b></div><div class="trk"><i style="width:92%"></i></div></div></div>
         <div class="agc low"><div class="ah"><span class="av">R</span><div><b>grid-runner</b><span>runs checks</span></div><span class="mdl">haiku</span></div><div class="afacts"><span class="k">Last run</span><span>T-03 · 48m ago</span><span class="k">Runs</span><span>31 this week</span></div><div class="pr"><div class="ph3"><span class="amber">Pass first time</span><b>58%</b></div><div class="trk"><i style="width:58%"></i></div></div></div>
       </div>
       <div class="var"><span class="vlab">Variant<b>never run</b></span>

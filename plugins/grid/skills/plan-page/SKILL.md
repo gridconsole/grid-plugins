@@ -95,7 +95,7 @@ Never mark a block that records a decision already taken (C-29), a finding, a st
 
 - Headline states the conclusion ("Rev 3 is ready to accept; three questions block the build"), not the topic ("Status").
 - One paragraph per section before any component; the component proves the paragraph.
-- Second person for the reader ("waits on you"), named agents for workers ("grid-worker 2 is drafting step 3").
+- Second person for the reader ("waits on you"), named agents for builders ("grid-builder 2 is drafting step 3").
 - Times are absolute with relative in brackets: `07:40 (2 h ago)`. Usage against a limit is in tokens or a share of the plan: `45k of 500k tokens`, never dollars.
 - Keep each code snippet under fifteen lines (C-46, C-47); link the file for the rest.
 

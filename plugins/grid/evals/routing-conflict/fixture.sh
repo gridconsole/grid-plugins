@@ -19,6 +19,6 @@ cat > ws/projects/notes-app/routing.md <<'R'
 | Applies to | Agent | Why |
 |---|---|---|
 | kind: make-together, project: notes-app | grid-designer | Shared design sessions |
-| kind: make-together, project: notes-app | grid-worker | Shared build sessions |
+| kind: make-together, project: notes-app | grid-builder | Shared build sessions |
 | kind: check | grid-runner | Checks are commands |
 R
