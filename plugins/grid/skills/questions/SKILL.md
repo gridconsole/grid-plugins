@@ -46,7 +46,8 @@ Only when the person gives the answer in their own words (or says what another p
 1. In the block, replace `Answer: —` with `Answer: <their words>. (<time>, <who>)` and change the state in the heading to `answered`.
 2. Append `- <time> · question answered · Q-<n> · by <who>` to `history.md` (Edit tool, not a shell append).
 3. In task.md remove `Q-<n>` from `needs`; if `needs` is now empty and `status` was `waiting`, set it to `running`. Set `next` to what happens now that `Q-<n>` is closed (it must not still name `Q-<n>`) and set `updated` (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess).
-4. Never edit another block, and never change an answer once recorded; a new answer is a new question.
+4. When the question was raised because a brief is `blocked` on the person's action, the answer reruns that brief: the next step is the execute skill rerunning it (status `running`, `next` naming the step); never ask the person to resume or rerun.
+5. Never edit another block, and never change an answer once recorded; a new answer is a new question.
 
 ## Withdraw
 

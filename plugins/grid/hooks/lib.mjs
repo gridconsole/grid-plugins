@@ -914,27 +914,64 @@ export function carryOnStep(dir) {
   const step = fm.data.step;
   const kinds = workflowKinds(text);
   if (!step || !['run', 'check'].includes(kinds[step])) return null;
-  const head = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)[1];
-  if (!isEmpty(fm.data.needs) || /^needs:[ \t]*\r?\n[ \t]*-[ \t]*\S/m.test(head)) return null;
-  let asked = [];
-  try { asked = fs.readdirSync(path.join(dir, 'questions')).filter((f) => f.endsWith('.md')); } catch { /* none */ }
-  for (const f of asked) {
-    if (/^##\s+Q-\d+\s+·[^\n]*·\s*blocking\s+·\s*open\s*$/m.test(readText(path.join(dir, 'questions', f)) ?? '')) return null;
-  }
-  let names = [];
-  try { names = fs.readdirSync(path.join(dir, 'subagents')).filter(isBriefName).sort(byBriefNumber); } catch { /* none */ }
-  const briefs = names.map((n) => frontmatter(readText(path.join(dir, 'subagents', n)) ?? '')?.data ?? {});
+  if (personQuestionOpen(dir, text, fm)) return null;
+  const briefs = briefsOf(dir);
   if (!briefs.length) {
     const lines = (readText(path.join(dir, 'history.md')) ?? '').split('\n').filter((l) => l.trim());
     if (lines.length && lines.every((l) => /^-\s.*·\s*created\s*·/.test(l))) return null;
   }
-  const role = (b) => str(b.role).toLowerCase();
-  if (briefs.some((b, i) => b.status === 'blocked' && !briefs.slice(i + 1).some((l) => role(l) === role(b)))) return null;
+  if (blockedBrief(briefs)) return null;
   if (briefs.some((b) => b.status === 'running')) return null;
   const status = briefs.at(-1)?.status;
   const recorded = (fm.body.split('\n').filter((l) => /^-\s+\S.*·/.test(l)).pop() ?? '').split('·')[1]?.trim() === step;
   if (status === 'done' && recorded && Object.keys(kinds).at(-1) === step) return null;
   return step;
+}
+
+// The briefs' frontmatter in number order (an unreadable brief gives {}).
+function briefsOf(dir) {
+  let names = [];
+  try { names = fs.readdirSync(path.join(dir, 'subagents')).filter(isBriefName).sort(byBriefNumber); } catch { /* none */ }
+  return names.map((n) => frontmatter(readText(path.join(dir, 'subagents', n)) ?? '')?.data ?? {});
+}
+
+// A blocked brief that no later brief of the same role has replaced.
+const blockedBrief = (briefs) => {
+  const role = (b) => str(b.role).toLowerCase();
+  return briefs.some((b, i) => b.status === 'blocked' && !briefs.slice(i + 1).some((l) => role(l) === role(b)));
+};
+
+// Whether a person already has something to answer: a non-empty needs list or an open blocking question.
+function personQuestionOpen(dir, text, fm) {
+  const head = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)[1];
+  if (!isEmpty(fm.data.needs) || /^needs:[ \t]*\r?\n[ \t]*-[ \t]*\S/m.test(head)) return true;
+  let asked = [];
+  try { asked = fs.readdirSync(path.join(dir, 'questions')).filter((f) => f.endsWith('.md')); } catch { /* none */ }
+  return asked.some((f) => /^##\s+Q-\d+\s+·[^\n]*·\s*blocking\s+·\s*open\s*$/m.test(readText(path.join(dir, 'questions', f)) ?? ''));
+}
+
+// `next` phrasings that ask a person to act ("Sam: restart ...", "ask the person to rerun ...");
+// Grid's own plans ("Grid will resume once ...", "... then the check reruns") do not match.
+const PERSON_ACTION = [
+  /(^|[.;]\s*)[A-Z][\w-]*:\s*(resume|restart|re-?run)\b/,
+  /\b(ask|tell|have)\s+(the\s+)?\w+\s+to\s+(resume|restart|re-?run)\b/i,
+  /\byou\s+(need|must|have|should)\s+to\s+(resume|restart|re-?run)\b/i,
+  /\bwaiting\s+for\s+you\s+to\b/i,
+  /\b(run|type|use)\s+\/[\w:-]+/i,
+  /\bopen\s+(a|the)\s+terminal\b/i,
+];
+
+// A running or reworking task that waits on a person but shows nothing in Needs you: the newest brief is blocked,
+// none is running, and no blocking question is open. Returns 'blocked' for that, 'next' when `next`
+// tells the person to resume, restart or rerun, else null. waiting and stuck tasks are the person's already.
+export function silentWait(dir) {
+  const text = readText(path.join(dir, 'task.md')) ?? '';
+  const fm = frontmatter(text);
+  if (!fm || !['running', 'reworking'].includes(fm.data.status)) return null;
+  if (personQuestionOpen(dir, text, fm)) return null;
+  const briefs = briefsOf(dir);
+  if (!briefs.some((b) => b.status === 'running') && briefs.at(-1)?.status === 'blocked') return 'blocked';
+  return PERSON_ACTION.some((re) => re.test(str(fm.data.next))) ? 'next' : null;
 }
 
 // Whether this session has made an Agent call to a reviewer (a REVIEWER_ROLES type, grid-reviewer

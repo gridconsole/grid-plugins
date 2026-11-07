@@ -14,6 +14,10 @@
 //     Also the carry-on gate: a running or reworking task whose current step is a run or check step
 //     nobody has to answer (no open question, no blocked brief, not the finished last step, not a task
 //     just created) is told to carry on with it. stop_hook_active ends the push, so one push per chain.
+//     Also the silent-wait gate: a running or reworking task whose latest brief of some role is blocked
+//     with no open blocking question, or whose `next` tells the person to resume, restart or rerun, is told
+//     to raise a blocking question to the owner now (status waiting) so it shows in Needs you. Once per
+//     session per task and reason.
 //   - SubagentStop: the Outcome of the brief that subagent was given (found in its transcript, or else
 //     in the Agent call that started it: briefFor).
 //     A reviewer writes Verdict, never Outcome, so when the subagent is a reviewer (agent_type,
@@ -24,7 +28,7 @@
 //     falls back to the brief's role alone.
 import fs from 'node:fs';
 import path from 'node:path';
-import { main, readInput, str, taskAt, frontmatter, isEmpty, section, readText, agentTasks, briefFor, agentName, unreviewedApproval, carryOnStep, reviewerCalled, firstGate, projectsRoot, REVIEWER_ROLES, NON_WRITERS } from './lib.mjs';
+import { main, readInput, str, taskAt, frontmatter, isEmpty, section, readText, agentTasks, briefFor, agentName, unreviewedApproval, carryOnStep, silentWait, reviewerCalled, firstGate, projectsRoot, REVIEWER_ROLES, NON_WRITERS } from './lib.mjs';
 
 main(async () => {
   const input = await readInput();
@@ -61,6 +65,8 @@ function stopProblems(input, projects) {
     }
     const gate = unreviewedApproval(dir, projects);
     if (gate && !reviewerCalled(input) && firstGate(input, gate.file)) out.push(noReview(gate, projects));
+    const wait = silentWait(dir);
+    if (wait && firstGate(input, `${task}#${wait}`)) out.push(`${label(task, projects)}: ${wait === 'blocked' ? 'a brief is blocked' : '"next" asks the person to resume, restart or rerun'} and no question is open, so the person cannot see it in Needs you. Raise a blocking question to the task's owner now through the questions skill (status waiting), naming what they must do and what Grid does once it is done. Do not end on a "resume" or "rerun" instruction in text.`);
     const next = carryOnStep(dir);
     if (next) out.push(`${label(task, projects)}: step ${next} is current and needs no one: record its result if its brief is done, else run it.`);
   }
