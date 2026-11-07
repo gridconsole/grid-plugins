@@ -5,7 +5,7 @@
 //   and `parallel_steps:` in the project's project.md (the project folder is two levels above the task folder; 6 when missing).
 //   --limit overrides that setting; --running adds step numbers the briefs do not show.
 //   Prints what to start now (the ready steps that fit under the limit, lowest number first) and where every other step stands.
-// A step's `needs:` line, anywhere in its block, lists step numbers or `none`. A step with no such line (an older plan) needs the
+// A step's lowercase `needs:` line (the plan hash leaves out only that spelling), anywhere in its block, lists step numbers or `none`. A step with no such line (an older plan) needs the
 // step before it in the list. Read-only. Exit 2 when there is no plan.md. Node built-ins only.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,7 +14,8 @@ import { fileURLToPath } from 'node:url';
 export const DEFAULT_LIMIT = 6;
 
 const STEP = /^- \[([ xX])\] (\d+)(?:\s+(.*))?$/;
-const NEEDS = /^\s+needs:\s*(.*?)\s*$/i;
+const NEEDS = /^\s+needs:\s*(.*?)\s*$/;
+const NEEDS_OTHER_CASE = /^\s+needs:/i;
 
 // The steps of a plan in list order: { n, title, done, needs: [n], explicit, bad }. `bad` holds the text of an unreadable needs line.
 export function parseSteps(text) {
@@ -23,9 +24,10 @@ export function parseSteps(text) {
   for (const line of text.replace(/\r\n/g, '\n').split('\n')) {
     const m = STEP.exec(line);
     if (m) {
-      current = { n: Number(m[2]), title: (m[3] ?? '').trim(), done: m[1] !== ' ', needs: null, explicit: false, bad: '' };
+      current = { n: Number(m[2]), title: (m[3] ?? '').trim(), done: m[1] !== ' ', needs: null, explicit: false, bad: '', wrongCase: false };
       steps.push(current);
     } else if (current && /^\s+\S/.test(line)) {
+      if (NEEDS_OTHER_CASE.test(line) && !NEEDS.test(line)) current.wrongCase = true;
       const need = NEEDS.exec(line);
       if (!need || current.explicit) continue;
       current.explicit = true;
@@ -82,6 +84,7 @@ export function readySet(steps, { states = new Map(), running = [], limit = DEFA
   const broken = new Set();
   for (const s of open) {
     const before = problems.length;
+    if (s.wrongCase) problems.push(`step ${s.n}: write needs: in lowercase; that spelling is not read`);
     if (s.bad) problems.push(`step ${s.n}: needs: "${s.bad}" is not step numbers or none`);
     else if (s.needs.includes(s.n)) problems.push(`step ${s.n} needs itself`);
     else for (const m of s.needs) if (!byN.has(m)) problems.push(`step ${s.n} needs step ${m}, which is not in the plan`);

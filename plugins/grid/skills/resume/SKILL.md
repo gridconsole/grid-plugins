@@ -46,4 +46,6 @@ If `plan.md` does not exist yet, the plan was never written: use the plan skill 
 3. If the step is an `approve` step after the plan (a review, a preview, a sign-off), there is nothing to run: on a ship approve step whose task.md has no `## Outcome`, or one older than a brief's Outcome, first run the deliver skill's `## Before the gate`. Compare by history.md order: the Outcome is older when a `subagent finished · brief <NN-name>` line (or a `file edited · subagents/<NN-name>.md` line) comes after the last `outcome written` line, which is where a Before-the-gate run ends, or when there is no `outcome written` line; the run then rewrites the Outcome whole. Then set `status: waiting`, name the person in `next`, report what waits and stop.
 4. Otherwise run the step through the execute skill: the plan item the person named (`from <n>`) and every other ready plan step together, else the whole ready set, never one step at a time. Tick nothing without evidence.
 
+Once, before the turn ends, run `grid-brain concept --task <id>` (the plugin's `bin/`) so the task's concept note in the project brain is current after the pause. It is the one place this skill runs it. If it exits non-zero, carry on and add one history line saying it failed; it never stops the step.
+
 Tell the person what the task was doing, which case applied, and what happens next.
