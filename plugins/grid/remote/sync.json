@@ -17,6 +17,7 @@
     "subagents/**",
     "brain-proposals/**",
     "memory/**",
+    "questions/**",
     "research.md",
     "spec.md",
     "sessions/**"
