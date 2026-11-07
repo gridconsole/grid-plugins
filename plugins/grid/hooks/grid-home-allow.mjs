@@ -9,7 +9,9 @@
 //   text with no `;` `&` `|` `$` backtick `\` `>` `<` `(` `)`, no newline or other control character, nothing before `node`.
 //   An arg that is a path (starts with `/`, `~` or `.`, contains `/` or `..`, or is a bare file name such as plan.md, alone or
 //   as the value after `=`) must itself resolve inside the Grid home, relative ones from cwd, so plan-hash cannot rewrite a
-//   plan.md in a repo. A JSON object or array arg (add-signal's) is not read as a path.
+//   plan.md in a repo. A JSON object or array arg (add-signal's) is not read as a path. One exception, for deliver/scripts/proof-add.mjs
+//   only: it reads its options as strict `--flag value` pairs, so the value of `--caption` and the value of `--url` when it is an
+//   http or https address are plain text there and not paths; every other arg of that script is judged as above.
 // A deny or ask rule and the other guards' denies still win (deny > ask > allow): this hook only ever allows. On PermissionRequest
 // (a prompt would show, or `-p` would deny) an allow also adds the Grid home as a session directory, so the next call needs no
 // hook. A Grid home that is too broad is never used: the filesystem root, the person's home folder or any folder above it, or
@@ -79,7 +81,8 @@ function words(text) {
   return out;
 }
 
-// The args of the command when it is `node <this plugin's skills/<skill>/scripts/<name>.mjs> <args>` and nothing else, else null.
+// The script ("<skill>/<name>.mjs") and args of the command when it is `node <this plugin's skills/<skill>/scripts/<name>.mjs> <args>`
+// and nothing else, else null.
 function ownScript(command) {
   const m = /^node +(.*)$/.exec(command);
   if (!m) return null;
@@ -92,7 +95,7 @@ function ownScript(command) {
   } catch { return null; }
   const parts = path.relative(pluginRoot(), script).split(path.sep);
   const own = parts.length === 4 && parts[0] === 'skills' && parts[2] === 'scripts' && parts[3].endsWith('.mjs') && !parts.includes('..') && parts[1] !== '';
-  return own ? tokens.slice(1) : null;
+  return own ? { script: `${parts[1]}/${parts[3]}`, args: tokens.slice(1) } : null;
 }
 
 const FLAG = /^--?[A-Za-z][\w-]*$/;
@@ -114,6 +117,19 @@ function pathsIn(args) {
   return out;
 }
 
+// proof-add reads --flag value pairs from the first arg on: a --caption value and an http(s) --url value are text it only stores,
+// so they are left out of the path check (the flag in each pair, and every other value, stay in). Pairs are cut as the script cuts them.
+const HTTP_URL = /^https?:\/\/[^\s]+$/;
+function proofAddPaths(args) {
+  const judged = [];
+  for (let i = 0; i < args.length; i += 2) {
+    const [flag, value] = [args[i], args[i + 1]];
+    judged.push(flag);
+    if (value !== undefined && !(flag === '--caption' || (flag === '--url' && HTTP_URL.test(value)))) judged.push(value);
+  }
+  return pathsIn(judged);
+}
+
 // Whether one path arg, absolute or from cwd, resolves inside the Grid home (never for `~`: a script may expand it).
 const within = (home, given, cwd) => !given.startsWith('~') && inside(home, realNative(path.isAbsolute(given) ? given : path.resolve(cwd, given)));
 
@@ -121,9 +137,9 @@ function judge(input) {
   const name = str(input.tool_name);
   const toolInput = input.tool_input && typeof input.tool_input === 'object' ? input.tool_input : {};
   if (name === 'Bash') {
-    const args = ownScript(str(toolInput.command));
-    if (!args) return null;
-    const paths = pathsIn(args);
+    const own = ownScript(str(toolInput.command));
+    if (!own) return null;
+    const paths = own.script === 'deliver/proof-add.mjs' ? proofAddPaths(own.args) : pathsIn(own.args);
     const home = paths.length ? gridHome(input) : null;
     if (paths.length && (!home || !paths.every((p) => within(home, p, str(input.cwd))))) return null;
     return 'runs one of the Grid plugin\'s own scripts';

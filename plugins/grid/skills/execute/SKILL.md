@@ -103,6 +103,8 @@ Read the brief's Outcome (a reviewer writes Verdict only; a scout's reply is the
 
 Read the brief with the Read tool right before you Edit it: a subagent wrote it since you last read it, and Edit refuses a file this session has not read.
 
+A `grid-checker` has no Bash and cannot file its own screenshots: whoever ran it (you, or the operator that started it) saves the screenshots its Verdict names through `skills/deliver/scripts/proof-add.mjs` with `--by grid-checker` and the checker brief's `subtask`, the one id, `_task` when it has none.
+
 Tick plan items through the plan skill, and only with evidence. With several steps running, do this for each brief as it finishes, never for the whole set at the end.
 
 Only when the task's work is in a git repo: copy the Outcome's `repo: <name> branch: <branch> base: <base>` lines into task.md's `repos:` in the section 5 edit, for a `blocked` brief too, one `  - {name: <name>, branch: <branch>, base: <base>}` item per repo, without `base` when the line has none. A repo already listed keeps its one item: update its `branch`, and keep its `base` unless that was empty. This is the only place a task's branches are recorded, in task.md in Grid's data folder; never write a branch note, file or setting into the repo.

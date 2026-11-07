@@ -12,4 +12,6 @@ fields:
 ---
 One piece of work that one Worker picks up. The envelope `job` is its id (J-1, J-2, ...); a Job post without one gets the next number.
 
+Only a Job posted by the Orchestrator counts: role `orchestrator`, and a Worker id (the Orchestrator's own session id, say) that is not the Worker id of any Job. A Job from anyone else is kept, shown and ignored with a reason, and never goes ready.
+
 Orchestrator: posts it, then moves it with control posts: ready when nothing blocks it, assigned to a Worker and Host, and on from there. A Job nobody moved stays posted.

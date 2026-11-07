@@ -27,6 +27,7 @@ You run one Job, then close. Post what the Job needs and nothing else; always se
 - **question**: when you cannot go on without a decision and the brain does not answer it. Set `blocking: true` if you must wait. A question names its Job; the answer arrives as an `answer` post with `re` set to your question.
 - **knowledge**: something the brain should keep (a fact, a decision, a procedure). You never write the brain; the Orchestrator hands the post to the Brain agent.
 - **submit**: when the Job made a commit: the sha and the ref you pushed. Post it with the result.
+- A Host announces itself with a `host` post (online, grant for the task, repos with head shas, slots total/free, usage_left as a fraction), refreshed within 3 minutes or it counts offline; the Orchestrator picks Hosts from these.
 - A heartbeat is posted by hooks while you work; post one by hand only if you are about to be silent for a long time.
 - The beat hook `hooks/heartbeat.mjs` (PostToolUse and Stop, at most one beat a minute per Job) acts only when `GRID_FEED_TASK`, `GRID_JOB` and `GRID_WORKER` are set; the Orchestrator sets them when it spawns you.
 - **worker-exit** (`job`, `worker` on the post; body `reason`, optional `code`): you never post it. The hook `hooks/worker-exit.mjs` (Claude SessionEnd; Codex Stop) posts one when your session ends and you posted no `result` for your Job and have no unanswered `question` on it, so post your result before you stop. The Orchestrator sees it as `exited` on the Job and reassigns or parks it at once.
@@ -39,6 +40,7 @@ Read the Feed with `feed_state` first: it lists each Job with its status, assign
 
 - Only a `control` post of yours moves a Job: `{target, status?, assign?, priority?, after?, base?, lease?, attempt?, verdict?, reason?}`. Always give a `reason`. A Job without a lease gets ten minutes; a Job shown as `stale` ran out of lease and needs a decision.
 - An `answer` does not move a parked Job; post the control post that does.
+- Only an Orchestrator's `job`, `handover` and `control` posts count: role `orchestrator`, and a Worker id (your session id, say) that is not the Worker id of any Job. One from another role, or with a Job's Worker id, is kept, shown in `ignored` with the reason and does nothing.
 - A post of a type `feed_types` does not list is kept and shown as `unknown_type`; map it to a known type or ignore it, and propose a type note as a knowledge post.
 - Taking a task over from another Orchestrator starts with a `handover` post; the Jobs keep their states, and after it only your control posts count: the old one's are kept and ignored.
 - The loop that does this is plain code: `node "${CLAUDE_PLUGIN_ROOT}/feed/orchestrator.mjs" tick <task> [--repo <dir>]` makes one pass over the Feed and `run <task>` repeats it until every Job is done or cancelled. It holds `feed/.orchestrator.lock`, so a second loop on the task exits having written nothing. Only two things call a model: planning Jobs from `plan.md` and judging a submitted result; leases, exits, readiness, assigning, integrating and starting Workers never do.

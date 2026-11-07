@@ -189,8 +189,24 @@ export function readFeed(dir, opts = {}) {
   return posts;
 }
 
+// The Worker ids the Orchestrator gave to Jobs, every attempt, read from the `assign` of the control posts of authors with role orchestrator.
+export function jobWorkers(posts) {
+  const out = new Set();
+  for (const p of posts) {
+    if (p?.type !== 'control' || p.author?.role !== 'orchestrator' || !isObj(p.body)) continue;
+    const w = str(isObj(p.body.assign) ? p.body.assign.worker : p.body.assign);
+    if (w) out.add(w);
+  }
+  return out;
+}
+
+// A post that speaks as the Orchestrator: role orchestrator, and a Worker id (the session id of the Orchestrator's own session, say) that is not
+// the id of a Job's Worker (`workers`, from jobWorkers), so a Job's Worker cannot act as Orchestrator by setting the role. The role and the Worker
+// id are the writer's own words and nothing signs a post, so this keeps out a Worker that kept its id, not one that also dropped it or forged a post.
+export const fromOrchestrator = (p, workers) => p?.author?.role === 'orchestrator' && !(p.worker !== null && p.worker !== undefined && workers.has(str(p.worker)));
+
 // The epoch that counts: the highest of the handover posts an Orchestrator wrote, 0 when there is none.
-const currentEpoch = (posts) => posts.reduce((e, p) => (p.type === 'handover' && p.author?.role === 'orchestrator' && Number.isInteger(p.epoch) && p.epoch > e ? p.epoch : e), 0);
+const currentEpoch = (posts, workers) => posts.reduce((e, p) => (p.type === 'handover' && fromOrchestrator(p, workers) && Number.isInteger(p.epoch) && p.epoch > e ? p.epoch : e), 0);
 
 // ---- posting ----
 
@@ -228,7 +244,7 @@ function append(taskDir, input, ctx) {
 
   const dir = feedDir(taskDir);
   const existing = readFeed(dir);
-  const head = currentEpoch(existing);
+  const head = currentEpoch(existing, jobWorkers(existing));
   const epoch = Number.isInteger(ctx.epoch) && ctx.epoch >= 0 ? ctx.epoch : type === 'handover' ? (Number.isInteger(body.epoch) && body.epoch >= 0 ? body.epoch : head + 1) : head;
   if (type === 'job' && !jobId) {
     const n = existing.reduce((m, p) => Math.max(m, p.type === 'job' ? Number(/^J-(\d+)$/.exec(str(p.job))?.[1] ?? 0) : 0), 0);
@@ -278,7 +294,8 @@ const who = (p) => `${str(p.author?.member)}@${str(p.author?.host)}`;
 // Never throws on a post it does not understand.
 export function fold(posts, { now = Date.now(), known = null } = {}) {
   const sorted = [...posts].filter((p) => !usable(p)).sort(byAtId);
-  const epoch = currentEpoch(sorted);
+  const workers = jobWorkers(sorted);
+  const epoch = currentEpoch(sorted, workers);
   const ignored = [];
   const unknown = [];
   const jobs = new Map();
@@ -290,11 +307,34 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
   const skip = (p, why) => ignored.push({ id: p.id, why });
   const isUnknown = (p) => p.unknown_type === true || (known !== null && !known.has(p.type));
 
+  // Whether a post may speak as the Orchestrator at the place it holds: a reason when it may not, else ''.
+  const refusal = (p, at) => {
+    if (p.author.role !== 'orchestrator') return `author role ${str(p.author.role) || 'none'} is not orchestrator`;
+    if (!fromOrchestrator(p, workers)) return `author is the Worker ${str(p.worker)} of a Job, not the orchestrator`;
+    if (p.epoch !== at.epoch) return `epoch ${p.epoch} is not the current epoch ${at.epoch}`;
+    if (at.by !== null && who(p) !== at.by) return `author ${who(p)} is not the Orchestrator of epoch ${at.epoch}, ${at.by}`;
+    return '';
+  };
+  // A handover that counts moves `at` to its epoch and author; otherwise the reason it does not count, else ''.
+  const takeOver = (at, p) => {
+    if (!fromOrchestrator(p, workers)) return `a handover from ${p.author.role === 'orchestrator' ? `the Worker ${str(p.worker)} of a Job` : `role ${str(p.author.role) || 'none'}`} does not count: only an orchestrator hands over`;
+    if (!Number.isInteger(p.epoch) || p.epoch < 0) return '';
+    if (p.epoch < at.epoch) return `a handover of epoch ${p.epoch} does not count: the current epoch is ${at.epoch}`;
+    at.epoch = p.epoch;
+    at.by = who(p);
+    return '';
+  };
+
+  // Jobs are registered first so a control post can name one; each is checked against the Orchestrator of its place in the Feed.
+  const seen = { epoch: 0, by: null };
   for (const p of sorted) {
     if (isUnknown(p)) { unknown.push({ id: p.id, type: p.type, at: p.at }); continue; }
     const body = isObj(p.body) ? p.body : {};
-    if (p.type === 'job') {
+    if (p.type === 'handover') takeOver(seen, p);
+    else if (p.type === 'job') {
       const id = p.job || p.id;
+      const why = refusal(p, seen);
+      if (why) { skip(p, `a job does not count: ${why}`); continue; }
       if (jobs.has(id)) { skip(p, `job ${id} is already posted`); continue; }
       jobs.set(id, {
         id, post: p.id, title: str(body.title), role: str(body.role) || null, status: 'posted', recorded_status: 'posted', stale: false, assign: null, priority: null,
@@ -310,9 +350,8 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
   // The epoch at the current place of the walk below, and the member@host whose handover set it (null before any handover).
   const live = { epoch: 0, by: null };
   const control = (p) => {
-    if (p.author.role !== 'orchestrator') return skip(p, `author role ${str(p.author.role) || 'none'} is not orchestrator`);
-    if (p.epoch !== live.epoch) return skip(p, `epoch ${p.epoch} is not the current epoch ${live.epoch}`);
-    if (live.by !== null && who(p) !== live.by) return skip(p, `author ${who(p)} is not the Orchestrator of epoch ${live.epoch}, ${live.by}`);
+    const why = refusal(p, live);
+    if (why) return skip(p, why);
     const b = isObj(p.body) ? p.body : {};
     const target = str(b.target);
     const question = questions.get(target);
@@ -352,13 +391,11 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
     const job = p.job ? jobs.get(p.job) : undefined;
     switch (p.type) {
       case 'control': control(p); break;
-      case 'handover':
-        if (p.author.role !== 'orchestrator') skip(p, `a handover from role ${str(p.author.role) || 'none'} does not count: only an orchestrator hands over`);
-        else if (Number.isInteger(p.epoch) && p.epoch >= 0) {
-          if (p.epoch < live.epoch) skip(p, `a handover of epoch ${p.epoch} does not count: the current epoch is ${live.epoch}`);
-          else { live.epoch = p.epoch; live.by = who(p); }
-        }
+      case 'handover': {
+        const why = takeOver(live, p);
+        if (why) skip(p, why);
         break;
+      }
       case 'heartbeat':
         if (job && (!job.assign?.worker || job.assign.worker === p.worker)) {
           job.last_beat = p.at;
@@ -370,7 +407,10 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
       case 'submit': job?.submits.push(p.id); break;
       case 'worker-exit': if (job) job.exited = p.id; break;
       case 'answer': questions.get(p.re)?.answers.push(p.id); break;
-      case 'host': hosts[str(p.author.host)] = { id: p.id, at: p.at, body: p.body }; break;
+      case 'host':
+        if (str(p.worker) || !['host', 'orchestrator'].includes(p.author.role)) skip(p, `a host post from ${str(p.worker) ? `a Worker (${str(p.worker)})` : `role ${str(p.author.role) || 'none'}`} does not count`);
+        else hosts[who(p)] = { id: p.id, at: p.at, body: p.body, member: str(p.author.member), host: str(p.author.host) };
+        break;
       case 'head': head = { id: p.id, at: p.at, body: p.body }; break;
       default: break;
     }

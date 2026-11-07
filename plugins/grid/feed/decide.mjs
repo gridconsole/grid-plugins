@@ -102,18 +102,20 @@ export function decide(kind, input, opts = {}) {
 
   const args = [
     '-p', '--safe-mode', '--output-format', 'json', '--json-schema', JSON.stringify(SCHEMAS[kind]), '--tools', '',
-    '--no-session-persistence', '--model', model, '--effort', effort, PROMPTS[kind](input),
+    '--no-session-persistence', '--model', model, '--effort', effort,
   ];
   let r;
   try {
-    r = spawnSync('claude', args, { cwd: os.tmpdir(), env: opts.env ?? process.env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: limit, maxBuffer: OUTPUT_MAX });
+    // The prompt goes in on stdin (argv has a single-argument limit a long plan can pass); SIGKILL on the limit, since a claude that ignores SIGTERM would keep the tick waiting.
+    r = spawnSync('claude', args, { cwd: os.tmpdir(), env: opts.env ?? process.env, encoding: 'utf8', input: PROMPTS[kind](input), stdio: ['pipe', 'pipe', 'pipe'], timeout: limit, killSignal: 'SIGKILL', maxBuffer: OUTPUT_MAX });
   } catch (e) {
     return failed(false, `claude could not be started: ${oneLine(e?.message ?? e)}`);
   }
-  // No pid is a command that is not there or not allowed to run (ENOENT, EACCES) or arguments too long: nothing ran, nothing was paid.
+  // No pid is a command that is not there or not allowed to run (ENOENT, EACCES): nothing ran, nothing was paid.
   if (!(r.pid > 0)) return failed(false, `claude could not be started${r.error?.code ? ` (${r.error.code})` : ''}: ${oneLine(r.error?.message ?? 'no process')}`);
   if (r.error?.code === 'ETIMEDOUT') return failed(true, `claude gave no answer within ${limit >= 60_000 ? `${Math.round(limit / 60_000)} minutes` : `${limit / 1000} seconds`}`);
-  if (r.error) return failed(true, `claude was stopped: ${oneLine(r.error.message)}`);
+  // EPIPE is claude closing stdin before it read the whole prompt (it failed early): what it printed says why.
+  if (r.error && r.error.code !== 'EPIPE') return failed(true, `claude was stopped: ${oneLine(r.error.message)}`);
 
   // --output-format json prints one result object; a version that prints the events as an array has it last.
   let out = null;

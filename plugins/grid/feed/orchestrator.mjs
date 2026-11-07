@@ -12,10 +12,11 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { post, readFeed, fold, feedDir, identity, resolveTask } from './lib.mjs';
+import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers } from './lib.mjs';
 import { jobStart, taskIntegrate } from './git-steps.mjs';
 import { runGit } from './git.mjs';
 import { workerLaunch, ROLES, AGENTS } from './worker.mjs';
+import { foldHosts, pickHost as scoreHost, whyNoHost } from './hosts.mjs';
 import { decide as askModel } from './decide.mjs';
 
 const LIVE = new Set(['assigned', 'running']);
@@ -90,7 +91,7 @@ export function lock(taskDir) {
 
 // ---- hooks ----
 
-// The Host for a ready Job, or null to leave it waiting. For now the loop's own Host while it has a free slot; scoring Hosts is plan step 26.
+// The Host for a ready Job, or null to leave it waiting. The loop's own Host while it has a free slot; once Hosts have posted, hosts.mjs scores them (see assign).
 export function localHost(job, view) {
   return (view.busy.get(view.me.host) ?? 0) < view.slots ? view.me.host : null;
 }
@@ -153,14 +154,15 @@ function settings(taskDir, o) {
     agent: o.agent ?? 'claude', slots: Number.isInteger(o.slots) && o.slots >= 0 ? o.slots : 2,
     intervalMs: Number.isFinite(o.intervalMs) && o.intervalMs > 0 ? o.intervalMs : 15_000,
     decideOpts: { env, model: o.model, effort: o.effort },
-    decide: o.decide ?? askModel, spawn: o.spawn ?? startWorker, pickHost: o.pickHost ?? localHost, retry: o.retry ?? noRetry,
+    decide: o.decide ?? askModel, spawn: o.spawn ?? startWorker, pickHost: o.pickHost, retry: o.retry ?? noRetry,
     steps: { start: jobStart, integrate: taskIntegrate, base: resolveBase, ...o.steps },
   };
 }
 
 // The member@host of the Orchestrator handover that counts (the highest epoch, the later on a tie), or null before any.
 function orchestratorOf(posts) {
-  const h = posts.reduce((best, p) => (p.type === 'handover' && p.author?.role === 'orchestrator' && Number.isInteger(p.epoch) && (!best || p.epoch >= best.epoch) ? p : best), null);
+  const workers = jobWorkers(posts);
+  const h = posts.reduce((best, p) => (p.type === 'handover' && fromOrchestrator(p, workers) && Number.isInteger(p.epoch) && (!best || p.epoch >= best.epoch) ? p : best), null);
   return h ? { epoch: h.epoch, by: `${str(h.author.member)}@${str(h.author.host)}` } : null;
 }
 
@@ -206,8 +208,9 @@ function work(taskDir, o) {
   }
 
   const planJobs = () => {
-    if (posts.some((p) => p.type === 'job')) return;
-    if (posts.some((p) => p.type === 'heartbeat' && p.author?.role === 'orchestrator' && p.body?.decision === 'plan')) return;
+    if (fold(posts, { now }).jobs.length) return; // a job the fold refused (not from the Orchestrator) is not a plan
+    const workers = jobWorkers(posts);
+    if (posts.some((p) => p.type === 'heartbeat' && fromOrchestrator(p, workers) && p.body?.decision === 'plan')) return;
     let text;
     try { text = fs.readFileSync(path.join(taskDir, 'plan.md'), 'utf8').slice(0, PLAN_MAX); } catch { return; }
     const r = callDecide('plan', { task: o.task, plan: text, repo: o.repo ? path.basename(o.repo) : null, roles: [...ROLES] }, 'plan');
@@ -274,9 +277,14 @@ function work(taskDir, o) {
     if (result) {
       const submit = own('submit');
       if (codeJob(j, v) && submit) return control({ target: j.id, status: 'submitted', reason: 'submit received' });
-      const d = judge(j, result, null, v);
-      if (d) control({ target: result.id, status: d.verdict === 'accept' ? 'done' : 'rejected', verdict: d.verdict, reason: d.reason });
-      return undefined;
+      if (!codeJob(j, v)) {
+        const d = judge(j, result, null, v);
+        if (d) control({ target: result.id, status: d.verdict === 'accept' ? 'done' : 'rejected', verdict: d.verdict, reason: d.reason });
+        return undefined;
+      }
+      // A code Job's result with no submit has nothing to integrate: the work is unfinished, so it is stale (as for a Worker that exited
+      // with no result) and the retry hook below decides. Once stale it is not marked again, or each pass would post it again.
+      if (rec !== 'stale') return control({ target: j.id, status: 'stale', reason: 'result posted with no submit: the code was not handed in' });
     }
     if (LIVE.has(rec)) {
       if (own('worker-exit')) return control({ target: j.id, status: 'stale', reason: 'worker exited without a result' });
@@ -338,7 +346,7 @@ function work(taskDir, o) {
       if (!o.repo) return failJob(j, `${j.id} works in ${str(jobPostOf(j, v)?.body?.repo)} and the loop has no --repo`);
       base = str(v.state.head?.body?.sha);
       if (!base) {
-        const b = o.steps.base(o.repo, o.baseRev, { env: gitEnv(o.env) });
+        const b = baseOf();
         if (!b?.ok) return failJob(j, `no base commit for ${j.id}: ${errText(b)}`);
         base = b.sha;
       }
@@ -356,13 +364,30 @@ function work(taskDir, o) {
     return control({ target: j.id, status: 'running', reason: `worker started${Number.isInteger(r.pid) ? `, pid ${r.pid}` : ''}` });
   };
 
+  // The base resolved once per tick, for scoring Hosts and for starting the Worker.
+  let baseOnce;
+  const baseOf = () => (baseOnce ??= o.steps.base(o.repo, o.baseRev, { env: gitEnv(o.env) }));
+  const hostJob = (j, v) => {
+    const repo = str(jobPostOf(j, v)?.body?.repo) || null;
+    let base = str(v.state.head?.body?.sha);
+    if (repo && !base && o.repo) { try { base = str(baseOf()?.sha); } catch { /* start reports it */ } }
+    return { repo, base: base || null };
+  };
+
   const assign = (v) => {
     for (const j of v.state.jobs) if (LIVE.has(j.recorded_status) && j.assign?.host) v.busy.set(j.assign.host, (v.busy.get(j.assign.host) ?? 0) + 1);
     const ready = v.state.jobs.filter((j) => j.recorded_status === 'ready' && !failed.has(j.id))
       .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || jobNo(a.id) - jobNo(b.id));
     for (const j of ready) {
-      const host = o.pickHost(j, v);
-      if (!host) continue;
+      const scored = !o.pickHost && Object.keys(v.state.hosts).length > 0; // Hosts announced: score them; else the loop's own Host
+      const hosts = scored ? foldHosts(v.state.hosts, now) : [];
+      const own = scored && !hosts.some((h) => h.member === v.me.member && h.host === v.me.host); // not announced: a candidate through localHost
+      const host = scored ? scoreHost(hosts, hostJob(j, v), v.busy) ?? (own ? localHost(j, v) : null) : (o.pickHost ?? localHost)(j, v);
+      if (!host) {
+        const why = scored ? whyNoHost(hosts, hostJob(j, v), v.busy) : null;
+        if (why && j.history.at(-1)?.reason !== why) control({ target: j.id, status: 'ready', reason: why });
+        continue;
+      }
       start(j, host, v);
       v.busy.set(host, (v.busy.get(host) ?? 0) + 1);
     }
