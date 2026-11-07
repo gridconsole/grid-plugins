@@ -9,10 +9,12 @@
       { "matcher": "^Bash$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/host-guard.mjs\"", "timeout_sec": 15 }] }
     ],
     "PostToolUse": [
-      { "matcher": "^Bash$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/history-log.mjs\"", "timeout_sec": 15 }] }
+      { "matcher": "^Bash$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/history-log.mjs\"", "timeout_sec": 15 }] },
+      { "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/heartbeat.mjs\"", "timeout_sec": 10 }] }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/stop-check.mjs\"", "timeout_sec": 15 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/stop-check.mjs\"", "timeout_sec": 15 }] },
+      { "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/heartbeat.mjs\"", "timeout_sec": 10 }] }
     ],
     "SubagentStop": [
       { "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/stop-check.mjs\"", "timeout_sec": 15 }] }

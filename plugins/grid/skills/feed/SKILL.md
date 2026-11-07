@@ -26,6 +26,7 @@ You run one Job, then close. Post what the Job needs and nothing else; always se
 - **knowledge**: something the brain should keep (a fact, a decision, a procedure). You never write the brain; the Orchestrator hands the post to the Brain agent.
 - **submit**: when the Job made a commit: the sha and the ref you pushed. Post it with the result.
 - A heartbeat is posted by hooks while you work; post one by hand only if you are about to be silent for a long time.
+- The beat hook `hooks/heartbeat.mjs` (PostToolUse and Stop, at most one beat a minute per Job) acts only when `GRID_FEED_TASK`, `GRID_JOB` and `GRID_WORKER` are set; the Orchestrator sets them when it spawns you.
 
 Never post a `control` post; it is ignored. Never edit or delete a post; to correct one, post again with `re` set to the old one.
 

@@ -14,6 +14,8 @@ hooks/hooks.json            the hook wiring
 hooks/codex.mjs             payload and verdict translation, shared by the adapters
 hooks/<name>.mjs            one adapter per shared script
 .mcp.json                   the grid-feed MCP server
+agents/grid-<role>.toml     the eight Worker role agents (not part of the plugin; see Worker roles)
+bin/install-agents.mjs      installs them into the Codex home
 ```
 
 This folder is the source, not an installable plugin. When Grid stages it for an account (step 18x-i) it adds:
@@ -36,10 +38,32 @@ The tests in `tests/hooks-codex/` stage the same layout with `hooks/grid` pointi
 | PostToolUse | `^Bash$` | history-log | history-log | none (writes one history line per changed file, by the subagent's role or `codex`) |
 | Stop | any | stop-check | stop-check | `{"decision":"block","reason":...}` while task.md or a brief is not written up |
 | SubagentStop | any | stop-check | stop-check | same, for the brief that subagent was given |
+| PostToolUse | any tool (no matcher) | heartbeat | heartbeat (`hookBeat`) | none (one `heartbeat` post in the Worker's own Feed file, at most once a minute per Job) |
+| Stop | any | heartbeat | heartbeat (`hookBeat`) | none (the exit beat, note `stopped`, on the same throttle) |
 
-There is no PermissionRequest hook, and apply_patch is not hooked: Grid writes the history lines for file edits from the session's `item/completed` events, outside the plugin.
+There is no PermissionRequest hook, and no gate hooks apply_patch: Grid writes the history lines for file edits from the session's `item/completed` events, outside the plugin. The heartbeat is the one PostToolUse hook that sees apply_patch, MCP tools and `spawn_agent`.
+
+## Heartbeat
+
+A Codex Worker beats on its task's Feed like a Claude Worker: the adapter `hooks/heartbeat.mjs` runs `hookBeat` from the shared `hooks/grid/heartbeat.mjs`, so both agents share one throttle (one beat a minute per Job), one lock and one file (`<member>@<host>~<worker>.jsonl`). It acts only when the Orchestrator set `GRID_FEED_TASK`, `GRID_JOB` and `GRID_WORKER` in the Worker's environment.
+
+- Codex's closest events are `PostToolUse` (after each tool call that succeeds, whatever the tool: the beat's note is the tool name) and `Stop` (when a turn ends, not when the session ends; note `stopped`). A Worker that fails a tool call beats on the next one.
+- Both are new last groups in `hooks.json`, so the keys and trusted hashes of the earlier hooks (`post_tool_use:0:0`, `stop:0:0`) do not change; the new hooks are `post_tool_use:1:0` and `stop:1:0`.
+- There is no `worker-exit` post yet for either agent (plan step 21). Codex 0.162 has a `SessionEnd` event (discovery.rs sets its timeout to 1 s by default and at most 3 s), which is the real "process ended" event for that step; it is not wired here.
+- In the staged copy the shared script sits in `hooks/grid/` and `feed/` at the plugin root, so it loads `feed/lib.mjs` from `../../feed/` when `../feed/` is not there.
 
 Every adapter exits 0. A verdict travels as JSON on stdout; an error or a timeout of the shared script (9 s, inside the 15 s `timeout_sec`) gives no output, which Codex reads as "go on".
+
+## Worker roles
+
+A Codex plugin cannot ship agents, so the Worker roles (scout, researcher, builder, runner, reviewer, designer, checker, operator) are TOML agents in `agents/`, installed into the Codex home, never into a repo's `.codex/`:
+
+```
+node plugins/grid-codex/bin/install-agents.mjs install [--codex-home DIR]   # DIR, else CODEX_HOME, else ~/.codex
+node plugins/grid-codex/bin/install-agents.mjs list
+```
+
+A file of the same name that Grid did not install is left alone. The Orchestrator starts a Worker with `workerLaunch` from `plugins/grid/feed/worker.mjs`: for Codex it reads the installed role file and passes its instructions, effort and sandbox to `codex exec`, because `codex exec` cannot take a role file as the top-level agent. The role files pin no model; the Orchestrator passes one.
 
 ## Codex facts this relies on
 
@@ -67,6 +91,7 @@ Not confirmed. None of these has been seen in a live Codex run. The tool names a
 - The names and inputs of shell handlers other than `exec_command`. `claudeTool` also accepts `shell`, `local_shell`, `container.exec` and `exec_command`, and `command` or `cmd` given as a string or an argv list.
 - Where `PLUGIN_ROOT` and `PLUGIN_DATA` are set in the code, and the plugin data folder's path. The adapters use `CLAUDE_PLUGIN_DATA`, then `PLUGIN_DATA`, and make up no folder when neither is set.
 - That Codex sets `stop_hook_active` to true on the turn a Stop block continues. stop-check's loop guard depends on it.
+- That a hook sees the `GRID_*` variables of the Worker's own process. command_runner.rs builds a hook's environment from the session's environment snapshot (minus a short list of restricted names), so it should; no live run has shown it (the one real `codex exec` planned for step 20 was refused by the permission check, see Limitations).
 - The plugin id format in the trust keys and the input of `trusted_hash`.
 - The marketplace format (documented only), and whether `skills` may be a folder path.
 
@@ -76,6 +101,7 @@ Not confirmed. None of these has been seen in a live Codex run. The tool names a
 - A subagent spawned with `fork_context` carries the parent's history in its transcript, so SubagentStop can find the parent's first brief rather than its own.
 - A shell command that fails leaves its `sessions/<id>.bash-<call>` snapshot behind and logs nothing, because there is no PostToolUseFailure.
 - Hooks that are not trusted do not run, and Codex says nothing about it. Grid has to trust them when it installs the plugin.
+- The host passes no hook trust today (`spawn_codex.rs`, `hooks: &[]`), so in a session Grid starts none of this plugin's hooks run, the heartbeat included, until the host trusts them per run (`-c hooks.state` with the hash `hooks/list` reports). `codex exec --dangerously-bypass-hook-trust` (0.162.0) skips the trust check for one run, but it also runs every other enabled hook from every layer, so it is for a run whose hook sources are vetted.
 - Whether a path that sets the trust exists is not confirmed until a live Codex run (step 18x-f). Until then Grid's host runs this plugin's Stop check itself, with the same `stop-check.mjs` and the same payload, for every Codex session, whatever the plugin's state on the account (current, earlier, none). The Stop and SubagentStop rows above are therefore the plugin's own check for a Codex run outside Grid, and a second pass over the same task folder inside it.
 - `node` must be on the PATH of the login shell.
 - Codex transcripts are rollout JSONL, not Claude Code's format. stop-check finds a brief by its path anywhere in the first 512 KB of the transcript, so the format does not matter to it.
@@ -89,3 +115,4 @@ node --test tests/hooks-codex/*.test.mjs
 - `contract`: the manifest and hooks.json against the formats above.
 - `codex`: the translation functions, and `runShared` against fake scripts.
 - `adapters`: each hooks.json command run through a shell against the shared scripts, with Codex payloads.
+- `heartbeat`: the heartbeat adapter in a real staged copy under a scratch `CODEX_HOME`: the beat for each tool, the throttle and the exit beat, one throttle shared with the Claude script, parallel hooks, silent failure.

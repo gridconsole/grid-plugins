@@ -78,6 +78,8 @@ Up to 3 briefs that compile Rust run at once (the Makefile slot lock queues the 
 
 Before you write a brief that builds on another branch, check that branch is on main (`git merge-base --is-ancestor <sha> main`). If it is not, land it first, or name the branch to merge in as the base. The brief quotes the base sha. Two open branches that edit the same file: land one before the other's next rework starts, and write the merge into that rework's Job and turn budget. Never add work (a merge, a second fix) to a running brief by note: stop it, rebrief, and restart.
 
+A Verdict you write on a brief (a spot check, a rerun) starts with the word on its first line, `ACCEPTED` or `REJECTED`, before any byline or date: Sessions reads that word.
+
 You never write the Verdict of a brief you wrote, plugin and docs changes included. A `grid-reviewer` does. A process review runs once per phase, beside the product briefs, and never holds them back. Every brief that touches a route or a role carries one Acceptance row per role (owner, member, guest, signed out). A worker that hit its turn limit is resumed once; you split the rest into a new brief. Mapping or design work that may take many turns is its own scout or designer brief, never part one of a worker brief. Chains and briefs already running are checked against the new rules, and restarted if they break one.
 
 A drive that has to check a stop or a question uses canned tasks that make that state on purpose. For a stop, use two or three agents that each run in the background for 3-5 minutes. For a question, use a task whose plan always asks one. Never wait for a one-off task to happen to reach that state.
