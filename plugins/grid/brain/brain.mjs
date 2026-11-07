@@ -95,8 +95,39 @@ function feedJobs(dir) {
   } catch { return {}; }
 }
 
+// Notes whose frontmatter source names this task (`T-12 feed ...`, `T-12 spec decision: ...`), the Task note itself left out.
+function produced(task) {
+  const root = path.join(task.projectDir, 'knowledge');
+  const out = [];
+  try {
+    for (const f of fs.readdirSync(root, { recursive: true }).sort()) {
+      if (!/\.md$/.test(f) || ['index.md', 'log.md'].includes(f)) continue;
+      const text = read(path.join(root, f));
+      const name = /^name: (.+)$/m.exec(/^---\n([\s\S]*?)\n---/.exec(text ?? '')?.[1] ?? '')?.[1]?.trim();
+      if (name && name !== `task-${task.id}` && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name) && sourceOf(text)?.startsWith(`${task.id} `)) out.push({ name, type: /^type: (.+)$/m.exec(text)?.[1] ?? 'note' });
+    }
+  } catch { /* no brain yet */ }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// The landing sections: Outcome from task.md, the Job refs from the Feed's submits, the landed shas, the notes the task produced.
+function landedLines(taskDir, task, shas, before) {
+  const outcome = /^##[ \t]+Outcome[ \t]*$([\s\S]*?)(?=^##[ \t]|(?![\s\S]))/m.exec(read(path.join(taskDir, 'task.md')) ?? '')?.[1]?.trim().slice(0, 1500);
+  let refs = [];
+  try { refs = readFeed(path.join(taskDir, 'feed'), { type: 'submit' }).map((p) => p.body ?? {}).filter((b) => oneLine(b.ref)); } catch { /* no feed */ }
+  const kept = shas.length ? shas : [...(before ?? '').matchAll(/^- Sha: (\S+)$/gm)].map((m) => m[1]);
+  const notes = produced(task);
+  return [
+    ...(outcome ? ['', '## Outcome', '', outcome] : []),
+    ...(refs.length ? ['', '## Refs', '', ...[...new Set(refs.map((b) => `- ${oneLine(b.ref)}${oneLine(b.sha) ? ` at ${oneLine(b.sha)}` : ''}`))]] : []),
+    ...(kept.length ? ['', '## Landed', '', ...[...new Set(kept)].filter((x) => /^[0-9a-f]{7,64}$/i.test(x)).map((x) => `- Sha: ${x}`)] : []),
+    ...(notes.length ? ['', '## Notes from this task', '', ...notes.map((n) => `- [[${n.name}]] (${n.type})`)] : []),
+  ];
+}
+
 // The Task as a concept note: what it is and where it stands now. The next call replaces it.
-export function conceptNote(taskDir, task, now = new Date()) {
+// `shas`: the landed commits (step 40). A rerun without them keeps the ones the note already holds.
+export function conceptNote(taskDir, task, now = new Date(), { shas = [] } = {}) {
   const fm = frontmatter(read(path.join(taskDir, 'task.md')));
   const id = task.id;
   const name = `task-${id}`;
@@ -114,17 +145,18 @@ export function conceptNote(taskDir, task, now = new Date()) {
     `- Jobs on the Feed: ${jobsLine}`,
     ...(fm.next ? [`- Next: ${oneLine(fm.next)}`] : []), '',
     `Task folder: tasks/${path.basename(taskDir)}/`,
+    ...landedLines(taskDir, task, shas, read(path.join(task.projectDir, 'knowledge', 'concepts', `${name}.md`))),
     // Step 38: knowledge notes link here as [[task-<id>]].
   ].join('\n');
   return writeBrainNote(task.projectDir, {
     rel: `concepts/${name}.md`, name, type: 'reference', description: `Concept note of task ${id} (${title}): what it is and where it stands now; replaced as the task moves.`,
-    source: `${id} task.md`, links: '[]', body, logKind: 'concept', logSource: id,
+    source: `${id} task.md`, links: `[${produced(task).map((n) => n.name).join(', ')}]`, body, logKind: 'concept', logSource: id,
   }, now);
 }
 
 export function conceptFor(taskArg, ctx = {}) {
   const t = resolveTask(taskArg, ctx);
-  return t.ok ? { ok: true, ...conceptNote(t.dir, t) } : t;
+  return t.ok ? { ok: true, ...conceptNote(t.dir, t, new Date(), { shas: ctx.shas ?? [] }) } : t;
 }
 
 const KIND_TYPE = { fact: 'reference', decision: 'decision', procedure: 'procedure' };

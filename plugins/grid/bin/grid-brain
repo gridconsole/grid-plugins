@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // grid-brain concept --task T-12: write or replace the task's concept note in the project brain.
+// grid-brain concept --task T-12 --sha <landed sha> (repeatable): at landing, also writes the outcome, Job refs, shas and links to the notes the task produced.
 // GRID_ROLE=brain grid-brain knowledge --task T-12: write each knowledge post of the task's Feed as a linked note.
 // GRID_ROLE=brain grid-brain decisions --task T-12: after `preview approved`, write each `## Decisions` item of spec.md as a linked note.
 // The brain's own path: run by the Brain agent (grid-curator) and the task skill, never by a Worker. Prints JSON; error on stderr, exit 1; usage exit 2.
@@ -8,8 +9,9 @@
   const cmd = a[0];
   const task = cmd === 'concept' || cmd === 'knowledge' || cmd === 'decisions' ? (a[1] === '--task' ? a[2] : a[1]) : undefined;
   if (!task) { process.stderr.write('usage: grid-brain concept|knowledge|decisions --task T-12\n'); process.exit(a.length ? 2 : 0); }
+  const shas = a.flatMap((x, i) => (x === '--sha' && a[i + 1] ? [a[i + 1]] : []));
   const { conceptFor, knowledgeFor, decisionsFor } = await import('../brain/brain.mjs');
-  const r = cmd === 'concept' ? conceptFor(task) : cmd === 'decisions' ? decisionsFor(task) : knowledgeFor(task);
+  const r = cmd === 'concept' ? conceptFor(task, { shas }) : cmd === 'decisions' ? decisionsFor(task) : knowledgeFor(task);
   if (!r.ok) { process.stderr.write(`${r.error}\n`); process.exit(1); }
   process.stdout.write(`${JSON.stringify(cmd === 'concept' ? { path: r.path, created: r.created, changed: r.changed } : { notes: r.notes.map((n) => ({ name: n.name, path: n.path, created: n.created, changed: n.changed, error: n.error })) })}\n`);
 })();

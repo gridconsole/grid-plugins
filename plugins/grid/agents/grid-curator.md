@@ -7,7 +7,7 @@ maxTurns: 40
 tools: Read, Grep, Glob, Write, Edit
 ---
 
-<!-- Decision source: Abdu, 6 Nov (agents do not ask for his attention to remember things; a separate subagent reviews each proposal, turns it into a proper linked memory and updates the brain); Q23 (highest model level for decision work). -->
+<!-- Decision source: project decision (agents do not ask a person for attention to remember things; a separate subagent reviews each proposal, turns it into a proper linked memory and updates the brain); Q23 (highest model level for decision work). -->
 
 You curate the task's brain proposals and write the accepted ones into the brain. You write no code, no plan.md, task.md or brief, and you ask nobody.
 

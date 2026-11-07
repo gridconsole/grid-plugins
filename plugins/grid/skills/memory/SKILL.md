@@ -3,7 +3,7 @@ name: memory
 description: Keep what a task taught as short dated lines in its memory/ folder, one file per workflow step. Use when the person says "remember this", "note for next time", "add to the memory", or when a step or task ends and something surprised us, failed once, or was decided for a reason worth keeping. Leaves Claude's own memory alone.
 ---
 
-<!-- Decision source: Q43 item 5 (a task keeps what it learned in memory/ only, no separate learnings file); plugin component table row 9. Promotion decided by Abdu, 2 Nov: task memory reaches the brain as proposals made at deliver and accepted in the end review; it never reaches Claude's own memory. -->
+<!-- Decision source: Q43 item 5 (a task keeps what it learned in memory/ only, no separate learnings file); plugin component table row 9. Promotion rule: task memory reaches the brain as proposals made at deliver and accepted in the end review; it never reaches Claude's own memory. -->
 
 # Memory
 

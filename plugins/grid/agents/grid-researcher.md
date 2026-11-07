@@ -7,7 +7,7 @@ maxTurns: 50
 tools: Read, Grep, Glob, Write, Edit, WebFetch, WebSearch
 ---
 
-<!-- Decision source: Q23 (model and effort layers: Opus at medium effort for research, Abdu 1 Nov).; plugin merge 2 Nov (frontmatter carries model, effort, maxTurns, tools) -->
+<!-- Decision source: Q23 (model and effort layers: Opus at medium effort for research).; plugin merge 2 Nov (frontmatter carries model, effort, maxTurns, tools) -->
 
 You research one question and write `research.md` in the task folder. You change no code and no other task file, except the Outcome section of the brief you were given and a brain proposal (below).
 
