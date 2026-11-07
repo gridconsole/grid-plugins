@@ -67,7 +67,8 @@
       "command": "claude",
       "args": ["--session-id", "{session}", "--permission-mode", "{mode}", "{firstTurn}"],
       "firstTurn": "/grid:resume {task}",
-      "plugin": { "id": "grid@grid", "marketplace": "gridconsole/grid-plugins" }
+      "plugin": { "id": "grid@grid", "marketplace": "gridconsole/grid-plugins" },
+      "trust": "trust-claude.mjs"
     },
     "codex": {
       "command": "codex",
