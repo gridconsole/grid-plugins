@@ -15,6 +15,6 @@ fields:
   - verdict: accept or disagree, on a result or submit
   - reason: why, in one line
 ---
-Moves a Job or closes a question. Only a control post from the Orchestrator of the current epoch counts; any other is kept and shown and ignored.
+Moves a Job or closes a question. A control post counts only when it comes from the Orchestrator of the epoch current at its place in the Feed, read in (at, id) order: before any handover, any Orchestrator at epoch 0; after a handover that counts (see handover.md), only the member@host that posted it, with its epoch. Any other is kept, shown and ignored with a reason.
 
 Orchestrator: is the only one who posts it. Every move of a Job is a control post with a reason, so the Job's history reads as a log of decisions.

@@ -1,0 +1,19 @@
+{
+  "name": "cancelled",
+  "about": "A ready Job and a running Job are both cancelled; a cancelled Job never turns stale.",
+  "posts": [
+    {"id":"01JC0700000000000000000001","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:00:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"title":"Draft the help page","role":"builder"}},
+    {"id":"01JC0700000000000000000002","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:01:00.000Z-0000","re":null,"job":"J-2","epoch":0,"body":{"title":"Add the export button","role":"builder"}},
+    {"id":"01JC0700000000000000000003","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:02:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"ready","reason":"no dependencies"}},
+    {"id":"01JC0700000000000000000004","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:03:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-2","status":"running","assign":{"worker":"w1","host":"vm"},"attempt":1,"reason":"free slot on vm"}},
+    {"id":"01JC0700000000000000000005","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:04:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"cancelled","reason":"not needed after the review"}},
+    {"id":"01JC0700000000000000000006","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:05:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-2","status":"cancelled","reason":"the task was stopped"}}
+  ],
+  "checks": [
+    {"after":"01JC0700000000000000000002","jobs":{"J-1":"posted","J-2":"posted"}},
+    {"after":"01JC0700000000000000000004","jobs":{"J-1":"ready","J-2":"running"}},
+    {"after":"01JC0700000000000000000005","jobs":{"J-1":"cancelled","J-2":"running"}},
+    {"after":"01JC0700000000000000000006","jobs":{"J-1":"cancelled","J-2":"cancelled"}},
+    {"after":"01JC0700000000000000000006","now":"2026-11-07T20:00:00.000Z","jobs":{"J-1":"cancelled","J-2":"cancelled"},"recorded":{"J-1":"cancelled","J-2":"cancelled"},"ignored":[]}
+  ]
+}

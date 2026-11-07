@@ -1,0 +1,24 @@
+{
+  "name": "old-orchestrator-after-handover",
+  "about": "From a handover on, only the member@host that posted it moves Jobs; another Orchestrator's later control posts are ignored with a reason, whatever epoch they carry.",
+  "posts": [
+    {"id":"01JC1100000000000000000001","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:00:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"title":"Speed up the search page","role":"builder"}},
+    {"id":"01JC1100000000000000000002","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:01:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"ready","reason":"no dependencies"}},
+    {"id":"01JC1100000000000000000003","task":"T-1","type":"handover","type_v":1,"author":{"member":"cara","host":"desk","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:02:00.000Z-0000","re":null,"job":null,"epoch":1,"body":{"from":"ann@laptop","reason":"ann went offline","epoch":1}},
+    {"id":"01JC1100000000000000000004","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:03:00.000Z-0000","re":null,"job":null,"epoch":1,"body":{"target":"J-1","status":"cancelled","reason":"ann came back"}},
+    {"id":"01JC1100000000000000000005","task":"T-1","type":"control","type_v":1,"author":{"member":"ben","host":"vm","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:04:00.000Z-0000","re":null,"job":null,"epoch":1,"body":{"target":"J-1","status":"done","reason":"another Orchestrator"}},
+    {"id":"01JC1100000000000000000006","task":"T-1","type":"control","type_v":1,"author":{"member":"cara","host":"desk","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:05:00.000Z-0000","re":null,"job":null,"epoch":1,"body":{"target":"J-1","status":"assigned","assign":{"worker":"w1","host":"vm"},"attempt":1,"reason":"free slot on vm"}},
+    {"id":"01JC1100000000000000000007","task":"T-1","type":"handover","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:06:00.000Z-0000","re":null,"job":null,"epoch":2,"body":{"from":"cara@desk","reason":"cara hands the task back","epoch":2}},
+    {"id":"01JC1100000000000000000008","task":"T-1","type":"control","type_v":1,"author":{"member":"cara","host":"desk","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:07:00.000Z-0000","re":null,"job":null,"epoch":2,"body":{"target":"J-1","status":"cancelled","reason":"cara has not stopped"}},
+    {"id":"01JC1100000000000000000009","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:08:00.000Z-0000","re":null,"job":null,"epoch":2,"body":{"target":"J-1","status":"running","reason":"worker started"}}
+  ],
+  "checks": [
+    {"after":"01JC1100000000000000000003","jobs":{"J-1":"ready"},"ignored":[]},
+    {"after":"01JC1100000000000000000004","jobs":{"J-1":"ready"},"ignored":["01JC1100000000000000000004"],"why":{"01JC1100000000000000000004":"author ann@laptop is not the Orchestrator of epoch 1, cara@desk"}},
+    {"after":"01JC1100000000000000000005","jobs":{"J-1":"ready"},"ignored":["01JC1100000000000000000004","01JC1100000000000000000005"],"why":{"01JC1100000000000000000005":"author ben@vm is not the Orchestrator of epoch 1, cara@desk"}},
+    {"after":"01JC1100000000000000000006","jobs":{"J-1":"assigned"},"ignored":["01JC1100000000000000000004","01JC1100000000000000000005"]},
+    {"after":"01JC1100000000000000000007","jobs":{"J-1":"assigned"},"ignored":["01JC1100000000000000000004","01JC1100000000000000000005"]},
+    {"after":"01JC1100000000000000000008","jobs":{"J-1":"assigned"},"ignored":["01JC1100000000000000000004","01JC1100000000000000000005","01JC1100000000000000000008"],"why":{"01JC1100000000000000000008":"author cara@desk is not the Orchestrator of epoch 2, ann@laptop"}},
+    {"after":"01JC1100000000000000000009","jobs":{"J-1":"running"},"ignored":["01JC1100000000000000000004","01JC1100000000000000000005","01JC1100000000000000000008"]}
+  ]
+}

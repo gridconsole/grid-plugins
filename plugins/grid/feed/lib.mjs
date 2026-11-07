@@ -6,8 +6,8 @@
 // (mcp.mjs) and the shell command (bin/grid-feed) are thin wrappers over callTool below.
 //
 // A post is one JSON line: id (ULID), task, type, type_v, author {member, host, role}, worker, at (hybrid logical clock),
-// re, job, epoch, body. Only a control post from the Orchestrator of the current epoch moves a Job; any other post is
-// kept and shown. `role` is what the writer says it is (GRID_ROLE): the Feed is a log for a team that trusts each other,
+// re, job, epoch, body. Only a control post from the Orchestrator of the epoch current at its place moves a Job; any other post
+// is kept and shown. `role` is what the writer says it is (GRID_ROLE): the Feed is a log for a team that trusts each other,
 // not an access check.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -272,7 +272,10 @@ const who = (p) => `${str(p.author?.member)}@${str(p.author?.host)}`;
 // A job has a status, assign {worker, host}, priority, after, base, attempt, verdict, lease_expires (ISO), last_beat, history (one entry per
 // control post that counted, with its reason), results and submits (post ids), open_questions (ids) and exited (the worker-exit post id).
 // `now` (ms) decides which leases ran out: an assigned or running job past its lease reads as stale (recorded_status keeps the control post's).
-// `ignored` lists the posts that did not count, with why. Never throws on a post it does not understand.
+// `ignored` lists the posts that did not count, with why. `epoch` is the highest; a control post is checked against the epoch current at its
+// place in (at, id) order, set by the Orchestrator handover with the highest epoch before it (the later one on a tie), so moves made before
+// a handover keep their states and a handover with a lower epoch is ignored.
+// Never throws on a post it does not understand.
 export function fold(posts, { now = Date.now(), known = null } = {}) {
   const sorted = [...posts].filter((p) => !usable(p)).sort(byAtId);
   const epoch = currentEpoch(sorted);
@@ -304,9 +307,12 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
     }
   }
 
+  // The epoch at the current place of the walk below, and the member@host whose handover set it (null before any handover).
+  const live = { epoch: 0, by: null };
   const control = (p) => {
     if (p.author.role !== 'orchestrator') return skip(p, `author role ${str(p.author.role) || 'none'} is not orchestrator`);
-    if (p.epoch !== epoch) return skip(p, `epoch ${p.epoch} is not the current epoch ${epoch}`);
+    if (p.epoch !== live.epoch) return skip(p, `epoch ${p.epoch} is not the current epoch ${live.epoch}`);
+    if (live.by !== null && who(p) !== live.by) return skip(p, `author ${who(p)} is not the Orchestrator of epoch ${live.epoch}, ${live.by}`);
     const b = isObj(p.body) ? p.body : {};
     const target = str(b.target);
     const question = questions.get(target);
@@ -346,7 +352,13 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
     const job = p.job ? jobs.get(p.job) : undefined;
     switch (p.type) {
       case 'control': control(p); break;
-      case 'handover': if (p.author.role !== 'orchestrator') skip(p, `a handover from role ${str(p.author.role) || 'none'} does not count: only an orchestrator hands over`); break;
+      case 'handover':
+        if (p.author.role !== 'orchestrator') skip(p, `a handover from role ${str(p.author.role) || 'none'} does not count: only an orchestrator hands over`);
+        else if (Number.isInteger(p.epoch) && p.epoch >= 0) {
+          if (p.epoch < live.epoch) skip(p, `a handover of epoch ${p.epoch} does not count: the current epoch is ${live.epoch}`);
+          else { live.epoch = p.epoch; live.by = who(p); }
+        }
+        break;
       case 'heartbeat':
         if (job && (!job.assign?.worker || job.assign.worker === p.worker)) {
           job.last_beat = p.at;

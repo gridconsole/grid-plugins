@@ -35,4 +35,4 @@ Read the Feed with `feed_state` first: it lists each Job with its status, assign
 - Only a `control` post of yours moves a Job: `{target, status?, assign?, priority?, after?, base?, lease?, attempt?, verdict?, reason?}`. Always give a `reason`. A Job without a lease gets ten minutes; a Job shown as `stale` ran out of lease and needs a decision.
 - An `answer` does not move a parked Job; post the control post that does.
 - A post of a type `feed_types` does not list is kept and shown as `unknown_type`; map it to a known type or ignore it, and propose a type note as a knowledge post.
-- Taking a task over from another Orchestrator starts with a `handover` post; after it the old one's control posts no longer count.
+- Taking a task over from another Orchestrator starts with a `handover` post; the Jobs keep their states, and after it only your control posts count: the old one's are kept and ignored.

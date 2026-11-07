@@ -1,0 +1,21 @@
+{
+  "name": "parked-on-question",
+  "about": "A running Job is parked on a blocking question; the answer alone does not move it, a control post does.",
+  "posts": [
+    {"id":"01JC0200000000000000000001","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:00:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"title":"Write the orders report","role":"builder"}},
+    {"id":"01JC0200000000000000000002","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:01:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"running","assign":{"worker":"w1","host":"vm"},"attempt":1,"reason":"free slot on vm"}},
+    {"id":"01JC0200000000000000000003","task":"T-1","type":"question","type_v":1,"author":{"member":"bob","host":"vm","role":"worker"},"worker":"w1","at":"2026-11-07T10:02:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"question":"Which table holds the orders?","blocking":true}},
+    {"id":"01JC0200000000000000000004","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:03:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"parked","reason":"waiting for an answer"}},
+    {"id":"01JC0200000000000000000005","task":"T-1","type":"answer","type_v":1,"author":{"member":"sam","host":"laptop","role":"person"},"worker":null,"at":"2026-11-07T10:05:00.000Z-0000","re":"01JC0200000000000000000003","job":null,"epoch":0,"body":{"answer":"orders"}},
+    {"id":"01JC0200000000000000000006","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:06:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"01JC0200000000000000000003","status":"answered","reason":"sam answered"}},
+    {"id":"01JC0200000000000000000007","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:07:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"running","reason":"answer received"}}
+  ],
+  "checks": [
+    {"after":"01JC0200000000000000000003","jobs":{"J-1":"running"}},
+    {"after":"01JC0200000000000000000004","jobs":{"J-1":"parked"}},
+    {"after":"01JC0200000000000000000004","now":"2026-11-07T15:00:00.000Z","jobs":{"J-1":"parked"},"recorded":{"J-1":"parked"}},
+    {"after":"01JC0200000000000000000005","jobs":{"J-1":"parked"}},
+    {"after":"01JC0200000000000000000006","jobs":{"J-1":"parked"},"ignored":[]},
+    {"after":"01JC0200000000000000000007","jobs":{"J-1":"running"},"ignored":[]}
+  ]
+}

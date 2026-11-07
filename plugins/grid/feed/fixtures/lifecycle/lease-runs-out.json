@@ -1,0 +1,19 @@
+{
+  "name": "lease-runs-out",
+  "about": "A running Job turns stale when its default ten-minute lease runs out; only its own Worker's beat extends it; a new assignment makes it live again.",
+  "posts": [
+    {"id":"01JC0300000000000000000001","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:00:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"title":"Migrate the settings page","role":"builder"}},
+    {"id":"01JC0300000000000000000002","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:01:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"running","assign":{"worker":"w1","host":"vm"},"attempt":1,"reason":"free slot on vm"}},
+    {"id":"01JC0300000000000000000003","task":"T-1","type":"heartbeat","type_v":1,"author":{"member":"bob","host":"vm","role":"worker"},"worker":"w1","at":"2026-11-07T10:06:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"note":"reading the page"}},
+    {"id":"01JC0300000000000000000004","task":"T-1","type":"heartbeat","type_v":1,"author":{"member":"dan","host":"desk","role":"worker"},"worker":"w2","at":"2026-11-07T10:17:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"note":"not my job"}},
+    {"id":"01JC0300000000000000000005","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:19:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"assigned","assign":{"worker":"w2","host":"desk"},"attempt":2,"reason":"w1 went quiet"}}
+  ],
+  "checks": [
+    {"after":"01JC0300000000000000000002","now":"2026-11-07T10:10:00.000Z","jobs":{"J-1":"running"}},
+    {"after":"01JC0300000000000000000002","now":"2026-11-07T10:12:00.000Z","jobs":{"J-1":"stale"},"recorded":{"J-1":"running"}},
+    {"after":"01JC0300000000000000000003","now":"2026-11-07T10:12:00.000Z","jobs":{"J-1":"running"}},
+    {"after":"01JC0300000000000000000003","now":"2026-11-07T10:17:00.000Z","jobs":{"J-1":"stale"},"recorded":{"J-1":"running"}},
+    {"after":"01JC0300000000000000000004","now":"2026-11-07T10:18:00.000Z","jobs":{"J-1":"stale"},"recorded":{"J-1":"running"}},
+    {"after":"01JC0300000000000000000005","now":"2026-11-07T10:20:00.000Z","jobs":{"J-1":"assigned"},"recorded":{"J-1":"assigned"},"ignored":[]}
+  ]
+}

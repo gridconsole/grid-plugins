@@ -1,0 +1,33 @@
+{
+  "name": "full-life",
+  "about": "One Job from posted to done; heartbeat, result and submit posts never move it, only control posts do.",
+  "posts": [
+    {"id":"01JC0100000000000000000001","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:00:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"title":"Add the login form","role":"builder"}},
+    {"id":"01JC0100000000000000000002","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:01:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"ready","reason":"no dependencies"}},
+    {"id":"01JC0100000000000000000003","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:02:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"assigned","assign":{"worker":"w1","host":"vm"},"base":"a1b2c3d","priority":2,"attempt":1,"reason":"free slot on vm"}},
+    {"id":"01JC0100000000000000000004","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:03:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"running","reason":"worker started"}},
+    {"id":"01JC0100000000000000000005","task":"T-1","type":"heartbeat","type_v":1,"author":{"member":"bob","host":"vm","role":"worker"},"worker":"w1","at":"2026-11-07T10:08:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"note":"writing tests"}},
+    {"id":"01JC0100000000000000000006","task":"T-1","type":"result","type_v":1,"author":{"member":"bob","host":"vm","role":"worker"},"worker":"w1","at":"2026-11-07T10:09:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"outcome":"Form added with tests"}},
+    {"id":"01JC0100000000000000000007","task":"T-1","type":"submit","type_v":1,"author":{"member":"bob","host":"vm","role":"worker"},"worker":"w1","at":"2026-11-07T10:10:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"sha":"d4e5f6a"}},
+    {"id":"01JC0100000000000000000008","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:11:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"submitted","reason":"submit received"}},
+    {"id":"01JC0100000000000000000009","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:12:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"integrated","verdict":"accept","reason":"merged into the task head"}},
+    {"id":"01JC0100000000000000000010","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:13:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"done","reason":"landed"}}
+  ],
+  "checks": [
+    {"after":"01JC0100000000000000000001","jobs":{"J-1":"posted"},"ignored":[]},
+    {"after":"01JC0100000000000000000002","jobs":{"J-1":"ready"}},
+    {"after":"01JC0100000000000000000003","jobs":{"J-1":"assigned"}},
+    {"after":"01JC0100000000000000000003","now":"2026-11-07T10:11:00.000Z","jobs":{"J-1":"assigned"}},
+    {"after":"01JC0100000000000000000003","now":"2026-11-07T10:13:00.000Z","jobs":{"J-1":"stale"},"recorded":{"J-1":"assigned"}},
+    {"after":"01JC0100000000000000000004","jobs":{"J-1":"running"}},
+    {"after":"01JC0100000000000000000005","jobs":{"J-1":"running"}},
+    {"after":"01JC0100000000000000000005","now":"2026-11-07T10:17:00.000Z","jobs":{"J-1":"running"}},
+    {"after":"01JC0100000000000000000006","jobs":{"J-1":"running"}},
+    {"after":"01JC0100000000000000000007","jobs":{"J-1":"running"},"recorded":{"J-1":"running"}},
+    {"after":"01JC0100000000000000000008","jobs":{"J-1":"submitted"}},
+    {"after":"01JC0100000000000000000008","now":"2026-11-07T12:00:00.000Z","jobs":{"J-1":"submitted"}},
+    {"after":"01JC0100000000000000000009","jobs":{"J-1":"integrated"}},
+    {"after":"01JC0100000000000000000010","jobs":{"J-1":"done"}},
+    {"after":"01JC0100000000000000000010","now":"2026-11-07T20:00:00.000Z","jobs":{"J-1":"done"},"recorded":{"J-1":"done"},"ignored":[]}
+  ]
+}

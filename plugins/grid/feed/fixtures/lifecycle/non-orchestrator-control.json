@@ -1,0 +1,15 @@
+{
+  "name": "non-orchestrator-control",
+  "about": "Control posts from a Worker and from a person are kept, counted and listed as ignored; the Job does not move until the Orchestrator posts.",
+  "posts": [
+    {"id":"01JC0800000000000000000001","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:00:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"title":"Fix the date picker","role":"builder"}},
+    {"id":"01JC0800000000000000000002","task":"T-1","type":"control","type_v":1,"author":{"member":"bob","host":"vm","role":"worker"},"worker":"w1","at":"2026-11-07T10:01:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"done","reason":"trust me"}},
+    {"id":"01JC0800000000000000000003","task":"T-1","type":"control","type_v":1,"author":{"member":"sam","host":"laptop","role":"person"},"worker":null,"at":"2026-11-07T10:02:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"cancelled","reason":"do not need it"}},
+    {"id":"01JC0800000000000000000004","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:03:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"ready","reason":"no dependencies"}}
+  ],
+  "checks": [
+    {"after":"01JC0800000000000000000002","jobs":{"J-1":"posted"},"ignored":["01JC0800000000000000000002"]},
+    {"after":"01JC0800000000000000000003","jobs":{"J-1":"posted"},"ignored":["01JC0800000000000000000002","01JC0800000000000000000003"]},
+    {"after":"01JC0800000000000000000004","jobs":{"J-1":"ready"},"ignored":["01JC0800000000000000000002","01JC0800000000000000000003"]}
+  ]
+}

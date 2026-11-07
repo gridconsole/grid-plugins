@@ -1,0 +1,16 @@
+{
+  "name": "lease-given",
+  "about": "A lease time on the control post decides when a running Job turns stale; the Orchestrator can also mark it stale and queue it again.",
+  "posts": [
+    {"id":"01JC0400000000000000000001","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:00:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"title":"Build the release bundle","role":"runner"}},
+    {"id":"01JC0400000000000000000002","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:01:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"running","assign":{"worker":"w1","host":"vm"},"attempt":1,"lease":"2026-11-07T10:31:00.000Z","reason":"long build"}},
+    {"id":"01JC0400000000000000000003","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:32:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"stale","reason":"no beat for 31m"}},
+    {"id":"01JC0400000000000000000004","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:33:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"ready","reason":"queued for a retry"}}
+  ],
+  "checks": [
+    {"after":"01JC0400000000000000000002","now":"2026-11-07T10:20:00.000Z","jobs":{"J-1":"running"}},
+    {"after":"01JC0400000000000000000002","now":"2026-11-07T10:32:00.000Z","jobs":{"J-1":"stale"},"recorded":{"J-1":"running"}},
+    {"after":"01JC0400000000000000000003","jobs":{"J-1":"stale"},"recorded":{"J-1":"stale"}},
+    {"after":"01JC0400000000000000000004","jobs":{"J-1":"ready"},"ignored":[]}
+  ]
+}
