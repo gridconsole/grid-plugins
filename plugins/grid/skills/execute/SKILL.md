@@ -32,7 +32,7 @@ The task folder is `<projects folder>/<project>/tasks/T-NN-slug/`. The projects 
 - A step already started in this session: if the current step's latest brief is `running` and you started it, wait for it instead of starting another; if it is `done` and its result is not yet in task.md, go to section 4.
 - A blocking question in `needs` that is still open: stop.
 - The planner start line: the task sits on its `plan` step and has no `plan.md` yet. Plan it before anything else: unless task.md says `size: small`, run the research skill first (`grid-scout` maps the files when they are not obvious, `grid-researcher` writes `research.md`), then the plan skill, which asks the open decisions in `questions/` and starts `grid-reviewer` on the plan before `status: waiting`.
-- Never use AskUserQuestion: use the questions skill and wait for the answer.
+- Never use AskUserQuestion: use the questions skill, then end the turn; the answer resumes the task.
 
 ## 1. Pick the agent
 
@@ -43,7 +43,7 @@ The step's own `agent` decides, then `routing.md`, then the step's kind.
 1. If the step's item in `workflow` has an `agent` (`{step: build, kind: run, agent: grid-builder}`), the person chose it in the workflow, and that agent runs the step. It wins over `routing.md` and the table below:
    - `run`, `check`: that agent runs it. A `check` stays a check: it runs the check and never fixes.
    - `make-together`: that agent builds the draft with the person.
-   - `ask`: that agent works out the question; put it with the questions skill and wait for the answer.
+   - `ask`: that agent works out the question; put it with the questions skill, then end the turn; the answer resumes the task.
    - `approve` and `schedule` items carry no agent.
 
    If no agent of that name can be started, say so and ask; do not pick another one.
@@ -53,7 +53,7 @@ The step's own `agent` decides, then `routing.md`, then the step's kind.
 | Kind | Who |
 |---|---|
 | `check` | `grid-runner` runs the check; a failed check sends the work back a step, or asks the owner when a rework cannot fix it (section 5) |
-| `ask` | no agent: use the questions skill, then wait for the answer |
+| `ask` | no agent: use the questions skill, then end the turn; the answer resumes the task |
 | `approve` | a person, after `grid-reviewer` reviews the finished work; for UI or website work also `grid-checker` on its own `checker` brief, after the reviewer accepts. On a ship approve step (after the build) the deliver skill's `## Before the gate` writes task.md's `## Outcome` before the gate is raised. Raise the question and wait. Never write `plan accepted`, `preview approved` or `ship approved` |
 | `make-together` | `grid-builder` builds the draft with the person; `grid-builder` builds UI when the brief names the design skill; `grid-designer` writes `spec.md` only, first for a large task |
 | `run` | `grid-builder`, after `grid-scout` or `grid-researcher` when the files or facts are not known and `research.md` does not already hold them |
