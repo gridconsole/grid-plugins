@@ -1,9 +1,10 @@
 {
   "name": "grid",
-  "version": "0.1.3118",
+  "version": "0.1.3130",
   "description": "Grid: task folders, a planner per task, plan pages built from a component library.",
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Grid",
     "shortDescription": "Task folders, briefs and gates for coding agents.",

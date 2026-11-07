@@ -13,12 +13,15 @@ Written against Codex 0.162.0.
 hooks/hooks.json            the hook wiring
 hooks/codex.mjs             payload and verdict translation, shared by the adapters
 hooks/<name>.mjs            one adapter per shared script
+.mcp.json                   the grid-feed MCP server
 ```
 
 This folder is the source, not an installable plugin. When Grid stages it for an account (step 18x-i) it adds:
 
 - `hooks/grid/`: a copy of `plugins/grid/hooks`, which the adapters run;
-- `skills/`: the Grid skills, which the manifest names.
+- `skills/`: the Grid skills, which the manifest names;
+- `feed/` and `bin/grid-feed`: the Feed server and shell command from `plugins/grid` (copied as they are);
+- `.mcp.json` (from this folder) registers the `grid-feed` server, whose tools Codex approves without asking (`default_tools_approval_mode` is set on that server only).
 
 The tests in `tests/hooks-codex/` stage the same layout with `hooks/grid` pointing at `plugins/grid/hooks`.
 

@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "grid-feed": {
+      "command": "node",
+      "args": [
+        "./feed/mcp.mjs"
+      ],
+      "cwd": ".",
+      "env_vars": [
+        "PATH",
+        "HOME",
+        "GRID_HOME",
+        "GRID_PROJECTS",
+        "GRID_MEMBER",
+        "GRID_HOST",
+        "GRID_ROLE",
+        "GRID_WORKER",
+        "GRID_PROJECT"
+      ],
+      "startup_timeout_sec": 10,
+      "tool_timeout_sec": 120,
+      "default_tools_approval_mode": "approve"
+    }
+  }
+}

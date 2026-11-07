@@ -1,5 +1,6 @@
 // The Feed: an append-only message board per task, kept as files in the task folder (never in a repo):
-//   <projects>/<project>/tasks/<task>/feed/<member>@<host>.jsonl
+//   <projects>/<project>/tasks/<task>/feed/<member>@<host>.jsonl          a session with no worker id (the Orchestrator)
+//   <projects>/<project>/tasks/<task>/feed/<member>@<host>~<worker>.jsonl a Worker, by its worker id (GRID_WORKER)
 // One file per writer, and a writer only ever appends to its own, so files never conflict when they are copied between
 // machines. Everything is read by merging all files on (at, id). No dependencies, Node built-ins only; the MCP server
 // (mcp.mjs) and the shell command (bin/grid-feed) are thin wrappers over callTool below.
@@ -13,7 +14,9 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { gridFolders, taskAt, projectFor, parseFrontmatter, str } from '../hooks/lib.mjs';
+// The shared hook library is at ../hooks/lib.mjs in plugins/grid and at ../hooks/grid/lib.mjs in the copy Grid stages for Codex.
+const hookLib = ['../hooks/lib.mjs', '../hooks/grid/lib.mjs'].find((r) => fs.existsSync(fileURLToPath(new URL(r, import.meta.url)))) ?? '../hooks/lib.mjs';
+const { gridFolders, taskAt, projectFor, parseFrontmatter, str } = await import(hookLib);
 
 export const CORE_TYPES = ['job', 'result', 'submit', 'question', 'answer', 'knowledge', 'heartbeat', 'head', 'host', 'control', 'handover', 'worker-exit'];
 export const JOB_STATUSES = ['posted', 'ready', 'assigned', 'running', 'submitted', 'integrated', 'done', 'stale', 'parked', 'rejected', 'conflict', 'cancelled'];
@@ -93,7 +96,11 @@ function identity(ctx) {
 }
 
 export const feedDir = (taskDir) => path.join(taskDir, 'feed');
-const writerFile = (a) => `${a.member}@${a.host}.jsonl`;
+// A worker id may hold a colon, which a file name that syncs between machines should not; only the file name is cleaned.
+const writerFile = (a) => {
+  const worker = cleanName(a.worker);
+  return `${a.member}@${a.host}${worker ? `~${worker}` : ''}.jsonl`;
+};
 const projectDirOf = (taskDir) => path.dirname(path.dirname(taskDir));
 const taskIdOf = (taskDir) => /^(T-\d+)/.exec(path.basename(taskDir))?.[1] ?? path.basename(taskDir);
 

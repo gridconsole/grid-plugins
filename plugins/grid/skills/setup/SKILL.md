@@ -61,7 +61,7 @@ brainLevel: project
 
 ## Never
 
-- Write inside any repo folder, or anywhere but `proposals.md`.
+- Write inside any repo folder, or anywhere but `proposals.md` (the one exception is step 4 of Write it).
 - Create, draft, edit or send an invite, or touch the project's people. Grid drafts invites from the Team answers and the person sends them. A teammate named in a session goes in your closing message, not in a file.
 - Merge, push, open a pull request, deploy or run a command that reaches another machine.
 - Propose a dollar budget, spend limit or cost cap for any agent.
@@ -71,7 +71,8 @@ brainLevel: project
 1. Read `proposals.md` if it exists, and `reading.md`.
 2. Read the repo, then the sessions the list names.
 3. Create `proposals.md` with the Write tool, or add blocks at the end with the Edit tool; never a shell heredoc or redirect.
-4. Tell the person how many entries you wrote per kind, and anything you could not read.
+4. When none of the project's repos has a remote (`git remote` prints nothing in each), run `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/lands-recommendation.mjs" <task folder>/questions/<person>.md <repo>...` so the open "How should finished work land" question recommends merging locally instead of a pull request. That is the only edit outside `proposals.md`; skip it when any repo has a remote.
+5. Tell the person how many entries you wrote per kind, and anything you could not read.
 
 ## Steps and the end
 
