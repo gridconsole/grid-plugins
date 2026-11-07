@@ -6,8 +6,14 @@
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-check.mjs\"", "timeout": 10 },
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/grid-env.mjs\"", "timeout": 10 },
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/agent-routing.mjs\"", "timeout": 10 },
-          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/usage-log.mjs\"", "timeout": 10 }
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/usage-log.mjs\"", "timeout": 10 },
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-attach.mjs\"", "timeout": 10 }
         ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-attach.mjs\"", "timeout": 10 }]
       }
     ],
     "PreToolUse": [
@@ -26,6 +32,10 @@
       {
         "matcher": "Bash",
         "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/history-log.mjs\"", "timeout": 10 }]
+      },
+      {
+        "matcher": "Skill|Agent|Task",
+        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-attach.mjs\"", "timeout": 10 }]
       },
       {
         "matcher": "Read|Write|Edit|MultiEdit|Glob|Grep|NotebookEdit|Bash",

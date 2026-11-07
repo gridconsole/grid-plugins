@@ -438,14 +438,14 @@ export function rememberTask(input, dir) {
     const own = pointerFile(input, `.tasks-${key}`);
     writePointer(own, readText(own) ?? '', dir);
   }
-  touchSession(input, dir, { create: true });
+  // No session record here: a write into a task folder does not make the session the task's (see taskRun).
 }
 
 // A small record of the session in the task folder it works in (<task>/sessions/<session_id>.json), so Grid shows a session
 // it did not start: { session_id, where, cwd, transcript, started, last, ended? }. `where` is "grid" for a session Grid started
 // (GRID_BRIDGE=off, set by its launch) and "terminal" for any other. No prompt text, no tool input: ids, paths and times only.
-// A record is made when the session writes into the task (create); later events only refresh `last` (never more than once
-// in 10 s) or set `ended` (SessionEnd). New activity after an end clears it, as a resumed session. Never writes outside `dir`
+// A record is made when the session runs the task (create, session-attach.mjs, see taskRun), never because it wrote into the
+// folder; later events only refresh `last` (never more than once in 10 s) or set `ended` (SessionEnd). New activity after an end clears it, as a resumed session. Never writes outside `dir`
 // (a symlinked sessions/ folder or record is left alone) and never throws.
 export const SESSION_TOUCH_MS = 10_000;
 export function touchSession(input, dir, { create = false, end = false, now = Date.now() } = {}) {
@@ -479,6 +479,66 @@ export function touchSession(input, dir, { create = false, end = false, now = Da
     fs.renameSync(tmp, file);
     return true;
   } catch { return false; }
+}
+
+// The task folder a task reference names ("T-12" or "T-12-slug"): the one <projects>/<project>/tasks/ folder with that id,
+// within the project GRID_PROJECT names when it is set. null when none matches or the id is in several projects.
+export function findTask(ref, projects, env = process.env) {
+  const m = /^(T-\d+)(?:-[\w.-]*)?$/.exec(str(ref).trim());
+  if (!m || !projects) return null;
+  const only = str(env.GRID_PROJECT).replace(/[^\w.-]/g, '');
+  const hits = [];
+  try {
+    for (const proj of only ? [only] : fs.readdirSync(projects)) {
+      const tasks = path.join(projects, proj, 'tasks');
+      let names = [];
+      try { names = fs.readdirSync(tasks); } catch { continue; }
+      for (const n of names) if (n === str(ref).trim() || n.startsWith(`${m[1]}-`)) hits.push(path.join(tasks, n));
+    }
+  } catch { return null; }
+  const found = hits.filter((d) => taskAt(d, projects)?.rel === '');
+  return found.length === 1 ? found[0] : null;
+}
+
+// The task folder this hook call shows the session running, or null: GRID_TASK set for the session (a task reference, or
+// the folder's path), a first turn of /grid:resume or /grid:execute <task> (what Grid sends, and a person types), the Skill
+// tool running grid:resume or grid:execute for a task, or a grid agent started on a brief of the task. Reading or writing
+// files in a task folder is not running it.
+export function taskRun(input, projects, env = process.env) {
+  if (!input || !projects) return null;
+  const turn = /^\s*\/grid:(?:resume|execute)\s+(T-\d+[\w.-]*)/.exec(str(input.prompt));
+  if (input.hook_event_name === 'UserPromptSubmit') return turn ? findTask(turn[1], projects, env) : null;
+  const ti = input.tool_input && typeof input.tool_input === 'object' ? input.tool_input : {};
+  if (input.hook_event_name === 'PreToolUse') {
+    if (input.tool_name === 'Skill') {
+      const run = /^grid:(?:resume|execute)$/.test(str(ti.skill).trim());
+      const ref = /(?:^|\s)(T-\d+[\w.-]*)/.exec(str(ti.args));
+      return run && ref ? findTask(ref[1], projects, env) : null;
+    }
+    if (['Agent', 'Task'].includes(input.tool_name) && /^grid[:-]/.test(str(ti.subagent_type))) {
+      return briefInPrompt(ti.prompt, str(input.cwd), projects)?.dir ?? null;
+    }
+    return null;
+  }
+  if (input.hook_event_name === 'SessionStart') {
+    const ref = str(env.GRID_TASK).trim();
+    if (!ref) return null;
+    if (path.isAbsolute(ref)) { const t = taskAt(ref, projects); return t?.rel === '' ? t.dir : null; }
+    return findTask(ref, projects, env);
+  }
+  return null;
+}
+
+// The task folders the session runs (CLAUDE_PLUGIN_DATA/sessions/<session_id>.attached): the records Stop and SessionEnd keep fresh.
+export function attachTask(input, dir) {
+  const file = pointerFile(input, '.attached');
+  if (!file) return;
+  writePointer(file, readText(file) ?? '', dir);
+}
+
+export function attachedTasks(input, projects) {
+  const file = pointerFile(input, '.attached');
+  return taskDirs(file ? readText(file) ?? '' : '', projects);
 }
 
 const taskDirs = (text, projects) => text.split('\n').filter(Boolean).filter((d) => taskAt(d, projects)?.rel === '' && fs.existsSync(d));
