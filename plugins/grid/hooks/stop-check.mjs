@@ -26,14 +26,22 @@
 //     Verdict is checked instead. A scout has no Write or Edit tool, so it is not asked for an
 //     Outcome either (the dispatcher's own write is still checked by Stop). A missing agent_type
 //     falls back to the brief's role alone.
+//     Also marks the brief when its agent ends (markBrief): a briefed or running brief becomes done when
+//     its Outcome (a reviewer brief: its Verdict) is written, and blocked when the agent was already
+//     pushed once and still has nothing written. A scout is left alone. The brief marked is the one the agent
+//     wrote (its Write or Edit calls in its transcript), else the one its prompt names when it names only
+//     one; a first mention among several, or the Agent call, is checked, never marked. Only its status
+//     line changes, by a temp file renamed over it.
 import fs from 'node:fs';
 import path from 'node:path';
-import { main, readInput, str, taskAt, frontmatter, isEmpty, section, readText, agentTasks, briefFor, agentName, unreviewedApproval, carryOnStep, silentWait, reviewerCalled, firstGate, projectsRoot, REVIEWER_ROLES, NON_WRITERS } from './lib.mjs';
+import { main, readInput, str, taskAt, frontmatter, isEmpty, section, readText, real, agentTasks, briefFor, ownBriefInTranscript, agentName, unreviewedApproval, carryOnStep, silentWait, reviewerCalled, firstGate, projectsRoot, REVIEWER_ROLES, NON_WRITERS, BRIEFLESS } from './lib.mjs';
 
 main(async () => {
   const input = await readInput();
   const projects = projectsRoot(process.env, str(input?.cwd));
-  if (!input || !projects || input.stop_hook_active === true) return;
+  if (!input || !projects) return;
+  if (input.hook_event_name === 'SubagentStop') markBrief(input, projects);
+  if (input.stop_hook_active === true) return;
   const problems = input.hook_event_name === 'SubagentStop' ? subagentProblems(input, projects) : stopProblems(input, projects);
   if (!problems.length) return;
   return { code: 2, stderr: `Not finished yet:\n${problems.map((p) => `- ${p}`).join('\n')}\nFix this, then stop again.\n` };
@@ -84,4 +92,36 @@ function subagentProblems(input, projects) {
   if (NON_WRITERS.has(agentName(input.agent_type))) return [];
   if (section(b.body, 'Outcome').trim()) return [];
   return REVIEWER_ROLES.has(str(b.data.role).toLowerCase()) ? verdict() : [noOutcome(file, projects)];
+}
+
+// Sets `status:` of the stopping subagent's brief: done when what it must write is written, blocked
+// when it was already pushed once (stop_hook_active) and still wrote nothing. Never touches a brief
+// whose status is already done, blocked or waiting. The brief is the one the agent wrote, else the one
+// its prompt names when it names only one (ownBriefInTranscript): the first brief a prompt names can be
+// one the agent was only told about, and the dispatch fallback (the last Agent call of the same type)
+// can name a sibling's, so those only feed the push. The brief's real path must be the task's own
+// subagents/<brief>.md. One read straight before the write, and the write is a rename of a temp file
+// created with 'wx' (a name already taken, a planted symlink included, aborts the mark), so a reader
+// never sees a half-written file and no link is followed.
+function markBrief(input, projects) {
+  const type = agentName(input.agent_type);
+  if (NON_WRITERS.has(type) || BRIEFLESS.has(type)) return;
+  const found = ownBriefInTranscript(input.agent_transcript_path, projects);
+  if (!found) return;
+  const file = path.join(found.dir, 'subagents', `${found.brief}.md`);
+  if (real(file) !== path.join(real(found.dir), 'subagents', `${found.brief}.md`)) return;
+  const text = readText(file);
+  const b = frontmatter(text ?? '');
+  if (!b || !['briefed', 'running'].includes(str(b.data.status))) return;
+  const reviewer = REVIEWER_ROLES.has(str(b.data.role).toLowerCase());
+  const written = section(b.body, 'Outcome').trim() || (reviewer && section(b.body, 'Verdict').trim());
+  const status = written ? 'done' : input.stop_hook_active === true ? 'blocked' : null;
+  if (!status) return;
+  const next = text.replace(/^(status:[ \t]*).*$/m, `$1${status}`);
+  if (next === text) return;
+  const tmp = path.join(path.dirname(file), `.${found.brief}.md.tmp`);
+  try {
+    fs.writeFileSync(tmp, next, { flag: 'wx' });
+    fs.renameSync(tmp, file);
+  } catch (e) { if (e?.code !== 'EEXIST') try { fs.unlinkSync(tmp); } catch { /* none */ } }
 }

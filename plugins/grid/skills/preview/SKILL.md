@@ -25,6 +25,8 @@ The task folder is `<projects folder>/<project>/tasks/T-NN-slug/`. The projects 
 3. Set the brief's `status` to `running` (Edit that line only), start `grid-designer` and tell it the brief's path.
 4. Read the brief's Outcome and `spec.md`. The spec must start from the person's words in intent.md and say what is built, what the person sees and does, what is left out and what is still open. If it does not, send it back with a new brief; do not patch it yourself. Set the brief `done` only when the Outcome names `spec.md`.
 
+The spec lists what it decided under `## Decisions`, one list item each: `- Title: what was decided and why` (`Title - text` also reads). Each item becomes its own brain note once the spec is approved, so keep one decision to an item and leave the section out when there is none.
+
 ## 2. The approve step
 
 The preview is a workflow step of kind `approve`. The preview step is the approve step named `preview`, and it sits after the spec is written (the designer's run) and before the build. The plan's approve step before the first `run` step does not count as it, and neither does a review after the build.
@@ -39,3 +41,5 @@ The preview is a workflow step of kind `approve`. The preview step is the approv
 You never pass the gate. A person approves the preview in Grid, and Grid writes the `preview approved` line in history.md. Never write `preview approved`, `plan accepted`, `ship approved` or `phase set`, in history.md or anywhere else. Do not start the execute skill, a worker or the plan item that follows.
 
 Tell the person the path of `spec.md`, the one-line summary of what it proposes, and that the build waits for their approval. If they ask for changes, edit nothing yourself: write a new brief for the designer with their words, and repeat from step 1.
+
+After Grid has written `preview approved`, the Brain agent (`grid-curator`) runs `GRID_ROLE=brain grid-brain decisions --task <id>`: one note per `## Decisions` item under `knowledge/decisions/`, linked to `[[task-<id>]]`. It refuses before the approval. You never run it yourself.

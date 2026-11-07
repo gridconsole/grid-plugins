@@ -42,11 +42,18 @@ Chosen: the store, because search is the next task and will need the same filter
 - [ ] 1 Add a tag filter function to the store
   The list and search both need it, so it lives in one tested place and ignores case.
   verify: `node --test` passes for the filter
+  needs: none
 - [ ] 2 Add the tag box to the list view
   People asked to narrow the list as they type; the box calls the store's filter.
   verify: typing narrows the list
-- [ ] 3 Cover both with tests
+  needs: 1
+- [ ] 3 Write the release note for the new filter
+  Support asked for it; it only needs the decision, not the code.
+  verify: the note names the filter and how it treats case
+  needs: none
+- [ ] 4 Cover both with tests
   verify: `node --test` passes
+  needs: 1, 2
 
 Verify: `node --test` passes and the list narrows by tag
 ```
@@ -56,7 +63,9 @@ Verify: `node --test` passes and the list narrows by tag
 - `## Approach and options`: two or three real options, each with its trade-off, then `Chosen:` with the reason. A choice that is the person's to make is an open question (below); name its `Q-n` here with the option you recommend.
 - `## Risks`: one bullet each, `- <high|medium|low>: <the risk>. Retired by step <n>.` A risk that no step retires needs a step, or a question.
 - `## Architecture` and `## Effort` are optional: add them when the shape of the change or its hours are a decision the person makes.
-- `## Steps`, then the steps: `- [ ] <n> <title>`, numbered from 1, each a change someone can check. Under the title, indented, a short paragraph (one or two lines) saying what the step does and why; then the `verify:` line saying how its result is proved. The paragraph comes before `verify:`, and no blank line falls inside a step.
+- `## Steps`, then the steps: `- [ ] <n> <title>`, numbered from 1, each a change someone can check. Under the title, indented, a short paragraph (one or two lines) saying what the step does and why; then the `verify:` line saying how its result is proved, then the `needs:` line. The paragraph comes before `verify:`, and no blank line falls inside a step.
+- `needs: <n>, <n>` lists the step numbers whose output this step truly uses (its code, its file, its decision); `needs: none` says it uses nothing from another step. Every step has the line, and it never leans on list order: step 3 does not need step 2 because it comes after it. Write only direct needs (a step that needs 2, which needs 1, writes `needs: 2`). Grid runs every step whose needs are ticked at once (the execute skill), so each missing line costs time and each invented one holds work back; ask of every pair "does this one read what the other makes?".
+- Steps that change the same files must not run together. Say so in the later step's paragraph ("changes the same files as step 3") and the execute skill runs them one after the other; add the step to `needs:` only when it also builds on the other's output.
 - The last line is `Verify:`, the check for the whole task. Nothing follows it: put assumptions under `## Where things stand now`, never in a block after it.
 - Grid reads these headings to lay out the Plan tab, so keep their names exactly. Never write an `Open questions:` paragraph; questions live in `questions/`.
 - The steps are the plan; the task's `workflow` in task.md says how the work moves, and is not repeated here. Steps run on their own until a workflow step that needs a person, so a step never says "check with the person"; that is a question.
@@ -87,7 +96,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/plan-hash.mjs" "<absolute task folder>/plan.md
 
 Run it as a single command on its own: the absolute path to plan.md, no `cd`, `&&`, `$PWD` or anything chained before or after, so a person's allow rule for `node` matches it.
 
-It writes line 1 as `# Plan, rev <n> · <hash>`. The hash is the first 6 hex digits of the SHA-256 of the file without line 1, with every checkbox read as unticked, every `evidence:` line under a step left out, and trailing spaces cut. An evidence line is an indented line that starts with `evidence:`, in the lines right under a `- [ ]` or `- [x]` step up to the next blank or unindented line. So ticking a step and adding its evidence does not change rev or hash; changing a step's words, order or `verify:`, or any section above the steps, does (so does an `evidence:` line that is not indented under a step), and then you must use `--bump`. A new plan is rev 1. An approval names a rev and a hash, so a bump voids any earlier approval; say so to the person.
+It writes line 1 as `# Plan, rev <n> · <hash>`. The hash is the first 6 hex digits of the SHA-256 of the file without line 1, with every checkbox read as unticked, every `evidence:` and `needs:` line under a step left out, and trailing spaces cut. An evidence or needs line is an indented line that starts with `evidence:` or `needs:`, in the lines right under a `- [ ]` or `- [x]` step up to the next blank or unindented line. So ticking a step, adding its evidence or changing its `needs:` does not change rev or hash; changing a step's words, order or `verify:`, or any section above the steps, does (so does an `evidence:` or `needs:` line that is not indented under a step), and then you must use `--bump`. A new plan is rev 1. An approval names a rev and a hash, so a bump voids any earlier approval; say so to the person.
 
 ## After writing
 
@@ -103,5 +112,7 @@ It writes line 1 as `# Plan, rev <n> · <hash>`. The hash is the first 6 hex dig
 Tick `- [x]` only with evidence the step is done: a command's output saved under `evidence/` (for example `evidence/store-tests.txt`), a file you can name, or a reviewer's Verdict. Add the path under the step, after its `verify:` line, as `  evidence: evidence/store-tests.txt`. No evidence, no tick. A step you started but cannot prove stays `[ ]`. Do not run the script for a tick or an evidence line; the hash ignores both. Then set `updated` in task.md (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess) and add a body line.
 
 ## Revising
+
+A plan without `needs:` lines (written before they existed) is read as "each step needs the one before it", so nothing in it runs together. Add the lines to every step when you next touch the plan; they are not part of the hash, so adding them alone needs no `--bump` and keeps an approval the person already gave (run the script without a flag: rev and hash stay).
 
 Change only what the person asked. Keep ticked steps ticked if their wording is unchanged; if you reword a ticked step, untick it unless its evidence still proves the new wording. When the revision rests on new facts, add them to `research.md` and `## Where things stand now`. Then `--bump`. When the revision sends the work back to an earlier step (a failed check, a rejected preview), set `step` to that step and `round` in task.md one higher (`2` the first time it goes back).

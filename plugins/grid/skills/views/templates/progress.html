@@ -24,12 +24,20 @@
   </ol>
 </section>
 
+<!-- The plan steps running now: every brief with status running and an item: line (subagents/), or the running: line of the execute skill's ready-steps script. Several run at once. Leave this section out when none runs. -->
+<section class="v-section" id="running">
+  <h2>Running now</h2>
+  <ul class="v-list">
+    <li class="v-row" data-state="running" id="r-1">● <a href="#s-{{N}}">{{plan item title}}</a> · {{agent role}}, brief {{NN-name}} · since {{time}}</li>
+  </ul>
+</section>
+
 <!-- Plan items from plan.md, ticked or not, each with an id. Leave this section out when there is no plan.md. -->
 <section class="v-section" id="items">
   <h2>Plan items</h2>
   <p>{{n of m plan items are done}}</p>
   <ul class="v-list">
-    <li class="v-row" id="s-1">{{✓ or ○}} {{plan item title}}</li>
+    <li class="v-row" id="s-1">{{✓ done, ● running or ○ planned}} {{plan item title}}{{, and for a planned one "needs N" while it waits}}</li>
   </ul>
 </section>
 

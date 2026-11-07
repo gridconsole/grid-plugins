@@ -27,6 +27,7 @@ You run one Job, then close. Post what the Job needs and nothing else; always se
 - **submit**: when the Job made a commit: the sha and the ref you pushed. Post it with the result.
 - A heartbeat is posted by hooks while you work; post one by hand only if you are about to be silent for a long time.
 - The beat hook `hooks/heartbeat.mjs` (PostToolUse and Stop, at most one beat a minute per Job) acts only when `GRID_FEED_TASK`, `GRID_JOB` and `GRID_WORKER` are set; the Orchestrator sets them when it spawns you.
+- **worker-exit** (`job`, `worker` on the post; body `reason`, optional `code`): you never post it. The hook `hooks/worker-exit.mjs` (Claude SessionEnd; Codex Stop) posts one when your session ends and you posted no `result` for your Job and have no unanswered `question` on it, so post your result before you stop. The Orchestrator sees it as `exited` on the Job and reassigns or parks it at once.
 
 Never post a `control` post; it is ignored. Never edit or delete a post; to correct one, post again with `re` set to the old one.
 

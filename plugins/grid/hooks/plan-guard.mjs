@@ -20,8 +20,8 @@
 //   grid-planner write the brain.
 // - Any other subagent never writes the brain: it writes a proposal in its task's brain-proposals/.
 // - In a task whose plan is not accepted, whatever its status, history.md and task.md (any letter
-//   case) are not changed to add the `· plan accepted ·` marker anywhere in a line (core still reads it
-//   there, so this is stricter than the hold), a step past the approval or unknown, a workflow
+//   case) are not changed to add the `· plan accepted ·` or `· preview approved ·` marker anywhere in a
+//   line (core still reads the first there, so this is stricter than the hold), a step past the approval or unknown, a workflow
 //   without the approval, a closed or paused status, or a task.md that cannot be read for sure (unless
 //   it could not be before), as Grid records the acceptance. Every way Claude Code could apply an edit
 //   is tried (old_string as written or after CRLF to LF, new_string literal or with `$&` patterns); an
@@ -31,6 +31,8 @@
 //   colon or a part ending in a dot or space, is denied: on macOS or Windows it can open history.md or
 //   task.md under another spelling. So is such a name, or tasks in other letters, for the folder in a
 //   project's tasks folder's place, which could open a task unseen.
+// - In any task, whatever the plan's state, history.md (any letter case, or a trailing dot or space, or a colon stream) is not
+//   changed to add a `· preview approved ·` line: a person approves in Grid, and the brain trusts that line.
 // - In any task, a top-level name that reads as a gate event (plan accepted, preview approved, ship
 //   approved; any case, spaces trimmed) is denied: history.md logs the names written.
 // - A grid-reviewer or grid-checker writes only inside the projects folder, in any mode (its Verdict);
@@ -85,6 +87,15 @@ main(async () => {
   const top = owner ? owner.rel.split('/')[0] : '';
   if (owner && gateLike(top)) {
     return deny(`${given} is not written: a name at the top of a task folder is not plan accepted, preview approved or ship approved, as history.md would log it like a person's approval.${OFF}`);
+  }
+  // In every plan state: people approve a preview in Grid, never through an agent edit, and the brain trusts the line.
+  // A line a hook logged and a line already in the file stay; only a new one is refused. What an edit would leave that cannot be told
+  // is not refused here (Claude Code does not apply an edit that fits no reading).
+  if (owner && /^history\.md(?::.*|[. ]*)$/i.test(owner.rel)) {
+    const next = after(input.tool_name, toolInput, historyText);
+    if (next && next.some((t) => addsMark(historyText, t, [PREVIEW_APPROVED]))) {
+      return deny(`${given} is not changed to add a preview approved line: a person approves the preview in Grid, and Grid writes the line.${OFF}`);
+    }
   }
   if (unaccepted && (NOT_ASCII.test(top) || ODD_PART.test(owner.rel))) {
     return deny(`This task's plan is not accepted yet, so ${given} is not written: until then its files keep plain names (printable ASCII at the top of the task folder, no colon, no dot or space at the end).${OFF}`);
@@ -156,13 +167,17 @@ function brainFile(root, target, gridHome) {
   return inside(homeReal, target) && path.relative(homeReal, target).split(path.sep)[0].toLowerCase() === 'knowledge';
 }
 
-// The lines with the accepted marker anywhere in them, as core/lifecycle.mjs reads history.md.
-const marked = (text) => str(text).split(/\r?\n/).filter((l) => l.includes(PLAN_ACCEPTED));
+// The approval markers an agent never writes: Grid's own plan accepted and preview approved lines (the brain trusts the second).
+const PREVIEW_APPROVED = '· preview approved ·';
+const MARKERS = [PLAN_ACCEPTED, PREVIEW_APPROVED];
+
+// The lines with an approval marker anywhere in them, as core/lifecycle.mjs reads history.md.
+const marked = (text, markers = MARKERS) => str(text).split(/\r?\n/).filter((l) => markers.some((m) => l.includes(m)));
 
 // Whether next has a marked line that text does not, each line of text matched once.
-function addsMark(text, next) {
-  const left = marked(text);
-  return marked(next).some((l) => {
+function addsMark(text, next, markers = MARKERS) {
+  const left = marked(text, markers);
+  return marked(next, markers).some((l) => {
     const i = left.indexOf(l);
     if (i < 0) return true;
     left.splice(i, 1);

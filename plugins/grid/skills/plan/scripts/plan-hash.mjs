@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // The revision line of a plan.md: "# Plan, rev <n> · <hash>".
 // The hash is the first 6 hex digits of the SHA-256 of the plan with its first line
-// removed, every checkbox read as unticked, every evidence line left out, trailing spaces
-// cut from each line, blank lines at both ends cut, and a final newline. An evidence line
-// is an indented line that starts with `evidence:` and sits in a step's block (the lines
-// right under a `- [ ]` or `- [x]` line, up to the next blank or unindented line). So ticking
-// a step and adding its evidence keeps rev and hash; changing a step's words, its order or
-// its verify line changes the hash, and so does an `evidence:` line that is not indented
-// under a step.
+// removed, every checkbox read as unticked, every evidence and needs line left out, trailing
+// spaces cut from each line, blank lines at both ends cut, and a final newline. An evidence
+// or needs line is an indented line that starts with `evidence:` or `needs:` and sits in a
+// step's block (the lines right under a `- [ ]` or `- [x]` line, up to the next blank or
+// unindented line). So ticking a step, adding its evidence or changing its needs keeps rev
+// and hash; changing a step's words, its order or its verify line changes the hash, and so
+// does an `evidence:` or `needs:` line that is not indented under a step.
 // Usage: node plan-hash.mjs <plan.md> [--bump] [--print]   (any other file name is refused, exit 2)
 //   (no flag)  write the heading with the current rev (1 for a new plan) and the hash
 //   --bump     write the heading with rev + 1
@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 const HEADING = /^# Plan, rev (\d+) · [0-9a-f]{6,}$/;
 const STEP = /^(\s*- )\[[ xX]\]/;
 const EVIDENCE = /^\s+evidence:/;
+const NEEDS = /^\s+needs:/;
 
 export function planHash(text) {
   let inStep = false;
@@ -28,7 +29,7 @@ export function planHash(text) {
   for (const line of text.replace(/\r\n/g, '\n').split('\n').slice(1)) {
     if (STEP.test(line)) inStep = true;
     else if (!/^\s+\S/.test(line)) inStep = false;
-    else if (inStep && EVIDENCE.test(line)) continue;
+    else if (inStep && (EVIDENCE.test(line) || NEEDS.test(line))) continue;
     kept.push(line.replace(STEP, '$1[ ]').replace(/\s+$/, ''));
   }
   const body = kept.join('\n').replace(/^\n+|\n+$/g, '') + '\n';

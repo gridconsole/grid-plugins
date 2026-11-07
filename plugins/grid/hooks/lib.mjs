@@ -594,6 +594,62 @@ export function briefInTranscript(file, projects) {
   return fs.existsSync(dir) && taskAt(dir, projects)?.rel === '' ? { dir, brief: m[3] } : null;
 }
 
+// Tools whose input names a file they change, and tools that only read: a brief the agent edited
+// with the first is its own; one named by any other tool (not a reader) counts only when the prompt
+// named it too.
+const FILE_WRITERS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+const FILE_READERS = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead', 'WebFetch', 'WebSearch']);
+const TRANSCRIPT_MAX = 32 * 1024 * 1024;
+
+// The stopping subagent's own brief, from its transcript: { dir, brief } or null. A prompt often names
+// other briefs first (the one being fixed or reviewed), so the first mention (briefInTranscript) is no
+// proof. In order of trust:
+//   1. the last subagents/<brief>.md of a real task folder that one of the agent's own Write, Edit,
+//      MultiEdit or NotebookEdit calls names as its file;
+//   2. else the last brief the first user message (the prompt) names that another tool call, not a
+//      reader, names as its file or path (a Bash write is not recognised);
+//   3. else the one brief the prompt names, when it names exactly one (the same brief twice is one);
+//   4. else null: the prompt names several and none was written, so the caller must not write any.
+// The written path must be that brief's own file (a path that only ends like one gives null). The whole
+// transcript is read, because the Outcome is written last; one over 32 MB gives null.
+export function ownBriefInTranscript(file, projects) {
+  if (!file || !projects || typeof file !== 'string' || typeof projects !== 'string') return null;
+  let text;
+  try {
+    if (fs.statSync(file).size > TRANSCRIPT_MAX) return null;
+    text = fs.readFileSync(file, 'utf8');
+  } catch { return null; }
+  const taskOf = (dir) => (fs.existsSync(dir) && taskAt(dir, projects)?.rel === '' ? dir : null);
+  const dirOf = (m) => taskOf(path.join(path.resolve(projects), m[1], 'tasks', m[2]));
+  let prompt = null;
+  const own = [];
+  const other = [];
+  for (const line of text.split('\n')) {
+    let d;
+    try { d = JSON.parse(line); } catch { continue; }
+    const content = d?.message?.content;
+    if (prompt === null && d?.type === 'user') {
+      prompt = typeof content === 'string' ? content : Array.isArray(content) ? content.map((b) => str(b?.text)).join('\n') : '';
+      continue;
+    }
+    if (!Array.isArray(content)) continue;
+    for (const b of content) {
+      if (b?.type !== 'tool_use' || !b.input || typeof b.input !== 'object' || FILE_READERS.has(b.name)) continue;
+      const target = str(b.input.file_path) || str(b.input.notebook_path) || str(b.input.path);
+      const m = target ? briefPattern(projects).exec(slashes(target)) : null;
+      const dir = m && dirOf(m);
+      if (dir && real(path.join(dir, 'subagents', `${m[3]}.md`)) === real(target)) (FILE_WRITERS.has(b.name) ? own : other).push({ dir, brief: m[3] });
+    }
+  }
+  if (own.length) return own.at(-1);
+  const named = new Map();
+  for (const m of slashes(prompt ?? '').matchAll(new RegExp(briefPattern(projects).source, 'g'))) {
+    const dir = dirOf(m);
+    if (dir) named.set(`${dir}\0${m[3]}`, { dir, brief: m[3] });
+  }
+  return other.reverse().find((w) => named.has(`${w.dir}\0${w.brief}`)) ?? (named.size === 1 ? [...named.values()][0] : null);
+}
+
 // The brief file { dir, brief, file } when `dir` is a real task folder of the projects folder and
 // the brief is that folder's own subagents/<brief>.md (a symlink out of it gives null), else null.
 function briefAt(dir, brief, projects, sub = 'subagents') {

@@ -24,4 +24,8 @@ Then write each accepted note into its level's brain (`<name>.md`; a decision as
 
 Concept notes (`knowledge/concepts/task-<id>.md`, type reference) are written only by the `grid-brain concept --task <id>` script, never by hand and never by a Worker; leave them as they are, and never decline or merge one.
 
+Knowledge posts on the task's Feed become notes through `GRID_ROLE=brain grid-brain knowledge --task <id>`: one note per finding under `knowledge/research/`, linked to `[[task-<id>]]` and the post's concepts. Run it at deliver and whenever a Worker's knowledge post is waiting; a post of kind `type` you review by hand. Workers only post; nobody else writes the brain.
+
+Once history.md holds `preview approved`, run `GRID_ROLE=brain grid-brain decisions --task <id>`: each item of the spec's `## Decisions` list becomes a note under `knowledge/decisions/`, linked to `[[task-<id>]]`. It refuses before the approval.
+
 Reply in at most 20 lines: each proposal and whether it was accepted, merged or declined, and why.

@@ -12,11 +12,12 @@ let lib = null;
 for (const rel of ['../feed/lib.mjs', '../../feed/lib.mjs']) {
   try { lib = await import(rel); break; } catch { /* the other layout */ }
 }
-const { atMs, feedDir, post, resolveTask } = lib ?? {};
+const { atMs, feedDir, fold, post, readFeed, resolveTask } = lib ?? {};
 
 export const BEAT_EVERY_MS = 60_000;
 const TAIL_BYTES = 64 * 1024;
 const LOCK_DEAD_MS = 10_000;
+const EXIT_SCAN_BYTES = 8 * 1024 * 1024;
 
 const str = (v) => (typeof v === 'string' ? v : '');
 
@@ -86,6 +87,65 @@ export function beat(note, { env = process.env, cwd = process.cwd(), now = Date.
       try { fs.unlinkSync(lock); } catch { /* removed */ }
     }
   } catch { return 'error'; }
+}
+
+// The Worker's own file holds a post of one of these types for the Job: a result (it finished) or a worker-exit (already told).
+function hasPost(file, job, types) {
+  try {
+    const size = fs.statSync(file).size;
+    const len = Math.min(size, EXIT_SCAN_BYTES);
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(len);
+      fs.readSync(fd, buf, 0, len, size - len);
+      const lines = buf.toString('utf8').split('\n');
+      if (size > len) lines.shift();
+      for (const l of lines) {
+        try { const p = JSON.parse(l); if (p?.job === job && types.includes(p.type)) return true; } catch { /* torn line */ }
+      }
+    } finally { fs.closeSync(fd); }
+  } catch { /* no file yet */ }
+  return false;
+}
+
+// The Worker asked a question for the Job that is still open in the fold (no answer, not closed by a control post): it is waiting, not gone.
+// Answers and closings come from other files, so the whole Feed is read. The Worker is matched by its raw GRID_WORKER, not its file name.
+function hasOpenQuestion(dir, job, worker) {
+  try {
+    const all = readFeed(dir);
+    const open = new Set(fold(all).open_questions.map((q) => q.id));
+    return all.some((p) => p.type === 'question' && p.job === job && p.worker === worker && open.has(p.id));
+  } catch { return false; }
+}
+
+// The Worker's session ended: post one `worker-exit` for the Job in the environment unless the Worker already posted its result or this exit.
+// Same outcomes as beat, with 'done' when a result or an earlier exit is there and 'waiting' when the Worker has an open question. Never throws.
+export function workerExit(reason, { env = process.env, cwd = process.cwd(), now = Date.now() } = {}) {
+  try {
+    if (!lib) return 'error';
+    const task = str(env.GRID_FEED_TASK);
+    const job = str(env.GRID_JOB);
+    if (!task || !job || !str(env.GRID_WORKER)) return 'off';
+    const found = resolveTask(task, { env, cwd });
+    if (!found.ok) return 'off';
+    const dir = feedDir(found.dir);
+    const own = ownFile(env);
+    const lock = path.join(dir, `.${own}.exit-lock`);
+    if (!takeLock(lock)) return 'locked';
+    try {
+      if (hasPost(path.join(dir, own), job, ['result', 'worker-exit'])) return 'done';
+      if (hasOpenQuestion(dir, job, str(env.GRID_WORKER))) return 'waiting';
+      return post(found.dir, { type: 'worker-exit', job, body: { reason: str(reason).slice(0, 200) || 'the session ended without a result' } }, { env, now }).ok ? 'posted' : 'error';
+    } finally {
+      try { fs.unlinkSync(lock); } catch { /* removed */ }
+    }
+  } catch { return 'error'; }
+}
+
+// One Stop or SessionEnd input as the exit post; SessionEnd carries Claude Code's reason (clear, logout, other, ...).
+export function hookExit(input, { env = process.env, now = Date.now() } = {}) {
+  const why = input.hook_event_name === 'SessionEnd' && str(input.reason) ? `the session ended (${str(input.reason).slice(0, 40)}) without a result` : 'the session stopped without a result';
+  return workerExit(why, { env, cwd: str(input.cwd) || process.cwd(), now });
 }
 
 // One hook input (the Claude Code shape, which Codex sends too) as one beat: Stop is the Worker's exit beat, a tool call notes its tool.

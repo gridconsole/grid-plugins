@@ -19,7 +19,7 @@ The brief comes first. The planner asks `grid-brief-writer` for it, gives the ta
 
 ## The file
 
-`subagents/NN-name.md`: NN is the next free two-digit number, name a short `a-z0-9-` slug of the job.
+`subagents/NN-name.md`: NN is the next free two-digit number (the number the planner gave, when it asks for several briefs at once, so two writers never take the same one), name a short `a-z0-9-` slug of the job.
 
 Frontmatter, all five keys filled:
 
@@ -30,7 +30,7 @@ Frontmatter, all five keys filled:
 | `status` | `briefed` when written, then `running`, `done` or `blocked` |
 | `verify` | what proves the job done: a command, or the id of the brief that checks it |
 | `follow_up` | what comes next, or `none` |
-| `item` | optional: the plan item the brief serves, `item: 12`, or several, `item: 12, 13`. Written whenever the brief serves plan items (its Job or Intent names the plan's `N Title` lines); left out for a brief that serves none. The task page reads it to show what is in progress |
+| `item` | optional: the plan item the brief serves, `item: 12`, or several, `item: 12, 13`. Written whenever the brief serves plan items (its Job or Intent names the plan's `N Title` lines); left out for a brief that serves none. Always written for the brief of a plan step: the task page reads it to show what is in progress, and the execute skill's ready-set script reads it to know which steps run, so a step with no `item:` brief looks idle and could be started twice |
 
 Sections, in this order, all present, each a `## ` heading:
 

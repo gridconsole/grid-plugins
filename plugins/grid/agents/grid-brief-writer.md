@@ -14,7 +14,7 @@ You write one brief and nothing else. Write no code, no plan.md and no task.md.
 
 Resolve the task folder from the path you were given, else from `GRID_PROJECTS`, else from `GRID_HOME`. The task sits at `$GRID_PROJECTS/<project>/tasks/T-NN-slug/`, or at `$GRID_HOME/projects/<project>/tasks/T-NN-slug/` when `GRID_PROJECTS` is empty. Never search the disk for a task folder; if you have no path and both are empty, stop and say so.
 
-Read `task.md` and `intent.md` there, plus the files the ask names. Then write `subagents/NN-name.md`: NN is the next free two-digit number in `subagents/`, name is a short `a-z0-9-` slug of the job. Create the file with the Write tool, once.
+Read `task.md` and `intent.md` there, plus the files the ask names. Then write `subagents/NN-name.md`: NN is the number the planner gave you, else the next free two-digit number in `subagents/`, name is a short `a-z0-9-` slug of the job. Create the file with the Write tool, once.
 
 Write the brief in the format of the `brief` skill (loaded with you): its five frontmatter keys and nine sections, in that order. The writer fills everything up to Acceptance. Intent is the person's words from `intent.md`, verbatim, or the quoted plan step, never reworded. Outcome, Verdict and Follow-up stay empty: a worker writes Outcome only, a reviewer writes Verdict only, into the brief it reviews.
 
