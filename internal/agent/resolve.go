@@ -1,16 +1,47 @@
 package agent
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
+// BatchExtensions is the replaceable refusal policy for workflow key
+// agent_batch_extensions. Configure it before running agent checks.
+var BatchExtensions = []string{".bat", ".cmd"}
+
 // isBatchLauncher is platform independent so every check refuses launchers
 // that Windows would run through cmd.exe instead of as a direct child.
 func isBatchLauncher(binary string) bool {
-	ext := filepath.Ext(binary)
-	return strings.EqualFold(ext, ".bat") || strings.EqualFold(ext, ".cmd")
+	// Recognize either path separator regardless of the host platform, without
+	// cleaning away a final dot component before applying Windows trimming.
+	base := binary[strings.LastIndexAny(binary, `/\`)+1:]
+	base = strings.TrimRight(base, ". ")
+	if base == "" {
+		return true
+	}
+	ext := filepath.Ext(base)
+	for _, refused := range BatchExtensions {
+		if strings.EqualFold(ext, refused) {
+			return true
+		}
+	}
+	return false
+}
+
+// isResolvedBatchLauncher also checks the final target of a symlink. A link
+// whose target cannot be resolved must not reach the version or auth probes.
+func isResolvedBatchLauncher(binary string) bool {
+	if isBatchLauncher(binary) {
+		return true
+	}
+	info, err := os.Lstat(binary)
+	if err == nil && info.Mode()&os.ModeSymlink != 0 {
+		target, err := filepath.EvalSymlinks(binary)
+		return err != nil || isBatchLauncher(target)
+	}
+	return false
 }
 
 // resolveAgent searches only the supplied launch PATH, in directory order.

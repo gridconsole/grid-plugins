@@ -116,6 +116,27 @@ func checkBatchResult(t *testing.T, name, dir, binary string, refused bool) {
 	}
 }
 
+func TestBatchExtensionsReplaceable(t *testing.T) {
+	original := BatchExtensions
+	t.Cleanup(func() { BatchExtensions = original })
+	BatchExtensions = []string{".WRAPPER"}
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{"claude.wrapper. ", true},
+		{"claude.cmd", false},
+		{"codex.bat", false},
+		{"claude.exe", false},
+		{". ", true},
+	} {
+		if got := isBatchLauncher(tc.path); got != tc.want {
+			t.Errorf("custom isBatchLauncher(%q) = %v; want %v", tc.path, got, tc.want)
+		}
+	}
+	checkBatchResult(t, "claude", t.TempDir(), "claude.wrapper. ", true)
+}
+
 func TestResolveAgentLaunchPath(t *testing.T) {
 	first, second := t.TempDir(), t.TempDir()
 	name := "claude"
