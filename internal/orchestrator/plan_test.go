@@ -11,6 +11,8 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/plan"
+	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 func plannedText(t *testing.T) string {
@@ -30,13 +32,14 @@ func writePlan(t *testing.T, f *fixture, text string) {
 }
 
 func TestPlanPublicationRetriesWithoutResettingJobs(t *testing.T) {
-	f := setup(t)
+	f := setupPlan(t)
 	text := plannedText(t)
 	// A prior pass published J-1 before stopping; J-2 still needs publication.
 	second := strings.ReplaceAll(text, "J-1", "J-2")
 	second = strings.ReplaceAll(second, "- [ ] 1 ", "- [ ] 2 ")
 	second = strings.ReplaceAll(second, "after: []", "after: [{job: J-1, kind: done, why: Reuse the documented format}]")
 	writePlan(t, f, text+"\n"+second)
+	approvePlan(t, f)
 	first, err := job.LoadPlan(f.s.Feed.TaskDir, "J-1")
 	if err != nil {
 		t.Fatal(err)
@@ -94,11 +97,12 @@ func TestPlanPublicationValidatesBeforeWriting(t *testing.T) {
 		"duplicate":          text + "\n" + strings.Replace(text, "- [ ] 1 ", "- [ ] 2 ", 1),
 	} {
 		t.Run(name, func(t *testing.T) {
-			f := setup(t)
+			f := setupPlan(t)
 			if name != "duplicate" {
 				bad = text + "\n" + strings.ReplaceAll(strings.ReplaceAll(bad, "J-1", "J-2"), "- [ ] 1 ", "- [ ] 2 ")
 			}
 			writePlan(t, f, bad)
+			approvePlan(t, f)
 			if _, err := f.s.Tick(); err == nil {
 				t.Fatal("accepted invalid plan")
 			}
@@ -107,5 +111,40 @@ func TestPlanPublicationValidatesBeforeWriting(t *testing.T) {
 				t.Fatalf("invalid plan published Jobs: %+v %v", records, err)
 			}
 		})
+	}
+}
+
+func setupPlan(t *testing.T) *fixture {
+	t.Helper()
+	f := setup(t)
+	dir := filepath.Join(t.TempDir(), "T-01-example")
+	if err := os.Rename(f.s.Feed.TaskDir, dir); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Feed.TaskDir = dir
+	text := "---\nid: T-01\ntitle: Example\nproject: example\nsize: normal\nworkflow: ''\nstate: waiting\ncreated: 2026-01-01T00:00:00Z\n---\n"
+	for name, body := range map[string]string{"task.md": text, "intent.md": "Example"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return f
+}
+
+func approvePlan(t *testing.T, f *fixture) {
+	t.Helper()
+	text, err := (plan.Store{TaskDir: f.s.Feed.TaskDir}).Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(task.Event{Task: "T-01", What: "approve", PlanHash: plan.Hash(text)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "approval.json"), b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !task.Approved(f.s.Feed.TaskDir) {
+		t.Fatal("invalid approval fixture")
 	}
 }

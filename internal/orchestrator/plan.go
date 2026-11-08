@@ -5,13 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/jobgraph"
 	"github.com/gridconsole/grid-plugins/internal/plan"
+	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
 // publishPlan runs under the task lease and pass lock. The Feed owns published
@@ -25,6 +29,34 @@ func (s Store) publishPlan(snap Snapshot) error {
 	if err != nil {
 		return err
 	}
+	// Hold task before plan, matching approval/reopen writers. The exact plan
+	// snapshot that passes the approval gate remains stable through publication.
+	lock, err := fslock.OpenNoFollow(filepath.Join(s.Feed.TaskDir, ".task.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err := fslock.LockExclusive(lock); err != nil {
+		return err
+	}
+	defer fslock.Unlock(lock)
+	return (plan.Store{TaskDir: s.Feed.TaskDir}).WithHash(func(_ string) error {
+		text, err = (plan.Store{TaskDir: s.Feed.TaskDir}).Read()
+		if err != nil {
+			return err
+		}
+		workflow, err := os.ReadFile(filepath.Join(s.Feed.TaskDir, "task.md"))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if taskfile.PlanApprovalRequired(string(workflow)) && !task.Approved(s.Feed.TaskDir) {
+			return nil
+		}
+		return s.publishPlanText(snap, text)
+	})
+}
+
+func (s Store) publishPlanText(snap Snapshot, text string) error {
 	items, err := plan.Items(text)
 	if err != nil {
 		return err

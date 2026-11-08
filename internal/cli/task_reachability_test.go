@@ -39,6 +39,13 @@ func TestTaskLeaseFreshHomeSequence(t *testing.T) {
 	if code := h.run(created.Path, "plan", "write", draft); code != 0 {
 		t.Fatalf("plan write: %d %s", code, h.errb)
 	}
+	// Default workflows require the person to approve the plan before publication.
+	if code := h.run(created.Path, "task", "status", "T-01", "waiting"); code != 0 {
+		t.Fatalf("task waiting: %d %s", code, h.errb)
+	}
+	if code := h.run(created.Path, "approve", "T-01"); code != 0 {
+		t.Fatalf("approve: %d %s", code, h.errb)
+	}
 	if code := h.run(created.Path, append(taskTakeArgs(pid, start), "--json")...); code != 0 {
 		t.Fatalf("lease take task: %d %s", code, h.errb)
 	}

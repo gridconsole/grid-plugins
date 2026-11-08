@@ -143,7 +143,6 @@ const previewApproved = "· preview approved ·"
 const planReady = "· plan ready ·"
 
 var acceptedLine = regexp.MustCompile(`(?m)^- \S+ · plan accepted · `)
-var stepName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 func planStage(text, history string) string {
 	if acceptedLine.MatchString(history) {
