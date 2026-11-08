@@ -434,7 +434,7 @@ func (s Store) stored(r Record) (Record, error) {
 		return r, err
 	}
 	var body map[string]any
-	if err := json.Unmarshal(data, &body); err != nil || body == nil {
+	if err := decodeBody(data, r.Type, &body); err != nil || body == nil {
 		return r, fmt.Errorf("body of %s is unreadable", r.ID)
 	}
 	r.Body = body
@@ -457,7 +457,7 @@ func (s Store) record(in Input, w Writer) (Record, error) {
 		return Record{}, &InvalidRecordError{Err: err}
 	}
 	var body map[string]any
-	if err := json.Unmarshal(data, &body); err != nil {
+	if err := decodeBody(data, in.Type, &body); err != nil {
 		return Record{}, &InvalidRecordError{Err: err}
 	}
 	t, _ := contract.LookupType(in.Type)

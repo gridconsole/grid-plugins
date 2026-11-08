@@ -2,6 +2,7 @@
 package feed
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -53,6 +54,55 @@ type Record struct {
 	Attempt *int               `json:"attempt"`
 	Wake    *string            `json:"wake"`
 	Body    map[string]any     `json:"body"`
+}
+
+// UnmarshalJSON preserves token notice integers across cold and cached reads.
+func (r *Record) UnmarshalJSON(data []byte) error {
+	type wire Record
+	var out wire
+	if err := json.Unmarshal(data, &out); err != nil {
+		return err
+	}
+	if out.Type == "usage-notice" {
+		var raw struct {
+			Body json.RawMessage `json:"body"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return err
+		}
+		if err := decodeBody(raw.Body, out.Type, &out.Body); err != nil {
+			return err
+		}
+	}
+	*r = Record(out)
+	return nil
+}
+
+// decodeBody keeps the existing float representation for other fields while
+// preserving tokens as a JSON number, which can span the full uint64 range.
+func decodeBody(data []byte, kind string, body *map[string]any) error {
+	if err := json.Unmarshal(data, body); err != nil {
+		return err
+	}
+	if kind != "usage-notice" {
+		return nil
+	}
+	var raw struct {
+		Tokens json.RawMessage `json:"tokens"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if len(raw.Tokens) != 0 {
+		var value any
+		dec := json.NewDecoder(bytes.NewReader(raw.Tokens))
+		dec.UseNumber()
+		if err := dec.Decode(&value); err != nil {
+			return err
+		}
+		(*body)["tokens"] = value
+	}
+	return nil
 }
 
 // Input describes a post. Set ID to reuse an id across retries.
