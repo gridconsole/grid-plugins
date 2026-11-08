@@ -16,10 +16,13 @@ func main() {
 	if len(os.Args) > 1 {
 		mode = os.Args[1]
 	}
-	// Env lifecycle tests provide a FIFO; CLI tests use this helper without one.
-	// Keep a writer in every process so EOF proves the whole tree exited.
-	if _, err := os.Stat("server.lifetime"); !os.IsNotExist(err) {
-		lifetime, err := os.OpenFile("server.lifetime", os.O_WRONLY, 0)
+	// Env lifecycle tests provide a lifetime address; CLI tests omit it.
+	// Keep a connection in every process so EOF proves the whole tree exited.
+	if address, err := os.ReadFile("server.lifetime"); !os.IsNotExist(err) {
+		if err != nil {
+			panic(err)
+		}
+		lifetime, err := net.Dial("tcp4", string(address))
 		if err != nil {
 			panic(err)
 		}

@@ -20,7 +20,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
@@ -63,33 +62,44 @@ func devServer(t *testing.T) string {
 	return serverFixture.binary
 }
 
-// Every helper process holds a writer until exit. EOF observes shutdown without
+// Every helper process holds a connection until exit. EOF observes shutdown without
 // depending on when the OS reaps an orphaned zombie (which kill(pid, 0) sees).
-func serverLifetime(t *testing.T, dir string) *os.File {
+func serverLifetime(t *testing.T, dir string) *net.TCPListener {
 	t.Helper()
-	path := filepath.Join(dir, "server.lifetime")
-	if err := syscall.Mkfifo(path, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = f.Close() })
-	return f
+	t.Cleanup(func() { _ = listener.Close() })
+	if err := os.WriteFile(filepath.Join(dir, "server.lifetime"), []byte(listener.Addr().String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return listener
 }
 
-func assertStopped(t *testing.T, lifetime *os.File, processes int) {
+func assertStopped(t *testing.T, lifetime *net.TCPListener, processes int) {
 	t.Helper()
-	if err := lifetime.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+	// Share one bound across accepting and reading every process's connection.
+	deadline := time.Now().Add(3 * time.Second)
+	if err := lifetime.SetDeadline(deadline); err != nil {
 		t.Fatal(err)
 	}
-	data, err := io.ReadAll(lifetime)
-	if err != nil {
-		t.Fatalf("server processes survived shutdown: %v", err)
-	}
-	if string(data) != strings.Repeat("started\n", processes) {
-		t.Fatalf("process lifetime witnesses: %q", data)
+	for i := 0; i < processes; i++ {
+		conn, err := lifetime.AcceptTCP()
+		if err != nil {
+			t.Fatalf("missing process lifetime witness: %v", err)
+		}
+		defer conn.Close()
+		if err := conn.SetReadDeadline(deadline); err != nil {
+			t.Fatal(err)
+		}
+		data, err := io.ReadAll(conn)
+		if err != nil {
+			t.Fatalf("server processes survived shutdown: %v", err)
+		}
+		if string(data) != "started\n" {
+			t.Fatalf("process lifetime witness: %q", data)
+		}
 	}
 }
 
@@ -154,8 +164,12 @@ func TestDevServerLifecycle(t *testing.T) {
 					}
 				}
 			}
+			started := time.Now()
 			if err := m.Down("J-1"); err != nil {
 				t.Fatal(err)
+			}
+			if elapsed := time.Since(started); mode == "stubborn" && elapsed < 2*m.Grace {
+				t.Fatalf("stubborn server stopped after %s, want at least two grace periods (%s)", elapsed, 2*m.Grace)
 			}
 			processes := 1
 			if mode == "tree" {
@@ -163,8 +177,9 @@ func TestDevServerLifecycle(t *testing.T) {
 			}
 			assertStopped(t, lifetime, processes)
 			assertEmpty(t, m.Ports)
-			// Signal order and grace durations are checked with a controlled clock
-			// in ports. A loaded OS may not schedule a handler before SIGKILL.
+			// TestStopSignalLadder and TestStopRechecksIdentityBeforeEscalation
+			// in internal/ports/process_unix_test.go cover the removed signal-log
+			// assertion. A loaded OS may not schedule a handler before SIGKILL.
 		})
 	}
 }
