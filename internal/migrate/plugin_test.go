@@ -13,7 +13,6 @@ var pointerExts = []string{"", ".attached", ".tasks", ".tasks-agent", ".planner"
 func pluginFixture(t *testing.T, from string) (data, oldTask string) {
 	t.Helper()
 	data = filepath.Join(filepath.Dir(from), "plugin-data")
-	t.Setenv("CLAUDE_PLUGIN_DATA", data)
 	oldTask = filepath.Join(from, "alpha/projects/widget/tasks/T-07-first")
 	for _, ext := range pointerExts {
 		put(t, filepath.Join(data, "sessions/hook"+ext), oldTask+"\r\n")
@@ -41,11 +40,12 @@ func checkPluginPointers(t *testing.T, data, want string) {
 func TestPluginSessionsCrashMatrix(t *testing.T) {
 	for _, step := range applySteps {
 		t.Run(step, func(t *testing.T) {
+			t.Parallel()
 			from, _ := fixture(t)
 			home := from
 			data, _ := pluginFixture(t, from)
-			crashAt(t, step, from, home)
-			finishAfterCrash(t, from, home)
+			crashAt(t, step, from, home, "CLAUDE_PLUGIN_DATA="+data)
+			finishAfterCrash(t, from, home, WithPluginData(data))
 			newTask := filepath.Join(home, "projects/widget/tasks/T-07-first")
 			for _, ext := range pointerExts {
 				if read(t, home, "sessions/hook"+ext) != newTask+"\r\n" {
@@ -65,16 +65,17 @@ func TestPluginSessionsCrashMatrix(t *testing.T) {
 func TestPluginPointersRewrittenInPlaceAndRolledBack(t *testing.T) {
 	for _, step := range []string{"", "rollback-published", "worktree-rewritten"} {
 		t.Run(step, func(t *testing.T) {
+			t.Parallel()
 			from, _ := fixture(t)
 			data, oldTask := pluginFixture(t, from)
 			before := view(t, data)
 			oldHome := view(t, from)
-			if _, err := scan(t, from, from).Apply(); err != nil {
+			if _, err := scan(t, from, from, WithPluginData(data)).Apply(); err != nil {
 				t.Fatal(err)
 			}
 			checkPluginPointers(t, data, filepath.Join(from, "projects/widget/tasks/T-07-first"))
 			if step != "" {
-				crashAt(t, step, from, from, rollbackEnv)
+				crashAt(t, step, from, from, rollbackEnv, "CLAUDE_PLUGIN_DATA="+data)
 			}
 			finishRollback(t, from)
 			if !sameView(oldHome, view(t, from)) {
@@ -91,7 +92,7 @@ func TestPluginPointersRewrittenInPlaceAndRolledBack(t *testing.T) {
 func TestPluginPointerChangedBeforeRollbackIsRefused(t *testing.T) {
 	from, _ := fixture(t)
 	data, _ := pluginFixture(t, from)
-	if _, err := scan(t, from, from).Apply(); err != nil {
+	if _, err := scan(t, from, from, WithPluginData(data)).Apply(); err != nil {
 		t.Fatal(err)
 	}
 	put(t, filepath.Join(data, "sessions/hook.tasks"), "somewhere else\r\n")

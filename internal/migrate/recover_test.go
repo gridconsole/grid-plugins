@@ -107,72 +107,75 @@ func cleanRun(t *testing.T, l crashLayout, root string) map[string]string {
 
 func TestCrashAtEveryStepThenRerun(t *testing.T) {
 	for _, l := range crashLayouts() {
-		root := gridhome.Real(t.TempDir())
-		want := cleanRun(t, l, root)
-		for _, step := range applySteps {
-			t.Run(l.name+"/"+step, func(t *testing.T) {
-				wipe(t, root)
-				from, home := l.build(t, root)
-				hadHome := exists(home)
-				if step == "displaced" && !hadHome {
-					t.Skip("there is no old home to set aside")
-				}
-				var oldHome map[string]string
-				if hadHome {
-					oldHome = view(t, home)
-				}
-				crashAt(t, step, from, home)
-				checkOneHomeSurvives(t, step, home, hadHome, oldHome)
+		t.Run(l.name, func(t *testing.T) {
+			t.Parallel()
+			root := gridhome.Real(t.TempDir())
+			want := cleanRun(t, l, root)
+			for _, step := range applySteps {
+				t.Run(step, func(t *testing.T) {
+					wipe(t, root)
+					from, home := l.build(t, root)
+					hadHome := exists(home)
+					if step == "displaced" && !hadHome {
+						t.Skip("there is no old home to set aside")
+					}
+					var oldHome map[string]string
+					if hadHome {
+						oldHome = view(t, home)
+					}
+					crashAt(t, step, from, home)
+					checkOneHomeSurvives(t, step, home, hadHome, oldHome)
 
-				// A dry run says what it found and changes nothing.
-				state := snapshotState(t, root)
-				p := scan(t, from, home)
-				if journaled := step != "locked" && step != "done"; journaled != (p.Interrupted != "") {
-					t.Fatalf("interrupted run noticed = %v after a stop at %q", p.Interrupted != "", step)
-				}
-				if p.Interrupted != "" {
-					var b strings.Builder
-					if err := p.WriteText(&b); err != nil || !strings.Contains(b.String(), "interrupted") {
-						t.Fatalf("plan text: %q %v", b.String(), err)
+					// A dry run says what it found and changes nothing.
+					state := snapshotState(t, root)
+					p := scan(t, from, home)
+					if journaled := step != "locked" && step != "done"; journaled != (p.Interrupted != "") {
+						t.Fatalf("interrupted run noticed = %v after a stop at %q", p.Interrupted != "", step)
 					}
-				}
-				if got := snapshotState(t, root); got != state {
-					t.Fatalf("a dry run changed the disk:\n%s\n%s", state, got)
-				}
+					if p.Interrupted != "" {
+						var b strings.Builder
+						if err := p.WriteText(&b); err != nil || !strings.Contains(b.String(), "interrupted") {
+							t.Fatalf("plan text: %q %v", b.String(), err)
+						}
+					}
+					if got := snapshotState(t, root); got != state {
+						t.Fatalf("a dry run changed the disk:\n%s\n%s", state, got)
+					}
 
-				first := finishAfterCrash(t, from, home)
-				if journaled := step != "locked" && step != "done"; journaled && (first.Recovered == "" || first.Rerun == first.Changed) {
-					t.Fatalf("recovery after %q: %+v", step, first)
-				}
-				if got := migrated(t, root, home); !sameView(got, want) {
-					t.Fatalf("the home differs from a clean migration:\nwant %v\n got %v", want, got)
-				}
-				for _, s := range siblings(t, home) {
-					if strings.Contains(s, ".migrate-") && !strings.HasSuffix(s, ".migrate-lock") {
-						t.Errorf("left behind: %s", s)
+					first := finishAfterCrash(t, from, home)
+					if journaled := step != "locked" && step != "done"; journaled && (first.Recovered == "" || first.Rerun == first.Changed) {
+						t.Fatalf("recovery after %q: %+v", step, first)
 					}
-				}
-				entries, _ := os.ReadDir(home + "-backup")
-				if len(entries) == 0 {
-					t.Fatal("no backup")
-				}
-				for _, e := range entries {
-					if !exists(filepath.Join(home+"-backup", e.Name(), "manifest.json")) {
-						t.Errorf("incomplete backup kept: %s", e.Name())
+					if got := migrated(t, root, home); !sameView(got, want) {
+						t.Fatalf("the home differs from a clean migration:\nwant %v\n got %v", want, got)
 					}
-				}
-			})
-		}
+					for _, s := range siblings(t, home) {
+						if strings.Contains(s, ".migrate-") && !strings.HasSuffix(s, ".migrate-lock") {
+							t.Errorf("left behind: %s", s)
+						}
+					}
+					entries, _ := os.ReadDir(home + "-backup")
+					if len(entries) == 0 {
+						t.Fatal("no backup")
+					}
+					for _, e := range entries {
+						if !exists(filepath.Join(home+"-backup", e.Name(), "manifest.json")) {
+							t.Errorf("incomplete backup kept: %s", e.Name())
+						}
+					}
+				})
+			}
+		})
 	}
 }
 
 // finishAfterCrash is what a person does: run migrate until it has nothing left to do.
 // A run that only undid the earlier one is followed by one that migrates. It returns
 // the result of the first run.
-func finishAfterCrash(t *testing.T, from, home string) (first Result) {
+func finishAfterCrash(t *testing.T, from, home string, opts ...Option) (first Result) {
 	t.Helper()
 	for i := 0; i < 3; i++ {
-		p, err := Scan(from, home)
+		p, err := Scan(from, home, opts...)
 		if err != nil {
 			t.Fatalf("scan after the crash: %v", err)
 		}
