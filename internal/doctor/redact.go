@@ -34,8 +34,9 @@ func Redact(text, home string) string {
 			pattern = `(?i)(?:` + strings.Join(variants, "|") + `)`
 		}
 		// Preserve the delimiter and avoid treating /home/example-two as the
-		// home /home/example. This also handles homes inside JSON strings.
-		pattern += `($|[\\/\s"'<>:;,)}\]])`
+		// home /home/example: only a character that can continue a name keeps
+		// the home from ending. This also handles homes inside JSON strings.
+		pattern += `($|[^A-Za-z0-9_-])`
 		text = regexp.MustCompile(pattern).ReplaceAllString(text, `~${1}`)
 	}
 	for _, pattern := range secretPatterns {

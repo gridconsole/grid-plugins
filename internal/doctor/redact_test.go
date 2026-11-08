@@ -39,3 +39,23 @@ func TestRedact(t *testing.T) {
 		})
 	}
 }
+
+func TestRedactHomeBeforePunctuation(t *testing.T) {
+	const home = "/home/example"
+	tests := []struct{ name, input, want string }{
+		{"dot", "log " + home + ".log", "log ~.log"},
+		{"equals", "HOME=" + home + "=x", "HOME=~=x"},
+		{"pipe and bang", home + "|" + home + "!", "~|~!"},
+		{"backtick", "`" + home + "`", "`~`"},
+		{"underscore stays", home + "_two", home + "_two"},
+		{"hyphen stays", home + "-two", home + "-two"},
+		{"digit stays", home + "2", home + "2"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Redact(tc.input, home); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
