@@ -35,11 +35,12 @@ func (p *Plan) rewriteWorktrees(paths map[string]string) {
 		}
 		oldTree := filepath.Dir(oldFile)
 		refuse := func(reason, common string) {
-			command := "git -C " + shellQuote(oldTree)
-			if common != "" {
-				command = "git --git-dir " + shellQuote(common)
+			if common == "" {
+				// Not a linked worktree that git can remove: git refuses a main working tree.
+				p.Unmapped = append(p.Unmapped, a.From+": "+reason+"; stop its writers, then move "+shellQuote(oldTree)+" outside the Grid home and run grid migrate again")
+				return
 			}
-			p.Unmapped = append(p.Unmapped, a.From+": "+reason+"; stop its writers, then remove the worktree with: "+command+" worktree remove -- "+shellQuote(oldTree))
+			p.Unmapped = append(p.Unmapped, a.From+": "+reason+"; stop its writers, check it for untracked or modified files (git asks for --force over them), then remove the worktree with: git --git-dir "+shellQuote(common)+" worktree remove -- "+shellQuote(oldTree))
 		}
 		if !e.Mode.IsRegular() {
 			refuse("embedded git metadata cannot be relocated automatically; move an embedded main repository outside the home", "")

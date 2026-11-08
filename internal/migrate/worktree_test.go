@@ -112,3 +112,20 @@ func TestPublishedHomeWrittenAfterCrashStillFinishes(t *testing.T) {
 		t.Fatal("rollback offered for a home written since publication")
 	}
 }
+
+// git refuses to remove a main working tree, so a repository kept inside the home is
+// told to move, never given a removal command.
+func TestEmbeddedMainRepositoryIsToldToMove(t *testing.T) {
+	testgit.Isolate(t)
+	from, home := fixture(t)
+	embedded := filepath.Join(from, "alpha/worktrees/widget/T-07/embedded")
+	if err := os.MkdirAll(embedded, 0700); err != nil {
+		t.Fatal(err)
+	}
+	testgit.Init(t, embedded, "", true)
+	p := scan(t, from, home)
+	text := strings.Join(p.Unmapped, "\n")
+	if !strings.Contains(text, "embedded") || !strings.Contains(text, "move '"+embedded+"' outside the Grid home") || strings.Contains(text, "worktree remove") {
+		t.Fatal(text)
+	}
+}
