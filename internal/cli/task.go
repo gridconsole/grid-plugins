@@ -23,6 +23,8 @@ const taskUsage = `Usage:
   grid task stop|close|reopen <task> [--reason <text>] [--json]
   grid task rename <task> --title <text> [--project <p>] [--json]
   grid task decline <task> --reason <text> [--project <p>] [--json]
+  grid task delete <task> [--project <p>] [--json]
+  grid task restore <T-NN> --project <p> [--json]
   grid task status <task> <state> [--json]
   grid task history <task> [--json]
 
@@ -43,6 +45,10 @@ func runTask(args []string, env Env) int {
 		return runTaskIntent(args, env)
 	}
 	switch sub {
+	case "delete":
+		return runTaskTrash(args, env)
+	case "restore":
+		return runTaskTrash(args, env)
 	case "attach":
 		return runTaskAttach(args[1:], env)
 	case "rename":

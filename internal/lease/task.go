@@ -111,6 +111,30 @@ type TaskTake struct {
 // TakeTask grants the first tenure or checks replacement evidence while holding
 // task.json exclusively, so two adopters cannot both replace the same holder.
 func (s TaskStore) TakeTask(w feed.Writer, pid int, start string, options ...TaskTake) (Tenure, error) {
+	// Coordinate with task folder moves, including the first lease when no
+	// lease file exists. Never recreate a task directory after waiting on a
+	// lock that moved to the trash; every waiter must still name this inode.
+	lockPath := filepath.Join(s.Feed.TaskDir, ".task.lock")
+	lock, err := fslock.OpenNoFollow(lockPath, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return Tenure{}, err
+	}
+	defer lock.Close()
+	if err := fslock.LockExclusive(lock); err != nil {
+		return Tenure{}, err
+	}
+	defer fslock.Unlock(lock)
+	held, err := lock.Stat()
+	if err != nil {
+		return Tenure{}, err
+	}
+	current, err := os.Lstat(lockPath)
+	if err != nil {
+		return Tenure{}, err
+	}
+	if !os.SameFile(held, current) {
+		return Tenure{}, errors.New("task folder changed while acquiring its lease")
+	}
 	policy := TaskTake{}
 	if len(options) > 0 {
 		policy = options[0]

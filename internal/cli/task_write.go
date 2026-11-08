@@ -231,3 +231,49 @@ func taskWriteResult(env Env, event task.Event, err error, asJSON bool, path str
 	fmt.Fprintf(env.Stdout, "%s %s: %s -> %s\n", event.Task, event.What, event.FromState, event.ToState)
 	return 0
 }
+
+func runTaskTrash(args []string, env Env) int {
+	sub := args[0]
+	fs := newFlags("task "+sub, env)
+	project := fs.String("project", "", "project name or id; required for restore")
+	asJSON := fs.Bool("json", false, "print JSON")
+	pos, err := taskArgs(fs, args[1:])
+	if errors.Is(err, flag.ErrHelp) {
+		return 0
+	}
+	if err != nil {
+		return 2
+	}
+	if len(pos) != 1 || (sub == "restore" && *project == "") {
+		fmt.Fprint(env.Stderr, taskUsage)
+		return 2
+	}
+	role := strings.TrimSpace(env.getenv("GRID_ROLE"))
+	if role == "" || role == "cli" {
+		role = "owner"
+	}
+	o := task.TrashOptions{WriteOptions: writeOptions(env, pos[0], sub, ""), Project: *project, Role: role, Agent: agentShell(env), PersonalAllowed: !agentShell(env)}
+	o.Who.Role = role
+	var result task.TrashResult
+	if sub == "delete" {
+		result, err = taskWriter(env).Delete(o)
+	} else {
+		result, err = taskWriter(env).Restore(o)
+	}
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "grid task %s: %v\n", sub, err)
+		switch {
+		case errors.Is(err, task.ErrEditUsage):
+			return 2
+		case errors.Is(err, task.ErrEditRejected):
+			return 3
+		default:
+			return 1
+		}
+	}
+	if *asJSON {
+		return writeJSON(env.Stdout, result)
+	}
+	fmt.Fprintln(env.Stdout, result.Folder)
+	return 0
+}
