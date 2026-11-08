@@ -1,1 +1,1 @@
-{"jobs":[{"job":"J-1.2","dollars":80,"minutes":50,"posts":1},{"job":"lead","dollars":20,"minutes":10,"posts":1}],"totals":{"dollars":100,"minutes":60,"posts":2}}
+{"jobs":[{"job":"J-1.2","dollars":80,"minutes":50,"tokens":0,"posts":1},{"job":"lead","dollars":20,"minutes":10,"tokens":0,"posts":1}],"totals":{"dollars":100,"minutes":60,"tokens":0,"posts":2}}

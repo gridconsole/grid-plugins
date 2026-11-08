@@ -187,3 +187,37 @@ func TestTokenRecordCompatibility(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenRecordRangeAndOmission(t *testing.T) {
+	s := testStore(t)
+	max, zero, one := uint64(math.MaxUint64), uint64(0), uint64(1)
+	for _, in := range []Input{
+		{Job: "lead", Dollars: number(0)},
+		{Job: "lead", Tokens: &zero},
+		{Job: "J-1", Tokens: &max},
+	} {
+		if _, err := s.Post(in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(s.TaskPath, "usage", "usage.jsonl")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(before), "\n")
+	if strings.Contains(lines[0], `"tokens"`) || !strings.Contains(lines[1], `"tokens":0`) || !strings.Contains(lines[2], `"tokens":18446744073709551615`) {
+		t.Fatalf("token omission/zero/range: %s", before)
+	}
+	if _, err := s.Post(Input{Job: "lead", Tokens: &one}); err == nil {
+		t.Fatal("token overflow accepted")
+	}
+	after, _ := os.ReadFile(path)
+	if string(before) != string(after) {
+		t.Fatal("overflow changed log")
+	}
+	out, err := s.Show()
+	if err != nil || out.Totals.Tokens != max || out.Totals.Posts != 3 {
+		t.Fatalf("%+v %v", out, err)
+	}
+}

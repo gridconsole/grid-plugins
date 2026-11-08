@@ -13,17 +13,22 @@ import (
 )
 
 const usageHelp = `Usage: grid usage [--task T-NN] [--json]
-       grid usage post --job J-N|lead [--dollars N] [--minutes N] [--session ID] [--model NAME]
+       grid usage post --job J-N|lead [--dollars N] [--minutes N] [--tokens N] [--session ID] [--model NAME]
        grid usage show
-       grid usage threshold set [--dollars PERCENT ...] [--minutes PERCENT ...]
-       grid usage threshold show | clear [--dollars] [--minutes]
-       grid usage budget set [--dollars N] [--minutes N]
-       grid usage budget show | clear [--dollars] [--minutes]
+       grid usage threshold set [--dollars PERCENT ...] [--minutes PERCENT ...] [--tokens PERCENT ...]
+       grid usage threshold show | clear [--dollars] [--minutes] [--tokens]
+       grid usage budget set [--dollars N] [--minutes N] [--tokens N]
+       grid usage budget show | clear [--dollars] [--minutes] [--tokens]
 All commands accept --task T-NN and --json.
 Flags alone fold the token totals observed by the session hooks; they are not Job usage posts.
 Posts are deltas; at least one amount is required. Thresholds are percentages (0-100).
-Default thresholds: 50%, 80%, 100%. No budget is set by default, so no notice fires.
-Set replaces the supplied units. Clear without unit flags clears both units.
+Units are dollars, minutes and tokens; token amounts are non-negative integers.
+Default thresholds: 50%, 80%, 100%. A task token budget overrides the workspace
+default tokens_per_task in <GRID_HOME>/workspace.md front matter (positive digits).
+Without a budget no notice fires. The hold at the limit is not enforced yet;
+worker and session hooks will enforce it in a follow-up.
+Set replaces the supplied units. Clear without unit flags clears all three units.
+Clearing a task token budget restores the workspace default when present.
 `
 
 type usageNumbers struct {
@@ -51,6 +56,28 @@ func (n *usageNumbers) amount() *float64 {
 	return &n.values[0]
 }
 
+// usageTokens parses before task resolution or any storage writes.
+type usageTokens struct{ values []uint64 }
+
+func (n *usageTokens) String() string { return "" }
+func (n *usageTokens) Set(value string) error {
+	if len(n.values) != 0 {
+		return fmt.Errorf("supply this amount only once")
+	}
+	v, err := usage.ParseTokens(value)
+	if err != nil {
+		return err
+	}
+	n.values = append(n.values, v)
+	return nil
+}
+func (n *usageTokens) amount() *uint64 {
+	if len(n.values) == 0 {
+		return nil
+	}
+	return &n.values[0]
+}
+
 func runUsage(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprint(env.Stdout, usageHelp)
@@ -72,6 +99,7 @@ func runUsage(args []string, env Env) int {
 	task := fs.String("task", "", "task folder or id; defaults to the current task")
 	asJSON := fs.Bool("json", false, "print JSON")
 	var dollars, minutes usageNumbers
+	var tokens usageTokens
 	var in usage.Input
 	if op == "post" {
 		fs.StringVar(&in.Job, "job", "", "Job id or lead")
@@ -79,6 +107,7 @@ func runUsage(args []string, env Env) int {
 		fs.StringVar(&in.Model, "model", "", "optional model name")
 		fs.Var(&dollars, "dollars", "dollar delta (non-negative and finite)")
 		fs.Var(&minutes, "minutes", "minute delta (non-negative and finite)")
+		fs.Var(&tokens, "tokens", "token delta (non-negative integer)")
 	}
 	if code, stop := parse(fs, args[1:], env); stop {
 		return code
@@ -87,7 +116,7 @@ func runUsage(args []string, env Env) int {
 	if err != nil {
 		return commandError(env, "usage", err)
 	}
-	s := usage.Store{TaskPath: res.TaskPath, Writer: func() (feed.Writer, error) {
+	s := usage.Store{TaskPath: res.TaskPath, GridHome: env.GridHome, Writer: func() (feed.Writer, error) {
 		if env.GridHome == "" {
 			return feed.Writer{}, fmt.Errorf("cannot find the Grid home; set GRID_HOME")
 		}
@@ -106,7 +135,7 @@ func runUsage(args []string, env Env) int {
 		printUsage(env, out)
 		return 0
 	}
-	in.Dollars, in.Minutes = dollars.amount(), minutes.amount()
+	in.Dollars, in.Minutes, in.Tokens = dollars.amount(), minutes.amount(), tokens.amount()
 	out, err := s.Post(in)
 	if err != nil {
 		return commandError(env, "usage", err)
@@ -123,17 +152,20 @@ func runUsage(args []string, env Env) int {
 		if _, ok := notice.Body["minutes"]; ok {
 			unit = "minutes"
 		}
-		fmt.Fprintf(env.Stdout, "usage-notice %s  %g%% of %s budget  %g %s\n", notice.ID, notice.Body["threshold"], unit, notice.Body[unit], unit)
+		if _, ok := notice.Body["tokens"]; ok {
+			unit = "tokens"
+		}
+		fmt.Fprintf(env.Stdout, "usage-notice %s  %g%% of %s budget  %v %s\n", notice.ID, notice.Body["threshold"], unit, notice.Body[unit], unit)
 	}
 	return 0
 }
 
 func printUsage(env Env, summary usage.Summary) {
 	for _, row := range summary.Jobs {
-		fmt.Fprintf(env.Stdout, "%s  dollars %g  minutes %g  posts %d\n", row.Job, row.Dollars, row.Minutes, row.Posts)
+		fmt.Fprintf(env.Stdout, "%s  dollars %g  minutes %g  tokens %d  posts %d\n", row.Job, row.Dollars, row.Minutes, row.Tokens, row.Posts)
 	}
 	t := summary.Totals
-	fmt.Fprintf(env.Stdout, "total  dollars %g  minutes %g  posts %d\n", t.Dollars, t.Minutes, t.Posts)
+	fmt.Fprintf(env.Stdout, "total  dollars %g  minutes %g  tokens %d  posts %d\n", t.Dollars, t.Minutes, t.Tokens, t.Posts)
 }
 
 func runUsageConfig(kind string, args []string, env Env) int {
@@ -150,7 +182,9 @@ func runUsageConfig(kind string, args []string, env Env) int {
 	task := fs.String("task", "", "task folder or id; defaults to the current task")
 	asJSON := fs.Bool("json", false, "print JSON")
 	dollars, minutes := usageNumbers{repeat: kind == "threshold"}, usageNumbers{repeat: kind == "threshold"}
-	var clearDollars, clearMinutes bool
+	var tokenBudget usageTokens
+	tokenThresholds := usageNumbers{repeat: true}
+	var clearDollars, clearMinutes, clearTokens bool
 	if op == "set" {
 		label := "positive budget amount"
 		if kind == "threshold" {
@@ -158,9 +192,15 @@ func runUsageConfig(kind string, args []string, env Env) int {
 		}
 		fs.Var(&dollars, "dollars", label)
 		fs.Var(&minutes, "minutes", label)
+		if kind == "budget" {
+			fs.Var(&tokenBudget, "tokens", "positive integer token budget")
+		} else {
+			fs.Var(&tokenThresholds, "tokens", label)
+		}
 	} else if op == "clear" {
 		fs.BoolVar(&clearDollars, "dollars", false, "clear dollars only")
 		fs.BoolVar(&clearMinutes, "minutes", false, "clear minutes only")
+		fs.BoolVar(&clearTokens, "tokens", false, "clear tokens only; budget clear restores the workspace default")
 	}
 	if code, stop := parse(fs, args[1:], env); stop {
 		return code
@@ -169,28 +209,35 @@ func runUsageConfig(kind string, args []string, env Env) int {
 	if err != nil {
 		return commandError(env, "usage", err)
 	}
-	s := usage.Store{TaskPath: res.TaskPath}
+	s := usage.Store{TaskPath: res.TaskPath, GridHome: env.GridHome}
 	var config usage.Configuration
 	if op == "show" {
 		config, err = s.Config()
 	} else {
-		change := usage.Change{Budget: kind == "budget", Dollars: dollars.values, Minutes: minutes.values}
+		change := usage.Change{Budget: kind == "budget", Dollars: dollars.values, Minutes: minutes.values, Tokens: tokenThresholds.values, BudgetTokens: tokenBudget.values}
 		if op == "clear" {
-			// With no selectors, clear both. Explicit false is a usage error:
-			// it must not silently turn an intended single-unit clear into both.
+			// With no selectors, clear all units. Explicit false is a usage error:
+			// it must not silently turn an intended single-unit clear into all units.
 			fs.Visit(func(f *flag.Flag) {
-				if f.Name == "dollars" && !clearDollars || f.Name == "minutes" && !clearMinutes {
+				if f.Name == "dollars" && !clearDollars || f.Name == "minutes" && !clearMinutes || f.Name == "tokens" && !clearTokens {
 					err = fmt.Errorf("clear selectors cannot be false")
 				}
 			})
 			if err != nil {
 				return commandError(env, "usage", err)
 			}
-			if !clearDollars && !clearMinutes {
-				clearDollars, clearMinutes = true, true
+			if !clearDollars && !clearMinutes && !clearTokens {
+				clearDollars, clearMinutes, clearTokens = true, true, true
 			}
 			if clearDollars {
 				change.Dollars = []float64{}
+			}
+			if clearTokens {
+				if change.Budget {
+					change.BudgetTokens = []uint64{}
+				} else {
+					change.Tokens = []float64{}
+				}
 			}
 			if clearMinutes {
 				change.Minutes = []float64{}
@@ -204,20 +251,27 @@ func runUsageConfig(kind string, args []string, env Env) int {
 	if *asJSON {
 		return writeJSON(env.Stdout, config)
 	}
-	for _, unit := range []string{"dollars", "minutes"} {
+	for _, unit := range []string{"dollars", "minutes", "tokens"} {
 		budget := "none"
 		if n, ok := config.Budget[unit]; ok {
-			budget = strconv.FormatFloat(n, 'g', -1, 64)
+			budget = string(n)
 		}
 		values := config.Dollars
 		if unit == "minutes" {
 			values = config.Minutes
 		}
+		if unit == "tokens" {
+			values = config.Tokens
+		}
 		percentages := make([]string, 0, len(values))
 		for _, n := range values {
 			percentages = append(percentages, strconv.FormatFloat(n, 'g', -1, 64)+"%")
 		}
-		fmt.Fprintf(env.Stdout, "%s  budget %s  thresholds [%s]\n", unit, budget, strings.Join(percentages, ", "))
+		source := ""
+		if unit == "tokens" {
+			source = "  source " + config.TokenBudgetSource
+		}
+		fmt.Fprintf(env.Stdout, "%s  budget %s  thresholds [%s]%s\n", unit, budget, strings.Join(percentages, ", "), source)
 	}
 	return 0
 }

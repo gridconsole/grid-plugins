@@ -23,6 +23,7 @@ import (
 type Input struct {
 	Job, Session, Model string
 	Dollars, Minutes    *float64
+	Tokens              *uint64
 }
 
 // Record is one complete line of usage/usage.jsonl. Amounts are always deltas.
@@ -34,11 +35,13 @@ type Record struct {
 	Model   string  `json:"model"`
 	Dollars float64 `json:"dollars"`
 	Minutes float64 `json:"minutes"`
+	Tokens  *uint64 `json:"tokens,omitempty"`
 }
 
 // Store is scoped to an existing task resolved by where. Now is optional.
 type Store struct {
 	TaskPath string
+	GridHome string
 	Now      func() time.Time
 	// Writer is resolved lazily, only when a notice needs posting.
 	Writer func() (feed.Writer, error)
@@ -56,8 +59,8 @@ func (in Input) validate() error {
 	if !jobPattern.MatchString(in.Job) {
 		return errors.New("job must be lead or J-N with positive numeric components")
 	}
-	if in.Dollars == nil && in.Minutes == nil {
-		return errors.New("at least one of --dollars or --minutes is required")
+	if in.Dollars == nil && in.Minutes == nil && in.Tokens == nil {
+		return errors.New("at least one of --dollars, --minutes or --tokens is required")
 	}
 	for name, n := range map[string]*float64{"dollars": in.Dollars, "minutes": in.Minutes} {
 		if n != nil && !finite(*n) {
@@ -154,7 +157,7 @@ func (s Store) Post(in Input) (PostResult, error) {
 		if s.Now != nil {
 			now = s.Now
 		}
-		r := Record{V: 1, At: contract.FormatTime(now()), Job: in.Job, Session: in.Session, Model: in.Model}
+		r := Record{V: 1, At: contract.FormatTime(now()), Job: in.Job, Session: in.Session, Model: in.Model, Tokens: in.Tokens}
 		if in.Dollars != nil {
 			r.Dollars = *in.Dollars
 		}

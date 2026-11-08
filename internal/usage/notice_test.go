@@ -317,3 +317,144 @@ func TestInvalidConfigurationDoesNotLoseUsage(t *testing.T) {
 		t.Fatalf("%+v %v", out, err)
 	}
 }
+
+func TestTokenConfigurationCompatibility(t *testing.T) {
+	s := noticeStore(t)
+	// Version 1 settings fixture from plugin main 5dcc524.
+	const old = `{"v":1,"dollars":[50,80,100],"minutes":[50,80,100],"budget":{"dollars":200},"baseline":{"dollars":0,"minutes":0},"fired":{}}`
+	dir := filepath.Join(s.TaskPath, "usage")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "thresholds.json")
+	if err := os.WriteFile(path, []byte(old), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.Config()
+	if err != nil || c.Budget["dollars"] != "200" || c.Baseline["tokens"] != "0" || !reflect.DeepEqual(c.Tokens, []float64{50, 80, 100}) || c.TokenBudgetSource != "none" {
+		t.Fatalf("old settings: %+v %v", c, err)
+	}
+	configure(t, s, Change{Budget: true, BudgetTokens: []uint64{math.MaxUint64}})
+	c, err = s.Config()
+	if err != nil || c.Budget["tokens"] != "18446744073709551615" || c.TokenBudgetSource != "task" {
+		t.Fatalf("large budget: %+v %v", c, err)
+	}
+	for _, bad := range []string{`null`, `"100"`, `-1`, `1.5`, `0`, `18446744073709551616`} {
+		if err := os.WriteFile(path, []byte(strings.Replace(old, `"dollars":200`, `"tokens":`+bad, 1)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Config(); err == nil {
+			t.Fatalf("accepted token budget %s", bad)
+		}
+	}
+}
+
+func TestTokenCrossingsExact(t *testing.T) {
+	for _, tc := range []struct {
+		base, total, budget uint64
+		percent             float64
+		want                bool
+	}{
+		{0, 79, 100, 80, false}, {0, 80, 100, 80, true}, {80, 81, 100, 80, false},
+		{0, 2, 3, 80, false}, {0, 3, 3, 80, true},
+		{0, 800, 1000, 80.1, false}, {0, 801, 1000, 80.1, true},
+		{0, 1, 100, 0, false},
+		{0, math.MaxUint64 - 1, math.MaxUint64, 100, false},
+		{0, math.MaxUint64, math.MaxUint64, 100, true},
+		{0, 7205759403792794, 9007199254740993, 80, false},
+		{0, 7205759403792795, 9007199254740993, 80, true},
+	} {
+		if got := tokenCrossing(tc.base, tc.total, tc.budget, tc.percent); got != tc.want {
+			t.Fatalf("%+v: %v", tc, got)
+		}
+	}
+}
+
+func TestTokenNoticeRecoveryAndLifetime(t *testing.T) {
+	s := noticeStore(t)
+	s.GridHome = t.TempDir()
+	path := filepath.Join(s.GridHome, "workspace.md")
+	if err := os.WriteFile(path, []byte("---\ntokens_per_task: 100\n---\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	configure(t, s, Change{Tokens: []float64{80, 100}})
+	broken := s
+	broken.beforeSave = func() error { return errors.New("injected save failure") }
+	n := uint64(80)
+	out, err := broken.Post(Input{Job: "lead", Tokens: &n})
+	if err != nil || len(out.Notices) != 1 || len(out.Warnings) != 1 {
+		t.Fatalf("%+v %v", out, err)
+	}
+	n = 0
+	out, err = s.Post(Input{Job: "lead", Tokens: &n})
+	if err != nil || len(out.Notices) != 0 || len(out.Warnings) != 0 || len(notices(t, s)) != 1 {
+		t.Fatalf("retry: %+v %v", out, err)
+	}
+	c, err := readConfig(filepath.Join(s.TaskPath, "usage"))
+	if err != nil || len(c.Budget) != 0 || len(c.Fired) != 1 {
+		t.Fatalf("persisted workspace default: %+v %v", c, err)
+	}
+	configure(t, s, Change{Budget: true, BudgetTokens: []uint64{200}})
+	configure(t, s, Change{Budget: true, BudgetTokens: []uint64{}})
+	n = 20
+	out, err = s.Post(Input{Job: "J-1", Tokens: &n})
+	if err != nil || len(out.Notices) != 1 || out.Notices[0].Body["threshold"] != float64(100) {
+		t.Fatalf("100%%: %+v %v", out, err)
+	}
+	n = 1
+	out, err = s.Post(Input{Job: "J-2", Tokens: &n})
+	if err != nil || out.Totals.Tokens != 101 || len(out.Notices) != 0 {
+		t.Fatalf("notice only, no hold: %+v %v", out, err)
+	}
+}
+
+func TestWorkspaceTokenReader(t *testing.T) {
+	for _, value := range []string{"1", "00100", `"100"`, "100 # limit", "18446744073709551615"} {
+		t.Run(value, func(t *testing.T) {
+			s := testStore(t)
+			s.GridHome = t.TempDir()
+			path := filepath.Join(s.GridHome, "workspace.md")
+			text := "---\ntokens_per_task: " + value + "\n---\n"
+			text += strings.Repeat("x", maxWorkspaceBytes-len(text))
+			if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if n := s.workspaceTokens(); n == nil {
+				t.Fatal("valid size-boundary workspace ignored")
+			}
+			if err := os.WriteFile(path, []byte(text+"x"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if n := s.workspaceTokens(); n != nil {
+				t.Fatal("oversized workspace accepted")
+			}
+		})
+	}
+}
+
+func TestTokenNoticeLargeCountAndSchema(t *testing.T) {
+	s := noticeStore(t)
+	configure(t, s, Change{Budget: true, BudgetTokens: []uint64{math.MaxUint64}})
+	configure(t, s, Change{Tokens: []float64{100}})
+	n := uint64(math.MaxUint64)
+	out, err := s.Post(Input{Job: "lead", Tokens: &n})
+	if err != nil || len(out.Warnings) != 0 || len(out.Notices) != 1 {
+		t.Fatalf("large notice: %+v %v", out, err)
+	}
+	for _, record := range []feed.Record{out.Notices[0], notices(t, s)[0].Record, notices(t, s)[0].Record} {
+		data, err := json.Marshal(record)
+		if err != nil || !strings.Contains(string(data), `"tokens":18446744073709551615`) {
+			t.Fatalf("rounded token notice: %s %v", data, err)
+		}
+		for _, bad := range []string{
+			strings.Replace(string(data), `"tokens":18446744073709551615`, `"tokens":1.5`, 1),
+			strings.Replace(string(data), `"tokens":18446744073709551615`, `"tokens":-1`, 1),
+			strings.Replace(string(data), `"tokens":18446744073709551615`, `"tokens":1,"dollars":1`, 1),
+			strings.Replace(string(data), `"tokens":18446744073709551615`, `"tokens":1,"minutes":1`, 1),
+		} {
+			if err := contract.Validate("usage-notice", []byte(bad)); err == nil {
+				t.Fatal("accepted invalid token notice")
+			}
+		}
+	}
+}

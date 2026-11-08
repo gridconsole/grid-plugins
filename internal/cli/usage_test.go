@@ -30,7 +30,7 @@ func usageTask(t *testing.T) (*harness, string) {
 func usageJSON(s string) string {
 	s = regexp.MustCompile(`"id":"[0-7][0-9A-HJKMNP-TV-Z]{25}"`).ReplaceAllString(s, `"id":"<ID>"`)
 	s = regexp.MustCompile(`"at":"[^"]+"`).ReplaceAllString(s, `"at":"<AT>"`)
-	return regexp.MustCompile(`("(?:dollars|minutes):[^"]+":)"[0-7][0-9A-HJKMNP-TV-Z]{25}"`).ReplaceAllString(s, `${1}"<ID>"`)
+	return regexp.MustCompile(`("(?:dollars|minutes|tokens):[^"]+":)"[0-7][0-9A-HJKMNP-TV-Z]{25}"`).ReplaceAllString(s, `${1}"<ID>"`)
 }
 
 func TestUsageGolden(t *testing.T) {
@@ -83,7 +83,7 @@ func TestUsageCLI(t *testing.T) {
 		{"unknown-flag", []string{"post", "--prompt", "text"}, 2, "not defined"},
 		{"transcript-flag", []string{"post", "--transcript", "file"}, 2, "not defined"},
 		{"duplicate-amount", []string{"post", "--job", "lead", "--dollars", "1", "--dollars", "2"}, 2, "only once"},
-		{"lead-minutes", []string{"post", "--job", "lead", "--minutes=2"}, 0, "lead  dollars 0  minutes 2  posts 1"},
+		{"lead-minutes", []string{"post", "--job", "lead", "--minutes=2"}, 0, "lead  dollars 0  minutes 2  tokens 0  posts 1"},
 		{"zero-dollars", []string{"post", "--job", "J-1", "--dollars=0"}, 0, "posts 1"},
 		{"extra-operand", []string{"show", "extra"}, 2, "unexpected argument"},
 		{"end-flags", []string{"show", "--", "--json"}, 2, "unexpected argument"},
@@ -241,7 +241,7 @@ func TestTokenBudgetCLI(t *testing.T) {
 }
 
 func TestTokenWorkspaceInvalidCLI(t *testing.T) {
-	for _, value := range []string{"0", "-5", "1.5", "lots", "+5", "1e3", "[100]", "18446744073709551616", "missing", "linked", "oversized", "directory", "invalid-utf8"} {
+	for _, value := range []string{"0", "-5", "1.5", "lots", "+5", "1e3", "[100]", "18446744073709551616", "missing", "linked", "oversized", "directory", "unreadable", "invalid-utf8"} {
 		t.Run(value, func(t *testing.T) {
 			h, task := usageTask(t)
 			path := filepath.Join(h.gridHome, "workspace.md")
@@ -253,10 +253,19 @@ func TestTokenWorkspaceInvalidCLI(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "oversized":
-				h.write(path, "---\ntokens_per_task: 100\n---\n"+strings.Repeat("x", 1024*1024+1))
+				h.write(path, "---\ntokens_per_task: 100\n---\n"+strings.Repeat("x", 64*1024+1))
 			case "directory":
 				if err := os.Mkdir(path, 0700); err != nil {
 					t.Fatal(err)
+				}
+			case "unreadable":
+				h.write(path, "---\ntokens_per_task: 100\n---\n")
+				if err := os.Chmod(path, 0000); err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = os.Chmod(path, 0600) }()
+				if _, err := os.ReadFile(path); err == nil {
+					t.Skip("filesystem does not enforce read permissions")
 				}
 			case "invalid-utf8":
 				h.write(path, "---\ntokens_per_task: 100\n---\n\xff")
@@ -296,7 +305,7 @@ func TestTokenNoticeCLI(t *testing.T) {
 					t.Fatal(err)
 				}
 				if i == 1 {
-					if len(result.Notices) != 1 || result.Notices[0].Body["threshold"] != float64(80) || result.Notices[0].Body["tokens"] != float64(80) {
+					if len(result.Notices) != 1 || result.Notices[0].Body["threshold"] != float64(80) || result.Notices[0].Body["tokens"] != json.Number("80") {
 						t.Fatalf("80%% notice: %s", h.out)
 					}
 				} else if len(result.Notices) != 0 {
@@ -308,5 +317,50 @@ func TestTokenNoticeCLI(t *testing.T) {
 				t.Fatalf("token notice admission: %+v %v", rows, err)
 			}
 		})
+	}
+}
+
+func TestTokenConfigurationSelectors(t *testing.T) {
+	h, task := usageTask(t)
+	for _, args := range [][]string{
+		{"budget", "set", "--tokens", "0"},
+		{"budget", "set", "--tokens", "10", "--tokens", "20"},
+		{"budget", "clear", "--tokens=false"},
+	} {
+		if code := h.run(task, append([]string{"usage"}, args...)...); code == 0 {
+			t.Fatal("accepted invalid selector or budget")
+		}
+		if _, err := os.Stat(filepath.Join(task, "usage")); !os.IsNotExist(err) {
+			t.Fatal("invalid selector wrote data")
+		}
+	}
+	for _, args := range [][]string{
+		{"budget", "set", "--tokens", "100", "--dollars", "200", "--minutes", "120"},
+		{"budget", "clear", "--tokens"},
+	} {
+		if code := h.run(task, append(append([]string{"usage"}, args...), "--json")...); code != 0 {
+			t.Fatal(code, h.errb)
+		}
+	}
+	if !strings.Contains(h.out.String(), `"budget":{"dollars":200,"minutes":120}`) || !strings.Contains(h.out.String(), `"token_budget_source":"none"`) {
+		t.Fatal(h.out)
+	}
+	if code := h.run(task, "usage", "threshold", "clear", "--tokens", "--json"); code != 0 || !strings.Contains(h.out.String(), `"tokens":[]`) {
+		t.Fatal(code, h.out, h.errb)
+	}
+	if code := h.run(task, "usage", "budget", "clear", "--json"); code != 0 || !strings.Contains(h.out.String(), `"budget":{}`) {
+		t.Fatal(code, h.out, h.errb)
+	}
+}
+
+func TestTokenHelp(t *testing.T) {
+	h, task := usageTask(t)
+	if code := h.run(task, "usage", "--help"); code != 0 {
+		t.Fatal(code, h.errb)
+	}
+	for _, text := range []string{"--tokens N", "--tokens PERCENT", "tokens_per_task", "workspace.md", "hold at the limit is not enforced yet", "worker and session hooks"} {
+		if !strings.Contains(h.out.String(), text) {
+			t.Fatalf("help omits %q", text)
+		}
 	}
 }

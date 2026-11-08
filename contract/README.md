@@ -256,9 +256,17 @@ Disagreements and defaults chosen:
   CI, job/state for Job gates, and optional default/at for person gates. Exact
   payload names were unspecified. The fold exposes unanswered questions and
   applies selected answers, but scheduling gate readiness needs external facts.
-- Usage threshold has no documented units/range. Choose a numeric percentage
-  from 0 through 100; dollars and minutes are nonnegative, exactly one is present,
-  and the body task must equal the envelope task. Usage is chatter, never a cap.
+- Usage thresholds are numeric percentages from 0 through 100, defaulting to
+  50, 80 and 100. Dollars and minutes are nonnegative numbers; tokens are
+  nonnegative integers. Exactly one unit is present in a usage-notice, and its
+  body task must equal the envelope task. `grid usage post --tokens N` adds a
+  delta; `usage show` includes token totals. `usage budget set --tokens N` sets
+  a positive task budget, overriding the replaceable `tokens_per_task` default
+  in `<GRID_HOME>/workspace.md` front matter (digits only, at least 1; missing,
+  linked, unreadable, invalid or oversized files give no default). Budget show
+  reports the effective token budget and source: task, workspace or none.
+  `usage budget clear --tokens` restores that default. Notices are chatter;
+  the hold at the limit is not enforced yet and requires worker/session hooks.
 - The task-local lease path table conflicts with the per-project merge rule.
   Merge leases explicitly require project and are stored by their caller at
   project scope. The merge wire format is otherwise unspecified: choose lease,

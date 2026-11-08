@@ -21,6 +21,7 @@ import (
 type Totals struct {
 	Dollars float64 `json:"dollars"`
 	Minutes float64 `json:"minutes"`
+	Tokens  uint64  `json:"tokens"`
 	Posts   int     `json:"posts"`
 	// Whole micro-units are summed, so decimal amounts add exactly.
 	dollarsMicro, minutesMicro int64
@@ -63,6 +64,14 @@ func (s *Summary) add(r Record) error {
 	if !okD || !okM {
 		return errors.New("usage amount out of range")
 	}
+	tokens := uint64(0)
+	if r.Tokens != nil {
+		tokens = *r.Tokens
+	}
+	if tokens > math.MaxUint64-s.Totals.Tokens {
+		return errors.New("usage token totals overflow")
+	}
+	s.Totals.Tokens += tokens
 	if !s.Totals.addMicro(d, m) {
 		return errors.New("usage totals overflow")
 	}
@@ -73,6 +82,7 @@ func (s *Summary) add(r Record) error {
 		s.Jobs[i] = Row{Job: r.Job}
 	}
 	s.Jobs[i].addMicro(d, m)
+	s.Jobs[i].Tokens += tokens
 	return nil
 }
 
@@ -136,6 +146,9 @@ func (r Record) validate(line []byte) error {
 		if len(fields[name]) == 0 || bytes.Equal(fields[name], []byte("null")) {
 			return fmt.Errorf("missing or null %s", name)
 		}
+	}
+	if raw, ok := fields["tokens"]; ok && bytes.Equal(raw, []byte("null")) {
+		return errors.New("null tokens")
 	}
 	if r.V != 1 {
 		return errors.New("unsupported usage version")

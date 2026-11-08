@@ -1,21 +1,25 @@
 package usage
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
+	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
 // PostResult reports the durable log delta even when a notice could not be saved.
@@ -25,16 +29,44 @@ type PostResult struct {
 	Warnings []string      `json:"warnings"`
 }
 
+// Amounts preserves integer token budgets and baselines without float conversion.
+// All entries must be JSON numbers; quoted numbers and null are invalid.
+type Amounts map[string]json.Number
+
+func (a *Amounts) UnmarshalJSON(data []byte) error {
+	var raw map[string]any
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(&raw); err != nil {
+		return err
+	}
+	if raw == nil {
+		return errors.New("amounts must be an object")
+	}
+	out := make(Amounts, len(raw))
+	for unit, value := range raw {
+		n, ok := value.(json.Number)
+		if !ok {
+			return errors.New("amounts must be JSON numbers")
+		}
+		out[unit] = n
+	}
+	*a = out
+	return nil
+}
+
 // Configuration stores percentages, optional budgets, and task-lifetime notices.
 // Baseline is the usage total when that unit's configuration was last changed:
 // it prevents retroactive notices and permits retrying a crossing after a crash.
 type Configuration struct {
-	V        int                `json:"v"`
-	Dollars  []float64          `json:"dollars"`
-	Minutes  []float64          `json:"minutes"`
-	Budget   map[string]float64 `json:"budget"`
-	Baseline map[string]float64 `json:"baseline"`
-	Fired    map[string]string  `json:"fired"`
+	V                 int               `json:"v"`
+	Dollars           []float64         `json:"dollars"`
+	Minutes           []float64         `json:"minutes"`
+	Tokens            []float64         `json:"tokens"`
+	Budget            Amounts           `json:"budget"`
+	Baseline          Amounts           `json:"baseline"`
+	Fired             map[string]string `json:"fired"`
+	TokenBudgetSource string            `json:"token_budget_source,omitempty"`
 }
 
 // Change replaces the supplied units' thresholds, or budgets when Budget is true.
@@ -42,11 +74,14 @@ type Configuration struct {
 type Change struct {
 	Budget           bool
 	Dollars, Minutes []float64
+	// Tokens changes percentages; BudgetTokens changes whole-token budgets.
+	Tokens       []float64
+	BudgetTokens []uint64
 }
 
 func defaults() Configuration {
-	return Configuration{V: 1, Dollars: []float64{50, 80, 100}, Minutes: []float64{50, 80, 100},
-		Budget: map[string]float64{}, Baseline: map[string]float64{"dollars": 0, "minutes": 0}, Fired: map[string]string{}}
+	return Configuration{V: 1, Dollars: []float64{50, 80, 100}, Minutes: []float64{50, 80, 100}, Tokens: []float64{50, 80, 100},
+		Budget: Amounts{}, Baseline: Amounts{"dollars": "0", "minutes": "0", "tokens": "0"}, Fired: map[string]string{}}
 }
 
 // Config returns effective settings without creating a usage folder.
@@ -57,6 +92,9 @@ func (s Store) Config() (Configuration, error) {
 		c, err = readConfig(dir)
 		return err
 	})
+	if err == nil {
+		c = s.effectiveConfig(c)
+	}
 	return c, err
 }
 
@@ -90,8 +128,8 @@ func normalize(values []float64, budget bool) ([]float64, error) {
 // Configure snapshots current totals under the posting lock. Already issued
 // notices remain fired even after a clear, budget change, or re-addition.
 func (s Store) Configure(change Change) (Configuration, error) {
-	if change.Dollars == nil && change.Minutes == nil {
-		return Configuration{}, errors.New("supply --dollars or --minutes")
+	if change.Dollars == nil && change.Minutes == nil && change.Tokens == nil && change.BudgetTokens == nil {
+		return Configuration{}, errors.New("supply --dollars, --minutes or --tokens")
 	}
 	dollars, err := normalize(change.Dollars, change.Budget)
 	if err != nil {
@@ -100,6 +138,16 @@ func (s Store) Configure(change Change) (Configuration, error) {
 	minutes, err := normalize(change.Minutes, change.Budget)
 	if err != nil {
 		return Configuration{}, err
+	}
+	tokens, err := normalize(change.Tokens, false)
+	if err != nil {
+		return Configuration{}, err
+	}
+	if change.Budget && change.Tokens != nil || !change.Budget && change.BudgetTokens != nil {
+		return Configuration{}, errors.New("token budgets and percentages must use the matching change kind")
+	}
+	if len(change.BudgetTokens) > 1 || len(change.BudgetTokens) == 1 && change.BudgetTokens[0] == 0 {
+		return Configuration{}, errors.New("supply one positive token budget; use budget clear to remove it")
 	}
 	var c Configuration
 	err = s.withData(func(dir string) error {
@@ -120,11 +168,11 @@ func (s Store) Configure(change Change) (Configuration, error) {
 			if values == nil {
 				continue
 			}
-			c.Baseline[unit] = total
+			c.Baseline[unit] = json.Number(strconv.FormatFloat(total, 'g', -1, 64))
 			if change.Budget {
 				delete(c.Budget, unit)
 				if len(values) > 0 {
-					c.Budget[unit] = values[0]
+					c.Budget[unit] = json.Number(strconv.FormatFloat(values[0], 'g', -1, 64))
 				}
 			} else if unit == "dollars" {
 				c.Dollars = values
@@ -132,8 +180,22 @@ func (s Store) Configure(change Change) (Configuration, error) {
 				c.Minutes = values
 			}
 		}
+		if tokens != nil || change.BudgetTokens != nil {
+			c.Baseline["tokens"] = json.Number(strconv.FormatUint(summary.Totals.Tokens, 10))
+			if change.Budget {
+				delete(c.Budget, "tokens")
+				if len(change.BudgetTokens) != 0 {
+					c.Budget["tokens"] = json.Number(strconv.FormatUint(change.BudgetTokens[0], 10))
+				}
+			} else {
+				c.Tokens = tokens
+			}
+		}
 		return s.saveConfig(dir, c)
 	})
+	if err == nil {
+		c = s.effectiveConfig(c)
+	}
 	return c, err
 }
 
@@ -149,7 +211,7 @@ func readConfig(dir string) (Configuration, error) {
 		return Configuration{}, err
 	}
 	defer f.Close()
-	var c Configuration
+	c := Configuration{Tokens: []float64{50, 80, 100}}
 	dec := json.NewDecoder(f)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&c); err != nil {
@@ -159,35 +221,40 @@ func readConfig(dir string) (Configuration, error) {
 	if dec.Decode(&extra) != io.EOF {
 		return c, errors.New("thresholds.json: expected one JSON object")
 	}
-	if c.V != 1 || c.Dollars == nil || c.Minutes == nil || c.Budget == nil || c.Baseline == nil || c.Fired == nil {
+	if c.V != 1 || c.Dollars == nil || c.Minutes == nil || c.Tokens == nil || c.Budget == nil || c.Baseline == nil || c.Fired == nil {
 		return c, errors.New("thresholds.json: invalid version or missing fields")
 	}
-	for _, values := range [][]float64{c.Dollars, c.Minutes} {
+	for _, values := range [][]float64{c.Dollars, c.Minutes, c.Tokens} {
 		normal, err := normalize(values, false)
 		if err != nil || !slices.Equal(normal, values) {
 			return c, errors.New("thresholds.json: invalid, unsorted or duplicate percentages")
 		}
 	}
 	for unit, value := range c.Budget {
-		if (unit != "dollars" && unit != "minutes") || !finite(value) || value == 0 {
+		if !validAmount(unit, value, true) {
 			return c, errors.New("thresholds.json: invalid budget")
 		}
 	}
-	if len(c.Baseline) != 2 {
+	// Version 1 settings written before tokens have just the two older baselines.
+	if _, ok := c.Baseline["tokens"]; !ok {
+		c.Baseline["tokens"] = "0"
+	}
+	if len(c.Baseline) != 3 || c.Baseline["dollars"] == "" || c.Baseline["minutes"] == "" {
 		return c, errors.New("thresholds.json: missing baseline")
 	}
 	for unit, value := range c.Baseline {
-		if (unit != "dollars" && unit != "minutes") || !finite(value) {
+		if !validAmount(unit, value, false) {
 			return c, errors.New("thresholds.json: invalid baseline")
 		}
 	}
 	for key, id := range c.Fired {
 		unit, percent, _ := strings.Cut(key, ":")
 		value, err := strconv.ParseFloat(percent, 64)
-		if err != nil || !finite(value) || value > 100 || (unit != "dollars" && unit != "minutes") || !feed.IsID(id) {
+		if err != nil || !finite(value) || value > 100 || (unit != "dollars" && unit != "minutes" && unit != "tokens") || !feed.IsID(id) {
 			return c, errors.New("thresholds.json: invalid fired entry")
 		}
 	}
+	c.TokenBudgetSource = ""
 	return c, nil
 }
 
@@ -226,11 +293,11 @@ func (s Store) postNotices(dir string, out *PostResult) error {
 	type crossing struct {
 		unit    string
 		percent float64
-		total   float64
+		total   any
 	}
 	var pending []crossing
 	for _, unit := range []string{"dollars", "minutes"} {
-		budget, ok := c.Budget[unit]
+		budgetValue, ok := c.Budget[unit]
 		if !ok {
 			continue
 		}
@@ -238,12 +305,22 @@ func (s Store) postNotices(dir string, out *PostResult) error {
 		if unit == "minutes" {
 			thresholds, total, totalMicro = c.Minutes, out.Totals.Minutes, out.Totals.minutesMicro
 		}
-		baseMicro := int64(math.Round(c.Baseline[unit] * microPerUnit))
+		base, _ := c.Baseline[unit].Float64()
+		budget, _ := budgetValue.Float64()
+		baseMicro := int64(math.Round(base * microPerUnit))
 		for _, percent := range thresholds {
 			// Whole micro-units make "exactly equal fires" hold for decimal amounts.
 			amountMicro := int64(math.Round(budget * percent / 100 * microPerUnit))
 			if baseMicro < amountMicro && amountMicro <= totalMicro && c.Fired[noticeKey(unit, percent)] == "" {
 				pending = append(pending, crossing{unit, percent, total})
+			}
+		}
+	}
+	if budget, _ := s.tokenBudget(c); budget != nil {
+		base, _ := strconv.ParseUint(string(c.Baseline["tokens"]), 10, 64)
+		for _, percent := range c.Tokens {
+			if tokenCrossing(base, out.Totals.Tokens, *budget, percent) && c.Fired[noticeKey("tokens", percent)] == "" {
+				pending = append(pending, crossing{"tokens", percent, out.Totals.Tokens})
 			}
 		}
 	}
@@ -270,7 +347,7 @@ func (s Store) postNotices(dir string, out *PostResult) error {
 		if !ok {
 			continue
 		}
-		for _, unit := range []string{"dollars", "minutes"} {
+		for _, unit := range []string{"dollars", "minutes", "tokens"} {
 			if _, ok := entry.Body[unit]; ok {
 				existing[noticeKey(unit, percent)] = entry.ID
 			}
@@ -305,3 +382,97 @@ func (s Store) postNotices(dir string, out *PostResult) error {
 	}
 	return nil
 }
+
+// ParseTokens accepts only ASCII decimal digits in the uint64 range.
+func ParseTokens(value string) (uint64, error) {
+	if value == "" || strings.IndexFunc(value, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+		return 0, errors.New("tokens must be a non-negative integer in the uint64 range")
+	}
+	n, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, errors.New("tokens must be a non-negative integer in the uint64 range")
+	}
+	return n, nil
+}
+
+func validAmount(unit string, value json.Number, budget bool) bool {
+	if unit == "tokens" {
+		n, err := ParseTokens(string(value))
+		return err == nil && (!budget || n > 0)
+	}
+	n, err := value.Float64()
+	return (unit == "dollars" || unit == "minutes") && err == nil && finite(n) && (!budget || n > 0)
+}
+
+// tokenCrossing compares exact integer counts to the configured decimal percent;
+// converting counts to float64 would round large budgets and crossings.
+func tokenCrossing(base, total, budget uint64, percent float64) bool {
+	p, _ := new(big.Rat).SetString(strconv.FormatFloat(percent, 'g', -1, 64))
+	amount := new(big.Rat).Mul(new(big.Rat).SetInt(new(big.Int).SetUint64(budget)), p)
+	amount.Quo(amount, big.NewRat(100, 1))
+	before := new(big.Rat).SetInt(new(big.Int).SetUint64(base))
+	after := new(big.Rat).SetInt(new(big.Int).SetUint64(total))
+	return before.Cmp(amount) < 0 && after.Cmp(amount) >= 0
+}
+
+func (s Store) tokenBudget(c Configuration) (*uint64, string) {
+	if value, ok := c.Budget["tokens"]; ok {
+		n, _ := ParseTokens(string(value)) // readConfig/Configure validated it.
+		return &n, "task"
+	}
+	if n := s.workspaceTokens(); n != nil {
+		return n, "workspace"
+	}
+	return nil, "none"
+}
+
+func (s Store) effectiveConfig(c Configuration) Configuration {
+	n, source := s.tokenBudget(c)
+	c.TokenBudgetSource = source
+	if n != nil {
+		c.Budget["tokens"] = json.Number(strconv.FormatUint(*n, 10))
+	}
+	return c
+}
+
+// workspaceTokens reads the replaceable default tokens_per_task from workspace.md
+// using the existing front-matter reader. Missing, linked, non-regular, unreadable,
+// oversized, invalid UTF-8 or non-positive/non-digit settings mean no default.
+func (s Store) workspaceTokens() *uint64 {
+	if s.GridHome == "" {
+		return nil
+	}
+	path := filepath.Join(s.GridHome, "workspace.md")
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxWorkspaceBytes {
+		return nil
+	}
+	f, err := fslock.OpenNoFollow(path, os.O_RDONLY, 0)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+		return nil
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxWorkspaceBytes+1))
+	if err != nil || len(data) > maxWorkspaceBytes || !utf8.Valid(data) {
+		return nil
+	}
+	front := taskfile.ParseFrontmatter(string(data))
+	if front == nil {
+		return nil
+	}
+	value, ok := front.Data["tokens_per_task"].(string)
+	if !ok {
+		return nil
+	}
+	n, err := ParseTokens(value)
+	if err != nil || n == 0 {
+		return nil
+	}
+	return &n
+}
+
+const maxWorkspaceBytes = 64 * 1024
