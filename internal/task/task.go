@@ -32,7 +32,7 @@ type Record struct {
 	Size      string `yaml:"size" json:"size"`
 	Workflow  string `yaml:"workflow" json:"workflow"`
 	State     string `yaml:"state" json:"state"`
-	Gate      string `yaml:"gate" json:"gate,omitempty"`
+	Gate      string `yaml:"gate,omitempty" json:"gate,omitempty"`
 	Created   string `yaml:"created" json:"created"`
 }
 
