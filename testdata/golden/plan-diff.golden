@@ -1,0 +1,75 @@
+{
+  "from": 3,
+  "to": 4,
+  "added": [
+    {
+      "id": "i-5",
+      "title": "Document keyboard navigation",
+      "state": "open",
+      "write": [
+        "docs/filter.md"
+      ],
+      "after": [
+        "J-2"
+      ],
+      "review": "L1",
+      "risk": [],
+      "verify": {
+        "kind": "file-exists",
+        "path": "docs/filter.md"
+      }
+    }
+  ],
+  "removed": [
+    {
+      "id": "i-4",
+      "title": "Write the release note",
+      "state": "open",
+      "verify": "`go test ./...` passes; the release note names the filter"
+    }
+  ],
+  "changed": [
+    {
+      "before": {
+        "id": "i-1",
+        "title": "Add a tag filter to the store",
+        "state": "built",
+        "write": [
+          "src/store/**",
+          "tests/store/**"
+        ],
+        "after": [],
+        "review": "L1",
+        "risk": [
+          "data-format"
+        ],
+        "verify": {
+          "command": "go test ./internal/store/...",
+          "min_tests": 3
+        }
+      },
+      "after": {
+        "id": "i-1",
+        "title": "Add a tag filter to the store",
+        "state": "built",
+        "write": [
+          "src/store/**",
+          "tests/store/**"
+        ],
+        "after": [],
+        "review": "L1",
+        "risk": [
+          "data-format"
+        ],
+        "verify": {
+          "command": "go test ./internal/store/...",
+          "min_tests": 3
+        }
+      },
+      "before_position": 1,
+      "after_position": 1,
+      "before_text": "- [ ] 1 Add a **tag filter** to the store\n  Match tags without case sensitivity and reuse the existing index.\n  write: [src/store/**, tests/store/**]\n  after: []\n  review: L1\n  risk: [data-format]\n  verify: {command: \"go test ./internal/store/...\", min_tests: 3}\n",
+      "after_text": "- [ ] 1 Add a **tag filter** to the store\n  Match tags without case sensitivity and normalize accents before lookup.\n  write: [src/store/**, tests/store/**]\n  after: []\n  review: L1\n  risk: [data-format]\n  verify: {command: \"go test ./internal/store/...\", min_tests: 3}\n"
+    }
+  ]
+}
