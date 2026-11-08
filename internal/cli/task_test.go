@@ -371,8 +371,11 @@ func TestTaskAttachTakeoverAdvice(t *testing.T) {
 			}
 			advice := h.out.String()
 			if asJSON {
-				if !json.Valid(h.out.Bytes()) {
-					t.Fatalf("invalid JSON: %s", h.out)
+				var got struct {
+					Holders []string `json:"holders"`
+				}
+				if err := json.Unmarshal(h.out.Bytes(), &got); err != nil || len(got.Holders) != 1 || got.Holders[0] != rec.Holder {
+					t.Fatalf("holders in JSON: %s %v", h.out, err)
 				}
 				advice = h.errb.String()
 			}

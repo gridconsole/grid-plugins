@@ -32,7 +32,7 @@ type Attachment struct {
 	Approved      bool        `json:"approved"`
 	OpenQuestions int         `json:"open_questions"`
 	Session       session.Key `json:"session"`
-	Holders       []string    `json:"-"`
+	Holders       []string    `json:"holders"`
 }
 
 // Attach resumes a terminal session and appends one history receipt under the
@@ -90,7 +90,7 @@ func (s Store) Attach(o AttachOptions) (Attachment, error) {
 		if err != nil {
 			return err
 		}
-		result = Attachment{ID: t.ID, Title: t.Title, State: t.State, Approved: Approved(t.Path), Session: key}
+		result = Attachment{ID: t.ID, Title: t.Title, State: t.State, Approved: Approved(t.Path), Session: key, Holders: []string{}}
 		for _, record := range records {
 			// Start removes an old Job heartbeat when reusing its key. Refuse that
 			// key rather than silently turning a Job session into a terminal one.
