@@ -92,6 +92,9 @@ func (s Store) List() ([]Entry, error) {
 	}
 	out := []Entry{}
 	for _, r := range records {
+		if reserved(r.Name) && !s.Resolver.PersonalOK() {
+			continue
+		}
 		out = append(out, entry(r))
 	}
 	return out, nil

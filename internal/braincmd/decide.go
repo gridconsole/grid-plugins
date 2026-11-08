@@ -10,7 +10,6 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/task"
-	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 func runDecide(args []string, env Env) int {
@@ -39,7 +38,7 @@ func runDecide(args []string, env Env) int {
 		return 2
 	}
 	fail := func(err error) int { fmt.Fprintf(env.Stderr, "brain decide: %v\n", err); return 1 }
-	t, err := (task.Store{Resolver: where.Resolver{GridHome: env.GridHome, Home: env.Home, TempRoots: env.TempRoots}}).Show(env.Cwd, f.Arg(0))
+	t, err := (task.Store{Resolver: env.Resolver}).Show(env.Cwd, f.Arg(0))
 	if err != nil {
 		return fail(err)
 	}
@@ -51,7 +50,7 @@ func runDecide(args []string, env Env) int {
 	if target == "" {
 		target = f.Arg(1)
 	}
-	tasks := task.Store{Resolver: where.Resolver{GridHome: env.GridHome, Home: env.Home, TempRoots: env.TempRoots}}
+	tasks := task.Store{Resolver: env.Resolver}
 	history := func(text string) error {
 		_, err := tasks.Note(task.WriteOptions{Cwd: env.Cwd, ID: t.ID, Note: text, Who: contract.Author{ID: "grid-curator", Role: "agent"}})
 		return err

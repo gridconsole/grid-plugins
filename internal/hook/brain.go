@@ -85,7 +85,7 @@ func namedTaskDir(o Options, in hookio.Input, text string) (string, error) {
 	if name == "" {
 		return taskDir(o, in)
 	}
-	roots, err := gridhome.TasksDirs(o.Resolver.GridHome)
+	roots, err := o.Resolver.TasksDirs()
 	if err != nil {
 		return "", err
 	}

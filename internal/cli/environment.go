@@ -33,7 +33,7 @@ func environmentTask(e Env, id string) (task.Task, error) {
 	if res.TaskPath != "" {
 		return task.Read(res.TaskPath)
 	}
-	dirs, err := gridhome.TasksDirs(e.GridHome)
+	dirs, err := resolver(e).TasksDirs()
 	if err != nil {
 		return task.Task{}, err
 	}

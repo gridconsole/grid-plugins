@@ -11,7 +11,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -239,7 +238,7 @@ func writeJSON(w io.Writer, v any) int {
 
 func resolver(env Env) where.Resolver {
 	return where.Resolver{GridHome: env.GridHome, Home: env.Home, TempRoots: env.TempRoots,
-		Machine: env.Machine, Ceiling: env.Ceiling, Role: strings.TrimSpace(env.getenv("GRID_ROLE"))}
+		Machine: env.Machine, Ceiling: env.Ceiling, Caller: where.CallerFrom(env.getenv)}
 }
 
 func runWhere(args []string, env Env) int {

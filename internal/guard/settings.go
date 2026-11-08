@@ -25,7 +25,7 @@ func configuredLevel(name string, in hookio.Input, root string, env map[string]s
 		cwd = root
 	}
 	level, err := settings.ResolveHookLevel(name,
-		where.Resolver{GridHome: home, Home: env["HOME"], Machine: env["GRID_MACHINE"]},
+		where.Resolver{GridHome: home, Home: env["HOME"], Machine: env["GRID_MACHINE"], Caller: where.CallerFrom(func(key string) string { return env[key] })},
 		where.Query{Cwd: cwd, Project: env["GRID_PROJECT"], Task: env["GRID_TASK"]})
 	if err != nil {
 		if d.Behavior == "deny" || d.Behavior == "ask" {

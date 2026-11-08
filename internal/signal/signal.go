@@ -57,6 +57,7 @@ type Result struct {
 
 // Store limits signal reads and writes to one registered project's notes folder.
 type Store struct {
+	Resolver where.Resolver
 	GridHome string
 	Project  string
 }
@@ -118,7 +119,12 @@ func (s Store) notes() (string, error) {
 	if err := projects.Name(s.Project); err != nil {
 		return "", err
 	}
-	entries, err := (projects.Store{Resolver: where.Resolver{GridHome: s.GridHome}}).List()
+	r := s.Resolver
+	r.GridHome = s.GridHome
+	if strings.EqualFold(s.Project, where.Personal) && !r.PersonalOK() {
+		return "", fmt.Errorf("project %q is not registered", s.Project)
+	}
+	entries, err := (projects.Store{Resolver: r}).List()
 	if err != nil {
 		return "", err
 	}

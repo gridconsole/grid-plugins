@@ -84,7 +84,7 @@ func runSignal(args []string, env Env) int {
 		}
 		res.Project = e.Name
 	}
-	s := signal.Store{GridHome: env.GridHome, Project: res.Project}
+	s := signal.Store{GridHome: env.GridHome, Project: res.Project, Resolver: projectStore(env).Resolver}
 	var got signal.Result
 	switch verb {
 	case "add":

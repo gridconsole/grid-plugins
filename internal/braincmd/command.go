@@ -18,6 +18,7 @@ import (
 )
 
 type Env struct {
+	Resolver            where.Resolver
 	Stdin               io.Reader
 	Stdout, Stderr      io.Writer
 	Cwd, Home, GridHome string
@@ -66,6 +67,11 @@ func (l *linkFlags) Set(raw string) error {
 
 // Run returns 0 on success, 1 for a store/gate error, and 2 for usage errors.
 func Run(args []string, env Env) int {
+	if env.Resolver.GridHome == "" {
+		env.Resolver.GridHome = env.GridHome
+		env.Resolver.Home = env.Home
+		env.Resolver.TempRoots = env.TempRoots
+	}
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprint(env.Stdout, usage)
 		return 0
@@ -94,8 +100,10 @@ func Run(args []string, env Env) int {
 	case "keep":
 		f.StringVar(&taskID, "task", "", "include proposals from this task")
 	case "show":
+		f.StringVar(&taskID, "task", "", "resolve this task")
 		f.BoolVar(&proposal, "proposal", false, "show a proposal")
 	case "search":
+		f.StringVar(&taskID, "task", "", "resolve this task")
 		f.StringVar(&topic, "topic", "", "topic filter")
 		f.IntVar(&limit, "limit", 5, "maximum hits (1 to 100)")
 	case "index":
@@ -170,7 +178,7 @@ func Run(args []string, env Env) int {
 	}
 	store := brain.Store{GridHome: env.GridHome, ReadLevel: *level}
 	if *level != "home" {
-		resolver := where.Resolver{GridHome: env.GridHome, Home: env.Home, TempRoots: env.TempRoots}
+		resolver := env.Resolver
 		if taskID != "" {
 			t, err := (task.Store{Resolver: resolver}).Show(env.Cwd, taskID)
 			if err != nil {

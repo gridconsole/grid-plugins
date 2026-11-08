@@ -412,7 +412,7 @@ func TestResolveRefusals(t *testing.T) {
 		}, "does not exist"},
 		{"unknown project", func(f *fixture) Query {
 			return Query{Cwd: f.tmp, Project: "nope"}
-		}, "is not in"},
+		}, "is not registered"},
 		{"task id with no project", func(f *fixture) Query {
 			return Query{Cwd: f.dir("notes"), Task: "T-07"}
 		}, "needs --project"},

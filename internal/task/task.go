@@ -96,8 +96,7 @@ func number(name string) (uint64, error) {
 	return n, nil
 }
 
-// resolve picks the project. Explicit Personal selection needs no project
-// record; where owns every other rule, including a folder inside a Personal task.
+// resolve delegates project selection and caller policy to where.
 func (s Store) resolve(cwd, proj string) (where.Result, error) {
 	if s.Resolver.GridHome == "" {
 		return where.Result{}, errors.New("cannot find the Grid home; set GRID_HOME")
@@ -105,10 +104,11 @@ func (s Store) resolve(cwd, proj string) (where.Result, error) {
 	if s.Resolver.Machine == "" {
 		s.Resolver.Machine = gridhome.Machine(s.Resolver.GridHome)
 	}
-	if strings.EqualFold(proj, where.Personal) {
-		return where.Result{Project: where.Personal, Rule: where.RulePersonal}, nil
+	r, err := s.Resolver.Resolve(where.Query{Cwd: cwd, Project: proj})
+	if errors.Is(err, where.ErrProjectUnregistered) {
+		return where.Result{}, where.ErrProjectUnregistered
 	}
-	return s.Resolver.Resolve(where.Query{Cwd: cwd, Project: proj})
+	return r, err
 }
 
 // Fold reads YAML front matter, preserving intent byte for byte. Task state is
@@ -189,7 +189,7 @@ func (s Store) Show(cwd, id string) (Task, error) {
 		}
 		return readProject(r.TaskPath, r.Project)
 	}
-	dirs, err := gridhome.TasksDirs(s.Resolver.GridHome)
+	dirs, err := s.Resolver.TasksDirs()
 	if err != nil {
 		return Task{}, err
 	}
@@ -210,7 +210,10 @@ func (s Store) Show(cwd, id string) (Task, error) {
 		}
 	}
 	if found == "" {
-		return Task{}, fmt.Errorf("task %s not found in the Grid home", id)
+		if s.Resolver.PersonalOK() {
+			return Task{}, fmt.Errorf("task %s not found in the Grid home", id)
+		}
+		return Task{}, errors.New("task not found")
 	}
 	return readProject(found, proj)
 }

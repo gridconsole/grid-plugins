@@ -211,7 +211,7 @@ func routineFailureSignal(env Env, project string) routine.FailureSignal {
 			// the note of the failed run that last_run names, hiding the instruction.
 			sourceID += ":changed"
 		}
-		_, err := (signal.Store{GridHome: env.GridHome, Project: gridhome.Personal}).Add(signal.Input{
+		_, err := (signal.Store{GridHome: env.GridHome, Project: gridhome.Personal, Resolver: projectStore(env).Resolver}).Add(signal.Input{
 			Source: "routine", SourceID: sourceID, Title: "Routine failed: " + entry.Name, Body: body,
 		})
 		return err

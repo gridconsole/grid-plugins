@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -11,13 +12,16 @@ import (
 )
 
 func TestPersonalGuardRefusesHostCallers(t *testing.T) {
-	for _, role := range []string{"guest", "member", "unknown", "OWNER", " guest \n"} {
+	for _, role := range []string{"guest", "member", "lead", "external", " guest \n"} {
 		for _, route := range []string{"personal", "PERSONAL", "grid-home", "task-folder", "task-id", "task-path"} {
 			t.Run(role+"/"+route, func(t *testing.T) {
 				h := newHarness(t)
 				h.env.Getenv = func(key string) string {
 					if key == "GRID_ROLE" {
 						return role
+					}
+					if key == "GRID_MEMBER" {
+						return "sam"
 					}
 					return ""
 				}
@@ -44,7 +48,14 @@ func TestPersonalGuardRefusesHostCallers(t *testing.T) {
 				if got := h.out.String(); got != "" {
 					t.Errorf("stdout = %q, want no output or paths", got)
 				}
-				if got := h.errb.String(); got != "grid: this caller cannot use the Personal project\n" {
+				want := "grid: this caller cannot use the Personal project\n"
+				switch route {
+				case "personal", "PERSONAL":
+					want = fmt.Sprintf("grid: project %q is not registered\n", route)
+				case "task-path":
+					want = "grid: task not found\n"
+				}
+				if got := h.errb.String(); got != want {
 					t.Errorf("stderr = %q, want path-free Personal refusal", got)
 				}
 			})

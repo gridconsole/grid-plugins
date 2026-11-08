@@ -52,9 +52,9 @@ type Resolver struct {
 	TempRoots []string
 	Machine   string
 	Ceiling   string
-	Role      string
+	Caller    Caller
 	// PersonalAllowed overrides DefaultPersonalAllowed when non-nil.
-	PersonalAllowed func(role string) bool
+	PersonalAllowed func(Caller) bool
 }
 
 // Query is what to resolve: the folder, or an explicit task or project.
@@ -87,6 +87,21 @@ func (r Resolver) Resolve(q Query) (Result, error) {
 	if r.GridHome == "" {
 		return Result{}, fmt.Errorf("no Grid home")
 	}
+	personalOK := r.PersonalOK()
+	if !personalOK {
+		if strings.EqualFold(q.Project, Personal) {
+			return Result{}, unregisteredProject(q.Project)
+		}
+		if strings.ContainsAny(q.Task, "/"+string(filepath.Separator)) || strings.HasPrefix(q.Task, ".") {
+			path := q.Task
+			if !filepath.IsAbs(path) {
+				path = filepath.Join(q.Cwd, path)
+			}
+			if within(filepath.Join(r.GridHome, Personal, "tasks"), path) {
+				return Result{}, fmt.Errorf("task not found")
+			}
+		}
+	}
 	gridHome := gridhome.Real(r.GridHome)
 	cwd := gridhome.Real(q.Cwd)
 	records, err := project.Load(gridHome)
@@ -95,21 +110,15 @@ func (r Resolver) Resolve(q Query) (Result, error) {
 	}
 	var res Result
 	if q.Task != "" || q.Project != "" {
-		res, err = r.explicit(gridHome, cwd, q, records)
+		res, err = r.explicit(gridHome, cwd, q, records, personalOK)
 		if err != nil {
 			return Result{}, err
 		}
 	} else {
 		res = r.implicit(gridHome, cwd, records)
 	}
-	if res.Project == Personal {
-		allowed := r.PersonalAllowed
-		if allowed == nil {
-			allowed = DefaultPersonalAllowed
-		}
-		if !allowed(r.Role) {
-			return Result{}, ErrPersonalRefused
-		}
+	if res.Project == Personal && !personalOK {
+		return Result{}, ErrPersonalRefused
 	}
 	return res, nil
 }
@@ -146,7 +155,7 @@ func (r Resolver) implicit(gridHome, cwd string, records []project.Record) Resul
 	return newResult(RuleFolder, freeName(gridHome, filepath.Base(cwd)), cwd)
 }
 
-func (r Resolver) explicit(gridHome, cwd string, q Query, records []project.Record) (Result, error) {
+func (r Resolver) explicit(gridHome, cwd string, q Query, records []project.Record, personalOK bool) (Result, error) {
 	var rec *project.Record
 	name := ""
 	switch {
@@ -154,8 +163,8 @@ func (r Resolver) explicit(gridHome, cwd string, q Query, records []project.Reco
 		name = Personal // Personal has no project record
 	case q.Project != "":
 		found, ok := findProject(records, q.Project)
-		if !ok {
-			return Result{}, fmt.Errorf("project %q is not in %s", q.Project, filepath.Join(gridHome, "projects"))
+		if !ok || found.Name == Personal && !personalOK {
+			return Result{}, unregisteredProject(q.Project)
 		}
 		rec, name = &found, found.Name
 	}
@@ -165,7 +174,7 @@ func (r Resolver) explicit(gridHome, cwd string, q Query, records []project.Reco
 		}
 		return r.fromRecord(*rec, RuleExplicit, r.firstFolder(*rec)), nil
 	}
-	proj, task, err := r.explicitTask(gridHome, cwd, q.Task, name, records)
+	proj, task, err := r.explicitTask(gridHome, cwd, q.Task, name, records, personalOK)
 	if err != nil {
 		return Result{}, err
 	}
@@ -178,13 +187,16 @@ func (r Resolver) explicit(gridHome, cwd string, q Query, records []project.Reco
 // explicitTask turns --task into a project and task folder name. A path is refused
 // unless it is inside the Grid home; an id is looked up in the explicit project
 // (name), else in the project the folder resolves to.
-func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []project.Record) (string, string, error) {
+func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []project.Record, personalOK bool) (string, string, error) {
 	if strings.ContainsAny(arg, "/"+string(filepath.Separator)) || strings.HasPrefix(arg, ".") {
 		abs := arg
 		if !filepath.IsAbs(abs) {
 			abs = filepath.Join(cwd, abs)
 		}
 		real := gridhome.Real(abs)
+		if !personalOK && within(filepath.Join(gridHome, Personal, "tasks"), real) {
+			return "", "", fmt.Errorf("task not found")
+		}
 		if !within(gridHome, real) {
 			return "", "", fmt.Errorf("task path %s is outside the Grid home %s", real, gridHome)
 		}
@@ -200,20 +212,32 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 	}
 	if name == "" {
 		if res := r.implicit(gridHome, cwd, records); res.Record || res.Task != "" {
+			if res.Project == Personal && !personalOK {
+				return "", "", ErrPersonalRefused
+			}
 			name = res.Project
 		}
 	}
 	if name == "" {
+		if !personalOK {
+			return "", "", fmt.Errorf("task not found")
+		}
 		return "", "", fmt.Errorf("task %s needs --project: this folder is in no project with a record", arg)
 	}
 	entries, err := os.ReadDir(gridhome.TasksDir(gridHome, name))
 	if err != nil {
+		if !personalOK {
+			return "", "", fmt.Errorf("task not found")
+		}
 		return "", "", fmt.Errorf("task %s not found in project %s", arg, name)
 	}
 	for _, e := range entries {
 		if e.IsDir() && (e.Name() == arg || strings.HasPrefix(e.Name(), arg+"-")) {
 			return name, e.Name(), nil
 		}
+	}
+	if !personalOK {
+		return "", "", fmt.Errorf("task not found")
 	}
 	return "", "", fmt.Errorf("task %s not found in project %s", arg, name)
 }
