@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"strconv"
 	"strings"
 	"unicode"
@@ -485,7 +486,7 @@ func whoOf(kind, who string) (*string, *string, string) {
 		}
 		return nil, nil, "a schedule step's who is \"the scheduler\""
 	}
-	if kind != "approve" && name == "grid-worker" {
+	if kind != "approve" && contract.NormalizeRole(name) == "worker" {
 		name = "grid-builder"
 	}
 	if !isHandle(name) {

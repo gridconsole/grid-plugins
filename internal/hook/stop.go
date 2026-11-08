@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"io"
 	"os"
 	"path/filepath"
@@ -145,7 +146,7 @@ func checkStop(o Options, in hookio.Input) int {
 	var problems []string
 	if in.HookEventName == "SubagentStop" {
 		who := guard.AgentName(in.AgentType)
-		if who == "grid-scout" {
+		if contract.NormalizeRole(who) == "scout" {
 			return 0
 		}
 		name := briefName(in, dir)
@@ -163,10 +164,10 @@ func checkStop(o Options, in hookio.Input) int {
 			o.log("stop check", fmt.Errorf("invalid brief metadata"))
 			return 0
 		}
-		roleReviewer := strings.Contains(str(doc.Data["role"]), "reviewer")
-		mark := who != "grid-reviewer" || roleReviewer
+		roleReviewer := strings.Contains(contract.NormalizeRole(str(doc.Data["role"])), "reviewer")
+		mark := contract.NormalizeRole(who) != "reviewer" || roleReviewer
 		field := "Outcome"
-		if who == "grid-reviewer" || roleReviewer {
+		if contract.NormalizeRole(who) == "reviewer" || roleReviewer {
 			field = "Verdict"
 		}
 		if section(doc.Body, field) == "" {
@@ -211,7 +212,7 @@ func checkStop(o Options, in hookio.Input) int {
 			}
 			if d.Data["status"] == "done" || d.Data["status"] == "blocked" {
 				field := "Outcome"
-				if strings.Contains(str(d.Data["role"]), "reviewer") {
+				if strings.Contains(contract.NormalizeRole(str(d.Data["role"])), "reviewer") {
 					field = "Verdict"
 				}
 				if section(d.Body, field) == "" {

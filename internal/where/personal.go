@@ -28,7 +28,7 @@ func CallerFrom(getenv func(string) string) Caller {
 // land; this default does not read workflow files.
 func DefaultPersonalAllowed(c Caller) bool {
 	role := contract.NormalizeRole(c.Role)
-	switch contract.TierFor(role) {
+	switch contract.TierFor(c.Role) {
 	case contract.PersonGuest, contract.External:
 		return false
 	case contract.PersonTeam:

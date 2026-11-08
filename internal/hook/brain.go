@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -122,7 +123,7 @@ func recall(o Options, in hookio.Input) {
 	text := ""
 	switch in.HookEventName {
 	case "PreToolUse":
-		if (in.ToolName != "Agent" && in.ToolName != "Task") || guard.AgentName(str(in.ToolInput["subagent_type"])) != "grid-planner" || in.SessionID == "" {
+		if (in.ToolName != "Agent" && in.ToolName != "Task") || contract.NormalizeRole(guard.AgentName(str(in.ToolInput["subagent_type"]))) != "planner" || in.SessionID == "" {
 			return
 		}
 		dir, err := namedTaskDir(o, in, str(in.ToolInput["prompt"])+" "+str(in.ToolInput["description"]))
@@ -158,7 +159,7 @@ func recall(o Options, in hookio.Input) {
 		if !o.hookEnabled("subagent-start", in) {
 			return
 		}
-		if name := guard.AgentName(in.AgentType); name != "grid-planner" && name != "grid-builder" {
+		if name := contract.NormalizeRole(guard.AgentName(in.AgentType)); name != "planner" && name != "builder" {
 			return
 		}
 	default:
@@ -169,7 +170,7 @@ func recall(o Options, in hookio.Input) {
 		o.log("recall", err)
 		return
 	}
-	if in.HookEventName == "SubagentStart" && guard.AgentName(in.AgentType) == "grid-planner" && in.SessionID != "" {
+	if in.HookEventName == "SubagentStart" && contract.NormalizeRole(guard.AgentName(in.AgentType)) == "planner" && in.SessionID != "" {
 		a, err := (session.Store{TaskDir: o.Resolver.GridHome}).Activity(in.SessionID)
 		if err != nil {
 			o.log("planner task", err)

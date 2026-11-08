@@ -13,6 +13,9 @@ func TestRolePrefix(t *testing.T) {
 			}
 		}
 	}
+	if NormalizeRole("grid-") != "grid-" {
+		t.Fatal("bare prefix became an empty local role")
+	}
 	if NormalizeRole(" GRID-WORKER ") != "worker" {
 		t.Fatal("role case was not normalized")
 	}

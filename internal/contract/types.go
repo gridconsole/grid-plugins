@@ -18,7 +18,11 @@ const (
 
 // NormalizeRole accepts caller roles with an optional plugin prefix.
 func NormalizeRole(role string) string {
-	return strings.TrimPrefix(strings.ToLower(strings.TrimSpace(role)), "grid-")
+	role = strings.ToLower(strings.TrimSpace(role))
+	if role == "grid-" {
+		return role
+	} // A bare prefix is unknown, not a local CLI.
+	return strings.TrimPrefix(role, "grid-")
 }
 
 // TierFor maps a stamped author role to the tier the envelope schema requires.

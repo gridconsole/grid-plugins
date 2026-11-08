@@ -73,6 +73,7 @@ func GatePostRoles(taskDir string) (map[string][]string, error) {
 		allowed := []string{}
 		for _, value := range list {
 			role, ok := value.(string)
+			role = contract.NormalizeRole(role)
 			if !ok || !slices.Contains(validRoles, role) {
 				return nil, fmt.Errorf("workflow.md gate_post_roles.%s: invalid question role %v", kind, value)
 			}

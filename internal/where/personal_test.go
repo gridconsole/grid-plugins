@@ -173,7 +173,7 @@ func TestPersonalRecordIDRefused(t *testing.T) {
 }
 
 func TestPersonalRolePrefix(t *testing.T) {
-	for _, role := range []string{"owner", "member", "lead", "guest", "external", "cli", "host", "worker", "agent", "builder", "checker", "curator", "designer", "library", "operator", "planner", "researcher", "reviewer", "runner", "scout", "unknown"} {
+	for _, role := range []string{"owner", "member", "lead", "guest", "external", "cli", "host", "worker", "agent", "builder", "checker", "curator", "designer", "library", "operator", "planner", "researcher", "reviewer", "runner", "scout", "unknown", "grid-unknown"} {
 		for _, member := range []string{"", "sam"} {
 			want := DefaultPersonalAllowed(Caller{Role: role, Member: member})
 			for _, spelling := range []string{"grid-" + role, " GRID-" + strings.ToUpper(role) + " "} {
@@ -181,6 +181,14 @@ func TestPersonalRolePrefix(t *testing.T) {
 					t.Errorf("%q member=%q: %t, want %t", spelling, member, got, want)
 				}
 			}
+		}
+	}
+}
+
+func TestPersonalRepeatedRolePrefixRefused(t *testing.T) {
+	for _, role := range []string{"grid-", "grid-grid-owner", "grid-grid-member", "grid-grid-worker"} {
+		if DefaultPersonalAllowed(Caller{Role: role}) {
+			t.Errorf("repeated prefix accepted: %q", role)
 		}
 	}
 }
