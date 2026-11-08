@@ -122,7 +122,7 @@ Read the brief's Outcome (a reviewer writes Verdict only; a scout's reply is the
 
 Read the brief with the Read tool right before you Edit it: a subagent wrote it since you last read it, and Edit refuses a file this session has not read.
 
-A `grid-checker` has no Bash and cannot file its own screenshots: whoever ran it (you, or the operator that started it) saves the screenshots its Verdict names through `skills/deliver/scripts/proof-add.mjs` with `--by grid-checker` and the checker brief's `subtask`, the one id, `_task` when it has none.
+A `grid-checker` has no Bash and cannot file its own screenshots: whoever ran it (you, or the operator that started it) saves the shots, recordings, diffs and logs its Verdict names through `skills/deliver/scripts/proof-add.mjs` with `--by grid-checker`, the checker brief's `subtask` (`_task` when it has none) and one `--run R-<n>` for the whole check, so they land in `checks/R-<n>/` and as points of that run in `checks.md`. The checker never writes there itself.
 
 Tick plan items through the plan skill, and only with evidence. With several steps running, do this for each brief as it finishes, never for the whole set at the end.
 

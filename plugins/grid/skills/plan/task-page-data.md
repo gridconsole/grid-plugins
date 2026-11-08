@@ -101,19 +101,39 @@ A message on the task, an item or a question is a Feed post (see the feed skill)
 
 ## Check runs: `checks.md`
 
-One block per run, the screenshots in `checks/<run id>/`.
+Proof has one place: `checks/<run id>/` in the task folder. `checks.md` lists it, one block per run. `artifacts/` holds what the task
+delivers, never its proof, and nothing is written into a project's repo.
 
 ```
 # Checks
 
-## R-2 · 2026-11-07T10:12 · partly · Test shop run: 5 work, 1 partly, 1 fails and is being fixed.
+## R-2 · 2026-11-07T10:12 · partly · Test shop run: 5 work, 1 partly, 1 fails and is being fixed. · by grid-checker
 - works · Search · The list narrows as you type · shot: checks/R-2/search.png · item: i-4
+- works · Total · The total follows the price rule · shot: checks/R-2/total-after.png · before: checks/R-2/total-before.png · diff: checks/R-2/total.patch · output: checks/R-2/total-tests.txt · item: i-5
+- partly · Checkout flow · Pay works, the receipt is late · video: checks/R-2/checkout.mp4 · gif: checks/R-2/checkout.gif · url: https://shop.test/checkout · item: i-6
 - fails · Checkout · The Pay button does nothing · shot: checks/R-2/pay.png
 - open · Mail · Not run yet
 ```
 
-- Heading `## R-<n> · <YYYY-MM-DDTHH:MM> · <state> · <title>`: the title is the checker's one-line summary.
-- One line per point: `- <state> · <title> · <text>`, then optional ` · shot: <path>` and ` · item: i-<n>`.
+- Heading `## R-<n> · <YYYY-MM-DDTHH:MM> · <state> · <title>`, then optionally ` · by <agent>`: the title is the checker's one-line
+  summary, and `by` is the agent that ran the check (its own name, such as `grid-checker`), which the Result tab shows as "Checked by". A
+  heading without `by` is valid.
+- One line per point: `- <state> · <title> · <text>`, then the optional keys, each ` · <key>: <value>`, in any order:
+
+  | key | value | shows |
+  |---|---|---|
+  | `shot:` | a path under `checks/<run id>/` | the screenshot; the after, when `before:` is given |
+  | `before:` | a path | the screenshot before the change |
+  | `video:` | a path, `.mp4` or `.webm` | a recording of the flow |
+  | `gif:` | a path | a short loop |
+  | `diff:` | a path, `.patch` or `.diff` | the change as a diff |
+  | `output:` | a path to a text log | the test or command output; the app shows its last 20 lines |
+  | `url:` | `http://` or `https://` | the live page |
+  | `item:` | `i-<n>` | the item the point proves |
+
+- A path is relative to the task folder, starts with `checks/`, has no `..`, no segment that starts with a dot, no backslash and no
+  empty part. The reader drops a path that breaks this, and a `url:` that is not http or https; the point stays. A point with none
+  of the keys is the old line, read as before.
 - `state` of a run and of a point: `works`, `partly`, `fails`, `open`.
 - The reader lists runs newest first, by the number in the id.
 

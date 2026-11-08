@@ -1,22 +1,23 @@
 #!/usr/bin/env node
-// Before the Outcome is written: read plan.md's steps (the subtasks, ids item-<n>) and every artifacts/proof/<subtask>/proof.json, write
-// artifacts/proof/index.json, and print the lines the Outcome carries.
+// Before the Outcome is written: read plan.md's steps (the subtasks, ids item-<n>) and the points of checks.md (the check runs; proof-add.mjs
+// writes them), and print the lines the Outcome carries. Nothing is written but a history line when it fails: nothing reads an index file.
 // Usage: node proof-index.mjs <task folder>
-//   index.json: { built, counts {subtasks, proven, shots, videos, checks, failing}, missing [ids done with no proof saved],
-//                 subtasks [{ id, name, state, counts {shots, videos, checks, failing}, missing }], other [{ id, counts }] (proof on _task or a
-//                 folder no plan step claims), problems [] }
-//   state: done (the step is ticked), working (a brief of the step is briefed or running), failed (failing proof, or the step's last
-//   item line in history.md is failed), else open. A subtask is proven with one proof of any kind, a Not applicable note included.
-//   shots count kind shot, videos kind video and gif, checks kind tests and check. A fails entry stays failing until a later entry of the
-//   same kind and caption in that subtask has another verdict.
-// Never blocks landing: always exits 0; a failure becomes a `proof index failed` history line. Prints one JSON line (ok, path, summary, lines).
-// Writes only artifacts/proof/index.json, never through a symlink. Node built-ins and the execute skill's plan reader only.
+//   index: { built, counts {subtasks, proven, shots, videos, checks, failing}, missing [ids done with no proof saved],
+//            subtasks [{ id, name, state, counts {shots, videos, checks, failing}, missing }], other [{ id, counts }] (points on no plan
+//            item: id _task, or an item the plan does not hold), problems [] }
+//   A point belongs to its `item: i-<n>` (item-<n>), else to _task. state: done (the step is ticked), working (a brief of the step is
+//   briefed or running), failed (a failing point, or the step's last item line in history.md is failed), else open. A subtask is proven
+//   with one point of any kind, a Not applicable note included. shots count `shot:` keys, videos `video:` and `gif:`, checks `output:`.
+//   A failing point stays failing until a later point of the same item, title and text has another state.
+// Never blocks landing: always exits 0; a failure becomes a `proof index failed` history line. Prints one JSON line (ok, summary, lines, index).
+// Node built-ins and the execute skill's plan reader only.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseSteps, briefStates } from '../../execute/scripts/ready-steps.mjs';
 
-const SUBTASK = /^[a-z0-9_][a-z0-9_-]{0,63}$/;
+const SEP = ' · ';
+const KEYS = ['shot', 'before', 'video', 'gif', 'diff', 'output', 'url', 'item'];
 const read = (file) => fs.readFileSync(file, 'utf8');
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const zero = () => ({ shots: 0, videos: 0, checks: 0, failing: 0 });
@@ -24,12 +25,40 @@ const zero = () => ({ shots: 0, videos: 0, checks: 0, failing: 0 });
 function counts(entries) {
   const c = zero();
   entries.forEach((e, i) => {
-    if (e.kind === 'shot') c.shots++;
-    else if (e.kind === 'video' || e.kind === 'gif') c.videos++;
-    else if (e.kind === 'tests' || e.kind === 'check') c.checks++;
-    if (e.verdict === 'fails' && !entries.slice(i + 1).some((l) => l.kind === e.kind && l.caption === e.caption && l.verdict !== 'fails')) c.failing++;
+    if (e.keys.shot) c.shots++;
+    if (e.keys.video) c.videos++;
+    if (e.keys.gif) c.videos++;
+    if (e.keys.output) c.checks++;
+    if (e.state === 'fails' && !entries.slice(i + 1).some((l) => l.title === e.title && l.text === e.text && l.state !== 'fails')) c.failing++;
   });
   return c;
+}
+
+// The points of checks.md by subtask id: `- <state> · <title> · <text>` then ` · key: value` parts, read as the app reads them.
+function readPoints(taskDir) {
+  const out = new Map();
+  let text = '';
+  try { text = read(path.join(taskDir, 'checks.md')); } catch { return out; }
+  let inRun = false;
+  for (const line of text.replace(/\r\n/g, '\n').split('\n')) {
+    if (line.startsWith('## ')) { inRun = true; continue; }
+    if (!inRun || !line.startsWith('- ')) continue;
+    const parts = line.slice(2).trimEnd().split(SEP);
+    const keys = {};
+    for (let last = parts[parts.length - 1]; parts.length > 2 && last !== undefined; last = parts[parts.length - 1]) {
+      const k = KEYS.find((key) => last.startsWith(`${key}:`));
+      if (!k) break;
+      keys[k] = last.slice(k.length + 1).trim();
+      parts.pop();
+    }
+    const [state, title, ...rest] = parts.map((p) => p.trim());
+    if (!state || !title) continue;
+    const n = /^i-(\d+)$/.exec(keys.item ?? '')?.[1];
+    const id = n ? `item-${n}` : '_task';
+    if (!out.has(id)) out.set(id, []);
+    out.get(id).push({ state, title, text: rest.join(SEP), keys });
+  }
+  return out;
 }
 
 function frontmatterLine(taskDir, key) {
@@ -58,22 +87,7 @@ export function buildIndex(taskDir) {
   const words = lastItemWords(taskDir);
   const problems = [];
 
-  const proofRoot = path.join(taskDir, 'artifacts', 'proof');
-  const entries = new Map();
-  let names = [];
-  try { names = fs.readdirSync(proofRoot); } catch { /* no proof folder */ }
-  for (const id of names.sort()) {
-    if (!SUBTASK.test(id)) continue;
-    const dir = path.join(proofRoot, id);
-    try {
-      if (!fs.lstatSync(dir).isDirectory()) continue; // a symlink is not a plain folder of the task
-      const doc = JSON.parse(read(path.join(dir, 'proof.json')));
-      if (!Array.isArray(doc?.proof)) throw new Error('no proof list');
-      entries.set(id, doc.proof.filter((e) => e && typeof e === 'object'));
-    } catch (e) {
-      if (e.code !== 'ENOENT') problems.push(`${id}: proof.json could not be read (${String(e.message).slice(0, 80)})`);
-    }
-  }
+  const entries = readPoints(taskDir);
 
   const planned = new Set();
   const subtasks = [];
@@ -122,19 +136,7 @@ export function writeIndex(taskDir) {
     const index = buildIndex(taskDir);
     const lines = outcomeLines(index);
     if (!index.subtasks.length && !index.other.length) return { ok: true, skipped: true, summary: lines[0], lines };
-    let dir = taskDir;
-    for (const part of ['artifacts', 'proof']) {
-      dir = path.join(dir, part);
-      let st = null;
-      try { st = fs.lstatSync(dir); } catch { /* not there yet */ }
-      if (!st) { try { fs.mkdirSync(dir); } catch (e) { if (e.code !== 'EEXIST') throw e; } st = fs.lstatSync(dir); }
-      if (st.isSymbolicLink() || !st.isDirectory()) throw new Error(`${part} is not a plain folder of the task`);
-    }
-    const tmp = path.join(dir, 'index.json.tmp');
-    try { fs.unlinkSync(tmp); } catch (e) { if (e.code !== 'ENOENT') throw e; } // a link left at this name is removed, never written through
-    fs.writeFileSync(tmp, `${JSON.stringify(index, null, 2)}\n`, { flag: 'wx' });
-    fs.renameSync(tmp, path.join(dir, 'index.json'));
-    return { ok: true, path: 'artifacts/proof/index.json', summary: lines[0], lines, problems: index.problems };
+    return { ok: true, summary: lines[0], lines, index, problems: index.problems };
   } catch (e) {
     const error = String(e.message || e);
     try {

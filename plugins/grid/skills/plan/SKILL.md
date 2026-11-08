@@ -134,7 +134,7 @@ It writes line 1 as `# Plan, rev <n> · <hash>`. The hash is the first 6 hex dig
 
 ## Ticking a step
 
-Tick `- [x]` only with evidence the step is done: a command's output saved under `evidence/` (for example `evidence/store-tests.txt`), a file you can name, or a reviewer's Verdict. Add the path under the step, after its `verify:` line, as `  evidence: evidence/store-tests.txt`. No evidence, no tick. A step you started but cannot prove stays `[ ]`. Do not run the script for a tick or an evidence line; the hash ignores both. Then set `updated` in task.md (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess) and add a body line.
+Tick `- [x]` only with evidence the step is done: a command's output saved under `checks/<run id>/` (for example `checks/R-1/store-tests.txt`, the `output:` of a point with `item: i-<n>` in `checks.md`; see `task-page-data.md`), a file you can name, or a reviewer's Verdict. Add the path under the step, after its `verify:` line, as `  evidence: checks/R-1/store-tests.txt`. No evidence, no tick. A step you started but cannot prove stays `[ ]`. Do not run the script for a tick or an evidence line; the hash ignores both. Then set `updated` in task.md (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess) and add a body line.
 
 ## Revising
 

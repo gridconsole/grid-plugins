@@ -10,7 +10,7 @@
 //   An arg that is a path (starts with `/`, `~` or `.`, contains `/` or `..`, or is a bare file name such as plan.md, alone or
 //   as the value after `=`) must itself resolve inside the Grid home, relative ones from cwd, so plan-hash cannot rewrite a
 //   plan.md in a repo. A JSON object or array arg (add-signal's) is not read as a path. One exception, for deliver/scripts/proof-add.mjs
-//   only: it reads its options as strict `--flag value` pairs, so the value of `--caption` and the value of `--url` when it is an
+//   only: it reads its options as strict `--flag value` pairs, so the value of `--caption`, of `--title` and of `--url` when it is an
 //   http or https address are plain text there and not paths; every other arg of that script is judged as above.
 // A deny or ask rule and the other guards' denies still win (deny > ask > allow): this hook only ever allows. On PermissionRequest
 // (a prompt would show, or `-p` would deny) an allow also adds the Grid home as a session directory, so the next call needs no
@@ -117,7 +117,7 @@ function pathsIn(args) {
   return out;
 }
 
-// proof-add reads --flag value pairs from the first arg on: a --caption value and an http(s) --url value are text it only stores,
+// proof-add reads --flag value pairs from the first arg on: a --caption or --title value and an http(s) --url value are text it only stores,
 // so they are left out of the path check (the flag in each pair, and every other value, stay in). Pairs are cut as the script cuts them.
 const HTTP_URL = /^https?:\/\/[^\s]+$/;
 function proofAddPaths(args) {
@@ -125,7 +125,7 @@ function proofAddPaths(args) {
   for (let i = 0; i < args.length; i += 2) {
     const [flag, value] = [args[i], args[i + 1]];
     judged.push(flag);
-    if (value !== undefined && !(flag === '--caption' || (flag === '--url' && HTTP_URL.test(value)))) judged.push(value);
+    if (value !== undefined && !(flag === '--caption' || flag === '--title' || (flag === '--url' && HTTP_URL.test(value)))) judged.push(value);
   }
   return pathsIn(judged);
 }

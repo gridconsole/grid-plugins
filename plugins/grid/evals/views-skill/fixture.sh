@@ -31,12 +31,12 @@ cat > "$d/plan.md" <<'X'
 
 - [x] 1 Add a tag filter function to the store
   verify: `node --test` passes for the filter
-  evidence: evidence/store-tests.txt
+  evidence: checks/R-1/store-tests.txt
 - [ ] 2 Add the tag box to the list view
   verify: typing narrows the list
 - [ ] 3 Cover both with tests
 
 Verify: `node --test` passes and the list narrows by tag
 X
-mkdir -p "$d/evidence"
-printf "3 tests, 3 pass\n" > "$d/evidence/store-tests.txt"
+mkdir -p "$d/checks/R-1"
+printf "3 tests, 3 pass\n" > "$d/checks/R-1/store-tests.txt"

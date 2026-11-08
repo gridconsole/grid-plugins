@@ -16,7 +16,7 @@ The task folder is `<projects folder>/<project>/tasks/T-NN-slug/`. The projects 
 | Page | Role it answers | Reads | Shape |
 |---|---|---|---|
 | `progress.html` | where the task stands and whose turn it is | task.md, plan.md, history.md | `templates/progress.html` |
-| `result.html` | what was made, and the checks that prove it | task.md (`outcome:`, and the `## Outcome` blocks the deliver skill writes, before a ship approve gate and again after `ship approved` when something changed: Summary first, then Before and after, Not in it and After the deploy when written), artifacts/, evidence/, briefs' Outcome | `templates/result.html` |
+| `result.html` | what was made, and the checks that prove it | task.md (`outcome:`, and the `## Outcome` blocks the deliver skill writes, before a ship approve gate and again after `ship approved` when something changed: Summary first, then Before and after, Not in it and After the deploy when written), artifacts/, checks.md and checks/, briefs' Outcome | `templates/result.html` |
 | `questions.html` | what waits on a person | `questions/*.md`, task.md `needs` | `templates/questions.html` |
 
 Write only the pages the person asked for, or the ones whose source changed. `result.html` appears once there is a result to show; before that, do not write it. An empty `questions.html` is not written either: say there is nothing open.

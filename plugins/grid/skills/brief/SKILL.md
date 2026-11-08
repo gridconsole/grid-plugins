@@ -31,7 +31,7 @@ Frontmatter, all five keys filled:
 | `verify` | what proves the job done: a command, or the id of the brief that checks it |
 | `follow_up` | what comes next, or `none` |
 | `item` | optional: the plan item the brief serves, `item: 12`, or several, `item: 12, 13`. Written whenever the brief serves plan items (its Job or Intent names the plan's `N Title` lines); left out for a brief that serves none. Always written for the brief of a plan step: the task page reads it to show what is in progress, and the execute skill's ready-set script reads it to know which steps run, so a step with no `item:` brief looks idle and could be started twice |
-| `subtask` | optional: the one id the brief's screenshots, recordings and test summaries are filed under, `subtask: item-3` (the plan item's number after `item-`), or `_task` for work that serves no plan item. Written in every brief of a checker, operator, runner or builder: the agent passes it to `proof-add.mjs` and the Result tab shows the proof under that subtask |
+| `subtask` | optional: the one id the brief's proof (screenshots, recordings, diffs, test summaries) is filed under in `checks/<run id>/` and `checks.md`, `subtask: item-3` (the plan item's number after `item-`), or `_task` for work that serves no plan item. Written in every brief of a checker, operator, runner or builder: the agent (or, for a checker, its runner) passes it to `proof-add.mjs` and the Result tab shows the proof under that item |
 
 Sections, in this order, all present, each a `## ` heading:
 

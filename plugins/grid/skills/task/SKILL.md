@@ -97,7 +97,7 @@ Do not plan, research or build in this skill. Starting a task only makes the fol
 
 ## What else lives in the folder
 
-Other skills add their own entries; none of them is a stray, so do not delete or tidy them: `research.md` (research), `plan.md` (plan), `spec.md` (preview, Large tasks only), `questions/<person>.md` (questions), `subagents/NN-name.md` (briefs), `artifacts/` and `evidence/` (the work and its proof), `views/` (views, the derived pages), `ds/` (views: copies of the design stylesheets the pages link) and `memory/<step>.md` (memory: short dated lines, one file per workflow step). Starting a task makes only `intent.md`, `task.md` and `history.md`.
+Other skills add their own entries; none of them is a stray, so do not delete or tidy them: `research.md` (research), `plan.md` (plan), `spec.md` (preview, Large tasks only), `questions/<person>.md` (questions), `subagents/NN-name.md` (briefs), `artifacts/` (what the task delivers), `checks.md` and `checks/<run id>/` (the check runs and their proof: screenshots, recordings, diffs, logs; older tasks may hold proof under `evidence/`), `views/` (views, the derived pages), `ds/` (views: copies of the design stylesheets the pages link) and `memory/<step>.md` (memory: short dated lines, one file per workflow step). Starting a task makes only `intent.md`, `task.md` and `history.md`.
 
 ## Show a task
 
