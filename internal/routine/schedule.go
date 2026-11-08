@@ -47,6 +47,7 @@ type TimerPlan struct {
 	Project     string      `json:"project"`
 	Name        string      `json:"name"`
 	Files       []TimerFile `json:"files"`
+	LogDir      string      `json:"log_dir,omitempty"`
 	Install     []OSCommand `json:"install,omitempty"`
 	Remove      []OSCommand `json:"remove,omitempty"`
 	AfterRemove []OSCommand `json:"after_remove,omitempty"`
@@ -230,6 +231,11 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 	state, err := s.readState(p)
 	if err != nil {
 		return err
+	}
+	if p.LogDir != "" {
+		if err := os.MkdirAll(p.LogDir, 0o700); err != nil {
+			return err
+		}
 	}
 	hash := e.Fingerprint()
 	if state.Installed {

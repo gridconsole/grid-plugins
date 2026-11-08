@@ -14,13 +14,20 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
+const routineLockHelp = "Runs hold the entry lock until execution finishes; another run, schedule or remove of that entry waits for it."
+
 func runRoutine(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprintln(env.Stdout, "Usage: grid routine add <name> --every <cron or duration> --run <grid command or skill> [--project p]\n       grid routine list|schedule|unschedule [--project p] [--json]\n       grid routine remove|run <name> [--project p] [--json]")
+		fmt.Fprintln(env.Stdout, "\n"+routineLockHelp)
 		return 0
 	}
 	verb := args[0]
 	fs := newFlags("routine "+verb, env)
+	fs.Usage = func() {
+		fmt.Fprintf(env.Stderr, "Usage: grid routine %s [options]\n\n%s\n", verb, routineLockHelp)
+		fs.PrintDefaults()
+	}
 	project := fs.String("project", "", "project name or id; defaults to home")
 	asJSON := fs.Bool("json", false, "print JSON")
 	var every, run, homeOverride string

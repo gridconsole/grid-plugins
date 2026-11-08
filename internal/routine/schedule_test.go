@@ -18,14 +18,91 @@ import (
 type fakeOS struct {
 	calls []OSCommand
 	fail  bool
+	check func(OSCommand)
 }
 
 func (f *fakeOS) Run(_ context.Context, c OSCommand) error {
 	f.calls = append(f.calls, c)
+	if f.check != nil {
+		f.check(c)
+	}
 	if f.fail {
 		return errors.New("OS failure")
 	}
 	return nil
+}
+
+func TestLaunchdIntervalAndLogs(t *testing.T) {
+	home := gridhome.Real(t.TempDir())
+	store := Store{GridHome: filepath.Join(home, "data & space")}
+	if _, err := store.Add("daily", "1h", "grid version"); err != nil {
+		t.Fatal(err)
+	}
+	s := Scheduler{Home: home, GridHome: store.GridHome, Binary: filepath.Join(home, "grid"), Backend: Launchd{UID: 501}, Runner: &fakeOS{}}
+	p, err := s.plan("", "daily")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDir := filepath.Join(store.GridHome, "logs", "routines", p.Label)
+	if p.LogDir != wantDir {
+		t.Fatalf("log folder: %s", p.LogDir)
+	}
+	want := map[string]string{
+		"StartInterval":     "60",
+		"StandardOutPath":   filepath.Join(wantDir, "stdout.log"),
+		"StandardErrorPath": filepath.Join(wantDir, "stderr.log"),
+	}
+	decoder := xml.NewDecoder(strings.NewReader(p.Files[0].Content))
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok || start.Name.Local != "key" {
+			continue
+		}
+		var key string
+		if err := decoder.DecodeElement(&key, &start); err != nil {
+			t.Fatal(err)
+		}
+		if key == "StartCalendarInterval" {
+			t.Fatal("calendar trigger remains")
+		}
+		if expected, ok := want[key]; ok {
+			token, err := decoder.Token()
+			if err != nil {
+				t.Fatal(err)
+			}
+			start, ok := token.(xml.StartElement)
+			kind := "string"
+			if key == "StartInterval" {
+				kind = "integer"
+			}
+			if !ok || start.Name.Local != kind {
+				t.Fatalf("%s must be %s: %v", key, kind, token)
+			}
+			var value string
+			if err := decoder.DecodeElement(&value, &start); err != nil || value != expected {
+				t.Fatalf("%s: %q, want %q: %v", key, value, expected, err)
+			}
+			delete(want, key)
+		}
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing plist settings: %v", want)
+	}
+	s.Runner = &fakeOS{check: func(OSCommand) {
+		if st, err := os.Stat(wantDir); err != nil || !st.IsDir() || st.Mode().Perm() != 0o700 {
+			t.Fatalf("log folder unavailable at registration: %v %v", st, err)
+		}
+	}}
+	if err := s.Schedule(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestScheduleRoundTrip(t *testing.T) {

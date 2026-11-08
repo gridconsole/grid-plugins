@@ -93,6 +93,19 @@ func TestRoutineCLI(t *testing.T) {
 	}
 }
 
+func TestRoutineHelpExplainsEntryLock(t *testing.T) {
+	h := newHarness(t)
+	for _, args := range [][]string{{"routine", "--help"}, {"routine", "run", "--help"}} {
+		if code := h.run(h.root, args...); code != 0 {
+			t.Fatalf("help: %d %s", code, h.errb)
+		}
+		text := h.out.String() + h.errb.String()
+		if !strings.Contains(text, "entry lock until execution finishes") || !strings.Contains(text, "waits for it") {
+			t.Fatalf("missing lock help: %s", text)
+		}
+	}
+}
+
 func TestRoutineProjectScope(t *testing.T) {
 	h := newHarness(t)
 	folder := filepath.Join(h.root, "work", "example")

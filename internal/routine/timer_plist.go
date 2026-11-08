@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/localdata"
 )
 
 func xmlText(s string) string {
@@ -18,6 +20,10 @@ type Launchd struct{ UID int }
 
 func (b Launchd) Plan(s TimerSpec) (TimerPlan, error) {
 	label := s.label()
+	logDir, err := localdata.Safe(s.GridHome, "logs", "routines", label)
+	if err != nil {
+		return TimerPlan{}, err
+	}
 	path := filepath.Join(s.Home, "Library", "LaunchAgents", label+".plist")
 	var args strings.Builder
 	for _, arg := range s.argv() {
@@ -29,8 +35,10 @@ func (b Launchd) Plan(s TimerSpec) (TimerPlan, error) {
 		"<key>ProgramArguments</key><array>" + args.String() + "</array>" +
 		"<key>WorkingDirectory</key><string>" + xmlText(s.GridHome) + "</string>" +
 		"<key>EnvironmentVariables</key><dict><key>GRID_HOME</key><string>" + xmlText(s.GridHome) + "</string><key>PATH</key><string>" + xmlText(s.Path) + "</string></dict>" +
-		"<key>StartCalendarInterval</key><dict/>" +
+		"<key>StandardOutPath</key><string>" + xmlText(filepath.Join(logDir, "stdout.log")) + "</string>" +
+		"<key>StandardErrorPath</key><string>" + xmlText(filepath.Join(logDir, "stderr.log")) + "</string>" +
+		"<key>StartInterval</key><integer>60</integer>" +
 		"</dict></plist>\n"
 	domain := fmt.Sprintf("gui/%d", b.UID)
-	return TimerPlan{Label: label, Project: s.Project, Name: s.Name, Files: []TimerFile{{path, content}}, Install: []OSCommand{{"launchctl", []string{"bootstrap", domain, path}}}, Remove: []OSCommand{{"launchctl", []string{"bootout", domain + "/" + label}}}}, nil
+	return TimerPlan{Label: label, Project: s.Project, Name: s.Name, LogDir: logDir, Files: []TimerFile{{path, content}}, Install: []OSCommand{{"launchctl", []string{"bootstrap", domain, path}}}, Remove: []OSCommand{{"launchctl", []string{"bootout", domain + "/" + label}}}}, nil
 }
