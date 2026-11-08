@@ -12,6 +12,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -20,17 +21,16 @@ func fixture(t *testing.T) (Options, *bytes.Buffer, string) {
 	root := t.TempDir()
 	home := filepath.Join(root, "data")
 	cwd := filepath.Join(root, "work")
-	project := filepath.Join(home, "projects", "example")
-	for _, p := range []string{cwd, project} {
-		if err := os.MkdirAll(p, 0o700); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.MkdirAll(cwd, 0o700); err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "project.md"), []byte("---\nid: example\nfolder: "+cwd+"\n---\n"), 0o600); err != nil {
+	const machine = "01TESTMACHINE"
+	rec := project.Record{Name: "example", ID: "01EXAMPLE", Folders: []project.Folder{{Machine: machine, Path: cwd}}}
+	if err := project.Write(home, rec); err != nil {
 		t.Fatal(err)
 	}
 	out := &bytes.Buffer{}
-	return Options{Event: "sessionstart", Cwd: cwd, Stdout: out, Resolver: where.Resolver{GridHome: home, Home: root}, Getenv: func(string) string { return "" }}, out, root
+	return Options{Event: "sessionstart", Cwd: cwd, Stdout: out, Resolver: where.Resolver{GridHome: home, Home: root, Machine: machine}, Getenv: func(string) string { return "" }}, out, root
 }
 
 func contextFrom(t *testing.T, out *bytes.Buffer) string {
@@ -171,16 +171,6 @@ func TestSessionStartErrorsAreSilent(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"newer format", func(o *Options, _ string) {
-			if err := os.WriteFile(filepath.Join(o.Resolver.GridHome, "VERSION"), []byte("99"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}},
-		{"invalid format", func(o *Options, _ string) {
-			if err := os.WriteFile(filepath.Join(o.Resolver.GridHome, "VERSION"), []byte("broken"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}},
 		{"unknown event", func(o *Options, _ string) { o.Event = "unknown" }},
 		{"output failure", func(o *Options, _ string) { o.Stdout = brokenWriter{} }},
 	} {
@@ -216,7 +206,7 @@ func TestEnvironmentShellQuoting(t *testing.T) {
 }
 
 func TestContextCeiling(t *testing.T) {
-	text := sessionContext(where.Result{Project: strings.Repeat("界", 12000)}, where.Resolver{GridHome: "/example"})
+	text := sessionContext(where.Result{Project: strings.Repeat("界", 12000)}, where.Resolver{GridHome: "/example"}, "")
 	if !utf8.ValidString(text) || utf8.RuneCountInString(text) >= 10000 {
 		t.Fatal("invalid context bound")
 	}
@@ -243,5 +233,22 @@ func TestCwdFromInputAndNoProjectCreated(t *testing.T) {
 	Run(o)
 	if _, err := os.Stat(emptyHome); !os.IsNotExist(err) {
 		t.Fatalf("session created a Grid home: %v", err)
+	}
+}
+
+func TestStaleExplicitTaskIsIgnoredWithANote(t *testing.T) {
+	o, out, _ := fixture(t)
+	o.Getenv = func(key string) string {
+		if key == "GRID_TASK" {
+			return "T-99"
+		}
+		return ""
+	}
+	if code := Run(o); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	got := contextFrom(t, out)
+	if !strings.Contains(got, "Grid project: example") || !strings.Contains(got, "is gone; ignored.") {
+		t.Fatal(got)
 	}
 }

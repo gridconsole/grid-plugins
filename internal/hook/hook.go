@@ -58,22 +58,22 @@ func sessionStart(o Options) {
 	if o.Resolver.GridHome == "" || o.Stdout == nil {
 		return
 	}
-	if n, err := gridhome.ReadFormat(o.Resolver.GridHome); err == nil {
-		if n != gridhome.FormatVersion {
-			return
-		}
-	} else if !os.IsNotExist(err) {
-		return
-	}
 	cwd := in.Cwd
 	if cwd == "" {
 		cwd = o.Cwd
 	}
-	res, err := o.Resolver.Resolve(where.Query{Cwd: cwd, Task: o.Getenv("GRID_TASK"), Project: o.Getenv("GRID_PROJECT")})
+	task, proj := o.Getenv("GRID_TASK"), o.Getenv("GRID_PROJECT")
+	res, err := o.Resolver.Resolve(where.Query{Cwd: cwd, Task: task, Project: proj})
+	note := ""
+	if err != nil && (task != "" || proj != "") {
+		// A stale GRID_TASK or GRID_PROJECT must not wipe the session's context.
+		res, err = o.Resolver.Resolve(where.Query{Cwd: cwd})
+		note = " GRID_TASK or GRID_PROJECT names something that is gone; ignored."
+	}
 	if err != nil {
 		return
 	}
-	context := sessionContext(res, o.Resolver)
+	context := sessionContext(res, o.Resolver, note)
 	out := map[string]any{"hookSpecificOutput": map[string]string{
 		"hookEventName": "SessionStart", "additionalContext": context,
 	}}
@@ -109,12 +109,12 @@ func writeEnv(path, home, task string) error {
 	return closeErr
 }
 
-func sessionContext(r where.Result, resolver where.Resolver) string {
+func sessionContext(r where.Result, resolver where.Resolver, note string) string {
 	home := gridhome.Tilde(resolver.GridHome, resolver.Home)
 	text := strings.Join([]string{
 		"Grid tracks tasks, Jobs and shared knowledge in one Grid home.",
 		"GRID_HOME is the Grid data folder " + home + "; GRID_PROJECTS is " + gridhome.Tilde(filepath.Join(resolver.GridHome, "projects"), resolver.Home) + ".",
-		ProjectLine(r, resolver.Home),
+		ProjectLine(r, resolver.Home) + note,
 		"Task files are written by grid under the Grid home. Project records and task files live outside repositories.",
 		"Grid agents cover delegated work in any folder: grid:grid-scout maps code; grid:grid-researcher researches facts; grid:grid-builder changes files; grid:grid-runner runs checks; grid:grid-reviewer reviews work; grid:grid-designer designs interfaces; grid:grid-checker checks pages; grid:grid-operator changes browser state; grid:grid-planner plans tasks; grid:grid-curator curates knowledge; grid:grid-library answers questions from the brain. Job briefs are rendered by grid job.",
 		"The Grid brain holds shared topics, knowledge and decisions at home and project level.",
