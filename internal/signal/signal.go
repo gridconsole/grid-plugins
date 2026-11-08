@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/projects"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -103,7 +104,7 @@ func validID(id string) bool {
 		return false
 	}
 	tail := strings.TrimPrefix(id, "S-")
-	if localdata.ValidID(tail) {
+	if gridhome.ValidID(tail) {
 		return true
 	}
 	if len(tail) != 64 {

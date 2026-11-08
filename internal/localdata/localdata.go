@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
@@ -106,7 +107,10 @@ func Init(home string) error {
 	return errors.Join(err, f.Close())
 }
 
-// Machine creates the machine identity with O_EXCL or reads the existing ULID.
+// Machine returns this computer's id, creating <home>/machine on first use.
+// Creation takes its own lock, because project and signal writers hold different
+// ones. A file that is empty or torn from a crash is replaced; one that holds
+// something else is an error.
 func Machine(home string) (string, error) {
 	if err := Init(home); err != nil {
 		return "", err
@@ -115,58 +119,34 @@ func Machine(home string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if id, err := gridhome.ReadMachine(home); id != "" || err != nil {
+		return id, err
+	}
+	unlock, err := Lock(home, ".machine.lock")
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	// Another process may have made the id while this one waited.
+	if id, err := gridhome.ReadMachine(home); id != "" || err != nil {
+		return id, err
+	}
 	id, err := ID()
 	if err != nil {
 		return "", err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		// Another process can be between its exclusive open and its write.
-		for i := 0; i < 50; i++ {
-			st, err := os.Lstat(path)
-			if err != nil {
-				return "", err
-			}
-			if !st.Mode().IsRegular() || st.Size() > 128 {
-				return "", fmt.Errorf("machine is not a regular ULID file")
-			}
-			b, err := os.ReadFile(path)
-			if err != nil {
-				return "", err
-			}
-			existing := strings.TrimSpace(string(b))
-			if existing != "" {
-				if !ValidID(existing) {
-					return "", fmt.Errorf("machine file does not contain a ULID")
-				}
-				return existing, nil
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-		return "", fmt.Errorf("machine file is empty")
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
 	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return "", err
 	}
 	_, err = fmt.Fprintln(f, id)
-	err = errors.Join(err, f.Close())
-	if err != nil {
+	if err = errors.Join(err, f.Sync(), f.Close()); err != nil {
 		return "", err
 	}
-	return id, nil
-}
-
-// ValidID reports whether s is a canonical ULID.
-func ValidID(s string) bool {
-	if len(s) != 26 || s[0] > '7' {
-		return false
-	}
-	for _, c := range s {
-		if !strings.ContainsRune("0123456789ABCDEFGHJKMNPQRSTVWXYZ", c) {
-			return false
-		}
-	}
-	return true
+	return id, atomicfile.SyncDir(home)
 }
 
 // Lock serializes local writers with an exclusive flock on a file in the Grid

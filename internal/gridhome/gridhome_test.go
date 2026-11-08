@@ -119,3 +119,49 @@ func TestTasksDirs(t *testing.T) {
 		t.Fatalf("got %v, %v; want %v", dirs, err, want)
 	}
 }
+
+func TestMachine(t *testing.T) {
+	const id = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+	for _, tc := range []struct {
+		name    string
+		content *string
+		want    string
+		wantErr bool
+	}{
+		{"missing", nil, "", false},
+		{"valid", ptr(id + "\n"), id, false},
+		{"padded", ptr("  " + id + "  "), id, false},
+		{"empty is missing", ptr(""), "", false},
+		{"torn is missing", ptr(id[:9]), "", false},
+		{"zero-filled is missing", ptr("\x00\x00\x00"), "", false},
+		{"not an id", ptr("not-an-id\n"), "", true},
+		{"too long", ptr(id + "X"), "", true},
+		{"first character out of range", ptr("91ARZ3NDEKTSV4RRFFQ69G5FAV"), "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tc.content != nil {
+				if err := os.WriteFile(filepath.Join(dir, "machine"), []byte(*tc.content), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := ReadMachine(dir)
+			if got != tc.want || (err != nil) != tc.wantErr {
+				t.Errorf("ReadMachine: %q, %v", got, err)
+			}
+			if Machine(dir) != tc.want {
+				t.Errorf("Machine: %q", Machine(dir))
+			}
+		})
+	}
+}
+
+func TestMachineNotAFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "machine"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if id, err := ReadMachine(dir); id != "" || err == nil {
+		t.Errorf("a folder read as an id: %q, %v", id, err)
+	}
+}

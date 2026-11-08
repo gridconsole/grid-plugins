@@ -63,13 +63,58 @@ func Tilde(path, home string) string {
 	return path
 }
 
-// Machine reads this computer's id from <dir>/machine, or "" before it is made.
+// Machine reads this computer's id from <dir>/machine, or "" before it is made
+// and while the file is empty or torn. It is the one reader of that file.
 func Machine(dir string) string {
-	b, err := os.ReadFile(filepath.Join(dir, "machine"))
-	if err != nil {
-		return ""
+	id, _ := ReadMachine(dir)
+	return id
+}
+
+// ReadMachine is Machine with the reason it could not read an id. A missing,
+// empty or torn file (a writer stopped before the id was complete) gives "" and
+// no error; a file that holds anything else is an error, so a person's edit is
+// never replaced.
+func ReadMachine(dir string) (string, error) {
+	path := filepath.Join(dir, "machine")
+	st, err := os.Stat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
 	}
-	return strings.TrimSpace(string(b))
+	if err != nil {
+		return "", err
+	}
+	if !st.Mode().IsRegular() || st.Size() > 128 {
+		return "", fmt.Errorf("machine is not a regular ULID file")
+	}
+	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	s := strings.Trim(string(b), " \t\r\n\x00")
+	switch {
+	case ValidID(s):
+		return s, nil
+	case len(s) < ulidLen && ulidChars(s):
+		return "", nil
+	}
+	return "", fmt.Errorf("machine file does not contain a ULID")
+}
+
+const ulidLen = 26
+
+// ValidID reports whether s is a canonical ULID.
+func ValidID(s string) bool { return len(s) == ulidLen && s[0] <= '7' && ulidChars(s) }
+
+func ulidChars(s string) bool {
+	for _, c := range s {
+		if !strings.ContainsRune("0123456789ABCDEFGHJKMNPQRSTVWXYZ", c) {
+			return false
+		}
+	}
+	return true
 }
 
 // FormatProblem says why this grid cannot use data of format n, or "" when it can.

@@ -7,8 +7,8 @@ import (
 	"os"
 )
 
-// syncDir flushes a folder's entries, so a rename into it is durable.
-func syncDir(dir string) error {
+// SyncDir flushes a folder's entries, so a rename or a new file in it survives a crash.
+func SyncDir(dir string) error {
 	d, err := os.Open(dir)
 	if err != nil {
 		return err

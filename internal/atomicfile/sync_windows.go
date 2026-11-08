@@ -2,6 +2,6 @@
 
 package atomicfile
 
-// syncDir does nothing: Windows cannot open a folder to sync it, and NTFS
+// SyncDir does nothing: Windows cannot open a folder to sync it, and NTFS
 // journals the rename.
-func syncDir(string) error { return nil }
+func SyncDir(string) error { return nil }
