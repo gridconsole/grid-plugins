@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -116,7 +117,7 @@ func (t Task) Validate() error {
 			return fmt.Errorf("check ids must be safe and unique: %q", c.ID)
 		}
 		seen[c.ID] = true
-		if c.Weight < 0 || c.Weight > 1000 {
+		if math.IsNaN(c.Weight) || c.Weight < 0 || c.Weight > 1000 {
 			return fmt.Errorf("check %s: weight must be between 0 and 1000", c.ID)
 		}
 		switch c.Type {
