@@ -47,6 +47,17 @@ def main():
         destination.mkdir()
         for case in CASES:
             record(case, source, node, scratch, destination)
+        # Go expectations are separately reviewed overlays, not JS recordings.
+        # Keep them through regeneration and include them unchanged in --check.
+        for case in CASES:
+            relative = Path(case['hook']) / case['name']
+            for name in ('go-diff.md', 'go-expected'):
+                old = output / relative / name
+                new = destination / relative / name
+                if old.is_dir():
+                    shutil.copytree(old, new)
+                elif old.is_file():
+                    shutil.copy2(old, new)
         index = index_text(source)
         (destination / 'INDEX.md').write_text(index)
         if args.check:

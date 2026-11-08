@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 )
 
-// All normalization rules mirror recordings/record.py:94-108. Order matters:
+// All normalization rules mirror recordings/record.py:108-122. Order matters:
 //   - Replace fixture, reference and recorder paths (longest first), then the
 //     case directory with $GRID_HOME/... Resolved sibling paths stay relative.
 //   - ISO dates through minutes, optional seconds/fractions/Z become <TIME>.
