@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/job"
@@ -57,6 +59,16 @@ type Record struct {
 type Store struct {
 	GridHome string
 	Now      func() time.Time
+	// Warn receives one line per damaged port file that List skips; nil is stderr.
+	Warn io.Writer
+}
+
+func (s Store) warn(format string, args ...any) {
+	w := s.Warn
+	if w == nil {
+		w = os.Stderr
+	}
+	fmt.Fprintf(w, "ports: warning: "+format+"\n", args...)
 }
 
 // Locked holds the allocator's fslock while examining or changing port files.
@@ -159,31 +171,38 @@ func (l *Locked) Claim(taskDir, id string, pid int, ports Range) (Record, error)
 	}
 	for start := ports.Start; start+BlockSize-1 <= ports.End; start += BlockSize {
 		r := Record{Range: Range{start, start + BlockSize - 1}, PID: pid, Job: id, Task: task, Lease: id, Fence: grant.Fence, Time: l.store.now()}
+		data, err := json.Marshal(r)
+		if err != nil {
+			return Record{}, err
+		}
+		// Every writer holds the allocator lock, so the existence check is exclusive.
+		// Each file is written whole by rename, so a crash never leaves a torn one.
 		var created []string
 		var createErr error
+		taken := false
 		for port := r.Start; port <= r.End; port++ {
 			path := filepath.Join(l.dir, strconv.Itoa(port)+".json")
-			f, err := fslock.OpenNoFollow(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-			if err != nil {
+			if _, err := os.Lstat(path); err == nil {
+				taken = true
+				break
+			} else if !errors.Is(err, os.ErrNotExist) {
 				createErr = err
 				break
 			}
 			created = append(created, path)
-			writeErr := json.NewEncoder(f).Encode(r)
-			createErr = errors.Join(writeErr, f.Sync(), f.Close())
-			if createErr != nil {
+			if createErr = atomicfile.Write(path, append(data, '\n'), 0o600); createErr != nil {
 				break
 			}
 		}
-		if createErr == nil {
+		if createErr == nil && !taken {
 			return r, nil
 		}
 		for _, path := range created {
-			if err := os.Remove(path); err != nil {
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return Record{}, errors.Join(createErr, err)
 			}
 		}
-		if !errors.Is(createErr, os.ErrExist) {
+		if createErr != nil {
 			return Record{}, createErr
 		}
 	}
@@ -197,21 +216,14 @@ func (l *Locked) SetProcess(r Record, pid int) (Record, error) {
 		return r, errors.New("a positive server pid is required")
 	}
 	r.PID, r.Group = pid, true
+	data, err := json.Marshal(r)
+	if err != nil {
+		return r, err
+	}
 	for port := r.Start; port <= r.End; port++ {
-		f, err := fslock.OpenNoFollow(filepath.Join(l.dir, strconv.Itoa(port)+".json"), os.O_WRONLY, 0)
-		if err != nil {
-			return r, err
-		}
-		err = json.NewEncoder(f).Encode(r)
-		if err == nil {
-			var offset int64
-			offset, err = f.Seek(0, 1)
-			if err == nil {
-				err = f.Truncate(offset)
-			}
-		}
-		err = errors.Join(err, f.Sync(), f.Close())
-		if err != nil {
+		// A crash part-way leaves files that disagree; List treats that block as
+		// damaged and gc removes it.
+		if err := atomicfile.Write(filepath.Join(l.dir, strconv.Itoa(port)+".json"), append(data, '\n'), 0o600); err != nil {
 			return r, err
 		}
 	}
@@ -226,13 +238,33 @@ func (s Store) List() ([]Record, error) {
 	defer l.Close()
 	return l.List()
 }
+
+// Damaged is a port file that holds no valid, agreeing, complete reservation.
+// Every writer holds the allocator lock and writes whole files, so one is always
+// a crash leftover. Records are the parsed reservations of its block, if any.
+type Damaged struct {
+	Port    int
+	Reason  string
+	Records []Record
+}
+
+// List returns the valid blocks and warns about, but skips, damaged files.
 func (l *Locked) List() ([]Record, error) {
+	records, damaged, err := l.Scan()
+	for _, d := range damaged {
+		l.store.warn("skipping damaged reservation file %d.json (%s); grid ports gc removes it", d.Port, d.Reason)
+	}
+	return records, err
+}
+
+func (l *Locked) Scan() ([]Record, []Damaged, error) {
 	entries, err := os.ReadDir(l.dir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	records := []Record{}
-	seen := map[int]Record{}
+	damaged := []Damaged{}
+	byStart := map[int][]int{}
+	parsed := map[int]Record{}
 	for _, e := range entries {
 		if !strings.HasSuffix(e.Name(), ".json") {
 			continue
@@ -243,32 +275,58 @@ func (l *Locked) List() ([]Record, error) {
 		}
 		f, err := fslock.OpenNoFollow(filepath.Join(l.dir, e.Name()), os.O_RDONLY, 0)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		var r Record
-		err = json.NewDecoder(f).Decode(&r)
+		err = json.NewDecoder(io.LimitReader(f, 64<<10)).Decode(&r)
 		_ = f.Close()
 		if err != nil {
-			return nil, fmt.Errorf("port %d: %w", port, err)
+			damaged = append(damaged, Damaged{Port: port, Reason: err.Error()})
+			continue
 		}
 		if r.Range.Validate() != nil || r.End-r.Start+1 != BlockSize || port < r.Start || port > r.End || r.PID <= 0 || !job.ValidID(r.Job) || r.Lease != r.Job || r.Time.IsZero() {
-			return nil, fmt.Errorf("port %d: invalid reservation", port)
+			damaged = append(damaged, Damaged{Port: port, Reason: "invalid reservation", Records: []Record{r}})
+			continue
 		}
 		rel, err := l.taskPath(filepath.Join(l.store.GridHome, filepath.FromSlash(r.Task)))
 		if err != nil || rel != r.Task {
-			return nil, errors.New("invalid reservation task path")
-		}
-		if old, ok := seen[r.Start]; ok {
-			if old != r {
-				return nil, fmt.Errorf("port %d: inconsistent block; inspect reservation files", port)
-			}
+			damaged = append(damaged, Damaged{Port: port, Reason: "invalid reservation task path", Records: []Record{r}})
 			continue
 		}
-		seen[r.Start] = r
-		records = append(records, r)
+		parsed[port] = r
+		byStart[r.Start] = append(byStart[r.Start], port)
+	}
+	records := []Record{}
+	for start, members := range byStart {
+		first := parsed[members[0]]
+		reason := ""
+		for _, port := range members {
+			if parsed[port] != first {
+				reason = "files of the block disagree"
+			}
+		}
+		if reason == "" && len(members) != BlockSize {
+			reason = "block is incomplete"
+		}
+		if reason == "" {
+			records = append(records, first)
+			continue
+		}
+		var all []Record
+		seen := map[Record]bool{}
+		for _, port := range members {
+			if r := parsed[port]; !seen[r] {
+				seen[r] = true
+				all = append(all, r)
+			}
+		}
+		for _, port := range members {
+			damaged = append(damaged, Damaged{Port: port, Reason: reason + fmt.Sprintf(" (block %d)", start), Records: all})
+		}
 	}
 	sort.Slice(records, func(i, j int) bool { return records[i].Start < records[j].Start })
-	return records, nil
+	sort.Slice(damaged, func(i, j int) bool { return damaged[i].Port < damaged[j].Port })
+	return records, damaged, nil
 }
 
 func (s Store) Release(taskDir, id string) error {
@@ -307,11 +365,17 @@ func (s Store) GC() ([]Record, error) {
 		return nil, err
 	}
 	defer l.Close()
-	records, err := l.List()
+	records, damaged, err := l.Scan()
 	if err != nil {
 		return nil, err
 	}
 	removed := []Record{}
+	for _, d := range damaged {
+		if err := os.Remove(filepath.Join(l.dir, strconv.Itoa(d.Port)+".json")); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return removed, err
+		}
+		s.warn("removed damaged reservation file %d.json (%s)", d.Port, d.Reason)
+	}
 	for _, r := range records {
 		reclaim := !Alive(r.PID, r.Group)
 		if !reclaim {

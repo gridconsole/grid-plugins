@@ -3,13 +3,16 @@
 package ports
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -269,5 +272,85 @@ func TestClaimInSeparateProcesses(t *testing.T) {
 	}
 	if len(records) != count || len(used) != count*BlockSize {
 		t.Fatalf("got %d blocks and %d ports", len(records), len(used))
+	}
+}
+
+// Every writer holds the allocator lock, so a file that is empty, unparsable or
+// out of step with its block is a crash leftover: List skips it, gc removes it.
+func TestDamagedPortFilesAreSkippedThenCollected(t *testing.T) {
+	portFile := func(s Store, port int) string {
+		return filepath.Join(s.GridHome, "ports", strconv.Itoa(port)+".json")
+	}
+	for _, tc := range []struct {
+		name   string
+		damage func(t *testing.T, s Store, r Record)
+		port   int // a port file that must be gone after gc
+	}{
+		{"empty", func(t *testing.T, s Store, r Record) {
+			if err := os.WriteFile(portFile(s, 41015), nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}, 41015},
+		{"unparsable", func(t *testing.T, s Store, r Record) {
+			if err := os.WriteFile(portFile(s, 41015), []byte("{\"pid\":"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}, 41015},
+		{"mismatched", func(t *testing.T, s Store, r Record) {
+			other := r
+			other.Fence++
+			b, _ := json.Marshal(other)
+			if err := os.WriteFile(portFile(s, r.Start+4), b, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}, 41004},
+		{"incomplete", func(t *testing.T, s Store, r Record) {
+			if err := os.Remove(portFile(s, r.End)); err != nil {
+				t.Fatal(err)
+			}
+		}, 41000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var warned bytes.Buffer
+			s := Store{GridHome: t.TempDir(), Warn: &warned}
+			task := filepath.Join(s.GridHome, "tasks", "T-1")
+			r, err := s.Claim(task, "J-1", os.Getpid(), Range{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.damage(t, s, r)
+			records, err := s.List()
+			if err != nil {
+				t.Fatalf("list failed on a damaged file: %v", err)
+			}
+			if tc.name == "empty" || tc.name == "unparsable" {
+				if len(records) != 1 {
+					t.Fatalf("intact block lost: %+v", records)
+				}
+			} else if len(records) != 0 {
+				t.Fatalf("damaged block listed: %+v", records)
+			}
+			if !strings.Contains(warned.String(), "damaged") {
+				t.Fatalf("no warning: %q", warned.String())
+			}
+			// A new claim still works around the leftover.
+			next, err := s.Claim(task, "J-2", os.Getpid(), Range{})
+			if err != nil || (next.Start <= 41015 && next.End >= 41015 && tc.port == 41015) {
+				t.Fatalf("claim over leftover: %+v %v", next, err)
+			}
+			if err := s.Release(task, "J-2"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.GC(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(portFile(s, tc.port)); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("gc left %d.json: %v", tc.port, err)
+			}
+			warned.Reset()
+			if _, err := s.List(); err != nil || warned.Len() != 0 {
+				t.Fatalf("still damaged after gc: %v %q", err, warned.String())
+			}
+		})
 	}
 }
