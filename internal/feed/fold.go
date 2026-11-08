@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -20,7 +21,11 @@ func (s Store) State() (contract.State, error) {
 	if err != nil {
 		return contract.State{}, err
 	}
-	state, _ := FoldRead(read)
+	now := time.Now()
+	if s.Now != nil {
+		now = s.Now()
+	}
+	state, _ := FoldReadAt(read, now)
 	return state, nil
 }
 

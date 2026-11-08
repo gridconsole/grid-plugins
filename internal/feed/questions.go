@@ -2,6 +2,7 @@ package feed
 
 import (
 	"sort"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 )
@@ -17,8 +18,9 @@ type QuestionDecision struct {
 }
 
 // foldQuestions extends the shared fold for person gates without changing Job
-// authority. Times are display data; task controls retain tenure order.
-func foldQuestions(read ReadResult, state *contract.State) map[string]QuestionDecision {
+// authority or contract verdicts. Task controls retain tenure order; only
+// gate deadlines use the read time.
+func foldQuestions(read ReadResult, state *contract.State, now time.Time) map[string]QuestionDecision {
 	records := map[string]Record{}
 	for _, e := range read.Records {
 		if e.Verdict == "counted" {
@@ -32,6 +34,9 @@ func foldQuestions(read ReadResult, state *contract.State) map[string]QuestionDe
 			continue
 		}
 		d := QuestionDecision{Question: post, State: "open", Events: []Record{}}
+		gate := object(post.Body["gate"])
+		deadline, deadlineErr := time.Parse(time.RFC3339Nano, str(gate["at"]))
+		due := deadlineErr == nil && !now.Before(deadline) && str(gate["default"]) != ""
 		controls := []Record{}
 		for _, p := range records {
 			if p.Type == "control" && p.Lease != nil && *p.Lease == "task" && p.Fence > 0 && str(p.Body["target"]) == id && value(p.Re) == id && str(p.Body["question_event"]) != "" {
@@ -63,7 +68,8 @@ func foldQuestions(read ReadResult, state *contract.State) map[string]QuestionDe
 				}
 				d.Aging++
 			case "defaulted":
-				if str(p.Body["text"]) != str(object(post.Body["gate"])["default"]) {
+				at, err := time.Parse(time.RFC3339Nano, p.At)
+				if deadlineErr != nil || err != nil || at.Before(deadline) || str(p.Body["text"]) != str(gate["default"]) {
 					continue
 				}
 				d.State, d.Answer = "defaulted", str(p.Body["text"])
@@ -73,6 +79,9 @@ func foldQuestions(read ReadResult, state *contract.State) map[string]QuestionDe
 				continue
 			}
 			d.Events = append(d.Events, p)
+		}
+		if d.State == "open" && due {
+			d.State, d.Answer = "defaulted", str(gate["default"])
 		}
 		selected := ""
 		if q.Applied != nil && personAnswer(records[*q.Applied], q.Who) {
@@ -153,7 +162,12 @@ func personAnswer(p Record, who string) bool {
 
 // FoldRead uses the same admitted snapshot for state and question projections.
 func FoldRead(read ReadResult) (contract.State, map[string]QuestionDecision) {
+	return FoldReadAt(read, time.Now())
+}
+
+// FoldReadAt projects person gates at a specified read time without writing events.
+func FoldReadAt(read ReadResult, now time.Time) (contract.State, map[string]QuestionDecision) {
 	state := contract.Fold(posts(read))
-	questions := foldQuestions(read, &state)
+	questions := foldQuestions(read, &state, now)
 	return state, questions
 }

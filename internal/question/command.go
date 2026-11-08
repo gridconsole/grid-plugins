@@ -51,6 +51,7 @@ func RunAnswer(args []string, env Env) int {
 func run(args []string, env Env) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(env.Stdout, "Usage: grid question add|withdraw|list|tick|sync [--task <path>] [--json]")
+		fmt.Fprintln(env.Stdout, "withdraw and tick require a task lease: GRID_LEASE=task and GRID_LEASE_EPOCH.")
 		return 0
 	}
 	if len(args) == 0 {
@@ -68,6 +69,13 @@ func run(args []string, env Env) int {
 	}
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
+	fs.Usage = func() {
+		fmt.Fprintf(env.Stderr, "Usage: %s [flags]\n", name)
+		if action == "withdraw" || action == "tick" {
+			fmt.Fprintln(env.Stderr, "Requires a task lease: GRID_LEASE=task and GRID_LEASE_EPOCH.")
+		}
+		fs.PrintDefaults()
+	}
 	task := fs.String("task", "", "task folder or id; otherwise the enclosing task")
 	asJSON := fs.Bool("json", false, "print JSON")
 	var in Input

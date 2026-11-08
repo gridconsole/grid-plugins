@@ -667,3 +667,51 @@ func TestListDoesNotWrite(t *testing.T) {
 		})
 	}
 }
+
+func TestReadDefaultsWithoutTick(t *testing.T) {
+	s, now := setup(t)
+	add(t, s, input())
+	*now = input().Applies
+	before := taskSnapshot(t, s.TaskDir)
+	r := list(t, s)[0]
+	if r.State != "defaulted" || r.Answer != input().Default || len(r.History) != 0 {
+		t.Fatalf("default needs tick: %+v", r)
+	}
+	if !reflect.DeepEqual(before, taskSnapshot(t, s.TaskDir)) {
+		t.Fatal("default read wrote files")
+	}
+	if _, err := s.Sync(); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.Answer(r.ID, "A late human answer")
+	if err != nil || r.State != "answered" || len(r.History) != 1 {
+		t.Fatalf("late answer without tick: %+v %v", r, err)
+	}
+}
+
+func TestCLIRoleCanTick(t *testing.T) {
+	s, now := setup(t)
+	add(t, s, input())
+	*now = input().Applies
+	s.ControlWriter.Author.Role = "cli"
+	changed, err := s.Tick()
+	if err != nil || len(changed) != 1 {
+		t.Fatalf("cli tick: %+v %v", changed, err)
+	}
+	r := list(t, s)[0]
+	if r.State != "defaulted" || len(r.History) != 1 || r.History[0].Role != "cli" {
+		t.Fatalf("cli audit: %+v", r)
+	}
+}
+
+func TestLeaseHelp(t *testing.T) {
+	for _, args := range [][]string{{"--help"}, {"withdraw", "--help"}, {"tick", "--help"}} {
+		env, _, out, errout := commandEnv(t)
+		if code := Run(args, env); code != 0 {
+			t.Fatalf("help %v: %d", args, code)
+		}
+		if !strings.Contains(out.String()+errout.String(), "GRID_LEASE=task") {
+			t.Fatalf("missing task lease help: %s%s", out, errout)
+		}
+	}
+}

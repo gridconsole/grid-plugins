@@ -56,7 +56,10 @@ func (s Store) publishQuestion(dir string, r *Record) error {
 		return err
 	}
 	r.Post = post.ID
-	r.Asked.Time, _ = time.Parse(FeedTime, post.At)
+	r.Asked.Time, err = time.Parse(FeedTime, post.At)
+	if err != nil {
+		return fmt.Errorf("invalid Feed timestamp: %w", err)
+	}
 	return save(dir, *r)
 }
 
@@ -104,7 +107,10 @@ func (s Store) publishEvents(dir string, r *Record, before int) error {
 			return err
 		}
 		e.Post, e.Who, e.Role = post.ID, post.Author.ID, post.Author.Role
-		e.At.Time, _ = time.Parse(FeedTime, post.At)
+		e.At.Time, err = time.Parse(FeedTime, post.At)
+		if err != nil {
+			return fmt.Errorf("invalid Feed timestamp: %w", err)
+		}
 	}
 	return save(dir, *r)
 }
@@ -130,7 +136,7 @@ func (s Store) project(dir string, write bool) ([]Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, decisions := feed.FoldRead(read)
+	_, decisions := feed.FoldReadAt(read, s.now())
 	records := []Record{}
 	ids := map[string]bool{}
 	for _, d := range decisions {
@@ -154,7 +160,10 @@ func (s Store) project(dir string, write bool) ([]Record, error) {
 		if r.Job == "" && d.Question.Job != nil {
 			r.Job = *d.Question.Job
 		}
-		r.Asked.Time, _ = time.Parse(FeedTime, d.Question.At)
+		r.Asked.Time, err = time.Parse(FeedTime, d.Question.At)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Feed timestamp: %w", err)
+		}
 		r.State, r.Answer, r.Aging = d.State, d.Answer, d.Aging
 		if r.AgeAfterSeconds == 0 {
 			r.AgeAfterSeconds = int64(DefaultAgeAfter / time.Second)
@@ -168,7 +177,10 @@ func (s Store) project(dir string, write bool) ([]Record, error) {
 				kind, _ = p.Body["question_event"].(string)
 				text, _ = p.Body["text"].(string)
 			}
-			at, _ := time.Parse(FeedTime, p.At)
+			at, err := time.Parse(FeedTime, p.At)
+			if err != nil {
+				return nil, fmt.Errorf("invalid Feed event timestamp: %w", err)
+			}
 			r.History = append(r.History, Event{Post: p.ID, Role: p.Author.Role, Who: p.Author.ID, Kind: kind, Text: text, At: Stamp{at}})
 		}
 		records = append(records, r)

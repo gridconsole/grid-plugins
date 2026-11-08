@@ -121,6 +121,11 @@ func validateRecord(r Record) error {
 			state = "withdrawn"
 		}
 	}
+	// A deadline alone defaults the projection; history contains only actual
+	// Feed events, so no synthetic control or author is required.
+	if state == "open" && r.State == "defaulted" && r.Answer == r.Gate.Default {
+		state, answer = r.State, r.Answer
+	}
 	if aging != r.Aging || defaults > 1 || answers > 1 || state != r.State || answer != r.Answer {
 		return errors.New("question state does not match history")
 	}

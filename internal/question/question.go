@@ -234,9 +234,9 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 	return
 }
 
-// Tick commits a due default and its audit event together under the task lock.
-// It has no external side effects to replay after a crash. The returned slice
-// contains only records changed by this invocation.
+// Tick records due default and aging audit events under the task lock.
+// Deadlines already release gates on reads; the default control is optional
+// audit history. The returned slice contains only newly recorded events.
 func (s Store) Tick() (changed []Record, err error) {
 	changed = []Record{}
 	err = s.locked(true, func(dir string) error {
@@ -246,7 +246,10 @@ func (s Store) Tick() (changed []Record, err error) {
 		}
 		now := s.now()
 		for _, r := range records {
-			if r.State != "open" {
+			if r.Post == "" || r.State != "open" && r.State != "defaulted" {
+				continue
+			}
+			if slices.ContainsFunc(r.History, func(e Event) bool { return e.Kind == "defaulted" }) {
 				continue
 			}
 			before := len(r.History)
