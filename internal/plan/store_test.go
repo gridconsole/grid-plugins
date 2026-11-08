@@ -2,6 +2,7 @@ package plan
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,6 +36,26 @@ func get(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+func TestWithHash(t *testing.T) {
+	s := testStore(t)
+	if err := s.WithHash(func(string) error { t.Fatal("called without a plan"); return nil }); !errors.Is(err, ErrNoPlan) {
+		t.Fatalf("missing plan: %v", err)
+	}
+	written, err := s.Write(fixture(t, "plan.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := ""
+	if err := s.WithHash(func(hash string) error { got = hash; return nil }); err != nil || got != written.Hash {
+		t.Fatalf("%q, want %q: %v", got, written.Hash, err)
+	}
+	// The hash follows plan.md itself, however it was edited.
+	put(t, filepath.Join(s.TaskDir, "plan.md"), "# Plan, rev 1 \u00b7 000000\n\nedited\n")
+	if err := s.WithHash(func(hash string) error { got = hash; return nil }); err != nil || got == written.Hash {
+		t.Fatalf("%q after an edit: %v", got, err)
+	}
 }
 
 func TestWriteRevisionAndArchive(t *testing.T) {

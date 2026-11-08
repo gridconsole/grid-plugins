@@ -1,1 +1,1 @@
-{"task":"T-01","who":{"id":"local","role":"owner"},"when":"<TIME>","what":"approve","from_state":"waiting","to_state":"waiting","note":"Reviewed","plan_hash":"opaque-v1"}
+{"task":"T-01","who":{"id":"local","role":"owner"},"when":"<TIME>","what":"approve","from_state":"waiting","to_state":"waiting","note":"Reviewed","plan_hash":"3b0155"}

@@ -11,6 +11,9 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
+// ErrNoPlan reports a task folder with no plan.md.
+var ErrNoPlan = errors.New("plan.md is missing")
+
 // Store owns only plan.md, plan-revisions/<n>.md and the persistent .plan.lock.
 // TaskDir is an existing task folder selected by internal/where or the caller.
 type Store struct{ TaskDir string }
@@ -137,6 +140,26 @@ func (s Store) Read() (string, error) {
 	}
 	b, err := readRegular(filepath.Join(dir, "plan.md"))
 	return string(b), err
+}
+
+// WithHash calls fn with the hash of the current plan.md while holding
+// .plan.lock, so no plan write lands between the hash and what fn records.
+// A caller that also holds another lock (a task's .task.lock) takes it first.
+func (s Store) WithHash(fn func(hash string) error) error {
+	dir, err := s.directory()
+	if err != nil {
+		return err
+	}
+	return locked(dir, func() error {
+		b, err := readRegular(filepath.Join(dir, "plan.md"))
+		if errors.Is(err, os.ErrNotExist) {
+			return ErrNoPlan
+		}
+		if err != nil {
+			return err
+		}
+		return fn(Hash(string(b)))
+	})
 }
 
 // Items projects the current plan and optional legacy state files without writes.

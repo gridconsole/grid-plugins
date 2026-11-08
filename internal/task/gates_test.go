@@ -7,6 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 )
 
 func waitingFixture(t *testing.T) (Store, Task) {
@@ -18,28 +22,52 @@ func waitingFixture(t *testing.T) (Store, Task) {
 	return s, task
 }
 
-func TestApprovalTracksOpaqueHash(t *testing.T) {
+const planV1 = "# Plan, rev 1 \u00b7 000000\n\n## Where it stands\n\n- [ ] 1 Build it\n\n## How we approach it\n\nUsed: brain:project/conventions/example\n"
+const planV2 = planV1 + "\nA new risk the person has not seen.\n"
+
+func setPlan(t *testing.T, task Task, text string) string {
+	t.Helper()
+	write(t, filepath.Join(task.Path, "plan.md"), text)
+	return plan.Hash(text)
+}
+
+func TestApprovalTracksPlan(t *testing.T) {
 	s, task := waitingFixture(t)
 	o := WriteOptions{ID: task.ID, Note: "Reviewed"}
-	if _, err := s.Approve(o, ""); err == nil {
-		t.Fatal("approved absent hash")
+	if _, err := s.Approval("", task.ID); err == nil || !strings.Contains(err.Error(), "not been approved") {
+		t.Fatalf("approval without a plan: %v", err)
 	}
+	if _, err := s.Approve(o, ""); err == nil || !strings.Contains(err.Error(), "plan.md is missing") {
+		t.Fatalf("approved a task with no plan.md: %v", err)
+	}
+	h1 := setPlan(t, task, planV1)
+	// A stored plan.hash is not a source of truth and is never read.
 	write(t, filepath.Join(task.Path, "plan.hash"), "opaque:v1\n")
 	event, err := s.Approve(o, "")
-	if err != nil || event.PlanHash != "opaque:v1" || event.Note != "Reviewed" {
+	if err != nil || event.PlanHash != h1 || event.Note != "Reviewed" {
 		t.Fatalf("%+v: %v", event, err)
 	}
 	got, err := s.Approval("", task.ID)
-	if err != nil || got != event {
+	if err != nil || got != event || !Approved(task.Path) {
 		t.Fatalf("%+v: %v", got, err)
+	}
+	// Ticking a step is not a plan change (plan.Hash ignores it).
+	setPlan(t, task, strings.Replace(planV1, "[ ]", "[x]", 1))
+	if _, err := s.Approval("", task.ID); err != nil || !Approved(task.Path) {
+		t.Fatalf("tick staled the approval: %v", err)
 	}
 	before, _ := os.ReadFile(filepath.Join(task.Path, "history.md"))
 	oldApproval, _ := os.ReadFile(filepath.Join(task.Path, "approval.json"))
-	write(t, filepath.Join(task.Path, "plan.hash"), "opaque:v2\n")
+	// An agent edits plan.md after the approval, and may rewrite plan.hash to match.
+	h2 := setPlan(t, task, planV2)
+	write(t, filepath.Join(task.Path, "plan.hash"), h1+"\n")
 	if _, err := s.Approval("", task.ID); err == nil || !strings.Contains(err.Error(), "Changed since you approved") {
 		t.Fatalf("stale gate accepted: %v", err)
 	}
-	for _, hash := range []string{"opaque:v1", ""} {
+	if Approved(task.Path) {
+		t.Fatal("hook predicate accepted a changed plan")
+	}
+	for _, hash := range []string{h1, ""} {
 		if _, err := s.Approve(o, hash); err == nil {
 			t.Fatalf("approved stale hash %q", hash)
 		}
@@ -49,19 +77,59 @@ func TestApprovalTracksOpaqueHash(t *testing.T) {
 	if !bytes.Equal(before, after) || !bytes.Equal(oldApproval, approval) {
 		t.Fatal("refused approval wrote data")
 	}
-	if _, err := s.Approve(o, "opaque:v2"); err != nil {
+	if _, err := s.Approve(o, h2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Approval("", task.ID); err != nil {
+	if _, err := s.Approval("", task.ID); err != nil || !Approved(task.Path) {
 		t.Fatal(err)
 	}
+	if err := os.Remove(filepath.Join(task.Path, "plan.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Approval("", task.ID); err == nil || Approved(task.Path) {
+		t.Fatal("approval survived a missing plan")
+	}
+	setPlan(t, task, planV2)
 	for _, action := range []string{"close", "reopen"} {
 		if _, err := s.Change(WriteOptions{ID: task.ID, Action: action}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.Approval("", task.ID); err == nil {
+	if _, err := s.Approval("", task.ID); err == nil || Approved(task.Path) {
 		t.Fatal("reopen reused an old approval")
+	}
+}
+
+// Approve and Approval take .plan.lock, so they wait for a plan write in flight.
+func TestApprovalWaitsForPlanLock(t *testing.T) {
+	s, task := waitingFixture(t)
+	setPlan(t, task, planV1)
+	lock, err := fslock.OpenNoFollow(filepath.Join(task.Path, ".plan.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	if err := fslock.LockExclusive(lock); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.Approve(WriteOptions{ID: task.ID}, "")
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("approved while a plan write held .plan.lock: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	fslock.Unlock(lock)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("approve did not resume after .plan.lock was released")
 	}
 }
 
@@ -78,20 +146,19 @@ func TestApproveStateAndFiles(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			write(t, filepath.Join(task.Path, "plan.hash"), "hash")
-			_, err := s.Approve(WriteOptions{ID: task.ID}, "hash")
+			_, err := s.Approve(WriteOptions{ID: task.ID}, setPlan(t, task, planV1))
 			if (err == nil) != (state == "waiting") {
 				t.Fatalf("%s: %v", state, err)
 			}
 		})
 	}
-	for _, name := range []string{"plan.hash", "approval.json"} {
+	for _, name := range []string{"plan.md", "approval.json"} {
 		t.Run("symlink/"+name, func(t *testing.T) {
 			s, task := waitingFixture(t)
-			write(t, filepath.Join(task.Path, "plan.hash"), "hash")
+			hash := setPlan(t, task, planV1)
 			target := filepath.Join(filepath.Dir(task.Path), "outside")
-			write(t, target, "hash")
-			if name == "plan.hash" {
+			write(t, target, planV1)
+			if name == "plan.md" {
 				if err := os.Remove(filepath.Join(task.Path, name)); err != nil {
 					t.Fatal(err)
 				}
@@ -99,8 +166,11 @@ func TestApproveStateAndFiles(t *testing.T) {
 			if err := os.Symlink(target, filepath.Join(task.Path, name)); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.Approve(WriteOptions{ID: task.ID}, "hash"); err == nil {
+			if _, err := s.Approve(WriteOptions{ID: task.ID}, hash); err == nil {
 				t.Fatal("followed symlink")
+			}
+			if Approved(task.Path) {
+				t.Fatal("hook predicate followed symlink")
 			}
 		})
 	}
@@ -157,8 +227,7 @@ func TestGateWithSymlinkedHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Resolver.GridHome = alias
-	write(t, filepath.Join(task.Path, "plan.hash"), "opaque")
-	if _, err := s.Approve(WriteOptions{ID: task.ID}, "opaque"); err != nil {
+	if _, err := s.Approve(WriteOptions{ID: task.ID}, setPlan(t, task, planV1)); err != nil {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(task.Path, "refusals", "R-1.json"), `{}`)

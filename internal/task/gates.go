@@ -6,98 +6,124 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 )
 
 var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
 
-// Approve records exactly the opaque plan.hash seen by the person. A supplied
-// hash is a compare-and-set token. With no token, an existing stale approval
-// must be explicitly replaced using --plan-hash after reviewing the new plan.
+// Approve records the plan.md hash the person saw. A supplied hash is a
+// compare-and-set token. With no token, an existing stale approval must be
+// explicitly replaced using --plan-hash after reviewing the new plan.
+//
+// The hash comes from plan.md through internal/plan, never from a stored copy.
+// Locks are taken in one order: .task.lock (withWrite), then .plan.lock (WithHash),
+// which only plan writers also take; nothing takes them the other way round.
 func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 	var event Event
 	err := s.withWrite(o.Cwd, o.ID, func(t Task) error {
 		if t.State != "waiting" {
 			return fmt.Errorf("cannot approve task in current state %q: expected waiting", t.State)
 		}
-		current, err := planHash(t.Path)
+		previous, err := readOptional(filepath.Join(t.Path, "approval.json"))
 		if err != nil {
 			return err
 		}
-		if hash == "" {
-			previous, err := readOptional(filepath.Join(t.Path, "approval.json"))
+		err = plan.Store{TaskDir: t.Path}.WithHash(func(current string) error {
+			want := hash
+			if want == "" {
+				if previous != nil {
+					var old Event
+					if err := json.Unmarshal(previous, &old); err != nil {
+						return err
+					}
+					if old.PlanHash != current {
+						return errors.New("Changed since you approved: review the plan and pass --plan-hash with its current hash")
+					}
+				}
+				want = current
+			}
+			if want != current {
+				return fmt.Errorf("plan hash no longer matches: approved %q, current %q", want, current)
+			}
+			o.Action = "approve"
+			event = s.event(t, o, t.State)
+			event.PlanHash = want
+			data, err := json.Marshal(event)
 			if err != nil {
 				return err
 			}
-			if previous != nil {
-				var old Event
-				if err := json.Unmarshal(previous, &old); err != nil {
-					return err
-				}
-				if old.PlanHash != current {
-					return errors.New("Changed since you approved: review the plan and pass --plan-hash with its current hash")
-				}
-			}
-			hash = current
+			return commitWrite(t.Path, event, map[string][]byte{"approval.json": append(data, '\n')})
+		})
+		if errors.Is(err, plan.ErrNoPlan) {
+			return errors.New("plan.md is missing; write the plan before approving it")
 		}
-		if hash != current {
-			return fmt.Errorf("plan hash no longer matches: approved %q, current %q", hash, current)
-		}
-		o.Action = "approve"
-		event = s.event(t, o, t.State)
-		event.PlanHash = hash
-		data, err := json.Marshal(event)
-		if err != nil {
-			return err
-		}
-		return commitWrite(t.Path, event, map[string][]byte{"approval.json": append(data, '\n')})
+		return err
 	})
 	return event, err
 }
 
-// Approval reads a gate only while its approved hash still matches plan.hash.
-// Consumers must use this check instead of treating approval.json's existence
-// as permission. Plan writers must also use the task's .task.lock.
+// Approval reads a gate only while its approved hash still matches plan.md.
+// Consumers must use this check (or Approved) instead of treating approval.json's
+// existence as permission. Plan writers hold .plan.lock, not .task.lock.
 func (s Store) Approval(cwd, id string) (Event, error) {
 	var event Event
 	err := s.withWrite(cwd, id, func(t Task) error {
-		if t.State == "closed" {
-			return errors.New("cannot use approval in current state closed")
-		}
 		data, err := readOptional(filepath.Join(t.Path, "approval.json"))
 		if err != nil {
 			return err
 		}
-		if data == nil {
-			return errors.New("plan has not been approved")
-		}
-		if err := json.Unmarshal(data, &event); err != nil {
+		err = plan.Store{TaskDir: t.Path}.WithHash(func(hash string) (err error) {
+			event, err = checkApproval(t, data, hash)
 			return err
+		})
+		if errors.Is(err, plan.ErrNoPlan) {
+			// A missing plan matches no approval; closed and never approved still come first.
+			if _, err = checkApproval(t, data, ""); err == nil {
+				err = plan.ErrNoPlan
+			}
 		}
-		hash, err := planHash(t.Path)
-		if err != nil {
-			return err
-		}
-		if event.Task != t.ID || event.What != "approve" || event.PlanHash != hash {
-			return errors.New("Changed since you approved: plan hash no longer matches")
-		}
-		return nil
+		return err
 	})
 	return event, err
 }
 
-func planHash(dir string) (string, error) {
-	data, err := readOptional(filepath.Join(dir, "plan.hash"))
+// Approved is the lock-free form of Approval for a hook: it answers whether dir
+// holds an approval whose hash still equals plan.md's now. It takes no lock and
+// replays no journal, so a write in flight or any read failure is false.
+func Approved(dir string) bool {
+	t, err := Read(dir)
 	if err != nil {
-		return "", err
+		return false
 	}
-	hash := strings.TrimSpace(string(data))
-	if hash == "" {
-		return "", errors.New("plan.hash is missing or empty; prepare a plan before approving")
+	data, err := readOptional(filepath.Join(dir, "approval.json"))
+	if err != nil {
+		return false
 	}
-	return hash, nil
+	text, err := plan.Store{TaskDir: dir}.Read()
+	if err != nil {
+		return false
+	}
+	_, err = checkApproval(t, data, plan.Hash(text))
+	return err == nil
+}
+
+func checkApproval(t Task, data []byte, hash string) (Event, error) {
+	var event Event
+	if t.State == "closed" {
+		return event, errors.New("cannot use approval in current state closed")
+	}
+	if data == nil {
+		return event, errors.New("plan has not been approved")
+	}
+	if err := json.Unmarshal(data, &event); err != nil {
+		return Event{}, err
+	}
+	if event.Task != t.ID || event.What != "approve" || event.PlanHash != hash {
+		return Event{}, errors.New("Changed since you approved: plan hash no longer matches")
+	}
+	return event, nil
 }
 
 // Decide records a task-scoped allow or deny for a known refusal. It never runs

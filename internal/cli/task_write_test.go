@@ -8,8 +8,11 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/golden"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
+
+const approvedPlan = "# Plan, rev 1 \u00b7 000000\n\n## Steps\n\n- [ ] 1 Build it\n"
 
 var taskWriteTime = regexp.MustCompile(`\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z`)
 
@@ -22,7 +25,7 @@ func TestTaskWriteGolden(t *testing.T) {
 		{"task-stop-json", []string{"task", "stop", "--json", "T-01", "--reason", "No longer needed"}},
 		{"task-reopen-json", []string{"task", "reopen", "T-01", "--reason", "Another round", "--json"}},
 		{"task-status-json", []string{"task", "status", "T-01", "waiting", "--json"}},
-		{"task-approve-json", []string{"approve", "T-01", "--plan-hash", "opaque-v1", "--note", "Reviewed", "--json"}},
+		{"task-approve-json", nil}, // --plan-hash is filled in from plan.md below
 		{"task-refusal-json", []string{"refusal", "decide", "T-01", "R-1", "allow", "--note", "This task only", "--json"}},
 		{"task-history-json", []string{"task", "history", "T-01", "--json"}},
 		{"task-history-empty-json", []string{"task", "history", "T-01", "--json"}},
@@ -41,7 +44,8 @@ func TestTaskWriteGolden(t *testing.T) {
 				if _, err := s.Change(task.WriteOptions{ID: fixture.ID, Action: "status", State: "waiting"}); err != nil {
 					t.Fatal(err)
 				}
-				h.write(filepath.Join(fixture.Path, "plan.hash"), "opaque-v1\n")
+				h.write(filepath.Join(fixture.Path, "plan.md"), approvedPlan)
+				tc.args = []string{"approve", "T-01", "--plan-hash", plan.Hash(approvedPlan), "--note", "Reviewed", "--json"}
 			case "task-refusal-json":
 				h.write(filepath.Join(fixture.Path, "refusals", "R-1.json"), `{"id":"R-1","command":"echo example"}`)
 			case "task-history-json":
