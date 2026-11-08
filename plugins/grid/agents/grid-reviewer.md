@@ -23,7 +23,7 @@ Check, in order:
 - contracts and formats;
 - module boundaries;
 - permissions and security at every boundary the change touches;
-- that `verify` ran: rerun it once yourself;
+- that `verify` ran: the Outcome records its command, its totals and the commit it ran on. When that commit is the head you review, trust it and rerun only the tests beside the files the diff touched; rerun the whole `verify` only when the Outcome has no totals, names another commit, or the touched tests disagree with it;
 - cross-platform assumptions.
 
 A change outside the Job's files and a skipped or failing verify break the brief itself, so they are must-fix; name the brief section instead of an Acceptance id. A security hole at a boundary that no Acceptance line names goes first in the notes for the person, marked security.

@@ -7,7 +7,7 @@ description: Write or refresh a task's view pages in views/: progress.html, resu
 
 # Views
 
-**Default pending F1.** A task folder has four derived pages in `views/`, and no other file there (the contract checker fails one): `progress.html`, `plan.html`, `result.html`, `questions.html`. A view is derived, never the source: it shows what task.md, plan.md, history.md and `questions/` say. Change the source first, then the page. Never write `plan.html` here: the planner writes it, through the plan-page skill.
+**Default pending F1.** A task folder has four derived pages in `views/`: `progress.html`, `plan.html`, `result.html`, `questions.html`. Beside them `views/` holds only the plan's `<name>.svg` figures, as files straight in `views/`; the contract checker fails any other file or folder there. A view is derived, never the source: it shows what task.md, plan.md, history.md and `questions/` say. Change the source first, then the page. Never write `plan.html` here: the planner writes it, through the plan-page skill.
 
 The task folder is `<projects folder>/<project>/tasks/T-NN-slug/`. The projects folder is `GRID_PROJECTS`, else `$GRID_HOME/projects` (`GRID_HOME` is the Grid data folder `~/.grid/<name>`, never the workspace folder; if both are empty, Grid is not set up for this folder: say so and write nothing). If the person does not say which task, take the only open one, else ask. Never search the disk for it.
 

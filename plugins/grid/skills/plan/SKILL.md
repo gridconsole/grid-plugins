@@ -21,6 +21,24 @@ If `research.md` already exists and still answers the intent, use it; research a
 ```
 # Plan, rev 1 · 3f9a1c
 
+## Where it stands
+Research is done and the plan waits for your approval. Nothing is built yet. Once you approve, step 1 adds the filter to the store.
+
+## How we approach it
+Notes already carry tags, so one filter goes in the store, where the list and the coming search both call it.
+
+- **One filter in the store**: it ignores case and is tested on its own.
+- **A tag box on the list**: the list narrows as you type.
+- **Tests for both**: the filter alone, then the list through it.
+
+| Without | With |
+|---|---|
+| Every note shows, whatever its tags. | Typing a tag narrows the list. |
+| "Home" and "home" are two tags. | Case is ignored. |
+| Search would need a filter of its own. | Search reuses the store's filter. |
+
+Figure: views/approach.svg — the list and search both call one filter in the store
+
 ## Where things stand now
 
 Notes keep their tags in `src/store.js:3`, but nothing filters by them (research.md, "Store"). The list view renders every note on each keystroke (research.md, "List view").
@@ -59,6 +77,13 @@ Verify: `node --test` passes and the list narrows by tag
 ```
 
 - Line 1 is the revision line. Never type it by hand; the script writes it (below).
+- `## Where it stands` and `## How we approach it` are optional at every size; they come first, in this order and this shape, because the task page's status block and Overview read them. Without them the page falls back (`task-page-data.md`, "Overview text"). The hash leaves `## Where it stands` out, so keep it current as the work moves: rewriting it keeps rev and hash, needs no `--bump` and keeps an approval. `## How we approach it` is plan text the hash covers: rewriting it is a revision (`--bump`) and voids an earlier approval.
+- `## Where it stands`: two to four plain sentences for the status block above every tab: where the task is, what waits and on whom, what comes next. Words a guest understands, no file paths. It is not `## Where things stand now`, which holds the findings with their sources.
+- `## How we approach it`: the explanation for someone who did not read the research.
+  - The lead: one or two sentences, the idea of the whole approach.
+  - 3 to 6 cards, `- **Card title**: one or two lines.`: each a part of the approach a reader can point at, never a step list copied.
+  - 3 to 6 rows under `| Without | With |`: each a concrete outcome before and after, in plain words, not file or hook names.
+  - Optional last line `Figure: views/approach.svg — <caption>`: the caption says in one sentence what the drawing shows. Draw it in the task's `views/` folder: the parts, arrows labelled with what moves, old parts dashed, the new part in the accent colour. It must read at 400px: a `viewBox` about 360 wide, text 12 to 13px (11px for arrow labels), top to bottom when it has more than three parts. A standalone file: `role="img"` and an `aria-label` that says what the caption says; lines and text in `currentColor`, the new part's outline and tint in the accent `#2bd7f2`, all as attributes; no `<script>`, `<style>`, `style=`, `<foreignObject>` or outside references.
 - `## Where things stand now`: the findings that shape the plan, each with its source (a `file:line`, a `research.md` section, a link). Short paragraphs or bullets; a reader who skips the code still knows the situation.
 - `## Approach and options`: two or three real options, each with its trade-off, then `Chosen:` with the reason. A choice that is the person's to make is an open question (below); name its `Q-n` here with the option you recommend.
 - `## Risks`: one bullet each, `- <high|medium|low>: <the risk>. Retired by step <n>.` A risk that no step retires needs a step, or a question.
@@ -96,7 +121,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/plan-hash.mjs" "<absolute task folder>/plan.md
 
 Run it as a single command on its own: the absolute path to plan.md, no `cd`, `&&`, `$PWD` or anything chained before or after, so a person's allow rule for `node` matches it.
 
-It writes line 1 as `# Plan, rev <n> · <hash>`. The hash is the first 6 hex digits of the SHA-256 of the file without line 1, with every checkbox read as unticked, every `evidence:` and `needs:` line under a step left out, and trailing spaces cut. An evidence or needs line is an indented line that starts with `evidence:` or `needs:`, in the lines right under a `- [ ]` or `- [x]` step up to the next blank or unindented line. So ticking a step, adding its evidence or changing its `needs:` does not change rev or hash; changing a step's words, order or `verify:`, or any section above the steps, does (so does an `evidence:` or `needs:` line that is not indented under a step), and then you must use `--bump`. A new plan is rev 1. An approval names a rev and a hash, so a bump voids any earlier approval; say so to the person.
+It writes line 1 as `# Plan, rev <n> · <hash>`. The hash is the first 6 hex digits of the SHA-256 of the file without line 1, with the `## Where it stands` section left out (its heading up to the next `## ` heading) except any unindented step line written there and the indented lines under it, which still count, every checkbox read as unticked, every `evidence:` and `needs:` line under a step left out, and trailing spaces cut. An evidence or needs line is an indented line that starts with `evidence:` or `needs:`, in the lines right under a `- [ ]` or `- [x]` step up to the next blank or unindented line. So ticking a step, adding its evidence or changing its `needs:` does not change rev or hash; changing a step's words, order or `verify:`, or any section above the steps, does (so does an `evidence:` or `needs:` line that is not indented under a step), and then you must use `--bump`. A new plan is rev 1. An approval names a rev and a hash, so a bump voids any earlier approval; say so to the person.
 
 ## After writing
 

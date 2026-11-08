@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 // The revision line of a plan.md: "# Plan, rev <n> · <hash>".
 // The hash is the first 6 hex digits of the SHA-256 of the plan with its first line
-// removed, every checkbox read as unticked, every evidence and needs line left out, trailing
-// spaces cut from each line, blank lines at both ends cut, and a final newline. An evidence
-// or needs line is an indented line that starts with `evidence:` or `needs:` and sits in a
-// step's block (the lines right under a `- [ ]` or `- [x]` line, up to the next blank or
-// unindented line). So ticking a step, adding its evidence or changing its needs keeps rev
-// and hash; changing a step's words, its order or its verify line changes the hash, and so
-// does an `evidence:` or `needs:` line that is not indented under a step.
+// removed, the "## Where it stands" section left out, every checkbox read as unticked, every
+// evidence and needs line left out, trailing spaces cut from each line, blank lines at both ends
+// cut, and a final newline. The section runs from a line that is `## Where it stands` (trailing
+// spaces allowed) up to the next line that starts with `## `, or the end; an unindented step line
+// written there, and the indented lines under it, still count. An evidence or needs line is an
+// indented line that starts with `evidence:` or `needs:` and sits in a step's block (the lines
+// right under a `- [ ]` or `- [x]` line, up to the next blank or unindented line). So ticking a
+// step, adding its evidence, changing its needs and rewriting where the task stands keep rev and
+// hash; changing a step's words, its order or its verify line changes the hash, and so does an
+// `evidence:` or `needs:` line that is not indented under a step.
 // Usage: node plan-hash.mjs <plan.md> [--bump] [--print]   (any other file name is refused, exit 2)
 //   (no flag)  write the heading with the current rev (1 for a new plan) and the hash
 //   --bump     write the heading with rev + 1
@@ -21,12 +24,25 @@ import { fileURLToPath } from 'node:url';
 const HEADING = /^# Plan, rev (\d+) · [0-9a-f]{6,}$/;
 const STEP = /^(\s*- )\[[ xX]\]/;
 const EVIDENCE = /^\s+evidence:/;
+const STANDS = /^## Where it stands\s*$/;
 const NEEDS = /^\s+needs:/;
 
 export function planHash(text) {
   let inStep = false;
+  let inStands = false;
   const kept = [];
   for (const line of text.replace(/\r\n/g, '\n').split('\n').slice(1)) {
+    // Status text the planner rewrites as work moves; it must not void an approval.
+    // An unindented step line, and the indented lines of its block, still count there: every reader counts it as a step.
+    if (STANDS.test(line)) { inStands = true; inStep = false; continue; }
+    if (inStands && !line.startsWith('## ')) {
+      if (/^- \[[ xX]\]/.test(line)) inStep = true;
+      else if (!(inStep && /^\s+\S/.test(line))) { inStep = false; continue; }
+      else if (EVIDENCE.test(line) || NEEDS.test(line)) continue;
+      kept.push(line.replace(STEP, '$1[ ]').replace(/\s+$/, ''));
+      continue;
+    }
+    inStands = false;
     if (STEP.test(line)) inStep = true;
     else if (!/^\s+\S/.test(line)) inStep = false;
     else if (inStep && (EVIDENCE.test(line) || NEEDS.test(line))) continue;
