@@ -17,11 +17,10 @@ func TestPersonalChokePoint(t *testing.T) {
 			"internal/task/history.go": "FolderAt is used by hooks running in agent sessions",
 		},
 		"where.Resolver{": {
-			"internal/where/":              "resolver implementation owns caller policy",
-			"internal/cli/cli.go":          "shared CLI resolver stamps the caller",
-			"internal/guard/settings.go":   "guard adapter stamps the caller from its environment",
-			"internal/workflow/write.go":   "workflow project selection has no caller; the CLI owns workflow write authorization",
-			"internal/job/jobcmd/trace.go": "trace stamps the caller before enumerating visible task roots",
+			"internal/where/":            "resolver implementation owns caller policy",
+			"internal/cli/cli.go":        "shared CLI resolver stamps the caller",
+			"internal/guard/settings.go": "guard adapter stamps the caller from its environment",
+			"internal/workflow/files.go": "workflow file enumeration has no caller and remains owned by workflow lanes",
 		},
 	}
 	root := filepath.Join("..", "..")

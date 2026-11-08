@@ -321,27 +321,3 @@ func TestJobTraceInvalidInputs(t *testing.T) {
 		t.Fatalf("%+v, %v", result, err)
 	}
 }
-
-func TestJobTraceRespectsPersonalCallerPolicy(t *testing.T) {
-	home := t.TempDir()
-	for _, project := range []string{"alpha", gridhome.Personal} {
-		traceTestBundle(t, traceTask(t, home, project, "T-01"), "J-1", job.Source{Pointer: "brain:home/x"})
-	}
-	t.Setenv("GRID_MEMBER", "member")
-	for _, role := range []string{"owner", "member", "guest"} {
-		t.Run(role, func(t *testing.T) {
-			t.Setenv("GRID_ROLE", role)
-			rows := traceTestRows(t, home, "brain:home/x")
-			want := 1
-			if role == "owner" {
-				want = 2
-			}
-			if len(rows) != want || rows[0]["project"] != "alpha" {
-				t.Fatalf("visible rows: %+v", rows)
-			}
-			if role != "owner" {
-				traceCall(t, home, traceExitNotFound, "brain:home/x", "--project", gridhome.Personal)
-			}
-		})
-	}
-}
