@@ -18,6 +18,33 @@ Validate live stdout before normalizing fixtures; fixed objects reject
 unknown fields. See [L47 notes](../docs/lanes/L47.md) for parser conventions,
 streaming behavior, fixture capture and current output oddities.
 
+Regenerate the whole inventory after parser changes:
+
+```sh
+UPDATE_CONTRACT_COMMANDS=1 go test ./internal/cli -run '^TestContractCommandsParserInventory$' -count=1
+```
+
+The generator reads command dispatch expressions and probes the real parsers
+with `--help` to discover registered flags and whether they take values.
+`TestContractCommandsParserInventory` compares the complete generated document
+with the embedded inventory. Operand labels, required-flag semantics and output
+schema links are reviewed annotations in `contract_inventory_test.go`; new or
+removed parser routes require those annotations to be reconciled. Flags are
+listed as parsed, including shared parser flags whose use is restricted later
+(for example, Job `--dir` is usable only with `verify`).
+
+Refresh captured output fixtures with:
+
+```sh
+UPDATE_CONTRACT_COMMAND_FIXTURES=1 go test ./internal/cli -run '^TestContractCommandsApp$' -count=1
+go test ./internal/contract
+```
+
+`stream: true` describes an NDJSON line shape. `job next --json`, including
+`job next --wait --json`, prints one line and exits; it is not a persistent
+subscription. The app must invoke it again for the next result. The `--wait`
+form can wait before emitting its single result.
+
 These JSON Schema 2020-12 documents define the current wire format. Feed core
 wins over older formats. All examples use synthetic identities. Sources below
 are reference-document names and original line numbers, not machine paths.

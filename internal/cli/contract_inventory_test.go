@@ -1,0 +1,525 @@
+package cli
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"reflect"
+	"regexp"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"testing"
+
+	contractdata "github.com/gridconsole/grid-plugins/contract"
+	"github.com/gridconsole/grid-plugins/internal/version"
+)
+
+// The inventory is rebuilt from command dispatch expressions and live parser
+// probes. Annotations describe operands and output schemas, which flag.FlagSet
+// does not expose; they are never the source of command or flag names.
+type contractParserSource struct {
+	funcs   map[string]*ast.FuncDecl
+	imports map[string]string
+}
+
+type contractInventorySource struct {
+	t        *testing.T
+	packages map[string]contractParserSource
+	flags    map[string]bool // true if a registration can be boolean
+}
+
+func contractLiteral(e ast.Expr) string {
+	if b, ok := e.(*ast.BasicLit); ok && b.Kind == token.STRING {
+		s, _ := strconv.Unquote(b.Value)
+		return s
+	}
+	return ""
+}
+
+var contractFlagName = regexp.MustCompile(`^--[a-z][a-z0-9-]*$`)
+
+func (s *contractInventorySource) pkg(dir string) contractParserSource {
+	if p, ok := s.packages[dir]; ok {
+		return p
+	}
+	p := contractParserSource{funcs: map[string]*ast.FuncDecl{}, imports: map[string]string{}}
+	files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	for _, path := range files {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			s.t.Fatal(err)
+		}
+		for _, imp := range f.Imports {
+			path := contractLiteral(imp.Path)
+			if !strings.HasPrefix(path, "github.com/gridconsole/grid-plugins/internal/") {
+				continue
+			}
+			name := filepath.Base(path)
+			if imp.Name != nil {
+				name = imp.Name.Name
+			}
+			p.imports[name] = filepath.Join("..", "..", strings.TrimPrefix(path, "github.com/gridconsole/grid-plugins/"))
+		}
+		for _, decl := range f.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil {
+				p.funcs[fn.Name.Name] = fn
+			}
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if lit, ok := n.(*ast.BasicLit); ok {
+				name := contractLiteral(lit)
+				if contractFlagName.MatchString(name) {
+					if _, exists := s.flags[name]; !exists {
+						s.flags[name] = false
+					}
+				}
+			}
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			method := sel.Sel.Name
+			index := 0
+			if strings.HasSuffix(method, "Var") || method == "Var" {
+				index = 1
+			}
+			switch strings.TrimSuffix(method, "Var") {
+			case "Bool", "String", "Int", "Int64", "Uint", "Uint64", "Float64", "Duration", "":
+				if len(call.Args) > index {
+					if name := contractLiteral(call.Args[index]); name != "" {
+						boolean := strings.HasPrefix(method, "Bool")
+						// The optional-message flag implements flag.boolFlag.
+						if method == "Var" {
+							if unary, ok := call.Args[0].(*ast.UnaryExpr); ok {
+								if value, ok := unary.X.(*ast.CompositeLit); ok {
+									if typ, ok := value.Type.(*ast.Ident); ok {
+										ast.Inspect(f, func(n ast.Node) bool {
+											fn, ok := n.(*ast.FuncDecl)
+											if ok && fn.Recv != nil && fn.Name.Name == "IsBoolFlag" {
+												star, ok := fn.Recv.List[0].Type.(*ast.StarExpr)
+												if ok {
+													id, ok := star.X.(*ast.Ident)
+													boolean = boolean || ok && id.Name == typ.Name
+												}
+											}
+											return true
+										})
+									}
+								}
+							}
+						}
+						s.flags["--"+name] = s.flags["--"+name] || boolean
+					}
+				}
+			}
+			return true
+		})
+	}
+	s.packages[dir] = p
+	return p
+}
+
+// Discover the literal alternatives tested against the first argument, following
+// CLI delegates (including jobcmd, braincmd, question and evalcmd). This catches
+// newly added routes even when the human-facing summary has not changed.
+func (s *contractInventorySource) routes(dir, name string, seen map[string]bool) []string {
+	key := dir + "/" + name
+	if seen[key] {
+		return nil
+	}
+	seen[key] = true
+	p := s.pkg(dir)
+	fn := p.funcs[name]
+	if fn == nil {
+		s.t.Fatalf("cannot find parser %s", key)
+	}
+	aliases := map[string]bool{}
+	// Once args is consumed, args[0] denotes an operand, not a route.
+	var consumed token.Pos
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if a, ok := n.(*ast.AssignStmt); ok {
+			for i, rhs := range a.Rhs {
+				if i >= len(a.Lhs) {
+					continue
+				}
+				lhs, ok := a.Lhs[i].(*ast.Ident)
+				slice, sliced := rhs.(*ast.SliceExpr)
+				if !ok || lhs.Name != "args" || !sliced {
+					continue
+				}
+				id, ok := slice.X.(*ast.Ident)
+				if ok && id.Name == "args" && (consumed == 0 || a.End() < consumed) {
+					consumed = a.End()
+				}
+			}
+		}
+		return true
+	})
+	first := func(e ast.Expr) bool {
+		if e == nil || consumed != 0 && e.Pos() > consumed {
+			return false
+		}
+		idx, ok := e.(*ast.IndexExpr)
+		if !ok {
+			return false
+		}
+		n, ok := idx.Index.(*ast.BasicLit)
+		if !ok || n.Value != "0" {
+			return false
+		}
+		switch x := idx.X.(type) {
+		case *ast.Ident:
+			return x.Name == "args"
+		case *ast.SelectorExpr:
+			return x.Sel.Name == "args"
+		}
+		return false
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if a, ok := n.(*ast.AssignStmt); ok {
+			for i, rhs := range a.Rhs {
+				if i < len(a.Lhs) && first(rhs) {
+					if id, ok := a.Lhs[i].(*ast.Ident); ok {
+						aliases[id.Name] = true
+					}
+				}
+			}
+		}
+		return true
+	})
+	selector := func(e ast.Expr) bool {
+		id, ok := e.(*ast.Ident)
+		return first(e) || ok && aliases[id.Name]
+	}
+	var names []string
+	add := func(e ast.Expr) {
+		v := contractLiteral(e)
+		if v != "" && v != "help" && !strings.HasPrefix(v, "-") {
+			names = append(names, v)
+		}
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.BinaryExpr:
+			if n.Op == token.EQL || n.Op == token.NEQ {
+				if selector(n.X) {
+					add(n.Y)
+				}
+				if selector(n.Y) {
+					add(n.X)
+				}
+			}
+		case *ast.SwitchStmt:
+			if selector(n.Tag) {
+				for _, stmt := range n.Body.List {
+					for _, e := range stmt.(*ast.CaseClause).List {
+						add(e)
+					}
+				}
+			}
+		case *ast.CallExpr:
+			switch call := n.Fun.(type) {
+			case *ast.Ident:
+				// These backends receive an already selected route. Usage
+				// configuration is expanded at its second dispatch level below;
+				// the orchestrator is shared by job and feed, whose wrappers
+				// choose which verbs are reachable from each command.
+				if strings.HasPrefix(call.Name, "run") && call.Name != "runUsageConfig" && call.Name != "runOrchestrator" && p.funcs[call.Name] != nil {
+					names = append(names, s.routes(dir, call.Name, seen)...)
+				}
+			case *ast.SelectorExpr:
+				if id, ok := call.X.(*ast.Ident); ok && call.Sel.Name == "Run" && p.imports[id.Name] != "" {
+					names = append(names, s.routes(p.imports[id.Name], "Run", seen)...)
+				}
+			}
+		}
+		return true
+	})
+	return names
+}
+
+func contractCommandInventory(t *testing.T) contractCommandDocument {
+	t.Helper()
+	source := contractInventorySource{t: t, packages: map[string]contractParserSource{}, flags: map[string]bool{}}
+	paths := map[string][]string{}
+	table := commands()
+	for _, c := range table {
+		if c.run == nil {
+			continue
+		}
+		fn := runtime.FuncForPC(reflect.ValueOf(c.run).Pointer()).Name()
+		fn = fn[strings.LastIndexByte(fn, '.')+1:]
+		routes := source.routes(".", fn, map[string]bool{})
+		if c.name == "usage" {
+			// usage has a flag-only fold plus a second dispatch level for configuration.
+			operations := source.routes(".", "runUsageConfig", map[string]bool{})
+			var nested []string
+			for _, route := range routes {
+				if route == "threshold" || route == "budget" {
+					for _, op := range operations {
+						nested = append(nested, route+" "+op)
+					}
+				} else {
+					nested = append(nested, route)
+				}
+			}
+			routes = append(nested, "")
+		}
+		if len(routes) == 0 {
+			routes = []string{""}
+		}
+		unique := map[string]bool{}
+		for _, route := range routes {
+			unique[route] = true
+		}
+		for route := range unique {
+			paths[c.name] = append(paths[c.name], route)
+		}
+		sort.Strings(paths[c.name])
+	}
+	candidates := []string{"--__contract_unknown"}
+	for flag := range source.flags {
+		if flag != "--help" {
+			candidates = append(candidates, flag)
+		}
+	}
+	sort.Strings(candidates)
+	h := newHarness(t)
+	doc := contractCommandDocument{Contract: version.Contract, Commands: []contractCommandEntry{}}
+	annotations := contractCommandAnnotations()
+	for _, c := range table {
+		entry := contractCommandEntry{Name: c.name, Summary: c.summary, Built: c.run != nil, Subcommands: []contractCommandSub{}}
+		for _, path := range paths[c.name] {
+			key := strings.TrimSpace(c.name + " " + path)
+			annotation, ok := annotations[key]
+			if !ok {
+				t.Fatalf("new parser route %q needs operand/output annotations", key)
+			}
+			delete(annotations, key)
+			sub := contractCommandSub{Name: path, Args: annotation.args, Flags: []contractCommandFlag{}, Output: annotation.output, Stream: annotation.stream}
+			if sub.Args == nil {
+				sub.Args = []string{}
+			}
+			prefix := append([]string{c.name}, strings.Fields(path)...)
+			probe := func(flag string, separate bool) (int, string) {
+				args := append([]string(nil), prefix...)
+				if separate {
+					args = append(args, flag, "1")
+				} else {
+					args = append(args, flag+"=__contract_probe__")
+				}
+				args = append(args, "--help")
+				code := h.run(h.home, args...)
+				return code, h.errb.String() + h.out.String()
+			}
+			// Hook deliberately ignores invalid input and has no flags.
+			if c.name != "hook" {
+				for _, flag := range candidates {
+					code, output := probe(flag, false)
+					takes := "value"
+					recognized := code == 0 || strings.HasPrefix(output, "invalid value ") || strings.HasPrefix(output, "invalid boolean value ")
+					if strings.HasPrefix(output, "invalid boolean value ") || code == 0 && source.flags[flag] {
+						takes = "none"
+					}
+					if !recognized {
+						// jobcmd's hand-written parser accepts separate values only.
+						code, _ = probe(flag, true)
+						recognized = code == 0
+						if recognized && source.flags[flag] {
+							takes = "none"
+						}
+					}
+					if recognized {
+						if flag == "--__contract_unknown" {
+							t.Fatalf("%s accepts the unknown-flag probe; cannot inspect this parser safely", key)
+						}
+						sub.Flags = append(sub.Flags, contractCommandFlag{Name: flag, Takes: takes, Required: annotation.required[flag]})
+						sub.JSON = sub.JSON || flag == "--json"
+					}
+				}
+			}
+			entry.Subcommands = append(entry.Subcommands, sub)
+		}
+		doc.Commands = append(doc.Commands, entry)
+	}
+	if len(annotations) != 0 {
+		t.Fatalf("annotations for removed parser routes: %v", annotations)
+	}
+	return doc
+}
+
+func TestContractCommandsParserInventory(t *testing.T) {
+	doc := contractCommandInventory(t)
+	if os.Getenv("UPDATE_CONTRACT_COMMANDS") == "1" {
+		contractCommandWrite(t, "../../contract/commands.json", doc)
+		return
+	}
+	// Use the same canonical encoder as fixture generation, then compare the
+	// entire document, not only summaries and built status.
+	data := contractdata.Commands
+	got := contractCommandJSON(t, doc)
+	if !bytes.Equal(data, got) {
+		t.Fatalf("commands.json differs from the current parsers; run UPDATE_CONTRACT_COMMANDS=1 go test ./internal/cli -run '^TestContractCommandsParserInventory$' -count=1\n%s", contractInventoryDifference(data, got))
+	}
+}
+
+func contractInventoryDifference(want, got []byte) string {
+	a, b := strings.Split(string(want), "\n"), strings.Split(string(got), "\n")
+	for i := 0; i < len(a) && i < len(b); i++ {
+		if a[i] != b[i] {
+			return fmt.Sprintf("line %d: inventory %s; parser %s", i+1, a[i], b[i])
+		}
+	}
+	return "document length changed"
+}
+
+func contractCommandJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(b, '\n')
+}
+
+type contractCommandAnnotation struct {
+	args     []string
+	required map[string]bool
+	output   string
+	stream   bool
+}
+
+func contractCommandAnnotations() map[string]contractCommandAnnotation {
+	return map[string]contractCommandAnnotation{
+		"version":               {output: "cmd-version.json"},
+		"where":                 {},
+		"doctor":                {},
+		"hook":                  {args: []string{"<event>"}},
+		"task new":              {args: []string{"<words>"}},
+		"task show":             {args: []string{"[T-NN]"}, output: "cmd-task-show.json"},
+		"task list":             {output: "cmd-task-list.json"},
+		"task status":           {args: []string{"<T-NN>", "<state>"}},
+		"task stop":             {args: []string{"<T-NN>"}},
+		"task close":            {args: []string{"<T-NN>"}},
+		"task reopen":           {args: []string{"<T-NN>"}},
+		"task history":          {args: []string{"<T-NN>"}},
+		"task attach":           {args: []string{"<T-NN>"}},
+		"task move":             {args: []string{"[machine-or-task]"}, output: "cmd-task-move.json"},
+		"plan write":            {args: []string{"<file>"}},
+		"plan check":            {args: []string{"[T-NN]"}},
+		"plan items":            {},
+		"plan hash":             {output: "cmd-plan-hash.json"},
+		"plan diff":             {args: []string{"<rev-a>", "<rev-b>"}},
+		"job next":              {args: []string{"[job]"}, output: "cmd-job-next.json", stream: true},
+		"job post":              {args: []string{"[job]"}},
+		"job ack":               {args: []string{"[job]"}},
+		"job result":            {args: []string{"[job]"}},
+		"job cancel":            {args: []string{"[job]"}, required: map[string]bool{"--reason": true}},
+		"job tree":              {args: []string{"[job]"}},
+		"job blocked":           {args: []string{"[job]"}},
+		"job render":            {args: []string{"<task>", "<item>"}},
+		"job lint":              {args: []string{"<file>"}},
+		"job show":              {args: []string{"[task job | job | file]"}},
+		"job cycles":            {args: []string{"<items.json>"}},
+		"job floor":             {args: []string{"<items.json>"}},
+		"lease take":            {args: []string{"[merge]"}, required: map[string]bool{"--holder": true}},
+		"lease renew":           {args: []string{"[merge]"}, required: map[string]bool{"--fence": true, "--holder": true}},
+		"lease release":         {args: []string{"[merge]"}, required: map[string]bool{"--fence": true, "--holder": true}},
+		"lease status":          {args: []string{"[merge]"}},
+		"feed tick":             {args: []string{"[job]"}},
+		"feed post":             {args: []string{"[task]"}, required: map[string]bool{"--body": true, "--type": true}, output: "cmd-feed-post.json"},
+		"feed read":             {args: []string{"[task]"}},
+		"feed state":            {args: []string{"[task]"}, output: "cmd-feed-state.json"},
+		"feed types":            {args: []string{"[task]"}},
+		"feed handover":         {args: []string{"[task]"}},
+		"feed fold":             {args: []string{"[task]"}},
+		"mcp":                   {},
+		"question add":          {args: []string{"[question]"}},
+		"question answer":       {args: []string{"<Q-id>", "<option-or-text>"}},
+		"question withdraw":     {args: []string{"<Q-id>"}},
+		"question list":         {},
+		"question tick":         {},
+		"approve":               {args: []string{"<T-NN>"}, output: "cmd-approve.json"},
+		"refusal decide":        {args: []string{"<T-NN>", "<R-N>", "<allow|deny>"}, output: "cmd-refusal-decide.json"},
+		"deliver":               {args: []string{"[outcome]", "[files...]"}},
+		"proof add":             {args: []string{"<item>", "[file]"}},
+		"proof index":           {},
+		"history add":           {args: []string{"<line>"}},
+		"brain show":            {args: []string{"<id>"}},
+		"brain search":          {args: []string{"<words...>"}},
+		"brain topics":          {},
+		"brain index":           {},
+		"brain propose":         {},
+		"brain accept":          {args: []string{"<id>"}},
+		"brain keep":            {},
+		"env up":                {args: []string{"<J>"}},
+		"env down":              {args: []string{"<J>"}},
+		"ports claim":           {args: []string{"<J>"}},
+		"ports release":         {args: []string{"<J>"}},
+		"ports list":            {},
+		"ports gc":              {},
+		"routine add":           {args: []string{"<name>"}, required: map[string]bool{"--every": true, "--run": true}},
+		"routine list":          {},
+		"routine remove":        {args: []string{"<name>"}},
+		"routine run":           {args: []string{"<name>"}},
+		"routine schedule":      {},
+		"routine unschedule":    {},
+		"worker list":           {output: "cmd-worker-list.json"},
+		"session list":          {output: "cmd-session-list.json"},
+		"session show":          {args: []string{"<session-id>"}, output: "cmd-session-show.json"},
+		"session start":         {output: "cmd-session-start.json"},
+		"session stop":          {output: "cmd-session-stop.json"},
+		"session send":          {args: []string{"[text]"}, output: "cmd-session-send.json"},
+		"session pause":         {output: "cmd-session-pause.json"},
+		"session resume":        {output: "cmd-session-resume.json"},
+		"session handback":      {output: "cmd-session-handback.json"},
+		"session switch":        {args: []string{"[agent]"}, output: "cmd-session-switch.json"},
+		"intent list":           {output: "cmd-intent-list.json"},
+		"intent claim":          {args: []string{"<id>"}},
+		"intent renew":          {args: []string{"<id>"}},
+		"intent done":           {args: []string{"<id>"}},
+		"usage":                 {},
+		"project add":           {args: []string{"[path]"}},
+		"project remove":        {args: []string{"<name-or-id>"}},
+		"project list":          {},
+		"project scan":          {args: []string{"<root>"}},
+		"project relink":        {args: []string{"<name-or-id>", "<path>"}},
+		"signal add":            {required: map[string]bool{"--title": true}},
+		"signal act":            {args: []string{"<id>"}},
+		"signal dismiss":        {args: []string{"<id>"}},
+		"artifact import":       {args: []string{"<file>"}},
+		"artifact link":         {args: []string{"<https-url>"}},
+		"artifact list":         {},
+		"artifact publish":      {args: []string{"<id>"}},
+		"eval list":             {},
+		"eval run":              {args: []string{"[task]"}},
+		"eval show":             {args: []string{"<run-id>"}},
+		"migrate":               {},
+		"job verify":            {args: []string{"<job>"}},
+		"usage post":            {required: map[string]bool{"--job": true}},
+		"usage show":            {},
+		"usage threshold set":   {},
+		"usage threshold show":  {},
+		"usage threshold clear": {},
+		"usage budget set":      {},
+		"usage budget show":     {},
+		"usage budget clear":    {},
+	}
+}
