@@ -274,7 +274,8 @@ func runTaskLease(action string, args []string, env Env) int {
 	}
 	body := map[string]any{}
 	recovery := false
-	if tenure.Holder != nil && *tenure.Holder == writer.Worker {
+	// Only the granted process finishes its handover; another process of the same member is a new taker.
+	if tenure.Holder != nil && *tenure.Holder == writer.Worker && tenure.PID != nil && *tenure.PID == pid && tenure.PIDStart != nil && *tenure.PIDStart == start {
 		records, err := store.Read(feed.Filter{Type: "handover"})
 		if err != nil {
 			return livenessError(env, err)

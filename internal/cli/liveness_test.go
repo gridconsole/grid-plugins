@@ -525,6 +525,33 @@ func TestTaskLeaseHandoverRecovery(t *testing.T) {
 	}
 }
 
+func TestTaskLeaseRecoveryNeedsTheGrantedProcess(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	otherPID, otherStart := liveTaskProcess(t)
+	h, path := feedHarness(t)
+	store := lease.TaskStore{Feed: feed.Store{TaskDir: path, TaskID: feedTaskID}}
+	// This role cannot post handover, so the grant succeeds and its post fails.
+	t.Setenv("GRID_ROLE", "worker")
+	if code := h.run(path, taskTakeArgs(pid, start)...); code != 1 || !strings.Contains(h.out.String(), "epoch 0.1") {
+		t.Fatalf("failure: %d %s %s", code, h.out, h.errb)
+	}
+	t.Setenv("GRID_ROLE", "member")
+	if code := h.run(path, taskTakeArgs(otherPID, otherStart)...); code != 1 || !strings.Contains(h.errb.String(), "held by member@"+feedMachine) {
+		t.Fatalf("other process: %d %s %s", code, h.out, h.errb)
+	}
+	current, err := store.Read("task")
+	if err != nil || current.Fence != 1 || *current.PID != pid {
+		t.Fatalf("other process changed the grant: %+v %v", current, err)
+	}
+	records, err := store.Feed.Read(feed.Filter{Type: "handover"})
+	if err != nil || len(records.Records) != 0 {
+		t.Fatalf("other process posted the handover: %+v %v", records, err)
+	}
+	if code := h.run(path, taskTakeArgs(pid, start)...); code != 0 {
+		t.Fatalf("recovery: %d %s", code, h.errb)
+	}
+}
+
 func TestTaskLeaseSessionAndUsage(t *testing.T) {
 	pid, start := taskLeaseIdentity(t)
 	for _, tc := range []struct{ name, start string }{{"RFC3339", start}, {"lstart", mustTaskStart(t, pid).Format("Mon Jan _2 15:04:05 2006")}} {
