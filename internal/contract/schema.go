@@ -121,6 +121,9 @@ func checkSubset(s map[string]any) error {
 				}
 			}
 		case "items", "not", "if", "then", "additionalProperties":
+			if _, tuple := v.([]any); tuple && k == "items" {
+				return fmt.Errorf("unsupported tuple-form items")
+			}
 			if child, ok := v.(map[string]any); ok {
 				if err := checkSubset(child); err != nil {
 					return err

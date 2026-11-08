@@ -167,6 +167,9 @@ func TestValidatorBoundaries(t *testing.T) {
 	if checkSubset(map[string]any{"unsupported": true}) == nil {
 		t.Fatal("unsupported keyword accepted")
 	}
+	if checkSubset(map[string]any{"items": []any{map[string]any{"type": "string"}}}) == nil {
+		t.Fatal("tuple-form items accepted")
+	}
 	for _, tc := range []struct {
 		name, schema, value string
 		valid               bool
