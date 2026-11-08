@@ -96,22 +96,33 @@ func (r Runner) Run(ctx context.Context, task Task) (Result, error) {
 	if err != nil {
 		return result, err
 	}
-	result, err = r.attempt(ctx, task, root)
+	return r.runInWorkspace(ctx, task, root)
+}
+
+// runInWorkspace owns root from entry, even if attempt returns early or panics.
+func (r Runner) runInWorkspace(ctx context.Context, task Task, root string) (result Result, err error) {
 	remove := r.removeAll
 	if remove == nil {
 		remove = removeTree
 	}
-	if rerr := remove(root); rerr != nil {
-		rerr = fmt.Errorf("remove temporary folder %s: %w", root, rerr)
-		if err != nil {
-			return result, errors.Join(err, rerr)
+	completed := false
+	defer func() {
+		if rerr := remove(root); rerr != nil {
+			rerr = fmt.Errorf("remove temporary folder %s: %w", root, rerr)
+			if err != nil {
+				err = errors.Join(err, rerr)
+			} else {
+				result.CleanupError = rerr.Error()
+			}
 		}
-		result.CleanupError = rerr.Error()
-	}
-	if err != nil {
-		return result, err
-	}
-	return result, saveResult(r.ResultsDir, result)
+		// A panic propagates after cleanup without persisting an incomplete result.
+		if completed && err == nil {
+			err = saveResult(r.ResultsDir, result)
+		}
+	}()
+	result, err = r.attempt(ctx, task, root)
+	completed = true
+	return result, err
 }
 
 // attempt runs one task inside tempRoot. Run removes tempRoot afterwards, so the

@@ -402,3 +402,43 @@ func TestAllowEnvRejectsSessionVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWorkspaceRemovedOnEarlyError(t *testing.T) {
+	runner := testRunner(t)
+	root := filepath.Join(runner.TempDir, "attempt")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "workspace"), []byte("blocked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.runInWorkspace(context.Background(), sampleTask(t), root); err == nil {
+		t.Fatal("expected setup error")
+	}
+	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("workspace left after early error: %v", err)
+	}
+}
+
+func TestWorkspaceRemovedOnPanic(t *testing.T) {
+	runner, task := testRunner(t), sampleTask(t)
+	task.Checks = []Check{{ID: "quality", Type: "llm_judge", Rubric: "S3: accurate CSV"}}
+	runner.Judge = judgeFunc(func(context.Context, JudgeRequest) (Judgement, error) { panic("judge panic") })
+	func() {
+		defer func() {
+			if got := recover(); got != "judge panic" {
+				t.Errorf("panic = %v", got)
+			}
+		}()
+		_, _ = runner.Run(context.Background(), task)
+		t.Error("panic did not propagate")
+	}()
+	entries, err := os.ReadDir(runner.TempDir)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("workspace left after panic: %v %v", entries, err)
+	}
+	entries, err = os.ReadDir(runner.ResultsDir)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("saved incomplete result: %v %v", entries, err)
+	}
+}
