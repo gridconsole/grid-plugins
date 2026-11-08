@@ -137,7 +137,7 @@ func approvePlan(t *testing.T, f *fixture) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := json.Marshal(task.Event{Task: "T-01", What: "approve", PlanHash: plan.Hash(text)})
+	b, err := json.Marshal(task.Event{Task: "T-01", What: "approve", PlanHash: plan.Hash(text), PlanDigest: plan.Digest(text)})
 	if err != nil {
 		t.Fatal(err)
 	}

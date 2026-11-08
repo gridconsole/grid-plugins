@@ -123,20 +123,26 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 // holds an approval whose hash and optional digest still match plan.md now. It takes no lock and
 // replays no journal, so a write in flight or any read failure is false.
 func Approved(dir string) bool {
-	t, err := Read(dir)
-	if err != nil {
-		return false
-	}
-	data, err := readOptional(filepath.Join(dir, "approval.json"))
-	if err != nil {
-		return false
-	}
 	text, err := plan.Store{TaskDir: dir}.Read()
 	if err != nil {
 		return false
 	}
-	digest := plan.Digest(text)
-	event, err := checkApproval(t, data, digest[:6], digest)
+	return ApprovedDigest(dir, plan.Hash(text), plan.Digest(text))
+}
+
+// ApprovedDigest checks the plan receipt against a caller's snapshot without
+// rereading plan.md. Callers must compute both values from the text they use.
+// Like Approved, it takes no locks and replays no journal.
+func ApprovedDigest(dir, hash, digest string) bool {
+	t, err := Read(dir)
+	if err != nil {
+		return false
+	}
+	data, err := readOptional(filepath.Join(dir, approvalFile))
+	if err != nil {
+		return false
+	}
+	event, err := checkApproval(t, data, hash, digest)
 	// Match ApprovalForGate: the plan receipt has no gate field. A receipt for
 	// ship or an unknown gate cannot authorize plan work, even if misfiled.
 	return err == nil && event.Gate == ""

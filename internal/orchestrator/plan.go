@@ -22,7 +22,12 @@ import (
 // Jobs; plan edits never reset their lifecycle. Missing Jobs are retried after a
 // partial publication, including when a new task holder resumes the task.
 func (s Store) publishPlan(snap Snapshot, m *memory) error {
-	text, err := (plan.Store{TaskDir: s.Feed.TaskDir}).Read()
+	return s.publishPlanWithReader(snap, m, (plan.Store{TaskDir: s.Feed.TaskDir}).Read)
+}
+
+// The reader seam lets tests replace plan.md after the publication snapshot is read.
+func (s Store) publishPlanWithReader(snap Snapshot, m *memory, read func() (string, error)) error {
+	text, err := read()
 	if errors.Is(err, os.ErrNotExist) {
 		return s.publicationBlocked(m, false)
 	}
@@ -30,7 +35,7 @@ func (s Store) publishPlan(snap Snapshot, m *memory) error {
 		return err
 	}
 	// Hold task before plan, matching approval/reopen writers. The exact plan
-	// snapshot that passes the approval gate remains stable through publication.
+	// snapshot is checked directly because writers can ignore the advisory locks.
 	lock, err := fslock.OpenNoFollow(filepath.Join(s.Feed.TaskDir, ".task.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
@@ -41,7 +46,7 @@ func (s Store) publishPlan(snap Snapshot, m *memory) error {
 	}
 	defer fslock.Unlock(lock)
 	return (plan.Store{TaskDir: s.Feed.TaskDir}).WithHash(func(_ string) error {
-		text, err = (plan.Store{TaskDir: s.Feed.TaskDir}).Read()
+		text, err = read()
 		if err != nil {
 			return err
 		}
@@ -49,7 +54,8 @@ func (s Store) publishPlan(snap Snapshot, m *memory) error {
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
-		if taskfile.PlanApprovalRequired(string(workflow)) && !task.Approved(s.Feed.TaskDir) {
+		digest := plan.Digest(text)
+		if taskfile.PlanApprovalRequired(string(workflow)) && !task.ApprovedDigest(s.Feed.TaskDir, plan.Hash(text), digest) {
 			return s.publicationBlocked(m, true)
 		}
 		if err := s.publicationBlocked(m, false); err != nil {

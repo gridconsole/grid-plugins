@@ -324,7 +324,7 @@ func TestApprovalDigestCompatibility(t *testing.T) {
 			hash := setPlan(t, task, planV1)
 			write(t, filepath.Join(task.Path, "approval.json"), `{"task":"`+task.ID+`","what":"approve","plan_hash":"`+hash+`"`+tc.digest+`}`)
 			_, err := s.Approval("", task.ID)
-			if (err == nil) != tc.want || Approved(task.Path) != tc.want {
+			if (err == nil) != tc.want || Approved(task.Path) != tc.want || ApprovedDigest(task.Path, hash, plan.Digest(planV1)) != tc.want {
 				t.Fatalf("approval allowed = %t, want %t: %v", err == nil, tc.want, err)
 			}
 			if tc.want {

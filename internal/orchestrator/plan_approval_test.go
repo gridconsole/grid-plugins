@@ -8,7 +8,54 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 )
+
+func TestPlanPublicationChecksReadSnapshot(t *testing.T) {
+	for _, approvedSnapshot := range []bool{false, true} {
+		t.Run(map[bool]string{false: "changed snapshot", true: "approved snapshot"}[approvedSnapshot], func(t *testing.T) {
+			f := setupPlan(t)
+			original := plannedText(t)
+			changed := strings.Replace(original, "role: writer", "role: builder", 1)
+			writePlan(t, f, original)
+			approvePlan(t, f)
+			snapshot, replacement := changed, original
+			want := 0
+			if approvedSnapshot {
+				snapshot, replacement, want = original, changed, 1
+			}
+			writePlan(t, f, snapshot)
+			snap, err := Load(f.s.Feed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reads := 0
+			err = f.s.publishPlanWithReader(snap, &memory{}, func() (string, error) {
+				text, err := (plan.Store{TaskDir: f.s.Feed.TaskDir}).Read()
+				reads++
+				if reads == 2 {
+					// Ignore the advisory lock, replacing the file after the exact
+					// publication read and before the receipt check, without timing.
+					writePlan(t, f, replacement)
+				}
+				return text, err
+			})
+			if err != nil || reads != 2 {
+				t.Fatalf("publication reads=%d err=%v", reads, err)
+			}
+			records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
+			if err != nil || len(records.Records) != want {
+				t.Fatalf("snapshot publication jobs=%d want=%d err=%v", len(records.Records), want, err)
+			}
+			if want == 1 {
+				published, err := Load(f.s.Feed)
+				if err != nil || len(published.Items) != 1 || published.Items[0].Role != "writer" {
+					t.Fatalf("publication did not retain approved snapshot: %+v err=%v", published.Items, err)
+				}
+			}
+		})
+	}
+}
 
 func TestUnapprovedPlanPublishesNoJob(t *testing.T) {
 	f := setup(t)
