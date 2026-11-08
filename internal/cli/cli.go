@@ -111,7 +111,7 @@ func commands() []command {
 		{"account", "agent accounts", nil},
 		{"project", "add, remove, list, scan and relink projects", runProject},
 		{"setup", "first-run scan and settings", nil},
-		{"signal", "inbox signals", nil},
+		{"signal", "add, act on and dismiss inbox signals", runSignal},
 		{"artifact", "import, link, list and publish task artifacts", runArtifact},
 		{"eval", "list, run and show task evaluations", runEval},
 		{"migrate", "upgrade the Grid home to this format", runMigrate},

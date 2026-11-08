@@ -1,0 +1,1 @@
+{"name":"example","id":"<ULID>","folders":[],"repos":[{"path":".","remote":"example.com/org/app"},{"path":".","remote":"example.com/upstream/app"}],"keys":[{"key":"remote:example.com/org/app"},{"key":"remote:example.com/upstream/app"}]}
