@@ -83,7 +83,7 @@ func commands() []command {
 		{"doctor", "check machine health and collect a support bundle", runDoctor},
 		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels", runHook},
 		{"task", "new, show, list, status, stop, close, reopen, history, attach, move", runTask},
-		{"plan", "write, check, items, hash, diff", runPlan},
+		{"plan", "write, check, items, hash, diff, migrate", runPlan},
 		{"views", "render the task pages", nil},
 		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor", runOrchestratorJob},
 		{"lease", "take, renew, release, status (merge or task lease)", runTaskLease},

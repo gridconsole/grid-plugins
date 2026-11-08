@@ -178,3 +178,38 @@ Diff reports item changes only. Changes to introductory prose, risks outside
 items, or other plan sections can change the plan hash without producing an item
 diff. It supplies comparison data for a view such as “Changed since you approved”;
 it neither records approvals nor changes any Feed or task record.
+
+## Older plans
+
+Use `grid plan migrate --task T-07 --dry-run` to preview conversion and its
+form (A: sentence verification, B: step Job fields, C: front-matter Jobs).
+`--json` returns `form` and `text`. Current plans return
+`plan.md is already current` without writing. There is no automatic migration
+when opening a task.
+
+Run `grid plan migrate --task T-07` to install through the plan store, which
+archives the original bytes, increments the revision and updates the hash. A matching
+plan or ship approval requires `--yes`; the plan will need approving again.
+The command checks both approval files while holding the plan lock and never
+writes an approval. Missing `Used:` or `Recall:` citations are refused; supply
+an actual citation before retrying. For form C migration only, an unnumbered
+source is archived unchanged as revision 1 and the upgraded plan becomes
+revision 2. Ordinary plan writes still require an installed revision heading.
+
+A keeps `needs:`, `host:`, and `evidence:` as prose, turns sentence verification
+into `Verified by:`, and supplies `kind: build` with `jobs: []`. The planner adds
+Jobs in a subsequent revision; host prose does not schedule a machine. B moves
+Job fields into the item's jobs list while keeping sentence verification as
+prose; a step with only prose gets an empty jobs list. Wrapped verification
+sentences remain prose. C preserves Job fields (including item, title and
+intent) and their order, uses writer Jobs' `non-code` kind, and converts Step
+and Verify anchors. Fenced Verify examples are preserved. Unplaceable fields,
+mixed current and legacy fields, and blank lines inside steps are refused with
+line numbers. No conversion invents a verification record or changes the
+verification sentence's wording or casing.
+
+Archived revisions are upgraded only in memory when `plan diff` needs them.
+Their files are never rewritten. Legacy parser refusals in `items`,
+`write`, and `check` include a migration-preview hint only if conversion can
+succeed. Migration establishes parser compatibility; it does not promise that
+every Job passes `plan check`.
