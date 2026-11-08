@@ -15,8 +15,9 @@ func TestPersonalChokePoint(t *testing.T) {
 			"internal/task/create.go":    "global allocation and cleanup",        // Global IDs and stale staging cleanup must include every root.
 		},
 		"where.Resolver{": {
-			"internal/cli/cli.go":        "CLI boundary",   // The shared CLI resolver stamps the caller from its environment.
-			"internal/guard/settings.go": "guard boundary", // Direct guard adapters stamp the caller from their environment.
+			"internal/job/jobtest/jobtest.go": "test fixture",   // Test-only fixture approves its own task through the real task writer.
+			"internal/cli/cli.go":             "CLI boundary",   // The shared CLI resolver stamps the caller from its environment.
+			"internal/guard/settings.go":      "guard boundary", // Direct guard adapters stamp the caller from their environment.
 		},
 	}
 	used := map[string]map[string]bool{}
