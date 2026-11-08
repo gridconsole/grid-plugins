@@ -437,6 +437,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"plan items":            {},
 		"plan hash":             {output: "cmd-plan-hash.json"},
 		"plan diff":             {args: []string{"<rev-a>", "<rev-b>"}},
+		"plan migrate":          {},
 		"job next":              {args: []string{"[job]"}, output: "cmd-job-next.json", stream: true},
 		"job post":              {args: []string{"[job]"}},
 		"job ack":               {args: []string{"[job]"}},

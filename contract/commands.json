@@ -422,7 +422,7 @@
     },
     {
       "name": "plan",
-      "summary": "write, check, items, hash, diff",
+      "summary": "write, check, items, hash, diff, migrate",
       "built": true,
       "subcommands": [
         {
@@ -516,6 +516,39 @@
             {
               "name": "--task",
               "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "migrate",
+          "args": [],
+          "flags": [
+            {
+              "name": "--dry-run",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--yes",
+              "takes": "none",
               "required": false
             }
           ],
