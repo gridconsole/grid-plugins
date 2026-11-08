@@ -144,3 +144,50 @@ func TestListRequiresExistingTask(t *testing.T) {
 		}
 	}
 }
+
+func TestImportSizeLimit(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "report.txt")
+	if err := os.WriteFile(source, []byte("0123456789"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (Store{TaskPath: root, MaxBytes: 10}).Import(source, ""); err != nil {
+		t.Fatalf("import at the limit: %v", err)
+	}
+	_, err := (Store{TaskPath: root, MaxBytes: 9}).Import(source, "")
+	if err == nil || !strings.Contains(err.Error(), "import limit of 9 bytes") {
+		t.Fatalf("import above the limit: %v", err)
+	}
+	entries, _ := os.ReadDir(filepath.Join(root, "artifacts"))
+	if len(entries) != 2 {
+		t.Fatalf("a refused import left files: %v", entries)
+	}
+}
+
+func TestCopyLimitedStopsAtTheLimit(t *testing.T) {
+	var out strings.Builder
+	if err := copyLimited(&out, strings.NewReader("0123456789"), 10); err != nil || out.Len() != 10 {
+		t.Fatalf("at the limit: %v, %d bytes", err, out.Len())
+	}
+	out.Reset()
+	// A source that never ends must stop one byte past the limit.
+	err := copyLimited(&out, endless{}, 10)
+	if err == nil || out.Len() != 11 {
+		t.Fatalf("above the limit: %v, %d bytes", err, out.Len())
+	}
+}
+
+type endless struct{}
+
+func (endless) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 'x'
+	}
+	return len(p), nil
+}
+
+func TestDefaultImportLimit(t *testing.T) {
+	if DefaultMaxImportBytes != 200*1024*1024 {
+		t.Fatalf("default limit %d", DefaultMaxImportBytes)
+	}
+}

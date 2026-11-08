@@ -17,6 +17,9 @@ import (
 	"time"
 )
 
+// DefaultMaxImportBytes is the largest file Import copies when MaxBytes is zero.
+const DefaultMaxImportBytes int64 = 200 << 20
+
 // Record is the sidecar for an imported file or an HTTPS link. File is relative
 // to artifacts/. Publishing changes only Published; it never uploads anything.
 type Record struct {
@@ -30,9 +33,11 @@ type Record struct {
 	Published bool   `json:"published"`
 }
 
-// Store is scoped to a task resolved by where. Now can be fixed in tests.
+// Store is scoped to a task resolved by where. MaxBytes caps one import and
+// defaults to DefaultMaxImportBytes. Now can be fixed in tests.
 type Store struct {
 	TaskPath string
+	MaxBytes int64
 	Now      func() time.Time
 }
 
@@ -101,6 +106,13 @@ func (s Store) Import(source, title string) (Record, error) {
 	if !info.Mode().IsRegular() {
 		return Record{}, errors.New("source must be a regular file")
 	}
+	limit := s.MaxBytes
+	if limit <= 0 {
+		limit = DefaultMaxImportBytes
+	}
+	if info.Size() > limit {
+		return Record{}, errTooLarge(limit)
+	}
 	dir, err := s.directory(true)
 	if err != nil {
 		return Record{}, err
@@ -126,7 +138,7 @@ func (s Store) Import(source, title string) (Record, error) {
 		}
 	}()
 	hash := sha256.New()
-	_, copyErr := io.Copy(io.MultiWriter(out, hash), f)
+	copyErr := copyLimited(io.MultiWriter(out, hash), f, limit)
 	syncErr := out.Sync()
 	closeErr := out.Close()
 	if err := errors.Join(copyErr, syncErr, closeErr); err != nil {
@@ -138,6 +150,20 @@ func (s Store) Import(source, title string) (Record, error) {
 	}
 	committed = true
 	return r, nil
+}
+
+func errTooLarge(limit int64) error {
+	return fmt.Errorf("source is above the import limit of %d bytes", limit)
+}
+
+// copyLimited copies src to dst and fails if src holds more than limit bytes, so
+// a file that grows after its size was read cannot fill the disk.
+func copyLimited(dst io.Writer, src io.Reader, limit int64) error {
+	n, err := io.Copy(dst, io.LimitReader(src, limit+1))
+	if err == nil && n > limit {
+		err = errTooLarge(limit)
+	}
+	return err
 }
 
 // Link records a URL without fetching it. Credentials and non-HTTPS URLs are refused.
