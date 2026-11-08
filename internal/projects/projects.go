@@ -57,6 +57,9 @@ func entry(r project.Record) Entry {
 	return e
 }
 
+// reserved reports the one name no project may take: where.Personal.
+func reserved(name string) bool { return strings.EqualFold(name, where.Personal) }
+
 func Name(name string) error {
 	if name == "" || strings.HasPrefix(name, ".") || strings.ContainsAny(name, "/\\\r\n\x00") || strings.TrimSpace(name) != name {
 		return fmt.Errorf("project name must be one non-hidden folder name")
@@ -209,13 +212,32 @@ func (s Store) Add(path, name string) (Entry, error) {
 }
 
 func (s Store) add(path, name string) (Entry, error) {
-	records, err := s.records()
+	rec, err := s.plan(path, name)
 	if err != nil {
 		return Entry{}, err
 	}
+	if err := s.write(rec); err != nil {
+		return Entry{}, err
+	}
+	return entry(rec), nil
+}
+
+// plan works out the record add would write, and writes nothing.
+func (s Store) plan(path, name string) (project.Record, error) {
+	if reserved(name) {
+		return project.Record{}, fmt.Errorf("%s is reserved for tasks that belong to no project", where.Personal)
+	}
+	path, err := directory(path)
+	if err != nil {
+		return project.Record{}, err
+	}
+	records, err := s.records()
+	if err != nil {
+		return project.Record{}, err
+	}
 	res, err := s.resolve(path)
 	if err != nil {
-		return Entry{}, err
+		return project.Record{}, err
 	}
 	folder := res.Folder
 	// For a remote match, inspect the new clone rather than a stale registered path.
@@ -242,35 +264,35 @@ func (s Store) add(path, name string) (Entry, error) {
 	if res.Record && res.Rule == where.RuleGit {
 		for _, repo := range rec.Repos {
 			if repo.Path != "." {
-				return Entry{}, fmt.Errorf("repo belongs to multi-repo project %s; relink its containing folder instead", rec.Name)
+				return project.Record{}, fmt.Errorf("repo belongs to multi-repo project %s; relink its containing folder instead", rec.Name)
 			}
 		}
 	}
 	if name != "" && name != rec.Name {
 		if res.Record || personal {
-			return Entry{}, fmt.Errorf("folder belongs to project %s", rec.Name)
+			return project.Record{}, fmt.Errorf("folder belongs to project %s", rec.Name)
 		}
 		rec.Name = name
 	}
 	if err := Name(rec.Name); err != nil {
-		return Entry{}, err
+		return project.Record{}, err
 	}
-	if !personal && rec.Name == where.Personal {
-		return Entry{}, fmt.Errorf("Personal is reserved for folders outside projects")
+	if !personal && res.Record && reserved(rec.Name) {
+		return project.Record{}, fmt.Errorf("%s is reserved for folders outside projects", where.Personal)
 	}
 	if !res.Record && rec.ID == "" && !personal {
 		base := rec.Name
 		for n := 2; ; n++ {
 			p, err := localdata.Safe(s.Resolver.GridHome, "projects", rec.Name)
 			if err != nil {
-				return Entry{}, err
+				return project.Record{}, err
 			}
 			_, err = os.Lstat(p)
-			if errors.Is(err, os.ErrNotExist) {
+			if !reserved(rec.Name) && errors.Is(err, os.ErrNotExist) {
 				break
 			}
-			if err != nil {
-				return Entry{}, err
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				return project.Record{}, err
 			}
 			rec.Name = fmt.Sprintf("%s-%d", base, n)
 		}
@@ -285,10 +307,10 @@ func (s Store) add(path, name string) (Entry, error) {
 	if folder != "" {
 		repos, keys, err := inspect(folder, s.Resolver.Machine)
 		if err != nil {
-			return Entry{}, err
+			return project.Record{}, err
 		}
 		if err := s.conflicts(records, rec, folder, keys); err != nil {
-			return Entry{}, err
+			return project.Record{}, err
 		}
 		found := false
 		for _, f := range rec.Folders {
@@ -305,13 +327,10 @@ func (s Store) add(path, name string) (Entry, error) {
 	if rec.ID == "" {
 		rec.ID, err = localdata.ID()
 		if err != nil {
-			return Entry{}, err
+			return project.Record{}, err
 		}
 	}
-	if err := s.write(rec); err != nil {
-		return Entry{}, err
-	}
-	return entry(rec), nil
+	return rec, nil
 }
 
 func mergeKeys(a, b []project.Key) []project.Key {
@@ -481,6 +500,7 @@ type Proposal struct {
 	Path       string     `json:"path"`
 	Rule       where.Rule `json:"rule"`
 	Registered bool       `json:"registered"`
+	Error      string     `json:"error,omitempty"`
 }
 
 // Scan treats each visible direct child as a candidate, keeping multi-repo groups.
@@ -516,6 +536,46 @@ func (s Store) Scan(path string) ([]Proposal, error) {
 			continue
 		}
 		out = append(out, Proposal{Name: res.Project, Path: p, Rule: res.Rule, Registered: res.Record})
+	}
+	return out, nil
+}
+
+// Apply registers the proposals under one lock. It checks every one first and
+// writes nothing if any fails its check, so a scan is not half applied; each
+// failure is reported on its own proposal. Once the checks pass, a write that
+// fails does not stop the ones after it.
+func (s Store) Apply(proposals []Proposal) ([]Proposal, error) {
+	unlock, err := localdata.Lock(s.Resolver.GridHome, ".projects.lock")
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	if err := s.machine(); err != nil {
+		return nil, err
+	}
+	out := append([]Proposal(nil), proposals...)
+	invalid := false
+	for i, p := range out {
+		if _, err := s.plan(p.Path, ""); err != nil {
+			out[i].Error = err.Error()
+			invalid = true
+		}
+	}
+	if invalid {
+		for i := range out {
+			if out[i].Error == "" {
+				out[i].Error = "not registered: another folder failed its check"
+			}
+		}
+		return out, nil
+	}
+	for i, p := range out {
+		e, err := s.add(p.Path, "") // planned again: the writes before it can change the answer
+		if err != nil {
+			out[i].Error = err.Error()
+			continue
+		}
+		out[i].Name, out[i].Registered = e.Name, true
 	}
 	return out, nil
 }

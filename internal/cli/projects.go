@@ -116,22 +116,33 @@ func runProject(args []string, env Env) int {
 			return failure(env, err)
 		}
 		if apply {
-			for i, p := range proposals {
-				e, err := s.Add(p.Path, "")
-				if err != nil {
-					return failure(env, fmt.Errorf("scan apply %s: %w", p.Name, err))
-				}
-				proposals[i].Name = e.Name
-				proposals[i].Registered = true
+			proposals, err = s.Apply(proposals)
+			if err != nil {
+				return failure(env, err)
 			}
 		}
-		if *asJSON {
-			return writeJSON(env.Stdout, proposals)
-		}
+		failed := 0
 		for _, p := range proposals {
-			fmt.Fprintf(env.Stdout, "project: %s\npath: %s\nrule: %s\nregistered: %t\n", p.Name, gridhome.Tilde(p.Path, env.Home), p.Rule, p.Registered)
+			if p.Error != "" {
+				failed++
+			}
 		}
-		return 0
+		code := 0
+		if *asJSON {
+			code = writeJSON(env.Stdout, proposals)
+		} else {
+			for _, p := range proposals {
+				fmt.Fprintf(env.Stdout, "project: %s\npath: %s\nrule: %s\nregistered: %t\n", p.Name, gridhome.Tilde(p.Path, env.Home), p.Rule, p.Registered)
+				if p.Error != "" {
+					fmt.Fprintf(env.Stdout, "error: %s\n", p.Error)
+				}
+			}
+		}
+		if failed > 0 {
+			fmt.Fprintf(env.Stderr, "grid: %d of %d projects were not registered\n", failed, len(proposals))
+			return 1
+		}
+		return code
 	}
 	var e projects.Entry
 	var err error

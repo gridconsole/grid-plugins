@@ -351,3 +351,66 @@ func TestCaseSpellingsOfOneFolderAreOneProject(t *testing.T) {
 		t.Fatal("a parent folder in another spelling did not conflict")
 	}
 }
+
+func TestPersonalNameIsReserved(t *testing.T) {
+	s, root := fixture(t)
+	folder := mkdir(t, filepath.Join(root, "work", "personal"))
+	for _, name := range []string{"personal", "Personal"} {
+		if _, err := s.Add(folder, name); err == nil {
+			t.Fatalf("--name %s was accepted", name)
+		}
+	}
+	got, err := s.Add(folder, "")
+	if err != nil || got.Name != "personal-2" {
+		t.Fatalf("a folder named personal: %+v, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(s.Resolver.GridHome, "projects", "personal")); !os.IsNotExist(err) {
+		t.Fatalf("a personal project folder was made: %v", err)
+	}
+}
+
+func TestApplyChecksAllBeforeWriting(t *testing.T) {
+	s, root := fixture(t)
+	disc := mkdir(t, filepath.Join(root, "work"))
+	a, b, c := mkdir(t, filepath.Join(disc, "a")), mkdir(t, filepath.Join(disc, "b")), mkdir(t, filepath.Join(disc, "c"))
+	inner := mkdir(t, filepath.Join(c, "inner"))
+	if _, err := s.Add(inner, "inner"); err != nil {
+		t.Fatal(err)
+	}
+	s.Resolver.Machine = gridhome.Machine(s.Resolver.GridHome)
+	got, err := s.Apply([]Proposal{{Name: "a", Path: a}, {Name: "c", Path: c}, {Name: "b", Path: b}})
+	if err != nil || len(got) != 3 {
+		t.Fatalf("%+v, %v", got, err)
+	}
+	if !strings.Contains(got[1].Error, "already belongs to project inner") || got[0].Error == "" || got[2].Error == "" || got[0].Registered || got[2].Registered {
+		t.Fatalf("per-item errors: %+v", got)
+	}
+	if list, _ := s.List(); len(list) != 1 {
+		t.Fatalf("a failed check still wrote: %+v", list)
+	}
+	got, err = s.Apply([]Proposal{{Name: "a", Path: a}, {Name: "b", Path: b}})
+	if err != nil || got[0].Error != "" || got[1].Error != "" || !got[0].Registered || !got[1].Registered {
+		t.Fatalf("%+v, %v", got, err)
+	}
+	if list, _ := s.List(); len(list) != 3 {
+		t.Fatalf("%d projects", len(list))
+	}
+}
+
+func TestApplyReportsEveryWriteFailure(t *testing.T) {
+	s, root := fixture(t)
+	disc := mkdir(t, filepath.Join(root, "work"))
+	a, b := mkdir(t, filepath.Join(disc, "a")), mkdir(t, filepath.Join(disc, "b"))
+	projectsDir := mkdir(t, filepath.Join(s.Resolver.GridHome, "projects"))
+	if err := os.Chmod(projectsDir, 0o500); err != nil {
+		t.Skip("cannot make a folder read-only")
+	}
+	defer os.Chmod(projectsDir, 0o755)
+	if os.WriteFile(filepath.Join(projectsDir, "probe"), nil, 0o600) == nil {
+		t.Skip("permissions are not enforced here")
+	}
+	got, err := s.Apply([]Proposal{{Name: "a", Path: a}, {Name: "b", Path: b}})
+	if err != nil || got[0].Error == "" || got[1].Error == "" {
+		t.Fatalf("a failed write stopped the rest: %+v, %v", got, err)
+	}
+}
