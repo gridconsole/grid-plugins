@@ -33,9 +33,15 @@ func runTaskWrite(args []string, env Env) int {
 	sub := args[0]
 	fs := newFlags("task "+sub, env)
 	asJSON := fs.Bool("json", false, "print JSON")
-	reason := ""
-	if sub == "stop" || sub == "close" || sub == "reopen" {
+	reason, title, project := "", "", ""
+	if sub == "stop" || sub == "close" || sub == "reopen" || sub == "decline" {
 		fs.StringVar(&reason, "reason", "", "reason for the move")
+	}
+	if sub == "rename" {
+		fs.StringVar(&title, "title", "", "new title (1-200 characters on one line)")
+	}
+	if sub == "rename" || sub == "decline" {
+		fs.StringVar(&project, "project", "", "project name or id; personal selects Personal")
 	}
 	pos, err := taskArgs(fs, args[1:])
 	if errors.Is(err, flag.ErrHelp) {
@@ -68,6 +74,35 @@ func runTaskWrite(args []string, env Env) int {
 		return 0
 	}
 	o := writeOptions(env, pos[0], sub, reason)
+	if sub == "rename" || sub == "decline" {
+		// Keep the host role separate from the audit role's local-owner default.
+		role := strings.TrimSpace(env.getenv("GRID_ROLE"))
+		var event task.Event
+		var err error
+		if sub == "rename" {
+			event, err = store.Rename(task.RenameOptions{WriteOptions: o, Title: title, Project: project, Role: role})
+		} else {
+			// An absent host person means "you" in next; the receipt still uses
+			// the existing local author default.
+			o.Who.ID = env.getenv("GRID_ACTOR")
+			if o.Who.ID == "" {
+				o.Who.ID = env.getenv("GRID_WHO")
+			}
+			event, err = store.Decline(task.DeclineOptions{WriteOptions: o, Reason: reason, Project: project, Role: role})
+		}
+		if err != nil {
+			fmt.Fprintf(env.Stderr, "grid task %s: %v\n", sub, err)
+			switch {
+			case errors.Is(err, task.ErrEditUsage):
+				return 2
+			case errors.Is(err, task.ErrEditRejected):
+				return 3
+			default:
+				return 1
+			}
+		}
+		return taskWriteResult(env, event, nil, *asJSON)
+	}
 	if sub == "status" {
 		o.State = pos[1]
 	}

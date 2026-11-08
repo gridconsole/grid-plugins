@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/golden"
+	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
@@ -133,8 +134,16 @@ func TestTaskRenameDecline(t *testing.T) {
 				t.Fatal("intent changed")
 			}
 			history := readTaskTestFile(t, filepath.Join(fixture.Path, "history.md"))
-			if !strings.HasPrefix(history, "- Earlier history\n") || !strings.Contains(history, historyWant) || strings.Count(history, "\n") != 2 {
+			if !strings.HasPrefix(history, "- Earlier history\n") || strings.Count(history, "\n") != 2 {
 				t.Fatalf("history = %s", history)
+			}
+			var recorded task.Event
+			line := strings.Split(history, "\n")[1]
+			if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "- ")), &recorded); err != nil || recorded != event || recorded.Note != historyWant {
+				t.Fatalf("history receipt = %+v, %v", recorded, err)
+			}
+			if tc.role == "member" && event.Who.Role != "member" {
+				t.Fatalf("lost member audit role: %+v", event.Who)
 			}
 		})
 	}
@@ -219,4 +228,107 @@ func omitTaskLines(text string, keys map[string]bool) string {
 		}
 	}
 	return strings.Join(kept, "\n")
+}
+
+func TestTaskRenameDeclineCustomPolicy(t *testing.T) {
+	oldRename, oldDecline := task.RenameAllowed, task.DeclineAllowed
+	t.Cleanup(func() { task.RenameAllowed, task.DeclineAllowed = oldRename, oldDecline })
+	for _, verb := range []string{"rename", "decline"} {
+		t.Run(verb, func(t *testing.T) {
+			h := newHarness(t)
+			h.env.Getenv = func(key string) string {
+				if key == "GRID_ROLE" {
+					return "member"
+				}
+				return ""
+			}
+			fixture := taskFixture(t, h)
+			seen := ""
+			policy := func(role string) bool { seen = role; return role != "member" }
+			task.RenameAllowed, task.DeclineAllowed = policy, policy
+			before := taskTestSnapshot(t, fixture.Path)
+			flag := "--title"
+			if verb == "decline" {
+				flag = "--reason"
+			}
+			if code := h.run(h.home, "task", verb, fixture.ID, flag, "Changed"); code != 1 || seen != "member" || !strings.Contains(h.errb.String(), "scope") {
+				t.Fatalf("custom %s policy: exit %d, role %q: %s", verb, code, seen, h.errb)
+			}
+			after := taskTestSnapshot(t, fixture.Path)
+			if len(after) != len(before) {
+				t.Fatal("policy refusal created files")
+			}
+			for name, data := range before {
+				if !bytes.Equal(data, after[name]) {
+					t.Fatalf("policy refusal changed %s", name)
+				}
+			}
+		})
+	}
+}
+
+func TestTaskRenameDeclineProject(t *testing.T) {
+	for _, verb := range []string{"rename", "decline"} {
+		for _, selection := range []string{"", "example", "01EXAMPLE", "personal", "missing"} {
+			t.Run(verb+"/"+selection, func(t *testing.T) {
+				h := newHarness(t)
+				h.env.Getenv = func(string) string { return "" }
+				h.record(project.Record{Name: "example", ID: "01EXAMPLE"})
+				fixture, err := taskWriter(h.env).New(task.NewOptions{Cwd: h.home, Project: "example", Words: "Example task", Who: "alex"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				before := taskTestSnapshot(t, fixture.Path)
+				flag := "--title"
+				if verb == "decline" {
+					flag = "--reason"
+				}
+				args := []string{"task", verb, flag, "Changed", fixture.ID}
+				if selection != "" {
+					args = append(args, "--project", selection)
+				}
+				want := 0
+				if selection == "personal" || selection == "missing" {
+					want = 1
+				}
+				if code := h.run(h.home, args...); code != want {
+					t.Fatalf("project %s exit %d, want %d: %s", selection, code, want, h.errb)
+				}
+				if want != 0 {
+					after := taskTestSnapshot(t, fixture.Path)
+					for name, data := range before {
+						if !bytes.Equal(data, after[name]) {
+							t.Fatalf("scope refusal changed %s", name)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestTaskDeclineHostPerson(t *testing.T) {
+	for _, tc := range []struct{ actor, who, want string }{
+		{"alex", "sam", "alex"}, {"", "sam", "sam"}, {"", "", "you"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			h := newHarness(t)
+			h.env.Getenv = func(key string) string {
+				switch key {
+				case "GRID_ACTOR":
+					return tc.actor
+				case "GRID_WHO":
+					return tc.who
+				}
+				return ""
+			}
+			fixture := taskFixture(t, h)
+			if code := h.run(h.home, "task", "decline", fixture.ID, "--reason", "Later"); code != 0 {
+				t.Fatalf("exit %d: %s", code, h.errb)
+			}
+			if text := readTaskTestFile(t, filepath.Join(fixture.Path, "task.md")); !strings.Contains(text, "declined by "+tc.want) {
+				t.Fatalf("host person lost: %s", text)
+			}
+		})
+	}
 }

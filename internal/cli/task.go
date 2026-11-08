@@ -20,6 +20,8 @@ const taskUsage = `Usage:
   grid task list [--project <name-or-id>] [--state <state>] [--json]
   grid task move <machine> [--task <task>] [--project <project>] [--who <caller>] [--json]
   grid task stop|close|reopen <T-NN> [--reason <text>] [--json]
+  grid task rename <T-NN> --title <text> [--project <p>] [--json]
+  grid task decline <T-NN> --reason <text> [--project <p>] [--json]
   grid task status <T-NN> <state> [--json]
   grid task history <T-NN> [--json]
 `
@@ -40,6 +42,10 @@ func runTask(args []string, env Env) int {
 	switch sub {
 	case "attach":
 		return runTaskAttach(args[1:], env)
+	case "rename":
+		return runTaskWrite(args, env)
+	case "decline":
+		return runTaskWrite(args, env)
 	case "stop", "close", "reopen", "status", "history":
 		return runTaskWrite(args, env)
 	}
