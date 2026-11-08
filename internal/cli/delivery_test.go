@@ -26,7 +26,7 @@ func deliveryFixture(t *testing.T) (*harness, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.write(filepath.Join(created.Path, "plan.md"), "# Plan 1\n- [x] 1 Check result\n  proof: check\n")
+	h.write(filepath.Join(created.Path, "plan.md"), "# Plan 1\n- [x] 1 Check result\n  proof: check\n  jobs: []\n")
 	return h, created.Path
 }
 
@@ -90,11 +90,11 @@ func TestDeliveryCommandRefusals(t *testing.T) {
 			h.write(filepath.Join(d, "brain-proposals", "fact.md"), "---\nstatus: [\n---\n")
 		}, []string{"deliver", "Result ready"}, "proposal fact.md", 1},
 		{"wrong-level", func(h *harness, d string) {
-			h.write(filepath.Join(d, "plan.md"), "# Plan 1\n- [x] 1 Check result\n  proof: screenshot\n")
+			h.write(filepath.Join(d, "plan.md"), "# Plan 1\n- [x] 1 Check result\n  proof: screenshot\n  jobs: []\n")
 			addDeliveryProof(t, h, d)
 		}, []string{"deliver", "Result ready"}, "lacks screenshot proof", 1},
 		{"unknown-level", func(h *harness, d string) {
-			h.write(filepath.Join(d, "plan.md"), "# Plan 1\n- [x] 1 Check result\n  proof: magic\n")
+			h.write(filepath.Join(d, "plan.md"), "# Plan 1\n- [x] 1 Check result\n  proof: magic\n  jobs: []\n")
 		}, []string{"deliver", "Result ready"}, "unknown proof level", 1},
 		{"empty-plan", func(h *harness, d string) { h.write(filepath.Join(d, "plan.md"), "# Plan 1\n") }, []string{"deliver", "Result ready"}, "no items to prove", 1},
 		{"missing-file", func(h *harness, d string) { addDeliveryProof(t, h, d) }, []string{"deliver", "Result ready", "absent.txt"}, "absent.txt", 1},

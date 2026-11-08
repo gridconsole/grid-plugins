@@ -18,7 +18,7 @@ func deliverFixture(t *testing.T, header string) (Store, Task) {
 	data, _ := os.ReadFile(path)
 	text := strings.Replace(string(data), "state: queued", header+"state: running", 1)
 	write(t, path, text+"\n## Notes\n\nKeep these.\n\n## Outcome\n\nOld result.\n\n## Follow-up\n\nKeep this too.\n")
-	write(t, filepath.Join(task.Path, "plan.md"), "# Plan 1\n- [x] 1 Check result\n")
+	write(t, filepath.Join(task.Path, "plan.md"), "# Plan 1\n- [x] 1 Check result\n  jobs: []\n")
 	if _, err := (proof.Store{TaskDir: task.Path}).Add(proof.Input{Item: "1", Text: "ok", Kind: "check", By: "grid"}); err != nil {
 		t.Fatal(err)
 	}

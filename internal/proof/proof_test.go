@@ -11,7 +11,7 @@ import (
 func fixture(t *testing.T) Store {
 	t.Helper()
 	s := Store{TaskDir: t.TempDir()}
-	if err := os.WriteFile(filepath.Join(s.TaskDir, "plan.md"), []byte("# Plan 1\n- [ ] 2 Capture screen\n  proof: screenshot\n- [x] 1 Check result\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(s.TaskDir, "plan.md"), []byte("# Plan 1\n- [ ] 2 Capture screen\n  proof: screenshot\n  jobs: []\n- [x] 1 Check result\n  jobs: []\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -101,7 +101,7 @@ func TestPlanChangeAndUnknownLevel(t *testing.T) {
 			if _, err := s.Add(Input{Item: "1", Text: "pass", By: "grid"}); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(filepath.Join(s.TaskDir, "plan.md"), []byte("# Plan 2\n- [x] 1 Changed requirement\n  proof: "+level+"\n"), 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(s.TaskDir, "plan.md"), []byte("# Plan 2\n- [x] 1 Changed requirement\n  proof: "+level+"\n  jobs: []\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
 			idx, err := s.Build()
