@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"io"
 	"os"
 	"path/filepath"
@@ -61,7 +62,7 @@ func runJobGraph(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "Usage: grid job %s <items.json> [--json]\n", verb)
 		return 2
 	}
-	var items []jobgraph.Item
+	var items []job.Job
 	if err := readJobJSON(env, files[0], &items); err != nil {
 		fmt.Fprintf(env.Stderr, "grid job %s: %v\n", verb, err)
 		return 1
@@ -124,7 +125,7 @@ func runJobGraph(args []string, env Env) int {
 	return code
 }
 
-func runJobCycles(items []jobgraph.Item, asJSON bool, env Env) int {
+func runJobCycles(items []job.Job, asJSON bool, env Env) int {
 	g, err := jobgraph.New(items)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid job cycles: %v\n", err)

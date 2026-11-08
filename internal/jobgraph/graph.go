@@ -3,102 +3,29 @@
 package jobgraph
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/job"
 )
 
-type EdgeKind string
+type EdgeKind = string
 
 const (
-	Done         EdgeKind = "done"
-	Failed       EdgeKind = "failed"
-	ChildrenDone EdgeKind = "children-done"
+	Done         = "done"
+	Failed       = "failed"
+	ChildrenDone = "children-done"
 )
 
-// Edge is an after dependency. Empty Kind means done, except for gates.
-// Bare ids in JSON expand to this same shape with an empty Why.
-type Edge struct {
-	Job  string   `json:"job"`
-	Kind EdgeKind `json:"kind,omitempty"`
-	Why  string   `json:"why,omitempty"`
-}
-
-// MarshalJSON preserves the bare-id shorthand when there is no explanation.
-func (e Edge) MarshalJSON() ([]byte, error) {
-	if e.Kind == "" && e.Why == "" {
-		return json.Marshal(e.Job)
-	}
-	type plain Edge
-	return json.Marshal(plain(e))
-}
-
-func (e *Edge) UnmarshalJSON(data []byte) error {
-	var id string
-	if len(data) > 0 && data[0] == '"' {
-		if err := json.Unmarshal(data, &id); err != nil {
-			return err
-		}
-		*e = Edge{Job: id}
-		return nil
-	}
-	type plain Edge
-	var value plain
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&value); err != nil {
-		return err
-	}
-	// Object edges must explain the dependency; bare ids are the shorthand.
-	if err := validWhy(value.Why, value.Job); err != nil {
-		return err
-	}
-	*e = Edge(value)
-	return nil
-}
-
-func validWhy(why, target string) error {
-	n := utf8.RuneCountInString(strings.TrimSpace(why))
-	s := strings.ToLower(strings.TrimSpace(why))
-	if n < 8 || n > 160 || s == "see also" || s == "related" || s == strings.ToLower(target) {
-		return fmt.Errorf("after %s: why must explain the link in 8 to 160 characters", target)
-	}
-	return nil
-}
-
-type Verify struct {
-	Command  string `json:"command,omitempty"`
-	MinTests int    `json:"min_tests,omitempty"`
-	Kind     string `json:"kind,omitempty"` // file-exists or reviewer-check for non-code
-}
-
-// Item is a plan projection, not a Feed or task record. Kind defaults to code;
-// non-code, research and scout opt into non-code verification. Rename and
-// generated describe low-risk code work. ReviewReason records an explicit
-// exception to the floor; authorization of its author belongs to the caller.
-type Item struct {
-	ID           string   `json:"id"`
-	After        []Edge   `json:"after,omitempty"`
-	Review       string   `json:"review,omitempty"`
-	Risk         []string `json:"risk,omitempty"`
-	Write        []string `json:"write,omitempty"`
-	Verify       Verify   `json:"verify"`
-	Kind         string   `json:"kind,omitempty"`
-	Visible      string   `json:"visible,omitempty"`
-	Irreversible bool     `json:"irreversible,omitempty"`
-	ReviewReason string   `json:"review_reason,omitempty"`
-}
+type Edge = job.Dependency
 
 type Graph struct {
 	ids      []string
-	items    map[string]Item
+	items    map[string]job.Job
 	children map[string][]string
 }
 
@@ -108,8 +35,8 @@ var gateID = regexp.MustCompile(`^gate:Q-[0-9]+$`)
 // New validates ids, targets and edge kinds. Gate existence is checked by the
 // caller that owns the Feed; a missing gate state remains a wait. A cycle is
 // returned by Cycle or Ready, allowing callers to inspect an invalid graph.
-func New(items []Item) (*Graph, error) {
-	g := &Graph{items: make(map[string]Item), children: make(map[string][]string)}
+func New(items []job.Job) (*Graph, error) {
+	g := &Graph{items: make(map[string]job.Job), children: make(map[string][]string)}
 	for _, item := range items {
 		if !jobID.MatchString(item.ID) {
 			return nil, fmt.Errorf("invalid Job id %q", item.ID)
@@ -148,7 +75,7 @@ func New(items []Item) (*Graph, error) {
 				}
 			}
 			if e.Why != "" {
-				if err := validWhy(e.Why, e.Job); err != nil {
+				if err := job.ValidDependencyWhy(e.Why, e.Job); err != nil {
 					return nil, fmt.Errorf("%s: %w", id, err)
 				}
 			}

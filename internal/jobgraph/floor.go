@@ -2,6 +2,7 @@ package jobgraph
 
 import (
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"path"
 	"regexp"
 	"sort"
@@ -57,7 +58,7 @@ func uiScope(write []string) bool {
 // ReviewFloor computes first-match precedence from job-contract.md section 5.
 // It does not lower or mutate the requested review level. An exception reason
 // permits a lower request but does not remove classify or capture requirements.
-func ReviewFloor(item Item, policy Policy) (Floor, error) {
+func ReviewFloor(item job.Job, policy Policy) (Floor, error) {
 	out := Floor{Job: item.ID, Review: item.Review, Errors: []string{}}
 	if strings.ContainsAny(policy.Repo, ":/*?[]\\") {
 		return out, fmt.Errorf("invalid policy repo %q", policy.Repo)
@@ -77,11 +78,11 @@ func ReviewFloor(item Item, policy Policy) (Floor, error) {
 		}
 	}
 	switch item.Kind {
-	case "", "code", "non-code", "research", "scout", "rename", "generated":
+	case "", "build", "code", "non-code", "research", "scout", "rename", "generated":
 	default:
 		return out, fmt.Errorf("%s: unknown work kind %q", item.ID, item.Kind)
 	}
-	if item.Visible != "" && item.Visible != "big" {
+	if item.Visible != "" && item.Visible != "big" && item.Visible != "small" {
 		return out, fmt.Errorf("%s: unknown visible value %q", item.ID, item.Visible)
 	}
 	// Lowering is exact: only the primary repo's own spelling reads as unprefixed.
@@ -110,7 +111,7 @@ func ReviewFloor(item Item, policy Policy) (Floor, error) {
 		out.Errors = append(out.Errors, "review must be L0, L1, L2 or L3")
 	} else if level < reviewRank(out.Floor) {
 		if strings.TrimSpace(item.ReviewReason) == "" {
-			out.Errors = append(out.Errors, "review "+item.Review+" is below floor "+out.Floor)
+			out.Errors = append(out.Errors, "review "+item.Review+" is below floor "+out.Floor+"; review_reason is required")
 		} else {
 			out.Override = true
 		}
@@ -138,7 +139,7 @@ func reviewRank(level string) int {
 
 // Floors returns a stable report, including per-Job review and verify refusals.
 // Malformed ids, kinds, risks or patterns are errors instead of partial reports.
-func Floors(items []Item, policy Policy) ([]Floor, error) {
+func Floors(items []job.Job, policy Policy) ([]Floor, error) {
 	if _, err := New(items); err != nil {
 		return nil, err
 	}
@@ -156,7 +157,7 @@ func Floors(items []Item, policy Policy) ([]Floor, error) {
 
 // ValidateVerify is a static plan check, not evidence of an executed test count.
 // Non-code Jobs may use the contract's file-exists or reviewer-check kinds.
-func ValidateVerify(item Item) error {
+func ValidateVerify(item job.Job) error {
 	v := item.Verify
 	nonCode := item.Kind == "non-code" || item.Kind == "research" || item.Kind == "scout"
 	if v.Kind != "" {

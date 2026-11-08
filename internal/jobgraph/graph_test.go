@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -13,7 +14,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
-func mustGraph(t *testing.T, items []Item) *Graph {
+func mustGraph(t *testing.T, items []job.Job) *Graph {
 	t.Helper()
 	g, err := New(items)
 	if err != nil {
@@ -37,7 +38,7 @@ func TestGraphValidation(t *testing.T) {
 		{"null", `[{"id":"J-1","after":[null]}]`, "why"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var items []Item
+			var items []job.Job
 			err := json.Unmarshal([]byte(tc.input), &items)
 			if err == nil {
 				_, err = New(items)
@@ -53,7 +54,7 @@ func TestGraphValidation(t *testing.T) {
 }
 
 func TestBlocksAndImmutableInput(t *testing.T) {
-	items := []Item{{ID: "J-2", After: []Edge{{Job: "J-1", Why: "Needs the base result"}, {Job: "gate:Q-7"}}}, {ID: "J-1"}}
+	items := []job.Job{{ID: "J-2", After: []Edge{{Job: "J-1", Why: "Needs the base result"}, {Job: "gate:Q-7"}}}, {ID: "J-1"}}
 	g := mustGraph(t, items)
 	items[0].After[0].Job = "J-2"
 	want := []Block{{From: "J-1", To: "J-2", Kind: Done, Why: "Needs the base result"}, {From: "gate:Q-7", To: "J-2"}}
@@ -86,13 +87,13 @@ func TestEdgeJSONRoundTrip(t *testing.T) {
 func TestCyclePaths(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
-		items []Item
+		items []job.Job
 		want  []string
 	}{
 		{"empty", nil, []string{}},
-		{"self", []Item{{ID: "J-1", After: []Edge{{Job: "J-1"}}}}, []string{"J-1", "J-1"}},
-		{"disconnected", []Item{{ID: "J-0"}, {ID: "J-2", After: []Edge{{Job: "J-1", Kind: Failed}}}, {ID: "J-1", After: []Edge{{Job: "J-2"}}}}, []string{"J-1", "J-2", "J-1"}},
-		{"split deadlock", []Item{{ID: "J-1"}, {ID: "J-1.1", After: []Edge{{Job: "J-2"}}}, {ID: "J-2", After: []Edge{{Job: "J-1", Kind: ChildrenDone}}}}, []string{"J-1.1", "J-2", "J-1.1"}},
+		{"self", []job.Job{{ID: "J-1", After: []Edge{{Job: "J-1"}}}}, []string{"J-1", "J-1"}},
+		{"disconnected", []job.Job{{ID: "J-0"}, {ID: "J-2", After: []Edge{{Job: "J-1", Kind: Failed}}}, {ID: "J-1", After: []Edge{{Job: "J-2"}}}}, []string{"J-1", "J-2", "J-1"}},
+		{"split deadlock", []job.Job{{ID: "J-1"}, {ID: "J-1.1", After: []Edge{{Job: "J-2"}}}, {ID: "J-2", After: []Edge{{Job: "J-1", Kind: ChildrenDone}}}}, []string{"J-1.1", "J-2", "J-1.1"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			g := mustGraph(t, tc.items)
@@ -113,7 +114,7 @@ func TestCycleRandomGraphs(t *testing.T) {
 	rng := rand.New(rand.NewSource(2501))
 	for trial := 0; trial < 1000; trial++ {
 		n := 1 + rng.Intn(30)
-		items := make([]Item, n)
+		items := make([]job.Job, n)
 		degree := make([]int, n)
 		adj := make([][]int, n)
 		for i := range items {
@@ -191,7 +192,7 @@ func TestReadyEdges(t *testing.T) {
 		{"accepted is not failed", Failed, contract.Accepted, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			g := mustGraph(t, []Item{{ID: "J-1"}, {ID: "J-2", After: []Edge{{Job: "J-1", Kind: tc.kind}}}})
+			g := mustGraph(t, []job.Job{{ID: "J-1"}, {ID: "J-2", After: []Edge{{Job: "J-1", Kind: tc.kind}}}})
 			got, err := g.Ready(Snapshot{Jobs: map[string]contract.Job{"J-1": {Status: tc.status}}, Exhausted: map[string]bool{"J-1": tc.exhausted}})
 			if err != nil {
 				t.Fatal(err)
@@ -204,7 +205,7 @@ func TestReadyEdges(t *testing.T) {
 }
 
 func TestReadyChildrenAndGates(t *testing.T) {
-	g := mustGraph(t, []Item{{ID: "J-14"}, {ID: "J-14.1"}, {ID: "J-14.2"}, {ID: "J-140.1"}, {ID: "J-20", After: []Edge{{Job: "J-14", Kind: ChildrenDone}, {Job: "gate:Q-7"}}}})
+	g := mustGraph(t, []job.Job{{ID: "J-14"}, {ID: "J-14.1"}, {ID: "J-14.2"}, {ID: "J-140.1"}, {ID: "J-20", After: []Edge{{Job: "J-14", Kind: ChildrenDone}, {Job: "gate:Q-7"}}}})
 	s := Snapshot{Jobs: map[string]contract.Job{"J-14": {Status: contract.Parked}, "J-14.1": {Status: contract.Accepted}, "J-14.2": {Status: contract.Running}, "J-140.1": {Status: contract.Running}}}
 	for _, tc := range []struct {
 		name                  string
@@ -230,7 +231,7 @@ func TestReadyChildrenAndGates(t *testing.T) {
 			}
 		})
 	}
-	g = mustGraph(t, []Item{{ID: "J-14"}, {ID: "J-20", After: []Edge{{Job: "J-14", Kind: ChildrenDone}}}})
+	g = mustGraph(t, []job.Job{{ID: "J-14"}, {ID: "J-20", After: []Edge{{Job: "J-14", Kind: ChildrenDone}}}})
 	got, _ := g.Ready(Snapshot{})
 	if len(got.Waiting) != 1 {
 		t.Fatal("unsplit parent released children-done")
@@ -238,11 +239,11 @@ func TestReadyChildrenAndGates(t *testing.T) {
 }
 
 func TestReadyOrderAndOwnState(t *testing.T) {
-	items := []Item{}
+	items := []job.Job{}
 	jobs := map[string]contract.Job{}
 	for i, status := range []contract.Status{"", contract.Posted, contract.Ready, contract.Assigned, contract.Running, contract.Submitted, contract.Accepted, contract.Rejected, contract.Cancelled, contract.Stale, contract.Parked} {
 		id := fmt.Sprintf("J-%d", i)
-		items = append(items, Item{ID: id})
+		items = append(items, job.Job{ID: id})
 		jobs[id] = contract.Job{Status: status}
 	}
 	now := time.Unix(100, 0)

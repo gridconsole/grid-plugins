@@ -12,7 +12,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
-const planUsage = "Usage: grid plan hash|items [--json] [--task <task>]\n       grid plan write <file> [--json] [--task <task>]\n       grid plan diff <rev-a> <rev-b> [--json] [--task <task>]"
+const planUsage = "Usage: grid plan check [T-NN] [--json]\n       grid plan hash|items [--json] [--task <task>]\n       grid plan write <file> [--json] [--task <task>]\n       grid plan diff <rev-a> <rev-b> [--json] [--task <task>]"
 
 func runPlan(args []string, env Env) int {
 	if len(args) == 0 {
@@ -24,9 +24,9 @@ func runPlan(args []string, env Env) int {
 		return 0
 	}
 	action := args[0]
-	want, ok := map[string]int{"hash": 0, "items": 0, "write": 1, "diff": 2}[action]
+	want, ok := map[string]int{"check": 0, "hash": 0, "items": 0, "write": 1, "diff": 2}[action]
 	if !ok {
-		fmt.Fprintf(env.Stderr, "plan: unknown action %q; use hash, items, write or diff\n", action)
+		fmt.Fprintf(env.Stderr, "plan: unknown action %q; use check, hash, items, write or diff\n", action)
 		return 2
 	}
 	fs := newFlags("plan "+action, env)
@@ -41,6 +41,10 @@ func runPlan(args []string, env Env) int {
 	if err != nil {
 		return 2
 	}
+	if action == "check" && len(operands) == 1 && *task == "" {
+		*task = operands[0]
+		operands = nil
+	}
 	if len(operands) != want {
 		fmt.Fprintln(env.Stderr, planUsage)
 		return 2
@@ -54,6 +58,12 @@ func runPlan(args []string, env Env) int {
 	}
 	store := plan.Store{TaskDir: scope.TaskPath}
 	switch action {
+	case "check":
+		text, err := store.Read()
+		if err != nil {
+			return planError(env, err)
+		}
+		return runPlanCheck(text, *asJSON, env)
 	case "hash":
 		text, err := store.Read()
 		if err != nil {

@@ -1,6 +1,7 @@
 package jobgraph
 
 import (
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"strings"
 	"testing"
 )
@@ -39,7 +40,7 @@ func TestReviewFloor(t *testing.T) {
 		{"glob can touch environment", []string{"*/docs/**", "src/service.go"}, nil, "", "", false, "L2", true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			item := Item{ID: "J-1", Write: tc.write, Risk: tc.risk, Kind: tc.kind, Visible: tc.visible, Irreversible: tc.irreversible, Review: "L3", Verify: Verify{Command: "go test ./...", MinTests: 1}}
+			item := job.Job{ID: "J-1", Write: tc.write, Risk: tc.risk, Kind: tc.kind, Visible: tc.visible, Irreversible: tc.irreversible, Review: "L3", Verify: job.Verify{Command: "go test ./...", MinTests: 1}}
 			got, err := ReviewFloor(item, policy)
 			if err != nil || got.Floor != tc.floor || got.Classify != tc.classify || got.CaptureAtL3 != tc.capture || len(got.Errors) > 0 {
 				t.Fatalf("got %+v, %v", got, err)
@@ -77,7 +78,7 @@ func TestReviewFloorCaseAndPrimaryRepo(t *testing.T) {
 		{"task path under the primary prefix lowers", []string{"main:task/notes.txt"}, "research", "L0", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			item := Item{ID: "J-1", Write: tc.write, Kind: tc.kind, Review: "L3", Verify: Verify{Command: "go test ./...", MinTests: 1}}
+			item := job.Job{ID: "J-1", Write: tc.write, Kind: tc.kind, Review: "L3", Verify: job.Verify{Command: "go test ./...", MinTests: 1}}
 			got, err := ReviewFloor(item, policy)
 			if err != nil || got.Floor != tc.floor || got.Classify != tc.classify || got.CaptureAtL3 != tc.ui || len(got.Errors) > 0 {
 				t.Fatalf("got %+v, %v", got, err)
@@ -85,7 +86,7 @@ func TestReviewFloorCaseAndPrimaryRepo(t *testing.T) {
 		})
 	}
 	// Without a primary repo name every prefix is another repo, as before.
-	item := Item{ID: "J-1", Write: []string{"main:src/auth/x.go"}, Review: "L3", Verify: Verify{Command: "go test ./...", MinTests: 1}}
+	item := job.Job{ID: "J-1", Write: []string{"main:src/auth/x.go"}, Review: "L3", Verify: job.Verify{Command: "go test ./...", MinTests: 1}}
 	if got, err := ReviewFloor(item, Policy{RiskPaths: []string{"src/auth/**"}}); err != nil || got.Floor != "L1" {
 		t.Fatalf("got %+v, %v", got, err)
 	}
@@ -107,18 +108,18 @@ func TestFloorRefusalsAndOverride(t *testing.T) {
 		{"floor", "L2", "", 0, false}, {"higher", "L3", "", 0, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := ReviewFloor(Item{ID: "J-1", Risk: []string{"security"}, Review: tc.review, ReviewReason: tc.reason, Verify: Verify{Command: "make test", MinTests: 2}}, Policy{})
+			got, err := ReviewFloor(job.Job{ID: "J-1", Risk: []string{"security"}, Review: tc.review, ReviewReason: tc.reason, Verify: job.Verify{Command: "make test", MinTests: 2}}, Policy{})
 			if err != nil || len(got.Errors) != tc.wantErrors || got.Override != tc.override || got.Floor != "L2" {
 				t.Fatalf("got %+v, %v", got, err)
 			}
 		})
 	}
-	for _, item := range []Item{{Risk: []string{"unknown"}}, {Kind: "unknown"}, {Visible: "unknown"}, {Write: []string{"src/["}}} {
+	for _, item := range []job.Job{{Risk: []string{"unknown"}}, {Kind: "unknown"}, {Visible: "unknown"}, {Write: []string{"src/["}}} {
 		if _, err := ReviewFloor(item, Policy{}); err == nil {
 			t.Fatalf("accepted %+v", item)
 		}
 	}
-	if _, err := ReviewFloor(Item{}, Policy{RiskPaths: []string{"../secret"}}); err == nil {
+	if _, err := ReviewFloor(job.Job{}, Policy{RiskPaths: []string{"../secret"}}); err == nil {
 		t.Fatal("accepted invalid policy")
 	}
 }
@@ -141,27 +142,27 @@ func TestVerifyCommands(t *testing.T) {
 		{"make \"test", false}, {"", false},
 	} {
 		t.Run(tc.command, func(t *testing.T) {
-			err := ValidateVerify(Item{Verify: Verify{Command: tc.command, MinTests: 1}})
+			err := ValidateVerify(job.Job{Verify: job.Verify{Command: tc.command, MinTests: 1}})
 			if (err == nil) != tc.valid {
 				t.Fatalf("got %v, valid %v", err, tc.valid)
 			}
 		})
 	}
 	for _, n := range []int{0, -1} {
-		if err := ValidateVerify(Item{Verify: Verify{Command: "go test ./...", MinTests: n}}); err == nil || !strings.Contains(err.Error(), "min_tests") {
+		if err := ValidateVerify(job.Job{Verify: job.Verify{Command: "go test ./...", MinTests: n}}); err == nil || !strings.Contains(err.Error(), "min_tests") {
 			t.Fatalf("got %v", err)
 		}
 	}
 	for _, tc := range []struct {
 		kind   string
-		verify Verify
+		verify job.Verify
 		valid  bool
 	}{
-		{"non-code", Verify{Kind: "file-exists"}, true}, {"research", Verify{Kind: "reviewer-check"}, true},
-		{"code", Verify{Kind: "file-exists"}, false}, {"non-code", Verify{Kind: "unknown"}, false},
-		{"non-code", Verify{Kind: "file-exists", Command: "go test", MinTests: 1}, false},
+		{"non-code", job.Verify{Kind: "file-exists"}, true}, {"research", job.Verify{Kind: "reviewer-check"}, true},
+		{"code", job.Verify{Kind: "file-exists"}, false}, {"non-code", job.Verify{Kind: "unknown"}, false},
+		{"non-code", job.Verify{Kind: "file-exists", Command: "go test", MinTests: 1}, false},
 	} {
-		if err := ValidateVerify(Item{Kind: tc.kind, Verify: tc.verify}); (err == nil) != tc.valid {
+		if err := ValidateVerify(job.Job{Kind: tc.kind, Verify: tc.verify}); (err == nil) != tc.valid {
 			t.Fatalf("%+v: %v", tc, err)
 		}
 	}

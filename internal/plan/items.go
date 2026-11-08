@@ -35,6 +35,9 @@ var (
 // beginning with exactly two spaces and kind: or jobs:. Blank lines end blocks.
 func Items(text string) ([]Item, error) {
 	ls := lines(text)
+	if ls[0] == "---" {
+		return nil, fmt.Errorf("plan line 1: front matter is refused; use checklist items with jobs lists")
+	}
 	items := []Item{}
 	seen := map[int]bool{}
 	for i := 0; i < len(ls); i++ {

@@ -220,7 +220,12 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 		}
 	}
 	if anchor != "" {
-		if s.Text, err = selectText(text, anchor); err != nil {
+		if !project && filepath.ToSlash(filepath.Clean(rel)) == "plan.md" && (strings.HasPrefix(anchor, "step-") || anchor == "verify") {
+			s.Text, err = plan.Anchor(text, anchor)
+		} else {
+			s.Text, err = selectText(text, anchor)
+		}
+		if err != nil {
 			return s, fmt.Errorf("%s: %w", pointer, err)
 		}
 	} else if s.Text == "" {
@@ -292,9 +297,6 @@ func inside(dirs []string, path string) bool {
 	}
 }
 func selectText(text, anchor string) (string, error) {
-	if strings.HasPrefix(anchor, "step-") || anchor == "verify" {
-		return plan.Anchor(text, anchor)
-	}
 	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
 	if m := lineAnchor.FindStringSubmatch(anchor); m != nil {
 		a, _ := strconv.Atoi(m[1])
