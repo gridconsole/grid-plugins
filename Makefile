@@ -14,9 +14,9 @@ lint:
 	go vet ./...
 	@out="$$(gofmt -l .)"; if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 
-# Replays the legacy corpus in-process and prints every case plus totals.
+# Replays the legacy corpus in-process and prints every case plus totals; make test runs it too.
 golden:
-	GRID_GOLDEN=1 go test -count=1 -v ./internal/golden -run '^TestGoldenCorpus$$'
+	go test -count=1 -v ./internal/golden -run '^TestGoldenCorpus$$'
 
 clean:
 	rm -rf dist
