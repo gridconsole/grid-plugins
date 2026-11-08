@@ -9,7 +9,9 @@ import (
 )
 
 var namesHost = regexp.MustCompile(`(?i)(^|[^\w.-])\.host($|[^\w.-])`)
-var namesPersonCommand = regexp.MustCompile(`(^|[\s;&|])(?:[^\s;&|]*/)?grid\s+(?:approve|answer)(?:\s|$)`)
+var namesPersonCommand = regexp.MustCompile(`(^|[\s;&|])(?:[^\s;&|]*/)?grid\s+(?:approve|answer|refusal\s+decide)(?:\s|$)`)
+var namesTaskGate = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:approval\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock)(?:$|[^\w.-])`)
+
 var namesFeed = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:projects/[^\s'"/]+/tasks/T-\d[^\s'"/]*/feed|feed)(?:/|[\s'";|&<>]|$)`)
 
 // hostFolder is the legacy .host: beside the data folders, two levels above a
@@ -36,7 +38,7 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 		return hookio.Deny("The host's folder is written only by Grid, so " + what + ". A held plan is approved by the person in Grid, never by a file an agent writes.")
 	}
 	person := func() hookio.Decision {
-		return hookio.Deny("Approval, answer and gate records are written only by a person or the app through grid approve and grid answer; an agent cannot approve its own gate.")
+		return hookio.Deny("Approval, answer and gate records are written only by a person or the app through grid approve, grid answer and grid refusal decide; an agent cannot approve its own gate.")
 	}
 	if in.ToolName == "Bash" {
 		command := str(in.ToolInput["command"])
@@ -47,7 +49,7 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 		// operators prevent this exemption, so a trailing raw write stays fenced.
 		tokens, simple := words(command)
 		feedCLI := simple && len(tokens) >= 2 && filepath.Base(tokens[0]) == "grid" && tokens[1] == "feed"
-		if c.set && (namesPersonCommand.MatchString(command) || (namesFeed.MatchString(command) && !feedCLI)) {
+		if c.set && (namesPersonCommand.MatchString(command) || namesTaskGate.MatchString(command) || (namesFeed.MatchString(command) && !feedCLI)) {
 			return person()
 		}
 		return hookio.Decision{}
@@ -74,6 +76,19 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 		if inside(strings.ToLower(realNative(folder.resolved, 0)), target) {
 			return deny(given + " is in " + folder.named)
 		}
+	}
+	// Local file gates and the write journal are as privileged as Feed gates.
+	// Personal tasks live beside projects, and use the same gate boundary.
+	owner := taskAtFold(target, strings.ToLower(realNative(c.projects, 0)))
+	if owner == nil && c.home != "" {
+		home := strings.ToLower(realNative(c.path(c.home), 0))
+		rel := strings.Split(relative(home, target), "/")
+		if inside(home, target) && len(rel) >= 4 && rel[0] == "personal" && rel[1] == "tasks" && taskName.MatchString(strings.ToUpper(rel[2])) {
+			owner = &task{dir: filepath.Join(home, filepath.Join(rel[:3]...)), rel: strings.Join(rel[3:], "/")}
+		}
+	}
+	if owner != nil && !strings.Contains(owner.rel, "/") && namesTaskGate.MatchString(owner.rel) {
+		return person()
 	}
 	// Compare the native resolved path as well as its lower-case form. The latter
 	// catches case aliases even on case-sensitive hosts used for tests.

@@ -179,6 +179,9 @@ func (s Store) withWrite(cwd, id string, fn func(Task) error) error {
 	if err := checkFormat(s.Resolver.GridHome); err != nil {
 		return err
 	}
+	if err := writableFile(t.Path, "task.md"); err != nil {
+		return err
+	}
 	if err := recoverWrite(t.Path); err != nil {
 		return err
 	}
