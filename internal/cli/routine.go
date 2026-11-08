@@ -58,6 +58,9 @@ func runRoutine(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "grid routine %s: expected %d arguments\n", verb, count)
 		return 2
 	}
+	if verb != "list" && resolver(env).Caller.IsGuest() {
+		return failure(env, fmt.Errorf("guests cannot change project settings"))
+	}
 	if homeOverride != "" {
 		if !filepath.IsAbs(homeOverride) {
 			return failure(env, fmt.Errorf("--grid-home must be absolute"))

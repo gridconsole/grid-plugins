@@ -93,6 +93,9 @@ func runProject(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "grid project %s: wrong number of arguments\n", verb)
 		return 2
 	}
+	if (verb == "add" || verb == "remove" || verb == "relink" || verb == "scan" && apply) && resolver(env).Caller.IsGuest() {
+		return failure(env, fmt.Errorf("guests cannot change project settings"))
+	}
 	s := projectStore(env)
 	if verb == "list" {
 		entries, err := s.List()

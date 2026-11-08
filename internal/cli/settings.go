@@ -43,6 +43,9 @@ func settingsStore(env Env, project string, listing bool) (settings.Store, error
 			return settings.Store{}, err
 		}
 	}
+	if !listing && resolver(env).Caller.IsGuest() {
+		return settings.Store{}, fmt.Errorf("guests cannot change project settings")
+	}
 	return settings.Store{Home: env.GridHome, Project: r.Project}, nil
 }
 

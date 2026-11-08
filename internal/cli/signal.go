@@ -40,6 +40,9 @@ func runSignal(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "grid signal %s: wrong number of arguments\n", verb)
 		return 2
 	}
+	if verb == "add" && resolver(env).Caller.IsGuest() {
+		return failure(env, fmt.Errorf("guests cannot change project settings"))
+	}
 	if in.Body == "-" {
 		data, err := io.ReadAll(io.LimitReader(env.Stdin, signal.MaxBytes+1))
 		if err != nil {
