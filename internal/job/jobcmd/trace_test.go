@@ -138,6 +138,52 @@ func TestJobTraceProjectFilter(t *testing.T) {
 	traceCall(t, home, 1, "brain:home/x", "--project", "unknown", "--json")
 }
 
+func TestJobTraceGuestProjects(t *testing.T) {
+	home := t.TempDir()
+	for _, name := range []string{"alpha", "beta", gridhome.Personal} {
+		traceTestBundle(t, traceTask(t, home, name, "T-01"), "J-1", job.Source{Pointer: "shared.md"})
+		traceWrite(t, filepath.Join(home, "projects", name, "project.md"), []byte("---\nid: id-"+name+"\n---\n"))
+	}
+	traceWrite(t, filepath.Join(home, "projects", "alpha", "project-roles.json"), []byte(`{"people":[{"id":"gus","perm":"Client"}]}`))
+	for _, tc := range []struct {
+		role, member string
+		want         int
+	}{
+		{"owner", "gus", 4}, {"member", "gus", 2},
+		{"guest", "gus", 1}, {"guest", "nobody", 0}, {"guest", "", 0},
+	} {
+		t.Run(tc.role+"/"+tc.member, func(t *testing.T) {
+			r := where.Resolver{GridHome: home, Caller: where.Caller{Role: tc.role, Member: tc.member}}
+			got, err := Trace(r, "shared.md", "", "")
+			if err != nil || len(got.Rows) != tc.want || len(got.Problems) != 0 {
+				t.Fatalf("trace rows = %d, want %d; problems=%d error=%v", len(got.Rows), tc.want, len(got.Problems), err)
+			}
+			if tc.role != "guest" {
+				return
+			}
+			for _, row := range got.Rows {
+				if row.Project != "alpha" {
+					t.Errorf("guest saw project %q", row.Project)
+				}
+			}
+			for _, selector := range []string{"beta", "id-beta", "unknown"} {
+				got, err := Trace(r, "shared.md", "", selector)
+				if err != errTraceProjectNotFound || len(got.Rows) != 0 || len(got.Problems) != 0 {
+					t.Errorf("selector %q: expected project not found, got rows=%d error=%v", selector, len(got.Rows), err)
+				}
+			}
+			if tc.member == "gus" {
+				for _, selector := range []string{"alpha", "id-alpha"} {
+					got, err := Trace(r, "shared.md", "", selector)
+					if err != nil || len(got.Rows) != 1 || got.Rows[0].Project != "alpha" {
+						t.Errorf("invited selector %q: rows=%d error=%v", selector, len(got.Rows), err)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestJobTraceBadBundle(t *testing.T) {
 	home := t.TempDir()
 	dir := traceTask(t, home, "alpha", "T-01")

@@ -94,6 +94,8 @@ func TestPersonalGuardPreservesExplicitProjectMatching(t *testing.T) {
 			h := newHarness(t)
 			t.Setenv("GRID_ROLE", role)
 			h.record(project.Record{Name: "alpha", ID: "01ALPHA"})
+			t.Setenv("GRID_MEMBER", "gus")
+			h.write(filepath.Join(h.gridHome, "projects", "alpha", "project-roles.json"), `{"people":[{"id":"gus","perm":"Client"}]}`)
 			for _, name := range []string{"alpha", "01ALPHA"} {
 				if code := h.run(h.home, "where", "--project", name, "--json"); code != 0 {
 					t.Fatalf("project %s: exit %d: %s", name, code, h.errb)

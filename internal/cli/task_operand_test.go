@@ -70,6 +70,7 @@ func TestTaskOperandPolicyAndExactFolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	h.write(filepath.Join(h.gridHome, "projects", shared.Project, "project-roles.json"), `{"people":[{"id":"example-member","perm":"Client"}]}`)
 	h.env.Cwd = h.home
 	for _, role := range []string{"owner", "member", "guest"} {
 		h.env.Getenv = func(key string) string {

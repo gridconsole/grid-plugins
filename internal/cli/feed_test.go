@@ -28,6 +28,7 @@ func feedHarness(t *testing.T) (*harness, string) {
 	t.Setenv("GRID_ATTEMPT", "")
 	h.write(filepath.Join(h.gridHome, "VERSION"), "1\n")
 	h.write(filepath.Join(h.gridHome, "machine"), feedMachine+"\n")
+	h.write(filepath.Join(h.gridHome, "projects", "example", "project-roles.json"), `{"people":[{"id":"member","perm":"Member"},{"id":"visitor","perm":"Client"},{"id":"other","perm":"Client"}]}`)
 	task := filepath.Join(h.gridHome, "projects", "example", "tasks", "T-07-example")
 	h.write(filepath.Join(task, "task.md"), "---\nid: "+feedTaskID+"\n---\n")
 	return h, task

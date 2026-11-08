@@ -19,6 +19,7 @@ func settingsAccessFixture(t *testing.T, role string) (*harness, string) {
 	cwd := filepath.Join(h.root, "alpha")
 	h.mkdir(cwd)
 	h.record(project.Record{Name: "alpha", ID: "01ALPHA", Folders: []project.Folder{{Machine: h.env.Machine, Path: cwd}}})
+	h.write(filepath.Join(h.gridHome, "projects", "alpha", "project-roles.json"), `{"people":[{"id":"gus","perm":"Client"}]}`)
 	h.env.Getenv = func(k string) string {
 		return map[string]string{"GRID_ROLE": role, "GRID_MEMBER": "gus"}[k]
 	}

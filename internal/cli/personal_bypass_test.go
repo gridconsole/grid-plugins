@@ -24,6 +24,7 @@ func bypassFixture(t *testing.T) (*harness, string, string) {
 	alpha := filepath.Join(h.root, "alpha")
 	h.mkdir(alpha)
 	h.record(project.Record{Name: "alpha", ID: "01ALPHA", Folders: []project.Folder{{Machine: h.env.Machine, Path: alpha}}})
+	h.write(filepath.Join(h.gridHome, "projects", "alpha", "project-roles.json"), `{"people":[{"id":"gus","perm":"Client"}]}`)
 	if _, err := (task.Store{Resolver: resolver(h.env)}).New(task.NewOptions{Cwd: alpha, Words: "Public intent", Project: "alpha"}); err != nil {
 		t.Fatal(err)
 	}
