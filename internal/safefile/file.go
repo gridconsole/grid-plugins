@@ -1,9 +1,8 @@
-// Package safefile shares bounded reads and atomic writes below an os.Root.
+// Package safefile shares symlink-free, bounded reads below an os.Root. Writers
+// use internal/atomicfile; the brain keeps its own os.Root-confined writer.
 package safefile
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -64,43 +63,4 @@ func Read(root *os.Root, path string) ([]byte, error) {
 		err = fmt.Errorf("brain file exceeds 1 MiB")
 	}
 	return b, err
-}
-
-func AtomicWrite(root *os.Root, path string, data []byte) error {
-	if err := NoSymlinks(root, path); err != nil {
-		return err
-	}
-	if err := root.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	id, err := randomID()
-	if err != nil {
-		return err
-	}
-	tmp := filepath.Join(filepath.Dir(path), ".brain-"+id+".tmp")
-	f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
-	}
-	defer root.Remove(tmp)
-	_, err = f.Write(data)
-	if err == nil {
-		err = f.Sync()
-	}
-	closeErr := f.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	return root.Rename(tmp, path)
-}
-
-func randomID() (string, error) {
-	var b [12]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b[:]), nil
 }

@@ -185,7 +185,7 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 			if err != nil {
 				return err
 			}
-			if err = safefile.AtomicWrite(tr, receipt, b); err != nil {
+			if err = atomicWrite(tr, receipt, b); err != nil {
 				return err
 			}
 		} else {
@@ -209,7 +209,7 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 				if !bytes.Equal(before, w.Before) {
 					return fmt.Errorf("destination changed since decision; refusing to overwrite it")
 				}
-				if err = safefile.AtomicWrite(root, path, after); err != nil {
+				if err = atomicWrite(root, path, after); err != nil {
 					return err
 				}
 			}
@@ -221,7 +221,7 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 		if err != nil {
 			return err
 		}
-		if err = safefile.AtomicWrite(tr, proposalPath, b); err != nil {
+		if err = atomicWrite(tr, proposalPath, b); err != nil {
 			return err
 		}
 		pending = &w
@@ -237,7 +237,7 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 			pending.Noted = true
 			var b []byte
 			if b, err = json.Marshal(pending); err == nil {
-				err = safefile.AtomicWrite(tr, receipt, b)
+				err = atomicWrite(tr, receipt, b)
 			}
 		}
 	}
@@ -250,7 +250,7 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 			var b []byte
 			b, err = json.Marshal(pending)
 			if err == nil {
-				err = safefile.AtomicWrite(tr, receipt, b)
+				err = atomicWrite(tr, receipt, b)
 			}
 		}
 	}

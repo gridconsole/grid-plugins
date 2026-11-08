@@ -110,6 +110,37 @@ func SessionOrigin() (Origin, error) {
 	return Origin{Kind: "session", ID: id, Tier: contract.Agent}, err
 }
 
+func atomicWrite(root *os.Root, path string, data []byte) error {
+	if err := safefile.NoSymlinks(root, path); err != nil {
+		return err
+	}
+	if err := root.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	id, err := randomID()
+	if err != nil {
+		return err
+	}
+	tmp := filepath.Join(filepath.Dir(path), ".brain-"+id+".tmp")
+	f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	defer root.Remove(tmp)
+	_, err = f.Write(data)
+	if err == nil {
+		err = f.Sync()
+	}
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return root.Rename(tmp, path)
+}
+
 // locked runs fn while holding an exclusive advisory lock on a file that stays
 // in place. A second writer waits its turn. The kernel drops the lock when the
 // holder exits, so a killed writer leaves nothing to clean up; removing the file
@@ -176,7 +207,7 @@ func (s Store) Propose(n Note, origin Origin) (Entry, error) {
 		if err != nil {
 			return err
 		}
-		return safefile.AtomicWrite(root, path, b)
+		return atomicWrite(root, path, b)
 	})
 	if err != nil {
 		return Entry{}, err
@@ -278,7 +309,7 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 			if err := logDecision(root, n); err != nil {
 				return err
 			}
-			if err := safefile.AtomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
+			if err := atomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
 				return err
 			}
 			result = s.entry(n, true)
@@ -310,7 +341,7 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 			if err != nil {
 				return err
 			}
-			if err := safefile.AtomicWrite(root, path, b); err != nil {
+			if err := atomicWrite(root, path, b); err != nil {
 				return err
 			}
 		} else {
@@ -323,7 +354,7 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 		if err := logDecision(root, n); err != nil {
 			return err
 		}
-		if err := safefile.AtomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
+		if err := atomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
 			return err
 		}
 		result = s.entry(n, false)
@@ -349,7 +380,7 @@ func logDecision(root *os.Root, n Note) error {
 	if strings.Contains(string(before), line) {
 		return nil
 	}
-	return safefile.AtomicWrite(root, "knowledge/log.md", append(before, []byte(line)...))
+	return atomicWrite(root, "knowledge/log.md", append(before, []byte(line)...))
 }
 
 func normalized(n Note) Note {

@@ -233,11 +233,11 @@ func (s Store) RebuildIndex() (Index, error) {
 			if err != nil {
 				return err
 			}
-			if err := safefile.AtomicWrite(root, "knowledge/backlinks.json", append(b, '\n')); err != nil {
+			if err := atomicWrite(root, "knowledge/backlinks.json", append(b, '\n')); err != nil {
 				return err
 			}
 			text := fmt.Sprintf("generation: %d\nlevel: %s\n", backlinks.Generation, level) + SessionStartText(r)
-			return safefile.AtomicWrite(root, "knowledge/index.md", []byte(text))
+			return atomicWrite(root, "knowledge/index.md", []byte(text))
 		})
 		root.Close()
 		if err != nil {
