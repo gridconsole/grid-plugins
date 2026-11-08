@@ -68,7 +68,7 @@ func (s Store) New(o NewOptions) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	dir := taskDir(home, r.Project)
+	dir := gridhome.TasksDir(home, r.Project)
 	if err := safeDir(home, dir); err != nil {
 		return Task{}, err
 	}
@@ -117,7 +117,7 @@ func (s Store) New(o NewOptions) (Task, error) {
 	if err := atomicWrite(filepath.Join(home, "machine"), []byte(s.Resolver.Machine+"\n")); err != nil {
 		return Task{}, err
 	}
-	if r.Project != "personal" {
+	if r.Project != where.Personal {
 		if err := s.register(r, now); err != nil {
 			return Task{}, err
 		}
@@ -142,7 +142,7 @@ const staleStage = 5 * time.Minute
 // folders. It runs under the allocation lock and is best effort: a folder it
 // cannot remove stays hidden from readers and from id allocation.
 func sweepStale(home string, before time.Time) {
-	dirs, err := taskDirs(home)
+	dirs, err := gridhome.TasksDirs(home)
 	if err != nil {
 		return
 	}
@@ -190,7 +190,7 @@ func safeDir(home, dir string) error {
 // nextID counts all project tasks and Personal tasks, including incomplete task
 // folders from older writers. Hidden staging folders are never display ids.
 func nextID(home string) (string, error) {
-	dirs, err := taskDirs(home)
+	dirs, err := gridhome.TasksDirs(home)
 	if err != nil {
 		return "", err
 	}

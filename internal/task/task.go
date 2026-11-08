@@ -79,15 +79,8 @@ func number(name string) (uint64, error) {
 	return n, nil
 }
 
-func taskDir(home, proj string) string {
-	if proj == "personal" {
-		return filepath.Join(home, "personal", "tasks")
-	}
-	return filepath.Join(home, "projects", proj, "tasks")
-}
-
-// resolve supplements where with the Personal task layout, without changing
-// project resolution. Explicit Personal selection needs no project record.
+// resolve picks the project. Explicit Personal selection needs no project
+// record; where owns every other rule, including a folder inside a Personal task.
 func (s Store) resolve(cwd, proj string) (where.Result, error) {
 	if s.Resolver.GridHome == "" {
 		return where.Result{}, errors.New("cannot find the Grid home; set GRID_HOME")
@@ -95,22 +88,10 @@ func (s Store) resolve(cwd, proj string) (where.Result, error) {
 	if s.Resolver.Machine == "" {
 		s.Resolver.Machine = gridhome.Machine(s.Resolver.GridHome)
 	}
-	if strings.EqualFold(proj, "personal") {
-		return where.Result{Project: "personal", Rule: where.RulePersonal}, nil
+	if strings.EqualFold(proj, where.Personal) {
+		return where.Result{Project: where.Personal, Rule: where.RulePersonal}, nil
 	}
-	if proj == "" {
-		base := taskDir(gridhome.Real(s.Resolver.GridHome), "personal")
-		rel, err := filepath.Rel(base, gridhome.Real(cwd))
-		parts := strings.Split(rel, string(filepath.Separator))
-		if err == nil && len(parts) > 0 && folderPattern.MatchString(parts[0]) {
-			return where.Result{Project: "personal", Rule: where.RuleTask, Task: parts[0], TaskPath: filepath.Join(base, parts[0])}, nil
-		}
-	}
-	r, err := s.Resolver.Resolve(where.Query{Cwd: cwd, Project: proj})
-	if r.Rule == where.RulePersonal {
-		r.Project = "personal"
-	}
-	return r, err
+	return s.Resolver.Resolve(where.Query{Cwd: cwd, Project: proj})
 }
 
 // Fold reads YAML front matter, preserving intent byte for byte. Task state is
@@ -190,7 +171,7 @@ func (s Store) Show(cwd, id string) (Task, error) {
 		}
 		return readProject(r.TaskPath, r.Project)
 	}
-	dirs, err := taskDirs(s.Resolver.GridHome)
+	dirs, err := gridhome.TasksDirs(s.Resolver.GridHome)
 	if err != nil {
 		return Task{}, err
 	}
@@ -230,7 +211,7 @@ func (s Store) List(cwd, proj, state string) ([]Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	paths, err := folders(taskDir(s.Resolver.GridHome, r.Project))
+	paths, err := folders(gridhome.TasksDir(s.Resolver.GridHome, r.Project))
 	if err != nil {
 		return nil, err
 	}
@@ -275,18 +256,4 @@ func folders(dir string) ([]string, error) {
 		}
 	}
 	return out, nil
-}
-
-func taskDirs(home string) ([]string, error) {
-	dirs := []string{taskDir(home, "personal")}
-	entries, err := os.ReadDir(filepath.Join(home, "projects"))
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, err
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			dirs = append(dirs, filepath.Join(home, "projects", e.Name(), "tasks"))
-		}
-	}
-	return dirs, nil
 }
