@@ -150,7 +150,7 @@ func (s Store) assign(j *contract.Job, to string) error {
 	if err != nil {
 		return err
 	}
-	a := contract.Assignment{Job: j.ID, Attempt: attempt, To: to, Fence: grant.Fence, Until: s.now().Add(session.LeaseDuration).Format("2006-01-02T15:04:05.000Z")}
+	a := contract.Assignment{Job: j.ID, Attempt: attempt, To: to, Fence: grant.Fence, Until: contract.FormatTime(s.now().Add(session.LeaseDuration))}
 	_, err = s.Feed.Post(feed.Input{Type: "control", Body: map[string]any{"assign": a}}, s.Writer)
 	return err
 }

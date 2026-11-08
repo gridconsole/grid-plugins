@@ -18,7 +18,6 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/plan"
-	"github.com/gridconsole/grid-plugins/internal/question"
 )
 
 func (s Store) progress(snap Snapshot, j *contract.Job) string {
@@ -111,7 +110,7 @@ func (s Store) park(snap Snapshot, j *contract.Job, m *jobMemory) error {
 	_, err := s.Feed.Post(feed.Input{Type: "question", Job: j.ID, Wake: m.Failure + "/1", Body: map[string]any{
 		"question": "Three attempts made no progress. How should " + j.ID + " continue?",
 		"who":      owner, "blocking": true, "options": []string{"Keep parked", "Retry"}, "why": strings.Join(m.Failures, ", "),
-		"gate": map[string]any{"id": fmt.Sprintf("Q-%d", gate), "kind": "person", "default": "Keep parked", "at": s.now().Add(24 * time.Hour).Format(question.FeedTime)},
+		"gate": map[string]any{"id": fmt.Sprintf("Q-%d", gate), "kind": "person", "default": "Keep parked", "at": contract.FormatTime(s.now().Add(24 * time.Hour))},
 	}}, s.Writer)
 	if err != nil {
 		return err

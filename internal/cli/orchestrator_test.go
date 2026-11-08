@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/lease"
@@ -22,7 +23,7 @@ func orchestratorHarness(t *testing.T) (*harness, string, feed.Store) {
 	h.env.Machine = feedMachine
 	store := feed.Store{TaskDir: path, TaskID: feedTaskID}
 	w := feed.Writer{Author: feed.Author{ID: "member", Role: "member"}, Worker: "member@" + feedMachine, Lease: "task"}
-	grant, err := (lease.TaskStore{Feed: store}).TakeTask(w, os.Getpid(), time.Now().UTC().Format("2006-01-02T15:04:05.000Z"))
+	grant, err := (lease.TaskStore{Feed: store}).TakeTask(w, os.Getpid(), contract.FormatTime(time.Now()))
 	if err != nil {
 		t.Fatal(err)
 	}

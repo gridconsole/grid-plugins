@@ -30,7 +30,7 @@ func setup(t *testing.T) *fixture {
 	t.Helper()
 	f := &fixture{now: time.Now().UTC()}
 	f.s = Store{Feed: feed.Store{TaskDir: t.TempDir(), TaskID: taskID}, Writer: feed.Writer{Author: feed.Author{ID: "lead", Role: "lead"}, Worker: "lead@" + machine, Lease: "task"}, Owner: "owner", Now: func() time.Time { return f.now }, Assignee: "worker@" + machine}
-	grant, err := (lease.TaskStore{Feed: f.s.Feed}).TakeTask(f.s.Writer, os.Getpid(), f.now.Format("2006-01-02T15:04:05.000Z"))
+	grant, err := (lease.TaskStore{Feed: f.s.Feed}).TakeTask(f.s.Writer, os.Getpid(), contract.FormatTime(f.now))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func TestReadySpawnAgree(t *testing.T) {
 	f.job(t, "J-1", nil)
 	f.job(t, "J-2", []any{"J-1"})
 	f.job(t, "J-3", []any{"gate:Q-1"})
-	f.post(t, feed.Input{Type: "question", Body: map[string]any{"question": "Wait?", "who": "owner", "gate": map[string]any{"id": "Q-1", "kind": "timer", "at": f.now.Add(time.Hour).Format("2006-01-02T15:04:05.000Z")}}}, f.s.Writer)
+	f.post(t, feed.Input{Type: "question", Body: map[string]any{"question": "Wait?", "who": "owner", "gate": map[string]any{"id": "Q-1", "kind": "timer", "at": contract.FormatTime(f.now.Add(time.Hour))}}}, f.s.Writer)
 	snap, err := Load(f.s.Feed)
 	if err != nil {
 		t.Fatal(err)
@@ -473,7 +473,7 @@ func TestGateKinds(t *testing.T) {
 			gate := map[string]any{"id": "Q-1", "kind": kind}
 			switch kind {
 			case "timer":
-				gate["at"] = f.now.Add(time.Minute).Format("2006-01-02T15:04:05.000Z")
+				gate["at"] = contract.FormatTime(f.now.Add(time.Minute))
 			case "ci":
 				gate["check"] = "tests"
 			case "job":

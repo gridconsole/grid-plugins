@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 )
 
 func TestTaskAndJobTenures(t *testing.T) {
 	s := TaskStore{Feed: feed.Store{TaskDir: t.TempDir(), TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}}
 	w := feed.Writer{Author: feed.Author{ID: "lead", Role: "lead"}, Worker: "lead@01ARZ3NDEKTSV4RRFFQ69G5FAW", Lease: "task"}
-	tenure, err := s.TakeTask(w, os.Getpid(), time.Now().UTC().Format("2006-01-02T15:04:05.000Z"))
+	tenure, err := s.TakeTask(w, os.Getpid(), contract.FormatTime(time.Now()))
 	if err != nil {
 		t.Fatal(err)
 	}

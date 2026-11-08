@@ -39,7 +39,7 @@ func (s TaskStore) now() string {
 	if s.Now != nil {
 		now = s.Now()
 	}
-	return now.UTC().Format("2006-01-02T15:04:05.000Z")
+	return contract.FormatTime(now)
 }
 func (s TaskStore) open(name string, create bool) (*os.File, error) {
 	if name != "task" && !jobName.MatchString(name) {
