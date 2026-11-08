@@ -16,11 +16,14 @@ var namesHost = regexp.MustCompile(`(?i)(^|[^\w.-])\.host($|[^\w.-])`)
 // env prefix, &&, ;, a subshell, a path or quoting.
 var gateVerb = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:approve|answer|question\s+(?:answer|withdraw)|refusal\s+decide|task\s+(?:status|close|reopen|stop))(?:\s|$)`)
 
-// feedAnswer is grid feed post or grid job post with an answer type in any Go flag
-// form. An answer post can close a person gate, so it is the person's verb like
-// grid answer. The lazy middle spans flattened separators, since a quoted body may
-// hold some.
-var feedAnswer = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:feed|job)\s+post(?:\s.*?)?\s-{1,2}type(?:=|\s+)answer(?:\s|$)`)
+// feedAnswer matches answer posts and withdrawn controls in either flag order.
+// The lazy middle spans flattened separators, since a quoted body may hold some.
+const feedPostCommand = `(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:feed|job)\s+post`
+const withdrawnEvent = `question_event\s*:\s*withdrawn(?:\s|,|$)`
+
+var feedAnswer = regexp.MustCompile(`(?i)` + feedPostCommand +
+	`(?:\s.*?)?\s-{1,2}type(?:=|\s+)(?:answer(?:\s|$)|control(?:\s|$).*?` + withdrawnEvent + `)|` +
+	feedPostCommand + `\s.*?` + withdrawnEvent + `.*?\s-{1,2}type(?:=|\s+)control(?:\s|$)`)
 
 // gateName is a task entry that holds a gate: the questions folder with its
 // answers, the plan and ship approvals, a refusal decision, the write journal and its lock, or a

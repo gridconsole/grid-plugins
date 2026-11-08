@@ -301,3 +301,24 @@ func TestHostDeniesFeedAnswerWithoutRole(t *testing.T) {
 	}
 	expect(t, EvaluateHost(f.input("Bash", "grid answer T-01 Q-1 Yes"), f.root, env), "deny")
 }
+
+func TestHostDeniesWithdrawalPosts(t *testing.T) {
+	f := setup(t)
+	for _, verb := range []string{
+		`feed post --type control --re X --body '{"question_event":"withdrawn","target":"X","text":"No longer needed"}'`,
+		`job post --type=control --re X --body '{"target":"X","question_event": "withdrawn"}'`,
+		`feed post --body '{"question_event": "withdrawn"}' -type control`,
+	} {
+		for _, form := range bypassForms {
+			command := fmt.Sprintf(form, verb)
+			t.Run(command, func(t *testing.T) { expect(t, EvaluateHost(f.input("Bash", command), f.root, f.env), "deny") })
+		}
+	}
+	for _, command := range []string{
+		`grid feed post --type control --body '{"question_event":"defaulted"}'`,
+		`grid feed post --type post --body '{"text":"withdrawn"}'`,
+		`grid feed post --type control --body '{"question_event":"withdrawn-later"}'`,
+	} {
+		t.Run(command, func(t *testing.T) { expect(t, EvaluateHost(f.input("Bash", command), f.root, f.env), "") })
+	}
+}

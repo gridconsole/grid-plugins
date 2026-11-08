@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -152,7 +153,12 @@ type Result struct {
 
 func toolError(err error) Result {
 	// Quote errors too: validation may echo attacker-controlled field names.
-	raw, _ := json.Marshal(map[string]string{"error": err.Error()})
+	payload := map[string]any{"error": err.Error()}
+	var coded interface{ ExitCode() int }
+	if errors.As(err, &coded) {
+		payload["code"] = coded.ExitCode()
+	}
+	raw, _ := json.Marshal(payload)
 	return Result{Content: []Content{{"text", string(raw)}}, IsError: true}
 }
 

@@ -77,8 +77,26 @@ func runOrchestrator(args []string, env Env) int {
 		}
 		return exitCode(err)
 	}
+	var obj map[string]any
 	if verb == "post" {
 		if err := refuseAnswerPost(*kind); err != nil {
+			return fail(err)
+		}
+		if *body == "-" {
+			data, err := io.ReadAll(env.Stdin)
+			if err != nil {
+				return fail(err)
+			}
+			*body = string(data)
+		}
+		if err := json.Unmarshal([]byte(*body), &obj); err != nil || obj == nil {
+			return fail(errors.New("--body must be a JSON object"))
+		}
+		postLease := *leaseFlag
+		if postLease == "" && *kind == "control" {
+			postLease = "task"
+		}
+		if err := refuseWithdrawalPost(env, *kind, obj, postLease, *epoch); err != nil {
 			return fail(err)
 		}
 	}
@@ -205,17 +223,19 @@ func runOrchestrator(args []string, env Env) int {
 	if *attempt == 0 {
 		*attempt, _ = strconv.Atoi(env.getenv("GRID_ATTEMPT"))
 	}
-	if *body == "-" {
-		b, err := io.ReadAll(env.Stdin)
-		if err != nil {
-			return fail(err)
+	if verb != "post" {
+		if *body == "-" {
+			b, err := io.ReadAll(env.Stdin)
+			if err != nil {
+				return fail(err)
+			}
+			*body = string(b)
 		}
-		*body = string(b)
+		if err := json.Unmarshal([]byte(*body), &obj); err != nil || obj == nil {
+			return fail(errors.New("--body must be a JSON object"))
+		}
 	}
-	obj := map[string]any{}
-	if err := json.Unmarshal([]byte(*body), &obj); err != nil || obj == nil {
-		return fail(errors.New("--body must be a JSON object"))
-	}
+
 	typ := verb
 	if verb == "post" {
 		typ = *kind

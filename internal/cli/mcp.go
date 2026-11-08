@@ -18,6 +18,12 @@ func runMCP(args []string, env Env) int {
 		Version: version.Version,
 		Resolve: func(task, project string) (feed.Store, error) { return sessionStore(env, task, project) },
 		Session: func(in feed.Input) (feed.Input, feed.Writer, error) {
+			if err := refuseAnswerPost(in.Type); err != nil {
+				return in, feed.Writer{}, err
+			}
+			if err := refuseWithdrawalPost(env, in.Type, in.Body, os.Getenv("GRID_LEASE"), os.Getenv("GRID_LEASE_EPOCH")); err != nil {
+				return in, feed.Writer{}, err
+			}
 			in, err := sessionDefaults(in)
 			if err != nil {
 				return in, feed.Writer{}, err
