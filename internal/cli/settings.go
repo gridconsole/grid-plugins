@@ -164,6 +164,9 @@ func runSettings(kind string, args []string, env Env) int {
 }
 
 func runSetup(args []string, env Env) int {
+	if resolver(env).Caller.IsGuest() {
+		return commandError(env, "setup", fmt.Errorf("guests cannot change project settings"))
+	}
 	if settings.ClaudeSetupCommand(args) {
 		fs := newFlags("setup", env)
 		fs.Usage = func() {
