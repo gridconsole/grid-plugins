@@ -19,6 +19,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/lease"
+	"github.com/gridconsole/grid-plugins/internal/processid"
 )
 
 const BlockSize = 10
@@ -47,13 +48,14 @@ func (r Range) Validate() error {
 // Group means PID is the dev server's process group, otherwise its owner pid.
 type Record struct {
 	Range
-	PID   int       `json:"pid"`
-	Group bool      `json:"group"`
-	Job   string    `json:"job"`
-	Task  string    `json:"task"`
-	Lease string    `json:"lease"`
-	Fence uint64    `json:"fence"`
-	Time  time.Time `json:"time"`
+	PID      int       `json:"pid"`
+	PIDStart string    `json:"pid_start,omitempty"`
+	Group    bool      `json:"group"`
+	Job      string    `json:"job"`
+	Task     string    `json:"task"`
+	Lease    string    `json:"lease"`
+	Fence    uint64    `json:"fence"`
+	Time     time.Time `json:"time"`
 }
 
 type Store struct {
@@ -81,8 +83,8 @@ func (s Store) warn(format string, args ...any) {
 }
 
 // Locked holds the allocator's fslock while examining or changing port files.
-// Close must always be called. Env uses the same transaction to keep startup,
-// pid handoff, health failure cleanup and concurrent gc/release indivisible.
+// Close must always be called. Env releases it after the pid handoff and
+// reacquires it to confirm ownership after waiting for health.
 type Locked struct {
 	store Store
 	dir   string
@@ -225,6 +227,10 @@ func (l *Locked) SetProcess(r Record, pid int) (Record, error) {
 		return r, errors.New("a positive server pid is required")
 	}
 	r.PID, r.Group = pid, true
+	r.PIDStart = processid.Start(pid)
+	if r.PIDStart == "" {
+		return r, errors.New("dev server exited or its process start time is unavailable")
+	}
 	data, err := json.Marshal(r)
 	if err != nil {
 		return r, err
@@ -348,8 +354,14 @@ func (s Store) Release(taskDir, id string) error {
 	if err != nil || !found {
 		return err
 	}
-	if r.Group && Alive(r.PID, true) {
-		return errors.New("dev server is still running; use grid env down")
+	if r.Group {
+		alive, err := ProcessMatches(r)
+		if err != nil {
+			return err
+		}
+		if alive {
+			return errors.New("dev server is still running; use grid env down")
+		}
 	}
 	return l.Remove(r)
 }
@@ -385,9 +397,9 @@ func (s Store) GC() ([]Record, error) {
 		// A start that crashed part-way left no parent to wait for its health, so
 		// a server recorded in a damaged block is an orphan too.
 		for _, r := range d.Records {
-			if r.Group && !stopped[r.PID] && Alive(r.PID, true) {
+			if r.Group && !stopped[r.PID] {
 				stopped[r.PID] = true
-				if err := Stop(r.PID, s.grace()); err != nil {
+				if err := StopRecord(r, s.grace()); err != nil {
 					return removed, err
 				}
 			}
@@ -398,7 +410,15 @@ func (s Store) GC() ([]Record, error) {
 		s.warn("removed damaged reservation file %d.json (%s)", d.Port, d.Reason)
 	}
 	for _, r := range records {
-		reclaim := !Alive(r.PID, r.Group)
+		alive := Alive(r.PID, false)
+		if r.Group {
+			var err error
+			alive, err = ProcessMatches(r)
+			if err != nil {
+				return removed, err
+			}
+		}
+		reclaim := !alive
 		if !reclaim {
 			status, err := lease.ReadJob(filepath.Join(s.GridHome, filepath.FromSlash(r.Task)), r.Lease)
 			if err != nil {
@@ -408,7 +428,7 @@ func (s Store) GC() ([]Record, error) {
 				if r.Group {
 					// Released, superseded (fence moved) or expired: nobody is left to run
 					// grid env down, so gc stops the orphaned server itself.
-					if err := Stop(r.PID, s.grace()); err != nil {
+					if err := StopRecord(r, s.grace()); err != nil {
 						return removed, err
 					}
 					reclaim = true

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/processid"
 	"net"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -352,5 +354,78 @@ func TestDamagedPortFilesAreSkippedThenCollected(t *testing.T) {
 				t.Fatalf("still damaged after gc: %v %q", err, warned.String())
 			}
 		})
+	}
+}
+
+func TestReusedPIDIsNotSignalled(t *testing.T) {
+	cmd := exec.Command("sleep", "60")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	exited := make(chan struct{})
+	go func() { _ = cmd.Wait(); close(exited) }()
+	defer func() { _ = cmd.Process.Kill(); <-exited }()
+	s := Store{GridHome: t.TempDir()}
+	task := filepath.Join(s.GridHome, "tasks", "T-1")
+	r, err := s.Claim(task, "J-1", os.Getpid(), Range{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := s.Lock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err = l.SetProcess(r, cmd.Process.Pid)
+	l.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.PIDStart == "" || r.PIDStart != processid.Start(cmd.Process.Pid) {
+		t.Fatalf("missing process identity: %+v", r)
+	}
+	r.PIDStart = "previous-process-start"
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for port := r.Start; port <= r.End; port++ {
+		if err := os.WriteFile(filepath.Join(s.GridHome, "ports", strconv.Itoa(port)+".json"), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := StopRecord(r, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if !Alive(cmd.Process.Pid, false) {
+		t.Fatal("signalled reused PID")
+	}
+	removed, err := s.GC()
+	if err != nil || len(removed) != 1 {
+		t.Fatalf("gc: %+v %v", removed, err)
+	}
+	select {
+	case <-exited:
+		t.Fatal("gc signalled reused PID")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestMissingStartTokenRefusesSignal(t *testing.T) {
+	cmd := exec.Command("sleep", "60")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	exited := make(chan struct{})
+	go func() { _ = cmd.Wait(); close(exited) }()
+	defer func() { _ = cmd.Process.Kill(); <-exited }()
+	if err := StopRecord(Record{PID: cmd.Process.Pid, Group: true}, time.Millisecond); err == nil {
+		t.Fatal("accepted unverifiable legacy record")
+	}
+	select {
+	case <-exited:
+		t.Fatal("signalled unverifiable PID")
+	case <-time.After(50 * time.Millisecond):
 	}
 }

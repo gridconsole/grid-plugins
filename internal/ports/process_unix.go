@@ -4,6 +4,7 @@ package ports
 
 import (
 	"errors"
+	"github.com/gridconsole/grid-plugins/internal/processid"
 	"syscall"
 	"time"
 )
@@ -28,11 +29,41 @@ func networkUnsupported(err error) bool {
 // Stop sends SIGINT, SIGTERM and SIGKILL to the process group, waiting grace
 // after each for the group to leave. gc and env down share this ladder.
 func Stop(pid int, grace time.Duration) error {
+	return StopRecord(Record{PID: pid, Group: true, PIDStart: processid.Start(pid)}, grace)
+}
+
+// ProcessMatches refuses unverifiable groups, including legacy records without
+// a start token. A different token proves that this PID belongs to another server.
+func ProcessMatches(r Record) (bool, error) {
+	if !Alive(r.PID, true) {
+		return false, nil
+	}
+	if r.PIDStart == "" {
+		return false, errors.New("dev server has no recorded process start time")
+	}
+	start := processid.Start(r.PID)
+	if start == "" {
+		return false, errors.New("cannot verify dev server process start time")
+	}
+	return start == r.PIDStart, nil
+}
+
+// StopRecord checks process identity before every signal so a reused PID is
+// never accepted merely because its process group exists.
+func StopRecord(r Record, grace time.Duration) error {
+	pid := r.PID
 	if pid <= 0 {
 		return errors.New("invalid dev server process group")
 	}
 	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL} {
-		err := syscall.Kill(-pid, sig)
+		matches, err := ProcessMatches(r)
+		if err != nil {
+			return err
+		}
+		if !matches {
+			return nil
+		}
+		err = syscall.Kill(-pid, sig)
 		if errors.Is(err, syscall.ESRCH) {
 			return nil
 		}

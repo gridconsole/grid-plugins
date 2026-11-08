@@ -59,7 +59,7 @@ func TestDevServerLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if r.PID <= 0 || !r.Group || !ports.Alive(r.PID, true) {
+			if r.PID <= 0 || r.PIDStart == "" || !r.Group || !ports.Alive(r.PID, true) {
 				t.Fatalf("server not recorded: %+v", r)
 			}
 			if mode == "tree" {

@@ -60,12 +60,16 @@ func (m Manager) Up(ctx context.Context, id string, c Config) (ports.Record, err
 		return ports.Record{}, err
 	}
 	if found && old.Group {
-		if ports.Alive(old.PID, true) {
+		matches, err := ports.ProcessMatches(old)
+		if err != nil {
+			return old, err
+		}
+		if matches {
 			healthCtx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 			err := waitHealth(healthCtx, c.HealthURL, old.Start, nil)
 			if err != nil {
-				if stopErr := stop(old.PID, m.grace()); stopErr != nil {
+				if stopErr := ports.StopRecord(old, m.grace()); stopErr != nil {
 					return old, errors.Join(err, stopErr)
 				}
 				return old, errors.Join(err, l.Remove(old))
@@ -138,7 +142,7 @@ func (m Manager) Down(id string) error {
 		return err
 	}
 	if r.Group {
-		if err := stop(r.PID, m.grace()); err != nil {
+		if err := ports.StopRecord(r, m.grace()); err != nil {
 			return err
 		}
 	}
