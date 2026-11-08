@@ -264,7 +264,7 @@ func (s Store) Delete(o TrashOptions) (result TrashResult, err error) {
 		if err != nil {
 			return err
 		}
-		dirs, err := gridhome.TasksDirs(s.Resolver.GridHome)
+		dirs, err := s.Resolver.TasksDirs()
 		if err != nil {
 			return err
 		}

@@ -11,10 +11,11 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 func trashOptions(t Task) TrashOptions {
-	return TrashOptions{WriteOptions: WriteOptions{ID: t.ID, Who: contract.Author{ID: "alex", Role: "owner"}}, Project: t.Project, Role: "owner", PersonalAllowed: true}
+	return TrashOptions{WriteOptions: WriteOptions{Cwd: filepath.Dir(t.Path), ID: t.ID, Who: contract.Author{ID: "alex", Role: "owner"}}, Project: t.Project, Role: "owner", PersonalAllowed: true}
 }
 
 func TestTrashPolicies(t *testing.T) {
@@ -73,6 +74,59 @@ func TestTrashPersonalAndPersonGuards(t *testing.T) {
 	}
 }
 
+func TestTrashResolverPersonalPolicy(t *testing.T) {
+	for _, action := range []string{"delete", "delete_explicit", "restore"} {
+		t.Run(action, func(t *testing.T) {
+			s, task := writeFixture(t)
+			o := trashOptions(task)
+			path := task.Path
+			if action == "restore" {
+				result, err := s.Delete(o)
+				if err != nil {
+					t.Fatal(err)
+				}
+				path = filepath.Join(s.Resolver.GridHome, "trash", task.Project, result.Folder)
+			}
+			if action == "delete" {
+				o.Project = ""
+			}
+			// Even an allowed owner with the person guard must pass the
+			// resolver's replaceable Personal policy for every selection route.
+			s.Resolver.Caller = where.Caller{Role: "owner"}
+			calls := 0
+			s.Resolver.PersonalAllowed = func(c where.Caller) bool {
+				calls++
+				if c.Role != "owner" {
+					t.Errorf("policy caller = %+v", c)
+				}
+				return false
+			}
+			var err error
+			if action == "restore" {
+				_, err = s.Restore(o)
+			} else {
+				_, err = s.Delete(o)
+			}
+			if err == nil || calls == 0 {
+				t.Fatalf("Personal policy bypassed: calls=%d, error=%v", calls, err)
+			}
+			if action != "delete" && !errors.Is(err, where.ErrProjectUnregistered) {
+				t.Fatalf("explicit Personal error = %v", err)
+			}
+			if _, err := trashRecord(path, filepath.Base(task.Path), task.Project); err != nil {
+				t.Fatal("refusal changed task:", err)
+			}
+			if action == "restore" {
+				if _, err := os.Stat(task.Path); !os.IsNotExist(err) {
+					t.Fatalf("refusal restored task: %v", err)
+				}
+			} else if _, err := os.Stat(filepath.Join(s.Resolver.GridHome, "trash")); !os.IsNotExist(err) {
+				t.Fatalf("refusal created trash: %v", err)
+			}
+		})
+	}
+}
+
 func TestTrashSameMinuteAndOccupiedID(t *testing.T) {
 	s, task := writeFixture(t)
 	o := trashOptions(task)
@@ -89,7 +143,7 @@ func TestTrashSameMinuteAndOccupiedID(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Creation can reuse the highest deleted id; restore must not overwrite it.
-	replacement, err := s.New(NewOptions{Project: "personal", Words: "Different folder", Who: "alex"})
+	replacement, err := s.New(NewOptions{Cwd: o.Cwd, Project: "personal", Words: "Different folder", Who: "alex"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +180,7 @@ func TestTrashNewestStampBeforeSlug(t *testing.T) {
 	if err := os.Rename(filepath.Join(dir, first.Folder), old); err != nil {
 		t.Fatal(err)
 	}
-	replacement, err := s.New(NewOptions{Project: "personal", Words: "aaa", Who: "alex"})
+	replacement, err := s.New(NewOptions{Cwd: o.Cwd, Project: "personal", Words: "aaa", Who: "alex"})
 	if err != nil {
 		t.Fatal(err)
 	}
