@@ -27,7 +27,7 @@ func TestTaskNewFeedCommands(t *testing.T) {
 		t.Setenv(key, "")
 	}
 	t.Setenv("GRID_MEMBER", "member")
-	t.Setenv("GRID_ROLE", "member")
+	t.Setenv("GRID_ROLE", "owner") // Personal is owner-only (L67R).
 	if code := h.run(h.home, "task", "new", "Use the Feed", "--json"); code != 0 {
 		t.Fatalf("new: %d %s", code, h.errb)
 	}
