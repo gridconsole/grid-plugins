@@ -62,8 +62,9 @@ func ValidWriteRev(rev string) bool {
 }
 
 // Write validates one file, then compares and replaces it under a persistent
-// per-file lock. It deliberately knows nothing about the caller's role.
-func Write(home, selector, expected string, input io.Reader) (WriteResult, error) {
+// per-file lock. The resolver limits project selection to the caller's visibility.
+func Write(resolver where.Resolver, selector, expected string, input io.Reader) (WriteResult, error) {
+	home := resolver.GridHome
 	var result WriteResult
 	if !ValidWriteRev(expected) {
 		return result, fmt.Errorf("%w: --rev requires 12 hex characters or none", ErrInvalid)
@@ -72,9 +73,10 @@ func Write(home, selector, expected string, input io.Reader) (WriteResult, error
 		return result, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
 	home = gridhome.Real(home)
+	resolver.GridHome = home
 	project := ""
 	if selector != "" {
-		entries, err := (projects.Store{Resolver: where.Resolver{GridHome: home}}).List()
+		entries, err := (projects.Store{Resolver: resolver}).List()
 		if err != nil {
 			if errors.Is(err, localdata.ErrUnsafePath) {
 				return result, fmt.Errorf("%w: workflow path is unsafe or inaccessible", ErrInvalid)

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 func writeFixture(t *testing.T, name string) string {
@@ -87,7 +89,7 @@ func TestWriteRustValidation(t *testing.T) {
 			if tc.selector != "" {
 				putWorkflowFixture(t, filepath.Join(home, "projects", tc.selector, "project.md"), "---\nid: id-"+tc.selector+"\n---\n")
 			}
-			_, err := Write(home, tc.selector, "none", strings.NewReader(tc.text))
+			_, err := Write(where.Resolver{GridHome: home}, tc.selector, "none", strings.NewReader(tc.text))
 			if !errors.Is(err, ErrInvalid) {
 				t.Fatalf("want invalid, got %v", err)
 			}
@@ -106,7 +108,7 @@ func TestWriteInputBoundaryAndRepair(t *testing.T) {
 	text := writeFixture(t, "root.md")
 	text += strings.Repeat("\n", 32*1024-len(text))
 	home := t.TempDir()
-	result, err := Write(home, "", "none", strings.NewReader(text))
+	result, err := Write(where.Resolver{GridHome: home}, "", "none", strings.NewReader(text))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +119,7 @@ func TestWriteInputBoundaryAndRepair(t *testing.T) {
 	for _, damaged := range []string{"\xff", strings.Repeat("x", 32*1024+1), ""} {
 		putWorkflowFixture(t, filepath.Join(home, "workflows.md"), damaged)
 		rev := fmt.Sprintf("%x", sha256.Sum256([]byte(damaged)))[:12]
-		if _, err := Write(home, "", strings.ToUpper(rev), strings.NewReader(text)); err != nil {
+		if _, err := Write(where.Resolver{GridHome: home}, "", strings.ToUpper(rev), strings.NewReader(text)); err != nil {
 			t.Fatalf("repair: %v", err)
 		}
 	}
@@ -126,7 +128,7 @@ func TestWriteInputBoundaryAndRepair(t *testing.T) {
 func TestWriteListsAllParseProblemsAndHidesPaths(t *testing.T) {
 	home := t.TempDir()
 	text := "# Workflows\n\n## /private/one\nreview rounds: 4\n\n## C:\\private\\two\nreview rounds: 4\n"
-	_, err := Write(home, "", "none", strings.NewReader(text))
+	_, err := Write(where.Resolver{GridHome: home}, "", "none", strings.NewReader(text))
 	if !errors.Is(err, ErrInvalid) || strings.Count(err.Error(), "review rounds") != 2 || !strings.Contains(err.Error(), "no default workflow") || strings.Contains(err.Error(), "/private") || strings.Contains(err.Error(), `C:\private`) {
 		t.Fatalf("diagnostics: %v", err)
 	}
@@ -177,7 +179,7 @@ func TestWriteSelectionAndUnsafeTargets(t *testing.T) {
 				}
 				selector = "alpha"
 			}
-			_, err := Write(home, selector, "none", strings.NewReader(text))
+			_, err := Write(where.Resolver{GridHome: home}, selector, "none", strings.NewReader(text))
 			if err == nil || strings.Contains(err.Error(), home) || strings.Contains(err.Error(), outside) {
 				t.Fatalf("refusal: %v", err)
 			}
@@ -201,7 +203,7 @@ func (brokenWorkflowInput) Read([]byte) (int, error) {
 func TestWriteInputErrorsAndAbsentHome(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "absent")
 	for _, input := range []io.Reader{nil, brokenWorkflowInput{}} {
-		_, err := Write(home, "", "none", input)
+		_, err := Write(where.Resolver{GridHome: home}, "", "none", input)
 		if err == nil || strings.Contains(err.Error(), "/private") {
 			t.Fatalf("input error: %v", err)
 		}
@@ -209,7 +211,7 @@ func TestWriteInputErrorsAndAbsentHome(t *testing.T) {
 			t.Fatalf("invalid input created home: %v", err)
 		}
 	}
-	if _, err := Write(home, "", "none", strings.NewReader(writeFixture(t, "root.md"))); err != nil {
+	if _, err := Write(where.Resolver{GridHome: home}, "", "none", strings.NewReader(writeFixture(t, "root.md"))); err != nil {
 		t.Fatal(err)
 	}
 }

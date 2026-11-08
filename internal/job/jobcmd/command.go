@@ -22,6 +22,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 type Env struct {
@@ -32,6 +33,7 @@ type Env struct {
 	Stdout      io.Writer
 	Stderr      io.Writer
 	ResolveTask func(string) (string, error)
+	Resolver    where.Resolver
 }
 type flags struct {
 	json   bool

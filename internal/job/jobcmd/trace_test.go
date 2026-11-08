@@ -13,6 +13,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 func traceWrite(t *testing.T, path string, data []byte) {
@@ -249,7 +250,7 @@ func TestJobTraceUnsafePaths(t *testing.T) {
 			if err := os.Symlink(from, to); err != nil {
 				t.Fatal(err)
 			}
-			result, err := Trace(home, "brain:project/x", "", "")
+			result, err := Trace(where.Resolver{GridHome: home}, "brain:project/x", "", "")
 			if err != nil || len(result.Rows) != 1 || len(result.Problems) != 1 {
 				t.Fatalf("%+v, %v", result, err)
 			}
@@ -283,7 +284,7 @@ func TestJobTraceSavedBundleReadOnly(t *testing.T) {
 	}
 	// The live brain entry need not exist, and omitted render candidates still
 	// appear in saved sources. Neither is a reason to discard historical evidence.
-	result, err := Trace(home, source.Pointer, source.Digest, "")
+	result, err := Trace(where.Resolver{GridHome: home}, source.Pointer, source.Digest, "")
 	if err != nil || len(result.Rows) != 1 || len(result.Problems) != 0 {
 		t.Fatalf("%+v, %v", result, err)
 	}
@@ -316,7 +317,7 @@ func TestJobTraceInvalidInputs(t *testing.T) {
 		traceWrite(t, filepath.Join(dir, "jobs", fmt.Sprintf("J-%d", i+1), "inputs.json"), []byte(data))
 	}
 	traceWrite(t, filepath.Join(dir, "jobs", ".render-in-progress", "inputs.json"), []byte("unfinished"))
-	result, err := Trace(home, "brain:project/x", "", "")
+	result, err := Trace(where.Resolver{GridHome: home}, "brain:project/x", "", "")
 	if err != nil || len(result.Rows) != 0 || len(result.Problems) != 4 {
 		t.Fatalf("%+v, %v", result, err)
 	}

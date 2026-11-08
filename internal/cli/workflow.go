@@ -138,7 +138,7 @@ func runWorkflowWrite(args []string, env Env) int {
 		defer f.Close()
 		input = f
 	}
-	answer, err := workflow.Write(env.GridHome, *project, *rev, input)
+	answer, err := workflow.Write(resolver(env), *project, *rev, input)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid workflow write: %v\n", err)
 		switch {

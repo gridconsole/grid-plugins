@@ -13,10 +13,10 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
-	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/job"
-	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/projects"
 	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 // These follow the CLI's existing status convention. There are no shared named
@@ -114,7 +114,7 @@ func tracePath(root, rel string) (string, error) {
 	return path, nil
 }
 
-func traceProject(home, filter string, dirs []string) (string, error) {
+func traceProject(resolver where.Resolver, filter string, dirs []string) (string, error) {
 	if filter == "" {
 		return "", nil
 	}
@@ -123,7 +123,7 @@ func traceProject(home, filter string, dirs []string) (string, error) {
 			return name, nil
 		}
 	}
-	records, err := project.Load(home)
+	records, err := (projects.Store{Resolver: resolver}).List()
 	if err != nil {
 		return "", errors.New("cannot read project records")
 	}
@@ -142,9 +142,10 @@ func traceProject(home, filter string, dirs []string) (string, error) {
 	return found, nil
 }
 
-// Trace reads filed inputs across Personal and all projects without consulting
+// Trace reads filed inputs across visible projects without consulting
 // live brain entries or changing Jobs. Problems do not discard other evidence.
-func Trace(home, pointer, digest, projectFilter string) (TraceResult, error) {
+func Trace(resolver where.Resolver, pointer, digest, projectFilter string) (TraceResult, error) {
+	home := resolver.GridHome
 	result := TraceResult{Rows: []TraceRow{}, Problems: []TraceProblem{}}
 	if err := traceCheckQuery(pointer, digest); err != nil {
 		return result, err
@@ -152,11 +153,11 @@ func Trace(home, pointer, digest, projectFilter string) (TraceResult, error) {
 	if home == "" {
 		return result, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
-	dirs, err := gridhome.TasksDirs(home)
+	dirs, err := resolver.TasksDirs()
 	if err != nil {
 		return result, errors.New("cannot list project task folders")
 	}
-	selected, err := traceProject(home, projectFilter, dirs)
+	selected, err := traceProject(resolver, projectFilter, dirs)
 	if err != nil {
 		return result, err
 	}
@@ -342,7 +343,9 @@ func runTrace(args []string, e Env) int {
 	if err := traceCheckQuery(pointer, digest); err != nil {
 		return fail(err, traceExitUsage)
 	}
-	result, err := Trace(e.GridHome, pointer, digest, filter)
+	resolver := e.Resolver
+	resolver.GridHome = e.GridHome
+	result, err := Trace(resolver, pointer, digest, filter)
 	if errors.Is(err, errTraceProjectNotFound) {
 		return fail(err, traceExitNotFound)
 	}
