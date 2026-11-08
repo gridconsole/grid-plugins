@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
@@ -248,11 +250,17 @@ func heartbeat(o Options, in hookio.Input) {
 		o.log("heartbeat", err)
 	}
 }
+
+// workerExit records how a Grid Worker's session ended. It acts only for a
+// Worker (GRID_FEED_TASK, GRID_JOB and GRID_WORKER set) whose Job has no result
+// yet, as the old hook did. Claude Code's own SessionEnd reasons are never a
+// crash: only an explicit Grid reason of crash or loop ends the record Errored.
 func workerExit(o Options, in hookio.Input) {
 	if in.HookEventName != "SessionEnd" && in.HookEventName != "SubagentStop" {
 		return
 	}
-	if in.SessionID == "" {
+	jobID := o.Getenv("GRID_JOB")
+	if in.SessionID == "" || o.Getenv("GRID_FEED_TASK") == "" || jobID == "" || o.Getenv("GRID_WORKER") == "" {
 		return
 	}
 	dir, err := taskDir(o, in)
@@ -263,18 +271,15 @@ func workerExit(o Options, in hookio.Input) {
 	if dir == "" {
 		return
 	}
-	reason := "crash"
-	if in.HookEventName == "SubagentStop" {
-		reason = "done"
+	if done, err := jobHasResult(dir, jobID, o.Getenv("GRID_ATTEMPT")); err != nil {
+		o.log("worker exit", err)
+		return
+	} else if done {
+		return
 	}
-	switch in.Reason {
-	case "done", "crash", "usage_limit", "cancelled", "loop":
-		reason = in.Reason
-	case "clear", "logout":
-		reason = "cancelled"
-	}
+	reason := exitReason(in)
 	store := session.Store{TaskDir: dir}
-	key := "exit:" + in.AgentID + ":" + o.Getenv("GRID_JOB") + ":" + o.Getenv("GRID_FENCE") + ":" + o.Getenv("GRID_ATTEMPT")
+	key := "exit:" + in.AgentID + ":" + jobID + ":" + o.Getenv("GRID_LEASE_EPOCH") + ":" + o.Getenv("GRID_ATTEMPT")
 	o.log("worker exit", store.UpdateActivity(in.SessionID, func(a *session.Activity) error {
 		if !a.Seen[key] {
 			a.ExitReason = reason
@@ -282,6 +287,9 @@ func workerExit(o Options, in hookio.Input) {
 				a.Exits = map[string]string{}
 			}
 			a.Exits[key] = reason
+			if a.Seen == nil {
+				a.Seen = map[string]bool{}
+			}
 			a.Seen[key] = true
 		}
 		return nil
@@ -292,10 +300,10 @@ func workerExit(o Options, in hookio.Input) {
 	}
 	if in.HookEventName == "SessionEnd" && machine != "" {
 		state := session.Finished
-		if reason == "crash" || reason == "loop" {
+		switch reason {
+		case "crash", "loop":
 			state = session.Errored
-		}
-		if reason == "cancelled" {
+		case "cancelled":
 			state = session.StoppedByYou
 		}
 		_, err = store.End(session.Key{SessionID: in.SessionID, MachineID: machine}, state)
@@ -303,6 +311,46 @@ func workerExit(o Options, in hookio.Input) {
 			o.log("end session", err)
 		}
 	}
+}
+
+// exitReason maps a SessionEnd reason to the contract's worker-exit reasons.
+// Claude Code sends clear, logout, prompt_input_exit and other (and more); none
+// of them is a crash signal, so anything Grid did not name is a normal end.
+func exitReason(in hookio.Input) string {
+	if in.HookEventName == "SubagentStop" {
+		return "done"
+	}
+	switch in.Reason {
+	case "done", "crash", "usage_limit", "cancelled", "loop":
+		return in.Reason
+	case "clear", "logout":
+		return "cancelled"
+	}
+	return "done"
+}
+
+// jobHasResult reports a result or an earlier worker-exit for the Job's attempt.
+// A task without a Feed has none.
+func jobHasResult(dir, jobID, attempt string) (bool, error) {
+	if _, err := os.Stat(filepath.Join(dir, "feed")); errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	// A task with no stable id has no Feed this store can read.
+	id, err := feed.TaskID(dir)
+	if err != nil {
+		return false, nil
+	}
+	read, err := feed.Store{TaskDir: dir, TaskID: id}.Read(feed.Filter{Job: jobID})
+	if err != nil {
+		return false, err
+	}
+	n, _ := strconv.Atoi(attempt)
+	for _, e := range read.Records {
+		if (e.Type == "result" || e.Type == "worker-exit") && (n == 0 || e.Attempt == nil || *e.Attempt == n) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Helper events expose the same pure functions the handlers use. They are

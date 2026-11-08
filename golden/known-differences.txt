@@ -51,7 +51,6 @@ usage-log/start	Usage folds numeric observations and transcript references in se
 usage-log/subagent	Usage folds numeric observations and transcript references in session records, never Feed posts. See docs/lanes/L29.md:84.
 worker-exit/missing-feed-folder	Exit evidence is recorded in sessions pending the fenced Feed writer; missing tasks log and allow. See docs/lanes/L29.md:88.
 worker-exit/missing-task	Exit evidence is recorded in sessions pending the fenced Feed writer; missing tasks log and allow. See docs/lanes/L29.md:88.
-worker-exit/not-worker	Exit evidence is recorded in sessions pending the fenced Feed writer; missing tasks log and allow. See docs/lanes/L29.md:88.
 worker-exit/post	Exit evidence is recorded in sessions pending the fenced Feed writer; missing tasks log and allow. See docs/lanes/L29.md:88.
 lib-parseFrontmatter/lists	The shared parser retains values but Go sorts JSON object keys. See docs/lanes/L29.md:94.
 lib-parseFrontmatter/scalars	The shared parser retains values but Go sorts JSON object keys. See docs/lanes/L29.md:94.

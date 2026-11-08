@@ -97,6 +97,7 @@ func TestHookHeartbeatCannotRenewOrEndOnStop(t *testing.T) {
 	if err != nil || got.Ended != nil || got.Last.Equal(r.Last) {
 		t.Fatalf("activity not separate from liveness: %+v %v", got, err)
 	}
+	f.env["GRID_FEED_TASK"], f.env["GRID_JOB"], f.env["GRID_WORKER"] = f.dir, "J-1", "worker-demo"
 	_, log, code := f.run(t, "SessionEnd", hookio.Input{Reason: "cancelled"})
 	if code != 0 || log != "" {
 		t.Fatalf("end: %d %s", code, log)
@@ -233,6 +234,7 @@ func TestInternalErrorsAllowAndGuardStillDenies(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(sessions, ".hooks"), []byte("not a directory"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	f.env["GRID_FEED_TASK"], f.env["GRID_JOB"], f.env["GRID_WORKER"] = f.dir, "J-1", "worker-demo"
 	out, log, code := f.run(t, "SessionEnd", hookio.Input{})
 	if code != 0 || out != "" || !strings.Contains(log, "grid hook:") {
 		t.Fatalf("error was not logged and allowed: %q %q %d", out, log, code)
