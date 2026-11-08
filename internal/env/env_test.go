@@ -213,6 +213,52 @@ func assertEmpty(t *testing.T, s ports.Store) {
 	}
 }
 
+func TestUpHealthTimeoutHonorsStopGrace(t *testing.T) {
+	m := Manager{Ports: ports.Store{GridHome: t.TempDir()}, Dir: t.TempDir(), Grace: 100 * time.Millisecond}
+	m.TaskDir = filepath.Join(m.Ports.GridHome, "tasks", "T-1")
+	const timeout = 100 * time.Millisecond
+	port := freeBlock(t)
+	c := Config{
+		Command:   "trap '' INT TERM; : > helper.ready; exec sleep 60",
+		HealthURL: "http://127.0.0.1:{port}/health",
+		Timeout:   timeout.String(),
+		PortRange: []int{port, port + 9},
+	}
+	t.Cleanup(func() {
+		if err := m.Down("J-1"); err != nil {
+			t.Error(err)
+		}
+	})
+	// Start the helper before timing Up so startup cannot hide missing grace
+	// waits. It ignores both signals and never listens on the health port.
+	if _, _, err := m.start("J-1", c); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(m.Dir, "helper.ready")); err == nil {
+			break
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("helper did not install signal handlers")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	started := time.Now()
+	_, err := m.Up(context.Background(), "J-1", c)
+	stopElapsed := time.Since(started) - timeout
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected health timeout: %v", err)
+	}
+	// Exclude the health wait and impose no upper bound on slow machines.
+	if stopElapsed < 2*m.Grace {
+		t.Errorf("stop phase took %s, want at least %s (two grace periods)", stopElapsed, 2*m.Grace)
+	}
+	assertEmpty(t, m.Ports)
+}
+
 func TestBadConfigAndFailedStart(t *testing.T) {
 	home := t.TempDir()
 	m := Manager{Ports: ports.Store{GridHome: home}, TaskDir: filepath.Join(home, "task"), Dir: t.TempDir(), Grace: 10 * time.Millisecond}
