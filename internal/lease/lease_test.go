@@ -1,6 +1,8 @@
 package lease
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -93,6 +95,145 @@ func TestCorruptionAndSymlinks(t *testing.T) {
 	}
 	if _, err := s.Take("session-a"); err == nil {
 		t.Fatal("followed lease directory symlink")
+	}
+}
+
+// rewrite writes the new record before it truncates, so a kill in between
+// leaves the new record followed by the tail of the longer record it replaced.
+// tear runs change, then puts that old tail back after the new record.
+func tear(t *testing.T, path string, change func()) {
+	t.Helper()
+	old, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	change()
+	next, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(next) >= len(old) {
+		t.Fatalf("the new record must be shorter to leave a tail: %d >= %d", len(next), len(old))
+	}
+	if err := os.WriteFile(path, append(append([]byte{}, next...), old[len(next):]...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readOnlyRecord(t *testing.T, path string) Record {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rec Record
+	if err := json.Unmarshal(b, &rec); err != nil {
+		t.Fatalf("file holds more than one record: %q: %v", b, err)
+	}
+	return rec
+}
+
+func TestTornRecordRecovers(t *testing.T) {
+	const long = "member+tag@01J00000000000000000000000-long-holder"
+	// Each case leaves a torn file whose first record is held or free.
+	cases := []struct {
+		name      string
+		change    func(s Store, first Record) error
+		held      bool
+		wantFence uint64
+	}{
+		{"release", func(s Store, first Record) error { _, err := s.Release(long, first.Fence); return err }, false, 1},
+		{"takeover by a shorter holder", func(s Store, first Record) error { _, err := s.Take("b"); return err }, true, 2},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			s := Store{ProjectDir: t.TempDir(), Now: func() time.Time { return now }}
+			path := filepath.Join(s.ProjectDir, "lease", "merge.json")
+			first, err := s.Take(long)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.held {
+				now = first.Until // the first grant has expired, so b takes it over
+			}
+			tear(t, path, func() {
+				if err := c.change(s, first); err != nil {
+					t.Fatal(err)
+				}
+			})
+			torn, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// A reader ignores the tail and never writes.
+			status, err := s.Status()
+			if err != nil || status.Held != c.held || status.Fence != c.wantFence {
+				t.Fatalf("status of a torn record: %+v, %v", status, err)
+			}
+			if after, _ := os.ReadFile(path); !bytes.Equal(after, torn) {
+				t.Fatal("status repaired the file under a shared lock")
+			}
+			// The next writer cuts the tail off and grants a new fence.
+			now = now.Add(Duration)
+			rec, err := s.Take("c")
+			if err != nil || rec.Fence != c.wantFence+1 {
+				t.Fatalf("take after a torn record: %+v, %v", rec, err)
+			}
+			if got := readOnlyRecord(t, path); got.Fence != rec.Fence {
+				t.Fatalf("file holds %+v, want fence %d", got, rec.Fence)
+			}
+		})
+	}
+	t.Run("a refused take still repairs", func(t *testing.T) {
+		now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		s := Store{ProjectDir: t.TempDir(), Now: func() time.Time { return now }}
+		path := filepath.Join(s.ProjectDir, "lease", "merge.json")
+		first, err := s.Take(long)
+		if err != nil {
+			t.Fatal(err)
+		}
+		now = first.Until
+		tear(t, path, func() {
+			if _, err := s.Take("b"); err != nil {
+				t.Fatal(err)
+			}
+		})
+		if _, err := s.Take("c"); !errors.Is(err, ErrHeld) {
+			t.Fatalf("take while held: %v", err)
+		}
+		if got := readOnlyRecord(t, path); got.Holder == nil || *got.Holder != "b" {
+			t.Fatalf("refused take left the tail: %+v", got)
+		}
+	})
+}
+
+func TestFenceSurvivesAMissingCounter(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	s := Store{ProjectDir: t.TempDir(), Now: func() time.Time { return now }}
+	for want := uint64(1); want <= 2; want++ {
+		if rec, err := s.Take("a"); err != nil || rec.Fence != want {
+			t.Fatalf("take: %+v, %v", rec, err)
+		}
+		now = now.Add(Duration)
+	}
+	if err := os.Remove(filepath.Join(s.ProjectDir, "lease", "seq")); err != nil {
+		t.Fatal(err)
+	}
+	if rec, err := s.Take("b"); err != nil || rec.Fence != 3 {
+		t.Fatalf("take after the counter was lost: %+v, %v", rec, err)
+	}
+}
+
+func TestHolderRefusesControlCharacters(t *testing.T) {
+	s := Store{ProjectDir: t.TempDir()}
+	for _, holder := range []string{"", " a", "a\x1b[31m", "a\u0085b", "a\x7f", "a\tb"} {
+		if _, err := s.Take(holder); err == nil {
+			t.Fatalf("accepted %q", holder)
+		}
+	}
+	if _, err := s.Take("member+tag@01J00000000000000000000000"); err != nil {
+		t.Fatal(err)
 	}
 }
 

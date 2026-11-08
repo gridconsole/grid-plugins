@@ -3,6 +3,7 @@
 package lease
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
@@ -62,7 +64,7 @@ func (s Store) now() time.Time {
 }
 
 func validHolder(holder string) bool {
-	return strings.TrimSpace(holder) == holder && holder != "" && !strings.ContainsAny(holder, "\r\n\x00\t")
+	return strings.TrimSpace(holder) == holder && holder != "" && !strings.ContainsFunc(holder, unicode.IsControl)
 }
 
 // Take grants a new fence when free or expired, including to a previous holder.
@@ -123,7 +125,7 @@ func (s Store) Status() (Status, error) {
 		return Status{}, err
 	}
 	defer fslock.Unlock(f)
-	rec, err := readRecord(f)
+	rec, _, _, err := readRecord(f) // a torn tail is ignored here; only a writer repairs it
 	if err != nil {
 		return Status{}, err
 	}
@@ -140,9 +142,17 @@ func (s Store) change(fn func(*os.File, Record) (Record, error)) (Record, error)
 		return Record{}, err
 	}
 	defer fslock.Unlock(f)
-	rec, err := readRecord(f)
+	rec, keep, torn, err := readRecord(f)
 	if err != nil {
 		return Record{}, err
+	}
+	if torn {
+		if err := f.Truncate(keep); err != nil {
+			return Record{}, err
+		}
+		if err := f.Sync(); err != nil {
+			return Record{}, err
+		}
 	}
 	return fn(f, rec)
 }
@@ -169,22 +179,32 @@ func (s Store) open(create bool) (*os.File, error) {
 	}
 	return fslock.OpenNoFollow(filepath.Join(dir, "merge.json"), flags, 0o600)
 }
-func readRecord(f *os.File) (Record, error) {
+
+// readRecord decodes the first JSON value. rewrite writes the new record at
+// offset 0 before it truncates, so a kill in between leaves bytes of the longer
+// record it replaced after the new one: keep is where the file should end and
+// torn says to cut it there. A file that does not start with a record fails closed.
+func readRecord(f *os.File) (rec Record, keep int64, torn bool, err error) {
 	b, err := io.ReadAll(f)
 	if err != nil {
-		return Record{}, err
+		return Record{}, 0, false, err
 	}
 	if len(b) == 0 {
-		return Record{Lease: "merge"}, nil
+		return Record{Lease: "merge"}, 0, false, nil
 	}
-	var rec Record
-	if err := json.Unmarshal(b, &rec); err != nil {
-		return Record{}, fmt.Errorf("read merge lease: %w", err)
+	dec := json.NewDecoder(bytes.NewReader(b))
+	if err := dec.Decode(&rec); err != nil {
+		return Record{}, 0, false, fmt.Errorf("read merge lease: %w", err)
 	}
+	end := int(dec.InputOffset())
+	if end < len(b) && b[end] == '\n' {
+		end++
+	}
+	torn = len(bytes.TrimSpace(b[end:])) > 0
 	if rec.Lease != "merge" || rec.Fence == 0 || (rec.Holder != nil && (!validHolder(*rec.Holder) || rec.Since.IsZero() || !rec.Until.After(rec.Since))) {
-		return Record{}, errors.New("invalid merge lease record")
+		return Record{}, 0, false, errors.New("invalid merge lease record")
 	}
-	return rec, nil
+	return rec, int64(end), torn, nil
 }
 func writeRecord(f *os.File, rec Record) error {
 	b, err := json.Marshal(rec)
@@ -194,8 +214,8 @@ func writeRecord(f *os.File, rec Record) error {
 	return rewrite(f, append(b, '\n'))
 }
 
-// Never unlink or rename a locked inode, or truncate it before writing. A torn
-// nonempty record fails closed; an empty new file has no grant to protect.
+// Never unlink or rename a locked inode, or truncate it before writing. A kill
+// before the truncate leaves a torn tail that the next writer cuts off.
 func rewrite(f *os.File, b []byte) error {
 	if _, err := f.WriteAt(b, 0); err != nil {
 		return err
@@ -226,9 +246,8 @@ func (s Store) nextFence(previous uint64) (uint64, error) {
 			return 0, fmt.Errorf("read lease fence: %w", err)
 		}
 	}
-	if n < previous {
-		return 0, errors.New("lease fence counter moved backwards")
-	}
+	// A missing or reset counter must not wedge the lease or reissue a fence.
+	n = max(n, previous)
 	if n == ^uint64(0) {
 		return 0, errors.New("lease fence counter exhausted")
 	}
