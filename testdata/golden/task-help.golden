@@ -1,0 +1,11 @@
+Usage:
+  grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--json]
+  grid task show [T-NN] [--json]
+  grid task attach <T-NN> [--session ID] [--runtime claude] [--json]
+  grid task list [--project <name-or-id>] [--state <state>] [--json]
+  grid task move <machine> [--task <task>] [--project <project>] [--who <caller>] [--json]
+  grid task stop|close|reopen <T-NN> [--reason <text>] [--json]
+  grid task rename <T-NN> --title <text> [--project <p>] [--json]
+  grid task decline <T-NN> --reason <text> [--project <p>] [--json]
+  grid task status <T-NN> <state> [--json]
+  grid task history <T-NN> [--json]
