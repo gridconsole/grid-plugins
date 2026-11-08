@@ -11,8 +11,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
 const Duration = 15 * time.Minute
@@ -118,10 +119,10 @@ func (s Store) Status() (Status, error) {
 		return Status{}, err
 	}
 	defer f.Close()
-	if err := flock(f, syscall.LOCK_SH); err != nil {
+	if err := fslock.LockShared(f); err != nil {
 		return Status{}, err
 	}
-	defer unlock(f)
+	defer fslock.Unlock(f)
 	rec, err := readRecord(f)
 	if err != nil {
 		return Status{}, err
@@ -135,10 +136,10 @@ func (s Store) change(fn func(*os.File, Record) (Record, error)) (Record, error)
 		return Record{}, err
 	}
 	defer f.Close()
-	if err := flock(f, syscall.LOCK_EX); err != nil {
+	if err := fslock.LockExclusive(f); err != nil {
 		return Record{}, err
 	}
-	defer unlock(f)
+	defer fslock.Unlock(f)
 	rec, err := readRecord(f)
 	if err != nil {
 		return Record{}, err
@@ -166,7 +167,7 @@ func (s Store) open(create bool) (*os.File, error) {
 	if create {
 		flags = os.O_RDWR | os.O_CREATE
 	}
-	return os.OpenFile(filepath.Join(dir, "merge.json"), flags|syscall.O_NOFOLLOW, 0o600)
+	return fslock.OpenNoFollow(filepath.Join(dir, "merge.json"), flags, 0o600)
 }
 func readRecord(f *os.File) (Record, error) {
 	b, err := io.ReadAll(f)
@@ -205,15 +206,15 @@ func rewrite(f *os.File, b []byte) error {
 	return f.Sync()
 }
 func (s Store) nextFence(previous uint64) (uint64, error) {
-	f, err := os.OpenFile(filepath.Join(s.ProjectDir, "lease", "seq"), os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
+	f, err := fslock.OpenNoFollow(filepath.Join(s.ProjectDir, "lease", "seq"), os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return 0, err
 	}
 	defer f.Close()
-	if err := flock(f, syscall.LOCK_EX); err != nil {
+	if err := fslock.LockExclusive(f); err != nil {
 		return 0, err
 	}
-	defer unlock(f)
+	defer fslock.Unlock(f)
 	b, err := io.ReadAll(f)
 	if err != nil {
 		return 0, err
@@ -234,12 +235,3 @@ func (s Store) nextFence(previous uint64) (uint64, error) {
 	n++
 	return n, rewrite(f, []byte(strconv.FormatUint(n, 10)+"\n"))
 }
-func flock(f *os.File, mode int) error {
-	for {
-		err := syscall.Flock(int(f.Fd()), mode)
-		if !errors.Is(err, syscall.EINTR) {
-			return err
-		}
-	}
-}
-func unlock(f *os.File) { _ = flock(f, syscall.LOCK_UN) }

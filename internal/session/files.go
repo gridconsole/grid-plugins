@@ -6,7 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
+
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
 // realDirectory rejects symlinked components, including sessions/ and .live/.
@@ -33,7 +34,7 @@ func realDirectory(dir string, create bool) error {
 	return nil
 }
 func readFile(path string) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := fslock.OpenNoFollow(path, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -71,20 +72,14 @@ func (s Store) locked(fn func() error) error {
 	if err := realDirectory(dir, true); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
+	f, err := fslock.OpenNoFollow(filepath.Join(dir, ".lock"), os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	for {
-		err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
-		if !errors.Is(err, syscall.EINTR) {
-			break
-		}
-	}
-	if err != nil {
+	if err := fslock.LockExclusive(f); err != nil {
 		return err
 	}
-	defer func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) }()
+	defer fslock.Unlock(f)
 	return fn()
 }
