@@ -307,21 +307,40 @@ Each request is one immutable `intents/<id>.json` under an existing task folder:
 - `created`: UTC RFC3339 time at millisecond precision (zero fractions may be omitted).
 - `idempotency_key`: only on sends, SHA-256 of canonical JSON `[who,target,args]`,
   or `[who,target,explicit-key]` when supplied. The task folder scopes the key.
+  The caller is part of both forms, so one caller's send never swallows another's.
 
 A matching send in the five seconds after the original creation returns that
 original request, including if already completed. Different text with the same
 explicit key during that window fails. Different targets or callers never
 coalesce. After five seconds a new request is written. Other verbs never coalesce.
 
+Without a key, the same caller sending the same text to the same target twice
+within five seconds gets one request, so a deliberate repeat ("yes", "go") is
+dropped. The desktop therefore passes `--who <person>` and a fresh
+`--idempotency-key <per-click id>` on every send click. A retried click reuses
+its key and coalesces; a second click has a new key and is always written.
+
 Worker lifecycle:
 
 - `intents/.lock` is a permanent fslock lock inode. All readers and transitions
   lock it; never unlink or replace it. The shared filesystem must support
-  distributed advisory flock, atomic exclusive creation and hard links. Requests
-  and completions are synced before atomic no-replace publication by hard link.
+  distributed advisory flock and atomic exclusive creation. Requests and
+  completions are synced before atomic no-replace publication by hard link.
+  Where the filesystem refuses hard links (FAT, exFAT, some network mounts; the
+  link fails with ENOTSUP, EOPNOTSUPP, ENOSYS or EPERM), publication falls back
+  to an `O_EXCL` create, write and sync under the same lock. That path is not
+  atomic: a crash mid-write can leave a short file, which a failed attempt
+  removes but a crash cannot.
 - Claim creates `<id>.claim` with `O_EXCL`, containing
   `{token,who,created,until}`. `token` is a fresh ULID; `until` is five minutes
   after claim creation. An existing unexpired marker rejects every other claimant.
+- Renew extends a live claim: the holder passes its claim token and `until`
+  becomes five minutes after the renew, keeping `token`, `who` and `created`.
+  The marker is replaced atomically under the lock. A token that is not the
+  current unexpired claim (expired, replaced by a second claimer, wrong intent)
+  is refused with the same error as a stale done, and a completed request cannot
+  be renewed. A worker that needs longer than five minutes renews before `until`;
+  a worker that misses it loses the claim like any other.
 - Expiry makes the request available again. Under the same lock, a new claimant
   removes the expired marker and exclusively creates its replacement. A crash
   after exclusive creation but before complete JSON leaves a marker that expires
@@ -361,7 +380,8 @@ grid session switch <agent>
 grid task move <machine>
 grid intent list [--json] [--pending]
 grid intent claim <id> [--who <worker>] [--json]
-grid intent done <id> [--claim <token>] [--error[=message]] [--json]
+grid intent renew <id> [--token <token>] [--json]
+grid intent done <id> [--token <token>] [--error[=message]] [--json]
 ```
 
 All commands accept `--task <path-or-id>` and `--project <name-or-id>`; by default
@@ -378,8 +398,9 @@ It does not contact that remote or validate destination availability.
 A successful write prints the request with `--json`, otherwise one line naming
 its ID, verb and target. Claim prints `{token,who,created,until}` with `--json`,
 otherwise one line naming the intent, token and expiry. Done prints its completion
-object with `--json`, otherwise one line naming the intent and done state. Done
-reads the token from `--claim` or `GRID_INTENT_CLAIM`; a token is required even
+object with `--json`, otherwise one line naming the intent and done state. Renew
+prints the renewed claim like claim does. Done and renew read the token from
+`--token`, its alias `--claim`, or `GRID_INTENT_CLAIM`; a token is required even
 though the environment permits the short `grid intent done <id>` spelling.
 A bare `--error` records `worker reported an error`; `--error=message` supplies
 the reason. Exit codes are 0 for success, 1 for storage/scope errors or a claim
