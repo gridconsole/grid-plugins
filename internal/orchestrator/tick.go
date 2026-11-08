@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -94,6 +95,14 @@ func (s Store) Tick() (out Output, err error) {
 		}
 		for _, id := range ready.Ready {
 			j := snap.State.Jobs[id]
+			if m.OfflineHosts[workerHost(to)] {
+				if j.Reason != "host_offline" {
+					if e := s.control(j, "", "host_offline", ""); e != nil {
+						return e
+					}
+				}
+				continue
+			}
 			if e := s.assign(j, to); e != nil {
 				return e
 			}
@@ -230,15 +239,35 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 			failure = j.Exited
 		}
 	} else if j.Assign != nil {
-		state := s.liveness(j)
+		state := s.liveness(j, m)
+		if state == "alive" {
+			delete(all.OfflineHosts, workerHost(j.Assign.To))
+		}
 		m.Liveness = state
-		if state != "dead" {
+		if state != "dead" && state != "host_offline" {
 			return nil
 		}
 		failure = j.AssignPost
 		if j.Status != contract.Stale {
-			if err := s.control(j, contract.Stale, "lease expired or process gone", j.AssignPost); err != nil {
+			reason := "lease expired or process gone"
+			if state == "host_offline" {
+				reason = state
+			}
+			if err := s.control(j, contract.Stale, reason, j.AssignPost); err != nil {
 				return err
+			}
+		}
+		if state == "host_offline" {
+			if all.OfflineHosts == nil {
+				all.OfflineHosts = map[string]bool{}
+			}
+			all.OfflineHosts[workerHost(j.Assign.To)] = true
+			to := s.Assignee
+			if to == "" {
+				to = s.Writer.Worker
+			}
+			if workerHost(to) == workerHost(j.Assign.To) {
+				return nil
 			}
 		}
 	}
@@ -269,51 +298,81 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 	}
 	return s.control(j, contract.Ready, "retry after failed attempt", failure)
 }
-func (s Store) liveness(j *contract.Job) string {
+func workerHost(worker string) string {
+	return worker[strings.LastIndexByte(worker, '@')+1:]
+}
+
+func (s Store) liveness(j *contract.Job, m *jobMemory) string {
 	a := j.Assign
+	until, _ := time.Parse(time.RFC3339Nano, a.Until)
+	if m.ObservedFence != a.Fence {
+		m.ObservedFence = a.Fence
+		m.LastCheck = until.Add(-session.LeaseDuration)
+		m.WakePending = false
+	}
+	if s.AfterWake {
+		m.WakePending = true
+	}
+	unknown := func() string {
+		if !m.WakePending && !until.IsZero() && !s.now().Before(until) && !m.LastCheck.IsZero() && s.now().Sub(m.LastCheck) >= 2*session.LeaseDuration {
+			return "host_offline"
+		}
+		return "unknown"
+	}
+	observed := func(process session.ProcessState, heartbeat bool) string {
+		switch process {
+		case session.Dead:
+			m.LastCheck = s.now()
+			m.WakePending = false
+			return "dead"
+		case session.Alive:
+			m.LastCheck = s.now()
+			if m.WakePending {
+				if !heartbeat || s.now().Before(until) {
+					m.WakePending = false
+				}
+				return "alive"
+			}
+			if heartbeat && !until.IsZero() && !s.now().Before(until) {
+				return "dead"
+			}
+			return "alive"
+		default:
+			return unknown()
+		}
+	}
 	path := filepath.Join(s.Feed.Dir(), ".live", fmt.Sprintf("%s.%d.json", a.To, a.Fence))
 	b, err := os.ReadFile(path)
 	if os.IsNotExist(err) && j.Status == contract.Assigned {
-		until, e := time.Parse(time.RFC3339Nano, a.Until)
-		if e == nil && !s.now().Before(until) {
+		if m.WakePending {
+			return "unknown"
+		}
+		if !until.IsZero() && !s.now().Before(until) {
 			return "dead"
 		}
 		return "starting"
 	}
-
 	if os.IsNotExist(err) && j.Status == contract.Running && a.To == s.Writer.Worker && s.Probe != nil {
 		task, e := (lease.TaskStore{Feed: s.Feed}).Read("task")
 		if e == nil && task.PID != nil && task.PIDStart != nil {
-			process := s.Probe(session.Live{Lease: j.ID, Holder: a.To, Fence: uint64(a.Fence), Attempt: j.Attempt, PID: *task.PID, PIDStart: *task.PIDStart})
-			if process == session.Dead {
-				return "dead"
-			}
-			if process == session.Alive {
-				return "alive"
-			}
+			return observed(s.Probe(session.Live{Lease: j.ID, Holder: a.To, Fence: uint64(a.Fence), Attempt: j.Attempt, PID: *task.PID, PIDStart: *task.PIDStart}), false)
 		}
 	}
 	if err != nil {
-		return "unknown"
+		return unknown()
 	}
 	var live session.Live
 	if json.Unmarshal(b, &live) != nil || live.Lease != j.ID || live.Holder != a.To || int64(live.Fence) != a.Fence || live.Attempt != a.Attempt {
-		return "unknown"
+		return unknown()
+	}
+	if !live.Until.IsZero() {
+		until = live.Until
 	}
 	if s.Probe != nil {
-		switch s.Probe(live) {
-		case session.Dead:
-			return "dead"
-		case session.Unknown:
-			return "unknown"
-		case session.Alive:
-			return "alive"
-		}
+		return observed(s.Probe(live), true)
 	}
-	// A failed explicit probe above never reaches the clock fallback. After a
-	// sleep, supervision must recheck identities before allowing expiry again.
-	if live.Until.IsZero() || s.AfterWake {
-		return "unknown"
+	if live.Until.IsZero() || m.WakePending {
+		return unknown()
 	}
 	if s.now().Before(live.Until) {
 		return "alive"

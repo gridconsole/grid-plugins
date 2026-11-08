@@ -64,6 +64,7 @@ func runOrchestrator(args []string, env Env) int {
 	recordID := fs.String("id", "", "record ULID reused on retries")
 	to := fs.String("to", "", "assignee member@machine; defaults to task holder")
 	owner := fs.String("owner", env.getenv("GRID_OWNER"), "task owner's member id for crash-loop questions")
+	afterWake := fs.Bool("after-wake", false, "suppress clock expiry until process identities and heartbeats are checked after sleep")
 	usageReady := fs.Bool("usage-ready", false, "capacity has been restored for the selected assignee")
 	if code, stop := parse(fs, rest, env); stop {
 		return code
@@ -153,7 +154,7 @@ func runOrchestrator(args []string, env Env) int {
 		return fail(err)
 	}
 	if verb == "next" || verb == "tick" {
-		s := orchestrator.Store{Feed: store, Writer: writer, Assignee: *to, Owner: *owner, WorktreesDir: filepath.Join(env.GridHome, "projects", scope.Project, "worktrees")}
+		s := orchestrator.Store{AfterWake: *afterWake, Feed: store, Writer: writer, Assignee: *to, Owner: *owner, WorktreesDir: filepath.Join(env.GridHome, "projects", scope.Project, "worktrees")}
 		s.Probe = func(live session.Live) session.ProcessState {
 			local := writer.Worker[strings.LastIndexByte(writer.Worker, '@'):]
 			if !strings.HasSuffix(live.Holder, local) {

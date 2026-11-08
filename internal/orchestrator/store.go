@@ -61,11 +61,14 @@ func (s Store) now() time.Time {
 }
 
 type jobMemory struct {
-	Failure      string   `json:"failure"`
-	Failures     []string `json:"failures"`
-	Progress     string   `json:"progress"`
-	ParkProgress string   `json:"park_progress"`
-	Liveness     string   `json:"liveness,omitempty"`
+	ObservedFence int64     `json:"observed_fence,omitempty"`
+	LastCheck     time.Time `json:"last_check,omitempty"`
+	WakePending   bool      `json:"wake_pending,omitempty"`
+	Failure       string    `json:"failure"`
+	Failures      []string  `json:"failures"`
+	Progress      string    `json:"progress"`
+	ParkProgress  string    `json:"park_progress"`
+	Liveness      string    `json:"liveness,omitempty"`
 }
 type progressFile struct {
 	Size  int64  `json:"size"`
@@ -73,15 +76,16 @@ type progressFile struct {
 	Hash  string `json:"hash"`
 }
 type memory struct {
-	Files       map[string]progressFile `json:"files,omitempty"`
-	WakeVersion int                     `json:"wake_version"`
-	WakeCounts  map[string]int          `json:"wake_counts"`
-	Active      *Wake                   `json:"active,omitempty"`
-	Overflow    bool                    `json:"overflow"`
-	Jobs        map[string]*jobMemory   `json:"jobs"`
-	Delivered   map[string]bool         `json:"delivered"`
-	Wakes       []time.Time             `json:"wakes"`
-	Pending     []Wake                  `json:"pending"`
+	OfflineHosts map[string]bool         `json:"offline_hosts,omitempty"`
+	Files        map[string]progressFile `json:"files,omitempty"`
+	WakeVersion  int                     `json:"wake_version"`
+	WakeCounts   map[string]int          `json:"wake_counts"`
+	Active       *Wake                   `json:"active,omitempty"`
+	Overflow     bool                    `json:"overflow"`
+	Jobs         map[string]*jobMemory   `json:"jobs"`
+	Delivered    map[string]bool         `json:"delivered"`
+	Wakes        []time.Time             `json:"wakes"`
+	Pending      []Wake                  `json:"pending"`
 }
 
 func (s Store) locked(fn func() error) error {

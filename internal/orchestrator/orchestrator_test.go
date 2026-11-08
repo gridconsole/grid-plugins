@@ -260,6 +260,7 @@ func TestLiveness(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.s.Probe = func(session.Live) session.ProcessState { return tc.probe }
+			f.s.AfterWake = tc.name == "alive after sleep"
 			before, _ := f.s.Feed.Read(feed.Filter{})
 			f.tick(t)
 			after, _ := f.s.Feed.Read(feed.Filter{})
@@ -777,5 +778,100 @@ func TestSpawnRequestRemovedAfterAck(t *testing.T) {
 	f.tick(t)
 	if _, err := os.Stat(filepath.Join(f.s.Feed.TaskDir, "spawned", "J-1.json")); !os.IsNotExist(err) {
 		t.Fatal("old spawn request survived ack", err)
+	}
+}
+
+func TestUnknownLivenessEventuallyMarksHostOffline(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	f.ack(t)
+	f.s.Probe = func(session.Live) session.ProcessState { return session.Unknown }
+	f.now = f.now.Add(2*session.LeaseDuration - time.Second)
+	before, _ := f.s.Feed.Read(feed.Filter{})
+	f.tick(t)
+	after, _ := f.s.Feed.Read(feed.Filter{})
+	if len(before.Records) != len(after.Records) {
+		t.Fatal("staled before offline grace")
+	}
+	f.now = f.now.Add(time.Second)
+	out := f.tick(t)
+	j := f.state(t)
+	if j.Status != contract.Stale || j.Reason != "host_offline" || out.Assigned != 0 {
+		t.Fatalf("offline host reused or never staled: %+v", j)
+	}
+	f.s.Assignee = "worker@01ARZ3NDEKTSV4RRFFQ69G5FAX"
+	if f.tick(t).Assigned != 1 || f.state(t).Assign.To != f.s.Assignee {
+		t.Fatal("did not retry on another host")
+	}
+}
+
+func TestNoAckAfterWakeDoesNotExpire(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	f.s.AfterWake = true
+	f.now = f.now.Add(time.Hour)
+	f.tick(t)
+	if f.state(t).Attempt != 1 {
+		t.Fatal("sleep expired unacknowledged assignment")
+	}
+	f.s.AfterWake = false
+	f.tick(t)
+	if f.state(t).Attempt != 1 {
+		t.Fatal("wake suppression lost before a successful check")
+	}
+}
+
+func TestAliveProbeDoesNotHideExpiredHeartbeat(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	f.ack(t)
+	j := f.state(t)
+	dir := filepath.Join(f.s.Feed.Dir(), ".live")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	live := session.Live{Lease: j.ID, Holder: f.worker.Worker, Fence: uint64(f.worker.Fence), Attempt: 1, PID: 123, PIDStart: "example", Until: f.now.Add(-time.Second)}
+	if err := writeJSON(filepath.Join(dir, fmt.Sprintf("%s.%d.json", live.Holder, live.Fence)), live); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Probe = func(session.Live) session.ProcessState { return session.Alive }
+	f.tick(t)
+	if f.state(t).Attempt != 2 {
+		t.Fatal("alive process hid expired heartbeat")
+	}
+}
+
+func TestOfflineGraceStartsAtLastSuccessfulCheck(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	f.ack(t)
+	j := f.state(t)
+	dir := filepath.Join(f.s.Feed.Dir(), ".live")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	f.now = f.now.Add(9 * time.Minute)
+	live := session.Live{Lease: j.ID, Holder: f.worker.Worker, Fence: uint64(f.worker.Fence), Attempt: 1, PID: 123, PIDStart: "example", Until: f.now.Add(21 * time.Minute)}
+	if err := writeJSON(filepath.Join(dir, fmt.Sprintf("%s.%d.json", live.Holder, live.Fence)), live); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Probe = func(session.Live) session.ProcessState { return session.Alive }
+	f.tick(t)
+	f.s.Probe = func(session.Live) session.ProcessState { return session.Unknown }
+	for _, step := range []time.Duration{19 * time.Minute, time.Minute} {
+		f.now = f.now.Add(step)
+		f.tick(t)
+		if f.state(t).Status != contract.Running {
+			t.Fatal("staled within grace or before until")
+		}
+	}
+	f.now = f.now.Add(time.Minute)
+	f.tick(t)
+	if f.state(t).Reason != "host_offline" {
+		t.Fatal("last successful check never expired")
 	}
 }
