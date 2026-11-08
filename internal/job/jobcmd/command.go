@@ -15,16 +15,20 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
+	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
 type Env struct {
 	Cwd         string
 	Home        string
 	GridHome    string
+	Machine     string // this computer's id; it picks the project's folders
 	Stdout      io.Writer
 	Stderr      io.Writer
 	ResolveTask func(string) (string, error)
@@ -77,11 +81,11 @@ func Run(args []string, e Env) int {
 		if err != nil {
 			return fail(err, 1)
 		}
-		files, repos, err := sources(task, e)
+		w, err := sources(task, e)
 		if err != nil {
 			return fail(err, 1)
 		}
-		generation, err := indexGeneration(files)
+		generation, err := w.generation()
 		if err != nil {
 			return fail(err, 1)
 		}
@@ -91,15 +95,15 @@ func Run(args []string, e Env) int {
 			return fail(err, 1)
 		}
 		skeleton := meta + "\n## Intent\n## Job\n## Context\n## Out of scope\n## Open\n## Acceptance\n## Outcome\n## Verdict\n## Follow-up\n"
-		findings := lint.Check(skeleton, lint.Options{Resolver: files, Repos: repos})
+		findings := lint.Check(skeleton, lint.Options{Resolver: w.files, Repos: w.repos})
 		if lint.HasErrors(findings) {
 			return output(e, f, report{ID: j.ID, Findings: findings}, 1)
 		}
-		rendered, err := job.Render(j, job.RenderOptions{Resolver: files, Generation: generation, BrainTokens: f.budget})
+		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget})
 		if err != nil {
 			return fail(err, 1)
 		}
-		after, err := indexGeneration(files)
+		after, err := w.generation()
 		if err != nil {
 			return fail(err, 1)
 		}
@@ -135,11 +139,11 @@ func Run(args []string, e Env) int {
 		if task == "" {
 			task = filepath.Dir(path)
 		}
-		files, repos, err := sources(task, e)
+		w, err := sources(task, e)
 		if err != nil {
 			return fail(err, 1)
 		}
-		findings := lint.Check(string(b), lint.Options{Resolver: files, Repos: repos})
+		findings := lint.Check(string(b), lint.Options{Resolver: w.files, Repos: w.repos})
 		ok := !lint.HasErrors(findings)
 		code := 0
 		if !ok {
@@ -319,79 +323,133 @@ func showPath(args []string, f flags, e Env) (string, error) {
 	return job.Within(task, filepath.Join("jobs", id, "brief.md"))
 }
 
-// Task-local root overrides are a small adapter, not the shared task schema.
-// Relative roots are resolved against the task folder, never the process cwd.
-func sources(task string, e Env) (*job.Files, []string, error) {
-	f := &job.Files{Task: task, Repo: task, Repos: map[string]string{}, Brain: map[string]string{}}
-	if e.GridHome != "" {
-		f.Brain["home"] = filepath.Join(e.GridHome, "knowledge")
-	}
-	if filepath.Base(filepath.Dir(task)) == "tasks" {
-		f.Brain["project"] = filepath.Join(filepath.Dir(filepath.Dir(task)), "knowledge")
-	}
-	f.Brain["task"] = filepath.Join(task, "knowledge")
+// world is what a Job reads from: the task folder, the brain store and the
+// project's own folders on this computer.
+type world struct {
+	files   *job.Files
+	repos   []string
+	store   brain.Store
+	project string
+}
+
+// sources never takes a root from the task folder, which syncs to every member.
+// The project's folders and repos come from its record in the Grid home, and the
+// owner's role in task.md decides how intent.md is treated.
+func sources(task string, e Env) (*world, error) {
+	w := &world{project: projectOf(task, e.GridHome)}
+	w.store = brain.Store{GridHome: e.GridHome, Project: w.project}
+	f := &job.Files{Task: task, Notes: w.store, Repos: map[string]string{}}
+	w.files = f
+	var prototype string
 	b, err := os.ReadFile(filepath.Join(task, "task.md"))
 	if err != nil && !os.IsNotExist(err) {
-		return nil, nil, err
+		return nil, err
 	}
 	if err == nil {
 		d, err := frontmatter.Parse(string(b))
 		if err != nil {
-			return nil, nil, fmt.Errorf("task.md: %w", err)
+			return nil, fmt.Errorf("task.md: %w", err)
 		}
-		var cfg struct {
-			Repo      string            `json:"repo"`
-			Prototype string            `json:"prototype"`
-			Repos     map[string]string `json:"repos"`
-			Brain     map[string]string `json:"brain"`
-		}
-		if err = frontmatter.Into(d.Data, &cfg); err != nil {
-			return nil, nil, fmt.Errorf("task.md source roots: %w", err)
-		}
-		if cfg.Repo != "" {
-			f.Repo = absolute(task, cfg.Repo)
-		}
-		if cfg.Prototype != "" {
-			f.Prototype = absolute(task, cfg.Prototype)
-		}
-		for k, v := range cfg.Repos {
-			f.Repos[k] = absolute(task, v)
-		}
-		for k, v := range cfg.Brain {
-			f.Brain[k] = absolute(task, v)
+		owner, _ := d.Data["owner"].(string)
+		f.Owner = ownerTier(owner)
+		prototype, _ = d.Data["prototype"].(string)
+	}
+	if w.project != "" {
+		if err := roots(w, prototype, e); err != nil {
+			return nil, err
 		}
 	}
-	repos := []string{}
-	for k := range f.Repos {
-		repos = append(repos, k)
+	for name := range f.Repos {
+		w.repos = append(w.repos, name)
 	}
-	sort.Strings(repos)
-	return f, repos, nil
+	sort.Strings(w.repos)
+	return w, nil
 }
-func indexGeneration(f *job.Files) (string, error) {
-	generations := map[string]json.RawMessage{}
-	for level, root := range f.Brain {
-		b, e := os.ReadFile(filepath.Join(root, "backlinks.json"))
-		if os.IsNotExist(e) {
-			continue
-		}
-		if e != nil {
-			return "", e
-		}
-		var index struct {
-			Generation json.RawMessage `json:"generation"`
-		}
-		if e = json.Unmarshal(b, &index); e != nil {
-			return "", fmt.Errorf("%s backlinks index: %w", level, e)
-		}
-		if len(index.Generation) == 0 {
-			return "", fmt.Errorf("%s backlinks index has no generation", level)
-		}
-		generations[level] = index.Generation
+
+// ownerTier maps the role task.md records for the owner to a trust tier. A task
+// without a known owner role is unknown provenance, and that is external.
+func ownerTier(role string) contract.TrustTier {
+	switch role {
+	case "member":
+		return contract.PersonTeam
+	case "guest":
+		return contract.PersonGuest
 	}
-	if len(generations) == 0 {
+	return contract.External
+}
+
+// projectOf names the project whose tasks folder holds task, or "".
+func projectOf(task, gridHome string) string {
+	if gridHome == "" {
+		return ""
+	}
+	rel, err := filepath.Rel(gridhome.Real(gridHome), gridhome.Real(task))
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(rel, string(filepath.Separator))
+	if len(parts) < 4 || parts[0] != "projects" || parts[2] != "tasks" {
+		return ""
+	}
+	return parts[1]
+}
+
+// roots reads the project record and sets the folders and repos this computer has.
+func roots(w *world, prototype string, e Env) error {
+	b, err := os.ReadFile(filepath.Join(e.GridHome, "projects", w.project, "project.md"))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	rec, err := project.Parse(w.project, string(b))
+	if err != nil {
+		return fmt.Errorf("project %s: %w", w.project, err)
+	}
+	f := w.files
+	f.Folders = rec.FoldersOn(e.Machine)
+	if len(f.Folders) == 0 {
+		return nil
+	}
+	base := f.Folders[0]
+	f.Repo = base
+	for i, r := range rec.Repos {
+		if !filepath.IsLocal(r.Path) {
+			return fmt.Errorf("project %s: repo path %q must stay inside the project folder", w.project, r.Path)
+		}
+		dir := filepath.Join(base, r.Path)
+		if i == 0 {
+			f.Repo = dir
+		}
+		if filepath.Clean(r.Path) != "." {
+			f.Repos[filepath.ToSlash(filepath.Clean(r.Path))] = dir
+		}
+	}
+	if prototype != "" {
+		f.Prototype = prototype
+		if !filepath.IsAbs(prototype) {
+			f.Prototype = filepath.Join(base, prototype)
+		}
+	}
+	return nil
+}
+
+// generation pins the project brain's index generation; "" when none is built.
+func (w *world) generation() (string, error) {
+	if w.project == "" {
 		return "", nil
 	}
-	b, e := json.Marshal(generations)
-	return string(b), e
+	store := w.store
+	store.ReadLevel = "project"
+	idx, err := store.Index()
+	if err != nil {
+		return "", err
+	}
+	g := idx.Generations["project"]
+	if g == 0 {
+		return "", nil
+	}
+	b, err := json.Marshal(map[string]uint64{"project": g})
+	return string(b), err
 }

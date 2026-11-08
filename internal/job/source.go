@@ -11,49 +11,65 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
 )
 
-// Source is a resolved, pinned pointer. Tier must come from trusted provenance,
-// not from the body of the pointed-to file. Unknown provenance is external.
+// Source is a resolved, pinned pointer. Tier comes from where the text was read
+// from, never from the text itself; unknown provenance is external. A PointerOnly
+// source is a personal note: the Job names it and nothing of it is copied.
 type Source struct {
-	State   string             `json:"state,omitempty"`
-	Pointer string             `json:"pointer"`
-	Summary string             `json:"summary"`
-	Text    string             `json:"text"`
-	Tier    contract.TrustTier `json:"tier"`
-	Digest  string             `json:"sha256"`
-	Topic   string             `json:"topic,omitempty"`
-	Updated string             `json:"updated,omitempty"`
-	Items   []int              `json:"items,omitempty"`
-	Links   []Link             `json:"links,omitempty"`
+	State       string             `json:"state,omitempty"`
+	Pointer     string             `json:"pointer"`
+	Summary     string             `json:"summary"`
+	Text        string             `json:"text"`
+	Tier        contract.TrustTier `json:"tier"`
+	Digest      string             `json:"sha256"`
+	Topic       string             `json:"topic,omitempty"`
+	Updated     string             `json:"updated,omitempty"`
+	Links       []Link             `json:"links,omitempty"`
+	PointerOnly bool               `json:"pointer_only,omitempty"`
 }
 type Resolver interface {
 	Resolve(pointer string) (Source, error)
 }
 
-// Files resolves only under explicitly configured roots. Trust is supplied by
-// the caller's provenance reader; frontmatter cannot promote its own trust.
+// NoteReader is the brain store. Notes are read only through it, so a proposed,
+// rejected or unknown note never reaches a Job.
+type NoteReader interface {
+	Show(id string) (brain.Entry, error)
+}
+
+// Files resolves task, brain, repo and prototype pointers. Repo and prototype
+// files must lie inside one of Folders, the project's own folders on this machine.
 type Files struct {
 	Task      string
-	Repo      string
+	Owner     contract.TrustTier // the task owner's tier; it sets the tier of intent.md
+	Notes     NoteReader
+	Folders   []string
+	Repo      string            // primary repo root
+	Repos     map[string]string // named repo roots
 	Prototype string
-	Repos     map[string]string
-	Brain     map[string]string // level -> knowledge directory
-	Trust     map[string]contract.TrustTier
 	cache     map[string]Source
 }
 
 var lineAnchor = regexp.MustCompile(`^L([0-9]+)(?:-L?([0-9]+))?$`)
 var rangeSuffix = regexp.MustCompile(`:([0-9]+)-([0-9]+)$`)
 var stepLine = regexp.MustCompile(`^- \[[ xX]\] ([0-9]+)\s+`)
+var slugDrop = regexp.MustCompile(`[^\pL\pN -]`)
+
+// ParseBrain splits brain:<level>/<name>, the one id shape the brain store uses.
+func ParseBrain(id string) (level, name string, ok bool) {
+	level, name, ok = strings.Cut(strings.TrimPrefix(id, "brain:"), "/")
+	return level, name, strings.HasPrefix(id, "brain:") && ok && (level == "home" || level == "project") && brain.ValidName(name)
+}
 
 func (f *Files) Resolve(pointer string) (Source, error) {
 	if s, ok := f.cache[pointer]; ok {
 		return s, nil
 	}
-	root, rel, anchor := f.Task, pointer, ""
+	rel, anchor := pointer, ""
 	if at := strings.IndexByte(rel, '#'); at >= 0 {
 		anchor = rel[at+1:]
 		rel = rel[:at]
@@ -65,31 +81,19 @@ func (f *Files) Resolve(pointer string) (Source, error) {
 		anchor = "L" + m[1] + "-L" + m[2]
 		rel = strings.TrimSuffix(rel, m[0])
 	}
-	topic := ""
+	var s Source
+	var err error
 	switch {
 	case strings.HasPrefix(rel, "brain:"):
-		level, id, ok := strings.Cut(strings.TrimPrefix(rel, "brain:"), "/")
-		if !ok {
-			return Source{}, fmt.Errorf("%s: expected brain:level/id", pointer)
-		}
-		root = f.Brain[level]
-		rel = id
-		if filepath.Ext(rel) == "" {
-			rel += ".md"
-		}
-		topic = strings.Split(id, "/")[0]
-	case strings.HasPrefix(rel, "task:"):
-		rel = strings.TrimPrefix(rel, "task:")
+		s, err = f.brain(pointer, rel, anchor)
 	case strings.HasPrefix(rel, "prototype:"):
-		root = f.Prototype
-		rel = strings.TrimPrefix(rel, "prototype:")
+		s, err = f.file(pointer, f.Prototype, strings.TrimPrefix(rel, "prototype:"), anchor, true)
 	case strings.HasPrefix(rel, "repo:"):
-		root = f.Repo
-		rel = strings.TrimPrefix(rel, "repo:")
-		if name, path, ok := strings.Cut(rel, ":"); ok {
-			root = f.Repos[name]
-			rel = path
+		root, path := f.Repo, strings.TrimPrefix(rel, "repo:")
+		if name, p, ok := strings.Cut(path, ":"); ok {
+			root, path = f.Repos[name], p
 		}
+		s, err = f.file(pointer, root, path, anchor, true)
 	case strings.HasPrefix(rel, "job:"):
 		id := strings.TrimPrefix(rel, "job:")
 		if task, j, ok := strings.Cut(id, "/"); ok {
@@ -101,65 +105,135 @@ func (f *Files) Resolve(pointer string) (Source, error) {
 		if !jobID.MatchString(id) {
 			return Source{}, fmt.Errorf("%s: invalid Job id", pointer)
 		}
-		rel = filepath.Join("jobs", id, "brief.md")
+		s, err = f.file(pointer, f.Task, filepath.Join("jobs", id, "brief.md"), anchor, false)
+		s.Tier = contract.Agent // rendered by this CLI from the accepted plan
+	default:
+		rel = strings.TrimPrefix(rel, "task:")
+		s, err = f.file(pointer, f.Task, rel, anchor, false)
+		s.Tier = f.taskTier(rel)
 	}
-	path, e := Within(root, rel)
-	if e != nil {
-		return Source{}, fmt.Errorf("%s: %w", pointer, e)
+	if err != nil {
+		return s, err
 	}
-	b, e := os.ReadFile(path)
-	if e != nil {
-		return Source{}, fmt.Errorf("%s: cannot read source: %w", pointer, e)
-	}
-	text := strings.ReplaceAll(string(b), "\r\n", "\n")
-	s := Source{Pointer: pointer, Tier: contract.External, Topic: topic}
-	if tier, ok := f.Trust[pointer]; ok {
-		s.Tier = tier
-	}
-	if strings.HasPrefix(text, "---\n") {
-		d, e := frontmatter.Parse(text)
-		if e != nil {
-			return s, fmt.Errorf("%s: %w", pointer, e)
-		}
-		s.Summary, _ = d.Data["summary"].(string)
-		if !strings.HasPrefix(pointer, "brain:") && s.Summary == "" {
-			s.Summary, _ = d.Data["title"].(string)
-		}
-		s.State, _ = d.Data["status"].(string)
-		s.Updated, _ = d.Data["updated"].(string)
-		if v, ok := d.Data["items"]; ok && strings.HasPrefix(pointer, "brain:") {
-			if e := frontmatter.Into(v, &s.Items); e != nil {
-				return s, e
-			}
-		}
-		if v, ok := d.Data["links"]; ok {
-			if e := frontmatter.Into(v, &s.Links); e != nil {
-				return s, e
-			}
-		}
-		if anchor == "" {
-			s.Text = strings.TrimRight(d.Body, "\n")
-		}
-	}
-	if anchor != "" {
-		s.Text, e = selectText(text, anchor)
-		if e != nil {
-			return s, fmt.Errorf("%s: %w", pointer, e)
-		}
-	} else if s.Text == "" {
-		s.Text = strings.TrimRight(text, "\n")
-	}
-	if s.Summary == "" && !strings.HasPrefix(pointer, "brain:") {
-		s.Summary = firstLine(s.Text)
-	}
-	sum := sha256.Sum256(b)
-	s.Digest = hex.EncodeToString(sum[:])
 	if f.cache == nil {
 		f.cache = map[string]Source{}
 	}
 	f.cache[pointer] = s
 	return s, nil
 }
+
+// taskTier names who wrote a file in the task folder. The owner's words are the
+// owner's tier, the plan is the planner's, and anything else (research, pasted
+// input) is a file the Job did not author.
+func (f *Files) taskTier(rel string) contract.TrustTier {
+	switch filepath.ToSlash(filepath.Clean(rel)) {
+	case "intent.md":
+		if f.Owner != "" {
+			return f.Owner
+		}
+	case "plan.md":
+		return contract.Agent
+	}
+	return contract.External
+}
+
+// brain reads one accepted note through the brain store. A note at the home level
+// is personal: it is checked to exist and nothing of it is kept.
+func (f *Files) brain(pointer, rel, anchor string) (Source, error) {
+	level, name, ok := ParseBrain(rel)
+	if !ok {
+		return Source{}, fmt.Errorf("%s: expected brain:<home|project>/<name>", pointer)
+	}
+	if f.Notes == nil {
+		return Source{}, fmt.Errorf("%s: no brain store is configured", pointer)
+	}
+	e, err := f.Notes.Show("brain:" + level + "/" + name)
+	if err != nil {
+		return Source{}, fmt.Errorf("%s: %w", pointer, err)
+	}
+	n := e.Note
+	if n.Status != "accepted" {
+		return Source{}, fmt.Errorf("%s: note is %s, not accepted", pointer, n.Status)
+	}
+	if n.SupersededBy != "" {
+		return Source{}, fmt.Errorf("%s: note is superseded by %s", pointer, n.SupersededBy)
+	}
+	s := Source{Pointer: pointer, Tier: contract.TrustTier(n.Origin.Tier), State: n.Status}
+	if level == "home" {
+		s.PointerOnly = true
+		return s, nil
+	}
+	s.Topic, s.Summary, s.Updated = n.Topic, n.Summary, n.Updated
+	for _, l := range n.Links {
+		s.Links = append(s.Links, Link{To: l.To, Rel: l.Rel, Why: l.Why})
+	}
+	s.Text = strings.TrimRight(n.Body, "\n")
+	if anchor != "" {
+		if s.Text, err = selectText(n.Body, anchor); err != nil {
+			return s, fmt.Errorf("%s: %w", pointer, err)
+		}
+	}
+	canonical, err := brain.Encode(n)
+	if err != nil {
+		return s, fmt.Errorf("%s: %w", pointer, err)
+	}
+	sum := sha256.Sum256(canonical)
+	s.Digest = hex.EncodeToString(sum[:])
+	return s, nil
+}
+
+// file reads one regular file under root. Repo and prototype files must also lie
+// inside the project's folders; the tier of such a file is external.
+func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, error) {
+	s := Source{Pointer: pointer, Tier: contract.External}
+	path, err := Within(root, rel)
+	if err != nil {
+		return s, fmt.Errorf("%s: %w", pointer, err)
+	}
+	if project && !inside(f.Folders, path) {
+		return s, fmt.Errorf("%s: source is outside the project folders", pointer)
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return s, fmt.Errorf("%s: cannot read source: not a regular file", pointer)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return s, fmt.Errorf("%s: cannot read source: %w", pointer, err)
+	}
+	text := strings.ReplaceAll(string(b), "\r\n", "\n")
+	// Only the task folder's own Markdown carries front matter worth reading; a repo
+	// file that starts with --- (a YAML file) is plain text.
+	if !project && strings.HasPrefix(text, "---\n") {
+		d, err := frontmatter.Parse(text)
+		if err != nil {
+			return s, fmt.Errorf("%s: %w", pointer, err)
+		}
+		s.Summary, _ = d.Data["summary"].(string)
+		if s.Summary == "" {
+			s.Summary, _ = d.Data["title"].(string)
+		}
+		s.State, _ = d.Data["status"].(string)
+		s.Updated, _ = d.Data["updated"].(string)
+		if anchor == "" {
+			s.Text = strings.TrimRight(d.Body, "\n")
+		}
+	}
+	if anchor != "" {
+		if s.Text, err = selectText(text, anchor); err != nil {
+			return s, fmt.Errorf("%s: %w", pointer, err)
+		}
+	} else if s.Text == "" {
+		s.Text = strings.TrimRight(text, "\n")
+	}
+	if s.Summary == "" {
+		s.Summary = firstLine(s.Text)
+	}
+	sum := sha256.Sum256(b)
+	s.Digest = hex.EncodeToString(sum[:])
+	return s, nil
+}
+
 func taskNumber(path string) string {
 	parts := strings.Split(filepath.Base(path), "-")
 	if len(parts) > 1 {
@@ -168,31 +242,54 @@ func taskNumber(path string) string {
 	return ""
 }
 
-// Within refuses lexical and symlink escapes, including nonexistent roots.
+// Within resolves rel below root and refuses a path that leaves root, by name or
+// through a symbolic link.
 func Within(root, rel string) (string, error) {
 	if root == "" {
 		return "", fmt.Errorf("source root is not configured")
 	}
-	if filepath.IsAbs(rel) {
-		return "", fmt.Errorf("absolute source paths are not allowed")
+	if filepath.IsAbs(rel) || !filepath.IsLocal(filepath.FromSlash(rel)) {
+		return "", fmt.Errorf("source paths must stay inside their root")
 	}
-	root, e := filepath.EvalSymlinks(root)
-	if e != nil {
-		return "", e
+	real, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", err
 	}
-	root, e = filepath.Abs(root)
-	if e != nil {
-		return "", e
+	path, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(rel)))
+	if err != nil {
+		return "", err
 	}
-	path, e := filepath.EvalSymlinks(filepath.Join(root, filepath.FromSlash(rel)))
-	if e != nil {
-		return "", e
-	}
-	r, e := filepath.Rel(root, path)
-	if e != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
+	if !inside([]string{real}, path) {
 		return "", fmt.Errorf("source escapes its root")
 	}
 	return path, nil
+}
+
+// inside reports whether path (symbolic links already resolved) is at or below
+// one of dirs. It compares the files themselves, not their spelling: on a
+// case-insensitive file system two spellings of one folder match, and on a
+// case-sensitive one two folders that differ only in case do not.
+func inside(dirs []string, path string) bool {
+	var roots []os.FileInfo
+	for _, d := range dirs {
+		if info, err := os.Stat(d); err == nil {
+			roots = append(roots, info)
+		}
+	}
+	for p := path; ; {
+		if info, err := os.Stat(p); err == nil {
+			for _, r := range roots {
+				if os.SameFile(r, info) {
+					return true
+				}
+			}
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return false
+		}
+		p = parent
+	}
 }
 func selectText(text, anchor string) (string, error) {
 	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
@@ -240,7 +337,7 @@ func selectText(text, anchor string) (string, error) {
 		}
 		heading := strings.TrimSpace(l[n:])
 		slug := strings.ToLower(heading)
-		slug = regexp.MustCompile(`[^\pL\pN -]`).ReplaceAllString(slug, "")
+		slug = slugDrop.ReplaceAllString(slug, "")
 		slug = strings.ReplaceAll(slug, " ", "-")
 		if slug == anchor || strings.HasSuffix(heading, "{#"+anchor+"}") {
 			if start >= 0 {

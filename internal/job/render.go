@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -34,7 +35,6 @@ type candidate struct {
 	link   Link
 	source Source
 	rank   int
-	item   bool
 }
 
 // Render never executes verify commands or reads the clock. It snapshots every
@@ -63,7 +63,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		if s.Tier != contract.PersonTeam && s.Tier != contract.Agent && s.Tier != contract.PersonGuest {
 			s.Tier = contract.External
 		}
-		if s.Tier == contract.PersonGuest || s.Tier == contract.External {
+		if marked(s.Tier) && !s.PointerOnly {
 			r.Inputs.DisableSkillShellExecution = true
 		}
 		seen[p] = s
@@ -90,16 +90,10 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		if e != nil {
 			return e
 		}
-		if strings.TrimSpace(s.Summary) == "" || utf8.RuneCountInString(s.Summary) > 300 {
+		if !s.PointerOnly && (strings.TrimSpace(s.Summary) == "" || utf8.RuneCountInString(s.Summary) > 300) {
 			return fmt.Errorf("%s: summary must have 1 to 300 characters", l.To)
 		}
-		c := candidate{link: l, source: s, rank: rank}
-		for _, n := range s.Items {
-			if n == j.Item {
-				c.item = true
-			}
-		}
-		candidates[l.To] = c
+		candidates[l.To] = candidate{link: l, source: s, rank: rank}
 		return nil
 	}
 	explicit := map[string]Link{}
@@ -160,9 +154,6 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		if x.rank != y.rank {
 			return x.rank < y.rank
 		}
-		if x.item != y.item {
-			return x.item
-		}
 		if x.source.Updated != y.source.Updated {
 			return x.source.Updated > y.source.Updated
 		}
@@ -186,7 +177,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		}
 		topics := map[string]bool{}
 		for _, c := range cut {
-			if c.source.Topic != "" {
+			if topicName.MatchString(c.source.Topic) {
 				topics[c.source.Topic] = true
 			}
 		}
@@ -239,10 +230,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		if e != nil {
 			return r, e
 		}
-		fmt.Fprintf(&b, "- %s · %s · %s · %s [%s]\n", l.To, l.Rel, oneLine(s.Summary), oneLine(l.Why), s.Tier)
-	}
-	if len(relations) > 0 {
-		b.WriteString("\n")
+		b.WriteString(pointerBlock(l, s))
 	}
 	if j.Continues != nil && *j.Continues != "" {
 		s, e := resolve("job:" + *j.Continues + "#acceptance")
@@ -301,25 +289,46 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 }
 func tokens(s string) int     { return (utf8.RuneCountInString(s) + 3) / 4 }
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+var topicName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// marked tiers hold text a Job must treat as data, never as instructions.
+func marked(t contract.TrustTier) bool {
+	return t == contract.PersonGuest || t == contract.External
+}
+
+// fenced is the only way guest or external text reaches a brief: after the fixed
+// notice, inside a data block, with markup escaped so the block cannot be closed.
+func fenced(s Source, text string) string {
+	return DataNotice + "\n<data tier=\"" + string(s.Tier) + "\" from=\"" + html.EscapeString(s.Pointer) + "\">\n" + html.EscapeString(text) + "\n</data>\n\n"
+}
 func sourceBlock(label string, s Source) string {
 	header := fmt.Sprintf("### %s [%s] (%s)\n\n", label, s.Tier, s.Pointer)
-	if s.Tier == contract.PersonGuest || s.Tier == contract.External {
-		return header + DataNotice + "\n<data tier=\"" + string(s.Tier) + "\" from=\"" + html.EscapeString(s.Pointer) + "\">\n" + html.EscapeString(s.Text) + "\n</data>\n\n"
+	if marked(s.Tier) {
+		return header + fenced(s, s.Text)
 	}
 	// Preserve every source line; quoting only adds Markdown's quote prefix.
 	return header + "> " + strings.ReplaceAll(s.Text, "\n", "\n> ") + "\n\n"
 }
+
+// pointerBlock is one pointer line: rel, summary and the link's reason. The
+// reason is the planner's; the summary is the target's, so a marked target shows
+// it inside the data fence and a personal note shows no summary at all.
+func pointerBlock(l Link, s Source) string {
+	switch {
+	case s.PointerOnly:
+		return fmt.Sprintf("- %s · %s · %s [personal; id only, read it on your computer with grid brain show]\n\n", l.To, l.Rel, oneLine(l.Why))
+	case marked(s.Tier):
+		return fmt.Sprintf("- %s · %s · %s [%s] [guest]\n\n", l.To, l.Rel, oneLine(l.Why), s.Tier) + fenced(s, s.Summary)
+	}
+	return fmt.Sprintf("- %s · %s · %s · %s [%s]\n\n", l.To, l.Rel, oneLine(s.Summary), oneLine(l.Why), s.Tier)
+}
 func brainBlock(c candidate) string {
-	s, l := c.source, c.link
-	label := ""
-	if s.Tier == contract.PersonGuest || s.Tier == contract.External {
-		label = " [guest]"
+	block := pointerBlock(c.link, c.source)
+	if c.source.PointerOnly || marked(c.source.Tier) {
+		return block
 	}
-	pointer := fmt.Sprintf("- %s · %s · %s · %s [%s]%s\n\n", l.To, l.Rel, oneLine(s.Summary), oneLine(l.Why), s.Tier, label)
-	if label != "" {
-		return pointer
-	}
-	return pointer + sourceBlock("Excerpt", s)
+	return block + sourceBlock("Excerpt", c.source)
 }
 
 // Replay resolves sources exclusively from an earlier inputs.json snapshot.

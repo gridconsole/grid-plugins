@@ -28,6 +28,7 @@ type Options struct {
 var sections = []string{"Intent", "Job", "Context", "Out of scope", "Open", "Acceptance", "Outcome", "Verdict", "Follow-up"}
 
 var relations = wordSet("depends-on explains decided-by supersedes duplicates related blocks continues validates same-files uses owns decides approves knows")
+var anchorName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 var acceptanceID = regexp.MustCompile(`^A[1-9][0-9]*$`)
 var words = regexp.MustCompile(`[\pL][\pL\pN_-]*`)
 var stopWords = wordSet("a an the and or of to for from in on at with without by as is are be it this that these those its their our your we you they one all only not no new add adds make makes create creates implement implements support supports update updates change changes use uses must should will can do does has have step verify item plan test tests")
@@ -198,14 +199,16 @@ func (c *checker) validate(j job.Job, o Options) {
 	}{{"keep", j.Keep}, {"decisions", j.Decisions}} {
 		for _, id := range group.ids {
 			if !validBrain(id) {
-				c.add("job.brain-id", group.key, "Expected a brain id: "+id, "Use brain:<level>/<id>, never copied rule text.")
+				c.add("job.brain-id", group.key, "Expected a brain id: "+id, "Use brain:<home|project>/<name>, never copied rule text.")
 			}
 		}
 	}
 	decisions := map[string]bool{}
 	for _, d := range j.Decisions {
 		decisions[d] = true
-		decisions[strings.TrimPrefix(strings.TrimPrefix(d, "brain:project/"), "brain:home/")] = true
+		name := strings.TrimPrefix(strings.TrimPrefix(d, "brain:project/"), "brain:home/")
+		decisions[name] = true
+		decisions["decisions/"+name] = true
 	}
 	ids := map[string]bool{}
 	if len(j.Acceptance) == 0 {
@@ -282,8 +285,10 @@ func (c *checker) validate(j job.Job, o Options) {
 			ids []string
 		}{{"keep", j.Keep}, {"decisions", j.Decisions}} {
 			for _, p := range group.ids {
-				if _, e := o.Resolver.Resolve(p); e != nil {
+				if s, e := o.Resolver.Resolve(p); e != nil {
 					c.add("job.pointer", group.key, e.Error(), "Use an existing brain entry id.")
+				} else if s.PointerOnly {
+					c.personal(group.key, p)
 				}
 			}
 		}
@@ -326,7 +331,7 @@ func (c *checker) link(l job.Link, key string, o Options) {
 		c.add("job.derived-link", key, "Relation "+l.Rel+" must be derived by the CLI", "Express dependencies in after and overlapping files in write.")
 	}
 	if !validBrain(l.To) && !regexp.MustCompile(`^job:(?:T-[0-9]+/)?J-[0-9]+(?:\.[0-9]+)*(?:#[^ ]+)?$`).MatchString(l.To) && !regexp.MustCompile(`^person:[a-zA-Z0-9_-]+$`).MatchString(l.To) {
-		c.add("job.link-target", key, "Invalid link target "+l.To, "Use a brain, job or person node id.")
+		c.add("job.link-target", key, "Invalid link target "+l.To, "Use brain:<home|project>/<name>, a job or a person node id.")
 	}
 	why := strings.TrimSpace(l.Why)
 	name := path.Base(strings.Split(l.To, "#")[0])
@@ -338,10 +343,17 @@ func (c *checker) link(l job.Link, key string, o Options) {
 		s, e := o.Resolver.Resolve(l.To)
 		if e != nil {
 			c.add("job.pointer", key, e.Error(), "Repair the link to an existing target.")
+		} else if s.PointerOnly {
+			c.personal(key, l.To)
 		} else if strings.TrimSpace(s.Summary) == "" || utf8.RuneCountInString(s.Summary) > 300 {
 			c.add("job.pointer-summary", key, "Target "+l.To+" needs a summary", "Give the target a summary of 1 to 300 characters.")
 		}
 	}
+}
+
+// personal warns that a home note is named in the brief and never copied into it.
+func (c *checker) personal(key, id string) {
+	c.addAt("job.personal-pointer", c.line(key), "warning", id+" is a personal note; the brief names it and copies none of it", "Put what the Job needs in a project note, or read the note on your own computer.")
 }
 func (c *checker) repo(p, key string, repos []string) {
 	if strings.HasPrefix(p, "brain:") || strings.HasPrefix(p, "task:") || strings.HasPrefix(p, "job:") || strings.HasPrefix(p, "prototype:") {
@@ -363,7 +375,9 @@ func (c *checker) repo(p, key string, repos []string) {
 	c.add("job.repo", key, fmt.Sprintf("Repository %q is not listed", prefix), "Use a repository declared by the task/project.")
 }
 func validBrain(s string) bool {
-	return regexp.MustCompile(`^brain:(?:home|project|task)/[^\s]+$`).MatchString(s)
+	id, anchor, hasAnchor := strings.Cut(s, "#")
+	_, _, ok := job.ParseBrain(id)
+	return ok && (!hasAnchor || anchorName.MatchString(anchor))
 }
 func empty(v any) bool {
 	switch x := v.(type) {
