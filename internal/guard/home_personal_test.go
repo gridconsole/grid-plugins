@@ -131,7 +131,7 @@ func TestHomeRoleAccess(t *testing.T) {
 }
 
 func TestHomeGlobStructure(t *testing.T) {
-	for _, role := range []string{"owner", "member", "guest"} {
+	for _, role := range []string{"owner", "builder", "member", "lead", "guest", "unknown"} {
 		for _, event := range []string{"PreToolUse", "PermissionRequest"} {
 			f := setup(t)
 			f.env["GRID_ROLE"], f.env["GRID_PROJECT"] = role, "example"
@@ -140,26 +140,27 @@ func TestHomeGlobStructure(t *testing.T) {
 			f.link(filepath.Join(root, "escape"), f.repo)
 			for _, row := range []struct {
 				name, pattern string
-				allow         bool
+				allow, rooted bool
 			}{
-				{"recursive", "**/*.md", true},
-				{"braces", "{notes,docs}/**", true},
-				{"nested safe braces", "{notes,{docs,src}}/**", true},
-				{"absolute inside", filepath.Join(root, "notes", "*.md"), true},
-				{"parent", "../personal/**", false},
-				{"brace parent", "{..,x}/personal/**", false},
-				{"brace assembled parent", "{.,x}./personal/**", false},
-				{"nested parent", "{x,{.,y}}./personal/**", false},
-				{"split parent", "{.,x}{.,y}/personal/**", false},
-				{"empty alternative parent", "..{,x}/personal/**", false},
-				{"backslash parent", `{..,x}\personal\**`, false},
-				{"inner parent", "notes/{..,x}/**", false},
-				{"absolute outside", filepath.Join(f.repo, "*.md"), false},
-				{"absolute mixed braces", "{" + root + "," + f.repo + "}/**", false},
-				{"absolute symlink escape", filepath.Join(root, "escape", "*.md"), false},
-				{"unbalanced open", "{notes,docs/**", false},
-				{"unbalanced close", "notes,docs}/**", false},
-				{"expansion bound", strings.Repeat("{a,b}", 9) + "/**", false},
+				{"recursive", "**/*.md", true, false},
+				{"braces", "{notes,docs}/**", true, false},
+				{"nested safe braces", "{notes,{docs,src}}/**", true, false},
+				{"absolute inside", filepath.Join(root, "notes", "*.md"), true, false},
+				{"parent", "../personal/**", false, false},
+				{"brace parent", "{..,x}/personal/**", false, false},
+				{"brace assembled parent", "{.,x}./personal/**", false, false},
+				{"nested parent", "{x,{.,y}}./personal/**", false, false},
+				{"split parent", "{.,x}{.,y}/personal/**", false, false},
+				{"empty alternative parent", "..{,x}/personal/**", false, false},
+				{"backslash parent", `{..,x}\personal\**`, false, false},
+				{"inner parent", "notes/{..,x}/**", false, false},
+				{"absolute outside", filepath.Join(f.repo, "*.md"), false, false},
+				{"absolute mixed braces", "{" + root + "," + f.repo + "}/**", false, true},
+				{"absolute home traversal", root + "/../personal/**", false, true},
+				{"absolute symlink escape", filepath.Join(root, "escape", "*.md"), false, true},
+				{"unbalanced open", "{notes,docs/**", false, false},
+				{"unbalanced close", "notes,docs}/**", false, false},
+				{"expansion bound", strings.Repeat("{a,b}", 9) + "/**", false, false},
 			} {
 				t.Run(role+"/"+event+"/"+row.name, func(t *testing.T) {
 					in := f.input("Glob", root)
@@ -167,11 +168,41 @@ func TestHomeGlobStructure(t *testing.T) {
 					in.ToolInput["pattern"] = row.pattern
 					got := EvaluateHome(in, f.root, f.env)
 					want := "deny"
-					if row.allow {
+					if row.allow && role != "unknown" {
 						want = "allow"
+					} else if (role == "owner" || role == "builder") && !row.allow && !row.rooted {
+						want = ""
 					}
 					if got.Behavior != want {
 						t.Fatalf("glob behavior=%q, want %q", got.Behavior, want)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestHomeGlobWindowsRoots(t *testing.T) {
+	for _, role := range []string{"member", "lead", "guest", "unknown"} {
+		for _, event := range []string{"PreToolUse", "PermissionRequest"} {
+			for _, pattern := range []string{
+				`/Users/example/.grid/personal/**`,
+				`\Users\example\.grid\personal\**`,
+				`\\server\share\**`,
+				`\foo`,
+				`C:foo`,
+				`C:\outside\**`,
+				`C:/outside/**`,
+			} {
+				t.Run(role+"/"+event+"/"+pattern, func(t *testing.T) {
+					f := setup(t)
+					f.env["GRID_ROLE"], f.env["GRID_PROJECT"] = role, "example"
+					f.write(filepath.Join(f.projects, "example", "project.md"), "---\nid: example-id\n---\n")
+					in := f.input("Glob", filepath.Join(f.projects, "example"))
+					in.Cwd, in.HookEventName = f.repo, event
+					in.ToolInput["pattern"] = pattern
+					if got := EvaluateHome(in, f.root, f.env); got.Behavior != "deny" {
+						t.Fatalf("rooted glob behavior=%q, want deny", got.Behavior)
 					}
 				})
 			}

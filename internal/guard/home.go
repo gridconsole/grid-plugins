@@ -275,8 +275,16 @@ func EvaluateHome(in hookio.Input, root string, env map[string]string) (decision
 		if c.homeRefused(scopedPath, scope, access) {
 			return hookio.Deny("This caller cannot access this Grid home scope.")
 		}
-		if in.ToolName == "Glob" && !c.homeGlobAllowed(str(in.ToolInput["pattern"]), scope, access) {
-			return hookio.Deny("This glob pattern cannot stay inside the allowed home scope.")
+		if in.ToolName == "Glob" {
+			pattern := str(in.ToolInput["pattern"])
+			if !c.homeGlobAllowed(pattern, scope, access) {
+				// Owners and machine sessions retain normal permission handling
+				// outside home-rooted patterns, without an automatic home grant.
+				if access == fullHome && !c.homeGlobRooted(pattern) {
+					return hookio.Decision{}
+				}
+				return hookio.Deny("This glob pattern cannot stay inside the allowed home scope.")
+			}
 		}
 		if home == "" || !filepath.IsAbs(given) {
 			return hookio.Decision{}
@@ -299,6 +307,31 @@ func EvaluateHome(in hookio.Input, root string, env map[string]string) (decision
 	return hookio.Allow("Grid: " + reason + ".")
 }
 
+// homeGlobRooted recognizes literal home roots before cleaning can erase a
+// traversal. A mixed brace pattern is home-rooted if any alternative is.
+func (c context) homeGlobRooted(pattern string) bool {
+	if !filepath.IsAbs(c.home) {
+		return false
+	}
+	patterns, ok := expandHomeBraces(pattern)
+	if !ok {
+		patterns = []string{pattern}
+	}
+	for _, root := range []string{c.home, realNative(c.home, 0)} {
+		if !filepath.IsAbs(root) {
+			continue
+		}
+		root = strings.TrimRight(strings.ReplaceAll(root, `\`, "/"), "/")
+		for _, p := range patterns {
+			p = strings.ReplaceAll(p, `\`, "/")
+			if p == root || strings.HasPrefix(p, root+"/") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // homeGlobAllowed checks every brace alternative structurally, before cleaning
 // paths could erase traversal elements. Absolute patterns need a literal prefix
 // inside the allowed root, checked both lexically and through existing symlinks.
@@ -317,11 +350,10 @@ func (c context) homeGlobAllowed(pattern, scope string, access homeAccess) bool 
 		if strings.HasPrefix(p, "~") {
 			return false
 		}
-		// Refuse foreign drive spellings, including drive-relative patterns.
-		if len(p) >= 2 && p[1] == ':' && !filepath.IsAbs(p) {
-			return false
-		}
-		if !filepath.IsAbs(p) {
+		// A leading separator is rooted even without a Windows volume.
+		// Drive-relative and foreign drive paths must also face the prefix
+		// check, never inherit the tool's allowed path as relative patterns.
+		if !strings.HasPrefix(p, "/") && !(len(p) >= 2 && p[1] == ':') {
 			continue
 		}
 		prefix := p

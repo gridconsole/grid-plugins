@@ -87,7 +87,7 @@ func TestHomeFileRules(t *testing.T) {
 			i := f.input("Glob", f.grid)
 			i.Cwd = f.repo
 			i.ToolInput["pattern"] = pattern
-			want := "deny"
+			want := ""
 			if pattern == "**/*.md" || pattern == "notes/*.md" {
 				want = "allow"
 			}
@@ -182,6 +182,38 @@ func TestBadInputAdapters(t *testing.T) {
 					t.Fatalf("%s, %d", out, code)
 				}
 			})
+		}
+	}
+}
+
+func TestHomeRepoGlobsStaySilent(t *testing.T) {
+	for _, role := range []string{"", "owner", "grid-owner", "worker", "builder", "grid-builder"} {
+		for _, event := range []string{"PreToolUse", "PermissionRequest"} {
+			for _, path := range []string{"omitted", "repo", "unsafe home"} {
+				for _, pattern := range []string{"absolute", "../app/*.go", "{main}.go"} {
+					t.Run(role+"/"+event+"/"+path+"/"+pattern, func(t *testing.T) {
+						f := setup(t)
+						f.env["GRID_ROLE"] = role
+						in := f.input("Glob", "")
+						in.Cwd, in.HookEventName = f.repo, event
+						if path != "omitted" {
+							in.ToolInput["path"] = f.repo
+						}
+						if path == "unsafe home" {
+							f.env["GRID_HOME"] = f.home
+						}
+						if pattern == "absolute" {
+							in.ToolInput["pattern"] = filepath.Join(f.repo, "*.go")
+						} else {
+							in.ToolInput["pattern"] = pattern
+						}
+						got := EvaluateHome(in, f.root, f.env)
+						if got.Behavior != "" || len(got.Directories) != 0 {
+							t.Fatalf("repo glob behavior=%q, directory grants=%d; want silence", got.Behavior, len(got.Directories))
+						}
+					})
+				}
+			}
 		}
 	}
 }
