@@ -3,6 +3,7 @@ package workflow
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -253,5 +254,70 @@ func TestWorkflowUnicodeNameComparison(t *testing.T) {
 		if len(got.Templates) != tc.templates || len(got.Errors) != tc.problems {
 			t.Fatalf("%+v: %+v", tc, got)
 		}
+	}
+}
+
+func TestQuestionWithdrawRolesKey(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  []string
+		bad   bool
+	}{
+		{"", nil, false}, {"owner", []string{"owner"}, false},
+		{"owner, member", []string{"owner", "member"}, false},
+		{"guest, lead", []string{"guest", "lead"}, false},
+		{"agent", nil, true}, {"cli", nil, true}, {"unknown", nil, true},
+		{"owner, owner", nil, true}, {"owner,", nil, true},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			keys := defaultKeys
+			if tc.value != "" {
+				keys += "\nquestion_withdraw_roles: " + tc.value
+			}
+			got := Parse("# Workflows\n"+sectionText("Default", keys, twoSteps), "")
+			if (len(got.Errors) != 0) != tc.bad {
+				t.Fatalf("parse errors: %+v", got.Errors)
+			}
+			if !tc.bad && !reflect.DeepEqual(got.Templates[0].QuestionWithdrawRoles, tc.want) {
+				t.Fatalf("roles: %v want %v", got.Templates[0].QuestionWithdrawRoles, tc.want)
+			}
+		})
+	}
+}
+
+func TestQuestionWorkflowPolicySelection(t *testing.T) {
+	for _, tc := range []struct {
+		name, meta, project, root string
+		want                      []string
+		bad                       bool
+	}{
+		{name: "absent", want: nil},
+		{name: "workspace default", root: sectionText("Default", defaultKeys+"\nquestion_withdraw_roles: owner", twoSteps), want: []string{"owner"}},
+		{name: "explicit", meta: "workflow: Review\n", root: sectionText("Review", labelKeys+"\nquestion_withdraw_roles: guest", twoSteps), want: []string{"guest"}},
+		{name: "title rule", meta: "title: Ship a patch\n", root: sectionText("Review", "applies when: the title has patch\nreview rounds: 1\nquestion_withdraw_roles: owner", twoSteps), want: []string{"owner"}},
+		{name: "project copy", root: sectionText("Default", defaultKeys+"\nquestion_withdraw_roles: owner", twoSteps), project: sectionText("Default", "applies when: as in the workspace Default\nreview rounds: 1\nquestion_withdraw_roles: member", twoSteps), want: []string{"member"}},
+		{name: "copy restores default", root: sectionText("Default", defaultKeys+"\nquestion_withdraw_roles: owner", twoSteps), project: sectionText("Default", "applies when: as in the workspace Default\nreview rounds: 1", twoSteps), want: nil},
+		{name: "unknown explicit", meta: "workflow: Missing\n", root: sectionText("Default", defaultKeys, twoSteps), bad: true},
+		{name: "invalid policy", root: sectionText("Default", defaultKeys+"\nquestion_withdraw_roles: agent", twoSteps), bad: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			taskDir := filepath.Join(home, "projects", "example", "tasks", "T-01-example")
+			putWorkflowFixture(t, filepath.Join(taskDir, "task.md"), "---\nid: T-01\n"+tc.meta+"---\n")
+			if tc.root != "" {
+				text := "# Workflows\n" + tc.root
+				if !strings.Contains(tc.root, "nothing else matches") {
+					text += sectionText("Default", defaultKeys, twoSteps)
+				}
+				putWorkflowFixture(t, filepath.Join(home, "workflows.md"), text)
+			}
+			if tc.project != "" {
+				putWorkflowFixture(t, filepath.Join(home, "projects", "example", "workflows.md"), "# Workflows\n"+tc.project)
+			}
+			got, err := QuestionWithdrawRoles(taskDir)
+			if (err != nil) != tc.bad || !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("roles=%v error=%v want=%v bad=%v", got, err, tc.want, tc.bad)
+			}
+		})
 	}
 }
