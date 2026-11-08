@@ -347,3 +347,41 @@ available to claim, including expired claims. Empty output is `[]`.
 
 The worker protocol runs on Linux and macOS. Windows builds, but the existing
 fslock implementation refuses operations requiring locks there.
+
+CLI syntax (positional arguments precede flags):
+
+```text
+grid session start [--agent <agent>]
+grid session stop
+grid session send <text> [--idempotency-key <key>]
+grid session pause
+grid session resume
+grid session handback
+grid session switch <agent>
+grid task move <machine>
+grid intent list [--json] [--pending]
+grid intent claim <id> [--who <worker>] [--json]
+grid intent done <id> [--claim <token>] [--error[=message]] [--json]
+```
+
+All commands accept `--task <path-or-id>` and `--project <name-or-id>`; by default
+scope is the current task. There is no implicit new task. Session writes also
+accept `--target <session>` (default: task folder name), `--who <caller>` (default:
+`cli`) and `--json`. `send --text <text>` handles text beginning with a dash;
+`switch --agent <agent>` is equivalent to the positional form. Move accepts
+`--who` and `--json`, plus the architecture's alternate spelling
+`grid task move <task> --to <machine>` or `grid task move --to <machine>`.
+Move verifies every configured repository in the project's local folders has a
+Git remote, refusing without writing anything if code cannot reach the worker.
+It does not contact that remote or validate destination availability.
+
+A successful write prints the request with `--json`, otherwise one line naming
+its ID, verb and target. Claim prints `{token,who,created,until}` with `--json`,
+otherwise one line naming the intent, token and expiry. Done prints its completion
+object with `--json`, otherwise one line naming the intent and done state. Done
+reads the token from `--claim` or `GRID_INTENT_CLAIM`; a token is required even
+though the environment permits the short `grid intent done <id>` spelling.
+A bare `--error` records `worker reported an error`; `--error=message` supplies
+the reason. Exit codes are 0 for success, 1 for storage/scope errors or a claim
+refusal, and 2 for invalid command usage. Existing session list/show behavior is
+preserved. These new commands define no task or Feed record shapes.
