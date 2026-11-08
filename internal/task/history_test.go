@@ -62,7 +62,8 @@ func TestFolderAtPersonalPolicy(t *testing.T) {
 				r := where.Resolver{GridHome: home, Caller: tc.caller, PersonalAllowed: tc.policy}
 				got, err := FolderAt(r, filepath.Join(dir, "plan.md"))
 				want := dir
-				if project == "personal" && !tc.allowed {
+				// An uninvited guest sees no project, so it finds no folder anywhere.
+				if (project == "personal" || tc.name == "guest") && !tc.allowed {
 					want = ""
 				}
 				if err != nil || got != want {
