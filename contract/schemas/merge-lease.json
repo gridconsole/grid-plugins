@@ -60,5 +60,5 @@
     "until"
   ],
   "additionalProperties": false,
-  "description": "One lease per project. Expires 15 minutes after renewed_at, or since when never renewed. A stale lease may be broken by the next lander. Validate checks this duration."
+  "description": "One lease per project. Expires 15 minutes after renewed_at, or since when never renewed. A stale lease may be broken by the next holder. Validate checks this duration."
 }

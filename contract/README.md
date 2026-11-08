@@ -175,7 +175,7 @@ Disagreements and defaults chosen:
   an explicit renewal, never earlier than since. Until is exactly 15 minutes
   after the most recent renewal, or since if never renewed. There is no automatic
   renewal in this package; a released or expired valid lease is breakable by the
-  next lander. A new grant needs a new fence. `lease.json`
+  next holder. A new grant needs a new fence. `lease.json`
   also validates the merge variant. Task leases have pid/pid_start while held;
   Job leases carry an attempt and null pid fields, with liveness in `.live`.
 - Heartbeat until must equal beat_at plus ten minutes. The schema does not permit
