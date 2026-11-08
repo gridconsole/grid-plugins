@@ -131,6 +131,113 @@ func TestIntentCommandsLifecycle(t *testing.T) {
 	}
 }
 
+func TestIntentRenewCommand(t *testing.T) {
+	h := newHarness(t)
+	task := livenessProject(h)
+	if code := h.run(task, "session", "start", "--json"); code != 0 {
+		t.Fatal(code, h.errb)
+	}
+	var r intent.Record
+	if err := json.Unmarshal(h.out.Bytes(), &r); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run(task, "intent", "renew", r.ID, "--token", "01ARZ3NDEKTSV4RRFFQ69G5FAV"); code != 1 {
+		t.Fatal("renew without a claim", code, h.errb)
+	}
+	if code := h.run(task, "intent", "claim", r.ID, "--json"); code != 0 {
+		t.Fatal(code, h.errb)
+	}
+	var claim intent.Claim
+	if err := json.Unmarshal(h.out.Bytes(), &claim); err != nil {
+		t.Fatal(err)
+	}
+	for _, flag := range []string{"--token", "--claim"} {
+		if code := h.run(task, "intent", "renew", r.ID, flag, claim.Token, "--json"); code != 0 {
+			t.Fatal(flag, code, h.errb)
+		}
+		var renewed intent.Claim
+		if err := json.Unmarshal(h.out.Bytes(), &renewed); err != nil {
+			t.Fatal(err)
+		}
+		if renewed.Token != claim.Token || renewed.Until.Before(claim.Until) {
+			t.Fatalf("%s renewed %+v from %+v", flag, renewed, claim)
+		}
+	}
+	if code := h.run(task, "intent", "renew", r.ID, "--token", "01ARZ3NDEKTSV4RRFFQ69G5FAV"); code != 1 || !strings.Contains(h.errb.String(), "claim token") {
+		t.Fatal("renew with a stale token", code, h.errb)
+	}
+	if code := h.run(task, "intent", "renew", r.ID); code != 2 {
+		t.Fatal("renew without a token", code)
+	}
+	h.env.Getenv = func(key string) string {
+		if key == "GRID_INTENT_CLAIM" {
+			return claim.Token
+		}
+		return ""
+	}
+	if code := h.run(task, "intent", "renew", r.ID); code != 0 || !strings.Contains(h.out.String(), "claim: "+claim.Token) {
+		t.Fatal("renew with the environment token", code, h.out, h.errb)
+	}
+	if code := h.run(task, "intent", "done", r.ID, "--token", claim.Token); code != 0 {
+		t.Fatal("done with --token", code, h.errb)
+	}
+	if code := h.run(task, "intent", "renew", r.ID); code != 1 {
+		t.Fatal("renew after done", code)
+	}
+}
+
+// The desktop passes --who <person> and one --idempotency-key per click; without
+// a key, only a repeat from the same caller inside the window coalesces.
+func TestSendWhoAndKeys(t *testing.T) {
+	send := func(t *testing.T, args ...string) (intent.Record, int) {
+		t.Helper()
+		h := newHarness(t)
+		task := livenessProject(h)
+		var last intent.Record
+		for _, a := range args {
+			argv := append([]string{"session", "send", "yes", "--json"}, strings.Fields(a)...)
+			if code := h.run(task, argv...); code != 0 {
+				t.Fatal(a, code, h.errb)
+			}
+			if err := json.Unmarshal(h.out.Bytes(), &last); err != nil {
+				t.Fatal(err)
+			}
+		}
+		rows, err := (intent.Store{TaskDir: task}).List(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return last, len(rows)
+	}
+	for _, tc := range []struct {
+		name    string
+		calls   []string
+		records int
+		who     string
+	}{
+		{"same caller repeats", []string{"--who alice", "--who alice"}, 1, "alice"},
+		{"different callers", []string{"--who alice", "--who bob"}, 2, "bob"},
+		{"default caller repeats", []string{"", ""}, 1, "cli"},
+		{"one key per click", []string{"--who alice --idempotency-key click-1", "--who alice --idempotency-key click-2"}, 2, "alice"},
+		{"retried click", []string{"--who alice --idempotency-key click-1", "--who alice --idempotency-key click-1"}, 1, "alice"},
+		{"same key, different callers", []string{"--who alice --idempotency-key click-1", "--who bob --idempotency-key click-1"}, 2, "bob"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			last, records := send(t, tc.calls...)
+			if records != tc.records || last.Who != tc.who {
+				t.Fatalf("records: %d who: %s, want %d and %s", records, last.Who, tc.records, tc.who)
+			}
+		})
+	}
+}
+
+func TestTaskUsageListsMove(t *testing.T) {
+	h := newHarness(t)
+	if code := h.run(h.tmp, "task", "--help"); code != 0 || !strings.Contains(h.out.String(), "grid task move <machine>") {
+		t.Fatal(code, h.out, h.errb)
+	}
+}
+
 func TestIntentJSONGolden(t *testing.T) {
 	h := newHarness(t)
 	task := livenessProject(h)
@@ -204,7 +311,7 @@ func TestIntentUsage(t *testing.T) {
 		{"session", "send"}, {"session", "switch"}, {"session", "pause", "--agent", "builder"},
 		{"session", "send", "hello", "--text", "again"}, {"session", "switch", "builder", "--agent", "planner"},
 		{"session", "start", "--who", " "}, {"session", "send", ""}, {"task", "move"},
-		{"intent"}, {"intent", "unknown"}, {"intent", "claim"}, {"intent", "done"},
+		{"intent"}, {"intent", "unknown"}, {"intent", "claim"}, {"intent", "done"}, {"intent", "renew"}, {"intent", "renew", "bad"},
 		{"intent", "list", "--claim", "bad"}, {"intent", "done", "bad"}, {"session", "unknown"},
 	} {
 		h := newHarness(t)

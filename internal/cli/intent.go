@@ -189,10 +189,10 @@ const noMoveRemote = "This project has no remote, so its code cannot reach the o
 
 func runIntent(args []string, env Env) int {
 	if len(args) == 0 {
-		return intentUsage(env, "use list, claim <id>, or done <id> --claim <token> [--error[=message]]")
+		return intentUsage(env, "use list, claim <id>, renew <id> --token <token>, or done <id> --token <token> [--error[=message]]")
 	}
 	action, args := args[0], args[1:]
-	if action != "list" && action != "claim" && action != "done" {
+	if action != "list" && action != "claim" && action != "renew" && action != "done" {
 		return intentUsage(env, "unknown action "+action)
 	}
 	id := ""
@@ -210,8 +210,11 @@ func runIntent(args []string, env Env) int {
 	if action == "claim" {
 		fs.StringVar(&who, "who", "worker", "worker label for audit")
 	}
+	if action == "renew" || action == "done" {
+		fs.StringVar(&token, "token", env.getenv("GRID_INTENT_CLAIM"), "token returned by claim (or GRID_INTENT_CLAIM)")
+		fs.StringVar(&token, "claim", env.getenv("GRID_INTENT_CLAIM"), "same as --token")
+	}
 	if action == "done" {
-		fs.StringVar(&token, "claim", env.getenv("GRID_INTENT_CLAIM"), "token returned by claim (or GRID_INTENT_CLAIM)")
 		// A bare --error means failed; --error=message also records the reason.
 		fs.Var(&intentErrorFlag{value: &failure}, "error", "record failure; optionally --error=message")
 	}
@@ -221,8 +224,8 @@ func runIntent(args []string, env Env) int {
 	if action != "list" && id == "" {
 		return intentUsage(env, action+" requires an intent id before flags")
 	}
-	if action == "done" && token == "" {
-		return intentUsage(env, "done requires --claim or GRID_INTENT_CLAIM from the successful claim")
+	if (action == "renew" || action == "done") && token == "" {
+		return intentUsage(env, action+" requires --token (or --claim) or GRID_INTENT_CLAIM from the successful claim")
 	}
 	scope, err := intentScope(env, *project, *task)
 	if err != nil {
@@ -246,6 +249,15 @@ func runIntent(args []string, env Env) int {
 		}
 	case "claim":
 		claim, err := store.Claim(id, who)
+		if err != nil {
+			return livenessError(env, err)
+		}
+		if *asJSON {
+			return writeJSON(env.Stdout, claim)
+		}
+		fmt.Fprintf(env.Stdout, "intent: %s  claim: %s  until: %s\n", id, claim.Token, claim.Until.Format("2006-01-02T15:04:05.000Z"))
+	case "renew":
+		claim, err := store.Renew(id, token)
 		if err != nil {
 			return livenessError(env, err)
 		}
