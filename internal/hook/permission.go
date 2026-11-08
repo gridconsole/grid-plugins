@@ -16,6 +16,22 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 )
 
+const (
+	// A person answers in Grid, so the wait is long; the registry gives the hook 100 s.
+	defaultPermissionWait = 85 * time.Second
+	maxPermissionWait     = 95 * time.Second
+)
+
+// permissionTimeout is GRID_PERMISSION_TIMEOUT_MS when positive, capped below the
+// hook's own timeout, else the 85 s default.
+func permissionTimeout(getenv func(string) string) time.Duration {
+	ms, err := strconv.Atoi(getenv("GRID_PERMISSION_TIMEOUT_MS"))
+	if err != nil || ms <= 0 {
+		return defaultPermissionWait
+	}
+	return min(time.Duration(ms)*time.Millisecond, maxPermissionWait)
+}
+
 // Explicit server configuration is the permission authority. Desktop bridge
 // discovery is intentionally absent; offline or unanswered requests fall back
 // to the terminal. No redirects can forward tool input to a different endpoint.
@@ -36,10 +52,7 @@ func forwardPermission(o Options, in hookio.Input) hookio.Decision {
 		return hookio.Decision{}
 	}
 	u.Path = strings.TrimRight(u.Path, "/") + "/hooks/permission"
-	timeout := 8 * time.Second
-	if ms, err := strconv.Atoi(o.Getenv("GRID_PERMISSION_TIMEOUT_MS")); err == nil && ms > 0 && ms < 8000 {
-		timeout = time.Duration(ms) * time.Millisecond
-	}
+	timeout := permissionTimeout(o.Getenv)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	b, err := json.Marshal(in)

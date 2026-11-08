@@ -68,3 +68,37 @@ func TestPermissionTimeoutAndInvalidResponseAllow(t *testing.T) {
 		})
 	}
 }
+
+func TestPermissionTimeoutDefaultOverrideAndCap(t *testing.T) {
+	for _, tc := range []struct {
+		env  string
+		want time.Duration
+	}{
+		{"", 85 * time.Second},
+		{"junk", 85 * time.Second},
+		{"-5", 85 * time.Second},
+		{"0", 85 * time.Second},
+		{"500", 500 * time.Millisecond},
+		{"95000", 95 * time.Second},
+		{"600000", 95 * time.Second},
+	} {
+		got := permissionTimeout(func(string) string { return tc.env })
+		if got != tc.want {
+			t.Errorf("GRID_PERMISSION_TIMEOUT_MS=%q: %v, want %v", tc.env, got, tc.want)
+		}
+	}
+}
+
+func TestPermissionSlowAnswerWithinWindowIsUsed(t *testing.T) {
+	f := eventSetup(t)
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		_ = json.NewEncoder(w).Encode(map[string]any{"behavior": "allow"})
+	}))
+	defer s.Close()
+	f.env["GRID_URL"] = s.URL
+	out, log, code := f.run(t, "PermissionRequest", hookio.Input{ToolName: "Read", ToolInput: map[string]any{"file_path": filepath.Join(filepath.Dir(f.home), "outside.md")}})
+	if code != 0 || log != "" || !strings.Contains(out, `"behavior":"allow"`) {
+		t.Fatalf("slow answer lost: %d %s %s", code, out, log)
+	}
+}
