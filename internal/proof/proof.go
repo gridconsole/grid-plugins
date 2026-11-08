@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -71,15 +70,6 @@ func Level(item plan.Item) (string, error) {
 	return level, nil
 }
 
-func canonicalID(id string) string {
-	id = strings.TrimPrefix(strings.TrimPrefix(id, "item-"), "i-")
-	n, err := strconv.ParseUint(id, 10, 64)
-	if err != nil || n == 0 {
-		return ""
-	}
-	return fmt.Sprintf("i-%d", n)
-}
-
 // Add keeps every addition, even when several processes add to the same item.
 func (s Store) Add(in Input) (Record, error) {
 	var zero Record
@@ -115,7 +105,7 @@ func (s Store) Add(in Input) (Record, error) {
 	if err != nil {
 		return zero, err
 	}
-	id := canonicalID(in.Item)
+	id, _ := plan.ItemID(in.Item)
 	found := false
 	for _, item := range items {
 		if item.ID == id {

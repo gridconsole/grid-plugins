@@ -32,7 +32,24 @@ var (
 	blockHeading   = regexp.MustCompile(`^## (i-\d+) · ([^·]+?) · (.+)$`)
 	itemNumber     = regexp.MustCompile(`^[0-9]+$`)
 	forbiddenField = regexp.MustCompile(`^  (write|after|review|risk|verify):`)
+	itemRef        = regexp.MustCompile(`^(?:i-|item-)?([0-9]+)$`)
 )
+
+// ItemID turns the forms a person types for a step (1, i-1, item-1) into the
+// id Items gives it (i-1). Plan is the only owner of item identity; callers that
+// take an item argument use this instead of parsing it themselves. A zero or
+// non-numeric reference is not an id.
+func ItemID(ref string) (string, bool) {
+	m := itemRef.FindStringSubmatch(ref)
+	if m == nil {
+		return "", false
+	}
+	n, err := strconv.ParseUint(m[1], 10, 64)
+	if err != nil || n == 0 {
+		return "", false
+	}
+	return fmt.Sprintf("i-%d", n), true
+}
 
 // Items reads top-level numbered checklist blocks. Prose precedes a YAML part
 // beginning with exactly two spaces and kind:, jobs: or proof:, in any order.
