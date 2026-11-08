@@ -158,6 +158,24 @@ func runSettings(kind string, args []string, env Env) int {
 }
 
 func runSetup(args []string, env Env) int {
+	if settings.ClaudeSetupCommand(args) {
+		fs := newFlags("setup", env)
+		fs.Usage = func() {
+			fmt.Fprintln(env.Stdout, "Usage: grid setup [--remove] [--yes] [--json]\n       grid setup <project> [--answers <file|->] [--json]")
+		}
+		yes := fs.Bool("yes", false, "write without prompting")
+		remove := fs.Bool("remove", false, "remove the Claude Code entries added by setup")
+		asJSON := fs.Bool("json", false, "print JSON")
+		_, code, stop := parseMixed(fs, args)
+		if stop {
+			return code
+		}
+		return settings.RunClaudeSetup(settings.ClaudeSetupOptions{
+			Home: env.Home, GridHome: env.GridHome, ConfigDir: env.getenv("CLAUDE_CONFIG_DIR"),
+			Yes: *yes, Remove: *remove, JSON: *asJSON,
+			Stdin: env.Stdin, Stdout: env.Stdout, Stderr: env.Stderr,
+		})
+	}
 	fs := newFlags("setup", env)
 	asJSON := fs.Bool("json", false, "print JSON")
 	source := fs.String("answers", "setup-answers.json", "answers JSON file relative to the current folder, or - for stdin")

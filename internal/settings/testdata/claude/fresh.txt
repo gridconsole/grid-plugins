@@ -1,0 +1,33 @@
++ Bash(grid *)
++ Read(~/.grid/**)
++ Edit(~/.grid/**)
++ Edit(~/.grid/projects/*/tasks/[Tt]-[0-9]*/**)
++ Edit(~/.grid/personal/tasks/[Tt]-[0-9]*/**)
++ Edit(~/.grid/projects/*/knowledge/**)
++ Edit(~/.grid/knowledge/**)
++ Edit(~/.grid/projects/*/project.md)
++ $defaults
++ The Grid home at ~/.grid is trusted for Grid operations.
+{
+  "permissions": {
+    "allow": [
+      "Bash(grid *)",
+      "Read(~/.grid/**)",
+      "Edit(~/.grid/**)"
+    ],
+    "deny": [
+      "Edit(~/.grid/projects/*/tasks/[Tt]-[0-9]*/**)",
+      "Edit(~/.grid/personal/tasks/[Tt]-[0-9]*/**)",
+      "Edit(~/.grid/projects/*/knowledge/**)",
+      "Edit(~/.grid/knowledge/**)",
+      "Edit(~/.grid/projects/*/project.md)"
+    ]
+  },
+  "autoMode": {
+    "environment": [
+      "$defaults",
+      "The Grid home at ~/.grid is trusted for Grid operations."
+    ]
+  }
+}
+Write these? [y/N] 
