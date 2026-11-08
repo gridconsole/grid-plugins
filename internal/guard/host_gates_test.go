@@ -13,6 +13,7 @@ import (
 var gateVerbs = []string{
 	"approve T-01", "answer T-01 Q-1 yes",
 	"feed post --type answer --re X --body -", "feed post --type=answer --re X --body -", "feed post -type answer --re X --body -",
+	"job post J-1 --attempt 1 --type answer --re X --body -", "job post J-1 --type=answer --re X --body -", "job post -type answer --re X --body -",
 	"question answer T-01 Q-1 yes", "question withdraw T-01 Q-1",
 	"refusal decide T-01 R-1 allow",
 	"task status T-01 closed", "task close T-01", "task reopen T-01", "task stop T-01",
@@ -66,6 +67,7 @@ func TestHostAllowsOtherGridVerbsAndLookalikes(t *testing.T) {
 		"grid hook plan-guard", "grid agent list", "grid skill list", "grid refusal list T-01", "grid doctor",
 		"mygrid approve", "grid-approve T-01", "grid_answer T-01", "echo gridapprove", "approve T-01", "ls approve",
 		"grid feed read --type answer", "grid feed post --type question --body '{}'", "grid feed post --type answers --body '{}'",
+		"grid job post J-1 --attempt 1 --type checkpoint --body '{}'", "grid job post J-1 --type answers --body '{}'", "grid job result J-1 --type answer",
 		"git commit -m 'fix the question text'", "cat README.md", "go test ./...",
 	} {
 		t.Run(command, func(t *testing.T) { expect(t, EvaluateHost(f.input("Bash", command), f.root, f.env), "") })
@@ -257,7 +259,7 @@ func TestHostGateShellChecksNeedAGridFolder(t *testing.T) {
 }
 
 // An answer post closes a person gate, so every argument order and quoting of
-// grid feed post --type answer is refused like grid answer.
+// grid feed post and grid job post with --type answer is refused like grid answer.
 func TestHostDeniesFeedAnswerPosts(t *testing.T) {
 	f := setup(t)
 	for _, command := range []string{
@@ -267,6 +269,9 @@ func TestHostDeniesFeedAnswerPosts(t *testing.T) {
 		`grid feed post --body '{"answer":"a;b"}' --type=answer`,
 		`grid feed post --type "answer" --body -`, `grid feed post --type 'an''swer' --body -`, `grid feed post --TYPE ANSWER --body -`,
 		`GRID_ROLE=owner grid feed post --type answer --body -`, `env GRID_ROLE=owner grid feed post --type answer --body -`,
+		`grid job post J-1 --attempt 1 --type answer --re 01ARZ3NDEKTSV4RRFFQ69G5FAV --body '{"answer":"Yes"}'`,
+		`grid job post --body '{"answer":"Yes"}' --job J-1 --type=answer`, `grid job post J-1 --type "answer" --body -`, `grid job post J-1 --TYPE ANSWER --body -`,
+		`GRID_ROLE=owner grid job post J-1 --type answer --body -`, `env GRID_ROLE=owner grid job post J-1 --type answer --body -`,
 	} {
 		t.Run(command, func(t *testing.T) {
 			d := EvaluateHost(f.input("Bash", command), f.root, f.env)
@@ -288,7 +293,11 @@ func TestHostDeniesFeedAnswerWithoutRole(t *testing.T) {
 			env[k] = v
 		}
 	}
-	command := `grid feed post --type answer --re 01ARZ3NDEKTSV4RRFFQ69G5FAV --body '{"answer":"Yes"}'`
-	expect(t, EvaluateHost(f.input("Bash", command), f.root, env), "deny")
+	for _, command := range []string{
+		`grid feed post --type answer --re 01ARZ3NDEKTSV4RRFFQ69G5FAV --body '{"answer":"Yes"}'`,
+		`grid job post J-1 --attempt 1 --type answer --re 01ARZ3NDEKTSV4RRFFQ69G5FAV --body '{"answer":"Yes"}'`,
+	} {
+		expect(t, EvaluateHost(f.input("Bash", command), f.root, env), "deny")
+	}
 	expect(t, EvaluateHost(f.input("Bash", "grid answer T-01 Q-1 Yes"), f.root, env), "deny")
 }
