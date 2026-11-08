@@ -20,6 +20,7 @@ type State struct {
 	Records   []Entry                   `json:"records"`
 	Bad       map[string]int            `json:"bad"`
 	NeedsYou  []string                  `json:"needs_you"`
+	Wakes     []string                  `json:"wakes"`
 }
 type JobState struct {
 	ID          string         `json:"id"`
@@ -65,7 +66,7 @@ func (s Store) State() (State, error) {
 // Fold never sorts decisions by timestamps. Controls are ordered by generation,
 // fence and file position; Job records must match a counted assignment.
 func Fold(task string, read ReadResult) State {
-	state := State{Task: task, Jobs: map[string]*JobState{}, Questions: map[string]*QuestionState{}, ByRef: map[string][]string{}, Hosts: map[string]Record{}, Records: append([]Entry{}, read.Records...), Bad: read.Bad, NeedsYou: []string{}}
+	state := State{Task: task, Jobs: map[string]*JobState{}, Questions: map[string]*QuestionState{}, ByRef: map[string][]string{}, Hosts: map[string]Record{}, Records: append([]Entry{}, read.Records...), Bad: read.Bad, NeedsYou: []string{}, Wakes: []string{}}
 	sort.Slice(state.Records, func(i, j int) bool {
 		a, b := state.Records[i], state.Records[j]
 		if a.File != b.File {
@@ -289,11 +290,11 @@ func Fold(task string, read ReadResult) State {
 			if str(r.Body["kind"]) == "security" {
 				if job := state.Jobs[str(r.Body["job"])]; job != nil {
 					job.LevelRaised = ptr("security")
-					state.NeedsYou = append(state.NeedsYou, r.ID)
+					state.Wakes = append(state.Wakes, r.ID)
 				}
 			}
 		case "loop-detected":
-			state.NeedsYou = append(state.NeedsYou, r.ID)
+			state.Wakes = append(state.Wakes, r.ID)
 		}
 	}
 	for id, q := range state.Questions {
@@ -303,6 +304,7 @@ func Fold(task string, read ReadResult) State {
 		}
 	}
 	sort.Strings(state.NeedsYou)
+	sort.Strings(state.Wakes)
 	// State must not depend on the input's display ordering or a reader's arrival clock.
 	sort.Slice(state.Records, func(i, j int) bool {
 		a, b := state.Records[i], state.Records[j]

@@ -32,3 +32,5 @@ func checkFilesystem(path string) error {
 	}
 	return nil
 }
+
+func writeOnce(f *os.File, data []byte) (int, error) { return syscall.Write(int(f.Fd()), data) }

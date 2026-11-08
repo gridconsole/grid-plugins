@@ -261,25 +261,36 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	}
 	line = append(line, '\n')
 	t, _ := lookup(r.Type)
+	if err := appendRecord(f, file, line, writeOnce); err != nil {
+		return Record{}, err
+	}
+	if t.Class == "state" {
+		if err := syncFile(f); err != nil {
+			return Record{}, diskError(err)
+		}
+	}
+	return r, nil
+}
+
+// write is one OS write, not os.File.Write's internal partial-write loop. Repair
+// runs before every retry while the same tenure lock remains held.
+func appendRecord(f *os.File, file string, line []byte, write func(*os.File, []byte) (int, error)) error {
 	for attempt := 0; attempt < 3; attempt++ {
 		if err := repairTail(f, file); err != nil {
-			return Record{}, diskError(err)
+			return diskError(err)
 		}
-		n, err := f.Write(line)
-		if err != nil {
-			return Record{}, diskError(err)
-		}
-		if n != len(line) {
+		n, err := write(f, line)
+		if errors.Is(err, syscall.EINTR) || errors.Is(err, io.ErrShortWrite) {
 			continue
 		}
-		if t.Class == "state" {
-			if err := syncFile(f); err != nil {
-				return Record{}, diskError(err)
-			}
+		if err != nil {
+			return diskError(err)
 		}
-		return r, nil
+		if n == len(line) {
+			return nil
+		}
 	}
-	return Record{}, io.ErrShortWrite
+	return io.ErrShortWrite
 }
 
 func diskError(err error) error {

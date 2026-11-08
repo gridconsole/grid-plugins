@@ -463,3 +463,21 @@ func TestQuestionAnswerSelection(t *testing.T) {
 		t.Fatal("explicit answer selection lost")
 	}
 }
+
+func TestFenceZeroCannotBeFenced(t *testing.T) {
+	s := testStore(t)
+	w := testWriter()
+	post := mustPost(t, s, message("Unleased feedback"), w)
+	dir := filepath.Join(s.Dir(), "lease")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	end, _ := json.Marshal(tenureEnd{File: writerFile(w.Worker, 0), EndOffset: 0})
+	if err := os.WriteFile(filepath.Join(dir, "takeovers.jsonl"), append(end, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	read, err := s.Read(Filter{})
+	if err != nil || len(read.Records) != 1 || read.Records[0].ID != post.ID || read.Records[0].Verdict != "counted" {
+		t.Fatalf("fence zero: %+v %v", read, err)
+	}
+}

@@ -60,9 +60,11 @@ func TaskID(taskDir string) (string, error) {
 		return "", fmt.Errorf("task.md needs frontmatter with a stable id")
 	}
 	var id string
+	closed := false
 	for scan.Scan() {
 		line := scan.Text()
 		if strings.TrimSpace(line) == "---" {
+			closed = true
 			break
 		}
 		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
@@ -82,6 +84,9 @@ func TaskID(taskDir string) (string, error) {
 	}
 	if err := scan.Err(); err != nil {
 		return "", err
+	}
+	if !closed {
+		return "", fmt.Errorf("task.md frontmatter is not closed")
 	}
 	if id == "" {
 		return "", fmt.Errorf("task.md needs a stable ULID in id or ulid")

@@ -194,3 +194,47 @@ func checkAppends(t *testing.T, s Store, want int) {
 		texts[str(e.Body["text"])] = true
 	}
 }
+
+func TestShortWriteRepairsBeforeRetry(t *testing.T) {
+	s := testStore(t)
+	w := testWriter()
+	first := mustPost(t, s, message("first"), w)
+	r, err := s.record(message("retry"), w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Seq = first.Seq + 1
+	line, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line = append(line, '\n')
+	path := filepath.Join(s.Dir(), writerFile(w.Worker, 0))
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := lock(f, true); err != nil {
+		t.Fatal(err)
+	}
+	defer unlock(f)
+	calls := 0
+	err = appendRecord(f, path, line, func(file *os.File, data []byte) (int, error) {
+		calls++
+		if calls == 1 {
+			return writeOnce(file, data[:12])
+		}
+		return writeOnce(file, data)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := s.Read(Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || len(read.Records) != 2 || read.Bad[filepath.Base(path)] != 1 || read.Records[1].ID != r.ID {
+		t.Fatalf("retry: calls=%d records=%+v bad=%v", calls, read.Records, read.Bad)
+	}
+}

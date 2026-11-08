@@ -93,7 +93,7 @@ func (s Store) Read(filter Filter) (ReadResult, error) {
 	}
 	for i := range out.Records {
 		e := &out.Records[i]
-		if end, ok := ends[e.File]; ok && e.End > end {
+		if end, ok := ends[e.File]; ok && e.Fence != 0 && e.End > end {
 			e.Verdict = "stale"
 			e.Reason = "past tenure end"
 			continue
