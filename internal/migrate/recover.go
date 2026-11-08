@@ -83,6 +83,8 @@ type journal struct {
 	ManifestSHA string            `json:"manifest_sha256,omitempty"`
 	Rollback    bool              `json:"rollback,omitempty"`
 	RemoveHome  bool              `json:"remove_home,omitempty"`
+	// PreviousVerified: a rollback checked the displaced new home and may delete it.
+	PreviousVerified bool `json:"previous_verified,omitempty"`
 }
 
 // writeJournal replaces the journal atomically, so it is never half written.
@@ -208,7 +210,7 @@ func (r *recovery) run() (Result, error) {
 		}
 		err = step("recover-renamed", os.Rename(j.Stage, j.Home))
 		if err == nil {
-			err = finishPublication(j)
+			err = finishPublication(&j)
 		}
 		if err == nil {
 			err = os.RemoveAll(j.Previous)
@@ -221,7 +223,7 @@ func (r *recovery) run() (Result, error) {
 		}
 		res.Rerun = true
 	case "finalize":
-		err = finishPublication(j)
+		err = finishPublication(&j)
 		if err == nil {
 			err = os.RemoveAll(j.Previous)
 		}

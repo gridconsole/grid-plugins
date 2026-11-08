@@ -217,3 +217,34 @@ func TestRollbackAfterPublicationCrash(t *testing.T) {
 		t.Fatal("old home not restored")
 	}
 }
+
+// A crash while the displaced new home is being deleted leaves a part of it, which a
+// rerun must delete too instead of checking it against the digests again.
+func TestRollbackFinishesAfterPartialRemovalOfDisplacedHome(t *testing.T) {
+	from, _ := fixture(t)
+	before := view(t, from)
+	if _, err := scan(t, from, from).Apply(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GRID_CRASH_OPERATION", "rollback")
+	crashAt(t, "receipt-written", from, from)
+	previous := globOne(from + ".migrate-previous-*")
+	if len(previous) != 1 {
+		t.Fatal(previous)
+	}
+	var one string
+	_ = filepath.WalkDir(previous[0], func(p string, d os.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() && one == "" {
+			one = p
+		}
+		return nil
+	})
+	if err := os.Remove(one); err != nil {
+		t.Fatal(err)
+	}
+	finishRollback(t, from)
+	if !sameView(before, view(t, from)) {
+		t.Fatal("old home not restored exactly")
+	}
+	absent(t, previous[0])
+}

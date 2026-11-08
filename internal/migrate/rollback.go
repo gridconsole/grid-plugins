@@ -77,22 +77,33 @@ func verifyDigests(root string, digs map[string]digest, times bool) error {
 	return nil
 }
 
-func finishPublication(j journal) error {
-	if j.Rollback && exists(j.Previous) {
+// finishPublication does what follows the swap: it repairs the pointers outside the
+// home and writes or removes the rollback receipt. A rerun repeats it after a crash and
+// never refuses over a home written since, which would leave the journal stuck for good;
+// a home that changed only gets no receipt, so rollback is not offered for it, and a
+// rollback leaves it alone.
+func finishPublication(j *journal) error {
+	if j.Rollback && exists(j.Previous) && !j.PreviousVerified {
 		if err := verifyDigests(j.Previous, j.Before, true); err != nil {
 			return fmt.Errorf("rollback refused: displaced new home was written after migration: %w", err)
 		}
-	}
-	if len(j.Published) > 0 && !(j.RemoveHome && !exists(j.Home)) {
-		if err := verifyDigests(j.Home, j.Published, true); err != nil {
-			return fmt.Errorf("published home changed; refusing cleanup: %w", err)
+		// Once verified, the displaced home may be deleted piece by piece; a crash in
+		// the middle leaves a part of it that must not be checked again.
+		j.PreviousVerified = true
+		if err := writeJournal(*j); err != nil {
+			return err
 		}
+		reached("previous-verified")
+	}
+	intact := true
+	if len(j.Published) > 0 && !(j.RemoveHome && !exists(j.Home)) {
+		intact = verifyDigests(j.Home, j.Published, true) == nil
 	}
 	if err := applyPointers(j.Pointers); err != nil {
 		return err
 	}
 	if j.Rollback {
-		if j.RemoveHome && exists(j.Home) {
+		if j.RemoveHome && intact && exists(j.Home) {
 			// Only the empty directory that we staged may be removed here.
 			if err := os.Remove(j.Home); err != nil {
 				return err
@@ -102,7 +113,7 @@ func finishPublication(j journal) error {
 			return err
 		}
 		syncDir(filepath.Dir(j.Home))
-	} else {
+	} else if intact {
 		data, err := json.MarshalIndent(j, "", "  ")
 		if err != nil {
 			return err
@@ -232,7 +243,7 @@ func Rollback(home string) (Result, error) {
 	}
 	syncDir(filepath.Dir(home))
 	reached("rollback-published")
-	if err := finishPublication(j); err != nil {
+	if err := finishPublication(&j); err != nil {
 		return Result{}, err
 	}
 	if err := os.RemoveAll(j.Previous); err != nil {

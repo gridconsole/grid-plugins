@@ -233,7 +233,7 @@ func (p *Plan) publish(parent string) (Result, error) {
 	syncDir(parent)
 	reached("published")
 	result.Changed = true
-	if err := finishPublication(j); err != nil {
+	if err := finishPublication(&j); err != nil {
 		return result, err
 	}
 	if j.HadHome {

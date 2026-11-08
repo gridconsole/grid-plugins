@@ -82,3 +82,33 @@ func TestWorktreeRefusalNamesRemovalCommand(t *testing.T) {
 		t.Fatal(p.Unmapped)
 	}
 }
+
+// A write to the new home between the publication and its cleanup must not wedge the
+// rerun: the backlinks are repaired and the journal is cleared, but no rollback receipt
+// is written for a home that no longer matches the digests.
+func TestPublishedHomeWrittenAfterCrashStillFinishes(t *testing.T) {
+	testgit.Isolate(t)
+	from, _, repo := worktreeFixture(t)
+	crashAt(t, "published", from, from)
+	put(t, filepath.Join(from, "late.txt"), "written after publication")
+	finishAfterCrash(t, from, from)
+	listing := testgit.Run(t, repo, "worktree", "list", "--porcelain")
+	for _, worker := range []string{"worker-b", "worker-c"} {
+		if dir := filepath.Join(from, "projects/widget/worktrees/T-07", worker); !strings.Contains(listing, "worktree "+dir+"\n") {
+			t.Fatal(listing)
+		}
+	}
+	if read(t, from, "late.txt") != "written after publication" {
+		t.Fatal("late write lost")
+	}
+	absent(t, journalPath(from))
+	absent(t, statePath(from))
+	for _, s := range siblings(t, from) {
+		if strings.Contains(s, ".migrate-previous-") || strings.Contains(s, ".migrate-stage-") {
+			t.Errorf("left behind: %s", s)
+		}
+	}
+	if _, err := Rollback(from); err == nil {
+		t.Fatal("rollback offered for a home written since publication")
+	}
+}
