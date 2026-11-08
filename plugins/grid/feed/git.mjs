@@ -1,5 +1,7 @@
 // Code between Hosts as hidden git refs, in three layers:
-//   refs/grid/<task>/jobs/<job>               a Job ref: one Worker's submitted commit
+//   refs/grid/<task>/jobs/<job>-<12 hex of the sha>   a Job ref: one Worker's submitted commit, named for the commit, so a retry of the Job
+//                                             (a new attempt on a newer base) never meets the ref an earlier attempt left and no push needs force
+//   refs/grid/<task>/jobs/<job>               the same, before refs were named for their commit; still read, no longer written
 //   refs/grid/<task>/head                     the task head: the Jobs integrated so far
 //   refs/grid-remotes/<remote>/<task>/...     every clone's copy of a remote's refs/grid/, fetched with fetchRefspec()
 // The copies sit under refs/grid-remotes/ and not refs/remotes/<remote>/grid/, because a repo may already have real
@@ -21,13 +23,25 @@ const REMOTE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const GRID_REF_RE = /^refs\/grid\/(T-\d+)((?:\/[A-Za-z0-9._-]+)+)$/;
 
 const SHA_RE = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
+const SHORT_SHA = 12;
 
 const fail = (...errors) => ({ ok: false, errors });
 const okRemote = (remote) => typeof remote === 'string' && REMOTE_RE.test(remote) && !remote.includes('..');
 const okTask = (task) => typeof task === 'string' && TASK_RE.test(task);
 const okGridRef = (ref) => typeof ref === 'string' && GRID_REF_RE.test(ref) && !ref.includes('..') && !ref.endsWith('.lock');
 
-export const jobRef = (task, job) => (okTask(task) && typeof job === 'string' && JOB_RE.test(job) ? `refs/grid/${task}/jobs/${job}` : null);
+// With a sha, the ref a Job's hand-in of that commit goes to: refs/grid/<task>/jobs/<job>-<12 hex>. A name holds one commit for good, so it can
+// be pushed again as it is (a retry after a failed push) and never collides with the ref of another attempt. Without a sha, the old plain name.
+export const jobRef = (task, job, sha) => {
+  if (!okTask(task) || typeof job !== 'string' || !JOB_RE.test(job)) return null;
+  if (sha === undefined) return `refs/grid/${task}/jobs/${job}`;
+  return typeof sha === 'string' && SHA_RE.test(sha) ? `refs/grid/${task}/jobs/${job}-${sha.slice(0, SHORT_SHA)}` : null;
+};
+// Whether ref is a hand-in ref of that task and Job: the plain name or the one named for a commit. J-2 never claims J-21's.
+export const isJobRef = (ref, task, job) => {
+  const plain = jobRef(task, job);
+  return plain !== null && typeof ref === 'string' && okGridRef(ref) && (ref === plain || new RegExp(`^${plain}-[0-9a-f]{${SHORT_SHA}}$`).test(ref));
+};
 export const headRef = (task) => (okTask(task) ? `refs/grid/${task}/head` : null);
 
 // The local copy of a remote's refs/grid/... name.

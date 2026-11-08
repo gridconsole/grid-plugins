@@ -12,7 +12,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { syncFeed } from './sync.mjs';
 import { syncRefs, hostLabel } from './refs-ssh.mjs';
-import { runGit, setRef, pushRefs, jobRef } from './git.mjs';
+import { runGit, setRef, pushRefs, jobRef, isJobRef, trackingRef } from './git.mjs';
 import { boxSession } from './remote-job.mjs';
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -230,14 +230,16 @@ export function commitsAs(repo, { env = process.env } = {}) {
 }
 
 // After a Worker on the Host submitted: its Job ref is pulled here, checked against the submitted sha, set here and pushed to origin.
-// { task, job, repo (this clone), sha, remoteRepo (the clone on the Host) }; returns { ok, ref, sha } or { ok: false, errors }.
-export function relayJob(h, { task, job, repo, sha, remoteRepo }, { env = process.env, sync = syncRefs, remote = 'origin' } = {}) {
-  const ref = jobRef(task, job);
-  if (!ref) return fail(`${String(task)} ${String(job)} is not a task and Job id`);
+// { task, job, repo (this clone), sha, ref, remoteRepo (the clone on the Host) }; returns { ok, ref, sha } or { ok: false, errors }.
+// ref is the one the submit post names; without it, the name for the commit (jobRef(task, job, sha)).
+export function relayJob(h, { task, job, repo, sha, ref: named, remoteRepo }, { env = process.env, sync = syncRefs, remote = 'origin' } = {}) {
+  if (!jobRef(task, job)) return fail(`${String(task)} ${String(job)} is not a task and Job id`);
   if (!SHA_RE.test(str(sha))) return fail(`${String(sha)} is not the full sha of the submitted commit`);
+  const ref = named === undefined || named === '' ? jobRef(task, job, sha) : named;
+  if (!isJobRef(ref, task, job)) return fail(`${String(ref)} is not a ref of ${job} under refs/grid/${task}/jobs/`);
   const pulled = sync({ task, repo, host: h.address, remoteRepo }, { env: sshEnv(h, env) });
   if (!pulled?.ok) return fail(`the refs of ${task} did not come back from ${h.name}: ${(pulled?.errors ?? []).join('; ')}`);
-  const copy = `refs/grid-remotes/${hostLabel(h.address)}/${task}/jobs/${job}`;
+  const copy = trackingRef(ref, hostLabel(h.address));
   const there = runGit(repo, ['rev-parse', '--verify', '-q', `${copy}^{commit}`], { env });
   const got = there.ok ? there.out.trim() : '';
   if (got !== sha) return fail(`${h.name} has ${got ? got.slice(0, 12) : 'no commit'} for ${ref}, not the submitted ${sha.slice(0, 12)}`);

@@ -1,7 +1,7 @@
 // The five git steps of a task's Jobs, as functions and as a command (the Orchestrator loop and a terminal session use the same):
 //   node git-steps.mjs job start <task> <job> --repo <dir> --base <sha> --path <dir>
 //   node git-steps.mjs job submit <task> <job> --repo <dir> --worktree <dir> [--feed <task folder>] [--push no]
-//   node git-steps.mjs task integrate <task> <job> --repo <dir>
+//   node git-steps.mjs task integrate <task> <job> --repo <dir> [--ref <job ref>] [--sha <sha>]
 //   node git-steps.mjs task land <task> --repo <dir> --rule branch|pr|main --base-branch <name>
 //   node git-steps.mjs task cleanup <task> --repo <dir>
 // Each prints one JSON object on stdout and exits 1 with { ok: false, errors } when it fails. Node built-ins, git.mjs and the Feed's post
@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import {
-  jobRef, headRef, trackingRef, fetchRefspec, setRef, deleteRef, pushRefs, fetchRefs, remoteRefs, localRefs, deleteRemoteRefs, runGit,
+  jobRef, isJobRef, headRef, trackingRef, fetchRefspec, setRef, deleteRef, pushRefs, fetchRefs, remoteRefs, localRefs, deleteRemoteRefs, runGit,
 } from './git.mjs';
 import { post } from './lib.mjs';
 
@@ -234,7 +234,6 @@ export function jobSubmit({ task, job, repo, worktree, feed, push } = {}, o = {}
     return fail(`ignored files are new or changed since the Job's base, so nothing was committed or pushed: ${named(refusedPaths)}; take them out of the Job's commits and index`);
   }
 
-  const ref = jobRef(task, job);
   if (changed.items.length) {
     const commit = g(wt.top, ['commit', '-q', '-m', `${task} ${job}`], c);
     if (!commit.ok) return commit;
@@ -242,6 +241,10 @@ export function jobSubmit({ task, job, repo, worktree, feed, push } = {}, o = {}
   const head = g(wt.top, ['rev-parse', '--verify', 'HEAD'], c);
   if (!head.ok) return head;
   const sha = text(head);
+  // The ref is named for the commit: an earlier attempt of this Job (rejected by the judge, or stale after it pushed) left its own ref on
+  // the remote, and this attempt starts from a newer base, so its commit never descends from that one. One shared name would be refused
+  // as non-fast-forward on every retry; a name per commit is never refused, and nothing is forced or deleted.
+  const ref = jobRef(task, job, sha);
   // A clean tree still submits when the Worker committed on its branch since the Job's base (HEAD is past the base), or when the Job ref
   // already holds this commit (a retry after a failed push). It also submits, as an empty hand-in, when the base is the task head itself:
   // the work the Job asks for (a "commit" Job, say) is already in the head an earlier Job integrated, so there is nothing to refuse and
@@ -269,18 +272,39 @@ export function jobSubmit({ task, job, repo, worktree, feed, push } = {}, o = {}
 
 // ---- task integrate ----
 
+// The Job's hand-in to integrate, as { ok, sha }: the one `ref` names (the ref the submit post carries), else the Job's only hand-in on the
+// remote. A Job that was retried has one per attempt, so with several the caller must name one (or the `sha` the submit post carries).
+function handIn(repo, { task, job, ref, sha }, c) {
+  if (ref !== undefined) {
+    const tip = readCommit(repo, trackingRef(ref, c.remote), c);
+    if (!tip) return fail(`${c.remote} has no ${ref}: ${job} was not submitted`);
+    return sha !== undefined && tip !== sha ? fail(`${ref} holds ${tip}, not the submitted ${sha}`) : { ok: true, sha: tip };
+  }
+  const pre = `refs/grid-remotes/${c.remote}/`;
+  const copies = localRefs(repo, `${pre}${task}/jobs/`, { env: c.env });
+  if (!copies.ok) return copies;
+  const mine = copies.refs.filter((r) => isJobRef(`refs/grid/${r.ref.slice(pre.length)}`, task, job) && (sha === undefined || r.sha === sha));
+  if (mine.length === 1) return { ok: true, sha: mine[0].sha };
+  if (!mine.length) return fail(`${c.remote} has no ${jobRef(task, job)}${sha === undefined ? '' : ` or other hand-in of ${job} at ${sha}`}: ${job} was not submitted`);
+  return fail(`${job} was handed in ${mine.length} times (${named(mine.map((r) => r.ref.slice(pre.length)))}); name the one to integrate with --ref`);
+}
+
 // Squashes the Job's commit onto the task head (the Job commit's parent when there is no head yet) and pushes the new head, never forced.
-export function taskIntegrate({ task, job, repo } = {}, o = {}) {
+// ref and sha, when given, are those of the submit that was judged: that very commit is integrated, whichever attempt left others.
+export function taskIntegrate({ task, job, repo, ref: handInRef, sha } = {}, o = {}) {
   const c = conf(o);
   const errors = badInput(task, job, c);
   if (job === undefined) errors.push('job is required: a Job id such as J-3');
+  if (handInRef !== undefined && !isJobRef(handInRef, task, job)) errors.push(`${String(handInRef)} is not a ref of ${String(job)} under refs/grid/${String(task)}/jobs/`);
+  if (sha !== undefined && !FULL_SHA.test(String(sha))) errors.push(`${String(sha)} is not a full commit sha`);
   if (errors.length) return fail(...errors);
   const d = dirsOf(repo, c);
   if (!d.ok) return d;
   const fetched = fetchRefs(d.top, { ...net(c), task });
   if (!fetched.ok) return fetched;
-  const jobSha = readCommit(d.top, trackingRef(jobRef(task, job), c.remote), c);
-  if (!jobSha) return fail(`${c.remote} has no ${jobRef(task, job)}: ${job} was not submitted`);
+  const found = handIn(d.top, { task, job, ref: handInRef, sha }, c);
+  if (!found.ok) return found;
+  const jobSha = found.sha;
   const head = headOf(d.top, task, c);
   if (!head.ok) return head;
   const parent = head.sha ? null : readCommit(d.top, `${jobSha}^`, c);
@@ -402,10 +426,10 @@ function unsentWork({ dir, job, base }, task, pushed, c) {
   if (!status.ok || status.out.trim()) return `${dir} has changes that were not submitted; it was left in place (submit or discard them, then clean up again)`;
   const head = readCommit(dir, 'HEAD', c);
   if (head === base) return null;
-  const ref = jobRef(task, job);
-  const tip = pushed.find((r) => r.ref === ref)?.sha;
-  if (head && tip && g(dir, ['merge-base', '--is-ancestor', head, tip], c).ok) return null;
-  return `${dir} has commits that are not on ${ref} on ${c.remote}; it was left in place (keep them with git branch <name> ${head ?? 'HEAD'}, or drop them with git reset --hard ${base}, then clean up again)`;
+  // Any hand-in of the Job will do: each attempt has its own ref, and the commits may be on the one of an attempt that was since rejected.
+  const tips = pushed.filter((r) => isJobRef(r.ref, task, job)).map((r) => r.sha);
+  if (head && tips.some((tip) => g(dir, ['merge-base', '--is-ancestor', head, tip], c).ok)) return null;
+  return `${dir} has commits that are not on a ${job} ref on ${c.remote}; it was left in place (keep them with git branch <name> ${head ?? 'HEAD'}, or drop them with git reset --hard ${base}, then clean up again)`;
 }
 
 // Deletes refs/grid/<task>/* on the remote, here and the local copies under refs/grid-remotes/<remote>/<task>/, then removes the task's worktrees.
@@ -492,7 +516,7 @@ export function taskLandAndClean(input = {}, o = {}) {
 const STEPS = {
   'job start': { run: jobStart, ids: ['task', 'job'], flags: { repo: 'repo', base: 'base', path: 'path' } },
   'job submit': { run: jobSubmit, ids: ['task', 'job'], flags: { repo: 'repo', worktree: 'worktree', feed: 'feed', push: 'push' } },
-  'task integrate': { run: taskIntegrate, ids: ['task', 'job'], flags: { repo: 'repo' } },
+  'task integrate': { run: taskIntegrate, ids: ['task', 'job'], flags: { repo: 'repo', ref: 'ref', sha: 'sha' } },
   'task land': { run: taskLand, ids: ['task'], flags: { repo: 'repo', rule: 'rule', 'base-branch': 'baseBranch' } },
   'task cleanup': { run: taskCleanup, ids: ['task'], flags: { repo: 'repo' } },
 };

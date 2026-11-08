@@ -387,11 +387,13 @@ function work(taskDir, o) {
     const h = sshOf(j);
     if (h) {
       let rel;
-      try { rel = o.ssh.relay(h, { task: o.task, job: j.id, repo: o.repo, sha: str(submit?.body?.sha), remoteRepo: `${h.repos}/projects/${path.basename(o.repo)}` }); } catch (e) { rel = { ok: false, errors: [e?.message ?? String(e)] }; }
+      try { rel = o.ssh.relay(h, { task: o.task, job: j.id, repo: o.repo, sha: str(submit?.body?.sha), ref: str(submit?.body?.ref), remoteRepo: `${h.repos}/projects/${path.basename(o.repo)}` }); } catch (e) { rel = { ok: false, errors: [e?.message ?? String(e)] }; }
       if (!rel?.ok) return failJob(j, `could not bring ${j.id} back from ${h.name}: ${errText(rel)}`);
     }
     let r;
-    try { r = o.steps.integrate({ task: o.task, job: j.id, repo: o.repo }, { env: gitEnv(o.env) }); } catch (e) { r = { ok: false, errors: [e?.message ?? String(e)] }; }
+    // The judged submit's own commit is integrated: its ref and sha, so an earlier attempt's ref on origin is never taken for it.
+    const handIn = { ...(str(submit?.body?.ref) ? { ref: str(submit.body.ref) } : {}), ...(str(submit?.body?.sha) ? { sha: str(submit.body.sha) } : {}) };
+    try { r = o.steps.integrate({ task: o.task, job: j.id, repo: o.repo, ...handIn }, { env: gitEnv(o.env) }); } catch (e) { r = { ok: false, errors: [e?.message ?? String(e)] }; }
     if (r?.ok) {
       if (!r.empty && isObj(r.post?.body)) write('head', r.post.body);
       return control({ target: j.id, status: 'integrated', verdict: 'accept', reason: r.empty ? 'nothing new for the task head' : `squashed onto the task head as ${r.sha}` });

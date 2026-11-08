@@ -8,7 +8,7 @@
 // machine reaches it, and nothing is written into a repo's config. None of that, nor the Worker's words, goes on tmux's command line, which
 // splits on a word that ends in ; and refuses a long one: tmux runs a launch script beside the log, in a folder only its owner can enter, that
 // removes itself and starts the Worker. Stop ends the Job's tmux sessions, removes any launch script of the Job left in `worktrees`, then its
-// worktrees under `worktrees` and, with ref, its refs/grid/<task>/jobs/<job> in the clone. Node built-ins and git-steps.mjs only.
+// worktrees under `worktrees` and, with ref, its refs/grid/<task>/jobs/<job>[-<12 hex>] hand-in refs in the clone. Node built-ins and git-steps.mjs only.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -157,9 +157,16 @@ export function stopJob(input, { env = process.env, run = spawnSync } = {}) {
     }
     g(['worktree', 'prune']);
     if (input.ref === true) {
-      const d = g(['update-ref', '-d', `refs/grid/${task}/jobs/${job}`]);
-      if (d.error || d.status !== 0) errors.push(`refs/grid/${task}/jobs/${job} was not removed: ${d.error?.message || String(d.stderr ?? '').trim()}`);
-      else ref = true;
+      // The Job's hand-in refs here: the plain name and one per commit it was handed in at (git.mjs's jobRef).
+      const found = g(['for-each-ref', '--format=%(refname)', `refs/grid/${task}/jobs/`]);
+      if (found.error || found.status !== 0) errors.push(`the refs of ${job} could not be listed: ${found.error?.message || String(found.stderr ?? '').trim()}`);
+      else {
+        const handIns = new RegExp(`^refs/grid/${task}/jobs/${job}(?:-[0-9a-f]{12})?$`);
+        const gone = String(found.stdout).split('\n').map((x) => x.trim()).filter((x) => handIns.test(x))
+          .map((name) => ({ name, d: g(['update-ref', '-d', name]) }));
+        for (const { name, d } of gone) if (d.error || d.status !== 0) errors.push(`${name} was not removed: ${d.error?.message || String(d.stderr ?? '').trim()}`);
+        if (!errors.length) ref = true;
+      }
     }
   }
   return errors.length ? fail(...errors) : { ok: true, killed, removed, ref };
