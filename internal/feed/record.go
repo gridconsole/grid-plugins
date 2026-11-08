@@ -93,20 +93,6 @@ func value(p *string) string {
 	}
 	return *p
 }
-func number(v any) int64 {
-	switch n := v.(type) {
-	case float64:
-		return int64(n)
-	case int:
-		return int64(n)
-	case int64:
-		return n
-	case json.Number:
-		i, _ := n.Int64()
-		return i
-	}
-	return 0
-}
 func str(v any) string                             { s, _ := v.(string); return s }
 func object(v any) map[string]any                  { m, _ := v.(map[string]any); return m }
 func writerFile(worker string, fence int64) string { return fmt.Sprintf("%s.%d.jsonl", worker, fence) }
