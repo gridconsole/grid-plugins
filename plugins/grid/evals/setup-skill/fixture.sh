@@ -24,6 +24,28 @@ cat > "$repo/docs/deploy.md" <<'T'
 
 Staging is a small server at staging.notes.example. A person deploys it from their own machine with `make deploy-staging`.
 T
+mkdir -p "$repo/.github/workflows"
+cat > "$repo/.github/workflows/deploy.yml" <<'T'
+name: deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  production:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test
+      - run: npx netlify deploy --prod --site notes-web
+        env:
+          SITE_URL: https://app.notes.example
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: flyctl deploy --app notes-api
+T
+printf 'app = "notes-api"\n[http_service]\n  internal_port = 8080\n# served at https://api.notes.example\n' > "$repo/fly.toml"
 printf 'export const store = new Map();\n' > "$repo/src/store.js"
 printf 'export const byTag = (notes, tag) => notes.filter((n) => n.tags.includes(tag));\n' > "$repo/src/tags.js"
 

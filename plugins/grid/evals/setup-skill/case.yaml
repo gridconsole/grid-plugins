@@ -1,5 +1,5 @@
 schema_version: "1.1"
 name: setup-skill
-description: Setting up a project makes the setup skill read the repo and the listed sessions and write only proposals.md, with no invite sent and nothing written in the repo.
+description: Setting up a project makes the setup skill read the repo (CI, deploy configs, git) and the listed sessions first, write proposals.md, then post only the gap questions, with no invite sent and nothing written in the repo.
 context:
   scaffold_script: fixture.sh
