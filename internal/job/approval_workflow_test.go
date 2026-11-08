@@ -11,7 +11,7 @@ import (
 
 func TestPlanOmittedAnchorsRefused(t *testing.T) {
 	h := jobtest.New(t, filepath.Join("..", "..", "testdata"))
-	text := "# Plan\n## Where it stands\nUnapproved live status\n- [ ] 1 Build it\n  Approved step prose\n## Verify\nIt works.\n"
+	text := "# Plan\n## Where it stands\nUnapproved live status\n- [ ] 1 Build it\n  Approved step prose\n  jobs: []\n## Verify\nIt works.\n"
 	path := filepath.Join(h.Task, "plan.md")
 	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
 		t.Fatal(err)

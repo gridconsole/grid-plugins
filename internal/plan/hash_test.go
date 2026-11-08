@@ -48,8 +48,8 @@ func TestHashStability(t *testing.T) {
 			if Hash(base) != Hash(changed) {
 				t.Fatal("legacy display hash changed")
 			}
-			if Digest(base) == Digest(changed) {
-				t.Fatal("edited file did not change approval digest")
+			if (Digest(base) != Digest(changed)) != (name == "heading") {
+				t.Fatal("only the heading edit should change approval digest")
 			}
 		})
 	}
@@ -107,9 +107,9 @@ func TestItemsBoundaries(t *testing.T) {
 	}
 }
 
-func TestDigestUsesWholeFileSHA256(t *testing.T) {
+func TestDigestUsesCanonicalSHA256(t *testing.T) {
 	text := "# Plan, rev 9 · ignored\r\n\r\n- [X] 1 Build it  \r\n  evidence: proof\r\n\r\n## Where it stands\r\nVolatile status.\r\n"
-	sum := sha256.Sum256([]byte(text))
+	sum := sha256.Sum256([]byte("# Plan, rev 9 · ignored\n\n- [ ] 1 Build it\n  evidence: proof\n"))
 	want := hex.EncodeToString(sum[:])
 	if got := Digest(text); got != want {
 		t.Fatalf("digest = %s, want %s", got, want)

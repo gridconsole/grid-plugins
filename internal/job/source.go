@@ -201,7 +201,7 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 	if project && !inside(f.Folders, path) {
 		return s, fmt.Errorf("%s: source is outside the project folders", pointer)
 	}
-	file, err := os.Open(path)
+	file, err := openSource(path)
 	if err != nil {
 		return s, fmt.Errorf("%s: cannot read source: %w", pointer, err)
 	}
@@ -258,7 +258,14 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 		if isPlan && (strings.HasPrefix(anchor, "step-") || anchor == "verify") {
 			s.Text, err = plan.Anchor(text, anchor)
 		} else {
-			s.Text, err = selectText(text, anchor)
+			var first, last int
+			first, last, err = selectRange(text, anchor)
+			if err == nil {
+				if isPlan && !plan.DigestCoversLines(text, first+1, last) {
+					return s, fmt.Errorf("%s: anchor selects lines outside the approval digest", pointer)
+				}
+				s.Text = selectedText(text, first, last, anchor)
+			}
 		}
 		if err != nil {
 			return s, fmt.Errorf("%s: %w", pointer, err)
@@ -332,6 +339,23 @@ func inside(dirs []string, path string) bool {
 	}
 }
 func selectText(text, anchor string) (string, error) {
+	first, last, err := selectRange(text, anchor)
+	if err != nil {
+		return "", err
+	}
+	return selectedText(text, first, last, anchor), nil
+}
+
+func selectedText(text string, first, last int, anchor string) string {
+	ls := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
+	selected := strings.Join(ls[first:last], "\n")
+	if !lineAnchor.MatchString(anchor) {
+		selected = strings.TrimRight(selected, "\n")
+	}
+	return selected
+}
+
+func selectRange(text, anchor string) (int, int, error) {
 	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
 	if m := lineAnchor.FindStringSubmatch(anchor); m != nil {
 		a, _ := strconv.Atoi(m[1])
@@ -340,9 +364,9 @@ func selectText(text, anchor string) (string, error) {
 			b, _ = strconv.Atoi(m[2])
 		}
 		if a < 1 || b < a || b > len(lines) {
-			return "", fmt.Errorf("range outside file (1-%d)", len(lines))
+			return 0, 0, fmt.Errorf("range outside file (1-%d)", len(lines))
 		}
-		return strings.Join(lines[a-1:b], "\n"), nil
+		return a - 1, b, nil
 	}
 	start, end := -1, len(lines)
 	level := 0
@@ -364,16 +388,16 @@ func selectText(text, anchor string) (string, error) {
 		slug = strings.ReplaceAll(slug, " ", "-")
 		if slug == anchor || strings.HasSuffix(heading, "{#"+anchor+"}") {
 			if start >= 0 {
-				return "", fmt.Errorf("ambiguous anchor %s", anchor)
+				return 0, 0, fmt.Errorf("ambiguous anchor %s", anchor)
 			}
 			start = i
 			level = n
 		}
 	}
 	if start < 0 {
-		return "", fmt.Errorf("anchor %q not found", anchor)
+		return 0, 0, fmt.Errorf("anchor %q not found", anchor)
 	}
-	return strings.TrimRight(strings.Join(lines[start:end], "\n"), "\n"), nil
+	return start, end, nil
 }
 func firstLine(s string) string {
 	for _, l := range strings.Split(s, "\n") {

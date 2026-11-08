@@ -30,19 +30,52 @@ func Hash(text string) string {
 	return fmt.Sprintf("%x", sum[:])[:6]
 }
 
-// Digest binds the entire plan snapshot with full SHA-256, including line one.
-// Unlike the legacy display Hash, no rendered text is omitted or normalized.
+// Digest binds canonical plan content with full SHA-256, including line one
+// and step metadata. Ticks, trailing whitespace, CRLF and status prose remain
+// normalized so live workflow edits preserve approval.
 func Digest(text string) string {
-	sum := sha256.Sum256([]byte(text))
+	sum := sha256.Sum256([]byte(canonicalPlan(text, true)))
 	return fmt.Sprintf("%x", sum[:])
 }
 
 func canonical(text string) string { return canonicalPlan(text, false) }
 
-func canonicalPlan(text string, includeStepMetadata bool) string {
-	inStep, inStands := false, false
+func canonicalPlan(text string, approval bool) string {
 	var kept []string
-	for _, line := range lines(text)[1:] {
+	for _, line := range canonicalLines(text, approval) {
+		kept = append(kept, line.text)
+	}
+	return strings.Join(kept, "\n") + "\n"
+}
+
+type canonicalLine struct {
+	number int
+	text   string
+}
+
+// DigestCoversLines reports whether every line in a one-based inclusive range
+// survives approval canonicalization. Normalized ticks and whitespace are safe;
+// omitted status prose and trimmed boundary blank lines are not anchor sources.
+func DigestCoversLines(text string, first, last int) bool {
+	if first < 1 || last < first {
+		return false
+	}
+	count := 0
+	for _, line := range canonicalLines(text, true) {
+		if line.number >= first && line.number <= last {
+			count++
+		}
+	}
+	return count == last-first+1
+}
+
+func canonicalLines(text string, approval bool) []canonicalLine {
+	inStep, inStands := false, false
+	var kept []canonicalLine
+	for i, line := range lines(text) {
+		if i == 0 && !approval {
+			continue
+		}
 		if stands.MatchString(line) {
 			inStands, inStep = true, false
 			continue
@@ -54,7 +87,7 @@ func canonicalPlan(text string, includeStepMetadata bool) string {
 			} else if !(inStep && indented.MatchString(line)) {
 				inStep = false
 				continue
-			} else if !includeStepMetadata && volatile.MatchString(line) {
+			} else if !approval && volatile.MatchString(line) {
 				continue
 			}
 		} else {
@@ -63,11 +96,17 @@ func canonicalPlan(text string, includeStepMetadata bool) string {
 				inStep = true
 			} else if !indented.MatchString(line) {
 				inStep = false
-			} else if !includeStepMetadata && inStep && volatile.MatchString(line) {
+			} else if !approval && inStep && volatile.MatchString(line) {
 				continue
 			}
 		}
-		kept = append(kept, trailing.ReplaceAllString(hashStep.ReplaceAllString(line, "${1}[ ]"), ""))
+		kept = append(kept, canonicalLine{i + 1, trailing.ReplaceAllString(hashStep.ReplaceAllString(line, "${1}[ ]"), "")})
 	}
-	return strings.Trim(strings.Join(kept, "\n"), "\n") + "\n"
+	for len(kept) > 0 && kept[0].text == "" {
+		kept = kept[1:]
+	}
+	for len(kept) > 0 && kept[len(kept)-1].text == "" {
+		kept = kept[:len(kept)-1]
+	}
+	return kept
 }
