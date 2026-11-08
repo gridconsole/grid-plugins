@@ -193,6 +193,13 @@ func run(args []string, env Env) int {
 		store.AgentShell = env.AgentShell()
 	}
 
+	if action == "withdraw" {
+		if err := (feed.Store{TaskDir: scope.TaskPath}).CheckWithdrawalPolicy(feed.Input{Type: "control", Body: map[string]any{"question_event": "withdrawn"}}); err != nil {
+			fmt.Fprintln(env.Stderr, "question:", err)
+			return 1
+		}
+	}
+
 	if env.Writer != nil && action != "list" && action != "sync" {
 		writer, e := env.Writer(action == "withdraw" || action == "tick")
 		if e != nil {

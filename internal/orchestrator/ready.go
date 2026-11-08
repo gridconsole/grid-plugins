@@ -36,6 +36,10 @@ type Snapshot struct {
 }
 
 func Load(store feed.Store) (Snapshot, error) {
+	allowed, err := feed.QuestionWithdrawPolicy(store.TaskDir)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	r, err := store.Read(feed.Filter{})
 	if err != nil {
 		return Snapshot{}, err
@@ -45,7 +49,6 @@ func Load(store feed.Store) (Snapshot, error) {
 		now = store.Now()
 	}
 	// The person layer keeps a non-person answer from releasing a person gate.
-	allowed := feed.QuestionWithdrawPolicy(store.TaskDir)
 	state, _ := feed.FoldReadAt(r, now, allowed)
 	s := Snapshot{State: state, Records: map[string]feed.Record{}, Bodies: map[string]map[string]any{}, Created: map[string]time.Time{}}
 	counted := map[string]bool{}

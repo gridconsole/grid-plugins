@@ -200,7 +200,16 @@ Disagreements and defaults chosen:
   `workflow.md` YAML front matter key `gate_post_roles: {withdraw: [owner, member]}`
   replaces this policy (an empty list forbids person withdrawals); a host may
   also supply `question.Store.WithdrawAllowed`. Agent shells still need the task
-  lease fence on Feed, Job and MCP posting paths, and lease holders retain the existing control path. Person withdrawal
+  lease fence on question, Feed, Job and MCP posting paths. This no-lease refusal
+  applies to agent shells only; hosts may write leaseless person records allowed
+  by the policy. The CLI treats guest/lead environments as agent shells, so a
+  `withdraw: [guest]` or `withdraw: [lead]` policy only takes effect for host-written
+  person records. Lease holders retain the existing control path.
+  A missing policy file uses the owner/member default without warning; malformed
+  policy uses that default with one warning per withdrawal command. If the task's
+  policy file cannot be read, every withdrawal path fails with exit 1 and a
+  one-line diagnostic before writing, including host and leased withdrawals.
+  Person withdrawal
   follows Feed order and closes only an open question; an applied answer or
   default makes it a refusal. An already withdrawn question is a successful
   retry that prints the record. Refusals return exit 3 (HTTP 409 in the app),

@@ -196,12 +196,17 @@ func (s Store) Answer(id, text string) (Record, error) {
 
 // Withdraw closes an open question for an allowed person or a task lease holder.
 func (s Store) Withdraw(id, reason string) (Record, error) {
+	// Resolve once before taking a lock or updating projections, including for
+	// lease holders. Keep the callback local to this operation, not the Store.
+	allowed, err := feed.QuestionWithdrawPolicy(s.TaskDir, s.Warn)
+	if err != nil {
+		return Record{}, err
+	}
+	if s.WithdrawAllowed == nil {
+		s.WithdrawAllowed = allowed
+	}
 	if s.ControlWriter.Lease != "task" {
-		allowed, err := s.withdrawPolicy()
-		if err != nil {
-			return Record{}, err
-		}
-		if !allowed(s.Writer.Author.Role) {
+		if !s.WithdrawAllowed(s.Writer.Author.Role) {
 			return Record{}, &withdrawRefusal{fmt.Sprintf("%s role %q may not withdraw", id, s.Writer.Author.Role)}
 		}
 		if s.AgentShell || s.Writer.Author.Role == "agent" || s.Writer.Author.Role == "cli" {
@@ -318,5 +323,5 @@ func (s Store) withdrawPolicy() (func(string) bool, error) {
 	if s.WithdrawAllowed != nil {
 		return s.WithdrawAllowed, nil
 	}
-	return feed.QuestionWithdrawPolicy(s.TaskDir), nil
+	return feed.QuestionWithdrawPolicy(s.TaskDir, s.Warn)
 }

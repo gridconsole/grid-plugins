@@ -16,6 +16,9 @@ var ErrDuplicateWake = errors.New("wake write already exists")
 // actual append, fence check and wake deduplication to Feed. The returned record
 // on ErrDuplicateWake is the first write, which the CLI prints before refusing.
 func Write(store feed.Store, w feed.Writer, in feed.Input) (record feed.Record, err error) {
+	if err := store.CheckWithdrawalPolicy(in); err != nil {
+		return record, err
+	}
 	if w.Lease == "" {
 		return record, feed.ErrStaleLease
 	}

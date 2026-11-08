@@ -92,13 +92,6 @@ func runOrchestrator(args []string, env Env) int {
 		if err := json.Unmarshal([]byte(*body), &obj); err != nil || obj == nil {
 			return fail(errors.New("--body must be a JSON object"))
 		}
-		postLease := *leaseFlag
-		if postLease == "" && *kind == "control" {
-			postLease = "task"
-		}
-		if err := refuseWithdrawalPost(env, *kind, obj, postLease, *epoch); err != nil {
-			return fail(err)
-		}
 	}
 	scope, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: *task, Project: *project})
 	if err != nil {
@@ -115,6 +108,18 @@ func runOrchestrator(args []string, env Env) int {
 		*owner = taskOwner
 	}
 	store := feed.Store{TaskDir: scope.TaskPath, TaskID: taskID}
+	if verb == "post" {
+		if err := store.CheckWithdrawalPolicy(feed.Input{Type: *kind, Body: obj}); err != nil {
+			return fail(err)
+		}
+		postLease := *leaseFlag
+		if postLease == "" && *kind == "control" {
+			postLease = "task"
+		}
+		if err := refuseWithdrawalPost(env, *kind, obj, postLease, *epoch); err != nil {
+			return fail(err)
+		}
+	}
 	if verb == "tree" || verb == "blocked" {
 		snap, err := orchestrator.Load(store)
 		if err != nil {

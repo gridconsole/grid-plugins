@@ -207,7 +207,11 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		if a.Reason != "" {
 			a.Body["reason"] = a.Reason
 		}
-		in, writer, err := s.Session(feed.Input{ID: a.ID, Type: a.Type, Body: a.Body, Re: a.Re, Job: a.Job, Attempt: int(a.Attempt), After: a.After})
+		in := feed.Input{ID: a.ID, Type: a.Type, Body: a.Body, Re: a.Re, Job: a.Job, Attempt: int(a.Attempt), After: a.After}
+		if err := store.CheckWithdrawalPolicy(in); err != nil {
+			return Result{}, err
+		}
+		in, writer, err := s.Session(in)
 		if err != nil {
 			return Result{}, err
 		}

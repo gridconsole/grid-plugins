@@ -76,7 +76,11 @@ func withdrawalFiles(t *testing.T, task string) map[string]string {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || entry.Name() == "workflow.md" {
+		if entry.IsDir() {
+			files[path+"/"] = "directory"
+			return nil
+		}
+		if entry.Name() == "workflow.md" {
 			return nil
 		}
 		raw, err := os.ReadFile(path)
@@ -122,5 +126,33 @@ func TestWithdrawPolicyWarningOnce(t *testing.T) {
 			t.Fatal(err)
 		}
 		os.Stderr = stderr
+	}
+}
+
+func TestAgentWithdrawUnreadablePolicy(t *testing.T) {
+	for _, path := range []string{"question", "feed", "job", "mcp"} {
+		t.Run(path, func(t *testing.T) {
+			h, task, _, q, body := withdrawalProbe(t)
+			h.mkdir(filepath.Join(task, "workflow.md"))
+			before := withdrawalFiles(t, task)
+			if path == "mcp" {
+				line := mcpCall(t, h, "feed_post", `{"type":"control","re":"`+q.ID+`","body":`+body+`}`)
+				if !strings.Contains(line, `"isError":true`) || !strings.Contains(line, `\"code\":1`) || !strings.Contains(line, "cannot read task withdrawal policy") {
+					t.Errorf("MCP refusal: %s", line)
+				}
+			} else {
+				args := []string{path, "post", "--type", "control", "--re", q.ID, "--body", body}
+				if path == "question" {
+					args = []string{"question", "withdraw", "Q-1"}
+				}
+				code := h.run(task, args...)
+				if code != 1 || h.out.Len() != 0 || strings.Count(h.errb.String(), "\n") != 1 || !strings.Contains(h.errb.String(), "cannot read task withdrawal policy") {
+					t.Errorf("refusal: exit=%d stdout=%s stderr=%s", code, h.out, h.errb)
+				}
+			}
+			if after := withdrawalFiles(t, task); !reflect.DeepEqual(before, after) {
+				t.Error("refusal changed task files")
+			}
+		})
 	}
 }

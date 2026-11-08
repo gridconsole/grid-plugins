@@ -130,6 +130,9 @@ func runFeed(args []string, env Env) int {
 		return fail(&feed.InvalidRecordError{Err: fmt.Errorf("--body must be a JSON object")})
 	}
 	if verb == "post" {
+		if err := store.CheckWithdrawalPolicy(feed.Input{Type: kind, Body: obj}); err != nil {
+			return fail(err)
+		}
 		if err := refuseWithdrawalPost(env, kind, obj, lease, epoch); err != nil {
 			return fail(err)
 		}

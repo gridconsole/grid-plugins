@@ -1,10 +1,13 @@
 package feed
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -223,15 +226,42 @@ func personWithdraw(p Record, allowed func(string) bool) bool {
 }
 
 // QuestionWithdrawPolicy reads the task's workflow policy. Hosts can instead
-// supply a callback to FoldReadAt and question.Store.WithdrawAllowed. An unreadable
-// policy falls back to defaults with one warning per read.
-func QuestionWithdrawPolicy(taskDir string) func(string) bool {
+// supply a callback to FoldReadAt and question.Store.WithdrawAllowed. Missing
+// files use defaults; malformed policy warns, but read errors fail closed.
+// An optional writer receives warnings; otherwise they go to stderr.
+func QuestionWithdrawPolicy(taskDir string, warning ...io.Writer) (func(string) bool, error) {
 	roles, err := workflow.GatePostRoles(taskDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: cannot read task withdrawal policy; using defaults: %v\n", err)
-		return DefaultWithdrawAllowed
+		var readErr *os.PathError
+		if errors.As(err, &readErr) {
+			return nil, &withdrawPolicyError{err: readErr}
+		}
+		var out io.Writer = os.Stderr
+		if len(warning) > 0 && warning[0] != nil {
+			out = warning[0]
+		}
+		fmt.Fprintf(out, "warning: cannot read task withdrawal policy; using defaults: %s\n", strings.Join(strings.Fields(err.Error()), " "))
+		return DefaultWithdrawAllowed, nil
 	}
-	return func(role string) bool { return slices.Contains(roles["withdraw"], role) }
+	return func(role string) bool { return slices.Contains(roles["withdraw"], role) }, nil
+}
+
+type withdrawPolicyError struct{ err *os.PathError }
+
+func (e *withdrawPolicyError) Error() string {
+	return "cannot read task withdrawal policy (workflow.md): " + strings.Join(strings.Fields(e.err.Err.Error()), " ")
+}
+func (e *withdrawPolicyError) Unwrap() error { return e.err }
+func (e *withdrawPolicyError) ExitCode() int { return 1 }
+
+// CheckWithdrawalPolicy rejects unreadable policy before any withdrawal writes.
+// Appending does not apply role defaults; the projection owns fallback warnings.
+func (s Store) CheckWithdrawalPolicy(in Input) error {
+	if in.Type != "control" || str(in.Body["question_event"]) != "withdrawn" {
+		return nil
+	}
+	_, err := QuestionWithdrawPolicy(s.TaskDir, io.Discard)
+	return err
 }
 
 // questionEventOrder preserves Feed order except for explicit causal links.

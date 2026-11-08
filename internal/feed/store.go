@@ -164,6 +164,9 @@ func completeLines(data []byte) [][]byte {
 // Post appends with a file lock held across seq allocation, tail repair, the
 // whole-line write and required durability. A lease lock covers that interval.
 func (s Store) Post(in Input, w Writer) (Record, error) {
+	if err := s.CheckWithdrawalPolicy(in); err != nil {
+		return Record{}, err
+	}
 	r, err := s.record(in, w)
 	if err != nil {
 		return Record{}, err
