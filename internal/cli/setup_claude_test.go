@@ -13,13 +13,14 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/project"
-	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
 func claudeHarness(t *testing.T) *harness {
 	t.Helper()
 	h := newHarness(t)
 	t.Setenv("HOME", h.home)
+	t.Setenv("GRID_HOME", h.gridHome)
+	t.Setenv("GRID_PROJECTS", filepath.Join(h.gridHome, "projects"))
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(h.home, "custom-claude"))
 	return h
 }
@@ -151,55 +152,95 @@ func TestSetupClaudeHelpAndProjectAnswersGolden(t *testing.T) {
 // second hand-written deny list. The settings test also pins writer.go's
 // source so adding a new kind requires consciously updating this coverage.
 func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
-	h := claudeHarness(t)
-	rules, err := settings.ClaudeBlock(h.home, h.gridHome)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Setup-record defenses are additional to the writer guard and are tested
-	// through the CLI in settings.TestClaudeReworkCLIProjectAnchors.
-	rules = slices.DeleteFunc(rules, func(r settings.ClaudeRule) bool {
-		return r.Section == "permissions" && r.Key == "deny" &&
-			(r.Value == "Edit(~/.grid/setup/**)" || r.Value == "Write(~/.grid/setup/**)")
-	})
-	env := map[string]string{"HOME": h.home, "GRID_HOME": h.gridHome}
-	paths := []string{
-		"projects/p/tasks/T-01-work", "projects/p/tasks/T-01-work/task.md", "projects/p/tasks/T-1/sub/deep/file", "projects/p/TASKS/t-22-work/brief.md",
-		"personal/tasks/T-01-work", "personal/tasks/t-02/task.md", "personal/tasks/T-9/sub/file",
-		"projects/p/knowledge", "projects/p/knowledge/topics/x.md", "projects/p/KNOWLEDGE/file",
-		"knowledge", "knowledge/topics/x.md", "KNOWLEDGE/x",
-		"projects/p/project.md", "projects/p/PROJECT.MD",
-		"projects/p/tasks/README.md", "projects/p/tasks/T-x/task.md", "projects/p/tasks/T-/task.md", "personal/tasks/T-x/task.md",
-		"projects/p/notes/x.md", "projects/p/nested/project.md", "projects/p/project.md/nested", "projects/p/project.md.bak", "projects/p/tasks", "settings.json", "personal/project.md", "personal/knowledge/x.md",
-	}
-	hits := map[string]bool{}
-	for _, rel := range paths {
-		for _, tool := range []string{"Edit", "Write"} {
-			target := filepath.Join(h.gridHome, filepath.FromSlash(rel))
-			decision := guard.EvaluateOnlyWriter(hookio.Input{Cwd: h.home, ToolName: tool, ToolInput: map[string]any{"file_path": target}}, h.home, env)
-			matched := false
-			for _, r := range rules {
-				if r.Section != "permissions" || r.Key != "deny" {
-					continue
+	for _, location := range []string{"default", "outside home"} {
+		t.Run(location, func(t *testing.T) {
+			h := claudeHarness(t)
+			projects := filepath.Join(h.gridHome, "projects")
+			if location == "outside home" {
+				projects = filepath.Join(h.root, "work")
+			}
+			t.Setenv("GRID_PROJECTS", projects)
+			if code := h.run(h.home, "setup", "--yes"); code != 0 {
+				t.Fatalf("code=%d: %s", code, h.errb)
+			}
+			data, err := os.ReadFile(filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "settings.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var doc struct{ Permissions struct{ Deny []string } }
+			if err := json.Unmarshal(data, &doc); err != nil {
+				t.Fatal(err)
+			}
+			// Setup-record defenses are additional to the writer guard and are tested
+			// through the CLI in settings.TestClaudeReworkCLIProjectAnchors.
+			rules := slices.DeleteFunc(doc.Permissions.Deny, func(rule string) bool {
+				return rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)"
+			})
+			env := map[string]string{"HOME": h.home, "GRID_HOME": h.gridHome, "GRID_PROJECTS": projects}
+			paths := []string{
+				"projects/p/tasks/T-01-work", "projects/p/tasks/T-01-work/task.md", "projects/p/tasks/T-1/sub/deep/file", "projects/p/TASKS/t-22-work/brief.md",
+				"personal/tasks/T-01-work", "personal/tasks/t-02/task.md", "personal/tasks/T-9/sub/file",
+				"projects/p/knowledge", "projects/p/knowledge/topics/x.md", "projects/p/KNOWLEDGE/file",
+				"knowledge", "knowledge/topics/x.md", "KNOWLEDGE/x",
+				"projects/p/project.md", "projects/p/PROJECT.MD",
+				"projects/p/tasks/README.md", "projects/p/tasks/T-x/task.md", "projects/p/tasks/T-/task.md", "personal/tasks/T-x/task.md",
+				"projects/p/notes/x.md", "projects/p/nested/project.md", "projects/p/project.md/nested", "projects/p/project.md.bak", "projects/p/tasks", "settings.json", "personal/project.md", "personal/knowledge/x.md",
+			}
+			targets := make([]string, 0, len(paths)*2)
+			for _, rel := range paths {
+				target := filepath.Join(h.gridHome, filepath.FromSlash(rel))
+				if suffix, ok := strings.CutPrefix(rel, "projects/"); ok {
+					if location == "outside home" {
+						// Old default project paths must no longer match project denies.
+						targets = append(targets, target)
+					}
+					target = filepath.Join(projects, filepath.FromSlash(suffix))
 				}
-				if !strings.HasPrefix(r.Value, "Edit(~/.grid/") {
-					t.Fatalf("unexpected file rule %s", r.Value)
-				}
-				pattern := strings.TrimSuffix(strings.TrimPrefix(r.Value, "Edit(~/.grid/"), ")")
-				if claudePatternMatches(t, pattern, rel) {
-					matched = true
-					hits[r.Value] = true
+				targets = append(targets, target)
+			}
+			hits := map[string]bool{}
+			for _, target := range targets {
+				for _, tool := range []string{"Edit", "Write"} {
+					decision := guard.EvaluateOnlyWriter(hookio.Input{Cwd: h.home, ToolName: tool, ToolInput: map[string]any{"file_path": target}}, h.home, env)
+					matched := false
+					for _, rule := range rules {
+						if !strings.HasPrefix(rule, "Edit(") || !strings.HasSuffix(rule, ")") {
+							t.Fatalf("unexpected file rule %s", rule)
+						}
+						pattern := strings.TrimSuffix(strings.TrimPrefix(rule, "Edit("), ")")
+						var candidate string
+						switch {
+						case strings.HasPrefix(pattern, "~/"):
+							rel, err := filepath.Rel(h.home, target)
+							if err != nil {
+								t.Fatal(err)
+							}
+							pattern, candidate = strings.TrimPrefix(pattern, "~/"), filepath.ToSlash(rel)
+						case strings.HasPrefix(pattern, "//"):
+							pattern, candidate = strings.TrimPrefix(pattern, "//"), filepath.ToSlash(target)
+							if volume := filepath.VolumeName(target); len(volume) == 2 && volume[1] == ':' {
+								candidate = strings.ToLower(volume[:1]) + candidate[len(volume):]
+							}
+							candidate = strings.TrimLeft(candidate, "/")
+						default:
+							t.Fatalf("unexpected path anchor %s", pattern)
+						}
+						if claudePatternMatches(t, pattern, candidate) {
+							matched = true
+							hits[rule] = true
+						}
+					}
+					if matched != (decision.Behavior == "deny") {
+						t.Errorf("%s %s: block=%v guard=%s", tool, h.norm(target), matched, decision.Behavior)
+					}
 				}
 			}
-			if matched != (decision.Behavior == "deny") {
-				t.Errorf("%s %s: block=%v guard=%s", tool, rel, matched, decision.Behavior)
+			for _, rule := range rules {
+				if !hits[rule] {
+					t.Errorf("deny has no guard counterpart: %s", rule)
+				}
 			}
-		}
-	}
-	for _, r := range rules {
-		if r.Key == "deny" && !hits[r.Value] {
-			t.Errorf("deny has no guard counterpart: %s", r.Value)
-		}
+		})
 	}
 }
 
