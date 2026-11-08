@@ -362,11 +362,23 @@ The title is the first nonblank line of the request, trimmed and limited to 120 
 
 `created` is a UTC RFC3339 timestamp on creation; `path` is absolute. `intent` is the exact file content. The remaining fields come from YAML front matter in `task.md`. Show folds these files without changing them or inferring execution state. Plain output prints one `name: value` line per field, followed by `intent:` and its text. An omitted id selects the enclosing task; an explicit id is looked up across the Grid home, including Personal. Missing, duplicate or malformed tasks fail instead of returning a partial record.
 
+### `grid task rename <T-NN> --title <text> [--project <p>] [--json]`
+
+Renames an open task. The title is trimmed and whitespace is collapsed, with 1–200 Unicode characters and no line breaks. Only `title` and `updated` change in `task.md`; the folder, intent, summary and other lines remain unchanged. Closed tasks must be reopened first; an unchanged title is rejected. History records `renamed · <title>` in the existing JSON receipt's `note` field, with `what: rename`.
+
+### `grid task decline <T-NN> --reason <text> [--project <p>] [--json]`
+
+Closes an open task with a required reason after whitespace collapse. Tasks with `kind: planner` and already closed tasks are rejected. Writes `state: closed`, `next: declined by <who>` and `updated`; the host person comes from `GRID_ACTOR`, then `GRID_WHO`, otherwise `you`. History records `closed · declined · <reason>` in the existing JSON receipt's `note` field, with `what: decline`.
+
+Both verbs use the same task lock, journal and atomic commit as stop and close, and refuse symlinked `task.md` files. `--project` constrains the task to a registered project name or id, or `personal`; omission uses the home-wide task id. `--json` prints the existing task write receipt; plain output uses `T-NN <verb>: <from-state> -> <to-state>`. Errors print one diagnostic line: exit 2 for invalid title or reason, 3 for a rejected task state or unchanged title, and 1 for scope, resolution or write failures. Success exits 0.
+
+`RenameAllowed` and `DeclineAllowed` are replaceable role policies in `internal/task`, called with the host's trimmed `GRID_ROLE`. Defaults allow the empty local role, owner and member; all other roles, including guest, are refused. A host or workflow may replace the policies during initialization; these commands do not read a workflow file.
+
 ### `grid task list [--project <name-or-id>] [--state <state>] --json`
 
 Returns an array of the same records as `show`, sorted by numeric display id, or `[]` when none match. State filtering is exact and case sensitive. Plain output is one `T-NN state title` line per task, or no output for an empty list. Both read commands leave files unchanged and ignore hidden creation staging folders.
 
-Task commands exit 0 on success, 2 for invalid flags or argument counts (including invalid creation size and empty words), and 1 for resolution, data or filesystem errors. Errors go to stderr without JSON on stdout. Flags may precede or follow the positional argument; use `--` before words that start with a hyphen.
+Task commands exit 0 on success, 2 for invalid flags or argument counts (including invalid creation size and empty words), 3 for the rename/decline rejections described above, and 1 for resolution, data or filesystem errors. Errors go to stderr without JSON on stdout. Flags may precede or follow the positional argument; use `--` before words that start with a hyphen.
 
 ### `grid hook <event>`
 
