@@ -229,6 +229,31 @@ func TestJudgeHook(t *testing.T) {
 	}
 }
 
+func TestLoadResultIgnoresUnknownFields(t *testing.T) {
+	runner := testRunner(t)
+	result := runTask(t, runner, sampleTask(t))
+	path := filepath.Join(runner.ResultsDir, result.ID+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer := strings.Replace(string(data), `"checks":`, `"added_later": {"x": 1},`+"\n  "+`"checks":`, 1)
+	newer = strings.Replace(newer, `"exit_code":`, `"future_field": true, "exit_code":`, 1)
+	if newer == string(data) || os.WriteFile(path, []byte(newer), 0o600) != nil {
+		t.Fatal("could not write the newer result")
+	}
+	loaded, err := LoadResult(runner.ResultsDir, result.ID)
+	if err != nil || !reflect.DeepEqual(loaded, result) {
+		t.Fatalf("newer result not readable: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(newer, `"schema_version": 1`, `"schema_version": 2`, 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadResult(runner.ResultsDir, result.ID); err == nil {
+		t.Fatal("a result with another schema version was accepted")
+	}
+}
+
 func TestResultValidationAndWriteFailure(t *testing.T) {
 	runner := testRunner(t)
 	if _, err := LoadResult(runner.ResultsDir, "../escape"); err == nil {

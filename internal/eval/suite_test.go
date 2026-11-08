@@ -59,7 +59,7 @@ func TestStrictJSON(t *testing.T) {
 		if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := readJSON(path, new(Task)); err == nil {
+		if err := readJSON(path, new(Task), true); err == nil {
 			t.Fatalf("accepted %s", data)
 		}
 	}

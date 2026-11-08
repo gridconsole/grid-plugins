@@ -71,7 +71,7 @@ func LoadSuite(dir string) ([]Task, error) {
 
 func loadTask(dir string) (Task, error) {
 	var task Task
-	if err := readJSON(filepath.Join(dir, "task.json"), &task); err != nil {
+	if err := readJSON(filepath.Join(dir, "task.json"), &task, true); err != nil {
 		return task, err
 	}
 	if task.Checks != nil {
@@ -89,7 +89,7 @@ func loadTask(dir string) (Task, error) {
 		return task, err
 	}
 	task.Prompt, task.Setup = string(prompt), string(setup)
-	if err := readJSON(filepath.Join(dir, "checks.json"), &task.Checks); err != nil {
+	if err := readJSON(filepath.Join(dir, "checks.json"), &task.Checks, true); err != nil {
 		return task, err
 	}
 	return task, task.Validate()
@@ -143,14 +143,18 @@ func (t Task) Validate() error {
 	return nil
 }
 
-func readJSON(path string, v any) error {
+// readJSON decodes exactly one value. Task input is strict, so a typo is an
+// error; saved results are read leniently so newer runs stay readable.
+func readJSON(path string, v any, strict bool) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 	dec := json.NewDecoder(f)
-	dec.DisallowUnknownFields()
+	if strict {
+		dec.DisallowUnknownFields()
+	}
 	if err := dec.Decode(v); err != nil {
 		return fmt.Errorf("%s: %w", filepath.Base(path), err)
 	}

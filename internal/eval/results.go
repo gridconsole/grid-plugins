@@ -30,12 +30,13 @@ func saveResult(dir string, result Result) error {
 }
 
 // LoadResult loads a run by id, never by an arbitrary path supplied as an id.
+// Unknown fields are ignored: fields added later keep schema_version 1.
 func LoadResult(dir, id string) (Result, error) {
 	var result Result
 	if !identifier.MatchString(id) {
 		return result, fmt.Errorf("invalid run id")
 	}
-	if err := readJSON(filepath.Join(dir, id+".json"), &result); err != nil {
+	if err := readJSON(filepath.Join(dir, id+".json"), &result, false); err != nil {
 		return result, err
 	}
 	if result.SchemaVersion != SchemaVersion || result.ID != id {
