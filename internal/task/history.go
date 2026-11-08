@@ -12,12 +12,14 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
-// FolderAt finds an existing task beneath one of the canonical task roots.
+// FolderAt finds an existing task beneath a canonical root visible to the caller.
 // It accepts legacy folders for hook migration without rewriting task.md.
-func FolderAt(home, path string) (string, error) {
-	roots, err := gridhome.TasksDirs(home)
+func FolderAt(r where.Resolver, path string) (string, error) {
+	r.GridHome = gridhome.Real(r.GridHome)
+	roots, err := r.TasksDirs()
 	if err != nil {
 		return "", err
 	}

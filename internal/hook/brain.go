@@ -103,7 +103,7 @@ func namedTaskDir(o Options, in hookio.Input, text string) (string, error) {
 			if !e.IsDir() || !(e.Name() == name || strings.HasPrefix(e.Name(), name+"-")) {
 				continue
 			}
-			dir, err := task.FolderAt(o.Resolver.GridHome, filepath.Join(root, e.Name()))
+			dir, err := task.FolderAt(o.Resolver, filepath.Join(root, e.Name()))
 			if err != nil {
 				return "", err
 			}
@@ -177,7 +177,7 @@ func recall(o Options, in hookio.Input) {
 			return
 		}
 		if a.PlannerTask != "" {
-			dir, err = task.FolderAt(o.Resolver.GridHome, a.PlannerTask)
+			dir, err = task.FolderAt(o.Resolver, a.PlannerTask)
 			if err != nil {
 				o.log("planner task", err)
 				return

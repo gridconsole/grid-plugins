@@ -156,9 +156,9 @@ func taskDir(o Options, in hookio.Input) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return task.FolderAt(o.Resolver.GridHome, r.TaskPath)
+		return task.FolderAt(o.Resolver, r.TaskPath)
 	}
-	return task.FolderAt(gridhome.Real(o.Resolver.GridHome), in.Cwd)
+	return task.FolderAt(o.Resolver, in.Cwd)
 }
 func activityStore(o Options, in hookio.Input) (session.Store, error) {
 	dir, err := taskDir(o, in)

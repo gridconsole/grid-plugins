@@ -60,7 +60,7 @@ func history(o Options, in hookio.Input) {
 		return
 	}
 	path = absolute(in.Cwd, path)
-	dir, err := task.FolderAt(o.Resolver.GridHome, path)
+	dir, err := task.FolderAt(o.Resolver, path)
 	if err != nil {
 		o.log("history", err)
 		return
