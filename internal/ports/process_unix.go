@@ -33,17 +33,24 @@ func Stop(pid int, grace time.Duration) error {
 	return StopRecord(Record{PID: pid, Group: true, PIDStart: processid.Start(pid)}, grace)
 }
 
-// ProcessMatches refuses unverifiable groups, including legacy records without
-// a start token. A different token proves that this PID belongs to another server.
+// ProcessMatches checks the leader's start token while it is alive. Once the
+// leader exits, its group cannot be reused while any member still lives.
 func ProcessMatches(r Record) (bool, error) {
 	if !Alive(r.PID, true) {
 		return false, nil
+	}
+	if !Alive(r.PID, false) {
+		return true, nil
 	}
 	if r.PIDStart == "" {
 		return false, errors.New("dev server has no recorded process start time")
 	}
 	start := processid.Start(r.PID)
 	if start == "" {
+		// The leader may have exited during the identity lookup.
+		if !Alive(r.PID, false) {
+			return Alive(r.PID, true), nil
+		}
 		return false, errors.New("cannot verify dev server process start time")
 	}
 	return start == r.PIDStart, nil
