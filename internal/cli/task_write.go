@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -58,6 +59,14 @@ func runTaskWrite(args []string, env Env) int {
 		fmt.Fprint(env.Stderr, taskUsage)
 		return 2
 	}
+	resolved, err := resolveTaskOperand(env, pos[0])
+	if err != nil {
+		if sub == "rename" || sub == "decline" {
+			err = fmt.Errorf("scope: %w", err)
+		}
+		return taskOperandError(env, "grid task "+sub, err)
+	}
+	pos[0] = resolved.ID
 	store := taskWriter(env)
 	if sub == "history" {
 		lines, err := store.History(env.Cwd, pos[0])
@@ -101,19 +110,20 @@ func runTaskWrite(args []string, env Env) int {
 				return 1
 			}
 		}
-		return taskWriteResult(env, event, nil, *asJSON)
+		return taskWriteResult(env, event, nil, *asJSON, resolved.Path)
 	}
 	if sub == "status" {
 		o.State = pos[1]
 	}
 	event, err := store.Change(o)
-	return taskWriteResult(env, event, err, *asJSON)
+	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 
-const approveUsage = "Usage: grid approve <T-NN> [--plan-hash <hash>] [--note <text>] [--json]\n"
+const approveUsage = "Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--json]\n<task> is an id, exact folder name, or folder path inside a project tasks directory.\n"
 
 func runApprove(args []string, env Env) int {
 	fs := newFlags("approve", env)
+	fs.Usage = func() { fmt.Fprint(env.Stderr, approveUsage); fs.PrintDefaults() }
 	hash := fs.String("plan-hash", "", "hash of the reviewed plan, as grid task show prints it")
 	note := fs.String("note", "", "approval note")
 	asJSON := fs.Bool("json", false, "print JSON")
@@ -131,11 +141,16 @@ func runApprove(args []string, env Env) int {
 	if !personWrite(env) {
 		return 1
 	}
+	resolved, err := resolveTaskOperand(env, pos[0])
+	if err != nil {
+		return taskOperandError(env, "grid approve", err)
+	}
+	pos[0] = resolved.ID
 	event, err := (land.Store{Resolver: resolver(env)}).Approve(writeOptions(env, pos[0], "approve", *note), *hash)
-	return taskWriteResult(env, event, err, *asJSON)
+	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 
-const refusalUsage = "Usage: grid refusal decide <T-NN> <R-N> allow|deny [--note <text>] [--json]\n"
+const refusalUsage = "Usage: grid refusal decide <task> <R-N> allow|deny [--note <text>] [--json]\n       grid decide <task> <R-N> allow|deny [--note <text>] [--json]\n<task> is an id, exact folder name, or folder path inside a project tasks directory.\n"
 
 func runRefusal(args []string, env Env) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "help" || args[0] == "-h") {
@@ -146,10 +161,16 @@ func runRefusal(args []string, env Env) int {
 		fmt.Fprint(env.Stderr, refusalUsage)
 		return 2
 	}
+	return runDecide(args[1:], env)
+}
+
+// runDecide also serves the top-level short spelling.
+func runDecide(args []string, env Env) int {
 	fs := newFlags("refusal decide", env)
+	fs.Usage = func() { fmt.Fprint(env.Stderr, refusalUsage); fs.PrintDefaults() }
 	note := fs.String("note", "", "decision note")
 	asJSON := fs.Bool("json", false, "print JSON")
-	pos, err := taskArgs(fs, args[1:])
+	pos, err := taskArgs(fs, args)
 	if errors.Is(err, flag.ErrHelp) {
 		return 0
 	}
@@ -163,8 +184,13 @@ func runRefusal(args []string, env Env) int {
 	if !personWrite(env) {
 		return 1
 	}
+	resolved, err := resolveTaskOperand(env, pos[0])
+	if err != nil {
+		return taskOperandError(env, "grid refusal decide", err)
+	}
+	pos[0] = resolved.ID
 	event, err := taskWriter(env).Decide(writeOptions(env, pos[0], "refusal decide", *note), pos[1], pos[2])
-	return taskWriteResult(env, event, err, *asJSON)
+	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 
 func personWrite(env Env) bool {
@@ -188,13 +214,16 @@ func agentShell(env Env) bool {
 	return role != "" && role != "owner" && role != "member" && role != "cli"
 }
 
-func taskWriteResult(env Env, event task.Event, err error, asJSON bool) int {
+func taskWriteResult(env Env, event task.Event, err error, asJSON bool, path string) int {
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid: %v\n", err)
 		return 1
 	}
 	if asJSON {
-		return writeJSON(env.Stdout, event)
+		return writeJSON(env.Stdout, struct {
+			task.Event
+			Folder string `json:"folder"`
+		}{event, filepath.Base(path)})
 	}
 	fmt.Fprintf(env.Stdout, "%s %s: %s -> %s\n", event.Task, event.What, event.FromState, event.ToState)
 	return 0

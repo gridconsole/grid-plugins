@@ -1,5 +1,6 @@
 {
   "decision": "allow",
+  "folder": "T-01-example-task",
   "from_state": "queued",
   "refusal_id": "R-1",
   "task": "T-01",

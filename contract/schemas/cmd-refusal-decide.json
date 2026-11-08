@@ -7,6 +7,10 @@
     "decision": {
       "type": "string"
     },
+    "folder": {
+      "type": "string",
+      "description": "Resolved task folder name, including its suffix."
+    },
     "from_state": {
       "type": "string"
     },
@@ -53,7 +57,8 @@
     "from_state",
     "to_state",
     "refusal_id",
-    "decision"
+    "decision",
+    "folder"
   ],
   "title": "grid refusal decide output",
   "type": "object"

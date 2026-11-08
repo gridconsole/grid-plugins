@@ -11,16 +11,18 @@ func TestPersonalChokePoint(t *testing.T) {
 	// Keep exceptions narrow and document why each caller can bypass propagation.
 	allowed := map[string]map[string]string{
 		"gridhome.TasksDirs(": {
-			"internal/gridhome/":       "primitive task-root enumeration",
-			"internal/where/":          "caller-aware enumeration choke point",
-			"internal/task/create.go":  "global id allocation and staging cleanup need every root",
-			"internal/task/history.go": "FolderAt is used by hooks running in agent sessions",
+			"internal/gridhome/":           "primitive task-root enumeration",
+			"internal/where/":              "caller-aware enumeration choke point",
+			"internal/task/create.go":      "global id allocation and staging cleanup need every root",
+			"internal/task/history.go":     "FolderAt is used by hooks running in agent sessions",
+			"internal/job/jobcmd/trace.go": "legacy Trace API has no caller and scans filed evidence across all task roots",
 		},
 		"where.Resolver{": {
 			"internal/where/":            "resolver implementation owns caller policy",
 			"internal/cli/cli.go":        "shared CLI resolver stamps the caller",
 			"internal/guard/settings.go": "guard adapter stamps the caller from its environment",
 			"internal/workflow/files.go": "workflow file enumeration has no caller and remains owned by workflow lanes",
+			"internal/workflow/write.go": "workflow Write enumerates registered projects without a caller; CLI applies WriteDefaultAllowed",
 		},
 	}
 	root := filepath.Join("..", "..")

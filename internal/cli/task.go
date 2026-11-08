@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
@@ -15,15 +16,17 @@ import (
 
 const taskUsage = `Usage:
   grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--json]
-  grid task show [T-NN] [--json]
-  grid task attach <T-NN> [--session ID] [--runtime claude] [--json]
+  grid task show [<task>] [--json]
+  grid task attach <task> [--session ID] [--runtime claude] [--json]
   grid task list [--project <name-or-id>] [--state <state>] [--json]
   grid task move <machine> [--task <task>] [--project <project>] [--who <caller>] [--json]
-  grid task stop|close|reopen <T-NN> [--reason <text>] [--json]
-  grid task rename <T-NN> --title <text> [--project <p>] [--json]
-  grid task decline <T-NN> --reason <text> [--project <p>] [--json]
-  grid task status <T-NN> <state> [--json]
-  grid task history <T-NN> [--json]
+  grid task stop|close|reopen <task> [--reason <text>] [--json]
+  grid task rename <task> --title <text> [--project <p>] [--json]
+  grid task decline <task> --reason <text> [--project <p>] [--json]
+  grid task status <task> <state> [--json]
+  grid task history <task> [--json]
+
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
 `
 
 func runTask(args []string, env Env) int {
@@ -115,9 +118,9 @@ func runTask(args []string, env Env) int {
 		if len(pos) == 1 {
 			id = pos[0]
 		}
-		t, err := store.Show(env.Cwd, id)
+		t, err := resolveTaskOperand(env, id)
 		if err != nil {
-			return fail(err)
+			return taskOperandError(env, "grid task show", err)
 		}
 		// The hash a person passes to grid approve --plan-hash; absent before a plan exists.
 		hash, err := taskPlanHash(t.Path)
@@ -128,7 +131,8 @@ func runTask(args []string, env Env) int {
 			return writeJSON(env.Stdout, struct {
 				task.Task
 				PlanHash string `json:"plan_hash,omitempty"`
-			}{t, hash})
+				Folder   string `json:"folder"`
+			}{t, hash, filepath.Base(t.Path)})
 		}
 		fmt.Fprintf(env.Stdout, "id: %s\ntitle: %s\nproject: %s\nsize: %s\nworkflow: %s\nstate: %s\ncreated: %s\npath: %s\n",
 			t.ID, t.Title, t.Project, t.Size, t.Workflow, t.State, t.Created, gridhome.Tilde(t.Path, env.Home))
@@ -180,9 +184,13 @@ func runTaskAttach(args []string, env Env) int {
 	if *id == "" {
 		*id = env.getenv("CLAUDE_SESSION_ID")
 	}
+	resolved, err := resolveTaskOperand(env, pos[0])
+	if err != nil {
+		return taskOperandError(env, "grid task attach", err)
+	}
 	pid := os.Getppid()
 	result, err := taskWriter(env).Attach(task.AttachOptions{
-		Cwd: env.Cwd, ID: pos[0], SessionID: *id, Runtime: *runtime,
+		Cwd: env.Cwd, ID: resolved.ID, SessionID: *id, Runtime: *runtime,
 		PID: pid, PIDStart: migrate.ProcessStart(pid), Who: writeOptions(env, pos[0], "attach", "").Who,
 		Agent: agentShell(env), BoundTask: env.getenv("GRID_TASK"),
 	})

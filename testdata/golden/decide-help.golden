@@ -1,0 +1,7 @@
+Usage: grid refusal decide <task> <R-N> allow|deny [--note <text>] [--json]
+       grid decide <task> <R-N> allow|deny [--note <text>] [--json]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
+  -json
+    	print JSON
+  -note string
+    	decision note

@@ -4,6 +4,10 @@
   "additionalProperties": false,
   "description": "JSON output of grid approve --json; internal/cli/task_write.go:161.",
   "properties": {
+    "folder": {
+      "type": "string",
+      "description": "Resolved task folder name, including its suffix."
+    },
     "from_state": {
       "type": "string"
     },
@@ -52,7 +56,8 @@
     "what",
     "from_state",
     "to_state",
-    "plan_hash"
+    "plan_hash",
+    "folder"
   ],
   "title": "grid approve output",
   "type": "object"

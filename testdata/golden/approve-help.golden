@@ -1,0 +1,8 @@
+Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--json]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
+  -json
+    	print JSON
+  -note string
+    	approval note
+  -plan-hash string
+    	hash of the reviewed plan, as grid task show prints it

@@ -7,6 +7,10 @@
     "created": {
       "type": "string"
     },
+    "folder": {
+      "type": "string",
+      "description": "Resolved task folder name, including its suffix."
+    },
     "gate": {
       "type": "string"
     },
@@ -53,7 +57,8 @@
     "state",
     "created",
     "path",
-    "intent"
+    "intent",
+    "folder"
   ],
   "title": "grid task show output",
   "type": "object"

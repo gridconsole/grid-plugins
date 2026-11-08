@@ -152,7 +152,7 @@
         {
           "name": "attach",
           "args": [
-            "\u003cT-NN\u003e"
+            "\u003ctask\u003e"
           ],
           "flags": [
             {
@@ -177,7 +177,7 @@
         {
           "name": "close",
           "args": [
-            "\u003cT-NN\u003e"
+            "\u003ctask\u003e"
           ],
           "flags": [
             {
@@ -197,7 +197,7 @@
         {
           "name": "decline",
           "args": [
-            "\u003cT-NN\u003e"
+            "\u003ctask\u003e"
           ],
           "flags": [
             {
@@ -222,7 +222,7 @@
         {
           "name": "history",
           "args": [
-            "\u003cT-NN\u003e"
+            "\u003ctask\u003e"
           ],
           "flags": [
             {
@@ -325,7 +325,7 @@
         {
           "name": "rename",
           "args": [
-            "\u003cT-NN\u003e"
+            "\u003ctask\u003e"
           ],
           "flags": [
             {
@@ -350,7 +350,7 @@
         {
           "name": "reopen",
           "args": [
-            "\u003cT-NN\u003e"
+            "\u003ctask\u003e"
           ],
           "flags": [
             {
@@ -370,7 +370,7 @@
         {
           "name": "show",
           "args": [
-            "[T-NN]"
+            "[\u003ctask\u003e]"
           ],
           "flags": [
             {
@@ -385,7 +385,7 @@
         {
           "name": "status",
           "args": [
-            "\u003cT-NN\u003e",
+            "\u003ctask\u003e",
             "\u003cstate\u003e"
           ],
           "flags": [
@@ -401,7 +401,7 @@
         {
           "name": "stop",
           "args": [
-            "\u003cT-NN\u003e"
+            "\u003ctask\u003e"
           ],
           "flags": [
             {
@@ -2211,7 +2211,7 @@
         {
           "name": "",
           "args": [
-            "\u003cT-NN\u003e"
+            "\u003ctask\u003e"
           ],
           "flags": [
             {
@@ -2243,7 +2243,36 @@
         {
           "name": "decide",
           "args": [
-            "\u003cT-NN\u003e",
+            "\u003ctask\u003e",
+            "\u003cR-N\u003e",
+            "\u003callow|deny\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--note",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-refusal-decide.json"
+        }
+      ]
+    },
+    {
+      "name": "decide",
+      "summary": "alias for refusal decide",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [
+            "\u003ctask\u003e",
             "\u003cR-N\u003e",
             "\u003callow|deny\u003e"
           ],
