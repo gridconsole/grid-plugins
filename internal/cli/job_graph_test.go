@@ -134,3 +134,15 @@ func TestJobUsageListsGraphVerbs(t *testing.T) {
 		}
 	}
 }
+
+func TestJobFloorPolicyRepoAndCase(t *testing.T) {
+	h := newHarness(t)
+	h.write(filepath.Join(h.tmp, "policy.json"), `{"repo":"main","risk_paths":["src/auth/**"]}`)
+	for _, write := range []string{"main:src/auth/x.go", "Src/Auth/x.go"} {
+		h.write(filepath.Join(h.tmp, "items.json"), `[{"id":"J-1","review":"L1","write":["`+write+`"],"verify":{"command":"make test","min_tests":1}}]`)
+		h.out.Reset()
+		if code := h.run(h.tmp, "job", "floor", "items.json", "--policy", "policy.json"); code != 1 || !strings.Contains(h.out.String(), "floor L2") || !strings.Contains(h.out.String(), "below floor L2") {
+			t.Fatalf("%s: exit %d: %s %s", write, code, h.out, h.errb)
+		}
+	}
+}
