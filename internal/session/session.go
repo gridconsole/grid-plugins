@@ -185,6 +185,11 @@ func (s Store) Start(r Record) (Record, error) {
 			r.Where = "terminal"
 		}
 		if err == nil {
+			// A terminal resume must not drop a Job tenure or its heartbeat.
+			// Check under the session lock, including a Job started since List.
+			if old.Lease != "" && r.Lease == "" {
+				return Record{}, fmt.Errorf("session %s belongs to Job lease %s; use a different --session", r.SessionID, old.Lease)
+			}
 			r.Started = old.Started
 			if r.Transcript == "" {
 				r.Transcript = old.Transcript

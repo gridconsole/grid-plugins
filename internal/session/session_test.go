@@ -365,3 +365,24 @@ func TestHeartbeatTimesMatchSchema(t *testing.T) {
 		}
 	}
 }
+
+func TestTerminalResumeCannotDropJobTenure(t *testing.T) {
+	f := newFixture(t, true)
+	running := f.observe(t, Alive, false)
+	before, err := f.store.ReadHeartbeat(running)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.store.Start(Record{Key: running.Key, Where: "terminal", PID: 43, PIDStart: "start-43"})
+	if err == nil {
+		t.Fatal("terminal replaced Job session")
+	}
+	after, err := f.store.Show(running.Key)
+	if err != nil || after != running {
+		t.Fatalf("session changed: %+v %v", after, err)
+	}
+	heartbeat, err := f.store.ReadHeartbeat(running)
+	if err != nil || heartbeat != before {
+		t.Fatalf("heartbeat changed: %+v %v", heartbeat, err)
+	}
+}

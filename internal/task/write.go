@@ -241,7 +241,7 @@ func recoverWrite(dir string) error {
 	if err := json.Unmarshal(data, &files); err != nil {
 		return fmt.Errorf("task write journal: %w", err)
 	}
-	if len(files) < 2 || files["history.md"] == nil {
+	if files["history.md"] == nil {
 		return errors.New("incomplete task write journal")
 	}
 	for name := range files {
