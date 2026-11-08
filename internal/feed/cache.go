@@ -29,7 +29,7 @@ type cachedFile struct {
 	Records []Entry `json:"records"`
 }
 
-func (s Store) scan() (ReadResult, error) {
+func (s Store) scan(readOnly bool) (ReadResult, error) {
 	out := ReadResult{Records: []Entry{}, Bad: map[string]int{}}
 	if err := CheckFilesystem(s.Dir()); err != nil {
 		return out, err
@@ -40,18 +40,20 @@ func (s Store) scan() (ReadResult, error) {
 		return out, err
 	}
 	cacheDir := filepath.Join(s.Dir(), ".cache")
-	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
-		return out, err
+	if !readOnly {
+		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+			return out, err
+		}
+		guard, err := os.OpenFile(filepath.Join(cacheDir, "reader.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+		if err != nil {
+			return out, err
+		}
+		defer guard.Close()
+		if err := fslock.LockExclusive(guard); err != nil {
+			return out, err
+		}
+		defer fslock.Unlock(guard)
 	}
-	guard, err := os.OpenFile(filepath.Join(cacheDir, "reader.lock"), os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return out, err
-	}
-	defer guard.Close()
-	if err := fslock.LockExclusive(guard); err != nil {
-		return out, err
-	}
-	defer fslock.Unlock(guard)
 	cache := readerCache{Version: 1, Task: s.TaskID, Files: map[string]*cachedFile{}}
 	data, err := os.ReadFile(filepath.Join(cacheDir, "reader.json"))
 	if err == nil {
@@ -121,8 +123,10 @@ func (s Store) scan() (ReadResult, error) {
 			out.Bad[name] = cf.Bad
 		}
 	}
-	if err := writeProjection(cacheDir, "reader.json", cache); err != nil {
-		return out, err
+	if !readOnly {
+		if err := writeProjection(cacheDir, "reader.json", cache); err != nil {
+			return out, err
+		}
 	}
 	return out, nil
 }

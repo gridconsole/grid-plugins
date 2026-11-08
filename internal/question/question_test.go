@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -543,5 +544,126 @@ func TestConcurrentAdds(t *testing.T) {
 		if r.ID != fmt.Sprintf("Q-%d", i+1) {
 			t.Fatal("duplicate or missing id")
 		}
+	}
+}
+
+func TestFileOnlyQuestionIsPreserved(t *testing.T) {
+	for _, missingFeed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("missing-feed-%t", missingFeed), func(t *testing.T) {
+			s, _ := setup(t)
+			if missingFeed {
+				if err := os.RemoveAll(filepath.Join(s.TaskDir, "feed")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			dir := filepath.Join(s.TaskDir, "questions")
+			if err := os.Mkdir(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			original := []byte("---\nid: Q-1\nstate: open\n---\n\nFile-only question with an unsaved answer.\n")
+			path := filepath.Join(dir, "Q-1.md")
+			if err := os.WriteFile(path, original, 0600); err != nil {
+				t.Fatal(err)
+			}
+			var warn bytes.Buffer
+			s.Warn = &warn
+			for _, action := range []string{"list", "add", "answer", "tick", "sync"} {
+				warn.Reset()
+				switch action {
+				case "list":
+					records := list(t, s)
+					if len(records) != 1 || records[0].ID != "Q-1" || records[0].State != "not in the Feed" {
+						t.Fatalf("unbacked question not listed: %+v", records)
+					}
+				case "add":
+					if r := add(t, s, input()); r.ID != "Q-2" {
+						t.Fatalf("reserved id reused: %s", r.ID)
+					}
+				case "answer":
+					if _, err := s.Answer("Q-1", "Yes"); err == nil || !strings.Contains(err.Error(), "not in the Feed") {
+						t.Fatalf("unbacked answer: %v", err)
+					}
+					if _, err := s.Answer("Q-2", "Yes"); err != nil {
+						t.Fatal(err)
+					}
+				case "tick":
+					if _, err := s.Tick(); err != nil {
+						t.Fatal(err)
+					}
+				case "sync":
+					if _, err := s.Sync(); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if !strings.Contains(warn.String(), "Q-1.md is not in the Feed") {
+					t.Fatalf("%s missing warning: %s", action, &warn)
+				}
+				got, err := os.ReadFile(path)
+				if err != nil || !bytes.Equal(got, original) {
+					t.Fatalf("%s changed unbacked file: %q %v", action, got, err)
+				}
+			}
+		})
+	}
+}
+
+func taskSnapshot(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	if err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		out[path] = fmt.Sprintf("%v %v", info.Mode(), info.ModTime())
+		if info.Mode().IsRegular() {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			out[path] += string(data)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestListDoesNotWrite(t *testing.T) {
+	for _, scenario := range []string{"no questions", "missing feed", "damaged projection", "missing projection"} {
+		t.Run(scenario, func(t *testing.T) {
+			s, _ := setup(t)
+			if scenario == "missing feed" {
+				if err := os.RemoveAll(filepath.Join(s.TaskDir, "feed")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if strings.Contains(scenario, "projection") {
+				add(t, s, input())
+				path := filepath.Join(s.TaskDir, "questions", "Q-1.md")
+				if scenario == "damaged projection" {
+					if err := os.WriteFile(path, []byte("hand edited"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				} else if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Remove(filepath.Join(s.TaskDir, "questions", ".lock")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := taskSnapshot(t, s.TaskDir)
+			records := list(t, s)
+			if !reflect.DeepEqual(before, taskSnapshot(t, s.TaskDir)) {
+				t.Fatal("list changed task files or directories")
+			}
+			if strings.Contains(scenario, "projection") && (len(records) != 1 || records[0].Question != input().Question) {
+				t.Fatalf("list did not use Feed: %+v", records)
+			}
+		})
 	}
 }

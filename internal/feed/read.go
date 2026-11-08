@@ -36,7 +36,16 @@ type ReadResult struct {
 // takeover snapshots are read after the files, so a concurrent takeover fences
 // everything that was read past its end. Filters are display-only.
 func (s Store) Read(filter Filter) (ReadResult, error) {
-	out, err := s.scan()
+	return s.read(filter, false)
+}
+
+// ReadOnly admits the same records as Read without creating or updating caches.
+func (s Store) ReadOnly(filter Filter) (ReadResult, error) {
+	return s.read(filter, true)
+}
+
+func (s Store) read(filter Filter, readOnly bool) (ReadResult, error) {
+	out, err := s.scan(readOnly)
 	if err != nil {
 		return out, err
 	}

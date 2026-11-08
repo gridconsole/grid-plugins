@@ -2,9 +2,9 @@ package question
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -112,14 +112,21 @@ func (s Store) publishEvents(dir string, r *Record, before int) error {
 // Sync repairs missing or changed projections from the admitted Feed. The same
 // task question lock covers sync, id allocation and publication, so a crash
 // after the append is repaired before a retry can publish another decision.
-func (s Store) Sync() ([]Record, error) { return s.List() }
+func (s Store) Sync() (records []Record, err error) {
+	err = s.locked(true, func(dir string) error {
+		var e error
+		records, e = s.project(dir, true)
+		return e
+	})
+	return
+}
 
-func (s Store) project(dir string) ([]Record, error) {
+func (s Store) project(dir string, write bool) ([]Record, error) {
 	f, err := s.feed()
 	if err != nil {
 		return nil, err
 	}
-	read, err := f.Read(feed.Filter{})
+	read, err := f.ReadOnly(feed.Filter{})
 	if err != nil {
 		return nil, err
 	}
@@ -166,20 +173,18 @@ func (s Store) project(dir string) ([]Record, error) {
 		}
 		records = append(records, r)
 	}
-	sort.Slice(records, func(i, j int) bool {
-		a, _ := strconv.Atoi(records[i].ID[2:])
-		b, _ := strconv.Atoi(records[j].ID[2:])
-		return a < b
-	})
 	// Check history invariants before changing any files.
 	for _, r := range records {
 		if err := validateRecord(r); err != nil {
 			return nil, err
 		}
 	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
+	var entries []os.DirEntry
+	if dir != "" {
+		entries, err = os.ReadDir(dir)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
 	}
 	skipped := []string{}
 	for _, e := range entries {
@@ -199,18 +204,34 @@ func (s Store) project(dir string) ([]Record, error) {
 			return nil, fmt.Errorf("question file must be regular")
 		}
 		if !ids[id] {
-			if err = os.Remove(filepath.Join(dir, e.Name())); err != nil {
-				return nil, err
+			// Keep even unreadable or legacy contents intact. The filename reserves
+			// the id; no migration or schema interpretation is needed to list it.
+			if _, err := strconv.Atoi(id[2:]); err != nil {
+				return nil, fmt.Errorf("question id exceeds the supported range: %s", id)
+			}
+			records = append(records, Record{ID: id, State: "not in the Feed"})
+			if s.Warn != nil {
+				fmt.Fprintf(s.Warn, "question: %s is not in the Feed; keeping file and reserving its id\n", e.Name())
 			}
 		}
 	}
 	if len(skipped) > 0 && s.Warn != nil {
 		fmt.Fprintf(s.Warn, "question: skipping files in questions/ that are not Q-n.md: %s\n", strings.Join(skipped, ", "))
 	}
-	for _, r := range records {
-		if err = save(dir, r); err != nil {
-			return nil, err
+	if write {
+		for _, r := range records {
+			if r.Post == "" {
+				continue
+			}
+			if err = save(dir, r); err != nil {
+				return nil, err
+			}
 		}
 	}
+	sort.Slice(records, func(i, j int) bool {
+		a, _ := strconv.Atoi(records[i].ID[2:])
+		b, _ := strconv.Atoi(records[j].ID[2:])
+		return a < b
+	})
 	return records, nil
 }

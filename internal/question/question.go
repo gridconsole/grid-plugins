@@ -123,7 +123,7 @@ func (s Store) Add(in Input) (rec Record, err error) {
 		return
 	}
 	err = s.locked(true, func(dir string) error {
-		if _, e := s.project(dir); e != nil {
+		if _, e := s.project(dir, true); e != nil {
 			return e
 		}
 		next, e := nextID(dir, 1)
@@ -140,10 +140,12 @@ func (s Store) Add(in Input) (rec Record, err error) {
 	return
 }
 
-func (s Store) List() (records []Record, err error) {
-	records = []Record{}
-	err = s.locked(true, func(dir string) error { var e error; records, e = s.project(dir); return e })
-	return
+func (s Store) List() ([]Record, error) {
+	dir, err := s.directory(false)
+	if err != nil {
+		return nil, err
+	}
+	return s.project(dir, false)
 }
 
 // Answer accepts option labels or free text. Repeating an identical answer is a
@@ -198,7 +200,7 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 		if dir == "" {
 			return fmt.Errorf("question %s does not exist", id)
 		}
-		records, e := s.project(dir)
+		records, e := s.project(dir, true)
 		if e != nil {
 			return e
 		}
@@ -211,6 +213,9 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 		}
 		if r.ID == "" {
 			return fmt.Errorf("question %s does not exist", id)
+		}
+		if r.Post == "" {
+			return fmt.Errorf("question %s is not in the Feed; migrate it before changing it", id)
 		}
 		before := len(r.History)
 		if e = fn(&r); e != nil {
@@ -235,7 +240,7 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 func (s Store) Tick() (changed []Record, err error) {
 	changed = []Record{}
 	err = s.locked(true, func(dir string) error {
-		records, e := s.project(dir)
+		records, e := s.project(dir, true)
 		if e != nil {
 			return e
 		}

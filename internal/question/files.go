@@ -19,30 +19,41 @@ import (
 
 var validID = regexp.MustCompile(`^Q-[1-9][0-9]*$`)
 
-func (s Store) locked(create bool, fn func(string) error) error {
+func (s Store) directory(create bool) (string, error) {
 	if s.TaskDir == "" {
-		return errors.New("task directory is required")
+		return "", errors.New("task directory is required")
 	}
 	// Resolve ancestors, including macOS's symlinked temporary directory, once.
 	task, err := filepath.EvalSymlinks(s.TaskDir)
 	if err != nil {
-		return err
+		return "", err
 	}
 	dir := filepath.Join(task, "questions")
 	if create {
 		if err = os.Mkdir(dir, 0700); err != nil && !errors.Is(err, os.ErrExist) {
-			return err
+			return "", err
 		}
 	}
 	info, err := os.Lstat(dir)
 	if errors.Is(err, os.ErrNotExist) && !create {
-		return fn("")
+		return "", nil
 	}
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", errors.New("questions must be a real directory")
+	}
+	return dir, nil
+}
+
+func (s Store) locked(create bool, fn func(string) error) error {
+	dir, err := s.directory(create)
 	if err != nil {
 		return err
 	}
-	if !info.IsDir() {
-		return errors.New("questions must be a real directory")
+	if dir == "" {
+		return fn("")
 	}
 	// Lock a stable inode, never the question file which rename replaces.
 	f, err := fslock.OpenNoFollow(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDWR, 0600)
@@ -50,7 +61,7 @@ func (s Store) locked(create bool, fn func(string) error) error {
 		return err
 	}
 	defer f.Close()
-	info, err = f.Stat()
+	info, err := f.Stat()
 	if err != nil {
 		return err
 	}

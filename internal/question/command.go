@@ -190,8 +190,10 @@ func run(args []string, env Env) int {
 		result, err = store.Answer(id, text)
 	case "withdraw":
 		result, err = store.Withdraw(id, reason)
-	case "list", "sync":
+	case "list":
 		result, err = store.List()
+	case "sync":
+		result, err = store.Sync()
 	case "tick":
 		result, err = store.Tick()
 	}
@@ -220,6 +222,10 @@ func run(args []string, env Env) int {
 		}
 	}
 	for _, r := range records {
+		if r.Post == "" {
+			fmt.Fprintf(env.Stdout, "%s | not in the Feed\n", r.ID)
+			continue
+		}
 		block := "not blocking"
 		if r.Blocking {
 			block = "blocking"
