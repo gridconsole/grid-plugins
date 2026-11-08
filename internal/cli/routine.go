@@ -149,7 +149,11 @@ func runRoutine(args []string, env Env) int {
 			fmt.Fprintln(env.Stdout, "result: preview (native Windows file locking is unavailable)")
 			for _, plan := range plans {
 				for _, file := range plan.Files {
-					fmt.Fprintf(env.Stdout, "file: %s\n%s", file.Path, file.Content)
+					fmt.Fprintf(env.Stdout, "file: %s\n", file.Path)
+					if file.Encoding != "" {
+						fmt.Fprintf(env.Stdout, "encoding: %s with BOM\n", file.Encoding)
+					}
+					fmt.Fprint(env.Stdout, file.Content)
 				}
 				for _, command := range append(plan.Install, plan.Remove...) {
 					fmt.Fprintf(env.Stdout, "would run: %s %q\n", command.Program, command.Args)

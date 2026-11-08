@@ -41,11 +41,11 @@ func (Schtasks) Plan(s TimerSpec) (TimerPlan, error) {
 	// A tiny cmd wrapper would lose argv boundaries and invite shell expansion.
 	// Instead --grid-home carries the local data location directly to this command.
 	argv = append(argv, "--grid-home", windowsArg(s.GridHome))
-	content := `<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">` +
+	content := `<?xml version="1.0" encoding="UTF-16"?>` + "\n" + `<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">` +
 		"<RegistrationInfo><Description>" + marker(label) + "</Description></RegistrationInfo>" +
 		"<Triggers><TimeTrigger><Repetition><Interval>PT1M</Interval><StopAtDurationEnd>false</StopAtDurationEnd></Repetition><StartBoundary>2020-01-01T00:00:00Z</StartBoundary><Enabled>true</Enabled></TimeTrigger></Triggers>" +
 		"<Principals><Principal id=\"Author\"><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>" +
 		"<Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT11M</ExecutionTimeLimit></Settings>" +
 		"<Actions Context=\"Author\"><Exec><Command>" + xmlText(s.Binary) + "</Command><Arguments>" + xmlText(strings.Join(argv, " ")) + "</Arguments><WorkingDirectory>" + xmlText(s.GridHome) + "</WorkingDirectory></Exec></Actions></Task>\n"
-	return TimerPlan{Label: label, Project: s.Project, Name: s.Name, Files: []TimerFile{{path, content}}, Install: []OSCommand{{"schtasks", []string{"/Create", "/TN", label, "/XML", path}}}, Remove: []OSCommand{{"schtasks", []string{"/Delete", "/TN", label, "/F"}}}}, nil
+	return TimerPlan{Label: label, Project: s.Project, Name: s.Name, Files: []TimerFile{{Path: path, Content: content, Encoding: "UTF-16LE"}}, Install: []OSCommand{{"schtasks", []string{"/Create", "/TN", label, "/XML", path}}}, Remove: []OSCommand{{"schtasks", []string{"/Delete", "/TN", label, "/F"}}}}, nil
 }

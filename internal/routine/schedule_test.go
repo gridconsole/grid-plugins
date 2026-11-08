@@ -2,6 +2,7 @@ package routine
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
@@ -112,7 +114,7 @@ func TestScheduleRoundTrip(t *testing.T) {
 	}{{"linux", Systemd{}}, {"darwin", Launchd{UID: 501}}, {"windows", Schtasks{}}} {
 		t.Run(tc.name, func(t *testing.T) {
 			home := gridhome.Real(t.TempDir())
-			gh := filepath.Join(home, "data & space")
+			gh := filepath.Join(home, "data & space é 𐐀")
 			store := Store{GridHome: gh, Project: "example"}
 			if _, err := store.Add("daily", "0 9 * * *", "grid version"); err != nil {
 				t.Fatal(err)
@@ -138,11 +140,31 @@ func TestScheduleRoundTrip(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if strings.HasSuffix(f.Path, ".xml") {
+					if len(b) < 2 || b[0] != 0xff || b[1] != 0xfe || len(b)%2 != 0 {
+						t.Fatalf("Task Scheduler XML is not UTF-16LE with a BOM: %x", b[:min(10, len(b))])
+					}
+					units := make([]uint16, (len(b)-2)/2)
+					for i := range units {
+						units[i] = binary.LittleEndian.Uint16(b[2+2*i:])
+					}
+					b = []byte(string(utf16.Decode(units)))
+					if string(b) != f.Content || !strings.Contains(string(b), `encoding="UTF-16"`) || f.Encoding != "UTF-16LE" {
+						t.Fatalf("UTF-16 round trip changed the XML: %s", b)
+					}
+				}
 				if !strings.Contains(string(b), "--due") && !strings.HasSuffix(f.Path, ".timer") {
 					t.Fatal("timer bypasses interval guard")
 				}
 				if strings.HasSuffix(f.Path, ".xml") || strings.HasSuffix(f.Path, ".plist") {
 					decoder := xml.NewDecoder(strings.NewReader(string(b)))
+					// UTF-16 bytes have already been decoded above.
+					decoder.CharsetReader = func(charset string, input io.Reader) (io.Reader, error) {
+						if charset != "UTF-16" {
+							t.Fatalf("unexpected XML encoding: %s", charset)
+						}
+						return input, nil
+					}
 					for {
 						_, err := decoder.Token()
 						if err == io.EOF {

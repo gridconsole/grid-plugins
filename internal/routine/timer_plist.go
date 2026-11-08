@@ -40,5 +40,5 @@ func (b Launchd) Plan(s TimerSpec) (TimerPlan, error) {
 		"<key>StartInterval</key><integer>60</integer>" +
 		"</dict></plist>\n"
 	domain := fmt.Sprintf("gui/%d", b.UID)
-	return TimerPlan{Label: label, Project: s.Project, Name: s.Name, LogDir: logDir, Files: []TimerFile{{path, content}}, Install: []OSCommand{{"launchctl", []string{"bootstrap", domain, path}}}, Remove: []OSCommand{{"launchctl", []string{"bootout", domain + "/" + label}}}}, nil
+	return TimerPlan{Label: label, Project: s.Project, Name: s.Name, LogDir: logDir, Files: []TimerFile{{Path: path, Content: content}}, Install: []OSCommand{{"launchctl", []string{"bootstrap", domain, path}}}, Remove: []OSCommand{{"launchctl", []string{"bootout", domain + "/" + label}}}}, nil
 }

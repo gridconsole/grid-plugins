@@ -1,7 +1,9 @@
 package routine
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/brain"
@@ -39,9 +42,31 @@ func (ExecOSRunner) Run(ctx context.Context, c OSCommand) error {
 }
 
 type TimerFile struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
+	Path     string `json:"path"`
+	Content  string `json:"content"` // readable Unicode text, including in previews
+	Encoding string `json:"encoding,omitempty"`
 }
+
+func (f TimerFile) encode(text string) []byte {
+	if f.Encoding != "UTF-16LE" {
+		return []byte(text)
+	}
+	units := utf16.Encode([]rune(text))
+	b := make([]byte, 2*len(units))
+	for i, unit := range units {
+		binary.LittleEndian.PutUint16(b[2*i:], unit)
+	}
+	return b
+}
+
+func (f TimerFile) bytes() []byte {
+	b := f.encode(f.Content)
+	if f.Encoding == "UTF-16LE" {
+		return append([]byte{0xff, 0xfe}, b...)
+	}
+	return b
+}
+
 type TimerPlan struct {
 	Label       string      `json:"label"`
 	Project     string      `json:"project"`
@@ -170,7 +195,8 @@ func (s Scheduler) checkFiles(p TimerPlan) error {
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(string(b), marker(p.Label)) {
+		// Accept the old UTF-8 Task Scheduler files when upgrading to UTF-16.
+		if !bytes.Contains(b, []byte(marker(p.Label))) && !bytes.Contains(b, f.encode(marker(p.Label))) {
 			return fmt.Errorf("refusing timer file not created by grid routine: %s", filepath.Base(path))
 		}
 	}
@@ -242,7 +268,7 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 		unchanged := true
 		for _, f := range p.Files {
 			b, err := os.ReadFile(f.Path)
-			if err != nil || string(b) != f.Content {
+			if err != nil || !bytes.Equal(b, f.bytes()) {
 				unchanged = false
 			}
 		}
@@ -267,7 +293,7 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 		if err = os.MkdirAll(filepath.Dir(f.Path), 0o700); err != nil {
 			return err
 		}
-		if err = atomicfile.Write(f.Path, []byte(f.Content), 0o600); err != nil {
+		if err = atomicfile.Write(f.Path, f.bytes(), 0o600); err != nil {
 			return err
 		}
 	}
