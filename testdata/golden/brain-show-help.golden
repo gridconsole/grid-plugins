@@ -1,0 +1,12 @@
+Usage: grid brain show <id> [--task <task>] [flags]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
+  -json
+    	print JSON
+  -level string
+    	home or project
+  -project string
+    	project name or id
+  -proposal
+    	show a proposal
+  -task string
+    	resolve this task

@@ -1,0 +1,20 @@
+Usage: grid brain <show|search|topics|index|propose|accept|keep|decide> [flags]
+  show <id> [--task <task>]  Show an accepted note and its links.
+  search <words> [--task <task>] Find notes by description, summary and body.
+  topics                     List built-in and custom topics.
+  index                      Rebuild the SessionStart index and backlinks.
+  propose --name <id> --topic <topic> --description <when> --summary <what> --source <source> --body <text>
+  keep [--task <task>]         List waiting proposals without writing the brain.
+  decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>]
+  accept <id>                File a proposal through the keeper gates.
+  accept <id> --reject <why>  Record a rejection.
+
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
+
+Common: --json, --project <name|id>, --level home|project
+Show: --proposal             Read a proposal instead of an accepted note.
+Search: --topic <name>, --limit <n> (default 5)
+Propose: --file <Markdown|->, --link <JSON> (repeatable), --external
+Index: --read-only           Render without updating generated files.
+Unqualified note ids prefer the project; brain:home/<id> selects a personal note.
+Proposals use the project level when a project is resolved, otherwise home.

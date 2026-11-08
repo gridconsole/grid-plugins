@@ -12,6 +12,11 @@ import (
 
 func runLand(args []string, env Env) int {
 	f := newFlags("land", env)
+	f.Usage = func() {
+		fmt.Fprintln(env.Stdout, "Usage: grid land <task> [--dry-run] [--json]")
+		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		f.PrintDefaults()
+	}
 	dry := f.Bool("dry-run", false, "print the plan without writes or execution")
 	asJSON := f.Bool("json", false, "print JSON")
 	operands, code, stop := parseMixed(f, args)
@@ -22,9 +27,13 @@ func runLand(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "Usage: grid land <task> [--dry-run] [--json]")
 		return 2
 	}
+	t, err := resolveTaskOperand(env, operands[0])
+	if err != nil {
+		return taskOperandError(env, "land", err)
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	result, err := (land.Store{Resolver: resolver(env), Who: writeOptions(env, "", "", "").Who}).Run(ctx, env.Cwd, operands[0], *dry)
+	result, err := (land.Store{Resolver: resolver(env), Who: writeOptions(env, "", "", "").Who}).Run(ctx, env.Cwd, t.ID, *dry)
 	if err != nil && result.Execution == nil {
 		return landError(env, err)
 	}

@@ -1,0 +1,14 @@
+Usage: grid proof add <item> <file|--text text> [--kind screenshot|video|log|check] [--by agent] [--note text] [--task <task>] [--json]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
+  -by string
+    	evidence author (default "grid")
+  -json
+    	print JSON
+  -kind string
+    	evidence kind (default "check")
+  -note string
+    	one-line note
+  -task string
+    	task id or folder; defaults to the current task
+  -text string
+    	text evidence

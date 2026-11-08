@@ -16,11 +16,12 @@ func (f *deliveryFiles) Set(value string) error { *f = append(*f, value); return
 func runDeliver(args []string, env Env) int {
 	fs := newFlags("deliver", env)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stdout, "Usage: grid deliver --outcome <text> [files...] [--file path] [--task T-NN] [--by agent] [--dry-run] [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid deliver --outcome <text> [files...] [--file path] [--task <task>] [--by agent] [--dry-run] [--json]")
+		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
 	}
 	o := task.DeliverOptions{Cwd: env.Cwd}
 	var files deliveryFiles
-	fs.StringVar(&o.Task, "task", "", "task id; defaults to the current task")
+	fs.StringVar(&o.Task, "task", "", "task id or folder; defaults to the current task")
 	fs.StringVar(&o.Outcome, "outcome", "", "Outcome text")
 	fs.StringVar(&o.By, "by", "grid", "delivery author")
 	fs.BoolVar(&o.DryRun, "dry-run", false, "print actions without writing")
@@ -39,6 +40,11 @@ func runDeliver(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "deliver: supply --outcome <text>")
 		return 2
 	}
+	t, err := resolveTaskOperand(env, o.Task)
+	if err != nil {
+		return taskOperandError(env, "deliver", err)
+	}
+	o.Task = t.ID
 	result, err := (task.Store{Resolver: resolver(env)}).Deliver(o)
 	if err != nil {
 		if errors.Is(err, task.ErrEditUsage) {

@@ -1,0 +1,6 @@
+Usage: grid proof index [--task <task>] [--json]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
+  -json
+    	print JSON
+  -task string
+    	task id or folder; defaults to the current task

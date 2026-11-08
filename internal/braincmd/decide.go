@@ -15,6 +15,11 @@ import (
 func runDecide(args []string, env Env) int {
 	f := flag.NewFlagSet("grid brain decide", flag.ContinueOnError)
 	f.SetOutput(env.Stderr)
+	f.Usage = func() {
+		fmt.Fprintln(env.Stdout, "Usage: grid brain decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--json]")
+		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		f.PrintDefaults()
+	}
 	note := f.String("note", "", "reason for the decision")
 	asJSON := f.Bool("json", false, "print JSON")
 	ordered, err := interspersed(f, args)
@@ -38,9 +43,9 @@ func runDecide(args []string, env Env) int {
 		return 2
 	}
 	fail := func(err error) int { fmt.Fprintf(env.Stderr, "brain decide: %v\n", err); return 1 }
-	t, err := (task.Store{Resolver: env.Resolver}).Show(env.Cwd, f.Arg(0))
+	t, err := env.ResolveTask(f.Arg(0))
 	if err != nil {
-		return fail(err)
+		return env.TaskOperandError("brain decide", err)
 	}
 	s := brain.Store{GridHome: env.GridHome, Project: t.Project}
 	if t.Project == gridhome.Personal {

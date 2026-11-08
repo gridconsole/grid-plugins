@@ -98,6 +98,12 @@ func resolveTaskOperand(env Env, operand string) (task.Task, error) {
 		}
 	}
 	if expectedRoot == "" {
+		// Hidden Personal paths, including nonexistent ones, have the same
+		// refusal as hidden IDs; do not inspect their contents.
+		personal := gridhome.TasksDir(r.GridHome, where.Personal)
+		if !r.PersonalOK() && (filepath.Dir(path) == personal || filepath.Dir(path) == gridhome.Real(personal)) {
+			return task.Task{}, errors.New("task not found")
+		}
 		return task.Task{}, fmt.Errorf("%w: folder must be directly inside an accessible project's tasks directory", errTaskOperand)
 	}
 	real, err := filepath.EvalSymlinks(path)

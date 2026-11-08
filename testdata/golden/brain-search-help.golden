@@ -1,0 +1,14 @@
+Usage: grid brain search <words> [--task <task>] [flags]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
+  -json
+    	print JSON
+  -level string
+    	home or project
+  -limit int
+    	maximum hits (1 to 100) (default 5)
+  -project string
+    	project name or id
+  -task string
+    	resolve this task
+  -topic string
+    	topic filter

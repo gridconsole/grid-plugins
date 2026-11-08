@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 
 	"github.com/gridconsole/grid-plugins/internal/proof"
-	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 func runProof(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid proof add <item> <file|--text text> [--kind screenshot|video|log|check] [--by agent] [--note text] | index [--task T-NN] [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid proof add <item> <file|--text text> [--kind screenshot|video|log|check] [--by agent] [--note text] [--task <task>] | index [--task <task>] [--json]")
+		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
 		return 0
 	}
 	op := args[0]
@@ -19,7 +19,16 @@ func runProof(args []string, env Env) int {
 		return 2
 	}
 	fs := newFlags("proof "+op, env)
-	id := fs.String("task", "", "task id; defaults to the current task")
+	fs.Usage = func() {
+		if op == "add" {
+			fmt.Fprintln(env.Stdout, "Usage: grid proof add <item> <file|--text text> [--kind screenshot|video|log|check] [--by agent] [--note text] [--task <task>] [--json]")
+		} else {
+			fmt.Fprintln(env.Stdout, "Usage: grid proof index [--task <task>] [--json]")
+		}
+		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		fs.PrintDefaults()
+	}
+	id := fs.String("task", "", "task id or folder; defaults to the current task")
 	asJSON := fs.Bool("json", false, "print JSON")
 	in := proof.Input{By: "grid"}
 	if op == "add" {
@@ -36,9 +45,9 @@ func runProof(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "proof: unexpected operands")
 		return 2
 	}
-	t, err := (task.Store{Resolver: resolver(env)}).Show(env.Cwd, *id)
+	t, err := resolveTaskOperand(env, *id)
 	if err != nil {
-		return commandError(env, "proof", err)
+		return taskOperandError(env, "proof", err)
 	}
 	store := proof.Store{TaskDir: t.Path}
 	if op == "index" {

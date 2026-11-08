@@ -1,0 +1,2 @@
+Usage: grid history add <line> [--task <task>] [--json]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.

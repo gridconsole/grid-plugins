@@ -1,8 +1,10 @@
 # Delivery commands
 
-These commands use the current task, or `--task T-NN` to select a task anywhere
-in the Grid home. Task lookup uses `internal/task` and its shared task-directory
-resolver. All commands support `--json`.
+These commands use the current task, or `--task <task>` to select a task in the
+Grid home. `<task>` accepts a T-NN id, an exact task folder name, or a task folder
+path through the shared CLI resolver. Folder paths must name a direct child of
+an accessible project tasks directory; folder operands do not widen caller
+access. All commands support `--json`.
 
 ```sh
 grid proof add 1 --text 'The acceptance checks passed' --kind check --by grid-checker

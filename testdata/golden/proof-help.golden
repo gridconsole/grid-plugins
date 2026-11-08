@@ -1,0 +1,2 @@
+Usage: grid proof add <item> <file|--text text> [--kind screenshot|video|log|check] [--by agent] [--note text] [--task <task>] | index [--task <task>] [--json]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.

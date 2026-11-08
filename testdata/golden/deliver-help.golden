@@ -1,0 +1,2 @@
+Usage: grid deliver --outcome <text> [files...] [--file path] [--task <task>] [--by agent] [--dry-run] [--json]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.

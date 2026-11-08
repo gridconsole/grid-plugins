@@ -23,18 +23,23 @@ type Env struct {
 	Stdout, Stderr      io.Writer
 	Cwd, Home, GridHome string
 	TempRoots           []string
+	// The CLI supplies its shared folder resolver and refusal contract.
+	ResolveTask      func(string) (task.Task, error)
+	TaskOperandError func(string, error) int
 }
 
 const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide> [flags]
-  show <id>                  Show an accepted note and its links.
-  search <words>             Find notes by description, summary and body.
+  show <id> [--task <task>]  Show an accepted note and its links.
+  search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
   index                      Rebuild the SessionStart index and backlinks.
   propose --name <id> --topic <topic> --description <when> --summary <what> --source <source> --body <text>
-  keep [--task T-NN]         List waiting proposals without writing the brain.
+  keep [--task <task>]         List waiting proposals without writing the brain.
   decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>]
   accept <id>                File a proposal through the keeper gates.
   accept <id> --reject <why>  Record a rejection.
+
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
 
 Common: --json, --project <name|id>, --level home|project
 Show: --proposal             Read a proposal instead of an accepted note.
@@ -72,6 +77,17 @@ func Run(args []string, env Env) int {
 		env.Resolver.Home = env.Home
 		env.Resolver.TempRoots = env.TempRoots
 	}
+	if env.ResolveTask == nil {
+		env.ResolveTask = func(operand string) (task.Task, error) {
+			return (task.Store{Resolver: env.Resolver}).Show(env.Cwd, operand)
+		}
+	}
+	if env.TaskOperandError == nil {
+		env.TaskOperandError = func(command string, err error) int {
+			fmt.Fprintf(env.Stderr, "%s: %v\n", command, err)
+			return 1
+		}
+	}
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprint(env.Stdout, usage)
 		return 0
@@ -88,7 +104,21 @@ func Run(args []string, env Env) int {
 	}
 	f := flag.NewFlagSet("grid brain "+verb, flag.ContinueOnError)
 	f.SetOutput(env.Stderr)
-	f.Usage = func() { fmt.Fprint(env.Stdout, usage) }
+	f.Usage = func() {
+		switch verb {
+		case "show":
+			fmt.Fprintln(env.Stdout, "Usage: grid brain show <id> [--task <task>] [flags]")
+		case "search":
+			fmt.Fprintln(env.Stdout, "Usage: grid brain search <words> [--task <task>] [flags]")
+		case "keep":
+			fmt.Fprintln(env.Stdout, "Usage: grid brain keep [--task <task>] [flags]")
+		default:
+			fmt.Fprint(env.Stdout, usage)
+			return
+		}
+		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		f.PrintDefaults()
+	}
 	asJSON := f.Bool("json", false, "print JSON")
 	project := f.String("project", "", "project name or id")
 	level := f.String("level", "", "home or project")
@@ -180,9 +210,9 @@ func Run(args []string, env Env) int {
 	if *level != "home" {
 		resolver := env.Resolver
 		if taskID != "" {
-			t, err := (task.Store{Resolver: resolver}).Show(env.Cwd, taskID)
+			t, err := env.ResolveTask(taskID)
 			if err != nil {
-				return fail(err)
+				return env.TaskOperandError("brain", err)
 			}
 			taskID = t.Path
 		}

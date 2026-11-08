@@ -3,12 +3,14 @@ package cli
 import (
 	"errors"
 	"fmt"
+
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 func runHistory(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid history add <line> [--task T-NN] [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid history add <line> [--task <task>] [--json]")
+		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
 		return 0
 	}
 	if args[0] != "add" {
@@ -16,7 +18,12 @@ func runHistory(args []string, env Env) int {
 		return 2
 	}
 	fs := newFlags("history add", env)
-	id := fs.String("task", "", "task id; defaults to the current task")
+	fs.Usage = func() {
+		fmt.Fprintln(env.Stdout, "Usage: grid history add <line> [--task <task>] [--json]")
+		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		fs.PrintDefaults()
+	}
+	id := fs.String("task", "", "task id or folder; defaults to the current task")
 	asJSON := fs.Bool("json", false, "print JSON")
 	args, code, stop := parseMixed(fs, args[1:])
 	if stop {
@@ -26,9 +33,9 @@ func runHistory(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "history add: expected one line")
 		return 2
 	}
-	t, err := taskWriter(env).Show(env.Cwd, *id)
+	t, err := resolveTaskOperand(env, *id)
 	if err != nil {
-		return commandError(env, "history", err)
+		return taskOperandError(env, "history", err)
 	}
 	if _, err := taskWriter(env).Note(writeOptions(env, t.ID, "note", args[0])); err != nil {
 		if errors.Is(err, task.ErrEditUsage) {

@@ -376,7 +376,9 @@ The title is the first nonblank line of the request, trimmed and limited to 120 
 
 `task show`, `approve`, `refusal decide` (also `decide`), and `task close`,
 `stop`, `reopen`, `status`, `history`, `attach`, `rename` and `decline` share
-one CLI task resolver. A task operand can be a display id (`T-01`), an exact
+one CLI task resolver. The same resolver handles `deliver --task`,
+`proof add/index --task`, `history add --task`, `land <task>`,
+`brain show/search/keep --task` and `brain decide <task>`. A task operand can be a display id (`T-01`), an exact
 folder name (`T-01-renamed`), or an absolute or current-directory-relative
 path to that folder. IDs and folder names retain home-wide lookup; an explicit
 folder suffix must match exactly. Omitted `task show` operands select the
@@ -387,7 +389,10 @@ Paths outside an accessible tasks directory, symlinks escaping that directory
 (including links into another project's tasks), and any `..` component exit 2
 before a write. Missing or ambiguous tasks still exit 1. The existing caller
 policy controls Personal enumeration and resolution; folder operands grant no
-additional access. Approval and refusal decisions still require a person.
+additional access. For callers without Personal access, a hidden Personal task
+folder or ID returns the same `task not found` message and exit 1 as an unknown
+ID, even if that folder does not exist. Approval and refusal decisions still
+require a person.
 
 `task show --json` reports `id`, absolute `path`, and `folder` (the resolved
 folder basename). Task write receipts from `approve`, `refusal decide`/`decide`,

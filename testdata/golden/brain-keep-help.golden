@@ -1,0 +1,10 @@
+Usage: grid brain keep [--task <task>] [flags]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
+  -json
+    	print JSON
+  -level string
+    	home or project
+  -project string
+    	project name or id
+  -task string
+    	include proposals from this task
