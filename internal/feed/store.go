@@ -174,6 +174,11 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	if gateID(r) != "" {
 		roles, err := workflow.GatePostRoles(s.TaskDir)
 		if err != nil {
+			var pathErr *os.PathError
+			var syscallErr *os.SyscallError
+			if errors.As(err, &pathErr) || errors.As(err, &syscallErr) {
+				return Record{}, fmt.Errorf("read gate post policy: %w", err)
+			}
 			return Record{}, &InvalidRecordError{Err: err}
 		}
 		kind := str(object(r.Body["gate"])["kind"])
