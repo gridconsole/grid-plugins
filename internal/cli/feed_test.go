@@ -20,11 +20,49 @@ func feedHarness(t *testing.T) (*harness, string) {
 	t.Setenv("GRID_LEASE", "")
 	t.Setenv("GRID_LEASE_EPOCH", "")
 	t.Setenv("GRID_WAKE", "")
+	t.Setenv("GRID_WORKER", "")
+	t.Setenv("GRID_FEED_TASK", "")
+	t.Setenv("GRID_JOB", "")
+	t.Setenv("GRID_ATTEMPT", "")
 	h.write(filepath.Join(h.gridHome, "VERSION"), "1\n")
 	h.write(filepath.Join(h.gridHome, "machine"), feedMachine+"\n")
 	task := filepath.Join(h.gridHome, "projects", "example", "tasks", "T-07-example")
 	h.write(filepath.Join(task, "task.md"), "---\nid: "+feedTaskID+"\n---\n")
 	return h, task
+}
+
+func TestCodexFeedCLI(t *testing.T) {
+	h, task := feedHarness(t)
+	t.Setenv("GRID_FEED_TASK", task)
+	t.Setenv("GRID_JOB", "J-1")
+	t.Setenv("GRID_ATTEMPT", "2")
+	t.Setenv("GRID_WORKER", "member@"+feedMachine)
+	if code := h.run(h.home, "feed", "post", "--type", "question", "--body", `{"question":"Continue?","who":"owner"}`, "--json"); code != 0 {
+		t.Fatalf("post: %d %s", code, h.errb)
+	}
+	var out struct {
+		Post feed.Record `json:"post"`
+	}
+	if err := json.Unmarshal(h.out.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Post.Task != feedTaskID || out.Post.Job == nil || *out.Post.Job != "J-1" || out.Post.Attempt == nil || *out.Post.Attempt != 2 || out.Post.Worker != "member@"+feedMachine {
+		t.Fatalf("session defaults: %+v", out.Post)
+	}
+	for _, verb := range []string{"read", "state"} {
+		if code := h.run(h.home, "feed", verb, "--json"); code != 0 || !strings.Contains(h.out.String(), out.Post.ID) {
+			t.Fatalf("%s: %d %s %s", verb, code, h.out, h.errb)
+		}
+	}
+	t.Setenv("GRID_ATTEMPT", "invalid")
+	if code := h.run(h.home, "feed", "post", "--type", "question", "--body", `{"question":"Continue?","who":"owner"}`); code != 1 || !strings.Contains(h.errb.String(), "GRID_ATTEMPT") {
+		t.Fatalf("invalid attempt: %d %s", code, h.errb)
+	}
+	t.Setenv("GRID_ATTEMPT", "2")
+	t.Setenv("GRID_WORKER", "another@"+feedMachine)
+	if code := h.run(h.home, "feed", "post", "--type", "question", "--body", `{"question":"Continue?","who":"owner"}`); code != 1 || !strings.Contains(h.errb.String(), "GRID_WORKER") {
+		t.Fatalf("invalid worker: %d %s", code, h.errb)
+	}
 }
 
 func TestFeedCommands(t *testing.T) {

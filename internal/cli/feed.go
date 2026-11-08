@@ -101,31 +101,10 @@ func runFeed(args []string, env Env) int {
 		}
 		return 1
 	}
-	if env.GridHome == "" {
-		return fail(fmt.Errorf("cannot find the Grid home; set GRID_HOME"))
-	}
-	format, err := gridhome.ReadFormat(env.GridHome)
+	store, err := feedStore(env, *task, *project)
 	if err != nil {
 		return fail(err)
 	}
-	if format > gridhome.FormatVersion {
-		return fail(fmt.Errorf("This data is format %d; this grid reads up to %d. Update grid.", format, gridhome.FormatVersion))
-	}
-	if format < gridhome.FormatVersion {
-		return fail(fmt.Errorf("This data is format %d; this grid reads %d. Run: grid migrate", format, gridhome.FormatVersion))
-	}
-	res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: *task, Project: *project})
-	if err != nil {
-		return fail(err)
-	}
-	if res.TaskPath == "" {
-		return fail(fmt.Errorf("no task selected; use --task"))
-	}
-	taskID, err := feed.TaskID(res.TaskPath)
-	if err != nil {
-		return fail(err)
-	}
-	store := feed.Store{TaskDir: res.TaskPath, TaskID: taskID}
 	switch verb {
 	case "read":
 		result, err := store.Read(feed.Filter{Since: since, Type: kind, Job: job})
@@ -158,7 +137,10 @@ func runFeed(args []string, env Env) int {
 	if err != nil {
 		return fail(err)
 	}
-	in := feed.Input{ID: id, Type: kind, Body: obj, Re: re, Job: job, Attempt: attempt, Wake: wake}
+	in, err := feedDefaults(feed.Input{ID: id, Type: kind, Body: obj, Re: re, Job: job, Attempt: attempt, Wake: wake})
+	if err != nil {
+		return fail(err)
+	}
 	if after != "" {
 		for _, a := range strings.Split(after, ",") {
 			in.After = append(in.After, strings.TrimSpace(a))
@@ -178,6 +160,56 @@ func runFeed(args []string, env Env) int {
 		Tier string      `json:"tier"`
 		Data bool        `json:"data"`
 	}{record, string(record.Tier), record.Data()})
+}
+
+// feedStore is shared by the CLI and MCP front ends.
+func feedStore(env Env, task, project string) (feed.Store, error) {
+	if env.GridHome == "" {
+		return feed.Store{}, fmt.Errorf("cannot find the Grid home; set GRID_HOME")
+	}
+	format, err := gridhome.ReadFormat(env.GridHome)
+	if err != nil {
+		return feed.Store{}, err
+	}
+	if format > gridhome.FormatVersion {
+		return feed.Store{}, fmt.Errorf("This data is format %d; this grid reads up to %d. Update grid.", format, gridhome.FormatVersion)
+	}
+	if format < gridhome.FormatVersion {
+		return feed.Store{}, fmt.Errorf("This data is format %d; this grid reads %d. Run: grid migrate", format, gridhome.FormatVersion)
+	}
+	if task == "" {
+		task = os.Getenv("GRID_FEED_TASK")
+	}
+	res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: task, Project: project})
+	if err != nil {
+		return feed.Store{}, err
+	}
+	if res.TaskPath == "" {
+		return feed.Store{}, fmt.Errorf("no task selected; use --task")
+	}
+	taskID, err := feed.TaskID(res.TaskPath)
+	if err != nil {
+		return feed.Store{}, err
+	}
+	return feed.Store{TaskDir: res.TaskPath, TaskID: taskID}, nil
+}
+
+// feedDefaults supplies the supervised session's Job context for either front end.
+func feedDefaults(in feed.Input) (feed.Input, error) {
+	if in.Job == "" {
+		in.Job = os.Getenv("GRID_JOB")
+	}
+	if in.Wake == "" {
+		in.Wake = os.Getenv("GRID_WAKE")
+	}
+	if in.Attempt == 0 && os.Getenv("GRID_ATTEMPT") != "" {
+		n, err := strconv.Atoi(os.Getenv("GRID_ATTEMPT"))
+		if err != nil || n < 1 {
+			return in, fmt.Errorf("GRID_ATTEMPT must be a positive integer")
+		}
+		in.Attempt = n
+	}
+	return in, nil
 }
 
 func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
@@ -205,7 +237,11 @@ func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
 	if err != nil {
 		return feed.Writer{}, err
 	}
-	writer := feed.Writer{Author: feed.Author{ID: member, Role: role}, Worker: member + "@" + machine, Lease: lease}
+	worker := member + "@" + machine
+	if supplied := os.Getenv("GRID_WORKER"); supplied != "" && supplied != worker {
+		return feed.Writer{}, fmt.Errorf("GRID_WORKER must match GRID_MEMBER and the local machine id")
+	}
+	writer := feed.Writer{Author: feed.Author{ID: member, Role: role}, Worker: worker, Lease: lease}
 	if epoch != "" {
 		parts := strings.Split(epoch, ".")
 		if len(parts) != 2 {
