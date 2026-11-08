@@ -219,3 +219,25 @@ func TestRenameTitleRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+func TestRenameDeclineRejectNoncharacters(t *testing.T) {
+	var forbidden []rune
+	for r := rune(0xfdd0); r <= 0xfdef; r++ {
+		forbidden = append(forbidden, r)
+	}
+	for plane := rune(0); plane <= 16; plane++ {
+		forbidden = append(forbidden, plane*0x10000+0xfffe, plane*0x10000+0xffff)
+	}
+	for _, r := range forbidden {
+		t.Run(fmt.Sprintf("U+%04X", r), func(t *testing.T) {
+			value := "before" + string(r) + "after"
+			// An empty store proves validation precedes resolution and encoding.
+			if _, err := (Store{}).Rename(RenameOptions{Title: value}); !errors.Is(err, ErrEditUsage) {
+				t.Errorf("rename: %v", err)
+			}
+			if _, err := (Store{}).Decline(DeclineOptions{Reason: value}); !errors.Is(err, ErrEditUsage) {
+				t.Errorf("decline: %v", err)
+			}
+		})
+	}
+}

@@ -14,6 +14,36 @@ import (
 
 const cliWorkflow = "# Workflows\n\n## Default\napplies when: nothing else matches\nreview rounds: 2\n\n| # | step | kind | who | on reject, back to |\n|---|---|---|---|---|\n| 1 | Build | run | grid-worker | |\n"
 
+func TestWorkflowShowLinkedProject(t *testing.T) {
+	h := newHarness(t)
+	outside := filepath.Join(h.root, "outside")
+	h.write(filepath.Join(outside, "project.md"), "---\nid: id-alpha\n---\n")
+	h.write(filepath.Join(outside, "workflows.md"), cliWorkflow)
+	if err := os.MkdirAll(filepath.Join(h.gridHome, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(h.gridHome, "projects", "alpha")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	for _, selector := range []string{"", "alpha", "id-alpha"} {
+		for _, mode := range []string{"plain", "json"} {
+			t.Run(selector+"/"+mode, func(t *testing.T) {
+				args := []string{"workflow", "show"}
+				if selector != "" {
+					args = append(args, "--project", selector)
+				}
+				if mode == "json" {
+					args = append(args, "--json")
+				}
+				code := h.run(h.root, args...)
+				if code != 2 || h.out.Len() != 0 || h.errb.String() != "grid workflow show: workflow path is unsafe or inaccessible\n" {
+					t.Fatalf("exit %d: out=%q err=%q", code, h.out, h.errb)
+				}
+			})
+		}
+	}
+}
+
 func TestWorkflowShowJSON(t *testing.T) {
 	h := newHarness(t)
 	h.write(filepath.Join(h.gridHome, "workflows.md"), cliWorkflow)

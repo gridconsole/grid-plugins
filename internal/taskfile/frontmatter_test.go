@@ -46,6 +46,7 @@ func TestQuotedJSONScalars(t *testing.T) {
 		{`"\ud83d\ude80"`, "🚀"},
 		{`"[one, two]"`, "[one, two]"},
 		{`"{key: value}"`, "{key: value}"},
+		{`"a" b`, `"a" b`},
 	} {
 		t.Run(tc.raw, func(t *testing.T) {
 			for name, parse := range map[string]func(string) *Frontmatter{"full": ParseFrontmatter, "scalar": ScalarFrontmatter} {
