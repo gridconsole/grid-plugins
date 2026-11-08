@@ -10,6 +10,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/artifact"
 	"github.com/gridconsole/grid-plugins/internal/golden"
+	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
 func artifactJSON(s string) string {
@@ -21,12 +22,16 @@ func TestArtifactGolden(t *testing.T) {
 	h := newHarness(t)
 	task := filepath.Join(h.gridHome, "projects", "example", "tasks", "T-01-report")
 	h.mkdir(task)
-	h.write(filepath.Join(task, "report.txt"), "Example report.\n")
+	folder := filepath.Join(h.root, "work", "example")
+	source := filepath.Join(folder, "docs", "report.txt")
+	h.write(source, "Example report.\n")
+	h.record(project.Record{Name: "example", ID: "01EXAMPLE",
+		Folders: []project.Folder{{Machine: h.env.Machine, Path: folder}}})
 	for _, tc := range []struct {
 		name string
 		args []string
 	}{
-		{"artifact-import-json", []string{"artifact", "import", "report.txt", "--title", "A report", "--json"}},
+		{"artifact-import-json", []string{"artifact", "import", source, "--title", "A report", "--json"}},
 		{"artifact-list-json", []string{"artifact", "list", "--json"}},
 	} {
 		if code := h.run(task, tc.args...); code != 0 {
@@ -49,7 +54,7 @@ func TestArtifactGolden(t *testing.T) {
 		t.Fatal(h.errb)
 	}
 	golden.Assert(t, "artifact-link-json", artifactJSON(h.out.String()))
-	if data, err := os.ReadFile(filepath.Join(task, "report.txt")); err != nil || string(data) != "Example report.\n" {
+	if data, err := os.ReadFile(source); err != nil || string(data) != "Example report.\n" {
 		t.Fatal("source changed")
 	}
 }
@@ -86,5 +91,23 @@ func TestArtifactCLI(t *testing.T) {
 				t.Fatalf("exit %d, out %s, err %s", code, h.out, h.errb)
 			}
 		})
+	}
+}
+
+func TestArtifactImportSourceOutsideProject(t *testing.T) {
+	h := newHarness(t)
+	task := filepath.Join(h.gridHome, "projects", "example", "tasks", "T-01-report")
+	h.mkdir(task)
+	source := filepath.Join(h.home, "Documents", "report.txt")
+	h.write(source, "Example report.\n")
+	if code := h.run(task, "artifact", "import", source, "--json"); code != 0 {
+		t.Fatal(h.errb)
+	}
+	var r artifact.Record
+	if err := json.Unmarshal(h.out.Bytes(), &r); err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`^report\.txt#[0-9a-f]{16}$`).MatchString(r.Source) || strings.Contains(h.out.String(), h.root) {
+		t.Fatalf("record: %s", h.out)
 	}
 }

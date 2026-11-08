@@ -1,1 +1,1 @@
-{"id":"<ID>","title":"A report","source":"<ROOT>/home/.grid/projects/example/tasks/T-01-report/report.txt","kind":"file","sha256":"445e0234ea41ef75a7da9d144a64abac0d09bee7e206dd2386cb68c6a84f531c","created":"<CREATED>","file":"<ID>-report.txt","published":true}
+{"id":"<ID>","title":"A report","source":"docs/report.txt","kind":"file","sha256":"445e0234ea41ef75a7da9d144a64abac0d09bee7e206dd2386cb68c6a84f531c","created":"<CREATED>","file":"<ID>-report.txt","published":true}

@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
+
+var sourceHashed = regexp.MustCompile(`^report\.txt#[0-9a-f]{16}$`)
 
 func TestImport(t *testing.T) {
 	for _, content := range []string{"", "a report\n", "\x00\xff\n"} {
@@ -34,7 +37,7 @@ func TestImport(t *testing.T) {
 			if first.ID == second.ID || first.File == second.File {
 				t.Fatal("imports collided")
 			}
-			if first.Title != "report.txt" || first.Source != source || first.Kind != "file" || first.SHA256 != fmt.Sprintf("%x", sha256.Sum256([]byte(content))) || first.Created != "2026-11-08T00:00:00Z" {
+			if first.Title != "report.txt" || !sourceHashed.MatchString(first.Source) || strings.Contains(first.Source, home) || first.Kind != "file" || first.SHA256 != fmt.Sprintf("%x", sha256.Sum256([]byte(content))) || first.Created != "2026-11-08T00:00:00Z" {
 				t.Fatalf("record: %+v", first)
 			}
 			for _, path := range []string{source, filepath.Join(task, "artifacts", first.File), filepath.Join(task, "artifacts", second.File)} {
@@ -220,5 +223,50 @@ func TestValidName(t *testing.T) {
 		if !validName(name) {
 			t.Errorf("%q refused", name)
 		}
+	}
+}
+
+func TestImportSource(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "work", "example")
+	inside := filepath.Join(project, "docs", "report.txt")
+	outside := filepath.Join(root, "elsewhere", "report.txt")
+	task := filepath.Join(root, "task")
+	for _, p := range []string{inside, outside, filepath.Join(task, "x")} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A project folder reached through a symlink, as macOS reaches /var.
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(project, link); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, project, source string
+		want                  *regexp.Regexp
+	}{
+		{"inside", project, inside, regexp.MustCompile(`^docs/report\.txt$`)},
+		{"inside-via-link", link, inside, regexp.MustCompile(`^docs/report\.txt$`)},
+		{"outside", project, outside, sourceHashed},
+		{"no-project", "", inside, sourceHashed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := (Store{TaskPath: task, ProjectFolder: tc.project}).Import(tc.source, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !tc.want.MatchString(r.Source) || strings.Contains(r.Source, root) {
+				t.Fatalf("source %q", r.Source)
+			}
+		})
+	}
+	a, _ := (Store{TaskPath: task}).Import(inside, "")
+	b, _ := (Store{TaskPath: task}).Import(outside, "")
+	if a.Source == b.Source {
+		t.Fatal("files with the same base name share a source label")
 	}
 }

@@ -94,7 +94,7 @@ func runArtifact(args []string, env Env) int {
 	if err != nil {
 		return commandError(env, "artifact", err)
 	}
-	store := artifact.Store{TaskPath: res.TaskPath}
+	store := artifact.Store{TaskPath: res.TaskPath, ProjectFolder: res.Folder}
 	if op == "list" {
 		records, err := store.List()
 		if err != nil {

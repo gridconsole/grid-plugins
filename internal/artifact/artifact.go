@@ -20,8 +20,11 @@ import (
 // DefaultMaxImportBytes is the largest file Import copies when MaxBytes is zero.
 const DefaultMaxImportBytes int64 = 200 << 20
 
-// Record is the sidecar for an imported file or an HTTPS link. File is relative
-// to artifacts/. Publishing changes only Published; it never uploads anything.
+// Record is the sidecar for an imported file or an HTTPS link. File is a bare
+// name inside artifacts/. Source of an import is the path below the project
+// folder when the file sits inside it, else the base name and a hash of the
+// absolute path, so a synced sidecar never carries a personal path. Publishing
+// changes only Published; it never uploads anything.
 type Record struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
@@ -33,12 +36,14 @@ type Record struct {
 	Published bool   `json:"published"`
 }
 
-// Store is scoped to a task resolved by where. MaxBytes caps one import and
-// defaults to DefaultMaxImportBytes. Now can be fixed in tests.
+// Store is scoped to a task resolved by where. ProjectFolder is the project's
+// folder on this machine, "" when unknown. MaxBytes caps one import and defaults
+// to DefaultMaxImportBytes. Now can be fixed in tests.
 type Store struct {
-	TaskPath string
-	MaxBytes int64
-	Now      func() time.Time
+	TaskPath      string
+	ProjectFolder string
+	MaxBytes      int64
+	Now           func() time.Time
 }
 
 var idPattern = regexp.MustCompile(`^A-[0-9a-f]{32}$`)
@@ -124,7 +129,7 @@ func (s Store) Import(source, title string) (Record, error) {
 	if title == "" {
 		title = name
 	}
-	r := s.record(source, title, "file")
+	r := s.record(s.sourceLabel(source), title, "file")
 	r.ID, err = newID()
 	if err != nil {
 		return Record{}, err
@@ -154,6 +159,50 @@ func (s Store) Import(source, title string) (Record, error) {
 	}
 	committed = true
 	return r, nil
+}
+
+// sourceLabel names where an import came from without an absolute personal path:
+// the slash-separated path below the project folder, else the base name and the
+// first 8 bytes of the SHA-256 of the absolute path, as name#16-hex.
+func (s Store) sourceLabel(source string) string {
+	abs, err := filepath.Abs(source)
+	if err != nil {
+		abs = source
+	}
+	abs = resolveParent(abs)
+	if s.ProjectFolder != "" {
+		if rel, ok := below(resolveFull(s.ProjectFolder), abs); ok {
+			return filepath.ToSlash(rel)
+		}
+	}
+	sum := sha256.Sum256([]byte(abs))
+	return filepath.Base(abs) + "#" + hex.EncodeToString(sum[:8])
+}
+
+// resolveParent resolves symlinks in the folders above path, so the project folder
+// and the source compare equal when one is reached through a link such as /var.
+func resolveParent(path string) string {
+	dir, err := filepath.EvalSymlinks(filepath.Dir(path))
+	if err != nil {
+		return path
+	}
+	return filepath.Join(dir, filepath.Base(path))
+}
+
+func resolveFull(path string) string {
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return real
+	}
+	return filepath.Clean(path)
+}
+
+// below returns path relative to base when path is a file inside base.
+func below(base, path string) (string, bool) {
+	rel, err := filepath.Rel(base, path)
+	if err != nil || rel == "." || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return rel, true
 }
 
 func errTooLarge(limit int64) error {
