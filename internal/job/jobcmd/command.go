@@ -26,6 +26,7 @@ import (
 )
 
 type Env struct {
+	Resolver    where.Resolver
 	Cwd         string
 	Home        string
 	GridHome    string

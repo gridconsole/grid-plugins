@@ -322,3 +322,25 @@ func TestJobTraceInvalidInputs(t *testing.T) {
 		t.Fatalf("%+v, %v", result, err)
 	}
 }
+
+func TestTracePersonalCallerPolicy(t *testing.T) {
+	home := t.TempDir()
+	source := job.Source{Pointer: "brain:home/private"}
+	traceTestBundle(t, traceTask(t, home, "personal", "T-01"), "J-1", source)
+	for _, role := range []string{"owner", "member", "guest", "unknown"} {
+		t.Run(role, func(t *testing.T) {
+			resolver := where.Resolver{GridHome: home, Caller: where.Caller{Role: role, Member: "gus"}}
+			result, err := Trace(resolver, source.Pointer, "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			if role == "owner" {
+				want = 1
+			}
+			if len(result.Rows) != want || len(result.Problems) != 0 {
+				t.Fatalf("rows=%d, problems=%d, want rows=%d and no problems", len(result.Rows), len(result.Problems), want)
+			}
+		})
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/where"
 	"io"
 	"os"
 	"path/filepath"
@@ -213,5 +214,17 @@ func TestWriteInputErrorsAndAbsentHome(t *testing.T) {
 	}
 	if _, err := Write(where.Resolver{GridHome: home}, "", "none", strings.NewReader(writeFixture(t, "root.md"))); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWritePersonalCallerPolicy(t *testing.T) {
+	home := t.TempDir()
+	resolver := where.Resolver{GridHome: home, Caller: where.Caller{Role: "member", Member: "gus"}}
+	_, err := Write(resolver, "personal", "none", strings.NewReader(writeFixture(t, "root.md")))
+	if err == nil {
+		t.Fatal("member wrote a Personal workflow")
+	}
+	if _, err := os.Stat(filepath.Join(home, "projects", "personal", "workflows.md")); !os.IsNotExist(err) {
+		t.Fatal("refused Personal workflow created a file")
 	}
 }
