@@ -86,19 +86,20 @@ func TestHostBashGatePaths(t *testing.T) {
 		{"cat questions/Q-1.md > questions/Q-2.md", true}, {"find questions -delete", true}, {"find questions -exec rm {} +", true},
 		{"python3 -c \"open('questions/Q-1.md','w').write('x')\"", true}, {"ls questions; rm questions/Q-1.md", true},
 		{"echo '{}' > approval.json", true}, {"echo '{}' > " + taskPath + "/approval.json", true}, {"cp /tmp/a APPROVAL.JSON", true},
+		{"echo '{}' > .task-write.json", true}, {"rm .task.lock", true}, {"touch " + taskPath + "/.task.lock", true},
 		{"echo '{}' > refusal-R-1.json", true}, {"rm " + taskPath + "/refusal-R-12.json", true},
 		{"echo x > plan-revisions/3.md", true}, {"mv /tmp/a plan-revisions/1.md", true}, {"rm -r plan-revisions", true},
 		// Reads stay allowed.
 		{"cat questions/Q-1.md", false}, {"cat " + taskPath + "/questions/Q-1.answer.md", false}, {"grep -rn answer questions/", false},
 		{"grep -n x questions/*.md | head -5", false}, {"ls questions", false}, {"ls -la " + taskPath + "/questions/", false},
 		{"head -20 questions/Q-1.md", false}, {"tail -f questions/Q-1.md", false}, {"wc -l questions/Q-1.md", false},
-		{"cat approval.json", false}, {"jq . approval.json", false}, {"cat " + taskPath + "/refusal-R-1.json", false},
+		{"cat .task-write.json", false}, {"ls -la .task.lock", false}, {"cat approval.json", false}, {"jq . approval.json", false}, {"cat " + taskPath + "/refusal-R-1.json", false},
 		{"ls plan-revisions", false}, {"cat plan-revisions/2.md", false}, {"diff plan.md plan-revisions/2.md", false},
 		{"find questions -name '*.md'", false}, {"cat questions/Q-1.md | grep -i yes", false}, {"cd questions && ls", false},
 		{"FOO=1 cat questions/Q-1.md", false}, {"echo questions", false}, {"stat questions", false},
 		// Other names are not gates.
 		{"echo x > questions.md", false}, {"echo x > question/Q-1.md", false}, {"echo x > approval.json.bak", false},
-		{"echo x > my-approval.json", false}, {"echo x > refusal-R-0.json", false}, {"echo x > plan-revisions-notes.md", false},
+		{"echo x > my-approval.json", false}, {"echo x > .task.lock.bak", false}, {"echo x > refusal-R-0.json", false}, {"echo x > plan-revisions-notes.md", false},
 		{"echo x > docs/questioning/a.md", false}, {"echo x > plan.md", false},
 	} {
 		t.Run(tt.command, func(t *testing.T) {
@@ -149,6 +150,7 @@ func TestHostFileToolsGatePaths(t *testing.T) {
 		for _, rel := range []string{
 			"questions", "questions/Q-1.md", "questions/Q-1.answer.md", "questions/.lock", "QUESTIONS/Q-2.md", "questions/nested/x.md",
 			"approval.json", "APPROVAL.JSON", "refusal-R-1.json", "refusal-R-27.json", "Refusal-r-3.JSON",
+			".task-write.json", ".task.lock", ".TASK.LOCK",
 			"plan-revisions", "plan-revisions/1.md", "PLAN-REVISIONS/2.md",
 		} {
 			t.Run("Write/"+filepath.Base(task)+"/"+rel, func(t *testing.T) {
@@ -168,7 +170,7 @@ func TestHostFileToolsGatePaths(t *testing.T) {
 		}
 		for _, rel := range []string{
 			"plan.md", "intent.md", "questions.md", "question/Q-1.md", "approval.json.bak", "my-approval.json", "refusal-R-0.json", "refusal-R-1.json.bak",
-			"plan-revisions.md", "artifacts/approval.json", "artifacts/questions/Q-1.md", "notes/plan-revisions/1.md",
+			"plan-revisions.md", ".task.lock.bak", "my.task.lock", "artifacts/.task-write.json", "artifacts/approval.json", "artifacts/questions/Q-1.md", "notes/plan-revisions/1.md",
 		} {
 			t.Run("allow/"+filepath.Base(task)+"/"+rel, func(t *testing.T) {
 				expect(t, EvaluateHost(f.input("Write", filepath.Join(task, rel)), f.root, f.env), "")

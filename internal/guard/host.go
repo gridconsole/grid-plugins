@@ -19,14 +19,14 @@ var gateVerb = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:appr
 // gateName is a task entry that holds a gate: the questions folder with its
 // answers, the approval, a refusal decision, the write journal and its lock, or a
 // plan revision archive.
-var gateName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:approval\.json|refusal-R-[1-9][0-9]*\.json|plan-revisions|questions)(?:$|[^\w.-])`)
+var gateName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:approval\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock|plan-revisions|questions)(?:$|[^\w.-])`)
 
 // switchVerb is a grid verb that changes which guards or agents run, and
 // settingsName is a Grid settings file or its lock, where the same switches live.
 var switchVerb = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:hook\s+level|agent\s+set|skill\s+(?:enable|disable)|setup)(?:\s|$)`)
 var settingsName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:settings\.json|\.settings\.lock)(?:$|[^\w.-])`)
 var settingsFile = regexp.MustCompile(`(?i)^(?:settings\.json|\.settings\.lock)$`)
-var gateFile = regexp.MustCompile(`(?i)^(?:approval\.json|refusal-R-[1-9][0-9]*\.json)$`)
+var gateFile = regexp.MustCompile(`(?i)^(?:approval\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock)$`)
 
 // readOnly are the commands that may name a gate path: none of them writes a file
 // when the command has no redirect and, for find, no action flag.
