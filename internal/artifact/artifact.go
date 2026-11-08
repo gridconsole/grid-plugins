@@ -94,6 +94,38 @@ func newID() (string, error) {
 	return "A-" + hex.EncodeToString(b[:]), nil
 }
 
+// CheckImport validates a deliverable without creating files, for delivery
+// preflight and dry runs. Import rechecks the opened source when copying it.
+func (s Store) CheckImport(source string) error {
+	f, err := openSource(source)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("source must be a regular file")
+	}
+	limit := s.MaxBytes
+	if limit <= 0 {
+		limit = DefaultMaxImportBytes
+	}
+	if info.Size() > limit {
+		return errTooLarge(limit)
+	}
+	if !validName(filepath.Base(source)) {
+		return errors.New("invalid deliverable file name")
+	}
+	_, err = s.directory(false)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
 // Import copies the bytes of a regular file, preserving its source, and hashes
 // the bytes actually copied. Every import has a unique name, even for duplicates.
 // The file is inspected on the opened handle, so a source swapped for a pipe or

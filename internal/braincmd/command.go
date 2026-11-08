@@ -13,6 +13,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -165,7 +166,15 @@ func Run(args []string, env Env) int {
 	}
 	store := brain.Store{GridHome: env.GridHome, ReadLevel: *level}
 	if *level != "home" {
-		res, err := (where.Resolver{GridHome: env.GridHome, Home: env.Home, TempRoots: env.TempRoots}).Resolve(where.Query{Cwd: env.Cwd, Project: *project, Task: taskID})
+		resolver := where.Resolver{GridHome: env.GridHome, Home: env.Home, TempRoots: env.TempRoots}
+		if taskID != "" {
+			t, err := (task.Store{Resolver: resolver}).Show(env.Cwd, taskID)
+			if err != nil {
+				return fail(err)
+			}
+			taskID = t.Path
+		}
+		res, err := resolver.Resolve(where.Query{Cwd: env.Cwd, Project: *project, Task: taskID})
 		if err != nil {
 			return fail(err)
 		}

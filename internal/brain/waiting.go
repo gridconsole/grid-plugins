@@ -19,6 +19,30 @@ type WaitingProposal struct {
 	Reason string `json:"reason"`
 }
 
+// WithKeeperGate shares the proposal writers' locks while checking the queue
+// and raising a delivery gate. The callback must not write brain proposals.
+func (s Store) WithKeeperGate(taskDir string, fn func() error) error {
+	levels := s.levels()
+	var visit func(int) error
+	visit = func(i int) error {
+		if i == len(levels) {
+			root, err := os.OpenRoot(taskDir)
+			if err != nil {
+				return err
+			}
+			defer root.Close()
+			return locked(root, fn)
+		}
+		root, err := s.scope(levels[i], true)
+		if err != nil {
+			return err
+		}
+		defer root.Close()
+		return locked(root, func() error { return visit(i + 1) })
+	}
+	return visit(0)
+}
+
 // Waiting includes proposals in the selected brain levels and, when supplied,
 // the task's legacy proposal folder. Missing folders are empty; malformed files
 // are errors, so delivery never treats unreadable proposals as settled.
