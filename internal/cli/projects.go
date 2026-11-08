@@ -34,7 +34,10 @@ func parsePositionals(fs *flag.FlagSet, args []string) error {
 		if b, ok := f.Value.(interface{ IsBoolFlag() bool }); ok {
 			isBool = b.IsBoolFlag()
 		}
-		if !isBool && i+1 < len(args) {
+		if !isBool {
+			if i+1 == len(args) {
+				return fs.Parse(flags)
+			}
 			i++
 			flags = append(flags, args[i])
 		}

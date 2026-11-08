@@ -75,6 +75,20 @@ func Init(home string) error {
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if errors.Is(err, os.ErrExist) {
+		// An exclusive creator may not have written the marker yet.
+		for i := 0; i < 50; i++ {
+			st, err := os.Lstat(path)
+			if err != nil {
+				return err
+			}
+			if !st.Mode().IsRegular() {
+				return fmt.Errorf("VERSION is not a regular file")
+			}
+			if st.Size() != 0 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 		n, err := gridhome.ReadFormat(home)
 		if err != nil {
 			return err
@@ -108,6 +122,13 @@ func Machine(home string) (string, error) {
 	if errors.Is(err, os.ErrExist) {
 		// Another process can be between its exclusive open and its write.
 		for i := 0; i < 50; i++ {
+			st, err := os.Lstat(path)
+			if err != nil {
+				return "", err
+			}
+			if !st.Mode().IsRegular() || st.Size() > 128 {
+				return "", fmt.Errorf("machine is not a regular ULID file")
+			}
 			b, err := os.ReadFile(path)
 			if err != nil {
 				return "", err

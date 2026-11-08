@@ -246,3 +246,42 @@ func TestCollisionAndPersonal(t *testing.T) {
 		t.Fatalf("%+v %+v %v", got, again, err)
 	}
 }
+
+func TestCloneAndChangedRemoteKeepIdentity(t *testing.T) {
+	s, root := fixture(t)
+	first := mkdir(t, filepath.Join(root, "one"))
+	testgit.Init(t, first, "https://example.com/org/app.git", false)
+	original, err := s.Add(first, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := mkdir(t, filepath.Join(root, "two"))
+	testgit.Init(t, second, "git@example.com:org/app.git", false)
+	clone, err := s.Add(second, "")
+	if err != nil || clone.ID != original.ID || len(clone.Folders) != 2 {
+		t.Fatalf("%+v %v", clone, err)
+	}
+	testgit.Run(t, second, "remote", "set-url", "origin", "https://example.com/new/app.git")
+	changed, err := s.Add(second, "")
+	if err != nil || changed.ID != original.ID {
+		t.Fatalf("%+v %v", changed, err)
+	}
+	remotes := map[string]bool{}
+	for _, k := range changed.Keys {
+		remotes[k.Key] = true
+	}
+	if !remotes["remote:example.com/org/app"] || !remotes["remote:example.com/new/app"] {
+		t.Fatalf("lost identity keys: %+v", changed.Keys)
+	}
+}
+
+func TestScanIgnoresEnclosingRepo(t *testing.T) {
+	s, root := fixture(t)
+	testgit.Init(t, root, "https://example.com/org/outer.git", false)
+	discovery := mkdir(t, filepath.Join(root, "work"))
+	mkdir(t, filepath.Join(discovery, "child"))
+	got, err := s.Scan(discovery)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("proposed enclosing checkout: %+v %v", got, err)
+	}
+}

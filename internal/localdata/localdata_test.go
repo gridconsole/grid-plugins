@@ -38,9 +38,6 @@ func TestMachine(t *testing.T) {
 
 func TestMachineConcurrent(t *testing.T) {
 	home := t.TempDir()
-	if err := Init(home); err != nil {
-		t.Fatal(err)
-	}
 	var wg sync.WaitGroup
 	ids := make(chan string, 12)
 	for i := 0; i < 12; i++ {

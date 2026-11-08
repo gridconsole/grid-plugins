@@ -240,7 +240,10 @@ func (s Store) add(path, name string) (Entry, error) {
 	if err := Name(rec.Name); err != nil {
 		return Entry{}, err
 	}
-	if !res.Record && rec.ID == "" {
+	if !personal && rec.Name == where.Personal {
+		return Entry{}, fmt.Errorf("Personal is reserved for folders outside projects")
+	}
+	if !res.Record && rec.ID == "" && !personal {
 		base := rec.Name
 		for n := 2; ; n++ {
 			p, err := localdata.Safe(s.Resolver.GridHome, "projects", rec.Name)
@@ -485,6 +488,12 @@ func (s Store) Scan(path string) ([]Proposal, error) {
 			return nil, err
 		}
 		if res.Rule == where.RulePersonal {
+			continue
+		}
+		if res.Rule == where.RuleRecord && !within(path, res.Folder) {
+			continue
+		}
+		if root, ok := gitx.FindRoot(p, s.Resolver.Ceiling); ok && !within(path, root) {
 			continue
 		}
 		out = append(out, Proposal{Name: res.Project, Path: p, Rule: res.Rule, Registered: res.Record})
