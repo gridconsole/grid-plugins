@@ -271,6 +271,9 @@ func TestWorkflowApproval(t *testing.T) {
 		t.Run(tc.gate+"/"+tc.approval, func(t *testing.T) {
 			s, dir, repo := fixture(t)
 			setWorkflow(t, s, dir, tc.gate)
+			if tc.gate == "none" {
+				setNeedsApprove(t, s, false)
+			}
 			if tc.approval == "ship" {
 				b, _ := os.ReadFile(filepath.Join(dir, "task.md"))
 				write(t, filepath.Join(dir, "task.md"), strings.Replace(string(b), "state: waiting", "gate: ship\nstate: waiting", 1))
@@ -379,6 +382,7 @@ func TestHistoryWithoutApprovalAndSymlinkRefusal(t *testing.T) {
 		t.Run(fmt.Sprint(symlink), func(t *testing.T) {
 			s, dir, repo := fixture(t)
 			setWorkflow(t, s, dir, "none")
+			setNeedsApprove(t, s, false)
 			if symlink {
 				other := filepath.Join(repo, "other-history")
 				write(t, other, "original\n")

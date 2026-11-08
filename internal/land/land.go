@@ -79,6 +79,10 @@ func (s Store) prepare(cwd, id string) (Plan, task.Task, string, error) {
 	if err != nil {
 		return p, t, "", err
 	}
+	// Either policy can require approval; a workflow cannot waive the deploy rule.
+	if p.Gate == "none" && p.Rule.NeedsApprove {
+		p.Gate = "plan"
+	}
 	res, err := s.Resolver.Resolve(where.Query{Cwd: cwd, Project: t.Project})
 	if err != nil {
 		return p, t, "", err
