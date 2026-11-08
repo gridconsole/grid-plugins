@@ -30,10 +30,14 @@ import { signalGroup } from './kill.mjs';
 import { openRegistry, SPAWNED } from './spawned.mjs';
 import { sshHooks, boxPaths, boxTaskDir } from './ssh-hosts.mjs';
 import { boxSession } from './remote-job.mjs';
+import { recordProof } from './proof.mjs';
 
 export { lock };
 import { isDeploy, isLand, deployOf, runDeploy, reopen, DEPLOY_KIND } from './deploy.mjs';
 
+const lastHeadSha = (v, id) => lastOf(v.posts, (p) => p.type === 'head' && Array.isArray(p.body?.from_jobs) && p.body.from_jobs.includes(id))?.body?.sha;
+const PROOF_TRIES = 3;
+const TRIES = '.proof-tries.json';
 const LIVE = new Set(['assigned', 'running']);
 const FINISHED = new Set(['done', 'cancelled']);
 // Roles that only read the code: in a repo they need no submit, and after a code Job they check its work at the task head.
@@ -146,7 +150,7 @@ function settings(taskDir, o) {
     probe: o.probe ?? ((check) => probeWait(check, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })), probeAt: new Map(), // wait Jobs: the check, and when each was last read
     review: o.review === true, planMemory: { misses: 0, at: 0, reason: '' }, // tries of this process that left no beat
     deploy: o.deploy ?? ((d) => runDeploy(d, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })),
-    steps: { start: jobStart, integrate: taskIntegrate, land: taskLandAndClean, base: resolveBase, discard: jobDiscard, ...o.steps },
+    steps: { start: jobStart, integrate: taskIntegrate, land: taskLandAndClean, base: resolveBase, discard: jobDiscard, proof: recordProof, ...o.steps },
   };
 }
 
@@ -359,6 +363,24 @@ function work(taskDir, o) {
     return { verdict, reason: oneLine(r.value.reason) || (verdict === 'accept' ? 'does what the Job asked' : 'does not do what the Job asked') };
   };
 
+  // An accepted Job leaves its proof in the task folder (proof.mjs). A failure to file it never holds the Job: the non-code path files once,
+  // and the integrated -> done step tries again on the next ticks, up to PROOF_TRIES, counted in the Feed folder so a new process sees them.
+  const proof = (j, input) => {
+    let r;
+    const wt = j.assign?.worker ? path.join(o.worktrees, j.assign.worker) : null;
+    try { r = o.steps.proof({ taskDir, job: { id: j.id, title: j.title, item: j.item }, roots: wt ? [wt] : [], ...input }); } catch (e) { r = { ok: false, error: e?.message ?? String(e) }; }
+    if (r && r.ok === false) out.errors.push(`could not file the proof of ${j.id}: ${r.error}`);
+    return !(r && r.ok === false);
+  };
+  const triesFile = path.join(dir, TRIES);
+  const triesOf = () => { try { return JSON.parse(fs.readFileSync(triesFile, 'utf8')) ?? {}; } catch { return {}; } };
+  const countTry = (id) => {
+    const t = triesOf();
+    t[id] = (t[id] ?? 0) + 1;
+    try { fs.writeFileSync(triesFile, JSON.stringify(t)); } catch { /* the count is only a limit */ }
+    return t[id];
+  };
+
   const integrate = (j, submit) => {
     if (!o.repo) return failJob(j, `${j.id} has code to integrate and the loop has no --repo`);
     // A Job on an SSH Host committed there and could not push: its ref comes here, checked against the submit, and goes to origin first.
@@ -498,6 +520,7 @@ function work(taskDir, o) {
       if (commitsCode(j, v) && submit) return control({ target: j.id, status: 'submitted', reason: 'submit received' });
       if (!commitsCode(j, v)) {
         const d = judge(j, result, null, v);
+        if (d?.verdict === 'accept') proof(j, { result: result.body, reason: d.reason });
         if (d) control({ target: result.id, status: d.verdict === 'accept' ? 'done' : 'rejected', verdict: d.verdict, reason: d.reason });
         if (d?.verdict === 'accept' && codeJob(j, v)) discard(j);
         return undefined;
@@ -570,7 +593,13 @@ function work(taskDir, o) {
       }
       return verdict === 'accept' ? integrate(j, submit) : undefined;
     }
-    if (rec === 'integrated') return control({ target: j.id, status: 'done', reason: 'in the task head' });
+    if (rec === 'integrated') {
+      const lastResult = lastOf(v.posts, (p) => p.type === 'result' && p.job === j.id);
+      const sub = j.submits.length ? v.byId.get(j.submits.at(-1)) : null;
+      const filed = proof(j, { result: lastResult?.body, submit: sub?.body, sha: lastHeadSha(v, j.id) });
+      if (!filed && countTry(j.id) < PROOF_TRIES) return undefined; // tried again next tick; the Job is never held past the limit
+      return control({ target: j.id, status: 'done', reason: 'in the task head' });
+    }
     if (rec === 'posted') {
       if (j.after.some((id) => v.status.get(id) !== 'done')) return undefined;
       const priority = jobPostOf(j, v)?.body?.priority;

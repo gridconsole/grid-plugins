@@ -26,7 +26,7 @@ function prompt({ role, task, job, brief }) {
     ? `The Job:\n${brief.trim()}`
     : `Read the Job first: feed_read with job ${job} (or grid-feed read --task ${task} --job ${job}).`;
   return `You are the Worker for Job ${job} of task ${task}. Your role is ${role}.\n${read}\n`
-    + `Do exactly this Job, then post one result with the feed_post tool of the grid-feed MCP server (type result, job ${job}, a body with outcome; Bash: grid-feed post --task ${task} --type result --job ${job}) and stop. If you cannot go on without a decision, post a blocking question the same way and stop.`;
+    + `Do exactly this Job, then post one result with the feed_post tool of the grid-feed MCP server (type result, job ${job}, a body with outcome; Bash: grid-feed post --task ${task} --type result --job ${job}, and in evidence the test totals as "N passed, M failed" and the path of every screenshot, recording or log you saved, inside the task folder or your worktree) and stop. If you cannot go on without a decision, post a blocking question the same way and stop.`;
 }
 
 // The settings of an installed role file. Only the four keys a launch needs, in the two shapes the shipped files use: "basic" and '''literal'''.
