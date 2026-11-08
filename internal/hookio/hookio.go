@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"strings"
 	"sync"
 	"time"
 )
@@ -156,6 +157,7 @@ type Decision struct {
 	Behavior     string
 	Reason       string
 	Directories  []string
+	Warnings     []string
 }
 
 func Allow(reason string) Decision {
@@ -177,11 +179,13 @@ func PermissionAllow(home string) Decision {
 
 // Bytes emits JSON.stringify-compatible compact JSON without a trailing newline.
 func (d Decision) Bytes() []byte {
-	if d.Behavior == "" {
+	if d.Behavior == "" && len(d.Warnings) == 0 {
 		return nil
 	}
 	var out any
-	if d.Event == "PermissionRequest" {
+	if d.Behavior == "" {
+		out = map[string]string{"systemMessage": strings.Join(d.Warnings, "\n")}
+	} else if d.Event == "PermissionRequest" {
 		type permission struct {
 			Type        string   `json:"type"`
 			Directories []string `json:"directories"`
@@ -212,6 +216,13 @@ func (d Decision) Bytes() []byte {
 			Behavior string `json:"permissionDecision"`
 			Reason   string `json:"permissionDecisionReason"`
 		}{d.Event, d.Behavior, d.Reason}}
+	}
+	if d.Behavior != "" && len(d.Warnings) > 0 {
+		data, _ := json.Marshal(out)
+		var fields map[string]any
+		_ = json.Unmarshal(data, &fields)
+		fields["systemMessage"] = strings.Join(d.Warnings, "\n")
+		out = fields
 	}
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
@@ -257,10 +268,13 @@ func (d Decision) Write(w io.Writer) error {
 func Strongest(ds ...Decision) Decision {
 	rank := map[string]int{"allow": 1, "ask": 2, "deny": 3}
 	var best Decision
+	var warnings []string
 	for _, d := range ds {
+		warnings = append(warnings, d.Warnings...)
 		if rank[d.Behavior] > rank[best.Behavior] {
 			best = d
 		}
 	}
+	best.Warnings = warnings
 	return best
 }

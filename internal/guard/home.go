@@ -158,8 +158,10 @@ func proofAddPaths(args []string) []string {
 }
 
 // EvaluateHome only grants permission; an empty decision means normal permission
-// handling, never denial. Combine it with other guards using hookio.Strongest.
-func EvaluateHome(in hookio.Input, root string, env map[string]string) hookio.Decision {
+// handling. Invalid settings fail closed. Combine it with other guards using
+// hookio.Strongest.
+func EvaluateHome(in hookio.Input, root string, env map[string]string) (decision hookio.Decision) {
+	defer func() { decision = configuredLevel("home-allow", in, root, env, decision) }()
 	c := newContext(in, root, env)
 	// Do not reinterpret a missing cwd as an absolute hook-supplied directory.
 	c.in.Cwd = in.Cwd

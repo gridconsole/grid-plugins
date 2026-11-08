@@ -186,7 +186,8 @@ func homeHostFolder(projects string) string {
 // EvaluateHost protects legacy .host and the new task Feed, which contains the
 // answer and gate records (feed-contract.md:17-29). It cannot be disabled by the
 // plan guard switch. Shell checks are deliberately textual, not a sandbox.
-func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.Decision {
+func EvaluateHost(in hookio.Input, root string, env map[string]string) (decision hookio.Decision) {
+	defer func() { decision = configuredLevel("host-guard", in, root, env, decision) }()
 	c := newContext(in, root, env)
 	if c.projects == "" {
 		return hookio.Decision{}

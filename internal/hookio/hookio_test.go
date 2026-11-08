@@ -122,3 +122,20 @@ func TestReadStopsAtLimit(t *testing.T) {
 type readerFunc func([]byte) (int, error)
 
 func (f readerFunc) Read(p []byte) (int, error) { return f(p) }
+
+func TestWarningsSurviveArbitration(t *testing.T) {
+	warning := Decision{Warnings: []string{"plan-guard: needs review"}}
+	for _, decision := range []Decision{{}, Allow("normal grant"), Deny("hard rule")} {
+		got := Strongest(warning, decision)
+		if got.Behavior != decision.Behavior || len(got.Warnings) != 1 {
+			t.Fatalf("lost decision or warning: %+v", got)
+		}
+		var out map[string]any
+		if err := json.Unmarshal(got.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		if out["systemMessage"] != "plan-guard: needs review" {
+			t.Fatal(out)
+		}
+	}
+}

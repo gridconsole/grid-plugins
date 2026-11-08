@@ -14,6 +14,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -93,6 +94,15 @@ func sessionStart(o Options) {
 		return
 	}
 	recordSession(o, hookio.Input{HookEventName: "SessionStart", SessionID: in.SessionID, TranscriptPath: in.Transcript, Cwd: cwd, Source: in.Source})
+	project := ""
+	if res.Record {
+		project = res.Project
+	}
+	levels, err := settings.ReadHookLevels(o.Resolver.GridHome, project)
+	if err != nil {
+		o.log("hook settings", err)
+		return
+	}
 	context := sessionContext(res, o.Resolver, note)
 	brainProject := res.Project
 	if brainProject == where.Personal {
@@ -116,8 +126,10 @@ func sessionStart(o Options) {
 			return
 		}
 	}
-	_, err = o.Stdout.Write(append(b, '\n'))
-	o.log("session context", err)
+	if levels["session-start"] != "off" {
+		_, err = o.Stdout.Write(append(b, '\n'))
+		o.log("session context", err)
+	}
 }
 
 func writeEnv(path, home, task string) error {
@@ -180,8 +192,8 @@ func ProjectLine(r where.Result, home string) string {
 // guardEnv is the explicit environment the pure guard evaluators read. HOME and
 // GRID_HOME come from the resolver so the guards judge the same home as the CLI.
 func guardEnv(o Options) map[string]string {
-	env := map[string]string{"HOME": o.Resolver.Home, "GRID_HOME": o.Resolver.GridHome, "PWD": o.Cwd}
-	for _, key := range []string{"GRID_PROJECTS", "GRID_PLAN_GUARD", "CLAUDE_PLUGIN_DATA", "CLAUDE_PLUGIN_ROOT"} {
+	env := map[string]string{"HOME": o.Resolver.Home, "GRID_HOME": o.Resolver.GridHome, "PWD": o.Cwd, "GRID_MACHINE": o.Resolver.Machine}
+	for _, key := range []string{"GRID_PROJECTS", "GRID_PROJECT", "GRID_TASK", "GRID_PLAN_GUARD", "CLAUDE_PLUGIN_DATA", "CLAUDE_PLUGIN_ROOT"} {
 		if v := o.Getenv(key); v != "" {
 			env[key] = v
 		}
