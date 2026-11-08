@@ -2,10 +2,12 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/routine"
 )
@@ -90,5 +92,40 @@ func TestRoutineFailureRecordsSignal(t *testing.T) {
 	}
 	if err := json.Unmarshal(h.out.Bytes(), &result); err != nil || !result.Skipped {
 		t.Fatalf("guard: %s %v", h.out, err)
+	}
+}
+
+func TestRoutineFailureMatchesPreL42Signal(t *testing.T) {
+	h := newHarness(t)
+	// This fixture retains the pre-L42 source ID and second-precision record
+	// timestamps. A retry must find it without rewriting or reopening it.
+	const id = "S-6fc2ee1fb06253bcdfabe9c06b3a17a161952020a1d6d1a963447fadccac5834"
+	const oldNote = `---
+id: ` + id + `
+source: routine
+source_id: example/daily:2026-01-02T03:04:05.123456789Z
+title: "Routine failed: daily"
+status: dismissed
+captured: "2026-01-02T03:04:06Z"
+updated: "2026-01-02T03:05:00Z"
+tier: external
+body_kind: data
+---
+Previously recorded failure.
+`
+	dir := filepath.Join(h.gridHome, "projects", "personal", "notes")
+	path := filepath.Join(dir, id+".md")
+	h.write(path, oldNote)
+	entry := routine.Entry{Name: "daily", LastRun: time.Date(2026, 1, 2, 3, 4, 5, 123456789, time.UTC)}
+	if err := routineFailureSignal(h.env, "example")(entry, errors.New("failed")); err != nil {
+		t.Fatal(err)
+	}
+	files, err := os.ReadDir(dir)
+	if err != nil || len(files) != 1 || files[0].Name() != id+".md" {
+		t.Fatalf("retry did not match old signal: %v %v", files, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != oldNote {
+		t.Fatalf("retry changed old signal: %s %v", data, err)
 	}
 }
