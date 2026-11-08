@@ -62,19 +62,26 @@ func topicAt(root *os.Root, name, level string) (Topic, error) {
 	if err != nil {
 		return Topic{}, fmt.Errorf("topic %s needs a TOPIC.md definition: %w", name, err)
 	}
-	f, body, err := frontmatter(b)
+	front, body, err := splitFrontMatter(b)
 	if err != nil {
 		return Topic{}, err
 	}
-	get := func(key string) string { v, _ := scalar(f[key]); return v }
-	if get("name") != name || get("kind") != "knowledge" {
+	var def struct {
+		Name        string `yaml:"name"`
+		Kind        string `yaml:"kind"`
+		Level       any    `yaml:"level"`
+		Description string `yaml:"description"`
+	}
+	if err := loadFrontMatter(front, &def, false); err != nil {
+		return Topic{}, err
+	}
+	if def.Name != name || def.Kind != "knowledge" {
 		return Topic{}, fmt.Errorf("custom topic %s must declare its name and kind: knowledge", name)
 	}
-	declaredLevel := get("level")
-	if declaredLevel != level && declaredLevel != "home, project" && declaredLevel != "[home, project]" && f["level"] != "[home, project]" {
+	if !declaresLevel(def.Level, level) {
 		return Topic{}, fmt.Errorf("custom topic %s does not declare level %s", name, level)
 	}
-	description := get("description")
+	description := def.Description
 	if description == "" {
 		for _, l := range strings.Split(body, "\n") {
 			if strings.TrimSpace(l) != "" && !strings.HasPrefix(l, "#") {
@@ -87,6 +94,27 @@ func topicAt(root *os.Root, name, level string) (Topic, error) {
 		description = "Custom knowledge"
 	}
 	return Topic{Name: name, Kind: "knowledge", Levels: []string{level}, Description: description, Custom: true}, nil
+}
+
+// declaresLevel accepts one level, a "home, project" string or a list.
+func declaresLevel(declared any, level string) bool {
+	var levels []string
+	switch v := declared.(type) {
+	case string:
+		levels = strings.Split(v, ",")
+	case []any:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				levels = append(levels, s)
+			}
+		}
+	}
+	for _, l := range levels {
+		if strings.TrimSpace(l) == level {
+			return true
+		}
+	}
+	return false
 }
 
 func scopeTopics(root *os.Root, level string) ([]Topic, error) {

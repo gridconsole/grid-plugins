@@ -34,6 +34,30 @@ func TestMarkdownRoundTrip(t *testing.T) {
 	}
 }
 
+func TestMarkdownRoundTripOddText(t *testing.T) {
+	for name, text := range map[string]string{
+		"del and c1":   "bell\x7f next\u0085 end\u009f",
+		"yaml words":   "yes",
+		"timestamp":    "2026-01-02T03:04:05Z",
+		"separators":   "a\u2028b\u2029c",
+		"leading star": "*not an alias",
+		"hash":         "- item # not a comment",
+	} {
+		t.Run(name, func(t *testing.T) {
+			n := sample()
+			n.Description, n.Reason = text, text
+			b, err := Encode(n)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := Parse(b)
+			if err != nil || !reflect.DeepEqual(got, n) {
+				t.Fatalf("round trip: %#v, %v", got, err)
+			}
+		})
+	}
+}
+
 func TestMarkdownHandwritten(t *testing.T) {
 	n, err := Parse([]byte("---\nname: checks\nsummary: |-\n  First line.\n  Second line.\nlinks:\n  - to: 'brain:project/checks#commands'\n    rel: explains\n    summary: The checks.\n    why: Explains how to run the checks.\norigin:\n  kind: job\n  id: T-01/J-01\n  tier: agent\n---\nBody\n"))
 	if err != nil || n.Summary != "First line.\nSecond line." || len(n.Links) != 1 || n.Origin.Tier != "agent" {
@@ -48,6 +72,8 @@ func TestMalformedMarkdown(t *testing.T) {
 	for _, input := range []string{
 		"name: x", "---\nname: x", "---\nname: a\nname: b\n---\n",
 		"---\nname: &anchor x\n---\n", "---\nunknown: x\n---\n",
+		"---\nname: *anchor\n---\n", "---\nname: !!str x\n---\n", "---\nname: [unclosed\n---\n",
+		"---\n---\n", "---\norigin: {\"kind\":\"job\",\"extra\":1}\n---\n",
 		"---\nlinks: [{\"to\":\"person:example\",\"extra\":true}]\n---\n",
 	} {
 		if _, err := Parse([]byte(input)); err == nil {

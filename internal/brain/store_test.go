@@ -262,6 +262,25 @@ func TestCustomTopic(t *testing.T) {
 	}
 }
 
+func TestCustomTopicLevelForms(t *testing.T) {
+	for name, level := range map[string]string{"scalar": "project", "pair": "home, project", "flow": "[home, project]", "block": "\n  - home\n  - project"} {
+		t.Run(name, func(t *testing.T) {
+			s := testStore(t)
+			putFile(t, s, "projects/example/knowledge/testing/TOPIC.md", "---\nname: testing\nkind: knowledge\nlevel: "+level+"\n---\nLocal test advice.\n")
+			n := sample()
+			n.Topic = "testing"
+			accepted(t, s, n)
+		})
+	}
+	s := testStore(t)
+	putFile(t, s, "projects/example/knowledge/testing/TOPIC.md", "---\nname: testing\nkind: knowledge\nlevel: home\n---\nLocal test advice.\n")
+	n := sample()
+	n.Topic = "testing"
+	if _, err := s.Propose(n, n.Origin); err == nil {
+		t.Fatal("topic declared for home accepted at project level")
+	}
+}
+
 func TestTraversalSymlinksAndLocks(t *testing.T) {
 	s := testStore(t)
 	n := sample()

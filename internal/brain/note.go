@@ -13,34 +13,34 @@ import (
 // Origin is supplied by the caller's session or authenticated source, never by
 // note text. Unknown imports must use external; local CLI sessions use agent.
 type Origin struct {
-	Kind string             `json:"kind"`
-	ID   string             `json:"id"`
-	Tier contract.TrustTier `json:"tier"`
+	Kind string             `json:"kind" yaml:"kind"`
+	ID   string             `json:"id" yaml:"id"`
+	Tier contract.TrustTier `json:"tier" yaml:"tier"`
 }
 
 // Link keeps the destination's summary with the reason to follow this edge.
 type Link struct {
-	To      string `json:"to"`
-	Rel     string `json:"rel"`
-	Summary string `json:"summary"`
-	Why     string `json:"why"`
+	To      string `json:"to" yaml:"to"`
+	Rel     string `json:"rel" yaml:"rel"`
+	Summary string `json:"summary" yaml:"summary"`
+	Why     string `json:"why" yaml:"why"`
 }
 
 type Note struct {
-	Name         string `json:"name"`
-	Topic        string `json:"topic"`
-	Type         string `json:"type"`
-	Description  string `json:"description"`
-	Summary      string `json:"summary"`
-	Updated      string `json:"updated"`
-	Source       string `json:"source"`
-	SupersededBy string `json:"superseded_by"`
-	Links        []Link `json:"links"`
-	Level        string `json:"level"`
-	Status       string `json:"status"`
-	Reason       string `json:"reason"`
-	Origin       Origin `json:"origin"`
-	Body         string `json:"body"`
+	Name         string `json:"name" yaml:"name"`
+	Topic        string `json:"topic" yaml:"topic"`
+	Type         string `json:"type" yaml:"type"`
+	Description  string `json:"description" yaml:"description"`
+	Summary      string `json:"summary" yaml:"summary"`
+	Updated      string `json:"updated" yaml:"updated"`
+	Source       string `json:"source" yaml:"source"`
+	SupersededBy string `json:"superseded_by" yaml:"superseded_by"`
+	Links        []Link `json:"links" yaml:"links"`
+	Level        string `json:"level" yaml:"level"`
+	Status       string `json:"status" yaml:"status"`
+	Reason       string `json:"reason" yaml:"reason"`
+	Origin       Origin `json:"origin" yaml:"origin"`
+	Body         string `json:"body" yaml:"-"`
 }
 
 var namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
