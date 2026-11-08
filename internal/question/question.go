@@ -4,6 +4,7 @@ package question
 import (
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -50,6 +51,7 @@ type Input struct {
 type Store struct {
 	TaskDir string
 	Now     func() time.Time
+	Warn    io.Writer // receives warnings about skipped files; nil discards them
 }
 
 func (s Store) now() time.Time {
@@ -90,7 +92,7 @@ func (s Store) Add(in Input) (rec Record, err error) {
 		return
 	}
 	err = s.locked(true, func(dir string) error {
-		records, e := readAll(dir)
+		records, e := s.readAll(dir)
 		if e != nil {
 			return e
 		}
@@ -116,7 +118,7 @@ func (s Store) Add(in Input) (rec Record, err error) {
 
 func (s Store) List() (records []Record, err error) {
 	records = []Record{}
-	err = s.locked(false, func(dir string) error { var e error; records, e = readAll(dir); return e })
+	err = s.locked(false, func(dir string) error { var e error; records, e = s.readAll(dir); return e })
 	return
 }
 
@@ -189,7 +191,7 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 func (s Store) Tick() (changed []Record, err error) {
 	changed = []Record{}
 	err = s.locked(false, func(dir string) error {
-		records, e := readAll(dir)
+		records, e := s.readAll(dir)
 		if e != nil {
 			return e
 		}

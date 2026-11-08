@@ -65,7 +65,9 @@ func (s Store) locked(create bool, fn func(string) error) error {
 	return fn(dir)
 }
 
-func readAll(dir string) ([]Record, error) {
+// readAll skips Markdown files not named Q-n.md, such as the old plugin's
+// per-recipient files, and names them in one warning per call.
+func (s Store) readAll(dir string) ([]Record, error) {
 	records := []Record{}
 	if dir == "" {
 		return records, nil
@@ -74,19 +76,24 @@ func readAll(dir string) ([]Record, error) {
 	if err != nil {
 		return nil, err
 	}
+	skipped := []string{}
 	for _, entry := range entries {
 		if !strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
 		id := strings.TrimSuffix(entry.Name(), ".md")
 		if !validID.MatchString(id) {
-			return nil, fmt.Errorf("unsupported question file %s; migrate it before writing", entry.Name())
+			skipped = append(skipped, entry.Name())
+			continue
 		}
 		r, e := read(dir, id)
 		if e != nil {
 			return nil, e
 		}
 		records = append(records, r)
+	}
+	if len(skipped) > 0 && s.Warn != nil {
+		fmt.Fprintf(s.Warn, "question: skipping files in questions/ that are not Q-n.md: %s\n", strings.Join(skipped, ", "))
 	}
 	sort.Slice(records, func(i, j int) bool {
 		a, _ := strconv.Atoi(records[i].ID[2:])

@@ -251,6 +251,50 @@ func TestStorage(t *testing.T) {
 			t.Fatal("silently skipped corrupt question")
 		}
 	})
+	t.Run("skip old per-recipient file", func(t *testing.T) {
+		s, now := setup(t)
+		var warn bytes.Buffer
+		s.Warn = &warn
+		dir := filepath.Join(s.TaskDir, "questions")
+		if e := os.Mkdir(dir, 0700); e != nil {
+			t.Fatal(e)
+		}
+		legacy := []byte("## Q-2 · to: sam · not blocking · open\nasked: 2026-03-04T10:30 · by grid-planner\n\nShould the tag box show recent tags?\nOptions: Yes, five / Yes, ten / No\nRecommendation: yes, five, to save typing.\nAnswer: —\n")
+		if e := os.WriteFile(filepath.Join(dir, "sam.md"), legacy, 0600); e != nil {
+			t.Fatal(e)
+		}
+		const line = "question: skipping files in questions/ that are not Q-n.md: sam.md\n"
+		for _, step := range []struct {
+			name string
+			call func() error
+		}{
+			{"list", func() error { _, e := s.List(); return e }},
+			{"add", func() error { _, e := s.Add(input()); return e }},
+			{"tick", func() error { *now = start.Add(24 * time.Hour); _, e := s.Tick(); return e }},
+		} {
+			warn.Reset()
+			if e := step.call(); e != nil {
+				t.Fatalf("%s: %v", step.name, e)
+			}
+			if warn.String() != line {
+				t.Fatalf("%s warning: %q", step.name, warn.String())
+			}
+		}
+		if r := list(t, s); len(r) != 1 || r[0].ID != "Q-1" || r[0].State != "defaulted" {
+			t.Fatalf("%+v", r)
+		}
+		if got, _ := os.ReadFile(filepath.Join(dir, "sam.md")); !bytes.Equal(got, legacy) {
+			t.Fatal("legacy file changed")
+		}
+		if e := os.Remove(filepath.Join(dir, "sam.md")); e != nil {
+			t.Fatal(e)
+		}
+		warn.Reset()
+		list(t, s)
+		if warn.Len() != 0 {
+			t.Fatalf("warned without skipped files: %q", warn.String())
+		}
+	})
 	t.Run("empty list does not create storage", func(t *testing.T) {
 		s, _ := setup(t)
 		if len(list(t, s)) != 0 {

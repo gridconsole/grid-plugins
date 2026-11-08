@@ -134,7 +134,7 @@ func Run(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "question:", err)
 		return 1
 	}
-	store := Store{TaskDir: scope.TaskPath, Now: env.Now}
+	store := Store{TaskDir: scope.TaskPath, Now: env.Now, Warn: env.Stderr}
 	var result any
 	switch action {
 	case "add":
