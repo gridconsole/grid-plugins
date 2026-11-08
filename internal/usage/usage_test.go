@@ -81,7 +81,7 @@ func TestFoldAndRepair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Totals != (Totals{Dollars: 6, Minutes: 6, Posts: 4}) || len(got.Jobs) != 3 || got.Jobs[2] != (Row{Job: "lead", Totals: Totals{Dollars: 1, Minutes: 6, Posts: 2}}) {
+	if got.Totals.Dollars != 6 || got.Totals.Minutes != 6 || got.Totals.Posts != 4 || len(got.Jobs) != 3 || got.Jobs[2].Job != "lead" || got.Jobs[2].Dollars != 1 || got.Jobs[2].Minutes != 6 || got.Jobs[2].Posts != 2 {
 		t.Fatal(got)
 	}
 	if _, err := s.Post(Input{Job: "lead", Dollars: number(1)}); err != nil {
@@ -116,13 +116,18 @@ func TestEmptyAndOverflow(t *testing.T) {
 	if out, err := s.Show(); err != nil || out.Jobs == nil || out.Totals.Posts != 0 {
 		t.Fatalf("%+v %v", out, err)
 	}
-	if _, err := s.Post(Input{Job: "lead", Dollars: number(math.MaxFloat64)}); err != nil {
-		t.Fatal(err)
+	for i := 0; i < 2; i++ {
+		if _, err := s.Post(Input{Job: "lead", Dollars: number(2e12)}); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err := s.Post(Input{Job: "lead", Dollars: number(math.MaxFloat64)}); err == nil {
+	if _, err := s.Post(Input{Job: "lead", Dollars: number(2e12)}); err == nil {
 		t.Fatal("overflow accepted")
 	}
-	if out, err := s.Show(); err != nil || out.Totals.Posts != 1 {
+	if _, err := s.Post(Input{Job: "lead", Dollars: number(math.MaxFloat64)}); err == nil {
+		t.Fatal("out of range amount accepted")
+	}
+	if out, err := s.Show(); err != nil || out.Totals.Posts != 2 {
 		t.Fatalf("%+v %v", out, err)
 	}
 }

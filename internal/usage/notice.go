@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -223,8 +224,9 @@ func (s Store) postNotices(dir string, out *PostResult) error {
 		return err
 	}
 	type crossing struct {
-		unit           string
-		percent, total float64
+		unit    string
+		percent float64
+		total   float64
 	}
 	var pending []crossing
 	for _, unit := range []string{"dollars", "minutes"} {
@@ -232,13 +234,15 @@ func (s Store) postNotices(dir string, out *PostResult) error {
 		if !ok {
 			continue
 		}
-		thresholds, total := c.Dollars, out.Totals.Dollars
+		thresholds, total, totalMicro := c.Dollars, out.Totals.Dollars, out.Totals.dollarsMicro
 		if unit == "minutes" {
-			thresholds, total = c.Minutes, out.Totals.Minutes
+			thresholds, total, totalMicro = c.Minutes, out.Totals.Minutes, out.Totals.minutesMicro
 		}
+		baseMicro := int64(math.Round(c.Baseline[unit] * microPerUnit))
 		for _, percent := range thresholds {
-			amount := budget * (percent / 100)
-			if c.Baseline[unit] < amount && amount <= total && c.Fired[noticeKey(unit, percent)] == "" {
+			// Whole micro-units make "exactly equal fires" hold for decimal amounts.
+			amountMicro := int64(math.Round(budget * percent / 100 * microPerUnit))
+			if baseMicro < amountMicro && amountMicro <= totalMicro && c.Fired[noticeKey(unit, percent)] == "" {
 				pending = append(pending, crossing{unit, percent, total})
 			}
 		}

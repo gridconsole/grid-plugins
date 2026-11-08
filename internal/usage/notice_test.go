@@ -74,6 +74,7 @@ func TestNotices(t *testing.T) {
 		name                     string
 		budget, thresholds       Change
 		before, dollars, minutes float64
+		posts, earlier           int // posts repeats the dollars post (0 is once); earlier counts notices before the last post
 		percentages              []float64
 		units                    []string
 	}{
@@ -84,6 +85,8 @@ func TestNotices(t *testing.T) {
 		{name: "cross-two", budget: Change{Budget: true, Dollars: []float64{200}}, dollars: 170, percentages: []float64{50, 80}, units: []string{"dollars", "dollars"}},
 		{name: "already-fired", budget: Change{Budget: true, Dollars: []float64{200}}, before: 100, dollars: 1},
 		{name: "both", budget: Change{Budget: true, Dollars: []float64{200}, Minutes: []float64{120}}, dollars: 100, minutes: 60, percentages: []float64{50, 50}, units: []string{"dollars", "minutes"}},
+		{name: "cents-80", budget: Change{Budget: true, Dollars: []float64{1}}, dollars: 0.1, posts: 8, earlier: 1, percentages: []float64{80}, units: []string{"dollars"}},
+		{name: "cents-100", budget: Change{Budget: true, Dollars: []float64{1}}, dollars: 0.1, posts: 10, earlier: 2, percentages: []float64{100}, units: []string{"dollars"}},
 		{name: "zero-percent", budget: Change{Budget: true, Dollars: []float64{200}}, thresholds: Change{Dollars: []float64{0}}, dollars: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -102,6 +105,9 @@ func TestNotices(t *testing.T) {
 			if tc.before != 0 {
 				post(t, s, tc.before, 0)
 			}
+			for i := 1; i < tc.posts; i++ {
+				post(t, s, tc.dollars, tc.minutes)
+			}
 			out := post(t, s, tc.dollars, tc.minutes)
 			if len(out.Notices) != len(tc.percentages) {
 				t.Fatalf("got %d notices: %+v", len(out.Notices), out)
@@ -116,7 +122,7 @@ func TestNotices(t *testing.T) {
 				}
 			}
 			all := notices(t, s)
-			count := len(tc.percentages)
+			count := len(tc.percentages) + tc.earlier
 			if tc.before > 0 {
 				count++
 			}
@@ -236,7 +242,7 @@ func TestConcurrentPosts(t *testing.T) {
 		}
 	}
 	out, err := s.Show()
-	if err != nil || out.Totals != (Totals{Dollars: 32, Minutes: 64, Posts: 32}) || len(out.Jobs) != 1 {
+	if err != nil || out.Totals.Dollars != 32 || out.Totals.Minutes != 64 || out.Totals.Posts != 32 || len(out.Jobs) != 1 {
 		t.Fatalf("%+v %v", out, err)
 	}
 	all := notices(t, s)

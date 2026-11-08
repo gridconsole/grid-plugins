@@ -13,12 +13,11 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 )
-
-const timeFormat = "2006-01-02T15:04:05.000Z"
 
 // Input carries one delta. Nil amounts distinguish omission from an explicit zero.
 type Input struct {
@@ -141,7 +140,7 @@ func (s Store) Post(in Input) (PostResult, error) {
 		if s.Now != nil {
 			now = s.Now
 		}
-		r := Record{V: 1, At: now().UTC().Format(timeFormat), Job: in.Job, Session: in.Session, Model: in.Model}
+		r := Record{V: 1, At: contract.FormatTime(now()), Job: in.Job, Session: in.Session, Model: in.Model}
 		if in.Dollars != nil {
 			r.Dollars = *in.Dollars
 		}

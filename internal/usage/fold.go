@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
@@ -20,6 +22,27 @@ type Totals struct {
 	Dollars float64 `json:"dollars"`
 	Minutes float64 `json:"minutes"`
 	Posts   int     `json:"posts"`
+	// Whole micro-units are summed, so decimal amounts add exactly.
+	dollarsMicro, minutesMicro int64
+}
+
+const microPerUnit = 1e6
+
+// maxMicro keeps sums far from int64 overflow.
+const maxMicro = int64(1) << 62
+
+func toMicro(n float64) (int64, bool) {
+	m := math.Round(n * microPerUnit)
+	return int64(m), m >= 0 && m < float64(maxMicro/2)
+}
+
+func (t *Totals) addMicro(dollars, minutes int64) bool {
+	t.dollarsMicro += dollars
+	t.minutesMicro += minutes
+	t.Dollars = float64(t.dollarsMicro) / microPerUnit
+	t.Minutes = float64(t.minutesMicro) / microPerUnit
+	t.Posts++
+	return t.dollarsMicro < maxMicro && t.minutesMicro < maxMicro
 }
 
 type Row struct {
@@ -35,10 +58,12 @@ type Summary struct {
 func emptySummary() Summary { return Summary{Jobs: []Row{}} }
 
 func (s *Summary) add(r Record) error {
-	s.Totals.Dollars += r.Dollars
-	s.Totals.Minutes += r.Minutes
-	s.Totals.Posts++
-	if !finite(s.Totals.Dollars) || !finite(s.Totals.Minutes) {
+	d, okD := toMicro(r.Dollars)
+	m, okM := toMicro(r.Minutes)
+	if !okD || !okM {
+		return errors.New("usage amount out of range")
+	}
+	if !s.Totals.addMicro(d, m) {
 		return errors.New("usage totals overflow")
 	}
 	i := sort.Search(len(s.Jobs), func(i int) bool { return s.Jobs[i].Job >= r.Job })
@@ -47,9 +72,7 @@ func (s *Summary) add(r Record) error {
 		copy(s.Jobs[i+1:], s.Jobs[i:])
 		s.Jobs[i] = Row{Job: r.Job}
 	}
-	s.Jobs[i].Dollars += r.Dollars
-	s.Jobs[i].Minutes += r.Minutes
-	s.Jobs[i].Posts++
+	s.Jobs[i].addMicro(d, m)
 	return nil
 }
 
@@ -117,7 +140,7 @@ func (r Record) validate(line []byte) error {
 	if r.V != 1 {
 		return errors.New("unsupported usage version")
 	}
-	if at, err := time.Parse(timeFormat, r.At); err != nil || at.Format(timeFormat) != r.At {
+	if at, err := time.Parse(contract.TimeLayout, r.At); err != nil || contract.FormatTime(at) != r.At {
 		return errors.New("at must be UTC with millisecond precision")
 	}
 	return (Input{Job: r.Job, Session: r.Session, Model: r.Model, Dollars: &r.Dollars, Minutes: &r.Minutes}).validate()
