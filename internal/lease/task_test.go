@@ -66,9 +66,12 @@ func TestTaskAdoptionAndRelease(t *testing.T) {
 		{"unknown local", false, session.Unknown, false}, {"dead remote", true, session.Dead, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := TaskStore{Feed: feed.Store{TaskDir: t.TempDir(), TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}}
+			now := time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)
+			s := TaskStore{Feed: feed.Store{TaskDir: t.TempDir(), TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}, Now: func() time.Time { return now }}
 			w := feed.Writer{Author: feed.Author{ID: "member", Role: "member"}, Worker: "member@01ARZ3NDEKTSV4RRFFQ69G5FAW", Lease: "task", Gen: 2}
-			first, err := s.TakeTask(w, 42, contract.FormatTime(time.Now()))
+			// The process start differs from the grant time, so the probe check sees which one it got.
+			start := contract.FormatTime(now.Add(-time.Hour))
+			first, err := s.TakeTask(w, 42, start)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -78,9 +81,9 @@ func TestTaskAdoptionAndRelease(t *testing.T) {
 				next.Worker = "other@01ARZ3NDEKTSV4RRFFQ69G5FAX"
 			}
 			called := false
-			got, old, err := s.AdoptTask(next, 43, first.Since, func(l session.Live) session.ProcessState {
+			got, old, err := s.AdoptTask(next, 43, start, func(l session.Live) session.ProcessState {
 				called = true
-				if l.PID != 42 || l.PIDStart != first.Since || l.Holder != w.Worker {
+				if l.PID != 42 || l.PIDStart != start || l.Holder != w.Worker {
 					t.Fatalf("bad probe: %+v", l)
 				}
 				return tc.state
