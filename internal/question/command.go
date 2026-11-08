@@ -57,6 +57,7 @@ func Run(args []string, env Env) int {
 		fs.StringVar(&by, "by", "", "answer author; defaults to the person asked")
 	}
 	if action == "withdraw" {
+		fs.StringVar(&by, "by", "", "who withdraws the question; defaults to cli")
 		fs.StringVar(&reason, "reason", "No longer needed", "reason for withdrawing")
 	}
 	// Permit flags before or after operands. -- protects literal option/text
@@ -143,7 +144,7 @@ func Run(args []string, env Env) int {
 	case "answer":
 		result, err = store.Answer(id, text, by)
 	case "withdraw":
-		result, err = store.Withdraw(id, reason)
+		result, err = store.Withdraw(id, reason, by)
 	case "list":
 		result, err = store.List()
 	case "tick":

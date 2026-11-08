@@ -165,7 +165,8 @@ func (s Store) Answer(id, text, who string) (Record, error) {
 	})
 }
 
-func (s Store) Withdraw(id, reason string) (Record, error) {
+// Withdraw closes an open question; by defaults to "cli".
+func (s Store) Withdraw(id, reason, by string) (Record, error) {
 	return s.change(id, func(r *Record) error {
 		if r.State == "withdrawn" {
 			return nil
@@ -173,8 +174,11 @@ func (s Store) Withdraw(id, reason string) (Record, error) {
 		if r.State != "open" {
 			return fmt.Errorf("%s is %s", id, r.State)
 		}
+		if by == "" {
+			by = "cli"
+		}
 		r.State = "withdrawn"
-		r.History = append(r.History, Event{Kind: "withdrawn", At: Stamp{s.now()}, Who: "cli", Text: reason})
+		r.History = append(r.History, Event{Kind: "withdrawn", At: Stamp{s.now()}, Who: by, Text: reason})
 		return nil
 	})
 }

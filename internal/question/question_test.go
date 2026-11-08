@@ -119,7 +119,7 @@ func TestTransitions(t *testing.T) {
 			if tc.action == "answer" {
 				r, e = s.Answer("Q-1", tc.text, "owner")
 			} else {
-				r, e = s.Withdraw("Q-1", tc.text)
+				r, e = s.Withdraw("Q-1", tc.text, "owner")
 			}
 			if e != nil {
 				t.Fatal(e)
@@ -130,17 +130,31 @@ func TestTransitions(t *testing.T) {
 			if tc.due && r.History[0].Kind != "defaulted" {
 				t.Fatal("lost default audit")
 			}
+			if last := r.History[len(r.History)-1]; last.Who != "owner" {
+				t.Fatalf("attributed to %q", last.Who)
+			}
+			path := filepath.Join(s.TaskDir, "questions", "Q-1.md")
+			before, e := os.ReadFile(path)
+			if e != nil {
+				t.Fatal(e)
+			}
+			*now = now.Add(time.Hour)
 			if tc.action == "answer" {
-				if _, e = s.Answer("Q-1", tc.text, "owner"); e != nil {
-					t.Fatal(e)
-				}
+				_, e = s.Answer("Q-1", tc.text, "owner")
+			} else {
+				_, e = s.Withdraw("Q-1", tc.text, "owner")
+			}
+			if e != nil {
+				t.Fatal(e)
+			}
+			if after, _ := os.ReadFile(path); !bytes.Equal(before, after) {
+				t.Fatal("repeat rewrote the question file")
+			}
+			if tc.action == "answer" {
 				if _, e = s.Answer("Q-1", "Different answer", "owner"); e == nil {
 					t.Fatal("overwrote human answer")
 				}
 			} else {
-				if _, e = s.Withdraw("Q-1", tc.text); e != nil {
-					t.Fatal(e)
-				}
 				if _, e = s.Answer("Q-1", "JSON", "owner"); e == nil {
 					t.Fatal("answered withdrawn question")
 				}
@@ -409,7 +423,7 @@ func TestQuestionListGolden(t *testing.T) {
 	}
 	in.Applies = start.Add(24 * time.Hour)
 	add(t, s, in)
-	if _, e := s.Withdraw("Q-4", "No longer needed"); e != nil {
+	if _, e := s.Withdraw("Q-4", "No longer needed", ""); e != nil {
 		t.Fatal(e)
 	}
 	if code := Run([]string{"list", "--json"}, env); code != 0 {
@@ -424,6 +438,8 @@ func TestCommand(t *testing.T) {
 		{"add", "Which format?", "--who", "owner", "--option", "CSV", "--option", "JSON", "--recommended", "CSV", "--default", "CSV", "--applies", "2026-11-09T10:00:00Z", "--blocking"},
 		{"answer", "Q-1", "JSON", "--json", "--task", s.TaskDir},
 		{"tick", "--task", s.TaskDir},
+		{"add", "Ship today?", "--option", "Yes", "--recommended", "Yes", "--default", "Yes", "--applies", "2026-11-09T10:00:00Z"},
+		{"withdraw", "Q-2", "--by", "reviewer", "--reason", "Shipped"},
 	}
 	for _, args := range calls {
 		out.Reset()
@@ -433,6 +449,9 @@ func TestCommand(t *testing.T) {
 		}
 	}
 	if r := list(t, s)[0]; r.State != "answered" || r.Answer != "JSON" {
+		t.Fatal(r)
+	}
+	if r := list(t, s)[1]; r.State != "withdrawn" || r.History[0].Who != "reviewer" || r.History[0].Text != "Shipped" {
 		t.Fatal(r)
 	}
 	for _, args := range [][]string{nil, {"bad"}, {"answer"}, {"withdraw"}, {"list", "extra"}, {"add", "--applies", "bad"}, {"list", "--bad"}} {
@@ -449,7 +468,7 @@ func TestCommand(t *testing.T) {
 		t.Fatalf("explicit task: %d %s", code, errout)
 	}
 	var records []Record
-	if e := json.Unmarshal(out.Bytes(), &records); e != nil || len(records) != 1 {
+	if e := json.Unmarshal(out.Bytes(), &records); e != nil || len(records) != 2 {
 		t.Fatalf("%v %s", e, out)
 	}
 }
