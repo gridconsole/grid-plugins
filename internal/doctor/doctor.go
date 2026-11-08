@@ -17,7 +17,7 @@ type Check struct {
 	Name   string `json:"name"`
 	OK     bool   `json:"ok"`
 	Detail string `json:"detail"`
-	Fix    string `json:"fix"`
+	Fix    string `json:"fix,omitempty"`
 }
 
 // Report is every check; OK is true when all hold.
@@ -49,9 +49,10 @@ func Run(o Options) Report {
 	}
 	rep := Report{OK: true, Checks: []Check{}}
 	add := func(name string, ok bool, detail string) {
-		rep.Checks = append(rep.Checks, Check{Name: name, OK: ok, Detail: detail, Fix: fixHint(name, detail)})
+		rep.Checks = append(rep.Checks, Check{Name: name, OK: ok, Detail: detail})
 		if !ok {
 			rep.OK = false
+			rep.Checks[len(rep.Checks)-1].Fix = fixHint(name, detail)
 		}
 	}
 

@@ -54,8 +54,8 @@ func TestInstallationChecksAndHints(t *testing.T) {
 		t.Fatal(rep)
 	}
 	for _, c := range rep.Checks {
-		if c.Fix == "" {
-			t.Errorf("missing fix: %+v", c)
+		if c.Fix != "" {
+			t.Errorf("passing check has a fix: %+v", c)
 		}
 	}
 	o.LookPath = func(string) (string, error) { return "", errors.New("missing") }
@@ -63,6 +63,11 @@ func TestInstallationChecksAndHints(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertChecks(t, Run(o), map[string]string{"grid on PATH": "!not found", "plugin hooks": "!not valid JSON"}, false)
+	for _, c := range Run(o).Checks {
+		if c.OK == (c.Fix != "") {
+			t.Errorf("fix must be set exactly on failing checks: %+v", c)
+		}
+	}
 	o.HooksFile = filepath.Join(home, "missing")
 	assertChecks(t, Run(o), map[string]string{"plugin hooks": "!cannot read"}, false)
 }

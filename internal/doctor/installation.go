@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -41,11 +40,11 @@ func checkInstallation(add func(string, bool, string), o Options) {
 	} else {
 		add("grid on PATH", true, "grid is on PATH")
 	}
-	path := o.HooksFile
-	if path == "" {
-		path = filepath.Join(os.Getenv("CLAUDE_PLUGIN_ROOT"), "hooks", "hooks.json")
+	if o.HooksFile == "" {
+		add("plugin hooks", false, "cannot locate the plugin hooks file")
+		return
 	}
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(o.HooksFile)
 	if err != nil {
 		add("plugin hooks", false, "cannot read the plugin hooks file")
 		return
