@@ -96,6 +96,7 @@ func commands() []command {
 		{"refusal", "decide a refused command (a person or the app only)", runRefusal},
 		{"deliver", "write the outcome of a task", nil},
 		{"proof", "the proof index of a task", nil},
+		{"history", "append a dated task history line", runHistory},
 		{"land", "land a task per the deploy topic", nil},
 		{"brain", "show, search, topics, index, propose, accept", runBrain},
 		{"machine", "machines topic", nil},

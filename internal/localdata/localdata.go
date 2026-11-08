@@ -157,6 +157,12 @@ func Lock(home, name string) (func(), error) {
 	if err := Init(home); err != nil {
 		return nil, err
 	}
+	return LockExisting(home, name)
+}
+
+// LockExisting takes the same persistent lock in an existing data directory,
+// without creating a Grid home or a format marker there.
+func LockExisting(home, name string) (func(), error) {
 	path, err := Safe(home, name)
 	if err != nil {
 		return nil, err
