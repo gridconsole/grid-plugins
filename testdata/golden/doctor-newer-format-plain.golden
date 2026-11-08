@@ -1,0 +1,4 @@
+ok grid home: ~/.grid
+ok grid home writable: ~/.grid
+fail format version: This data is format 99; this grid reads up to 1. Update grid.
+ok git: git version 2.0.0-test

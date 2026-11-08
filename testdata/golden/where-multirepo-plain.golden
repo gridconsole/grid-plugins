@@ -1,0 +1,6 @@
+project: suite
+rule: multi-repo
+folder: <ROOT>/work/suite
+record: false
+repos: <ROOT>/work/suite/a
+repos: <ROOT>/work/suite/libs/b

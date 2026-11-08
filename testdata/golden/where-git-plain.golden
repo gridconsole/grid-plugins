@@ -1,0 +1,6 @@
+project: app
+rule: git
+folder: <ROOT>/work/app
+record: false
+keys: common:<ROOT>/work/app/.git
+keys: remote:example.com/org/app

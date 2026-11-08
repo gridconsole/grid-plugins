@@ -1,0 +1,17 @@
+---
+id: 01SUITE
+folders:
+- machine: 01LAPTOP
+  path: '/work/suite #1'
+- machine: 01DESK
+  path: C:\work\suite
+repos:
+- path: app
+  remote: example.com/org/app
+- path: libs/core
+keys:
+- key: remote:example.com/org/app
+- key: root:0123abcd
+- key: 'common:/work/suite #1/libs/core/.git'
+  machine: 01LAPTOP
+---

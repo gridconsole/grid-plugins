@@ -1,0 +1,1 @@
+{"ok":false,"checks":[{"name":"grid home","ok":false,"detail":"~/.absent does not exist"},{"name":"git","ok":true,"detail":"git version 2.0.0-test"}]}

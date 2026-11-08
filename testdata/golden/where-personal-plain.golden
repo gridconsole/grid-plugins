@@ -1,0 +1,4 @@
+project: Personal
+rule: personal
+folder: ~
+record: false

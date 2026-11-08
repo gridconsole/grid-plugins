@@ -1,0 +1,1 @@
+{"ok":true,"checks":[{"name":"grid home","ok":true,"detail":"~/.grid"},{"name":"grid home writable","ok":true,"detail":"~/.grid"},{"name":"format version","ok":true,"detail":"1"},{"name":"git","ok":true,"detail":"git version 2.0.0-test"}]}

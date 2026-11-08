@@ -1,0 +1,6 @@
+project: example
+id: 01EXAMPLE
+rule: record
+folder: <ROOT>/work/example
+record: true
+keys: remote:example.com/org/example
