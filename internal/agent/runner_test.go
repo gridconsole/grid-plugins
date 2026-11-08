@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,8 +37,43 @@ func TestAgentProbeHelper(t *testing.T) {
 		case "env":
 			_, _ = os.Stdout.WriteString(os.Getenv("PATH") + "\n" + os.Getenv("HOME"))
 			os.Exit(0)
+		case "stdin":
+			if _, err := io.Copy(os.Stdout, os.Stdin); err != nil {
+				os.Exit(3)
+			}
+			os.Exit(0)
 		}
 		os.Exit(4)
+	}
+}
+
+func TestRunnerNullStdin(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputPath := filepath.Join(t.TempDir(), "stdin")
+	if err := os.WriteFile(inputPath, []byte("parent stdin must not reach the probe"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input, err := os.Open(inputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Keep this test nonparallel: a nonempty parent stdin distinguishes null
+	// input from os.Stdin even when the test suite itself runs with null stdin.
+	previous := os.Stdin
+	os.Stdin = input
+	t.Cleanup(func() {
+		os.Stdin = previous
+		_ = input.Close()
+	})
+	e := Env{Home: t.TempDir()}
+	ctx, cancel := context.WithTimeout(context.Background(), Wait)
+	defer cancel()
+	out, code := e.run(ctx, "claude", []string{exe, "-test.run=^TestAgentProbeHelper$", "--", "--agent-probe-helper", "stdin"})
+	if code != 0 || out != "" {
+		t.Fatalf("expected null stdin (immediate EOF): output %q, exit %d", out, code)
 	}
 }
 
