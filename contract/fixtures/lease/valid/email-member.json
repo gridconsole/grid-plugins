@@ -1,0 +1,10 @@
+{
+  "lease": "task",
+  "holder": "someone@example.com@01K9J000000000000000000002",
+  "fence": 1,
+  "gen": 0,
+  "attempt": null,
+  "since": "2026-11-08T10:00:00.000Z",
+  "pid": 1234,
+  "pid_start": "2026-11-08T10:00:00.000Z"
+}

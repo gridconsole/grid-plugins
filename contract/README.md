@@ -101,8 +101,10 @@ Disagreements and defaults chosen:
   fields fail known-version writes. Unknown types or versions are displayed with
   an unknown verdict and do not affect state. Result is v2, other types v1.
 - ULIDs are uppercase canonical Crockford strings with the overflow bit checked.
-  Task IDs are ULIDs, never display numbers. Worker IDs use a placeholder member
-  and a machine ULID; old short host names are not accepted. Dates require UTC
+  Task IDs are ULIDs, never display numbers. Worker IDs are `<member>@<machine
+  ULID>`, split on the last `@`: the member is `git config user.email` until
+  sign-in (feed-contract.md:34), so it may hold an `@` but no `/` or whitespace;
+  old short host names are not accepted. Dates require UTC
   and exactly three fractional digits. Counters start at the documented bounds;
   body strings are nonempty unless the field is optional or nullable.
 - Core line 86 leaves head/host/transfer/deploy-failed classes to their type files,

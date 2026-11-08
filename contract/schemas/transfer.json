@@ -34,7 +34,7 @@
                 "to": {
                   "type": "string",
                   "minLength": 1,
-                  "pattern": "^[^@/\\s]+@[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+                  "pattern": "^[^/\\s]+@[0-7][0-9A-HJKMNP-TV-Z]{25}$"
                 },
                 "reason": {
                   "type": "string",
