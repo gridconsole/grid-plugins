@@ -1,0 +1,1 @@
+{"handle":"reviewer","name":"Example Reviewer","role":"member","links":[{"to":"release","rel":"approves","summary":"Release review","why":"Reviews release changes"}],"body":"Review notes.\n"}

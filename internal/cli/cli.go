@@ -103,7 +103,7 @@ func commands() []command {
 		{"env", "up, down browser Job dev environments", runEnv},
 		{"ports", "claim, release, list, gc dev port blocks", runPorts},
 		{"deploy", "deploy topic", nil},
-		{"person", "people topic", nil},
+		{"person", "people topic", runPerson},
 		{"routine", "add, list, remove, run, schedule and unschedule routines", runRoutine},
 		{"worker", "list local grid-worker processes", runWorker},
 		{"agent", "check agent readiness; set models and efforts; list settings", runAgentCommand},
