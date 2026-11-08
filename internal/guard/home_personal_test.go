@@ -88,6 +88,7 @@ func TestHomeRoleAccess(t *testing.T) {
 				t.Run(row.name+"/"+prefix+"/"+event, func(t *testing.T) {
 					f := setup(t)
 					f.env["GRID_ROLE"], f.env["GRID_MEMBER"], f.env["GRID_PROJECT"] = prefix+row.role, row.member, "example"
+					f.write(filepath.Join(f.projects, "example", "project-roles.json"), `{"people":[{"id":"gus","perm":"Client"}]}`)
 					f.write(filepath.Join(f.projects, "example", "project.md"), "---\nid: example-id\n---\n")
 					script := filepath.Join(f.plugin, "skills", "plan", "scripts", "plan-hash.mjs")
 					f.write(script, "// fixture")
@@ -134,7 +135,8 @@ func TestHomeGlobStructure(t *testing.T) {
 	for _, role := range []string{"owner", "builder", "member", "lead", "guest", "unknown"} {
 		for _, event := range []string{"PreToolUse", "PermissionRequest"} {
 			f := setup(t)
-			f.env["GRID_ROLE"], f.env["GRID_PROJECT"] = role, "example"
+			f.env["GRID_ROLE"], f.env["GRID_MEMBER"], f.env["GRID_PROJECT"] = role, "gus", "example"
+			f.write(filepath.Join(f.projects, "example", "project-roles.json"), `{"people":[{"id":"gus","perm":"Client"}]}`)
 			f.write(filepath.Join(f.projects, "example", "project.md"), "---\nid: example-id\n---\n")
 			root := filepath.Join(f.projects, "example")
 			f.link(filepath.Join(root, "escape"), f.repo)
