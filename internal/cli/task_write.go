@@ -19,7 +19,13 @@ func writeOptions(env Env, id, action, note string) task.WriteOptions {
 	if who == "" {
 		who = "local"
 	}
-	return task.WriteOptions{Cwd: env.Cwd, ID: id, Action: action, Note: note, Who: contract.Author{ID: who, Role: "owner"}}
+	// A member's write is recorded as the member's; "owner" is only the
+	// no-account default (also for the plain "cli" role of a person's shell).
+	role := "owner"
+	if strings.TrimSpace(env.getenv("GRID_ROLE")) == "member" {
+		role = "member"
+	}
+	return task.WriteOptions{Cwd: env.Cwd, ID: id, Action: action, Note: note, Who: contract.Author{ID: who, Role: role}}
 }
 
 func runTaskWrite(args []string, env Env) int {

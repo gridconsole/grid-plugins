@@ -104,3 +104,46 @@ func TestTaskPersonGates(t *testing.T) {
 		}
 	}
 }
+
+func TestTaskWriteRecordsRole(t *testing.T) {
+	for _, tc := range []struct{ role, actor, wantRole, wantID string }{
+		{"", "", "owner", "local"},
+		{"owner", "", "owner", "local"},
+		{"cli", "", "owner", "local"},
+		{"member", "", "member", "local"},
+		{"member", "sam", "member", "sam"},
+		{" member ", "sam", "member", "sam"},
+	} {
+		t.Run(tc.role+"/"+tc.actor, func(t *testing.T) {
+			h := newHarness(t)
+			h.env.Getenv = func(name string) string {
+				switch name {
+				case "GRID_ROLE":
+					return tc.role
+				case "GRID_ACTOR":
+					return tc.actor
+				}
+				return ""
+			}
+			fixture := taskFixture(t, h)
+			s := taskWriter(h.env)
+			if _, err := s.Change(task.WriteOptions{ID: fixture.ID, Action: "status", State: "waiting"}); err != nil {
+				t.Fatal(err)
+			}
+			h.write(filepath.Join(fixture.Path, "plan.md"), approvedPlan)
+			for _, args := range [][]string{{"approve", "T-01", "--json"}, {"task", "close", "T-01", "--json"}} {
+				h.out.Reset()
+				if code := h.run(h.home, args...); code != 0 {
+					t.Fatalf("%v exit %d: %s", args, code, h.errb)
+				}
+				var event task.Event
+				if err := json.Unmarshal(h.out.Bytes(), &event); err != nil {
+					t.Fatal(err)
+				}
+				if event.Who.Role != tc.wantRole || event.Who.ID != tc.wantID {
+					t.Fatalf("%v recorded %+v, want %s/%s", args, event.Who, tc.wantID, tc.wantRole)
+				}
+			}
+		})
+	}
+}
