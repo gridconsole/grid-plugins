@@ -83,7 +83,7 @@ The `--json` lists are objects keyed by name, sorted lexically, with a trailing
 newline. Agents have `model` and `effort`, skills have boolean values, and hooks
 have level strings. Setup returns `{"project":"example","answers":{...}}`.
 Usage errors exit 2; validation and I/O errors exit 1; success exits 0. Hook event
-calls retain their existing exit-zero contract.
+calls exit zero except when an enabled stop guard blocks completion (exit 2).
 
 `internal/fslock` has no Windows lock yet, so on Windows every settings write
 (`agent set`, `skill enable|disable`, `hook level`, `setup`) fails with its
@@ -92,10 +92,11 @@ read, and work.
 
 ## Hook behavior
 
-Guards, SessionStart and `grid hook levels` read through
-`settings.ReadHookLevels`. The existing guards apply the result through one
-shared function in `internal/guard/settings.go`. Project identity is resolved
-with `internal/where`; hook environment task/project selections also participate.
+Runtime hooks and guards share `settings.ResolveHookLevel`, which resolves the
+home and project before calling `settings.ReadHookLevels`. `grid hook levels`
+uses the same stored levels. Project identity is resolved with `internal/where`;
+hook environment task/project selections also participate. Project overrides beat
+personal values, and missing values use the catalog defaults.
 
 | Hook | Default | Consumer in this checkout |
 | --- | --- | --- |
@@ -105,8 +106,15 @@ with `internal/where`; hook environment task/project selections also participate
 | plan-guard | block, fixed | Plan guard |
 | home-allow | warn | Home permission fallback |
 | session-start | warn | SessionStart context |
-| job-lint, stop-check | block | Stored for future consumers |
-| history-log, needs-you, precompact, session-check, session-end, subagent-start, topic-trigger, usage-log, user-prompt | warn | Stored for future consumers |
+| stop-check | block | Stop and SubagentStop completion checks, including saved Job verification |
+| history-log | warn | File, Bash, subagent, brain-read and brain-recall history entries |
+| usage-log | warn | Usage totals and session/subagent transcript references |
+| precompact | warn | PreCompact summary guidance |
+| session-end | warn | Worker exit records and SessionEnd terminal state |
+| subagent-start | warn | SubagentStart brain recall context |
+| user-prompt | warn | UserPromptSubmit brain recall context |
+| job-lint | block | No runtime counterpart; has no effect yet |
+| needs-you, session-check, topic-trigger | warn | No runtime counterpart; have no effect yet |
 
 The four guards marked fixed always block. They are the person's gates and the
 fence around task, brain and project files (`docs/plugin-design.md:90`, `:92`), and a file
@@ -116,22 +124,34 @@ otherwise is refused as a whole, and the guards do not read the settings files a
 all. The host guard also denies agent writes to the settings files and the
 `grid hook level`, `agent set`, `skill enable|disable` and `setup` verbs.
 
-For the hooks that may be lowered, `off` suppresses that guard's decision. `warn`
-turns a refusal into a `systemMessage` without a permission decision. `block`
-preserves the original refusal. Warnings survive arbitration with other guards. A
-different guard can still deny the same call. An invalid settings document fails
-closed when such a guard would otherwise return a decision. The legacy
-`GRID_PLAN_GUARD=off` switch still suppresses plan checks; it does not suppress
-the host guard.
+For configurable guards, `off` skips the check, `warn` turns a denial or stop
+block into a warning, and `block` keeps the original decision. Permission warnings
+use `systemMessage`; stop warnings go to stderr and exit zero. Stop checks at
+`off` skip saved Job verification and brief marking too; `warn` still performs
+those checks and records their evidence. Warnings survive arbitration with other
+guards, so another guard can still deny a call. The permission-only `home-allow`
+fallback grants at both `warn` and `block`; `off` suppresses that grant.
 
-For the permission-only home fallback, `warn` and `block` preserve its original
-grant, so `warn` is the same as `block` there; `off` suppresses the grant. For
-SessionStart, `off` suppresses context but keeps environment initialization;
-`warn` and `block` preserve context. If the settings cannot be read, SessionStart
-still prints the context, with a one-line note that says so. A level
-cannot make an informational hook deny a call. Levels for hooks not implemented
-in this checkout are recorded without claiming to implement those hooks: `grid
-hook level stop-check off` is stored and nothing reads it yet.
+For context hooks, `off` adds no context; `warn` and `block` preserve it. For log
+hooks, `off` writes nothing for that hook; `warn` and `block` preserve logging.
+`session-start off` still initializes the environment. `history-log off` also
+skips Bash snapshots and brain history entries, while recall context continues.
+`session-end off` skips worker exit recording and ending the worker's session,
+including the worker-exit path on SubagentStop. Other hooks sharing the event
+still run under their own settings. Usage settings do not control the separate
+home permission counter or supervisor heartbeat.
+
+Unreadable settings or project resolution errors are reported and cannot disable
+a hook. A guard keeps its denial; an unreadable home permission fallback denies
+instead of granting. Stop-check retains its exit-2 block when it finds unfinished
+work. Context and log hooks run as on and report the settings error on stderr;
+SessionStart also retains its context note. The legacy `GRID_PLAN_GUARD=off`
+switch still suppresses plan checks; it does not suppress the host guard.
+
+The inactive names above remain accepted and stored for compatibility. Setting
+`job-lint`, `needs-you`, `session-check` or `topic-trigger` currently changes no
+runtime behavior. See [the L64 lane note](lanes/L64.md) for the complete mapping
+and the default policies that an owner may change.
 
 ## Setup answers
 
