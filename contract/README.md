@@ -252,6 +252,16 @@ Exit 1 with one line on stderr when the folder cannot be resolved (a task path o
 
 Checks, in order: `grid home`, `grid home writable`, `format version`, `git`. Exit 1 when any check fails.
 
+### `grid workflow show [--project <name-or-id>] [--json]`
+
+Reads the workspace `workflows.md` and registered project files, or the workspace and exactly one project selected by name or ID. JSON contains `files`, `templates`, and `errors`; each file has `scope`, `project`, `rev`, and `text`. Revisions are the first 12 hex characters of SHA-256 of the bytes, or null when absent. Plain output remains the file label, template names, and error count.
+
+### `grid workflow write [--project <name-or-id>] --rev <12-hex|none> --file <path|-> [--json]`
+
+Replaces one workspace file, or `projects/<name>/workflows.md` for exactly one registered project. Input comes from a file (relative to the current folder) or stdin with `--file -`; it must be UTF-8, at most 32 KiB, start with a workflows heading on the first line, and pass workflow parsing. `--rev none` requires absence; otherwise the revision must match under the destination's persistent lock. A mismatch exits 3 with `workflow changed since read`; invalid input exits 2 and parse diagnostics are listed. Refusals leave existing bytes unchanged.
+
+Writes use a synced temporary file in the destination folder and atomic rename, with symlinks refused and destination operations confined by `os.Root`. JSON is `{ "file": "workflows.md", "rev": "<12-hex>" }`, with `"<project>/workflows.md"` for a project; plain output is `<file> <rev>` on one line. Diagnostics do not expose absolute paths. The replaceable `WriteDefaultAllowed` host policy accepts an unset/empty `GRID_ROLE`, `owner`, or `member`; other roles exit 3 before reading input or writing files. Application authorization remains the caller's responsibility.
+
 ### `grid task new "<words>" [--project <name-or-id>] [--size <size>] [--workflow <name>] --json`
 
     {"id": string, "path": string}
