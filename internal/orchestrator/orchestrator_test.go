@@ -934,3 +934,33 @@ func TestWorkerWriteWaitsForTaskLeaseBeforePassLock(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAppliedRetrySurvivesMetadataLoss(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	for range 3 {
+		f.ack(t)
+		f.exit(t, "crash")
+		f.tick(t)
+	}
+	state, err := f.s.Feed.State()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id := range state.Questions {
+		f.post(t, feed.Input{Type: "answer", Re: id, Body: map[string]any{"answer": "Retry"}}, feed.Writer{Author: feed.Author{ID: "owner", Role: "owner"}, Worker: "owner@" + machine})
+	}
+	if f.tick(t).Assigned != 1 {
+		t.Fatal("retry not applied")
+	}
+	if err := os.Remove(filepath.Join(f.s.Feed.Dir(), ".orchestrator.json")); err != nil {
+		t.Fatal(err)
+	}
+	f.ack(t)
+	f.exit(t, "crash")
+	f.tick(t)
+	if f.state(t).Status != contract.Rejected {
+		t.Fatal("recovery forgot applied retry and restored old crash count")
+	}
+}

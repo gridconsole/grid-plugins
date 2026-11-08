@@ -342,6 +342,14 @@ func (s Store) recoverMemory(snap Snapshot, j *contract.Job) *jobMemory {
 				failure = id
 			}
 		case "control":
+			if r.Body["status"] == "ready" && r.Re != nil {
+				for qid, q := range snap.State.Questions {
+					question := snap.Records[qid]
+					if question.Job != nil && *question.Job == j.ID && question.Wake != nil && *question.Wake == m.Failure+"/1" && q.Applied != nil && *q.Applied == *r.Re && snap.Records[*q.Applied].Body["answer"] == "Retry" {
+						m.Failures = nil
+					}
+				}
+			}
 			if r.Body["status"] == "stale" && r.Re != nil {
 				failure = *r.Re
 			}

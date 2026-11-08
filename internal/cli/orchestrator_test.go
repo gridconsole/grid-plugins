@@ -346,3 +346,53 @@ func TestJobNextInterruptExits130(t *testing.T) {
 		t.Fatal(output.String())
 	}
 }
+
+func TestTaskAdoptProcess(t *testing.T) {
+	if os.Getenv("GRID_TEST_ADOPT_PROCESS") != "1" {
+		return
+	}
+	env := OSEnv()
+	env.Cwd = gridhome.Real(os.Getenv("GRID_TEST_TASK"))
+	env.Ceiling = gridhome.Real(os.Getenv("GRID_TEST_ROOT"))
+	env.TempRoots = nil
+	os.Exit(Run([]string{"lease", "take", "task", "--adopt", "--expected-epoch", "0.1", "--pid", fmt.Sprint(os.Getpid()), "--pid-start", "2000-01-01T00:00:00.000Z"}, env))
+}
+
+func TestTwoProcessesAdoptOneTaskTenure(t *testing.T) {
+	h, path := feedHarness(t)
+	h.env.Machine = feedMachine
+	if code := h.run(path, "lease", "take", "task", "--pid", fmt.Sprint(os.Getpid()), "--pid-start", "2000-01-01T00:00:00.000Z"); code != 0 {
+		t.Fatal(h.errb)
+	}
+	cmds := make([]*exec.Cmd, 2)
+	outputs := make([]bytes.Buffer, 2)
+	for n := range cmds {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestTaskAdoptProcess$")
+		cmd.Env = append(os.Environ(), "GRID_TEST_ADOPT_PROCESS=1", "GRID_TEST_TASK="+path, "GRID_TEST_ROOT="+h.root, "GRID_HOME="+h.gridHome)
+		cmd.Stdout, cmd.Stderr = &outputs[n], &outputs[n]
+		cmds[n] = cmd
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wins := 0
+	for n, cmd := range cmds {
+		if err := cmd.Wait(); err == nil {
+			wins++
+		} else if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 1 {
+			t.Fatalf("unexpected adoption failure %v: %s", err, &outputs[n])
+		}
+	}
+	if wins != 1 {
+		t.Fatalf("%d contenders granted: %s %s", wins, &outputs[0], &outputs[1])
+	}
+	store := feed.Store{TaskDir: path, TaskID: feedTaskID}
+	grant, err := (lease.TaskStore{Feed: store}).Read("task")
+	if err != nil || grant.Fence != 2 {
+		t.Fatal(grant, err)
+	}
+	read, err := store.Read(feed.Filter{Type: "handover"})
+	if err != nil || len(read.Records) != 2 {
+		t.Fatal(read, err)
+	}
+}
