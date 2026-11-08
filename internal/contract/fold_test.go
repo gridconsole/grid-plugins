@@ -442,3 +442,12 @@ func TestResultTargetAndTenureBoundaries(t *testing.T) {
 		}
 	})
 }
+
+func TestTypeVersionFromSchema(t *testing.T) {
+	SchemaNames()
+	for name, want := range map[string]int{"ack": 1, "result": 2, "envelope": 0} {
+		if got := typeVersion(schemas.byName[name+".json"]); got != want {
+			t.Errorf("typeVersion(%s) = %d, want %d", name, got, want)
+		}
+	}
+}

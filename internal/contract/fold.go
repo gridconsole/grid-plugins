@@ -99,11 +99,7 @@ func Fold(posts []Post) State {
 			set(p, "unknown", "unknown or retired Feed type")
 			continue
 		}
-		version := 1
-		if p.Type == "result" {
-			version = 2
-		}
-		if p.TypeV != version {
+		if version := typeVersion(schema); version == 0 || p.TypeV != version {
 			set(p, "unknown", "unknown type version")
 			continue
 		}
@@ -312,4 +308,20 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// typeVersion returns the type_v const a post type's schema pins, or 0 when it pins none.
+func typeVersion(schema map[string]any) int {
+	parts, _ := schema["allOf"].([]any)
+	for _, part := range parts {
+		m, _ := part.(map[string]any)
+		props, _ := m["properties"].(map[string]any)
+		typeV, _ := props["type_v"].(map[string]any)
+		if n, ok := typeV["const"].(json.Number); ok {
+			if v, err := n.Int64(); err == nil {
+				return int(v)
+			}
+		}
+	}
+	return 0
 }
