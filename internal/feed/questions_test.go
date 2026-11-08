@@ -1,6 +1,10 @@
 package feed
 
-import "testing"
+import (
+	"github.com/gridconsole/grid-plugins/internal/contract"
+	"reflect"
+	"testing"
+)
 
 func TestPersonGateAnswersAndConflicts(t *testing.T) {
 	s := testStore(t)
@@ -51,6 +55,9 @@ func TestQuestionControlRequiresTaskTenure(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, decisions := FoldRead(read)
+	if !reflect.DeepEqual(state.Verdicts, contract.Fold(posts(read)).Verdicts) {
+		t.Fatal("person layer changed contract verdicts")
+	}
 	if state.Questions[q.ID].Open || decisions[q.ID].State != "withdrawn" {
 		t.Fatalf("withdraw: %+v", decisions)
 	}

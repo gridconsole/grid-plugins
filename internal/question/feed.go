@@ -70,6 +70,9 @@ func (s Store) publishEvents(dir string, r *Record, before int) error {
 		in := feed.Input{Re: r.Post, Job: r.Job}
 		w := s.Writer
 		if e.Kind == "answered" {
+			if w.Author.Role == "agent" || w.Author.Role == "cli" {
+				return fmt.Errorf("only a person may answer a person gate")
+			}
 			w.Lease, w.Fence, w.Gen = "", 0, 0
 			in.Type, in.Body = "answer", map[string]any{"answer": e.Text}
 		} else {

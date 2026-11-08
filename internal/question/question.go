@@ -150,6 +150,11 @@ func (s Store) List() (records []Record, err error) {
 // no-op; a different human answer cannot silently overwrite an earlier answer.
 // A default is provisional and always permits a subsequent human answer.
 func (s Store) Answer(id, text string) (Record, error) {
+	switch s.Writer.Author.Role {
+	case "owner", "member", "lead", "guest":
+	default:
+		return Record{}, errors.New("only a person may answer a person gate")
+	}
 	if strings.TrimSpace(text) == "" {
 		return Record{}, errors.New("answer must not be empty")
 	}

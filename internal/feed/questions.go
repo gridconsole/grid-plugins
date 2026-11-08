@@ -73,14 +73,9 @@ func foldQuestions(read ReadResult, state *contract.State) map[string]QuestionDe
 				continue
 			}
 			d.Events = append(d.Events, p)
-			for i := range state.Verdicts {
-				if state.Verdicts[i].ID == p.ID {
-					state.Verdicts[i].Kind, state.Verdicts[i].Reason = "counted", ""
-				}
-			}
 		}
 		selected := ""
-		if q.Applied != nil {
+		if q.Applied != nil && personAnswer(records[*q.Applied], q.Who) {
 			selected = *q.Applied
 		} else if d.State != "withdrawn" {
 			answer, conflict := "", false
@@ -89,10 +84,7 @@ func foldQuestions(read ReadResult, state *contract.State) map[string]QuestionDe
 				if !ok {
 					continue
 				}
-				// The question-file contract records these caller roles.
-				switch p.Author.Role {
-				case "owner", "member", "guest", "lead", "agent", "cli":
-				default:
+				if !personAnswer(p, q.Who) {
 					continue
 				}
 				text := str(p.Body["answer"])
@@ -107,29 +99,56 @@ func foldQuestions(read ReadResult, state *contract.State) map[string]QuestionDe
 				selected = ""
 			}
 		}
+		q.Applied = nil
 		if p, ok := records[selected]; ok {
 			d.State, d.Answer = "answered", str(p.Body["answer"])
 			d.Events = append(d.Events, p)
 			q.Applied = &p.ID
 		}
-		q.Open = q.Open && d.State == "open"
+		q.Open = d.State == "open"
+		if q.Job != nil {
+			if job := state.Jobs[*q.Job]; job != nil && job.Status == contract.Cancelled {
+				q.Open = false
+			}
+		}
 		decisions[id] = d
 	}
-	state.NeedsYou = filterOpen(state.NeedsYou, state.Questions)
+	// Rebuild indexes because the person layer can also reject a contract-selected
+	// non-person answer. Contract verdicts remain untouched.
+	state.NeedsYou = []string{}
 	for _, job := range state.Jobs {
-		job.OpenQuestions = filterOpen(job.OpenQuestions, state.Questions)
+		job.OpenQuestions = []string{}
+	}
+	for id, q := range state.Questions {
+		if !q.Open {
+			continue
+		}
+		state.NeedsYou = append(state.NeedsYou, id)
+		if q.Job != nil {
+			if job := state.Jobs[*q.Job]; job != nil {
+				job.OpenQuestions = append(job.OpenQuestions, id)
+			}
+		}
+	}
+	sort.Strings(state.NeedsYou)
+	for _, job := range state.Jobs {
+		sort.Strings(job.OpenQuestions)
 	}
 	return decisions
 }
 
-func filterOpen(ids []string, questions map[string]*contract.Question) []string {
-	out := []string{}
-	for _, id := range ids {
-		if q := questions[id]; q != nil && q.Open {
-			out = append(out, id)
-		}
+func personAnswer(p Record, who string) bool {
+	if p.Type != "answer" {
+		return false
 	}
-	return out
+	switch p.Author.Role {
+	case "owner", "member", "lead":
+		return true
+	case "guest":
+		return p.Author.ID == who
+	default:
+		return false
+	}
 }
 
 // FoldRead uses the same admitted snapshot for state and question projections.

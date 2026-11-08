@@ -119,6 +119,16 @@ func TestAnswerCallerRoles(t *testing.T) {
 			q := questionAdd(t, h, task, "visitor")
 			t.Setenv("GRID_MEMBER", "visitor")
 			t.Setenv("GRID_ROLE", role)
+			if role == "agent" || role == "cli" {
+				if code := h.run(task, "answer", task, q.ID, "Yes"); code == 0 {
+					t.Fatal("non-person answer accepted")
+				}
+				read, err := (feed.Store{TaskDir: task, TaskID: feedTaskID}).Read(feed.Filter{Type: "answer"})
+				if err != nil || len(read.Records) != 0 {
+					t.Fatalf("refused answer posted: %+v %v", read, err)
+				}
+				return
+			}
 			if code := h.run(task, "answer", task, q.ID, "Yes", "--json"); code != 0 {
 				t.Fatalf("answer %d: %s", code, h.errb)
 			}
@@ -163,5 +173,35 @@ func TestQuestionCommandSurface(t *testing.T) {
 	}
 	if code := h.run(task, "answer", "--help"); code != 0 || !bytes.Contains(h.out.Bytes(), []byte("grid answer <task>")) {
 		t.Fatalf("help: %d %s", code, h.out)
+	}
+}
+
+func TestAgentFeedAnswerLeavesPersonGateOpen(t *testing.T) {
+	for _, role := range []string{"agent", "cli"} {
+		t.Run(role, func(t *testing.T) {
+			h, task := feedHarness(t)
+			q := questionAdd(t, h, task, "member")
+			t.Setenv("GRID_ROLE", role)
+			if code := h.run(task, "feed", "post", "--type", "answer", "--re", q.Post, "--body", `{"answer":"Yes"}`); code != 0 {
+				t.Fatalf("feed post %d: %s", code, h.errb)
+			}
+			state, err := (feed.Store{TaskDir: task, TaskID: feedTaskID}).State()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !state.Questions[q.Post].Open || state.Questions[q.Post].Applied != nil || len(state.NeedsYou) != 1 {
+				t.Fatalf("non-person answer closed gate: %+v", state)
+			}
+			if code := h.run(task, "question", "list", "--json"); code != 0 {
+				t.Fatalf("list %d: %s", code, h.errb)
+			}
+			var listed []question.Record
+			if err := json.Unmarshal(h.out.Bytes(), &listed); err != nil {
+				t.Fatal(err)
+			}
+			if len(listed) != 1 || listed[0].State != "open" || len(listed[0].History) != 0 {
+				t.Fatalf("non-person answer projected: %+v", listed)
+			}
+		})
 	}
 }
