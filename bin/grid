@@ -1,57 +1,45 @@
 #!/bin/sh
-# Dev launcher for the grid CLI: builds this checkout into <checkout>/dist/grid on every
-# call (go's build cache makes an unchanged tree a no-op) and runs it.
-# TODO: release launcher. Run ~/.grid/bin/<version>/grid; when it is missing, download the
-# platform build, check it against the sha256 committed in this plugin, then install it
-# there. On a mismatch print "Download failed: checksum does not match. Nothing was
-# installed." and keep the old binary (plugin-design.md section 9).
-set -u
+# Generated as bin/grid by make generate; edit internal/packaging/grid.sh.
+set -eu
 
-# Follow symlinks (a link in ~/.local/bin, say) to the checkout this file lives in.
+# Resolve shell links without readlink -f (which is absent on older macOS).
 self=$0
+case $self in
+*/*) ;;
+*) self=$(command -v "$self") ;;
+esac
+links=0
 while [ -L "$self" ]; do
+	links=$((links + 1))
+	if [ "$links" -gt 40 ]; then
+		echo 'grid: launcher symlink loop' >&2
+		exit 1
+	fi
 	link=$(readlink "$self")
 	case $link in
 	/*) self=$link ;;
-	*) self=$(dirname -- "$self")/$link ;;
+	*) self=$(dirname "$self")/$link ;;
 	esac
 done
-root=$(CDPATH= cd -P -- "$(dirname -- "$self")/.." && pwd -P) || exit 1
-bin="$root/dist/grid"
-
-# Same flags as make build, so the two never rebuild over each other.
-build() {
-	go build -C "$root" -trimpath -o "$bin" ./cmd/grid
-}
-
-if [ "${1:-}" = hook ]; then
-	# A hook answers inside its 10 s timeout and never fails the session: when go is
-	# missing, the build fails or takes over 8 s, it answers nothing and exits 0.
-	# A slow build carries on in the background, so a later call finds it done.
-	command -v go >/dev/null 2>&1 || exit 0
-	trap 'exit 0' USR1
-	build </dev/null >/dev/null 2>&1 &
-	pid=$!
-	main=$$
-	(
-		trap 'kill "$nap" 2>/dev/null; exit 0' TERM
-		sleep 8 &
-		nap=$!
-		wait "$nap" && kill -USR1 "$main"
-	) </dev/null >/dev/null 2>&1 &
-	watchdog=$!
-	if ! wait "$pid"; then
-		kill "$watchdog" 2>/dev/null
-		exit 0
-	fi
-	kill "$watchdog" 2>/dev/null
-	trap - USR1
-	exec "$bin" "$@"
+root=$(CDPATH= cd -P "$(dirname "$self")/.." && pwd -P)
+os=$(uname -s)
+arch=$(uname -m)
+case $os in
+Darwin) platform=darwin ;;
+Linux) platform=linux ;;
+*) echo "grid: unsupported operating system: $os (supported: Darwin, Linux)" >&2; exit 1 ;;
+esac
+case $arch in
+arm64|aarch64) platform=$platform-arm64 ;;
+x86_64|amd64) platform=$platform-amd64 ;;
+*) echo "grid: unsupported architecture: $arch on $os (supported: arm64, amd64)" >&2; exit 1 ;;
+esac
+binary="$root/bin/grid-$platform"
+if [ ! -x "$binary" ] && [ -f "$root/go.mod" ]; then
+	binary="$root/dist/plugin/bin/grid-$platform"
 fi
-
-if ! command -v go >/dev/null 2>&1; then
-	echo "grid: this dev launcher builds grid from source and needs go on PATH" >&2
+if [ ! -x "$binary" ]; then
+	echo "grid: missing executable for $platform; install a complete release or run make dist in the source checkout" >&2
 	exit 1
 fi
-build || exit 1
-exec "$bin" "$@"
+exec "$binary" "$@"

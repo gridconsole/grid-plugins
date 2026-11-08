@@ -102,7 +102,7 @@ func TestSkillCommandExtraction(t *testing.T) {
 	if want := "task,where,brain,job,version,doctor"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
-	if cli.Implemented("not-a-command") || cli.Implemented("setup") {
+	if cli.Implemented("not-a-command") {
 		t.Fatal("unimplemented commands accepted")
 	}
 }

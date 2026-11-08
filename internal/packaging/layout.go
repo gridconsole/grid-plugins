@@ -2,6 +2,7 @@
 package packaging
 
 import (
+	_ "embed"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,6 +10,9 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/hook"
 )
+
+//go:embed grid.sh
+var launcher []byte
 
 // HookConfig is shared by the Claude Code and Codex manifests.
 type HookConfig struct {
@@ -59,6 +63,7 @@ func Files(version string) (map[string][]byte, error) {
 		}
 		files[path] = append(b, '\n')
 	}
+	files["bin/grid"] = launcher
 	return files, nil
 }
 
@@ -73,7 +78,14 @@ func Write(root, version string) error {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(path, b, 0o644); err != nil {
+		mode := os.FileMode(0o644)
+		if name == "bin/grid" {
+			mode = 0o755
+		}
+		if err := os.WriteFile(path, b, mode); err != nil {
+			return err
+		}
+		if err := os.Chmod(path, mode); err != nil {
 			return err
 		}
 	}
