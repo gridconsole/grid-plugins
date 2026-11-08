@@ -220,13 +220,6 @@ func (s Store) wake(snap Snapshot, m *memory) *Wake {
 		keys = append(keys, event)
 	}
 	sort.Strings(keys)
-	// Old metadata marked events delivered before the caller saw them. Rebuild
-	// that queue once; counted wake writes remain the acknowledgement authority.
-	if m.WakeVersion == 0 {
-		m.Delivered = map[string]bool{}
-		m.Pending = nil
-		m.WakeVersion = 1
-	}
 	if m.WakeCounts == nil {
 		m.WakeCounts = map[string]int{}
 	}
@@ -235,6 +228,33 @@ func (s Store) wake(snap Snapshot, m *memory) *Wake {
 		if r.Wake != nil {
 			acknowledged[*r.Wake] = true
 		}
+	}
+	// L34 used n=1 for every event and marked delivery before any write. On
+	// upgrade, honor existing acknowledgements by their original key and reserve
+	// all legacy delivery slots so replay cannot overwrite an earlier render.
+	if m.WakeVersion == 0 {
+		counts := map[string]int{}
+		for event, seen := range m.Delivered {
+			if seen {
+				counts[candidates[event]]++
+			}
+		}
+		m.Delivered = map[string]bool{}
+		for wake := range acknowledged {
+			event, number, ok := strings.Cut(wake, "/")
+			n, err := strconv.Atoi(number)
+			job, candidate := candidates[event]
+			if ok && err == nil && n > 0 && candidate {
+				m.Delivered[event] = true
+				counts[job] = max(counts[job], n)
+			}
+		}
+		for job, n := range counts {
+			m.WakeCounts[job] = max(m.WakeCounts[job], n)
+		}
+		m.Pending = nil
+		m.Active = nil
+		m.WakeVersion = 1
 	}
 	key := func(w Wake) string { return fmt.Sprintf("%s/%d", w.Event, w.N) }
 	if m.Active != nil {

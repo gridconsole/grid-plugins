@@ -964,3 +964,23 @@ func TestAppliedRetrySurvivesMetadataLoss(t *testing.T) {
 		t.Fatal("recovery forgot applied retry and restored old crash count")
 	}
 }
+
+func TestLegacyWakeMigrationPreservesAcknowledgementsAndNumbers(t *testing.T) {
+	f := setup(t)
+	snap := Snapshot{State: contract.State{Jobs: map[string]*contract.Job{}, Wakes: []string{"event-1", "event-2", "event-3"}}, Records: map[string]feed.Record{}}
+	m := memory{Jobs: map[string]*jobMemory{}, Delivered: map[string]bool{"event-1": true, "event-2": true, "event-3": true}}
+	for _, event := range snap.State.Wakes {
+		snap.Records[event] = feed.Record{Body: map[string]any{"job": "J-1"}}
+	}
+	for _, event := range []string{"event-1", "event-2"} {
+		key := event + "/1"
+		snap.Records["ack-"+event] = feed.Record{Wake: &key}
+	}
+	out := f.s.wake(snap, &m)
+	if out == nil || out.Event != "event-3" || out.N <= 3 {
+		t.Fatal("migration replayed acknowledged event or reused legacy render number", out)
+	}
+	if again := f.s.wake(snap, &m); !reflect.DeepEqual(out, again) {
+		t.Fatal("migrated pending wake was lost", again)
+	}
+}
