@@ -18,7 +18,10 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^[^\\r\\n\\x00]*[^\\s\\p{Z}\\x{0085}\\r\\n\\x00][^\\r\\n\\x00]*$"
+          "pattern": "^[^\r\n\u0000]+$",
+          "not": {
+            "pattern": "^[\t\n\u000b\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$"
+          }
         },
         "tier": {
           "type": "string",
