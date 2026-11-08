@@ -9,7 +9,7 @@ grid agent list --json
 grid skill disable research
 grid skill enable research --project example
 grid skill list --json
-grid hook level plan-guard warn --project example
+grid hook level home-allow warn --project example
 grid hook levels --json
 grid setup example --json
 ```
@@ -25,7 +25,7 @@ does not freeze an inherited model. Commands do not create projects.
 | Agent model | `haiku`, `sonnet`, `opus` |
 | Agent effort | `low`, `medium`, `high`, `xhigh`, `max` |
 | Skill state | `enable`, `disable` (stored as JSON booleans) |
-| Hook level | `off`, `warn`, `block` |
+| Hook level | `off`, `warn`, `block`; `block` only for brief-lint, host-guard, only-writer and plan-guard |
 
 Model arguments accept any letter case and are stored in lower case. Efforts,
 names and levels use the spelling in the tables. `agent set` requires at least
@@ -62,7 +62,7 @@ explicit overrides:
 {
   "agents": {"grid-builder": {"effort": "low"}},
   "skills": {"research": false},
-  "hooks": {"plan-guard": "warn"}
+  "hooks": {"home-allow": "warn"}
 }
 ```
 
@@ -74,16 +74,21 @@ symlink. Symlinks in the Grid home's existing prefix are resolved, including the
 normal macOS temporary-directory aliases.
 
 Writes take the stable `<grid-home>/.settings.lock` using `internal/fslock`, read
-again while holding the lock, and publish with `internal/atomicfile`, extracted
-from the task store's existing implementation. Data is synced before rename and
-the containing directory is synced afterward. First writes also atomically
-record `VERSION` while holding the lock. No machine identity is created.
+again while holding the lock, and publish with `internal/atomicfile`. Data is
+synced before rename and the containing directory is synced afterward. First
+writes also atomically record `VERSION` while holding the lock. No machine
+identity is created.
 
 The `--json` lists are objects keyed by name, sorted lexically, with a trailing
 newline. Agents have `model` and `effort`, skills have boolean values, and hooks
 have level strings. Setup returns `{"project":"example","answers":{...}}`.
 Usage errors exit 2; validation and I/O errors exit 1; success exits 0. Hook event
 calls retain their existing exit-zero contract.
+
+`internal/fslock` has no Windows lock yet, so on Windows every settings write
+(`agent set`, `skill enable|disable`, `hook level`, `setup`) fails with its
+unsupported-platform error before anything is written. Lists and hook events only
+read, and work.
 
 ## Hook behavior
 
@@ -94,27 +99,39 @@ with `internal/where`; hook environment task/project selections also participate
 
 | Hook | Default | Consumer in this checkout |
 | --- | --- | --- |
-| brief-lint | block | Legacy brief guard |
-| host-guard | block | Host and Feed guard |
-| only-writer | block | Task and brain ownership guard |
-| plan-guard | block | Plan guard |
+| brief-lint | block, fixed | Legacy brief guard |
+| host-guard | block, fixed | Host and Feed guard |
+| only-writer | block, fixed | Task and brain ownership guard |
+| plan-guard | block, fixed | Plan guard |
 | home-allow | warn | Home permission fallback |
 | session-start | warn | SessionStart context |
 | job-lint, stop-check | block | Stored for future consumers |
 | history-log, needs-you, precompact, session-check, session-end, subagent-start, topic-trigger, usage-log, user-prompt | warn | Stored for future consumers |
 
-`off` suppresses that guard's decision. `warn` turns a refusal into a
-`systemMessage` without a permission decision. `block` preserves the original
-refusal. Warnings survive arbitration with other guards. A different guard can
-still deny the same call. An invalid settings document fails closed when a guard
-would otherwise return a decision. The legacy `GRID_PLAN_GUARD=off` switch still
-suppresses plan checks; it does not suppress the host guard.
+The four guards marked fixed always block. They are the person's gates and the
+fence around task, brain and project files (`docs/plugin-design.md:90`, `:92`), and a file
+an agent can write must not be able to switch them off. `grid hook level` refuses
+`off` and `warn` for them with the allowed list, a settings file that says
+otherwise is refused as a whole, and the guards do not read the settings files at
+all. The host guard also denies agent writes to the settings files and the
+`grid hook level`, `agent set`, `skill enable|disable` and `setup` verbs.
+
+For the hooks that may be lowered, `off` suppresses that guard's decision. `warn`
+turns a refusal into a `systemMessage` without a permission decision. `block`
+preserves the original refusal. Warnings survive arbitration with other guards. A
+different guard can still deny the same call. An invalid settings document fails
+closed when such a guard would otherwise return a decision. The legacy
+`GRID_PLAN_GUARD=off` switch still suppresses plan checks; it does not suppress
+the host guard.
 
 For the permission-only home fallback, `warn` and `block` preserve its original
-grant; `off` suppresses the grant. For SessionStart, `off` suppresses context but
-keeps environment initialization; `warn` and `block` preserve context. A level
+grant, so `warn` is the same as `block` there; `off` suppresses the grant. For
+SessionStart, `off` suppresses context but keeps environment initialization;
+`warn` and `block` preserve context. If the settings cannot be read, SessionStart
+still prints the context, with a one-line note that says so. A level
 cannot make an informational hook deny a call. Levels for hooks not implemented
-in this checkout are recorded without claiming to implement those hooks.
+in this checkout are recorded without claiming to implement those hooks: `grid
+hook level stop-check off` is stored and nothing reads it yet.
 
 ## Setup answers
 
