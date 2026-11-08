@@ -15,6 +15,9 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
+// MaxTimeout caps the health wait of one `grid env up`.
+const MaxTimeout = 120 * time.Second
+
 // Config is the single local environments entry in project.md. Command is a
 // shell command; {port} and PORT both name the first port of the reserved block.
 // Timeout is a Go duration string. PortRange is an inclusive [first,last] pair.
@@ -74,11 +77,21 @@ func (c Config) Validate() (time.Duration, error) {
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil {
 		return 0, errors.New("environments.health_url must be an HTTP or HTTPS URL without credentials")
 	}
+	// The check runs on this machine against the server this command started, so
+	// an unrelated remote 2xx must never count as healthy.
+	switch u.Hostname() {
+	case "127.0.0.1", "::1", "localhost":
+	default:
+		return 0, errors.New("environments.health_url must name a loopback host: 127.0.0.1, ::1 or localhost")
+	}
 	timeout := 30 * time.Second
 	if c.Timeout != "" {
 		timeout, err = time.ParseDuration(c.Timeout)
 		if err != nil || timeout <= 0 {
 			return 0, errors.New("environments.timeout must be a positive duration such as 30s")
+		}
+		if timeout > MaxTimeout {
+			return 0, fmt.Errorf("environments.timeout must be at most %s", MaxTimeout)
 		}
 	}
 	if _, err := c.Ports(); err != nil {

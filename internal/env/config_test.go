@@ -20,6 +20,11 @@ func TestProjectEnvironmentConfig(t *testing.T) {
 	}{
 		{"configured", "environments:\n  command: serve --port {port}\n  health_url: http://127.0.0.1:{port}/health\n  timeout: 5s\n  port_range: [43000, 43199]\n", false},
 		{"default range", "environments:\n  command: serve\n  health_url: http://127.0.0.1:{port}/health\n", false},
+		{"remote health host", "environments:\n  command: serve\n  health_url: http://example.com:{port}/health\n", true},
+		{"ipv6 loopback health host", "environments:\n  command: serve\n  health_url: http://[::1]:{port}/health\n", false},
+		{"localhost health host", "environments:\n  command: serve\n  health_url: http://localhost:{port}/health\n", false},
+		{"timeout at the cap", "environments:\n  command: serve\n  health_url: http://127.0.0.1:{port}/health\n  timeout: 2m\n", false},
+		{"timeout above the cap", "environments:\n  command: serve\n  health_url: http://127.0.0.1:{port}/health\n  timeout: 121s\n", true},
 		{"bad range", "environments:\n  port_range: [3]\n", true},
 		{"wrong shape", "environments: [dev]\n", true},
 	} {
@@ -30,6 +35,9 @@ func TestProjectEnvironmentConfig(t *testing.T) {
 			}
 			cfg, rec, err := Load(home, "example")
 			if tc.bad {
+				if err == nil {
+					_, err = cfg.Validate()
+				}
 				if err == nil {
 					t.Fatal("accepted invalid config")
 				}
