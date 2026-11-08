@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "sync-manifest",
-  "description": "Spec-only paid-account manifest, not written by grid sync yet. All field spellings are defaults, owner may change. Logical classes select content; there is no arbitrary path or payload field. See formats.md for authorization and cross-reference checks beyond JSON Schema.",
+  "description": "Spec-only paid-account manifest, not written by grid sync yet. All field spellings are defaults, owner may change. Logical classes select content; there is no arbitrary path or payload field. See formats.md for authorization and cross-reference checks beyond JSON Schema. Fixed class policy (authority / server_holds / readers / conflict), documented in formats.md and never carried or overridden by a manifest: task_files: bound-machine / task-files / own-computers-cut-1-project-members-cut-2 / last-writer-wins-keep-conflict-file (findings-concept.md:185; findings-runtime.md:193; go-architecture.md:392); folded_feed: bound-machine / folded-state / project-status-and-needs / rebuild-from-records-never-merge (findings-concept.md:185; feed-contract.md:13; findings-runtime.md:193); project_brain: project-members-no-guest-writes / project-brain-by-project-id / project-members-role-filtered-and-workers / version-with-superseded-by (brain-feed.md:285-286; findings-brain.md:72; findings-runtime.md:193); personal_notes: person / private-personal-notes / own-computers-only / version-with-superseded-by (go-architecture.md:13; brain-feed.md:285-286; findings-runtime.md:193); secrets: local-only / nothing / local-only / never-sync (go-architecture.md:13; findings-runtime.md:193); repos: git-remote / nothing / git-clients / never-sync (go-architecture.md:13; findings-concept.md:185; findings-runtime.md:193); raw_feed: bound-machine / nothing / local-only / deferred-not-in-cut-1 (feed-contract.md:13; findings-concept.md:185; findings-runtime.md:193). Policy tokens and unresolved conflict behavior are defaults, owner may change.",
   "type": "object",
   "properties": {
     "manifest_v": {
@@ -42,8 +42,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
-            "description": "go-architecture.md:392: stable logical identity, never a filesystem path; spelling default, owner may change."
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+            "description": "feed-contract.md:34: machine ULID, never a display name or filesystem path."
           },
           "person": {
             "type": "string",
@@ -149,8 +149,8 @@
                 },
                 "machine": {
                   "type": "string",
-                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
-                  "description": "feed-contract.md:13: bound machine."
+                  "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+                  "description": "feed-contract.md:13,34: bound machine ULID."
                 },
                 "gen": {
                   "type": "integer",
@@ -181,225 +181,6 @@
       "minItems": 1,
       "uniqueItems": true,
       "description": "go-architecture.md:13; brain-feed.md:286: project-keyed sync."
-    },
-    "classes": {
-      "type": "object",
-      "properties": {
-        "task_files": {
-          "type": "object",
-          "properties": {
-            "authority": {
-              "const": "bound-machine",
-              "description": "findings-concept.md:185; findings-runtime.md:193; go-architecture.md:392; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "server_holds": {
-              "const": "task-files",
-              "description": "findings-concept.md:185; findings-runtime.md:193; go-architecture.md:392; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "readers": {
-              "const": "own-computers-cut-1-project-members-cut-2",
-              "description": "findings-concept.md:185; findings-runtime.md:193; go-architecture.md:392; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "conflict": {
-              "const": "last-writer-wins-keep-conflict-file",
-              "description": "findings-concept.md:185; findings-runtime.md:193; go-architecture.md:392; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            }
-          },
-          "required": [
-            "authority",
-            "server_holds",
-            "readers",
-            "conflict"
-          ],
-          "additionalProperties": false,
-          "description": "findings-concept.md:185; findings-runtime.md:193; go-architecture.md:392"
-        },
-        "folded_feed": {
-          "type": "object",
-          "properties": {
-            "authority": {
-              "const": "bound-machine",
-              "description": "findings-concept.md:185; feed-contract.md:13; findings-runtime.md:193; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "server_holds": {
-              "const": "folded-state",
-              "description": "findings-concept.md:185; feed-contract.md:13; findings-runtime.md:193; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "readers": {
-              "const": "project-status-and-needs",
-              "description": "findings-concept.md:185; feed-contract.md:13; findings-runtime.md:193; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "conflict": {
-              "const": "rebuild-from-records-never-merge",
-              "description": "findings-concept.md:185; feed-contract.md:13; findings-runtime.md:193; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            }
-          },
-          "required": [
-            "authority",
-            "server_holds",
-            "readers",
-            "conflict"
-          ],
-          "additionalProperties": false,
-          "description": "findings-concept.md:185; feed-contract.md:13; findings-runtime.md:193"
-        },
-        "project_brain": {
-          "type": "object",
-          "properties": {
-            "authority": {
-              "const": "project-members-no-guest-writes",
-              "description": "brain-feed.md:285-286; findings-brain.md:72; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "server_holds": {
-              "const": "project-brain-by-project-id",
-              "description": "brain-feed.md:285-286; findings-brain.md:72; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "readers": {
-              "const": "project-members-role-filtered-and-workers",
-              "description": "brain-feed.md:285-286; findings-brain.md:72; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "conflict": {
-              "const": "version-with-superseded-by",
-              "description": "brain-feed.md:285-286; findings-brain.md:72; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            }
-          },
-          "required": [
-            "authority",
-            "server_holds",
-            "readers",
-            "conflict"
-          ],
-          "additionalProperties": false,
-          "description": "brain-feed.md:285-286; findings-brain.md:72"
-        },
-        "personal_notes": {
-          "type": "object",
-          "properties": {
-            "authority": {
-              "const": "person",
-              "description": "go-architecture.md:13; brain-feed.md:285-286; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "server_holds": {
-              "const": "private-personal-notes",
-              "description": "go-architecture.md:13; brain-feed.md:285-286; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "readers": {
-              "const": "own-computers-only",
-              "description": "go-architecture.md:13; brain-feed.md:285-286; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "conflict": {
-              "const": "version-with-superseded-by",
-              "description": "go-architecture.md:13; brain-feed.md:285-286; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            }
-          },
-          "required": [
-            "authority",
-            "server_holds",
-            "readers",
-            "conflict"
-          ],
-          "additionalProperties": false,
-          "description": "go-architecture.md:13; brain-feed.md:285-286"
-        },
-        "secrets": {
-          "type": "object",
-          "properties": {
-            "authority": {
-              "const": "local-only",
-              "description": "go-architecture.md:13; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "server_holds": {
-              "const": "nothing",
-              "description": "go-architecture.md:13; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "readers": {
-              "const": "local-only",
-              "description": "go-architecture.md:13; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "conflict": {
-              "const": "never-sync",
-              "description": "go-architecture.md:13; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            }
-          },
-          "required": [
-            "authority",
-            "server_holds",
-            "readers",
-            "conflict"
-          ],
-          "additionalProperties": false,
-          "description": "go-architecture.md:13"
-        },
-        "repos": {
-          "type": "object",
-          "properties": {
-            "authority": {
-              "const": "git-remote",
-              "description": "go-architecture.md:13; findings-concept.md:185; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "server_holds": {
-              "const": "nothing",
-              "description": "go-architecture.md:13; findings-concept.md:185; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "readers": {
-              "const": "git-clients",
-              "description": "go-architecture.md:13; findings-concept.md:185; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "conflict": {
-              "const": "never-sync",
-              "description": "go-architecture.md:13; findings-concept.md:185; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            }
-          },
-          "required": [
-            "authority",
-            "server_holds",
-            "readers",
-            "conflict"
-          ],
-          "additionalProperties": false,
-          "description": "go-architecture.md:13; findings-concept.md:185"
-        },
-        "raw_feed": {
-          "type": "object",
-          "properties": {
-            "authority": {
-              "const": "bound-machine",
-              "description": "feed-contract.md:13; findings-concept.md:185; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "server_holds": {
-              "const": "nothing",
-              "description": "feed-contract.md:13; findings-concept.md:185; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "readers": {
-              "const": "local-only",
-              "description": "feed-contract.md:13; findings-concept.md:185; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            },
-            "conflict": {
-              "const": "deferred-not-in-cut-1",
-              "description": "feed-contract.md:13; findings-concept.md:185; findings-runtime.md:193. Policy spelling and unresolved conflict behavior: default, owner may change."
-            }
-          },
-          "required": [
-            "authority",
-            "server_holds",
-            "readers",
-            "conflict"
-          ],
-          "additionalProperties": false,
-          "description": "feed-contract.md:13; findings-concept.md:185"
-        }
-      },
-      "required": [
-        "task_files",
-        "folded_feed",
-        "project_brain",
-        "personal_notes",
-        "secrets",
-        "repos",
-        "raw_feed"
-      ],
-      "additionalProperties": false,
-      "description": "findings-runtime.md:193: data class (key), authority, server holdings, readers and conflict rule."
     }
   },
   "required": [
@@ -407,8 +188,7 @@
     "cut",
     "account",
     "machines",
-    "projects",
-    "classes"
+    "projects"
   ],
   "additionalProperties": false
 }

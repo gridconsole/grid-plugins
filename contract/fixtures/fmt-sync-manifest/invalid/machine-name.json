@@ -1,0 +1,45 @@
+{
+  "manifest_v": 1,
+  "cut": 1,
+  "account": {
+    "person": "person-one",
+    "paid": true
+  },
+  "machines": [
+    {
+      "id": "laptop",
+      "person": "person-one"
+    },
+    {
+      "id": "01K9J000000000000000000003",
+      "person": "person-one"
+    }
+  ],
+  "projects": [
+    {
+      "id": "project-demo",
+      "repos": [
+        {
+          "remote": "example.com/team/app"
+        }
+      ],
+      "members": [
+        {
+          "person": "person-one",
+          "role": "member"
+        }
+      ],
+      "approvers": [
+        "person-one"
+      ],
+      "tasks": [
+        {
+          "id": "01K9J000000000000000000001",
+          "owner": "person-one",
+          "machine": "01K9J000000000000000000002",
+          "gen": 1
+        }
+      ]
+    }
+  ]
+}

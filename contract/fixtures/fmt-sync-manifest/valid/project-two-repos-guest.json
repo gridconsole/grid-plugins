@@ -7,15 +7,15 @@
   },
   "machines": [
     {
-      "id": "laptop",
+      "id": "01K9J000000000000000000002",
       "person": "person-one"
     },
     {
-      "id": "desktop",
+      "id": "01K9J000000000000000000003",
       "person": "person-one"
     },
     {
-      "id": "guest-computer",
+      "id": "01K9J000000000000000000004",
       "person": "person-guest"
     }
   ],
@@ -47,54 +47,10 @@
         {
           "id": "01K9J000000000000000000001",
           "owner": "person-one",
-          "machine": "laptop",
+          "machine": "01K9J000000000000000000002",
           "gen": 1
         }
       ]
     }
-  ],
-  "classes": {
-    "task_files": {
-      "authority": "bound-machine",
-      "server_holds": "task-files",
-      "readers": "own-computers-cut-1-project-members-cut-2",
-      "conflict": "last-writer-wins-keep-conflict-file"
-    },
-    "folded_feed": {
-      "authority": "bound-machine",
-      "server_holds": "folded-state",
-      "readers": "project-status-and-needs",
-      "conflict": "rebuild-from-records-never-merge"
-    },
-    "project_brain": {
-      "authority": "project-members-no-guest-writes",
-      "server_holds": "project-brain-by-project-id",
-      "readers": "project-members-role-filtered-and-workers",
-      "conflict": "version-with-superseded-by"
-    },
-    "personal_notes": {
-      "authority": "person",
-      "server_holds": "private-personal-notes",
-      "readers": "own-computers-only",
-      "conflict": "version-with-superseded-by"
-    },
-    "secrets": {
-      "authority": "local-only",
-      "server_holds": "nothing",
-      "readers": "local-only",
-      "conflict": "never-sync"
-    },
-    "repos": {
-      "authority": "git-remote",
-      "server_holds": "nothing",
-      "readers": "git-clients",
-      "conflict": "never-sync"
-    },
-    "raw_feed": {
-      "authority": "bound-machine",
-      "server_holds": "nothing",
-      "readers": "local-only",
-      "conflict": "deferred-not-in-cut-1"
-    }
-  }
+  ]
 }

@@ -63,3 +63,27 @@ func TestFormatManifestMachineULIDs(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatManifestOmitsPolicy(t *testing.T) {
+	var manifest map[string]any
+	data := formatRead(t, filepath.Join("..", "fixtures", "fmt-sync-manifest", "valid", "cut-1.json"))
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := manifest["classes"]; ok {
+		t.Fatal("manifest fixture still carries fixed policy")
+	}
+	if err := contract.Validate("fmt-sync-manifest", data); err != nil {
+		t.Fatalf("manifest without policy: %v", err)
+	}
+	for _, policy := range []any{
+		map[string]any{},
+		map[string]any{"personal_notes": map[string]any{"readers": "project-members"}},
+		map[string]any{"secrets": map[string]any{"server_holds": "secrets"}},
+	} {
+		manifest["classes"] = policy
+		if err := contract.Validate("fmt-sync-manifest", formatJSON(t, manifest)); err == nil {
+			t.Fatalf("manifest accepted a policy block: %v", policy)
+		}
+	}
+}
