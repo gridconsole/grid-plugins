@@ -193,8 +193,9 @@ func run(args []string, env Env) int {
 		store.AgentShell = env.AgentShell()
 	}
 
-	if action == "withdraw" {
-		if err := (feed.Store{TaskDir: scope.TaskPath}).CheckWithdrawalPolicy(feed.Input{Type: "control", Body: map[string]any{"question_event": "withdrawn"}}); err != nil {
+	// Fail before writer identity setup, which may create local machine state.
+	if action != "list" {
+		if _, err := feed.QuestionWithdrawPolicy(scope.TaskPath, io.Discard); err != nil {
 			fmt.Fprintln(env.Stderr, "question:", err)
 			return 1
 		}

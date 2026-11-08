@@ -122,6 +122,9 @@ func (s Store) publishEvents(dir string, r *Record, before int) error {
 // task question lock covers sync, id allocation and publication, so a crash
 // after the append is repaired before a retry can publish another decision.
 func (s Store) Sync() (records []Record, err error) {
+	if err = s.requireWritePolicy(); err != nil {
+		return
+	}
 	err = s.locked(true, func(dir string) error {
 		var e error
 		records, e = s.project(dir, true)

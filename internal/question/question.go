@@ -132,6 +132,9 @@ func (s Store) Add(in Input) (rec Record, err error) {
 	if err = validateInput(in); err != nil {
 		return
 	}
+	if err = s.requireWritePolicy(); err != nil {
+		return
+	}
 	err = s.locked(true, func(dir string) error {
 		if _, e := s.project(dir, true); e != nil {
 			return e
@@ -161,6 +164,9 @@ func (s Store) List() ([]Record, error) {
 		if _, err := feed.TaskID(s.TaskDir); errors.Is(err, feed.ErrNoTaskID) {
 			return s.readFiles(dir)
 		}
+	}
+	if s.WithdrawAllowed == nil {
+		s.WithdrawAllowed = feed.QuestionWithdrawReadPolicy(s.TaskDir, s.Warn)
 	}
 	return s.project(dir, false)
 }
@@ -198,12 +204,8 @@ func (s Store) Answer(id, text string) (Record, error) {
 func (s Store) Withdraw(id, reason string) (Record, error) {
 	// Resolve once before taking a lock or updating projections, including for
 	// lease holders. Keep the callback local to this operation, not the Store.
-	allowed, err := feed.QuestionWithdrawPolicy(s.TaskDir, s.Warn)
-	if err != nil {
+	if err := s.requireWritePolicy(); err != nil {
 		return Record{}, err
-	}
-	if s.WithdrawAllowed == nil {
-		s.WithdrawAllowed = allowed
 	}
 	if s.ControlWriter.Lease != "task" {
 		if !s.WithdrawAllowed(s.Writer.Author.Role) {
@@ -234,6 +236,9 @@ func (e *withdrawRefusal) Unwrap() error { return ErrWithdrawRefused }
 func (s Store) change(id string, fn func(*Record) error) (rec Record, err error) {
 	if !validID.MatchString(id) {
 		return rec, errors.New("question id must be Q- followed by a positive number")
+	}
+	if err = s.requireWritePolicy(); err != nil {
+		return
 	}
 	err = s.locked(true, func(dir string) error {
 		if dir == "" {
@@ -281,6 +286,9 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 // audit history. The returned slice contains only newly recorded events.
 func (s Store) Tick() (changed []Record, err error) {
 	changed = []Record{}
+	if err = s.requireWritePolicy(); err != nil {
+		return
+	}
 	err = s.locked(true, func(dir string) error {
 		records, e := s.project(dir, true)
 		if e != nil {
@@ -323,5 +331,23 @@ func (s Store) withdrawPolicy() (func(string) bool, error) {
 	if s.WithdrawAllowed != nil {
 		return s.WithdrawAllowed, nil
 	}
-	return feed.QuestionWithdrawReadPolicy(s.TaskDir, s.Warn), nil
+	return feed.QuestionWithdrawPolicy(s.TaskDir, s.Warn)
+}
+
+// requireWritePolicy checks the actual file even for host overrides. Resolve the
+// projection policy on this operation's Store copy before locks or file writes.
+func (s *Store) requireWritePolicy() error {
+	warn := s.Warn
+	if s.WithdrawAllowed != nil {
+		// A callback already supplies the projection policy; only check I/O.
+		warn = io.Discard
+	}
+	allowed, err := feed.QuestionWithdrawPolicy(s.TaskDir, warn)
+	if err != nil {
+		return err
+	}
+	if s.WithdrawAllowed == nil {
+		s.WithdrawAllowed = allowed
+	}
+	return nil
 }

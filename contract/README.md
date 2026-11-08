@@ -210,11 +210,14 @@ Disagreements and defaults chosen:
   raw `feed post` and MCP withdrawals do not print a fallback warning.
   If the task's policy file cannot be read, every withdrawal path fails with
   exit 1 and a one-line diagnostic before writing, including host and leased
-  withdrawals (MCP returns a coded error). Reads and orchestration instead use
+  withdrawals (MCP returns a coded error). `answer`, `question add`, `question
+  tick`, and `question sync` also fail before writing: their durable projections
+  and decisions require a readable withdrawal policy, even with a host override.
+  Read-only question operations and Feed/orchestrator projections instead use
   `withdraw: []` and print one path-free warning per operation: `question list`,
-  `question sync`, `question tick`, `feed state`, MCP `feed_state`, `job tree`,
-  orchestrator tick, and non-withdrawal `job post` continue, including question
-  defaults and Job progress. This fallback never authorizes a withdrawal write.
+  `feed state`, MCP `feed_state`, `job tree`, orchestrator tick, and non-withdrawal
+  `job post` continue, including question defaults and Job progress. This fallback
+  never authorizes a question Store write or a withdrawal post.
   Person withdrawal
   follows Feed order and closes only an open question; an applied answer or
   default makes it a refusal. An already withdrawn question is a successful
