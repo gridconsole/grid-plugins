@@ -640,6 +640,8 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
     }
   }
 
+  // A cancelled Job's questions are not asked any more: they leave the open ones (the bridge withdraws their blocks in questions/).
+  for (const q of questions.values()) if (q.job && jobs.get(q.job)?.status === 'cancelled') q.closed = true;
   for (const q of questions.values()) q.open = !q.closed && q.answers.length === 0;
   const open = [...questions.values()].filter((q) => q.open);
   const out = [...jobs.values()].map((j) => {

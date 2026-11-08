@@ -74,6 +74,43 @@ export function waitOn(taskText, qid, owner, stamp) {
   return `${m[1]}${fm}${m[3]}${taskText.slice(m[0].length)}`;
 }
 
+// task.md with `qid` out of an inline `needs` list; a task that was waiting on nothing else goes back to running. null when nothing changes
+// (not in an inline list, or no front matter).
+export function clearNeed(taskText, qid, stamp) {
+  const m = /^(---\r?\n)([\s\S]*?)(\r?\n---)/.exec(taskText);
+  if (!m) return null;
+  let fm = m[2];
+  const needs = /^needs:[ \t]*\[(.*)\][ \t]*$/m.exec(fm);
+  if (!needs) return null;
+  const list = needs[1].split(',').map((x) => x.trim()).filter(Boolean);
+  if (!list.includes(qid)) return null;
+  const rest = list.filter((x) => x !== qid);
+  const set = (key, value) => { fm = fm.replace(new RegExp(`^${key}:.*$`, 'm'), `${key}: ${value}`); };
+  set('needs', `[${rest.join(', ')}]`);
+  if (!rest.length && /^status:[ \t]*waiting[ \t]*$/m.test(fm)) set('status', 'running');
+  const who = /^next:[ \t]*(\S+) answers\b/m.exec(fm)?.[1];
+  if (who && new RegExp(`^next:.*\\b${qid}\\b`, 'm').test(fm)) set('next', rest.length ? `${who} answers ${rest.join(', ')}` : 'The loop carries on');
+  set('updated', stamp);
+  return `${m[1]}${fm}${m[3]}${taskText.slice(m[0].length)}`;
+}
+
+// The text of a questions file with block `qid` withdrawn, as the questions skill's Withdraw does it; null when it holds no open such block.
+export function withdrawIn(text, qid, stamp, why) {
+  const parts = text.split(/^(?=## Q-\d+ ·)/m);
+  let hit = false;
+  const out = parts.map((block) => {
+    const h = HEADING.exec(block.split('\n')[0]);
+    if (!h || `Q-${h[1]}` !== qid || h[4] !== 'open') return block;
+    hit = true;
+    const lines = block.split('\n');
+    lines[0] = lines[0].replace(/ · open[ \t]*$/, ' · withdrawn');
+    const at = lines.findIndex((l, i) => i > 0 && /^asked:/.test(l));
+    lines.splice(at < 0 ? 1 : at + 1, 0, `withdrawn: ${stamp} · ${why}`);
+    return lines.join('\n');
+  });
+  return hit ? out.join('') : null;
+}
+
 function plainPath(p, kind) {
   try { const s = fs.lstatSync(p); return kind === 'dir' ? s.isDirectory() : s.isFile(); } catch { return true; } // missing is fine
 }
@@ -149,6 +186,48 @@ export function bridge(taskDir, opts = {}) {
         } else {
           out.errors.push(`task.md could not be set to wait on Q-${n}: its needs is not an inline list`);
         }
+      }
+    }
+
+    // A question the Feed has closed without an answer (its Job was cancelled, or it was closed there) is withdrawn here: it stays in the
+    // history, and leaves Needs you and every count of what waits on a person.
+    for (const b of blocks) {
+      if (b.state !== 'open' || !b.feed) continue;
+      const q = state.questions.find((x) => x.id === b.feed);
+      if (!q || q.open || q.answers.length) continue;
+      const why = q.job && state.jobs.find((j) => j.id === q.job)?.status === 'cancelled' ? `its Job ${q.job} was cancelled` : 'it was closed on the Feed';
+      try {
+        let done = false;
+        if (!plainPath(qdir, 'dir')) { out.errors.push('questions is a link or not a plain folder: the Feed question was not withdrawn'); continue; }
+        for (const f of fs.readdirSync(qdir).filter((x) => x.endsWith('.md'))) {
+          const fp = path.join(qdir, f);
+          if (!plainPath(fp, 'file')) continue;
+          const patched = withdrawIn(fs.readFileSync(fp, 'utf8'), b.qid, stamp, why);
+          if (patched === null) continue;
+          // Written beside the file and renamed over it, so a reader (the app, the questions skill) never sees half a file.
+          const tmp = path.join(qdir, `.${f}.${process.pid}.tmp`);
+          try {
+            fs.writeFileSync(tmp, patched);
+            fs.renameSync(tmp, fp);
+          } catch (e) {
+            fs.rmSync(tmp, { force: true });
+            throw e;
+          }
+          done = true;
+          break;
+        }
+        if (!done) continue;
+        appendLine(path.join(taskDir, 'history.md'), `- ${stamp} · question withdrawn · ${b.qid} · by orchestrator`);
+        const cleared = clearNeed(taskText, b.qid, stamp);
+        if (cleared) {
+          const tmp = path.join(taskDir, `.task.md.${process.pid}.tmp`);
+          fs.writeFileSync(tmp, cleared);
+          fs.renameSync(tmp, path.join(taskDir, 'task.md'));
+          taskText = cleared;
+        }
+        out.writes.push({ id: b.feed, type: 'withdraw', target: b.qid });
+      } catch (e) {
+        out.errors.push(`could not withdraw ${b.qid}: ${e?.message ?? e}`);
       }
     }
 

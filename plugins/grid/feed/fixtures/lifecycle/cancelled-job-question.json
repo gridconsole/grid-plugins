@@ -1,0 +1,24 @@
+{
+  "name": "cancelled-job-question",
+  "about": "A cancelled Job's open questions (also one posted after the cancel) leave the open ones; a live Job's question and a question with no Job stay open.",
+  "posts": [
+    {"id":"01JC1300000000000000000001","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:00:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"title":"Write the orders report","role":"builder"}},
+    {"id":"01JC1300000000000000000002","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:01:00.000Z-0000","re":null,"job":"J-2","epoch":0,"body":{"title":"Add the export button","role":"builder"}},
+    {"id":"01JC1300000000000000000003","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:02:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"running","assign":{"worker":"w1","host":"vm"},"attempt":1,"reason":"free slot on vm"}},
+    {"id":"01JC1300000000000000000004","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:03:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-2","status":"running","assign":{"worker":"w2","host":"vm"},"attempt":1,"reason":"free slot on vm"}},
+    {"id":"01JC1300000000000000000005","task":"T-1","type":"question","type_v":1,"author":{"member":"bob","host":"vm","role":"worker"},"worker":"w1","at":"2026-11-07T10:04:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"question":"Which table holds the orders?","blocking":true}},
+    {"id":"01JC1300000000000000000006","task":"T-1","type":"question","type_v":1,"author":{"member":"bob","host":"vm","role":"worker"},"worker":"w2","at":"2026-11-07T10:05:00.000Z-0000","re":null,"job":"J-2","epoch":0,"body":{"question":"Which colour is the button?","blocking":false}},
+    {"id":"01JC1300000000000000000007","task":"T-1","type":"question","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:06:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"question":"Planning looks slow. Wait / Drop it","blocking":true}},
+    {"id":"01JC1300000000000000000008","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:07:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"cancelled","reason":"the person dropped the report"}},
+    {"id":"01JC1300000000000000000009","task":"T-1","type":"question","type_v":1,"author":{"member":"bob","host":"vm","role":"worker"},"worker":"w1","at":"2026-11-07T10:08:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"question":"Still the orders table?","blocking":false}},
+    {"id":"01JC1300000000000000000010","task":"T-1","type":"answer","type_v":1,"author":{"member":"sam","host":"laptop","role":"person"},"worker":null,"at":"2026-11-07T10:09:00.000Z-0000","re":"01JC1300000000000000000006","job":null,"epoch":0,"body":{"answer":"blue"}},
+    {"id":"01JC1300000000000000000011","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-07T10:10:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-2","status":"cancelled","reason":"the task was stopped"}}
+  ],
+  "checks": [
+    {"after":"01JC1300000000000000000007","jobs":{"J-1":"running","J-2":"running"},"open_questions":["01JC1300000000000000000005","01JC1300000000000000000006","01JC1300000000000000000007"],"job_open_questions":{"J-1":["01JC1300000000000000000005"],"J-2":["01JC1300000000000000000006"]},"ignored":[]},
+    {"after":"01JC1300000000000000000008","jobs":{"J-1":"cancelled","J-2":"running"},"open_questions":["01JC1300000000000000000006","01JC1300000000000000000007"],"job_open_questions":{"J-1":[],"J-2":["01JC1300000000000000000006"]},"ignored":[]},
+    {"after":"01JC1300000000000000000009","jobs":{"J-1":"cancelled","J-2":"running"},"open_questions":["01JC1300000000000000000006","01JC1300000000000000000007"],"job_open_questions":{"J-1":[],"J-2":["01JC1300000000000000000006"]},"ignored":[]},
+    {"after":"01JC1300000000000000000010","jobs":{"J-1":"cancelled","J-2":"running"},"open_questions":["01JC1300000000000000000007"],"job_open_questions":{"J-1":[],"J-2":[]}},
+    {"after":"01JC1300000000000000000011","jobs":{"J-1":"cancelled","J-2":"cancelled"},"open_questions":["01JC1300000000000000000007"],"job_open_questions":{"J-1":[],"J-2":[]},"ignored":[]}
+  ]
+}
