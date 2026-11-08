@@ -715,3 +715,35 @@ func TestLeaseHelp(t *testing.T) {
 		}
 	}
 }
+
+// Without a ULID in task.md there is no Feed: files list as written, contents
+// that do not decode are kept, and only a failed read is an error.
+func TestListWithoutFeedID(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "questions"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "task.md"), []byte("---\nid: T-01\n---\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "questions", "Q-2.md"), []byte("not a question file\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "questions", "Q-1.md"), []byte("---\n{\"id\":\"Q-1\",\"question\":\"Which?\",\"state\":\"answered\",\"answer\":\"CSV\"}\n---\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var warn bytes.Buffer
+	got, err := (Store{TaskDir: dir, Warn: &warn}).List()
+	if err != nil || len(got) != 2 || got[0].ID != "Q-1" || got[0].State != "answered" || got[1].ID != "Q-2" || got[1].State != "not in the Feed" {
+		t.Fatalf("list: %+v %v", got, err)
+	}
+	if !strings.Contains(warn.String(), "Q-2.md does not decode") {
+		t.Fatalf("warning: %q", warn.String())
+	}
+	if err := os.Mkdir(filepath.Join(dir, "questions", "Q-3.md"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (Store{TaskDir: dir}).List(); err == nil {
+		t.Fatal("a non-regular question file listed")
+	}
+}

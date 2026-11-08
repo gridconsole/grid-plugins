@@ -382,3 +382,19 @@ func TestAttachAgentBoundary(t *testing.T) {
 		})
 	}
 }
+
+// A task from task.New has no ULID and so no Feed; its question files still
+// list and count as written.
+func TestAttachCountsQuestionsWithoutFeedID(t *testing.T) {
+	s, task := waitingFixture(t)
+	file := "---\n" + `{"id":"Q-1","question":"Which format?","who":"owner","blocking":true,"gate":{"id":"Q-1","kind":"person","default":"CSV","at":"2026-11-09T10:00:00.000Z"},"asked":"2026-11-08T10:00:00.000Z","state":"open","answer":"","age_after_seconds":28800,"aging":0,"history":[]}` + "\n---\n\n## Q-1 | to: owner | blocking | open\n\nWhich format?\n"
+	write(t, filepath.Join(task.Path, "questions", "Q-1.md"), file)
+	listed, err := (question.Store{TaskDir: task.Path}).List()
+	if err != nil || len(listed) != 1 || listed[0].ID != "Q-1" || listed[0].State != "open" {
+		t.Fatalf("list: %+v %v", listed, err)
+	}
+	got, err := s.Attach(attachOptions(task.ID))
+	if err != nil || got.OpenQuestions != 1 {
+		t.Fatalf("attach: %+v %v", got, err)
+	}
+}

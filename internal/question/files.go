@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -178,4 +180,66 @@ func save(dir string, r Record) error {
 		return err
 	}
 	return atomicfile.Write(path, out.Bytes(), 0600)
+}
+
+// readFiles lists question files without a Feed. Only a failed read is an error;
+// contents that do not decode are kept as an unbacked record, as project does.
+func (s Store) readFiles(dir string) ([]Record, error) {
+	records := []Record{}
+	if dir == "" {
+		return records, nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	skipped := []string{}
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		id := strings.TrimSuffix(e.Name(), ".md")
+		if !validID.MatchString(id) {
+			skipped = append(skipped, e.Name())
+			continue
+		}
+		if _, err := strconv.Atoi(id[2:]); err != nil {
+			return nil, fmt.Errorf("question id exceeds the supported range: %s", id)
+		}
+		path := filepath.Join(dir, e.Name())
+		info, err := os.Lstat(path)
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() {
+			return nil, errors.New("question file must be regular")
+		}
+		f, err := fslock.OpenNoFollow(path, os.O_RDONLY, 0)
+		if err != nil {
+			return nil, err
+		}
+		data, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			return nil, err
+		}
+		var r Record
+		body, _, ok := bytes.Cut(bytes.TrimPrefix(data, []byte("---\n")), []byte("\n---\n"))
+		if !bytes.HasPrefix(data, []byte("---\n")) || !ok || json.Unmarshal(body, &r) != nil || r.ID != id {
+			r = Record{ID: id, State: "not in the Feed"}
+			if s.Warn != nil {
+				fmt.Fprintf(s.Warn, "question: %s does not decode; keeping file and reserving its id\n", e.Name())
+			}
+		}
+		records = append(records, r)
+	}
+	if len(skipped) > 0 && s.Warn != nil {
+		fmt.Fprintf(s.Warn, "question: skipping files in questions/ that are not Q-n.md: %s\n", strings.Join(skipped, ", "))
+	}
+	sort.Slice(records, func(i, j int) bool {
+		a, _ := strconv.Atoi(records[i].ID[2:])
+		b, _ := strconv.Atoi(records[j].ID[2:])
+		return a < b
+	})
+	return records, nil
 }

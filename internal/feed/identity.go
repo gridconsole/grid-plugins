@@ -2,6 +2,7 @@ package feed
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -51,6 +52,9 @@ func MachineID(gridHome string) (string, error) {
 
 // TaskID reads only the scalar stable identifier in task.md frontmatter. Display
 // numbers are never silently substituted for missing stable ids.
+// ErrNoTaskID means task.md was read but holds no stable ULID, so the task has no Feed.
+var ErrNoTaskID = errors.New("task.md needs a stable ULID in id or ulid")
+
 func TaskID(taskDir string) (string, error) {
 	f, err := os.Open(filepath.Join(taskDir, "task.md"))
 	if err != nil {
@@ -91,7 +95,7 @@ func TaskID(taskDir string) (string, error) {
 		return "", fmt.Errorf("task.md frontmatter is not closed")
 	}
 	if id == "" {
-		return "", fmt.Errorf("task.md needs a stable ULID in id or ulid")
+		return "", ErrNoTaskID
 	}
 	return id, nil
 }

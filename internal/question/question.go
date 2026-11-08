@@ -140,10 +140,17 @@ func (s Store) Add(in Input) (rec Record, err error) {
 	return
 }
 
+// List projects the Feed. A task whose task.md has no ULID has no Feed, so its
+// question files are listed as written.
 func (s Store) List() ([]Record, error) {
 	dir, err := s.directory(false)
 	if err != nil {
 		return nil, err
+	}
+	if s.TaskID == "" {
+		if _, err := feed.TaskID(s.TaskDir); errors.Is(err, feed.ErrNoTaskID) {
+			return s.readFiles(dir)
+		}
 	}
 	return s.project(dir, false)
 }
