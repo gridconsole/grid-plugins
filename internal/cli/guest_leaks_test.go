@@ -34,16 +34,22 @@ func TestGuestProjectSettingsWrites(t *testing.T) {
 			{"skill_disable", []string{"skill", "disable", "research", "--project", "alpha"}},
 			{"routine_add", []string{"routine", "add", "review", "--every", "1h", "--run", "grid doctor", "--project", "alpha"}},
 			{"setup", []string{"setup", "alpha", "--answers", "-"}},
+			{"claude_setup", []string{"setup", "--yes", "--json"}},
 			{"signal_add", []string{"signal", "add", "--title", "review", "--project", "alpha"}},
 		} {
 			t.Run(role+"/"+tc.name, func(t *testing.T) {
 				h, cwd := guestLeakFixture(t, role)
 				before := bypassTree(t, h.gridHome)
+				homeBefore := bypassTree(t, h.home)
 				code := h.run(cwd, tc.args...)
 				changed := !reflect.DeepEqual(before, bypassTree(t, h.gridHome))
+				homeChanged := !reflect.DeepEqual(homeBefore, bypassTree(t, h.home))
 				if role == "owner" || role == "member" {
 					if code != 0 || !changed {
 						t.Errorf("exit=%d, tree changed=%t; want successful write", code, changed)
+					}
+					if !homeChanged {
+						t.Error("HOME tree unchanged after successful write")
 					}
 					return
 				}
@@ -52,6 +58,31 @@ func TestGuestProjectSettingsWrites(t *testing.T) {
 				}
 				if changed {
 					t.Error("GRID_HOME tree changed after guest write")
+				}
+				if homeChanged {
+					t.Error("HOME tree changed after guest write")
+				}
+			})
+		}
+	}
+}
+
+func TestGuestClaudeSetupRemove(t *testing.T) {
+	for _, role := range []string{"guest", "external", "unknown"} {
+		for _, mode := range []string{"plain", "json"} {
+			t.Run(role+"/"+mode, func(t *testing.T) {
+				h, cwd := guestLeakFixture(t, role)
+				before := bypassTree(t, h.gridHome)
+				homeBefore := bypassTree(t, h.home)
+				args := []string{"setup", "--remove"}
+				if mode == "json" {
+					args = append(args, "--json")
+				}
+				if code := h.run(cwd, args...); code != 1 || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "guests cannot change project settings") {
+					t.Errorf("exit=%d, refusal=%q; want exit 1, empty stdout and guest refusal", code, h.errb.String())
+				}
+				if !reflect.DeepEqual(before, bypassTree(t, h.gridHome)) || !reflect.DeepEqual(homeBefore, bypassTree(t, h.home)) {
+					t.Error("HOME or GRID_HOME tree changed after guest removal")
 				}
 			})
 		}
