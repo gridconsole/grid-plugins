@@ -224,9 +224,14 @@ func TestAttachFacts(t *testing.T) {
 	if _, err := s.Approve(WriteOptions{ID: task.ID}, hash); err != nil {
 		t.Fatal(err)
 	}
-	questions := question.Store{TaskDir: task.Path, TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV", Writer: feed.Writer{Author: feed.Author{ID: "local", Role: "member"}, Worker: "local@01ARZ3NDEKTSV4RRFFQ69G5FAW"}, Now: s.Now}
+	feedID, _, err := FeedIdentity(task.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	questions := question.Store{TaskDir: task.Path, TaskID: feedID, Writer: feed.Writer{Author: feed.Author{ID: "local", Role: "member"}, Worker: "local@01ARZ3NDEKTSV4RRFFQ69G5FAW"}, Now: s.Now}
+	// Attach lists with the wall clock, so the default must lie ahead of it.
 	for i := range 2 {
-		q, err := questions.Add(question.Input{Question: "Which option?", Who: "local", Options: []string{"one", "two"}, Recommended: "one", Default: "one", Applies: s.Now().Add(time.Hour)})
+		q, err := questions.Add(question.Input{Question: "Which option?", Who: "local", Options: []string{"one", "two"}, Recommended: "one", Default: "one", Applies: time.Now().Add(time.Hour)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -383,10 +388,11 @@ func TestAttachAgentBoundary(t *testing.T) {
 	}
 }
 
-// A task from task.New has no ULID and so no Feed; its question files still
-// list and count as written.
+// A legacy task has no ULID and so no Feed; its question files still list and
+// count as written.
 func TestAttachCountsQuestionsWithoutFeedID(t *testing.T) {
 	s, task := waitingFixture(t)
+	legacyTask(t, task.Path)
 	file := "---\n" + `{"id":"Q-1","question":"Which format?","who":"owner","blocking":true,"gate":{"id":"Q-1","kind":"person","default":"CSV","at":"2026-11-09T10:00:00.000Z"},"asked":"2026-11-08T10:00:00.000Z","state":"open","answer":"","age_after_seconds":28800,"aging":0,"history":[]}` + "\n---\n\n## Q-1 | to: owner | blocking | open\n\nWhich format?\n"
 	write(t, filepath.Join(task.Path, "questions", "Q-1.md"), file)
 	listed, err := (question.Store{TaskDir: task.Path}).List()
@@ -397,4 +403,22 @@ func TestAttachCountsQuestionsWithoutFeedID(t *testing.T) {
 	if err != nil || got.OpenQuestions != 1 {
 		t.Fatalf("attach: %+v %v", got, err)
 	}
+}
+
+// legacyTask drops the stable Feed id that task.New now writes, leaving the
+// record a task made before it would have.
+func legacyTask(t *testing.T, dir string) {
+	t.Helper()
+	path := filepath.Join(dir, "task.md")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keep []string
+	for _, line := range strings.Split(string(b), "\n") {
+		if !strings.HasPrefix(line, "ulid:") {
+			keep = append(keep, line)
+		}
+	}
+	write(t, path, strings.Join(keep, "\n"))
 }
