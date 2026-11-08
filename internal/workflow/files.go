@@ -6,14 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
-	"github.com/gridconsole/grid-plugins/internal/localdata"
-	"github.com/gridconsole/grid-plugins/internal/projects"
-	"github.com/gridconsole/grid-plugins/internal/where"
+	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
 // File is a source file. Rev is the first 12 hex characters of its SHA-256,
@@ -36,19 +37,114 @@ type fileProblem struct {
 // Tests that set it run in a separate process so concurrent reads are unaffected.
 var beforeWorkflowOpen func(relative string)
 
+var (
+	errNotRegular = errors.New("not a regular file")
+	errSymlink    = errors.New("symlink refused")
+	errChanged    = errors.New("changed while opening")
+	errTooLarge   = errors.New("larger than 32768 bytes")
+	errNotUTF8    = errors.New("not UTF-8")
+)
+
+// fileReason is the only boundary from filesystem errors to public messages.
+// Never expose an OS error string, even for an unexpected failure.
+func fileReason(err error) string {
+	switch {
+	case errors.Is(err, fs.ErrPermission):
+		return "cannot read"
+	case errors.Is(err, fs.ErrNotExist):
+		return errChanged.Error()
+	}
+	for _, reason := range []error{errNotRegular, errSymlink, errChanged, errTooLarge, errNotUTF8} {
+		if errors.Is(err, reason) {
+			return reason.Error()
+		}
+	}
+	return "cannot read"
+}
+
+type workflowProject struct {
+	name, id string
+	err      error
+}
+
+// Discover records independently: Store.List deliberately fails closed for
+// registry mutations, but one damaged record must not hide other workflows.
+func workflowProjects(home string) ([]workflowProject, error) {
+	root, err := os.OpenRoot(home)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, errors.New("cannot read projects")
+	}
+	defer root.Close()
+	before, err := sourceInfo(root, "projects")
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("projects: %s", fileReason(err))
+	}
+	// OpenRoot requires a directory, so a concurrent FIFO replacement cannot
+	// block discovery either. Read entries through the pinned directory.
+	dir, err := root.OpenRoot("projects")
+	if err != nil {
+		return nil, errors.New("cannot read projects")
+	}
+	defer dir.Close()
+	opened, err := dir.Stat(".")
+	if err != nil || !os.SameFile(before, opened) {
+		return nil, errors.New("projects: changed while opening")
+	}
+	f, err := dir.Open(".")
+	if err != nil {
+		return nil, errors.New("cannot read projects")
+	}
+	defer f.Close()
+	entries, err := f.ReadDir(-1)
+	if err != nil {
+		return nil, errors.New("cannot read projects")
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	var out []workflowProject
+	for _, entry := range entries {
+		if !entry.IsDir() && entry.Type()&os.ModeSymlink == 0 {
+			continue
+		}
+		p := workflowProject{name: entry.Name()}
+		file, err := openSource(home, filepath.Join("projects", p.name, "project.md"))
+		if err == nil && file == nil {
+			continue // An unregistered project folder, as in project.Load.
+		}
+		if err == nil {
+			var data []byte
+			data, err = io.ReadAll(file)
+			_ = file.Close()
+			if err == nil {
+				var record project.Record
+				record, err = project.Parse(p.name, string(data))
+				p.id = record.ID
+			}
+		}
+		p.err = err
+		out = append(out, p)
+	}
+	return out, nil
+}
+
 func readFiles(home, selector string) ([]File, []fileProblem, error) {
 	if home == "" {
 		return nil, nil, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
 	home = gridhome.Real(home)
-	entries, err := (projects.Store{Resolver: where.Resolver{GridHome: home}}).List()
+	entries, err := workflowProjects(home)
 	if err != nil {
 		return nil, nil, err
 	}
 	if selector != "" {
-		matches := []projects.Entry{}
+		matches := []workflowProject{}
 		for _, entry := range entries {
-			if entry.Name == selector || entry.ID == selector {
+			if entry.name == selector || entry.id == selector {
 				matches = append(matches, entry)
 			}
 		}
@@ -60,11 +156,15 @@ func readFiles(home, selector string) ([]File, []fileProblem, error) {
 	files := []File{{Scope: "workspace"}}
 	paths := []string{"workflows.md"}
 	for _, entry := range entries {
-		files = append(files, File{Scope: "project", Project: &entry.Name})
-		paths = append(paths, filepath.Join("projects", entry.Name, "workflows.md"))
+		files = append(files, File{Scope: "project", Project: &entry.name})
+		paths = append(paths, filepath.Join("projects", entry.name, "workflows.md"))
 	}
 	problems := []fileProblem{}
 	for i, path := range paths {
+		if i > 0 && entries[i-1].err != nil {
+			problems = append(problems, fileProblem{index: i, err: entries[i-1].err})
+			continue
+		}
 		text, rev, err := readFile(home, path)
 		files[i].Text, files[i].Rev = text, rev
 		if err != nil {
@@ -74,48 +174,97 @@ func readFiles(home, selector string) ([]File, []fileProblem, error) {
 	return files, problems, nil
 }
 
-func readFile(home, relative string) (string, *string, error) {
-	path, err := localdata.Safe(home, relative)
-	if err != nil {
-		return "", nil, err
+// sourceInfo refuses symlinks in every component without relying on the text of
+// localdata.Safe's errors. Root confines every lookup if an ancestor is swapped.
+func sourceInfo(root *os.Root, relative string) (os.FileInfo, error) {
+	var info os.FileInfo
+	var err error
+	path := ""
+	for _, part := range strings.Split(relative, string(filepath.Separator)) {
+		path = filepath.Join(path, part)
+		info, err = root.Lstat(path)
+		if err != nil {
+			return nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil, errSymlink
+		}
 	}
-	before, err := os.Lstat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return "", nil, nil
-	}
-	if err != nil {
-		return "", nil, err
-	}
-	if !before.Mode().IsRegular() {
-		return "", nil, fmt.Errorf("%s is not a regular file", relative)
-	}
-	// Root confines resolution to the Grid home even if an ancestor is replaced
-	// after Safe. Check the opened identity before reading any bytes; a leaf
-	// replaced by a symlink or another file must not supply the template text.
+	return info, nil
+}
+
+// openSource returns nil for an absent file. It checks the opened descriptor's
+// type and identity before any read, including after a nonblocking FIFO open.
+func openSource(home, relative string) (*os.File, error) {
 	root, err := os.OpenRoot(home)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	defer root.Close()
+	before, err := sourceInfo(root, relative)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !before.Mode().IsRegular() {
+		return nil, errNotRegular
+	}
 	if beforeWorkflowOpen != nil {
 		beforeWorkflowOpen(relative)
 	}
-	f, err := root.Open(relative)
+	f, err := openWorkflowFile(root, relative)
 	if err != nil {
-		return "", nil, err
+		// Sockets cannot be opened as files, and Root may refuse a swapped
+		// symlink before returning a descriptor. Classify the replacement
+		// without exposing the platform-specific open error.
+		if after, statErr := root.Lstat(relative); statErr == nil {
+			if after.Mode()&os.ModeSymlink != 0 {
+				return nil, errChanged
+			}
+			if !after.Mode().IsRegular() {
+				return nil, errNotRegular
+			}
+			if !os.SameFile(before, after) {
+				return nil, errChanged
+			}
+		}
+		return nil, err
 	}
-	defer f.Close()
+	keep := false
+	defer func() {
+		if !keep {
+			_ = f.Close()
+		}
+	}()
 	opened, err := f.Stat()
 	if err != nil {
-		return "", nil, err
+		return nil, err
+	}
+	if !opened.Mode().IsRegular() {
+		return nil, errNotRegular
 	}
 	after, err := root.Lstat(relative)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	if !after.Mode().IsRegular() || !os.SameFile(before, opened) || !os.SameFile(after, opened) {
-		return "", nil, fmt.Errorf("%s changed while opening", relative)
+		return nil, errChanged
 	}
+	keep = true
+	return f, nil
+}
+
+func readFile(home, relative string) (string, *string, error) {
+	f, err := openSource(home, relative)
+	if err != nil || f == nil {
+		return "", nil, err
+	}
+	defer f.Close()
 	const maxFileBytes = 32 * 1024
 	data, err := io.ReadAll(io.LimitReader(f, maxFileBytes+1))
 	if err != nil {
@@ -128,10 +277,10 @@ func readFile(home, relative string) (string, *string, error) {
 	}
 	rev := fmt.Sprintf("%x", hash.Sum(nil))[:12]
 	if len(data) > maxFileBytes {
-		return "", &rev, fmt.Errorf("larger than %d bytes", maxFileBytes)
+		return "", &rev, errTooLarge
 	}
 	if !utf8.Valid(data) {
-		return "", &rev, errors.New("not UTF-8")
+		return "", &rev, errNotUTF8
 	}
 	return string(data), &rev, nil
 }

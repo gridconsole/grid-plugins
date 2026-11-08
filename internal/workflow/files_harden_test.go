@@ -3,7 +3,10 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +31,8 @@ func hardenProblem(t *testing.T, home string, got Answer, label, reason string) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), home) || strings.Contains(string(data), filepath.ToSlash(home)) {
+	encodedHome, _ := json.Marshal(home)
+	if strings.Contains(string(data), home) || strings.Contains(string(data), filepath.ToSlash(home)) || strings.Contains(string(data), string(encodedHome[1:len(encodedHome)-1])) {
 		t.Fatalf("home leaked into JSON: %s", data)
 	}
 	if len(got.Errors) != 1 || got.Errors[0].File != label || got.Errors[0].Message != reason {
@@ -157,7 +161,7 @@ func TestWorkflowHardenFIFO(t *testing.T) {
 	if _, err := exec.LookPath("mkfifo"); err != nil {
 		t.Skip("mkfifo unavailable")
 	}
-	for _, swap := range []string{"before", "after-lstat"} {
+	for _, swap := range []string{"before", "after-lstat", "regular", "symlink", "removed", "directory", "socket"} {
 		t.Run(swap, func(t *testing.T) {
 			home := hardenHome(t)
 			path := filepath.Join(home, "projects", "a", "workflows.md")
@@ -184,7 +188,11 @@ func TestWorkflowHardenFIFO(t *testing.T) {
 			if err := json.Unmarshal(data, &got); err != nil {
 				t.Fatalf("JSON: %v: %s", err, data)
 			}
-			hardenProblem(t, home, got, "a/workflows.md", "not a regular file")
+			reason := "not a regular file"
+			if swap == "regular" || swap == "symlink" || swap == "removed" {
+				reason = "changed while opening"
+			}
+			hardenProblem(t, home, got, "a/workflows.md", reason)
 			if len(got.Files) != 3 || len(got.Templates) != 2 {
 				t.Fatalf("lost healthy files: %+v", got)
 			}
@@ -197,17 +205,42 @@ func TestWorkflowHardenOpenChild(t *testing.T) {
 	if home == "" {
 		return
 	}
-	if os.Getenv("GRID_WORKFLOW_TEST_SWAP") == "after-lstat" {
+	swap := os.Getenv("GRID_WORKFLOW_TEST_SWAP")
+	if swap != "before" {
 		beforeWorkflowOpen = func(relative string) {
 			if relative != filepath.Join("projects", "a", "workflows.md") {
 				return
 			}
 			path := filepath.Join(home, relative)
-			if err := os.Remove(path); err != nil {
+			// Keep the original inode alive to make the regular-file replacement
+			// deterministic even on filesystems that immediately reuse inodes.
+			if err := os.Rename(path, path+".old"); err != nil {
 				t.Fatal(err)
 			}
-			if out, err := exec.Command("mkfifo", path).CombinedOutput(); err != nil {
-				t.Fatalf("mkfifo: %v: %s", err, out)
+			switch swap {
+			case "after-lstat":
+				if out, err := exec.Command("mkfifo", path).CombinedOutput(); err != nil {
+					t.Fatalf("mkfifo: %v: %s", err, out)
+				}
+			case "regular":
+				putWorkflowFixture(t, path, "must not be read")
+			case "symlink":
+				if err := os.Symlink(filepath.Join(home, "workflows.md"), path); err != nil {
+					t.Fatal(err)
+				}
+			case "directory":
+				if err := os.Mkdir(path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			case "socket":
+				listener, err := net.Listen("unix", path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = listener.Close() })
+			case "removed":
+			default:
+				t.Fatalf("unknown swap: %s", swap)
 			}
 		}
 	}
@@ -221,4 +254,51 @@ func TestWorkflowHardenOpenChild(t *testing.T) {
 	}
 	fmt.Println(string(data))
 	os.Exit(0)
+}
+
+func TestWorkflowHardenSocketAndDevice(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix special files")
+	}
+	home := hardenHome(t)
+	path := filepath.Join(home, "projects", "alpha", "workflows.md")
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	got, err := Read(home, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hardenProblem(t, home, got, "alpha/workflows.md", "not a regular file")
+	if info, err := os.Lstat("/dev/null"); err == nil && info.Mode()&os.ModeDevice != 0 {
+		if _, _, err := readFile("/dev", "null"); !errors.Is(err, errNotRegular) {
+			t.Fatalf("device: %v", err)
+		}
+	}
+}
+
+func TestWorkflowHardenWrappedErrors(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{fs.ErrPermission, "cannot read"},
+		{fs.ErrNotExist, "changed while opening"},
+		{errNotRegular, "not a regular file"},
+		{errSymlink, "symlink refused"},
+		{errChanged, "changed while opening"},
+		{errTooLarge, "larger than 32768 bytes"},
+		{errNotUTF8, "not UTF-8"},
+		{errors.New("unexpected OS error with /secret/home"), "cannot read"},
+	} {
+		err := fmt.Errorf("read failed: %w", &os.PathError{Op: "open", Path: "/secret/home/workflows.md", Err: tc.err})
+		if got := fileReason(err); got != tc.want {
+			t.Errorf("%v: got %q, want %q", tc.err, got, tc.want)
+		}
+	}
 }

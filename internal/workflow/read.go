@@ -26,7 +26,7 @@ func Read(home, project string) (Answer, error) {
 			project = *file.Project
 		}
 		if err := failed[i]; err != nil {
-			out.Errors = append(out.Errors, Problem{File: labelOf(project), Message: err.Error()})
+			out.Errors = append(out.Errors, Problem{File: labelOf(project), Message: fileReason(err)})
 			continue
 		}
 		if file.Rev == nil {
