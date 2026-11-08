@@ -51,7 +51,7 @@ func runWorkflow(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "grid workflow show: --project requires a name or ID")
 		return 2
 	}
-	answer, err := workflow.Read(env.GridHome, *project)
+	answer, err := workflow.Read(resolver(env), *project)
 	if err != nil {
 		if errors.Is(err, localdata.ErrUnsafePath) {
 			fmt.Fprintln(env.Stderr, "grid workflow show: workflow path is unsafe or inaccessible")

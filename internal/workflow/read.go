@@ -1,5 +1,7 @@
 package workflow
 
+import "github.com/gridconsole/grid-plugins/internal/where"
+
 // Answer is the workflows read response. Empty collections encode as arrays.
 type Answer struct {
 	Files     []File     `json:"files"`
@@ -10,8 +12,9 @@ type Answer struct {
 // Read returns the workspace file and registered project files, or just the
 // workspace and selected project (name or ID). File and parse failures remain
 // in Errors; home resolution and project selection failures return an error.
-func Read(home, project string) (Answer, error) {
-	files, problems, err := readFiles(home, project)
+// The caller filters discovery before project records or workflows are opened.
+func Read(r where.Resolver, project string) (Answer, error) {
+	files, problems, err := readFiles(r, project)
 	if err != nil {
 		return Answer{}, err
 	}

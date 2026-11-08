@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/where"
 	"io/fs"
 	"net"
 	"os"
@@ -71,7 +72,7 @@ func TestWorkflowHardenLeafErrors(t *testing.T) {
 					}
 				}
 			}
-			got, err := Read(home, "")
+			got, err := Read(where.Resolver{GridHome: home}, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -246,7 +247,7 @@ func TestWorkflowHardenOpenChild(t *testing.T) {
 			}
 		}
 	}
-	got, err := Read(home, "")
+	got, err := Read(where.Resolver{GridHome: home}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +274,7 @@ func TestWorkflowHardenSocketAndDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	got, err := Read(home, "")
+	got, err := Read(where.Resolver{GridHome: home}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -112,7 +112,7 @@ func TestWriteInputBoundaryAndRepair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := Read(home, "")
+	got, err := Read(where.Resolver{GridHome: home}, "")
 	if err != nil || got.Files[0].Rev == nil || *got.Files[0].Rev != result.Rev || got.Files[0].Text != text {
 		t.Fatalf("boundary: %+v %v", got, err)
 	}

@@ -63,7 +63,7 @@ func TestGuestWorkflowVisibility(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			h, cwd := guestLeakFixture(t, "guest")
 			for _, name := range []string{"alpha", "hidden"} {
-				h.write(filepath.Join(h.gridHome, "projects", name, "workflows.md"), strings.ReplaceAll(cliWorkflow, "Default", name+"-secret"))
+				h.write(filepath.Join(h.gridHome, "projects", name, "workflows.md"), strings.ReplaceAll(strings.ReplaceAll(cliWorkflow, "Default", name+"-secret"), "nothing else matches", "label example"))
 			}
 			args := []string{"workflow", "show"}
 			if mode == "json" {

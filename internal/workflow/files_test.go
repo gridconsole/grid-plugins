@@ -3,6 +3,7 @@ package workflow
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/where"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,7 +32,7 @@ func workflowHome(t *testing.T) string {
 }
 
 func TestWorkflowFilesAllProjects(t *testing.T) {
-	files, problems, err := readFiles(workflowHome(t), "")
+	files, problems, err := readFiles(where.Resolver{GridHome: workflowHome(t)}, "")
 	if err != nil || len(problems) != 0 || len(files) != 3 {
 		t.Fatalf("files=%+v problems=%+v err=%v", files, problems, err)
 	}
@@ -50,14 +51,14 @@ func TestWorkflowFilesOneProject(t *testing.T) {
 	home := workflowHome(t)
 	for _, selector := range []string{"alpha", "id-alpha"} {
 		t.Run(selector, func(t *testing.T) {
-			files, problems, err := readFiles(home, selector)
+			files, problems, err := readFiles(where.Resolver{GridHome: home}, selector)
 			if err != nil || len(problems) != 0 || len(files) != 2 || *files[1].Project != "alpha" {
 				t.Fatalf("files=%+v problems=%+v err=%v", files, problems, err)
 			}
 		})
 	}
 	for _, selector := range []string{"unknown", "../alpha"} {
-		if _, _, err := readFiles(home, selector); err == nil {
+		if _, _, err := readFiles(where.Resolver{GridHome: home}, selector); err == nil {
 			t.Fatalf("accepted project %q", selector)
 		}
 	}
@@ -65,14 +66,14 @@ func TestWorkflowFilesOneProject(t *testing.T) {
 
 func TestWorkflowFilesAbsentHome(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "absent")
-	files, problems, err := readFiles(home, "")
+	files, problems, err := readFiles(where.Resolver{GridHome: home}, "")
 	if err != nil || len(problems) != 0 || len(files) != 1 || files[0].Rev != nil || files[0].Text != "" {
 		t.Fatalf("files=%+v problems=%+v err=%v", files, problems, err)
 	}
 	if _, err := os.Stat(home); !os.IsNotExist(err) {
 		t.Fatalf("reader created home: %v", err)
 	}
-	if _, _, err := readFiles("", ""); err == nil {
+	if _, _, err := readFiles(where.Resolver{GridHome: ""}, ""); err == nil {
 		t.Fatal("accepted unknown home")
 	}
 }
@@ -82,7 +83,7 @@ func TestWorkflowRevIsContentHash(t *testing.T) {
 	var previous string
 	for _, text := range []string{"# Workflows\n", "# Workflows\n", "# Workflows\r\n"} {
 		putWorkflowFixture(t, filepath.Join(home, "workflows.md"), text)
-		files, problems, err := readFiles(home, "")
+		files, problems, err := readFiles(where.Resolver{GridHome: home}, "")
 		if err != nil || len(problems) != 0 {
 			t.Fatalf("problems=%+v err=%v", problems, err)
 		}
@@ -109,7 +110,7 @@ func TestWorkflowFilesReadErrorsKeepOtherFiles(t *testing.T) {
 			} else {
 				putWorkflowFixture(t, path, "\xff")
 			}
-			files, problems, err := readFiles(home, "")
+			files, problems, err := readFiles(where.Resolver{GridHome: home}, "")
 			if err != nil || len(files) != 3 || len(problems) != 1 || problems[0].index != 2 {
 				t.Fatalf("files=%+v problems=%+v err=%v", files, problems, err)
 			}
@@ -126,7 +127,7 @@ func TestWorkflowFilesReadErrorsKeepOtherFiles(t *testing.T) {
 func TestWorkflowFilesEmptyPresentFile(t *testing.T) {
 	home := t.TempDir()
 	putWorkflowFixture(t, filepath.Join(home, "workflows.md"), "")
-	files, problems, err := readFiles(home, "")
+	files, problems, err := readFiles(where.Resolver{GridHome: home}, "")
 	if err != nil || len(problems) != 0 || len(files) != 1 || files[0].Rev == nil || *files[0].Rev != "e3b0c44298fc" {
 		t.Fatalf("files=%+v problems=%+v err=%v", files, problems, err)
 	}
@@ -135,7 +136,7 @@ func TestWorkflowFilesEmptyPresentFile(t *testing.T) {
 func TestWorkflowFilesAmbiguousProject(t *testing.T) {
 	home := workflowHome(t)
 	putWorkflowFixture(t, filepath.Join(home, "projects", "beta", "project.md"), "---\nid: alpha\n---\n")
-	if _, _, err := readFiles(home, "alpha"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+	if _, _, err := readFiles(where.Resolver{GridHome: home}, "alpha"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
 		t.Fatalf("ambiguous selection: %v", err)
 	}
 }
@@ -148,7 +149,7 @@ func TestWorkflowSymlinkRefused(t *testing.T) {
 	if err := os.Symlink(outside, path); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	files, problems, err := readFiles(home, "")
+	files, problems, err := readFiles(where.Resolver{GridHome: home}, "")
 	if err != nil || len(problems) != 1 || len(files) != 3 {
 		t.Fatalf("files=%+v problems=%+v err=%v", files, problems, err)
 	}
@@ -160,7 +161,7 @@ func TestWorkflowSymlinkRefused(t *testing.T) {
 	if err := os.Symlink(home, alias); err != nil {
 		t.Fatal(err)
 	}
-	if files, problems, err := readFiles(alias, "alpha"); err != nil || len(problems) != 0 || len(files) != 2 {
+	if files, problems, err := readFiles(where.Resolver{GridHome: alias}, "alpha"); err != nil || len(problems) != 0 || len(files) != 2 {
 		t.Fatalf("aliased home: files=%+v problems=%+v err=%v", files, problems, err)
 	}
 }

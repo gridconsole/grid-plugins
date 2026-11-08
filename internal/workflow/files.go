@@ -15,6 +15,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 // File is a source file. Rev is the first 12 hex characters of its SHA-256,
@@ -69,7 +70,8 @@ type workflowProject struct {
 
 // Discover records independently: Store.List deliberately fails closed for
 // registry mutations, but one damaged record must not hide other workflows.
-func workflowProjects(home string) ([]workflowProject, error) {
+func workflowProjects(r where.Resolver) ([]workflowProject, error) {
+	home := r.GridHome
 	root, err := os.OpenRoot(home)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -111,6 +113,9 @@ func workflowProjects(home string) ([]workflowProject, error) {
 		if !entry.IsDir() && entry.Type()&os.ModeSymlink == 0 {
 			continue
 		}
+		if !r.GuestProjectAllowed(entry.Name()) {
+			continue
+		}
 		p := workflowProject{name: entry.Name()}
 		file, err := openSource(home, filepath.Join("projects", p.name, "project.md"))
 		if err == nil && file == nil {
@@ -132,12 +137,14 @@ func workflowProjects(home string) ([]workflowProject, error) {
 	return out, nil
 }
 
-func readFiles(home, selector string) ([]File, []fileProblem, error) {
+func readFiles(r where.Resolver, selector string) ([]File, []fileProblem, error) {
+	home := r.GridHome
 	if home == "" {
 		return nil, nil, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
 	home = gridhome.Real(home)
-	entries, err := workflowProjects(home)
+	r.GridHome = home
+	entries, err := workflowProjects(r)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -149,6 +156,9 @@ func readFiles(home, selector string) ([]File, []fileProblem, error) {
 			}
 		}
 		if len(matches) != 1 {
+			if r.Caller.IsGuest() {
+				return nil, nil, fmt.Errorf("project is missing or ambiguous")
+			}
 			return nil, nil, fmt.Errorf("project %q is missing or ambiguous", selector)
 		}
 		entries = matches

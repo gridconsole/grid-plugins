@@ -3,6 +3,7 @@ package workflow
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/where"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ func TestWorkflowShowAllProjects(t *testing.T) {
 	home := workflowHome(t)
 	putWorkflowFixture(t, filepath.Join(home, "workflows.md"), rootText(""))
 	putWorkflowFixture(t, filepath.Join(home, "projects", "alpha", "workflows.md"), projectText(labelKeys, twoSteps))
-	got, err := Read(home, "")
+	got, err := Read(where.Resolver{GridHome: home}, "")
 	if err != nil || len(got.Files) != 3 || len(got.Templates) != 2 || len(got.Errors) != 0 {
 		t.Fatalf("%+v %v", got, err)
 	}
@@ -29,12 +30,12 @@ func TestWorkflowShowOneProject(t *testing.T) {
 	putWorkflowFixture(t, filepath.Join(home, "workflows.md"), rootText(""))
 	putWorkflowFixture(t, filepath.Join(home, "projects", "alpha", "workflows.md"), projectText(labelKeys, twoSteps))
 	for _, selector := range []string{"alpha", "id-alpha"} {
-		got, err := Read(home, selector)
+		got, err := Read(where.Resolver{GridHome: home}, selector)
 		if err != nil || len(got.Files) != 2 || len(got.Templates) != 2 || len(got.Errors) != 0 || *got.Files[1].Project != "alpha" {
 			t.Fatalf("%+v %v", got, err)
 		}
 	}
-	if _, err := Read(home, "unknown"); err == nil {
+	if _, err := Read(where.Resolver{GridHome: home}, "unknown"); err == nil {
 		t.Fatal("accepted unknown project")
 	}
 }
@@ -49,7 +50,7 @@ func TestWorkflowBadSectionKeepsRest(t *testing.T) {
 	text := strings.Replace(string(good), "## Web page", broken+"## Web page", 1)
 	home := t.TempDir()
 	putWorkflowFixture(t, filepath.Join(home, "workflows.md"), text)
-	got, err := Read(home, "")
+	got, err := Read(where.Resolver{GridHome: home}, "")
 	if err != nil || len(got.Templates) != 7 || len(got.Errors) != 1 || len(got.Files) != 1 {
 		t.Fatalf("%+v %v", got, err)
 	}
@@ -71,7 +72,7 @@ func TestWorkflowReadLimitsAndErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
 			putWorkflowFixture(t, filepath.Join(home, "workflows.md"), tc.text)
-			got, err := Read(home, "")
+			got, err := Read(where.Resolver{GridHome: home}, "")
 			if err != nil || len(got.Files) != 1 || len(got.Errors) != 1 || got.Errors[0].Message != tc.message {
 				t.Fatalf("%+v %v", got, err)
 			}
@@ -87,7 +88,7 @@ func TestWorkflowReadLimitsAndErrors(t *testing.T) {
 
 func TestWorkflowReadAbsentAndSymlink(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "absent")
-	got, err := Read(home, "")
+	got, err := Read(where.Resolver{GridHome: home}, "")
 	if err != nil || len(got.Files) != 1 || got.Files[0].Rev != nil || len(got.Templates) != 0 || len(got.Errors) != 0 {
 		t.Fatalf("%+v %v", got, err)
 	}
@@ -100,7 +101,7 @@ func TestWorkflowReadAbsentAndSymlink(t *testing.T) {
 	if err := os.Symlink(filepath.Join(home, "workflows.md"), filepath.Join(home, "projects", "beta", "workflows.md")); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	got, err = Read(home, "")
+	got, err = Read(where.Resolver{GridHome: home}, "")
 	if err != nil || len(got.Files) != 3 || len(got.Templates) != 2 || len(got.Errors) != 1 || got.Errors[0].File != "beta/workflows.md" || got.Errors[0].Section != nil || got.Errors[0].Line != nil || got.Files[2].Rev != nil {
 		t.Fatalf("%+v %v", got, err)
 	}
