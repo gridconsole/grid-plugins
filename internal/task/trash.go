@@ -48,7 +48,7 @@ func (o TrashOptions) validate(restore bool) error {
 	if o.Agent || strings.TrimSpace(o.Who.ID) == "" || !policy(o.Role) {
 		return fmt.Errorf("%w: a person with an allowed role must perform this task move", ErrEditRejected)
 	}
-	if hasInvalidEditText(o.Who.ID) || !idPattern.MatchString(o.ID) || (restore && o.Project == "") {
+	if hasEditControls(o.Who.ID) || !idPattern.MatchString(o.ID) || (restore && o.Project == "") {
 		return fmt.Errorf("%w: give a task id and, for restore, --project", ErrEditUsage)
 	}
 	return nil
