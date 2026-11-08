@@ -6,11 +6,15 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -143,7 +147,8 @@ func TestBadConfigAndFailedStart(t *testing.T) {
 			t.Fatalf("accepted %+v", c)
 		}
 	}
-	c := Config{Command: "exit 7", HealthURL: "http://127.0.0.1:{port}", Timeout: "1s"}
+	port := freeBlock(t)
+	c := Config{Command: "exit 7", HealthURL: "http://127.0.0.1:{port}", Timeout: "1s", PortRange: []int{port, port + 9}}
 	if _, err := m.Up(context.Background(), "J-1", c); err == nil || !strings.Contains(err.Error(), "exited") {
 		t.Fatalf("failed command: %v", err)
 	}
@@ -252,4 +257,142 @@ func TestGCStopsOrphanedServerAfterParentKilledAndLeaseExpiry(t *testing.T) {
 		t.Fatalf("expired lease left the server group %d running", rec.PID)
 	}
 	assertEmpty(t, ports.Store{GridHome: home})
+}
+
+func TestHealthWaitReleasesLockAndConfirmsReservation(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		t.Run(strconv.FormatBool(existing), func(t *testing.T) {
+			m := Manager{Ports: ports.Store{GridHome: t.TempDir()}, Dir: t.TempDir(), Grace: 10 * time.Millisecond}
+			m.TaskDir = filepath.Join(m.Ports.GridHome, "tasks", "T-1")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			entered, release := make(chan struct{}), make(chan struct{})
+			var once sync.Once
+			var block atomic.Bool
+			block.Store(!existing)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if block.Load() {
+					once.Do(func() { close(entered) })
+					select {
+					case <-release:
+					case <-r.Context().Done():
+						return
+					}
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+			defer close(release)
+			port := freeBlock(t)
+			c := Config{Command: "exec sleep 60", HealthURL: server.URL + "/?port={port}", Timeout: "5s", PortRange: []int{port, port + 9}}
+			t.Cleanup(func() {
+				if err := m.Down("J-1"); err != nil {
+					t.Error(err)
+				}
+			})
+			if existing {
+				if _, err := m.Up(ctx, "J-1", c); err != nil {
+					t.Fatal(err)
+				}
+				block.Store(true)
+			}
+			result := make(chan error, 1)
+			go func() { _, err := m.Up(ctx, "J-1", c); result <- err }()
+			defer func() {
+				cancel()
+				select {
+				case <-result:
+				case <-time.After(6 * time.Second):
+					t.Error("up did not finish")
+				}
+			}()
+			select {
+			case <-entered:
+			case err := <-result:
+				result <- err
+				t.Fatalf("up ended before health wait: %v", err)
+			case <-time.After(3 * time.Second):
+				t.Fatal("health wait did not start")
+			}
+			// List and down must finish while the health handler is still blocked.
+			operations := make(chan error, 1)
+			var replacement ports.Record
+			go func() {
+				records, err := m.Ports.List()
+				if err == nil && len(records) != 1 {
+					err = errors.New("missing starting server reservation")
+				}
+				if err == nil {
+					err = m.Down("J-1")
+				}
+				if err == nil {
+					replacement, err = m.Ports.Claim(m.TaskDir, "J-1", os.Getpid(), ports.Range{Start: port, End: port + 9})
+				}
+				operations <- err
+			}()
+			select {
+			case err := <-operations:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(time.Second):
+				cancel()
+				<-operations
+				t.Fatal("allocator lock held across health wait")
+			}
+			cancel()
+			select {
+			case err := <-result:
+				result <- err // let the deferred drain cover every exit path
+				if err == nil || !strings.Contains(err.Error(), "reservation changed") {
+					t.Fatalf("replacement not detected: %v", err)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("up did not confirm reservation")
+			}
+			records, err := m.Ports.List()
+			if err != nil || len(records) != 1 || records[0] != replacement {
+				t.Fatalf("up removed replacement: %+v %v", records, err)
+			}
+		})
+	}
+}
+
+func TestDevCommandEnvironmentAllowlist(t *testing.T) {
+	for _, key := range []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "AWS_SECRET_ACCESS_KEY", "GRID_PRIVATE_TOKEN", "BASH_ENV", "ENV"} {
+		t.Setenv(key, "must-not-reach-child")
+	}
+	t.Setenv("PORT", "parent-port")
+	t.Setenv("GRID_JOB", "parent-job")
+	t.Setenv("LANG", "C")
+	m := Manager{Ports: ports.Store{GridHome: t.TempDir()}, Dir: t.TempDir(), Grace: 10 * time.Millisecond}
+	m.TaskDir = filepath.Join(m.Ports.GridHome, "tasks", "T-1")
+	port := freeBlock(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := os.Stat(filepath.Join(m.Dir, "child.ready")); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+	}))
+	defer server.Close()
+	defer func() {
+		if err := m.Down("J-1"); err != nil {
+			t.Error(err)
+		}
+	}()
+	c := Config{Command: "env > child.env; touch child.ready; exec sleep 60", HealthURL: server.URL + "/?port={port}", Timeout: "3s", PortRange: []int{port, port + 9}}
+	if _, err := m.Up(context.Background(), "J-1", c); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(m.Dir, "child.env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "must-not-reach-child") || strings.Contains(string(data), "parent-port") || strings.Contains(string(data), "parent-job") {
+		t.Fatalf("parent secrets or port settings leaked: %s", data)
+	}
+	for _, entry := range []string{"LANG=C", "PORT=" + strconv.Itoa(port), "GRID_PORT=" + strconv.Itoa(port), "GRID_JOB=J-1", "PATH=" + os.Getenv("PATH")} {
+		if !strings.Contains("\n"+string(data), "\n"+entry+"\n") {
+			t.Errorf("child missing %q", entry)
+		}
+	}
 }

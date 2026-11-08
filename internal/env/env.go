@@ -33,9 +33,8 @@ func (m Manager) grace() time.Duration {
 	return 2 * time.Second
 }
 
-// Up returns only after a 2xx health response. The allocator transaction spans
-// startup so another up/down/gc cannot race the pid handoff. Long starts thus
-// serialize local allocator operations, bounded by the configured timeout.
+// Up returns only after a 2xx health response and a fresh ownership check.
+// Startup and pid handoff hold the allocator lock; health polling does not.
 func (m Manager) Up(ctx context.Context, id string, c Config) (ports.Record, error) {
 	if err := supported(); err != nil {
 		return ports.Record{}, err
@@ -50,81 +49,114 @@ func (m Manager) Up(ctx context.Context, id string, c Config) (ports.Record, err
 	if err := ctx.Err(); err != nil {
 		return ports.Record{}, err
 	}
+	r, done, err := m.start(id, c)
+	if err != nil {
+		return r, err
+	}
+	healthCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	healthErr := waitHealth(healthCtx, c.HealthURL, r.Start, done)
+	// Down, gc or another up can replace the reservation while health is pending.
+	// Never stop or remove that replacement on behalf of this invocation.
 	l, err := m.Ports.Lock()
 	if err != nil {
-		return ports.Record{}, err
+		return r, errors.Join(healthErr, err)
+	}
+	defer l.Close()
+	current, found, err := l.Find(m.TaskDir, id)
+	if err != nil {
+		return r, errors.Join(healthErr, err)
+	}
+	if !found || current != r {
+		return r, errors.Join(healthErr, errors.New("dev server reservation changed while waiting for health"))
+	}
+	matches, err := ports.ProcessMatches(r)
+	if err != nil {
+		return r, errors.Join(healthErr, err)
+	}
+	if !matches {
+		return r, errors.Join(healthErr, errors.New("dev server exited or its process identity changed while waiting for health"), l.Remove(r))
+	}
+	if healthErr != nil {
+		if err := ports.StopRecord(r, m.grace()); err != nil {
+			return r, errors.Join(healthErr, err)
+		}
+		return r, errors.Join(healthErr, l.Remove(r))
+	}
+	return r, nil
+}
+
+// start serializes only the claim, process launch and pid handoff.
+func (m Manager) start(id string, c Config) (ports.Record, <-chan error, error) {
+	l, err := m.Ports.Lock()
+	if err != nil {
+		return ports.Record{}, nil, err
 	}
 	defer l.Close()
 	old, found, err := l.Find(m.TaskDir, id)
 	if err != nil {
-		return ports.Record{}, err
+		return ports.Record{}, nil, err
 	}
 	if found && old.Group {
 		matches, err := ports.ProcessMatches(old)
 		if err != nil {
-			return old, err
+			return old, nil, err
 		}
 		if matches {
-			healthCtx, cancel := context.WithTimeout(ctx, timeout)
-			defer cancel()
-			err := waitHealth(healthCtx, c.HealthURL, old.Start, nil)
-			if err != nil {
-				if stopErr := ports.StopRecord(old, m.grace()); stopErr != nil {
-					return old, errors.Join(err, stopErr)
-				}
-				return old, errors.Join(err, l.Remove(old))
-			}
-			return old, nil
+			return old, nil, nil
 		}
 		if err := l.Remove(old); err != nil {
-			return old, err
+			return old, nil, err
 		}
 	}
 	rnge, _ := c.Ports()
 	r, err := l.Claim(m.TaskDir, id, os.Getpid(), rnge)
 	if err != nil {
-		return r, err
+		return r, nil, err
 	}
 	if !r.Range.Available() {
-		return r, errors.Join(errors.New("reserved dev ports already have a listener; stop it or choose another port range"), l.Remove(r))
+		return r, nil, errors.Join(errors.New("reserved dev ports already have a listener; stop it or choose another port range"), l.Remove(r))
 	}
 	port := strconv.Itoa(r.Start)
 	cmd := exec.Command("/bin/sh", "-c", strings.ReplaceAll(c.Command, "{port}", port))
 	cmd.Dir = m.Dir
-	cmd.Env = append(os.Environ(), "PORT="+port, "GRID_PORT="+port, "GRID_JOB="+id)
+	cmd.Env = devEnvironment(port, id)
 	if err := configure(cmd); err != nil {
-		return r, errors.Join(err, l.Remove(r))
+		return r, nil, errors.Join(err, l.Remove(r))
 	}
 	// A file avoids inherited CLI pipes and lets the detached server keep running.
 	log, err := fslock.OpenNoFollow(filepath.Join(m.Ports.GridHome, "ports", "env-"+port+".log"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
-		return r, errors.Join(err, l.Remove(r))
+		return r, nil, errors.Join(err, l.Remove(r))
 	}
 	cmd.Stdout, cmd.Stderr = log, log
 	err = cmd.Start()
 	_ = log.Close()
 	if err != nil {
-		return r, errors.Join(err, l.Remove(r))
+		return r, nil, errors.Join(err, l.Remove(r))
 	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
-	cleanup := func(cause error) (ports.Record, error) {
-		stopErr := stop(cmd.Process.Pid, m.grace())
-		if stopErr != nil {
-			return r, errors.Join(cause, stopErr)
-		}
-		return r, errors.Join(cause, l.Remove(r))
-	}
 	r, err = l.SetProcess(r, cmd.Process.Pid)
 	if err != nil {
-		return cleanup(err)
+		if stopErr := stop(cmd.Process.Pid, m.grace()); stopErr != nil {
+			return r, nil, errors.Join(err, stopErr)
+		}
+		return r, nil, errors.Join(err, l.Remove(r))
 	}
-	healthCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	if err := waitHealth(healthCtx, c.HealthURL, r.Start, done); err != nil {
-		return cleanup(err)
+	return r, done, nil
+}
+
+// devEnvironment starts from an explicit allowlist. Shell startup hooks, agent
+// settings, API keys and arbitrary parent variables never enter the dev command.
+func devEnvironment(port, job string) []string {
+	env := []string{}
+	for _, key := range []string{"PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "LC_CTYPE", "LC_COLLATE", "LC_MESSAGES", "LC_MONETARY", "LC_NUMERIC", "LC_TIME", "TERM", "TZ"} {
+		if value, ok := os.LookupEnv(key); ok {
+			env = append(env, key+"="+value)
+		}
 	}
-	return r, nil
+	return append(env, "PORT="+port, "GRID_PORT="+port, "GRID_JOB="+job)
 }
 
 // Down is idempotent. It retains the reservation if process signalling fails.
