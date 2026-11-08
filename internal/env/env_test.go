@@ -4,6 +4,7 @@ package env
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -395,4 +396,39 @@ func TestDevCommandEnvironmentAllowlist(t *testing.T) {
 			t.Errorf("child missing %q", entry)
 		}
 	}
+}
+
+func TestDownDoesNotSignalReusedPID(t *testing.T) {
+	m := Manager{Ports: ports.Store{GridHome: t.TempDir()}, Dir: t.TempDir(), Grace: 10 * time.Millisecond}
+	m.TaskDir = filepath.Join(m.Ports.GridHome, "tasks", "T-1")
+	port := freeBlock(t)
+	r, done, err := m.start("J-1", Config{Command: "exec sleep 60", PortRange: []int{port, port + 9}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := ports.StopRecord(r, m.grace()); err != nil {
+			t.Error(err)
+		}
+	}()
+	stale := r
+	stale.PIDStart = "previous-process-start"
+	data, err := json.Marshal(stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p := stale.Start; p <= stale.End; p++ {
+		if err := os.WriteFile(filepath.Join(m.Ports.GridHome, "ports", strconv.Itoa(p)+".json"), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := m.Down("J-1"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+		t.Fatal("down signalled reused PID")
+	case <-time.After(50 * time.Millisecond):
+	}
+	assertEmpty(t, m.Ports)
 }

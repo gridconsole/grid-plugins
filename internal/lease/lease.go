@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -267,7 +268,7 @@ func (s Store) nextFence(previous uint64) (uint64, error) {
 	}
 	// A missing or reset counter must not wedge the lease or reissue a fence.
 	n = max(n, previous)
-	if n == ^uint64(0) {
+	if n >= math.MaxInt64 {
 		return 0, errors.New("lease fence counter exhausted")
 	}
 	n++

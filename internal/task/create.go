@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"io/fs"
 	"math"
 	"math/big"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gitx"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"

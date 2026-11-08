@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gridconsole/grid-plugins/internal/processid"
 	"net"
 	"os"
 	"os/exec"
@@ -18,6 +17,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/processid"
 )
 
 func TestTwentyConcurrentClaims(t *testing.T) {

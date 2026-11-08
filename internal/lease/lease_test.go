@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -348,5 +349,28 @@ func TestWrittenMergeLeaseContract(t *testing.T) {
 		if err := json.Unmarshal(data, &wire); err != nil || wire.Project != "example" {
 			t.Fatalf("project: %+v %v", wire, err)
 		}
+	}
+}
+
+func TestFenceCannotOverflowContractInteger(t *testing.T) {
+	s := Store{ProjectDir: t.TempDir()}
+	if _, err := s.Take("worker@01K9J000000000000000000002"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.ProjectDir, "lease", "seq"), []byte(strconv.FormatUint(math.MaxInt64, 10)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Release("worker@01K9J000000000000000000002", 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Take("worker@01K9J000000000000000000002"); err == nil || !strings.Contains(err.Error(), "counter exhausted") {
+		t.Fatalf("overflowed contract fence: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(s.ProjectDir, "lease", "merge.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := contract.Validate("merge-lease", data); err != nil {
+		t.Fatal(err)
 	}
 }

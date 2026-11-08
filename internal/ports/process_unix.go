@@ -4,9 +4,10 @@ package ports
 
 import (
 	"errors"
-	"github.com/gridconsole/grid-plugins/internal/processid"
 	"syscall"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/processid"
 )
 
 // Alive treats permission errors as alive; only ESRCH proves death. A group
