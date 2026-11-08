@@ -224,7 +224,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 				return Record{}, err
 			}
 			if !sameRequest(old, r) {
-				return Record{}, fmt.Errorf("record id already used for a different post")
+				return Record{}, &InvalidRecordError{Err: fmt.Errorf("record id already used for a different post")}
 			}
 			if t, _ := contract.LookupType(r.Type); t.Class == "state" {
 				if err := syncFile(f); err != nil {
@@ -246,7 +246,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		for _, entry := range existing.Records {
 			old := entry.Record
 			if old.ID == r.ID {
-				return Record{}, fmt.Errorf("record id already used for a different post")
+				return Record{}, &InvalidRecordError{Err: fmt.Errorf("record id already used for a different post")}
 			}
 			if r.Wake != nil && old.Wake != nil && wakeKey(old) == wakeKey(r) {
 				return old, nil
@@ -260,7 +260,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 				matched = a.To == r.Worker && a.Fence == r.Fence && job.Generation == r.Gen && r.Attempt != nil && a.Attempt == *r.Attempt && slices.Contains(r.After, job.AssignPost)
 			}
 			if !matched {
-				return Record{}, fmt.Errorf("ack requires its counted assignment in after")
+				return Record{}, &InvalidRecordError{Err: fmt.Errorf("ack requires its counted assignment in after")}
 			}
 		}
 		if guestAnswer {
@@ -272,7 +272,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 				}
 			}
 			if !addressed {
-				return Record{}, fmt.Errorf("guest answer must name a question addressed to that guest")
+				return Record{}, &InvalidRecordError{Err: fmt.Errorf("guest answer must name a question addressed to that guest")}
 			}
 		}
 	}
@@ -282,7 +282,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 			first = "handover"
 		}
 		if r.Type != first {
-			return Record{}, fmt.Errorf("first record of a tenure must be %s", first)
+			return Record{}, &InvalidRecordError{Err: fmt.Errorf("first record of a tenure must be %s", first)}
 		}
 	}
 	line, err := json.Marshal(r)
@@ -304,7 +304,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 			return Record{}, err
 		}
 		if len(line)+1 > MaxLine {
-			return Record{}, fmt.Errorf("envelope exceeds 32 KB even with body reference")
+			return Record{}, &InvalidRecordError{Err: fmt.Errorf("envelope exceeds 32 KB even with body reference")}
 		}
 	}
 	line = append(line, '\n')
@@ -405,11 +405,11 @@ func (s Store) record(in Input, w Writer) (Record, error) {
 	// same JSON type checks to API and CLI inputs.
 	data, err := json.Marshal(in.Body)
 	if err != nil {
-		return Record{}, err
+		return Record{}, &InvalidRecordError{Err: err}
 	}
 	var body map[string]any
 	if err := json.Unmarshal(data, &body); err != nil {
-		return Record{}, err
+		return Record{}, &InvalidRecordError{Err: err}
 	}
 	t, _ := contract.LookupType(in.Type)
 	after := append([]string{}, in.After...)
@@ -450,7 +450,7 @@ func (s Store) saveBody(id string, body []byte) error {
 	target := filepath.Join(dir, id+".json")
 	if old, err := os.ReadFile(target); err == nil {
 		if !bytes.Equal(old, body) {
-			return fmt.Errorf("body id already used")
+			return &InvalidRecordError{Err: fmt.Errorf("body id already used")}
 		}
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {

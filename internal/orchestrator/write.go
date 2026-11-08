@@ -46,7 +46,7 @@ func Write(store feed.Store, w feed.Writer, in feed.Input) (record feed.Record, 
 	if in.Type == "control" {
 		target := stringValue(in.Body["target"])
 		if strings.HasPrefix(target, "J-") && snap.State.Jobs[target] == nil {
-			return record, fmt.Errorf("unknown Job %s", target)
+			return record, &feed.InvalidRecordError{Err: fmt.Errorf("unknown Job %s", target)}
 		}
 	}
 	if w.Lease != "task" {
@@ -57,10 +57,10 @@ func Write(store feed.Store, w feed.Writer, in feed.Input) (record feed.Record, 
 		if in.Type == "ack" {
 			in.After = []string{j.AssignPost}
 		} else if j.Status != contract.Running {
-			return record, fmt.Errorf("Job tenure must start with ack")
+			return record, &feed.InvalidRecordError{Err: fmt.Errorf("Job tenure must start with ack")}
 		}
 		if j.Exited != "" {
-			return record, fmt.Errorf("attempt already exited")
+			return record, &feed.InvalidRecordError{Err: fmt.Errorf("attempt already exited")}
 		}
 	}
 	if in.ID == "" {

@@ -4,6 +4,7 @@ package feed
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"regexp"
@@ -11,6 +12,17 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 )
+
+// ErrInvalidRecord identifies a final rejection of the supplied record.
+var ErrInvalidRecord = errors.New("invalid record")
+
+// InvalidRecordError preserves the rejection's diagnostic and underlying error
+// while allowing callers to classify it with errors.Is(err, ErrInvalidRecord).
+type InvalidRecordError struct{ Err error }
+
+func (e *InvalidRecordError) Error() string        { return e.Err.Error() }
+func (e *InvalidRecordError) Unwrap() error        { return e.Err }
+func (e *InvalidRecordError) Is(target error) bool { return target == ErrInvalidRecord }
 
 const MaxLine = 32 * 1024
 
@@ -116,7 +128,7 @@ func (r Record) dataTier() string {
 // store additionally checks the lease and a guest answer's addressee.
 func validate(r Record) error {
 	if _, ok := contract.LookupType(r.Type); !ok {
-		return fmt.Errorf("unregistered post type %q", r.Type)
+		return &InvalidRecordError{Err: fmt.Errorf("unregistered post type %q", r.Type)}
 	}
 	// Post validates before it numbers the record under the writer lock.
 	if r.Seq < 1 {
@@ -124,13 +136,13 @@ func validate(r Record) error {
 	}
 	data, err := json.Marshal(r)
 	if err != nil {
-		return err
+		return &InvalidRecordError{Err: err}
 	}
 	if err := contract.Validate(r.Type, data); err != nil {
-		return err
+		return &InvalidRecordError{Err: err}
 	}
 	if contract.WorkerMember(r.Worker) != r.Author.ID {
-		return fmt.Errorf("author and worker disagree")
+		return &InvalidRecordError{Err: fmt.Errorf("author and worker disagree")}
 	}
 	return nil
 }

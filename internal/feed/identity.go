@@ -100,7 +100,7 @@ func TaskID(taskDir string) (string, error) {
 // grants, transfers or takes a lease using post timestamps.
 func (s Store) Handover(in Input, w Writer) (Record, error) {
 	if w.Lease != "task" || w.Fence <= 0 {
-		return Record{}, fmt.Errorf("handover requires an already granted task lease")
+		return Record{}, &InvalidRecordError{Err: fmt.Errorf("handover requires an already granted task lease")}
 	}
 	in.Type = "handover"
 	if in.Body == nil {
