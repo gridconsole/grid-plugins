@@ -154,7 +154,7 @@ Every case has input.json, setup.json, env.txt, stdout, stderr, exit and files.d
 
 ## Reference provenance
 
-Runtime: `v26.13.0` on Linux.
+Runtime requirement: Node 20 or newer with `--import`.
 
 SHA-256 of reference files read by these cases (paths relative to the old plugin):
 

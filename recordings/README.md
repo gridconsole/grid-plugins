@@ -3,8 +3,8 @@
 Run from the checkout root:
 
 ```sh
-./record.sh
-./record.sh --check
+./record.sh --source /path/to/old-plugin
+./record.sh --source /path/to/old-plugin --check
 make test
 make lint
 ```
@@ -16,11 +16,11 @@ corpus. A mismatch exits nonzero. Python 3.9 or newer, Node with `--import`
 (Node 20 or newer), Bash and the reference plugin are required. The repository's
 Go checks use its existing Makefile; they do not regenerate these recordings.
 
-The default source is the supplied read-only reference plugin. To use another
-copy, pass `--source /path/to/old-plugin` or set `OLD_PLUGIN`. An alternative
-`--output golden-repeat` must stay within this checkout. The index includes the
-Node version and reference SHA-256 hashes so a source or runtime change is
-visible during comparison. The original source is never edited or copied into
+Pass `--source /path/to/old-plugin` or set `GRID_OLD_PLUGIN`; there is no
+default reference location. An alternative
+`--output golden-repeat` must stay within this checkout. The index includes runtime requirements and reference SHA-256 hashes. It does
+not include the recording machine's OS or Node version, so provenance stays
+stable across supported hosts. The original source is never edited or copied into
 the public repository.
 
 `fixtures/` is the fake Grid data folder. `recordings/cases.py` defines inputs,
