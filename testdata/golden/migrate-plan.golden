@@ -1,0 +1,50 @@
+migrate: plan format 1
+backup: sibling <home>-backup/<UTC-date>-<unique>/ before changes
+copy: alpha/projects/widget -> projects/widget
+copy: alpha/projects/widget/knowledge -> projects/widget/knowledge
+copy: alpha/projects/widget/knowledge/research -> projects/widget/knowledge/research
+copy: alpha/projects/widget/knowledge/research/sample.md -> projects/widget/knowledge/research/sample.md
+copy: alpha/projects/widget/project.md -> projects/widget/project.md
+copy: alpha/projects/widget/tasks -> projects/widget/tasks
+copy: alpha/projects/widget/tasks/T-07-first -> projects/widget/tasks/T-07-first
+copy: alpha/projects/widget/tasks/T-07-first/feed -> projects/widget/tasks/T-07-first/feed
+copy: alpha/projects/widget/tasks/T-07-first/feed/example@example.com.jsonl -> projects/widget/tasks/T-07-first/feed/example@example.com.jsonl
+copy: alpha/projects/widget/tasks/T-07-first/history.md -> projects/widget/tasks/T-07-first/history.md
+copy: alpha/projects/widget/tasks/T-07-first/intent.md -> projects/widget/tasks/T-07-first/intent.md
+copy: alpha/projects/widget/tasks/T-07-first/sessions -> projects/widget/tasks/T-07-first/sessions
+copy: alpha/projects/widget/tasks/T-07-first/sessions/session-a.json -> projects/widget/tasks/T-07-first/sessions/session-a.json
+copy: alpha/projects/widget/tasks/T-07-first/task.md -> projects/widget/tasks/T-07-first/task.md
+identify: alpha/projects/widget/project.md -> projects/widget/project.md
+identify: alpha/projects/widget/tasks/T-07-first/task.md -> projects/widget/tasks/T-07-first/task.md
+copy: beta/projects/notes -> projects/notes
+copy: beta/projects/notes/project.md -> projects/notes/project.md
+copy: beta/projects/notes/tasks -> projects/notes/tasks
+copy: beta/projects/notes/tasks/T-01-note -> projects/notes/tasks/T-01-note
+copy: beta/projects/notes/tasks/T-01-note/history.md -> projects/notes/tasks/T-01-note/history.md
+copy: beta/projects/notes/tasks/T-01-note/task.md -> projects/notes/tasks/T-01-note/task.md
+identify: beta/projects/notes/project.md -> projects/notes/project.md
+identify: beta/projects/notes/tasks/T-01-note/task.md -> projects/notes/tasks/T-01-note/task.md
+copy: beta/projects/widget -> projects/widget-2
+copy: beta/projects/widget/project.md -> projects/widget-2/project.md
+copy: beta/projects/widget/tasks -> projects/widget-2/tasks
+copy: beta/projects/widget/tasks/T-12-second -> projects/widget-2/tasks/T-12-second
+copy: beta/projects/widget/tasks/T-12-second/history.md -> projects/widget-2/tasks/T-12-second/history.md
+copy: beta/projects/widget/tasks/T-12-second/task.md -> projects/widget-2/tasks/T-12-second/task.md
+identify: beta/projects/widget/project.md -> projects/widget-2/project.md
+identify: beta/projects/widget/tasks/T-12-second/task.md -> projects/widget-2/tasks/T-12-second/task.md
+copy: alpha/sessions -> sessions
+copy: alpha/sessions/session-a -> sessions/session-a
+copy: alpha/sessions/session-a.recalled -> sessions/session-a.recalled
+copy: alpha/sessions/session-a.tasks -> sessions/session-a.tasks
+copy: alpha/sessions/session-a.usage -> sessions/session-a.usage
+copy: alpha/worktrees/widget -> projects/widget/worktrees
+copy: alpha/worktrees/widget/T-07 -> projects/widget/worktrees/T-07
+copy: alpha/worktrees/widget/T-07/worker-a -> projects/widget/worktrees/T-07/worker-a
+copy: alpha/worktrees/widget/T-07/worker-a/sample.txt -> projects/widget/worktrees/T-07/worker-a/sample.txt
+create: machine
+create: VERSION
+write: migration.log (backup path, checksums and actions)
+note: beta/projects/widget: name collision resolved as widget-2
+note: alpha/worktrees/widget: preserves legacy task/worker subfolders; repo/job mapping is unavailable
+note: history, Feed, usage and recall files are preserved without schema conversion
+result: 43 actions, 0 conflicts, 0 unmapped

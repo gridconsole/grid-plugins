@@ -1,0 +1,2 @@
+{"id":"01K00000000000000000000001","ts":"2026-01-02T09:10:00Z","member":"Example","host":"example.com","role":"lead","worker":null,"type":"post","body":{"text":"Plan accepted for T-07"},"re":null,"job":null,"epoch":0}
+{"id":"01K00000000000000000000002","ts":"2026-01-02T10:00:00Z","member":"Example","host":"example.com","role":"builder","worker":"worker-a","type":"result","body":{"status":"passed"},"re":"01K00000000000000000000001","job":"J-01","epoch":0}
