@@ -1,0 +1,170 @@
+# Lane L25: Job graph
+
+Built `internal/jobgraph`, a pure package over a small plan projection. It does
+not read files, execute verification commands, write task or Feed records, take
+locks, or change its inputs. Run state uses `internal/contract.Job`.
+
+- `New` validates Job ids, edge kinds, explanations and referenced Job targets.
+- `Graph.Blocks` reverses `after`, retaining its kind and explanation.
+- `Graph.Cycle` returns the first deterministic closed cycle path. It checks all
+  components, self-edges and dependencies on a split's children.
+- `Graph.Ready` returns ready ids and individual wait reasons. It reads accepted,
+  rejected and cancelled states from contract Jobs. Failed dependencies also
+  require an explicit exhausted-retries decision. Gate states are supplied as
+  `gate:Q-id` keys. Assigned, running, submitted, parked, stale and terminal Jobs
+  are not offered again.
+- `ReviewFloor` and `Floors` apply the first-match floor rules, report classify
+  gates and L3 captures, and refuse review levels below the floor unless an
+  explicit exception reason is supplied. They also validate verification.
+- `grid job cycles` and `grid job floor` read JSON lists and have plain and JSON
+  output. Only the command-table registration changed in `internal/cli/cli.go`.
+
+## Commands and input
+
+```sh
+go run ./cmd/grid job cycles items.json
+go run ./cmd/grid job cycles items.json --json
+go run ./cmd/grid job floor items.json --json
+go run ./cmd/grid job floor items.json --json --policy policy.json
+```
+
+Flags may precede or follow the filename. Exit status is 0 for success, 1 for an
+invalid input, a cycle, or a floor/verify refusal, and 2 for usage errors. A cycle
+report has `ok` and `cycle`; a floor report has `ok` and `jobs`. Malformed input
+is reported on stderr, without a partial JSON result. Empty results use arrays,
+not null. Reports are sorted by Job id; cycle traversal is also deterministic.
+
+Example `items.json`:
+
+```json
+[
+  {
+    "id": "J-1",
+    "review": "L1",
+    "write": ["internal/example/**"],
+    "verify": {"command": "go test ./...", "min_tests": 1}
+  },
+  {
+    "id": "J-2",
+    "after": ["J-1", "gate:Q-7"],
+    "kind": "non-code",
+    "review": "L0",
+    "write": ["docs/example.md"],
+    "verify": {"kind": "reviewer-check"}
+  }
+]
+```
+
+The plan projection accepts `id`, `after`, `review`, `risk`, `write`, `verify`,
+`kind`, `visible`, `irreversible` and `review_reason`. `cycles` needs only ids and
+dependencies. `floor` additionally requires a review level and valid verify.
+Unknown JSON fields are errors; callers with full plan items must project them
+to this input shape. An object edge has `job`, optional `kind` (default `done`),
+and a `why` of 8 to 160 characters. Bare ids need no explanation. Gates have no
+edge kind. The supported Job edge kinds are `done`, `failed` and `children-done`.
+
+`kind` is local classification metadata, not a new task or Feed schema. It
+defaults to `code`; `rename` and `generated` describe low-risk code changes.
+`non-code`, `research` and `scout` permit `file-exists` or `reviewer-check`
+verification. `visible: "big"` and `irreversible: true` supply the other floor
+facts. `review_reason` is an already-recorded exception, whose author the caller
+must authorize; this command does not create an exception record.
+
+Example `policy.json`, supplied from project brain configuration:
+
+```json
+{
+  "environment_paths": ["infra/**", ".github/workflows/**"],
+  "risk_paths": ["internal/auth/**", "other:transport/**"],
+  "ui_paths": ["web/**"],
+  "generated_paths": ["generated/**"],
+  "task_paths": ["task/**"]
+}
+```
+
+Omitting policy supplies no project-specific tags. Callers enforcing a project's
+floor must supply its tags; the command cannot discover them from plan items.
+Built-in conventions recognize page/UI/component directories, UI extensions,
+docs and test directories, Markdown/reStructuredText, and common test filename
+suffixes. All writes must be low-risk to receive L0 from path classification;
+an empty write list does not establish low risk. A research/scout classification
+gets L0 only when every write is covered by a task-folder tag.
+
+Paths use forward slashes on every platform. Patterns support `*`, `?`, character
+classes and `**` as an entire segment. Environment/risk/UI tags use glob overlap,
+so a broad write cannot evade a narrower risk tag. Repo prefixes are explicit:
+`other:src/**` does not match a primary-repo `**` tag. Generated/task coverage is
+conservative: exact patterns, literal paths, and literal directory subtrees
+establish containment; an ambiguous overlap cannot lower the floor.
+
+## Verification
+
+Ran successfully with the default temporary-directory configuration:
+
+```sh
+make test
+make lint
+GOOS=windows go build ./...
+GOOS=darwin go build ./...
+```
+
+Focused tests:
+
+```sh
+go test ./internal/jobgraph
+go test ./internal/cli -run TestJob
+make golden
+```
+
+Tests include tables for dependency kinds, gates, split children, retry exhaustion,
+own-state exclusions, readiness order, every floor rule and its precedence,
+overlapping scopes, repo prefixes, verification refusals, CLI flags and malformed
+JSON. A seeded property test compares cycle detection against an independent
+Kahn topological sort on 1,000 random graphs, validates every returned edge and
+checks invariance under input permutations. Six JSON goldens cover acyclic and
+cyclic graphs, floor levels, refusals and empty lists. Tests use `t.TempDir` and
+do not assume that a system temporary-directory path has no symlinks.
+
+## Intended differences from the old plugin
+
+References below name files in the read-only reference material.
+
+| Difference | Design and old behavior |
+| --- | --- |
+| Pure evaluation of explicit plan items and state, with a read-only CLI adapter, replaces dependence on markdown steps and orchestration side effects for these checks. | `docs/job-contract.md:7`; `docs/plugin-design.md:155`; old `skills/execute/scripts/ready-steps.mjs:142` reads task files and `feed/orchestrator.mjs:290` writes Jobs. |
+| Typed dependencies distinguish acceptance, exhausted rejection/cancellation, and accepted immediate children. Bare ids still mean `done`. | `docs/feed-contract.md:68`, `docs/feed-contract.md:71`, `docs/job-contract.md:73`; old `feed/orchestrator.mjs:813` requires every target to be `done`. |
+| A gate is a distinct wait, with the reason `waiting on gate Q-7`; it is not a Job or brain node. Callers supply whether it is open. | `docs/feed-contract.md:188`, `docs/feed-contract.md:197`; old `feed/orchestrator.mjs:288` represents a wait as a Job. |
+| Missing targets and duplicate ids are errors. Self-dependencies and cycles produce an explicit closed path instead of being filtered or reported only as a group of steps. All edge kinds participate. | `docs/feed-contract.md:77`, `docs/job-contract.md:73`; old `feed/orchestrator.mjs:277` filters invalid/self targets and `skills/execute/scripts/ready-steps.mjs:76` ignores duplicate steps, with cycle groups at line 103. |
+| `blocks` is derived from `after`, keeps the explanation and direction, and is never persisted by this package. Object explanations are checked. | `docs/job-contract.md:60`, `docs/job-contract.md:61`, `docs/feed-contract.md:78`; old `feed/orchestrator.mjs:277` reduces dependencies to strings. |
+| Hierarchical ids identify immediate children without an extra tree link. A children-done edge also checks child dependencies for deadlocks. Before any child exists it stays waiting, avoiding premature release before a split. | `docs/job-contract.md:76`, `docs/feed-contract.md:74`; old `skills/execute/scripts/ready-steps.mjs:72` operates on numbered steps. The no-children wait is an explicit conservative interpretation. |
+| Ready ordering uses supplied after-satisfied time, creation time and id, with no priority or slot cap in the pure package. Without times, ordering falls back to lexical id. | `docs/feed-contract.md:227`, `docs/job-contract.md:74`; old `feed/orchestrator.mjs:814` sorts priority then numeric id, and `skills/execute/scripts/ready-steps.mjs:118` caps starts. |
+| Per-Job floors are L2 for environment/irreversible work (with classify), then L2 for risk, L1 plus L3 capture for UI, L0 for the specified low-risk work, and otherwise L1. No model is invoked and L0 checks remain required even for higher levels. | `docs/job-contract.md:124`, `docs/job-contract.md:128`, `docs/job-contract.md:129`, `docs/job-contract.md:130`, `docs/job-contract.md:131`, `docs/job-contract.md:132`; `docs/plugin-design.md:35`, `docs/plugin-design.md:164`, `docs/plugin-design.md:240`; `docs/findings-swarm.md:19` (R-review-levels). |
+| Lower-than-floor review is refused unless an explicit recorded reason is supplied; the computed floor remains visible and is not mutated. | `docs/job-contract.md:124`, `docs/findings-swarm.md:97`. This follows the later explicit exception decision rather than treating the earlier R-review-levels table as an absolute prohibition. |
+| Code verification must name tests and declare a positive minimum; the caller chooses the number. Non-code work may use the specified verification kinds. | `docs/job-contract.md:68`, `docs/job-contract.md:71`, `docs/job-contract.md:136`; `docs/findings-swarm.md:100`; old `hooks/brief-lint.mjs:37` checks only presence of frontmatter fields and headings. |
+
+## Limits and integration work
+
+No requested graph or CLI work is blocked. Runtime integration is outside this
+lane: the existing `grid plan check` and `grid job next` commands are still
+unimplemented. This package does not schedule workers, execute classify, run L1
+checks, perform L2/L3 reviews, capture a UI, or post a security escalation. The
+floor report exposes the requirements for those callers.
+
+The caller must fold gates, establish retry exhaustion, and supply readiness
+timestamps. `children-done` examines immediate children in the plan, not unseen
+future Jobs. The no-child wait is intentional. `max_rounds: 2`, flaky reruns,
+loop-detection accounting and waking the lead belong to the runtime loop
+(`docs/job-contract.md:137`, `docs/feed-contract.md:229`); this package does not
+infer exhaustion from attempt numbers or alter those counters.
+
+Verification is a static naming check. It recognizes common runners and named
+test scripts/targets and rejects obvious print-only commands, build-only
+commands and comment-only mentions. It cannot prove an arbitrary script runs
+tests, count results, or infer tests hidden behind `make check`. Dynamic shell
+expansions and compound shell constructs should be replaced with a named test
+script for this check. Actual totals and the declared minimum must be enforced
+when verification runs, as required by `docs/job-contract.md:136`.
+
+Windows and macOS builds passed. Native macOS and Windows test execution was not
+available in this Linux lane; no native execution is claimed. The implementation
+adds no platform-specific filesystem operations and changes no lock package.
