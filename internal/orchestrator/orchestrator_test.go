@@ -13,6 +13,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/question"
 	"github.com/gridconsole/grid-plugins/internal/session"
@@ -873,5 +874,63 @@ func TestOfflineGraceStartsAtLastSuccessfulCheck(t *testing.T) {
 	f.tick(t)
 	if f.state(t).Reason != "host_offline" {
 		t.Fatal("last successful check never expired")
+	}
+}
+
+func TestWorkerWriteWaitsForTaskLeaseBeforePassLock(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	f.ack(t)
+	task, err := fslock.OpenNoFollow(filepath.Join(f.s.Feed.Dir(), "lease", "task.json"), os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer task.Close()
+	if err := fslock.LockExclusive(task); err != nil {
+		t.Fatal(err)
+	}
+	locked := true
+	defer func() {
+		if locked {
+			fslock.Unlock(task)
+		}
+	}()
+	done := make(chan error, 1)
+	go func() {
+		_, err := Write(f.s.Feed, f.worker, feed.Input{Type: "result", Job: "J-1", Attempt: 1, Body: resultBody()})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("worker wrote while task lease was exclusively held: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	// The queued writer must leave the pass lock free while waiting for task.json.
+	pass, err := fslock.OpenNoFollow(filepath.Join(f.s.Feed.Dir(), ".orchestrator.lock"), os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pass.Close()
+	acquired := make(chan error, 1)
+	go func() { acquired <- fslock.LockExclusive(pass) }()
+	select {
+	case err := <-acquired:
+		if err != nil {
+			t.Fatal(err)
+		}
+		fslock.Unlock(pass)
+	case <-time.After(time.Second):
+		fslock.Unlock(task)
+		locked = false
+		<-acquired
+		fslock.Unlock(pass)
+		<-done
+		t.Fatal("writer took the pass lock before task.json")
+	}
+	fslock.Unlock(task)
+	locked = false
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }

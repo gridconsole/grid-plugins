@@ -177,6 +177,9 @@ func runOrchestrator(args []string, env Env) int {
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer cancel()
 		out, err := s.Next(ctx, *wait && verb == "next")
+		if errors.Is(err, context.Canceled) {
+			return 130
+		}
 		if err != nil {
 			return fail(err)
 		}

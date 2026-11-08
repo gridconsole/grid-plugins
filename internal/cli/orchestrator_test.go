@@ -89,7 +89,11 @@ func TestJobNextProcess(t *testing.T) {
 	env.Cwd = gridhome.Real(os.Getenv("GRID_TEST_TASK"))
 	env.Ceiling = gridhome.Real(os.Getenv("GRID_TEST_ROOT"))
 	env.TempRoots = nil
-	os.Exit(Run([]string{"job", "next", "--json"}, env))
+	args := []string{"job", "next", "--json"}
+	if os.Getenv("GRID_TEST_NEXT_WAIT") == "1" {
+		args = append(args, "--wait")
+	}
+	os.Exit(Run(args, env))
 }
 func TestTwoProcessesJobNext(t *testing.T) {
 	h, path, store := orchestratorHarness(t)
@@ -298,5 +302,47 @@ func TestTaskAdoptionRefusesLiveAndUnknownCLI(t *testing.T) {
 				t.Fatal("adopted live or unknown process")
 			}
 		})
+	}
+}
+
+func TestJobNextInterruptExits130(t *testing.T) {
+	h, path, _ := orchestratorHarness(t)
+	if code := h.run(path, "job", "next"); code != 0 {
+		t.Fatal(h.errb)
+	}
+	projection := filepath.Join(path, "feed", "state.json")
+	if err := os.Remove(projection); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestJobNextProcess$")
+	cmd.Env = append(os.Environ(), "GRID_TEST_NEXT_PROCESS=1", "GRID_TEST_NEXT_WAIT=1", "GRID_TEST_TASK="+path, "GRID_TEST_ROOT="+h.root, "GRID_HOME="+h.gridHome)
+	var output bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &output, &output
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill() }()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, err := os.Stat(projection); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+			t.Fatalf("child did not enter wait: %s", &output)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		t.Fatal(err)
+	}
+	err := cmd.Wait()
+	exit, ok := err.(*exec.ExitError)
+	if !ok || exit.ExitCode() != 130 {
+		t.Fatalf("Ctrl-C exit: %v, output: %s", err, &output)
+	}
+	if strings.Contains(output.String(), "context canceled") {
+		t.Fatal(output.String())
 	}
 }

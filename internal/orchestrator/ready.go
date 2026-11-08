@@ -1,4 +1,13 @@
 // Package orchestrator makes mechanical task moves without calling a model.
+//
+// All passes and command writes hold task.json shared before acquiring
+// .orchestrator.lock exclusively. Worker lease checks occur inside that order;
+// no Job lease is held while waiting for the pass lock. Task grants hold
+// task.json exclusively and never wait for .orchestrator.lock. Within a pass,
+// Feed posts use wake lock, lease, then tenure file; Job grants use Job lease,
+// takeover log, then sequence counter. Question ID reservation uses the
+// question store lock inside the pass; question-file paths never take a pass
+// or task lease lock. Every lock uses internal/fslock.
 package orchestrator
 
 import (

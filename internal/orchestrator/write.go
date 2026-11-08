@@ -3,13 +3,11 @@ package orchestrator
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
-	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/lease"
 )
 
 var ErrDuplicateWake = errors.New("wake write already exists")
@@ -21,24 +19,26 @@ func Write(store feed.Store, w feed.Writer, in feed.Input) (record feed.Record, 
 	if w.Lease == "" {
 		return record, feed.ErrStaleLease
 	}
-	var attempt *int
+	guard := w
 	if w.Lease != "task" {
-		attempt = &in.Attempt
+		task, e := (lease.TaskStore{Feed: store}).Read("task")
+		if e != nil {
+			return record, e
+		}
+		if task.Holder == nil {
+			return record, feed.ErrStaleLease
+		}
+		guard.Lease, guard.Worker, guard.Gen, guard.Fence = "task", *task.Holder, task.Gen, task.Fence
 	}
-	// Check the lease before creating even the pass lock.
-	err = store.WithLease(w, attempt, func() error { return nil })
-	if err != nil {
-		return record, err
-	}
-	f, err := fslock.OpenNoFollow(filepath.Join(store.Dir(), ".orchestrator.lock"), os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return record, err
-	}
-	defer f.Close()
-	if err := fslock.LockExclusive(f); err != nil {
-		return record, err
-	}
-	defer fslock.Unlock(f)
+	err = (Store{Feed: store, Writer: guard}).locked(func() error {
+		var e error
+		record, e = writeLocked(store, w, in)
+		return e
+	})
+	return
+}
+
+func writeLocked(store feed.Store, w feed.Writer, in feed.Input) (record feed.Record, err error) {
 	snap, err := Load(store)
 	if err != nil {
 		return record, err
