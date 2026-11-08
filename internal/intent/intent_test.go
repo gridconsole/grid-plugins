@@ -160,6 +160,96 @@ func TestClaimLifecycle(t *testing.T) {
 	}
 }
 
+func TestRenewKeepsClaimPastTimeout(t *testing.T) {
+	s := testStore(t)
+	now := s.now()
+	s.Now = func() time.Time { return now }
+	r := enqueue(t, s, "start", nil)
+	first, err := s.Claim(r.ID, "worker-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Renew every four minutes: the claim outlives its original five-minute timeout.
+	for range 3 {
+		now = now.Add(ClaimTimeout - time.Minute)
+		renewed, err := s.Renew(r.ID, first.Token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if renewed.Token != first.Token || renewed.Who != "worker-a" || !renewed.Created.Equal(first.Created) || !renewed.Until.Equal(now.Add(ClaimTimeout)) {
+			t.Fatalf("renewed claim: %+v from %+v", renewed, first)
+		}
+		if _, err := s.Claim(r.ID, "worker-b"); !errors.Is(err, ErrClaimed) {
+			t.Fatalf("second claimer after renew: %v", err)
+		}
+	}
+	if rows, err := s.List(true); err != nil || len(rows) != 0 {
+		t.Fatalf("renewed claim listed as pending: %v %v", rows, err)
+	}
+	rows, err := s.List(false)
+	if err != nil || len(rows) != 1 || rows[0].State != "claimed" || rows[0].Claim == nil || !rows[0].Claim.Until.Equal(now.Add(ClaimTimeout)) {
+		t.Fatalf("claim after renew: %+v %v", rows, err)
+	}
+	if _, err := s.Done(r.ID, first.Token, ""); err != nil {
+		t.Fatalf("done after renews: %v", err)
+	}
+	if _, err := s.Renew(r.ID, first.Token); !errors.Is(err, ErrDone) {
+		t.Fatalf("renew after done: %v", err)
+	}
+}
+
+func TestRenewRefusals(t *testing.T) {
+	s := testStore(t)
+	now := s.now()
+	s.Now = func() time.Time { return now }
+	r := enqueue(t, s, "start", nil)
+	other := enqueue(t, s, "start", nil)
+	if _, err := s.Renew(r.ID, "01ARZ3NDEKTSV4RRFFQ69G5FAV"); !errors.Is(err, ErrClaim) {
+		t.Fatalf("renew without a claim: %v", err)
+	}
+	first, err := s.Claim(r.ID, "worker-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, token := range map[string]string{"empty": "", "malformed": "nope", "unknown": "01ARZ3NDEKTSV4RRFFQ69G5FAV"} {
+		if _, err := s.Renew(r.ID, token); !errors.Is(err, ErrClaim) {
+			t.Fatalf("%s token: %v", name, err)
+		}
+	}
+	if _, err := s.Renew(other.ID, first.Token); !errors.Is(err, ErrClaim) {
+		t.Fatalf("token from another intent: %v", err)
+	}
+	// Past the timeout the claim is gone: the holder cannot revive it, and a second
+	// claimer's token fences the first one's renew.
+	now = now.Add(ClaimTimeout)
+	if _, err := s.Renew(r.ID, first.Token); !errors.Is(err, ErrClaim) {
+		t.Fatalf("expired renew: %v", err)
+	}
+	second, err := s.Claim(r.ID, "worker-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Renew(r.ID, first.Token); !errors.Is(err, ErrClaim) {
+		t.Fatalf("stale renew after reclaim: %v", err)
+	}
+	if _, err := s.Renew(r.ID, second.Token); err != nil {
+		t.Fatalf("current holder renew: %v", err)
+	}
+	if _, err := s.Renew("../../outside", second.Token); !errors.Is(err, ErrClaim) {
+		t.Fatalf("traversal: %v", err)
+	}
+	if temps, _ := filepath.Glob(filepath.Join(s.TaskDir, "intents", ".intent-*")); len(temps) != 0 {
+		t.Fatalf("temporary files left: %v", temps)
+	}
+}
+
+func TestRenewMissingDirectory(t *testing.T) {
+	s := testStore(t)
+	if _, err := s.Renew("01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+}
+
 // The helper exits without Done, simulating loss of the worker after its claim.
 func TestClaimProcess(t *testing.T) {
 	if os.Getenv("GRID_INTENT_TEST_PROCESS") != "1" {

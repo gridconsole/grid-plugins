@@ -325,6 +325,42 @@ func (s Store) Claim(id, who string) (Claim, error) {
 	return result, err
 }
 
+// Renew gives the holder of a live claim another ClaimTimeout from now. An
+// expired, replaced or unknown token is refused with ErrClaim, so a worker that
+// lost its claim cannot take it back from a second claimer.
+func (s Store) Renew(id, token string) (Claim, error) {
+	var result Claim
+	if !validID(id) || !validID(token) {
+		return result, ErrClaim
+	}
+	err := s.locked(false, func(dir string) error {
+		r, err := readRecord(dir, id)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		v, err := state(dir, r, now)
+		if err != nil {
+			return err
+		}
+		if v.State == "done" {
+			return ErrDone
+		}
+		if v.Claim == nil || v.Claim.Token != token {
+			return ErrClaim
+		}
+		result = *v.Claim
+		if until := now.Add(ClaimTimeout); until.After(result.Until) {
+			result.Until = until
+		}
+		return replaceJSON(filepath.Join(dir, id+".claim"), result)
+	})
+	if err == nil && result.Token == "" {
+		err = os.ErrNotExist
+	}
+	return result, err
+}
+
 // Done requires the token from Claim. Expired workers cannot finish new claims.
 func (s Store) Done(id, token, failure string) (Completion, error) {
 	var result Completion
