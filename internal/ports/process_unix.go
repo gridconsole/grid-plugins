@@ -60,34 +60,47 @@ func ProcessMatches(r Record) (bool, error) {
 // StopRecord rechecks available process identity before every signal, with
 // the legacy-record and surviving-group behavior described by ProcessMatches.
 func StopRecord(r Record, grace time.Duration) error {
+	return stopRecord(r, grace, ProcessMatches, syscall.Kill, waitStopped)
+}
+
+// Keep the signal ladder independent of wall time so its order and grace periods
+// can be checked without requiring a child signal handler to win a scheduling race.
+func stopRecord(r Record, grace time.Duration, matchesProcess func(Record) (bool, error), signal func(int, syscall.Signal) error, wait func(int, time.Duration) bool) error {
 	pid := r.PID
 	if pid <= 0 {
 		return errors.New("invalid dev server process group")
 	}
 	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL} {
-		matches, err := ProcessMatches(r)
+		matches, err := matchesProcess(r)
 		if err != nil {
 			return err
 		}
 		if !matches {
 			return nil
 		}
-		err = syscall.Kill(-pid, sig)
+		err = signal(-pid, sig)
 		if errors.Is(err, syscall.ESRCH) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		until := time.Now().Add(grace)
-		for time.Now().Before(until) {
-			if !Alive(pid, true) {
-				return nil
-			}
-			time.Sleep(10 * time.Millisecond)
+		if wait(pid, grace) {
+			return nil
 		}
 	}
 	// SIGKILL has been delivered to the whole group. Orphaned zombies can remain
 	// visible to kill(0) until their parent reaps them, but cannot keep serving.
 	return nil
+}
+
+func waitStopped(pid int, grace time.Duration) bool {
+	until := time.Now().Add(grace)
+	for time.Now().Before(until) {
+		if !Alive(pid, true) {
+			return true
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return false
 }

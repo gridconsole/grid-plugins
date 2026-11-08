@@ -3,9 +3,13 @@
 package env
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -16,22 +20,86 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/ports"
 )
 
-func TestDevServerLifecycle(t *testing.T) {
-	binary := filepath.Join(t.TempDir(), "server")
-	build := exec.Command("go", "build", "-o", binary, "./testdata/server")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build helper: %v %s", err, out)
+// Build the immutable helper once per test process, including repeated -count runs.
+var serverFixture struct {
+	once   sync.Once
+	dir    string
+	binary string
+	err    error
+	output []byte
+}
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if serverFixture.dir != "" {
+		if err := os.RemoveAll(serverFixture.dir); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			code = 1
+		}
 	}
+	os.Exit(code)
+}
+
+func devServer(t *testing.T) string {
+	t.Helper()
+	serverFixture.once.Do(func() {
+		serverFixture.dir, serverFixture.err = os.MkdirTemp("", "grid-env-server-")
+		if serverFixture.err != nil {
+			return
+		}
+		serverFixture.binary = filepath.Join(serverFixture.dir, "server")
+		serverFixture.output, serverFixture.err = exec.Command("go", "build", "-o", serverFixture.binary, "./testdata/server").CombinedOutput()
+	})
+	if serverFixture.err != nil {
+		t.Fatalf("build helper: %v %s", serverFixture.err, serverFixture.output)
+	}
+	return serverFixture.binary
+}
+
+// Every helper process holds a writer until exit. EOF observes shutdown without
+// depending on when the OS reaps an orphaned zombie (which kill(pid, 0) sees).
+func serverLifetime(t *testing.T, dir string) *os.File {
+	t.Helper()
+	path := filepath.Join(dir, "server.lifetime")
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+	return f
+}
+
+func assertStopped(t *testing.T, lifetime *os.File, processes int) {
+	t.Helper()
+	if err := lifetime.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(lifetime)
+	if err != nil {
+		t.Fatalf("server processes survived shutdown: %v", err)
+	}
+	if string(data) != strings.Repeat("started\n", processes) {
+		t.Fatalf("process lifetime witnesses: %q", data)
+	}
+}
+
+func TestDevServerLifecycle(t *testing.T) {
+	binary := devServer(t)
 	for _, mode := range []string{"healthy", "legacy", "tree", "term", "stubborn", "unhealthy", "redirect"} {
 		t.Run(mode, func(t *testing.T) {
 			home := t.TempDir()
 			dir := t.TempDir()
+			lifetime := serverLifetime(t, dir)
 			m := Manager{Ports: ports.Store{GridHome: home}, TaskDir: filepath.Join(home, "tasks", "T-1"), Dir: dir, Grace: 100 * time.Millisecond}
 			// Avoid assuming the standard dev range is unused on the test machine.
 			port := freeBlock(t)
@@ -41,21 +109,13 @@ func TestDevServerLifecycle(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			started := time.Now()
 			r, err := m.Up(context.Background(), "J-1", c)
 			if mode == "unhealthy" || mode == "redirect" {
 				if !errors.Is(err, context.DeadlineExceeded) {
 					t.Fatalf("expected health timeout: %v", err)
 				}
 				assertEmpty(t, m.Ports)
-				data, readErr := os.ReadFile(filepath.Join(dir, "server.pid"))
-				if readErr != nil {
-					t.Fatal(readErr)
-				}
-				pid, _ := strconv.Atoi(string(data))
-				if ports.Alive(pid, true) {
-					t.Fatalf("timeout left process group %d", pid)
-				}
+				assertStopped(t, lifetime, 1)
 				return
 			}
 			if err != nil {
@@ -97,46 +157,39 @@ func TestDevServerLifecycle(t *testing.T) {
 			if err := m.Down("J-1"); err != nil {
 				t.Fatal(err)
 			}
-			if ports.Alive(r.PID, true) {
-				t.Fatalf("down left process group %d", r.PID)
+			processes := 1
+			if mode == "tree" {
+				processes = 2
 			}
+			assertStopped(t, lifetime, processes)
 			assertEmpty(t, m.Ports)
-			signals, err := os.ReadFile(filepath.Join(dir, "signals.log"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			want := "interrupt\n"
-			if mode == "term" || mode == "stubborn" {
-				want += "terminated\n"
-			}
-			if string(signals) != want {
-				t.Fatalf("signal order %q, want %q", signals, want)
-			}
-			if mode == "stubborn" && time.Since(started) < 2*m.Grace {
-				t.Fatal("did not observe grace periods")
-			}
+			// Signal order and grace durations are checked with a controlled clock
+			// in ports. A loaded OS may not schedule a handler before SIGKILL.
 		})
 	}
 }
 
-// freeBlock returns the start of ten ports with no listener, since a machine
-// can have other servers in the ephemeral range.
+// freeBlock keeps a listening sentinel just beyond the block until test cleanup.
+// Concurrent test processes cannot select the same block, and using ports below
+// the usual ephemeral range avoids racing the health client's outbound sockets.
 func freeBlock(t *testing.T) int {
 	t.Helper()
 	for i := 0; i < 100; i++ {
-		ln, err := net.Listen("tcp4", "127.0.0.1:0")
+		start := 10000 + rand.IntN(1600)*(ports.BlockSize+1)
+		ln, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(start+ports.BlockSize)))
 		if err != nil {
-			t.Fatal(err)
+			continue
 		}
-		start := min(ln.Addr().(*net.TCPAddr).Port, 65526)
-		ln.Close()
 		if (ports.Range{Start: start, End: start + ports.BlockSize - 1}).Available() {
+			t.Cleanup(func() { _ = ln.Close() })
 			return start
 		}
+		ln.Close()
 	}
 	t.Fatal("no free ten-port block")
 	return 0
 }
+
 func assertEmpty(t *testing.T, s ports.Store) {
 	t.Helper()
 	records, err := s.List()
@@ -200,14 +253,12 @@ func TestGCStopsOrphanedServerAfterParentKilledAndLeaseExpiry(t *testing.T) {
 		if _, err := m.Up(context.Background(), "J-1", c); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(time.Minute)
-		return
+		fmt.Fprintln(os.Stdout, "ready")
+		select {}
 	}
-	binary := filepath.Join(t.TempDir(), "server")
-	if out, err := exec.Command("go", "build", "-o", binary, "./testdata/server").CombinedOutput(); err != nil {
-		t.Fatalf("build helper: %v %s", err, out)
-	}
+	binary := devServer(t)
 	home, dir := t.TempDir(), t.TempDir()
+	lifetime := serverLifetime(t, dir)
 	task := filepath.Join(home, "tasks", "T-1")
 	write := func(path, body string) {
 		t.Helper()
@@ -223,6 +274,10 @@ func TestGCStopsOrphanedServerAfterParentKilledAndLeaseExpiry(t *testing.T) {
 	start := freeBlock(t)
 	parent := exec.Command(os.Args[0], "-test.run=^TestGCStopsOrphanedServerAfterParentKilledAndLeaseExpiry$")
 	parent.Env = append(os.Environ(), "GRID_ENV_UP_HOME="+home, "GRID_ENV_UP_DIR="+dir, "GRID_ENV_UP_PORT="+strconv.Itoa(start), "GRID_ENV_UP_COMMAND=exec '"+binary+"' healthy")
+	ready, err := parent.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := parent.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -237,17 +292,29 @@ func TestGCStopsOrphanedServerAfterParentKilledAndLeaseExpiry(t *testing.T) {
 		now, _ := time.Parse(time.RFC3339, clock)
 		return ports.Store{GridHome: home, Now: func() time.Time { return now }, Grace: 100 * time.Millisecond}
 	}
-	var rec ports.Record
-	deadline := time.Now().Add(20 * time.Second)
-	for rec.PID == 0 || !rec.Group {
-		if time.Now().After(deadline) {
-			t.Fatal("env up never recorded a server")
+	// A recorded PID precedes health readiness; wait for Up to finish before
+	// killing its parent so this tests a detached, healthy server.
+	started := make(chan error, 1)
+	go func() {
+		line, err := bufio.NewReader(ready).ReadString('\n')
+		if err == nil && line != "ready\n" {
+			err = fmt.Errorf("unexpected readiness message %q", line)
 		}
-		time.Sleep(20 * time.Millisecond)
-		if records, err := at("2026-11-08T10:05:00Z").List(); err == nil && len(records) == 1 {
-			rec = records[0]
+		started <- err
+	}()
+	select {
+	case err := <-started:
+		if err != nil {
+			t.Fatal(err)
 		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("env up never became healthy")
 	}
+	records, err := at("2026-11-08T10:05:00Z").List()
+	if err != nil || len(records) != 1 || records[0].PID == 0 || !records[0].Group {
+		t.Fatalf("server not recorded: %+v %v", records, err)
+	}
+	rec := records[0]
 	if err := parent.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
@@ -263,9 +330,7 @@ func TestGCStopsOrphanedServerAfterParentKilledAndLeaseExpiry(t *testing.T) {
 	if removed, err := at("2026-11-08T11:00:00Z").GC(); err != nil || len(removed) != 1 {
 		t.Fatalf("gc after expiry: %v %v", removed, err)
 	}
-	if ports.Alive(rec.PID, true) {
-		t.Fatalf("expired lease left the server group %d running", rec.PID)
-	}
+	assertStopped(t, lifetime, 1)
 	assertEmpty(t, ports.Store{GridHome: home})
 }
 

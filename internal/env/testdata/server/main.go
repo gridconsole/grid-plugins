@@ -16,6 +16,16 @@ func main() {
 	if len(os.Args) > 1 {
 		mode = os.Args[1]
 	}
+	// Hold a lifetime witness in each process, including the tree's parent.
+	// Readers see EOF only after all processes exit, even if zombies remain.
+	lifetime, err := os.OpenFile("server.lifetime", os.O_WRONLY, 0)
+	if err != nil {
+		panic(err)
+	}
+	defer lifetime.Close()
+	if _, err := fmt.Fprintln(lifetime, "started"); err != nil {
+		panic(err)
+	}
 	if mode == "tree" {
 		signal.Ignore(os.Interrupt, syscall.SIGTERM)
 		executable, err := os.Executable()
@@ -33,11 +43,6 @@ func main() {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		for s := range signals {
-			f, err := os.OpenFile("signals.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
-			if err == nil {
-				fmt.Fprintln(f, s.String())
-				f.Close()
-			}
 			if mode == "term" && s == syscall.SIGTERM {
 				os.Exit(0)
 			}
