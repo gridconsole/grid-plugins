@@ -104,7 +104,7 @@ func TestTraceCallerContext(t *testing.T) {
 		{" \t\n", 0},
 		{"owner", 2},
 		{"member", 1},
-		{"guest", 1},
+		{"guest", 0}, // main limits guests to recorded invitations
 	} {
 		t.Run("role="+tc.role, func(t *testing.T) {
 			resolver := where.Resolver{GridHome: home, Caller: where.Caller{Role: tc.role, Member: "sam"}}
