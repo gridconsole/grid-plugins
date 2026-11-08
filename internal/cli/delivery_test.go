@@ -61,6 +61,12 @@ func addDeliveryProof(t *testing.T, h *harness, dir string) {
 	}
 }
 
+// homeProposal is a full home-level note, as accept reads it.
+func homeProposal(name, source string) string {
+	return "---\nname: " + name + "\ntopic: testing\ntype: reference\ndescription: A fact\nsummary: A fact\nupdated: 2026-01-01T00:00:00Z\nsource: " + source +
+		"\nsuperseded_by: \"\"\nlinks: []\nlevel: home\nstatus: proposed\nreason: Reuse this check\norigin:\n  kind: job\n  id: " + source + "\n  tier: agent\n---\nA fact.\n"
+}
+
 func TestDeliveryCommandRefusals(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -75,8 +81,11 @@ func TestDeliveryCommandRefusals(t *testing.T) {
 			h.write(filepath.Join(d, "brain-proposals", "fact.md"), "---\nstatus: proposed\ntopic: testing\nreason: Reuse this check\n---\n")
 		}, []string{"deliver", "Result ready"}, "Deliver blocked: 1 brain proposals wait. Run: grid brain keep\n", 1},
 		{"home-pending", func(h *harness, d string) {
+			h.write(filepath.Join(h.gridHome, "brain-proposals", "fact.md"), homeProposal("fact", "T-01/J-01"))
+		}, []string{"deliver", "Result ready"}, "Deliver blocked: 1 brain proposals wait", 1},
+		{"home-malformed", func(h *harness, d string) {
 			h.write(filepath.Join(h.gridHome, "brain-proposals", "fact.md"), "---\nstatus: proposed\ntopic: testing\n---\n")
-		}, []string{"deliver", "Result ready"}, "brain proposals wait", 1},
+		}, []string{"deliver", "Result ready"}, "proposal fact.md", 1},
 		{"malformed-proposal", func(h *harness, d string) {
 			h.write(filepath.Join(d, "brain-proposals", "fact.md"), "---\nstatus: [\n---\n")
 		}, []string{"deliver", "Result ready"}, "proposal fact.md", 1},
@@ -178,8 +187,16 @@ func TestDeliverSuccessAndDryRun(t *testing.T) {
 		t.Fatal(doc.Body)
 	}
 	history, err := os.ReadFile(filepath.Join(dir, "history.md"))
-	if err != nil || !strings.Contains(string(history), "delivered · The report is ready. · by grid\n") || strings.Contains(string(history), "approved") {
-		t.Fatal(string(history), err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(history), "\n"), "\n")
+	var receipt task.Event
+	if err = json.Unmarshal([]byte(strings.TrimPrefix(lines[len(lines)-1], "- ")), &receipt); err != nil {
+		t.Fatal(err, lines)
+	}
+	if receipt.What != "deliver" || receipt.Note != "The report is ready." || receipt.Who.ID != "grid" || receipt.FromState != "queued" || receipt.ToState != "waiting" || strings.Contains(string(history), "approve") {
+		t.Fatalf("%+v", receipt)
 	}
 	records, err := (artifact.Store{TaskPath: dir}).List()
 	if err != nil || len(records) != 1 {
@@ -196,12 +213,19 @@ func TestDeliverSuccessAndDryRun(t *testing.T) {
 	if _, err = os.Stat(filepath.Join(dir, "proof", "index.json")); err != nil {
 		t.Fatal(err)
 	}
-	// Re-delivery replaces the section without inventing an approval.
+	// A task already at the ship gate cannot move to waiting again; the person
+	// sends it back, and delivery then replaces the section without inventing an approval.
+	if code := h.run(dir, "deliver", "Updated outcome"); code != 1 || !strings.Contains(h.errb.String(), `current state "waiting"`) {
+		t.Fatal(code, h.errb)
+	}
+	if code := h.run(dir, "task", "status", "T-01", "running"); code != 0 {
+		t.Fatal(h.errb)
+	}
 	if code := h.run(dir, "deliver", "Updated outcome"); code != 0 {
 		t.Fatal(h.errb)
 	}
 	b, err = os.ReadFile(taskPath)
-	if err != nil || strings.Count(string(b), "## Outcome\n") != 1 {
+	if err != nil || strings.Count(string(b), "## Outcome\n") != 1 || !strings.Contains(string(b), "Updated outcome") {
 		t.Fatal(string(b), err)
 	}
 }
@@ -303,21 +327,39 @@ func TestHistoryCommandProcess(t *testing.T) {
 	}
 	var out, errout bytes.Buffer
 	env := Env{Cwd: os.Getenv("GRID_HISTORY_CLI_TASK"), GridHome: os.Getenv("GRID_HISTORY_CLI_HOME"), Stdout: &out, Stderr: &errout}
+	writer := os.Getenv("GRID_HISTORY_CLI_WRITER")
+	if writer == "status" {
+		for i := 0; i < 30; i++ {
+			state := []string{"running", "waiting"}[i%2]
+			if code := Run([]string{"task", "status", "T-01", state}, env); code != 0 {
+				t.Fatal(code, errout.String())
+			}
+		}
+		return
+	}
 	for i := 0; i < 20; i++ {
-		line := fmt.Sprintf("writer%s-%d", os.Getenv("GRID_HISTORY_CLI_WRITER"), i)
+		line := fmt.Sprintf("writer%s-%d", writer, i)
 		if code := Run([]string{"history", "add", line}, env); code != 0 {
 			t.Fatal(code, errout.String())
 		}
 	}
 }
 
+// Two `history add` processes and a `task status` process write one task at
+// once. All three go through the task writer's lock, so no line is lost.
 func TestConcurrentHistoryCommands(t *testing.T) {
 	h, dir := deliveryFixture(t)
-	cmds := make([]*exec.Cmd, 2)
-	var errs [2]bytes.Buffer
+	before, err := os.ReadFile(filepath.Join(dir, "history.md"))
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	base := strings.Count(string(before), "\n")
+	writers := []string{"0", "1", "status"}
+	cmds := make([]*exec.Cmd, len(writers))
+	errs := make([]bytes.Buffer, len(writers))
 	for i := range cmds {
 		cmds[i] = exec.Command(os.Args[0], "-test.run=^TestHistoryCommandProcess$")
-		cmds[i].Env = append(os.Environ(), "GRID_HISTORY_CLI_HELPER=1", "GRID_HISTORY_CLI_TASK="+dir, "GRID_HISTORY_CLI_HOME="+h.gridHome, fmt.Sprintf("GRID_HISTORY_CLI_WRITER=%d", i))
+		cmds[i].Env = append(os.Environ(), "GRID_HISTORY_CLI_HELPER=1", "GRID_HISTORY_CLI_TASK="+dir, "GRID_HISTORY_CLI_HOME="+h.gridHome, "GRID_HISTORY_CLI_WRITER="+writers[i])
 		cmds[i].Stdout = &errs[i]
 		cmds[i].Stderr = &errs[i]
 		if err := cmds[i].Start(); err != nil {
@@ -333,13 +375,13 @@ func TestConcurrentHistoryCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(string(b), "\n") != 40 {
-		t.Fatal(string(b))
+	if got := strings.Count(string(b), "\n"); got != base+40+30 {
+		t.Fatalf("history has %d lines, want %d: %s", got, base+70, b)
 	}
 	for i := 0; i < 2; i++ {
 		for j := 0; j < 20; j++ {
-			if strings.Count(string(b), fmt.Sprintf(" · writer%d-%d\n", i, j)) != 1 {
-				t.Fatalf("missing %d-%d", i, j)
+			if strings.Count(string(b), fmt.Sprintf(`"note":"writer%d-%d"}`+"\n", i, j)) != 1 {
+				t.Fatalf("missing or repeated %d-%d", i, j)
 			}
 		}
 	}
@@ -355,5 +397,43 @@ func TestDeliverRejectsTamperedProof(t *testing.T) {
 	h.write(filepath.Join(dir, filepath.FromSlash(r.File)), "changed")
 	if code := h.run(dir, "deliver", "Ready"); code != 1 || !strings.Contains(h.errb.String(), "checksum") {
 		t.Fatal(code, h.errb)
+	}
+}
+
+func TestUnrelatedHomeProposalDoesNotBlockDelivery(t *testing.T) {
+	h, dir := deliveryFixture(t)
+	addDeliveryProof(t, h, dir)
+	h.write(filepath.Join(h.gridHome, "brain-proposals", "elsewhere.md"), homeProposal("elsewhere", "T-99/J-01"))
+	if code := h.run(h.home, "brain", "keep", "--task", "T-01"); code != 0 || !strings.Contains(h.out.String(), "elsewhere") {
+		t.Fatalf("keep must still list it: %s %s", h.out, h.errb)
+	}
+	if code := h.run(dir, "deliver", "Ready"); code != 0 {
+		t.Fatal(h.errb)
+	}
+}
+
+// After delivery raises the ship gate, approve records a ship approval and
+// leaves the plan approval alone.
+func TestApproveAfterDeliveryRecordsShipApproval(t *testing.T) {
+	h, dir := deliveryFixture(t)
+	addDeliveryProof(t, h, dir)
+	if code := h.run(dir, "deliver", "Ready"); code != 0 {
+		t.Fatal(h.errb)
+	}
+	if code := h.run(dir, "approve", "T-01", "--json"); code != 0 {
+		t.Fatal(h.errb)
+	}
+	var event task.Event
+	if err := json.Unmarshal(h.out.Bytes(), &event); err != nil || event.What != "approve" || event.Gate != "ship" || event.PlanHash == "" {
+		t.Fatalf("%+v %v", event, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "approval-ship.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "approval.json")); !os.IsNotExist(err) {
+		t.Fatal("ship approval wrote a plan approval", err)
+	}
+	if task.Approved(dir) {
+		t.Fatal("a ship approval must not count as the plan approval")
 	}
 }

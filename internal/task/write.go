@@ -71,6 +71,7 @@ type Event struct {
 	ToState   string          `json:"to_state"`
 	Note      string          `json:"note,omitempty"`
 	PlanHash  string          `json:"plan_hash,omitempty"`
+	Gate      string          `json:"gate,omitempty"`
 	RefusalID string          `json:"refusal_id,omitempty"`
 	Decision  string          `json:"decision,omitempty"`
 }
@@ -96,40 +97,30 @@ func (s Store) Change(o WriteOptions) (Event, error) {
 		if err != nil {
 			return err
 		}
-		// Reuse the front-matter reader for the body, and YAML's document decoder
-		// for the header. Unknown keys and header comments survive the state change.
-		fm := taskfile.ParseFrontmatter(string(data))
-		if fm == nil {
-			return errors.New("task.md has no YAML front matter")
-		}
-		var doc yaml.Node
-		if err := yaml.NewDecoder(bytes.NewReader(data)).Decode(&doc); err != nil {
-			return err
-		}
-		mapping := doc.Content[0]
-		for i := 0; i+1 < len(mapping.Content); i += 2 {
-			if mapping.Content[i].Value == "state" {
-				mapping.Content[i+1].SetString(next)
-			}
-		}
-		front, err := yaml.Dump(&doc, yaml.WithIndent(2), yaml.WithLineWidth(-1))
+		updated, err := rewriteTask(data, func(mapping *yaml.Node) error {
+			setScalar(mapping, "state", next, false)
+			return nil
+		}, nil)
 		if err != nil {
 			return err
 		}
-		updated := append(append([]byte("---\n"), front...), []byte("---\n"+fm.Body)...)
 		if _, err := Fold(t.Path, string(updated), t.Intent); err != nil {
 			return err
 		}
 		files := map[string][]byte{"task.md": updated}
 		if o.Action == "reopen" {
-			previous, err := readOptional(filepath.Join(t.Path, "approval.json"))
-			if err != nil {
-				return err
-			}
-			if previous != nil {
-				files["approval.json"], err = json.Marshal(event)
+			// A reopened task needs both gates approved again: the receipt below
+			// is not an approve event, so neither file stays valid.
+			for _, name := range []string{approvalFile, shipApprovalFile} {
+				previous, err := readOptional(filepath.Join(t.Path, name))
 				if err != nil {
 					return err
+				}
+				if previous != nil {
+					files[name], err = json.Marshal(event)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -138,16 +129,94 @@ func (s Store) Change(o WriteOptions) (Event, error) {
 	return event, err
 }
 
-func (s Store) event(t Task, o WriteOptions, next string) Event {
-	now := time.Now()
-	if s.Now != nil {
-		now = s.Now()
+// rewriteTask edits the task.md header as a YAML document, so key order,
+// comments and unknown keys survive, and optionally rewrites the body.
+func rewriteTask(data []byte, edit func(mapping *yaml.Node) error, body func(string) string) ([]byte, error) {
+	fm := taskfile.ParseFrontmatter(string(data))
+	if fm == nil {
+		return nil, errors.New("task.md has no YAML front matter")
 	}
+	var doc yaml.Node
+	if err := yaml.NewDecoder(bytes.NewReader(data)).Decode(&doc); err != nil {
+		return nil, err
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, errors.New("task.md front matter is not a mapping")
+	}
+	if err := edit(doc.Content[0]); err != nil {
+		return nil, err
+	}
+	front, err := yaml.Dump(&doc, yaml.WithIndent(2), yaml.WithLineWidth(-1))
+	if err != nil {
+		return nil, err
+	}
+	text := fm.Body
+	if body != nil {
+		text = body(text)
+	}
+	return append(append([]byte("---\n"), front...), []byte("---\n"+text)...), nil
+}
+
+// setScalar sets a string key of the header mapping, adding it at the end when
+// add is true and the key is missing. It reports whether the key was set.
+func setScalar(mapping *yaml.Node, key, value string, add bool) bool {
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			old := mapping.Content[i+1]
+			mapping.Content[i+1] = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value, HeadComment: old.HeadComment, LineComment: old.LineComment, FootComment: old.FootComment}
+			return true
+		}
+	}
+	if !add {
+		return false
+	}
+	mapping.Content = append(mapping.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value})
+	return true
+}
+
+// scalar returns the string value of a header key, or "" when it is absent or
+// not a scalar.
+func scalar(mapping *yaml.Node, key string) string {
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key && mapping.Content[i+1].Kind == yaml.ScalarNode {
+			return mapping.Content[i+1].Value
+		}
+	}
+	return ""
+}
+
+// Note appends one history line through the same lock, journal and receipt as a
+// state move, so it can neither race Change nor be overwritten by journal replay.
+// It changes no task state, and a closed task can still be annotated.
+func (s Store) Note(o WriteOptions) (Event, error) {
+	var event Event
+	if strings.TrimSpace(o.Note) == "" || strings.ContainsAny(o.Note, "\r\n\x00") {
+		return event, errors.New("history needs one nonempty line")
+	}
+	err := s.withWrite(o.Cwd, o.ID, func(t Task) error {
+		o.Action = "note"
+		event = s.event(t, o, t.State)
+		return commitWrite(t.Path, event, map[string][]byte{})
+	})
+	return event, err
+}
+
+func (s Store) event(t Task, o WriteOptions, next string) Event {
+	now := s.clock()
 	who := o.Who
 	if who.ID == "" {
 		who = contract.Author{ID: "local", Role: "owner"}
 	}
 	return Event{Task: t.ID, Who: who, When: now.UTC().Format(time.RFC3339Nano), What: o.Action, FromState: t.State, ToState: next, Note: o.Note}
+}
+
+func (s Store) clock() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now()
 }
 
 // withWrite re-reads the record after locking: a resolved task is only a path,
@@ -192,7 +261,11 @@ func (s Store) withWrite(cwd, id string, fn func(Task) error) error {
 	return fn(t)
 }
 
-const journalName = ".task-write.json"
+const (
+	journalName      = ".task-write.json"
+	approvalFile     = "approval.json"
+	shipApprovalFile = "approval-ship.json"
+)
 
 var decisionFile = regexp.MustCompile(`^refusal-R-[1-9][0-9]*\.json$`)
 
@@ -241,11 +314,12 @@ func recoverWrite(dir string) error {
 	if err := json.Unmarshal(data, &files); err != nil {
 		return fmt.Errorf("task write journal: %w", err)
 	}
+	// A note writes history alone, so one file is a complete journal.
 	if files["history.md"] == nil {
 		return errors.New("incomplete task write journal")
 	}
 	for name := range files {
-		if name != "task.md" && name != "history.md" && name != "approval.json" && !decisionFile.MatchString(name) {
+		if name != "task.md" && name != "history.md" && name != approvalFile && name != shipApprovalFile && !decisionFile.MatchString(name) {
 			return fmt.Errorf("invalid journal file %q", name)
 		}
 		if err := writableFile(dir, name); err != nil {

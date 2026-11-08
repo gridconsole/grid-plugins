@@ -2,9 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"time"
-
-	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 func runHistory(args []string, env Env) int {
@@ -27,11 +24,11 @@ func runHistory(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "history add: expected one line")
 		return 2
 	}
-	t, err := (task.Store{Resolver: resolver(env)}).Show(env.Cwd, *id)
+	t, err := taskWriter(env).Show(env.Cwd, *id)
 	if err != nil {
 		return commandError(env, "history", err)
 	}
-	if err := task.AppendHistory(t.Path, args[0], time.Now()); err != nil {
+	if _, err := taskWriter(env).Note(writeOptions(env, t.ID, "note", args[0])); err != nil {
 		return commandError(env, "history", err)
 	}
 	if *asJSON {

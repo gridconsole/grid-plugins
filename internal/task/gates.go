@@ -17,6 +17,10 @@ var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
 // compare-and-set token. With no token, an existing stale approval must be
 // explicitly replaced using --plan-hash after reviewing the new plan.
 //
+// The gate the task raised decides what is recorded: a task at gate ship (set
+// by deliver) gets a ship approval in approval-ship.json, and any other waiting
+// task a plan approval in approval.json. The two never overwrite each other.
+//
 // The hash comes from plan.md through internal/plan, never from a stored copy.
 // Locks are taken in one order: .task.lock (withWrite), then .plan.lock (WithHash),
 // which only plan writers also take; nothing takes them the other way round.
@@ -26,7 +30,11 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 		if t.State != "waiting" {
 			return fmt.Errorf("cannot approve task in current state %q: expected waiting", t.State)
 		}
-		previous, err := readOptional(filepath.Join(t.Path, "approval.json"))
+		name, gate := approvalFile, ""
+		if t.Gate == "ship" {
+			name, gate = shipApprovalFile, "ship"
+		}
+		previous, err := readOptional(filepath.Join(t.Path, name))
 		if err != nil {
 			return err
 		}
@@ -49,12 +57,12 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 			}
 			o.Action = "approve"
 			event = s.event(t, o, t.State)
-			event.PlanHash = want
+			event.PlanHash, event.Gate = want, gate
 			data, err := json.Marshal(event)
 			if err != nil {
 				return err
 			}
-			return commitWrite(t.Path, event, map[string][]byte{"approval.json": append(data, '\n')})
+			return commitWrite(t.Path, event, map[string][]byte{name: append(data, '\n')})
 		})
 		if errors.Is(err, plan.ErrNoPlan) {
 			return errors.New("plan.md is missing; write the plan before approving it")
