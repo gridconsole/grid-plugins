@@ -16,6 +16,14 @@ import (
 // The task is built by the real Feed and session stores, so the reader is held
 // to the folder layout they write instead of a layout the test invents.
 func TestReadJobFindsLeaseAndBeatWrittenByTheRealStores(t *testing.T) {
+	// 0, 10 and 120 ms are the shapes Go's shortest-fraction format used to break.
+	for _, ms := range []int{123, 0, 10, 120} {
+		readJobFindsBeatAt(t, ms)
+	}
+}
+
+func readJobFindsBeatAt(t *testing.T, ms int) {
+	t.Helper()
 	const holder = "worker@01K9J000000000000000000002"
 	task := t.TempDir()
 	store := feed.Store{TaskDir: task, TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}
@@ -36,9 +44,7 @@ func TestReadJobFindsLeaseAndBeatWrittenByTheRealStores(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Go prints a time's shortest fraction, so only a time with three significant
-	// millisecond digits matches the heartbeat schema's fixed .000Z shape.
-	now := time.Date(2026, 11, 8, 10, 0, 0, 123_000_000, time.UTC)
+	now := time.Date(2026, 11, 8, 10, 0, 0, ms*int(time.Millisecond), time.UTC)
 	sessions := session.Store{TaskDir: task, Now: func() time.Time { return now }}
 	key := session.Key{SessionID: "sess-1", MachineID: "01K9J000000000000000000002"}
 	rec, err := sessions.Start(session.Record{Key: key, PID: os.Getpid(), PIDStart: "2026-11-08T10:00:00.000Z", Lease: "J-1", Holder: holder, Fence: 2, Attempt: 1})
