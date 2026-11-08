@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
 var ErrStaleLease = errors.New("stale lease")
@@ -81,11 +82,11 @@ func (s Store) leaseLock(w Writer, attempt *int) (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: cannot read lease: %v", ErrStaleLease, err)
 	}
-	if err := lock(f, false); err != nil {
+	if err := fslock.LockShared(f); err != nil {
 		f.Close()
 		return nil, err
 	}
-	fail := func(err error) (*os.File, error) { unlock(f); f.Close(); return nil, err }
+	fail := func(err error) (*os.File, error) { fslock.Unlock(f); f.Close(); return nil, err }
 	var lease Lease
 	if err := json.NewDecoder(f).Decode(&lease); err != nil {
 		return fail(fmt.Errorf("%w: invalid lease", ErrStaleLease))
@@ -155,7 +156,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 			return Record{}, err
 		}
 		defer guard.Close()
-		defer unlock(guard)
+		defer fslock.Unlock(guard)
 	}
 	lease, err := s.leaseLock(w, r.Attempt)
 	if err != nil {
@@ -163,7 +164,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	}
 	if lease != nil {
 		defer lease.Close()
-		defer unlock(lease)
+		defer fslock.Unlock(lease)
 	}
 	file := filepath.Join(s.Dir(), writerFile(w.Worker, w.Fence))
 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
@@ -171,10 +172,10 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		return Record{}, diskError(err)
 	}
 	defer f.Close()
-	if err := lock(f, true); err != nil {
+	if err := fslock.LockExclusive(f); err != nil {
 		return Record{}, err
 	}
-	defer unlock(f)
+	defer fslock.Unlock(f)
 	existing, err := s.Read(Filter{})
 	if err != nil {
 		return Record{}, err
@@ -431,7 +432,7 @@ func (s Store) wakeLock() (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := lock(f, true); err != nil {
+	if err := fslock.LockExclusive(f); err != nil {
 		f.Close()
 		return nil, err
 	}

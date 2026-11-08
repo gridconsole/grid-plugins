@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
@@ -223,10 +224,10 @@ func TestShortWriteRepairsBeforeRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	if err := lock(f, true); err != nil {
+	if err := fslock.LockExclusive(f); err != nil {
 		t.Fatal(err)
 	}
-	defer unlock(f)
+	defer fslock.Unlock(f)
 	calls := 0
 	err = appendRecord(f, path, line, func(file *os.File, data []byte) (int, error) {
 		calls++

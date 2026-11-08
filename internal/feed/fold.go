@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
 // State folds the task through the contract fold. The reader keeps its own
@@ -51,10 +52,10 @@ func (s Store) SaveState() (contract.State, error) {
 		return contract.State{}, err
 	}
 	defer f.Close()
-	if err := lock(f, true); err != nil {
+	if err := fslock.LockExclusive(f); err != nil {
 		return contract.State{}, err
 	}
-	defer unlock(f)
+	defer fslock.Unlock(f)
 	state, err := s.State()
 	if err != nil {
 		return contract.State{}, err

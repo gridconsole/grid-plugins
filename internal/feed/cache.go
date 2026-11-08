@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"time"
 	"unicode/utf8"
+
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
 // Only arrival metadata is clock-based. Offsets always stop just after a newline.
@@ -46,10 +48,10 @@ func (s Store) scan() (ReadResult, error) {
 		return out, err
 	}
 	defer guard.Close()
-	if err := lock(guard, true); err != nil {
+	if err := fslock.LockExclusive(guard); err != nil {
 		return out, err
 	}
-	defer unlock(guard)
+	defer fslock.Unlock(guard)
 	cache := readerCache{Version: 1, Task: s.TaskID, Files: map[string]*cachedFile{}}
 	data, err := os.ReadFile(filepath.Join(cacheDir, "reader.json"))
 	if err == nil {

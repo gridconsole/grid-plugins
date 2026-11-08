@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
 // MachineID creates the stable local machine key once, under a file lock.
@@ -19,10 +21,10 @@ func MachineID(gridHome string) (string, error) {
 		return "", err
 	}
 	defer f.Close()
-	if err := lock(f, true); err != nil {
+	if err := fslock.LockExclusive(f); err != nil {
 		return "", err
 	}
-	defer unlock(f)
+	defer fslock.Unlock(f)
 	data, err := io.ReadAll(f)
 	if err != nil {
 		return "", err
