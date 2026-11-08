@@ -136,7 +136,7 @@ func TestPlanUsageAndRefusals(t *testing.T) {
 	if code := h.run(task, "plan", "write", "missing.md"); code != 1 {
 		t.Fatalf("missing input: %d", code)
 	}
-	h.write(filepath.Join(task, "-draft.md"), "# Plan\nRecall: nothing found\n- [ ] 1 First\n")
+	h.write(filepath.Join(task, "-draft.md"), "# Plan\nRecall: nothing found\n- [ ] 1 First\n  jobs: []\n")
 	if code := h.run(task, "plan", "write", "--", "-draft.md"); code != 0 {
 		t.Fatalf("literal filename: %d %s", code, h.errb)
 	}

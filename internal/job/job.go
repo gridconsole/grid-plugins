@@ -2,13 +2,20 @@
 package job
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 )
 
 // Job contains the planned fields and the run fields of job-contract.md section 1.
 // Status and FollowUp retain compatibility with the old brief reader.
 type Job struct {
+	Kind           string       `json:"kind,omitempty"`
+	Visible        string       `json:"visible,omitempty"`
+	Irreversible   bool         `json:"irreversible,omitempty"`
+	ReviewReason   string       `json:"review_reason,omitempty"`
 	ID             string       `json:"id"`
 	Item           int          `json:"item"`
 	Title          string       `json:"title"`
@@ -98,19 +105,48 @@ func (w *Worktree) UnmarshalJSON(b []byte) error {
 
 type Dependency struct {
 	Job  string `json:"job"`
-	Kind string `json:"kind"`
+	Kind string `json:"kind,omitempty"`
 	Why  string `json:"why,omitempty"`
 }
 
-func (d *Dependency) UnmarshalJSON(b []byte) error {
-	var s string
-	if json.Unmarshal(b, &s) == nil {
-		d.Job, d.Kind = s, "done"
+// MarshalJSON preserves the bare-id shorthand when there is no explanation.
+func (e Dependency) MarshalJSON() ([]byte, error) {
+	if e.Kind == "" && e.Why == "" {
+		return json.Marshal(e.Job)
+	}
+	type plain Dependency
+	return json.Marshal(plain(e))
+}
+
+func (e *Dependency) UnmarshalJSON(data []byte) error {
+	var id string
+	if len(data) > 0 && data[0] == '"' {
+		if err := json.Unmarshal(data, &id); err != nil {
+			return err
+		}
+		*e = Dependency{Job: id}
 		return nil
 	}
 	type plain Dependency
-	if err := json.Unmarshal(b, (*plain)(d)); err != nil {
-		return fmt.Errorf("after: %w", err)
+	var value plain
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	// Object edges must explain the dependency; bare ids are the shorthand.
+	if err := ValidDependencyWhy(value.Why, value.Job); err != nil {
+		return err
+	}
+	*e = Dependency(value)
+	return nil
+}
+
+func ValidDependencyWhy(why, target string) error {
+	n := utf8.RuneCountInString(strings.TrimSpace(why))
+	s := strings.ToLower(strings.TrimSpace(why))
+	if n < 8 || n > 160 || s == "see also" || s == "related" || s == strings.ToLower(target) {
+		return fmt.Errorf("after %s: why must explain the link in 8 to 160 characters", target)
 	}
 	return nil
 }

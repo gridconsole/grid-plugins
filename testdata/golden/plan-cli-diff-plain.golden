@@ -5,16 +5,22 @@ changed: i-1: Add a tag filter to the store (position 1 to 1)
 before:
 - [ ] 1 Add a **tag filter** to the store
   Match tags without case sensitivity and reuse the existing index.
-  write: [src/store/**, tests/store/**]
-  after: []
-  review: L1
-  risk: [data-format]
-  verify: {command: "go test ./internal/store/...", min_tests: 3}
+  kind: build
+  jobs:
+    - id: J-1
+      write: [src/store/**, tests/store/**]
+      after: []
+      review: L1
+      risk: [data-format]
+      verify: {command: "go test ./internal/store/...", min_tests: 3}
 after:
 - [ ] 1 Add a **tag filter** to the store
   Match tags without case sensitivity and normalize accents before lookup.
-  write: [src/store/**, tests/store/**]
-  after: []
-  review: L1
-  risk: [data-format]
-  verify: {command: "go test ./internal/store/...", min_tests: 3}
+  kind: build
+  jobs:
+    - id: J-1
+      write: [src/store/**, tests/store/**]
+      after: []
+      review: L1
+      risk: [data-format]
+      verify: {command: "go test ./internal/store/...", min_tests: 3}

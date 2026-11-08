@@ -14,6 +14,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 )
 
 // Source is a resolved, pinned pointer. Tier comes from where the text was read
@@ -56,7 +57,6 @@ type Files struct {
 
 var lineAnchor = regexp.MustCompile(`^L([0-9]+)(?:-L?([0-9]+))?$`)
 var rangeSuffix = regexp.MustCompile(`:([0-9]+)-([0-9]+)$`)
-var stepLine = regexp.MustCompile(`^- \[[ xX]\] ([0-9]+)\s+`)
 var slugDrop = regexp.MustCompile(`[^\pL\pN -]`)
 
 // ParseBrain splits brain:<level>/<name>, the one id shape the brain store uses.
@@ -292,6 +292,9 @@ func inside(dirs []string, path string) bool {
 	}
 }
 func selectText(text, anchor string) (string, error) {
+	if strings.HasPrefix(anchor, "step-") || anchor == "verify" {
+		return plan.Anchor(text, anchor)
+	}
 	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
 	if m := lineAnchor.FindStringSubmatch(anchor); m != nil {
 		a, _ := strconv.Atoi(m[1])
@@ -307,23 +310,6 @@ func selectText(text, anchor string) (string, error) {
 	start, end := -1, len(lines)
 	level := 0
 	for i, l := range lines {
-		trimmed := strings.TrimSpace(l)
-		if strings.HasPrefix(anchor, "step-") {
-			if m := stepLine.FindStringSubmatch(trimmed); m != nil {
-				if start >= 0 {
-					end = i
-					break
-				}
-				if "step-"+m[1] == anchor {
-					start = i
-					level = -1
-					continue
-				}
-			}
-		}
-		if anchor == "verify" && strings.HasPrefix(trimmed, "Verify:") {
-			return l, nil
-		}
 		if !strings.HasPrefix(l, "#") {
 			continue
 		}
@@ -365,40 +351,32 @@ var jobID = regexp.MustCompile(`^J-[0-9]+(?:\.[0-9]+)*$`)
 
 func ValidID(id string) bool { return jobID.MatchString(id) }
 
-// LoadPlan selects exactly one structured item, by item number or Job id.
-// The local interchange is plan.md frontmatter items: [Job, ...].
+// LoadPlan selects exactly one planned Job by item number or Job id.
 func LoadPlan(task, selector string) (Job, error) {
-	path, e := Within(task, "plan.md")
-	if e != nil {
-		return Job{}, e
+	path, err := Within(task, "plan.md")
+	if err != nil {
+		return Job{}, err
 	}
-	b, e := os.ReadFile(path)
-	if e != nil {
-		return Job{}, e
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return Job{}, err
 	}
-	d, e := frontmatter.Parse(string(b))
-	if e != nil {
-		return Job{}, fmt.Errorf("plan.md: %w", e)
+	items, err := plan.Items(string(b))
+	if err != nil {
+		return Job{}, err
 	}
-	var items []map[string]any
-	if e = frontmatter.Into(d.Data["items"], &items); e != nil {
-		return Job{}, fmt.Errorf("plan.md items: %w", e)
-	}
-	var matches []Job
-	for _, raw := range items {
-		var j Job
-		if e = frontmatter.Into(raw, &j); e != nil {
-			return Job{}, fmt.Errorf("plan.md item: %w", e)
-		}
-		if strconv.Itoa(j.Item) != selector && j.ID != selector {
-			continue
-		}
-		for _, key := range PlannedFields {
-			if _, ok := raw[key]; !ok {
-				return Job{}, fmt.Errorf("plan.md item %s: missing required field %s", selector, key)
+	matches := []Job{}
+	for _, item := range items {
+		for _, raw := range item.Jobs {
+			j, problems := DecodePlanned(raw, item.Kind)
+			if strconv.Itoa(j.Item) != selector && j.ID != selector {
+				continue
 			}
+			if len(problems) > 0 {
+				return Job{}, fmt.Errorf("plan.md Job %s: %s", selector, strings.Join(problems, "; "))
+			}
+			matches = append(matches, j)
 		}
-		matches = append(matches, j)
 	}
 	if len(matches) != 1 {
 		return Job{}, fmt.Errorf("plan.md: expected one item %q, found %d", selector, len(matches))
@@ -432,6 +410,11 @@ func Metadata(j Job) (string, error) {
 	// Struct field order, rather than map iteration, fixes the display order.
 	var out strings.Builder
 	out.WriteString("---\n")
+	for _, key := range []string{"kind", "visible", "irreversible", "review_reason"} {
+		if value, ok := m[key]; ok {
+			fmt.Fprintf(&out, "%s: %s\n", key, value)
+		}
+	}
 	for _, key := range []string{"id", "item", "title", "role", "skills", "review", "risk", "max_rounds", "intent", "links", "keep", "decisions", "read", "write", "out_of_scope", "acceptance", "verify", "budget", "on_blocked", "after", "attempt", "continues", "discovered_from", "close_reason", "checkpoint", "review_rounds", "level_raised", "worktree", "posts_back", "status", "follow_up"} {
 		fmt.Fprintf(&out, "%s: %s\n", key, m[key])
 	}

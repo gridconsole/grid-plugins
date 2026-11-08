@@ -26,7 +26,7 @@ type Diff struct {
 // Compare matches stable item ids; content and position changes count. Content
 // uses the full canonical text, not its six-digit hash, and includes step prose.
 // Tick, needs and evidence changes alone do not invalidate an item approval.
-// States are historical checkboxes, never today's items.md or subagent state.
+// Run state is never inferred from historical checkboxes.
 func Compare(before, after string) (Diff, error) {
 	a, err := Items(before)
 	if err != nil {

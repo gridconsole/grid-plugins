@@ -1,121 +1,177 @@
 package plan
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"go.yaml.in/yaml/v4"
-
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
+	"go.yaml.in/yaml/v4"
 )
 
-// Item is a plan projection, not a Feed Job or task record. Optional fields
-// retain their YAML value as JSON, including empty lists and explicit nulls.
+// Item owns a checklist block. Jobs are planned YAML objects, decoded by job.
+// State is an optional legacy run projection; the checkbox never supplies it.
 type Item struct {
-	ID     string          `json:"id"`
-	Title  string          `json:"title"`
-	State  string          `json:"state"`
-	Write  json.RawMessage `json:"write,omitempty"`
-	After  json.RawMessage `json:"after,omitempty"`
-	Review json.RawMessage `json:"review,omitempty"`
-	Risk   json.RawMessage `json:"risk,omitempty"`
-	Verify json.RawMessage `json:"verify,omitempty"`
-	text   string
+	N     int              `json:"n"`
+	ID    string           `json:"id"`
+	Title string           `json:"title"`
+	Prose string           `json:"prose"`
+	Kind  string           `json:"kind,omitempty"`
+	Jobs  []map[string]any `json:"jobs"`
+	State string           `json:"state"`
+	text  string
+	line  string
 }
 
 var (
-	itemLine     = regexp.MustCompile(`^- \[([ xX])\] (\d+) (\S.*)$`)
-	blockHeading = regexp.MustCompile(`^## (i-\d+) · ([^·]+?) · (.+)$`)
-	fieldLine    = regexp.MustCompile(`^( +)(write|after|review|risk|verify):(?:[ \t]*(.*))$`)
-	itemNumber   = regexp.MustCompile(`^[0-9]+$`)
+	itemLine       = regexp.MustCompile(`^- \[([ xX])\] (\d+) (\S.*)$`)
+	blockHeading   = regexp.MustCompile(`^## (i-\d+) · ([^·]+?) · (.+)$`)
+	itemNumber     = regexp.MustCompile(`^[0-9]+$`)
+	forbiddenField = regexp.MustCompile(`^  (write|after|review|risk|verify):`)
 )
 
-// Items reads top-level numbered checklist steps in document order. A step's
-// block ends at a blank or unindented line, as in the old plan skill.
+// Items reads top-level numbered checklist blocks. Prose precedes a YAML part
+// beginning with exactly two spaces and kind: or jobs:. Blank lines end blocks.
 func Items(text string) ([]Item, error) {
 	ls := lines(text)
 	items := []Item{}
-	seen := map[string]bool{}
+	seen := map[int]bool{}
 	for i := 0; i < len(ls); i++ {
+		if forbiddenField.MatchString(ls[i]) {
+			return nil, fmt.Errorf("plan line %d: step-level %s is refused; put it under jobs", i+1, strings.TrimSpace(ls[i]))
+		}
 		m := itemLine.FindStringSubmatch(ls[i])
 		if m == nil {
 			continue
 		}
-		n, err := strconv.ParseUint(m[2], 10, 64)
-		if err != nil || n == 0 {
+		n, err := strconv.Atoi(m[2])
+		if err != nil || n <= 0 {
 			return nil, fmt.Errorf("plan line %d: item number must be a positive integer", i+1)
 		}
-		id := fmt.Sprintf("i-%d", n)
-		if seen[id] {
-			return nil, fmt.Errorf("plan line %d: duplicate item %s", i+1, id)
+		if seen[n] {
+			return nil, fmt.Errorf("plan line %d: duplicate item %d", i+1, n)
 		}
-		seen[id] = true
-		item := Item{ID: id, Title: strings.TrimSpace(strings.NewReplacer("**", "", "`", "").Replace(m[3])), State: "open"}
-		if m[1] != " " {
-			item.State = "built"
-		}
+		seen[n] = true
+		item := Item{N: n, ID: fmt.Sprintf("i-%d", n), Title: strings.TrimSpace(strings.NewReplacer("**", "", "`", "").Replace(m[3])), State: "open", line: ls[i]}
 		end := i + 1
 		for end < len(ls) && indented.MatchString(ls[end]) {
 			end++
 		}
-		item.text = strings.Join(ls[i:end], "\n")
-		if err := item.fields(ls[i+1 : end]); err != nil {
-			return nil, fmt.Errorf("item %s: %w", id, err)
+		start := end
+		for k := i + 1; k < end; k++ {
+			if forbiddenField.MatchString(ls[k]) {
+				return nil, fmt.Errorf("plan line %d: step-level %s is refused; put it under jobs", k+1, strings.TrimSpace(ls[k]))
+			}
+			if start == end && (strings.HasPrefix(ls[k], "  kind:") || strings.HasPrefix(ls[k], "  jobs:")) {
+				start = k
+			}
+			if k < start && (!strings.HasPrefix(ls[k], "  ") || strings.HasPrefix(ls[k], "   ")) {
+				return nil, fmt.Errorf("plan line %d: prose must be indented two spaces", k+1)
+			}
 		}
+		prose := []string{}
+		for _, l := range ls[i+1 : start] {
+			prose = append(prose, strings.TrimPrefix(l, "  "))
+		}
+		item.Prose = strings.Join(prose, "\n")
+		if start == end {
+			return nil, fmt.Errorf("plan line %d: item %d missing jobs list", i+1, n)
+		}
+		var data map[string]any
+		if err := yaml.Unmarshal([]byte(strings.Join(ls[start:end], "\n")), &data); err != nil {
+			return nil, fmt.Errorf("plan line %d: %w", start+1, err)
+		}
+		for key := range data {
+			if key != "kind" && key != "jobs" {
+				return nil, fmt.Errorf("plan line %d: unknown step field %q", start+1, key)
+			}
+		}
+		if value, ok := data["kind"]; ok {
+			var valid bool
+			item.Kind, valid = value.(string)
+			if !valid {
+				return nil, fmt.Errorf("plan line %d: kind must be a string", start+1)
+			}
+		}
+		jobs, ok := data["jobs"].([]any)
+		if !ok {
+			return nil, fmt.Errorf("plan line %d: jobs must be a list", start+1)
+		}
+		item.Jobs = []map[string]any{}
+		for _, value := range jobs {
+			raw, ok := value.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("plan line %d: each jobs entry must be an object", start+1)
+			}
+			if _, ok := raw["item"]; !ok {
+				raw["item"] = n
+			}
+			if _, ok := raw["title"]; !ok {
+				raw["title"] = item.Title
+			}
+			intent, ok := raw["intent"].(map[string]any)
+			if _, exists := raw["intent"]; !exists {
+				intent = map[string]any{}
+				raw["intent"] = intent
+				ok = true
+			}
+			if ok {
+				if _, exists := intent["item"]; !exists {
+					intent["item"] = fmt.Sprintf("plan.md#step-%d", n)
+				}
+				if _, exists := intent["goal"]; !exists {
+					intent["goal"] = "plan.md#verify"
+				}
+			}
+			item.Jobs = append(item.Jobs, raw)
+		}
+		item.text = strings.Join(ls[i:end], "\n")
 		items = append(items, item)
 		i = end - 1
 	}
 	return items, nil
 }
 
-func (item *Item) fields(block []string) error {
-	fields := map[string]*json.RawMessage{"write": &item.Write, "after": &item.After, "review": &item.Review, "risk": &item.Risk, "verify": &item.Verify}
-	for i := 0; i < len(block); i++ {
-		m := fieldLine.FindStringSubmatch(block[i])
-		if m == nil {
-			continue
+// Anchor returns the checklist line and prose, or the first Verify paragraph.
+func Anchor(text, anchor string) (string, error) {
+	if strings.HasPrefix(anchor, "step-") {
+		items, err := Items(text)
+		if err != nil {
+			return "", err
 		}
-		name, indent := m[2], len(m[1])
-		if *fields[name] != nil {
-			return fmt.Errorf("duplicate %s field", name)
-		}
-		end := i + 1
-		for end < len(block) && len(block[end])-len(strings.TrimLeft(block[end], " ")) > indent {
-			end++
-		}
-		var data json.RawMessage
-		// Legacy verify is Markdown prose, often starting with a backtick or
-		// containing a colon. Structured verify uses an inline map or block.
-		value := strings.TrimSpace(m[3])
-		if name == "verify" && value != "" && !strings.ContainsAny(value[:1], "{[|>'\"") {
-			data, _ = json.Marshal(value)
-		} else {
-			var node yaml.Node
-			field := strings.Join(block[i:end], "\n")
-			if err := yaml.Unmarshal([]byte(field), &node); err != nil {
-				return fmt.Errorf("invalid %s: %w", name, err)
-			}
-			var values map[string]any
-			if err := node.Decode(&values); err != nil {
-				return fmt.Errorf("invalid %s: %w", name, err)
-			}
-			var err error
-			data, err = json.Marshal(values[name])
-			if err != nil {
-				return fmt.Errorf("%s must be JSON-compatible YAML: %w", name, err)
+		for _, item := range items {
+			if anchor == fmt.Sprintf("step-%d", item.N) {
+				out := item.line
+				if item.Prose != "" {
+					out += "\n  " + strings.ReplaceAll(item.Prose, "\n", "\n  ")
+				}
+				return out, nil
 			}
 		}
-		*fields[name] = data
-		i = end - 1
+	} else if anchor == "verify" {
+		ls := lines(text)
+		for i, l := range ls {
+			if l == "## Verify" {
+				start := i + 1
+				for start < len(ls) && strings.TrimSpace(ls[start]) == "" {
+					start++
+				}
+				end := start
+				for end < len(ls) && strings.TrimSpace(ls[end]) != "" && !strings.HasPrefix(ls[end], "#") {
+					end++
+				}
+				if end > start {
+					return strings.Join(ls[start:end], "\n"), nil
+				}
+				break
+			}
+		}
 	}
-	return nil
+	return "", fmt.Errorf("anchor %q not found", anchor)
 }
 
-// WithLegacyState overlays items.md and running subagent briefs without writing
-// either file. Titles and membership always come from the plan.
+// WithLegacyState overlays items.md and running briefs, never plan ticks.
 func WithLegacyState(items []Item, blocks string, briefs []string) []Item {
 	states := map[string]string{}
 	for _, line := range lines(blocks) {
@@ -136,7 +192,7 @@ func WithLegacyState(items []Item, blocks string, briefs []string) []Item {
 		}
 		for _, number := range strings.Split(numbers, ",") {
 			number = strings.TrimSpace(number)
-			if n, err := strconv.ParseUint(number, 10, 64); err == nil && itemNumber.MatchString(number) {
+			if n, err := strconv.Atoi(number); err == nil && itemNumber.MatchString(number) {
 				running[fmt.Sprintf("i-%d", n)] = true
 			}
 		}
@@ -147,9 +203,7 @@ func WithLegacyState(items []Item, blocks string, briefs []string) []Item {
 		if state == "" {
 			state = "open"
 		}
-		if out[i].State == "built" && (state == "open" || state == "working") {
-			state = "built"
-		} else if state == "open" && running[out[i].ID] {
+		if state == "open" && running[out[i].ID] {
 			state = "working"
 		}
 		out[i].State = state

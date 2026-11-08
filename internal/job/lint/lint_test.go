@@ -108,8 +108,10 @@ func TestContractRules(t *testing.T) {
 		{"scope", "job.scope-narrowing", func(j *job.Job) { j.OutOfScope = []string{"export format"} }},
 		{"repo", "job.repo", func(j *job.Job) { j.Write = []string{"unlisted:docs/**"} }},
 		{"close reason", "job.close-reason", func(j *job.Job) { j.Status = "cancelled" }},
-		{"after", "job.after-kind", func(j *job.Job) { j.After = []job.Dependency{{Job: "J-2", Kind: "unknown"}} }},
-		{"self dependency", "job.after-cycle", func(j *job.Job) { j.After = []job.Dependency{{Job: "J-1", Kind: "done"}} }},
+		{"after", "job.after-kind", func(j *job.Job) {
+			j.After = []job.Dependency{{Job: "J-2", Kind: "unknown", Why: "Needs the other result"}}
+		}},
+		{"self dependency", "job.after-cycle", func(j *job.Job) { j.After = []job.Dependency{{Job: "J-1", Kind: "done", Why: "Needs its own result"}} }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

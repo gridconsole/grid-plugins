@@ -145,7 +145,7 @@ func TestDependencyAndWorktreeForms(t *testing.T) {
 	if e := json.Unmarshal([]byte(`{"after":["J-1",{"job":"J-2","kind":"failed","why":"Fallback work"},"gate:Q-1"],"worktree":"example-tree"}`), &j); e != nil {
 		t.Fatal(e)
 	}
-	if j.After[0].Kind != "done" || j.After[1].Kind != "failed" || j.Worktree[""] != "example-tree" {
+	if j.After[0].Kind != "" || j.After[1].Kind != "failed" || j.Worktree[""] != "example-tree" {
 		t.Fatalf("bad forms: %+v", j)
 	}
 }

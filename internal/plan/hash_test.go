@@ -95,11 +95,11 @@ func TestItemsRefusals(t *testing.T) {
 }
 
 func TestItemsBoundaries(t *testing.T) {
-	items, err := Items("# Plan\n- [X] 7 **Keep** `title`\n  verify: pass: all cases\n\n  write: [not-in-item]\n  - [ ] 8 Nested\n- [ ] 9 Last\n  risk: []\n  after: null\n")
+	items, err := Items("# Plan\n- [X] 7 **Keep** `title`\n  Some prose.\n  jobs: []\n\n  - [ ] 8 Nested\n- [ ] 9 Last\n  jobs: []\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 2 || items[0].ID != "i-7" || items[0].Title != "Keep title" || items[0].State != "built" || items[0].Write != nil || string(items[0].Verify) != `"pass: all cases"` || string(items[1].Risk) != "[]" || string(items[1].After) != "null" {
+	if len(items) != 2 || items[0].N != 7 || items[0].Title != "Keep title" || items[0].State != "open" || items[0].Prose != "Some prose." {
 		t.Fatalf("%+v", items)
 	}
 }

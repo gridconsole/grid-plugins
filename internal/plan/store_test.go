@@ -354,14 +354,14 @@ func TestDiffGolden(t *testing.T) {
 }
 
 func TestDiffPositionAndFields(t *testing.T) {
-	base := "# Plan\n- [ ] 1 First\n  write: [src/one/**]\n  after: []\n  review: L1\n  risk: []\n  verify: pass\n- [ ] 2 Second\n"
+	base := "# Plan\n- [ ] 1 First\n  jobs:\n    - write: [src/one/**]\n      after: []\n      review: L1\n      risk: []\n      verify: pass\n- [ ] 2 Second\n  jobs: []\n"
 	for _, pair := range [][2]string{{"src/one", "src/two"}, {"after: []", "after: [J-3]"}, {"L1", "L2"}, {"risk: []", "risk: [security]"}, {"verify: pass", "verify: check"}} {
 		d, err := Compare(base, strings.ReplaceAll(base, pair[0], pair[1]))
 		if err != nil || len(d.Changed) != 1 {
 			t.Fatalf("%v: %+v %v", pair, d, err)
 		}
 	}
-	d, err := Compare("# Plan\n- [ ] 1 One\n- [ ] 2 Two", "# Plan\n- [ ] 2 Two\n- [ ] 1 One")
+	d, err := Compare("# Plan\n- [ ] 1 One\n  jobs: []\n- [ ] 2 Two\n  jobs: []", "# Plan\n- [ ] 2 Two\n  jobs: []\n- [ ] 1 One\n  jobs: []")
 	if err != nil || len(d.Changed) != 2 || d.Changed[0].BeforePosition != 2 {
 		t.Fatalf("%+v %v", d, err)
 	}

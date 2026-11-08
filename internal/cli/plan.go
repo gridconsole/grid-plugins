@@ -80,16 +80,6 @@ func runPlan(args []string, env Env) int {
 		var out strings.Builder
 		for _, item := range items {
 			fmt.Fprintf(&out, "%s: %s: %s\n", item.ID, item.State, item.Title)
-			for _, field := range []struct {
-				name  string
-				value []byte
-			}{
-				{"write", item.Write}, {"after", item.After}, {"review", item.Review}, {"risk", item.Risk}, {"verify", item.Verify},
-			} {
-				if field.value != nil {
-					fmt.Fprintf(&out, "  %s: %s\n", field.name, field.value)
-				}
-			}
 		}
 		if len(items) == 0 {
 			out.WriteString("No plan items.\n")

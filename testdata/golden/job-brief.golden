@@ -1,4 +1,5 @@
 ---
+kind: "non-code"
 id: "J-1"
 item: 1
 title: "Document the export format"
@@ -42,14 +43,11 @@ follow_up: "none"
 
 ### Item [agent] (plan.md#step-1)
 
-> ## Step 1 {#step-1}
-> 
-> Document the export format and column order.
+> - [ ] 1 Document the export format
+>   Document the export format and column order.
 
 ### Goal [agent] (plan.md#verify)
 
-> ## Verify {#verify}
-> 
 > The export documentation lists the column order.
 
 ## Context

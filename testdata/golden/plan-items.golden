@@ -1,53 +1,98 @@
 [
   {
+    "n": 1,
     "id": "i-1",
     "title": "Add a tag filter to the store",
-    "state": "in-test",
-    "write": [
-      "src/store/**",
-      "tests/store/**"
+    "prose": "Match tags without case sensitivity and reuse the existing index.\nneeds: none\nevidence: checks/R-1/store.txt",
+    "kind": "build",
+    "jobs": [
+      {
+        "after": [],
+        "id": "J-1",
+        "intent": {
+          "goal": "plan.md#verify",
+          "item": "plan.md#step-1"
+        },
+        "item": 1,
+        "review": "L1",
+        "risk": [
+          "data-format"
+        ],
+        "title": "Add a tag filter to the store",
+        "verify": {
+          "command": "go test ./internal/store/...",
+          "min_tests": 3
+        },
+        "write": [
+          "src/store/**",
+          "tests/store/**"
+        ]
+      }
     ],
-    "after": [],
-    "review": "L1",
-    "risk": [
-      "data-format"
-    ],
-    "verify": {
-      "command": "go test ./internal/store/...",
-      "min_tests": 3
-    }
+    "state": "in-test"
   },
   {
+    "n": 2,
     "id": "i-2",
     "title": "Add the tag box to the list view",
-    "state": "working",
-    "write": [
-      "src/list/**",
-      "tests/list/**"
-    ],
-    "after": [
-      "J-1",
+    "prose": "Keep the current selection when the query changes.\nneeds: 1",
+    "kind": "build",
+    "jobs": [
       {
-        "job": "J-3",
-        "kind": "failed",
-        "why": "Use the fallback if indexing fails"
-      },
-      "gate:Q-7"
+        "after": [
+          "J-1",
+          {
+            "job": "J-3",
+            "kind": "failed",
+            "why": "Use the fallback if indexing fails"
+          },
+          "gate:Q-7"
+        ],
+        "id": "J-2",
+        "intent": {
+          "goal": "plan.md#verify",
+          "item": "plan.md#step-2"
+        },
+        "item": 2,
+        "review": "L2",
+        "risk": [
+          "concurrency",
+          "cross-platform"
+        ],
+        "title": "Add the tag box to the list view",
+        "verify": {
+          "command": "go test ./internal/list/...",
+          "min_tests": 2
+        },
+        "write": [
+          "src/list/**",
+          "tests/list/**"
+        ]
+      }
     ],
-    "review": "L2",
-    "risk": [
-      "concurrency",
-      "cross-platform"
-    ],
-    "verify": {
-      "command": "go test ./internal/list/...",
-      "min_tests": 2
-    }
+    "state": "working"
   },
   {
+    "n": 4,
     "id": "i-4",
     "title": "Write the release note",
-    "state": "open",
-    "verify": "`go test ./...` passes; the release note names the filter"
+    "prose": "Explain the case-insensitive match and keyboard shortcut.\nneeds: none",
+    "kind": "build",
+    "jobs": [
+      {
+        "id": "J-4",
+        "intent": {
+          "goal": "plan.md#verify",
+          "item": "plan.md#step-4"
+        },
+        "item": 4,
+        "title": "Write the release note",
+        "verify": {
+          "command": "go test ./...",
+          "min_tests": 1
+        }
+      }
+    ],
+    "state": "open"
   }
 ]
