@@ -39,7 +39,7 @@ func (s Store) stamp() string {
 	if s.Now != nil {
 		now = s.Now()
 	}
-	return now.UTC().Format(time.RFC3339)
+	return contract.FormatTime(now)
 }
 
 func (s Store) levels() []string {

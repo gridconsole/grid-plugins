@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
@@ -110,7 +111,7 @@ func exclusiveJSON(path string, value any) error {
 		return err
 	}
 	defer f.Close()
-	if err := json.NewEncoder(f).Encode(value); err != nil {
+	if err := json.NewEncoder(f).Encode(storedRecord(value)); err != nil {
 		return err
 	}
 	if err := f.Sync(); err != nil {
@@ -133,7 +134,7 @@ func writeTemp(dir string, value any) (string, error) {
 		_ = os.Remove(f.Name())
 		return "", err
 	}
-	if err := json.NewEncoder(f).Encode(value); err != nil {
+	if err := json.NewEncoder(f).Encode(storedRecord(value)); err != nil {
 		return fail(err)
 	}
 	if err := f.Sync(); err != nil {
@@ -199,4 +200,32 @@ func syncDir(path string) error {
 	}
 	defer f.Close()
 	return f.Sync()
+}
+
+// storedRecord fixes timestamp precision at the persistence boundary; readers
+// still accept older RFC3339 records with variable precision.
+func storedRecord(value any) any {
+	switch r := value.(type) {
+	case Record:
+		type wire Record
+		return struct {
+			wire
+			Created string `json:"created"`
+		}{wire(r), contract.FormatTime(r.Created)}
+	case Claim:
+		type wire Claim
+		return struct {
+			wire
+			Created string `json:"created"`
+			Until   string `json:"until"`
+		}{wire(r), contract.FormatTime(r.Created), contract.FormatTime(r.Until)}
+	case Completion:
+		type wire Completion
+		return struct {
+			wire
+			Created string `json:"created"`
+		}{wire(r), contract.FormatTime(r.Created)}
+	default:
+		return value
+	}
 }

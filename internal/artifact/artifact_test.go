@@ -37,7 +37,7 @@ func TestImport(t *testing.T) {
 			if first.ID == second.ID || first.File == second.File {
 				t.Fatal("imports collided")
 			}
-			if first.Title != "report.txt" || !sourceHashed.MatchString(first.Source) || strings.Contains(first.Source, home) || first.Kind != "file" || first.SHA256 != fmt.Sprintf("%x", sha256.Sum256([]byte(content))) || first.Created != "2026-11-08T00:00:00Z" {
+			if first.Title != "report.txt" || !sourceHashed.MatchString(first.Source) || strings.Contains(first.Source, home) || first.Kind != "file" || first.SHA256 != fmt.Sprintf("%x", sha256.Sum256([]byte(content))) || first.Created != "2026-11-08T00:00:00.000Z" {
 				t.Fatalf("record: %+v", first)
 			}
 			for _, path := range []string{source, filepath.Join(task, "artifacts", first.File), filepath.Join(task, "artifacts", second.File)} {
@@ -268,5 +268,24 @@ func TestImportSource(t *testing.T) {
 	b, _ := (Store{TaskPath: task}).Import(outside, "")
 	if a.Source == b.Source {
 		t.Fatal("files with the same base name share a source label")
+	}
+}
+
+func TestStoredTimestampPrecision(t *testing.T) {
+	for _, ns := range []int{0, 120000000, 123456789} {
+		now := time.Date(2026, 1, 1, 1, 2, 3, ns, time.FixedZone("offset", 3600))
+		s := Store{TaskPath: t.TempDir(), Now: func() time.Time { return now }}
+		r, err := s.Link("https://example.com/report", "Report")
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(s.TaskPath, "artifacts", r.ID+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := fmt.Sprintf("2026-01-01T00:02:03.%03dZ", ns/1000000)
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("stored timestamp: %s, want %s", data, want)
+		}
 	}
 }

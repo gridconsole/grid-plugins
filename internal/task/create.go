@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"io/fs"
 	"math"
 	"math/big"
@@ -90,7 +91,7 @@ func (s Store) New(o NewOptions) (Task, error) {
 	}
 	owner, role := o.owner()
 	t := Task{Record: Record{ID: id, Title: title, Project: r.Project, Owner: owner, OwnerRole: role,
-		Size: o.Size, Workflow: o.Workflow, State: "queued", Created: now.UTC().Format(time.RFC3339)},
+		Size: o.Size, Workflow: o.Workflow, State: "queued", Created: contract.FormatTime(now)},
 		Path: filepath.Join(dir, id+"-"+slug(title)), Intent: o.Words}
 	front, err := yaml.Dump(t.Record, yaml.WithIndent(2), yaml.WithLineWidth(-1))
 	if err != nil {

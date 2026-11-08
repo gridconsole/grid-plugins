@@ -209,7 +209,7 @@ func (s Store) event(t Task, o WriteOptions, next string) Event {
 	if who.ID == "" {
 		who = contract.Author{ID: "local", Role: "owner"}
 	}
-	return Event{Task: t.ID, Who: who, When: now.UTC().Format(time.RFC3339Nano), What: o.Action, FromState: t.State, ToState: next, Note: o.Note}
+	return Event{Task: t.ID, Who: who, When: contract.FormatTime(now), What: o.Action, FromState: t.State, ToState: next, Note: o.Note}
 }
 
 func (s Store) clock() time.Time {

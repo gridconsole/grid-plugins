@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"os"
 	"path/filepath"
 	"strings"
@@ -230,7 +231,7 @@ func (s Store) Add(in Input) (Result, error) {
 	if !errors.Is(err, os.ErrNotExist) {
 		return Result{}, err
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := contract.FormatTime(time.Now())
 	note := Note{ID: id, Source: in.Source, SourceID: in.SourceID, Title: in.Title, Status: "new", Captured: now, Updated: now, Tier: "external", BodyKind: "data", Body: in.Body}
 	data, err := encode(note)
 	if err != nil {
@@ -285,7 +286,7 @@ func (s Store) change(id, status string) (Result, error) {
 		return Result{}, fmt.Errorf("signal is already %s", n.Status)
 	}
 	n.Status = status
-	n.Updated = time.Now().UTC().Format(time.RFC3339Nano)
+	n.Updated = contract.FormatTime(time.Now())
 	data, err := encode(n)
 	if err != nil {
 		return Result{}, err

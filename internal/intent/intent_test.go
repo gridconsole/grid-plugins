@@ -1,6 +1,7 @@
 package intent
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -499,6 +500,51 @@ func TestULIDs(t *testing.T) {
 	for _, id := range []string{strings.Repeat("Z", 26), strings.Repeat("I", 26), strings.Repeat("0", 25)} {
 		if validID(id) {
 			t.Fatal("invalid ULID accepted", id)
+		}
+	}
+}
+
+func TestStoredTimestampPrecision(t *testing.T) {
+	for _, ns := range []int{0, 120000000, 123456789} {
+		now := time.Date(2026, 1, 1, 1, 2, 3, ns, time.FixedZone("offset", 3600))
+		s := Store{TaskDir: t.TempDir(), Now: func() time.Time { return now }}
+		r := enqueue(t, s, "stop", nil)
+		claim, err := s.Claim(r.ID, "worker")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Done(r.ID, claim.Token, ""); err != nil {
+			t.Fatal(err)
+		}
+		files, err := os.ReadDir(filepath.Join(s.TaskDir, "intents"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		checked := 0
+		for _, file := range files {
+			if !strings.HasPrefix(file.Name(), r.ID) {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(s.TaskDir, "intents", file.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]any
+			if err := json.Unmarshal(data, &fields); err != nil {
+				t.Fatal(err)
+			}
+			for _, key := range []string{"created", "until"} {
+				if stamp, ok := fields[key]; ok {
+					parsed, err := time.Parse("2006-01-02T15:04:05.000Z", stamp.(string))
+					if err != nil || parsed.Nanosecond() != ns/1000000*1000000 {
+						t.Errorf("%s: %v, %v", key, stamp, err)
+					}
+					checked++
+				}
+			}
+		}
+		if checked != 4 {
+			t.Fatalf("checked only %d timestamps", checked)
 		}
 	}
 }

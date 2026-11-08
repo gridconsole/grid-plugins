@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 // DefaultMaxImportBytes is the largest file Import copies when MaxBytes is zero.
@@ -83,7 +85,7 @@ func (s Store) record(source, title, kind string) Record {
 	if s.Now != nil {
 		now = s.Now
 	}
-	return Record{Title: title, Source: source, Kind: kind, Created: now().UTC().Format(time.RFC3339Nano)}
+	return Record{Title: title, Source: source, Kind: kind, Created: contract.FormatTime(now())}
 }
 
 func newID() (string, error) {

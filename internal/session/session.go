@@ -460,7 +460,26 @@ func (s Store) save(r Record) error {
 	if err != nil {
 		return err
 	}
-	return atomicJSON(path, r)
+	// Override time.Time's variable precision only at the persistence boundary.
+	type wire Record
+	var ended, slept *string
+	if r.Ended != nil {
+		v := contract.FormatTime(*r.Ended)
+		ended = &v
+	}
+	if r.Slept != nil {
+		v := contract.FormatTime(*r.Slept)
+		slept = &v
+	}
+	return atomicJSON(path, struct {
+		wire
+		Started   string  `json:"started"`
+		Last      string  `json:"last"`
+		Ended     *string `json:"ended,omitempty"`
+		Slept     *string `json:"slept,omitempty"`
+		LastAlive string  `json:"last_alive"`
+		Until     string  `json:"until"`
+	}{wire(r), contract.FormatTime(r.Started), contract.FormatTime(r.Last), ended, slept, contract.FormatTime(r.LastAlive), contract.FormatTime(r.Until)})
 }
 func (s Store) removeLive(r Record) error {
 	if r.Lease == "" {

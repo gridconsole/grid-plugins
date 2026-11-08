@@ -1,7 +1,9 @@
 package session
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -384,5 +386,48 @@ func TestTerminalResumeCannotDropJobTenure(t *testing.T) {
 	heartbeat, err := f.store.ReadHeartbeat(running)
 	if err != nil || heartbeat != before {
 		t.Fatalf("heartbeat changed: %+v %v", heartbeat, err)
+	}
+}
+
+func TestStoredRecordTimestampPrecision(t *testing.T) {
+	for _, ns := range []int{0, 120000000, 123456789} {
+		now := time.Date(2026, 1, 1, 1, 2, 3, ns, time.FixedZone("offset", 3600))
+		s := Store{TaskDir: t.TempDir()}
+		r := Record{Key: Key{SessionID: "session-1", MachineID: "machine-1"}, Started: now, Last: now, Ended: &now, Slept: &now, LastAlive: now, Until: now}
+		if err := s.save(r); err != nil {
+			t.Fatal(err)
+		}
+		path, err := s.recordPath(r.Key, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(data, &fields); err != nil {
+			t.Fatal(err)
+		}
+		want := fmt.Sprintf("2026-01-01T00:02:03.%03dZ", ns/1000000)
+		for _, key := range []string{"started", "last", "ended", "slept", "last_alive", "until"} {
+			if fields[key] != want {
+				t.Errorf("%s = %v, want %s", key, fields[key], want)
+			}
+		}
+		r.Ended, r.Slept = nil, nil
+		if err := s.save(r); err != nil {
+			t.Fatal(err)
+		}
+		data, _ = os.ReadFile(path)
+		fields = nil
+		if err := json.Unmarshal(data, &fields); err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range []string{"ended", "slept"} {
+			if _, ok := fields[key]; ok {
+				t.Errorf("%s should be omitted", key)
+			}
+		}
 	}
 }
