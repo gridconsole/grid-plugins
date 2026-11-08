@@ -12,6 +12,15 @@ func runQuestion(args []string, env Env) int {
 
 func questionEnv(env Env) question.Env {
 	return question.Env{AgentShell: func() bool { return agentShell(env) }, Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Writer: func(control bool) (feed.Writer, error) {
+		if control && os.Getenv("GRID_LEASE") != "task" && agentShell(env) {
+			// Preserve the withdrawal refusal before feedWriter checks a worker
+			// identity that an agent shell cannot use for a person withdrawal.
+			role := os.Getenv("GRID_ROLE")
+			if role == "" {
+				role = "member"
+			}
+			return feed.Writer{Author: feed.Author{ID: os.Getenv("GRID_MEMBER"), Role: role}}, nil
+		}
 		if control {
 			return feedWriter(env, os.Getenv("GRID_LEASE"), os.Getenv("GRID_LEASE_EPOCH"))
 		}

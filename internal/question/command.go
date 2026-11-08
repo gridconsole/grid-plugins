@@ -53,7 +53,8 @@ func RunAnswer(args []string, env Env) int {
 func run(args []string, env Env) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(env.Stdout, "Usage: grid question add|withdraw|list|tick|sync [--task <path>] [--json]")
-		fmt.Fprintln(env.Stdout, "withdraw and tick require a task lease: GRID_LEASE=task and GRID_LEASE_EPOCH.")
+		fmt.Fprintln(env.Stdout, "A person may withdraw without a lease; a task lease holder may also withdraw.")
+		fmt.Fprintln(env.Stdout, "tick requires a task lease: GRID_LEASE=task and GRID_LEASE_EPOCH.")
 		return 0
 	}
 	if len(args) == 0 {
@@ -73,7 +74,10 @@ func run(args []string, env Env) int {
 	fs.SetOutput(env.Stderr)
 	fs.Usage = func() {
 		fmt.Fprintf(env.Stderr, "Usage: %s [flags]\n", name)
-		if action == "withdraw" || action == "tick" {
+		if action == "withdraw" {
+			fmt.Fprintln(env.Stderr, "A person may withdraw without a lease; a task lease holder may also withdraw.")
+		}
+		if action == "tick" {
 			fmt.Fprintln(env.Stderr, "Requires a task lease: GRID_LEASE=task and GRID_LEASE_EPOCH.")
 		}
 		fs.PrintDefaults()

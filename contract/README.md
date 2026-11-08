@@ -192,7 +192,18 @@ Disagreements and defaults chosen:
   and close_reason. Target may be a Job ID or a Job-side post ID. A hold has
   target/reason only. Closing a question selects
   `{target: question-post-id, answer: answer-post-id, status: answered|closed}`;
-  neither of two concurrent answers wins by time. `accepted` replaces old
+  neither of two concurrent answers wins by time. A person may also close an open
+  person question with `grid question withdraw <Q-id> [--task <folder|id>]
+  [--reason <text>] [--json]`. It posts a leaseless control referencing the
+  question with `{target, question_event: "withdrawn", text}`; the reason defaults
+  to `No longer needed`. Owners and members are allowed by default. The workflow
+  key `question_withdraw_roles: owner, member` replaces this policy; a host may
+  also supply `question.Store.WithdrawAllowed`. Agent shells still need the task
+  lease, and lease holders retain the existing control path. Person withdrawal
+  follows Feed order and closes only an open question; an applied answer or
+  default makes it a refusal. An already withdrawn question is a successful
+  retry that prints the record. Refusals return exit 3 (HTTP 409 in the app),
+  usage errors 2, other failures 1, and success 0. `accepted` replaces old
   `done`, because new dependency rules name accepted. Cancelled/rejected require
   close_reason; a close never silently supplies one from a generic reason.
 - Job-side evidence requires a matching Job lease, attempt, generation, worker

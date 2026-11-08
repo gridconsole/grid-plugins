@@ -80,7 +80,10 @@ func (s Store) publishEvents(dir string, r *Record, before int) error {
 			in.Type, in.Body = "answer", map[string]any{"answer": e.Text}
 		} else {
 			w = s.ControlWriter
-			if w.Lease != "task" || w.Fence <= 0 {
+			if e.Kind == "withdrawn" && w.Lease != "task" {
+				w = s.Writer
+				w.Lease, w.Fence, w.Gen = "", 0, 0
+			} else if w.Lease != "task" || w.Fence <= 0 {
 				return fmt.Errorf("%s requires the task lease to post its control record", e.Kind)
 			}
 			in.Type, in.Body = "control", map[string]any{"target": r.Post, "question_event": e.Kind, "text": e.Text}
@@ -136,7 +139,11 @@ func (s Store) project(dir string, write bool) ([]Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, decisions := feed.FoldReadAt(read, s.now())
+	allowed, err := s.withdrawPolicy()
+	if err != nil {
+		return nil, err
+	}
+	_, decisions := feed.FoldReadAt(read, s.now(), allowed)
 	records := []Record{}
 	ids := map[string]bool{}
 	for _, d := range decisions {

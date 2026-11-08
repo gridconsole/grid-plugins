@@ -15,12 +15,20 @@ import (
 func TestPersonWithdrawCLI(t *testing.T) {
 	for _, tc := range []struct {
 		name, role, agent, reason, prior, stderr string
+		marker, workflow                         string
 		code                                     int
 	}{
 		{name: "owner", role: "owner", reason: "Resolved elsewhere"},
 		{name: "member", role: "member"},
 		{name: "guest", role: "guest", code: 3, stderr: "question: Q-1 role \"guest\" may not withdraw\n"},
 		{name: "agent shell", role: "member", agent: "builder", code: 3, stderr: "question: Q-1 agent shell requires a task lease to withdraw\n"},
+		{name: "worker id", role: "owner", marker: "GRID_WORKER_ID", agent: "builder", code: 3, stderr: "question: Q-1 agent shell requires a task lease to withdraw\n"},
+		{name: "worker", role: "owner", marker: "GRID_WORKER", agent: "builder", code: 3, stderr: "question: Q-1 agent shell requires a task lease to withdraw\n"},
+		{name: "agent role", role: "agent", code: 3, stderr: "question: Q-1 role \"agent\" may not withdraw\n"},
+		{name: "cli role", role: "cli", code: 3, stderr: "question: Q-1 role \"cli\" may not withdraw\n"},
+		{name: "workflow member refused", role: "member", workflow: "owner", code: 3, stderr: "question: Q-1 role \"member\" may not withdraw\n"},
+		{name: "workflow owner allowed", role: "owner", workflow: "owner"},
+		{name: "defaulted", role: "owner", prior: "default", code: 3, stderr: "question: Q-1 is defaulted\n"},
 		{name: "answered", role: "owner", prior: "answer", code: 3, stderr: "question: Q-1 is answered\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -44,7 +52,17 @@ func TestPersonWithdrawCLI(t *testing.T) {
 			var out, stderr bytes.Buffer
 			env := cli.Env{Cwd: root, Home: root, GridHome: home, Ceiling: root, Stdout: &out, Stderr: &stderr}
 			run := func(args ...string) int { out.Reset(); stderr.Reset(); return cli.Run(args, env) }
-			if code := run("question", "add", "Proceed?", "--task", task, "--default", "Wait", "--applies", "2099-01-01T00:00:00Z", "--json"); code != 0 {
+			if tc.workflow != "" {
+				workflowText := "# Workflows\n\n## Default\napplies when: nothing else matches\nreview rounds: 1\nquestion_withdraw_roles: " + tc.workflow + "\n\n| # | step | kind | who | on reject, back to |\n|---|---|---|---|---|\n| 1 | Build | run | grid-builder | |\n"
+				if err := os.WriteFile(filepath.Join(home, "workflows.md"), []byte(workflowText), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			deadline := "2099-01-01T00:00:00Z"
+			if tc.prior == "default" {
+				deadline = "2000-01-01T00:00:00Z"
+			}
+			if code := run("question", "add", "Proceed?", "--task", task, "--default", "Wait", "--applies", deadline, "--json"); code != 0 {
 				t.Fatalf("add: %d %s", code, &stderr)
 			}
 			var q question.Record
@@ -67,7 +85,11 @@ func TestPersonWithdrawCLI(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Setenv("GRID_ROLE", tc.role)
-			t.Setenv("GRID_AGENT", tc.agent)
+			marker := tc.marker
+			if marker == "" {
+				marker = "GRID_AGENT"
+			}
+			t.Setenv(marker, tc.agent)
 			args := []string{"question", "withdraw", q.ID, "--task", task, "--json"}
 			if tc.reason != "" {
 				args = append(args, "--reason", tc.reason)

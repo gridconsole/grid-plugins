@@ -1,0 +1,6 @@
+Usage: grid question tick [flags]
+Requires a task lease: GRID_LEASE=task and GRID_LEASE_EPOCH.
+  -json
+    	print JSON
+  -task string
+    	task folder or id; otherwise the enclosing task

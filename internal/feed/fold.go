@@ -25,7 +25,11 @@ func (s Store) State() (contract.State, error) {
 	if s.Now != nil {
 		now = s.Now()
 	}
-	state, _ := FoldReadAt(read, now)
+	allowed, err := QuestionWithdrawPolicy(s.TaskDir)
+	if err != nil {
+		return contract.State{}, err
+	}
+	state, _ := FoldReadAt(read, now, allowed)
 	return state, nil
 }
 

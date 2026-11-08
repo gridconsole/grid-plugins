@@ -1,6 +1,8 @@
 package feed
 
 import (
+	"github.com/gridconsole/grid-plugins/internal/workflow"
+	"slices"
 	"sort"
 	"time"
 
@@ -20,7 +22,7 @@ type QuestionDecision struct {
 // foldQuestions extends the shared fold for person gates without changing Job
 // authority or contract verdicts. Task controls retain tenure order; only
 // gate deadlines use the read time.
-func foldQuestions(read ReadResult, state *contract.State, now time.Time) map[string]QuestionDecision {
+func foldQuestions(read ReadResult, state *contract.State, now time.Time, allowed func(string) bool) map[string]QuestionDecision {
 	records := map[string]Record{}
 	for _, e := range read.Records {
 		if e.Verdict == "counted" {
@@ -56,7 +58,67 @@ func foldQuestions(read ReadResult, state *contract.State, now time.Time) map[st
 			}
 			return a.Seq < b.Seq
 		})
-		for _, p := range controls {
+		selected := ""
+		if q.Applied != nil && PersonAnswer(records[*q.Applied], q.Who) {
+			selected = *q.Applied
+		} else {
+			answer, conflict := "", false
+			for _, aid := range q.Answers {
+				p, ok := records[aid]
+				if !ok {
+					continue
+				}
+				if !PersonAnswer(p, q.Who) {
+					continue
+				}
+				text := str(p.Body["answer"])
+				if selected != "" && text != answer {
+					conflict = true
+				}
+				if selected == "" {
+					selected, answer = aid, text
+				}
+			}
+			if conflict {
+				selected = ""
+			}
+		}
+
+		// Keep person events in Feed order and substitute tenure-sorted task
+		// controls into their existing slots. Never sort all events by fences:
+		// leaseless person records have fence zero regardless of arrival.
+		events := []Record{}
+		nextControl := 0
+		for _, entry := range read.Records {
+			p := entry.Record
+			if entry.Verdict != "counted" {
+				continue
+			}
+			if p.Type == "control" && p.Lease != nil && *p.Lease == "task" && p.Fence > 0 && str(p.Body["target"]) == id && value(p.Re) == id && str(p.Body["question_event"]) != "" {
+				events = append(events, controls[nextControl])
+				nextControl++
+			} else if p.ID == selected || (personWithdraw(p, allowed) && value(p.Re) == id && str(p.Body["target"]) == id) {
+				events = append(events, p)
+			}
+		}
+		q.Applied = nil
+		for _, p := range questionEventOrder(events) {
+			if p.Type == "answer" {
+				// A person may still override a default, as before.
+				if d.State != "withdrawn" {
+					d.State, d.Answer = "answered", str(p.Body["answer"])
+					d.Events = append(d.Events, p)
+					answerID := p.ID
+					q.Applied = &answerID
+				}
+				continue
+			}
+			if personWithdraw(p, allowed) {
+				at, err := time.Parse(time.RFC3339Nano, p.At)
+				if d.State == "open" && deadlineErr == nil && err == nil && !at.Before(deadline) && str(gate["default"]) != "" {
+					d.State, d.Answer = "defaulted", str(gate["default"])
+				}
+			}
 			if d.State != "open" {
 				continue
 			}
@@ -82,37 +144,6 @@ func foldQuestions(read ReadResult, state *contract.State, now time.Time) map[st
 		}
 		if d.State == "open" && due {
 			d.State, d.Answer = "defaulted", str(gate["default"])
-		}
-		selected := ""
-		if q.Applied != nil && PersonAnswer(records[*q.Applied], q.Who) {
-			selected = *q.Applied
-		} else if d.State != "withdrawn" {
-			answer, conflict := "", false
-			for _, aid := range q.Answers {
-				p, ok := records[aid]
-				if !ok {
-					continue
-				}
-				if !PersonAnswer(p, q.Who) {
-					continue
-				}
-				text := str(p.Body["answer"])
-				if selected != "" && text != answer {
-					conflict = true
-				}
-				if selected == "" {
-					selected, answer = aid, text
-				}
-			}
-			if conflict {
-				selected = ""
-			}
-		}
-		q.Applied = nil
-		if p, ok := records[selected]; ok {
-			d.State, d.Answer = "answered", str(p.Body["answer"])
-			d.Events = append(d.Events, p)
-			q.Applied = &p.ID
 		}
 		q.Open = d.State == "open"
 		if q.Job != nil {
@@ -167,8 +198,79 @@ func FoldReadQuestions(read ReadResult) (contract.State, map[string]QuestionDeci
 }
 
 // FoldReadAt projects person gates at a specified read time without writing events.
-func FoldReadAt(read ReadResult, now time.Time) (contract.State, map[string]QuestionDecision) {
+// An optional callback replaces the default withdrawal role policy.
+func FoldReadAt(read ReadResult, now time.Time, withdrawAllowed ...func(string) bool) (contract.State, map[string]QuestionDecision) {
 	state := contract.Fold(posts(read))
-	questions := foldQuestions(read, &state, now)
+	allowed := DefaultWithdrawAllowed
+	if len(withdrawAllowed) > 0 && withdrawAllowed[0] != nil {
+		allowed = withdrawAllowed[0]
+	}
+	questions := foldQuestions(read, &state, now, allowed)
 	return state, questions
+}
+
+// DefaultWithdrawAllowed is the shared default for person withdrawal policy.
+func DefaultWithdrawAllowed(role string) bool { return role == "owner" || role == "member" }
+
+func personWithdraw(p Record, allowed func(string) bool) bool {
+	return p.Type == "control" && p.Lease == nil && p.Fence == 0 && p.Gen == 0 &&
+		str(p.Body["question_event"]) == "withdrawn" &&
+		(p.Author.Role == "owner" || p.Author.Role == "member" || p.Author.Role == "lead" || p.Author.Role == "guest") && allowed(p.Author.Role)
+}
+
+// QuestionWithdrawPolicy reads the task's workflow policy. Hosts can instead
+// supply a callback to FoldReadAt and question.Store.WithdrawAllowed.
+func QuestionWithdrawPolicy(taskDir string) (func(string) bool, error) {
+	roles, err := workflow.QuestionWithdrawRoles(taskDir)
+	if err != nil {
+		return nil, err
+	}
+	if roles == nil {
+		return DefaultWithdrawAllowed, nil
+	}
+	return func(role string) bool { return slices.Contains(roles, role) }, nil
+}
+
+// questionEventOrder preserves Feed order except for explicit causal links.
+// Tenure order has already been established for the task-control slots.
+func questionEventOrder(events []Record) []Record {
+	pending := map[string]bool{}
+	for _, p := range events {
+		pending[p.ID] = true
+	}
+	ordered := make([]Record, 0, len(events))
+	for len(ordered) < len(events) {
+		advanced := false
+		for i, p := range events {
+			if !pending[p.ID] {
+				continue
+			}
+			ready := true
+			if p.Lease != nil && *p.Lease == "task" {
+				for _, prior := range events[:i] {
+					if prior.Lease != nil && *prior.Lease == "task" && pending[prior.ID] {
+						ready = false
+						break
+					}
+				}
+			}
+			for _, id := range p.After {
+				if pending[id] {
+					ready = false
+					break
+				}
+			}
+			if !ready {
+				continue
+			}
+			ordered = append(ordered, p)
+			delete(pending, p.ID)
+			advanced = true
+			break
+		}
+		if !advanced {
+			break
+		} // Cyclic dependencies do not close a gate.
+	}
+	return ordered
 }

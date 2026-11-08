@@ -711,9 +711,14 @@ func TestLeaseHelp(t *testing.T) {
 		if code := Run(args, env); code != 0 {
 			t.Fatalf("help %v: %d", args, code)
 		}
-		if !strings.Contains(out.String()+errout.String(), "GRID_LEASE=task") {
+		want := "GRID_LEASE=task"
+		if args[0] == "withdraw" {
+			want = "A person may withdraw without a lease"
+		}
+		if !strings.Contains(out.String()+errout.String(), want) {
 			t.Fatalf("missing task lease help: %s%s", out, errout)
 		}
+		golden.Assert(t, "question-help-"+strings.TrimLeft(args[0], "-"), out.String()+errout.String())
 	}
 }
 
@@ -773,6 +778,41 @@ func TestWithdrawPolicyRefusals(t *testing.T) {
 			}
 			if got := list(t, s)[0]; got.State != "open" || len(got.History) != 0 {
 				t.Fatalf("refusal changed question: %+v", got)
+			}
+		})
+	}
+}
+
+func TestWithdrawCustomPolicyAllowsPerson(t *testing.T) {
+	s, _ := setup(t)
+	q := add(t, s, input())
+	s.ControlWriter = feed.Writer{}
+	s.Writer.Author.Role = "guest"
+	s.WithdrawAllowed = func(role string) bool { return role == "guest" }
+	r, err := s.Withdraw(q.ID, "Resolved")
+	if err != nil || r.State != "withdrawn" {
+		t.Fatalf("custom withdrawal: %+v %v", r, err)
+	}
+	if got := list(t, s)[0]; got.State != "withdrawn" || got.History[0].Role != "guest" {
+		t.Fatalf("custom projection: %+v", got)
+	}
+}
+
+func TestWithdrawErrorCodes(t *testing.T) {
+	for _, tc := range []struct {
+		args   []string
+		code   int
+		stderr string
+	}{
+		{[]string{"withdraw"}, 2, "question: withdraw requires <Q-id>\n"},
+		{[]string{"withdraw", "Q-0"}, 2, "question: question id must be Q- followed by a positive number\n"},
+		{[]string{"withdraw", "Q-2"}, 1, "question: question Q-2 does not exist\n"},
+	} {
+		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
+			env, store, out, stderr := commandEnv(t)
+			add(t, store, input())
+			if code := Run(tc.args, env); code != tc.code || stderr.String() != tc.stderr || out.Len() != 0 {
+				t.Fatalf("exit=%d stdout=%q stderr=%q", code, out.String(), stderr.String())
 			}
 		})
 	}

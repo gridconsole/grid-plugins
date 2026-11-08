@@ -1,0 +1,8 @@
+Usage: grid question withdraw [flags]
+A person may withdraw without a lease; a task lease holder may also withdraw.
+  -json
+    	print JSON
+  -reason string
+    	reason for withdrawing (default "No longer needed")
+  -task string
+    	task folder or id; otherwise the enclosing task

@@ -77,10 +77,11 @@ type Input struct {
 var ErrWithdrawRefused = errors.New("question withdrawal refused")
 
 // DefaultWithdrawAllowed allows owners and members to withdraw without a lease.
-func DefaultWithdrawAllowed(role string) bool { return role == "owner" || role == "member" }
+func DefaultWithdrawAllowed(role string) bool { return feed.DefaultWithdrawAllowed(role) }
 
 type Store struct {
-	// WithdrawAllowed may be replaced by a host or the workflow; nil uses the default.
+	// WithdrawAllowed may be replaced by a host; nil reads the workflow policy
+	// or uses the owner/member default when no policy is specified.
 	WithdrawAllowed func(role string) bool
 	AgentShell      bool
 	TaskDir         string
@@ -196,9 +197,9 @@ func (s Store) Answer(id, text string) (Record, error) {
 // Withdraw closes an open question for an allowed person or a task lease holder.
 func (s Store) Withdraw(id, reason string) (Record, error) {
 	if s.ControlWriter.Lease != "task" {
-		allowed := s.WithdrawAllowed
-		if allowed == nil {
-			allowed = DefaultWithdrawAllowed
+		allowed, err := s.withdrawPolicy()
+		if err != nil {
+			return Record{}, err
 		}
 		if !allowed(s.Writer.Author.Role) {
 			return Record{}, &withdrawRefusal{fmt.Sprintf("%s role %q may not withdraw", id, s.Writer.Author.Role)}
@@ -233,7 +234,7 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 		if dir == "" {
 			return fmt.Errorf("question %s does not exist", id)
 		}
-		records, e := s.project(dir, true)
+		records, e := s.project(dir, false)
 		if e != nil {
 			return e
 		}
@@ -252,6 +253,9 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 		}
 		before := len(r.History)
 		if e = fn(&r); e != nil {
+			return e
+		}
+		if _, e = s.project(dir, true); e != nil {
 			return e
 		}
 		rec = r
@@ -307,4 +311,12 @@ func (s Store) Tick() (changed []Record, err error) {
 		return nil
 	})
 	return
+}
+
+// withdrawPolicy shares workflow policy with Feed state and permits host overrides.
+func (s Store) withdrawPolicy() (func(string) bool, error) {
+	if s.WithdrawAllowed != nil {
+		return s.WithdrawAllowed, nil
+	}
+	return feed.QuestionWithdrawPolicy(s.TaskDir)
 }

@@ -1,0 +1,3 @@
+Usage: grid question add|withdraw|list|tick|sync [--task <path>] [--json]
+A person may withdraw without a lease; a task lease holder may also withdraw.
+tick requires a task lease: GRID_LEASE=task and GRID_LEASE_EPOCH.
