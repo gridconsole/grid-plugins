@@ -1,0 +1,5 @@
+{
+  "argv": ["version", "--timeout", "0s"],
+  "files": {"$GRID_HOME/setup.txt": "setup"},
+  "dirs": ["$GRID_HOME/empty"]
+}

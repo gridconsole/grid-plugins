@@ -1,4 +1,5 @@
-// Package golden compares test output with files under testdata/golden. Tests only.
+// Package golden replays recorded CLI cases and compares byte-level output and
+// filesystem changes. Assert also supports the existing testdata/golden files.
 package golden
 
 import (
@@ -23,7 +24,7 @@ func Assert(t *testing.T, name, got string) {
 	}
 	want, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("%v\nrun UPDATE_GOLDEN=1 make golden to create it", err)
+		t.Fatalf("%v\nrun UPDATE_GOLDEN=1 go test ./... to create it", err)
 	}
 	if string(want) != got {
 		t.Errorf("%s differs from the golden file\n--- want\n%s--- got\n%s", name, want, got)
