@@ -45,11 +45,14 @@ func Files(version string) (map[string][]byte, error) {
 			Type: "command", Command: `"${CLAUDE_PLUGIN_ROOT}/bin/grid" hook ` + strings.ToLower(e.Name), Timeout: e.Timeout,
 		}}}}
 	}
-	// Both hosts discover skills/ and hooks/hooks.json at the plugin root.
+	// Both hosts discover skills/, hooks/hooks.json and .mcp.json at the plugin root.
 	values := map[string]any{
 		".claude-plugin/plugin.json": manifest,
 		".codex-plugin/plugin.json":  manifest,
 		"hooks/hooks.json":           config,
+		".mcp.json": map[string]any{"mcpServers": map[string]any{"grid-feed": map[string]any{
+			"command": "${CLAUDE_PLUGIN_ROOT}/bin/grid", "args": []string{"mcp"},
+		}}},
 		".claude-plugin/marketplace.json": map[string]any{
 			"name": "grid", "owner": map[string]string{"name": "Grid"},
 			"plugins": []any{map[string]string{"name": "grid", "source": "./", "version": version}},

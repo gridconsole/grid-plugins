@@ -59,6 +59,36 @@ func TestGeneratedLayout(t *testing.T) {
 	}
 }
 
+// The plugin root's .mcp.json starts `grid mcp` as the grid-feed server, in the
+// generated set and in what Write puts in a plugin directory.
+func TestPackagedMCPManifest(t *testing.T) {
+	files, err := packaging.Files(version.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	if err := packaging.Write(root, version.Version); err != nil {
+		t.Fatal(err)
+	}
+	written, err := os.ReadFile(filepath.Join(root, ".mcp.json"))
+	if err != nil || !bytes.Equal(written, files[".mcp.json"]) {
+		t.Fatalf("Write did not package .mcp.json: %v", err)
+	}
+	var manifest struct {
+		Servers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(written, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	server, ok := manifest.Servers["grid-feed"]
+	if !ok || len(manifest.Servers) != 1 || server.Command != `${CLAUDE_PLUGIN_ROOT}/bin/grid` || len(server.Args) != 1 || server.Args[0] != "mcp" {
+		t.Fatalf("manifest: %+v", manifest.Servers)
+	}
+}
+
 // Check all Markdown under skills, including reference files and fenced examples.
 // Grid CLI names are lower case; Grid prose and grid:<skill> invocations are not CLI calls.
 var gridCommand = regexp.MustCompile("(?:^|[^A-Za-z0-9_-])(?:[^\\s`\"']*/)?grid(?:[\"']?)[ \\t\\r\\n]+([a-z][a-z0-9-]*)")

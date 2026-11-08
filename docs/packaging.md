@@ -10,6 +10,7 @@ dist/
     .claude-plugin/marketplace.json
     .codex-plugin/plugin.json
     hooks/hooks.json
+    .mcp.json
     bin/grid
     bin/grid-darwin-arm64
     bin/grid-darwin-amd64
@@ -21,6 +22,7 @@ dist/
 Install `dist/plugin` as the plugin directory; keep its relative paths intact.
 The local Claude marketplace entry points at that same directory (`./`).
 Both manifests share skills and hooks; Codex uses its compatibility manifest.
+`.mcp.json` at the plugin root starts `${CLAUDE_PLUGIN_ROOT}/bin/grid mcp` as the `grid-feed` server.
 Codex supplies `CLAUDE_PLUGIN_ROOT` for compatibility with the shared hook command
 ([OpenAI plugin packaging](https://developers.openai.com/plugins/build/plugins)).
 `bin/grid` follows shell symlinks, maps uname to a shipped binary, and uses exec
@@ -45,7 +47,7 @@ Verify from dist with `sha256sum -c SHA256SUMS` on Linux or
 `shasum -a 256 -c SHA256SUMS` on macOS. Only successful builds write the sums.
 
 `internal/hook/events.go` owns dispatch and hook registration metadata.
-`internal/packaging` generates both manifests, marketplace, hooks and launcher.
+`internal/packaging` generates both manifests, marketplace, hooks, `.mcp.json` and launcher.
 Run `make generate` after edits; committed development manifests use the default
 version in `internal/version`, while dist uses the Git version without editing them.
 `make test` checks generated files, hook coverage, skill command names, launcher
