@@ -53,39 +53,28 @@ type Record struct {
 	Job     *string            `json:"job"`
 	Attempt *int               `json:"attempt"`
 	Wake    *string            `json:"wake"`
-	Body    map[string]any     `json:"body"`
+	Body    Body               `json:"body"`
 }
 
-// UnmarshalJSON preserves token notice integers across cold and cached reads.
-func (r *Record) UnmarshalJSON(data []byte) error {
-	type wire Record
-	var out wire
-	if err := json.Unmarshal(data, &out); err != nil {
+// Body preserves the tokens number without rounding through float64. Keeping
+// decoding on this named field lets Record and Entry be embedded without
+// promoting a whole-object UnmarshalJSON method and losing outer fields.
+type Body map[string]any
+
+func (b *Body) UnmarshalJSON(data []byte) error {
+	var out map[string]any
+	if err := decodeBody(data, &out); err != nil {
 		return err
 	}
-	if out.Type == "usage-notice" {
-		var raw struct {
-			Body json.RawMessage `json:"body"`
-		}
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return err
-		}
-		if err := decodeBody(raw.Body, out.Type, &out.Body); err != nil {
-			return err
-		}
-	}
-	*r = Record(out)
+	*b = out
 	return nil
 }
 
 // decodeBody keeps the existing float representation for other fields while
 // preserving tokens as a JSON number, which can span the full uint64 range.
-func decodeBody(data []byte, kind string, body *map[string]any) error {
+func decodeBody(data []byte, body *map[string]any) error {
 	if err := json.Unmarshal(data, body); err != nil {
 		return err
-	}
-	if kind != "usage-notice" {
-		return nil
 	}
 	var raw struct {
 		Tokens json.RawMessage `json:"tokens"`

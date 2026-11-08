@@ -26,30 +26,6 @@ type Entry struct {
 	Reason  string   `json:"reason"`
 }
 
-// UnmarshalJSON decodes entry metadata explicitly because Record's decoder is
-// otherwise promoted by embedding and would discard cached admission fields.
-func (e *Entry) UnmarshalJSON(data []byte) error {
-	var meta struct {
-		Arrived string   `json:"arrived"`
-		File    string   `json:"file"`
-		End     int64    `json:"end"`
-		Verdict string   `json:"verdict"`
-		Waiting []string `json:"waiting"`
-		Data    bool     `json:"data"`
-		Reason  string   `json:"reason"`
-	}
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return err
-	}
-	var record Record
-	if err := json.Unmarshal(data, &record); err != nil {
-		return err
-	}
-	*e = Entry{Record: record, Arrived: meta.Arrived, File: meta.File, End: meta.End,
-		Verdict: meta.Verdict, Waiting: meta.Waiting, Data: meta.Data, Reason: meta.Reason}
-	return nil
-}
-
 type Filter struct{ Since, Type, Job string }
 type ReadResult struct {
 	Records []Entry        `json:"records"`
@@ -105,7 +81,7 @@ func (s Store) read(filter Filter, readOnly bool) (ReadResult, error) {
 				// Decode into a fresh map: unmarshalling into the reference map
 				// would retain its storage-only ref key and break retry equality.
 				var expanded map[string]any
-				if decodeBody(body, r.Type, &expanded) != nil || expanded == nil {
+				if decodeBody(body, &expanded) != nil || expanded == nil {
 					out.Bad[e.File]++
 					continue
 				}

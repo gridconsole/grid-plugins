@@ -29,7 +29,7 @@ func TestFeedJobPlannedFieldsRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(h.out.Bytes(), &posted); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(posted.Post.Body, want) {
+	if !reflect.DeepEqual(map[string]any(posted.Post.Body), want) {
 		t.Fatalf("posted body = %#v, want %#v", posted.Post.Body, want)
 	}
 	if code := h.run(task, "feed", "read", "--type", "job", "--json"); code != 0 {
@@ -43,7 +43,7 @@ func TestFeedJobPlannedFieldsRoundTrip(t *testing.T) {
 		t.Fatalf("read = %+v", read)
 	}
 	record := read.Records[0]
-	if record.ID != posted.Post.ID || record.Verdict != "counted" || !reflect.DeepEqual(record.Body, want) {
+	if record.ID != posted.Post.ID || record.Verdict != "counted" || !reflect.DeepEqual(map[string]any(record.Body), want) {
 		t.Fatalf("persisted record = %+v", record)
 	}
 	if code := h.run(task, "feed", "state", "--json"); code != 0 {

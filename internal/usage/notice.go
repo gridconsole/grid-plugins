@@ -213,7 +213,8 @@ func readConfig(dir string) (Configuration, error) {
 	defer f.Close()
 	c := Configuration{Tokens: []float64{50, 80, 100}}
 	dec := json.NewDecoder(f)
-	dec.DisallowUnknownFields()
+	// New optional fields must remain readable by older version-1 readers.
+	// Known fields are still type-checked here and validated below.
 	if err := dec.Decode(&c); err != nil {
 		return c, fmt.Errorf("thresholds.json: %w", err)
 	}
