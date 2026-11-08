@@ -14,6 +14,33 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/feed"
 )
 
+func TestCorruptTaskLeaseIsNotFree(t *testing.T) {
+	s := TaskStore{Feed: feed.Store{TaskDir: t.TempDir(), TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}}
+	dir := filepath.Join(s.Feed.Dir(), "lease")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "task.json")
+	corrupt := []byte(`{"lease":"task","holder":`)
+	if err := os.WriteFile(path, corrupt, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Read("task"); err == nil {
+		t.Error("corrupt task lease reported as readable/free")
+	}
+	w := feed.Writer{Worker: "member@01ARZ3NDEKTSV4RRFFQ69G5FAW", Lease: "task"}
+	if _, err := s.TakeTask(w, os.Getpid(), contract.FormatTime(time.Now())); err == nil {
+		t.Error("corrupt task lease granted a new tenure")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(after, corrupt) {
+		t.Error("refused take overwrote corrupt task lease")
+	}
+}
+
 func TestTaskAndJobTenures(t *testing.T) {
 	s := TaskStore{Feed: feed.Store{TaskDir: t.TempDir(), TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}}
 	w := feed.Writer{Author: feed.Author{ID: "lead", Role: "lead"}, Worker: "lead@01ARZ3NDEKTSV4RRFFQ69G5FAW", Lease: "task"}
