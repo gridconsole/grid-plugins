@@ -1,0 +1,315 @@
+package contract
+
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+)
+
+type controlBody struct {
+	Assign      *Assignment `json:"assign"`
+	Target      string      `json:"target"`
+	Status      Status      `json:"status"`
+	Reason      string      `json:"reason"`
+	CloseReason *string     `json:"close_reason"`
+	Attempt     int         `json:"attempt"`
+	Answer      string      `json:"answer"`
+}
+
+type question struct {
+	post   Post
+	who    string
+	closed bool
+}
+
+// Fold materializes one task's admitted posts. The caller checks writer-file
+// identity, complete lines and takeover byte offsets, setting Post.Stale for
+// lines beyond an ended tenure. No timestamp affects a decision here.
+//
+// Controls apply by (gen, fence, seq). Each grant consumes its matching Job
+// tenure in seq order before the next control. Cross-file causal dependencies
+// must be named by re/after. Unknown types and versions remain visible without
+// affecting Jobs. This is an in-memory contract fold, not a filesystem reader
+// or the scheduling/liveness loop.
+func Fold(posts []Post) State {
+	out := State{Jobs: map[string]*Job{}, Verdicts: []Verdict{}}
+	verdicts := map[string]Verdict{}
+	set := func(p Post, kind, reason string) { verdicts[p.ID] = Verdict{p.ID, kind, reason} }
+	seen := map[string]Post{}
+	var ordered []Post
+	tasks := map[string]bool{}
+	for _, p := range posts {
+		if _, duplicate := seen[p.ID]; duplicate {
+			continue
+		}
+		data, err := json.Marshal(p)
+		if err == nil {
+			err = Validate("envelope", data)
+		}
+		if err != nil {
+			set(p, "bad", fmt.Sprint(err))
+			continue
+		}
+		seen[p.ID] = p
+		tasks[p.Task] = true
+		ordered = append(ordered, p)
+	}
+	// Sorting is only an implementation traversal. Cross-writer authority comes
+	// from the task controls and their granted Job fences, never these tie-breaks.
+	sort.SliceStable(ordered, func(i, j int) bool {
+		a, b := ordered[i], ordered[j]
+		if a.Gen != b.Gen {
+			return a.Gen < b.Gen
+		}
+		if a.Fence != b.Fence {
+			return a.Fence < b.Fence
+		}
+		if a.Worker != b.Worker {
+			return a.Worker < b.Worker
+		}
+		return a.Seq < b.Seq
+	})
+	var active []Post
+	for _, p := range ordered {
+		if len(tasks) != 1 {
+			set(p, "bad", "Fold requires exactly one task")
+			continue
+		}
+		if p.Stale {
+			set(p, "stale", "past tenure end offset")
+			continue
+		}
+		missing := ""
+		refs := append([]string{}, p.After...)
+		if p.Re != nil {
+			refs = append(refs, *p.Re)
+		}
+		for _, id := range refs {
+			if _, ok := seen[id]; !ok {
+				missing = id
+				break
+			}
+		}
+		if missing != "" {
+			set(p, "held", "waiting for "+missing)
+			continue
+		}
+		schema, known := schemas.byName[p.Type+".json"]
+		if !known || schema["x-class"] == nil {
+			set(p, "unknown", "unknown or retired Feed type")
+			continue
+		}
+		version := 1
+		if p.Type == "result" {
+			version = 2
+		}
+		if p.TypeV != version {
+			set(p, "unknown", "unknown type version")
+			continue
+		}
+		data, _ := json.Marshal(p)
+		if err := Validate(p.Type, data); err != nil {
+			set(p, "bad", err.Error())
+			continue
+		}
+		var body map[string]json.RawMessage
+		_ = json.Unmarshal(p.Body, &body)
+		if len(body) == 1 && body["ref"] != nil {
+			set(p, "held", "resolve and validate external body before folding")
+			continue
+		}
+		set(p, "counted", "")
+		active = append(active, p)
+	}
+
+	questions := map[string]*question{}
+	for _, p := range active {
+		switch p.Type {
+		case "job":
+			var b struct {
+				ID, Title, Role, Review string
+				MaxRounds               int     `json:"max_rounds"`
+				Continues               *string `json:"continues"`
+				DiscoveredFrom          *string `json:"discovered_from"`
+			}
+			_ = json.Unmarshal(p.Body, &b)
+			if _, exists := out.Jobs[b.ID]; exists {
+				set(p, "ignored", "Job already exists; revisions need a new Job")
+				continue
+			}
+			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Status: Posted, Review: b.Review, MaxRounds: b.MaxRounds, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
+		case "question":
+			var b struct{ Who string }
+			_ = json.Unmarshal(p.Body, &b)
+			questions[p.ID] = &question{post: p, who: b.Who}
+		case "handover":
+			// Announcement only: neither this nor transfer changes authority.
+		}
+	}
+	consumed := map[string]bool{}
+	for _, p := range active {
+		if p.Type != "control" {
+			continue
+		}
+		var b controlBody
+		_ = json.Unmarshal(p.Body, &b)
+		if q := questions[b.Target]; q != nil {
+			answer, exists := seen[b.Answer]
+			if !exists || answer.Type != "answer" || verdicts[answer.ID].Kind != "counted" || answer.Re == nil || *answer.Re != q.post.ID || answer.Author.Role == "guest" && answer.Author.ID != q.who {
+				set(p, "ignored", "control must select an eligible answer to this question")
+				continue
+			}
+			q.closed = true
+			continue
+		}
+		id := b.Target
+		if b.Assign != nil {
+			id = b.Assign.Job
+		}
+		if target, ok := seen[id]; ok && target.Job != nil {
+			id = *target.Job
+		}
+		j := out.Jobs[id]
+		if j == nil {
+			set(p, "ignored", "unknown Job target")
+			continue
+		}
+		if b.Assign != nil {
+			a := b.Assign
+			sameRetry := a.Attempt == j.Attempt && j.ExitReason == "usage_limit" && j.Assign != nil && a.Fence > j.Assign.Fence
+			if a.Attempt < j.Attempt || a.Attempt == j.Attempt && !sameRetry || j.Status == Accepted || j.Status == Cancelled || j.Status == Rejected {
+				set(p, "ignored", "attempt already granted, regressed, or Job closed")
+				continue
+			}
+			if j.Assign != nil && a.Fence <= j.Assign.Fence && p.Gen <= j.Generation {
+				set(p, "ignored", "grant must advance the tenure")
+				continue
+			}
+			j.Assign, j.AssignPost, j.Generation = a, p.ID, p.Gen
+			j.Attempt, j.Status, j.LeaseExpires = a.Attempt, Assigned, a.Until
+			j.Exited, j.ExitReason, j.Reason = "", "", ""
+			j.History = append(j.History, p.ID)
+			acknowledged := false
+			for _, side := range active {
+				if !isJobSide(side.Type) || side.Job == nil || *side.Job != id || side.Attempt == nil || *side.Attempt != a.Attempt || side.Worker != a.To || side.Fence != a.Fence || side.Gen != p.Gen || consumed[side.ID] {
+					continue
+				}
+				consumed[side.ID] = true
+				if j.Exited != "" {
+					set(side, "ignored", "attempt already exited")
+					continue
+				}
+				if side.Type == "ack" {
+					if acknowledged || !contains(side.After, p.ID) {
+						set(side, "ignored", "ack must name its assign exactly once")
+						continue
+					}
+					acknowledged, j.Status = true, Running
+				} else if !acknowledged {
+					set(side, "ignored", "Job tenure must start with ack")
+					continue
+				}
+				applySide(j, side)
+			}
+			continue
+		}
+		if b.Attempt != 0 && b.Attempt != j.Attempt {
+			set(p, "ignored", "control names another attempt")
+			continue
+		}
+		if (b.Status == Cancelled || b.Status == Rejected) && (b.CloseReason == nil || *b.CloseReason == "") {
+			set(p, "ignored", "close_reason required")
+			continue
+		}
+		if b.Status != "" {
+			j.Status = b.Status
+			j.CloseReason = b.CloseReason
+		}
+		j.Reason = b.Reason
+		j.History = append(j.History, p.ID)
+	}
+	for _, p := range active {
+		if isJobSide(p.Type) && !consumed[p.ID] {
+			set(p, "ignored", "no matching counted assign for this tenure")
+		}
+		if p.Type == "answer" && p.Author.Role == "guest" {
+			q := questions[*p.Re]
+			if q == nil || q.who != p.Author.ID {
+				set(p, "ignored", "question is not addressed to this guest")
+			}
+		}
+		if p.Type == "found" {
+			var b struct{ Job, Kind string }
+			_ = json.Unmarshal(p.Body, &b)
+			if j := out.Jobs[b.Job]; j != nil && b.Kind == "security" {
+				if j.Review != "L3" {
+					j.LevelRaised = &LevelRaised{From: j.Review, To: "L3", Why: "security finding " + p.ID}
+					j.Review = "L3"
+				}
+				j.NeedsLead = true
+			}
+		}
+	}
+	for id, q := range questions {
+		if q.post.Job != nil {
+			if j := out.Jobs[*q.post.Job]; j != nil && !q.closed && j.Status != Cancelled {
+				j.OpenQuestions = append(j.OpenQuestions, id)
+			}
+		}
+	}
+	for _, j := range out.Jobs {
+		sort.Strings(j.OpenQuestions)
+	}
+	for _, v := range verdicts {
+		out.Verdicts = append(out.Verdicts, v)
+	}
+	sort.Slice(out.Verdicts, func(i, j int) bool { return out.Verdicts[i].ID < out.Verdicts[j].ID })
+	return out
+}
+
+func applySide(j *Job, p Post) {
+	j.History = append(j.History, p.ID)
+	switch p.Type {
+	case "submit":
+		j.Submits = append(j.Submits, p.ID)
+	case "result":
+		j.Results = append(j.Results, p.ID)
+		var b struct {
+			ProposedJobs    []ProposedJob   `json:"proposed_jobs"`
+			DecisionsNeeded []string        `json:"decisions_needed"`
+			Verified        json.RawMessage `json:"verified"`
+		}
+		_ = json.Unmarshal(p.Body, &b)
+		j.ProposedJobs = append(j.ProposedJobs, b.ProposedJobs...)
+		j.DecisionsNeeded = append(j.DecisionsNeeded, b.DecisionsNeeded...)
+		j.Verified = b.Verified
+		j.NeedsLead = j.NeedsLead || len(b.DecisionsNeeded) > 0
+	case "checkpoint":
+		var b Checkpoint
+		_ = json.Unmarshal(p.Body, &b)
+		j.Checkpoint = &b
+	case "worker-exit":
+		var b struct{ Reason string }
+		_ = json.Unmarshal(p.Body, &b)
+		if b.Reason == "" {
+			b.Reason = "crash"
+		}
+		j.Exited, j.ExitReason = p.ID, b.Reason
+		if b.Reason == "usage_limit" {
+			j.Reason = "usage_limit"
+		}
+		if b.Reason == "loop" {
+			j.ReviewRounds++
+			j.NeedsLead = true
+		}
+	}
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
