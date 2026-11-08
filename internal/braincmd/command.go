@@ -23,12 +23,13 @@ type Env struct {
 	TempRoots           []string
 }
 
-const usage = `Usage: grid brain <show|search|topics|index|propose|accept> [flags]
+const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep> [flags]
   show <id>                  Show an accepted note and its links.
   search <words>             Find notes by description, summary and body.
   topics                     List built-in and custom topics.
   index                      Rebuild the SessionStart index and backlinks.
   propose --name <id> --topic <topic> --description <when> --summary <what> --source <source> --body <text>
+  keep [--task T-NN]         List waiting proposals without writing the brain.
   accept <id>                File a proposal through the keeper gates.
   accept <id> --reject <why>  Record a rejection.
 
@@ -69,7 +70,7 @@ func Run(args []string, env Env) int {
 	}
 	verb := args[0]
 	switch verb {
-	case "show", "search", "topics", "index", "propose", "accept":
+	case "show", "search", "topics", "index", "propose", "accept", "keep":
 	default:
 		fmt.Fprintf(env.Stderr, "brain: unknown command %q. Run: grid brain help\n", verb)
 		return 2
@@ -80,11 +81,13 @@ func Run(args []string, env Env) int {
 	asJSON := f.Bool("json", false, "print JSON")
 	project := f.String("project", "", "project name or id")
 	level := f.String("level", "", "home or project")
-	var topic, name, description, summary, source, body, file, reject string
+	var topic, name, description, summary, source, body, file, reject, taskID, taskDir string
 	var links linkFlags
 	var proposal, external, readOnly bool
 	limit := 5
 	switch verb {
+	case "keep":
+		f.StringVar(&taskID, "task", "", "include proposals from this task")
 	case "show":
 		f.BoolVar(&proposal, "proposal", false, "show a proposal")
 	case "search":
@@ -123,6 +126,9 @@ func Run(args []string, env Env) int {
 	if *level != "" && *level != "home" && *level != "project" {
 		return usageError("level must be home or project")
 	}
+	if *level == "home" && taskID != "" {
+		return usageError("--level home cannot be combined with --task")
+	}
 	if *level == "home" && *project != "" {
 		return usageError("--level home cannot be combined with --project")
 	}
@@ -159,10 +165,11 @@ func Run(args []string, env Env) int {
 	}
 	store := brain.Store{GridHome: env.GridHome, ReadLevel: *level}
 	if *level != "home" {
-		res, err := (where.Resolver{GridHome: env.GridHome, Home: env.Home, TempRoots: env.TempRoots}).Resolve(where.Query{Cwd: env.Cwd, Project: *project})
+		res, err := (where.Resolver{GridHome: env.GridHome, Home: env.Home, TempRoots: env.TempRoots}).Resolve(where.Query{Cwd: env.Cwd, Project: *project, Task: taskID})
 		if err != nil {
 			return fail(err)
 		}
+		taskDir = res.TaskPath
 		if res.Rule != where.RulePersonal && res.Project != where.Personal {
 			store.Project = res.Project
 			writesProject := verb == "propose" || (verb == "accept" && !strings.HasPrefix(f.Arg(0), "brain:home/")) || (verb == "index" && !readOnly)
@@ -183,6 +190,8 @@ func Run(args []string, env Env) int {
 	}
 	var result any
 	switch verb {
+	case "keep":
+		result, err = store.Waiting(taskDir)
 	case "show":
 		id := f.Arg(0)
 		if proposal {
@@ -292,6 +301,10 @@ func Run(args []string, env Env) int {
 		enc.SetEscapeHTML(false)
 		if err := enc.Encode(result); err != nil {
 			return fail(err)
+		}
+	} else if rows, ok := result.([]brain.WaitingProposal); ok {
+		for _, row := range rows {
+			fmt.Fprintf(env.Stdout, "%s -> %s: %s\n", row.Path, row.Topic, row.Reason)
 		}
 	} else if err := plain(env.Stdout, result); err != nil {
 		return fail(err)
