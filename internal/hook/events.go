@@ -16,7 +16,7 @@ var events = []struct {
 }{
 	{Event{"SessionStart", "startup|resume|clear|compact|fork", 10}, sessionStart},
 	{Event{"PreToolUse", "", 10}, toolUse},
-	{Event{"PermissionRequest", "", 10}, toolUse},
+	{Event{"PermissionRequest", "", 100}, toolUse},
 }
 
 // Events returns registration metadata without exposing the dispatcher table.
