@@ -1,7 +1,6 @@
 package guard
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +11,10 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
-func TestGuardSettingsLevels(t *testing.T) {
+// The guards that hold the gates read no level. A settings file that switches one
+// off or to warn, personal or project, neither silences nor softens it, and the
+// commands refuse to write such a level.
+func TestAlwaysBlockGuardsIgnoreHookLevels(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		eval  func(hookio.Input, string, map[string]string) hookio.Decision
@@ -26,46 +28,55 @@ func TestGuardSettingsLevels(t *testing.T) {
 			return f.input("Agent", "Read subagents/01-work.md")
 		}},
 	} {
-		for _, level := range []string{"off", "warn", "block"} {
+		for _, level := range []string{"none", "off", "warn", "block", "malformed"} {
 			t.Run(tc.name+"/"+level, func(t *testing.T) {
 				f := setup(t)
 				if err := project.Write(f.grid, project.Record{Name: "example"}); err != nil {
 					t.Fatal(err)
 				}
-				personal := settings.Store{Home: f.grid}
-				proj := settings.Store{Home: f.grid, Project: "example"}
-				if err := personal.SetHook(tc.name, "off"); err != nil {
-					t.Fatal(err)
-				}
-				if err := proj.SetHook(tc.name, level); err != nil {
-					t.Fatal(err)
-				}
-				in := tc.input(f)
-				d := tc.eval(in, f.root, f.env)
-				want := ""
-				if level == "block" {
-					want = "deny"
-				}
-				if d.Behavior != want {
-					t.Fatalf("got %+v, want %s", d, want)
-				}
-				if (len(d.Warnings) > 0) != (level == "warn") {
-					t.Fatalf("unexpected warning: %+v", d)
-				}
-				if level == "warn" {
-					var raw map[string]any
-					if err := json.Unmarshal(d.Bytes(), &raw); err != nil {
-						t.Fatal(err)
+				if level == "off" || level == "warn" {
+					if err := (settings.Store{Home: f.grid}).SetHook(tc.name, level); err == nil {
+						t.Fatalf("the command accepted %s %s", tc.name, level)
 					}
-					if _, ok := raw["systemMessage"]; !ok {
-						t.Fatal(string(d.Bytes()))
+				}
+				if level != "none" {
+					doc := `{"hooks":{"` + tc.name + `":"` + level + `"}}`
+					if level == "malformed" {
+						doc = `{"hooks":`
 					}
-					if _, ok := raw["hookSpecificOutput"]; ok {
-						t.Fatal("warning changed permission")
-					}
+					f.write(filepath.Join(f.grid, "settings.json"), doc)
+					f.write(filepath.Join(f.grid, "projects", "example", "settings.json"), doc)
+				}
+				d := tc.eval(tc.input(f), f.root, f.env)
+				expect(t, d, "deny")
+				if len(d.Warnings) > 0 || strings.Contains(d.Reason, "Cannot read hook settings") {
+					t.Fatalf("settings changed the decision: %+v", d)
 				}
 			})
 		}
+	}
+}
+
+// home-allow is the guard whose level a person may change; the project's level
+// wins over the personal one, and warn leaves the grant as block does.
+func TestHomeAllowProjectLevel(t *testing.T) {
+	for level, want := range map[string]string{"off": "", "warn": "allow", "block": "allow"} {
+		t.Run(level, func(t *testing.T) {
+			f := setup(t)
+			if err := project.Write(f.grid, project.Record{Name: "example"}); err != nil {
+				t.Fatal(err)
+			}
+			if err := (settings.Store{Home: f.grid}).SetHook("home-allow", "off"); err != nil {
+				t.Fatal(err)
+			}
+			if err := (settings.Store{Home: f.grid, Project: "example"}).SetHook("home-allow", level); err != nil {
+				t.Fatal(err)
+			}
+			in := f.input("Read", filepath.Join(f.grid, "notes.md"))
+			in.Cwd = f.repo
+			f.env["GRID_PROJECT"] = "example"
+			expect(t, EvaluateHome(in, f.root, f.env), want)
+		})
 	}
 }
 
@@ -86,10 +97,10 @@ func TestHomeAllowSettingAndInvalidSettings(t *testing.T) {
 	if d := EvaluateHome(in, f.root, f.env); d.Behavior != "allow" {
 		t.Fatal(d)
 	}
-	if err := os.WriteFile(filepath.Join(f.grid, "settings.json"), []byte(`{"hooks":{"only-writer":"bogus"}}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(f.grid, "settings.json"), []byte(`{"hooks":{"home-allow":"bogus"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	d := EvaluateOnlyWriter(f.input("Write", filepath.Join(f.task, "notes.md")), f.root, f.env)
+	d := EvaluateHome(in, f.root, f.env)
 	if d.Behavior != "deny" || !strings.Contains(d.Reason, "Cannot read hook settings") {
 		t.Fatal(d)
 	}

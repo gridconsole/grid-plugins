@@ -87,8 +87,7 @@ func LintBrief(text string) []string {
 
 // EvaluateBrief lints an existing brief named by an Agent or Task prompt. Dispatch
 // bookkeeping belongs to the event caller, not this read-only evaluation.
-func EvaluateBrief(in hookio.Input, root string, env map[string]string) (decision hookio.Decision) {
-	defer func() { decision = configuredLevel("brief-lint", in, root, env, decision) }()
+func EvaluateBrief(in hookio.Input, root string, env map[string]string) hookio.Decision {
 	c := newContext(in, root, env)
 	if c.projects == "" || (in.ToolName != "Agent" && in.ToolName != "Task") {
 		return hookio.Decision{}

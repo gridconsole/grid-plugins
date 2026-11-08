@@ -18,8 +18,7 @@ var historyAlias = regexp.MustCompile(`(?i)^history\.md(?::.*|[. ]*)$`)
 
 // EvaluatePlan ports the legacy plan rules. root is the filesystem base used
 // when cwd is omitted; all environment reads come from env. It performs no writes.
-func EvaluatePlan(in hookio.Input, root string, env map[string]string) (decision hookio.Decision) {
-	defer func() { decision = configuredLevel("plan-guard", in, root, env, decision) }()
+func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.Decision {
 	c := newContext(in, root, env)
 	in = c.in
 	if c.projects == "" || strings.EqualFold(strings.TrimSpace(env["GRID_PLAN_GUARD"]), "off") {

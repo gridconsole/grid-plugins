@@ -156,7 +156,7 @@ func (s Store) SetHook(name, level string) error {
 	if err := allowed("hook", name, hooks); err != nil {
 		return err
 	}
-	if err := allowed("hook level", level, levels); err != nil {
+	if err := checkLevel(name, level); err != nil {
 		return err
 	}
 	return s.update(func(d *Document) { d.Hooks[name] = level })

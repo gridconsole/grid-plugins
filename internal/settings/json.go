@@ -124,7 +124,7 @@ func decode(data []byte) (Document, error) {
 				if err != nil {
 					return doc, err
 				}
-				if err := allowed("hook level", s, levels); err != nil {
+				if err := checkLevel(name, s); err != nil {
 					return doc, err
 				}
 				doc.Hooks[name] = s

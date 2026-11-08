@@ -13,8 +13,7 @@ import (
 // individual legacy guard adapters remain useful for recording comparisons.
 // Shell writes still require the worker's settings/sandbox; a text guard cannot
 // reliably identify computed paths or arbitrary programs that write files.
-func EvaluateOnlyWriter(in hookio.Input, root string, env map[string]string) (decision hookio.Decision) {
-	defer func() { decision = configuredLevel("only-writer", in, root, env, decision) }()
+func EvaluateOnlyWriter(in hookio.Input, root string, env map[string]string) hookio.Decision {
 	if !fileTool(in.ToolName) {
 		return hookio.Decision{}
 	}

@@ -39,8 +39,8 @@ func TestProjectOverrides(t *testing.T) {
 	must(t, proj.SetAgent("grid-builder", Agent{Effort: "low"}))
 	must(t, personal.SetSkill("research", false))
 	must(t, proj.SetSkill("research", true))
-	must(t, personal.SetHook("plan-guard", "off"))
-	must(t, proj.SetHook("plan-guard", "block"))
+	must(t, personal.SetHook("home-allow", "off"))
+	must(t, proj.SetHook("home-allow", "block"))
 	for _, tc := range []struct {
 		name  string
 		store Store
@@ -55,7 +55,7 @@ func TestProjectOverrides(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			d, err := tc.store.Effective()
 			must(t, err)
-			if d.Agents["grid-builder"] != tc.agent || d.Skills["research"] != tc.skill || d.Hooks["plan-guard"] != tc.level {
+			if d.Agents["grid-builder"] != tc.agent || d.Skills["research"] != tc.skill || d.Hooks["home-allow"] != tc.level {
 				t.Fatalf("unexpected effective settings: %+v", d)
 			}
 		})
@@ -84,6 +84,8 @@ func TestInvalidChangesLeaveBytes(t *testing.T) {
 		{"skill", func() error { return s.SetSkill("routing", false) }},
 		{"hook", func() error { return s.SetHook("unknown", "off") }},
 		{"level", func() error { return s.SetHook("plan-guard", "never") }},
+		{"host-guard off", func() error { return s.SetHook("host-guard", "off") }},
+		{"plan-guard warn", func() error { return s.SetHook("plan-guard", "warn") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.change()
@@ -103,6 +105,7 @@ func TestInvalidDocumentsWriteNothing(t *testing.T) {
 		`{"agents":{"grid-builder":{"model":"unknown"}}}`, `{"agents":{"grid-builder":{"model":""}}}`,
 		`{"agents":{"grid-builder":{"effort":null}}}`, `{"skills":{"research":"false"}}`,
 		`{"hooks":{"plan-guard":"never"}}`, `{"hooks":null}`, `{"hooks":{},"hooks":{}}`,
+		`{"hooks":{"host-guard":"off"}}`, `{"hooks":{"only-writer":"warn"}}`,
 		`{"agents":{"grid-builder":{"model":"opus","model":"haiku"}}}`, `null`, `{} {}`, `{`,
 	} {
 		t.Run(data, func(t *testing.T) {
@@ -134,12 +137,58 @@ func TestAllowedValues(t *testing.T) {
 	}
 	for _, name := range hooks {
 		for _, level := range levels {
+			if AlwaysBlock(name) && level != "block" {
+				continue
+			}
 			must(t, s.SetHook(name, level))
 		}
 	}
 	for _, name := range skills {
 		must(t, s.SetSkill(name, false))
 		must(t, s.SetSkill(name, true))
+	}
+}
+
+// The guards that hold the gates stay on whoever writes the level: the commands
+// refuse off and warn, and a settings file that says so is refused as a whole.
+func TestAlwaysBlockHooksRefuseOffAndWarn(t *testing.T) {
+	personal, proj := fixture(t)
+	for _, name := range neverOff {
+		for _, s := range []Store{personal, proj} {
+			must(t, s.SetHook(name, "block"))
+			path := filepath.Join(s.Home, "settings.json")
+			if s.Project != "" {
+				path = filepath.Join(s.Home, "projects", s.Project, "settings.json")
+			}
+			before := contents(t, path)
+			for _, level := range []string{"off", "warn"} {
+				err := s.SetHook(name, level)
+				if err == nil || !strings.Contains(err.Error(), name) || !strings.Contains(err.Error(), "allowed: block") {
+					t.Fatalf("%s %s: %v", name, level, err)
+				}
+				if !bytes.Equal(before, contents(t, path)) {
+					t.Fatalf("%s %s changed bytes", name, level)
+				}
+				must(t, os.WriteFile(path, []byte(`{"hooks":{"`+name+`":"`+level+`"}}`), 0o600))
+				if _, err := s.Effective(); err == nil || !strings.Contains(err.Error(), "allowed: block") {
+					t.Fatalf("accepted %s %s from a file: %v", name, level, err)
+				}
+				if _, err := ReadHookLevels(s.Home, s.Project); err == nil {
+					t.Fatalf("read %s %s from a file", name, level)
+				}
+				must(t, os.WriteFile(path, before, 0o600))
+			}
+			d, err := s.Effective()
+			must(t, err)
+			if d.Hooks[name] != "block" {
+				t.Fatalf("%s is %s", name, d.Hooks[name])
+			}
+		}
+	}
+	for _, name := range []string{"home-allow", "session-start", "stop-check"} {
+		if AlwaysBlock(name) {
+			t.Fatalf("%s must stay configurable", name)
+		}
 	}
 }
 
