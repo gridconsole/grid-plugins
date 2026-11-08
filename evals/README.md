@@ -20,7 +20,10 @@ run of any other task fails explicitly.
 the caller's working directory. `run` accepts one optional task id before or
 after its flags. Without an id it runs every matching task in folder-name order.
 An empty selection is an error for `run`. `run` and `show` accept
-`--results <directory>` (default `evals/runs`). `--json` is available on all three.
+`--results <directory>`; the default is `evals/runs` under the Grid home
+(`$GRID_HOME`, else `~/.grid`), not the working directory. When no Grid home can be
+found, it falls back to `evals/runs` under the working directory. `--json` is
+available on all three.
 
 Configure a real agent with an argv array:
 
@@ -35,8 +38,8 @@ the fresh workspace. Use an absolute executable or script path for a custom
 agent stored outside it, or an executable on PATH. Shell syntax is interpreted
 only when explicitly invoking a shell. No credentials are stored in the suite
 or supplied by the harness. Configure authentication through the runtime's
-supported environment or configuration options; HOME is temporary, so an agent
-cannot rely on the usual home-directory login files unless explicitly configured.
+supported environment variables, passed with `--env`; HOME is temporary, so an
+agent cannot rely on the usual home-directory login files.
 Agent argv is saved in results; keep credentials out of command arguments.
 If a runtime requires a Git repository, initialize one in `setup.sh` or supply
 that runtime's option for evaluating a directory without a repository.
@@ -46,6 +49,27 @@ On Linux and macOS, cancellation kills the command's process group; background
 children in that group are also killed when a command finishes. Other platforms
 only cancel the direct process and require compatible shell utilities. Ctrl-C
 saves the current task's failure and stops scheduling more tasks.
+
+### Agent environment
+
+Setup, the agent and command checks start with an empty environment, not the
+caller's. They receive `PATH`, `LANG`, `LC_*` and `TERM` from the caller, plus
+per-attempt `HOME`, `USERPROFILE`, `XDG_CONFIG_HOME`, `TMPDIR`, `PWD`, `GRID_HOME`,
+`GRID_PROJECTS` (all inside the attempt's temporary folder) and `GRID_EVAL_TASK`.
+Nothing else is inherited, so a run started from a Claude or Grid session cannot
+reach that session's task folders, `GRID_*` settings, `CLAUDE_CODE_*` variables,
+`CLAUDE_ENV_FILE` or messaging sockets and tokens.
+
+A real agent usually needs a login. Name each variable it may receive with
+`--env` (repeatable); it is copied only when set in the caller's environment:
+
+```sh
+go run ./cmd/grid eval run fix-total --agent '["claude","-p"]' --env ANTHROPIC_API_KEY
+```
+
+`GRID_*`, `CLAUDE_CODE_*`, `CLAUDE_ENV_FILE`, `CLAUDE_PLUGIN_ROOT`, names containing
+`MESSAGING`, and the per-attempt variables above are refused. Passed values reach
+the agent and any code it runs, and the agent's output is saved in the result.
 
 ## Folder format
 
@@ -82,13 +106,13 @@ tasks; they do not impose token or monetary caps.
 executed with `sh -eu -c` in a new workspace. A script containing `true` suffices
 for an empty fixture. Setup can create project files and seed `$GRID_HOME`.
 The agent sees `$GRID_EVAL_TASK`, the task id. The runner creates a temporary
-HOME, USERPROFILE, XDG_CONFIG_HOME and GRID_HOME, and inherits other environment
-variables, including deliberately configured runtime authentication.
+HOME, USERPROFILE, XDG_CONFIG_HOME, TMPDIR, GRID_HOME and GRID_PROJECTS, and passes
+only the environment described under "Agent environment".
 
 All suite scripts, agent commands and command checks are trusted local code.
-Temporary directories provide fresh state, not an OS security sandbox. Inherited
-environment variables can reference external files. Run untrusted agents or suites
-in a separate container or other sandbox. The runner loads the setup, prompt and
+Temporary directories provide fresh state, not an OS security sandbox: commands run
+with the caller's permissions and can read any file that user can. Run untrusted
+agents or suites in a separate container or other sandbox. The runner loads the setup, prompt and
 checks before execution and does not copy the check definitions into the workspace.
 Command checks can still invoke files the agent modified, so keep authoritative
 assertions in `checks.json`, as the samples do.
@@ -136,11 +160,14 @@ individual checks with reasons and evidence, and aggregate counts.
 Text evidence includes a matching line number. Command checks retain exit code,
 stdout, stderr, timing and any error in their `process` field. The configuration
 hash covers the task metadata, prompt, setup and checks, but not external runtime
-versions or inherited environment variables. Save those separately when comparing
-real model runs. The temporary workspace and home are deleted after saving the
-result. Full workspaces and transcripts are not retained; result files can contain
-command output and should be reviewed before sharing. Generated runs are ignored
-by Git in this repository.
+versions or the variables passed with `--env`. Save those separately when comparing
+real model runs. The temporary folder is deleted before the result is saved; if
+that fails, the result's `cleanup_error` names the folder and `run` exits with 1.
+Directories the agent made read-only are made writable again first. Readers ignore
+unknown fields, so a result written by a newer build stays readable.
+Full workspaces and transcripts are not retained; result files can contain
+command output and should be reviewed before sharing. A results folder at
+`evals/runs` in this repository is ignored by Git.
 
 Code checks score 5 for pass and 0 for fail. Judge checks use the returned 0..5
 score. `check_score` is the weighted mean of non-gate checks, with default weight
