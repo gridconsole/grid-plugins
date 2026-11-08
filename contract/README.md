@@ -364,11 +364,11 @@ The title is the first nonblank line of the request, trimmed and limited to 120 
 
 ### `grid task rename <T-NN> --title <text> [--project <p>] [--json]`
 
-Renames an open task. The title is trimmed and whitespace is collapsed, with 1–200 Unicode characters and no line breaks. Only `title` and `updated` change in `task.md`; the folder, intent, summary and other lines remain unchanged. Closed tasks must be reopened first; an unchanged title is rejected. History records `renamed · <title>` in the existing JSON receipt's `note` field, with `what: rename`.
+Renames an open task. Titles containing control characters (including tab or newline), U+FFFE, U+FFFF, or bidi override/isolate characters are refused with exit 2 before whitespace normalization. The title is trimmed and whitespace is collapsed, with 1–200 Unicode characters and no line breaks. Only `title` and `updated` change in `task.md`; the folder, intent, summary and other lines remain unchanged. Closed tasks must be reopened first; an unchanged title is rejected. History records `renamed · <title>` in the existing JSON receipt's `note` field, with `what: rename`.
 
 ### `grid task decline <T-NN> --reason <text> [--project <p>] [--json]`
 
-Closes an open task with a required reason after whitespace collapse. Tasks with `kind: planner` and already closed tasks are rejected. Writes `state: closed`, `next: declined by <who>` and `updated`; the host person comes from `GRID_ACTOR`, then `GRID_WHO`, otherwise `you`. History records `closed · declined · <reason>` in the existing JSON receipt's `note` field, with `what: decline`.
+Closes an open task with a required reason after whitespace collapse. Decline reasons containing control characters (including tab or newline), U+FFFE, U+FFFF, or bidi override/isolate characters are refused with exit 2 before whitespace normalization. Tasks with `kind: planner` and already closed tasks are rejected. Writes `state: closed`, `next: declined by <who>` and `updated`; the host person comes from `GRID_ACTOR`, then `GRID_WHO`, otherwise `you`. History records `closed · declined · <reason>` in the existing JSON receipt's `note` field, with `what: decline`.
 
 Both verbs use the same task lock, journal and atomic commit as stop and close, and refuse symlinked `task.md` files. `--project` constrains the task to a registered project name or id, or `personal`; omission uses the home-wide task id. `--json` prints the existing task write receipt; plain output uses `T-NN <verb>: <from-state> -> <to-state>`. Errors print one diagnostic line: exit 2 for invalid title or reason, 3 for a rejected task state or unchanged title, and 1 for scope, resolution or write failures. Success exits 0.
 

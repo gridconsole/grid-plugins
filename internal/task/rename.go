@@ -59,9 +59,10 @@ func (s Store) Rename(o RenameOptions) (Event, error) {
 }
 
 // Validate before whitespace folding so controls cannot disappear into spaces.
+// U+FFFE and U+FFFF are noncharacters rejected by YAML, not Unicode Cc.
 func hasEditControls(text string) bool {
 	return strings.ContainsFunc(text, func(r rune) bool {
-		return unicode.IsControl(r) || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')
+		return unicode.IsControl(r) || r == '\ufffe' || r == '\uffff' || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')
 	})
 }
 
