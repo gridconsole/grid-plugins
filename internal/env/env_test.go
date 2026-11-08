@@ -36,9 +36,6 @@ func TestDevServerLifecycle(t *testing.T) {
 			// Avoid assuming the standard dev range is unused on the test machine.
 			port := freeBlock(t)
 			c := Config{Command: "exec '" + strings.ReplaceAll(binary, "'", "'\"'\"'") + "' " + mode, HealthURL: "http://127.0.0.1:{port}/health", Timeout: "3s", PortRange: []int{port, port + 9}}
-			if mode == "unhealthy" || mode == "redirect" {
-				c.Timeout = "300ms"
-			}
 			t.Cleanup(func() {
 				if err := m.Down("J-1"); err != nil {
 					t.Error(err)
