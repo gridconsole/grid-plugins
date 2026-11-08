@@ -54,13 +54,16 @@ type TimerPlan struct {
 
 type TimerSpec struct{ Home, GridHome, Project, Binary, Name, Path string }
 
-func (s TimerSpec) label() string { return LabelPrefix + identity(s.GridHome, s.Project, s.Name) }
+func (s TimerSpec) label() string { return timerLabel(s.GridHome, s.Project, s.Name) }
 func (s TimerSpec) argv() []string {
 	args := []string{s.Binary, "routine", "run", s.Name, "--due"}
 	if s.Project != "" {
 		args = append(args, "--project", s.Project)
 	}
 	return args
+}
+func timerLabel(gridHome, project, name string) string {
+	return LabelPrefix + identity(gridHome, project, name)
 }
 func marker(label string) string { return "Managed by grid routine: " + label }
 
@@ -80,6 +83,9 @@ type timerState struct {
 	Installed bool   `json:"installed"`
 	Project   string `json:"project"`
 	Name      string `json:"name"`
+	// Hash is the fingerprint of the routine's run and every when the person
+	// last ran schedule; timer runs refuse a routine that no longer matches.
+	Hash string `json:"hash,omitempty"`
 }
 
 func (s Scheduler) plan(project, name string) (TimerPlan, error) {
@@ -102,7 +108,7 @@ func (s Scheduler) plan(project, name string) (TimerPlan, error) {
 func (s Scheduler) statePath(label string) (string, error) {
 	return localdata.Safe(s.GridHome, "local", "routine-timers", label+".json")
 }
-func (s Scheduler) writeState(p TimerPlan, installed bool) error {
+func (s Scheduler) writeState(p TimerPlan, installed bool, hash string) error {
 	path, err := s.statePath(p.Label)
 	if err != nil {
 		return err
@@ -110,7 +116,7 @@ func (s Scheduler) writeState(p TimerPlan, installed bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	b, err := json.Marshal(timerState{Label: p.Label, Installed: installed, Project: p.Project, Name: p.Name})
+	b, err := json.Marshal(timerState{Label: p.Label, Installed: installed, Project: p.Project, Name: p.Name, Hash: hash})
 	if err != nil {
 		return err
 	}
@@ -225,6 +231,7 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 	if err != nil {
 		return err
 	}
+	hash := e.Fingerprint()
 	if state.Installed {
 		unchanged := true
 		for _, f := range p.Files {
@@ -234,7 +241,12 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 			}
 		}
 		if unchanged {
-			return nil
+			// The files do not carry the command, so a changed run or every
+			// only needs the approval record refreshed.
+			if state.Hash == hash {
+				return nil
+			}
+			return s.writeState(p, true, hash)
 		}
 		if err = s.commands(ctx, p.Remove); err != nil {
 			return err
@@ -242,7 +254,7 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 	}
 	// Record ownership before OS calls, leaving enough evidence for recovery if
 	// registration fails. Never overwrite a foreign file even with our prefix.
-	if err = s.writeState(p, false); err != nil {
+	if err = s.writeState(p, false, hash); err != nil {
 		return err
 	}
 	for _, f := range p.Files {
@@ -256,7 +268,7 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 	if err = s.commands(ctx, p.Install); err != nil {
 		return err
 	}
-	return s.writeState(p, true)
+	return s.writeState(p, true, hash)
 }
 
 // Unschedule removes only entries with a local ownership record and our marker.

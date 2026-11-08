@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
@@ -233,6 +235,66 @@ func TestFailedRegistrationNeverAuthorizesOSRemoval(t *testing.T) {
 	}
 	if len(calls.calls) != before {
 		t.Fatal("removed OS label after failed registration")
+	}
+}
+
+func TestTimerRunRefusesRoutineChangedSinceSchedule(t *testing.T) {
+	home := gridhome.Real(t.TempDir())
+	now := time.Date(2026, 1, 2, 3, 4, 0, 0, time.UTC)
+	store := Store{GridHome: filepath.Join(home, ".grid"), Project: "example", Now: func() time.Time { return now }}
+	if _, err := store.Add("daily", "1h", "grid version"); err != nil {
+		t.Fatal(err)
+	}
+	var runs atomic.Int32
+	runner := executorFunc(func(context.Context, Store, Entry) error { runs.Add(1); return nil })
+	run := func(due bool) error {
+		_, err := store.Execute(context.Background(), "daily", due, runner, nil)
+		return err
+	}
+	// Without a schedule nothing was approved, so there is nothing to compare.
+	if err := run(true); err != nil || runs.Load() != 1 {
+		t.Fatalf("unscheduled timer run: %v %d", err, runs.Load())
+	}
+	calls := &fakeOS{}
+	s := Scheduler{Home: home, GridHome: store.GridHome, Binary: filepath.Join(home, "grid"), Backend: Systemd{}, Runner: calls}
+	if err := s.Schedule(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(2 * time.Hour)
+	if err := run(true); err != nil || runs.Load() != 2 {
+		t.Fatalf("scheduled timer run: %v %d", err, runs.Load())
+	}
+	for _, edit := range []func(*Entry){
+		func(e *Entry) { e.Run = "grid brain index" },
+		func(e *Entry) { e.Every = "1m" },
+	} {
+		e, err := store.Get("daily")
+		if err != nil {
+			t.Fatal(err)
+		}
+		edit(&e)
+		if err = store.save(e); err != nil {
+			t.Fatal(err)
+		}
+		before := runs.Load()
+		now = now.Add(2 * time.Hour)
+		err = run(true)
+		if err == nil || !strings.Contains(err.Error(), "grid routine schedule") || strings.Contains(err.Error(), "\n") || runs.Load() != before {
+			t.Fatalf("changed routine ran: %v %d", err, runs.Load())
+		}
+		// A manual run is the person's own request.
+		if err = run(false); err != nil || runs.Load() != before+1 {
+			t.Fatalf("manual run refused: %v %d", err, runs.Load())
+		}
+		// The files do not hold the command, so approving it again makes no OS call.
+		osCalls := len(calls.calls)
+		if err = s.Schedule(context.Background(), store); err != nil || len(calls.calls) != osCalls {
+			t.Fatalf("reschedule: %v %d", err, len(calls.calls)-osCalls)
+		}
+		now = now.Add(2 * time.Hour)
+		if err = run(true); err != nil || runs.Load() != before+2 {
+			t.Fatalf("approved routine refused: %v %d", err, runs.Load())
+		}
 	}
 }
 

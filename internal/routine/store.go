@@ -3,6 +3,8 @@ package routine
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -41,6 +43,28 @@ func (s Store) now() time.Time {
 		return s.Now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+// Fingerprint identifies what a schedule approved: the command and the interval.
+// The run value cannot hold NUL, so the pair is unambiguous.
+func (e Entry) Fingerprint() string {
+	sum := sha256.Sum256([]byte(e.Run + "\x00" + e.Every))
+	return hex.EncodeToString(sum[:])
+}
+
+// checkScheduled refuses a timer run of a routine whose run or every differs
+// from what `grid routine schedule` recorded, so a synced edit of a project
+// brain cannot change what an installed timer runs.
+func (s Store) checkScheduled(e Entry) error {
+	p := TimerPlan{Label: timerLabel(s.GridHome, s.Project, e.Name), Project: s.Project, Name: e.Name}
+	state, err := Scheduler{GridHome: s.GridHome}.readState(p)
+	if err != nil {
+		return err
+	}
+	if state.Label == "" || state.Hash == e.Fingerprint() {
+		return nil
+	}
+	return fmt.Errorf("routine %s changed since it was scheduled; run grid routine schedule again to approve it", e.Name)
 }
 
 func (e Entry) Validate() error {
@@ -188,6 +212,11 @@ func (s Store) Execute(ctx context.Context, name string, due bool, runner Execut
 	result := RunResult{Entry: e}
 	if e.Machine != gridhome.Machine(s.GridHome) {
 		return result, fmt.Errorf("routine belongs to another machine")
+	}
+	if due {
+		if err := s.checkScheduled(e); err != nil {
+			return result, err
+		}
 	}
 	schedule, _ := ParseInterval(e.Every)
 	if due && !schedule.Due(s.now(), e.LastRun) {
