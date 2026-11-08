@@ -1,0 +1,91 @@
+---
+id: "J-1"
+item: 1
+title: "Document the export format"
+role: "writer"
+skills: []
+review: "L0"
+risk: []
+max_rounds: 2
+intent: {"owner":"intent.md#request","item":"plan.md#step-1","goal":"plan.md#verify"}
+links: [{"to":"brain:project/conventions/export-format","rel":"uses","why":"Keep the documented column order stable for readers"}]
+keep: ["brain:project/conventions/export-format"]
+decisions: []
+read: ["task:research.md#format"]
+write: ["docs/export.md"]
+out_of_scope: ["runtime/**"]
+acceptance: [{"id":"A1","text":"Document the export format and column order.","traces":"item"}]
+verify: {"min_tests":0,"kind":"file-exists","path":"docs/export.md"}
+budget: {"turns_estimate":8,"reads_before_first_edit":3}
+on_blocked: "ask-and-continue"
+after: []
+attempt: 1
+continues: null
+discovered_from: null
+close_reason: null
+checkpoint: null
+review_rounds: 0
+level_raised: null
+worktree: null
+posts_back: null
+status: "briefed"
+follow_up: "none"
+---
+
+## Intent
+
+### Owner [person-team] (intent.md#request)
+
+> ## Request {#request}
+> 
+> I want the export format documented so I can read the column order.
+
+### Item [agent] (plan.md#step-1)
+
+> ## Step 1 {#step-1}
+> 
+> Document the export format and column order.
+
+### Goal [agent] (plan.md#verify)
+
+> ## Verify {#verify}
+> 
+> The export documentation lists the column order.
+
+## Context
+
+- brain:project/conventions/export-format · uses · The export column order and compatibility rule. · Keep the documented column order stable for readers [person-team]
+
+### Excerpt [person-team] (brain:project/conventions/export-format)
+
+> Keep the id column before the title column.
+> Changing the column order requires a recorded decision.
+
+- Read task:research.md#format [external]
+
+## Job
+
+Document the export format
+
+- Write docs/export.md
+
+## Out of scope
+
+- runtime/**
+
+## Open
+
+Nothing.
+
+## Acceptance
+
+- A1: Document the export format and column order. (traces: item)
+
+Verify: file-exists docs/export.md
+On blocked: ask-and-continue
+
+## Outcome
+
+## Verdict
+
+## Follow-up

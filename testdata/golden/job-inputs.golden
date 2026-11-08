@@ -1,0 +1,48 @@
+{
+  "generation": "fixture-1",
+  "sources": [
+    {
+      "pointer": "brain:project/conventions/export-format",
+      "summary": "The export column order and compatibility rule.",
+      "text": "Keep the id column before the title column.\nChanging the column order requires a recorded decision.",
+      "tier": "person-team",
+      "sha256": "5b1c920b138ecba030b6b60ed8edd7ab86dca36e9551d103199f82731c5fabab",
+      "topic": "conventions",
+      "updated": "2026-01-01",
+      "items": [
+        1
+      ]
+    },
+    {
+      "pointer": "intent.md#request",
+      "summary": "Request {#request}",
+      "text": "## Request {#request}\n\nI want the export format documented so I can read the column order.",
+      "tier": "person-team",
+      "sha256": "e8187d6338418a42bb6223c39a841ed50eb615d0929bdf34a520403647b81efa"
+    },
+    {
+      "pointer": "plan.md#step-1",
+      "summary": "Step 1 {#step-1}",
+      "text": "## Step 1 {#step-1}\n\nDocument the export format and column order.",
+      "tier": "agent",
+      "sha256": "455d8144d92c386a92b55d9bc94fa06591c34e8804f76f45ad9a5754c5324832"
+    },
+    {
+      "pointer": "plan.md#verify",
+      "summary": "Verify {#verify}",
+      "text": "## Verify {#verify}\n\nThe export documentation lists the column order.",
+      "tier": "agent",
+      "sha256": "455d8144d92c386a92b55d9bc94fa06591c34e8804f76f45ad9a5754c5324832"
+    },
+    {
+      "pointer": "task:research.md#format",
+      "summary": "Format {#format}",
+      "text": "## Format {#format}\n\nThe export contains an id column followed by a title column.",
+      "tier": "external",
+      "sha256": "0011b584c5fa5c090101b7d02ca4d83df330ec3d7291213878f27f50ff8a4d0d"
+    }
+  ],
+  "not_rendered": [],
+  "brain_tokens": 86,
+  "disableSkillShellExecution": true
+}
