@@ -7,7 +7,9 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,6 +33,8 @@ type Runner struct {
 	// AllowEnv names parent variables (login keys such as ANTHROPIC_API_KEY) copied
 	// into the task environment when set. Nothing else is inherited; see taskEnvironment.
 	AllowEnv []string
+
+	removeAll func(string) error // test hook; nil uses removeTree
 }
 
 type Summary struct {
@@ -64,11 +68,13 @@ type Result struct {
 	AgentResult   ProcessResult `json:"agent_result"`
 	Checks        []CheckResult `json:"checks"`
 	Summary       Summary       `json:"summary"`
+	CleanupError  string        `json:"cleanup_error,omitempty"` // temporary folder left behind
 }
 
-// Run persists failures as well as successes before deleting the workspace.
+// Run persists failures as well as successes after deleting the workspace.
 // A non-nil error means validation, workspace creation or persistence failed;
 // task failures are reported by Result.Status, allowing a suite to continue.
+// A temporary folder that cannot be removed is recorded in Result.CleanupError.
 func (r Runner) Run(ctx context.Context, task Task) (Result, error) {
 	var result Result
 	if err := task.Validate(); err != nil {
@@ -90,8 +96,29 @@ func (r Runner) Run(ctx context.Context, task Task) (Result, error) {
 	if err != nil {
 		return result, err
 	}
-	defer os.RemoveAll(root)
-	root, err = filepath.Abs(root)
+	result, err = r.attempt(ctx, task, root)
+	remove := r.removeAll
+	if remove == nil {
+		remove = removeTree
+	}
+	if rerr := remove(root); rerr != nil {
+		rerr = fmt.Errorf("remove temporary folder %s: %w", root, rerr)
+		if err != nil {
+			return result, errors.Join(err, rerr)
+		}
+		result.CleanupError = rerr.Error()
+	}
+	if err != nil {
+		return result, err
+	}
+	return result, saveResult(r.ResultsDir, result)
+}
+
+// attempt runs one task inside tempRoot. Run removes tempRoot afterwards, so the
+// saved result can say whether that worked.
+func (r Runner) attempt(ctx context.Context, task Task, tempRoot string) (Result, error) {
+	var result Result
+	root, err := filepath.Abs(tempRoot)
 	if err != nil {
 		return result, err
 	}
@@ -162,7 +189,22 @@ func (r Runner) Run(ctx context.Context, task Task) (Result, error) {
 	}
 	result.FinishedAt = time.Now().UTC()
 	result.DurationMS = result.FinishedAt.Sub(started).Milliseconds()
-	return result, saveResult(r.ResultsDir, result)
+	return result, nil
+}
+
+// removeTree deletes root, first making directories the agent left read-only
+// writable again so they cannot leak the folder.
+func removeTree(root string) error {
+	if err := os.RemoveAll(root); err == nil {
+		return nil
+	}
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if d != nil && d.IsDir() {
+			_ = os.Chmod(path, 0o700)
+		}
+		return nil
+	})
+	return os.RemoveAll(root)
 }
 
 // taskEnvironment builds the child environment from nothing. Only PATH, LANG,

@@ -166,6 +166,10 @@ func Run(args []string, env Env) int {
 			if result.Status != "passed" {
 				code = 1
 			}
+			if result.CleanupError != "" {
+				fail(env, fmt.Errorf("task %s: %s", task.ID, result.CleanupError))
+				code = 1
+			}
 		}
 		if ctx.Err() != nil {
 			break
@@ -210,6 +214,11 @@ func showDetails(env Env, result eval.Result) int {
 	}
 	if err := tw.Flush(); err != nil {
 		return fail(env, err)
+	}
+	if result.CleanupError != "" {
+		if _, err := fmt.Fprintf(env.Stdout, "cleanup: %s\n", result.CleanupError); err != nil {
+			return fail(env, err)
+		}
 	}
 	for _, phase := range []struct {
 		name string

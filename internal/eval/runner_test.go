@@ -254,6 +254,45 @@ func TestLoadResultIgnoresUnknownFields(t *testing.T) {
 	}
 }
 
+// readOnlyTreeTask makes the agent leave a directory its owner cannot delete from.
+func readOnlyTreeTask(t *testing.T) (Task, Runner) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	task, runner := sampleTask(t), testRunner(t)
+	task.Setup = "true"
+	task.Checks = []Check{{ID: "tree", Type: "file_exists", Path: "ro/x/f"}}
+	runner.Agent = []string{"sh", "-c", "mkdir -p ro/x && touch ro/x/f && chmod -R 555 ro"}
+	// Restore write access so the test's own temp folder can be deleted.
+	t.Cleanup(func() { _ = removeTree(runner.TempDir) })
+	return task, runner
+}
+
+func TestReadOnlyTreeIsRemoved(t *testing.T) {
+	task, runner := readOnlyTreeTask(t)
+	r := runTask(t, runner, task)
+	if r.Status != "passed" || r.CleanupError != "" {
+		t.Fatalf("read-only tree was not cleaned up: %+v", r)
+	}
+}
+
+func TestFailedRemovalIsReported(t *testing.T) {
+	task, runner := readOnlyTreeTask(t)
+	runner.removeAll = os.RemoveAll // no chmod retry: the tree stays behind
+	r, err := runner.Run(context.Background(), task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Status != "passed" || !strings.Contains(r.CleanupError, "remove temporary folder") {
+		t.Fatalf("failed removal not reported: %+v", r)
+	}
+	saved, err := LoadResult(runner.ResultsDir, r.ID)
+	if err != nil || saved.CleanupError != r.CleanupError {
+		t.Fatalf("saved result lost the cleanup error: %+v, %v", saved, err)
+	}
+}
+
 func TestResultValidationAndWriteFailure(t *testing.T) {
 	runner := testRunner(t)
 	if _, err := LoadResult(runner.ResultsDir, "../escape"); err == nil {
