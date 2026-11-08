@@ -1,5 +1,7 @@
 # Grid Feed and Job contract
 
+Shared file formats use the `fmt-` schema prefix; see [formats.md](formats.md).
+
 The Feed contract: schemas, fixtures and the conformance suite; contract/commands.json (each command, arguments, output schema) comes later.
 
 These JSON Schema 2020-12 documents define the current wire format. Feed core
