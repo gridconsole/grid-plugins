@@ -76,7 +76,8 @@ type Written struct {
 	Hash     string `json:"hash"`
 }
 
-// Write installs a new revision, including when only ticks or whitespace changed.
+// Write installs a new revision, including when only ticks or whitespace changed;
+// bytes identical to the current plan leave it and its revision unchanged.
 // The installed heading determines the next number; the input's number is ignored.
 // A failed replacement can leave a complete archive of the still-current revision;
 // retrying accepts that archive only if its bytes agree exactly.
@@ -113,6 +114,10 @@ func (s Store) Write(text string) (Written, error) {
 		}
 		body := strings.TrimLeft(strings.Join(ls, "\n"), "\n")
 		hash := Hash("x\n" + body)
+		if current != nil && string(current) == fmt.Sprintf("# Plan, rev %d · %s\n\n%s", next-1, hash, body) {
+			result = Written{Revision: next - 1, Hash: hash}
+			return nil
+		}
 		out := fmt.Sprintf("# Plan, rev %d · %s\n\n%s", next, hash, body)
 		if current != nil {
 			archiveDir, err := childDirectory(dir, "plan-revisions", true)

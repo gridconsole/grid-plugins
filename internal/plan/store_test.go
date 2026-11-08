@@ -88,6 +88,22 @@ func TestWriteRevisionAndArchive(t *testing.T) {
 	}
 }
 
+func TestWriteIdenticalIsNoOp(t *testing.T) {
+	s := testStore(t)
+	base := fixture(t, "plan.md")
+	first, err := s.Write(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := s.Write(base)
+	if err != nil || again != first {
+		t.Fatalf("%+v %v", again, err)
+	}
+	if _, err := os.Stat(filepath.Join(s.TaskDir, "plan-revisions", "1.md")); !os.IsNotExist(err) {
+		t.Fatalf("archive written for identical plan: %v", err)
+	}
+}
+
 func TestRecallGate(t *testing.T) {
 	for _, text := range []string{
 		"Used: brain:project/tag-matching", "Recall: nothing found", "- **Used:** brain:project/tag-matching", "**Recall:** nothing found", "  + __Used__: conventions/tags", "used: conventions/tags",
@@ -158,7 +174,7 @@ func TestInvalidCurrentAndArchive(t *testing.T) {
 	}
 	archive := filepath.Join(s.TaskDir, "plan-revisions", "1.md")
 	put(t, archive, "different archive")
-	if _, err := s.Write(base); err == nil {
+	if _, err := s.Write(strings.ReplaceAll(base, "[ ]", "[x]")); err == nil {
 		t.Fatal("overwrote conflicting archive")
 	}
 	if get(t, archive) != "different archive" || get(t, filepath.Join(s.TaskDir, "plan.md")) != current {

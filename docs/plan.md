@@ -35,6 +35,10 @@ are stable ids, so removing an item does not require renumbering the others.
 `X` makes it `built`. Duplicate ids, zero ids and numbers outside uint64 are
 refused. Bold markers and backticks are removed from display titles.
 
+Ids are the author's step numbers, so they are stable across revisions only while
+steps keep their numbers. Renumbering shows in `grid plan diff` as the old ids
+removed and the new ids added.
+
 Optional job fields sit under a step, indented with spaces. Nested YAML values
 must be indented further. A blank or unindented line ends the step block.
 
@@ -96,7 +100,8 @@ examples, HTML comments, blockquotes and indented code do not satisfy the gate.
 This is a citation-presence check; it does not resolve or validate the note.
 
 Every successful write increments the installed revision, even if the hash
-stays the same. A new plan starts at 1; the input's revision number is ignored.
+stays the same, except that bytes identical to the current plan are a no-op and
+return the current revision. A new plan starts at 1; the input's revision number is ignored.
 The previous file's exact bytes are kept in `plan-revisions/<number>.md`.
 Archives are never pruned. A conflicting archive refuses the write; an identical
 archive left by an interrupted write is reused.
