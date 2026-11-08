@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
 // TestLockHelperProcess is the body of the child process the tests below start;
@@ -66,7 +68,7 @@ func TestKilledWriterDoesNotBlockTheNextWrite(t *testing.T) {
 	home := t.TempDir()
 	marker := filepath.Join(t.TempDir(), "marker")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestLockHelperProcess$")
-	cmd.Env = append(os.Environ(), "LOCALDATA_LOCK_HELPER=1", "LOCALDATA_HOME="+home, "LOCALDATA_MARKER="+marker)
+	cmd.Env = append(testenv.Temp(t, os.Environ()), "LOCALDATA_LOCK_HELPER=1", "LOCALDATA_HOME="+home, "LOCALDATA_MARKER="+marker)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

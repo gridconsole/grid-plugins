@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
 const stressWriters = 125
@@ -45,11 +47,13 @@ func TestStressWriters(t *testing.T) {
 	cmds := make([]*exec.Cmd, stressWriters)
 	for i := range cmds {
 		cmds[i] = exec.Command(os.Args[0], "-test.run=^TestStressWriters$")
-		cmds[i].Env = append(os.Environ(), "GRID_FEED_STRESS_CHILD="+s.TaskDir, fmt.Sprintf("GRID_FEED_STRESS_WRITER=%d", i))
+		cmds[i].Env = append(testenv.Temp(t, os.Environ()), "GRID_FEED_STRESS_CHILD="+s.TaskDir, fmt.Sprintf("GRID_FEED_STRESS_WRITER=%d", i))
 		cmds[i].Stderr = os.Stderr
 		if err := cmds[i].Start(); err != nil {
 			t.Fatal(err)
 		}
+		cmd := cmds[i]
+		t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 	}
 	for _, cmd := range cmds {
 		if err := cmd.Wait(); err != nil {

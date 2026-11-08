@@ -14,6 +14,7 @@ import (
 
 func command(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
+	t.Setenv("TMPDIR", t.TempDir())
 	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
@@ -98,6 +99,7 @@ func TestSuiteContinuesAfterFailure(t *testing.T) {
 }
 
 func TestDefaultResultsLiveUnderGridHome(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
 	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)

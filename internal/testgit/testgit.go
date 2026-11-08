@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
 // Isolate skips the test without git, and keeps the machine's git config, signing
@@ -28,7 +30,9 @@ func Isolate(t *testing.T) {
 func Run(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	base := []string{"-C", dir, "-c", "commit.gpgsign=false", "-c", "user.name=Example", "-c", "user.email=dev@example.com"}
-	out, err := exec.Command("git", append(base, args...)...).CombinedOutput()
+	cmd := exec.Command("git", append(base, args...)...)
+	cmd.Env = testenv.Temp(t, cmd.Environ())
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
 	}
@@ -49,16 +53,13 @@ func Init(t *testing.T, dir, remote string, commit bool) {
 }
 
 // TempInRepo points TMPDIR at a folder inside a fresh git repo, as on a machine whose
-// temp folder sits in a checkout, and returns that repo. Call it before the test's
-// first t.TempDir, which then lands inside the repo.
+// temp folder sits in a checkout, and returns that repo. Call it before creating
+// fixtures. testing caches a parent folder for all of a test's TempDir calls, so
+// initialize the repo there to keep subsequent fixtures inside the checkout.
 func TempInRepo(t *testing.T) string {
 	t.Helper()
 	Isolate(t)
-	outer, err := os.MkdirTemp("", "grid-outer-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(outer) })
+	outer := filepath.Dir(t.TempDir())
 	Init(t, outer, "https://example.com/org/outer.git", true)
 	tmp := filepath.Join(outer, "tmp")
 	if err := os.Mkdir(tmp, 0o755); err != nil {

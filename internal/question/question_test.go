@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/golden"
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -346,7 +347,7 @@ func TestConcurrentProcessesTick(t *testing.T) {
 	releases := make([]func(), 2)
 	for i := range cmds {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestTickProcess$")
-		cmd.Env = append(os.Environ(), "GRID_QUESTION_HELPER=1", "GRID_QUESTION_TASK="+s.TaskDir)
+		cmd.Env = append(testenv.Temp(t, os.Environ()), "GRID_QUESTION_HELPER=1", "GRID_QUESTION_TASK="+s.TaskDir)
 		cmd.Stdout = &outputs[i]
 		cmd.Stderr = &outputs[i]
 		stdin, e := cmd.StdinPipe()
@@ -366,6 +367,7 @@ func TestConcurrentProcessesTick(t *testing.T) {
 		t.Cleanup(func() {
 			if cmd.Process != nil {
 				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
 			}
 		})
 	}

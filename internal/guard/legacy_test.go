@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
 // Optional differential checks use a read-only checkout named by the caller.
@@ -55,6 +56,7 @@ func legacyCompare(t *testing.T, fn Adapter, in hookio.Input, env map[string]str
 		}
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
+	cmd.Env = testenv.Temp(t, cmd.Env)
 	old, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("legacy %s: %v", script, err)

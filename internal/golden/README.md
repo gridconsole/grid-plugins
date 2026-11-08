@@ -12,8 +12,10 @@ and `input.json`. It runs all supported `pre` commands, applies `after_pre`, tak
 a raw snapshot, and invokes the main command. The CLI adapter calls `cli.Run`
 with isolated stdin, stdout, stderr, environment lookup and cwd. The fixture root
 is the resolver ceiling and temporary root; ancestor repositories and process
-configuration do not leak into the result. Nothing changes the process cwd or
-environment. Paths are symlink-resolved before fixture writes.
+configuration do not leak into the result. Nothing changes the process cwd.
+The CLI test adapter sets process TMPDIR to a separate `t.TempDir()` so commands
+that use the operating system's temp location are cleaned up with the test;
+`t.Setenv` restores it afterward. Paths are symlink-resolved before fixture writes.
 
 The original corpus stores invocation identity in `setup.json` as `hook` and an
 optional exported-function `call`, rather than a literal argv array. The explicit

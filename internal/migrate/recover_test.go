@@ -12,6 +12,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
 // The crash tests run Apply in a copy of the test binary that exits, without running
@@ -42,7 +43,7 @@ const crashExit = 77
 func crashAt(t *testing.T, step, from, home string) {
 	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCrashHelper$", "-test.count=1")
-	cmd.Env = append(os.Environ(), "GRID_CRASH_STEP="+step, "GRID_CRASH_FROM="+from, "GRID_CRASH_HOME="+home)
+	cmd.Env = append(testenv.Temp(t, os.Environ()), "GRID_CRASH_STEP="+step, "GRID_CRASH_FROM="+from, "GRID_CRASH_HOME="+home)
 	out, err := cmd.CombinedOutput()
 	var ee *exec.ExitError
 	if !errors.As(err, &ee) || ee.ExitCode() != crashExit {
@@ -355,6 +356,7 @@ func TestLockOwnership(t *testing.T) {
 	})
 	t.Run("left by a process that is gone", func(t *testing.T) {
 		cmd := exec.Command(os.Args[0], "-test.run=^$")
+		cmd.Env = testenv.Temp(t, cmd.Environ())
 		if err := cmd.Run(); err != nil {
 			t.Fatal(err)
 		}

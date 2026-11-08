@@ -15,7 +15,7 @@ func TestSyntheticCases(t *testing.T) {
 			box := t.TempDir()
 			// Inherited process values must not affect the recorded environment.
 			t.Setenv("GRID_HOME", "must-not-be-used")
-			result, err := golden.Replay("testdata/fixtures", filepath.Join("testdata", name), box, cliDriver())
+			result, err := golden.Replay("testdata/fixtures", filepath.Join("testdata", name), box, cliDriver(t))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -69,7 +69,7 @@ func write(t *testing.T, path, content string) {
 func TestIntendedDifference(t *testing.T) {
 	dir := copyCase(t)
 	write(t, filepath.Join(dir, "go-diff.md"), "Deliberate fixture expectation; docs/example.md:12.\n")
-	_, err := golden.Replay("testdata/fixtures", dir, t.TempDir(), cliDriver())
+	_, err := golden.Replay("testdata/fixtures", dir, t.TempDir(), cliDriver(t))
 	if err == nil {
 		t.Fatal("missing go-expected must fail")
 	}
@@ -81,12 +81,12 @@ func TestIntendedDifference(t *testing.T) {
 		write(t, filepath.Join(dir, "go-expected", name), string(b))
 	}
 	write(t, filepath.Join(dir, "stdout"), "old output")
-	r, err := golden.Replay("testdata/fixtures", dir, t.TempDir(), cliDriver())
+	r, err := golden.Replay("testdata/fixtures", dir, t.TempDir(), cliDriver(t))
 	if err != nil || len(r.Differences) > 0 {
 		t.Fatalf("%+v, %v", r, err)
 	}
 	write(t, filepath.Join(dir, "go-diff.md"), "No citation")
-	if _, err := golden.Replay("testdata/fixtures", dir, t.TempDir(), cliDriver()); err == nil {
+	if _, err := golden.Replay("testdata/fixtures", dir, t.TempDir(), cliDriver(t)); err == nil {
 		t.Fatal("missing citation must fail")
 	}
 }

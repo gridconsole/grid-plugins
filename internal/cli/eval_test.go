@@ -10,6 +10,7 @@ import (
 )
 
 func TestEvalCommands(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
 	h := newHarness(t)
 	root, err := filepath.Abs("../..")
 	if err != nil {

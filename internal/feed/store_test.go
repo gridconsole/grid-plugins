@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
 const testTask = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
@@ -168,10 +169,12 @@ func TestConcurrentProcesses(t *testing.T) {
 	cmds := make([]*exec.Cmd, 4)
 	for i := range cmds {
 		cmds[i] = exec.Command(os.Args[0], "-test.run=^TestConcurrentProcesses$")
-		cmds[i].Env = append(os.Environ(), "GRID_FEED_TEST_CHILD="+s.TaskDir)
+		cmds[i].Env = append(testenv.Temp(t, os.Environ()), "GRID_FEED_TEST_CHILD="+s.TaskDir)
 		if err := cmds[i].Start(); err != nil {
 			t.Fatal(err)
 		}
+		cmd := cmds[i]
+		t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 	}
 	for _, cmd := range cmds {
 		if err := cmd.Wait(); err != nil {

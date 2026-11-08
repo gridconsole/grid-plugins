@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
 func testStore(t *testing.T) Store {
@@ -280,7 +282,7 @@ func TestTwentyProcessesAndCrashRecovery(t *testing.T) {
 	gates := make([]io.WriteCloser, count)
 	for i := range cmds {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestClaimProcess$")
-		cmd.Env = append(os.Environ(), "GRID_INTENT_TEST_PROCESS=1", "GRID_INTENT_TEST_DIR="+s.TaskDir, "GRID_INTENT_TEST_ID="+r.ID)
+		cmd.Env = append(testenv.Temp(t, os.Environ()), "GRID_INTENT_TEST_PROCESS=1", "GRID_INTENT_TEST_DIR="+s.TaskDir, "GRID_INTENT_TEST_ID="+r.ID)
 		gate, err := cmd.StdinPipe()
 		if err != nil {
 			t.Fatal(err)
@@ -289,7 +291,7 @@ func TestTwentyProcessesAndCrashRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 		cmds[i], gates[i] = cmd, gate
-		t.Cleanup(func() { _ = cmd.Process.Kill() })
+		t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 	}
 	for _, gate := range gates {
 		if _, err := gate.Write([]byte{1}); err != nil {

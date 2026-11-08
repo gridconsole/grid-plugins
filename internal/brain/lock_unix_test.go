@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
 const helperEnv = "BRAIN_LOCK_HELPER"
@@ -56,7 +58,7 @@ func start(t *testing.T, s Store, mode, name string) child {
 	t.Helper()
 	marker := filepath.Join(t.TempDir(), "marker")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestLockHelperProcess$")
-	cmd.Env = append(os.Environ(), helperEnv+"="+mode, "BRAIN_HOME="+s.GridHome, "BRAIN_NAME="+name, "BRAIN_MARKER="+marker)
+	cmd.Env = append(testenv.Temp(t, os.Environ()), helperEnv+"="+mode, "BRAIN_HOME="+s.GridHome, "BRAIN_NAME="+name, "BRAIN_MARKER="+marker)
 	out := &strings.Builder{}
 	cmd.Stdout, cmd.Stderr = out, out
 	if err := cmd.Start(); err != nil {

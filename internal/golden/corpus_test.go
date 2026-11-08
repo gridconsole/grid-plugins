@@ -30,7 +30,9 @@ var legacyHooks = map[string][]string{
 	"grid-home-allow": {"PreToolUse", "PermissionRequest"},
 }
 
-func cliDriver() golden.Driver {
+func cliDriver(t *testing.T) golden.Driver {
+	t.Helper()
+	t.Setenv("TMPDIR", t.TempDir())
 	return golden.Driver{
 		Resolve: func(c golden.Command) ([]string, bool) {
 			if len(c.Argv) > 0 {
@@ -98,7 +100,7 @@ func TestGoldenCorpus(t *testing.T) {
 		}
 		r := row{name: filepath.ToSlash(name), status: "fail"}
 		t.Run(r.name, func(t *testing.T) {
-			result, err := golden.Replay(filepath.Join(root, "fixtures"), dir, t.TempDir(), cliDriver())
+			result, err := golden.Replay(filepath.Join(root, "fixtures"), dir, t.TempDir(), cliDriver(t))
 			r.command = result.Command
 			if err != nil {
 				t.Fatal(err)

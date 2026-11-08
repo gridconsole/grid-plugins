@@ -15,6 +15,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 	"github.com/gridconsole/grid-plugins/internal/testgit"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -436,7 +437,7 @@ func TestTwoProcessIDRace(t *testing.T) {
 	for i := range children {
 		c := &children[i]
 		c.cmd = exec.Command(os.Args[0], "-test.run=^TestTwoProcessIDRace$", "-test.timeout=30s")
-		c.cmd.Env = append(os.Environ(), "GRID_TASK_RACE_CHILD=1", "GRID_TASK_RACE_HOME="+home, "GRID_TASK_RACE_CWD="+cwd)
+		c.cmd.Env = append(testenv.Temp(t, os.Environ()), "GRID_TASK_RACE_CHILD=1", "GRID_TASK_RACE_HOME="+home, "GRID_TASK_RACE_CWD="+cwd)
 		c.cmd.Stdout, c.cmd.Stderr = &c.out, &c.out
 		var err error
 		c.start, err = c.cmd.StdinPipe()
@@ -446,7 +447,7 @@ func TestTwoProcessIDRace(t *testing.T) {
 		if err := c.cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = c.cmd.Process.Kill() })
+		t.Cleanup(func() { _ = c.cmd.Process.Kill(); _ = c.cmd.Wait() })
 	}
 	for i := range children {
 		if _, err := children[i].start.Write([]byte{1}); err != nil {

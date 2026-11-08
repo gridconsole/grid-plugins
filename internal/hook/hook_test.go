@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -195,6 +196,7 @@ func TestEnvironmentShellQuoting(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("sh", "-c", `. "$1"; printf '%s\n%s\n%s' "$GRID_HOME" "$GRID_PROJECTS" "$GRID_TASK"`, "sh", file)
+	cmd.Env = testenv.Temp(t, cmd.Environ())
 	b, err := cmd.Output()
 	if err != nil {
 		t.Fatal(err)

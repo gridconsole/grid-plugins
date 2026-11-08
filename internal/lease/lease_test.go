@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
 func TestLifecycle(t *testing.T) {
@@ -276,7 +278,7 @@ func TestMultiProcessRace(t *testing.T) {
 		starts := make([]func(), count)
 		for i := range cmds {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestLeaseProcessHelper$")
-			cmd.Env = append(os.Environ(), "GRID_LEASE_TEST_HELPER=1", "GRID_LEASE_TEST_DIR="+dir,
+			cmd.Env = append(testenv.Temp(t, os.Environ()), "GRID_LEASE_TEST_HELPER=1", "GRID_LEASE_TEST_DIR="+dir,
 				"GRID_LEASE_TEST_NOW="+strconv.FormatInt(at.Unix(), 10), "GRID_LEASE_TEST_ID="+strconv.Itoa(i))
 			pipe, err := cmd.StdinPipe()
 			if err != nil {
@@ -287,7 +289,7 @@ func TestMultiProcessRace(t *testing.T) {
 			if err := cmd.Start(); err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { _ = pipe.Close(); _ = cmd.Process.Kill() })
+			t.Cleanup(func() { _ = pipe.Close(); _ = cmd.Process.Kill(); _ = cmd.Wait() })
 			starts[i] = func() { _, _ = pipe.Write([]byte{1}); _ = pipe.Close() }
 			cmds[i] = cmd
 		}
