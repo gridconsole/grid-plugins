@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/gitx"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
@@ -460,7 +461,7 @@ func (s Store) write(rec project.Record) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
-	return localdata.Write(target, data)
+	return atomicfile.Write(target, data, 0o644)
 }
 
 // Proposal describes a project found under a discovery folder. Scan never writes.

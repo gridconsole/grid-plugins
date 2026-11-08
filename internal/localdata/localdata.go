@@ -192,24 +192,3 @@ func Lock(home, name string) (func(), error) {
 	}
 	return nil, fmt.Errorf("data is locked by %s; if no writer is running, remove the leftover lock", name)
 }
-
-// Write replaces a file by rename, so readers see a complete old or new file.
-func Write(path string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".write-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), path)
-}

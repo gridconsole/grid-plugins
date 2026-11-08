@@ -14,6 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/projects"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -244,7 +245,7 @@ func (s Store) Add(in Input) (Result, error) {
 	if len(files) >= 4000 {
 		return Result{}, fmt.Errorf("notes already holds 4000 files")
 	}
-	if err := localdata.Write(path, data); err != nil {
+	if err := atomicfile.Write(path, data, 0o600); err != nil {
 		return Result{}, err
 	}
 	return result(s, note, "written"), nil
@@ -288,7 +289,7 @@ func (s Store) change(id, status string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if err := localdata.Write(path, data); err != nil {
+	if err := atomicfile.Write(path, data, 0o600); err != nil {
 		return Result{}, err
 	}
 	return result(s, n, "updated"), nil
