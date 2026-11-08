@@ -21,12 +21,16 @@ func TestTaskRenameDecline(t *testing.T) {
 		{name: "rename_open", verb: "rename", value: "  Better\u2003 title  "},
 		{name: "rename_esc", verb: "rename", value: "before\x1bafter", code: 2, diagnostic: "title"},
 		{name: "rename_bel", verb: "rename", value: "before\x07after", code: 2, diagnostic: "title"},
+		{name: "rename_fffe", verb: "rename", value: "before\ufffeafter", code: 2, diagnostic: "title"},
+		{name: "rename_ffff", verb: "rename", value: "before\uffffafter", code: 2, diagnostic: "title"},
 		{name: "rename_bidi_override", verb: "rename", value: "before\u202eafter", code: 2, diagnostic: "title"},
 		{name: "rename_bidi_isolate", verb: "rename", value: "before\u2066after", code: 2, diagnostic: "title"},
 		{name: "rename_tab", verb: "rename", value: "before\tafter", code: 2, diagnostic: "title"},
 		{name: "rename_newline", verb: "rename", value: "before\nafter", code: 2, diagnostic: "title"},
 		{name: "decline_esc", verb: "decline", value: "before\x1bafter", code: 2, diagnostic: "reason"},
 		{name: "decline_bel", verb: "decline", value: "before\x07after", code: 2, diagnostic: "reason"},
+		{name: "decline_fffe", verb: "decline", value: "before\ufffeafter", code: 2, diagnostic: "reason"},
+		{name: "decline_ffff", verb: "decline", value: "before\uffffafter", code: 2, diagnostic: "reason"},
 		{name: "decline_bidi_override", verb: "decline", value: "before\u202eafter", code: 2, diagnostic: "reason"},
 		{name: "decline_bidi_isolate", verb: "decline", value: "before\u2066after", code: 2, diagnostic: "reason"},
 		{name: "decline_tab", verb: "decline", value: "before\tafter", code: 2, diagnostic: "reason"},
@@ -90,6 +94,16 @@ func TestTaskRenameDecline(t *testing.T) {
 				t.Fatalf("%s exit = %d, want %d: %s", tc.name, code, tc.code, h.errb)
 			}
 			if tc.code != 0 {
+				if tc.code == 2 {
+					want := "invalid task edit: title must have 1-200 characters on one line without control or bidi override/isolate characters\n"
+					if tc.verb == "decline" {
+						want = "invalid task edit: a decline needs a reason without control or bidi override/isolate characters\n"
+					}
+					want = "grid task " + tc.verb + ": " + want
+					if h.errb.String() != want || h.out.Len() != 0 {
+						t.Fatalf("refusal stdout = %q, stderr = %q; want empty stdout and %q", h.out.String(), h.errb.String(), want)
+					}
+				}
 				if !strings.Contains(h.errb.String(), tc.diagnostic) || strings.Count(h.errb.String(), "\n") != 1 {
 					t.Fatalf("want one diagnostic containing %q, got %q", tc.diagnostic, h.errb.String())
 				}

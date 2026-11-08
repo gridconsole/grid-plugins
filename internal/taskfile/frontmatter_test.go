@@ -37,6 +37,7 @@ func TestHistoryLine(t *testing.T) {
 
 func TestQuotedJSONScalars(t *testing.T) {
 	for _, tc := range []struct{ raw, want string }{
+		{`"a" b`, `"a" b`},
 		{`"A \u003c B \u0026 C"`, "A < B & C"},
 		{`"issue #12"`, "issue #12"},
 		{`"issue # 12" # outside`, "issue # 12"},

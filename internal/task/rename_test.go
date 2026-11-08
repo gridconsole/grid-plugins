@@ -165,7 +165,7 @@ func TestRenameScalarStyles(t *testing.T) {
 
 // Check the original input, including controls that whitespace folding removes.
 func TestRenameDeclineRejectControls(t *testing.T) {
-	var forbidden []rune
+	forbidden := []rune{'\ufffe', '\uffff'}
 	for r := rune(0); r <= 0x9f; r++ {
 		if r <= 0x1f || r >= 0x7f {
 			forbidden = append(forbidden, r)
