@@ -204,11 +204,15 @@ func routineFailureSignal(env Env, project string) routine.FailureSignal {
 		body := "Routine " + entry.Name + " failed. Run grid routine list to inspect its outcome."
 		// SourceID is an existing deduplication key, not a record timestamp. Keep
 		// its original RFC3339Nano bytes so pre-L42 signals still match retries.
+		sourceID := project + "/" + entry.Name + ":" + entry.LastRun.Format(time.RFC3339Nano)
 		if errors.Is(runErr, routine.ErrScheduleChanged) {
 			body = runErr.Error()
+			// A refusal leaves last_run alone; without its own id it would fold into
+			// the note of the failed run that last_run names, hiding the instruction.
+			sourceID += ":changed"
 		}
 		_, err := (signal.Store{GridHome: env.GridHome, Project: gridhome.Personal}).Add(signal.Input{
-			Source: "routine", SourceID: project + "/" + entry.Name + ":" + entry.LastRun.Format(time.RFC3339Nano), Title: "Routine failed: " + entry.Name, Body: body,
+			Source: "routine", SourceID: sourceID, Title: "Routine failed: " + entry.Name, Body: body,
 		})
 		return err
 	}

@@ -93,6 +93,59 @@ func TestRoutineCLI(t *testing.T) {
 	}
 }
 
+func TestRoutineRefusalAfterFailedRunKeepsItsOwnNote(t *testing.T) {
+	h := newHarness(t)
+	store := routine.Store{GridHome: h.gridHome}
+	if _, err := store.Add("daily", "1h", "grid version"); err != nil {
+		t.Fatal(err)
+	}
+	scheduler := routine.Scheduler{Home: h.home, GridHome: h.gridHome, Binary: filepath.Join(h.root, "grid"), Backend: routine.Systemd{}, Runner: routineOS{}}
+	if err := scheduler.Schedule(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+	h.env.Executable = func() (string, error) { return filepath.Join(h.root, "missing-grid"), nil }
+	if code := h.run(h.root, "routine", "run", "daily", "--due", "--json"); code != 1 {
+		t.Fatalf("failing run: exit %d: %s", code, h.errb)
+	}
+	failed, err := store.Get("daily")
+	if err != nil || failed.Outcome != "failed" || failed.LastRun.IsZero() {
+		t.Fatalf("run did not fail: %+v %v", failed, err)
+	}
+	failed.Run = "grid brain index"
+	if err := (brain.Store{GridHome: h.gridHome}).EditConfig("home", "routines", failed.Name, func([]byte) ([]byte, error) {
+		return brain.EncodeConfig(failed, "")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		h.errb.Reset()
+		if code := h.run(h.root, "routine", "run", "daily", "--due", "--json"); code != 1 || !strings.Contains(h.errb.String(), "grid routine schedule") {
+			t.Fatalf("refusal: exit %d: %s", code, h.errb)
+		}
+	}
+	notes := filepath.Join(h.gridHome, "projects", "personal", "notes")
+	files, err := os.ReadDir(notes)
+	if err != nil || len(files) != 2 {
+		t.Fatalf("expected the failure note and one refusal note: %v %v", files, err)
+	}
+	var refusals, failures int
+	for _, f := range files {
+		body, err := os.ReadFile(filepath.Join(notes, f.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch {
+		case strings.Contains(string(body), "grid routine schedule"):
+			refusals++
+		case strings.Contains(string(body), "Run grid routine list"):
+			failures++
+		}
+	}
+	if refusals != 1 || failures != 1 {
+		t.Fatalf("notes: %d refusal, %d failure", refusals, failures)
+	}
+}
+
 func TestRoutineHelpExplainsEntryLock(t *testing.T) {
 	h := newHarness(t)
 	for _, args := range [][]string{{"routine", "--help"}, {"routine", "run", "--help"}} {
