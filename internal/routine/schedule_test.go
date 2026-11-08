@@ -204,8 +204,9 @@ func TestTimerEscaping(t *testing.T) {
 	if !strings.Contains(service, `$data%% & spaces`) || !strings.Contains(service, `grid $$tool%%`) || !strings.Contains(service, `PATH=/example/bin:$literal%%`) {
 		t.Fatalf("systemd escaping: %s", service)
 	}
-	if strings.Contains(service, `WorkingDirectory="`+strings.ReplaceAll(spec.GridHome, "$", "$$")) {
-		t.Fatal("systemd expanded a literal directory dollar")
+	// systemd does not unquote WorkingDirectory=, and it expands only percent specifiers.
+	if want := "\nWorkingDirectory=" + strings.ReplaceAll(spec.GridHome, "%", "%%") + "\n"; !strings.Contains(service, want) {
+		t.Fatalf("systemd working directory line %q missing: %s", want, service)
 	}
 	for _, tc := range []struct{ in, want string }{{`a b`, `"a b"`}, {`a"b`, `"a\"b"`}, {`a\`, `"a\\"`}} {
 		if got := windowsArg(tc.in); got != tc.want {
