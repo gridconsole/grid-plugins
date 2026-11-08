@@ -6,7 +6,32 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestMain(m *testing.M) {
+	settle = 100 * time.Millisecond
+	os.Exit(m.Run())
+}
+
+func TestTransientEntryOfAnotherProcessIsIgnored(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "grid-eval-other")
+	var stderr bytes.Buffer
+	status := check(dir, func() int {
+		if err := os.Mkdir(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			time.Sleep(30 * time.Millisecond)
+			_ = os.Remove(path)
+		}()
+		return 0
+	}, &stderr)
+	if status != 0 {
+		t.Fatalf("transient entry reported: %d: %s", status, &stderr)
+	}
+}
 
 func TestCheck(t *testing.T) {
 	for _, tc := range []struct {

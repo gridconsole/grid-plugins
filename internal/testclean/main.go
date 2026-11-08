@@ -19,6 +19,9 @@ var prefixes = []string{
 	"grid-outer-", "grid-eval-",
 }
 
+// settle is how long new entries may take to disappear before they are reported.
+var settle = 10 * time.Second
+
 func snapshot(dir string) (map[string]bool, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -48,16 +51,27 @@ func check(dir string, run func() int, stderr io.Writer) int {
 	scanTime := time.Since(start)
 	status := run()
 	start = time.Now()
-	after, err := snapshot(dir)
-	if err != nil {
-		fmt.Fprintf(stderr, "temp leak check: after: %v\n", err)
-		return 1
-	}
+	// Concurrent test runs of other checkouts share this folder; their folders
+	// are removed within moments, so only entries that outlive the settle
+	// window count as leaks.
+	deadline := time.Now().Add(settle)
 	var leaked []string
-	for name := range after {
-		if !before[name] {
-			leaked = append(leaked, name)
+	for {
+		after, err := snapshot(dir)
+		if err != nil {
+			fmt.Fprintf(stderr, "temp leak check: after: %v\n", err)
+			return 1
 		}
+		leaked = leaked[:0]
+		for name := range after {
+			if !before[name] {
+				leaked = append(leaked, name)
+			}
+		}
+		if len(leaked) == 0 || !time.Now().Before(deadline) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	slices.Sort(leaked)
 	for _, name := range leaked {
