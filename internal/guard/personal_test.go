@@ -15,7 +15,9 @@ func TestPersonalSettingsRefused(t *testing.T) {
 	f.write(filepath.Join(f.grid, "settings.json"), `{"hooks":{"home-allow":"off"}}`)
 	f.env["GRID_ROLE"], f.env["GRID_MEMBER"], f.env["GRID_TASK"] = " guest ", " gus ", personal
 	got := configuredLevel("home-allow", hookio.Input{Cwd: f.repo}, f.root, f.env, hookio.Deny("original"))
-	if got.Behavior != "deny" || !strings.Contains(got.Reason, "task not found") || strings.Contains(got.Reason, personal) {
+	// The resolver error rides in Warnings; the original deny stands (settings level resolution, L64).
+	text := got.Reason + strings.Join(got.Warnings, " ")
+	if got.Behavior != "deny" || !strings.Contains(text, "task not found") || strings.Contains(text, personal) {
 		t.Fatalf("decision = %+v", got)
 	}
 }
