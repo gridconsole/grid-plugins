@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
@@ -514,6 +515,7 @@ func TestTwoProcessIDRace(t *testing.T) {
 	}
 	s.Resolver.Machine = gridhome.Machine(s.Resolver.GridHome)
 	seen := map[string]bool{}
+	stableIDs := map[string]bool{}
 	for _, proj := range []string{"personal", "example"} {
 		tasks, err := s.List(home, proj, "")
 		if err != nil || len(tasks) != 12 {
@@ -524,6 +526,11 @@ func TestTwoProcessIDRace(t *testing.T) {
 				t.Fatalf("duplicate id or incomplete task: %+v", task)
 			}
 			seen[task.ID] = true
+			id, err := feed.TaskID(task.Path)
+			if err != nil || stableIDs[id] {
+				t.Fatalf("missing or duplicate stable id for %s: %q, %v", task.ID, id, err)
+			}
+			stableIDs[id] = true
 		}
 	}
 	for i := 1; i <= 24; i++ {

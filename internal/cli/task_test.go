@@ -11,12 +11,70 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/golden"
+	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/testgit"
 )
+
+func TestTaskNewFeedCommands(t *testing.T) {
+	h := newHarness(t)
+	h.env.Machine = "" // Let task new allocate the real machine identity too.
+	for _, key := range []string{"GRID_LEASE", "GRID_LEASE_EPOCH", "GRID_WAKE", "GRID_WORKER", "GRID_FEED_TASK", "GRID_JOB", "GRID_ATTEMPT"} {
+		t.Setenv(key, "")
+	}
+	t.Setenv("GRID_MEMBER", "member")
+	t.Setenv("GRID_ROLE", "member")
+	if code := h.run(h.home, "task", "new", "Use the Feed", "--json"); code != 0 {
+		t.Fatalf("new: %d %s", code, h.errb)
+	}
+	var created struct{ ID, Path string }
+	if err := json.Unmarshal(h.out.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ID != "T-01" {
+		t.Fatalf("human id: %q", created.ID)
+	}
+	if code := h.run(h.home, "feed", "state", "--task", created.ID, "--project", "personal", "--json"); code != 0 {
+		t.Fatalf("state: %d %s", code, h.errb)
+	}
+	stableID, err := feed.TaskID(created.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run(created.Path, "feed", "post", "--type", "post", "--body", `{"ref":"task","kind":"message","text":"Ready"}`, "--json"); code != 0 {
+		t.Fatalf("post: %d %s", code, h.errb)
+	}
+	var posted struct{ Post feed.Record }
+	if err := json.Unmarshal(h.out.Bytes(), &posted); err != nil {
+		t.Fatal(err)
+	}
+	if posted.Post.Task != stableID {
+		t.Fatalf("post task: %q, want %q", posted.Post.Task, stableID)
+	}
+	if code := h.run(created.Path, "feed", "state", "--json"); code != 0 || !strings.Contains(h.out.String(), posted.Post.ID) {
+		t.Fatalf("state after post: %d %s %s", code, h.out, h.errb)
+	}
+	// job next needs a granted task lease even when there are no jobs yet.
+	machine, err := feed.MachineID(h.gridHome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := feed.Store{TaskDir: created.Path, TaskID: stableID}
+	w := feed.Writer{Author: feed.Author{ID: "member", Role: "member"}, Worker: "member@" + machine, Lease: "task"}
+	grant, err := (lease.TaskStore{Feed: store}).TakeTask(w, os.Getpid(), time.Now().UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run(h.home, "job", "next", "--task", created.ID, "--project", "personal", "--lease-epoch", fmt.Sprintf("0.%d", grant.Fence), "--json"); code != 0 {
+		t.Fatalf("next: %d %s", code, h.errb)
+	}
+	if after, err := feed.TaskID(created.Path); err != nil || after != stableID {
+		t.Fatalf("stable id changed: %q, %v", after, err)
+	}
+}
 
 func taskFixture(t *testing.T, h *harness) task.Task {
 	t.Helper()
