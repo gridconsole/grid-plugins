@@ -23,7 +23,7 @@ func runLand(args []string, env Env) int {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	result, err := (land.Store{Resolver: resolver(env)}).Run(ctx, env.Cwd, operands[0], *dry)
+	result, err := (land.Store{Resolver: resolver(env), Who: writeOptions(env, "", "", "").Who}).Run(ctx, env.Cwd, operands[0], *dry)
 	if err != nil && result.Execution == nil {
 		return commandError(env, "land", err)
 	}

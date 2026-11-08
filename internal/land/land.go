@@ -3,7 +3,6 @@ package land
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -19,10 +18,9 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/mdfile"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 	"github.com/gridconsole/grid-plugins/internal/safefile"
 	"github.com/gridconsole/grid-plugins/internal/task"
-	"github.com/gridconsole/grid-plugins/internal/taskfile"
-	"github.com/gridconsole/grid-plugins/internal/taskhistory"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -45,22 +43,18 @@ type Result struct {
 	Execution *eval.ProcessResult `json:"execution,omitempty"`
 }
 
-// Approval is a local gate record written by the person/app gate writer, never
-// by land. It is not a Feed post. Agent and guest tiers cannot approve landing.
-type Approval struct {
-	PlanHash string             `json:"plan_hash"`
-	Approved bool               `json:"approved"`
-	Tier     contract.TrustTier `json:"tier"`
-}
 type Store struct {
 	Resolver where.Resolver
 	Timeout  time.Duration // zero uses ten minutes
 	Now      func() time.Time
+	Who      contract.Author // recorded on the history lines; empty is the local person
 }
+
+func (s Store) tasks() task.Store { return task.Store{Resolver: s.Resolver, Now: s.Now} }
 
 func (s Store) prepare(cwd, id string) (Plan, task.Task, string, error) {
 	p := Plan{}
-	t, err := (task.Store{Resolver: s.Resolver}).Show(cwd, id)
+	t, err := s.tasks().Show(cwd, id)
 	if err != nil {
 		return p, t, "", err
 	}
@@ -68,21 +62,12 @@ func (s Store) prepare(cwd, id string) (Plan, task.Task, string, error) {
 		return p, t, "", fmt.Errorf("deploy topic requires a project")
 	}
 	p.Task, p.Project = t.ID, t.Project
-	root, err := os.OpenRoot(t.Path)
+	// The same hash grid approve records, so the approval check compares like with like.
+	text, err := plan.Store{TaskDir: t.Path}.Read()
 	if err != nil {
 		return p, t, "", err
 	}
-	defer root.Close()
-	hash, err := safefile.Read(root, "plan.hash")
-	if err != nil {
-		return p, t, "", fmt.Errorf("plan.hash: %w", err)
-	}
-	// The hash belongs to the plan writer. Remove its line ending only; never
-	// compute, split, decode, or otherwise reinterpret the opaque value.
-	p.Hash = strings.TrimSuffix(strings.TrimSuffix(string(hash), "\n"), "\r")
-	if strings.TrimSpace(p.Hash) == "" || strings.ContainsAny(p.Hash, "\r\n\x00") {
-		return p, t, "", fmt.Errorf("plan.hash must contain one nonempty opaque value")
-	}
+	p.Hash = plan.Hash(text)
 	p.Rule, err = s.rule(t.Project)
 	if err != nil {
 		return p, t, "", err
@@ -164,7 +149,7 @@ func (s Store) rule(project string) (Rule, error) {
 }
 
 // Run is read-only for a dry run. Execution always requires approval for the
-// current opaque plan hash, including when needs-approve is false: this field
+// current plan.md hash, including when needs-approve is false: this field
 // describes the deploy rule and cannot bypass the task's approval boundary.
 func (s Store) Run(ctx context.Context, cwd, id string, dry bool) (Result, error) {
 	p, t, folder, err := s.prepare(cwd, id)
@@ -201,24 +186,14 @@ func (s Store) Run(ctx context.Context, cwd, id string, dry bool) (Result, error
 	if !reflect.DeepEqual(p, current) || folder != currentFolder {
 		return result, fmt.Errorf("land plan changed; review it again")
 	}
-	b, err := safefile.Read(root, filepath.Join("approvals", "land.json"))
+	// Only grid approve writes approval.json, and the guard keeps agents from both;
+	// Approval also re-checks the hash against plan.md under the task lock.
+	approval, err := s.tasks().Approval(cwd, t.ID)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return result, fmt.Errorf("land refused: approval for the current plan hash is required")
-		}
-		return result, err
+		return result, fmt.Errorf("land refused: %w", err)
 	}
-	var approval Approval
-	decoder := json.NewDecoder(strings.NewReader(string(b)))
-	decoder.DisallowUnknownFields()
-	if !json.Valid(b) {
-		return result, fmt.Errorf("land approval is invalid JSON")
-	}
-	if err = decoder.Decode(&approval); err != nil {
-		return result, fmt.Errorf("land approval: %w", err)
-	}
-	if !approval.Approved || approval.Tier != contract.PersonTeam || approval.PlanHash != p.Hash {
-		return result, fmt.Errorf("land refused: a team approval for the current plan hash is required")
+	if approval.PlanHash != p.Hash {
+		return result, fmt.Errorf("land refused: the approval is for another plan; review it again")
 	}
 	timeout := s.Timeout
 	if timeout == 0 {
@@ -227,12 +202,8 @@ func (s Store) Run(ctx context.Context, cwd, id string, dry bool) (Result, error
 	if timeout < 0 {
 		return result, fmt.Errorf("land timeout must be positive")
 	}
-	started := time.Now()
-	if s.Now != nil {
-		started = s.Now()
-	}
 	// Record the attempt before invoking a command that may change external state.
-	if err = taskhistory.Add(t.Path, taskfile.HistoryLine(started.UTC().Format(time.RFC3339Nano), "land started", fmt.Sprintf("plan %q; target %q; branch %q", p.Hash, p.Rule.Target, p.Rule.Branch), "grid")); err != nil {
+	if err = s.note(cwd, t.ID, fmt.Sprintf("land started: plan %q; target %q; branch %q", p.Hash, p.Rule.Target, p.Rule.Branch)); err != nil {
 		return result, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -263,9 +234,15 @@ func (s Store) Run(ctx context.Context, cwd, id string, dry bool) (Result, error
 		result.Status = "timed-out"
 	}
 	detail := fmt.Sprintf("plan %q; target %q; branch %q; exit %d", p.Hash, p.Rule.Target, p.Rule.Branch, execution.ExitCode)
-	historyErr := taskhistory.Add(t.Path, taskfile.HistoryLine(started.UTC().Format(time.RFC3339Nano), "land "+result.Status, detail, "grid"))
+	historyErr := s.note(cwd, t.ID, "land "+result.Status+": "+detail)
 	if execution.Status != "passed" {
 		return result, errors.Join(fmt.Errorf("land %s: %s", result.Status, execution.Error), historyErr)
 	}
 	return result, historyErr
+}
+
+// note appends through main's task writer, the one history.md writer and lock.
+func (s Store) note(cwd, id, text string) error {
+	_, err := s.tasks().Note(task.WriteOptions{Cwd: cwd, ID: id, Note: text, Who: s.Who})
+	return err
 }

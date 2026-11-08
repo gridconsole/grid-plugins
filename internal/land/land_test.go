@@ -3,15 +3,17 @@ package land
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -26,9 +28,9 @@ func fixture(t *testing.T) (Store, string, string) {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(gridhome.TasksDir(home, "sample"), "T-01-example")
-	write(t, filepath.Join(dir, "task.md"), "---\nid: T-01\ntitle: Example\nproject: sample\nstate: open\ncreated: 2026-11-08T00:00:00Z\n---\n")
+	write(t, filepath.Join(dir, "task.md"), "---\nid: T-01\ntitle: Example\nproject: sample\nstate: waiting\ncreated: 2026-11-08T00:00:00Z\n---\n")
 	write(t, filepath.Join(dir, "intent.md"), "Example\n")
-	write(t, filepath.Join(dir, "plan.hash"), "opaque: revision/one + two\n")
+	write(t, filepath.Join(dir, "plan.md"), "# Plan\n\n- [ ] 1 Land the change\n  jobs: []\n")
 	write(t, filepath.Join(home, "projects", "sample", "knowledge", "deploy", "lands.md"), "---\nlands:\n  target: local\n  branch: main\n  command: printf landed > outcome\n  needs-approve: true\n---\n")
 	return Store{Resolver: where.Resolver{GridHome: home, Machine: "machine-example"}}, dir, repo
 }
@@ -41,43 +43,54 @@ func write(t *testing.T, path, content string) {
 		t.Fatal(err)
 	}
 }
-func approve(t *testing.T, dir string, a Approval) {
+
+// approve records the plan approval the way a person does, through grid approve's writer.
+func approve(t *testing.T, s Store) {
 	t.Helper()
-	b, err := json.Marshal(a)
-	if err != nil {
+	if _, err := s.tasks().Approve(task.WriteOptions{ID: "T-01"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(dir, "approvals", "land.json"), string(b))
 }
+
+// landJSON is the record the first L27 branch trusted; any agent could write it.
+const landJSON = `{"plan_hash":"%s","approved":true,"tier":"person-team"}`
 
 func TestApprovalBoundary(t *testing.T) {
 	for _, tc := range []struct {
-		name, hash      string
-		tier            contract.TrustTier
-		approved, allow bool
+		name  string
+		setup func(t *testing.T, s Store, dir string)
+		allow bool
 	}{
-		{"missing", "", contract.PersonTeam, true, false},
-		{"stale", "old", contract.PersonTeam, true, false},
-		{"opaque-match", "opaque: revision/one + two", contract.PersonTeam, true, true},
-		{"agent", "opaque: revision/one + two", contract.Agent, true, false},
-		{"guest", "opaque: revision/one + two", contract.PersonGuest, true, false},
-		{"denied", "opaque: revision/one + two", contract.PersonTeam, false, false},
+		{"missing", func(*testing.T, Store, string) {}, false},
+		{"approved", func(t *testing.T, s Store, _ string) { approve(t, s) }, true},
+		{"stale", func(t *testing.T, s Store, dir string) {
+			approve(t, s)
+			write(t, filepath.Join(dir, "plan.md"), "# Plan\n\n- [ ] 1 Land another change\n  jobs: []\n")
+		}, false},
+		// Regression: an agent-written approvals/land.json with the current hash never lands.
+		{"forged-land-json", func(t *testing.T, s Store, dir string) {
+			text, err := plan.Store{TaskDir: dir}.Read()
+			if err != nil {
+				t.Fatal(err)
+			}
+			write(t, filepath.Join(dir, "approvals", "land.json"), fmt.Sprintf(landJSON, plan.Hash(text)))
+		}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, dir, repo := fixture(t)
-			if tc.hash != "" {
-				approve(t, dir, Approval{tc.hash, tc.approved, tc.tier})
-			}
+			tc.setup(t, s, dir)
+			before, _ := os.ReadFile(filepath.Join(dir, "history.md"))
 			r, err := s.Run(context.Background(), repo, "T-01", false)
 			if (err == nil) != tc.allow {
 				t.Fatalf("result %+v, error %v", r, err)
 			}
 			b, readErr := os.ReadFile(filepath.Join(repo, "outcome"))
+			history, _ := os.ReadFile(filepath.Join(dir, "history.md"))
 			if !tc.allow {
 				if readErr == nil {
 					t.Fatal("command ran without approval")
 				}
-				if _, err := os.Stat(filepath.Join(dir, "history.md")); !os.IsNotExist(err) {
+				if string(history) != string(before) {
 					t.Fatal("refusal wrote history")
 				}
 				return
@@ -85,9 +98,8 @@ func TestApprovalBoundary(t *testing.T) {
 			if readErr != nil || string(b) != "landed" || r.Status != "landed" {
 				t.Fatalf("result %+v, output %s, error %v", r, b, readErr)
 			}
-			history, err := os.ReadFile(filepath.Join(dir, "history.md"))
-			if err != nil || !strings.Contains(string(history), "land landed") {
-				t.Fatalf("history %s, %v", history, err)
+			if !strings.Contains(string(history), "land started") || !strings.Contains(string(history), "land landed") {
+				t.Fatalf("history %s", history)
 			}
 		})
 	}
@@ -157,7 +169,7 @@ func TestFailureTimeoutAndEnvironment(t *testing.T) {
 			// Quoting through JSON is also valid YAML string syntax.
 			command, _ := json.Marshal(tc.command)
 			write(t, filepath.Join(s.Resolver.GridHome, "projects", "sample", "knowledge", "deploy", "lands.md"), "---\nlands:\n  target: local\n  branch: main\n  command: "+string(command)+"\n  needs-approve: true\n---\n")
-			approve(t, dir, Approval{"opaque: revision/one + two", true, contract.PersonTeam})
+			approve(t, s)
 			start := time.Now()
 			r, err := s.Run(context.Background(), repo, "T-01", false)
 			if r.Status != tc.status || (err == nil) != (tc.status == "landed") {
@@ -184,7 +196,7 @@ func TestFailureTimeoutAndEnvironment(t *testing.T) {
 }
 
 func TestInvalidDeployAndHash(t *testing.T) {
-	for _, kind := range []string{"missing", "unknown-key", "missing-field", "wrong-type", "two-rules", "empty-hash", "multiline-hash", "no-bypass"} {
+	for _, kind := range []string{"missing", "unknown-key", "missing-field", "wrong-type", "two-rules", "no-plan", "no-bypass"} {
 		t.Run(kind, func(t *testing.T) {
 			s, dir, repo := fixture(t)
 			topic := filepath.Join(s.Resolver.GridHome, "projects", "sample", "knowledge", "deploy", "lands.md")
@@ -202,10 +214,10 @@ func TestInvalidDeployAndHash(t *testing.T) {
 				write(t, topic, strings.Replace(string(b), "needs-approve: true", "needs-approve: yes", 1))
 			case "two-rules":
 				write(t, filepath.Join(filepath.Dir(topic), "other.md"), string(b))
-			case "empty-hash":
-				write(t, filepath.Join(dir, "plan.hash"), "\n")
-			case "multiline-hash":
-				write(t, filepath.Join(dir, "plan.hash"), "first\nsecond\n")
+			case "no-plan":
+				if err := os.Remove(filepath.Join(dir, "plan.md")); err != nil {
+					t.Fatal(err)
+				}
 			case "no-bypass":
 				write(t, topic, strings.Replace(string(b), "needs-approve: true", "needs-approve: false", 1))
 			}
@@ -219,13 +231,12 @@ func TestInvalidDeployAndHash(t *testing.T) {
 
 func TestLandRefusesSymlinkedApproval(t *testing.T) {
 	s, dir, repo := fixture(t)
-	target := filepath.Join(s.Resolver.GridHome, "approval.json")
-	write(t, target, `{"plan_hash":"opaque: revision/one + two","approved":true,"tier":"person-team"}`)
-	approvalDir := filepath.Join(dir, "approvals")
-	if err := os.Mkdir(approvalDir, 0700); err != nil {
+	approve(t, s)
+	elsewhere := filepath.Join(s.Resolver.GridHome, "approval.json")
+	if err := os.Rename(filepath.Join(dir, "approval.json"), elsewhere); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(target, filepath.Join(approvalDir, "land.json")); err != nil {
+	if err := os.Symlink(elsewhere, filepath.Join(dir, "approval.json")); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 	if _, err := s.Run(context.Background(), repo, "T-01", false); err == nil {

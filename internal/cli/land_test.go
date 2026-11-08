@@ -19,7 +19,7 @@ func TestLandDryRunJSON(t *testing.T) {
 	for path, text := range map[string]string{
 		filepath.Join(dir, "task.md"):   "---\nid: T-01\ntitle: Example\nproject: sample\nstate: open\ncreated: 2026-11-08T00:00:00Z\n---\n",
 		filepath.Join(dir, "intent.md"): "Example\n",
-		filepath.Join(dir, "plan.hash"): "opaque: revision/one + two\n",
+		filepath.Join(dir, "plan.md"):   "# Plan\n\n- [ ] 1 Land the change\n  jobs: []\n",
 		filepath.Join(home, "projects", "sample", "knowledge", "deploy", "lands.md"): "---\nlands:\n  target: local\n  branch: main\n  command: printf landed > outcome\n  needs-approve: true\n---\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
