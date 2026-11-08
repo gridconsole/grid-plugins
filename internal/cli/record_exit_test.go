@@ -90,57 +90,26 @@ func oversizedExitAfter() string {
 	return strings.Join(ids, ",")
 }
 
+// Job-side records go through grid job post, whose exit codes TestRecordExitJob
+// pins; grid feed post refuses them and writes nothing.
 func TestRecordExitWorkerArgv(t *testing.T) {
-	for _, tc := range []struct {
-		name, kind, body, after, epoch string
-		ack                            bool
-		code                           int
-		stderr                         string
-	}{
-		{name: "ack", kind: "ack", body: "{}", after: "assign", code: 0},
-		{name: "wrong after", kind: "ack", body: "{}", after: exitRecordID, code: 3, stderr: "ack requires its counted assignment in after"},
-		{name: "missing after", kind: "ack", body: "{}", code: 3, stderr: "$.after: array length"},
-		{name: "stale", kind: "ack", body: "{}", after: "assign", epoch: "0.999", code: 3, stderr: "stale lease"},
-		{name: "first record", kind: "worker-exit", body: "{}", code: 3, stderr: "first record of a tenure must be ack"},
-		{name: "invalid worker exit", kind: "worker-exit", body: `{"reason":"exploded"}`, ack: true, code: 3, stderr: exitBodyError},
-		{name: "idempotent worker exit", kind: "worker-exit", body: `{"reason":"done"}`, ack: true, code: 0},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			h, path, store, epoch, assign := assignedExitHarness(t, tc.ack)
-			if tc.epoch != "" {
-				epoch = tc.epoch
-			}
-			args := []string{"feed", "post", "--type", tc.kind, "--id", exitRecordID, "--job", "J-1", "--attempt", "1", "--lease", "J-1", "--lease-epoch", epoch, "--body", tc.body, "--json"}
-			after := tc.after
-			if after == "assign" {
-				after = assign
-			}
-			if after != "" {
-				args = append(args, "--after", after)
-			}
+	for _, kind := range []string{"ack", "worker-exit"} {
+		t.Run(kind, func(t *testing.T) {
+			h, path, store, epoch, assign := assignedExitHarness(t, kind == "worker-exit")
 			before, err := store.Read(feed.Filter{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			for n := 0; n < 2; n++ {
-				code := h.run(path, args...)
-				if tc.stderr != "" && h.errb.String() != "grid feed: "+tc.stderr+"\n" {
-					t.Errorf("stderr = %q, want %q", h.errb.String(), "grid feed: "+tc.stderr+"\n")
-				}
-				if code != tc.code {
-					t.Errorf("exit %d, want %d: %s", code, tc.code, h.errb)
-				}
+			args := []string{"feed", "post", "--type", kind, "--id", exitRecordID, "--job", "J-1", "--attempt", "1", "--lease", "J-1", "--lease-epoch", epoch, "--body", `{"reason":"done"}`, "--after", assign, "--json"}
+			if code := h.run(path, args...); code != 1 || !strings.Contains(h.errb.String(), "grid job post") {
+				t.Errorf("exit %d, stderr %q; want 1 naming grid job post", code, h.errb)
 			}
 			records, err := store.Read(feed.Filter{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := len(before.Records)
-			if tc.code == 0 {
-				want++
-			}
-			if len(records.Records) != want {
-				t.Errorf("records = %d, want %d", len(records.Records), want)
+			if len(records.Records) != len(before.Records) {
+				t.Errorf("records = %d, want %d", len(records.Records), len(before.Records))
 			}
 		})
 	}
