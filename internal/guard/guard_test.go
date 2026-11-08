@@ -21,7 +21,12 @@ type fixture struct {
 
 func setup(t *testing.T) *fixture {
 	t.Helper()
-	f := &fixture{t: t, root: t.TempDir()}
+	// The guards report physical paths, and macOS temp folders sit behind a symlink.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fixture{t: t, root: root}
 	f.home = filepath.Join(f.root, "home")
 	f.grid = filepath.Join(f.home, ".grid")
 	f.projects = filepath.Join(f.grid, "projects")
