@@ -64,6 +64,15 @@ type View struct {
 type Store struct {
 	TaskDir string
 	Now     func() time.Time
+	// Link replaces os.Link in tests of the no-hard-link fallback.
+	Link func(oldname, newname string) error
+}
+
+func (s Store) link() func(oldname, newname string) error {
+	if s.Link != nil {
+		return s.Link
+	}
+	return os.Link
 }
 
 func (s Store) now() time.Time {
@@ -188,7 +197,7 @@ func (s Store) Enqueue(verb, target string, args map[string]string, who, key str
 			return err
 		}
 		result = Record{id, verb, target, copied, who, now, key}
-		return publish(filepath.Join(dir, id+".json"), result)
+		return publish(filepath.Join(dir, id+".json"), result, s.link())
 	})
 	return result, err
 }
@@ -343,7 +352,7 @@ func (s Store) Done(id, token, failure string) (Completion, error) {
 			return ErrClaim
 		}
 		result = Completion{token, now, failure}
-		return publish(filepath.Join(dir, id+".done.json"), result)
+		return publish(filepath.Join(dir, id+".done.json"), result, s.link())
 	})
 	if err == nil && result.Token == "" {
 		err = os.ErrNotExist

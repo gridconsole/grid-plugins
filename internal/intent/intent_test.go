@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -260,6 +261,84 @@ func TestPartialClaimRecovery(t *testing.T) {
 	s.Now = func() time.Time { return info.ModTime().Add(ClaimTimeout + time.Second) }
 	if _, err := s.Claim(r.ID, "worker"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPublishWithoutHardLinks(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		errno    syscall.Errno
+		fallback bool
+	}{
+		{"ENOTSUP", syscall.ENOTSUP, true},
+		{"EOPNOTSUPP", syscall.EOPNOTSUPP, true},
+		{"ENOSYS", syscall.ENOSYS, true},
+		{"EPERM on FAT", syscall.EPERM, true},
+		{"EACCES", syscall.EACCES, false},
+		{"EEXIST", syscall.EEXIST, false},
+		{"EIO", syscall.EIO, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testStore(t)
+			links := 0
+			s.Link = func(oldname, newname string) error {
+				links++
+				return &os.LinkError{Op: "link", Old: oldname, New: newname, Err: tc.errno}
+			}
+			r, err := s.Enqueue("start", "task", nil, "member", "")
+			dir := filepath.Join(s.TaskDir, "intents")
+			if links != 1 {
+				t.Fatalf("link calls: %d", links)
+			}
+			if !tc.fallback {
+				if !errors.Is(err, tc.errno) {
+					t.Fatalf("error: %v", err)
+				}
+				if files, _ := filepath.Glob(filepath.Join(dir, "*.json")); len(files) != 0 {
+					t.Fatalf("failed publish left %v", files)
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				rows, err := s.List(true)
+				if err != nil || len(rows) != 1 || rows[0].ID != r.ID {
+					t.Fatalf("list: %v %v", rows, err)
+				}
+				claim, err := s.Claim(r.ID, "worker")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := s.Done(r.ID, claim.Token, ""); err != nil {
+					t.Fatal(err)
+				}
+				rows, err = s.List(false)
+				if err != nil || len(rows) != 1 || rows[0].State != "done" {
+					t.Fatalf("done through fallback: %v %v", rows, err)
+				}
+			}
+			if temps, _ := filepath.Glob(filepath.Join(dir, ".intent-*")); len(temps) != 0 {
+				t.Fatalf("temporary files left: %v", temps)
+			}
+		})
+	}
+}
+
+func TestFallbackNeverReplaces(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "01ARZ3NDEKTSV4RRFFQ69G5FAV.json")
+	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	unsupported := func(string, string) error { return syscall.ENOTSUP }
+	if err := publish(path, Record{ID: "other"}, unsupported); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("publish over existing file: %v", err)
+	}
+	if b, err := os.ReadFile(path); err != nil || string(b) != "original" {
+		t.Fatalf("existing file changed: %q %v", b, err)
+	}
+	if temps, _ := filepath.Glob(filepath.Join(dir, ".intent-*")); len(temps) != 0 {
+		t.Fatalf("temporary files left: %v", temps)
 	}
 }
 

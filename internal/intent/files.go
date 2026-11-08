@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/fslock"
@@ -121,25 +122,71 @@ func exclusiveJSON(path string, value any) error {
 	return syncDir(filepath.Dir(path))
 }
 
+// writeTemp writes value to a synced temporary file beside the final path.
+func writeTemp(dir string, value any) (string, error) {
+	f, err := os.CreateTemp(dir, ".intent-*")
+	if err != nil {
+		return "", err
+	}
+	fail := func(err error) (string, error) {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return "", err
+	}
+	if err := json.NewEncoder(f).Encode(value); err != nil {
+		return fail(err)
+	}
+	if err := f.Sync(); err != nil {
+		return fail(err)
+	}
+	if err := f.Close(); err != nil {
+		return fail(err)
+	}
+	return f.Name(), nil
+}
+
 // Publish a fully synced temporary file with a no-replace hard link. The lock
 // serializes normal writers; the link also prevents accidental ID overwrites.
-func publish(path string, value any) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".intent-*")
+func publish(path string, value any, link func(oldname, newname string) error) error {
+	tmp, err := writeTemp(filepath.Dir(path), value)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
-	defer f.Close()
-	if err := json.NewEncoder(f).Encode(value); err != nil {
+	defer os.Remove(tmp)
+	if err := link(tmp, path); err != nil {
+		if !linkUnsupported(err) {
+			return err
+		}
+		return createExclusive(path, value)
+	}
+	return syncDir(filepath.Dir(path))
+}
+
+// linkUnsupported reports a filesystem without hard links. FAT and exFAT answer
+// EPERM; others answer ENOTSUP, EOPNOTSUPP or ENOSYS, which are ErrUnsupported.
+func linkUnsupported(err error) bool {
+	return errors.Is(err, errors.ErrUnsupported) || errors.Is(err, syscall.EPERM)
+}
+
+// createExclusive is the no-replace fallback for filesystems without hard links:
+// O_EXCL create, write and sync, under the same lock. A short write could leave
+// a torn file, so a failed attempt removes what it created.
+func createExclusive(path string, value any) error {
+	err := exclusiveJSON(path, value)
+	if err != nil && !errors.Is(err, os.ErrExist) {
+		_ = os.Remove(path)
+	}
+	return err
+}
+
+// replaceJSON atomically swaps path for a new synced file. Callers hold the lock.
+func replaceJSON(path string, value any) error {
+	tmp, err := writeTemp(filepath.Dir(path), value)
+	if err != nil {
 		return err
 	}
-	if err := f.Sync(); err != nil {
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	if err := os.Link(f.Name(), path); err != nil {
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
 	return syncDir(filepath.Dir(path))
