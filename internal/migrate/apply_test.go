@@ -4,8 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
 func TestApplyTwice(t *testing.T) {
@@ -24,10 +28,7 @@ func TestApplyTwice(t *testing.T) {
 				home = from
 				from = filepath.Join(from, "alpha")
 			}
-			before, err := snapshot(from)
-			if err != nil {
-				t.Fatal(err)
-			}
+			before := view(t, from)
 			p := scan(t, from, home)
 			res, err := p.Apply()
 			if err != nil {
@@ -36,61 +37,63 @@ func TestApplyTwice(t *testing.T) {
 			if !res.Changed || res.Backup == "" {
 				t.Fatal("missing apply result")
 			}
-			backup, err := snapshot(filepath.Join(res.Backup, "source"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !equal(before, backup) {
+			if !sameView(before, view(t, filepath.Join(res.Backup, "source"))) {
 				t.Fatal("backup differs from original")
 			}
-			got, err := snapshot(home)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if string(got["VERSION"].Data) != "1\n" {
+			got := view(t, home)
+			if read(t, home, "VERSION") != "1\n" {
 				t.Fatal("missing format marker")
 			}
-			if !ulidRE.MatchString(strings.TrimSpace(string(got["machine"].Data))) {
-				t.Fatal("missing machine id")
+			machine := gridhome.Machine(home)
+			if !ulidRE.MatchString(machine) {
+				t.Fatalf("missing machine id: %q", machine)
 			}
 			for _, a := range p.Actions {
 				if filepath.Base(a.From) == "history.md" || strings.HasSuffix(a.From, ".jsonl") || strings.HasSuffix(a.From, ".usage") || strings.HasSuffix(a.From, ".recalled") {
-					if !same(before[a.From], got[a.To]) {
+					if before[a.From] != got[a.To] {
 						t.Errorf("changed archived content: %s", a.From)
 					}
 				}
-				if a.Kind == "identify" {
-					r, err := parseRecord(got[a.To].Data)
+				if a.Kind != "identify" {
+					continue
+				}
+				if strings.HasSuffix(a.To, "/project.md") {
+					rec, err := project.Parse(filepath.Base(filepath.Dir(a.To)), read(t, home, a.To))
 					if err != nil {
-						t.Fatal(err)
+						t.Fatalf("%s: %v", a.To, err)
 					}
-					if !ulidRE.MatchString(r.value("id")) {
-						t.Errorf("invalid id: %s", a.To)
+					if !ulidRE.MatchString(rec.ID) || len(rec.FoldersOn(machine)) != 1 {
+						t.Errorf("%s: id %q, folders on this machine %v", a.To, rec.ID, rec.FoldersOn(machine))
 					}
-					if strings.HasSuffix(a.To, "/task.md") && !taskRE.MatchString(r.value("display")) {
-						t.Errorf("lost display number: %s", a.To)
-					}
+					continue
+				}
+				r, err := parseRecord([]byte(read(t, home, a.To)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !ulidRE.MatchString(r.value("id")) || !taskRE.MatchString(r.value("display")) {
+					t.Errorf("%s: id %q, display %q", a.To, r.value("id"), r.value("display"))
 				}
 			}
 			task := filepath.Join(home, "projects/widget/tasks/T-07-first")
-			if string(got["sessions/session-a"].Data) != task+"\n" {
+			if read(t, home, "sessions/session-a") != task+"\n" {
 				t.Fatal("pointer not remapped")
 			}
 			var session map[string]any
-			if err := json.Unmarshal(got["projects/widget/tasks/T-07-first/sessions/session-a.json"].Data, &session); err != nil {
+			if err := json.Unmarshal([]byte(read(t, home, "projects/widget/tasks/T-07-first/sessions/session-a.json")), &session); err != nil {
 				t.Fatal(err)
 			}
 			if session["cwd"] != filepath.Join(home, "projects/widget/worktrees/T-07/worker-a") {
 				t.Fatal("session cwd not remapped")
 			}
-			var log journal
-			if err := json.Unmarshal(got["migration.log"].Data, &log); err != nil {
+			var log manifest
+			if err := json.Unmarshal([]byte(read(t, home, "migration.log")), &log); err != nil {
 				t.Fatal(err)
 			}
 			if log.Backup != res.Backup || len(log.SourceFiles) != len(before) {
 				t.Fatal("incomplete migration log")
 			}
-			backupAll := gotTree(t, res.Backup)
+			backupAll := view(t, res.Backup)
 			again, err := scan(t, from, home).Apply()
 			if err != nil || again.Changed || again.Backup != "" {
 				t.Fatalf("second apply: %+v %v", again, err)
@@ -99,10 +102,10 @@ func TestApplyTwice(t *testing.T) {
 			if again, err = p.Apply(); err != nil || again.Changed {
 				t.Fatalf("repeat plan apply: %+v %v", again, err)
 			}
-			if !equal(got, gotTree(t, home)) {
+			if !sameView(got, view(t, home)) {
 				t.Fatal("second apply changed the home")
 			}
-			if !equal(backupAll, gotTree(t, res.Backup)) {
+			if !sameView(backupAll, view(t, res.Backup)) {
 				t.Fatal("second apply changed the backup")
 			}
 			entries, err := os.ReadDir(home + "-backup")
@@ -110,25 +113,23 @@ func TestApplyTwice(t *testing.T) {
 				t.Fatal("second apply created another backup")
 			}
 			if layout == "separate" || layout == "single-home" {
-				if !equal(before, gotTree(t, from)) {
+				if !sameView(before, view(t, from)) {
 					t.Fatal("external source changed")
 				}
 			}
 			if layout == "in-place" {
-				if _, err := os.Stat(filepath.Join(home, "alpha")); !os.IsNotExist(err) {
-					t.Fatal("old named home remains")
+				absent(t, filepath.Join(home, "alpha"))
+			}
+			for _, name := range []string{".migrate-lock", ".migrate-journal"} {
+				absent(t, home+name)
+			}
+			for _, s := range siblings(t, home) {
+				if strings.Contains(s, ".migrate-") {
+					t.Errorf("left behind: %s", s)
 				}
 			}
 		})
 	}
-}
-func gotTree(t *testing.T, root string) tree {
-	t.Helper()
-	v, err := snapshot(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return v
 }
 
 func TestApplyRefusalsLeaveDataUntouched(t *testing.T) {
@@ -155,40 +156,49 @@ func TestApplyRefusalsLeaveDataUntouched(t *testing.T) {
 					t.Skip(err)
 				}
 			case "locked":
-				if err := os.Mkdir(home+".migrate-lock", 0700); err != nil {
+				// A lock held by a running process, here this one.
+				if _, err := acquireLock(lockPath(home)); err != nil {
 					t.Fatal(err)
 				}
 			}
-			beforeSrc, beforeHome := gotTree(t, from), gotTree(t, home)
+			beforeSrc, beforeHome := view(t, from), view(t, home)
 			if _, err := p.Apply(); err == nil {
 				t.Fatal("apply should refuse")
 			}
-			if !equal(beforeSrc, gotTree(t, from)) || !equal(beforeHome, gotTree(t, home)) {
+			if !sameView(beforeSrc, view(t, from)) || !sameView(beforeHome, view(t, home)) {
 				t.Fatal("refusal changed data")
 			}
-			if _, err := os.Stat(filepath.Join(home, "VERSION")); !os.IsNotExist(err) {
-				t.Fatal("failed apply published VERSION")
-			}
+			absent(t, filepath.Join(home, "VERSION"))
+			absent(t, journalPath(home))
 		})
 	}
 }
+
 func TestExistingMachineAndDestinationAreBackedUp(t *testing.T) {
 	from, home := fixture(t)
 	put(t, filepath.Join(home, "machine"), "existing-machine\n")
 	put(t, filepath.Join(home, "settings.json"), "{}\n")
-	before := gotTree(t, home)
+	before := view(t, home)
 	res, err := scan(t, from, home).Apply()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !equal(before, gotTree(t, filepath.Join(res.Backup, "home"))) {
+	if !sameView(before, view(t, filepath.Join(res.Backup, "home"))) {
 		t.Fatal("existing home backup differs")
 	}
-	after := gotTree(t, home)
-	if !same(after["machine"], before["machine"]) || !same(after["settings.json"], before["settings.json"]) {
-		t.Fatal("existing home data lost")
+	after := view(t, home)
+	for _, f := range []string{"machine", "settings.json"} {
+		if after[f] != before[f] {
+			t.Fatalf("existing home data lost: %s", f)
+		}
+	}
+	// The records carry the machine that was already there.
+	rec, err := project.Parse("widget", read(t, home, "projects/widget/project.md"))
+	if err != nil || len(rec.FoldersOn("existing-machine")) != 1 {
+		t.Fatalf("record %+v: %v", rec, err)
 	}
 }
+
 func TestCurrentVersionDoesNotInspectOtherFiles(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, ".grid")
@@ -206,7 +216,7 @@ func TestCurrentVersionDoesNotInspectOtherFiles(t *testing.T) {
 }
 
 func TestFlatInPlaceKeepsPointersAndMachine(t *testing.T) {
-	root := t.TempDir()
+	root := gridhome.Real(t.TempDir())
 	put(t, filepath.Join(root, "projects/example/project.md"), "---\nfolder: /example/work/project\n---\n")
 	task := filepath.Join(root, "projects/example/tasks/T-01-example")
 	put(t, filepath.Join(task, "task.md"), "---\nid: T-01\n---\n")
@@ -215,8 +225,97 @@ func TestFlatInPlaceKeepsPointersAndMachine(t *testing.T) {
 	if _, err := scan(t, root, root).Apply(); err != nil {
 		t.Fatal(err)
 	}
-	got := gotTree(t, root)
-	if string(got["sessions/session-a"].Data) != task+"\n" || string(got["machine"].Data) != "existing-machine\n" {
+	if read(t, root, "sessions/session-a") != task+"\n" || read(t, root, "machine") != "existing-machine\n" {
 		t.Fatal("in-place data changed")
 	}
+}
+
+// A new machine id is made once, at apply, and every record carries it.
+func TestNewMachineIDIsInEveryRecord(t *testing.T) {
+	from, home := fixture(t)
+	p := scan(t, from, home)
+	if !strings.Contains(string(p.result["projects/widget/project.md"].Data), pendingMachine) {
+		t.Fatal("the plan should show a placeholder for the machine id")
+	}
+	if _, err := p.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	machine := gridhome.Machine(home)
+	if !ulidRE.MatchString(machine) {
+		t.Fatalf("machine id %q", machine)
+	}
+	recs, err := project.Load(home)
+	if err != nil || len(recs) != 3 {
+		t.Fatalf("project.Load: %d records, %v", len(recs), err)
+	}
+	for _, r := range recs {
+		if len(r.FoldersOn(machine)) != 1 {
+			t.Errorf("%s has no folder on this machine: %+v", r.Name, r.Folders)
+		}
+	}
+	if strings.Contains(read(t, home, "projects/widget/project.md"), pendingMachine) {
+		t.Fatal("placeholder was written")
+	}
+}
+
+// Files are streamed, never held: a large file costs buffers, not its size.
+func TestLargeFilesAreStreamed(t *testing.T) {
+	from, home := fixture(t)
+	const size = 96 << 20
+	big := filepath.Join(from, "alpha/projects/widget/knowledge/big.bin")
+	f, err := os.Create(big)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(size); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	var m0, m1 runtime.MemStats
+	runtime.ReadMemStats(&m0)
+	res, err := scan(t, from, home).Apply()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime.ReadMemStats(&m1)
+	if used := m1.TotalAlloc - m0.TotalAlloc; used > 24<<20 {
+		t.Fatalf("migrating a %d MiB file allocated %d MiB", size>>20, used>>20)
+	}
+	for _, p := range []string{filepath.Join(home, "projects/widget/knowledge/big.bin"), filepath.Join(res.Backup, "source/alpha/projects/widget/knowledge/big.bin")} {
+		if fi, err := os.Stat(p); err != nil || fi.Size() != size {
+			t.Fatalf("%s: %v", p, err)
+		}
+	}
+}
+
+// A source that changes while it is copied is caught, and the home stays as it was.
+func TestChangedDuringCopyIsRefused(t *testing.T) {
+	from, home := fixture(t)
+	p := scan(t, from, home)
+	afterStep = func(step string) {
+		if step == "journal-preparing" {
+			put(t, filepath.Join(from, "alpha/projects/widget/knowledge/research/sample.md"), "changed after the plan\n")
+		}
+	}
+	t.Cleanup(func() { afterStep = nil })
+	res, err := p.Apply()
+	if err == nil || !strings.Contains(err.Error(), "changed") {
+		t.Fatalf("apply: %+v %v", res, err)
+	}
+	absent(t, home)
+	absent(t, journalPath(home))
+	absent(t, lockPath(home))
+	if siblingsHave(t, home, ".migrate-stage-") {
+		t.Fatal("staged copy left behind")
+	}
+}
+
+func siblingsHave(t *testing.T, home, part string) bool {
+	t.Helper()
+	for _, s := range siblings(t, home) {
+		if strings.Contains(s, part) {
+			return true
+		}
+	}
+	return false
 }

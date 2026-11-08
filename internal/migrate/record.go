@@ -1,11 +1,13 @@
 package migrate
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io/fs"
+	"io"
 	"math/big"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -36,6 +38,7 @@ func legacyID(namespace string) string {
 	return string(out)
 }
 
+// record is the flat key: value front matter of an old project.md or task.md.
 type record struct {
 	lines []string
 	end   int
@@ -106,88 +109,219 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// identity uses local git facts only; it never contacts a remote or writes a repo.
-func identity(folder string) (repos, keys []string) {
-	seen := map[string]bool{}
-	add := func(repo string) {
-		repos = append(repos, repo)
-		for _, remote := range gitx.Remotes(repo) {
-			if k := project.NormalizeRemote(remote); k != "" {
-				seen["remote:"+k] = true
-			}
+// projectBody returns the bytes after the closing "---" line of an old project.md,
+// exactly as they were (line endings included).
+func projectBody(data []byte) []byte {
+	pos, first := 0, true
+	for pos < len(data) {
+		nl := bytes.IndexByte(data[pos:], '\n')
+		end := len(data)
+		if nl >= 0 {
+			end = pos + nl + 1
 		}
-		if root := gitx.RootCommit(repo); root != "" {
-			seen["root:"+root] = true
+		line := strings.TrimRight(string(data[pos:end]), "\r\n")
+		if !first && line == "---" {
+			return data[end:]
 		}
+		first = false
+		pos = end
 	}
-	root, found := gitx.FindRoot(folder, "")
-	if found {
-		_, err := gitx.CommonDir(root)
-		found = err == nil
-	}
-	if found {
-		add(root)
-	} else {
-		// Match the resolver's two-level multi-repo discovery without following links.
-		_ = filepath.WalkDir(folder, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || !d.IsDir() {
-				return nil
-			}
-			rel, _ := filepath.Rel(folder, path)
-			if rel == "." {
-				return nil
-			}
-			depth := len(strings.Split(rel, string(filepath.Separator)))
-			if gitx.IsRepoRoot(path) {
-				add(path)
-				return filepath.SkipDir
-			}
-			if depth >= 2 {
-				return filepath.SkipDir
-			}
-			return nil
-		})
-	}
-	if len(seen) == 0 {
-		seen["folder:"+gridhome.Real(folder)] = true
-	}
-	return repos, sortedKeys(seen)
+	return nil
 }
 
-func rewriteSession(data []byte, paths map[string]string) ([]byte, error) {
-	var v map[string]any
-	if err := json.Unmarshal(data, &v); err != nil {
+// oldProjectKeys are the front matter keys a rewritten project.md replaces.
+var oldProjectKeys = map[string]bool{"id": true, "folder": true, "repo": true, "key": true, "folders": true, "repos": true, "keys": true}
+
+// keptLines returns the top-level front matter lines of an old project.md that the
+// new record does not replace, each with the indented lines that continue it.
+func (r record) keptLines() []string {
+	var out []string
+	keep := false
+	for _, line := range r.lines[1:r.end] {
+		if line == "" || line[0] != ' ' && line[0] != '\t' && line[0] != '-' {
+			k, _, _ := strings.Cut(line, ":")
+			keep = line != "" && !strings.HasPrefix(line, "#") && !oldProjectKeys[k]
+		}
+		if keep {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// plannedRecord is a project.md the migration writes: the record in the main
+// format plus the old body. It is rendered again at apply, once the machine id is
+// known, so the id in the plan can still be a placeholder.
+type plannedRecord struct {
+	dst   string
+	rec   project.Record
+	extra []string
+	body  []byte
+}
+
+func (pr plannedRecord) render(machine string) ([]byte, error) {
+	rec := pr.rec
+	rec.Folders = append([]project.Folder(nil), rec.Folders...)
+	for i := range rec.Folders {
+		rec.Folders[i].Machine = machine
+	}
+	rec.Keys = append([]project.Key(nil), rec.Keys...)
+	for i := range rec.Keys {
+		if rec.Keys[i].Machine != "" {
+			rec.Keys[i].Machine = machine
+		}
+	}
+	front, err := project.Format(rec)
+	if err != nil {
 		return nil, err
+	}
+	front = bytes.TrimSuffix(front, []byte("---\n"))
+	for _, l := range pr.extra {
+		front = append(front, l+"\n"...)
+	}
+	out := append(front, "---\n"...)
+	out = append(out, pr.body...)
+	if _, err := project.Parse(rec.Name, string(out)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// discover reads local git facts only; it never contacts a remote or writes a repo.
+// A folder that is gone gives no repos and no keys: its record keeps the folder.
+func discover(folder, machine, ceiling string) ([]project.Repo, []project.Key) {
+	if info, err := os.Stat(folder); err != nil || !info.IsDir() {
+		return nil, nil
+	}
+	var roots []string
+	if root, ok := gitx.FindRoot(folder, ceiling); ok {
+		if _, err := gitx.CommonDir(root); err == nil {
+			roots = []string{root}
+		}
+	}
+	if roots == nil {
+		roots = childRepos(folder)
+	}
+	var repos []project.Repo
+	var keys []project.Key
+	seen := map[string]bool{}
+	addKey := func(k project.Key) {
+		if id := k.Key + "@" + k.Machine; !seen[id] {
+			seen[id] = true
+			keys = append(keys, k)
+		}
+	}
+	for _, root := range roots {
+		rel, err := filepath.Rel(folder, root)
+		if err != nil {
+			continue
+		}
+		repo := project.Repo{Path: filepath.ToSlash(rel)}
+		if common, err := gitx.CommonDir(root); err == nil {
+			addKey(project.NewKey(machine, "common:"+common))
+		}
+		var remotes []string
+		have := map[string]bool{}
+		for _, raw := range gitx.Remotes(root) {
+			if n := project.NormalizeRemote(raw); n != "" && !have[n] {
+				have[n] = true
+				remotes = append(remotes, n)
+			}
+		}
+		sort.Strings(remotes)
+		for _, n := range remotes {
+			addKey(project.Key{Key: "remote:" + n})
+		}
+		if len(remotes) > 0 {
+			repo.Remote = remotes[0]
+		} else if sha := gitx.RootCommit(root); sha != "" {
+			addKey(project.Key{Key: "root:" + sha}) // a fork shares it, so only a repo with no remote uses it
+		}
+		repos = append(repos, repo)
+	}
+	return repos, keys
+}
+
+// childRepos lists git repos one or two levels below dir, never entering a repo
+// or following a link; it follows the same rules as grid where.
+func childRepos(dir string) []string {
+	var repos []string
+	var walk func(d string, depth int)
+	walk = func(d string, depth int) {
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			return
+		}
+		for _, e := range entries {
+			if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			p := filepath.Join(d, e.Name())
+			if gitx.IsRepoRoot(p) {
+				repos = append(repos, p)
+			} else if depth < 2 {
+				walk(p, depth+1)
+			}
+		}
+	}
+	walk(dir, 1)
+	sort.Strings(repos)
+	return repos
+}
+
+// rewriteSession maps the paths of a session record. Numbers and text are kept as
+// they were read, apart from key order.
+func rewriteSession(data []byte, paths map[string]string) ([]byte, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	var v map[string]any
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, fmt.Errorf("data after the session object")
 	}
 	if v == nil {
 		return nil, fmt.Errorf("session must be an object")
 	}
 	for _, key := range []string{"cwd", "transcript"} {
 		if s, ok := v[key].(string); ok {
-			v[key] = mapPath(s, paths)
+			v[key], _ = mapPath(s, paths)
 		}
 	}
-	b, err := json.Marshal(v)
-	return append(b, '\n'), err
+	var out bytes.Buffer
+	enc := json.NewEncoder(&out)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
-func mapPath(path string, paths map[string]string) string {
+
+// mapPath moves a path under an old project or worktree folder to its new place and
+// reports whether it was under one. A path written through a symlink (macOS /var,
+// /tmp) is resolved before it is looked up again.
+func mapPath(p string, paths map[string]string) (string, bool) {
+	if m, ok := lookup(p, paths); ok {
+		return m, true
+	}
+	if filepath.IsAbs(p) {
+		if r := gridhome.Real(p); r != p {
+			return lookup(r, paths)
+		}
+	}
+	return p, false
+}
+
+func lookup(p string, paths map[string]string) (string, bool) {
 	best := ""
 	for old := range paths {
-		if (path == old || strings.HasPrefix(path, old+string(filepath.Separator))) && len(old) > len(best) {
+		if (p == old || strings.HasPrefix(p, old+string(filepath.Separator))) && len(old) > len(best) {
 			best = old
 		}
 	}
-	if best != "" {
-		return paths[best] + strings.TrimPrefix(path, best)
+	if best == "" {
+		return p, false
 	}
-	return path
-}
-
-func knownPath(value string, paths map[string]string) bool {
-	for old := range paths {
-		if value == old || strings.HasPrefix(value, old+string(filepath.Separator)) {
-			return true
-		}
-	}
-	return false
+	return paths[best] + strings.TrimPrefix(p, best), true
 }
