@@ -29,6 +29,9 @@ func brainRead(o Options, in hookio.Input) {
 	if in.HookEventName != "PostToolUse" || in.ToolName != "Read" || in.SessionID == "" {
 		return
 	}
+	if !o.hookEnabled("history-log", in) {
+		return
+	}
 	path := str(in.ToolInput["file_path"])
 	if !strings.HasSuffix(path, ".md") {
 		return
@@ -133,6 +136,9 @@ func recall(o Options, in hookio.Input) {
 		o.log("planner task", (session.Store{TaskDir: o.Resolver.GridHome}).UpdateActivity(in.SessionID, func(a *session.Activity) error { a.PlannerTask = dir; return nil }))
 		return
 	case "UserPromptSubmit":
+		if !o.hookEnabled("user-prompt", in) {
+			return
+		}
 		trimmed := strings.TrimSpace(in.Prompt)
 		command, _, _ := strings.Cut(trimmed, " ")
 		if command != "/grid:plan" && command != "/grid:execute" && command != "/grid:resume" {
@@ -149,6 +155,9 @@ func recall(o Options, in hookio.Input) {
 		}
 		text = str(in.ToolInput["args"])
 	case "SubagentStart":
+		if !o.hookEnabled("subagent-start", in) {
+			return
+		}
 		if name := guard.AgentName(in.AgentType); name != "grid-planner" && name != "grid-builder" {
 			return
 		}
@@ -217,6 +226,7 @@ func recall(o Options, in hookio.Input) {
 		lines = append(lines, "Record Used: <pointer> in the plan for each note used.")
 		context = strings.Join(lines, "\n")
 	}
+	logHistory := o.hookEnabled("history-log", in)
 	emit := true
 	if in.SessionID != "" {
 		// Content identity also recalls after a plan edit without a numeric revision.
@@ -226,8 +236,10 @@ func recall(o Options, in hookio.Input) {
 				emit = false
 				return nil
 			}
-			if err := task.AppendHistory(dir, "brain recall", fmt.Sprintf("%d pointers", len(hits)), writer(in), ""); err != nil {
-				return err
+			if logHistory {
+				if err := task.AppendHistory(dir, "brain recall", fmt.Sprintf("%d pointers", len(hits)), writer(in), ""); err != nil {
+					return err
+				}
 			}
 			a.Seen[key] = true
 			return nil

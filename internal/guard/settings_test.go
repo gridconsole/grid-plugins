@@ -105,3 +105,44 @@ func TestHomeAllowSettingAndInvalidSettings(t *testing.T) {
 		t.Fatal(d)
 	}
 }
+
+func TestConfiguredLevelPreservesDenialOnSettingsError(t *testing.T) {
+	for _, mode := range []string{"off", "warn", "block", "malformed", "unreadable", "resolution"} {
+		t.Run(mode, func(t *testing.T) {
+			f := setup(t)
+			in := f.input("Read", filepath.Join(f.grid, "notes.md"))
+			in.Cwd = f.repo
+			path := filepath.Join(f.grid, "settings.json")
+			switch mode {
+			case "malformed":
+				f.write(path, `{"hooks":`)
+			case "unreadable":
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			case "resolution":
+				f.env["GRID_PROJECT"] = "missing-project"
+			default:
+				if err := (settings.Store{Home: f.grid}).SetHook("home-allow", mode); err != nil {
+					t.Fatal(err)
+				}
+			}
+			original := hookio.Deny("original denial")
+			got := configuredLevel("home-allow", in, f.root, f.env, original)
+			switch mode {
+			case "off":
+				if got.Behavior != "" || len(got.Warnings) != 0 {
+					t.Fatal(got)
+				}
+			case "warn":
+				if got.Behavior != "" || len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], original.Reason) {
+					t.Fatal(got)
+				}
+			default:
+				if got.Behavior != original.Behavior || got.Reason != original.Reason {
+					t.Fatal(got)
+				}
+			}
+		})
+	}
+}

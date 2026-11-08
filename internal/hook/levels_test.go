@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/project"
@@ -29,7 +31,7 @@ func levelCases(t *testing.T, name string, check func(*testing.T, *eventFixture,
 				}
 				f.env["GRID_PROJECT"] = "example"
 				personal := "off"
-				if level == "off" || mode == "bad-project" {
+				if level == "off" {
 					personal = "block"
 				}
 				if err := s.SetHook(name, personal); err != nil {
@@ -137,10 +139,6 @@ func TestCatalogLogLevels(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				// A failed explicit resolution prevents task lookup independently of levels.
-				if f.env["GRID_PROJECT"] == "missing-project" {
-					on = true
-				}
 				if code != 0 || (a.ExitReason == "done") != on {
 					t.Fatalf("exit: %d %+v %q", code, a, log)
 				}
@@ -205,6 +203,126 @@ func TestCatalogStopLevels(t *testing.T) {
 					t.Fatal(log)
 				}
 			})
+		})
+	}
+}
+
+func TestHistoryOffCoversEveryWriter(t *testing.T) {
+	for _, component := range []bool{false, true} {
+		for _, level := range []string{"off", "warn", "block"} {
+			t.Run(level+"/component="+map[bool]string{false: "false", true: "true"}[component], func(t *testing.T) {
+				f := eventSetup(t)
+				if err := (settings.Store{Home: f.home}).SetHook("history-log", level); err != nil {
+					t.Fatal(err)
+				}
+				store := brain.Store{GridHome: f.home}
+				origin := brain.Origin{Tier: contract.PersonTeam, Kind: "session", ID: "session-demo"}
+				_, err := store.Propose(brain.Note{Name: "cache", Topic: "decisions", Type: "convention", Description: "Cache configuration", Summary: "Keep configuration explicit.", Source: "task:T-01", Level: "home", Body: "Use explicit configuration.", Origin: origin}, origin)
+				if err != nil {
+					t.Fatal(err)
+				}
+				entry, err := store.Accept("home", "cache")
+				if err != nil {
+					t.Fatal(err)
+				}
+				run := func(event, alias string, in hookio.Input) string {
+					t.Helper()
+					in.HookEventName = event
+					if component {
+						event = alias
+					}
+					out, log, code := f.run(t, event, in)
+					if code != 0 || log != "" {
+						t.Fatalf("%s: %d %s", event, code, log)
+					}
+					return out
+				}
+				shell := hookio.Input{ToolName: "Bash", ToolUseID: "bash-1", ToolInput: map[string]any{"command": "grid task change"}}
+				run("PreToolUse", "history-log", shell)
+				if err := os.WriteFile(filepath.Join(f.dir, "notes.md"), []byte("changed"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				run("PostToolUseFailure", "history-log", shell)
+				run("SubagentStop", "history-log", hookio.Input{})
+				run("PostToolUse", "brain-read", hookio.Input{ToolName: "Read", ToolInput: map[string]any{"file_path": filepath.Join(f.home, entry.Path)}})
+				out := run("UserPromptSubmit", "brain-recall", hookio.Input{Prompt: "/grid:plan"})
+				if !strings.Contains(out, "Brain pointers") {
+					t.Fatal(out)
+				}
+				b, err := os.ReadFile(filepath.Join(f.dir, "history.md"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if level == "off" && len(b) != 0 {
+					t.Fatalf("off wrote history: %s", b)
+				}
+				for _, text := range []string{"file written", "subagent finished", "brain read", "brain recall"} {
+					if strings.Contains(string(b), text) != (level != "off") {
+						t.Fatalf("%s: %s", text, b)
+					}
+				}
+				a, err := (session.Store{TaskDir: f.dir}).Activity("session-demo")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(a.Snapshots) != 0 {
+					t.Fatalf("retained snapshot: %+v", a)
+				}
+			})
+		}
+	}
+}
+
+func TestUsageOffSuppressesTranscriptRecords(t *testing.T) {
+	for _, event := range []string{"SessionStart", "SubagentStop", "usage-log"} {
+		t.Run(event, func(t *testing.T) {
+			f := eventSetup(t)
+			if err := (settings.Store{Home: f.home}).SetHook("usage-log", "off"); err != nil {
+				t.Fatal(err)
+			}
+			out, log, code := f.run(t, event, hookio.Input{HookEventName: "SubagentStop", TranscriptPath: "transcript.jsonl", AgentTranscriptPath: "agent.jsonl", AgentID: "agent-demo"})
+			if code != 0 || log != "" {
+				t.Fatalf("%d %s", code, log)
+			}
+			if event == "SessionStart" && !strings.Contains(out, "Grid tracks tasks") {
+				t.Fatal(out)
+			}
+			a, err := (session.Store{TaskDir: f.dir}).Activity("session-demo")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if a.Transcript != "" || len(a.Transcripts) > 0 {
+				t.Fatalf("usage off recorded transcript: %+v", a)
+			}
+		})
+	}
+}
+
+func TestContextComponentLevels(t *testing.T) {
+	for _, tc := range []struct {
+		name, event string
+		in          hookio.Input
+	}{
+		{"user-prompt", "UserPromptSubmit", hookio.Input{Prompt: "/grid:plan"}},
+		{"subagent-start", "SubagentStart", hookio.Input{AgentType: "grid:grid-builder"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := eventSetup(t)
+			if err := (settings.Store{Home: f.home}).SetHook(tc.name, "off"); err != nil {
+				t.Fatal(err)
+			}
+			tc.in.HookEventName = tc.event
+			out, log, code := f.run(t, "brain-recall", tc.in)
+			if out != "" || log != "" || code != 0 {
+				t.Fatalf("off: %d %s %s", code, out, log)
+			}
+			if err := (settings.Store{Home: f.home}).SetHook(tc.name, "warn"); err != nil {
+				t.Fatal(err)
+			}
+			out, log, code = f.run(t, "brain-recall", tc.in)
+			if !strings.Contains(out, "Brain recall") || log != "" || code != 0 {
+				t.Fatalf("warn: %d %s %s", code, out, log)
+			}
 		})
 	}
 }

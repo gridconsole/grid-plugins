@@ -18,7 +18,7 @@ import (
 )
 
 func history(o Options, in hookio.Input) {
-	if o.Resolver.GridHome == "" {
+	if o.Resolver.GridHome == "" || !o.hookEnabled("history-log", in) {
 		return
 	}
 	if in.ToolName == "Bash" {

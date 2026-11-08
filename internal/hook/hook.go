@@ -14,7 +14,6 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
-	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -94,13 +93,8 @@ func sessionStart(o Options) {
 		return
 	}
 	recordSession(o, hookio.Input{HookEventName: "SessionStart", SessionID: in.SessionID, TranscriptPath: in.Transcript, Cwd: cwd, Source: in.Source})
-	project := ""
-	if res.Record {
-		project = res.Project
-	}
-	levels, err := settings.ReadHookLevels(o.Resolver.GridHome, project)
+	level, err := o.hookLevel("session-start", hookio.Input{Cwd: cwd})
 	if err != nil {
-		o.log("hook settings", err)
 		// Unreadable settings keep the default levels and say so, instead of hiding the context.
 		note += " Hook settings cannot be read: " + err.Error() + "."
 	}
@@ -127,7 +121,7 @@ func sessionStart(o Options) {
 			return
 		}
 	}
-	if levels["session-start"] != "off" {
+	if level != "off" {
 		_, err = o.Stdout.Write(append(b, '\n'))
 		o.log("session context", err)
 	}

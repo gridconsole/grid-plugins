@@ -24,26 +24,18 @@ func configuredLevel(name string, in hookio.Input, root string, env map[string]s
 	if cwd == "" {
 		cwd = root
 	}
-	if cwd == "" {
-		cwd = "."
-	}
-	machine := env["GRID_MACHINE"]
-	if machine == "" {
-		machine = gridhome.Machine(home)
-	}
-	r, err := (where.Resolver{GridHome: home, Home: env["HOME"], Machine: machine}).Resolve(where.Query{Cwd: cwd, Project: env["GRID_PROJECT"], Task: env["GRID_TASK"]})
+	level, err := settings.ResolveHookLevel(name,
+		where.Resolver{GridHome: home, Home: env["HOME"], Machine: env["GRID_MACHINE"]},
+		where.Query{Cwd: cwd, Project: env["GRID_PROJECT"], Task: env["GRID_TASK"]})
 	if err != nil {
-		return hookio.Deny("Cannot resolve hook settings: " + err.Error())
+		if d.Behavior == "deny" || d.Behavior == "ask" {
+			d.Warnings = append(d.Warnings, err.Error())
+			return d
+		}
+		// An unreadable permission fallback must never grant access.
+		return hookio.Deny(err.Error())
 	}
-	project := ""
-	if r.Record {
-		project = r.Project
-	}
-	levels, err := settings.ReadHookLevels(home, project)
-	if err != nil {
-		return hookio.Deny("Cannot read hook settings: " + err.Error())
-	}
-	switch levels[name] {
+	switch level {
 	case "off":
 		return hookio.Decision{}
 	case "warn":

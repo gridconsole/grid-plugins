@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -108,6 +109,28 @@ func stopCheck(o Options, in hookio.Input) int {
 	if in.HookEventName != "Stop" && in.HookEventName != "SubagentStop" {
 		return 0
 	}
+	level, _ := o.hookLevel("stop-check", in)
+	if level == "off" {
+		return 0
+	}
+	if level != "warn" {
+		return checkStop(o, in)
+	}
+	// Preserve the diagnostic while allowing the stop, including saved Job verification.
+	var warning bytes.Buffer
+	output := o.Stderr
+	o.Stderr = &warning
+	code := checkStop(o, in)
+	if output != nil {
+		if code == 2 {
+			fmt.Fprint(output, "Warning: stop-check: ")
+		}
+		_, _ = output.Write(warning.Bytes())
+	}
+	return 0
+}
+
+func checkStop(o Options, in hookio.Input) int {
 	dir, err := taskDir(o, in)
 	if err != nil {
 		o.log("stop check", err)

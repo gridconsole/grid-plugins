@@ -119,7 +119,7 @@ func remaining(o Options) int {
 		// Local guards arbitrate first; no bridge answer means the terminal asks.
 		toolUse(Options{Event: "permissionrequest", Stdin: reader(*in), Stdout: o.Stdout, Stderr: o.Stderr, Resolver: o.Resolver, Cwd: o.Cwd, Getenv: o.Getenv})
 	default:
-		if name == "precompact" && o.Stdout != nil {
+		if name == "precompact" && o.Stdout != nil && o.hookEnabled("precompact", *in) {
 			fmt.Fprintln(o.Stdout, "Keep the Job id, acceptance ids and open decisions in the summary.")
 		}
 		heartbeat(o, *in)
@@ -188,6 +188,9 @@ func recordSession(o Options, in hookio.Input) {
 		return
 	}
 	if in.HookEventName != "SessionStart" && in.HookEventName != "SubagentStop" && !(in.HookEventName == "PostToolUse" && (in.ToolName == "Agent" || in.ToolName == "Task")) {
+		return
+	}
+	if !o.hookEnabled("usage-log", in) {
 		return
 	}
 	store, err := activityStore(o, in)
@@ -261,6 +264,9 @@ func workerExit(o Options, in hookio.Input) {
 	}
 	jobID := o.Getenv("GRID_JOB")
 	if in.SessionID == "" || o.Getenv("GRID_FEED_TASK") == "" || jobID == "" || o.Getenv("GRID_WORKER") == "" {
+		return
+	}
+	if !o.hookEnabled("session-end", in) {
 		return
 	}
 	dir, err := taskDir(o, in)

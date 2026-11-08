@@ -12,6 +12,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 // Document contains only explicit overrides on disk, and complete values from Effective.
@@ -129,6 +130,38 @@ func merge(dst *Document, src Document) {
 func ReadHookLevels(home, project string) (map[string]string, error) {
 	d, err := (Store{home, project}).Effective()
 	return d.Hooks, err
+}
+
+// ResolveHookLevel is the runtime level reader for both event hooks and guards.
+// It shares project selection with grid where. On errors the returned block
+// level keeps guards enforced and informational hooks enabled; callers report
+// the error without replacing an existing denial. Fixed guards read no files.
+func ResolveHookLevel(name string, resolver where.Resolver, query where.Query) (string, error) {
+	if AlwaysBlock(name) {
+		return "block", nil
+	}
+	if resolver.GridHome == "" {
+		return defaultLevel(name), nil
+	}
+	if query.Cwd == "" {
+		query.Cwd = "."
+	}
+	if resolver.Machine == "" {
+		resolver.Machine = gridhome.Machine(resolver.GridHome)
+	}
+	r, err := resolver.Resolve(query)
+	if err != nil {
+		return "block", fmt.Errorf("Cannot resolve hook settings: %w", err)
+	}
+	project := ""
+	if r.Record {
+		project = r.Project
+	}
+	levels, err := ReadHookLevels(resolver.GridHome, project)
+	if err != nil {
+		return "block", fmt.Errorf("Cannot read hook settings: %w", err)
+	}
+	return levels[name], nil
 }
 
 // SetAgent changes only supplied fields; omitted fields continue to inherit.
