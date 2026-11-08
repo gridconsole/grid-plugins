@@ -415,3 +415,5 @@ A bare `--error` records `worker reported an error`; `--error=message` supplies
 the reason. Exit codes are 0 for success, 1 for storage/scope errors or a claim
 refusal, and 2 for invalid command usage. Existing session list/show behavior is
 preserved. These new commands define no task or Feed record shapes.
+
+`grid feed` and `grid job post|ack|result|cancel` exit with 0 for success, 1 for storage/scope/resolution or other errors, 2 for usage, 3 for final rejection (stale lease or invalid record; do not retry), and 4 for disk full.

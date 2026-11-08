@@ -69,6 +69,20 @@ close the fence. The record and persisted state retain the original body.
 Validation and Feed failures return `isError: true`; unknown methods/tools and
 malformed protocol messages return JSON-RPC errors.
 
+## Exit status
+
+Feed record writes and `grid job post|ack|result|cancel` return 0 for success,
+1 for storage, scope, resolution, or other failures, 2 for command usage,
+3 for a final rejection (stale lease or invalid record; do not retry), and
+4 for disk full. Invalid records include contract validation failures and a
+`--body` that is not a JSON object. Stale-lease and invalid-record diagnostics
+remain distinct on stderr. Retrying a successful Feed write with the same
+`--id` and request still returns 0. A duplicate Job wake still prints the first
+record ID and returns 1.
+
+MCP has no per-call process exit status: the same rejection remains a tool
+error (`isError: true`) with the same diagnostic text.
+
 ## Protocol
 
 Messages are UTF-8 JSON-RPC 2.0 objects separated by newlines. Only protocol
