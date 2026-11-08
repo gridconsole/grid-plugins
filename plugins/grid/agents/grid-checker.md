@@ -4,7 +4,7 @@ description: Read-only browser check for a Grid task - pages, flows, console and
 model: haiku
 effort: low
 maxTurns: 40
-tools: Read, Grep, Glob, Edit, Write, mcp__claude-in-chrome__*, mcp__Claude_Browser__*
+tools: Read, Grep, Glob, Edit, Write, mcp__claude-in-chrome__*, mcp__Claude_Browser__*, mcp__plugin_grid_grid-feed__feed_post
 ---
 
 <!-- Decision source: plugin merge 2 Nov (one Grid agent per old role; read-only by tools and plan-guard). -->
