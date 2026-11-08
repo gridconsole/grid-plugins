@@ -9,7 +9,9 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/cli"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/persongate"
 	"github.com/gridconsole/grid-plugins/internal/question"
+	"strings"
 )
 
 func TestPersonWithdrawCLI(t *testing.T) {
@@ -53,7 +55,7 @@ func TestPersonWithdrawCLI(t *testing.T) {
 			t.Setenv("GRID_MEMBER", "person")
 			t.Setenv("GRID_ROLE", "owner")
 			var out, stderr bytes.Buffer
-			env := cli.Env{Cwd: root, Home: root, GridHome: home, Ceiling: root, Stdout: &out, Stderr: &stderr}
+			env := cli.Env{Procs: terminalProcs{}, PersonDir: func() (string, error) { return filepath.Join(root, ".grid-person"), nil }, Cwd: root, Home: root, GridHome: home, Ceiling: root, Stdout: &out, Stderr: &stderr}
 			run := func(args ...string) int { out.Reset(); stderr.Reset(); return cli.Run(args, env) }
 			if tc.workflow != "" {
 				workflowText := "---\ngate_post_roles: {withdraw: [" + tc.workflow + "]}\n---\n"
@@ -97,6 +99,9 @@ func TestPersonWithdrawCLI(t *testing.T) {
 			if tc.reason != "" {
 				args = append(args, "--reason", tc.reason)
 			}
+			if tc.agent != "" || tc.role == "agent" || tc.role == "guest" {
+				tc.stderr = "grid question withdraw: a person must run this, from the Grid app or your own terminal outside Claude Code or Codex (reason: agent_env).\n"
+			}
 			if code := run(args...); code != tc.code || stderr.String() != tc.stderr {
 				t.Fatalf("withdraw: exit=%d stderr=%q; want exit=%d stderr=%q", code, stderr.String(), tc.code, tc.stderr)
 			}
@@ -109,7 +114,7 @@ func TestPersonWithdrawCLI(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if len(after.Records) != len(before.Records) || out.Len() != 0 || !bytes.Equal(original, current) {
+				if len(after.Records) != len(before.Records) || (out.Len() != 0 && !strings.Contains(out.String(), `"error":"person_required"`)) || !bytes.Equal(original, current) {
 					t.Fatal("refused withdraw wrote data")
 				}
 				return
@@ -151,4 +156,11 @@ func TestPersonWithdrawCLI(t *testing.T) {
 			}
 		})
 	}
+}
+
+type terminalProcs struct{}
+
+func (terminalProcs) Snapshot() (map[int]persongate.Process, error) {
+	pid := os.Getpid()
+	return map[int]persongate.Process{pid: {PID: pid, PPID: pid + 1, Exe: "grid"}, pid + 1: {PID: pid + 1, Exe: "Terminal"}}, nil
 }
