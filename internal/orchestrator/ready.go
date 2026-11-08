@@ -40,7 +40,13 @@ func Load(store feed.Store) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	s := Snapshot{State: feed.FoldRead(r), Records: map[string]feed.Record{}, Bodies: map[string]map[string]any{}, Created: map[string]time.Time{}}
+	now := time.Now()
+	if store.Now != nil {
+		now = store.Now()
+	}
+	// The person layer keeps a non-person answer from releasing a person gate.
+	state, _ := feed.FoldReadAt(r, now)
+	s := Snapshot{State: state, Records: map[string]feed.Record{}, Bodies: map[string]map[string]any{}, Created: map[string]time.Time{}}
 	counted := map[string]bool{}
 	for _, v := range s.State.Verdicts {
 		counted[v.ID] = v.Kind == "counted"

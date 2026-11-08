@@ -984,3 +984,40 @@ func TestLegacyWakeMigrationPreservesAcknowledgementsAndNumbers(t *testing.T) {
 		t.Fatal("migrated pending wake was lost", again)
 	}
 }
+
+// An agent's answer must not release a person gate on the Orchestrator path,
+// nor make every pass post a selection control for it.
+func TestAgentAnswerKeepsPersonGateClosed(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", []any{"gate:Q-1"})
+	q := f.post(t, feed.Input{Type: "question", Body: map[string]any{"question": "Ship?", "who": "owner", "gate": map[string]any{"id": "Q-1", "kind": "person", "default": "Wait", "at": contract.FormatTime(f.now.Add(time.Hour))}}}, f.s.Writer)
+	f.post(t, feed.Input{Type: "answer", Re: q.ID, Body: map[string]any{"answer": "Yes"}}, feed.Writer{Author: feed.Author{ID: "agent-1", Role: "agent"}, Worker: "agent-1@" + machine})
+	for range 2 {
+		if out := f.tick(t); out.Assigned != 0 {
+			t.Fatalf("agent answer assigned J-1: %+v", out.Rows)
+		}
+	}
+	if f.state(t).Assign != nil {
+		t.Fatal("agent answer opened the person gate")
+	}
+	snap, err := Load(f.s.Feed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snap.State.Questions[q.ID].Open || snap.State.Questions[q.ID].Applied != nil {
+		t.Fatalf("orchestrator fold closed the gate: %+v", snap.State.Questions[q.ID])
+	}
+	controls, err := f.s.Feed.Read(feed.Filter{Type: "control"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range controls.Records {
+		if c.Body["target"] == q.ID && c.Body["status"] == "answered" {
+			t.Fatalf("orchestrator selected a non-person answer: %+v", c.Record)
+		}
+	}
+	f.post(t, feed.Input{Type: "answer", Re: q.ID, Body: map[string]any{"answer": "Yes"}}, feed.Writer{Author: feed.Author{ID: "owner", Role: "owner"}, Worker: "owner@" + machine})
+	if f.tick(t).Assigned != 1 {
+		t.Fatal("person answer did not open the gate")
+	}
+}

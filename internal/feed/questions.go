@@ -84,7 +84,7 @@ func foldQuestions(read ReadResult, state *contract.State, now time.Time) map[st
 			d.State, d.Answer = "defaulted", str(gate["default"])
 		}
 		selected := ""
-		if q.Applied != nil && personAnswer(records[*q.Applied], q.Who) {
+		if q.Applied != nil && PersonAnswer(records[*q.Applied], q.Who) {
 			selected = *q.Applied
 		} else if d.State != "withdrawn" {
 			answer, conflict := "", false
@@ -93,7 +93,7 @@ func foldQuestions(read ReadResult, state *contract.State, now time.Time) map[st
 				if !ok {
 					continue
 				}
-				if !personAnswer(p, q.Who) {
+				if !PersonAnswer(p, q.Who) {
 					continue
 				}
 				text := str(p.Body["answer"])
@@ -146,7 +146,8 @@ func foldQuestions(read ReadResult, state *contract.State, now time.Time) map[st
 	return decisions
 }
 
-func personAnswer(p Record, who string) bool {
+// PersonAnswer reports whether p is an answer a person gate addressed to who admits.
+func PersonAnswer(p Record, who string) bool {
 	if p.Type != "answer" {
 		return false
 	}

@@ -323,6 +323,7 @@ func (s Store) wake(snap Snapshot, m *memory) *Wake {
 
 // A single eligible answer needs no arbitration. Multiple answers are a
 // judgement event; neither arrival time nor a record id chooses their winner.
+// Only an answer feed.PersonAnswer admits is eligible.
 func (s Store) answers(snap Snapshot) error {
 	ids := []string{}
 	for id := range snap.State.Questions {
@@ -331,10 +332,19 @@ func (s Store) answers(snap Snapshot) error {
 	sort.Strings(ids)
 	for _, id := range ids {
 		q := snap.State.Questions[id]
-		if !q.Open || len(q.Answers) != 1 {
+		if !q.Open {
 			continue
 		}
-		answer := q.Answers[0]
+		admitted := []string{}
+		for _, aid := range q.Answers {
+			if feed.PersonAnswer(snap.Records[aid], q.Who) {
+				admitted = append(admitted, aid)
+			}
+		}
+		if len(admitted) != 1 {
+			continue
+		}
+		answer := admitted[0]
 		if _, err := s.Feed.Post(feed.Input{Type: "control", Re: answer, After: []string{id}, Body: map[string]any{"target": id, "answer": answer, "status": "answered"}}, s.Writer); err != nil {
 			return err
 		}
