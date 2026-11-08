@@ -182,3 +182,24 @@ func TestRejectCommand(t *testing.T) {
 		t.Fatalf("rejected: %+v", e)
 	}
 }
+
+func TestUnregisteredProjectDoesNotCreateBrain(t *testing.T) {
+	h := newHarness(t)
+	h.env.Cwd = filepath.Join(h.env.Home, "work")
+	if err := os.Mkdir(h.env.Cwd, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("index"); code != 1 || !strings.Contains(h.err.String(), "no Grid record") {
+		t.Fatalf("unregistered project: %d %s", code, &h.err)
+	}
+	if code := h.run("index", "--read-only"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if _, err := os.Stat(h.env.GridHome); !os.IsNotExist(err) {
+		t.Fatal("unregistered project gained a brain folder")
+	}
+	h.propose(t)
+	if code := h.run("accept", "brain:home/checks"); code != 0 {
+		t.Fatalf("qualified home id must work outside a registered project: %s", &h.err)
+	}
+}
