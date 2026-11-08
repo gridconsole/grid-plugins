@@ -48,26 +48,99 @@ func TestWaiting(t *testing.T) {
 	}
 }
 
+// proposalFile is a full note, as Propose writes it.
+func proposalFile(name, level, source, originID string) string {
+	return "---\nname: " + name + "\ntopic: testing\ntype: reference\ndescription: A fact\nsummary: A fact\nupdated: 2026-01-01T00:00:00Z\nsource: " + source +
+		"\nsuperseded_by: \"\"\nlinks: []\nlevel: " + level + "\nstatus: proposed\nreason: \"\"\norigin:\n  kind: job\n  id: " + originID + "\n  tier: agent\n---\nA fact.\n"
+}
+
+func writeProposal(t *testing.T, dir, name, text string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWaitingScopesAndMalformed(t *testing.T) {
 	s := Store{GridHome: t.TempDir(), Project: "example"}
-	for _, prefix := range []string{"", filepath.Join("projects", "example")} {
-		dir := filepath.Join(s.GridHome, prefix, "brain-proposals")
-		if err := os.MkdirAll(dir, 0700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, "note.md"), []byte("---\nstatus: proposed\ntopic: testing\n---\n"), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
+	home := filepath.Join(s.GridHome, "brain-proposals")
+	project := filepath.Join(s.GridHome, "projects", "example", "brain-proposals")
+	writeProposal(t, home, "note", proposalFile("note", "home", "T-01", "T-01/J-01"))
+	writeProposal(t, project, "note", proposalFile("note", "project", "T-01", "T-01/J-01"))
 	rows, err := s.Waiting("")
 	if err != nil || len(rows) != 2 || rows[0].Path >= rows[1].Path {
 		t.Fatal(rows, err)
 	}
-	path := filepath.Join(s.GridHome, "brain-proposals", "note.md")
+	path := filepath.Join(home, "note.md")
 	if err = os.WriteFile(path, []byte("---\nstatus: [\n---\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Waiting(""); err == nil || !strings.Contains(err.Error(), "proposal note.md") {
 		t.Fatal(err)
+	}
+}
+
+// Home and project proposals must parse the way accept parses them: an unknown
+// field, a name that differs from the file or a level that differs from the
+// folder is an error, while the task folder keeps its lenient reader.
+func TestWaitingStoreLevelsAreStrict(t *testing.T) {
+	for name, text := range map[string]string{
+		"unknown field":  strings.Replace(proposalFile("note", "home", "T-01", "T-01"), "topic: testing", "topic: testing\nsurprise: yes", 1),
+		"wrong name":     proposalFile("other", "home", "T-01", "T-01"),
+		"wrong level":    proposalFile("note", "project", "T-01", "T-01"),
+		"alias":          strings.Replace(proposalFile("note", "home", "T-01", "T-01"), "topic: testing", "topic: &a testing", 1),
+		"lenient legacy": "---\nstatus: proposed\ntopic: testing\n---\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := Store{GridHome: t.TempDir()}
+			writeProposal(t, filepath.Join(s.GridHome, "brain-proposals"), "note", text)
+			if _, err := s.Waiting(""); err == nil || !strings.Contains(err.Error(), "proposal note.md") {
+				t.Fatal(err)
+			}
+			legacy := t.TempDir()
+			writeProposal(t, filepath.Join(legacy, "brain-proposals"), "note", text)
+			rows, err := Store{GridHome: t.TempDir()}.Waiting(legacy)
+			if name == "lenient legacy" && (err != nil || len(rows) != 1) {
+				t.Fatal(rows, err)
+			}
+		})
+	}
+}
+
+func TestWaitingForTaskNamesTheTaskOrProject(t *testing.T) {
+	s := Store{GridHome: t.TempDir(), Project: "example"}
+	home := filepath.Join(s.GridHome, "brain-proposals")
+	writeProposal(t, home, "by-task", proposalFile("by-task", "home", "T-07", "T-07/J-02"))
+	writeProposal(t, home, "by-folder", proposalFile("by-folder", "home", "T-07-title", "session-1"))
+	writeProposal(t, home, "by-project", proposalFile("by-project", "home", "example", "session-2"))
+	writeProposal(t, home, "other-task", proposalFile("other-task", "home", "T-70", "T-70/J-01"))
+	writeProposal(t, home, "other-project", proposalFile("other-project", "home", "elsewhere", "session-3"))
+	writeProposal(t, filepath.Join(s.GridHome, "projects", "example", "brain-proposals"), "own", proposalFile("own", "project", "T-99", "T-99"))
+	task := t.TempDir()
+	writeProposal(t, filepath.Join(task, "brain-proposals"), "local", "---\nstatus: proposed\ntopic: testing\n---\n")
+
+	rows, err := s.WaitingForTask(task, "T-07")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, row := range rows {
+		got = append(got, row.Path)
+	}
+	want := []string{"brain:home/brain-proposals/by-folder.md", "brain:home/brain-proposals/by-project.md", "brain:home/brain-proposals/by-task.md", "brain:project/brain-proposals/own.md", "task:brain-proposals/local.md"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v\nwant %v", got, want)
+	}
+	// keep still lists every waiting proposal, so the keeper sees the rest.
+	if all, err := s.Waiting(task); err != nil || len(all) != 7 {
+		t.Fatal(len(all), err)
+	}
+	// A personal task has no project name to match.
+	rows, err = Store{GridHome: s.GridHome}.WaitingForTask("", "T-07")
+	if err != nil || len(rows) != 2 {
+		t.Fatal(rows, err)
 	}
 }
