@@ -41,6 +41,9 @@ func (s Store) Tick() (out Output, err error) {
 		if _, e = Ready(snap, s.now()); e != nil {
 			return e
 		}
+		if e := s.warnDuplicateGates(snap); e != nil {
+			return e
+		}
 		if e := s.answers(snap); e != nil {
 			return e
 		}

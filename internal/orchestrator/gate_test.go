@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,81 @@ func legacyGateDuplicate(t *testing.T, f *fixture) {
 		if err := os.WriteFile(file, []byte(strings.ReplaceAll(string(data), `"Q-2"`, `"Q-1"`)), 0o600); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestLegacyDuplicateGateReadyOrder(t *testing.T) {
+	for _, kind := range []string{"person", "timer"} {
+		t.Run(kind, func(t *testing.T) {
+			f := setup(t)
+			for _, id := range []string{"J-1", "J-2"} {
+				body := jobBody(t, id)
+				body["created_at"] = contract.FormatTime(f.now.Add(-4 * time.Hour))
+				if id == "J-1" {
+					body["after"] = []any{"gate:Q-1"}
+				} else {
+					body["created_at"] = contract.FormatTime(f.now.Add(-2 * time.Hour))
+				}
+				f.post(t, feed.Input{Type: "job", Job: id, Body: body}, f.s.Writer)
+			}
+			for i, gid := range []string{"Q-1", "Q-2"} {
+				gate := map[string]any{"id": gid, "kind": kind, "at": contract.FormatTime(f.now.Add(time.Duration(-3+2*i) * time.Hour))}
+				if kind == "person" {
+					gate["default"] = "Proceed"
+				}
+				f.post(t, feed.Input{Type: "question", Body: map[string]any{"question": "Proceed?", "who": "owner", "gate": gate}}, f.s.Writer)
+			}
+			legacyGateDuplicate(t, f)
+			snap, err := Load(f.s.Feed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range 100 {
+				ready, err := Ready(snap, f.now)
+				if err != nil || !reflect.DeepEqual(ready.Ready, []string{"J-2", "J-1"}) {
+					t.Fatalf("iteration %d: readiness must use latest strict gate time: %+v %v", i, ready, err)
+				}
+			}
+		})
+	}
+}
+
+func TestLegacyDuplicateStrictKindWins(t *testing.T) {
+	for _, kinds := range [][2]string{{"person", "timer"}, {"timer", "ci"}, {"person", "job"}} {
+		t.Run(kinds[0]+"-"+kinds[1], func(t *testing.T) {
+			f := setup(t)
+			f.job(t, "J-1", []any{"gate:Q-1"})
+			for i, kind := range kinds {
+				gate := map[string]any{"id": []string{"Q-1", "Q-2"}[i], "kind": kind}
+				switch kind {
+				case "timer", "person":
+					at := f.now.Add(-time.Hour)
+					if i == 1 {
+						at = f.now.Add(time.Hour)
+					}
+					gate["at"] = contract.FormatTime(at)
+					if kind == "person" {
+						gate["default"] = "Proceed"
+					}
+				case "ci":
+					gate["check"] = "tests"
+				case "job":
+					gate["job"], gate["state"] = "J-1", "accepted"
+				}
+				f.post(t, feed.Input{Type: "question", Body: map[string]any{"question": "Proceed?", "who": "owner", "gate": gate}}, f.s.Writer)
+			}
+			legacyGateDuplicate(t, f)
+			snap, err := Load(f.s.Feed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range 100 {
+				ready, err := Ready(snap, f.now)
+				if err != nil || !reflect.DeepEqual(ready.Ready, []string{"J-1"}) {
+					t.Fatalf("iteration %d: weaker closed gate blocked strict open gate: %+v %v", i, ready, err)
+				}
+			}
+		})
 	}
 }
 

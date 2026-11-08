@@ -96,6 +96,7 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 		}
 	}
 	gateTimes := map[string]time.Time{}
+	gateRanks := map[string]int{}
 	for id, q := range s.State.Questions {
 		r := s.Records[id]
 		gate, _ := r.Body["gate"].(map[string]any)
@@ -104,6 +105,11 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 			continue
 		}
 		key := "gate:" + gid
+		rank := gateRank(stringValue(gate["kind"]))
+		previous, exists := gateRanks[key]
+		if exists && rank < previous {
+			continue
+		}
 		at, _ := time.Parse(time.RFC3339Nano, stringValue(gate["at"]))
 		open := !q.Open
 		switch gate["kind"] {
@@ -121,6 +127,16 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 		if q.Applied != nil {
 			at, _ = time.Parse(time.RFC3339Nano, s.Records[*q.Applied].At)
 		}
+		// Old Feeds can contain duplicate names. Strictest kind wins; ties
+		// require every equally strict question to open. AND and max keep
+		// both readiness and its timestamp independent of map iteration.
+		if exists && rank == previous {
+			open = open && input.OpenGates[key]
+			if gateTimes[key].After(at) {
+				at = gateTimes[key]
+			}
+		}
+		gateRanks[key] = rank
 		input.OpenGates[key] = open
 		gateTimes[key] = at
 	}
