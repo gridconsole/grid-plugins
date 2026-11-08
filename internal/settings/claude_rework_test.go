@@ -24,10 +24,13 @@ func TestClaudeRemoveRejectsForgedOwnership(t *testing.T) {
 				{"permissions", "deny", "Bash(curl *)"},
 				// A genuine block value in the wrong array is not owned either.
 				{"permissions", "deny", "Bash(grid *)"},
+				{"permissions", "ask", "Bash(grid *)"},
 			}
 			doc, _ := parseClaudeObject(f.read(f.path))
-			if err := changeClaudeRule(&doc, forged[2], false); err != nil {
-				t.Fatal(err)
+			for _, rule := range forged[2:] {
+				if err := changeClaudeRule(&doc, rule, false); err != nil {
+					t.Fatal(err)
+				}
 			}
 			f.write(f.path, string(doc.bytes()))
 			record.Rules = append(record.Rules, forged...)
@@ -42,6 +45,10 @@ func TestClaudeRemoveRejectsForgedOwnership(t *testing.T) {
 			deny, _, err := claudeValues(doc, forged[0])
 			if err != nil || !reflect.DeepEqual(deny, []string{forged[0].Value, forged[1].Value, forged[2].Value}) {
 				t.Fatalf("personal denies changed: %v (%v)", deny, err)
+			}
+			ask, _, err := claudeValues(doc, forged[3])
+			if err != nil || !reflect.DeepEqual(ask, []string{forged[3].Value}) {
+				t.Fatalf("personal asks changed: %v (%v)", ask, err)
 			}
 			var warning bytes.Buffer
 			for _, rule := range forged {

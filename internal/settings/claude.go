@@ -209,6 +209,9 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 			return 1, errors.New("Setup record is invalid or belongs to another settings file. Nothing written.")
 		}
 		for _, r := range record.Rules {
+			if o.Remove {
+				continue // Removal reports every non-block entry below.
+			}
 			if !(r.Section == "permissions" && (r.Key == "allow" || r.Key == "deny") || r.Section == "autoMode" && r.Key == "environment") || r.Value == "" {
 				return 1, errors.New("Setup record contains an invalid rule. Nothing written.")
 			}
