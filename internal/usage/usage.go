@@ -73,33 +73,47 @@ func (in Input) validate() error {
 	return nil
 }
 
-// withData holds the same fslock for reads, appends and configuration changes.
-// The lock inode is never replaced when data files are replaced atomically.
-func (s Store) withData(create bool, fn func(string) error) error {
+// taskDir validates the task path and returns its usage folder path.
+func (s Store) taskDir() (string, error) {
 	if s.TaskPath == "" {
-		return errors.New("a task is required")
+		return "", errors.New("a task is required")
 	}
 	info, err := os.Stat(s.TaskPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !info.IsDir() {
-		return errors.New("task is not a directory")
+		return "", errors.New("task is not a directory")
 	}
-	dir, err := localdata.Safe(s.TaskPath, "usage")
+	return localdata.Safe(s.TaskPath, "usage")
+}
+
+// readData is lock-free and creates nothing: appends end in a complete line or a
+// torn tail that readLog ignores, and the configuration is replaced atomically.
+func (s Store) readData(fn func(string) error) error {
+	dir, err := s.taskDir()
 	if err != nil {
 		return err
 	}
-	if create {
-		if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-			return err
-		}
-		if err := atomicfile.SyncDir(s.TaskPath); err != nil {
-			return err
-		}
-	} else if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
 		return fn("")
 	} else if err != nil {
+		return err
+	}
+	return fn(dir)
+}
+
+// withData holds the usage fslock for appends and configuration changes.
+// The lock inode is never replaced when data files are replaced atomically.
+func (s Store) withData(fn func(string) error) error {
+	dir, err := s.taskDir()
+	if err != nil {
+		return err
+	}
+	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	if err := atomicfile.SyncDir(s.TaskPath); err != nil {
 		return err
 	}
 	f, err := fslock.OpenNoFollow(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDWR, 0o600)
@@ -114,10 +128,10 @@ func (s Store) withData(create bool, fn func(string) error) error {
 	return fn(dir)
 }
 
-// Show folds complete log lines, leaving any torn final line untouched.
+// Show folds complete log lines read-only, leaving any torn final line untouched.
 func (s Store) Show() (Summary, error) {
 	out := emptySummary()
-	err := s.withData(false, func(dir string) error {
+	err := s.readData(func(dir string) error {
 		var err error
 		out, _, err = readLog(dir)
 		return err
@@ -131,7 +145,7 @@ func (s Store) Post(in Input) (PostResult, error) {
 		return PostResult{}, err
 	}
 	out := PostResult{Summary: emptySummary(), Notices: []feed.Record{}, Warnings: []string{}}
-	err := s.withData(true, func(dir string) error {
+	err := s.withData(func(dir string) error {
 		before, end, err := readLog(dir)
 		if err != nil {
 			return err

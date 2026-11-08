@@ -52,7 +52,7 @@ func defaults() Configuration {
 // Config returns effective settings without creating a usage folder.
 func (s Store) Config() (Configuration, error) {
 	c := defaults()
-	err := s.withData(false, func(dir string) error {
+	err := s.readData(func(dir string) error {
 		var err error
 		c, err = readConfig(dir)
 		return err
@@ -102,7 +102,7 @@ func (s Store) Configure(change Change) (Configuration, error) {
 		return Configuration{}, err
 	}
 	var c Configuration
-	err = s.withData(true, func(dir string) error {
+	err = s.withData(func(dir string) error {
 		var err error
 		c, err = readConfig(dir)
 		if err != nil {

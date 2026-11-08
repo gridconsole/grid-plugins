@@ -2,6 +2,7 @@ package usage
 
 import (
 	"encoding/json"
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -129,5 +130,33 @@ func TestEmptyAndOverflow(t *testing.T) {
 	}
 	if out, err := s.Show(); err != nil || out.Totals.Posts != 2 {
 		t.Fatalf("%+v %v", out, err)
+	}
+}
+
+func TestReadsCreateNothing(t *testing.T) {
+	s := testStore(t)
+	if _, err := s.Show(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Config(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(s.TaskPath, "usage")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("read created usage folder: %v", err)
+	}
+	if _, err := s.Post(Input{Job: "lead", Dollars: number(1)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(s.TaskPath, "usage", ".lock")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Show(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Config(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(s.TaskPath, "usage", ".lock")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("read created lock: %v", err)
 	}
 }
