@@ -220,6 +220,26 @@
           "output": ""
         },
         {
+          "name": "delete",
+          "args": [
+            "\u003cT-NN\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
           "name": "history",
           "args": [
             "\u003ctask\u003e"
@@ -362,6 +382,26 @@
               "name": "--reason",
               "takes": "value",
               "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "restore",
+          "args": [
+            "\u003cT-NN\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": true
             }
           ],
           "json": true,
