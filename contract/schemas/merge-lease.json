@@ -42,6 +42,12 @@
       "minLength": 1,
       "format": "date-time",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "renewed_at": {
+      "type": "string",
+      "minLength": 1,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
     }
   },
   "required": [
@@ -54,5 +60,5 @@
     "until"
   ],
   "additionalProperties": false,
-  "description": "One lease per project. Fixed 15 minute tenure, no renewal. Any next lander may break it at expiry. Validate also checks until = since + 15 minutes."
+  "description": "One lease per project. Expires 15 minutes after renewed_at, or since when never renewed. A stale lease may be broken by the next lander. Validate checks this duration."
 }

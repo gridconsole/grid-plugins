@@ -132,16 +132,17 @@ type State struct {
 	Verdicts []Verdict       `json:"verdicts"`
 }
 
-// MergeLease belongs to a project, not a task. A release clears Holder. No
-// renewal operation exists: a later grant must get a new fence and start time.
+// MergeLease belongs to a project, not a task. A release clears Holder. Its
+// fifteen-minute window starts at RenewedAt, or Since when never renewed.
 type MergeLease struct {
-	Lease   string  `json:"lease"`
-	Project string  `json:"project"`
-	Holder  *string `json:"holder"`
-	Fence   int64   `json:"fence"`
-	Gen     int64   `json:"gen"`
-	Since   string  `json:"since"`
-	Until   string  `json:"until"`
+	Lease     string  `json:"lease"`
+	Project   string  `json:"project"`
+	Holder    *string `json:"holder"`
+	Fence     int64   `json:"fence"`
+	Gen       int64   `json:"gen"`
+	Since     string  `json:"since"`
+	RenewedAt *string `json:"renewed_at,omitempty"`
+	Until     string  `json:"until"`
 }
 
 // Breakable reports release or expiry; a malformed held lease is not breakable.

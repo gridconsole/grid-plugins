@@ -144,6 +144,12 @@ func TestMergeLeaseExpiry(t *testing.T) {
 	if lease.Breakable(end) {
 		t.Fatal("malformed lease should not authorize a break")
 	}
+	if err := json.Unmarshal(fixture(t, "merge-lease", "valid/renewed"), &lease); err != nil {
+		t.Fatal(err)
+	}
+	if lease.Breakable(end) || !lease.Breakable(end.Add(5*time.Minute)) {
+		t.Fatal("a renewal must move the fifteen-minute expiry window")
+	}
 }
 
 func TestValidatorBoundaries(t *testing.T) {

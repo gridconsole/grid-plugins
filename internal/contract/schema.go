@@ -334,6 +334,14 @@ func semantic(name string, value any) error {
 		return nil
 	}
 	if name == "merge-lease" || name == "lease" && v["lease"] == "merge" {
+		if renewed, ok := v["renewed_at"].(string); ok {
+			since, _ := time.Parse(time.RFC3339Nano, v["since"].(string))
+			at, _ := time.Parse(time.RFC3339Nano, renewed)
+			if at.Before(since) {
+				return fmt.Errorf("$.renewed_at: cannot precede since")
+			}
+			return duration(v, "renewed_at", "until", 15*time.Minute)
+		}
 		return duration(v, "since", "until", 15*time.Minute)
 	}
 	if name == "heartbeat" {
