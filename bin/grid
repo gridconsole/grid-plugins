@@ -1,0 +1,57 @@
+#!/bin/sh
+# Dev launcher for the grid CLI: builds this checkout into <checkout>/dist/grid on every
+# call (go's build cache makes an unchanged tree a no-op) and runs it.
+# TODO: release launcher. Run ~/.grid/bin/<version>/grid; when it is missing, download the
+# platform build, check it against the sha256 committed in this plugin, then install it
+# there. On a mismatch print "Download failed: checksum does not match. Nothing was
+# installed." and keep the old binary (plugin-design.md section 9).
+set -u
+
+# Follow symlinks (a link in ~/.local/bin, say) to the checkout this file lives in.
+self=$0
+while [ -L "$self" ]; do
+	link=$(readlink "$self")
+	case $link in
+	/*) self=$link ;;
+	*) self=$(dirname -- "$self")/$link ;;
+	esac
+done
+root=$(CDPATH= cd -P -- "$(dirname -- "$self")/.." && pwd -P) || exit 1
+bin="$root/dist/grid"
+
+# Same flags as make build, so the two never rebuild over each other.
+build() {
+	go build -C "$root" -trimpath -o "$bin" ./cmd/grid
+}
+
+if [ "${1:-}" = hook ]; then
+	# A hook answers inside its 10 s timeout and never fails the session: when go is
+	# missing, the build fails or takes over 8 s, it answers nothing and exits 0.
+	# A slow build carries on in the background, so a later call finds it done.
+	command -v go >/dev/null 2>&1 || exit 0
+	trap 'exit 0' USR1
+	build </dev/null >/dev/null 2>&1 &
+	pid=$!
+	main=$$
+	(
+		trap 'kill "$nap" 2>/dev/null; exit 0' TERM
+		sleep 8 &
+		nap=$!
+		wait "$nap" && kill -USR1 "$main"
+	) </dev/null >/dev/null 2>&1 &
+	watchdog=$!
+	if ! wait "$pid"; then
+		kill "$watchdog" 2>/dev/null
+		exit 0
+	fi
+	kill "$watchdog" 2>/dev/null
+	trap - USR1
+	exec "$bin" "$@"
+fi
+
+if ! command -v go >/dev/null 2>&1; then
+	echo "grid: this dev launcher builds grid from source and needs go on PATH" >&2
+	exit 1
+fi
+build || exit 1
+exec "$bin" "$@"
