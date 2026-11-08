@@ -186,6 +186,7 @@ func TestReadyEdges(t *testing.T) {
 		{"rejected is not done", Done, contract.Rejected, true, false},
 		{"failed rejected", Failed, contract.Rejected, true, true},
 		{"failed cancelled", Failed, contract.Cancelled, true, true},
+		{"cancelled with a retry left", Failed, contract.Cancelled, false, false},
 		{"retry left", Failed, contract.Rejected, false, false},
 		{"accepted is not failed", Failed, contract.Accepted, true, false},
 	} {
