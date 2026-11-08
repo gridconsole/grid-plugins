@@ -188,11 +188,22 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	if err != nil {
 		return 2, claudeInvalid{path}
 	}
-	rules := record.Rules
-	if !o.Remove {
-		rules, err = ClaudeBlock(o.Home, o.GridHome)
-		if err != nil {
-			return 1, err
+	block, err := ClaudeBlock(o.Home, o.GridHome)
+	if err != nil {
+		return 1, err
+	}
+	rules := block
+	if o.Remove {
+		// The writable record is evidence of installation, never authority to
+		// remove arbitrary settings. Match section, key, and value exactly,
+		// using the same path normalization and block builder as installation.
+		rules = nil
+		for _, rule := range record.Rules {
+			if slices.Contains(block, rule) {
+				rules = append(rules, rule)
+			} else {
+				fmt.Fprintf(o.Stderr, "not a Grid rule, left in place: %s\n", rule.Value)
+			}
 		}
 	}
 	changes := []ClaudeRule{}
@@ -204,6 +215,15 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		// Preserve a user's intentional replacement of classifier defaults.
 		if !o.Remove && rule.Section == "autoMode" && rule.Value == "$defaults" && exists && !slices.Contains(values, "$defaults") {
 			continue
+		}
+		if o.Remove && rule == (ClaudeRule{"autoMode", "environment", "$defaults"}) {
+			// Keep the defaults alongside any context the person will retain.
+			personal := slices.ContainsFunc(values, func(value string) bool {
+				return !slices.Contains(rules, ClaudeRule{"autoMode", "environment", value})
+			})
+			if personal {
+				continue
+			}
 		}
 		present := slices.Contains(values, rule.Value)
 		if o.Remove {
