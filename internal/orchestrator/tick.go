@@ -33,14 +33,14 @@ func (s Store) Tick() (out Output, err error) {
 		if e != nil {
 			return e
 		}
-		if e := s.publishPlan(snap); e != nil {
-			return e
-		}
-		snap, e = Load(s.Feed)
+		m, e := s.readMemory()
 		if e != nil {
 			return e
 		}
-		m, e := s.readMemory()
+		if e := s.publishPlan(snap, &m); e != nil {
+			return e
+		}
+		snap, e = Load(s.Feed)
 		if e != nil {
 			return e
 		}

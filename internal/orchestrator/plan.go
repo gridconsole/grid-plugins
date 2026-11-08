@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,10 +21,10 @@ import (
 // publishPlan runs under the task lease and pass lock. The Feed owns published
 // Jobs; plan edits never reset their lifecycle. Missing Jobs are retried after a
 // partial publication, including when a new task holder resumes the task.
-func (s Store) publishPlan(snap Snapshot) error {
+func (s Store) publishPlan(snap Snapshot, m *memory) error {
 	text, err := (plan.Store{TaskDir: s.Feed.TaskDir}).Read()
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return s.publicationBlocked(m, false)
 	}
 	if err != nil {
 		return err
@@ -51,11 +50,29 @@ func (s Store) publishPlan(snap Snapshot) error {
 			return err
 		}
 		if taskfile.PlanApprovalRequired(string(workflow)) && !task.Approved(s.Feed.TaskDir) {
-			log.Print("plan publication skipped: workflow requires approval of the current plan")
-			return nil
+			return s.publicationBlocked(m, true)
+		}
+		if err := s.publicationBlocked(m, false); err != nil {
+			return err
 		}
 		return s.publishPlanText(snap, text)
 	})
+}
+
+// Persist transitions under the pass lock, including across CLI invocations.
+// Save before continuing the tick so a later failure cannot repeat the notice.
+func (s Store) publicationBlocked(m *memory, blocked bool) error {
+	if m.PlanPublicationBlocked == blocked {
+		return nil
+	}
+	m.PlanPublicationBlocked = blocked
+	if err := s.saveMemory(*m); err != nil {
+		return err
+	}
+	if blocked && s.Diagnostics != nil {
+		fmt.Fprintln(s.Diagnostics, "plan publication skipped: workflow requires approval of the current plan; run grid approve before Jobs can post")
+	}
+	return nil
 }
 
 func (s Store) publishPlanText(snap Snapshot, text string) error {

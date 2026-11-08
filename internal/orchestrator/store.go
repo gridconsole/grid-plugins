@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -51,6 +52,8 @@ type Store struct {
 	Probe        func(session.Live) session.ProcessState
 	UsageReady   func(string) bool
 	Incident     func(string, []string) error
+	// Diagnostics receives publication notices; nil discards them.
+	Diagnostics io.Writer
 }
 
 func (s Store) now() time.Time {
@@ -86,6 +89,8 @@ type memory struct {
 	Delivered    map[string]bool         `json:"delivered"`
 	Wakes        []time.Time             `json:"wakes"`
 	Pending      []Wake                  `json:"pending"`
+
+	PlanPublicationBlocked bool `json:"plan_publication_blocked,omitempty"`
 }
 
 func (s Store) locked(fn func() error) error {

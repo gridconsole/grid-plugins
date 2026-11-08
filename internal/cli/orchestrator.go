@@ -191,6 +191,7 @@ func runOrchestrator(args []string, env Env) int {
 	}
 	if verb == "next" || verb == "tick" {
 		s := orchestrator.Store{AfterWake: *afterWake, Feed: store, Writer: writer, Assignee: *to, Owner: *owner, WorktreesDir: filepath.Join(env.GridHome, "projects", scope.Project, "worktrees")}
+		s.Diagnostics = env.Stderr
 		s.Probe = func(live session.Live) session.ProcessState {
 			local := writer.Worker[strings.LastIndexByte(writer.Worker, '@'):]
 			if !strings.HasSuffix(live.Holder, local) {

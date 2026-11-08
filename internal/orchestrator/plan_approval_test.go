@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"bytes"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,8 +64,10 @@ func TestPlanPublicationChecksCurrentApproval(t *testing.T) {
 }
 
 func TestPlanPublicationApprovalDiagnostics(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"unapproved", "approved", "edited", "no gate", "history only"} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
 			f := setupPlan(t)
 			text := plannedText(t)
 			writePlan(t, f, text)
@@ -83,11 +84,8 @@ func TestPlanPublicationApprovalDiagnostics(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			// These subtests are serial: restore the process logger after each one.
 			var logs bytes.Buffer
-			previous := log.Writer()
-			log.SetOutput(&logs)
-			t.Cleanup(func() { log.SetOutput(previous) })
+			f.s.Diagnostics = &logs
 			before, err := f.s.Feed.Read(feed.Filter{})
 			if err != nil {
 				t.Fatal(err)
@@ -107,7 +105,7 @@ func TestPlanPublicationApprovalDiagnostics(t *testing.T) {
 			if added := len(records.Records) - len(before.Records); added != 0 || out.Assigned != 0 {
 				t.Fatalf("unapproved plan posted %d records and assigned %d Jobs", added, out.Assigned)
 			}
-			if strings.Count(logs.String(), "\n") != 1 || !strings.Contains(logs.String(), "plan publication skipped: workflow requires approval of the current plan") {
+			if strings.Count(logs.String(), "\n") != 1 || !strings.Contains(logs.String(), "plan publication skipped: workflow requires approval of the current plan") || !strings.Contains(logs.String(), "grid approve") {
 				t.Fatalf("blocked publication needs one explanatory log line; got %q", logs.String())
 			}
 		})
@@ -123,6 +121,81 @@ func rewritePlanFile(t *testing.T, dir, name, old, next string) {
 	}
 	if err := os.WriteFile(path, []byte(strings.Replace(string(b), old, next, 1)), 0600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPlanPublicationNoticeRepeatsOnlyAfterUnblocked(t *testing.T) {
+	t.Parallel()
+	for _, unblock := range []string{"approval", "workflow waiver", "removed plan"} {
+		t.Run(unblock, func(t *testing.T) {
+			t.Parallel()
+			f := setupPlan(t)
+			text := plannedText(t)
+			writePlan(t, f, text)
+			var logs bytes.Buffer
+			f.s.Diagnostics = &logs
+			const notice = "plan publication skipped: workflow requires approval of the current plan; run grid approve before Jobs can post\n"
+			check := func(lines int) {
+				t.Helper()
+				if got, want := logs.String(), strings.Repeat(notice, lines); got != want {
+					t.Fatalf("diagnostics = %q, want %q", got, want)
+				}
+			}
+			before, err := f.s.Feed.Read(feed.Filter{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for range 3 {
+				if out := f.tick(t); out.Assigned != 0 {
+					t.Fatalf("blocked task assigned Jobs: %+v", out)
+				}
+				check(1)
+			}
+			after, err := f.s.Feed.Read(feed.Filter{})
+			if err != nil || len(after.Records) != len(before.Records) {
+				t.Fatalf("blocked ticks changed Feed: %+v %v", after, err)
+			}
+			// Changing the unapproved revision is still the same blocked state.
+			text = strings.Replace(text, "role: writer", "role: builder", 1)
+			writePlan(t, f, text)
+			f.tick(t)
+			check(1)
+
+			switch unblock {
+			case "approval":
+				approvePlan(t, f)
+			case "workflow waiver":
+				rewritePlanFile(t, f.s.Feed.TaskDir, "task.md", "workflow: ''", "workflow: [{step: build, kind: run}]")
+			case "removed plan":
+				if err := os.Remove(filepath.Join(f.s.Feed.TaskDir, "plan.md")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			out := f.tick(t)
+			want := 1
+			if unblock == "removed plan" {
+				want = 0
+			}
+			if out.Assigned != want {
+				t.Fatalf("unblocked assignments = %d, want %d", out.Assigned, want)
+			}
+			check(1)
+
+			switch unblock {
+			case "approval":
+				if err := os.Remove(filepath.Join(f.s.Feed.TaskDir, "approval.json")); err != nil {
+					t.Fatal(err)
+				}
+			case "workflow waiver":
+				rewritePlanFile(t, f.s.Feed.TaskDir, "task.md", "workflow: [{step: build, kind: run}]", "workflow: ''")
+			case "removed plan":
+				writePlan(t, f, text)
+			}
+			for range 3 {
+				f.tick(t)
+				check(2)
+			}
+		})
 	}
 }
 
