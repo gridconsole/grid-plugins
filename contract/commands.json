@@ -113,7 +113,7 @@
     },
     {
       "name": "hook",
-      "summary": "answer a Claude Code or Codex hook event",
+      "summary": "answer a Claude Code or Codex hook event; set and list hook levels",
       "built": true,
       "subcommands": [
         {
@@ -121,6 +121,23 @@
           "args": [
             "\u003cevent\u003e"
           ],
+          "flags": [],
+          "json": false,
+          "output": ""
+        },
+        {
+          "name": "level",
+          "args": [
+            "\u003chook\u003e",
+            "\u003coff|warn|block\u003e"
+          ],
+          "flags": [],
+          "json": false,
+          "output": ""
+        },
+        {
+          "name": "levels",
+          "args": [],
           "flags": [],
           "json": false,
           "output": ""
@@ -500,6 +517,11 @@
           ],
           "flags": [
             {
+              "name": "--after-wake",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--attempt",
               "takes": "value",
               "required": false
@@ -595,6 +617,11 @@
           ],
           "flags": [
             {
+              "name": "--after-wake",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--attempt",
               "takes": "value",
               "required": false
@@ -689,6 +716,11 @@
             "[job]"
           ],
           "flags": [
+            {
+              "name": "--after-wake",
+              "takes": "none",
+              "required": false
+            },
             {
               "name": "--attempt",
               "takes": "value",
@@ -850,6 +882,11 @@
           ],
           "flags": [
             {
+              "name": "--after-wake",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--attempt",
               "takes": "value",
               "required": false
@@ -945,6 +982,11 @@
             "[job]"
           ],
           "flags": [
+            {
+              "name": "--after-wake",
+              "takes": "none",
+              "required": false
+            },
             {
               "name": "--attempt",
               "takes": "value",
@@ -1072,6 +1114,11 @@
           ],
           "flags": [
             {
+              "name": "--after-wake",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--attempt",
               "takes": "value",
               "required": false
@@ -1191,11 +1238,41 @@
           "output": ""
         },
         {
+          "name": "trace",
+          "args": [
+            "\u003cpointer\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--sha256",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
           "name": "tree",
           "args": [
             "[job]"
           ],
           "flags": [
+            {
+              "name": "--after-wake",
+              "takes": "none",
+              "required": false
+            },
             {
               "name": "--attempt",
               "takes": "value",
@@ -1319,7 +1396,7 @@
     },
     {
       "name": "lease",
-      "summary": "take, renew, release, status (merge lease)",
+      "summary": "take task (adoption, takeover); take, renew, release, status merge",
       "built": true,
       "subcommands": [
         {
@@ -1716,6 +1793,11 @@
           ],
           "flags": [
             {
+              "name": "--after-wake",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--attempt",
               "takes": "value",
               "required": false
@@ -1847,7 +1929,7 @@
     },
     {
       "name": "question",
-      "summary": "add, answer, withdraw, list and tick task questions",
+      "summary": "add, withdraw, list, tick and sync task questions",
       "built": true,
       "subcommands": [
         {
@@ -1873,6 +1955,16 @@
             },
             {
               "name": "--default",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--item",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
               "takes": "value",
               "required": false
             },
@@ -1916,17 +2008,9 @@
           "output": ""
         },
         {
-          "name": "answer",
-          "args": [
-            "\u003cQ-id\u003e",
-            "\u003coption-or-text\u003e"
-          ],
+          "name": "list",
+          "args": [],
           "flags": [
-            {
-              "name": "--by",
-              "takes": "value",
-              "required": false
-            },
             {
               "name": "--json",
               "takes": "none",
@@ -1942,8 +2026,10 @@
           "output": ""
         },
         {
-          "name": "list",
-          "args": [],
+          "name": "sync",
+          "args": [
+            "[task]"
+          ],
           "flags": [
             {
               "name": "--json",
@@ -1984,11 +2070,6 @@
           ],
           "flags": [
             {
-              "name": "--by",
-              "takes": "value",
-              "required": false
-            },
-            {
               "name": "--json",
               "takes": "none",
               "required": false
@@ -2018,8 +2099,26 @@
     {
       "name": "answer",
       "summary": "record a person's answer",
-      "built": false,
-      "subcommands": []
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [
+            "\u003ctask\u003e",
+            "\u003cQ-N\u003e",
+            "\u003ctext\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
     },
     {
       "name": "approve",
@@ -2226,12 +2325,33 @@
     {
       "name": "land",
       "summary": "land a task per the deploy topic",
-      "built": false,
-      "subcommands": []
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [
+            "\u003ctask\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--dry-run",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
     },
     {
       "name": "brain",
-      "summary": "show, search, topics, index, propose, accept, keep",
+      "summary": "show, search, topics, index, propose, accept, keep, decide",
       "built": true,
       "subcommands": [
         {
@@ -2257,6 +2377,29 @@
             },
             {
               "name": "--reject",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "decide",
+          "args": [
+            "\u003ctask\u003e",
+            "\u003cproposal-id\u003e",
+            "\u003caccept|reject|merge-into\u003e",
+            "[note-id]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--note",
               "takes": "value",
               "required": false
             }
@@ -2735,21 +2878,123 @@
     },
     {
       "name": "agent",
-      "summary": "agents topic",
-      "built": false,
-      "subcommands": []
+      "summary": "set agent models and efforts; list effective settings",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "set",
+          "args": [
+            "\u003cagent\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--effort",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--model",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": false,
+          "output": ""
+        }
+      ]
     },
     {
       "name": "workflow",
-      "summary": "workflows topic",
-      "built": false,
-      "subcommands": []
+      "summary": "show workflow template files and parse problems",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "show",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
     },
     {
       "name": "skill",
-      "summary": "skills topic",
-      "built": false,
-      "subcommands": []
+      "summary": "enable, disable and list skills",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "disable",
+          "args": [
+            "\u003cskill\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": false,
+          "output": ""
+        },
+        {
+          "name": "enable",
+          "args": [
+            "\u003cskill\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": false,
+          "output": ""
+        },
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
     },
     {
       "name": "session",
@@ -3175,6 +3420,41 @@
           "output": "cmd-intent-list.json"
         },
         {
+          "name": "release",
+          "args": [
+            "\u003cid\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--claim",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--token",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
           "name": "renew",
           "args": [
             "\u003cid\u003e"
@@ -3543,10 +3823,69 @@
       ]
     },
     {
+      "name": "project-md",
+      "summary": "get or set a project front-matter key",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "get",
+          "args": [
+            "\u003cproject\u003e",
+            "\u003ckey\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "set",
+          "args": [
+            "\u003cproject\u003e",
+            "\u003ckey\u003e",
+            "\u003cvalue\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
       "name": "setup",
-      "summary": "first-run scan and settings",
-      "built": false,
-      "subcommands": []
+      "summary": "record validated project setup answers",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [
+            {
+              "name": "--answers",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
     },
     {
       "name": "signal",

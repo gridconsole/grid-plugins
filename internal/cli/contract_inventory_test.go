@@ -273,6 +273,13 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 		}
 		sort.Strings(paths[c.name])
 	}
+	// runSettings serves agent, skill and hook; follow-through of its shared
+	// operation names would invent routes such as "agent enable".
+	paths["agent"] = []string{"list", "set"}
+	paths["skill"] = []string{"disable", "enable", "list"}
+	paths["hook"] = []string{"", "level", "levels"}
+	// "answer" is the top-level command; question.Run keeps no such route.
+	paths["question"] = []string{"add", "list", "sync", "tick", "withdraw"}
 	candidates := []string{"--__contract_unknown"}
 	for flag := range source.flags {
 		if flag != "--help" {
@@ -324,7 +331,11 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 				return true, "value"
 			}
 			// Hook deliberately ignores invalid input and has no flags.
-			if c.name != "hook" {
+			// answer takes <task> first, so a leading probe flag is swallowed as the task.
+			if c.name == "answer" {
+				sub.Flags = append(sub.Flags, contractCommandFlag{Name: "--json", Takes: "none"})
+				sub.JSON = true
+			} else if c.name != "hook" {
 				for _, flag := range candidates {
 					recognized, takes := probe(flag)
 					if recognized {
@@ -393,6 +404,13 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"where":                 {},
 		"doctor":                {},
 		"hook":                  {args: []string{"<event>"}},
+		"hook level":            {args: []string{"<hook>", "<off|warn|block>"}},
+		"hook levels":           {},
+		"agent list":            {},
+		"agent set":             {args: []string{"<agent>"}},
+		"skill list":            {},
+		"skill enable":          {args: []string{"<skill>"}},
+		"skill disable":         {args: []string{"<skill>"}},
 		"task new":              {args: []string{"<words>"}},
 		"task show":             {args: []string{"[T-NN]"}, output: "cmd-task-show.json"},
 		"task list":             {output: "cmd-task-list.json"},
@@ -433,7 +451,8 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"feed fold":             {args: []string{"[task]"}},
 		"mcp":                   {},
 		"question add":          {args: []string{"[question]"}},
-		"question answer":       {args: []string{"<Q-id>", "<option-or-text>"}},
+		"question sync":         {args: []string{"[task]"}},
+		"answer":                {args: []string{"<task>", "<Q-N>", "<text>"}},
 		"question withdraw":     {args: []string{"<Q-id>"}},
 		"question list":         {},
 		"question tick":         {},
@@ -450,6 +469,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"brain propose":         {},
 		"brain accept":          {args: []string{"<id>"}},
 		"brain keep":            {},
+		"brain decide":          {args: []string{"<task>", "<proposal-id>", "<accept|reject|merge-into>", "[note-id]"}},
 		"env up":                {args: []string{"<J>"}},
 		"env down":              {args: []string{"<J>"}},
 		"ports claim":           {args: []string{"<J>"}},
@@ -476,6 +496,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"intent claim":          {args: []string{"<id>"}},
 		"intent renew":          {args: []string{"<id>"}},
 		"intent done":           {args: []string{"<id>"}},
+		"intent release":        {args: []string{"<id>"}},
 		"usage":                 {},
 		"project add":           {args: []string{"[path]"}},
 		"project remove":        {args: []string{"<name-or-id>"}},
@@ -494,6 +515,12 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"eval show":             {args: []string{"<run-id>"}},
 		"migrate":               {},
 		"job verify":            {args: []string{"<job>"}},
+		"job trace":             {args: []string{"<pointer>"}},
+		"land":                  {args: []string{"<task>"}},
+		"project-md get":        {args: []string{"<project>", "<key>"}},
+		"project-md set":        {args: []string{"<project>", "<key>", "<value>"}},
+		"setup":                 {},
+		"workflow show":         {},
 		"usage post":            {required: map[string]bool{"--job": true}},
 		"usage show":            {},
 		"usage threshold set":   {},
