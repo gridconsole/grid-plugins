@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "grid-feed": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/grid",
+      "args": ["mcp"]
+    }
+  }
+}

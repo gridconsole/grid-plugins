@@ -88,7 +88,7 @@ func commands() []command {
 		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, cycles, floor", runOrchestratorJob},
 		{"lease", "take, renew, release, status (merge lease)", runLease},
 		{"feed", "tick, post, read, state, types, handover, fold", runOrchestratorFeed},
-		{"mcp", "stdio server with the Feed tools", nil},
+		{"mcp", "stdio server with the Feed tools", runMCP},
 		{"question", "add, answer, withdraw, list and tick task questions", runQuestion},
 		{"ask", "ask a person a question", nil},
 		{"answer", "record a person's answer", nil},

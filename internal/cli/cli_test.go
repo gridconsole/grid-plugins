@@ -297,7 +297,6 @@ func TestStubsAndUsageErrors(t *testing.T) {
 		wantStderr string
 	}{
 		{[]string{"task"}, 2, "Usage:"},
-		{[]string{"mcp"}, 2, "mcp: not built yet\n"},
 		{[]string{"migrate", "--dry-run", "--apply"}, 2, "mutually exclusive"},
 		{[]string{"nope"}, 2, `unknown command "nope"`},
 		{[]string{"version", "extra"}, 2, "unexpected argument"},
