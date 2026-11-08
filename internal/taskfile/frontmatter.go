@@ -14,9 +14,14 @@ type Frontmatter struct {
 }
 
 var block = regexp.MustCompile(`^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$`)
-var field = regexp.MustCompile(`^([A-Za-z_][\w-]*):\s*(.*)$`)
-var item = regexp.MustCompile(`^\s+-\s+(.*)$`)
-var comment = regexp.MustCompile(`\s+#\s.*$`)
+
+// JavaScript's whitespace includes BOM and excludes U+0085; Go's \s and
+// strings.TrimSpace differ on both, so keep the legacy dialect explicit.
+const jsSpace = `[\t\n\v\f\r \x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}]`
+
+var field = regexp.MustCompile(`^([A-Za-z_][\w-]*):` + jsSpace + `*(.*)$`)
+var item = regexp.MustCompile(`^` + jsSpace + `+-` + jsSpace + `+(.*)$`)
+var comment = regexp.MustCompile(jsSpace + `+#` + jsSpace + `.*$`)
 
 // ParseFrontmatter matches lib.mjs parseFrontmatter, including string-valued
 // scalars, duplicate keys, nested inline lists, and its intentionally unquoted
@@ -62,7 +67,7 @@ func ScalarFrontmatter(text string) *Frontmatter {
 }
 
 func scalar(raw string) string {
-	v := strings.TrimSpace(comment.ReplaceAllString(raw, ""))
+	v := trimSpace(comment.ReplaceAllString(raw, ""))
 	if len(v) >= 2 && (v[0] == '\'' || v[0] == '"') && v[len(v)-1] == v[0] {
 		v = v[1 : len(v)-1]
 	}
@@ -88,7 +93,7 @@ func value(raw string, seen *bool) any {
 	if strings.HasPrefix(v, "{") && strings.HasSuffix(v, "}") {
 		out := map[string]any{}
 		for _, p := range splitTop(v[1 : len(v)-1]) {
-			if kv := field.FindStringSubmatch(strings.TrimSpace(p)); kv != nil {
+			if kv := field.FindStringSubmatch(trimSpace(p)); kv != nil {
 				odd(kv[1], seen)
 				out[kv[1]] = value(kv[2], seen)
 			}
@@ -108,12 +113,12 @@ func splitTop(s string) []string {
 			depth--
 		}
 		if c == ',' && depth == 0 {
-			out = append(out, strings.TrimSpace(s[start:i]))
+			out = append(out, trimSpace(s[start:i]))
 			start = i + 1
 		}
 	}
-	if strings.TrimSpace(s[start:]) != "" {
-		out = append(out, strings.TrimSpace(s[start:]))
+	if trimSpace(s[start:]) != "" {
+		out = append(out, trimSpace(s[start:]))
 	}
 	return out
 }
@@ -129,4 +134,10 @@ func HistoryLine(time, event, detail, who string, via ...string) string {
 		line += " · via " + via[0]
 	}
 	return line
+}
+
+func trimSpace(s string) string {
+	return strings.TrimFunc(s, func(r rune) bool {
+		return r == '\t' || r == '\n' || r == '\v' || r == '\f' || r == '\r' || r == ' ' || r == 0xa0 || r == 0x1680 || (r >= 0x2000 && r <= 0x200a) || r == 0x2028 || r == 0x2029 || r == 0x202f || r == 0x205f || r == 0x3000 || r == 0xfeff
+	})
 }

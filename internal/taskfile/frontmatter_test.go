@@ -8,6 +8,7 @@ import (
 func TestParseFrontmatter(t *testing.T) {
 	for _, tt := range []struct{ name, text, want string }{
 		{"missing", "body", `null`},
+		{"javascript whitespace", "---\nx:\ufeffvalue\ufeff # note\ny: \u0085kept\u0085\n---", "{\"data\":{\"x\":\"value\",\"y\":\"\u0085kept\u0085\"},\"body\":\"\",\"odd\":false}"},
 		{"scalars", "---\r\na: 'yes' # note\r\nb: false\r\nn: 3\r\n---\r\nbody", `{"data":{"a":"yes","b":"false","n":"3"},"body":"body","odd":false}`},
 		{"lists", "---\nworkflow:\n  - {step: plan, kind: approve}\nx: [one, [two, three], {}, '']\n---\n", `{"data":{"workflow":[{"kind":"approve","step":"plan"}],"x":["one",["two","three"],{}]},"body":"","odd":false}`},
 		{"odd nested", "---\nx: {constructor: yes}\n---", `{"data":{"x":{"constructor":"yes"}},"body":"","odd":true}`},

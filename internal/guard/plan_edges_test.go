@@ -139,3 +139,16 @@ func TestRecallLineForms(t *testing.T) {
 		}
 	}
 }
+
+func TestExplicitFilesystemBase(t *testing.T) {
+	f := setup(t)
+	f.env["GRID_PROJECTS"] = "home/.grid/projects"
+	f.env["CLAUDE_PLUGIN_DATA"] = "data"
+	f.env["PWD"] = f.root
+	i := f.input("Write", "file.go")
+	i.Cwd = "repo"
+	// The pointer is relative to the explicit filesystem base, not the process cwd.
+	f.write(filepath.Join(f.root, "data", "sessions", "session.tasks"), f.task+"\n")
+	d := EvaluatePlan(i, f.root, f.env)
+	expect(t, d, "deny")
+}

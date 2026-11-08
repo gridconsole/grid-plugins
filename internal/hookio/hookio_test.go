@@ -1,6 +1,7 @@
 package hookio
 
 import (
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -51,5 +52,22 @@ func TestDecisions(t *testing.T) {
 	}
 	if got := Strongest(Allow("a"), Ask("b"), Deny("c"), Deny("d")); got.Reason != "c" {
 		t.Fatal(got)
+	}
+}
+
+func TestDecisionUnicodeSeparators(t *testing.T) {
+	for _, reason := range []string{"\u2028\u2029", `\u2028`, `\u2029`, "\\\u2028", `\\u2028`, "<>&\n\t"} {
+		data := Deny(reason).Bytes()
+		var got struct {
+			Output struct {
+				Reason string `json:"permissionDecisionReason"`
+			} `json:"hookSpecificOutput"`
+		}
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatalf("%q: %s: %v", reason, data, err)
+		}
+		if got.Output.Reason != reason {
+			t.Fatalf("got %q, want %q", got.Output.Reason, reason)
+		}
 	}
 }

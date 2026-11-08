@@ -94,7 +94,7 @@ func (c context) ownScript(command string) (string, []string) {
 	if plugin == "" {
 		return "", nil
 	}
-	plugin, err = filepath.EvalSymlinks(plugin)
+	plugin, err = filepath.EvalSymlinks(resolve(c.root, plugin))
 	if err != nil {
 		return "", nil
 	}

@@ -24,8 +24,11 @@ func newContext(in hookio.Input, root string, env map[string]string) context {
 	if root == "" {
 		root = "."
 	}
+	root = resolve(".", root)
 	if in.Cwd == "" {
 		in.Cwd = root
+	} else {
+		in.Cwd = resolve(root, in.Cwd)
 	}
 	c := context{in: in, env: env, root: root, home: env["GRID_HOME"], projects: env["GRID_PROJECTS"]}
 	c.set = c.home != "" || c.projects != ""
@@ -35,6 +38,9 @@ func newContext(in hookio.Input, root string, env map[string]string) context {
 	}
 	if c.projects == "" && c.home != "" {
 		c.projects = filepath.Join(c.home, "projects")
+	}
+	if c.projects != "" {
+		c.projects = resolve(root, c.projects)
 	}
 	return c
 }
@@ -225,7 +231,7 @@ func (c context) pointer(ext string) string {
 	if id == "" || c.env["CLAUDE_PLUGIN_DATA"] == "" {
 		return ""
 	}
-	return filepath.Join(c.env["CLAUDE_PLUGIN_DATA"], "sessions", id+ext)
+	return filepath.Join(resolve(c.root, c.env["CLAUDE_PLUGIN_DATA"]), "sessions", id+ext)
 }
 func (c context) taskDirs(text string) []string {
 	out := []string{}

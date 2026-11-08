@@ -161,8 +161,29 @@ func (d Decision) Bytes() []byte {
 		return nil
 	}
 	data := bytes.TrimSuffix(b.Bytes(), []byte("\n"))
-	data = bytes.ReplaceAll(data, []byte(`\u2028`), []byte("\u2028"))
-	return bytes.ReplaceAll(data, []byte(`\u2029`), []byte("\u2029"))
+	// JSON.stringify leaves these valid Unicode separators literal. Walk escape
+	// sequences so a literal backslash followed by "u2028" remains escaped.
+	outBytes := make([]byte, 0, len(data))
+	for i := 0; i < len(data); {
+		if data[i] == '\\' && i+1 < len(data) {
+			if bytes.HasPrefix(data[i:], []byte(`\u2028`)) {
+				outBytes = append(outBytes, []byte("\u2028")...)
+				i += 6
+				continue
+			}
+			if bytes.HasPrefix(data[i:], []byte(`\u2029`)) {
+				outBytes = append(outBytes, []byte("\u2029")...)
+				i += 6
+				continue
+			}
+			outBytes = append(outBytes, data[i:i+2]...)
+			i += 2
+			continue
+		}
+		outBytes = append(outBytes, data[i])
+		i++
+	}
+	return outBytes
 }
 func (d Decision) Write(w io.Writer) error {
 	b := d.Bytes()
