@@ -1,6 +1,10 @@
 package feed
 
-import "os"
+import (
+	"os"
+
+	"github.com/gridconsole/grid-plugins/internal/fslock"
+)
 
 // WithLease holds the checked tenure against takeover for a mechanical pass.
 // Callers serialize passes separately; individual posts still check their lease.
@@ -13,7 +17,7 @@ func (s Store) WithLease(w Writer, attempt *int, fn func() error) error {
 		return err
 	}
 	defer f.Close()
-	defer unlock(f)
+	defer fslock.Unlock(f)
 	return fn()
 }
 
