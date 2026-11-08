@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-feed-post.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid feed post --json; internal/cli/feed.go:168.",
+  "properties": {
+    "data": {
+      "type": "boolean"
+    },
+    "post": {
+      "$ref": "envelope.json"
+    },
+    "tier": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "post",
+    "tier",
+    "data"
+  ],
+  "title": "grid feed post output",
+  "type": "object"
+}

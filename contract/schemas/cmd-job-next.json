@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-job-next.json",
+  "description": "One JSON line from grid job next [--wait] --json; internal/cli/orchestrator.go:175 and :228.",
+  "oneOf": [
+    {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "state",
+          "why"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "wake": {
+          "additionalProperties": false,
+          "properties": {
+            "event": {
+              "type": "string"
+            },
+            "events": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "job": {
+              "type": "string"
+            },
+            "n": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "job",
+            "event",
+            "n"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "wake"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "grid job next output"
+}

@@ -2040,7 +2040,8 @@
         {
           "name": "",
           "args": [
-            "[outcome]"
+            "[outcome]",
+            "[files...]"
           ],
           "flags": [
             {

@@ -2,7 +2,21 @@
 
 Shared file formats use the `fmt-` schema prefix; see [formats.md](formats.md).
 
-The Feed contract: schemas, fixtures and the conformance suite; contract/commands.json (each command, arguments, output schema) comes later.
+The Feed contract: schemas, fixtures and the conformance suite.
+
+[commands.json](commands.json) publishes the command table, summaries, build status,
+positional arguments, parsed flags and JSON support under the version returned
+by `grid version --json`. An empty subcommand name means the command itself;
+`<arg>` is required and `[arg]` is optional. Output names resolve under
+`schemas/`; an empty output means this lane has not published a schema for
+that invocation. App output schemas use `cmd-<command>[-<subcommand>].json`
+and have no Feed post registration metadata. When adding a command, update
+the inventory from its parser, add or revise its output schema and at least
+two captured valid and two invalid fixtures, and extend
+`TestContractCommandsApp` in `internal/cli/contract_commands_test.go`.
+Validate live stdout before normalizing fixtures; fixed objects reject
+unknown fields. See [L47 notes](../docs/lanes/L47.md) for parser conventions,
+streaming behavior, fixture capture and current output oddities.
 
 These JSON Schema 2020-12 documents define the current wire format. Feed core
 wins over older formats. All examples use synthetic identities. Sources below
@@ -36,14 +50,34 @@ are reference-document names and original line numbers, not machine paths.
 | Heartbeat file, not a post | [heartbeat.json](schemas/heartbeat.json) | feed-contract.md:200-218 |
 | Takeover log entry | [takeover.json](schemas/takeover.json) | feed-contract.md:105-111 |
 | Trust tier field | [trust-tier.json](schemas/trust-tier.json) | feed-contract.md:90; job-contract.md:87-91 |
+| grid approve output | [cmd-approve.json](schemas/cmd-approve.json) | internal/cli/task_write.go:161 |
+| grid feed post output | [cmd-feed-post.json](schemas/cmd-feed-post.json) | internal/cli/feed.go:168 |
+| grid feed state output | [cmd-feed-state.json](schemas/cmd-feed-state.json) | internal/cli/feed.go:131 |
+| grid intent list output | [cmd-intent-list.json](schemas/cmd-intent-list.json) | internal/cli/intent.go:247 |
+| grid job next output | [cmd-job-next.json](schemas/cmd-job-next.json) | internal/cli/orchestrator.go:175 and :228 |
+| grid plan hash output | [cmd-plan-hash.json](schemas/cmd-plan-hash.json) | internal/cli/plan.go:74 |
+| grid refusal decide output | [cmd-refusal-decide.json](schemas/cmd-refusal-decide.json) | internal/cli/task_write.go:161 |
+| grid session handback output | [cmd-session-handback.json](schemas/cmd-session-handback.json) | internal/cli/intent.go:140 |
+| grid session list output | [cmd-session-list.json](schemas/cmd-session-list.json) | internal/cli/liveness.go:142 |
+| grid session pause output | [cmd-session-pause.json](schemas/cmd-session-pause.json) | internal/cli/intent.go:140 |
+| grid session resume output | [cmd-session-resume.json](schemas/cmd-session-resume.json) | internal/cli/intent.go:140 |
+| grid session send output | [cmd-session-send.json](schemas/cmd-session-send.json) | internal/cli/intent.go:140 |
+| grid session show output | [cmd-session-show.json](schemas/cmd-session-show.json) | internal/cli/liveness.go:162 |
+| grid session start output | [cmd-session-start.json](schemas/cmd-session-start.json) | internal/cli/intent.go:140 |
+| grid session stop output | [cmd-session-stop.json](schemas/cmd-session-stop.json) | internal/cli/intent.go:140 |
+| grid session switch output | [cmd-session-switch.json](schemas/cmd-session-switch.json) | internal/cli/intent.go:140 |
+| grid task list output | [cmd-task-list.json](schemas/cmd-task-list.json) | internal/cli/task.go:142 |
+| grid task move output | [cmd-task-move.json](schemas/cmd-task-move.json) | internal/cli/intent.go:140 |
+| grid task show output | [cmd-task-show.json](schemas/cmd-task-show.json) | internal/cli/task.go:122 |
+| grid version output | [cmd-version.json](schemas/cmd-version.json) | internal/cli/version.go:54 |
+| grid worker list output | [cmd-worker-list.json](schemas/cmd-worker-list.json) | internal/cli/worker.go:44 |
 
-Run `make test` and `make lint` from the repository root. `make test` includes
-`go test ./...`. In a sandbox with a read-only default Go cache, prefix both
-commands with `GOCACHE="$PWD/.contract-cache"`. To keep temporary test files
-inside the checkout as well, first run `mkdir -p .contract-tmp`, then also set
-`TMPDIR="$PWD/.contract-tmp"`. The existing module declaration and Go 1.27
-version are unchanged. The test helper sets a Git discovery ceiling so fixtures
-do not accidentally resolve to an ancestor checkout.
+Run `make test` and `make lint` from the repository root. Keep the default
+TMPDIR so the test runner can check for leaked temporary folders. Focused
+checks are `go test ./internal/cli -run ContractCommands -v` and
+`go test ./internal/contract/...`. The existing module declaration is unchanged.
+The test helper sets a Git discovery ceiling so fixtures do not resolve to
+an ancestor checkout.
 
 The canonical schemas are embedded by `contract/embed.go` and consumed by
 `internal/contract`. Go embed patterns cannot reach parent directories, so the
