@@ -353,7 +353,7 @@ func TestLockOwnership(t *testing.T) {
 	}
 	defer l.release()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCrashHelper$", "-test.count=1")
-	cmd.Env = append(os.Environ(), "GRID_CRASH_STEP=locked", "GRID_CRASH_FROM="+from, "GRID_CRASH_HOME="+home)
+	cmd.Env = append(testenv.Temp(t, os.Environ()), "GRID_CRASH_STEP=locked", "GRID_CRASH_FROM="+from, "GRID_CRASH_HOME="+home)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

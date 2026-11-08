@@ -113,10 +113,10 @@ func (s Store) New(o NewOptions) (Task, error) {
 	if err := syncDir(stage); err != nil {
 		return Task{}, err
 	}
-	if err := AtomicWrite(filepath.Join(home, "VERSION"), []byte(fmt.Sprintf("%d\n", gridhome.FormatVersion))); err != nil {
+	if err := atomicWrite(filepath.Join(home, "VERSION"), []byte(fmt.Sprintf("%d\n", gridhome.FormatVersion))); err != nil {
 		return Task{}, err
 	}
-	if err := AtomicWrite(filepath.Join(home, "machine"), []byte(s.Resolver.Machine+"\n")); err != nil {
+	if err := atomicWrite(filepath.Join(home, "machine"), []byte(s.Resolver.Machine+"\n")); err != nil {
 		return Task{}, err
 	}
 	if r.Project != where.Personal {
@@ -339,7 +339,7 @@ func (s Store) register(r where.Result, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	return AtomicWrite(filepath.Join(s.Resolver.GridHome, "projects", rec.Name, "project.md"), data)
+	return atomicWrite(filepath.Join(s.Resolver.GridHome, "projects", rec.Name, "project.md"), data)
 }
 
 func addKey(rec *project.Record, key project.Key) {
@@ -351,10 +351,10 @@ func addKey(rec *project.Record, key project.Key) {
 	rec.Keys = append(rec.Keys, key)
 }
 
-// AtomicWrite replaces path with data. The data is synced before the rename and
+// atomicWrite replaces path with data. The data is synced before the rename and
 // the folder after it, so a power loss leaves the old file or the new one, never
 // an empty file under the published name.
-func AtomicWrite(path string, data []byte) error {
+func atomicWrite(path string, data []byte) error {
 	f, err := os.CreateTemp(filepath.Dir(path), ".write-")
 	if err != nil {
 		return err
