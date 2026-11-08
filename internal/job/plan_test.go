@@ -23,6 +23,7 @@ func TestLoadChecklistPlan(t *testing.T) {
 		if err := os.WriteFile(path, []byte(text), 0600); err != nil {
 			t.Fatal(err)
 		}
+		h.Approve(t)
 	}
 	base := string(data)
 	write(base)

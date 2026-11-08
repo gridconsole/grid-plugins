@@ -83,18 +83,13 @@ func (f *Files) Resolve(pointer string) (Source, error) {
 		anchor = "L" + m[1] + "-L" + m[2]
 		rel = strings.TrimSuffix(rel, m[0])
 	}
-	// Plan anchors must recheck the current snapshot and receipt on every read,
-	// including when lint and render share this resolver.
-	planAnchor := anchor != "" && filepath.ToSlash(filepath.Clean(strings.TrimPrefix(rel, "task:"))) == "plan.md"
-	if !planAnchor {
-		if s, ok := f.cache[pointer]; ok {
-			return s, nil
-		}
-	}
 	var s Source
 	var err error
 	switch {
 	case strings.HasPrefix(rel, "brain:"):
+		if s, ok := f.cache[pointer]; ok {
+			return s, nil
+		}
 		s, err = f.brain(pointer, rel, anchor)
 	case strings.HasPrefix(rel, "prototype:"):
 		s, err = f.file(pointer, f.Prototype, strings.TrimPrefix(rel, "prototype:"), anchor, true)
@@ -207,12 +202,25 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 	if err != nil || !info.Mode().IsRegular() {
 		return s, fmt.Errorf("%s: cannot read source: not a regular file", pointer)
 	}
+	isPlan := false
+	if !project {
+		if planInfo, err := os.Stat(filepath.Join(root, "plan.md")); err == nil {
+			isPlan = os.SameFile(info, planInfo)
+		}
+	}
+	// Identify the file before using the cache: every plan anchor, including
+	// aliases, must recheck the current snapshot and receipt on every read.
+	if !isPlan || anchor == "" {
+		if cached, ok := f.cache[pointer]; ok {
+			return cached, nil
+		}
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return s, fmt.Errorf("%s: cannot read source: %w", pointer, err)
 	}
 	text := strings.ReplaceAll(string(b), "\r\n", "\n")
-	if !project && anchor != "" && filepath.ToSlash(filepath.Clean(rel)) == "plan.md" {
+	if isPlan && anchor != "" {
 		// Validate the bytes we will select from, not a second read of plan.md.
 		if !task.ApprovedDigest(root, plan.Hash(text), plan.Digest(text)) {
 			return s, fmt.Errorf("%s: %w", pointer, ErrPlanNeedsApproval)
@@ -236,7 +244,7 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 		}
 	}
 	if anchor != "" {
-		if !project && filepath.ToSlash(filepath.Clean(rel)) == "plan.md" && (strings.HasPrefix(anchor, "step-") || anchor == "verify") {
+		if isPlan && (strings.HasPrefix(anchor, "step-") || anchor == "verify") {
 			s.Text, err = plan.Anchor(text, anchor)
 		} else {
 			s.Text, err = selectText(text, anchor)
@@ -370,8 +378,8 @@ var jobID = regexp.MustCompile(`^J-[0-9]+(?:\.[0-9]+)*$`)
 func ValidID(id string) bool { return jobID.MatchString(id) }
 
 // LoadPlan selects exactly one planned Job by item number or Job id.
-func LoadPlan(task, selector string) (Job, error) {
-	path, err := Within(task, "plan.md")
+func LoadPlan(dir, selector string) (Job, error) {
+	path, err := Within(dir, "plan.md")
 	if err != nil {
 		return Job{}, err
 	}
@@ -379,7 +387,11 @@ func LoadPlan(task, selector string) (Job, error) {
 	if err != nil {
 		return Job{}, err
 	}
-	items, err := plan.Items(string(b))
+	text := string(b)
+	if !task.ApprovedDigest(dir, plan.Hash(text), plan.Digest(text)) {
+		return Job{}, ErrPlanNeedsApproval
+	}
+	items, err := plan.Items(text)
 	if err != nil {
 		return Job{}, err
 	}

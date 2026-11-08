@@ -8,10 +8,11 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/job/jobtest"
 )
 
 func TestJobRecordStatus(t *testing.T) {
-	j, err := job.LoadPlan("../../testdata/job/task", "J-1")
+	j, err := job.LoadPlan(jobtest.New(t, testdata()).Task, "J-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +51,7 @@ func TestJobRecordStatus(t *testing.T) {
 }
 
 func TestJobRecordVerify(t *testing.T) {
-	j, err := job.LoadPlan("../../testdata/job/task", "J-1")
+	j, err := job.LoadPlan(jobtest.New(t, testdata()).Task, "J-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +95,7 @@ func TestJobRecordVerify(t *testing.T) {
 }
 
 func TestJobRecordPostsBack(t *testing.T) {
-	j, err := job.LoadPlan("../../testdata/job/task", "J-1")
+	j, err := job.LoadPlan(jobtest.New(t, testdata()).Task, "J-1")
 	if err != nil {
 		t.Fatal(err)
 	}

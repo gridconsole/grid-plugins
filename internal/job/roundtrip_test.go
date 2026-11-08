@@ -128,7 +128,16 @@ func TestTestdataPlanJobRecords(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(filepath.ToSlash(tc.task)+"/"+tc.id, func(t *testing.T) {
-			j, err := job.LoadPlan(tc.task, tc.id)
+			h := jobtest.New(t, testdata())
+			data, err := os.ReadFile(filepath.Join(tc.task, "plan.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(h.Task, "plan.md"), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			h.Approve(t)
+			j, err := job.LoadPlan(h.Task, tc.id)
 			if err != nil {
 				t.Fatal(err)
 			}
