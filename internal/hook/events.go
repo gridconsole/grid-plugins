@@ -369,7 +369,7 @@ func helper(o Options, in hookio.Input) {
 	case "lib-gatelike":
 		out = guard.GateLike(arg(0))
 	case "lib-historyline":
-		out = task.HistoryLine(arg(0), arg(1), arg(2), arg(3), arg(4))
+		out = taskfile.HistoryLine(arg(0), arg(1), arg(2), arg(3), arg(4))
 	case "lib-parsefrontmatter":
 		out = taskfile.ParseFrontmatter(arg(0))
 	case "lib-workflowsteps":

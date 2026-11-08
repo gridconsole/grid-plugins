@@ -93,19 +93,6 @@ func CleanHistory(s string) string {
 	return s
 }
 
-// HistoryLine formats already cleaned fields; approval callers may retain separators.
-func HistoryLine(at, event, detail, who, via string) string {
-	s := "- " + at + " · " + event
-	if detail != "" {
-		s += " · " + detail
-	}
-	s += " · by " + who
-	if via != "" {
-		s += " · via " + via
-	}
-	return s
-}
-
 // AppendHistory serializes append and consecutive duplicate suppression. It
 // never follows a symlink or creates a history file for an uninitialized task.
 func AppendHistory(dir, event, detail, who, via string) error {
@@ -141,7 +128,7 @@ func AppendHistory(dir, event, detail, who, via string) error {
 	case "plan accepted", "preview approved", "ship approved":
 		detail = fmt.Sprintf("%q", detail)
 	}
-	line := HistoryLine(time.Now().UTC().Format("2006-01-02T15:04"), event, detail, who, via)
+	line := taskfile.HistoryLine(time.Now().UTC().Format("2006-01-02T15:04"), event, detail, who, via)
 	tail := strings.TrimRight(string(b), "\r\n")
 	if i := strings.LastIndexByte(tail, '\n'); i >= 0 {
 		tail = tail[i+1:]
