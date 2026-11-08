@@ -4,6 +4,7 @@ package session
 
 import (
 	"context"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"os"
 	"os/exec"
 	"strconv"
@@ -30,5 +31,20 @@ func TestProbeLocal(t *testing.T) {
 	}
 	if ProbeLocal(Live{PID: os.Getpid(), PIDStart: "2000-01-01T00:00:00.000Z"}) != Dead {
 		t.Fatal("different start not detected")
+	}
+}
+
+func TestProcessStartRoundTrip(t *testing.T) {
+	start, err := ProcessStart(os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ProbeLocal(Live{PID: os.Getpid(), PIDStart: contract.FormatTime(start)}); got != Alive {
+		t.Fatalf("got %v, want Alive", got)
+	}
+	for _, pid := range []int{0, -1} {
+		if _, err := ProcessStart(pid); err == nil {
+			t.Fatalf("accepted pid %d", pid)
+		}
 	}
 }

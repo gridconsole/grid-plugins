@@ -97,41 +97,77 @@ func (s TaskStore) Read(name string) (Tenure, error) {
 	return t, err
 }
 
-// TaskTake authorizes replacement of a specific tenure. OfflineSince is a
-// server observation supplied by the supervising caller, never a file timestamp.
-type TaskTake struct {
-	Adopt, Takeover bool
-	Gen, Fence      int64
-	OfflineSince    time.Time
-}
-
-// TakeTask grants the first tenure or checks replacement evidence while holding
-// task.json exclusively, so two adopters cannot both replace the same holder.
-func (s TaskStore) TakeTask(w feed.Writer, pid int, start string, options ...TaskTake) (Tenure, error) {
-	policy := TaskTake{}
-	if len(options) > 0 {
-		policy = options[0]
-	}
+// TakeTask creates the first task tenure. A live or unknown holder is never
+// replaced here; adoption requires a separate, proven process-identity decision.
+func (s TaskStore) TakeTask(w feed.Writer, pid int, start string) (Tenure, error) {
 	return s.grant(Tenure{Lease: feed.Lease{Lease: "task", Holder: &w.Worker, Gen: w.Gen}, Since: s.now(), PID: &pid, PIDStart: &start}, func(old Tenure) error {
-		if old.Holder == nil {
-			return nil
-		}
-		if policy.Adopt == policy.Takeover || policy.Gen != old.Gen || policy.Fence != old.Fence {
-			return errors.New("task lease held; adoption or takeover requires its current expected epoch")
-		}
-		if policy.Adopt {
-			host := w.Worker[strings.LastIndexByte(w.Worker, '@')+1:]
-			if !strings.HasSuffix(*old.Holder, "@"+host) || old.PID == nil || old.PIDStart == nil || session.ProbeLocal(session.Live{PID: *old.PID, PIDStart: *old.PIDStart}) != session.Dead {
-				return errors.New("adoption requires a provably gone process on this host")
-			}
-			return nil
-		}
-		now, _ := time.Parse(time.RFC3339Nano, s.now())
-		if contract.TierFor(w.Author.Role) != contract.PersonTeam || policy.OfflineSince.IsZero() || now.Sub(policy.OfflineSince) < 15*time.Minute {
-			return errors.New("takeover requires a person and 15 minutes of server-observed offline time")
+		if old.Holder != nil {
+			return taskHeld(old)
 		}
 		return nil
 	})
+}
+
+func taskHeld(t Tenure) error {
+	holder := "nobody"
+	if t.Holder != nil {
+		holder = *t.Holder
+	}
+	return fmt.Errorf("task lease held by %s since %s (epoch %d.%d)", holder, t.Since, t.Gen, t.Fence)
+}
+
+// AdoptTask replaces only a provably dead holder on the writer's host. The
+// identity check and probe run while the task lease is exclusively locked.
+func (s TaskStore) AdoptTask(w feed.Writer, pid int, start string, probe func(session.Live) session.ProcessState) (Tenure, Tenure, error) {
+	var old Tenure
+	next, err := s.grant(Tenure{Lease: feed.Lease{Lease: "task", Holder: &w.Worker, Gen: w.Gen}, Since: s.now(), PID: &pid, PIDStart: &start}, func(current Tenure) error {
+		old = current
+		if current.Holder == nil {
+			return taskHeld(current)
+		}
+		machine := w.Worker[strings.LastIndexByte(w.Worker, '@'):]
+		if !strings.HasSuffix(*current.Holder, machine) || current.PID == nil || current.PIDStart == nil || probe == nil {
+			return taskHeld(current)
+		}
+		live := session.Live{Lease: "task", Holder: *current.Holder, Fence: uint64(current.Fence), PID: *current.PID, PIDStart: *current.PIDStart}
+		if probe(live) != session.Dead {
+			return taskHeld(current)
+		}
+		return nil
+	})
+	return next, old, err
+}
+
+// ReleaseTask ends a tenure only for its exact holder, generation and fence.
+func (s TaskStore) ReleaseTask(w feed.Writer) error {
+	f, err := s.open("task", true)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := fslock.LockExclusive(f); err != nil {
+		return err
+	}
+	defer fslock.Unlock(f)
+	old, err := readTenure(f)
+	if err != nil {
+		return err
+	}
+	if w.Lease != "task" || old.Holder == nil || *old.Holder != w.Worker || old.Gen != w.Gen || old.Fence != w.Fence {
+		return taskHeld(old)
+	}
+	if err := s.end(old); err != nil {
+		return err
+	}
+	old.Holder, old.PID, old.PIDStart = nil, nil, nil
+	b, err := json.Marshal(old)
+	if err == nil {
+		err = contract.Validate("lease", b)
+	}
+	if err != nil {
+		return err
+	}
+	return rewriteTenure(f, append(b, '\n'))
 }
 
 // GrantJob requires the current task holder throughout the grant and snapshot.
@@ -143,7 +179,7 @@ func (s TaskStore) GrantJob(task feed.Writer, id, to string, attempt int) (t Ten
 	})
 	return
 }
-func (s TaskStore) grant(next Tenure, authorize func(Tenure) error) (Tenure, error) {
+func (s TaskStore) grant(next Tenure, check func(Tenure) error) (Tenure, error) {
 	// Validate before creating anything or ending the old tenure.
 	next.Fence = 1
 	b, err := json.Marshal(next)
@@ -166,8 +202,8 @@ func (s TaskStore) grant(next Tenure, authorize func(Tenure) error) (Tenure, err
 	if err != nil {
 		return Tenure{}, err
 	}
-	if authorize != nil {
-		if err := authorize(old); err != nil {
+	if check != nil {
+		if err := check(old); err != nil {
 			return Tenure{}, err
 		}
 	}

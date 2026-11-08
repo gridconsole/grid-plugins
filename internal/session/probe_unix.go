@@ -5,6 +5,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
@@ -12,6 +13,29 @@ import (
 	"syscall"
 	"time"
 )
+
+const processStartLayout = "Mon Jan 2 15:04:05 2006"
+
+// ProcessStart reads the process start time in UTC at ps's second precision.
+func ProcessStart(pid int) (time.Time, error) {
+	if pid < 1 {
+		return time.Time{}, fmt.Errorf("pid must be positive")
+	}
+	observed, err := processStartText(pid)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Parse(processStartLayout, observed)
+}
+
+func processStartText(pid int) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ps", "-o", "lstart=", "-p", strconv.Itoa(pid))
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "TZ=UTC")
+	b, err := cmd.Output()
+	return strings.TrimSpace(string(b)), err
+}
 
 // ProbeLocal proves absence or compares process start identity on this host.
 // Callers must first establish that the holder names this machine. Permission,
@@ -45,15 +69,10 @@ func ProbeLocal(live Live) ProcessState {
 		}
 		return Alive
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "ps", "-o", "lstart=", "-p", strconv.Itoa(live.PID))
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "TZ=UTC")
-	b, err := cmd.Output()
+	observed, err := processStartText(live.PID)
 	if err != nil {
 		return Unknown
 	}
-	observed := strings.TrimSpace(string(b))
 	if observed == "" {
 		return Unknown
 	}
@@ -64,7 +83,7 @@ func ProbeLocal(live Live) ProcessState {
 	if err != nil {
 		return Unknown
 	}
-	got, err := time.Parse("Mon Jan 2 15:04:05 2006", observed)
+	got, err := time.Parse(processStartLayout, observed)
 	if err != nil {
 		return Unknown
 	}
