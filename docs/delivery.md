@@ -31,15 +31,15 @@ A numbered plan item can declare an evidence kind:
   proof: screenshot
 ```
 
-The lane brief requires proof levels but the referenced documents do not define
-an enum. This implementation uses `check`, `log`, `screenshot`, and `video` as
-levels. Omitted `proof` means `check`; a log also satisfies a check. Other levels
+The `proof:` key is provisional (see `docs/plan.md`), and no document defines a
+proof-level enum. This implementation uses `check`, `log`, `screenshot`, and
+`video` as levels. Omitted `proof` means `check`; a log also satisfies a check. Other levels
 require the matching kind. Unknown levels fail explicitly. Evidence presence
 and integrity do not independently establish that a test passed or that a
 reviewer approved the work.
 
 Item arguments accept `1`, `i-1`, and `item-1`, normalized to the existing plan
-identifier `i-1`. Unknown items and `_task` are refused. Text evidence is allowed
+identifier `i-1` by `plan.ItemID`; `internal/proof` holds no id parsing of its own. Unknown items and `_task` are refused. Text evidence is allowed
 for check and log; screenshot and video require files. Screenshots accept PNG,
 JPEG and WebP; videos accept MP4 and WebM. Inputs must be nonempty regular files
 or text, at most 20 MiB. File bytes are preserved; media duration and content are
@@ -67,32 +67,74 @@ one-line reason. JSON is an array of `{id, path, topic, reason}`. It includes
 current-task proposals and the project and home proposal stores. `--project`
 and `--level` retain the brain command's existing scope selection. It writes
 nothing and does not launch an agent or accept, merge, or decline proposals.
-A missing topic is shown as `unassigned`; malformed proposal records are errors.
+A missing topic is shown as `unassigned`. Project and home proposals are read
+with `brain.Parse`, the reader `accept` uses, so keep lists exactly what accept
+will read: an unknown field, an alias, a name that differs from the file name or
+a level that differs from the folder is an error. Only the older proposals in a
+task folder keep a lenient reader.
 
-Delivery refuses closed, stopped, or cancelled tasks, waiting proposals,
-missing or invalid proof, empty plans, and unreadable deliverables. Refusals are
-one stderr line and a nonzero exit. Preflight refusals and `--dry-run` write no
-files, including locks. A dry run checks the same inputs and prints each action.
+Delivery blocks on waiting proposals of three kinds: the task's own folder, the
+whole project store, and home-level proposals whose `source` or `origin.id` names
+this task (`T-NN`, also as `T-NN/J-NN` or a `T-NN-title` folder name) or its
+project, as a whole word. The home store is shared by every project, so an
+unrelated proposal there does not stop this task; `brain keep` still lists it
+for the keeper. This narrows the design's "refuses while proposals wait" to the
+proposals that are this task's. A home-level proposal that names neither is not
+this task's to clear.
 
-On success, delivery replaces `## Outcome` while retaining other body sections
-and task metadata, imports deliverables using `internal/artifact`, rebuilds the
-proof index, and appends a dated delivery line through `task.AppendHistory`.
-It then sets `state: waiting`, `step: ship`, `gate: ship`, and a `next` instruction
-to review the Outcome. An existing legacy `status` field is also set to waiting.
-It never writes an approval or closes the task. The existing task API continues
-to own the task record; no new Feed or task-record schema is introduced.
+Delivery refuses closed, stopped, or cancelled tasks, tasks whose state cannot
+move to `waiting`, waiting proposals, missing or invalid proof, empty plans, and
+unreadable deliverables. Refusals are one stderr line and a nonzero exit.
+Preflight refusals and `--dry-run` write no files, including locks. A dry run
+checks the same inputs and prints each action.
 
-The task, plan, and brain writer locks protect delivery's checks and gate update.
-Proof and history writes use their respective persistent kernel locks. File
-replacements use `internal/atomicfile`. A late I/O failure can leave an Outcome,
-copied artifacts, index, or history line; delivery does not newly raise the gate
-unless all preceding writes succeed. This is not a transaction across files.
-Repeated delivery replaces Outcome, appends another history line, and imports
-listed files again under new artifact IDs.
+### The write
+
+Delivery writes the task record only through the task writer (`internal/task`,
+`withWrite` and `commitWrite`), under `.task.lock`. After the checks pass again
+under the locks, it imports the deliverables, rebuilds the proof index, then
+commits `task.md` and one history receipt together in a single journal commit. In
+`task.md` it replaces `## Outcome` (other sections stay), sets `state: waiting`,
+`step: ship`, `gate: ship`, a `next` instruction, `outcome` (the Outcome's first
+line) and `updated`, and sets an existing legacy `status` field to waiting. The
+header is edited as a YAML document, as `task status` does, so key order,
+comments and unknown keys survive; new keys go at the end.
+
+The state moves through `task.NextState`: delivery is refused from `paused` and
+`closed`, and from a task that is already `waiting`, as `grid task status` would
+refuse the same move. To deliver again after the ship gate was raised, send the
+task back first (`grid task status T-NN running`); delivery then replaces the
+Outcome and appends another receipt. A journal left by a crashed writer is
+replayed before delivery reads the task, so it cannot overwrite the delivery
+later. Delivery never writes an approval and never closes the task.
+
+The history receipt is a task event like the others (`what: deliver`, the
+Outcome's first line as `note`, `--by` as the author). Artifacts and the proof
+index are written before the commit and are not part of it: a failure after
+the import and before the commit can leave copied artifacts or a rebuilt index,
+and the gate is not raised. Repeated delivery imports listed files again under new
+artifact IDs.
+
+Lock order: `.task.lock`, then `.plan.lock`, then the brain levels' locks
+(project, home, task), then `.proof.lock`. `grid approve` takes `.task.lock` and
+then `.plan.lock`; nothing takes them the other way round.
+
+### Ship approval
+
+Once delivery has set `gate: ship`, `grid approve T-NN` records a ship approval in
+`approval-ship.json`, not a plan approval. It is the same event with
+`gate: ship` and the plan hash the person saw, under the same stale-hash rule as
+the plan approval. `approval.json` is not touched, so the plan approval stays
+valid. Reopening a task invalidates both files. `gate` stays in `task.md` until
+a later writer replaces it, including after the task is sent back.
+
+### History
 
 `history add` takes exactly one nonempty line and rejects newline and NUL input.
-It appends `- <UTC RFC3339 time> · <line>` using the single history writer and
-`.history.lock`. Existing history is preserved, including a missing final
-newline. The lock is shared across processes and is released by the kernel on
-process exit. Runtime locking is supported on macOS and Linux; other platforms
-inherit `internal/fslock`'s existing unsupported-platform error.
+It appends a task event (`what: note`, the line as `note`) through `Store.Note`,
+which uses the same `.task.lock` and journal as `task status`, so notes and state
+moves never lose each other's lines. A note changes no state and works on a
+closed task. Lines follow the writer's format, `- {json event}`, and existing
+history is preserved, including a missing final newline. Runtime locking is
+supported on macOS and Linux; other platforms inherit `internal/fslock`'s
+existing unsupported-platform error.

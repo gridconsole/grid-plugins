@@ -37,10 +37,16 @@ Bold markers and backticks are removed from display titles.
 
 Under the item, prose lines have two leading spaces. No blank line falls inside
 the block. The YAML part starts at the first line beginning with exactly two
-spaces and `kind:` or `jobs:` and continues to the block end. `kind` is the step
+spaces and `kind:`, `jobs:` or `proof:` (in any order) and continues to the block end. `kind` is the step
 kind; `build` is ordinary code work. `jobs` is always a list, including `[]` when
-there are no Jobs yet. Prose must come before YAML. Only `kind` and `jobs` are
-allowed as step YAML keys.
+there are no Jobs yet. Prose must come before YAML. Only `kind`, `jobs` and
+`proof` are allowed as step YAML keys. `proof` is a string, the evidence level
+(`check`, `log`, `screenshot` or `video`) that `grid proof` and `grid deliver`
+require for the step; it defaults to `check`. **Provisional:** the key was added
+by the delivery commands and has not been confirmed by the owner, so it can be
+renamed or removed, and the plan skill's format should wait for that. Step
+references (`1`, `i-1`, `item-1`) are parsed by `plan.ItemID`, the one place item
+ids are parsed.
 
 Each Job carries the names in `job.PlannedFields`, even when a list is empty.
 When omitted, `item` is N, `title` is the checklist title, `intent.item` is
