@@ -1,0 +1,3623 @@
+{
+  "contract": "1",
+  "commands": [
+    {
+      "name": "version",
+      "summary": "print the CLI, contract and app_min versions",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [
+            {
+              "name": "--app-version",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--check",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--manifest-url",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--session-id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--timeout",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-version.json"
+        }
+      ]
+    },
+    {
+      "name": "where",
+      "summary": "show which project and task a folder belongs to",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "doctor",
+      "summary": "check the Grid home, its format version and git",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [
+            {
+              "name": "--bundle",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--hooks-file",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "hook",
+      "summary": "answer a Claude Code or Codex hook event",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [
+            "<event>"
+          ],
+          "flags": [],
+          "json": false,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "task",
+      "summary": "new, show, list, status, stop, close, reopen, history, attach, move",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "new",
+          "args": [
+            "<words>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--size",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--workflow",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "show",
+          "args": [
+            "[T-NN]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-task-show.json"
+        },
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--state",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-task-list.json"
+        },
+        {
+          "name": "status",
+          "args": [
+            "<T-NN>",
+            "<state>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "stop",
+          "args": [
+            "<T-NN>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "close",
+          "args": [
+            "<T-NN>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "reopen",
+          "args": [
+            "<T-NN>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "history",
+          "args": [
+            "<T-NN>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "attach",
+          "args": [
+            "<T-NN>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--runtime",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--session",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "move",
+          "args": [
+            "[machine-or-task]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-task-move.json"
+        }
+      ]
+    },
+    {
+      "name": "plan",
+      "summary": "write, check, items, hash, diff",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "write",
+          "args": [
+            "<file>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "check",
+          "args": [
+            "[T-NN]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "items",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "hash",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-plan-hash.json"
+        },
+        {
+          "name": "diff",
+          "args": [
+            "<rev-a>",
+            "<rev-b>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "views",
+      "summary": "render the task pages",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "job",
+      "summary": "next, post, ack, result, cancel, tree, blocked, render, lint, show, cycles, floor",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "next",
+          "args": [
+            "[job]"
+          ],
+          "flags": [
+            {
+              "name": "--attempt",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--lease",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--lease-epoch",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--re",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--type",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--usage-ready",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wait",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-job-next.json",
+          "stream": true
+        },
+        {
+          "name": "post",
+          "args": [
+            "[job]"
+          ],
+          "flags": [
+            {
+              "name": "--attempt",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--lease",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--lease-epoch",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--re",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--type",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--usage-ready",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wait",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "ack",
+          "args": [
+            "[job]"
+          ],
+          "flags": [
+            {
+              "name": "--attempt",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--lease",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--lease-epoch",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--re",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--type",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--usage-ready",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wait",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "result",
+          "args": [
+            "[job]"
+          ],
+          "flags": [
+            {
+              "name": "--attempt",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--lease",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--lease-epoch",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--re",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--type",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--usage-ready",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wait",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "cancel",
+          "args": [
+            "[job]"
+          ],
+          "flags": [
+            {
+              "name": "--attempt",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--lease",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--lease-epoch",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--re",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--type",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--usage-ready",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wait",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "tree",
+          "args": [
+            "[job]"
+          ],
+          "flags": [
+            {
+              "name": "--attempt",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--lease",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--lease-epoch",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--re",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--type",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--usage-ready",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wait",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "blocked",
+          "args": [
+            "[job]"
+          ],
+          "flags": [
+            {
+              "name": "--attempt",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--lease",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--lease-epoch",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--re",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--type",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--usage-ready",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wait",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "render",
+          "args": [
+            "<task>",
+            "<item>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--budget",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "lint",
+          "args": [
+            "<file>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--budget",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "show",
+          "args": [
+            "[task job | job | file]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--budget",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "cycles",
+          "args": [
+            "<items.json>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "floor",
+          "args": [
+            "<items.json>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--policy",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "lease",
+      "summary": "take, renew, release, status (merge lease)",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "take",
+          "args": [
+            "[merge]"
+          ],
+          "flags": [
+            {
+              "name": "--fence",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--holder",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "renew",
+          "args": [
+            "[merge]"
+          ],
+          "flags": [
+            {
+              "name": "--fence",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--holder",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "release",
+          "args": [
+            "[merge]"
+          ],
+          "flags": [
+            {
+              "name": "--fence",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--holder",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "status",
+          "args": [
+            "[merge]"
+          ],
+          "flags": [
+            {
+              "name": "--fence",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--holder",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "feed",
+      "summary": "tick, post, read, state, types, handover, fold",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "tick",
+          "args": [
+            "[job]"
+          ],
+          "flags": [
+            {
+              "name": "--attempt",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--lease",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--lease-epoch",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--re",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--type",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--usage-ready",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wait",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "post",
+          "args": [
+            "[task]"
+          ],
+          "flags": [
+            {
+              "name": "--after",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--attempt",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--lease",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--lease-epoch",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--re",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--type",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-feed-post.json"
+        },
+        {
+          "name": "read",
+          "args": [
+            "[task]"
+          ],
+          "flags": [
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--since",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--type",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "state",
+          "args": [
+            "[task]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-feed-state.json"
+        },
+        {
+          "name": "types",
+          "args": [
+            "[task]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "handover",
+          "args": [
+            "[task]"
+          ],
+          "flags": [
+            {
+              "name": "--after",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--attempt",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--lease",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--lease-epoch",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--re",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "fold",
+          "args": [
+            "[task]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "mcp",
+      "summary": "stdio server with the Feed tools",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [],
+          "json": false,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "question",
+      "summary": "add, answer, withdraw, list and tick task questions",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "add",
+          "args": [
+            "[question]"
+          ],
+          "flags": [
+            {
+              "name": "--age-after",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--applies",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--blocking",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--default",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--option",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--question",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--recommended",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--why",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "answer",
+          "args": [
+            "<Q-id>",
+            "<option-or-text>"
+          ],
+          "flags": [
+            {
+              "name": "--by",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "withdraw",
+          "args": [
+            "<Q-id>"
+          ],
+          "flags": [
+            {
+              "name": "--by",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "tick",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "ask",
+      "summary": "ask a person a question",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "answer",
+      "summary": "record a person's answer",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "approve",
+      "summary": "approve a gate (a person or the app only)",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [
+            "<T-NN>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--note",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--plan-hash",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-approve.json"
+        }
+      ]
+    },
+    {
+      "name": "refusal",
+      "summary": "decide a refused command (a person or the app only)",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "decide",
+          "args": [
+            "<T-NN>",
+            "<R-N>",
+            "<allow|deny>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--note",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-refusal-decide.json"
+        }
+      ]
+    },
+    {
+      "name": "deliver",
+      "summary": "write the outcome and raise the ship gate",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [
+            "[outcome]"
+          ],
+          "flags": [
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--outcome",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--by",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--dry-run",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--file",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "proof",
+      "summary": "add evidence and rebuild the task proof index",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "add",
+          "args": [
+            "<item>",
+            "[file]"
+          ],
+          "flags": [
+            {
+              "name": "--by",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--kind",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--note",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--text",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "index",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "history",
+      "summary": "append a dated task history line",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "add",
+          "args": [
+            "<line>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "land",
+      "summary": "land a task per the deploy topic",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "brain",
+      "summary": "show, search, topics, index, propose, accept, keep",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "show",
+          "args": [
+            "<id>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--proposal",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "search",
+          "args": [
+            "<words...>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--topic",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--limit",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "topics",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "index",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--read-only",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "propose",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--name",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--topic",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--description",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--summary",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--source",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--file",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--external",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--link",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "accept",
+          "args": [
+            "<id>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reject",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "keep",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "machine",
+      "summary": "machines topic",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "env",
+      "summary": "up, down browser Job dev environments",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "up",
+          "args": [
+            "<J>"
+          ],
+          "flags": [],
+          "json": false,
+          "output": ""
+        },
+        {
+          "name": "down",
+          "args": [
+            "<J>"
+          ],
+          "flags": [],
+          "json": false,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "ports",
+      "summary": "claim, release, list, gc dev port blocks",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "claim",
+          "args": [
+            "<J>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "release",
+          "args": [
+            "<J>"
+          ],
+          "flags": [],
+          "json": false,
+          "output": ""
+        },
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "gc",
+          "args": [],
+          "flags": [],
+          "json": false,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "deploy",
+      "summary": "deploy topic",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "person",
+      "summary": "people topic",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "routine",
+      "summary": "add, list, remove, run, schedule and unschedule routines",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "add",
+          "args": [
+            "<name>"
+          ],
+          "flags": [
+            {
+              "name": "--every",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--run",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "remove",
+          "args": [
+            "<name>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "run",
+          "args": [
+            "<name>"
+          ],
+          "flags": [
+            {
+              "name": "--due",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--grid-home",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "schedule",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "unschedule",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "worker",
+      "summary": "list local grid-worker processes",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-worker-list.json"
+        }
+      ]
+    },
+    {
+      "name": "agent",
+      "summary": "agents topic",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "workflow",
+      "summary": "workflows topic",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "skill",
+      "summary": "skills topic",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "session",
+      "summary": "list, show, start, stop, send, pause, resume, handback, switch",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--machine",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-session-list.json"
+        },
+        {
+          "name": "show",
+          "args": [
+            "<session-id>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--machine",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-session-show.json"
+        },
+        {
+          "name": "start",
+          "args": [],
+          "flags": [
+            {
+              "name": "--agent",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--target",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-session-start.json"
+        },
+        {
+          "name": "stop",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--target",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-session-stop.json"
+        },
+        {
+          "name": "send",
+          "args": [
+            "[text]"
+          ],
+          "flags": [
+            {
+              "name": "--idempotency-key",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--target",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--text",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-session-send.json"
+        },
+        {
+          "name": "pause",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--target",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-session-pause.json"
+        },
+        {
+          "name": "resume",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--target",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-session-resume.json"
+        },
+        {
+          "name": "handback",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--target",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-session-handback.json"
+        },
+        {
+          "name": "switch",
+          "args": [
+            "[agent]"
+          ],
+          "flags": [
+            {
+              "name": "--agent",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--target",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-session-switch.json"
+        }
+      ]
+    },
+    {
+      "name": "intent",
+      "summary": "list, claim, done (worker requests)",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--pending",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-intent-list.json"
+        },
+        {
+          "name": "claim",
+          "args": [
+            "<id>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "renew",
+          "args": [
+            "<id>"
+          ],
+          "flags": [
+            {
+              "name": "--claim",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--token",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "done",
+          "args": [
+            "<id>"
+          ],
+          "flags": [
+            {
+              "name": "--claim",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--error",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--token",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "usage",
+      "summary": "fold observed session usage totals",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "account",
+      "summary": "agent accounts",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "project",
+      "summary": "add, remove, list, scan and relink projects",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "add",
+          "args": [
+            "[path]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--name",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "remove",
+          "args": [
+            "<name-or-id>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "scan",
+          "args": [
+            "<root>"
+          ],
+          "flags": [
+            {
+              "name": "--apply",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "relink",
+          "args": [
+            "<name-or-id>",
+            "<path>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "setup",
+      "summary": "first-run scan and settings",
+      "built": false,
+      "subcommands": []
+    },
+    {
+      "name": "signal",
+      "summary": "add, act on and dismiss inbox signals",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "add",
+          "args": [],
+          "flags": [
+            {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--source",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--source-id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--title",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "act",
+          "args": [
+            "<id>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "dismiss",
+          "args": [
+            "<id>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "artifact",
+      "summary": "import, link, list and publish task artifacts",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "import",
+          "args": [
+            "<file>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--title",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "link",
+          "args": [
+            "<https-url>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--title",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "publish",
+          "args": [
+            "<id>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "eval",
+      "summary": "list, run and show task evaluations",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--size",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--suite",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--tier",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "run",
+          "args": [
+            "[task]"
+          ],
+          "flags": [
+            {
+              "name": "--agent",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--env",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--results",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--size",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--suite",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--tier",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--timeout",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "show",
+          "args": [
+            "<run-id>"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--results",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "migrate",
+      "summary": "upgrade the Grid home to this format",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [
+            {
+              "name": "--apply",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--dry-run",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--from",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--plugin-data",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--rollback",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": false,
+          "output": ""
+        }
+      ]
+    },
+    {
+      "name": "sync",
+      "summary": "sync with a Grid server",
+      "built": false,
+      "subcommands": []
+    }
+  ]
+}
