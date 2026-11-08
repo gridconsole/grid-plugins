@@ -78,4 +78,6 @@ This is for parallel worker branches merged back into the task's branch (`GRID_T
 1. Read both sides of each conflict and keep what each meant. When the two sides cannot both hold, for example where a contract, a format or an API changed both ways, stop: that is a person point, written as a question on the task.
 2. Never hand-merge generated files (lockfiles, schemas, generated types or routes). Take either side, then regenerate them with a `grid-runner`.
 3. A branch based on the exact head it merges into, with its `verify` totals recorded at its own head, merges on those totals: run nothing again. Otherwise, after each branch, run only the tests of the packages both sides touched, through a `grid-runner`, and run independent packages at the same time. A failure stops the merge and goes back to the worker's brief.
+
+   Run the formatter checks on every merge result all the same (`cargo fmt --check` and the like): they take seconds, and a squash or a conflict resolution can leave drift that no recorded total covers.
 4. Never push, reset, rebase away work, delete a branch or stash. Record each branch merged, with its commit, in `history.md`.
