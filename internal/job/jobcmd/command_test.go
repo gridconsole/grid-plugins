@@ -238,7 +238,7 @@ func TestTaskNewThenRenderTrustsTheRequest(t *testing.T) {
 	// The fixture's brain note and research file are not in a fresh Grid home.
 	text := string(plan)
 	for old, now := range map[string]string{
-		"    links:\n      - {to: brain:project/export-format, rel: uses, why: \"Keep the documented column order stable for readers\"}\n": "    links: []\n",
+		"      links:\n        - {to: brain:project/export-format, rel: uses, why: \"Keep the documented column order stable for readers\"}\n": "      links: []\n",
 		"keep: [brain:project/export-format]": "keep: []",
 		"read: [task:research.md#format]":     "read: []",
 	} {
