@@ -8,12 +8,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
-	"github.com/gridconsole/grid-plugins/internal/task"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -30,56 +28,9 @@ func runVerify(args []string, f flags, e Env) int {
 	if err != nil {
 		return fail(err, 1)
 	}
-	dir := e.Cwd
-	if f.dir != "" {
-		dir = absolute(e.Cwd, f.dir)
-	} else if len(j.Worktree) > 0 {
-		if len(j.Worktree) > 1 {
-			return fail(errors.New("multiple worktrees; specify --dir"), 1)
-		}
-		for repo, path := range j.Worktree {
-			if filepath.IsAbs(path) {
-				dir = path
-				continue
-			}
-			if !filepath.IsLocal(path) {
-				return fail(errors.New("invalid recorded worktree path; specify --dir"), 1)
-			}
-			record, err := task.Read(taskPath)
-			if err != nil {
-				return fail(err, 1)
-			}
-			if record.Project == "" || filepath.Base(record.Project) != record.Project {
-				return fail(errors.New("recorded worktree needs a project; specify --dir"), 1)
-			}
-			dir = filepath.Join(e.GridHome, "projects", record.Project, "worktrees")
-			if repo != "" {
-				if filepath.Base(repo) != repo || repo == "." || repo == ".." {
-					return fail(errors.New("invalid worktree repository"), 1)
-				}
-				dir = filepath.Join(dir, repo)
-			}
-			dir = filepath.Join(dir, path)
-		}
-	}
-	// Task proof pointers are explicit; unprefixed paths refer to the selected dir.
-	for i, path := range j.Verify.Paths {
-		if strings.HasPrefix(path, "task:") {
-			j.Verify.Paths[i], err = job.Within(taskPath, strings.TrimPrefix(path, "task:"))
-			if err != nil {
-				return fail(err, 1)
-			}
-		}
-	}
-	if strings.HasPrefix(j.Verify.Path, "task:") {
-		j.Verify.Path, err = job.Within(taskPath, strings.TrimPrefix(j.Verify.Path, "task:"))
-		if err != nil {
-			return fail(err, 1)
-		}
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	r, err := job.RunVerify(ctx, j, dir)
+	r, err := job.RunVerify(ctx, j, f.dir, job.VerifyOptions{GridHome: e.GridHome, TaskPath: taskPath, Cwd: e.Cwd})
 	code := 0
 	if !r.Pass || err != nil {
 		code = 1

@@ -91,12 +91,14 @@ func TestVerifyNamedWorktreeAndTaskProof(t *testing.T) {
 	if err := os.MkdirAll(saved, 0700); err != nil {
 		t.Fatal(err)
 	}
-	metadata := "id: J-1\nworktree: example-tree\nverify:\n  kind: file-exists\n  paths: [proof.txt, 'task:research.md']\n"
-	if err := os.WriteFile(filepath.Join(saved, "job.yaml"), []byte(metadata), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if code := Run([]string{"verify", "J-1", "--task", taskPath}, e); code != 0 {
-		t.Fatalf("%d: %s %s", code, out, errs)
+	for _, worktreeRecord := range []string{"example-tree", "example-tree@b44a66c9", "{repo: example-tree@b44a66c9}"} {
+		metadata := "id: J-1\nworktree: " + worktreeRecord + "\nverify:\n  kind: file-exists\n  path: 'task:research.md'\n  paths: [proof.txt, 'task:research.md']\n"
+		if err := os.WriteFile(filepath.Join(saved, "job.yaml"), []byte(metadata), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if code := Run([]string{"verify", "J-1", "--task", taskPath}, e); code != 0 {
+			t.Fatalf("%s: %d: %s %s", worktreeRecord, code, out, errs)
+		}
 	}
 	out.Reset()
 	if code := Run([]string{"verify", "J-1", "--task", taskPath, "--dir", e.Cwd, "--json"}, e); code != 1 {

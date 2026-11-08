@@ -24,13 +24,21 @@ type VerifyResult struct {
 	OutputTruncated bool   `json:"output_truncated,omitempty"`
 }
 
+// VerifyOptions supplies the Grid and task context shared by CLI and L0 callers.
+// Cwd is the fallback directory and the base for a relative dir override.
+// TaskPath is an already resolved task folder, read through internal/task.
+type VerifyOptions struct {
+	GridHome string
+	TaskPath string
+	Cwd      string
+}
+
 // RunVerify executes the Job's verification and returns evidence even on failure.
-// dir overrides Worktree; an empty dir uses the single recorded worktree or cwd.
-// Callers resolve named Grid worktrees to paths before calling. Multiple worktrees
-// require an explicit dir. File paths are relative to dir (absolute paths work).
+// dir overrides the single recorded worktree, then options.Cwd (or process cwd).
+// Named worktrees and task: proof paths are resolved here for all callers.
 // Failed checks are results; invalid configuration, launch and cancellation errors
 // also return an error. No Job, task or Feed record is changed.
-func RunVerify(ctx context.Context, j Job, dir string) (VerifyResult, error) {
+func RunVerify(ctx context.Context, j Job, dir string, options ...VerifyOptions) (VerifyResult, error) {
 	r := VerifyResult{ExitCode: -1}
 	fail := func(err error) (VerifyResult, error) {
 		r.Reason = strings.Join(strings.Fields(err.Error()), " ")
@@ -39,16 +47,17 @@ func RunVerify(ctx context.Context, j Job, dir string) (VerifyResult, error) {
 	if err := ctx.Err(); err != nil {
 		return fail(err)
 	}
-	if dir == "" {
-		if len(j.Worktree) > 1 {
-			return fail(errors.New("multiple worktrees; specify --dir"))
-		}
-		for _, path := range j.Worktree {
-			dir = path
-		}
+	if len(options) > 1 {
+		return fail(errors.New("verify accepts at most one options value"))
 	}
-	if dir == "" {
-		dir = "."
+	var o VerifyOptions
+	if len(options) == 1 {
+		o = options[0]
+	}
+	var err error
+	j, dir, err = resolveVerifyPaths(j, dir, o)
+	if err != nil {
+		return fail(err)
 	}
 	info, err := os.Stat(dir)
 	if err != nil {
