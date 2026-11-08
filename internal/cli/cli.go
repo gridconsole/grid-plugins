@@ -137,8 +137,8 @@ func Implemented(name string) bool {
 // reads nothing, doctor reports the format, and migrate is how an old home moves on.
 var anyFormat = map[string]bool{"version": true, "doctor": true, "migrate": true}
 
-// Run executes one grid call and returns the exit code: 0 done, 1 failed or a Grid
-// home of another format, 2 usage error or a command that is not built yet.
+// Run executes one grid call and returns the exit code: 0 done, 1 failed,
+// 2 usage, 3 rejected (stale lease or invalid record; do not retry), 4 disk full.
 func Run(args []string, env Env) int {
 	if len(args) == 0 {
 		printHelp(env.Stdout)
@@ -202,6 +202,7 @@ func printHelp(w io.Writer) {
 		}
 		fmt.Fprintf(w, "  %-*s  %s%s\n", width, c.name, c.summary, note)
 	}
+	fmt.Fprintln(w, "\n"+exitStatusHelp)
 }
 
 func newFlags(name string, env Env) *flag.FlagSet {

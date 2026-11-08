@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,7 +25,7 @@ func runFeed(args []string, env Env) int {
 	}
 	verb := args[0]
 	if verb == "--help" || verb == "-h" {
-		fmt.Fprintln(env.Stdout, "usage: grid feed post|read|state|types|handover|fold [flags]")
+		fmt.Fprintln(env.Stdout, "usage: grid feed post|read|state|types|handover|fold [flags]\n"+exitStatusHelp)
 		return 0
 	}
 	switch verb {
@@ -93,13 +92,7 @@ func runFeed(args []string, env Env) int {
 	}
 	fail := func(err error) int {
 		fmt.Fprintf(env.Stderr, "grid feed: %v\n", err)
-		if errors.Is(err, feed.ErrStaleLease) {
-			return 3
-		}
-		if errors.Is(err, feed.ErrDiskFull) {
-			return 4
-		}
-		return 1
+		return exitCode(err)
 	}
 	store, err := feedStore(env, *task, *project)
 	if err != nil {
@@ -128,7 +121,7 @@ func runFeed(args []string, env Env) int {
 	}
 	var obj map[string]any
 	if err := json.Unmarshal([]byte(body), &obj); err != nil || obj == nil {
-		return fail(fmt.Errorf("--body must be a JSON object"))
+		return fail(&feed.InvalidRecordError{Err: fmt.Errorf("--body must be a JSON object")})
 	}
 	if reason != "" {
 		obj["reason"] = reason

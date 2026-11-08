@@ -68,7 +68,14 @@ func runOrchestrator(args []string, env Env) int {
 	if code, stop := parse(fs, rest, env); stop {
 		return code
 	}
-	fail := func(err error) int { fmt.Fprintln(env.Stderr, err); return 1 }
+	fail := func(err error) int {
+		fmt.Fprintln(env.Stderr, err)
+		// The body parser reports this before a record reaches the shared writer.
+		if err.Error() == "--body must be a JSON object" {
+			err = &feed.InvalidRecordError{Err: err}
+		}
+		return exitCode(err)
+	}
 	scope, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: *task, Project: *project})
 	if err != nil {
 		return fail(err)

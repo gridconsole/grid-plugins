@@ -52,7 +52,7 @@ type report struct {
 	Error    string         `json:"error,omitempty"`
 }
 
-const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--json]\n       grid job verify <job> [--task <task>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]\n"
+const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--json]\n       grid job verify <job> [--task <task>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease or invalid record; do not retry), 4 disk full.\n"
 
 func Run(args []string, e Env) int {
 	f, err := parse(args)

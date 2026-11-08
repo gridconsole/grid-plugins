@@ -114,7 +114,7 @@ func TestFeedPlainAndTrust(t *testing.T) {
 			t.Fatalf("missing %s in %s", want, h.out)
 		}
 	}
-	if code := h.run(task, "feed", "post", "--type", "job", "--job", "J-1", "--body", `{"title":"Unsafe","role":"agent"}`); code != 1 {
+	if code := h.run(task, "feed", "post", "--type", "job", "--job", "J-1", "--body", `{"title":"Unsafe","role":"agent"}`); code != 3 {
 		t.Fatalf("guest job: %d", code)
 	}
 }
@@ -141,10 +141,10 @@ func TestFeedErrors(t *testing.T) {
 		{"no verb", []string{"feed"}, 2},
 		{"retired sync", []string{"feed", "sync"}, 2},
 		{"unknown flag", []string{"feed", "state", "--bad"}, 2},
-		{"array body", []string{"feed", "post", "--type", "post", "--body", "[]"}, 1},
-		{"null body", []string{"feed", "post", "--type", "post", "--body", "null"}, 1},
-		{"unknown type", []string{"feed", "post", "--type", "example", "--body", "{}"}, 1},
-		{"no task lease", []string{"feed", "handover"}, 1},
+		{"array body", []string{"feed", "post", "--type", "post", "--body", "[]"}, 3},
+		{"null body", []string{"feed", "post", "--type", "post", "--body", "null"}, 3},
+		{"unknown type", []string{"feed", "post", "--type", "example", "--body", "{}"}, 3},
+		{"no task lease", []string{"feed", "handover"}, 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, task := feedHarness(t)
