@@ -206,9 +206,30 @@ func Validate(r Record) error {
 		if r.Job == nil {
 			return fmt.Errorf("job requires an explicit Job id")
 		}
-		if _, ok := r.Body["priority"]; ok {
-			return fmt.Errorf("priority is not part of the v1 Job schema")
+		for _, key := range []string{"priority", "defer_until"} {
+			if _, ok := r.Body[key]; ok {
+				return fmt.Errorf("%s is not part of the v1 Job schema", key)
+			}
 		}
+		if id := str(r.Body["id"]); id != "" && id != value(r.Job) {
+			return fmt.Errorf("Job body id disagrees with envelope")
+		}
+		if edges, ok := r.Body["after"].([]any); ok {
+			for _, edge := range edges {
+				if id, ok := edge.(string); ok {
+					if !jobPattern.MatchString(id) && !regexp.MustCompile(`^gate:Q-[0-9]+$`).MatchString(id) {
+						return fmt.Errorf("invalid Job dependency")
+					}
+					continue
+				}
+				m := object(edge)
+				why := str(m["why"])
+				if !jobPattern.MatchString(str(m["job"])) || !slices.Contains([]string{"done", "failed", "children-done"}, str(m["kind"])) || utf8.RuneCountInString(why) < 8 || utf8.RuneCountInString(why) > 160 {
+					return fmt.Errorf("Job dependency requires job, kind and why (8 to 160 characters)")
+				}
+			}
+		}
+
 	case "post":
 		if !postRef.MatchString(str(r.Body["ref"])) {
 			return fmt.Errorf("invalid post ref")
@@ -280,6 +301,21 @@ func Validate(r Record) error {
 				return fmt.Errorf("L1 verification requires its validating Job")
 			}
 		}
+		if proposals, ok := r.Body["proposed_jobs"].([]any); ok {
+			for _, proposal := range proposals {
+				m := object(proposal)
+				if strings.TrimSpace(str(m["title"])) == "" || strings.TrimSpace(str(m["role"])) == "" || strings.TrimSpace(str(m["why"])) == "" || !jobPattern.MatchString(str(m["discovered_from"])) {
+					return fmt.Errorf("proposed Job requires title, role, why and discovered_from")
+				}
+			}
+		}
+		if found, ok := r.Body["found"].([]any); ok {
+			for _, id := range found {
+				if !IsID(str(id)) {
+					return fmt.Errorf("result.found must contain record ULIDs")
+				}
+			}
+		}
 		if rows, ok := r.Body["must_fix"].([]any); ok {
 			for _, row := range rows {
 				m := object(row)
@@ -298,10 +334,14 @@ func Validate(r Record) error {
 			return fmt.Errorf("usage-notice task disagrees with envelope")
 		}
 	case "loop-detected":
+		quoted := 0
 		for _, key := range []string{"calls", "errors"} {
-			if list, ok := r.Body[key].([]any); ok && len(list) > 5 {
-				return fmt.Errorf("loop-detected may quote at most five %s", key)
+			if list, ok := r.Body[key].([]any); ok {
+				quoted += len(list)
 			}
+		}
+		if quoted > 5 {
+			return fmt.Errorf("loop-detected may quote at most five calls or errors")
 		}
 	}
 	return nil

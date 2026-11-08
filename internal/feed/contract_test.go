@@ -481,3 +481,32 @@ func TestFenceZeroCannotBeFenced(t *testing.T) {
 		t.Fatalf("fence zero: %+v %v", read, err)
 	}
 }
+
+func TestJobDependencyValidation(t *testing.T) {
+	s := testStore(t)
+	for _, tc := range []struct {
+		name  string
+		edge  any
+		valid bool
+	}{
+		{"bare", "J-2", true},
+		{"gate", "gate:Q-7", true},
+		{"done", map[string]any{"job": "J-2", "kind": "done", "why": "Needs the result"}, true},
+		{"failed", map[string]any{"job": "J-2", "kind": "failed", "why": "Use the fallback"}, true},
+		{"children", map[string]any{"job": "J-2", "kind": "children-done", "why": "Wait for all children"}, true},
+		{"unknown kind", map[string]any{"job": "J-2", "kind": "unknown", "why": "Wait for result"}, false},
+		{"short why", map[string]any{"job": "J-2", "kind": "done", "why": "short"}, false},
+		{"not a job", "invalid", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := s.record(Input{Type: "job", Job: "J-1", Body: map[string]any{"title": "Example", "role": "agent", "after": []any{tc.edge}}}, testWriter())
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = Validate(r)
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v error=%v", tc.valid, err)
+			}
+		})
+	}
+}
