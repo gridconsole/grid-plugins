@@ -324,18 +324,22 @@ func (s Scheduler) remove(ctx context.Context, project, name string) error {
 	if err = s.checkFiles(p); err != nil {
 		return err
 	}
-	// Even an interrupted installation may have registered the timer. The backend
-	// must therefore acknowledge removal before its ownership record is discarded.
-	if err = s.commands(ctx, p.Remove); err != nil {
-		return err
+	// A failed registration can mean the OS already had someone else's label.
+	// Only a confirmed installation authorizes removing an OS registration.
+	if state.Installed {
+		if err = s.commands(ctx, p.Remove); err != nil {
+			return err
+		}
 	}
 	for _, f := range p.Files {
 		if err = os.Remove(f.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}
-	if err = s.commands(ctx, p.AfterRemove); err != nil {
-		return err
+	if state.Installed {
+		if err = s.commands(ctx, p.AfterRemove); err != nil {
+			return err
+		}
 	}
 	path, err := s.statePath(p.Label)
 	if err != nil {

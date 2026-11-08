@@ -31,11 +31,15 @@ func TestProcessEnvironmentAndTimeout(t *testing.T) {
 	if got, want := out.String(), "unset|"+home+"|"+home+"|two words"; got != want {
 		t.Fatalf("environment/argv: %q want %q", got, want)
 	}
-	if err := os.WriteFile(program, []byte("#!/bin/sh\nexec sleep 5\n"), 0o700); err != nil {
+	if err := os.WriteFile(program, []byte("#!/bin/sh\nsleep 5 &\nwait\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	p.Timeout = 20 * time.Millisecond
+	p.Timeout = 100 * time.Millisecond
+	started := time.Now()
 	if err := p.Execute(context.Background(), s, Entry{Run: "grid example"}); err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("timeout: %v", err)
+	}
+	if time.Since(started) > time.Second {
+		t.Fatal("descendants outlived the outer timeout")
 	}
 }

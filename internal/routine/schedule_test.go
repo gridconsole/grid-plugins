@@ -166,3 +166,71 @@ func TestTimerOwnershipAndFailure(t *testing.T) {
 		})
 	}
 }
+
+func TestPreviewDoesNotWriteOrInvokeOS(t *testing.T) {
+	home := gridhome.Real(t.TempDir())
+	gh := filepath.Join(home, ".grid")
+	store := Store{GridHome: gh}
+	if _, err := store.Add("daily", "1h", "grid version"); err != nil {
+		t.Fatal(err)
+	}
+	calls := &fakeOS{}
+	scheduler := Scheduler{Home: home, GridHome: gh, Binary: filepath.Join(home, "grid.exe"), Backend: Schtasks{}, Runner: calls}
+	for _, remove := range []bool{false, true} {
+		plans, err := scheduler.Preview(store, remove)
+		if err != nil || len(plans) != 1 {
+			t.Fatalf("preview: %v %v", plans, err)
+		}
+		if len(calls.calls) != 0 {
+			t.Fatal("preview invoked OS")
+		}
+		if _, err := os.Stat(plans[0].Files[0].Path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("preview created a timer file")
+		}
+		if remove && (len(plans[0].Install) != 0 || len(plans[0].Remove) != 1) {
+			t.Fatal("wrong removal plan")
+		}
+	}
+}
+
+func TestTimerEscaping(t *testing.T) {
+	home := gridhome.Real(t.TempDir())
+	spec := TimerSpec{Home: home, GridHome: filepath.Join(home, "$data% & spaces"), Binary: filepath.Join(home, "grid $tool%"), Name: "daily", Path: "/example/bin:$literal%"}
+	p, err := (Systemd{}).Plan(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := p.Files[0].Content
+	if !strings.Contains(service, `$data%% & spaces`) || !strings.Contains(service, `grid $$tool%%`) || !strings.Contains(service, `PATH=/example/bin:$literal%%`) {
+		t.Fatalf("systemd escaping: %s", service)
+	}
+	if strings.Contains(service, `WorkingDirectory="`+strings.ReplaceAll(spec.GridHome, "$", "$$")) {
+		t.Fatal("systemd expanded a literal directory dollar")
+	}
+	for _, tc := range []struct{ in, want string }{{`a b`, `"a b"`}, {`a"b`, `"a\"b"`}, {`a\`, `"a\\"`}} {
+		if got := windowsArg(tc.in); got != tc.want {
+			t.Fatalf("Windows argv %q: %q want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestFailedRegistrationNeverAuthorizesOSRemoval(t *testing.T) {
+	home := gridhome.Real(t.TempDir())
+	store := Store{GridHome: filepath.Join(home, ".grid")}
+	if _, err := store.Add("daily", "1h", "grid version"); err != nil {
+		t.Fatal(err)
+	}
+	calls := &fakeOS{fail: true}
+	s := Scheduler{Home: home, GridHome: store.GridHome, Binary: filepath.Join(home, "grid"), Backend: Launchd{UID: 501}, Runner: calls}
+	if err := s.Schedule(context.Background(), store); err == nil {
+		t.Fatal("expected registration error")
+	}
+	calls.fail = false
+	before := len(calls.calls)
+	if err := s.Unschedule(context.Background(), "", "daily"); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls.calls) != before {
+		t.Fatal("removed OS label after failed registration")
+	}
+}
