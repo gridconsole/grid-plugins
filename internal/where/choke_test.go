@@ -11,19 +11,22 @@ func TestPersonalChokePoint(t *testing.T) {
 	// Keep exceptions narrow and document why each caller can bypass propagation.
 	allowed := map[string]map[string]string{
 		"gridhome.TasksDirs(": {
-			"internal/gridhome/":           "primitive task-root enumeration",
-			"internal/where/":              "caller-aware enumeration choke point",
-			"internal/task/create.go":      "global id allocation and staging cleanup need every root",
-			"internal/task/history.go":     "FolderAt is used by hooks running in agent sessions",
-			"internal/job/jobcmd/trace.go": "legacy Trace API has no caller and scans filed evidence across all task roots",
+			"internal/where/personal.go": "caller-aware enumeration choke point", // Filters primitive roots using the caller's Personal policy.
+			"internal/task/create.go":    "global allocation and cleanup",        // Global IDs and stale staging cleanup must include every root.
 		},
 		"where.Resolver{": {
-			"internal/where/":            "resolver implementation owns caller policy",
-			"internal/cli/cli.go":        "shared CLI resolver stamps the caller",
-			"internal/guard/settings.go": "guard adapter stamps the caller from its environment",
-			"internal/workflow/files.go": "workflow file enumeration has no caller and remains owned by workflow lanes",
-			"internal/workflow/write.go": "workflow Write enumerates registered projects without a caller; CLI applies WriteDefaultAllowed",
+			"internal/cli/cli.go":        "CLI boundary",   // The shared CLI resolver stamps the caller from its environment.
+			"internal/guard/settings.go": "guard boundary", // Direct guard adapters stamp the caller from their environment.
 		},
+	}
+	used := map[string]map[string]bool{}
+	for needle, exceptions := range allowed {
+		used[needle] = map[string]bool{}
+		for entry, reason := range exceptions {
+			if strings.TrimSpace(reason) == "" {
+				t.Fatalf("missing exception reason: %s", entry)
+			}
+		}
 	}
 	root := filepath.Join("..", "..")
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
@@ -52,22 +55,22 @@ func TestPersonalChokePoint(t *testing.T) {
 			if !strings.Contains(string(data), needle) {
 				continue
 			}
-			permitted := false
-			for entry, reason := range exceptions {
-				if reason == "" {
-					t.Fatalf("missing exception reason: %s", entry)
-				}
-				if rel == entry || strings.HasSuffix(entry, "/") && strings.HasPrefix(rel, entry) {
-					permitted = true
-				}
-			}
-			if !permitted {
+			if _, permitted := exceptions[rel]; !permitted {
 				t.Errorf("%s uses %s outside the caller-policy choke point", rel, needle)
+			} else {
+				used[needle][rel] = true
 			}
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	for needle, exceptions := range allowed {
+		for entry := range exceptions {
+			if !used[needle][entry] {
+				t.Errorf("stale exception: %s no longer uses %s", entry, needle)
+			}
+		}
 	}
 }
