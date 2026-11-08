@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "job-render",
+  "description": "Validation projection of the saved bundle: brief is the exact brief.md text; inputs is the decoded inputs.json object. This JSON wrapper is not a persisted file. See formats.md.",
+  "type": "object",
+  "properties": {
+    "brief": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputs": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "string"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pointer": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "tier": {
+                "type": "string",
+                "enum": [
+                  "person-team",
+                  "person-guest",
+                  "agent",
+                  "external"
+                ]
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "topic": {
+                "type": "string"
+              },
+              "updated": {
+                "type": "string"
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "to": {
+                      "type": "string"
+                    },
+                    "rel": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "to",
+                    "rel",
+                    "why"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "pointer_only": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "pointer",
+              "summary",
+              "text",
+              "tier",
+              "sha256"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "not_rendered": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "brain_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000
+        },
+        "disableSkillShellExecution": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "generation",
+        "sources",
+        "not_rendered",
+        "brain_tokens",
+        "disableSkillShellExecution"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "brief",
+    "inputs"
+  ],
+  "additionalProperties": false
+}

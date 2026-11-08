@@ -1,0 +1,48 @@
+{
+  "inputs": {
+    "generation": "content:56c37446070f98c73683f2e3233c81d8cb8756a6401e8bfb7cacdd99e5cfbbfb",
+    "sources": [
+      {
+        "state": "accepted",
+        "pointer": "brain:project/export-format",
+        "summary": "The export column order and compatibility rule.",
+        "text": "Keep the id column before the title column.\nChanging the column order requires a recorded decision.",
+        "tier": "person-team",
+        "sha256": "2691a6de20d04ad63a98d0e309598ac0c07a53c44adc63560e00c9a2634555d7",
+        "topic": "conventions",
+        "updated": "2026-01-01T00:00:00Z"
+      },
+      {
+        "pointer": "intent.md#request",
+        "summary": "Request {#request}",
+        "text": "## Request {#request}\n\nI want the export format documented so I can read the column order.",
+        "tier": "person-team",
+        "sha256": "e8187d6338418a42bb6223c39a841ed50eb615d0929bdf34a520403647b81efa"
+      },
+      {
+        "pointer": "plan.md#step-1",
+        "summary": "- [ ] 1 Document the export format",
+        "text": "- [ ] 1 Document the export format\n  Document the export format and column order.",
+        "tier": "agent",
+        "sha256": "d8288be7c8e9058645f1ee0c03824762de7221f0d07ed1cb962312d9355d53bb"
+      },
+      {
+        "pointer": "plan.md#verify",
+        "summary": "The export documentation lists the column order.",
+        "text": "The export documentation lists the column order.",
+        "tier": "agent",
+        "sha256": "d8288be7c8e9058645f1ee0c03824762de7221f0d07ed1cb962312d9355d53bb"
+      },
+      {
+        "pointer": "task:research.md#format",
+        "summary": "Format {#format}",
+        "text": "## Format {#format}\n\nThe export contains an id column followed by a title column.",
+        "tier": "external",
+        "sha256": "0011b584c5fa5c090101b7d02ca4d83df330ec3d7291213878f27f50ff8a4d0d"
+      }
+    ],
+    "not_rendered": [],
+    "brain_tokens": 80,
+    "disableSkillShellExecution": true
+  }
+}

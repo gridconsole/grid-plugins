@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "origin",
+  "description": "The origin block from brain note front matter. Null represents an absent legacy block at the Parse boundary only, never a valid new stamp or accepted knowledge.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "session",
+            "job",
+            "server",
+            "import"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\r\\n\\x00]*[^\\s\\p{Z}\\x{0085}\\r\\n\\x00][^\\r\\n\\x00]*$"
+        },
+        "tier": {
+          "type": "string",
+          "enum": [
+            "person-team",
+            "person-guest",
+            "agent",
+            "external"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "tier"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "null"
+    }
+  ]
+}
