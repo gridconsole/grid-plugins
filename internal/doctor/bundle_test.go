@@ -180,3 +180,62 @@ func TestBundleMissingLogsAndOutputRefusal(t *testing.T) {
 		t.Fatal("output symlink accepted")
 	}
 }
+
+func TestBundleSkipsHardLinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fslock support is Unix-only")
+	}
+	root := t.TempDir()
+	gh := filepath.Join(root, "grid")
+	outside := filepath.Join(root, "credentials")
+	writeBundleFixture(t, outside, "aws_secret_access_key = example-private-value", time.Now())
+	writeBundleFixture(t, filepath.Join(gh, "logs", "ordinary.log"), "ordinary diagnostic", time.Now())
+	linked := filepath.Join(gh, "logs", "hard.log")
+	if err := os.Link(outside, linked); err != nil {
+		t.Fatal(err)
+	}
+	outsideInfo, err := os.Stat(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkedInfo, err := os.Stat(linked)
+	if err != nil || !os.SameFile(outsideInfo, linkedInfo) {
+		t.Fatalf("fixture is not a hard link: %v", err)
+	}
+	path, err := Bundle(BundleOptions{GridHome: gh})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := readBundle(t, path)
+	if len(files) != 3 || files["logs/ordinary.log"] != "ordinary diagnostic" {
+		t.Fatalf("unexpected archive contents: %v", files)
+	}
+	for name, body := range files {
+		if name == "logs/hard.log" || strings.Contains(body, "example-private-value") {
+			t.Fatal("collected outside file through hard link")
+		}
+	}
+	// Recheck the opened descriptor too, covering a link added after selection.
+	if _, err := readBundleTail(linked); err == nil {
+		t.Fatal("read a hard link after selection")
+	}
+}
+
+func TestBundleCustomOutputLeavesOnlyArchive(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fslock support is Unix-only")
+	}
+	outDir := t.TempDir()
+	gh := t.TempDir()
+	out := filepath.Join(outDir, "report.zip")
+	if _, err := Bundle(BundleOptions{GridHome: gh, Out: out}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(outDir)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "report.zip" {
+		t.Fatalf("unexpected output folder entries: %v, %v", entries, err)
+	}
+	if _, err := os.Stat(filepath.Join(gh, "support", ".grid-support.lock")); err != nil {
+		t.Fatalf("support lock: %v", err)
+	}
+}

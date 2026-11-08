@@ -53,7 +53,7 @@ func WriteReport(w io.Writer, rep Report) error {
 
 // Bundle writes a redacted zip without contacting a network service. It takes
 // the newest 20 regular logs and the newest crash-*.txt report, keeping at most
-// the last 5 MiB of each. Symlinks and special files are not collected.
+// the last 5 MiB of each. Symlinks, hard links and special files are not collected.
 func Bundle(o BundleOptions) (string, error) {
 	if o.GridHome == "" {
 		return "", errors.New("cannot find the Grid home; set GRID_HOME")
@@ -127,7 +127,11 @@ func Bundle(o BundleOptions) (string, error) {
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}
-	lock, err := fslock.OpenNoFollow(filepath.Join(dir, ".grid-support.lock"), os.O_RDWR|os.O_CREATE, 0600)
+	lockDir := filepath.Join(o.GridHome, "support")
+	if err = os.MkdirAll(lockDir, 0700); err != nil {
+		return "", err
+	}
+	lock, err := fslock.OpenNoFollow(filepath.Join(lockDir, ".grid-support.lock"), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return "", err
 	}
@@ -178,7 +182,7 @@ func bundleFiles(root, out string) ([]bundleFile, error) {
 		if err != nil {
 			return err
 		}
-		if !info.Mode().IsRegular() || path == out {
+		if !info.Mode().IsRegular() || !singleLinkBundleLog(info) || path == out {
 			return nil
 		}
 		name, err := filepath.Rel(root, path)
@@ -227,8 +231,8 @@ func readBundleTail(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !st.Mode().IsRegular() {
-		return "", errors.New("log is not a regular file")
+	if !st.Mode().IsRegular() || !singleLinkBundleLog(st) {
+		return "", errors.New("log is not a single-link regular file")
 	}
 	start := max(int64(0), st.Size()-bundleFileLimit)
 	// Track PEM delimiters in the discarded prefix. Otherwise a key starting
