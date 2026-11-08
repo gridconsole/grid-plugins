@@ -1,0 +1,44 @@
+# Lane L17
+
+Implemented `internal/task` and registered `grid task new`, `grid task show` and `grid task list` in the existing command table. The existing project and folder resolver packages are unchanged.
+
+Creation allocates the next home-wide `T-NN` under a cross-process `flock`, resolves and registers the project while holding that lock, stages `intent.md` and YAML `task.md`, then publishes the complete task folder by rename. The kernel releases the lock when a process exits. Personal tasks use `personal/tasks/` and `project: personal`. The person's request is preserved byte for byte. Show folds the record and intent into a read-only view; list sorts by numeric id and supports an exact state filter. Plain and JSON outputs are documented in `contract/README.md`.
+
+## Run and verify
+
+```sh
+make build
+./dist/grid task new "Fix the search label" --size small --json
+./dist/grid task show T-01 --json
+./dist/grid task list --state queued --json
+make test
+make lint
+```
+
+`make test` includes table-driven tests with temporary homes, project registration and selection, Personal fallback, exact intent preservation, YAML parsing, numeric ordering, state filtering, malformed data, JSON goldens and a two-process allocation race. The two children create 24 complete tasks across Personal and the same newly registered project, then verify all ids are distinct and consecutive. `make golden` runs the writer and CLI golden tests. Both `make test` and `make lint` pass. `make build` also passes with `GOOS=linux` and `GOOS=darwin`, each with `GOARCH=amd64` and `GOARCH=arm64`.
+
+## Intended differences from the old plugin
+
+References here are relative to the supplied read-only reference tree; `old-plugin/` denotes the old implementation, `docs/` the new design, and `prototype/` the UI reference.
+
+| Difference | Reference and reason |
+| --- | --- |
+| A Go command owns file creation; the skill no longer chooses fields and writes files through editor tools. | `old-plugin/skills/task/SKILL.md:15` and `:16`; `docs/plugin-design.md:49` makes the CLI the only writer. |
+| One Grid home replaces the named workspace and `GRID_PROJECTS`. The existing resolver chooses the project without asking. The first task creates a project record and persistent machine identity; Personal needs no project record. | `old-plugin/skills/task/SKILL.md:8` and `:12`; `docs/plugin-design.md:127`, `:134`, `:135`, `:136`, `:137`; `docs/go-architecture.md:262`. Personal's exact `personal/tasks/` layout is required by the lane brief; `prototype/new.html:691` also uses a Personal task path. |
+| The next `T-NN` counts both project tasks and Personal tasks. It retains the old minimum two-digit display and never fills gaps below the maximum. | `old-plugin/skills/task/scripts/next-id.mjs:13` counts only project task folders; the lane brief adds Personal. |
+| A persistent lock file in the Grid home uses kernel `flock`, with no stale-time takeover. The lock covers project registration as well as id allocation. A complete staging folder is renamed into place, so readers never observe half-written tasks. | `old-plugin/skills/task/scripts/alloc-lock.mjs:1`, `:5`, `:13`, `:17` use a directory lock with timeouts; `old-plugin/skills/task/scripts/next-id.mjs:28` reserves an empty visible folder. Staging follows the old terminal hook (`old-plugin-map.md:35`) and `docs/go-architecture.md:600`. The lane brief explicitly permits flock. |
+| The title is the first nonblank request line, trimmed to 120 Unicode characters. The slug is deterministic ASCII, at most 60 characters, with `task` as a fallback. Intent remains exact, including whitespace and line endings. | `old-plugin/skills/task/SKILL.md:13` asks the model for a two-to-five-word slug, and `:42` calls for a short title. The new CLI has no model call or title flag; the title limit follows `prototype/new.html:352`. Exact intent follows `old-plugin/skills/task/SKILL.md:15` and `old-plugin-map.md:70`. |
+| Size defaults to `auto`; it accepts only `auto`, `small`, `normal`, `large`. Workflow stores the supplied name, or an empty string for later rule selection, rather than an inline sequence of steps. | `old-plugin/skills/task/SKILL.md:44` and `:45`; the lane brief requires `auto`; `prototype/new.html:535` lists the sizes and `:611` offers workflow names or selection by rules. Explicit small sizing follows `docs/plugin-design.md:17`. |
+| New tasks use `state: queued` and UTC RFC3339 `created`, with no automatic start. The written metadata is `id`, `title`, `project`, `size`, `workflow`, `state`, `created`. No owner prompt, source, current step, summary, next action, local-minute updated field or body log is invented. | The lane brief names the new fields. `old-plugin-map.md:68` and `old-plugin/skills/task/SKILL.md:19` describe the old record, including `status: running` and `updated`. Queued is a deliberate storage default because this lane creates tasks but has no execution driver; the old state vocabulary includes queued at `old-plugin/skills/task/SKILL.md:48`. |
+| Creation writes only the two requested task files. It does not create history, a concept note, session pointers, worktrees or execution state. | `old-plugin/skills/task/SKILL.md:92`, `:93`, `:100` describe history and concept-note side effects. The lane brief limits this slice to task creation and reads; `docs/plugin-design.md:160` assigns planning and delivery to their commands. |
+| New prints exactly the created id and path, or JSON `{id, path}`. Show returns the new record fields plus path and exact intent; explicit ids are found across the Grid home, and an omitted id uses the enclosing task. List reads one resolved project, filters by state, and sorts numerically. It does not calculate plan progress, open questions, owner or current workflow-step position. Malformed tasks and duplicate display ids are errors. | `old-plugin/skills/task/SKILL.md:94` describes the old creation response; `:116` describes the broader old show/list. `docs/plugin-design.md:478` and `:480` define the new output convention and new-task response; the lane brief defines project-scoped listing and state filters. |
+
+## Limits and remaining work
+
+All requested L17 commands and checks are complete. The following broader design work is outside this slice:
+
+- The task fold reads `task.md` and `intent.md`; it does not fold Feed events or drive execution. Feed and lifecycle writers do not exist in this checkout. Workflow names are stored without loading or executing topic rules. The workflow and Feed responsibilities are described in `docs/plugin-design.md:159` and `:160`.
+- This slice provides local `T-NN` allocation, as requested. Task ULIDs, server-assigned numbers and offline host tags from `docs/plugin-design.md:141` and `docs/go-architecture.md:264` remain for identity and sync integration. Project and machine identities are generated locally as ULIDs.
+- Existing project records are preserved and first-write repo metadata is recorded using the existing resolver. Full project merge, moved-folder repair, discovery of additional repos in an already registered multi-repo project, and overlapping project refusal remain with the project slice (`docs/plugin-design.md:135` and `:136`). The resolver was explicitly out of scope for edits.
+- Old JavaScript writers use another lock protocol and must not write concurrently with this CLI. References were read-only, so the old scripts were not removed; migration of their `status`, inline workflow and local timestamps is left to `grid migrate` (`docs/plugin-design.md:145`).
+- `flock` targets Linux and macOS. Windows locking is not implemented; the design's build targets are Linux and Darwin on amd64 and arm64 (`docs/plugin-design.md:365`). Interrupted creation can leave a hidden staging folder, which readers and allocation ignore. No task recovery command is included in this lane.

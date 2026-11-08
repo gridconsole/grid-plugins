@@ -243,6 +243,38 @@ Exit 1 with one line on stderr when the folder cannot be resolved (a task path o
 
 Checks, in order: `grid home`, `grid home writable`, `format version`, `git`. Exit 1 when any check fails.
 
+### `grid task new "<words>" [--project <name-or-id>] [--size <size>] [--workflow <name>] --json`
+
+    {"id": string, "path": string}
+
+The path is absolute. Plain output is two lines: `T-NN created`, then the task folder path, with the home spelled as `~`. The original words are written byte for byte to `intent.md`. Size is `auto` (default), `small`, `normal` or `large`. Workflow is a name, with an empty string meaning selection is left to the workflow rules. State starts as `queued`; creation does not start execution.
+
+Project defaults to the existing folder resolver's answer. `--project` selects a registered name or id; `personal` and `Personal` select the Personal project without requiring a record. Personal tasks live under `<GRID_HOME>/personal/tasks/` and use `project: personal`. Other tasks live under `<GRID_HOME>/projects/<project>/tasks/`. A first write creates the project record, machine identity and format version as needed.
+
+The title is the first nonblank line of the request, trimmed and limited to 120 Unicode characters. The folder slug uses lowercase ASCII letters and digits, separated by hyphens, limited to 60 characters, with `task` as the fallback. These transformations never change `intent.md`.
+
+### `grid task show [T-NN] --json`
+
+    {
+      "id": string,
+      "title": string,
+      "project": string,
+      "size": "auto" | "small" | "normal" | "large",
+      "workflow": string,
+      "state": string,
+      "created": string,
+      "path": string,
+      "intent": string
+    }
+
+`created` is a UTC RFC3339 timestamp on creation; `path` is absolute. `intent` is the exact file content. The remaining fields come from YAML front matter in `task.md`. Show folds these files without changing them or inferring execution state. Plain output prints one `name: value` line per field, followed by `intent:` and its text. An omitted id selects the enclosing task; an explicit id is looked up across the Grid home, including Personal. Missing, duplicate or malformed tasks fail instead of returning a partial record.
+
+### `grid task list [--project <name-or-id>] [--state <state>] --json`
+
+Returns an array of the same records as `show`, sorted by numeric display id, or `[]` when none match. State filtering is exact and case sensitive. Plain output is one `T-NN state title` line per task, or no output for an empty list. Both read commands leave files unchanged and ignore hidden creation staging folders.
+
+Task commands exit 0 on success, 2 for invalid flags or argument counts (including invalid creation size and empty words), and 1 for resolution, data or filesystem errors. Errors go to stderr without JSON on stdout. Flags may precede or follow the positional argument; use `--` before words that start with a hyphen.
+
 ### `grid hook <event>`
 
 Reads the event JSON on stdin and always exits 0. `sessionstart` prints

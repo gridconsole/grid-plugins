@@ -15,14 +15,21 @@ This repo replaces the earlier JavaScript plugin. It is public and MIT licensed.
 
 ## Commands working today
 
-`grid version`, `grid where`, `grid doctor`, `grid hook <event>`. The other command groups are listed by `grid help` and print "not built yet". The `--json` shapes are in [contract/README.md](contract/README.md).
+`grid version`, `grid where`, `grid doctor`, `grid hook <event>`, and `grid task new|show|list`. The other command groups are listed by `grid help` and print "not built yet". The `--json` shapes are in [contract/README.md](contract/README.md).
+
+    grid task new "Fix the search label" --size small --json
+    grid task show T-01 --json
+    grid task list --state queued --json
+    grid task new "Sort my notes" --project personal
+
+Tasks use the current folder's project, or Personal when no project applies. `--project` accepts a registered project's name or id, or `personal`. A new task preserves the quoted request exactly in `intent.md`, starts in `state: queued`, and defaults to `size: auto`. `--workflow` stores a workflow name; omitting it leaves selection to the workflow rules. Creation does not start work. `show` needs no id inside a task folder or its descendants. `list` reads one project and optionally filters by an exact state.
 
 To do: `grid mcp`, the stdio server with the Feed tools. The plugin's `.mcp.json` comes back with it.
 
 ## Layout
 
     cmd/grid/        entry point
-    internal/        packages: cli, where, doctor, hook, project, gitx, gridhome, version
+    internal/        packages: cli, task, where, doctor, hook, project, gitx, gridhome, version
     agents/ skills/  shipped with the plugin
     topics/          brain topic schemas
     contract/        Feed contract schemas and fixtures
@@ -35,3 +42,5 @@ To do: `grid mcp`, the stdio server with the Feed tools. The plugin's `.mcp.json
 ## Data folder
 
 `GRID_HOME` overrides the data folder; the default is `~/.grid`. It holds `VERSION` (the format version), `machine` (this computer's id) and `projects/<name>/project.md`, each project's record: YAML front matter with its `id`, its folder per machine, its repos with their normalised remotes, and its match keys. The format is in `internal/project/project.go`.
+
+Task folders are `projects/<name>/tasks/T-NN-slug/`; Personal tasks are `personal/tasks/T-NN-slug/` with `project: personal`. Display numbers increase across both locations. Creation uses a shared `flock` on `.task-alloc.lock` and publishes a complete folder by rename. Linux and macOS are supported. Project records are created on the first task write; task reads create nothing.
