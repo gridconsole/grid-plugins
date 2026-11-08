@@ -113,19 +113,23 @@ func (s Store) Import(source, title string) (Record, error) {
 	if info.Size() > limit {
 		return Record{}, errTooLarge(limit)
 	}
+	name := filepath.Base(source)
+	if !validName(name) {
+		return Record{}, fmt.Errorf("source name %q cannot be used as an artifact file name", name)
+	}
 	dir, err := s.directory(true)
 	if err != nil {
 		return Record{}, err
 	}
 	if title == "" {
-		title = filepath.Base(source)
+		title = name
 	}
 	r := s.record(source, title, "file")
 	r.ID, err = newID()
 	if err != nil {
 		return Record{}, err
 	}
-	r.File = r.ID + "-" + filepath.Base(source)
+	r.File = r.ID + "-" + name
 	dest := filepath.Join(dir, r.File)
 	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
@@ -164,6 +168,13 @@ func copyLimited(dst io.Writer, src io.Reader, limit int64) error {
 		err = errTooLarge(limit)
 	}
 	return err
+}
+
+// validName reports whether name is one plain file name: no separator of either
+// platform, no NUL, no volume, not "." or "..", and not absolute.
+func validName(name string) bool {
+	return name != "" && name != "." && name != ".." &&
+		!strings.ContainsAny(name, "/\\\x00") && !filepath.IsAbs(name) && filepath.VolumeName(name) == ""
 }
 
 // Link records a URL without fetching it. Credentials and non-HTTPS URLs are refused.
@@ -262,6 +273,9 @@ func read(dir, id string) (Record, error) {
 	}
 	if r.ID != id || (r.Kind != "file" && r.Kind != "link") {
 		return Record{}, fmt.Errorf("invalid artifact record %s", id)
+	}
+	if r.File != "" && !validName(r.File) {
+		return Record{}, fmt.Errorf("artifact %s: invalid file name", id)
 	}
 	return r, nil
 }

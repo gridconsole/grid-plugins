@@ -66,3 +66,17 @@ func TestImportRefusesSymlinkSource(t *testing.T) {
 		t.Fatalf("import of a symlink: %v", err)
 	}
 }
+
+func TestImportRefusesUnusableName(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, `a\b.txt`)
+	if err := os.WriteFile(source, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (Store{TaskPath: root}).Import(source, ""); err == nil || !strings.Contains(err.Error(), "artifact file name") {
+		t.Fatalf("import: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "artifacts")); !os.IsNotExist(err) {
+		t.Fatal("refused import wrote artifacts")
+	}
+}

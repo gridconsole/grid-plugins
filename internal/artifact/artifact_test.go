@@ -191,3 +191,34 @@ func TestDefaultImportLimit(t *testing.T) {
 		t.Fatalf("default limit %d", DefaultMaxImportBytes)
 	}
 }
+
+func TestReadRefusesUnsafeFileName(t *testing.T) {
+	for _, file := range []string{"../task.md", "a/b", `a\b`, "/etc/passwd", "..", ".", "a\x00b", `C:\x`} {
+		t.Run(file, func(t *testing.T) {
+			root := t.TempDir()
+			s := Store{TaskPath: root}
+			r, err := s.Link("https://example.com", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			r.Kind, r.File = "file", file
+			if err := save(filepath.Join(root, "artifacts"), r); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.List(); err == nil || !strings.Contains(err.Error(), "invalid file name") {
+				t.Fatalf("List: %v", err)
+			}
+			if _, err := s.Publish(r.ID); err == nil {
+				t.Fatal("Publish accepted it")
+			}
+		})
+	}
+}
+
+func TestValidName(t *testing.T) {
+	for _, name := range []string{"A-0-report.txt", "v1..2.txt", "résumé.pdf"} {
+		if !validName(name) {
+			t.Errorf("%q refused", name)
+		}
+	}
+}
