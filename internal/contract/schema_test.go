@@ -2,6 +2,7 @@ package contract
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -292,5 +293,35 @@ func TestPostTypes(t *testing.T) {
 		if _, ok := LookupType(name); ok {
 			t.Errorf("%s registered as a post type", name)
 		}
+	}
+}
+
+func TestPersonWithdrawControlSchema(t *testing.T) {
+	for _, tc := range []struct {
+		role, event  string
+		leased, want bool
+	}{
+		{"owner", "withdrawn", false, true}, {"member", "withdrawn", false, true},
+		{"guest", "withdrawn", false, true}, {"lead", "withdrawn", false, true},
+		{"agent", "withdrawn", false, false}, {"cli", "withdrawn", false, false},
+		{"owner", "aged", false, false}, {"member", "defaulted", false, false},
+		{"guest", "withdrawn", true, false}, {"cli", "withdrawn", true, true},
+	} {
+		t.Run(tc.role+"/"+tc.event+"/"+fmt.Sprint(tc.leased), func(t *testing.T) {
+			var p map[string]any
+			if err := json.Unmarshal(fixture(t, "control", "invalid/question-unleased"), &p); err != nil {
+				t.Fatal(err)
+			}
+			p["author"] = Author{ID: "person", Role: tc.role}
+			p["tier"] = TierFor(tc.role)
+			p["body"] = map[string]any{"target": p["re"], "question_event": tc.event, "text": "No longer needed"}
+			if tc.leased {
+				p["lease"], p["fence"] = "task", 1
+			}
+			raw, _ := json.Marshal(p)
+			if err := Validate("control", raw); (err == nil) != tc.want {
+				t.Fatalf("control admitted=%v want=%v: %v", err == nil, tc.want, err)
+			}
+		})
 	}
 }

@@ -14,18 +14,6 @@
         "type_v": {
           "const": 1
         },
-        "author": {
-          "properties": {
-            "role": {
-              "enum": [
-                "lead",
-                "owner",
-                "member",
-                "cli"
-              ]
-            }
-          }
-        },
         "body": {
           "oneOf": [
             {
@@ -248,15 +236,83 @@
               "additionalProperties": false
             }
           ]
-        },
-        "lease": {
-          "const": "task"
-        },
-        "fence": {
-          "type": "integer",
-          "minimum": 1
         }
-      }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "author": {
+              "properties": {
+                "role": {
+                  "enum": [
+                    "lead",
+                    "owner",
+                    "member",
+                    "cli"
+                  ]
+                }
+              }
+            },
+            "lease": {
+              "const": "task"
+            },
+            "fence": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "author": {
+              "properties": {
+                "role": {
+                  "enum": [
+                    "owner",
+                    "member",
+                    "lead",
+                    "guest"
+                  ]
+                }
+              }
+            },
+            "lease": {
+              "type": "null"
+            },
+            "gen": {
+              "const": 0
+            },
+            "fence": {
+              "const": 0
+            },
+            "re": {
+              "type": "string",
+              "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+            },
+            "body": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "type": "string",
+                  "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+                },
+                "question_event": {
+                  "const": "withdrawn"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "target",
+                "question_event",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
     }
   ],
   "x-class": "state",
@@ -264,6 +320,7 @@
     "lead",
     "owner",
     "member",
-    "cli"
+    "cli",
+    "guest"
   ]
 }
