@@ -291,6 +291,36 @@ func TestToolErrors(t *testing.T) {
 	}
 }
 
+// JSON clients may write a whole number as 2.0 or 2e0; only a fraction is refused.
+func TestAttemptAcceptsIntegralNumbers(t *testing.T) {
+	body := `"type":"post","body":{"ref":"task","kind":"message","text":"example"}`
+	for _, tc := range []struct {
+		attempt string
+		want    int // 0 means refused
+	}{
+		{"2", 2}, {"2.0", 2}, {"2.00", 2}, {"2e0", 2}, {"0.2e1", 2}, {"1.0", 1},
+		{"2.5", 0}, {"2.0000001", 0}, {"0", 0}, {"0.0", 0}, {"-1.0", 0}, {`"2"`, 0}, {"1e400", 0}, {"null", 0},
+	} {
+		t.Run(tc.attempt, func(t *testing.T) {
+			s, store, _ := fixture(t)
+			out := result(t, last(t, exchange(t, s, prelude+request("feed_post", `{`+body+`,"attempt":`+tc.attempt+`}`))))
+			read, err := store.Read(feed.Filter{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == 0 {
+				if !out.IsError || !strings.Contains(out.Content[0].Text, "attempt must be integer") || len(read.Records) != 0 {
+					t.Fatalf("not refused: %+v %+v", out, read.Records)
+				}
+				return
+			}
+			if out.IsError || len(read.Records) != 1 || read.Records[0].Attempt == nil || *read.Records[0].Attempt != tc.want {
+				t.Fatalf("not accepted as %d: %+v %+v", tc.want, out, read.Records)
+			}
+		})
+	}
+}
+
 func TestTrustFences(t *testing.T) {
 	for _, role := range []string{"guest", "external", "member"} {
 		for _, tool := range []string{"feed_post", "feed_read"} {

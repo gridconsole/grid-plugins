@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -94,8 +95,8 @@ func (s Schema) validate(raw json.RawMessage) error {
 			var value map[string]any
 			valid = valid && json.Unmarshal(raw, &value) == nil
 		case "integer":
-			var value int
-			valid = valid && json.Unmarshal(raw, &value) == nil && (p.Minimum == nil || value >= *p.Minimum)
+			var value integer
+			valid = valid && json.Unmarshal(raw, &value) == nil && (p.Minimum == nil || int(value) >= *p.Minimum)
 		case "array":
 			var values []json.RawMessage
 			valid = valid && json.Unmarshal(raw, &values) == nil
@@ -111,6 +112,22 @@ func (s Schema) validate(raw json.RawMessage) error {
 	return nil
 }
 
+// integer decodes a whole JSON number, so 2, 2.0 and 2e0 all read as 2 while 2.5
+// is refused. Go's int decoding rejects 2.0, which JSON clients may legitimately send.
+type integer int
+
+func (i *integer) UnmarshalJSON(raw []byte) error {
+	var f float64
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return err
+	}
+	if f != math.Trunc(f) || math.Abs(f) > 1<<53 {
+		return fmt.Errorf("%s is not an integer", raw)
+	}
+	*i = integer(f)
+	return nil
+}
+
 type arguments struct {
 	Task    string         `json:"task"`
 	Project string         `json:"project"`
@@ -119,7 +136,7 @@ type arguments struct {
 	ID      string         `json:"id"`
 	Re      string         `json:"re"`
 	Job     string         `json:"job"`
-	Attempt int            `json:"attempt"`
+	Attempt integer        `json:"attempt"`
 	After   []string       `json:"after"`
 	Since   string         `json:"since"`
 	Reason  string         `json:"reason"`
@@ -184,7 +201,7 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		if a.Reason != "" {
 			a.Body["reason"] = a.Reason
 		}
-		in, writer, err := s.Session(feed.Input{ID: a.ID, Type: a.Type, Body: a.Body, Re: a.Re, Job: a.Job, Attempt: a.Attempt, After: a.After})
+		in, writer, err := s.Session(feed.Input{ID: a.ID, Type: a.Type, Body: a.Body, Re: a.Re, Job: a.Job, Attempt: int(a.Attempt), After: a.After})
 		if err != nil {
 			return Result{}, err
 		}

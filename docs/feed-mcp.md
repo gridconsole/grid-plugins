@@ -46,7 +46,7 @@ selectors because this release has only the built-in registry.
 
 | Tool | Other arguments | Result |
 | --- | --- | --- |
-| `feed_post` | Required `type`, object `body`; optional `id`, `re`, `job`, positive integer `attempt`, string array `after` | Appended record and its derived tier/data labels. Reuse `id` for a retry. |
+| `feed_post` | Required `type`, object `body`; optional `id`, `re`, `job`, positive whole-number `attempt` (2 and 2.0 are the same, 2.5 is refused), string array `after` | Appended record and its derived tier/data labels. Reuse `id` for a retry. |
 | `feed_read` | Optional `since` (exclusive record ULID or RFC3339 time), `type`, `job` | Records from every writer, with verdicts, trust labels, and bad-line counts. |
 | `feed_state` | None | The Feed fold; also saves `state.json` and `needs-you.json`. |
 | `feed_types` | None | Registered types, schemas, roles, and lease requirements. |
