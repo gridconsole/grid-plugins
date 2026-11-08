@@ -16,11 +16,13 @@ import (
 // Snapshot contains one folded Feed and its admitted records. The worker uses
 // Ready on this same input to size its spawn demand.
 type Snapshot struct {
-	State   contract.State
-	Records map[string]feed.Record
-	Items   []jobgraph.Item
-	Bodies  map[string]map[string]any
-	Created map[string]time.Time
+	// Assignee scopes host capacity; empty computes dependency readiness only.
+	Assignee string
+	State    contract.State
+	Records  map[string]feed.Record
+	Items    []jobgraph.Item
+	Bodies   map[string]map[string]any
+	Created  map[string]time.Time
 }
 
 func Load(store feed.Store) (Snapshot, error) {
@@ -128,7 +130,47 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 		}
 		input.ReadySince[item.ID] = readyAt
 	}
-	return g.Ready(input)
+	out, err := g.Ready(input)
+	if err != nil {
+		return out, err
+	}
+	if s.Assignee != "" {
+		for _, j := range s.State.Jobs {
+			if j.Status == contract.Parked && j.Reason == "usage_limit" && j.Assign != nil && host(j.Assign.To) == host(s.Assignee) {
+				for _, id := range out.Ready {
+					out.Waiting = append(out.Waiting, jobgraph.Wait{Job: id, Reason: "usage_limit"})
+				}
+				out.Ready = []string{}
+				break
+			}
+		}
+	}
+
+	if s.Assignee != "" {
+		slots := 3
+		review := func(j *contract.Job) bool {
+			return (j.Role == "reviewer" || j.Role == "checker") && (j.Review == "L2" || j.Review == "L3")
+		}
+		for _, j := range s.State.Jobs {
+			if review(j) && j.Assign != nil && host(j.Assign.To) == host(s.Assignee) && (j.Status == contract.Assigned || j.Status == contract.Running) {
+				slots--
+			}
+		}
+		keep := out.Ready[:0]
+		for _, id := range out.Ready {
+			j := s.State.Jobs[id]
+			if review(j) {
+				if slots <= 0 {
+					out.Waiting = append(out.Waiting, jobgraph.Wait{Job: id, Reason: "review_capacity"})
+					continue
+				}
+				slots--
+			}
+			keep = append(keep, id)
+		}
+		out.Ready = keep
+	}
+	return out, nil
 }
 func stringValue(v any) string { s, _ := v.(string); return s }
 func ids(s Snapshot) []string {
@@ -138,4 +180,11 @@ func ids(s Snapshot) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func host(worker string) string {
+	if i := strings.LastIndexByte(worker, '@'); i >= 0 {
+		return worker[i+1:]
+	}
+	return worker
 }

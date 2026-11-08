@@ -366,8 +366,8 @@ func TestWakeRateSummary(t *testing.T) {
 	}
 	f.now = f.now.Add(time.Hour)
 	out := f.s.wake(snap, &m)
-	if out == nil {
-		t.Fatal("queue lost")
+	if out == nil || len(out.Events) != 5 {
+		t.Fatal("queue was not summarized", out)
 	}
 }
 func TestWaitCancellation(t *testing.T) {
@@ -377,5 +377,205 @@ func TestWaitCancellation(t *testing.T) {
 	_, err := f.s.Next(ctx, true)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+}
+
+func TestProposedJobsAndCheckpoints(t *testing.T) {
+	for _, tc := range []struct {
+		name, gap string
+		children  int
+	}{{"same acceptance", "A1", 1}, {"scope change", "new scope", 0}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := setup(t)
+			f.job(t, "J-1", nil)
+			if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "plan.md"), []byte("# Plan\n\n- [ ] 1 Build example feature\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			f.tick(t)
+			f.ack(t)
+			body := resultBody()
+			body["proposed_jobs"] = []contract.ProposedJob{{Title: "Rework acceptance", Role: "builder", Why: "Finish the original acceptance row", Gap: tc.gap, DiscoveredFrom: "J-1"}}
+			if _, err := Write(f.s.Feed, f.worker, feed.Input{Type: "result", Job: "J-1", Attempt: 1, Body: body}); err != nil {
+				t.Fatal(err)
+			}
+			out := f.tick(t)
+			if out.Wake == nil {
+				t.Fatal("result did not wake lead")
+			}
+			state, err := f.s.Feed.State()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(state.Jobs) != 1+tc.children {
+				t.Fatalf("%+v", state.Jobs)
+			}
+			f.tick(t)
+			state, err = f.s.Feed.State()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(state.Jobs) != 1+tc.children {
+				t.Fatal("duplicate proposal")
+			}
+			if tc.children == 1 {
+				child := state.Jobs["J-1.1"]
+				if child.DiscoveredFrom == nil || *child.DiscoveredFrom != "J-1" {
+					t.Fatal(child)
+				}
+			}
+		})
+	}
+	t.Run("checkpoint survives retry", func(t *testing.T) {
+		f := setup(t)
+		f.job(t, "J-1", nil)
+		f.tick(t)
+		f.ack(t)
+		_, err := Write(f.s.Feed, f.worker, feed.Input{Type: "checkpoint", Job: "J-1", Attempt: 1, Body: map[string]any{"job": "J-1", "step": "tests", "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.exit(t, "crash")
+		f.tick(t)
+		if j := f.state(t); j.Checkpoint == nil || j.Checkpoint.Step != "tests" {
+			t.Fatal(j)
+		}
+	})
+}
+
+func TestReadyCanonicalOrder(t *testing.T) {
+	f := setup(t)
+	for _, id := range []string{"J-3", "J-2", "J-1"} {
+		body := jobBody(t, id)
+		body["created_at"] = "2000-01-01T00:00:00.000Z"
+		if id == "J-3" {
+			body["created_at"] = "1999-01-01T00:00:00.000Z"
+		}
+		f.post(t, feed.Input{Type: "job", Job: id, Body: body}, f.s.Writer)
+	}
+	snap, err := Load(f.s.Feed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready, err := Ready(snap, f.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(ready.Ready, []string{"J-3", "J-1", "J-2"}) {
+		t.Fatal(ready)
+	}
+}
+
+func TestGateKinds(t *testing.T) {
+	for _, kind := range []string{"person", "timer", "ci", "job"} {
+		t.Run(kind, func(t *testing.T) {
+			f := setup(t)
+			f.job(t, "J-1", []any{"gate:Q-1"})
+			gate := map[string]any{"id": "Q-1", "kind": kind}
+			switch kind {
+			case "timer":
+				gate["at"] = f.now.Add(time.Minute).Format("2006-01-02T15:04:05.000Z")
+			case "ci":
+				gate["check"] = "tests"
+			case "job":
+				f.job(t, "J-2", nil)
+				gate["job"], gate["state"] = "J-2", "accepted"
+			}
+			q := f.post(t, feed.Input{Type: "question", Body: map[string]any{"question": "Proceed?", "who": "owner", "gate": gate}}, f.s.Writer)
+			f.tick(t)
+			if f.state(t).Assign != nil {
+				t.Fatal("gate opened early")
+			}
+			switch kind {
+			case "timer":
+				f.now = f.now.Add(2 * time.Minute)
+			case "job":
+				state, _ := f.s.Feed.State()
+				if err := f.s.control(state.Jobs["J-2"], contract.Accepted, "check passed", ""); err != nil {
+					t.Fatal(err)
+				}
+			default:
+				f.post(t, feed.Input{Type: "answer", Re: q.ID, Body: map[string]any{"answer": "Proceed"}}, feed.Writer{Author: feed.Author{ID: "owner", Role: "owner"}, Worker: "owner@" + machine})
+			}
+			if f.tick(t).Assigned != 1 {
+				t.Fatal("gate did not open")
+			}
+		})
+	}
+}
+
+func TestCrashLoopRecoversWithoutMetadata(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	for range 2 {
+		f.ack(t)
+		f.exit(t, "crash")
+		f.tick(t)
+	}
+	if err := os.Remove(filepath.Join(f.s.Feed.Dir(), ".orchestrator.json")); err != nil {
+		t.Fatal(err)
+	}
+	f.ack(t)
+	f.exit(t, "crash")
+	f.tick(t)
+	if j := f.state(t); j.Status != contract.Parked || j.Reason != "needs_person" {
+		t.Fatal(j)
+	}
+}
+
+func TestUsageHoldBlocksHostDemand(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	f.ack(t)
+	f.exit(t, "usage_limit")
+	f.tick(t)
+	f.job(t, "J-2", nil)
+	snap, err := Load(f.s.Feed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap.Assignee = f.s.Assignee
+	ready, err := Ready(snap, f.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ready.Ready) != 0 {
+		t.Fatal(ready)
+	}
+	if f.tick(t).Assigned != 0 {
+		t.Fatal("held host assigned work")
+	}
+	f.s.UsageReady = func(string) bool { return true }
+	if f.tick(t).Assigned != 2 {
+		t.Fatal("capacity did not restore demand")
+	}
+}
+
+func TestReviewCapacityUsesReady(t *testing.T) {
+	f := setup(t)
+	for n := 1; n <= 4; n++ {
+		id := fmt.Sprintf("J-%d", n)
+		body := jobBody(t, id)
+		body["role"], body["review"] = "reviewer", "L2"
+		f.post(t, feed.Input{Type: "job", Job: id, Body: body}, f.s.Writer)
+	}
+	snap, err := Load(f.s.Feed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap.Assignee = f.s.Assignee
+	ready, err := Ready(snap, f.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ready.Ready) != 3 || len(ready.Waiting) != 1 || ready.Waiting[0].Reason != "review_capacity" {
+		t.Fatal(ready)
+	}
+	if f.tick(t).Assigned != 3 {
+		t.Fatal("spawn demand disagreed")
+	}
+	if f.tick(t).Assigned != 0 {
+		t.Fatal("capacity exceeded")
 	}
 }

@@ -37,14 +37,15 @@ type Output struct {
 // both pid and start time; nil leaves a live file's process identity unknown.
 // UsageReady must positively confirm capacity after a usage_limit exit.
 type Store struct {
-	Feed       feed.Store
-	Writer     feed.Writer
-	Assignee   string
-	Owner      string
-	Now        func() time.Time
-	Probe      func(session.Live) session.ProcessState
-	UsageReady func(string) bool
-	Incident   func(string, []string) error
+	WorktreesDir string
+	Feed         feed.Store
+	Writer       feed.Writer
+	Assignee     string
+	Owner        string
+	Now          func() time.Time
+	Probe        func(session.Live) session.ProcessState
+	UsageReady   func(string) bool
+	Incident     func(string, []string) error
 }
 
 func (s Store) now() time.Time {

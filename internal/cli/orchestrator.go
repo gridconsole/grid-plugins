@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,8 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
+	"github.com/gridconsole/grid-plugins/internal/session"
+	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -46,11 +49,15 @@ func runOrchestrator(args []string, env Env) int {
 	project := fs.String("project", "", "project name or id")
 	asJSON := fs.Bool("json", false, "print JSON")
 	wait := fs.Bool("wait", false, "wait for an assignment or judgement event")
+	if id == "" {
+		id = env.getenv("GRID_JOB")
+	}
 	job := fs.String("job", id, "Job id")
 	kind := fs.String("type", "post", "registered post type")
 	body := fs.String("body", "{}", "JSON body, or - for stdin")
 	reason := fs.String("reason", "", "cancellation reason")
 	attempt := fs.Int("attempt", 0, "Job attempt (or GRID_ATTEMPT)")
+	leaseFlag := fs.String("lease", env.getenv("GRID_LEASE"), "task or Job lease")
 	epoch := fs.String("lease-epoch", env.getenv("GRID_LEASE_EPOCH"), "generation.fence")
 	wake := fs.String("wake", env.getenv("GRID_WAKE"), "event/n idempotency key")
 	re := fs.String("re", "", "record this follows")
@@ -69,9 +76,12 @@ func runOrchestrator(args []string, env Env) int {
 	if scope.TaskPath == "" {
 		return fail(errors.New("no task selected; use --task"))
 	}
-	taskID, err := feed.TaskID(scope.TaskPath)
+	taskID, taskOwner, err := taskstore.FeedIdentity(scope.TaskPath)
 	if err != nil {
 		return fail(err)
+	}
+	if *owner == "" {
+		*owner = taskOwner
 	}
 	store := feed.Store{TaskDir: scope.TaskPath, TaskID: taskID}
 	if verb == "tree" || verb == "blocked" {
@@ -109,7 +119,7 @@ func runOrchestrator(args []string, env Env) int {
 		rows := []orchestrator.Row{}
 		for _, r := range orchestrator.Tree(snap) {
 			why := waits[r.ID]
-			if r.Status == contract.Parked {
+			if r.Status == contract.Parked || why == "" && (r.Status == contract.Posted || r.Status == contract.Ready) && r.Reason != "ready" {
 				why = r.Reason
 			}
 			if why != "" {
@@ -125,12 +135,25 @@ func runOrchestrator(args []string, env Env) int {
 			leaseName = env.getenv("GRID_LEASE")
 		}
 	}
+	if verb == "post" && (*kind == "job" || *kind == "control") {
+		leaseName = "task"
+	}
+	if *leaseFlag != "" {
+		leaseName = *leaseFlag
+	}
 	writer, err := orchestratorWriter(env, leaseName, *epoch)
 	if err != nil {
 		return fail(err)
 	}
 	if verb == "next" || verb == "tick" {
-		s := orchestrator.Store{Feed: store, Writer: writer, Assignee: *to, Owner: *owner}
+		s := orchestrator.Store{Feed: store, Writer: writer, Assignee: *to, Owner: *owner, WorktreesDir: filepath.Join(env.GridHome, "projects", scope.Project, "worktrees")}
+		s.Probe = func(live session.Live) session.ProcessState {
+			local := writer.Worker[strings.LastIndexByte(writer.Worker, '@'):]
+			if !strings.HasSuffix(live.Holder, local) {
+				return session.Unknown
+			}
+			return session.ProbeLocal(live)
+		}
 		if *usageReady {
 			s.UsageReady = func(worker string) bool { return worker == *to || *to == "" && worker == writer.Worker }
 		}

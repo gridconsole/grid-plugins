@@ -1,12 +1,14 @@
 package orchestrator
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -21,6 +23,42 @@ import (
 
 func (s Store) progress(snap Snapshot, j *contract.Job) string {
 	h := sha256.New()
+	if s.WorktreesDir != "" {
+		paths := []string{}
+		switch v := snap.Bodies[j.ID]["worktree"].(type) {
+		case string:
+			paths = append(paths, v)
+		case []any:
+			for _, path := range v {
+				if text, ok := path.(string); ok {
+					paths = append(paths, text)
+				}
+			}
+		case map[string]any:
+			for _, path := range v {
+				if text, ok := path.(string); ok {
+					paths = append(paths, text)
+				}
+			}
+		}
+		sort.Strings(paths)
+		for _, name := range paths {
+			path := filepath.Join(s.WorktreesDir, name)
+			if rel, e := filepath.Rel(s.WorktreesDir, path); e != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				continue
+			}
+			if _, e := os.Stat(path); os.IsNotExist(e) {
+				base, _, _ := strings.Cut(name, "@")
+				path = filepath.Join(s.WorktreesDir, base)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			out, e := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "--verify", "HEAD").Output()
+			cancel()
+			if e == nil {
+				fmt.Fprintf(h, "worktree %s %s", name, out)
+			}
+		}
+	}
 	// Only work products count. Mechanical projections, leases and spawn files
 	// must not reset a crash loop merely because this pass wrote them.
 	_ = filepath.WalkDir(s.Feed.TaskDir, func(path string, d fs.DirEntry, err error) error {
@@ -125,6 +163,7 @@ func (s Store) proposals(snap Snapshot) error {
 			body["id"], body["title"], body["role"] = child, p.Title, p.Role
 			body["discovered_from"], body["continues"] = id, id
 			body["attempt"], body["review_rounds"], body["checkpoint"], body["close_reason"] = 1, 0, nil, nil
+			body["worktree"] = nil
 			event := j.Results[len(j.Results)-1]
 			if _, err := s.Feed.Post(feed.Input{Type: "job", Job: child, Re: event, Wake: event + "/1", Body: body}, s.Writer); err != nil {
 				return err
@@ -152,6 +191,15 @@ func fits(parent map[string]any, j *contract.Job, p contract.ProposedJob) bool {
 }
 func (s Store) wake(snap Snapshot, m *memory) *Wake {
 	candidates := map[string]string{}
+	for id, q := range snap.State.Questions {
+		if q.Open && len(q.Answers) > 1 {
+			job := ""
+			if q.Job != nil {
+				job = *q.Job
+			}
+			candidates[id] = job
+		}
+	}
 	for _, id := range ids(snap) {
 		j := snap.State.Jobs[id]
 		for _, r := range j.Results {
@@ -213,4 +261,61 @@ func (s Store) wake(snap Snapshot, m *memory) *Wake {
 	}
 	m.Wakes = append(m.Wakes, s.now())
 	return &out
+}
+
+// A single eligible answer needs no arbitration. Multiple answers are a
+// judgement event; neither arrival time nor a record id chooses their winner.
+func (s Store) answers(snap Snapshot) error {
+	ids := []string{}
+	for id := range snap.State.Questions {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		q := snap.State.Questions[id]
+		if !q.Open || len(q.Answers) != 1 {
+			continue
+		}
+		answer := q.Answers[0]
+		if _, err := s.Feed.Post(feed.Input{Type: "control", Re: answer, After: []string{id}, Body: map[string]any{"target": id, "answer": answer, "status": "answered"}}, s.Writer); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Rebuild failure evidence if a pass died before publishing its local metadata.
+// The counted history is authoritative; the metadata only saves repeat work.
+func (s Store) recoverMemory(snap Snapshot, j *contract.Job) *jobMemory {
+	m := &jobMemory{Failures: []string{}, Progress: s.progress(snap, j)}
+	seen := map[string]bool{}
+	for _, id := range j.History {
+		r := snap.Records[id]
+		failure := ""
+		switch r.Type {
+		case "checkpoint":
+			m.Failures = nil
+		case "worker-exit":
+			switch stringValue(r.Body["reason"]) {
+			case "usage_limit", "cancelled":
+				m.Failures = nil
+			case "done":
+			default:
+				failure = id
+			}
+		case "control":
+			if r.Body["status"] == "stale" && r.Re != nil {
+				failure = *r.Re
+			}
+		}
+		if failure != "" && !seen[failure] {
+			seen[failure] = true
+			m.Failures = append(m.Failures, failure)
+			m.Failure = failure
+		}
+	}
+	if j.Status == contract.Parked && j.Reason == "needs_person" {
+		m.ParkProgress = m.Progress
+	}
+	return m
 }

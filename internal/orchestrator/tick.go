@@ -34,12 +34,19 @@ func (s Store) Tick() (out Output, err error) {
 		if _, e = Ready(snap, s.now()); e != nil {
 			return e
 		}
+		if e := s.answers(snap); e != nil {
+			return e
+		}
+		snap, e = Load(s.Feed)
+		if e != nil {
+			return e
+		}
 		for _, id := range ids(snap) {
 			j := snap.State.Jobs[id]
 			if m.Jobs[id] == nil {
-				m.Jobs[id] = &jobMemory{Failures: []string{}}
+				m.Jobs[id] = s.recoverMemory(snap, j)
 			}
-			if e := s.advance(snap, j, m.Jobs[id]); e != nil {
+			if e := s.advance(snap, j, m.Jobs[id], &m); e != nil {
 				return e
 			}
 		}
@@ -54,6 +61,11 @@ func (s Store) Tick() (out Output, err error) {
 		if e != nil {
 			return e
 		}
+		to := s.Assignee
+		if to == "" {
+			to = s.Writer.Worker
+		}
+		snap.Assignee = to
 		ready, e := Ready(snap, s.now())
 		if e != nil {
 			return e
@@ -71,15 +83,18 @@ func (s Store) Tick() (out Output, err error) {
 				}
 			}
 		}
-		to := s.Assignee
-		if to == "" {
-			to = s.Writer.Worker
+		if e := s.saveMemory(m); e != nil {
+			return e
 		}
 		for _, id := range ready.Ready {
 			j := snap.State.Jobs[id]
 			if e := s.assign(j, to); e != nil {
 				return e
 			}
+			if m.Jobs[id] == nil {
+				m.Jobs[id] = s.recoverMemory(snap, j)
+			}
+			m.Jobs[id].Liveness = "starting"
 			out.Assigned++
 		}
 		snap, e = Load(s.Feed)
@@ -162,7 +177,7 @@ func (s Store) spawn(j *contract.Job) error {
 	}
 	return writeJSON(path, request)
 }
-func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory) error {
+func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory) error {
 	if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected || j.Status == contract.Posted || j.Status == contract.Ready {
 		return nil
 	}
@@ -219,6 +234,12 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory) error {
 		m.Failure = failure
 	}
 	if len(m.Failures) >= 3 {
+		m.ParkProgress = progress
+	}
+	if err := s.saveMemory(*all); err != nil {
+		return err
+	}
+	if len(m.Failures) >= 3 {
 		if err := s.park(snap, j, m); err != nil {
 			return err
 		}
@@ -242,6 +263,19 @@ func (s Store) liveness(j *contract.Job) string {
 			return "dead"
 		}
 		return "starting"
+	}
+
+	if os.IsNotExist(err) && j.Status == contract.Running && a.To == s.Writer.Worker && s.Probe != nil {
+		task, e := (lease.TaskStore{Feed: s.Feed}).Read("task")
+		if e == nil && task.PID != nil && task.PIDStart != nil {
+			process := s.Probe(session.Live{Lease: j.ID, Holder: a.To, Fence: uint64(a.Fence), Attempt: j.Attempt, PID: *task.PID, PIDStart: *task.PIDStart})
+			if process == session.Dead {
+				return "dead"
+			}
+			if process == session.Alive {
+				return "alive"
+			}
+		}
 	}
 	if err != nil {
 		return "unknown"

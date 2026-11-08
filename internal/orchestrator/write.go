@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -41,6 +42,12 @@ func Write(store feed.Store, w feed.Writer, in feed.Input) (record feed.Record, 
 	snap, err := Load(store)
 	if err != nil {
 		return record, err
+	}
+	if in.Type == "control" {
+		target := stringValue(in.Body["target"])
+		if strings.HasPrefix(target, "J-") && snap.State.Jobs[target] == nil {
+			return record, fmt.Errorf("unknown Job %s", target)
+		}
 	}
 	if w.Lease != "task" {
 		j := snap.State.Jobs[in.Job]
