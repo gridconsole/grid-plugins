@@ -135,7 +135,7 @@ func TestAssignmentFold(t *testing.T) {
 		t.Fatal(err)
 	}
 	j := state.Jobs["J-1"]
-	if j.Status != "running" || j.Attempt != 1 || value(j.ExitReason) != "usage_limit" || j.Checkpoint.ID != checkpoint.ID || !reflect.DeepEqual(j.Results, []string{result.ID}) {
+	if j.Status != "running" || j.Attempt != 1 || j.ExitReason != "usage_limit" || j.Checkpoint == nil || j.Checkpoint.Step != str(checkpoint.Body["step"]) || !reflect.DeepEqual(j.Results, []string{result.ID}) {
 		t.Fatalf("Job: %+v ack=%s", j, ack.ID)
 	}
 	mustPost(t, s, Input{Type: "control", Body: map[string]any{"target": "J-1", "status": "accepted", "reason": "Reviewed"}}, task)
@@ -147,9 +147,9 @@ func TestAssignmentFold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first := Fold(testTask, read)
+	first := contract.Fold(posts(read))
 	slices.Reverse(read.Records)
-	second := Fold(testTask, read)
+	second := contract.Fold(posts(read))
 	a, _ := json.Marshal(first)
 	b, _ := json.Marshal(second)
 	if string(a) != string(b) {
@@ -398,10 +398,8 @@ func TestWarmSnapshotRejudgesAndFilenameCheck(t *testing.T) {
 	if err != nil || state.Jobs["J-1"].Status != "posted" {
 		t.Fatalf("snapshot was not reapplied: %v", err)
 	}
-	for _, r := range state.Records {
-		if r.ID == control.ID && r.Verdict != "stale" {
-			t.Fatal("old cache verdict survived snapshot")
-		}
+	if !slices.ContainsFunc(state.Verdicts, func(v contract.Verdict) bool { return v.ID == control.ID && v.Kind == "stale" }) {
+		t.Fatalf("old cache verdict survived snapshot: %+v", state.Verdicts)
 	}
 	bad := control
 	bad.ID, _ = NewID()

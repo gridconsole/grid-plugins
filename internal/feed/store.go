@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -198,10 +199,10 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	}
 	if r.Type == "ack" {
 		matched := false
-		state := Fold(s.TaskID, existing)
+		state := contract.Fold(posts(existing))
 		if job := state.Jobs[value(r.Job)]; job != nil && job.Assign != nil {
 			a := job.Assign
-			matched = a.To == r.Worker && a.Fence == r.Fence && a.Gen == r.Gen && r.Attempt != nil && a.Attempt == *r.Attempt && contains(r.After, a.Record)
+			matched = a.To == r.Worker && a.Fence == r.Fence && job.Generation == r.Gen && r.Attempt != nil && a.Attempt == *r.Attempt && slices.Contains(r.After, job.AssignPost)
 		}
 		if !matched {
 			return Record{}, fmt.Errorf("ack requires its counted assignment in after")
