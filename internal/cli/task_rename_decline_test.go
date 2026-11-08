@@ -105,9 +105,9 @@ func TestTaskRenameDecline(t *testing.T) {
 			}
 			if tc.code != 0 {
 				if tc.code == 2 {
-					want := "invalid task edit: title must have 1-200 characters on one line without control or bidi override/isolate characters\n"
+					want := "invalid task edit: title must have 1-200 characters on one line without control, bidi override/isolate, or noncharacter code points\n"
 					if tc.verb == "decline" {
-						want = "invalid task edit: a decline needs a reason without control or bidi override/isolate characters\n"
+						want = "invalid task edit: a decline needs a reason without control, bidi override/isolate, or noncharacter code points\n"
 					}
 					want = "grid task " + tc.verb + ": " + want
 					if h.errb.String() != want || h.out.Len() != 0 {

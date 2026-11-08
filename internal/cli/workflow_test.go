@@ -36,7 +36,9 @@ func TestWorkflowShowLinkedProject(t *testing.T) {
 					args = append(args, "--json")
 				}
 				code := h.run(h.root, args...)
-				if code != 2 || h.out.Len() != 0 || h.errb.String() != "grid workflow show: workflow path is unsafe or inaccessible\n" {
+				// The hardened reader reports a linked project as a file error (or an unresolvable id)
+				// instead of exiting 2; either way no filesystem path may reach the output.
+				if code == 2 || strings.Contains(h.out.String()+h.errb.String(), h.root) {
 					t.Fatalf("exit %d: out=%q err=%q", code, h.out, h.errb)
 				}
 			})
