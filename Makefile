@@ -2,10 +2,13 @@ PKG     := github.com/gridconsole/grid-plugins
 VERSION ?=
 LDFLAGS := $(if $(VERSION),-X $(PKG)/internal/version.Version=$(VERSION))
 
-.PHONY: build test test-clean lint golden clean
+.PHONY: build generate test test-clean lint golden clean
 
 build:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o dist/grid ./cmd/grid
+
+generate:
+	go run ./internal/packaging/cmd
 
 test: test-clean
 

@@ -1,34 +1,38 @@
 {
   "hooks": {
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook permissionrequest",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook pretooluse",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "startup|resume|clear|compact|fork",
-        "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook sessionstart", "timeout": 10 }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook sessionstart",
+            "timeout": 10
+          }
+        ]
       }
-    ],
-    "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook userpromptsubmit", "timeout": 10 }] }
-    ],
-    "SubagentStart": [
-      { "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook subagentstart", "timeout": 10 }] }
-    ],
-    "PreToolUse": [
-      { "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook pretooluse", "timeout": 10 }] }
-    ],
-    "PostToolUse": [
-      { "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook posttooluse", "timeout": 10 }] }
-    ],
-    "PreCompact": [
-      { "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook precompact", "timeout": 10 }] }
-    ],
-    "Stop": [
-      { "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook stop", "timeout": 60 }] }
-    ],
-    "SubagentStop": [
-      { "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook subagentstop", "timeout": 60 }] }
-    ],
-    "SessionEnd": [
-      { "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook sessionend", "timeout": 10 }] }
     ]
   }
 }

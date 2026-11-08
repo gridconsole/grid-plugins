@@ -30,11 +30,7 @@ type Options struct {
 // Handles reports whether Run answers the event, so callers can tell a handled
 // event from one that silently prints nothing.
 func Handles(event string) bool {
-	switch strings.ToLower(event) {
-	case "sessionstart", "pretooluse", "permissionrequest":
-		return true
-	}
-	return false
+	return handler(event) != nil
 }
 
 // Run handles one event and returns the exit code (always 0). Unknown events and
@@ -43,11 +39,8 @@ func Run(o Options) int {
 	if o.Getenv == nil {
 		o.Getenv = os.Getenv
 	}
-	switch strings.ToLower(o.Event) {
-	case "sessionstart":
-		sessionStart(o)
-	case "pretooluse", "permissionrequest":
-		toolUse(o)
+	if run := handler(o.Event); run != nil {
+		run(o)
 	}
 	return 0
 }
