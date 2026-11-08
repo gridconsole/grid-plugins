@@ -24,11 +24,17 @@ type Env struct {
 	Stderr io.Writer
 }
 
+// stringList collects a repeated flag.
+type stringList []string
+
+func (l *stringList) String() string     { return strings.Join(*l, ",") }
+func (l *stringList) Set(v string) error { *l = append(*l, v); return nil }
+
 // Run returns 0 on success, 1 for failed checks or execution/storage errors,
 // and 2 for invalid command usage. Reading a failed run with show returns 0.
 func Run(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid eval list [flags]\n       grid eval run [task] [flags]\n       grid eval show <run-id> [flags]\n\nRun defaults to all tasks and the fake agent. Use --agent with a JSON argv array for a real agent.")
+		fmt.Fprintln(env.Stdout, "Usage: grid eval list [flags]\n       grid eval run [task] [flags]\n       grid eval show <run-id> [flags]\n\nRun defaults to all tasks and the fake agent. Use --agent with a JSON argv array for a real agent; the agent sees only a minimal environment plus variables named with --env.")
 		return 0
 	}
 	verb := args[0]
@@ -49,7 +55,9 @@ func Run(args []string, env Env) int {
 	if verb != "list" {
 		fs.StringVar(&results, "results", "evals/runs", "result directory")
 	}
+	var allowEnv stringList
 	if verb == "run" {
+		fs.Var(&allowEnv, "env", "name of a login variable to pass to the agent, such as ANTHROPIC_API_KEY (repeatable)")
 		fs.StringVar(&agent, "agent", "", `agent argv as JSON, for example '["claude","-p"]' (default: fake)`)
 		fs.DurationVar(&timeout, "timeout", 5*time.Minute, "timeout per task, including setup and checks")
 	}
@@ -98,6 +106,10 @@ func Run(args []string, env Env) int {
 			fmt.Fprintln(env.Stderr, "eval run: timeout must be positive")
 			return 2
 		}
+		if err := eval.ValidateAllowEnv(allowEnv); err != nil {
+			fmt.Fprintf(env.Stderr, "eval run: --env: %v\n", err)
+			return 2
+		}
 		if agent != "" {
 			if err := json.Unmarshal([]byte(agent), &argv); err != nil || len(argv) == 0 || strings.TrimSpace(argv[0]) == "" {
 				fmt.Fprintln(env.Stderr, "eval run: --agent must be a nonempty JSON argv array")
@@ -132,7 +144,7 @@ func Run(args []string, env Env) int {
 	if len(selected) == 0 {
 		return fail(env, errors.New("no tasks match the selection"))
 	}
-	runner := eval.Runner{Agent: argv, ResultsDir: resolve(env.Cwd, results), Timeout: timeout}
+	runner := eval.Runner{Agent: argv, ResultsDir: resolve(env.Cwd, results), Timeout: timeout, AllowEnv: allowEnv}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	records := []eval.Result{}

@@ -26,7 +26,7 @@ func TestUsage(t *testing.T) {
 	for _, args := range [][]string{
 		{"unknown"}, {"list", "extra"}, {"list", "--tier", "a"}, {"list", "--size", "huge"},
 		{"run", "--agent", "sh -c true"}, {"run", "--agent", "[]"}, {"run", "--agent", "null"},
-		{"run", "--agent", `[""]`}, {"run", "--timeout", "0s"}, {"run", "one", "two"}, {"show"},
+		{"run", "--agent", `[""]`}, {"run", "--env", "GRID_HOME"}, {"run", "--env", "CLAUDE_CODE_MESSAGING_TOKEN"}, {"run", "--timeout", "0s"}, {"run", "one", "two"}, {"show"},
 	} {
 		if code, _, stderr := command(t, args...); code != 2 || stderr == "" {
 			t.Errorf("%v: code=%d stderr=%s", args, code, stderr)
@@ -58,6 +58,21 @@ func TestSelectionAndRealCommand(t *testing.T) {
 	}
 	if code, _, _ := command(t, "run", "unknown", "--results", results); code != 1 {
 		t.Fatalf("missing task: exit %d", code)
+	}
+}
+
+func TestEnvFlagPassesNamedVariablesOnly(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "key-1")
+	t.Setenv("OPENAI_API_KEY", "key-2")
+	t.Setenv("GRID_PROJECTS", "/leak")
+	var runs []eval.Result
+	code, out, stderr := command(t, "run", "release-notes", "--results", t.TempDir(), "--json", "--env", "ANTHROPIC_API_KEY", "--agent", `["sh","-c","cat >/dev/null; env"]`)
+	if code != 1 || json.Unmarshal([]byte(out), &runs) != nil || len(runs) != 1 {
+		t.Fatalf("run: %d %s %s", code, out, stderr)
+	}
+	agent := runs[0].AgentResult.Stdout
+	if !strings.Contains(agent, "ANTHROPIC_API_KEY=key-1\n") || strings.Contains(agent, "OPENAI_API_KEY") || strings.Contains(agent, "/leak") {
+		t.Fatalf("agent environment: %s", agent)
 	}
 }
 
