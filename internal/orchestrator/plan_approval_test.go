@@ -1,11 +1,14 @@
 package orchestrator
 
 import (
-	"github.com/gridconsole/grid-plugins/internal/feed"
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/feed"
 )
 
 func TestUnapprovedPlanPublishesNoJob(t *testing.T) {
@@ -21,7 +24,7 @@ func TestUnapprovedPlanPublishesNoJob(t *testing.T) {
 }
 
 func TestPlanPublicationChecksCurrentApproval(t *testing.T) {
-	for _, change := range []string{"unchanged", "edited plan", "wrong task", "closed task", "malformed receipt", "ship receipt"} {
+	for _, change := range []string{"unchanged", "edited plan", "wrong task", "closed task", "malformed receipt", "ship receipt", "misfiled ship receipt", "unknown gate"} {
 		t.Run(change, func(t *testing.T) {
 			f := setupPlan(t)
 			text := plannedText(t)
@@ -43,6 +46,10 @@ func TestPlanPublicationChecksCurrentApproval(t *testing.T) {
 				if err := os.Rename(filepath.Join(dir, "approval.json"), filepath.Join(dir, "approval-ship.json")); err != nil {
 					t.Fatal(err)
 				}
+			case "misfiled ship receipt":
+				rewritePlanFile(t, dir, "approval.json", `"what":"approve"`, `"what":"approve","gate":"ship"`)
+			case "unknown gate":
+				rewritePlanFile(t, dir, "approval.json", `"what":"approve"`, `"what":"approve","gate":"unknown"`)
 			}
 			out := f.tick(t)
 			records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
@@ -52,6 +59,56 @@ func TestPlanPublicationChecksCurrentApproval(t *testing.T) {
 			}
 			if err != nil || len(records.Records) != want || out.Assigned != want {
 				t.Fatalf("publication: jobs=%d assigned=%d want=%d err=%v", len(records.Records), out.Assigned, want, err)
+			}
+		})
+	}
+}
+
+func TestPlanPublicationApprovalDiagnostics(t *testing.T) {
+	for _, scenario := range []string{"unapproved", "approved", "edited", "no gate", "history only"} {
+		t.Run(scenario, func(t *testing.T) {
+			f := setupPlan(t)
+			text := plannedText(t)
+			writePlan(t, f, text)
+			switch scenario {
+			case "approved", "edited":
+				approvePlan(t, f)
+				if scenario == "edited" {
+					writePlan(t, f, strings.Replace(text, "role: writer", "role: builder", 1))
+				}
+			case "no gate":
+				rewritePlanFile(t, f.s.Feed.TaskDir, "task.md", "workflow: ''", "workflow: [{step: build, kind: run}]")
+			case "history only":
+				if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "history.md"), []byte("- 2026-01-01T00:00 · plan accepted · by person\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// These subtests are serial: restore the process logger after each one.
+			var logs bytes.Buffer
+			previous := log.Writer()
+			log.SetOutput(&logs)
+			t.Cleanup(func() { log.SetOutput(previous) })
+			before, err := f.s.Feed.Read(feed.Filter{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			out := f.tick(t)
+			records, err := f.s.Feed.Read(feed.Filter{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if scenario == "approved" || scenario == "no gate" {
+				jobs, err := f.s.Feed.Read(feed.Filter{Type: "job"})
+				if err != nil || len(jobs.Records) != 1 || out.Assigned != 1 || logs.Len() != 0 {
+					t.Fatalf("publication: jobs=%d assigned=%d log=%q err=%v", len(jobs.Records), out.Assigned, logs.String(), err)
+				}
+				return
+			}
+			if added := len(records.Records) - len(before.Records); added != 0 || out.Assigned != 0 {
+				t.Fatalf("unapproved plan posted %d records and assigned %d Jobs", added, out.Assigned)
+			}
+			if strings.Count(logs.String(), "\n") != 1 || !strings.Contains(logs.String(), "plan publication skipped: workflow requires approval of the current plan") {
+				t.Fatalf("blocked publication needs one explanatory log line; got %q", logs.String())
 			}
 		})
 	}

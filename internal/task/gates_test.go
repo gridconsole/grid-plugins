@@ -100,6 +100,31 @@ func TestApprovalTracksPlan(t *testing.T) {
 	}
 }
 
+func TestApprovedRejectsAnotherGate(t *testing.T) {
+	for _, gate := range []string{"ship", "unknown"} {
+		t.Run(gate, func(t *testing.T) {
+			s, task := waitingFixture(t)
+			setPlan(t, task, planV1)
+			event, err := s.Approve(WriteOptions{ID: task.ID}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			event.Gate = gate
+			data, err := json.Marshal(event)
+			if err != nil {
+				t.Fatal(err)
+			}
+			write(t, filepath.Join(task.Path, "approval.json"), string(data))
+			if _, err := s.Approval("", task.ID); err == nil {
+				t.Fatal("locked approval accepted another gate")
+			}
+			if Approved(task.Path) {
+				t.Fatal("lock-free approval accepted another gate")
+			}
+		})
+	}
+}
+
 // Approve and Approval take .plan.lock, so they wait for a plan write in flight.
 func TestApprovalWaitsForPlanLock(t *testing.T) {
 	s, task := waitingFixture(t)
