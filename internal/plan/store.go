@@ -146,6 +146,12 @@ func (s Store) Read() (string, error) {
 // .plan.lock, so no plan write lands between the hash and what fn records.
 // A caller that also holds another lock (a task's .task.lock) takes it first.
 func (s Store) WithHash(fn func(hash string) error) error {
+	return s.WithDigest(func(hash, _ string) error { return fn(hash) })
+}
+
+// WithDigest calls fn with the short hash and full digest of one plan snapshot
+// under .plan.lock, using the same lock order and missing-plan rules as WithHash.
+func (s Store) WithDigest(fn func(hash, digest string) error) error {
 	dir, err := s.directory()
 	if err != nil {
 		return err
@@ -158,7 +164,8 @@ func (s Store) WithHash(fn func(hash string) error) error {
 		if err != nil {
 			return err
 		}
-		return fn(Hash(string(b)))
+		digest := Digest(string(b))
+		return fn(digest[:6], digest)
 	})
 }
 

@@ -26,8 +26,14 @@ func lines(text string) []string { return strings.Split(strings.ReplaceAll(text,
 // The first line is always omitted, even on a plan without a revision heading.
 // Internal blank lines, leading indentation and spaces within text still count.
 func Hash(text string) string {
+	return Digest(text)[:6]
+}
+
+// Digest is the full SHA-256 of the same canonical bytes used by Hash.
+// Approval receipts use it to bind plan content without the short hash collisions.
+func Digest(text string) string {
 	sum := sha256.Sum256([]byte(canonical(text)))
-	return fmt.Sprintf("%x", sum[:3])
+	return fmt.Sprintf("%x", sum[:])
 }
 
 func canonical(text string) string {

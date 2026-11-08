@@ -1,6 +1,8 @@
 package plan
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"strings"
@@ -45,7 +47,7 @@ func TestHashStability(t *testing.T) {
 		"heading":             strings.ReplaceAll(base, "rev 3 · 000000", "rev 4 · abcdef"),
 	} {
 		t.Run(name, func(t *testing.T) {
-			if Hash(base) != Hash(changed) {
+			if Hash(base) != Hash(changed) || Digest(base) != Digest(changed) {
 				t.Fatal("hash changed")
 			}
 		})
@@ -59,7 +61,7 @@ func TestHashStability(t *testing.T) {
 		"outside evidence": base + "evidence: checks/R-3/proof.txt\n",
 	} {
 		t.Run(name, func(t *testing.T) {
-			if Hash(base) == Hash(changed) {
+			if Hash(base) == Hash(changed) || Digest(base) == Digest(changed) {
 				t.Fatal("hash did not change")
 			}
 		})
@@ -101,5 +103,14 @@ func TestItemsBoundaries(t *testing.T) {
 	}
 	if len(items) != 2 || items[0].N != 7 || items[0].Title != "Keep title" || items[0].State != "open" || items[0].Prose != "Some prose." {
 		t.Fatalf("%+v", items)
+	}
+}
+
+func TestDigestUsesFullCanonicalSHA256(t *testing.T) {
+	text := "# Plan, rev 9 · ignored\r\n\r\n- [X] 1 Build it  \r\n  evidence: ignored\r\n\r\n## Where it stands\r\nVolatile status.\r\n"
+	sum := sha256.Sum256([]byte("- [ ] 1 Build it\n"))
+	want := hex.EncodeToString(sum[:])
+	if got := Digest(text); got != want || Hash(text) != got[:6] {
+		t.Fatalf("digest = %s, want %s", got, want)
 	}
 }

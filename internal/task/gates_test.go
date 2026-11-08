@@ -44,7 +44,7 @@ func TestApprovalTracksPlan(t *testing.T) {
 	// A stored plan.hash is not a source of truth and is never read.
 	write(t, filepath.Join(task.Path, "plan.hash"), "opaque:v1\n")
 	event, err := s.Approve(o, "")
-	if err != nil || event.PlanHash != h1 || event.Note != "Reviewed" {
+	if err != nil || event.PlanHash != h1 || event.PlanDigest != plan.Digest(planV1) || event.Note != "Reviewed" {
 		t.Fatalf("%+v: %v", event, err)
 	}
 	got, err := s.Approval("", task.ID)
@@ -274,7 +274,7 @@ func TestApproveAtShipGateRecordsShipApproval(t *testing.T) {
 	data, _ := os.ReadFile(path)
 	write(t, path, strings.Replace(string(data), "state: waiting", "state: waiting\ngate: ship", 1))
 	shipEvent, err := s.Approve(WriteOptions{ID: task.ID, Note: "Ship ok"}, "")
-	if err != nil || shipEvent.Gate != "ship" || shipEvent.PlanHash != h1 || shipEvent.What != "approve" {
+	if err != nil || shipEvent.Gate != "ship" || shipEvent.PlanHash != h1 || shipEvent.PlanDigest != plan.Digest(planV1) || shipEvent.What != "approve" {
 		t.Fatalf("%+v: %v", shipEvent, err)
 	}
 	var stored Event
@@ -303,5 +303,36 @@ func TestApproveAtShipGateRecordsShipApproval(t *testing.T) {
 		if err := json.Unmarshal(b, &e); err != nil || e.What != "reopen" {
 			t.Fatalf("%s survived reopen: %+v %v", name, e, err)
 		}
+	}
+}
+
+func TestApprovalDigestCompatibility(t *testing.T) {
+	for _, tc := range []struct {
+		name, digest string
+		want         bool
+	}{
+		{"legacy short hash", "", true},
+		{"full digest", `,"plan_digest":"` + plan.Digest(planV1) + `"`, true},
+		{"wrong digest", `,"plan_digest":"` + strings.Repeat("0", 64) + `"`, false},
+		{"empty digest", `,"plan_digest":""`, false},
+		{"null digest", `,"plan_digest":null`, false},
+		{"non-string digest", `,"plan_digest":123`, false},
+		{"short digest", `,"plan_digest":"abcdef"`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, task := waitingFixture(t)
+			hash := setPlan(t, task, planV1)
+			write(t, filepath.Join(task.Path, "approval.json"), `{"task":"`+task.ID+`","what":"approve","plan_hash":"`+hash+`"`+tc.digest+`}`)
+			_, err := s.Approval("", task.ID)
+			if (err == nil) != tc.want || Approved(task.Path) != tc.want {
+				t.Fatalf("approval allowed = %t, want %t: %v", err == nil, tc.want, err)
+			}
+			if tc.want {
+				event, err := s.Approve(WriteOptions{ID: task.ID}, "")
+				if err != nil || event.PlanDigest != plan.Digest(planV1) {
+					t.Fatalf("reapproval must upgrade legacy receipts: %+v %v", event, err)
+				}
+			}
+		})
 	}
 }

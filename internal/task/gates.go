@@ -13,7 +13,7 @@ import (
 
 var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
 
-// Approve records the plan.md hash the person saw. A supplied hash is a
+// Approve records the plan.md short hash and full digest the person saw. A supplied hash is a
 // compare-and-set token. With no token, an existing stale approval must be
 // explicitly replaced using --plan-hash after reviewing the new plan.
 //
@@ -22,7 +22,7 @@ var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
 // task a plan approval in approval.json. The two never overwrite each other.
 //
 // The hash comes from plan.md through internal/plan, never from a stored copy.
-// Locks are taken in one order: .task.lock (withWrite), then .plan.lock (WithHash),
+// Locks are taken in one order: .task.lock (withWrite), then .plan.lock (WithDigest),
 // which only plan writers also take; nothing takes them the other way round.
 func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 	var event Event
@@ -44,15 +44,15 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 		if err != nil {
 			return err
 		}
-		err = plan.Store{TaskDir: t.Path}.WithHash(func(current string) error {
+		err = plan.Store{TaskDir: t.Path}.WithDigest(func(current, digest string) error {
 			want := hash
 			if want == "" {
 				if previous != nil {
 					var old Event
-					if err := json.Unmarshal(previous, &old); err != nil {
+					if err := readApproval(previous, &old); err != nil {
 						return err
 					}
-					if old.PlanHash != current || old.LandsHash != o.LandsHash {
+					if old.PlanHash != current || (old.PlanDigest != "" && old.PlanDigest != digest) || old.LandsHash != o.LandsHash {
 						return errors.New("Changed since you approved: review the plan and pass --plan-hash with its current hash")
 					}
 				}
@@ -63,7 +63,7 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 			}
 			o.Action = "approve"
 			event = s.event(t, o, t.State)
-			event.PlanHash, event.Gate, event.LandsHash = want, gate, o.LandsHash
+			event.PlanHash, event.PlanDigest, event.Gate, event.LandsHash = want, digest, gate, o.LandsHash
 			data, err := json.Marshal(event)
 			if err != nil {
 				return err
@@ -78,7 +78,7 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 	return event, err
 }
 
-// Approval reads a gate only while its approved hash still matches plan.md.
+// Approval reads a gate only while its approved hash and optional digest match plan.md.
 // Consumers must use this check (or Approved) instead of treating approval.json's
 // existence as permission. Plan writers hold .plan.lock, not .task.lock.
 func (s Store) Approval(cwd, id string) (Event, error) {
@@ -101,8 +101,8 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 		if err != nil {
 			return err
 		}
-		err = plan.Store{TaskDir: t.Path}.WithHash(func(hash string) (err error) {
-			event, err = checkApproval(t, data, hash)
+		err = plan.Store{TaskDir: t.Path}.WithDigest(func(hash, digest string) (err error) {
+			event, err = checkApproval(t, data, hash, digest)
 			if err == nil && event.Gate != eventGate {
 				return fmt.Errorf("approval is for another gate")
 			}
@@ -110,7 +110,7 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 		})
 		if errors.Is(err, plan.ErrNoPlan) {
 			// A missing plan matches no approval; closed and never approved still come first.
-			if _, err = checkApproval(t, data, ""); err == nil {
+			if _, err = checkApproval(t, data, "", ""); err == nil {
 				err = plan.ErrNoPlan
 			}
 		}
@@ -120,7 +120,7 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 }
 
 // Approved is the lock-free form of Approval for a hook: it answers whether dir
-// holds an approval whose hash still equals plan.md's now. It takes no lock and
+// holds an approval whose hash and optional digest still match plan.md now. It takes no lock and
 // replays no journal, so a write in flight or any read failure is false.
 func Approved(dir string) bool {
 	t, err := Read(dir)
@@ -135,13 +135,14 @@ func Approved(dir string) bool {
 	if err != nil {
 		return false
 	}
-	event, err := checkApproval(t, data, plan.Hash(text))
+	digest := plan.Digest(text)
+	event, err := checkApproval(t, data, digest[:6], digest)
 	// Match ApprovalForGate: the plan receipt has no gate field. A receipt for
 	// ship or an unknown gate cannot authorize plan work, even if misfiled.
 	return err == nil && event.Gate == ""
 }
 
-func checkApproval(t Task, data []byte, hash string) (Event, error) {
+func checkApproval(t Task, data []byte, hash, digest string) (Event, error) {
 	var event Event
 	if t.State == "closed" {
 		return event, errors.New("cannot use approval in current state closed")
@@ -149,13 +150,35 @@ func checkApproval(t Task, data []byte, hash string) (Event, error) {
 	if data == nil {
 		return event, errors.New("plan has not been approved")
 	}
-	if err := json.Unmarshal(data, &event); err != nil {
+	if err := readApproval(data, &event); err != nil {
 		return Event{}, err
 	}
-	if event.Task != t.ID || event.What != "approve" || event.PlanHash != hash {
+	if event.Task != t.ID || event.What != "approve" || event.PlanHash != hash || (event.PlanDigest != "" && event.PlanDigest != digest) {
 		return Event{}, errors.New("Changed since you approved: plan hash no longer matches")
 	}
 	return event, nil
+}
+
+// readApproval distinguishes an absent legacy digest from a present but empty,
+// null or malformed one. Only absence permits the short-hash compatibility path.
+func readApproval(data []byte, event *Event) error {
+	var receipt struct {
+		*Event
+		Digest json.RawMessage `json:"plan_digest"`
+	}
+	receipt.Event = event
+	if err := json.Unmarshal(data, &receipt); err != nil {
+		return err
+	}
+	if receipt.Digest != nil {
+		if err := json.Unmarshal(receipt.Digest, &event.PlanDigest); err != nil {
+			return err
+		}
+		if len(event.PlanDigest) != 64 {
+			return errors.New("invalid plan digest in approval")
+		}
+	}
+	return nil
 }
 
 // Decide records a task-scoped allow or deny for a known refusal. It never runs

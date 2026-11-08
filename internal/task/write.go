@@ -64,18 +64,19 @@ func NextState(current, action, requested string) (string, error) {
 // Event is a local task write receipt, not a Feed post. The shared contract has
 // no task-write schema yet; author identity uses the contract's existing shape.
 type Event struct {
-	Task      string          `json:"task"`
-	Who       contract.Author `json:"who"`
-	When      string          `json:"when"`
-	What      string          `json:"what"`
-	FromState string          `json:"from_state"`
-	ToState   string          `json:"to_state"`
-	Note      string          `json:"note,omitempty"`
-	LandsHash string          `json:"lands_hash,omitempty"`
-	PlanHash  string          `json:"plan_hash,omitempty"`
-	Gate      string          `json:"gate,omitempty"`
-	RefusalID string          `json:"refusal_id,omitempty"`
-	Decision  string          `json:"decision,omitempty"`
+	Task       string          `json:"task"`
+	Who        contract.Author `json:"who"`
+	When       string          `json:"when"`
+	What       string          `json:"what"`
+	FromState  string          `json:"from_state"`
+	ToState    string          `json:"to_state"`
+	Note       string          `json:"note,omitempty"`
+	LandsHash  string          `json:"lands_hash,omitempty"`
+	PlanHash   string          `json:"plan_hash,omitempty"`
+	PlanDigest string          `json:"plan_digest,omitempty"`
+	Gate       string          `json:"gate,omitempty"`
+	RefusalID  string          `json:"refusal_id,omitempty"`
+	Decision   string          `json:"decision,omitempty"`
 }
 
 // WriteOptions names the task, the requested move and the caller's explanation.
