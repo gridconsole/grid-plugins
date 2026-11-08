@@ -35,6 +35,7 @@ func Stop(pid int, grace time.Duration) error {
 
 // ProcessMatches checks the leader's start token while it is alive. Once the
 // leader exits, its group cannot be reused while any member still lives.
+// Legacy records without a token retain the original PID/group liveness check.
 func ProcessMatches(r Record) (bool, error) {
 	if !Alive(r.PID, true) {
 		return false, nil
@@ -43,7 +44,7 @@ func ProcessMatches(r Record) (bool, error) {
 		return true, nil
 	}
 	if r.PIDStart == "" {
-		return false, errors.New("dev server has no recorded process start time")
+		return true, nil
 	}
 	start := processid.Start(r.PID)
 	if start == "" {

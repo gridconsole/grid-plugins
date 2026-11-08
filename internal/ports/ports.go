@@ -61,7 +61,7 @@ type Record struct {
 type Store struct {
 	GridHome string
 	Now      func() time.Time
-	// Warn receives one line per damaged port file that List skips; nil is stderr.
+	// Warn receives warnings for damaged files and records GC skips; nil is stderr.
 	Warn io.Writer
 	// Grace is the wait after each stop signal when gc stops a dev server; zero is two seconds.
 	Grace time.Duration
@@ -382,6 +382,10 @@ func (l *Locked) Remove(r Record) error {
 // or superseded it stops the block's dev server group, or for a bare claim waits
 // until no TCP listener remains in the block (go-architecture.md:245).
 func (s Store) GC() ([]Record, error) {
+	return s.gc(ProcessMatches, StopRecord)
+}
+
+func (s Store) gc(matches func(Record) (bool, error), stop func(Record, time.Duration) error) ([]Record, error) {
 	l, err := s.Lock()
 	if err != nil {
 		return nil, err
@@ -392,15 +396,21 @@ func (s Store) GC() ([]Record, error) {
 		return nil, err
 	}
 	removed := []Record{}
-	stopped := map[int]bool{}
+	stopped := map[int]error{}
+damagedFiles:
 	for _, d := range damaged {
 		// A start that crashed part-way left no parent to wait for its health, so
 		// a server recorded in a damaged block is an orphan too.
 		for _, r := range d.Records {
-			if r.Group && !stopped[r.PID] {
-				stopped[r.PID] = true
-				if err := StopRecord(r, s.grace()); err != nil {
-					return removed, err
+			if r.Group {
+				err, tried := stopped[r.PID]
+				if !tried {
+					err = stop(r, s.grace())
+					stopped[r.PID] = err
+				}
+				if err != nil {
+					s.warn("skipping damaged reservation file %d.json: %v", d.Port, err)
+					continue damagedFiles
 				}
 			}
 		}
@@ -413,23 +423,26 @@ func (s Store) GC() ([]Record, error) {
 		alive := Alive(r.PID, false)
 		if r.Group {
 			var err error
-			alive, err = ProcessMatches(r)
+			alive, err = matches(r)
 			if err != nil {
-				return removed, err
+				s.warn("skipping reservation %d-%d: %v", r.Start, r.End, err)
+				continue
 			}
 		}
 		reclaim := !alive
 		if !reclaim {
 			status, err := lease.ReadJob(filepath.Join(s.GridHome, filepath.FromSlash(r.Task)), r.Lease)
 			if err != nil {
-				return removed, err
+				s.warn("skipping reservation %d-%d: %v", r.Start, r.End, err)
+				continue
 			}
 			if status.Expired(r.Fence, s.now()) {
 				if r.Group {
 					// Released, superseded (fence moved) or expired: nobody is left to run
 					// grid env down, so gc stops the orphaned server itself.
-					if err := StopRecord(r, s.grace()); err != nil {
-						return removed, err
+					if err := stop(r, s.grace()); err != nil {
+						s.warn("skipping reservation %d-%d: %v", r.Start, r.End, err)
+						continue
 					}
 					reclaim = true
 				} else {

@@ -28,7 +28,7 @@ func TestDevServerLifecycle(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build helper: %v %s", err, out)
 	}
-	for _, mode := range []string{"healthy", "tree", "term", "stubborn", "unhealthy", "redirect"} {
+	for _, mode := range []string{"healthy", "legacy", "tree", "term", "stubborn", "unhealthy", "redirect"} {
 		t.Run(mode, func(t *testing.T) {
 			home := t.TempDir()
 			dir := t.TempDir()
@@ -84,6 +84,18 @@ func TestDevServerLifecycle(t *testing.T) {
 			}
 			if err := m.Ports.Release(m.TaskDir, "J-1"); err == nil {
 				t.Fatal("released live server")
+			}
+			if mode == "legacy" {
+				r.PIDStart = ""
+				data, err := json.Marshal(r)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for port := r.Start; port <= r.End; port++ {
+					if err := os.WriteFile(filepath.Join(home, "ports", strconv.Itoa(port)+".json"), data, 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
 			}
 			if err := m.Down("J-1"); err != nil {
 				t.Fatal(err)

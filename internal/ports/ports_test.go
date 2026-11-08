@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/processid"
 )
 
@@ -412,7 +413,7 @@ func TestReusedPIDIsNotSignalled(t *testing.T) {
 	}
 }
 
-func TestMissingStartTokenRefusesSignal(t *testing.T) {
+func TestLegacyRecordStopsGroup(t *testing.T) {
 	cmd := exec.Command("sleep", "60")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
@@ -421,12 +422,118 @@ func TestMissingStartTokenRefusesSignal(t *testing.T) {
 	exited := make(chan struct{})
 	go func() { _ = cmd.Wait(); close(exited) }()
 	defer func() { _ = cmd.Process.Kill(); <-exited }()
-	if err := StopRecord(Record{PID: cmd.Process.Pid, Group: true}, time.Millisecond); err == nil {
-		t.Fatal("accepted unverifiable legacy record")
+	if err := StopRecord(Record{PID: cmd.Process.Pid, Group: true}, 20*time.Millisecond); err != nil {
+		t.Fatal(err)
 	}
 	select {
 	case <-exited:
-		t.Fatal("signalled unverifiable PID")
-	case <-time.After(50 * time.Millisecond):
+	case <-time.After(2 * time.Second):
+		t.Fatal("legacy server survived shutdown")
 	}
+}
+
+func TestGCLegacyRecordDoesNotBlockOtherReservations(t *testing.T) {
+	cmd := exec.Command("sleep", "30")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+	s := Store{GridHome: t.TempDir()}
+	task := filepath.Join(s.GridHome, "tasks", "T-1")
+	r, err := s.Claim(task, "J-1", cmd.Process.Pid, Range{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Group = true // pre-L42 records had no pid_start field
+	writeReservation(t, s, r)
+	dead := deadReservation(t, s, task)
+	removed, err := s.GC()
+	if err != nil || len(removed) != 1 || removed[0] != dead {
+		t.Fatalf("gc: %+v %v", removed, err)
+	}
+	remaining, err := s.List()
+	if err != nil || len(remaining) != 1 || remaining[0] != r || !Alive(r.PID, false) {
+		t.Fatalf("lost live legacy server: %+v %v", remaining, err)
+	}
+}
+
+func TestGCSkipsUnverifiableRecords(t *testing.T) {
+	for _, failure := range []string{"identity", "stop", "damaged", "lease"} {
+		t.Run(failure, func(t *testing.T) {
+			var warnings bytes.Buffer
+			s := Store{GridHome: t.TempDir(), Warn: &warnings}
+			task := filepath.Join(s.GridHome, "tasks", "T-1")
+			r, err := s.Claim(task, "J-1", os.Getpid(), Range{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r.Group, r.PIDStart = true, "recorded-start"
+			writeReservation(t, s, r)
+			dead := deadReservation(t, s, task)
+			if failure == "damaged" {
+				if err := os.Remove(filepath.Join(s.GridHome, "ports", strconv.Itoa(r.End)+".json")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if failure == "stop" || failure == "lease" {
+				dir := filepath.Join(task, "feed", "lease")
+				if err := os.MkdirAll(dir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				data := []byte(`{"lease":"J-1","holder":null,"fence":1,"gen":0,"attempt":1,"since":"2026-01-01T00:00:00.000Z","pid":null,"pid_start":null}`)
+				if err := contract.Validate("lease", data); err != nil {
+					t.Fatal(err)
+				}
+				if failure == "lease" {
+					data = []byte("invalid lease")
+				}
+				if err := os.WriteFile(filepath.Join(dir, "J-1.json"), data, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			unverifiable := errors.New("cannot verify dev server process start time")
+			removed, err := s.gc(func(Record) (bool, error) {
+				if failure == "identity" {
+					return false, unverifiable
+				}
+				return true, nil
+			}, func(Record, time.Duration) error { return unverifiable })
+			if err != nil || len(removed) != 1 || removed[0] != dead {
+				t.Fatalf("gc: %+v %v", removed, err)
+			}
+			if _, err := os.Stat(filepath.Join(s.GridHome, "ports", strconv.Itoa(r.Start)+".json")); err != nil {
+				t.Fatalf("unverified reservation removed: %v", err)
+			}
+			if !strings.Contains(warnings.String(), "skipping") || (failure != "lease" && !strings.Contains(warnings.String(), unverifiable.Error())) {
+				t.Fatalf("missing warning: %s", &warnings)
+			}
+		})
+	}
+}
+
+func writeReservation(t *testing.T, s Store, r Record) {
+	t.Helper()
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for port := r.Start; port <= r.End; port++ {
+		if err := os.WriteFile(filepath.Join(s.GridHome, "ports", strconv.Itoa(port)+".json"), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func deadReservation(t *testing.T, s Store, task string) Record {
+	t.Helper()
+	cmd := exec.Command("/bin/sh", "-c", "exit 0")
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.Claim(task, "J-2", cmd.Process.Pid, Range{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }
