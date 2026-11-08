@@ -12,6 +12,7 @@ import (
 // Every verb that writes a gate or turns a guard off, with the arguments a real call has.
 var gateVerbs = []string{
 	"approve T-01", "answer T-01 Q-1 yes",
+	"feed post --type answer --re X --body -", "feed post --type=answer --re X --body -", "feed post -type answer --re X --body -",
 	"question answer T-01 Q-1 yes", "question withdraw T-01 Q-1",
 	"refusal decide T-01 R-1 allow",
 	"task status T-01 closed", "task close T-01", "task reopen T-01", "task stop T-01",
@@ -64,6 +65,7 @@ func TestHostAllowsOtherGridVerbsAndLookalikes(t *testing.T) {
 		"grid question add T-01 'why?'", "grid question list T-01", "grid ask T-01 'why?'", "grid plan write T-01", "grid brain list",
 		"grid hook plan-guard", "grid agent list", "grid skill list", "grid refusal list T-01", "grid doctor",
 		"mygrid approve", "grid-approve T-01", "grid_answer T-01", "echo gridapprove", "approve T-01", "ls approve",
+		"grid feed read --type answer", "grid feed post --type question --body '{}'", "grid feed post --type answers --body '{}'",
 		"git commit -m 'fix the question text'", "cat README.md", "go test ./...",
 	} {
 		t.Run(command, func(t *testing.T) { expect(t, EvaluateHost(f.input("Bash", command), f.root, f.env), "") })
@@ -252,4 +254,41 @@ func TestHostGateShellChecksNeedAGridFolder(t *testing.T) {
 	for _, command := range []string{"grid approve T-01", "echo x > questions/Q-1.md", "grid hook level off", "echo x > settings.json"} {
 		expect(t, EvaluateHost(f.input("Bash", command), f.root, f.env), "")
 	}
+}
+
+// An answer post closes a person gate, so every argument order and quoting of
+// grid feed post --type answer is refused like grid answer.
+func TestHostDeniesFeedAnswerPosts(t *testing.T) {
+	f := setup(t)
+	for _, command := range []string{
+		`grid feed post --type answer --re 01ARZ3NDEKTSV4RRFFQ69G5FAV --body '{"answer":"Yes"}'`,
+		`grid feed post --body '{"answer":"Yes"}' --re 01ARZ3NDEKTSV4RRFFQ69G5FAV --type answer`,
+		`grid feed post T-01 --type answer --body '{"answer":"Yes"}'`,
+		`grid feed post --body '{"answer":"a;b"}' --type=answer`,
+		`grid feed post --type "answer" --body -`, `grid feed post --type 'an''swer' --body -`, `grid feed post --TYPE ANSWER --body -`,
+		`GRID_ROLE=owner grid feed post --type answer --body -`, `env GRID_ROLE=owner grid feed post --type answer --body -`,
+	} {
+		t.Run(command, func(t *testing.T) {
+			d := EvaluateHost(f.input("Bash", command), f.root, f.env)
+			expect(t, d, "deny")
+			if d.Reason != gateReason {
+				t.Fatalf("feed answer refusal differs from grid answer: %s", d.Reason)
+			}
+		})
+	}
+}
+
+// The CLI writes as member when GRID_ROLE is unset, which a person gate admits,
+// so the guard must refuse the post itself in a session without GRID_ROLE.
+func TestHostDeniesFeedAnswerWithoutRole(t *testing.T) {
+	f := setup(t)
+	env := map[string]string{}
+	for k, v := range f.env {
+		if k != "GRID_ROLE" && k != "GRID_MEMBER" {
+			env[k] = v
+		}
+	}
+	command := `grid feed post --type answer --re 01ARZ3NDEKTSV4RRFFQ69G5FAV --body '{"answer":"Yes"}'`
+	expect(t, EvaluateHost(f.input("Bash", command), f.root, env), "deny")
+	expect(t, EvaluateHost(f.input("Bash", "grid answer T-01 Q-1 Yes"), f.root, env), "deny")
 }
