@@ -1,0 +1,85 @@
+# Lane L26: task writes and gates
+
+Built in the existing `internal/task` store:
+
+- `grid task stop|close|reopen <T-id> [--reason <text>] [--json]`
+- `grid task status <T-id> <state> [--json]`
+- `grid approve <T-id> [--plan-hash <hash>] [--note <text>] [--json]`
+- `grid refusal decide <T-id> <R-id> allow|deny [--note <text>] [--json]`
+- `grid task history <T-id> [--json]`
+
+Commands resolve tasks through the existing store and `gridhome.TasksDirs`. No question or plan commands were added. The existing `task.md` record and intent remain in place; state updates preserve unknown header fields, YAML comments and the Markdown body. No worker, session, command execution, delivery or deployment is triggered.
+
+## State table
+
+The eight state names come from `old-plugin/skills/task/SKILL.md:48`. The references do not define an exhaustive transition matrix. This lane makes the following explicit operational choices, informed by `old-plugin/skills/resume/SKILL.md:14-18` and `prototype/task.html:4887-4901`:
+
+| Current state | Allowed `status` targets | `stop` | `close` | `reopen` |
+| --- | --- | --- | --- | --- |
+| queued | running, waiting, paused, stuck | closed | closed | refused |
+| running | waiting, stuck, reworking, pausing, paused | closed | closed | refused |
+| waiting | running, queued, stuck, reworking, paused | closed | closed | refused |
+| stuck | running, queued, waiting, paused | closed | closed | refused |
+| reworking | running, waiting, stuck, pausing, paused | closed | closed | refused |
+| pausing | paused, running, stuck | closed | closed | refused |
+| paused | queued, running | closed | closed | refused |
+| closed | none | refused | refused | queued |
+
+Unknown states, repeated state assignments and all unlisted moves fail with the current state named. `status` cannot close or reopen a task. Stop records the distinct `stop` action with `closed` as its destination, matching “Closed · stopped” in `prototype/task.html:4674`.
+
+## Files, gates and integration
+
+Every successful mutation adds one Markdown bullet containing an escaped JSON receipt to `history.md`: task, who, when, what, from_state, to_state, and any note, plan_hash, refusal_id or decision. Existing history bytes are retained; a missing final newline is completed. `history --json` returns an ordered array of all original lines, including legacy prose. Mutation `--json` returns the receipt object. Gate decisions leave state unchanged.
+
+Writers use `internal/fslock` on `<task>/.task.lock`, re-read state after locking and use the existing task atomic-write helper. `.task-write.json` is a durable redo journal containing complete file images. Files are replaced atomically, with history last; the journal is removed and the directory synced after publication. A later write, gate check or history read replays an interrupted commit without duplicating its line. This is recoverable multi-file publication, not a filesystem transaction visible instantaneously to unlocked readers. Consumers needing a consistent multi-file snapshot must hold `.task.lock`; plan.hash writers must use that same lock. Task folder symlinks and symlinked write targets are rejected; a symlink in the configured Grid home is resolved first.
+
+Approval requires `waiting` and a nonempty `plan.hash`; the hash is treated as opaque text with surrounding whitespace removed. `approval.json` contains the receipt and the approved hash. `Store.Approval` checks the current hash before returning a usable gate. A stale supplied hash fails without a history line. When a prior approval is stale, omitting `--plan-hash` also fails; the caller must review the new plan and supply its current hash. Reopen invalidates an earlier approval even if the plan bytes did not change.
+
+Refusal producers supply `refusals/R-N.json`. This lane requires that regular file to exist, without imposing a second schema on the producer. A decision writes `refusal-R-N.json` once, with `allow` or `deny`; duplicate decisions, unknown refusals and closed tasks are refused. These are task-scoped records, not modifications to agent permission settings.
+
+The terminal records `who: {id: local, role: owner}` unless the host supplies `GRID_ACTOR`. No OS username is inferred. The CLI refuses person-only gates in a marked agent or worker environment (`GRID_AGENT`, `GRID_WORKER_ID`, `GRID_WORKER`, or a non-person `GRID_ROLE`). These environment checks are cooperative, not authentication. The existing host guard also denies agent invocations of refusal decisions and raw writes to approval/decision files, the journal and the lock, including Personal tasks and case aliases. Worker deny settings remain the stronger boundary described by the design.
+
+## Verification
+
+Run from the checkout, with the default TMPDIR:
+
+```sh
+make test
+make lint
+GOOS=windows go build ./...
+GOOS=darwin go build ./...
+```
+
+All four required checks passed in this lane, with the default TMPDIR. The test suite ran on Linux; the Windows and macOS checks were cross-builds.
+
+Focused tests:
+
+```sh
+go test ./internal/task ./internal/cli ./internal/guard
+```
+
+Coverage includes every state/action/target combination, CLI JSON goldens, stale approval rejection after a plan change, reopening invalidation, refusal validation, preservation of task metadata and legacy history, symlink rejection, a symlinked Grid home, interrupted journal recovery and two independent processes concurrently closing and reopening. The process test compares every successful receipt against disk and checks the full state chain and final task record.
+
+## Intended differences from the old plugin
+
+Reference paths below are relative to the read-only reference root.
+
+| Difference | Reference and reason |
+| --- | --- |
+| Writes are CLI operations in `grid task`; no bare `grid stop/close/reopen/status` aliases. `status` with an explicit state is a write; `show` remains the read command. | `docs/plugin-design.md:111,487`; `docs/migration.md:65`; explicit lane interface. The old task skill's Status was read-only (`old-plugin/skills/task/SKILL.md:116`). |
+| Retain main's `state` field and named workflow instead of introducing the old `status`, step, next, updated and inline workflow shape. No body log line or concept-note refresh accompanies these writes. | `old-plugin-map.md:68`; `old-plugin/skills/task/SKILL.md:24-49,93`; `docs/plugin.md:249`. This extends the existing new task store. |
+| Explicit state table, no same-state writes, and reopening queues a new round rather than immediately resuming an agent. Close accepts any open state without checking delivery milestones. | `old-plugin/skills/resume/SKILL.md:14-18`; `prototype/task.html:4887-4901`. The prototype's close availability depends on workflow/delivery state that main's task record does not model. |
+| Stop records closed/stopped intent; it neither kills Jobs nor implements a ten-minute Undo. Reopen is an explicit terminal-state transition and does not reset a workflow step. | `prototype/task.html:4667-4675,4685,4889-4901`; worker ownership in `docs/plugin-design.md:121,198`. |
+| CLI-owned receipts replace manually edited prose history, shell-generated minute timestamps and retry-on-edit-conflict. UTC timestamps include subsecond precision; notes are JSON-escaped; legacy lines remain readable. | `old-plugin-map.md:69`; `old-plugin/skills/task/SKILL.md:92`; `old-plugin/skills/deliver/SKILL.md:54`; `docs/plugin.md:249`. No hook history compaction is implemented here. |
+| Approval is an explicit file bound to opaque `plan.hash`, not acceptance inferred from a history phrase or a tool call. It keeps the task waiting for its consumer and does not advance workflow steps. Reopen invalidates it. | `old-plugin/skills/resume/SKILL.md:27-38`; `old-plugin/skills/deliver/SKILL.md:72`; `prototype/task.html:4149,4338`. The requested file gate is implemented without adding the parallel plan commands (`docs/plugin-design.md:112`). |
+| A person's shell may approve; no desktop `.host` queue is required. Local actor identity is explicit and guards protect the new records. | `docs/plugin.md:249` describes the earlier app-only approach; the later terminal rule is `docs/plugin-design.md:92,114`. |
+| Refusal decisions are task-scoped allow/deny records; no project-wide permission, automatic resume, rule installation or command execution. Existing decisions cannot be replaced. | `prototype/task.html:14755-14786`; requested lane interface; `docs/go-architecture.md:353` puts authorization decisions in the host. |
+| No approval or refusal Feed events are invented, and no question, plan, deliver or land commands are added. | `docs/migration.md:65` spans multiple lanes; command ownership is separated in `docs/plugin-design.md:112-115`. |
+
+## Limits and work not done
+
+- `internal/contract` currently defines Feed/Job records and `Author`, but has no task header, history receipt, plan approval or refused-command decision shape. The lane forbids editing that package. Consequently, this work preserves the existing `task.Record`, uses `contract.Author` for identity and places the local receipt shape in `internal/task`; full shared-contract schema ownership remains unresolved. No Feed-shaped substitute was fabricated.
+- Plan generation, hash calculation, workflow-aware close validation, workflow-step reset, real worker stop/resume, question commands, people/role authorization and hook history compaction need their owning lanes. In particular, authenticated people checks described in `docs/brain-feed.md:292` cannot be supplied by a local `GRID_ACTOR` value.
+- The available reference tree has task, resume and deliver skills but no standalone approve skill/script or Rust task-write recording. The migration row's full 37-operation JS/Rust parity requirement (`docs/migration.md:65`) could not be established from those missing inputs. This lane has focused fixtures and goldens, not a claim of full legacy parity.
+- The exact phrase “Approve is a file-based gate” was absent from the named reference files. File-based approval is supported by the resume gate rules at `old-plugin/skills/resume/SKILL.md:27-38`; changed approvals are visible at `prototype/task.html:4149,4338`.
+- Windows cross-compilation is supported; actual writes return the existing `fslock.ErrUnsupported` on Windows. No new flock or O_NOFOLLOW implementation was added. macOS was cross-built here; execution of the suite on macOS still requires a macOS runner.

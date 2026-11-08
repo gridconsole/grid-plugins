@@ -149,3 +149,20 @@ func TestRefusalDecisions(t *testing.T) {
 		})
 	}
 }
+
+func TestGateWithSymlinkedHome(t *testing.T) {
+	s, task := waitingFixture(t)
+	alias := filepath.Join(filepath.Dir(s.Resolver.GridHome), "grid-alias")
+	if err := os.Symlink(s.Resolver.GridHome, alias); err != nil {
+		t.Fatal(err)
+	}
+	s.Resolver.GridHome = alias
+	write(t, filepath.Join(task.Path, "plan.hash"), "opaque")
+	if _, err := s.Approve(WriteOptions{ID: task.ID}, "opaque"); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(task.Path, "refusals", "R-1.json"), `{}`)
+	if _, err := s.Decide(WriteOptions{ID: task.ID}, "R-1", "deny"); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
 
 var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
@@ -114,7 +116,7 @@ func (s Store) Decide(o WriteOptions, id, decision string) (Event, error) {
 			return fmt.Errorf("cannot decide refusal in current state %q", t.State)
 		}
 		dir := filepath.Join(t.Path, "refusals")
-		if err := safeDir(s.Resolver.GridHome, dir); err != nil {
+		if err := safeDir(gridhome.Real(s.Resolver.GridHome), dir); err != nil {
 			return err
 		}
 		refusal, err := readOptional(filepath.Join(dir, id+".json"))
