@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -143,6 +144,12 @@ func runTaskLeaseAction(action string, args []string, env Env) int {
 	if !contract.ValidWorker(writer.Worker) {
 		return usage("writer must be <member>@<machine ULID> with no slash or whitespace")
 	}
+	genSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "gen" {
+			genSet = true
+		}
+	})
 	policy := lease.TaskTake{Adopt: adopt, Takeover: takeover}
 	if action == "take" {
 		typ, _ := contract.LookupType("handover")
@@ -281,7 +288,7 @@ func runTaskLeaseAction(action string, args []string, env Env) int {
 		}
 	}
 	if !recovery {
-		if tenure.Lease.Lease != "" && tenure.Fence > 0 {
+		if !genSet && tenure.Lease.Lease != "" && tenure.Fence > 0 {
 			writer.Gen = tenure.Gen
 		}
 		// Save the retry metadata before the tenure is written, so a crash after the
