@@ -92,6 +92,17 @@ func HistoryLine(at, event, detail, who, via string) string {
 // AppendHistory serializes append and consecutive duplicate suppression. It
 // never follows a symlink or creates a history file for an uninitialized task.
 func AppendHistory(dir, event, detail, who, via string) error {
+	info, err := os.Lstat(filepath.Join(dir, "history.md"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("history must be a regular file")
+	}
+
 	f, err := fslock.OpenNoFollow(filepath.Join(dir, "history.md"), os.O_RDWR|os.O_APPEND, 0)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil

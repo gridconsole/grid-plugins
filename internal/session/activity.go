@@ -1,6 +1,7 @@
 package session
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"math"
@@ -21,13 +22,15 @@ type Usage struct {
 }
 
 type Activity struct {
-	SessionID  string                       `json:"session_id"`
-	Last       time.Time                    `json:"last"`
-	Transcript string                       `json:"transcript,omitempty"`
-	Usage      map[string]Usage             `json:"usage,omitempty"`
-	Seen       map[string]bool              `json:"seen,omitempty"`
-	Snapshots  map[string]map[string]string `json:"snapshots,omitempty"`
-	ExitReason string                       `json:"exit_reason,omitempty"`
+	Exits       map[string]string            `json:"exits,omitempty"`
+	PlannerTask string                       `json:"planner_task,omitempty"`
+	SessionID   string                       `json:"session_id"`
+	Last        time.Time                    `json:"last"`
+	Transcript  string                       `json:"transcript,omitempty"`
+	Usage       map[string]Usage             `json:"usage,omitempty"`
+	Seen        map[string]bool              `json:"seen,omitempty"`
+	Snapshots   map[string]map[string]string `json:"snapshots,omitempty"`
+	ExitReason  string                       `json:"exit_reason,omitempty"`
 }
 
 // Activity is hook evidence, separate from the supervisor's process record.
@@ -36,7 +39,7 @@ func (s Store) Activity(id string) (Activity, error) {
 	if !component.MatchString(id) {
 		return Activity{}, errors.New("invalid session id")
 	}
-	dir, err := s.storageDir(false, "sessions", "hooks")
+	dir, err := s.storageDir(false, "sessions", ".hooks")
 	if errors.Is(err, os.ErrNotExist) {
 		return Activity{SessionID: id}, nil
 	}
@@ -76,11 +79,16 @@ func (s Store) UpdateActivity(id string, change func(*Activity) error) error {
 		if a.Snapshots == nil {
 			a.Snapshots = map[string]map[string]string{}
 		}
+		before, _ := json.Marshal(a)
 		if err = change(&a); err != nil {
 			return err
 		}
+		after, _ := json.Marshal(a)
+		if !a.Last.IsZero() && bytes.Equal(before, after) {
+			return nil
+		}
 		a.Last = s.now()
-		dir, err := s.storageDir(true, "sessions", "hooks")
+		dir, err := s.storageDir(true, "sessions", ".hooks")
 		if err != nil {
 			return err
 		}
@@ -114,4 +122,31 @@ func FoldUsage(records []Activity) Usage {
 		}
 	}
 	return total
+}
+
+// Activities reads the observations used by usage totals, without creating files.
+func (s Store) Activities() ([]Activity, error) {
+	dir, err := s.storageDir(false, "sessions", ".hooks")
+	if errors.Is(err, os.ErrNotExist) {
+		return []Activity{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	result := []Activity{}
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+			continue
+		}
+		a, err := s.Activity(e.Name()[:len(e.Name())-5])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, a)
+	}
+	return result, nil
 }

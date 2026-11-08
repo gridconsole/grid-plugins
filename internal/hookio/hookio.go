@@ -12,6 +12,11 @@ import (
 // Input contains shared event fields. ToolInput keeps unknown and ill-typed
 // values so one malformed optional field does not discard other guard evidence.
 type Input struct {
+	Source                string            `json:"source"`
+	Prompt                string            `json:"prompt"`
+	Reason                string            `json:"reason"`
+	ToolResponse          map[string]any    `json:"tool_response"`
+	Args                  []any             `json:"args"`
 	SessionID             string            `json:"session_id"`
 	TranscriptPath        string            `json:"transcript_path"`
 	Cwd                   string            `json:"cwd"`
@@ -145,10 +150,12 @@ func prefixFields(data []byte) *Input {
 
 // Decision's zero value is silence (defer to normal permission rules).
 type Decision struct {
-	Event       string
-	Behavior    string
-	Reason      string
-	Directories []string
+	UpdatedInput map[string]any
+	Interrupt    bool
+	Event        string
+	Behavior     string
+	Reason       string
+	Directories  []string
 }
 
 func Allow(reason string) Decision {
@@ -181,11 +188,13 @@ func (d Decision) Bytes() []byte {
 			Destination string   `json:"destination"`
 		}
 		type decision struct {
-			Behavior           string       `json:"behavior"`
-			Message            string       `json:"message,omitempty"`
-			UpdatedPermissions []permission `json:"updatedPermissions,omitempty"`
+			UpdatedInput       map[string]any `json:"updatedInput,omitempty"`
+			Interrupt          bool           `json:"interrupt,omitempty"`
+			Behavior           string         `json:"behavior"`
+			Message            string         `json:"message,omitempty"`
+			UpdatedPermissions []permission   `json:"updatedPermissions,omitempty"`
 		}
-		p := decision{Behavior: d.Behavior, Message: d.Reason}
+		p := decision{Behavior: d.Behavior, Message: d.Reason, UpdatedInput: d.UpdatedInput, Interrupt: d.Interrupt}
 		if len(d.Directories) > 0 {
 			p.UpdatedPermissions = []permission{{"addDirectories", d.Directories, "session"}}
 		}

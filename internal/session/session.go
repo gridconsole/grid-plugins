@@ -405,7 +405,7 @@ func (s Store) List() ([]Record, error) {
 		return nil, err
 	}
 	for _, machine := range machines {
-		if !machine.IsDir() || machine.Name() == "hooks" || !component.MatchString(machine.Name()) {
+		if !machine.IsDir() || !component.MatchString(machine.Name()) {
 			continue
 		}
 		entries, err := os.ReadDir(filepath.Join(dir, machine.Name()))

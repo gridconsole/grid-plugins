@@ -156,31 +156,20 @@ func planStage(text, history string) string {
 	if fm == nil || fm.Odd {
 		return "unreadable"
 	}
-	steps, ok := fm.Data["workflow"].([]any)
-	if !ok || len(steps) == 0 {
+	steps := WorkflowSteps(text)
+	if len(steps) == 0 {
 		return "unreadable"
 	}
 	current, ok := fm.Data["step"].(string)
 	if !ok || current == "" {
 		return "unreadable"
 	}
-	seen := map[string]bool{}
 	at, gate := -1, -1
-	for i, v := range steps {
-		item, ok := v.(map[string]any)
-		if !ok {
-			return "unreadable"
-		}
-		s, sok := item["step"].(string)
-		k, kok := item["kind"].(string)
-		if !sok || !kok || !stepName.MatchString(s) || seen[s] {
-			return "unreadable"
-		}
-		seen[s] = true
-		if s == current {
+	for i, item := range steps {
+		if item.Step == current {
 			at = i
 		}
-		if gate < 0 && k == "approve" && strings.Contains(s, "plan") {
+		if gate < 0 && item.Kind == "approve" && strings.Contains(item.Step, "plan") {
 			gate = i
 		}
 	}

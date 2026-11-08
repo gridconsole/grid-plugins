@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 )
 
@@ -22,7 +23,10 @@ func EvaluateOnlyWriter(in hookio.Input, root string, env map[string]string) hoo
 	}
 	target := c.path(c.target())
 	owner := taskAtFold(strings.ToLower(target), strings.ToLower(realNative(c.projects, 0)))
-	if owner != nil || c.brain(target) {
+	personalRoot := realNative(filepath.Join(c.home, gridhome.Personal, "tasks"), 0)
+	personalRel := strings.Split(relative(personalRoot, target), "/")
+	personal := c.home != "" && len(personalRel) > 0 && taskName.MatchString(strings.ToUpper(personalRel[0]))
+	if owner != nil || personal || c.brain(target) {
 		return hookio.Deny("Task folders and the brain are written only by grid. Use the corresponding grid command to make this change.")
 	}
 	parts := strings.Split(relative(realNative(c.projects, 0), target), "/")
