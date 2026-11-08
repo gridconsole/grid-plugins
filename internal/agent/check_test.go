@@ -89,6 +89,8 @@ func TestAgentCheckNotSignedIn(t *testing.T) {
 		{"unknown", `{}`, 0, nil},
 		{"invalid json", `oops`, 0, nil},
 		{"wrong type", `{"authMethod":true}`, 0, nil},
+		{"case sensitive", `{"AuthMethod":"oauth"}`, 0, nil},
+		{"null method", `{"authMethod":null}`, 0, nil},
 		{"failed", "", -1, nil},
 		{"empty method", `{"authMethod":""}`, 0, boolPtr(true)},
 	} {

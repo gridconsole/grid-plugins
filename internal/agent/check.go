@@ -164,13 +164,15 @@ func signedIn(name, out string, code int) *bool {
 	}
 	value := code == 0
 	if name == "claude" && value {
-		var status struct {
-			AuthMethod *string `json:"authMethod"`
-		}
-		if json.Unmarshal([]byte(out), &status) != nil || status.AuthMethod == nil {
+		var status map[string]json.RawMessage
+		if json.Unmarshal([]byte(out), &status) != nil {
 			return nil
 		}
-		value = *status.AuthMethod != "none"
+		var method *string
+		if json.Unmarshal(status["authMethod"], &method) != nil || method == nil {
+			return nil
+		}
+		value = *method != "none"
 	}
 	return &value
 }
