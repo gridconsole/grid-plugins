@@ -3,6 +3,7 @@
 package jobgraph
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -41,7 +42,9 @@ func (e *Edge) UnmarshalJSON(data []byte) error {
 	}
 	type plain Edge
 	var value plain
-	if err := json.Unmarshal(data, &value); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
 		return err
 	}
 	// Object edges must explain the dependency; bare ids are the shorthand.
