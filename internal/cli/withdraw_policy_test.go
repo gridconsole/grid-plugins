@@ -59,6 +59,61 @@ func TestWithdrawUnreadablePolicy(t *testing.T) {
 	}
 }
 
+func TestQuestionWriteUnreadablePolicy(t *testing.T) {
+	commands := []struct {
+		name      string
+		action    string
+		withdrawn bool
+		empty     bool
+	}{
+		{name: "answer open", action: "answer"},
+		{name: "answer withdrawn", action: "answer", withdrawn: true},
+		{name: "add empty", action: "add", empty: true},
+		{name: "add withdrawn", action: "add", withdrawn: true},
+		{name: "tick open", action: "tick"},
+		{name: "tick withdrawn", action: "tick", withdrawn: true},
+		{name: "sync withdrawn", action: "sync", withdrawn: true},
+	}
+	for _, failure := range []string{"directory", "permissions", "io error"} {
+		for _, command := range commands {
+			t.Run(failure+"/"+command.name, func(t *testing.T) {
+				h, task, _ := orchestratorHarness(t)
+				if !command.empty {
+					questionAdd(t, h, task, "member")
+					if command.withdrawn {
+						if code := h.run(task, "question", "withdraw", "Q-1"); code != 0 {
+							t.Fatalf("setup withdrawal: exit=%d", code)
+						}
+					}
+				}
+				t.Setenv("GRID_LEASE", "task")
+				unreadableWorkflow(t, h, task, failure)
+				before := withdrawalFiles(t, task)
+				args := []string{"question", command.action, "--json"}
+				switch command.action {
+				case "answer":
+					args = []string{"answer", task, "Q-1", "Ship it", "--json"}
+				case "add":
+					args = append(args, "Another question?", "--default", "Wait", "--applies", "2099-01-01T00:00:00Z")
+				}
+				code := h.run(task, args...)
+				if code != 1 {
+					t.Errorf("write: exit=%d; want exit=1", code)
+				}
+				if h.out.Len() != 0 {
+					t.Error("refusal produced stdout")
+				}
+				if strings.Count(h.errb.String(), "\n") != 1 || !strings.Contains(h.errb.String(), "cannot read task withdrawal policy") || strings.Contains(h.errb.String(), task) || strings.Contains(h.errb.String(), "warning:") {
+					t.Error("want one path-free policy error without fallback warning")
+				}
+				if after := withdrawalFiles(t, task); !reflect.DeepEqual(before, after) {
+					t.Error("refusal changed task files")
+				}
+			})
+		}
+	}
+}
+
 func withdrawalFiles(t *testing.T, task string) map[string]string {
 	t.Helper()
 	files := map[string]string{}
@@ -155,8 +210,6 @@ func TestReadUnreadablePolicy(t *testing.T) {
 		want string
 	}{
 		{"question list", []string{"question", "list", "--json"}, `"state":"defaulted"`},
-		{"question sync", []string{"question", "sync", "--json"}, `"state":"defaulted"`},
-		{"question tick", []string{"question", "tick", "--json"}, `"state":"defaulted"`},
 		{"feed state", []string{"feed", "state", "--json"}, `"open":false`},
 		{"MCP feed_state", []string{"mcp"}, `\"open\":false`},
 		{"job tree", []string{"job", "tree", "--json"}, `"id":"J-1"`},

@@ -817,3 +817,39 @@ func TestWithdrawErrorCodes(t *testing.T) {
 		})
 	}
 }
+
+// Host callbacks must not bypass unreadable-policy checks or cache a successful
+// policy read across calls on the same Store.
+func TestWritesRequireReadablePolicy(t *testing.T) {
+	for _, action := range []string{"add", "answer", "withdraw", "tick", "sync"} {
+		t.Run(action, func(t *testing.T) {
+			s, now := setup(t)
+			s.WithdrawAllowed = func(string) bool { return true }
+			q := add(t, s, input())
+			*now = input().Applies
+			if err := os.Mkdir(filepath.Join(s.TaskDir, "workflow.md"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			before := taskSnapshot(t, s.TaskDir)
+			var err error
+			switch action {
+			case "add":
+				_, err = s.Add(input())
+			case "answer":
+				_, err = s.Answer(q.ID, "CSV")
+			case "withdraw":
+				_, err = s.Withdraw(q.ID, "No longer needed")
+			case "tick":
+				_, err = s.Tick()
+			case "sync":
+				_, err = s.Sync()
+			}
+			if err == nil || !strings.Contains(err.Error(), "cannot read task withdrawal policy") {
+				t.Error("write must return a policy read error")
+			}
+			if !reflect.DeepEqual(before, taskSnapshot(t, s.TaskDir)) {
+				t.Error("refusal changed task files or directories")
+			}
+		})
+	}
+}
