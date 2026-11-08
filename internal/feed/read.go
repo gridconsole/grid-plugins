@@ -130,7 +130,7 @@ func wireValid(line []byte, r Record, task string) bool {
 		}
 	}
 	at, err := time.Parse("2006-01-02T15:04:05.000Z", r.At)
-	return IsID(r.ID) && IsID(r.Task) && (task == "" || r.Task == task) && validWorker(r.Worker) && r.Type != "" && r.TypeV > 0 && r.Gen >= 0 && r.Fence >= 0 && r.Seq > 0 && r.Body != nil && r.After != nil && err == nil && !at.IsZero()
+	return IsID(r.ID) && IsID(r.Task) && (task == "" || r.Task == task) && contract.ValidWorker(r.Worker) && r.Type != "" && r.TypeV > 0 && r.Gen >= 0 && r.Fence >= 0 && r.Seq > 0 && r.Body != nil && r.After != nil && err == nil && !at.IsZero()
 }
 
 func displayOrder(entries []Entry) []Entry {

@@ -81,3 +81,28 @@ func contractBody(t *testing.T, typ string, over map[string]any) map[string]any 
 	}
 	return fx.Body
 }
+
+// TestContractWriterIDs posts as members the contract's writer id admits,
+// including non-ASCII and email members, and reads each back as counted.
+func TestContractWriterIDs(t *testing.T) {
+	s := testStore(t)
+	for _, member := range []string{"jürgen", "sam@example.com", "o'brien"} {
+		w := Writer{Author: Author{ID: member, Role: "member"}, Worker: member + "@" + testMachine}
+		mustPost(t, s, message("Hello from "+member), w)
+	}
+	read, err := s.Read(Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(read.Records) != 3 {
+		t.Fatalf("got %d records, bad %v", len(read.Records), read.Bad)
+	}
+	for _, e := range read.Records {
+		if e.Verdict != "counted" {
+			t.Fatalf("%s: %s %s", e.Author.ID, e.Verdict, e.Reason)
+		}
+	}
+	if contract.ValidWorker("a b@" + testMachine) {
+		t.Fatal("whitespace member admitted")
+	}
+}

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -16,8 +15,6 @@ import (
 const MaxLine = 32 * 1024
 
 var ulidPattern = regexp.MustCompile(`^[0-7][0-9A-HJKMNP-TV-Z]{25}$`)
-var jobPattern = regexp.MustCompile(`^J-[0-9]+(?:\.[0-9]+)*$`)
-var memberPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.@+\-]{0,199}$`)
 
 // Author is stamped from the caller's session, never from its body: the
 // contract's {id, role}, where id is the member part of the writer id.
@@ -113,10 +110,6 @@ func number(v any) int64 {
 func str(v any) string                             { s, _ := v.(string); return s }
 func object(v any) map[string]any                  { m, _ := v.(map[string]any); return m }
 func writerFile(worker string, fence int64) string { return fmt.Sprintf("%s.%d.jsonl", worker, fence) }
-func validWorker(worker string) bool {
-	i := strings.LastIndexByte(worker, '@')
-	return i > 0 && memberPattern.MatchString(worker[:i]) && IsID(worker[i+1:])
-}
 
 // Data reports whether the body is untrusted text, shown only in a data fence.
 // The tier follows the role; a body marked external is data for any author.
