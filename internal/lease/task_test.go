@@ -175,6 +175,28 @@ func TestTaskGrantPreparesBeforeTheTenure(t *testing.T) {
 	}
 }
 
+func TestReleaseFreeTask(t *testing.T) {
+	s := TaskStore{Feed: feed.Store{TaskDir: t.TempDir(), TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}}
+	w := feed.Writer{Worker: "member@01ARZ3NDEKTSV4RRFFQ69G5FAW", Lease: "task", Fence: 1}
+	if err := s.ReleaseTask(w); !errors.Is(err, ErrTaskFree) {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(s.Feed.Dir(), "lease")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("release created the lease: %v", err)
+	}
+	first, err := s.TakeTask(w, 42, contract.FormatTime(time.Now()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Fence = first.Fence
+	if err := s.ReleaseTask(w); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReleaseTask(w); !errors.Is(err, ErrTaskFree) {
+		t.Fatal(err)
+	}
+}
+
 func TestTaskConcurrentTake(t *testing.T) {
 	s := TaskStore{Feed: feed.Store{TaskDir: t.TempDir(), TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}}
 	w := feed.Writer{Worker: "member@01ARZ3NDEKTSV4RRFFQ69G5FAW", Lease: "task"}

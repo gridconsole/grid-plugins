@@ -43,12 +43,12 @@ func (s TaskStore) now() string {
 	}
 	return contract.FormatTime(now)
 }
-func (s TaskStore) open(name string, create bool) (*os.File, error) {
+func (s TaskStore) open(name string, flags int) (*os.File, error) {
 	if name != "task" && !job.ValidID(name) {
 		return nil, errors.New("invalid lease name")
 	}
 	dir := filepath.Join(s.Feed.Dir(), "lease")
-	if create {
+	if flags&os.O_CREATE != 0 {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, err
 		}
@@ -59,10 +59,6 @@ func (s TaskStore) open(name string, create bool) (*os.File, error) {
 	}
 	if !info.IsDir() {
 		return nil, errors.New("lease must be a real directory")
-	}
-	flags := os.O_RDONLY
-	if create {
-		flags = os.O_RDWR | os.O_CREATE
 	}
 	return fslock.OpenNoFollow(filepath.Join(dir, name+".json"), flags, 0o600)
 }
@@ -84,7 +80,7 @@ func readTenure(f *os.File) (Tenure, error) {
 	return t, err
 }
 func (s TaskStore) Read(name string) (Tenure, error) {
-	f, err := s.open(name, false)
+	f, err := s.open(name, os.O_RDONLY)
 	if err != nil {
 		return Tenure{}, err
 	}
@@ -127,6 +123,9 @@ func (taskHeldError) Unwrap() error { return ErrTaskHeld }
 
 func taskHeld(t Tenure) error { return taskHeldError{t} }
 
+// ErrTaskFree is returned by ReleaseTask when no tenure holds the task lease.
+var ErrTaskFree = errors.New("no task lease is held")
+
 // AdoptTask replaces only a provably dead holder on the writer's host. The
 // identity check and probe run while the task lease is exclusively locked.
 func (s TaskStore) AdoptTask(w feed.Writer, pid int, start string, probe func(session.Live) session.ProcessState) (Tenure, Tenure, error) {
@@ -150,8 +149,12 @@ func (s TaskStore) AdoptTask(w feed.Writer, pid int, start string, probe func(se
 }
 
 // ReleaseTask ends a tenure only for its exact holder, generation and fence.
+// A free task lease is ErrTaskFree and nothing is created.
 func (s TaskStore) ReleaseTask(w feed.Writer) error {
-	f, err := s.open("task", true)
+	f, err := s.open("task", os.O_RDWR)
+	if errors.Is(err, os.ErrNotExist) {
+		return ErrTaskFree
+	}
 	if err != nil {
 		return err
 	}
@@ -164,7 +167,10 @@ func (s TaskStore) ReleaseTask(w feed.Writer) error {
 	if err != nil {
 		return err
 	}
-	if w.Lease != "task" || old.Holder == nil || *old.Holder != w.Worker || old.Gen != w.Gen || old.Fence != w.Fence {
+	if old.Holder == nil {
+		return ErrTaskFree
+	}
+	if w.Lease != "task" || *old.Holder != w.Worker || old.Gen != w.Gen || old.Fence != w.Fence {
 		return taskHeld(old)
 	}
 	if err := s.end(old); err != nil {
@@ -200,7 +206,7 @@ func (s TaskStore) grant(next Tenure, check func(Tenure) error, prepare func(nex
 	if err != nil {
 		return Tenure{}, err
 	}
-	f, err := s.open(next.Lease.Lease, true)
+	f, err := s.open(next.Lease.Lease, os.O_RDWR|os.O_CREATE)
 	if err != nil {
 		return Tenure{}, err
 	}

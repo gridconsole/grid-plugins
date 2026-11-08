@@ -784,6 +784,29 @@ func TestTaskLeaseTakeRefusesIdentityNotAlive(t *testing.T) {
 	}
 }
 
+func TestTaskLeaseReleaseFree(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	h, path := feedHarness(t)
+	leaseFile := filepath.Join(path, "feed", "lease", "task.json")
+	if code := h.run(path, "lease", "release", "task", "--epoch", "0.1"); code != 1 || h.errb.String() != "grid: no task lease is held\n" {
+		t.Fatalf("never taken: %d %s", code, h.errb)
+	}
+	if _, err := os.Stat(leaseFile); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("release created the lease: %v", err)
+	}
+	if code := h.run(path, taskTakeArgs(pid, start)...); code != 0 {
+		t.Fatalf("take: %d %s", code, h.errb)
+	}
+	for i, want := range []int{0, 1} {
+		if code := h.run(path, "lease", "release", "task", "--epoch", "0.1"); code != want {
+			t.Fatalf("release %d: %d %s", i, code, h.errb)
+		}
+	}
+	if h.errb.String() != "grid: no task lease is held\n" {
+		t.Fatalf("released twice: %s", h.errb)
+	}
+}
+
 func TestTaskLeaseTakeReportsGrantErrors(t *testing.T) {
 	pid, start := taskLeaseIdentity(t)
 	h, path := feedHarness(t)
