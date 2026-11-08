@@ -64,16 +64,28 @@ func TestVerifyTotals(t *testing.T) {
 		name, output string
 		total        int
 	}{
-		{"go verbose", "=== RUN   TestOne\n    --- PASS: TestOne/sub (0.0s)\n--- PASS: TestOne (0.01s)\nok  example.com/demo 0.1s\n--- FAIL: TestTwo (0.1s)\nFAIL example.com/other 0.1s\n", 2},
+		{"go verbose", "=== RUN   TestOne\n    --- PASS: TestOne/sub (0.0s)\n--- PASS: TestOne (0.01s)\nok  \texample.com/demo\t0.1s\n--- FAIL: TestTwo (0.1s)\nFAIL\texample.com/other\t0.1s\n", 2},
 		{"go json", `{"Action":"output","Output":"--- PASS: TestOne (0s)\n"}` + "\n" + `{"Action":"pass","Test":"TestOne/sub"}` + "\n" + `{"Action":"pass","Test":"TestOne"}` + "\n" + `{"Action":"pass","Package":"example.com/demo"}`, 1},
-		{"go plain", "ok  example.com/demo 0.1s\n", -1},
-		{"go mixed missing count", "--- PASS: TestOne (0s)\nok example.com/one 0.1s\nok example.com/two 0.1s\n", -1},
-		{"go no tests", "? example.com/demo [no test files]\n", 0},
+		{"go plain", "ok  \texample.com/demo\t0.1s\n", -1},
+		{"go mixed missing count", "--- PASS: TestOne (0s)\nok  \texample.com/one\t0.1s\nok  \texample.com/two\t0.1s\n", -1},
+		{"go no tests", "?   \texample.com/demo\t[no test files]\n", 0},
 		{"node TAP", "# tests 5\n# pass 4\n# fail 1\n", 5},
 		{"node spec", "ℹ tests 7\nℹ pass 7\n", 7},
 		{"cargo", "test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s\ntest result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n", 5},
 		{"pytest", "================ 3 passed, 1 skipped, 2 deselected in 0.12s ================\n", 4},
 		{"pytest quiet", "1 failed, 2 passed, 1 error in 1.25s\n", 4},
+		{"pytest warnings", "3 passed, 2 warnings in 0.12s\n", 3},
+		{"pytest warning", "3 passed, 1 warning in 0.12s\n", 3},
+		{"pytest rerun", "3 passed, 1 rerun in 0.12s\n", 3},
+		{"pytest skipped", "2 skipped in 0.12s\n", 2},
+		{"pytest xfailed", "2 xfailed, 1 xpassed in 0.12s\n", 3},
+		{"pytest errors", "2 errors in 0.12s\n", 2},
+		{"pytest combined", "== 3 passed, 1 skipped, 1 xfailed, 2 errors, 1 rerun, 2 warnings in 0.12s ==\n", 7},
+		{"go cached", "ok  \texample.com/demo\t(cached)\n", -1},
+		{"go build failure", "FAIL\texample.com/demo [build failed]\nFAIL\n", -1},
+		{"go binary plain", "PASS\n", -1},
+		{"go binary verbose", "--- PASS: TestOne (0.00s)\nPASS\n", 1},
+		{"go printed ok", "ok this is test output\n--- PASS: TestOne (0.00s)\nPASS\nok  \texample.com/demo\t0.01s\n", 1},
 		{"pytest empty", "no tests ran in 0.01s\n", 0},
 		{"color", "\x1b[32m# tests 2\x1b[0m\r\n", 2},
 		{"unknown", "everything worked\n", -1},
@@ -181,5 +193,35 @@ func TestVerifyExitedShellKillsDescendants(t *testing.T) {
 	time.Sleep(1200 * time.Millisecond)
 	if _, err := os.Stat(filepath.Join(dir, "survived")); !os.IsNotExist(err) {
 		t.Fatal("descendant survived its shell")
+	}
+}
+
+func TestVerifyRealTAP(t *testing.T) {
+	// Captured from node --test --test-reporter=tap testdata/verify/node-tap.mjs;
+	// only the absolute source path is replaced with a public placeholder.
+	b, err := os.ReadFile("testdata/verify/node-tap.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, prefix := range []string{"", "--- PASS: TestOne (0.00s)\nPASS\nok  \texample.com/demo\t0.01s\n"} {
+		w := &verifyOutput{}
+		_, _ = w.Write(append([]byte(prefix), b...))
+		w.finish()
+		want := 4 // # tests includes the nested child; # pass is 3.
+		if prefix != "" {
+			want++
+		}
+		if n := w.tests(); n == nil || *n != want {
+			t.Fatalf("mixed=%t: got %v, want %d", prefix != "", n, want)
+		}
+	}
+}
+
+func TestVerifyGoPrintedOK(t *testing.T) {
+	r, err := RunVerify(context.Background(), Job{Verify: Verify{
+		Command: "go test -v testdata/verify/go_ok_test.go", MinTests: 1,
+	}}, ".")
+	if err != nil || !r.Pass || r.Tests == nil || *r.Tests != 1 {
+		t.Fatalf("result: %+v, error: %v", r, err)
 	}
 }

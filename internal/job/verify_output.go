@@ -14,10 +14,10 @@ const verifyLineLimit = 1024 * 1024
 
 var (
 	goTestLine    = regexp.MustCompile(`^--- (?:PASS|FAIL|SKIP): [^ /]+(?: |$)`)
-	goPackageLine = regexp.MustCompile(`^(?:ok\s+|\?\s+|FAIL\s+)\S+`)
+	goPackageLine = regexp.MustCompile(`^(?:ok *\t|\? *\t|FAIL\t)\S+[ \t]+(?:[0-9]+(?:\.[0-9]+)?s|\(cached\)|\[no test files\]|\[build failed\])(?: \[no tests to run\])?$`)
 	nodeTests     = regexp.MustCompile(`^(?:#|ℹ) tests ([0-9]+)\s*$`)
 	cargoTests    = regexp.MustCompile(`^test result: (?:ok|FAILED)\. ([0-9]+) passed; ([0-9]+) failed; ([0-9]+) ignored;`)
-	pytestSummary = regexp.MustCompile(`^(?:=+\s*)?(?:[0-9]+ (?:passed|failed|skipped|error|errors|xfailed|xpassed|deselected)(?:, )?)+ in [0-9.]+s(?: .*)?$`)
+	pytestSummary = regexp.MustCompile(`^(?:=+\s*)?(?:[0-9]+ (?:passed|failed|skipped|error|errors|xfailed|xpassed|deselected|warnings?|reruns?)(?:, )?)+ in [0-9.]+s(?: .*)?$`)
 	pytestCount   = regexp.MustCompile(`([0-9]+) (passed|failed|skipped|errors?|xfailed|xpassed|deselected)`)
 	ansiEscape    = regexp.MustCompile("\x1b\\[[0-?]*[ -/]*[@-~]")
 )
