@@ -339,3 +339,88 @@ func TestClaudeSymlinksAndNonRegularFiles(t *testing.T) {
 		})
 	}
 }
+
+func TestClaudeWriterReservedKindsStayInSync(t *testing.T) {
+	// Any new writer predicate must be represented in ClaudeBlock and the CLI
+	// parity cases before refreshing this reviewed source snapshot.
+	got, err := os.ReadFile(filepath.Join("..", "guard", "writer.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile(filepath.Join("testdata", "claude", "writer.go.golden"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("writer.go changed: reconcile ClaudeBlock and TestClaudeDenyRulesEqualWriterGuard before updating the reserved-kind snapshot")
+	}
+}
+
+func TestClaudeRemoveRestoresClassifierDefaults(t *testing.T) {
+	f := newClaudeFixture(t)
+	f.o.Yes = true
+	f.wantCode(0)
+	f.o.Remove = true
+	f.wantCode(0)
+	doc, err := parseClaudeObject(f.read(f.path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, exists, err := claudeValues(doc, ClaudeRule{"autoMode", "environment", ""})
+	if err != nil || exists {
+		t.Fatal("empty environment array would replace classifier defaults", err)
+	}
+}
+
+func TestClaudeReinstallRetainsEarlierOwnership(t *testing.T) {
+	f := newClaudeFixture(t)
+	f.o.Yes = true
+	f.wantCode(0)
+	doc, _ := parseClaudeObject(f.read(f.path))
+	if err := changeClaudeRule(&doc, ClaudeRule{"permissions", "allow", "Bash(grid *)"}, true); err != nil {
+		t.Fatal(err)
+	}
+	f.write(f.path, string(doc.bytes()))
+	f.wantCode(0)
+	var record claudeRecord
+	if err := json.Unmarshal(f.read(f.record), &record); err != nil {
+		t.Fatal(err)
+	}
+	rules, _ := ClaudeBlock(f.o.Home, f.o.GridHome)
+	if len(record.Rules) != len(rules) {
+		t.Fatal(record)
+	}
+	f.o.Remove = true
+	f.wantCode(0)
+	doc, _ = parseClaudeObject(f.read(f.path))
+	for _, rule := range rules {
+		values, _, err := claudeValues(doc, rule)
+		if err != nil || slices.Contains(values, rule.Value) {
+			t.Fatal("owned rule remains", rule, err)
+		}
+	}
+}
+
+func TestClaudeCustomGridHomeAndInvalidRules(t *testing.T) {
+	f := newClaudeFixture(t)
+	rules, err := ClaudeBlock(f.o.Home, filepath.Join(f.o.Home, "data", "grid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rules {
+		if r.Value == "Bash(grid *)" || r.Value == "$defaults" {
+			continue
+		}
+		if !strings.Contains(r.Value, "~/data/grid") {
+			t.Fatal(r)
+		}
+	}
+	for _, grid := range []string{filepath.Dir(f.o.Home), f.o.Home, filepath.Join(f.o.Home, "grid*"), ""} {
+		if _, err := ClaudeBlock(f.o.Home, grid); err == nil {
+			t.Fatalf("accepted %q", grid)
+		}
+	}
+	f.write(f.path, `{"permissions":{"allow":[null]}}`)
+	f.o.Yes = true
+	f.wantCode(2)
+}

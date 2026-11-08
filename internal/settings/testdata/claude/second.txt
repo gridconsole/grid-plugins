@@ -1,11 +1,11 @@
 = Bash(grid *)
 = Read(~/.grid/**)
 = Edit(~/.grid/**)
-= Edit(~/.grid/projects/*/tasks/[Tt]-[0-9]*/**)
+= Edit(~/.grid/projects/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)
 = Edit(~/.grid/personal/tasks/[Tt]-[0-9]*/**)
-= Edit(~/.grid/projects/*/knowledge/**)
-= Edit(~/.grid/knowledge/**)
-= Edit(~/.grid/projects/*/project.md)
+= Edit(~/.grid/projects/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)
+= Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)
+= Edit(~/.grid/projects/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])
 = $defaults
 = The Grid home at ~/.grid is trusted for Grid operations.
 {
@@ -16,11 +16,11 @@
       "Edit(~/.grid/**)"
     ],
     "deny": [
-      "Edit(~/.grid/projects/*/tasks/[Tt]-[0-9]*/**)",
+      "Edit(~/.grid/projects/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
       "Edit(~/.grid/personal/tasks/[Tt]-[0-9]*/**)",
-      "Edit(~/.grid/projects/*/knowledge/**)",
-      "Edit(~/.grid/knowledge/**)",
-      "Edit(~/.grid/projects/*/project.md)"
+      "Edit(~/.grid/projects/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
+      "Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
+      "Edit(~/.grid/projects/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])"
     ]
   },
   "autoMode": {

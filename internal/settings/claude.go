@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -42,17 +43,30 @@ func ClaudeBlock(home, gridHome string) ([]ClaudeRule, error) {
 		{"permissions", "allow", "Edit(" + anchor + "/**)"},
 	}
 	for _, path := range []string{
-		"/projects/*/tasks/[Tt]-[0-9]*/**",
+		"/projects/*/" + claudeFold("tasks") + "/[Tt]-[0-9]*/**",
 		"/personal/tasks/[Tt]-[0-9]*/**",
-		"/projects/*/knowledge/**",
-		"/knowledge/**",
-		"/projects/*/project.md",
+		"/projects/*/" + claudeFold("knowledge") + "/**",
+		"/" + claudeFold("knowledge") + "/**",
+		"/projects/*/" + claudeFold("project.md"),
 	} {
 		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + anchor + path + ")"})
 	}
 	return append(rules,
 		ClaudeRule{"autoMode", "environment", "$defaults"},
 		ClaudeRule{"autoMode", "environment", "The Grid home at " + anchor + " is trusted for Grid operations."}), nil
+}
+
+// The writer guard folds these reserved names even for not-yet-created files.
+func claudeFold(s string) string {
+	var b strings.Builder
+	for _, c := range s {
+		if c >= 'a' && c <= 'z' {
+			fmt.Fprintf(&b, "[%c%c]", c, c-'a'+'A')
+		} else {
+			b.WriteRune(c)
+		}
+	}
+	return b.String()
 }
 
 // ClaudeSetupCommand separates the operand-free form without changing the
@@ -258,6 +272,22 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 			return 1, err
 		}
 	}
+	// Removing our $defaults entry must restore an absent environment array,
+	// rather than leave [] (which disables the classifier's built-in context).
+	if o.Remove && slices.Contains(record.Rules, ClaudeRule{"autoMode", "environment", "$defaults"}) {
+		values, _, err := claudeValues(doc, ClaudeRule{"autoMode", "environment", ""})
+		if err != nil {
+			return 1, err
+		}
+		if len(values) == 0 {
+			obj, err := parseClaudeObject(doc.get("autoMode"))
+			if err != nil {
+				return 1, err
+			}
+			obj = slices.DeleteFunc(obj, func(f claudeField) bool { return f.key == "environment" })
+			doc.set("autoMode", obj.bytes())
+		}
+	}
 	// Prepare both files before committing either. Ownership survives no-op runs;
 	// later installs retain earlier ownership and add only newly missing entries.
 	nextRecord := record
@@ -326,6 +356,9 @@ func claudeTerminal(r io.Reader) bool {
 		return false
 	}
 	cmd := exec.Command("test", "-t", "0")
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "if ([Console]::IsInputRedirected) { exit 1 }")
+	}
 	cmd.Stdin = f
 	return cmd.Run() == nil
 }
@@ -365,7 +398,7 @@ func readClaudeFile(path string) (claudeFile, error) {
 }
 func (f claudeFile) unchanged() bool {
 	now, err := readClaudeFile(f.path)
-	return err == nil && now.exists == f.exists && now.target == f.target && bytes.Equal(now.data, f.data)
+	return err == nil && now.exists == f.exists && now.target == f.target && now.mode == f.mode && bytes.Equal(now.data, f.data)
 }
 func stageClaudeFile(target string, data []byte, mode os.FileMode) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
@@ -472,12 +505,25 @@ func claudeValues(doc claudeObject, r ClaudeRule) ([]string, bool, error) {
 	if raw == nil {
 		return nil, false, nil
 	}
-	var values []string
-	err = json.Unmarshal(raw, &values)
-	if err == nil && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		err = errors.New("expected array")
+	var entries []json.RawMessage
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return nil, true, err
 	}
-	return values, true, err
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, true, errors.New("expected array")
+	}
+	values := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		var value string
+		if len(entry) == 0 || entry[0] != '"' {
+			return nil, true, errors.New("expected string rule")
+		}
+		if err := json.Unmarshal(entry, &value); err != nil {
+			return nil, true, err
+		}
+		values = append(values, value)
+	}
+	return values, true, nil
 }
 func changeClaudeRule(doc *claudeObject, r ClaudeRule, remove bool) error {
 	raw := doc.get(r.Section)
