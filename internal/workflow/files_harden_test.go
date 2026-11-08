@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -145,4 +146,79 @@ func TestWorkflowHardenBadProjectCLI(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Run FIFO reads in a subprocess: a regression must neither hang the test suite
+// nor leave a blocked goroutine behind when the two-second deadline expires.
+func TestWorkflowHardenFIFO(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix FIFO test")
+	}
+	if _, err := exec.LookPath("mkfifo"); err != nil {
+		t.Skip("mkfifo unavailable")
+	}
+	for _, swap := range []string{"before", "after-lstat"} {
+		t.Run(swap, func(t *testing.T) {
+			home := hardenHome(t)
+			path := filepath.Join(home, "projects", "a", "workflows.md")
+			putWorkflowFixture(t, filepath.Join(home, "projects", "a", "project.md"), "---\nid: id-a\n---\n")
+			if swap == "before" {
+				if out, err := exec.Command("mkfifo", path).CombinedOutput(); err != nil {
+					t.Fatalf("mkfifo: %v: %s", err, out)
+				}
+			} else {
+				putWorkflowFixture(t, path, "# Workflows\n")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestWorkflowHardenOpenChild$")
+			cmd.Env = append(os.Environ(), "GRID_WORKFLOW_TEST_HOME="+home, "GRID_WORKFLOW_TEST_SWAP="+swap)
+			data, err := cmd.CombinedOutput()
+			if ctx.Err() != nil {
+				t.Fatal("FIFO read blocked for two seconds")
+			}
+			if err != nil {
+				t.Fatalf("read: %v: %s", err, data)
+			}
+			var got Answer
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatalf("JSON: %v: %s", err, data)
+			}
+			hardenProblem(t, home, got, "a/workflows.md", "not a regular file")
+			if len(got.Files) != 3 || len(got.Templates) != 2 {
+				t.Fatalf("lost healthy files: %+v", got)
+			}
+		})
+	}
+}
+
+func TestWorkflowHardenOpenChild(t *testing.T) {
+	home := os.Getenv("GRID_WORKFLOW_TEST_HOME")
+	if home == "" {
+		return
+	}
+	if os.Getenv("GRID_WORKFLOW_TEST_SWAP") == "after-lstat" {
+		beforeWorkflowOpen = func(relative string) {
+			if relative != filepath.Join("projects", "a", "workflows.md") {
+				return
+			}
+			path := filepath.Join(home, relative)
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			if out, err := exec.Command("mkfifo", path).CombinedOutput(); err != nil {
+				t.Fatalf("mkfifo: %v: %s", err, out)
+			}
+		}
+	}
+	got, err := Read(home, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(data))
+	os.Exit(0)
 }

@@ -32,6 +32,10 @@ type fileProblem struct {
 	err   error
 }
 
+// beforeWorkflowOpen is a test hook for replacing a leaf after its Lstat.
+// Tests that set it run in a separate process so concurrent reads are unaffected.
+var beforeWorkflowOpen func(relative string)
+
 func readFiles(home, selector string) ([]File, []fileProblem, error) {
 	if home == "" {
 		return nil, nil, errors.New("cannot find the Grid home; set GRID_HOME")
@@ -93,6 +97,9 @@ func readFile(home, relative string) (string, *string, error) {
 		return "", nil, err
 	}
 	defer root.Close()
+	if beforeWorkflowOpen != nil {
+		beforeWorkflowOpen(relative)
+	}
 	f, err := root.Open(relative)
 	if err != nil {
 		return "", nil, err
