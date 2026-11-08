@@ -295,6 +295,9 @@ func runTaskLease(action string, args []string, env Env) int {
 	if !recovery {
 		writer.Gen = tenure.Gen
 		tenure, err = leases.TakeTask(writer, pid, start)
+		if err != nil && !errors.Is(err, lease.ErrTaskHeld) {
+			return livenessError(env, err)
+		}
 		if err != nil {
 			var old lease.Tenure
 			tenure, old, err = leases.AdoptTask(writer, pid, start, session.ProbeLocal)

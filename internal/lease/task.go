@@ -108,13 +108,21 @@ func (s TaskStore) TakeTask(w feed.Writer, pid int, start string) (Tenure, error
 	})
 }
 
-func taskHeld(t Tenure) error {
+// ErrTaskHeld is wrapped by every refusal that names the tenure holding the task lease.
+var ErrTaskHeld = errors.New("task lease held")
+
+type taskHeldError struct{ tenure Tenure }
+
+func (e taskHeldError) Error() string {
 	holder := "nobody"
-	if t.Holder != nil {
-		holder = *t.Holder
+	if e.tenure.Holder != nil {
+		holder = *e.tenure.Holder
 	}
-	return fmt.Errorf("task lease held by %s since %s (epoch %d.%d)", holder, t.Since, t.Gen, t.Fence)
+	return fmt.Sprintf("task lease held by %s since %s (epoch %d.%d)", holder, e.tenure.Since, e.tenure.Gen, e.tenure.Fence)
 }
+func (taskHeldError) Unwrap() error { return ErrTaskHeld }
+
+func taskHeld(t Tenure) error { return taskHeldError{t} }
 
 // AdoptTask replaces only a provably dead holder on the writer's host. The
 // identity check and probe run while the task lease is exclusively locked.

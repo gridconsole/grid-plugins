@@ -654,3 +654,13 @@ func TestTaskLeaseReachabilityWithFeedTaskFixture(t *testing.T) {
 	}
 	t.Log("task new -> plan write -> lease take -> job next reaches the Orchestrator; publishing the Job via feed post makes J-1 ready")
 }
+
+func TestTaskLeaseTakeReportsGrantErrors(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	h, path := feedHarness(t)
+	// A fence counter that cannot be opened fails the grant on a free lease; adoption must not hide it.
+	h.mkdir(filepath.Join(path, "feed", "lease", "seq"))
+	if code := h.run(path, taskTakeArgs(pid, start)...); code != 1 || strings.Contains(h.errb.String(), "held by") || !strings.Contains(h.errb.String(), "seq") {
+		t.Fatalf("grant error: %d %s", code, h.errb)
+	}
+}
