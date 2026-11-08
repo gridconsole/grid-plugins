@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/lease"
@@ -64,7 +65,7 @@ func TestTaskNewFeedCommands(t *testing.T) {
 	}
 	store := feed.Store{TaskDir: created.Path, TaskID: stableID}
 	w := feed.Writer{Author: feed.Author{ID: "member", Role: "member"}, Worker: "member@" + machine, Lease: "task"}
-	grant, err := (lease.TaskStore{Feed: store}).TakeTask(w, os.Getpid(), time.Now().UTC().Format(time.RFC3339Nano))
+	grant, err := (lease.TaskStore{Feed: store}).TakeTask(w, os.Getpid(), contract.FormatTime(time.Now()))
 	if err != nil {
 		t.Fatal(err)
 	}

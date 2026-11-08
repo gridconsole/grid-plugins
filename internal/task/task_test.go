@@ -82,7 +82,11 @@ func TestNewReadGolden(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				golden.Assert(t, "task-record", string(data))
+				id, err := feed.TaskID(got.Path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				golden.Assert(t, "task-record", strings.ReplaceAll(string(data), id, "<ULID>"))
 				data, err = os.ReadFile(filepath.Join(got.Path, "intent.md"))
 				if err != nil {
 					t.Fatal(err)

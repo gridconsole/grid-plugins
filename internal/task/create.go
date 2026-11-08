@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gitx"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
@@ -93,7 +94,16 @@ func (s Store) New(o NewOptions) (Task, error) {
 	t := Task{Record: Record{ID: id, Title: title, Project: r.Project, Owner: owner, OwnerRole: role,
 		Size: o.Size, Workflow: o.Workflow, State: "queued", Created: contract.FormatTime(now)},
 		Path: filepath.Join(dir, id+"-"+slug(title)), Intent: o.Words}
-	front, err := yaml.Dump(t.Record, yaml.WithIndent(2), yaml.WithLineWidth(-1))
+	stableID, err := feed.NewID()
+	if err != nil {
+		return Task{}, err
+	}
+	// Keep the human id in Record; Feed reads the existing ulid field. Both
+	// identities are allocated under the lock and published in the same rename.
+	front, err := yaml.Dump(struct {
+		Record `yaml:",inline"`
+		ULID   string `yaml:"ulid"`
+	}{t.Record, stableID}, yaml.WithIndent(2), yaml.WithLineWidth(-1))
 	if err != nil {
 		return Task{}, err
 	}

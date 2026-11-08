@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/session"
 )
@@ -102,13 +102,11 @@ func TestWorkerExitSkipsAJobThatAlreadyHasAResult(t *testing.T) {
 	if err := json.Unmarshal(raw, &fx); err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(filepath.Join(f.dir, "task.md"))
+	id, err := feed.TaskID(f.dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(f.dir, "task.md"), []byte(strings.Replace(string(b), "---\n", "---\nid: "+fx.Task+"\n", 1)), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	raw = bytes.ReplaceAll(raw, []byte(fx.Task), []byte(id))
 	feedDir := filepath.Join(f.dir, "feed")
 	if err := os.MkdirAll(feedDir, 0o700); err != nil {
 		t.Fatal(err)
