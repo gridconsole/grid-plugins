@@ -2,6 +2,7 @@
   "folder": "T-01-example-task",
   "from_state": "waiting",
   "note": "Reviewed",
+  "plan_digest": "0be2f702b71f6728c3de3130bce71cd6e5929de75adc9e1f9ae572b7231686b9",
   "plan_hash": "0be2f7",
   "task": "T-01",
   "to_state": "waiting",

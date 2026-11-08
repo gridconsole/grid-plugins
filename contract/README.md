@@ -578,3 +578,35 @@ done. Existing session list/show behavior is preserved. These new commands defin
 no task or Feed record shapes.
 
 `grid feed` and `grid job post|ack|result|cancel` exit with 0 for success, 1 for storage/scope/resolution or other errors, 2 for usage, 3 for final rejection (stale lease, invalid record, or Job-side kind/Job lease refused by `grid feed post`; do not retry), and 4 for disk full. Status 5 taken applies to the intent refusals above.
+
+## Plan approval receipts
+
+Local task receipts in `approval.json` (plan) and `approval-ship.json` (ship)
+retain `plan_hash`, the six lower-case hex digits used in the plan heading.
+New approvals also write `plan_digest`: all 64 lower-case hex digits of SHA-256
+of exactly the same canonical plan bytes. The snake_case name follows Rust's
+`plan_hash` naming; it is an additive plugin receipt field, not a field claimed
+to exist in the Rust history format. Both values are computed from one snapshot
+under the plan lock and recorded together. The heading and CLI `--plan-hash`
+compare-and-set token remain short for compatibility.
+
+Publication, the guard, and locked approval readers require both values to
+match when `plan_digest` is present. A present empty, null, non-string or
+incorrect digest is refused. Only an absent digest permits legacy short-hash
+validation; reapproving writes the full digest. An implicit reapproval also
+checks the previous digest, so a short-hash collision requires an explicit
+review and `--plan-hash` to replace the receipt. Plan receipts still have no
+`gate` field; ship receipts carry `gate: ship` and cannot release the plan gate.
+
+Rust's existing history receipt remains readable by the legacy guard path:
+`- <time> · plan accepted · rev <n> · <hash> · by <person>`.
+An existing JSON approval takes precedence over that prose receipt, including
+when its digest has become stale. Legacy approvals remain weak until reapproved;
+this extension does not retroactively strengthen receipts or change Rust readers.
+
+The host guard protects `task.md` under the same write rule as approval files,
+including when the plan guard is disabled, because its `workflow` selects the
+gates. Reads remain allowed. An `approve` step whose name contains `plan` is a
+plan gate, as in Rust; an `approve` step before the first `run` or `work` also
+requires plan approval, regardless of its name (for example, `sign-off`). A later
+approval without `plan` in its name remains a delivery gate.
