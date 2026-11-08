@@ -304,7 +304,7 @@ func TestHistoryCommandTable(t *testing.T) {
 	}{
 		{[]string{"history", "add", "Checked the result"}, 0, "History added"},
 		{[]string{"history", "add", "Checked the result", "--task", "T-01", "--json"}, 0, `"line"`},
-		{[]string{"history", "add", "two\nlines"}, 1, "one nonempty line"},
+		{[]string{"history", "add", "two\nlines"}, 2, "one nonempty line"},
 		{[]string{"history", "add", ""}, 1, "one nonempty line"},
 		{[]string{"history", "add"}, 2, "expected one line"},
 		{[]string{"history", "remove"}, 2, "expected add"},

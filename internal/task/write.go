@@ -200,8 +200,11 @@ func (s Store) Note(o WriteOptions) (Event, error) {
 	if err := o.validateText(); err != nil {
 		return event, err
 	}
-	if strings.TrimSpace(o.Note) == "" || strings.ContainsAny(o.Note, "\r\n\x00") {
+	if strings.ContainsRune(o.Note, '\n') {
 		return event, fmt.Errorf("%w: history needs one nonempty line", ErrEditUsage)
+	}
+	if strings.TrimSpace(o.Note) == "" {
+		return event, errors.New("history needs one nonempty line")
 	}
 	err := s.withWrite(o.Cwd, o.ID, func(t Task) error {
 		o.Action = "note"

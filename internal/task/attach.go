@@ -39,6 +39,12 @@ type Attachment struct {
 // task writer lock. It never changes task.md, plan.md, or a lease.
 func (s Store) Attach(o AttachOptions) (Attachment, error) {
 	var result Attachment
+	if err := (WriteOptions{Who: o.Who}).validateText(); err != nil {
+		return result, err
+	}
+	if err := checkTaskText("session", o.SessionID, false); err != nil {
+		return result, err
+	}
 	if o.Agent {
 		var boundPath string
 		if idPattern.MatchString(o.BoundTask) {
