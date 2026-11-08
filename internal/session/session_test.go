@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 type fixture struct {
@@ -330,6 +332,36 @@ func TestSymlinksAboveTheTaskFolderAreAllowed(t *testing.T) {
 		}
 		if _, err := s.Show(r.Key); err != nil {
 			t.Fatalf("%s: %v", dir, err)
+		}
+	}
+}
+
+func TestHeartbeatTimesMatchSchema(t *testing.T) {
+	for _, ms := range []int{0, 120, 10, 123} {
+		now := time.Date(2026, 1, 1, 0, 0, 5, ms*int(time.Millisecond), time.UTC)
+		store := Store{TaskDir: t.TempDir(), Now: func() time.Time { return now }}
+		r, err := store.Start(Record{Key: Key{"session-1", "machine-1"}, PID: 42, PIDStart: "2026-01-01T00:00:00.000Z", Transcript: "t.jsonl",
+			Lease: "J-1", Holder: "member@01ARZ3NDEKTSV4RRFFQ69G5FAV", Fence: 1, Attempt: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err = store.Reconcile(r.Key, Observation{Process: Alive, PID: 42, PIDStart: r.PIDStart})
+		if err != nil {
+			t.Fatal(err)
+		}
+		path, err := store.livePath(r, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := contract.Validate("heartbeat", b); err != nil {
+			t.Fatalf("ms=%d: %v\n%s", ms, err, b)
+		}
+		if live, err := store.ReadHeartbeat(r); err != nil || !live.BeatAt.Equal(now) {
+			t.Fatalf("ms=%d: read back %v %v", ms, live.BeatAt, err)
 		}
 	}
 }

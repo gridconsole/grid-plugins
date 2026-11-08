@@ -214,3 +214,10 @@ func isJobSide(typ string) bool {
 	}
 	return false
 }
+
+// TimeLayout is the fixed-width UTC timestamp the schemas require; Go's
+// RFC3339Nano trims trailing zeros and fails their pattern.
+const TimeLayout = "2006-01-02T15:04:05.000Z"
+
+// FormatTime renders t as UTC with exactly three fractional digits.
+func FormatTime(t time.Time) string { return t.UTC().Format(TimeLayout) }

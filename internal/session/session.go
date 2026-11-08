@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 const (
@@ -75,6 +77,17 @@ type Live struct {
 	BeatAt   time.Time `json:"beat_at"`
 	OutputAt time.Time `json:"output_at"`
 	Until    time.Time `json:"until"`
+}
+
+// MarshalJSON writes the schema's fixed millisecond timestamps; reading stays lenient.
+func (l Live) MarshalJSON() ([]byte, error) {
+	type wire Live
+	return json.Marshal(struct {
+		wire
+		BeatAt   string `json:"beat_at"`
+		OutputAt string `json:"output_at"`
+		Until    string `json:"until"`
+	}{wire(l), contract.FormatTime(l.BeatAt), contract.FormatTime(l.OutputAt), contract.FormatTime(l.Until)})
 }
 
 type ProcessState int
