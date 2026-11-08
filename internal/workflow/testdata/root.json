@@ -1,0 +1,500 @@
+{
+  "templates": [
+    {
+      "name": "Social post",
+      "only": null,
+      "repeat": "Mondays at 09:00",
+      "lead": null,
+      "batch": null,
+      "default": false,
+      "applies": [
+        {
+          "by": "project",
+          "v": "northwind"
+        },
+        {
+          "by": "label",
+          "v": "social"
+        }
+      ],
+      "approvers": [
+        "sam",
+        "robin"
+      ],
+      "rounds": 2,
+      "research": false,
+      "steps": [
+        {
+          "name": "Write the posts together",
+          "kind": "make-together",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-designer",
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Check the copy",
+          "kind": "check",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-runner",
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Write the posts together"
+        },
+        {
+          "name": "Robin approves the posts",
+          "kind": "approve",
+          "approver": "robin",
+          "approvers": [
+            "robin"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Write the posts together"
+        },
+        {
+          "name": "Post on schedule",
+          "kind": "schedule",
+          "approver": null,
+          "approvers": null,
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        }
+      ],
+      "overrides": null,
+      "file": "workflows.md",
+      "usedIn": [],
+      "openTasks": []
+    },
+    {
+      "name": "Monthly content calendar",
+      "only": null,
+      "repeat": null,
+      "lead": "a month ahead",
+      "batch": "One task holds the whole month; the customer approves once, by the 25th",
+      "default": false,
+      "applies": [
+        {
+          "by": "label",
+          "v": "calendar"
+        },
+        {
+          "by": "title",
+          "v": "content calendar"
+        }
+      ],
+      "approvers": [
+        "sam",
+        "robin",
+        "relay page"
+      ],
+      "rounds": 2,
+      "research": false,
+      "steps": [
+        {
+          "name": "Prepare the month together",
+          "kind": "make-together",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-designer",
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Robin approves the month",
+          "kind": "approve",
+          "approver": "robin",
+          "approvers": [
+            "robin"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Prepare the month together"
+        },
+        {
+          "name": "Customer approves by the 25th",
+          "kind": "approve",
+          "approver": "relay page",
+          "approvers": [
+            "relay page"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Prepare the month together"
+        },
+        {
+          "name": "Post each item on its day",
+          "kind": "schedule",
+          "approver": null,
+          "approvers": null,
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        }
+      ],
+      "overrides": null,
+      "file": "workflows.md",
+      "usedIn": [],
+      "openTasks": []
+    },
+    {
+      "name": "Design together",
+      "only": null,
+      "repeat": null,
+      "lead": null,
+      "batch": null,
+      "default": false,
+      "applies": [
+        {
+          "by": "goal",
+          "v": "changes a screen and starts with a sketch"
+        }
+      ],
+      "approvers": [
+        "sam"
+      ],
+      "rounds": 3,
+      "research": false,
+      "steps": [
+        {
+          "name": "Sketch it together",
+          "kind": "make-together",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-designer",
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Build it",
+          "kind": "run",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-builder",
+          "runs": "make build",
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Review the screens",
+          "kind": "approve",
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Build it"
+        },
+        {
+          "name": "Merge into main",
+          "kind": "run",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-builder",
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        }
+      ],
+      "overrides": null,
+      "file": "workflows.md",
+      "usedIn": [],
+      "openTasks": []
+    },
+    {
+      "name": "Web page",
+      "only": null,
+      "repeat": null,
+      "lead": null,
+      "batch": null,
+      "default": false,
+      "applies": [
+        {
+          "by": "goal",
+          "v": "writes a page under a site folder"
+        }
+      ],
+      "approvers": [
+        "sam",
+        "alex"
+      ],
+      "rounds": 2,
+      "research": false,
+      "steps": [
+        {
+          "name": "Draft the page together",
+          "kind": "make-together",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-designer",
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Check the links",
+          "kind": "check",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-runner",
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Draft the page together"
+        },
+        {
+          "name": "Approve the page",
+          "kind": "approve",
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Draft the page together"
+        }
+      ],
+      "overrides": null,
+      "file": "workflows.md",
+      "usedIn": [],
+      "openTasks": []
+    },
+    {
+      "name": "Release",
+      "only": null,
+      "repeat": null,
+      "lead": null,
+      "batch": null,
+      "default": false,
+      "applies": [
+        {
+          "by": "goal",
+          "v": "ends in a version tag"
+        }
+      ],
+      "approvers": [
+        "sam",
+        "alex"
+      ],
+      "rounds": 3,
+      "research": false,
+      "steps": [
+        {
+          "name": "Reproduce the problem",
+          "kind": "run",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-builder",
+          "runs": "make test",
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Fix it and test",
+          "kind": "run",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-builder",
+          "runs": "/grid:worker",
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Preview the result",
+          "kind": "approve",
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "L",
+          "back": "Fix it and test"
+        },
+        {
+          "name": "Approve the version",
+          "kind": "approve",
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Fix it and test"
+        },
+        {
+          "name": "Release",
+          "kind": "schedule",
+          "approver": null,
+          "approvers": null,
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        }
+      ],
+      "overrides": null,
+      "file": "workflows.md",
+      "usedIn": [],
+      "openTasks": []
+    },
+    {
+      "name": "Sign-off",
+      "only": null,
+      "repeat": null,
+      "lead": null,
+      "batch": null,
+      "default": false,
+      "applies": [
+        {
+          "by": "goal",
+          "v": "ends in a file a person signs off"
+        }
+      ],
+      "approvers": [
+        "sam"
+      ],
+      "rounds": 2,
+      "research": false,
+      "steps": [
+        {
+          "name": "Ask what is needed",
+          "kind": "ask",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-planner",
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Write it",
+          "kind": "run",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-builder",
+          "runs": "/grid:writer",
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Check it",
+          "kind": "check",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-runner",
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Write it"
+        },
+        {
+          "name": "Sign off",
+          "kind": "approve",
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Write it"
+        }
+      ],
+      "overrides": null,
+      "file": "workflows.md",
+      "usedIn": [],
+      "openTasks": []
+    },
+    {
+      "name": "Accept, approve, ship",
+      "only": null,
+      "repeat": null,
+      "lead": null,
+      "batch": null,
+      "default": true,
+      "applies": [],
+      "approvers": [
+        "sam",
+        "alex",
+        "robin"
+      ],
+      "rounds": 2,
+      "research": true,
+      "steps": [
+        {
+          "name": "Accept the plan",
+          "kind": "ask",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-planner",
+          "runs": null,
+          "sizes": "NL",
+          "back": null
+        },
+        {
+          "name": "Do the work",
+          "kind": "run",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-builder",
+          "runs": "/grid:worker",
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Preview the result",
+          "kind": "approve",
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "L",
+          "back": "Do the work"
+        },
+        {
+          "name": "Approve the result",
+          "kind": "approve",
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Do the work"
+        },
+        {
+          "name": "Ship",
+          "kind": "schedule",
+          "approver": null,
+          "approvers": null,
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        }
+      ],
+      "overrides": null,
+      "file": "workflows.md",
+      "usedIn": [],
+      "openTasks": []
+    }
+  ],
+  "errors": []
+}

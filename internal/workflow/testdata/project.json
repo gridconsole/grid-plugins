@@ -1,0 +1,72 @@
+{
+  "templates": [
+    {
+      "name": "Rate change",
+      "only": "helios",
+      "repeat": null,
+      "lead": null,
+      "batch": null,
+      "default": false,
+      "applies": [
+        {
+          "by": "title",
+          "v": "rates"
+        }
+      ],
+      "approvers": [
+        "sam"
+      ],
+      "rounds": 2,
+      "research": false,
+      "steps": [
+        {
+          "name": "Write the change",
+          "kind": "run",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-builder",
+          "runs": "/grid:worker",
+          "sizes": "SNL",
+          "back": null
+        },
+        {
+          "name": "Check it against the old rates",
+          "kind": "check",
+          "approver": null,
+          "approvers": null,
+          "agent": "grid-runner",
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Write the change"
+        },
+        {
+          "name": "Approve the new rates",
+          "kind": "approve",
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": "Write the change"
+        },
+        {
+          "name": "Roll out on the first of the month",
+          "kind": "schedule",
+          "approver": null,
+          "approvers": null,
+          "agent": null,
+          "runs": null,
+          "sizes": "SNL",
+          "back": null
+        }
+      ],
+      "overrides": null,
+      "file": "helios/workflows.md",
+      "usedIn": [],
+      "openTasks": []
+    }
+  ],
+  "errors": []
+}
