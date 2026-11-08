@@ -8,6 +8,8 @@ import { AGENTS } from './worker.mjs';
 
 export const RUN_FLAGS = ['repo', 'base', 'agent', 'slots', 'model', 'interval'];
 const FILE = '.orchestrator.json';
+// Kept in the file but never passed to the loop: the permission mode the Orchestrator's session starts with (set from the Sessions tab, read by the app).
+const KEPT = ['mode'];
 
 const read = (file) => {
   try {
@@ -34,10 +36,12 @@ export function runSettings(taskDir, given = {}) {
   if (errors.length) return { ok: false, errors };
   // A relative repo would mean another folder once the loop runs from the task folder.
   if (flags.repo !== undefined) flags.repo = path.resolve(flags.repo);
-  if (JSON.stringify(saved) !== JSON.stringify(flags)) {
+  const keep = Object.fromEntries(KEPT.filter((k) => typeof saved[k] === 'string' && saved[k] !== '').map((k) => [k, saved[k]]));
+  const next = { ...flags, ...keep };
+  if (JSON.stringify(saved) !== JSON.stringify(next)) {
     try {
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, `${JSON.stringify(flags, null, 2)}\n`);
+      fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
     } catch (e) {
       return { ok: false, errors: [`could not save the run settings to ${file}: ${e?.message ?? e}`] };
     }
