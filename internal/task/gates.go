@@ -26,6 +26,12 @@ var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
 // which only plan writers also take; nothing takes them the other way round.
 func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 	var event Event
+	if err := checkTaskText("plan hash", hash, false); err != nil {
+		return event, err
+	}
+	if err := o.validateText(); err != nil {
+		return event, err
+	}
 	err := s.withWrite(o.Cwd, o.ID, func(t Task) error {
 		if t.State != "waiting" {
 			return fmt.Errorf("cannot approve task in current state %q: expected waiting", t.State)
@@ -157,6 +163,9 @@ func checkApproval(t Task, data []byte, hash string) (Event, error) {
 // Refusal producers own refusals/R-n.json; this writer only checks its existence.
 func (s Store) Decide(o WriteOptions, id, decision string) (Event, error) {
 	var event Event
+	if err := o.validateText(); err != nil {
+		return event, err
+	}
 	if !refusalID.MatchString(id) {
 		return event, errors.New("invalid refusal id: use R-N")
 	}

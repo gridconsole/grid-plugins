@@ -42,6 +42,12 @@ type Delivery struct {
 // no writer takes them the other way round.
 func (s Store) Deliver(o DeliverOptions) (Delivery, error) {
 	out := Delivery{DryRun: o.DryRun, Actions: []string{}, Artifacts: []artifact.Record{}}
+	if err := checkTaskText("outcome", o.Outcome, true); err != nil {
+		return out, err
+	}
+	if err := checkTaskText("by", o.By, false); err != nil {
+		return out, err
+	}
 	if strings.TrimSpace(o.Outcome) == "" || strings.ContainsRune(o.Outcome, 0) {
 		return out, errors.New("supply a nonempty Outcome with --outcome")
 	}

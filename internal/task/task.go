@@ -62,6 +62,17 @@ const IntentHead = "# Intent\n\n## Request {#request}\n\n"
 
 // Validate checks creation choices before any files are written.
 func (o NewOptions) Validate() error {
+	if err := checkTaskText("words", o.Words, true); err != nil {
+		return err
+	}
+	for _, field := range []struct{ name, value string }{
+		{"workflow", o.Workflow}, {"who", o.Who}, {"role", o.Role},
+	} {
+		if err := checkTaskText(field.name, field.value, false); err != nil {
+			return err
+		}
+	}
+
 	if strings.TrimSpace(o.Words) == "" {
 		return errors.New("task words must not be empty")
 	}
@@ -70,13 +81,8 @@ func (o NewOptions) Validate() error {
 	default:
 		return fmt.Errorf("invalid size %q: use auto, small, normal or large", o.Size)
 	}
-	if strings.ContainsAny(o.Workflow, "\r\n\x00") || (o.Workflow != "" && strings.TrimSpace(o.Workflow) == "") {
+	if o.Workflow != "" && strings.TrimSpace(o.Workflow) == "" {
 		return errors.New("workflow must be a nonempty name on one line")
-	}
-	for _, v := range []string{o.Who, o.Role} {
-		if strings.ContainsAny(v, "\r\n\x00") {
-			return errors.New("who and role must be on one line")
-		}
 	}
 	return nil
 }

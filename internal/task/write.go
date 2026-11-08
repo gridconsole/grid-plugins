@@ -89,6 +89,9 @@ type WriteOptions struct {
 // Change performs a checked state move and appends its receipt under one lock.
 func (s Store) Change(o WriteOptions) (Event, error) {
 	var event Event
+	if err := o.validateText(); err != nil {
+		return event, err
+	}
 	err := s.withWrite(o.Cwd, o.ID, func(t Task) error {
 		next, err := NextState(t.State, o.Action, o.State)
 		if err != nil {
@@ -194,8 +197,11 @@ func scalar(mapping *yaml.Node, key string) string {
 // It changes no task state, and a closed task can still be annotated.
 func (s Store) Note(o WriteOptions) (Event, error) {
 	var event Event
+	if err := o.validateText(); err != nil {
+		return event, err
+	}
 	if strings.TrimSpace(o.Note) == "" || strings.ContainsAny(o.Note, "\r\n\x00") {
-		return event, errors.New("history needs one nonempty line")
+		return event, fmt.Errorf("%w: history needs one nonempty line", ErrEditUsage)
 	}
 	err := s.withWrite(o.Cwd, o.ID, func(t Task) error {
 		o.Action = "note"

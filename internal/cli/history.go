@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 func runHistory(args []string, env Env) int {
@@ -29,6 +31,10 @@ func runHistory(args []string, env Env) int {
 		return commandError(env, "history", err)
 	}
 	if _, err := taskWriter(env).Note(writeOptions(env, t.ID, "note", args[0])); err != nil {
+		if errors.Is(err, task.ErrEditUsage) {
+			fmt.Fprintf(env.Stderr, "history: %v\n", err)
+			return 2
+		}
 		return commandError(env, "history", err)
 	}
 	if *asJSON {

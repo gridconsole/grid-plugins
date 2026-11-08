@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"go.yaml.in/yaml/v4"
@@ -23,7 +22,7 @@ func defaultTaskEditAllowed(role string) bool {
 }
 
 var (
-	// ErrEditUsage identifies invalid rename or decline input, before any write.
+	// ErrEditUsage identifies invalid task text input, before any write.
 	ErrEditUsage = errors.New("invalid task edit")
 	// ErrEditRejected identifies a rename or decline rejected by the current task.
 	ErrEditRejected = errors.New("task edit rejected")
@@ -40,8 +39,11 @@ type RenameOptions struct {
 // It uses the same locked reread, journal and atomic commit as Change.
 func (s Store) Rename(o RenameOptions) (Event, error) {
 	title := strings.Join(strings.Fields(o.Title), " ")
-	if hasInvalidEditText(o.Title) || strings.ContainsAny(o.Title, "\u2028\u2029") || !utf8.ValidString(o.Title) || title == "" || utf8.RuneCountInString(title) > 200 {
+	if !validTaskText(o.Title, false) || title == "" || utf8.RuneCountInString(title) > 200 {
 		return Event{}, fmt.Errorf("%w: title must have 1-200 characters on one line without control, bidi override/isolate, or noncharacter code points", ErrEditUsage)
+	}
+	if err := o.WriteOptions.validateText(); err != nil {
+		return Event{}, err
 	}
 	if !RenameAllowed(strings.TrimSpace(o.Role)) {
 		return Event{}, errors.New("scope: role cannot rename tasks")
@@ -58,16 +60,11 @@ func (s Store) Rename(o RenameOptions) (Event, error) {
 	})
 }
 
-// Validate before whitespace folding so controls cannot disappear into spaces.
-func hasInvalidEditText(text string) bool {
-	return strings.ContainsFunc(text, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.Is(unicode.Noncharacter_Code_Point, r) ||
-			(r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')
-	})
-}
-
 // JSON strings are valid YAML scalars; keep HTML punctuation readable.
 func encodeTaskScalar(value string) (string, error) {
+	if err := checkTaskText("scalar", value, true); err != nil {
+		return "", err
+	}
 	var out bytes.Buffer
 	encoder := json.NewEncoder(&out)
 	encoder.SetEscapeHTML(false)

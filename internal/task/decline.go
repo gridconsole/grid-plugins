@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"unicode/utf8"
 
 	"go.yaml.in/yaml/v4"
 )
@@ -24,16 +23,16 @@ type DeclineOptions struct {
 // locked reread, journal and atomic commit path.
 func (s Store) Decline(o DeclineOptions) (Event, error) {
 	reason := strings.Join(strings.Fields(o.Reason), " ")
-	if reason == "" || hasInvalidEditText(o.Reason) || !utf8.ValidString(o.Reason) {
+	if reason == "" || !validTaskText(o.Reason, false) {
 		return Event{}, fmt.Errorf("%w: a decline needs a reason without control, bidi override/isolate, or noncharacter code points", ErrEditUsage)
+	}
+	if err := o.WriteOptions.validateText(); err != nil {
+		return Event{}, err
 	}
 	if !DeclineAllowed(strings.TrimSpace(o.Role)) {
 		return Event{}, errors.New("scope: role cannot decline tasks")
 	}
 	who := strings.Join(strings.Fields(o.Who.ID), " ")
-	if strings.ContainsRune(who, '\x00') || !utf8.ValidString(o.Who.ID) {
-		return Event{}, errors.New("host person must be valid text without NUL")
-	}
 	if who == "" {
 		who = "you"
 	}

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -40,6 +41,10 @@ func runDeliver(args []string, env Env) int {
 	}
 	result, err := (task.Store{Resolver: resolver(env)}).Deliver(o)
 	if err != nil {
+		if errors.Is(err, task.ErrEditUsage) {
+			fmt.Fprintf(env.Stderr, "deliver: %v\n", err)
+			return 2
+		}
 		line := strings.Join(strings.Fields(err.Error()), " ")
 		if !strings.HasPrefix(line, "Deliver blocked:") {
 			line = "Deliver blocked: " + line

@@ -217,6 +217,9 @@ func agentShell(env Env) bool {
 func taskWriteResult(env Env, event task.Event, err error, asJSON bool, path string) int {
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid: %v\n", err)
+		if errors.Is(err, task.ErrEditUsage) {
+			return 2
+		}
 		return 1
 	}
 	if asJSON {
