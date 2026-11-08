@@ -14,7 +14,8 @@ import { parseArgs } from 'node:util';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readFeed, fold, feedDir, resolveTask } from './lib.mjs';
-import { lock, run, tick } from './orchestrator.mjs';
+import { lock, run, tick, gitEnv } from './orchestrator.mjs';
+import { runGit } from './git.mjs';
 import { runSettings, RUN_FLAGS } from './run-settings.mjs';
 
 const ORCH = fileURLToPath(new URL('./orchestrator.mjs', import.meta.url));
@@ -49,6 +50,11 @@ export async function start(taskDir, opts = {}) {
   if (!fs.existsSync(path.join(taskDir, 'plan.md'))) return { ok: false, ...base, state: 'no-plan', jobs: {}, errors: ['plan.md is missing: plan the task first'] };
   const settings = runSettings(taskDir, opts);
   if (!settings.ok) return { ok: false, ...base, state: 'error', jobs: jobsOf(taskDir), errors: settings.errors };
+  // A Worker's submit pushes to the origin remote; without one the loop would run to the first submit before failing.
+  if (settings.flags.repo) {
+    const hasOrigin = opts.hasOrigin ?? ((repo) => runGit(repo, ['remote', 'get-url', 'origin'], { env: gitEnv(opts.env) }).ok);
+    if (!hasOrigin(path.resolve(settings.flags.repo))) return { ok: false, ...base, state: 'error', jobs: jobsOf(taskDir), errors: [`the repo has no origin remote; add one (git remote add origin <url>) or start without --repo for a task with no code (${settings.flags.repo})`] };
+  }
   const before = jobsOf(taskDir);
   const states = Object.values(before);
   if (states.length && states.every((s) => FINISHED.has(s))) return { ok: true, ...base, state: 'done', jobs: before };

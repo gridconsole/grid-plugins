@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The grid-feed MCP server: stdio, JSON-RPC 2.0, one message per line. Tools: feed_post, feed_read, feed_state, feed_types
+// The grid-feed MCP server: stdio, JSON-RPC 2.0, one message per line. Tools: feed_post, feed_read, feed_state, feed_types, feed_handover
 // (feed/lib.mjs holds what they do). The task is resolved inside a tool call, so initialize and tools/list need no Grid environment.
 // Nothing but JSON-RPC goes to stdout. Environment of the session: GRID_PROJECTS or GRID_HOME, GRID_PROJECT, GRID_MEMBER,
 // GRID_HOST, GRID_ROLE (default worker), GRID_WORKER.

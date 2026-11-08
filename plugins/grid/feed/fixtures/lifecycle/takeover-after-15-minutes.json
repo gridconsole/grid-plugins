@@ -1,0 +1,22 @@
+{
+  "name": "takeover-after-15-minutes",
+  "about": "A handover via takeover counts only once the Owner has written no post for 15 minutes before its `at`: 14 min 59 s is ignored, exactly 15 min counts. An Owner heartbeat inside the window keeps take-over closed, and the fold never posts one itself.",
+  "posts": [
+    {"id":"01JC0B00000000000000000001","task":"T-1","type":"job","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-08T10:00:00.000Z-0000","re":null,"job":"J-1","epoch":0,"body":{"title":"Tidy the settings copy","role":"builder"}},
+    {"id":"01JC0B00000000000000000002","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-08T10:01:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"ready","reason":"no dependencies"}},
+    {"id":"01JC0B00000000000000000003","task":"T-1","type":"heartbeat","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-08T10:05:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"note":"alive"}},
+    {"id":"01JC0B00000000000000000004","task":"T-1","type":"handover","type_v":1,"author":{"member":"bob","host":"vm","role":"orchestrator"},"worker":null,"at":"2026-11-08T10:19:59.000Z-0000","re":null,"job":null,"epoch":1,"body":{"via":"takeover","reason":"ann is away"}},
+    {"id":"01JC0B00000000000000000005","task":"T-1","type":"handover","type_v":1,"author":{"member":"cara","host":"desk","role":"orchestrator"},"worker":null,"at":"2026-11-08T10:20:00.000Z-0000","re":null,"job":null,"epoch":1,"body":{"via":"takeover","reason":"ann is away"}},
+    {"id":"01JC0B00000000000000000006","task":"T-1","type":"control","type_v":1,"author":{"member":"ann","host":"laptop","role":"orchestrator"},"worker":null,"at":"2026-11-08T10:21:00.000Z-0000","re":null,"job":null,"epoch":0,"body":{"target":"J-1","status":"cancelled","reason":"back again"}},
+    {"id":"01JC0B00000000000000000007","task":"T-1","type":"control","type_v":1,"author":{"member":"cara","host":"desk","role":"orchestrator"},"worker":null,"at":"2026-11-08T10:22:00.000Z-0000","re":null,"job":null,"epoch":1,"body":{"target":"J-1","status":"assigned","assign":{"worker":"w1","host":"vm"},"reason":"cara carries on"}}
+  ],
+  "checks": [
+    {"after":"01JC0B00000000000000000002","now":"2026-11-08T10:10:00.000Z","jobs":{"J-1":"ready"},"ignored":[],"owner":{"epoch":0,"by":"ann@laptop","last_seen":"2026-11-08T10:01:00.000Z","idle_ms":540000,"takeover_open":false}},
+    {"after":"01JC0B00000000000000000003","now":"2026-11-08T10:19:59.999Z","jobs":{"J-1":"ready"},"ignored":[],"owner":{"epoch":0,"by":"ann@laptop","last_seen":"2026-11-08T10:05:00.000Z","idle_ms":899999,"takeover_open":false}},
+    {"after":"01JC0B00000000000000000003","now":"2026-11-08T10:20:00.000Z","jobs":{"J-1":"ready"},"ignored":[],"owner":{"epoch":0,"by":"ann@laptop","last_seen":"2026-11-08T10:05:00.000Z","idle_ms":900000,"takeover_open":true}},
+    {"after":"01JC0B00000000000000000004","now":"2026-11-08T10:19:59.000Z","jobs":{"J-1":"ready"},"ignored":["01JC0B00000000000000000004"],"why":{"01JC0B00000000000000000004":"the Owner ann@laptop was seen 14 min ago, take-over opens after 15"},"owner":{"epoch":0,"by":"ann@laptop","takeover_open":false}},
+    {"after":"01JC0B00000000000000000005","now":"2026-11-08T10:20:00.000Z","jobs":{"J-1":"ready"},"ignored":["01JC0B00000000000000000004"],"owner":{"epoch":1,"by":"cara@desk","last_seen":"2026-11-08T10:20:00.000Z","idle_ms":0,"takeover_open":false}},
+    {"after":"01JC0B00000000000000000006","now":"2026-11-08T10:21:00.000Z","jobs":{"J-1":"ready"},"ignored":["01JC0B00000000000000000004","01JC0B00000000000000000006"],"why":{"01JC0B00000000000000000006":"epoch 0 is not the current epoch 1"},"owner":{"epoch":1,"by":"cara@desk"}},
+    {"after":"01JC0B00000000000000000007","now":"2026-11-08T10:22:00.000Z","jobs":{"J-1":"assigned"},"ignored":["01JC0B00000000000000000004","01JC0B00000000000000000006"],"owner":{"epoch":1,"by":"cara@desk","idle_ms":0}}
+  ]
+}

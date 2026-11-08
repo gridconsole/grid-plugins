@@ -4,7 +4,7 @@ description: Read-only map maker for a Grid task. Use before a builder, reviewer
 model: haiku
 effort: low
 maxTurns: 25
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, mcp__plugin_grid_grid-feed__feed_post
 ---
 
 <!-- Decision source: Q23 (model and effort layers: Haiku for read-only mapping).; plugin merge 2 Nov (frontmatter carries model, effort, maxTurns, tools) -->

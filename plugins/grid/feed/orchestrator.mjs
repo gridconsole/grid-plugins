@@ -12,7 +12,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers, priorityRank, firstById, PRIORITIES } from './lib.mjs';
+import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers, priorityRank, firstById, PRIORITIES, handoverOwner } from './lib.mjs';
 import { postHolds } from './hold.mjs';
 import { jobStart, taskIntegrate, taskLand } from './git-steps.mjs';
 import { runGit } from './git.mjs';
@@ -50,6 +50,18 @@ const errText = (r) => oneLine((r?.errors ?? [r?.error]).filter(Boolean).join(';
 const jobNo = (id) => Number(/^J-(\d+)$/.exec(str(id))?.[1] ?? Infinity);
 const taskIdOf = (taskDir) => /^(T-\d+)/.exec(path.basename(taskDir))?.[1] ?? path.basename(taskDir);
 const lastOf = (posts, keep) => { for (let i = posts.length - 1; i >= 0; i--) if (keep(posts[i])) return posts[i]; return null; };
+
+// Signal 0 only tests the pid; EPERM means it exists under another user.
+export function pidAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (e) { return e?.code === 'EPERM'; }
+}
+
+// The pid in the reason of the Job's latest "running" control post ("worker started, pid N"), or null.
+function workerPid(j, v) {
+  const p = lastOf(v.posts, (x) => x.type === 'control' && x.body?.target === j.id && x.body?.status === 'running');
+  const n = Number(/\bpid (\d+)/.exec(str(p?.body?.reason))?.[1]);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
 
 // ---- hooks ----
 
@@ -115,7 +127,7 @@ function settings(taskDir, o) {
     repo: o.repo ? path.resolve(o.repo) : null, baseRev: o.base || 'HEAD',
     agent: o.agent ?? 'claude', slots: Number.isInteger(o.slots) && o.slots >= 0 ? o.slots : 2,
     intervalMs: Number.isFinite(o.intervalMs) && o.intervalMs > 0 ? o.intervalMs : 15_000,
-    decideOpts: { env, model: o.model, effort: o.effort },
+    decideOpts: { env, model: o.model, effort: o.effort }, model: o.model, alive: o.alive ?? pidAlive,
     decide: o.decide ?? askModel, spawn: o.spawn ?? startWorker, pickHost: o.pickHost, retry: o.retry ?? defaultRetry,
     probe: o.probe ?? ((check) => probeWait(check, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })), probeAt: new Map(), // wait Jobs: the check, and when each was last read
     review: o.review === true, planMemory: { misses: 0, at: 0, reason: '' }, // tries of this process that left no beat
@@ -124,12 +136,10 @@ function settings(taskDir, o) {
   };
 }
 
-// The member@host of the Orchestrator handover that counts (the highest epoch, the later on a tie), or null before any.
-function orchestratorOf(posts) {
-  const workers = jobWorkers(posts);
-  const h = posts.reduce((best, p) => (p.type === 'handover' && fromOrchestrator(p, workers) && Number.isInteger(p.epoch) && (!best || p.epoch >= best.epoch) ? p : best), null);
-  return h ? { epoch: h.epoch, by: `${str(h.author.member)}@${str(h.author.host)}` } : null;
-}
+// The member@host of the Orchestrator handover that counts (the fold's own verdict), or null before any.
+const orchestratorOf = handoverOwner;
+const notOwner = (boss) => `not the Orchestrator of epoch ${boss.epoch}: ${boss.by} is`;
+const HEARTBEAT_AFTER_MS = 5 * 60_000;
 
 const spendOf = (posts) => Math.round(posts.reduce((sum, p) => {
   const c = ['heartbeat', 'result', 'worker-exit'].includes(p.type) && isObj(p.body) ? p.body.cost_usd : undefined;
@@ -148,8 +158,15 @@ function work(taskDir, o) {
   const failed = new Set(); // Jobs a step failed for in this tick: tried again next tick
   const asked = new Set(); // stale Jobs the retry hook was asked about in this tick
 
-  const write = (type, body, extra = {}) => {
-    const r = post(taskDir, { type, body, ...extra }, ctx);
+  const me = `${o.me.member}@${o.me.host}`;
+  // Re-reads the Feed: a counting handover by someone else since the last look ends this tick's writing.
+  const stillOwner = () => {
+    const boss = orchestratorOf(readFeed(dir));
+    if (boss && boss.by !== me) throw new Error(notOwner(boss));
+  };
+
+  const write = (type, body, extra = {}, as = {}) => {
+    const r = post(taskDir, { type, body, ...extra }, { ...ctx, ...as });
     if (!r.ok) throw new Error(`could not post a ${type}: ${r.errors.join('; ')}`);
     out.writes.push({ id: r.post.id, type, job: r.post.job ?? undefined, target: body.target, status: body.status });
     return r.post;
@@ -168,9 +185,7 @@ function work(taskDir, o) {
 
   let posts = readFeed(dir);
   const boss = orchestratorOf(posts);
-  if (boss && boss.by !== `${o.me.member}@${o.me.host}`) {
-    return { ...out, ok: false, errors: [`not the Orchestrator of epoch ${boss.epoch}: ${boss.by} is`] };
-  }
+  if (boss && boss.by !== me) return { ...out, ok: false, errors: [notOwner(boss)] };
 
   // Asks the model for the Jobs unless there are some, or a try failed less than one interval ago, or the tries are used up (planning.mjs).
   const planJobs = () => {
@@ -365,6 +380,12 @@ function work(taskDir, o) {
     }
     if (LIVE.has(rec)) {
       if (own('worker-exit')) return control({ target: j.id, status: 'stale', reason: 'worker exited without a result' });
+      // A `claude -p` session may end without the SessionEnd hook firing, so a Worker on this Host whose pid is gone is reported here, as the hook would.
+      const pid = workerPid(j, v);
+      if (pid && j.assign?.host === o.me.host && !o.alive(pid)) {
+        write('worker-exit', { reason: 'process ended without a result' }, { job: j.id }, { role: 'worker', worker: cur });
+        return undefined;
+      }
       if (j.stale) return control({ target: j.id, status: 'stale', reason: `lease ran out at ${j.lease_expires}` });
       return undefined;
     }
@@ -416,7 +437,7 @@ function work(taskDir, o) {
         + `node "${GIT_STEPS}" job submit ${o.task} ${j.id} --repo "${o.repo}" --worktree "${cwd}" --feed "${taskDir}"`;
     }
     const l = workerLaunch({
-      agent: o.agent, role, task: o.task, job: j.id, worker, member: o.me.member, host: o.me.host, project: o.project, cwd, brief,
+      agent: o.agent, role, task: o.task, job: j.id, worker, member: o.me.member, host: o.me.host, project: o.project, cwd, brief, model: o.model,
       args: o.agent === 'claude' ? ['--permission-mode', 'auto'] : [], codexHome: str(o.env.CODEX_HOME) || undefined,
     });
     return { ...l, env: { ...gitEnv(o.env), ...l.env, GRID_TASK: o.task, GRID_PROJECTS: o.projects }, log: path.join(o.worktrees, `${worker}.log`) };
@@ -424,6 +445,7 @@ function work(taskDir, o) {
 
   // Assigns a ready Job to a Host, makes its worktree when it has code, and starts its Worker.
   const start = (j, host, v) => {
+    stillOwner();
     const attempt = j.attempt + 1;
     // A Job retried by the Owner starts counting again, so a name an earlier Worker used gets a suffix: its old posts must not count.
     let worker = `${j.id}-a${attempt}`;
@@ -489,6 +511,7 @@ function work(taskDir, o) {
     if (o.review) addReview();
     let pass = 0;
     for (; pass < MAX_PASSES; pass++) {
+      stillOwner();
       posts = readFeed(dir);
       state = fold(posts, { now });
       const v = {
@@ -502,6 +525,12 @@ function work(taskDir, o) {
     }
     if (pass === MAX_PASSES) out.errors.push(`stopped after ${MAX_PASSES} passes`);
     bridged();
+    // An idle Owner shows it is alive, so a teammate's take-over stays closed; only the Owner does this.
+    if (!out.writes.length) {
+      stillOwner();
+      const own = fold(readFeed(dir), { now }).owner;
+      if (own.by === me && own.idle_ms !== null && own.idle_ms > HEARTBEAT_AFTER_MS) write('heartbeat', { note: 'alive' });
+    }
   } catch (e) {
     out.ok = false;
     out.errors.push(e?.message ?? String(e));

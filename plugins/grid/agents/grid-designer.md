@@ -4,7 +4,7 @@ description: Writes the design spec (spec.md) for a Grid task - layout, componen
 model: sonnet
 effort: medium
 maxTurns: 50
-tools: Read, Grep, Glob, Write, Edit, Skill
+tools: Read, Grep, Glob, Write, Edit, Skill, mcp__plugin_grid_grid-feed__feed_post
 ---
 
 <!-- Decision source: plugin agent table (spec.md for Large tasks). Default pending Q4: whether a Large task always gets a design step, and whether a person approves its size, is open. Model is also a default.; plugin merge 2 Nov (frontmatter carries model, effort, maxTurns, tools) -->

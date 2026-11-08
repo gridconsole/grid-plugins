@@ -13,6 +13,14 @@ export const isWork = (prompt) => {
   return !text.startsWith('/') && text.length >= 12 && text.split(/\s+/).length >= 2;
 };
 
+// Claude Code feeds a session its own user turns wrapped in an envelope: a finished background subagent (<task-notification>), a
+// message from another session (<agent-message ...>, <cross-session-message ...>), reminders and local command output. None is a
+// person's idea, so a prompt that starts with one makes no task and names no title.
+const ENVELOPES = ['task-notification', 'agent-message', 'cross-session-message', 'teammate-message', 'system-reminder', 'command-name',
+  'command-message', 'command-args', 'local-command-stdout', 'local-command-stderr', 'local-command-caveat', 'bash-input', 'bash-stdout', 'bash-stderr'];
+const ENVELOPE = new RegExp(`^\\s*<(?:${ENVELOPES.join('|')})(?=[\\s>/])`, 'i');
+export const isEnvelope = (prompt) => ENVELOPE.test(str(prompt));
+
 // A title that fits one frontmatter line: the first line of the prompt in plain words, at most 80 characters.
 export function titleOf(prompt) {
   const plain = str(prompt).trim().split('\n')[0].replace(/[^\p{L}\p{N} .,()/_?-]+/gu, ' ').replace(/\s+/g, ' ').trim().replace(/^[-.,?]+\s*/, '');
@@ -64,6 +72,7 @@ const member = (home, env) => {
 export function terminalTask(input, env = process.env) {
   if (input?.hook_event_name !== 'UserPromptSubmit') return null;
   // A prompt that only names a task (`T-12`) is under the work rule but still attaches; anything else needs the rule.
+  if (isEnvelope(input.prompt)) return null;
   const work = isWork(input.prompt);
   const prompt = str(input.prompt).trim();
   if (!work && (prompt.startsWith('/') || !/(?<![\w-])T-\d/.test(prompt))) return null;

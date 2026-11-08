@@ -18,13 +18,14 @@ import { fileURLToPath } from 'node:url';
 const hookLib = ['../hooks/lib.mjs', '../hooks/grid/lib.mjs'].find((r) => fs.existsSync(fileURLToPath(new URL(r, import.meta.url)))) ?? '../hooks/lib.mjs';
 const { gridFolders, taskAt, projectFor, parseFrontmatter, str } = await import(hookLib);
 
-export const CORE_TYPES = ['job', 'result', 'submit', 'question', 'answer', 'knowledge', 'heartbeat', 'head', 'host', 'control', 'handover', 'worker-exit', 'claim', 'post', 'deploy-failed'];
+export const CORE_TYPES = ['job', 'result', 'submit', 'question', 'answer', 'knowledge', 'heartbeat', 'head', 'host', 'control', 'handover', 'transfer', 'worker-exit', 'claim', 'post', 'deploy-failed'];
 export const JOB_STATUSES = ['posted', 'ready', 'assigned', 'running', 'submitted', 'integrated', 'done', 'stale', 'parked', 'rejected', 'conflict', 'cancelled'];
 export const LEASE_MS = 10 * 60_000;
 export const PRIORITIES = ['high', 'normal', 'low'];
 export const HOLD_REASONS = ['dependency', 'worker_cap', 'needs_person', 'question', 'host_offline', 'conflict_hold', 'starting', 'orchestrator_stopped'];
 export const TAIL_LINES = 8;
 export const TAIL_CHARS = 200;
+export const TAKEOVER_AFTER_MS = 15 * 60 * 1000;
 const LIVE = new Set(['assigned', 'running']);
 const QUESTION_CLOSING = new Set(['closed', 'answered', 'done', 'cancelled']);
 const VERDICTS = new Set(['accept', 'disagree']);
@@ -209,8 +210,63 @@ export function jobWorkers(posts) {
 // id are the writer's own words and nothing signs a post, so this keeps out a Worker that kept its id, not one that also dropped it or forged a post.
 export const fromOrchestrator = (p, workers) => p?.author?.role === 'orchestrator' && !(p.worker !== null && p.worker !== undefined && workers.has(str(p.worker)));
 
-// The epoch that counts: the highest of the handover posts an Orchestrator wrote, 0 when there is none.
-const currentEpoch = (posts, workers) => posts.reduce((e, p) => (p.type === 'handover' && fromOrchestrator(p, workers) && Number.isInteger(p.epoch) && p.epoch > e ? p.epoch : e), 0);
+const whoOf = (p) => `${str(p.author?.member)}@${str(p.author?.host)}`;
+
+// The walk over the handovers, in (at, id) order (`sorted`: usable posts only): which count and which do not, and who the Owner is.
+// Returns { verdicts: Map(post id -> reason it does not count, '' when it counts), at: { epoch, by }, owner: { by, last_seen (ms) } }.
+// A handover via transfer needs an earlier transfer of the Owner naming its author; one via takeover needs the Owner silent for TAKEOVER_AFTER_MS
+// before its `at`. Both read only the posts' own `at`, never the clock, so the fold stays deterministic. The one place these rules live.
+export function walkHandovers(sorted, workers) {
+  const verdicts = new Map();
+  const at = { epoch: 0, by: null };
+  const seen = new Map(); // member@host -> the latest `at` (ms) of any post of theirs so far
+  const transfers = []; // the transfers an Orchestrator wrote: { by, to, epoch }
+  let newest = null; // member@host of the newest orchestrator post that counts
+  const ownerNow = () => at.by ?? newest;
+  for (const p of sorted) {
+    const author = whoOf(p);
+    if (p.type === 'handover') {
+      let why = '';
+      let applies = false;
+      if (!fromOrchestrator(p, workers)) why = `a handover from ${p.author.role === 'orchestrator' ? `the Worker ${str(p.worker)} of a Job` : `role ${str(p.author.role) || 'none'}`} does not count: only an orchestrator hands over`;
+      else if (Number.isInteger(p.epoch) && p.epoch >= 0) {
+        if (p.epoch < at.epoch) why = `a handover of epoch ${p.epoch} does not count: the current epoch is ${at.epoch}`;
+        else {
+          const via = isObj(p.body) ? p.body.via : undefined;
+          if (via === undefined || via === null || via === '') { /* a plain handover */ } else if (via === 'transfer') {
+            if (!transfers.some((t) => t.epoch === at.epoch && (at.by === null || t.by === at.by) && t.to === author)) why = `no transfer to ${author} from the Owner`;
+          } else if (via === 'takeover') {
+            const owner = ownerNow();
+            const last = owner === null ? null : seen.get(owner) ?? null;
+            const now = atMs(p.at);
+            if (last !== null && now !== null && now - last < TAKEOVER_AFTER_MS) why = `the Owner ${owner} was seen ${Math.floor(Math.max(0, now - last) / 60_000)} min ago, take-over opens after 15`;
+          } else why = `via ${str(via)} is not transfer or takeover`;
+          applies = !why;
+        }
+      }
+      if (applies) { at.epoch = p.epoch; at.by = author; }
+      verdicts.set(p.id, why);
+      if (!why && fromOrchestrator(p, workers)) newest = author;
+    } else if (fromOrchestrator(p, workers)) {
+      newest = author;
+      if (p.type === 'transfer' && isObj(p.body)) transfers.push({ by: author, to: str(p.body.to), epoch: p.epoch });
+    }
+    const ms = atMs(p.at);
+    if (ms !== null && ms > (seen.get(author) ?? -Infinity)) seen.set(author, ms);
+  }
+  const by = ownerNow();
+  return { verdicts, at, owner: { by, last_seen: by === null ? null : seen.get(by) ?? null } };
+}
+
+// The epoch that counts: the highest of the handover posts that count, 0 when there is none.
+const currentEpoch = (posts, workers) => walkHandovers(posts.filter((p) => !usable(p)).sort(byAtId), workers).at.epoch;
+
+// The member@host of the handover that counts and its epoch, or null before any: the one answer to "who may write now", shared with the Orchestrator.
+export function handoverOwner(posts) {
+  const sorted = [...posts].filter((p) => !usable(p)).sort(byAtId);
+  const { at } = walkHandovers(sorted, jobWorkers(sorted));
+  return at.by === null ? null : { epoch: at.epoch, by: at.by };
+}
 
 // ---- posting ----
 
@@ -337,6 +393,44 @@ const holdOf = (b) => ({
   reason: b.reason, after: list(b.after), question: str(b.question) || null, blocker: str(b.blocker) || null,
 });
 
+// Hand the task over. action `transfer` {to, reason}: the Owner names a teammate (member@host). `accept` {re?}: the named teammate takes it, via the
+// transfer. `takeover` {reason}: a teammate takes it once the Owner has been silent 15 minutes, never automatically. Posts as an orchestrator and
+// refuses, with the fold's own reason and nothing posted, when the handover would be ignored. Returns { ok, post, file, epoch } or { ok: false, errors }.
+export function handOver(taskDir, action, args = {}, ctx = {}) {
+  try {
+    const a = isObj(args) ? args : {};
+    const c = { ...ctx, role: 'orchestrator' };
+    if (!['transfer', 'accept', 'takeover'].includes(action)) return fail('action must be transfer, accept or takeover');
+    if (!fs.existsSync(taskDir) || !fs.statSync(taskDir).isDirectory()) return fail(`task folder ${taskDir} does not exist`);
+    const existing = readFeed(feedDir(taskDir));
+    const workers = jobWorkers(existing);
+    const me = identity(c);
+    const author = `${me.member}@${me.host}`;
+    const now = Number.isFinite(c.now) ? c.now : Date.now();
+    const reason = str(a.reason);
+    const walk = walkHandovers(existing, workers);
+    if (action === 'transfer') {
+      const to = str(a.to).trim();
+      if (!/^[^@\s]+@[^@\s]+$/.test(to)) return fail('to must be a teammate as member@host');
+      if (walk.owner.by !== null && walk.owner.by !== author) return fail(`only the Owner ${walk.owner.by} can transfer the task`);
+      return post(taskDir, { type: 'transfer', body: { to, ...(reason ? { reason } : {}) } }, { ...c, now });
+    }
+    let re = str(a.re) || null;
+    if (action === 'accept' && !re) {
+      const mine = existing.filter((p) => p.type === 'transfer' && fromOrchestrator(p, workers) && p.epoch === walk.at.epoch && isObj(p.body) && str(p.body.to) === author && (walk.at.by === null || whoOf(p) === walk.at.by));
+      re = mine.at(-1)?.id ?? null;
+    }
+    const body = { via: action === 'accept' ? 'transfer' : 'takeover', ...(walk.owner.by !== null ? { from: walk.owner.by } : {}), reason: reason || (action === 'accept' ? 'accepting the transfer' : 'taking over') };
+    const epoch = walk.at.epoch + 1;
+    const candidate = { id: '~', task: '', type: 'handover', author: { member: me.member, host: me.host, role: 'orchestrator' }, worker: me.worker, at: nextAt(existing.at(-1)?.at, now), re, job: null, epoch, body };
+    const why = walkHandovers([...existing, candidate], workers).verdicts.get('~');
+    if (why) return fail(why);
+    return post(taskDir, { type: 'handover', body, re }, { ...c, now });
+  } catch (e) {
+    return fail(`could not hand over: ${e?.message ?? e}`);
+  }
+}
+
 // ---- the fold ----
 
 // The posts by id, the first post of an id winning: a later post that reuses an id cannot stand in for the first one wherever a post is looked up by id.
@@ -368,7 +462,8 @@ const who = (p) => `${str(p.author?.member)}@${str(p.author?.host)}`;
 export function fold(posts, { now = Date.now(), known = null } = {}) {
   const sorted = [...posts].filter((p) => !usable(p)).sort(byAtId);
   const workers = jobWorkers(sorted);
-  const epoch = currentEpoch(sorted, workers);
+  const walk = walkHandovers(sorted, workers);
+  const epoch = walk.at.epoch;
   const ignored = [];
   const unknown = [];
   const jobs = new Map();
@@ -392,9 +487,8 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
   };
   // A handover that counts moves `at` to its epoch and author; otherwise the reason it does not count, else ''.
   const takeOver = (at, p) => {
-    if (!fromOrchestrator(p, workers)) return `a handover from ${p.author.role === 'orchestrator' ? `the Worker ${str(p.worker)} of a Job` : `role ${str(p.author.role) || 'none'}`} does not count: only an orchestrator hands over`;
-    if (!Number.isInteger(p.epoch) || p.epoch < 0) return '';
-    if (p.epoch < at.epoch) return `a handover of epoch ${p.epoch} does not count: the current epoch is ${at.epoch}`;
+    const why = walk.verdicts.get(p.id) ?? '';
+    if (why || !Number.isInteger(p.epoch) || p.epoch < 0) return why;
     at.epoch = p.epoch;
     at.by = who(p);
     return '';
@@ -526,8 +620,14 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
     Object.defineProperty(rec, 'jobPost', { value: counted.get(j.id) });
     return rec;
   });
+  const lastSeen = walk.owner.last_seen;
+  const idle = lastSeen === null ? null : Math.max(0, now - lastSeen);
+  const owner = {
+    epoch, by: walk.owner.by, last_seen: lastSeen === null ? null : new Date(lastSeen).toISOString(), idle_ms: idle,
+    takeover_open: idle !== null && idle >= TAKEOVER_AFTER_MS,
+  };
   return {
-    epoch, posts: sorted.length, by_ref: byRef, jobs: out, hosts, head, ignored, unknown,
+    epoch, owner, posts: sorted.length, by_ref: byRef, jobs: out, hosts, head, ignored, unknown,
     questions: [...questions.values()].map(({ closed: _c, ...q }) => q), open_questions: open.map(({ closed: _c, ...q }) => q),
   };
 }
@@ -608,6 +708,21 @@ export const TOOLS = [
     },
   },
   {
+    name: 'feed_handover',
+    description: 'Hand the task to another Orchestrator. transfer: the Owner names a teammate (to). accept: the named teammate takes it. takeover: a teammate takes it after the Owner has been silent 15 minutes. Refused with the reason when the handover would not count.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: taskProp,
+        action: { type: 'string', enum: ['transfer', 'accept', 'takeover'], description: 'transfer, accept or takeover.' },
+        to: { type: 'string', description: 'For transfer: the teammate as member@host.' },
+        reason: { type: 'string', description: 'Why the task changes hands, in one line.' },
+        re: { type: 'string', description: 'For accept: the id of the transfer; without it the newest transfer to you is used.' },
+      },
+      required: ['task', 'action'],
+    },
+  },
+  {
     name: 'feed_state',
     description: 'The state of a task from its Feed: each Job with its status, assignment, lease, attempt and history, the open questions, the Hosts and the head.',
     inputSchema: { type: 'object', properties: { task: taskProp }, required: ['task'] },
@@ -643,6 +758,7 @@ function run(name, args, ctx) {
     if (!projectDir && project && projects && /^[\w][\w.-]*$/.test(project) && project !== '..') projectDir = path.join(projects, project);
     return { ok: true, types: [...loadTypes(projectDir).values()].sort((a, b) => (a.type < b.type ? -1 : 1)).map(noteView) };
   }
+  if (name === 'feed_handover') return handOver(t.dir, str(args.action), args, ctx);
   const types = loadTypes(t.projectDir);
   if (name === 'feed_post') {
     let body = args.body;

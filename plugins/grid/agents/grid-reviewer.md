@@ -4,7 +4,7 @@ description: Reviews one finished brief in a Grid task and writes only its Verdi
 model: opus
 effort: medium
 maxTurns: 45
-tools: Read, Grep, Glob, Bash, Edit, Skill
+tools: Read, Grep, Glob, Bash, Edit, Skill, mcp__plugin_grid_grid-feed__feed_post
 skills:
   - brief
 ---

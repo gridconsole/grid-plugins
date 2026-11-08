@@ -4,7 +4,7 @@ description: Researches one question for a Grid task from sources - the docs for
 model: opus
 effort: medium
 maxTurns: 50
-tools: Read, Grep, Glob, Write, Edit, WebFetch, WebSearch
+tools: Read, Grep, Glob, Write, Edit, WebFetch, WebSearch, mcp__plugin_grid_grid-feed__feed_post
 ---
 
 <!-- Decision source: Q23 (model and effort layers: Opus at medium effort for research).; plugin merge 2 Nov (frontmatter carries model, effort, maxTurns, tools) -->

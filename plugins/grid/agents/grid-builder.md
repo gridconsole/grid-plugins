@@ -4,7 +4,7 @@ description: Executes one brief in a Grid task exactly - code, UI when the brief
 model: sonnet
 effort: medium
 maxTurns: 60
-tools: Read, Grep, Glob, Edit, Write, Bash, Agent, Skill
+tools: Read, Grep, Glob, Edit, Write, Bash, Agent, Skill, mcp__plugin_grid_grid-feed__feed_post
 skills:
   - brief
 ---

@@ -4,7 +4,7 @@ description: Runs one command or check for a Grid task - a test, build, lint, re
 model: haiku
 effort: low
 maxTurns: 15
-tools: Bash, Read, Grep, Edit
+tools: Bash, Read, Grep, Edit, mcp__plugin_grid_grid-feed__feed_post
 ---
 
 <!-- Decision source: Q23 (Haiku runs commands and checks); Q7 as read through Q13 (a runner is switched only at a step boundary, or after the old runner pushed its branch; "step" is the reading of "phase").; plugin merge 2 Nov (frontmatter carries model, effort, maxTurns, tools) -->
