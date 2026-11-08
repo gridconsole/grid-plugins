@@ -3692,6 +3692,11 @@
               "name": "--task",
               "takes": "value",
               "required": false
+            },
+            {
+              "name": "--tokens",
+              "takes": "none",
+              "required": false
             }
           ],
           "json": true,
@@ -3718,6 +3723,11 @@
             },
             {
               "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--tokens",
               "takes": "value",
               "required": false
             }
@@ -3781,6 +3791,11 @@
               "name": "--task",
               "takes": "value",
               "required": false
+            },
+            {
+              "name": "--tokens",
+              "takes": "value",
+              "required": false
             }
           ],
           "json": true,
@@ -3827,6 +3842,11 @@
               "name": "--task",
               "takes": "value",
               "required": false
+            },
+            {
+              "name": "--tokens",
+              "takes": "none",
+              "required": false
             }
           ],
           "json": true,
@@ -3853,6 +3873,11 @@
             },
             {
               "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--tokens",
               "takes": "value",
               "required": false
             }
