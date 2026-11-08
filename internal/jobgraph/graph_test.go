@@ -65,6 +65,24 @@ func TestBlocksAndImmutableInput(t *testing.T) {
 	}
 }
 
+func TestEdgeJSONRoundTrip(t *testing.T) {
+	input := `["J-1","gate:Q-7",{"job":"J-2","kind":"children-done","why":"Wait for the split Jobs"}]`
+	var edges, again []Edge
+	if err := json.Unmarshal([]byte(input), &edges); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(edges)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(encoded, &again); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(edges, again) {
+		t.Fatalf("round trip changed edges: %s", encoded)
+	}
+}
+
 func TestCyclePaths(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

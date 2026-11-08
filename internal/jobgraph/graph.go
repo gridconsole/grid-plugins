@@ -31,6 +31,15 @@ type Edge struct {
 	Why  string   `json:"why,omitempty"`
 }
 
+// MarshalJSON preserves the bare-id shorthand when there is no explanation.
+func (e Edge) MarshalJSON() ([]byte, error) {
+	if e.Kind == "" && e.Why == "" {
+		return json.Marshal(e.Job)
+	}
+	type plain Edge
+	return json.Marshal(plain(e))
+}
+
 func (e *Edge) UnmarshalJSON(data []byte) error {
 	var id string
 	if len(data) > 0 && data[0] == '"' {
