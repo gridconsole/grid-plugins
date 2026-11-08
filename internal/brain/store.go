@@ -12,6 +12,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
 // Store has two independent namespaces. Project is a folder name below
@@ -191,17 +193,21 @@ func atomicWrite(root *os.Root, path string, data []byte) error {
 	return root.Rename(tmp, path)
 }
 
+// locked runs fn while holding an exclusive advisory lock on a file that stays
+// in place. A second writer waits its turn. The kernel drops the lock when the
+// holder exits, so a killed writer leaves nothing to clean up; removing the file
+// would let two writers lock different inodes.
 func locked(root *os.Root, fn func() error) error {
-	f, err := root.OpenFile(".brain.lock", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, fs.ErrExist) {
-		return fmt.Errorf("brain is locked; retry after the writer finishes (remove a stale .brain.lock only when no writer is running)")
+	if err := noSymlinks(root, lockName); err != nil {
+		return err
 	}
+	f, err := root.OpenFile(lockName, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return err
 	}
-	defer root.Remove(".brain.lock")
-	if err := f.Close(); err != nil {
-		return err
+	defer f.Close() // closing releases the lock
+	if err := fslock.LockExclusive(f); err != nil {
+		return fmt.Errorf("brain write: %w", err)
 	}
 	return fn()
 }

@@ -270,10 +270,18 @@ func TestTraversalSymlinksAndLocks(t *testing.T) {
 	if _, err := s.Show("../checks"); err == nil {
 		t.Fatal("note traversal accepted")
 	}
-	putFile(t, s, "projects/example/.brain.lock", "")
-	n.Name = "locked"
-	if _, err := s.Propose(n, n.Origin); err == nil || !strings.Contains(err.Error(), "locked") {
-		t.Fatalf("lock not respected: %v", err)
+	n.Name = "lockfile"
+	if err := os.Remove(filepath.Join(s.GridHome, "projects", "example", lockName)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("elsewhere", filepath.Join(s.GridHome, "projects", "example", lockName)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Propose(n, n.Origin); err == nil {
+		t.Fatal("symbolic link lock file accepted")
+	}
+	if err := os.Remove(filepath.Join(s.GridHome, "projects", "example", lockName)); err != nil {
+		t.Fatal(err)
 	}
 	// A relative symlink to a project also violates personal isolation, even
 	// though its target is within the outer Grid home.
