@@ -152,6 +152,8 @@ func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
 		}
 	}
 	cmd.WaitDelay = 2 * time.Second
+	configureProcess(cmd)
+	defer cleanupProcess(cmd)
 	err = cmd.Run()
 	if ctx.Err() != nil {
 		return fmt.Errorf("routine timed out or was cancelled: %w", ctx.Err())

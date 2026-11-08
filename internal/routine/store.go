@@ -148,6 +148,10 @@ func (s Store) Remove(name string) error {
 		return err
 	}
 	defer unlock()
+	return s.remove(name)
+}
+
+func (s Store) remove(name string) error {
 	return s.brain().EditConfig(s.level(), "routines", name, func([]byte) ([]byte, error) { return nil, nil })
 }
 func (s Store) save(e Entry) error {
