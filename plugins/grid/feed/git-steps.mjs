@@ -437,6 +437,18 @@ export function taskCleanup({ task, repo } = {}, o = {}) {
   };
 }
 
+// What the Orchestrator's land Job runs: land, and only when that succeeded, clear the task's refs/grid/<task>/ refs (here and on the remote).
+// `cleanup: false` lands and leaves the refs (a sibling Job is still open). A failed land returns its own error and touches nothing, so a retry still finds the head. A cleanup that cannot finish (a Job worktree with
+// unsent work) does not undo the land: the result stays ok and carries `cleanup_errors`, and `task cleanup` can be run again.
+export function taskLandAndClean(input = {}, o = {}) {
+  const landed = taskLand(input, o);
+  if (!landed.ok || input.cleanup === false) return landed;
+  const cleaned = taskCleanup({ task: input.task, repo: input.repo }, o);
+  return cleaned.ok
+    ? { ...landed, deleted_remote: cleaned.deleted_remote, deleted_local: cleaned.deleted_local }
+    : { ...landed, cleanup_errors: cleaned.errors };
+}
+
 // ---- the command ----
 
 const STEPS = {

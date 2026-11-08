@@ -13,7 +13,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers, priorityRank, firstById, PRIORITIES, handoverOwner, writerFile, fileOf, writtenByWorker, hostName, sameHost } from './lib.mjs';
 import { postHolds } from './hold.mjs';
-import { jobStart, taskIntegrate, taskLand } from './git-steps.mjs';
+import { jobStart, taskIntegrate, taskLandAndClean } from './git-steps.mjs';
 import { runGit } from './git.mjs';
 import { workerLaunch, ROLES, AGENTS } from './worker.mjs';
 import { grantedSpawn } from './host.mjs';
@@ -112,7 +112,7 @@ function settings(taskDir, o) {
     probe: o.probe ?? ((check) => probeWait(check, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })), probeAt: new Map(), // wait Jobs: the check, and when each was last read
     review: o.review === true, planMemory: { misses: 0, at: 0, reason: '' }, // tries of this process that left no beat
     deploy: o.deploy ?? ((d) => runDeploy(d, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })),
-    steps: { start: jobStart, integrate: taskIntegrate, land: taskLand, base: resolveBase, ...o.steps },
+    steps: { start: jobStart, integrate: taskIntegrate, land: taskLandAndClean, base: resolveBase, ...o.steps },
   };
 }
 
@@ -328,9 +328,11 @@ function work(taskDir, o) {
     const body = jobPostOf(j, v)?.body;
     control({ target: j.id, status: 'running', lease: new Date(now + LEASE_MS).toISOString(), reason: `landing by the ${str(body?.rule)} rule` });
     let r;
-    try { r = o.steps.land({ task: o.task, repo: o.repo, rule: body?.rule, baseBranch: body?.base_branch }, { env: gitEnv(o.env) }); } catch (e) { r = { ok: false, errors: [e?.message ?? String(e)] }; }
+    // A sibling Job that is not done or cancelled may still hold a worktree or a Job ref, so the land goes ahead and the cleanup waits.
+    const open = v.state.jobs.filter((x) => x.id !== j.id && !FINISHED.has(x.status)).map((x) => x.id);
+    try { r = o.steps.land({ task: o.task, repo: o.repo, rule: body?.rule, baseBranch: body?.base_branch, cleanup: open.length === 0 }, { env: gitEnv(o.env) }); } catch (e) { r = { ok: false, errors: [e?.message ?? String(e)] }; }
     if (r?.ok) {
-      write('result', { outcome: `landed by the ${r.rule ?? body?.rule} rule: ${r.branch} at ${r.sha}`, evidence: `${r.branch} at ${r.sha}`, changed: [] }, { job: j.id });
+      write('result', { outcome: `landed by the ${r.rule ?? body?.rule} rule: ${r.branch} at ${r.sha}`, evidence: `${r.branch} at ${r.sha}${open.length ? `; cleanup skipped: ${open.join(', ')} still running` : ''}${r.cleanup_errors?.length ? `; refs not cleared: ${r.cleanup_errors.join('; ')}` : ''}`, changed: [] }, { job: j.id });
       return control({ target: j.id, status: 'done', reason: `landed at ${r.sha}` });
     }
     write('result', { outcome: 'landing failed', evidence: errText(r), changed: [] }, { job: j.id });
