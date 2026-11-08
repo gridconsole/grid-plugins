@@ -9,7 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/mdfile"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/safefile"
@@ -64,18 +65,12 @@ func Key(home, name, key string, value *string) (Result, error) {
 		return result, err
 	}
 	if value != nil {
-		lockPath := filepath.Join("projects", found.Name, ".project-md.lock")
-		if err = safefile.NoSymlinks(root, lockPath); err != nil {
-			return result, err
-		}
-		lock, err := fslock.OpenNoFollow(filepath.Join(home, lockPath), os.O_CREATE|os.O_RDWR, 0600)
+		// The lock every project.md writer takes (internal/projects), so a relink cannot lose this edit.
+		unlock, err := localdata.Lock(home, ".projects.lock")
 		if err != nil {
 			return result, err
 		}
-		defer lock.Close()
-		if err = fslock.LockExclusive(lock); err != nil {
-			return result, err
-		}
+		defer unlock()
 	}
 	b, err := safefile.Read(root, path)
 	if err != nil {
@@ -140,7 +135,8 @@ func Key(home, name, key string, value *string) (Result, error) {
 		if _, err = project.Parse(found.Name, string(b)); err != nil {
 			return result, err
 		}
-		if err = safefile.AtomicWrite(root, path, b); err != nil {
+		// The shared writer keeps project.md's permission bits and syncs the folder.
+		if err = atomicfile.Write(filepath.Join(home, path), b, 0o644); err != nil {
 			return result, err
 		}
 	}
