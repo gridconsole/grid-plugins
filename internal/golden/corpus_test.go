@@ -149,7 +149,7 @@ func TestGoldenCorpus(t *testing.T) {
 	}
 }
 
-var laneCite = regexp.MustCompile(`docs/lanes/L[0-9]+\.md:([1-9][0-9]*)`)
+var laneCite = regexp.MustCompile(`docs/lanes/L[0-9]+R?\.md:([1-9][0-9]*)`)
 
 // knownDifferences reads "case<TAB>reason" lines. Each reason must cite a line
 // that exists in a docs/lanes file, so a difference is never accepted unexplained.
