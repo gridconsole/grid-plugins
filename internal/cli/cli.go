@@ -95,7 +95,7 @@ func commands() []command {
 		{"deliver", "write the outcome of a task", nil},
 		{"proof", "the proof index of a task", nil},
 		{"land", "land a task per the deploy topic", nil},
-		{"brain", "index, topic, recall, propose, check, accept, sync, usage", nil},
+		{"brain", "show, search, topics, index, propose, accept", runBrain},
 		{"machine", "machines topic", nil},
 		{"env", "environments topic", nil},
 		{"deploy", "deploy topic", nil},

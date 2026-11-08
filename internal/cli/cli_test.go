@@ -297,7 +297,6 @@ func TestStubsAndUsageErrors(t *testing.T) {
 		wantStderr string
 	}{
 		{[]string{"task"}, 2, "task: not built yet\n"},
-		{[]string{"brain", "index"}, 2, "brain: not built yet\n"},
 		{[]string{"mcp"}, 2, "mcp: not built yet\n"},
 		{[]string{"migrate"}, 2, "migrate: not built yet\n"},
 		{[]string{"nope"}, 2, `unknown command "nope"`},
