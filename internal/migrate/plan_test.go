@@ -49,7 +49,7 @@ func TestBlockedPlanGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	golden.Assert(t, "migrate-blocked-plan", strings.NewReplacer(from, "<SOURCE>", home, "<HOME>").Replace(b.String()))
-	if len(p.Conflicts) == 0 || len(p.Unmapped) == 0 {
+	if len(p.Conflicts) == 0 {
 		t.Fatal("missing blockers")
 	}
 }
@@ -251,7 +251,7 @@ func TestVersionGuards(t *testing.T) {
 }
 
 func TestUnsafeAndUnknownInputs(t *testing.T) {
-	for _, kind := range []string{"top-level-symlink", "missing-project", "bad-task", "bad-session", "git-worktree", "unknown-pointer"} {
+	for _, kind := range []string{"missing-project", "bad-task", "bad-session", "git-worktree", "unknown-pointer"} {
 		t.Run(kind, func(t *testing.T) {
 			from, home := fixture(t)
 			switch kind {

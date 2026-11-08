@@ -236,12 +236,13 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 		if handled[f] {
 			continue
 		}
-		// Report unknown subtrees once, but keep them out of the new layout.
+		// Keep unknown subtrees at their original relative paths and list them.
 		parent := path.Dir(f)
 		if parent != "." && !handled[parent] {
 			continue
 		}
-		p.Unmapped = append(p.Unmapped, f+": no mapping for legacy data")
+		p.Notes = append(p.Notes, f+": unknown legacy entry carried over untouched")
+		p.copyPrefix(f, f, handled)
 	}
 	if from == home || within(from, home) {
 		prefix := ""
@@ -297,7 +298,7 @@ func (p *Plan) makeMachine() {
 	case !ok:
 		p.add("create", "", "machine", dataEntry([]byte("<made on apply>\n"), 0600))
 	case !e.Mode.IsRegular():
-		p.Conflicts = append(p.Conflicts, "machine: is a folder or a link, but the machine id must be a file; the new home cannot keep it")
+		p.Conflicts = append(p.Conflicts, "machine: must be an id file; move the existing directory or link aside (for example, mv machine machine-legacy), then rerun grid migrate")
 	case p.machine == "":
 		p.Conflicts = append(p.Conflicts, "machine: the machine id file is empty")
 	}
@@ -429,7 +430,13 @@ func checkVersion(data []byte) (bool, error) {
 }
 
 func (p *Plan) add(kind, from, to string, e entry) {
-	if old, ok := p.result[to]; ok && to != "VERSION" && !p.samePath(e, to) && !p.sameEntry(old, e) {
+	for d := path.Dir(to); d != "."; d = path.Dir(d) {
+		if parent, ok := p.result[d]; ok && !parent.Mode.IsDir() {
+			p.Conflicts = append(p.Conflicts, to+": would overwrite non-directory "+d)
+			return
+		}
+	}
+	if old, ok := p.result[to]; ok && to != "VERSION" && !(p.samePath(e, to) && old.Src == e.Src) && !p.sameEntry(old, e) {
 		p.Conflicts = append(p.Conflicts, to+": destination already has different data")
 		return
 	}

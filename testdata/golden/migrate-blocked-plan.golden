@@ -42,6 +42,7 @@ copy: alpha/worktrees/widget -> projects/widget/worktrees
 copy: alpha/worktrees/widget/T-07 -> projects/widget/worktrees/T-07
 copy: alpha/worktrees/widget/T-07/worker-a -> projects/widget/worktrees/T-07/worker-a
 copy: alpha/worktrees/widget/T-07/worker-a/sample.txt -> projects/widget/worktrees/T-07/worker-a/sample.txt
+copy: config.json -> config.json
 create: machine
 create: VERSION
 write: migration.log (backup path, checksums and actions)
@@ -50,7 +51,7 @@ note: alpha/projects/widget/project.md: repository folder unavailable; remote/ro
 note: beta/projects/notes/project.md: repository folder unavailable; remote/root keys cannot be discovered, retaining folder identity
 note: beta/projects/widget/project.md: repository folder unavailable; remote/root keys cannot be discovered, retaining folder identity
 note: alpha/worktrees/widget: preserves legacy task/worker subfolders; repo/job mapping is unavailable
+note: config.json: unknown legacy entry carried over untouched
 note: history, Feed, usage and recall files are preserved without schema conversion
 conflict: sessions/session-a: destination already has different data
-unmapped: config.json: no mapping for legacy data
-result: 42 actions, 1 conflicts, 1 unmapped
+result: 43 actions, 1 conflicts, 0 unmapped

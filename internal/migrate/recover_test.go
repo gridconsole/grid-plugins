@@ -65,6 +65,7 @@ func crashLayouts() []crashLayout {
 	return []crashLayout{
 		{"old home in place", func(t *testing.T, root string) (string, string) {
 			from, _ := fixtureIn(t, root)
+			remainingFixture(t, from)
 			put(t, filepath.Join(from, "machine"), machine)
 			return from, from
 		}},
@@ -203,7 +204,7 @@ func checkOneHomeSurvives(t *testing.T, step, home string, hadHome bool, oldHome
 			t.Fatalf("the old home changed at %q", step)
 		}
 	default:
-		if read(t, home, "VERSION") != "1\n" || exists(filepath.Join(home, "alpha")) {
+		if read(t, home, "VERSION") != "1\n" || exists(filepath.Join(home, "alpha/projects")) {
 			t.Fatal("the new home is not complete")
 		}
 	}

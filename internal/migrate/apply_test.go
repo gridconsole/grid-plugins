@@ -138,7 +138,7 @@ func TestApplyRefusalsLeaveDataUntouched(t *testing.T) {
 			from, home := fixture(t)
 			put(t, filepath.Join(home, "machine"), "existing-machine\n")
 			if kind == "unmapped" {
-				put(t, filepath.Join(from, "unknown.bin"), "unknown")
+				put(t, filepath.Join(from, "alpha/projects/widget/tasks/T-07-first/task.md"), "invalid")
 			}
 			if kind == "conflict" {
 				put(t, filepath.Join(home, "sessions/session-a"), "other")

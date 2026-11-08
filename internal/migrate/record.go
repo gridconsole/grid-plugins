@@ -40,8 +40,9 @@ func legacyID(namespace string) string {
 
 // record is the flat key: value front matter of an old project.md or task.md.
 type record struct {
-	lines []string
-	end   int
+	lines   []string
+	end     int
+	newline string
 }
 
 func parseRecord(data []byte) (record, error) {
@@ -51,7 +52,11 @@ func parseRecord(data []byte) (record, error) {
 	}
 	for i := 1; i < len(lines); i++ {
 		if lines[i] == "---" {
-			return record{lines, i}, nil
+			newline := "\n"
+			if bytes.Contains(data, []byte("\r\n")) {
+				newline = "\r\n"
+			}
+			return record{lines: lines, end: i, newline: newline}, nil
 		}
 	}
 	return record{}, fmt.Errorf("unterminated frontmatter")
@@ -98,7 +103,7 @@ func (r record) rewrite(fields map[string][]string) []byte {
 		}
 	}
 	out = append(out, r.lines[r.end:]...)
-	return []byte(strings.Join(out, "\n"))
+	return []byte(strings.Join(out, r.newline))
 }
 func sortedKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))
@@ -270,7 +275,7 @@ func childRepos(dir string) []string {
 }
 
 // rewriteSession maps the paths of a session record. Numbers and text are kept as
-// they were read, apart from key order.
+// they were read. When no path changes, the original bytes are returned.
 func rewriteSession(data []byte, paths map[string]string) ([]byte, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
@@ -284,10 +289,16 @@ func rewriteSession(data []byte, paths map[string]string) ([]byte, error) {
 	if v == nil {
 		return nil, fmt.Errorf("session must be an object")
 	}
+	changed := false
 	for _, key := range []string{"cwd", "transcript"} {
 		if s, ok := v[key].(string); ok {
-			v[key], _ = mapPath(s, paths)
+			mapped, _ := mapPath(s, paths)
+			v[key] = mapped
+			changed = changed || mapped != s
 		}
+	}
+	if !changed {
+		return data, nil
 	}
 	var out bytes.Buffer
 	enc := json.NewEncoder(&out)
