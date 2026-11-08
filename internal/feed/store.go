@@ -26,6 +26,9 @@ var ErrDiskFull = errors.New("disk full")
 type Store struct {
 	TaskDir, TaskID string
 	Now             func() time.Time
+	// WithdrawAllowed overrides person withdrawal roles for projections only.
+	// Nil reads workflow.md. Writes always check the current policy separately.
+	WithdrawAllowed func(string) bool
 	// afterGateCheck is a test hook inside the gate lock, before the append.
 	afterGateCheck func()
 }

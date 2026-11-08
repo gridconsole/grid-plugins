@@ -24,6 +24,11 @@ func (s Store) Tick() (out Output, err error) {
 		if s.Writer.Lease != "task" {
 			return feed.ErrStaleLease
 		}
+		// Reuse one policy for every projection in this pass, including the
+		// saved state. The value receiver keeps it local to this tick.
+		if s.Feed.WithdrawAllowed == nil {
+			s.Feed.WithdrawAllowed = feed.QuestionWithdrawReadPolicy(s.Feed.TaskDir)
+		}
 		snap, e := Load(s.Feed)
 		if e != nil {
 			return e

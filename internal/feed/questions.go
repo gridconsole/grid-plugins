@@ -225,6 +225,26 @@ func personWithdraw(p Record, allowed func(string) bool) bool {
 		(p.Author.Role == "owner" || p.Author.Role == "member" || p.Author.Role == "lead" || p.Author.Role == "guest") && allowed(p.Author.Role)
 }
 
+// QuestionWithdrawReadPolicy resolves withdrawal roles for projections. An
+// unreadable policy permits no person withdrawals and warns once; callers that
+// fold repeatedly in one operation should reuse the returned callback.
+// Withdrawal writes must still use QuestionWithdrawPolicy or CheckWithdrawalPolicy.
+func QuestionWithdrawReadPolicy(taskDir string, warning ...io.Writer) func(string) bool {
+	allowed, err := QuestionWithdrawPolicy(taskDir, warning...)
+	if err != nil {
+		fmt.Fprintln(policyWarningWriter(warning), "warning: cannot read task withdrawal policy (workflow.md); using withdraw: []")
+		return func(string) bool { return false }
+	}
+	return allowed
+}
+
+func policyWarningWriter(warning []io.Writer) io.Writer {
+	if len(warning) > 0 && warning[0] != nil {
+		return warning[0]
+	}
+	return os.Stderr
+}
+
 // QuestionWithdrawPolicy reads the task's workflow policy. Hosts can instead
 // supply a callback to FoldReadAt and question.Store.WithdrawAllowed. Missing
 // files use defaults; malformed policy warns, but read errors fail closed.
@@ -236,11 +256,7 @@ func QuestionWithdrawPolicy(taskDir string, warning ...io.Writer) (func(string) 
 		if errors.As(err, &readErr) {
 			return nil, &withdrawPolicyError{err: readErr}
 		}
-		var out io.Writer = os.Stderr
-		if len(warning) > 0 && warning[0] != nil {
-			out = warning[0]
-		}
-		fmt.Fprintf(out, "warning: cannot read task withdrawal policy; using defaults: %s\n", strings.Join(strings.Fields(err.Error()), " "))
+		fmt.Fprintf(policyWarningWriter(warning), "warning: cannot read task withdrawal policy; using defaults: %s\n", strings.Join(strings.Fields(err.Error()), " "))
 		return DefaultWithdrawAllowed, nil
 	}
 	return func(role string) bool { return slices.Contains(roles["withdraw"], role) }, nil

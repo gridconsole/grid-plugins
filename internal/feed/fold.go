@@ -17,9 +17,9 @@ import (
 // concerns: held records wait, bad and ignored lines stay out, and records past
 // an ended tenure reach the fold marked stale.
 func (s Store) State() (contract.State, error) {
-	allowed, err := QuestionWithdrawPolicy(s.TaskDir)
-	if err != nil {
-		return contract.State{}, err
+	allowed := s.WithdrawAllowed
+	if allowed == nil {
+		allowed = QuestionWithdrawReadPolicy(s.TaskDir)
 	}
 	read, err := s.Read(Filter{})
 	if err != nil {

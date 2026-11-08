@@ -36,9 +36,9 @@ type Snapshot struct {
 }
 
 func Load(store feed.Store) (Snapshot, error) {
-	allowed, err := feed.QuestionWithdrawPolicy(store.TaskDir)
-	if err != nil {
-		return Snapshot{}, err
+	allowed := store.WithdrawAllowed
+	if allowed == nil {
+		allowed = feed.QuestionWithdrawReadPolicy(store.TaskDir)
 	}
 	r, err := store.Read(feed.Filter{})
 	if err != nil {

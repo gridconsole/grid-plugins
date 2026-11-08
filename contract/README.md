@@ -206,9 +206,15 @@ Disagreements and defaults chosen:
   `withdraw: [guest]` or `withdraw: [lead]` policy only takes effect for host-written
   person records. Lease holders retain the existing control path.
   A missing policy file uses the owner/member default without warning; malformed
-  policy uses that default with one warning per withdrawal command. If the task's
-  policy file cannot be read, every withdrawal path fails with exit 1 and a
-  one-line diagnostic before writing, including host and leased withdrawals.
+  policy uses that default with one warning per `question withdraw` command;
+  raw `feed post` and MCP withdrawals do not print a fallback warning.
+  If the task's policy file cannot be read, every withdrawal path fails with
+  exit 1 and a one-line diagnostic before writing, including host and leased
+  withdrawals (MCP returns a coded error). Reads and orchestration instead use
+  `withdraw: []` and print one path-free warning per operation: `question list`,
+  `question sync`, `question tick`, `feed state`, MCP `feed_state`, `job tree`,
+  orchestrator tick, and non-withdrawal `job post` continue, including question
+  defaults and Job progress. This fallback never authorizes a withdrawal write.
   Person withdrawal
   follows Feed order and closes only an open question; an applied answer or
   default makes it a refusal. An already withdrawn question is a successful

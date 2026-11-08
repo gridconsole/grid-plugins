@@ -16,6 +16,14 @@ func (s Store) fileProgress(m *memory) (string, error) {
 	files := map[string]progressFile{}
 	h := sha256.New()
 	err := filepath.WalkDir(s.Feed.TaskDir, func(path string, d fs.DirEntry, err error) error {
+		// Policy is configuration, not work progress. Its read failure is
+		// handled once by the projection policy reader for this pass.
+		if path == filepath.Join(s.Feed.TaskDir, "workflow.md") {
+			if d != nil && d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if err != nil {
 			return err
 		}

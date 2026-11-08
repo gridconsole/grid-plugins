@@ -1,24 +1,23 @@
 package cli
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
 )
 
 func TestWithdrawUnreadablePolicy(t *testing.T) {
-	for _, failure := range []string{"permissions", "directory"} {
+	for _, failure := range []string{"permissions", "directory", "io error"} {
 		for _, path := range []string{"question", "leased question", "feed", "job", "mcp", "host"} {
 			t.Run(failure+"/"+path, func(t *testing.T) {
-				if failure == "permissions" && (runtime.GOOS == "windows" || os.Geteuid() == 0) {
-					t.Skip("chmod does not deny reads on Windows or as root")
-				}
 				h, task, store := orchestratorHarness(t)
 				q := questionAdd(t, h, task, "member")
 				t.Setenv("GRID_FEED_TASK", task)
@@ -26,16 +25,7 @@ func TestWithdrawUnreadablePolicy(t *testing.T) {
 					t.Setenv("GRID_LEASE", "task")
 					t.Setenv("GRID_AGENT", "builder")
 				}
-				policy := filepath.Join(task, "workflow.md")
-				if failure == "directory" {
-					h.mkdir(policy)
-				} else {
-					h.write(policy, "---\ngate_post_roles: {withdraw: [member]}\n---\n")
-					if err := os.Chmod(policy, 0); err != nil {
-						t.Fatal(err)
-					}
-					t.Cleanup(func() { _ = os.Chmod(policy, 0600) })
-				}
+				unreadableWorkflow(t, h, task, failure)
 				before := withdrawalFiles(t, task)
 				body := `{"question_event":"withdrawn","target":"` + q.Post + `","text":"No longer needed"}`
 				switch path {
@@ -174,26 +164,14 @@ func TestReadUnreadablePolicy(t *testing.T) {
 		{"job post message", []string{"job", "post", "--job", "J-1", "--type", "post", "--body", `{"ref":"task","kind":"message","text":"Still moving"}`, "--json"}, `"type":"post"`},
 		{"job post control", []string{"job", "post", "--job", "J-1", "--type", "control", "--body", `{"target":"J-1","status":"ready","reason":"ready"}`, "--json"}, `"type":"control"`},
 	}
-	for _, failure := range []string{"permissions", "directory"} {
+	for _, failure := range []string{"permissions", "directory", "io error"} {
 		for _, command := range commands {
 			t.Run(failure+"/"+command.name, func(t *testing.T) {
-				if failure == "permissions" && (runtime.GOOS == "windows" || os.Geteuid() == 0) {
-					t.Skip("chmod does not deny reads on Windows or as root")
-				}
 				h, task, _ := orchestratorHarness(t)
 				questionAdd(t, h, task, "member", "--applies", "2000-01-01T00:00:00Z")
 				t.Setenv("GRID_FEED_TASK", task)
 				t.Setenv("GRID_LEASE", "task")
-				policy := filepath.Join(task, "workflow.md")
-				if failure == "directory" {
-					h.mkdir(policy)
-				} else {
-					h.write(policy, "---\ngate_post_roles: {withdraw: [member]}\n---\n")
-					if err := os.Chmod(policy, 0); err != nil {
-						t.Fatal(err)
-					}
-					t.Cleanup(func() { _ = os.Chmod(policy, 0600) })
-				}
+				unreadableWorkflow(t, h, task, failure)
 				for attempt := 0; attempt < 2; attempt++ {
 					if command.name == "MCP feed_state" {
 						h.env.Stdin = strings.NewReader(mcpHello + `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"feed_state","arguments":{}}}` + "\n")
@@ -201,7 +179,7 @@ func TestReadUnreadablePolicy(t *testing.T) {
 					code := 0
 					warnings := capturePolicyStderr(t, func() { code = h.run(task, command.args...) }) + h.errb.String()
 					if code != 0 || strings.Contains(h.out.String(), `"isError":true`) {
-						t.Errorf("read: exit=%d; want exit=0", code)
+						t.Errorf("read: exit=%d isError=%t; want exit=0 isError=false; stderr=%s", code, strings.Contains(h.out.String(), `"isError":true`), warnings)
 						return
 					}
 					if strings.Count(warnings, "warning:") != 1 || strings.Count(warnings, "\n") != 1 || !strings.Contains(warnings, "withdraw: []") || strings.Contains(warnings, task) {
@@ -235,4 +213,36 @@ func capturePolicyStderr(t *testing.T, run func()) string {
 		t.Fatal(err)
 	}
 	return string(raw)
+}
+
+func unreadableWorkflow(t *testing.T, h *harness, task, failure string) {
+	t.Helper()
+	policy := filepath.Join(task, "workflow.md")
+	switch failure {
+	case "directory":
+		h.mkdir(policy)
+	case "permissions":
+		if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+			t.Skip("chmod does not deny reads on Windows or as root")
+		}
+		h.write(policy, "---\ngate_post_roles: {withdraw: [member]}\n---\n")
+		if err := os.Chmod(policy, 0); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(policy, 0600) })
+	case "io error":
+		if runtime.GOOS != "linux" {
+			t.Skip("requires Linux process memory reads")
+		}
+		// Reading unmapped address zero yields a real EIO without a global
+		// filesystem hook. The link resolves to the reading process itself.
+		if err := os.Symlink(filepath.Join(string(filepath.Separator), "proc", "self", "mem"), policy); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.ReadFile(policy); !errors.Is(err, syscall.EIO) {
+			t.Skipf("process memory did not provide EIO: %v", err)
+		}
+	default:
+		t.Fatalf("unknown workflow failure %q", failure)
+	}
 }
