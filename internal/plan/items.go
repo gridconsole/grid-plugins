@@ -13,11 +13,14 @@ import (
 // Item owns a checklist block. Jobs are planned YAML objects, decoded by job.
 // State is an optional legacy run projection; the checkbox never supplies it.
 type Item struct {
-	N     int              `json:"n"`
-	ID    string           `json:"id"`
-	Title string           `json:"title"`
-	Prose string           `json:"prose"`
-	Kind  string           `json:"kind,omitempty"`
+	N     int    `json:"n"`
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Prose string `json:"prose"`
+	Kind  string `json:"kind,omitempty"`
+	// Proof is the evidence level a step needs (check, log, screenshot or video).
+	// The key is provisional until the owner confirms it; see docs/plan.md.
+	Proof string           `json:"proof,omitempty"`
 	Jobs  []map[string]any `json:"jobs"`
 	State string           `json:"state"`
 	text  string
@@ -32,7 +35,8 @@ var (
 )
 
 // Items reads top-level numbered checklist blocks. Prose precedes a YAML part
-// beginning with exactly two spaces and kind: or jobs:. Blank lines end blocks.
+// beginning with exactly two spaces and kind:, jobs: or proof:, in any order.
+// Blank lines end blocks.
 func Items(text string) ([]Item, error) {
 	ls := lines(text)
 	if ls[0] == "---" {
@@ -66,7 +70,7 @@ func Items(text string) ([]Item, error) {
 			if forbiddenField.MatchString(ls[k]) {
 				return nil, fmt.Errorf("plan line %d: step-level %s is refused; put it under jobs", k+1, strings.TrimSpace(ls[k]))
 			}
-			if start == end && (strings.HasPrefix(ls[k], "  kind:") || strings.HasPrefix(ls[k], "  jobs:")) {
+			if start == end && (strings.HasPrefix(ls[k], "  kind:") || strings.HasPrefix(ls[k], "  jobs:") || strings.HasPrefix(ls[k], "  proof:")) {
 				start = k
 			}
 			if k < start && (!strings.HasPrefix(ls[k], "  ") || strings.HasPrefix(ls[k], "   ")) {
@@ -86,7 +90,7 @@ func Items(text string) ([]Item, error) {
 			return nil, fmt.Errorf("plan line %d: %w", start+1, err)
 		}
 		for key := range data {
-			if key != "kind" && key != "jobs" {
+			if key != "kind" && key != "jobs" && key != "proof" {
 				return nil, fmt.Errorf("plan line %d: unknown step field %q", start+1, key)
 			}
 		}
@@ -95,6 +99,13 @@ func Items(text string) ([]Item, error) {
 			item.Kind, valid = value.(string)
 			if !valid {
 				return nil, fmt.Errorf("plan line %d: kind must be a string", start+1)
+			}
+		}
+		if value, ok := data["proof"]; ok {
+			var valid bool
+			item.Proof, valid = value.(string)
+			if !valid {
+				return nil, fmt.Errorf("plan line %d: proof must be a string", start+1)
 			}
 		}
 		jobs, ok := data["jobs"].([]any)
