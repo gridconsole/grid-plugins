@@ -2,6 +2,7 @@ package where
 
 import (
 	"errors"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -65,13 +66,15 @@ func (r Resolver) TasksDirs() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.PersonalOK() {
+	personalOK := r.PersonalOK()
+	if personalOK && !r.guest() {
 		return dirs, nil
 	}
 	personal := gridhome.TasksDir(r.GridHome, Personal)
 	visible := dirs[:0]
 	for _, dir := range dirs {
-		if dir != personal {
+		name := filepath.Base(filepath.Dir(dir))
+		if (personalOK || dir != personal) && r.GuestProjectAllowed(name) && r.guestTaskPathAllowed(gridhome.TasksDir(gridhome.Real(r.GridHome), name)) {
 			visible = append(visible, dir)
 		}
 	}

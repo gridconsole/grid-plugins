@@ -104,7 +104,7 @@ func (r Resolver) Resolve(q Query) (Result, error) {
 	}
 	gridHome := gridhome.Real(r.GridHome)
 	cwd := gridhome.Real(q.Cwd)
-	records, err := project.Load(gridHome)
+	records, err := r.Projects()
 	if err != nil {
 		return Result{}, fmt.Errorf("read projects: %w", err)
 	}
@@ -119,6 +119,12 @@ func (r Resolver) Resolve(q Query) (Result, error) {
 	}
 	if res.Project == Personal && !personalOK {
 		return Result{}, ErrPersonalRefused
+	}
+	if !r.GuestProjectAllowed(res.Project) || r.guest() && !res.Record && res.Task == "" {
+		return Result{}, ErrProjectUnregistered
+	}
+	if res.TaskPath != "" && !r.guestTaskPathAllowed(res.TaskPath) {
+		return Result{}, fmt.Errorf("task not found")
 	}
 	return res, nil
 }
@@ -201,7 +207,7 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 			return "", "", fmt.Errorf("task path %s is outside the Grid home %s", real, gridHome)
 		}
 		proj, task, ok := taskParts(gridHome, real)
-		if !ok {
+		if !ok || !r.GuestProjectAllowed(proj) {
 			// Invalid paths inside Grid home reveal neither its location nor
 			// whether a case variant names a private Personal task.
 			return "", "", fmt.Errorf("task not found")
@@ -225,6 +231,9 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 			return "", "", fmt.Errorf("task not found")
 		}
 		return "", "", fmt.Errorf("task %s needs --project: this folder is in no project with a record", arg)
+	}
+	if !r.GuestProjectAllowed(name) || !r.guestTaskPathAllowed(gridhome.TasksDir(gridHome, name)) {
+		return "", "", fmt.Errorf("task not found")
 	}
 	entries, err := os.ReadDir(gridhome.TasksDir(gridHome, name))
 	if err != nil {

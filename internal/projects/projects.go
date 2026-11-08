@@ -78,11 +78,14 @@ func (s Store) records() ([]project.Record, error) {
 		return nil, err
 	}
 	for _, e := range entries {
+		if !s.Resolver.GuestProjectAllowed(e.Name()) {
+			continue
+		}
 		if _, err := localdata.Safe(home, "projects", e.Name(), "project.md"); err != nil {
 			return nil, err
 		}
 	}
-	return project.Load(home)
+	return s.Resolver.Projects()
 }
 
 func (s Store) List() ([]Entry, error) {

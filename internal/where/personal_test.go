@@ -38,7 +38,8 @@ func TestPersonalGuardAllResolutionRules(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)
 			q, want := tc.setup(f)
-			f.r.Caller = Caller{Role: "guest", Member: "gus"}
+			// A member isolates the Personal guard from guest project invitations.
+			f.r.Caller = Caller{Role: "member", Member: "gus"}
 			got, err := f.r.Resolve(q)
 			if want.Project == Personal {
 				wantErr := ErrPersonalRefused
