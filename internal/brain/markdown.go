@@ -1,6 +1,10 @@
 package brain
 
-import "github.com/gridconsole/grid-plugins/internal/mdfile"
+import (
+	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/mdfile"
+)
 
 // Encode writes a note as Markdown with YAML front matter. The same library
 // reads it back, so whatever Validate accepts, including control characters,
