@@ -1,24 +1,22 @@
 # Legacy fixture provenance
 
-The requested `a9aa9a3` object is absent from this checkout. The available
-pre-skeleton parent, `124138c^`, supplies the unchanged `form-b.md`,
-`form-b-revised.md`, and `form-c.md` inputs. `form-a.md` is the fenced example
-at `old-plugin/skills/plan/SKILL.md:22-77` in the reference material.
+L44 recorded recovering `form-b.md`, `form-b-revised.md`, and `form-c.md` from
+the pre-skeleton parent `124138c^`. Neither that object nor the requested
+`a9aa9a3^` is available in this rework checkout; the inherited historical inputs
+remain unchanged. `form-a.md` is the fenced example at
+`old-plugin/skills/plan/SKILL.md:22-77` in the reference material.
 
-There are substantive differences between these available historical inputs
-and the requested hand-converted outputs:
+The expected files follow the 8 November owner decisions:
 
-- `form-b.md` mixes Job fields with an A-style sentence verification in item 4.
-  It is an error fixture. `form-b-fields.md` is an explicitly adjusted companion
-  using the current fixture's Job verification record in that one item.
-- `form-b.expected.md` is an unchanged copy of today's parser fixture, for
-  current-format no-op coverage. The pure B and revised B expected files preserve
-  the lowercase first word of the original closing verification sentence.
-- C's expected output retains the document title and the explicit `item`,
-  `title`, `intent.item`, and `intent.goal` fields. The hand conversion removed
-  those fields and replaced the title with a placeholder revision heading.
-  The converted Job is compared with the old YAML through JSON and LoadPlan.
+- B's sentence verification remains prose, including beside structured fields.
+  Its original closing sentence starts with lowercase `filtering`. Conversion,
+  hash, CLI migration and archive diff tests use the real historical input;
+  the hand-edited `form-b-fields` companion has been removed.
+- C retains the document title and explicit `item`, `title`, `intent.item`, and
+  `intent.goal` fields. The converted Job is compared with the old YAML through
+  JSON and LoadPlan. Installation adds a revision heading, archives the original
+  unnumbered bytes as revision 1 and writes the upgraded plan as revision 2.
+- A and C lack recall citations. Preview preserves that absence; installation
+  tests supply `Recall: nothing found` explicitly, as an owner would.
 
-These differences are recorded rather than silently fabricating historical
-fixtures or dropping source content. Exact equality to the hand-converted
-fixtures remains unresolved. New hash-corpus entries pin the preserved outputs.
+Migrated hash-corpus entries are produced by the reference `plan-hash.mjs`.
