@@ -43,7 +43,7 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 		history = read(filepath.Join(owner.dir, "history.md"))
 		top = strings.Split(owner.rel, "/")[0]
 	}
-	unaccepted := owner != nil && heldStage(planStage(text, history))
+	unaccepted := owner != nil && held(owner.dir, text, history)
 	slot := strings.Split(relative(projects, target), "/")
 	if owner == nil && inside(projects, target) && len(slot) > 2 && slot[1] != "tasks" && (oddName.MatchString(slot[1]) || strings.EqualFold(slot[1], "tasks")) {
 		return hookio.Deny("A folder beside a project's tasks folder keeps a plain name (printable ASCII, no colon, no dot or space at the end, not tasks in other letters): on macOS or Windows it can be the tasks folder under another spelling, so " + given + " is not written." + off)

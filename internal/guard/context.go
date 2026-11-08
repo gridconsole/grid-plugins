@@ -11,6 +11,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/fspath"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
@@ -197,6 +198,14 @@ func planStage(text, history string) string {
 func heldStage(stage string) bool {
 	return stage == "before" || stage == "gate" || stage == "unreadable"
 }
+
+// held is the one answer to "does this task's plan still wait for a person?".
+// An approval from `grid approve` releases it only while it still matches
+// plan.md (taskstore.Approved); the old "plan accepted" history line, which tasks
+// migrated from the old plugin carry, releases it through planStage.
+func held(dir, text, history string) bool {
+	return heldStage(planStage(text, history)) && !taskstore.Approved(dir)
+}
 func inactive(text string) bool {
 	f := taskfile.ParseFrontmatter(text)
 	if f == nil {
@@ -210,7 +219,7 @@ func inactive(text string) bool {
 }
 func isHeld(dir string) bool {
 	t := read(filepath.Join(dir, "task.md"))
-	return exists(dir) && !inactive(t) && heldStage(planStage(t, read(filepath.Join(dir, "history.md"))))
+	return exists(dir) && !inactive(t) && held(dir, t, read(filepath.Join(dir, "history.md")))
 }
 func gateLike(s string) bool {
 	s = strings.ToLower(strings.Join(strings.Fields(s), " "))
