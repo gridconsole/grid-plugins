@@ -10,10 +10,12 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/mdfile"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/safefile"
+	"github.com/gridconsole/grid-plugins/internal/where"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -25,11 +27,13 @@ type Result struct {
 
 var keyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
-// Key resolves the project's name or id through project.Load. Set parses value
+// Key resolves the project's name or id within the caller's visible projects.
+// Guests can read invited projects but cannot set keys. Set parses value
 // as YAML (an omitted value is the empty string), validates identity fields with
 // project.Parse, and preserves other keys and the Markdown body. project.Write
 // cannot preserve those fields, so the shared atomic writer commits the edit.
-func Key(home, name, key string, value *string) (Result, error) {
+func Key(r where.Resolver, name, key string, value *string) (Result, error) {
+	home := r.GridHome
 	result := Result{Key: key}
 	if home == "" {
 		return result, fmt.Errorf("cannot find the Grid home; set GRID_HOME")
@@ -37,7 +41,7 @@ func Key(home, name, key string, value *string) (Result, error) {
 	if !keyPattern.MatchString(key) {
 		return result, fmt.Errorf("key must be a single front-matter key")
 	}
-	records, err := project.Load(home)
+	records, err := r.Projects()
 	if err != nil {
 		return result, err
 	}
@@ -51,8 +55,17 @@ func Key(home, name, key string, value *string) (Result, error) {
 			found = &copy
 		}
 	}
+	guest := contract.TierFor(r.Caller.Role) == contract.PersonGuest
 	if found == nil {
+		if guest {
+			return result, fmt.Errorf("project not found")
+		}
 		return result, fmt.Errorf("project %q not found", name)
+	}
+	// There is no project setting granting guests project.md writes. Refuse
+	// before opening or locking the record, including an omitted set value.
+	if guest && value != nil {
+		return result, fmt.Errorf("guests cannot write project.md")
 	}
 	result.Project = found.Name
 	root, err := os.OpenRoot(home)

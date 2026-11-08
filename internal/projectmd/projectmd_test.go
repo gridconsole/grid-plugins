@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 // Regression: set used its own writer, which turned 0644 into 0600, and its own
@@ -21,7 +22,7 @@ func TestSetKeepsModeAndTakesTheProjectsLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	value := "reviewed"
-	if _, err := Key(home, "sample", "lands", &value); err != nil {
+	if _, err := Key(where.Resolver{GridHome: home}, "sample", "lands", &value); err != nil {
 		t.Fatal(err)
 	}
 	if runtime.GOOS != "windows" {
@@ -35,7 +36,7 @@ func TestSetKeepsModeAndTakesTheProjectsLock(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, "projects", "sample", ".project-md.lock")); !os.IsNotExist(err) {
 		t.Fatalf("set took a second project.md lock: %v", err)
 	}
-	got, err := Key(home, "sample", "lands", nil)
+	got, err := Key(where.Resolver{GridHome: home}, "sample", "lands", nil)
 	if err != nil || got.Value != "reviewed" {
 		t.Fatalf("got %+v, %v", got, err)
 	}

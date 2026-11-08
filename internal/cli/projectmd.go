@@ -33,7 +33,7 @@ func runProjectMD(args []string, env Env) int {
 		}
 		value = &v
 	}
-	result, err := projectmd.Key(env.GridHome, operands[0], operands[1], value)
+	result, err := projectmd.Key(resolver(env), operands[0], operands[1], value)
 	if err != nil {
 		return commandError(env, "project-md", err)
 	}

@@ -59,3 +59,118 @@ func TestProjectMD(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectMDGuestAccess(t *testing.T) {
+	for _, role := range []string{"guest", "grid-guest", " GRID-GUEST "} {
+		for _, member := range []string{"gus", "nobody"} {
+			for _, jsonMode := range []bool{false, true} {
+				mode := "plain"
+				if jsonMode {
+					mode = "json"
+				}
+				t.Run(role+"/"+member+"/"+mode, func(t *testing.T) {
+					h := newHarness(t)
+					h.record(project.Record{Name: "alpha", ID: "01ALPHA"})
+					h.record(project.Record{Name: "beta", ID: "01BETA"})
+					h.write(filepath.Join(h.gridHome, "projects", "alpha", "project-roles.json"), `{"people":[{"id":"gus","perm":"Client"}]}`)
+					h.env.Getenv = func(k string) string {
+						return map[string]string{"GRID_ROLE": role, "GRID_MEMBER": member}[k]
+					}
+					for _, op := range []string{"get", "set"} {
+						args := func(selector string) []string {
+							a := []string{"project-md", op, selector, "id"}
+							if op == "set" {
+								a = append(a, "changed")
+							}
+							if jsonMode {
+								a = append(a, "--json")
+							}
+							return a
+						}
+						unknownCode := h.run(h.home, args("unknown")...)
+						unknownOut, unknownErr := h.out.String(), h.errb.String()
+						if unknownCode != 1 || unknownOut != "" || unknownErr != "project-md: project not found\n" {
+							t.Errorf("%s unknown: exit=%d stdout=%q stderr=%q", op, unknownCode, unknownOut, unknownErr)
+						}
+						for _, selector := range []string{"alpha", "01ALPHA", "beta", "01BETA"} {
+							name := selector
+							if selector == "01ALPHA" {
+								name = "alpha"
+							}
+							if selector == "01BETA" {
+								name = "beta"
+							}
+							path := filepath.Join(h.gridHome, "projects", name, "project.md")
+							before, err := os.ReadFile(path)
+							if err != nil {
+								t.Fatal(err)
+							}
+							code := h.run(h.home, args(selector)...)
+							invited := member == "gus" && name == "alpha"
+							if invited && op == "get" {
+								want := "id: 01ALPHA\n"
+								if jsonMode {
+									want = "{\"project\":\"alpha\",\"key\":\"id\",\"value\":\"01ALPHA\"}\n"
+								}
+								if code != 0 || h.out.String() != want || h.errb.Len() != 0 {
+									t.Errorf("invited get %s: exit=%d stdout=%q stderr=%q", selector, code, h.out, h.errb)
+								}
+							} else if invited {
+								if code != 1 || h.out.Len() != 0 || h.errb.String() != "project-md: guests cannot write project.md\n" {
+									t.Errorf("invited set %s: exit=%d stdout=%q stderr=%q", selector, code, h.out, h.errb)
+								}
+							} else if code != unknownCode || h.out.String() != unknownOut || h.errb.String() != unknownErr {
+								t.Errorf("%s %s differs from unknown: exit=%d/%d stdout=%q/%q stderr=%q/%q", op, selector, code, unknownCode, h.out, unknownOut, h.errb, unknownErr)
+							}
+							after, err := os.ReadFile(path)
+							if err != nil {
+								t.Fatal(err)
+							}
+							if !bytes.Equal(before, after) {
+								t.Errorf("%s %s changed project.md", op, selector)
+								h.write(path, string(before))
+							}
+						}
+					}
+					if _, err := os.Stat(filepath.Join(h.gridHome, ".projects.lock")); !os.IsNotExist(err) {
+						t.Errorf("guest operation acquired the projects lock: %v", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestProjectMDTeamAccess(t *testing.T) {
+	for _, role := range []string{"owner", "member"} {
+		t.Run(role, func(t *testing.T) {
+			h := newHarness(t)
+			h.record(project.Record{Name: "alpha", ID: "01ALPHA"})
+			h.env.Getenv = func(k string) string { return map[string]string{"GRID_ROLE": role, "GRID_MEMBER": "nobody"}[k] }
+			if code := h.run(h.home, "project-md", "set", "01ALPHA", "lands", "reviewed", "--json"); code != 0 {
+				t.Fatalf("set: exit=%d stderr=%s", code, h.errb)
+			}
+			want := h.out.String()
+			if code := h.run(h.home, "project-md", "get", "alpha", "lands", "--json"); code != 0 || h.out.String() != want {
+				t.Fatalf("get: exit=%d stdout=%s stderr=%s", code, h.out, h.errb)
+			}
+		})
+	}
+}
+
+func TestProjectMDGuestHiddenBrokenRecord(t *testing.T) {
+	for _, role := range []string{"guest", "grid-guest"} {
+		t.Run(role, func(t *testing.T) {
+			h := newHarness(t)
+			h.write(filepath.Join(h.gridHome, "projects", "broken", "project.md"), "broken")
+			h.env.Getenv = func(k string) string { return map[string]string{"GRID_ROLE": role, "GRID_MEMBER": "nobody"}[k] }
+			for _, op := range []string{"get", "set"} {
+				for _, selector := range []string{"broken", "unknown"} {
+					if code := h.run(h.home, "project-md", op, selector, "id", "--json"); code != 1 || h.out.Len() != 0 || h.errb.String() != "project-md: project not found\n" {
+						t.Errorf("%s %s: exit=%d stdout=%q stderr=%q", op, selector, code, h.out, h.errb)
+					}
+				}
+			}
+		})
+	}
+}
