@@ -705,55 +705,6 @@ func TestTaskLeaseConcurrentCLI(t *testing.T) {
 	}
 }
 
-func TestTaskLeaseReachabilityWithFeedTaskFixture(t *testing.T) {
-	pid, start := taskLeaseIdentity(t)
-	h, _ := feedHarness(t)
-	h.env.Machine = feedMachine
-	if code := h.run(h.home, "task", "new", "Build example feature", "--json"); code != 0 {
-		t.Fatalf("task new: %d %s", code, h.errb)
-	}
-	var created struct{ Path string }
-	if err := json.Unmarshal(h.out.Bytes(), &created); err != nil {
-		t.Fatal(err)
-	}
-	// Main's task new still emits only a display id. Supply the stable-id
-	// fixture required by all existing Feed commands without changing creation.
-	taskPath := filepath.Join(created.Path, "task.md")
-	raw, err := os.ReadFile(taskPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.write(taskPath, strings.Replace(string(raw), "---\n", "---\nulid: "+feedTaskID+"\n", 1))
-	t.Log("fixture prerequisite: task new does not yet write the stable Feed ULID")
-	draft := filepath.Join(h.home, "draft.md")
-	h.write(draft, "# Plan\n\nRecall: nothing found\n\n## Steps\n\n- [ ] 1 Build example feature\n  needs: none\n  kind: build\n  jobs:\n    - id: J-1\n      write: [main.go]\n      after: []\n      review: L1\n      verify: {command: go test ./..., min_tests: 1}\n\n## Verify\n\nExample feature passes its checks.\n")
-	if code := h.run(created.Path, "plan", "write", draft); code != 0 {
-		t.Fatalf("plan write: %d %s", code, h.errb)
-	}
-	if code := h.run(created.Path, taskTakeArgs(pid, start)...); code != 0 {
-		t.Fatalf("take: %d %s", code, h.errb)
-	}
-	parts := strings.Split(strings.TrimSpace(h.out.String()), "\n")
-	epoch := strings.TrimPrefix(parts[len(parts)-1], "epoch ")
-	// Plan write stores a checklist; main's Orchestrator reads Jobs from Feed.
-	// With the stable-id fixture, next now reaches the lease guard successfully.
-	if code := h.run(created.Path, "job", "next", "--lease-epoch", epoch); code != 0 || h.out.String() != "Nothing ready.\n" {
-		t.Fatalf("next before publication: %d %s %s", code, h.out, h.errb)
-	}
-	// Publish the plan's Job through the existing shell command, not a Go grant.
-	body, err := os.ReadFile("../../contract/fixtures/job-record/valid/basic.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code := h.run(created.Path, "feed", "post", "--type", "job", "--job", "J-1", "--body", string(body), "--lease", "task", "--lease-epoch", epoch); code != 0 {
-		t.Fatalf("publish Job: %d %s", code, h.errb)
-	}
-	if code := h.run(created.Path, "job", "next", "--lease-epoch", epoch, "--json"); code != 0 || !strings.Contains(h.out.String(), `"id":"J-1"`) || !strings.Contains(h.out.String(), `"state":"assigned"`) {
-		t.Fatalf("ready Job: %d %s %s", code, h.out, h.errb)
-	}
-	t.Log("task new -> plan write -> lease take -> job next reaches the Orchestrator; publishing the Job via feed post makes J-1 ready")
-}
-
 func TestTaskLeaseTakeRefusesIdentityNotAlive(t *testing.T) {
 	pid, _ := taskLeaseIdentity(t)
 	deadPID, deadStart := deadTaskProcess(t)

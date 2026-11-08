@@ -1,0 +1,111 @@
+package orchestrator
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/job"
+)
+
+func plannedText(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile("../../testdata/job/task/plan.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func writePlan(t *testing.T, f *fixture, text string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "plan.md"), []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPlanPublicationRetriesWithoutResettingJobs(t *testing.T) {
+	f := setup(t)
+	text := plannedText(t)
+	// A prior pass published J-1 before stopping; J-2 still needs publication.
+	second := strings.ReplaceAll(text, "J-1", "J-2")
+	second = strings.ReplaceAll(second, "- [ ] 1 ", "- [ ] 2 ")
+	second = strings.ReplaceAll(second, "after: []", "after: [{job: J-1, kind: done, why: Reuse the documented format}]")
+	writePlan(t, f, text+"\n"+second)
+	first, err := job.LoadPlan(f.s.Feed.TaskDir, "J-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := first.Record()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(b, &body); err != nil {
+		t.Fatal(err)
+	}
+	f.post(t, feed.Input{Type: "job", Job: "J-1", Body: body}, f.s.Writer)
+	// Concurrent retries serialize publication and assignment through the pass lock.
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for range 2 {
+		wg.Go(func() { _, err := f.s.Tick(); errs <- err })
+	}
+	wg.Wait()
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := f.state(t)
+	if before.Status != contract.Assigned {
+		t.Fatalf("first Job: %+v", before)
+	}
+	fence := before.Assign.Fence
+	// Edits to an already published Job cannot replace its intent or reset its run.
+	writePlan(t, f, strings.ReplaceAll(text+"\n"+second, "role: writer", "role: builder"))
+	f.tick(t)
+	after := f.state(t)
+	if after.Assign.Fence != fence || after.Role != "writer" {
+		t.Fatalf("plan reset published Job: %+v", after)
+	}
+	records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
+	if err != nil || len(records.Records) != 2 {
+		t.Fatalf("duplicate or missing publication: %+v %v", records, err)
+	}
+	snap, err := Load(f.s.Feed)
+	if err != nil || snap.State.Jobs["J-2"] == nil || snap.State.Jobs["J-2"].Assign != nil {
+		t.Fatalf("dependent Job: %+v %v", snap.State.Jobs["J-2"], err)
+	}
+}
+
+func TestPlanPublicationValidatesBeforeWriting(t *testing.T) {
+	text := plannedText(t)
+	for name, bad := range map[string]string{
+		"missing field":      strings.Replace(text, "      skills: []\n", "", 1),
+		"invalid contract":   strings.Replace(text, "review: L0", "review: L99", 1),
+		"missing dependency": strings.Replace(text, "after: []", "after: [{job: J-9, kind: done, why: Reuse the documented format}]", 1),
+		"cycle":              strings.Replace(text, "after: []", "after: [{job: J-1, kind: done, why: Reuse the documented format}]", 1),
+		"duplicate":          text + "\n" + strings.Replace(text, "- [ ] 1 ", "- [ ] 2 ", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := setup(t)
+			if name != "duplicate" {
+				bad = text + "\n" + strings.ReplaceAll(strings.ReplaceAll(bad, "J-1", "J-2"), "- [ ] 1 ", "- [ ] 2 ")
+			}
+			writePlan(t, f, bad)
+			if _, err := f.s.Tick(); err == nil {
+				t.Fatal("accepted invalid plan")
+			}
+			records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
+			if err != nil || len(records.Records) != 0 {
+				t.Fatalf("invalid plan published Jobs: %+v %v", records, err)
+			}
+		})
+	}
+}
