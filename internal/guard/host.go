@@ -61,13 +61,18 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 	}
 	target := strings.ToLower(c.path(given))
 	realProjects := realNative(c.projects, 0)
-	folders := []string{host, hostFolder(c.projects), homeHostFolder(realProjects), hostFolder(realProjects)}
+	legacy := hostFolder(c.projects)
+	// Each folder is judged by its resolved path and named as the guard derived it.
+	folders := []struct{ named, resolved string }{
+		{host, host}, {legacy, legacy},
+		{host, homeHostFolder(realProjects)}, {legacy, hostFolder(realProjects)},
+	}
 	if c.home != "" {
-		folders = append(folders, filepath.Join(resolve(c.root, c.expand(c.home)), ".host"))
+		folders = append(folders, struct{ named, resolved string }{host, filepath.Join(resolve(c.root, c.expand(c.home)), ".host")})
 	}
 	for _, folder := range folders {
-		if inside(strings.ToLower(realNative(folder, 0)), target) {
-			return deny(given + " is in " + host)
+		if inside(strings.ToLower(realNative(folder.resolved, 0)), target) {
+			return deny(given + " is in " + folder.named)
 		}
 	}
 	// Compare the native resolved path as well as its lower-case form. The latter
