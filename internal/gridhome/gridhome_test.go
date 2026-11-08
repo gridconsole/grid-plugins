@@ -127,16 +127,17 @@ func TestMachine(t *testing.T) {
 		content *string
 		want    string
 		wantErr bool
+		legacy  string // what Machine returns for another grid's id
 	}{
-		{"missing", nil, "", false},
-		{"valid", ptr(id + "\n"), id, false},
-		{"padded", ptr("  " + id + "  "), id, false},
-		{"empty is missing", ptr(""), "", false},
-		{"torn is missing", ptr(id[:9]), "", false},
-		{"zero-filled is missing", ptr("\x00\x00\x00"), "", false},
-		{"not an id", ptr("not-an-id\n"), "", true},
-		{"too long", ptr(id + "X"), "", true},
-		{"first character out of range", ptr("91ARZ3NDEKTSV4RRFFQ69G5FAV"), "", true},
+		{"missing", nil, "", false, ""},
+		{"valid", ptr(id + "\n"), id, false, ""},
+		{"padded", ptr("  " + id + "  "), id, false, ""},
+		{"empty is missing", ptr(""), "", false, ""},
+		{"torn is missing", ptr(id[:9]), "", false, ""},
+		{"zero-filled is missing", ptr("\x00\x00\x00"), "", false, ""},
+		{"not an id", ptr("not-an-id\n"), "", true, "not-an-id"},
+		{"too long", ptr(id + "X"), "", true, id + "X"},
+		{"first character out of range", ptr("91ARZ3NDEKTSV4RRFFQ69G5FAV"), "", true, "91ARZ3NDEKTSV4RRFFQ69G5FAV"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -149,8 +150,12 @@ func TestMachine(t *testing.T) {
 			if got != tc.want || (err != nil) != tc.wantErr {
 				t.Errorf("ReadMachine: %q, %v", got, err)
 			}
-			if Machine(dir) != tc.want {
-				t.Errorf("Machine: %q", Machine(dir))
+			want := tc.want
+			if tc.wantErr {
+				want = tc.legacy
+			}
+			if Machine(dir) != want {
+				t.Errorf("Machine: %q, want %q", Machine(dir), want)
 			}
 		})
 	}

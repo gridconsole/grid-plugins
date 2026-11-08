@@ -64,17 +64,34 @@ func Tilde(path, home string) string {
 }
 
 // Machine reads this computer's id from <dir>/machine, or "" before it is made
-// and while the file is empty or torn. It is the one reader of that file.
+// and while the file is empty or torn. A file holding some other id (an older
+// grid's) is returned as it is. It is the one reader of that file.
 func Machine(dir string) string {
-	id, _ := ReadMachine(dir)
-	return id
+	s, err := machineFile(dir)
+	if err != nil || torn(s) {
+		return ""
+	}
+	return s
 }
 
-// ReadMachine is Machine with the reason it could not read an id. A missing,
-// empty or torn file (a writer stopped before the id was complete) gives "" and
-// no error; a file that holds anything else is an error, so a person's edit is
-// never replaced.
+// ReadMachine is Machine for a writer: a missing, empty or torn file (a writer
+// stopped before the id was complete) gives "" and no error, and a file that holds
+// anything but a ULID is an error, so a person's edit is never replaced.
 func ReadMachine(dir string) (string, error) {
+	s, err := machineFile(dir)
+	switch {
+	case err != nil:
+		return "", err
+	case ValidID(s):
+		return s, nil
+	case torn(s):
+		return "", nil
+	}
+	return "", fmt.Errorf("machine file does not contain a ULID")
+}
+
+// machineFile returns the trimmed content of <dir>/machine, "" when it is missing.
+func machineFile(dir string) (string, error) {
 	path := filepath.Join(dir, "machine")
 	st, err := os.Stat(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -93,15 +110,12 @@ func ReadMachine(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	s := strings.Trim(string(b), " \t\r\n\x00")
-	switch {
-	case ValidID(s):
-		return s, nil
-	case len(s) < ulidLen && ulidChars(s):
-		return "", nil
-	}
-	return "", fmt.Errorf("machine file does not contain a ULID")
+	return strings.Trim(string(b), " \t\r\n\x00"), nil
 }
+
+// torn reports content a writer left before the whole id was down: nothing, or
+// a short run of ULID characters.
+func torn(s string) bool { return len(s) < ulidLen && ulidChars(s) }
 
 const ulidLen = 26
 
