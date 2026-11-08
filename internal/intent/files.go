@@ -225,6 +225,12 @@ func storedRecord(value any) any {
 			wire
 			Created string `json:"created"`
 		}{wire(r), contract.FormatTime(r.Created)}
+	case Release:
+		type wire Release
+		return struct {
+			wire
+			Created string `json:"created"`
+		}{wire(r), contract.FormatTime(r.Created)}
 	default:
 		return value
 	}

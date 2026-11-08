@@ -51,6 +51,12 @@ type Completion struct {
 	Error   string    `json:"error,omitempty"`
 }
 
+type Release struct {
+	Token   string    `json:"token"`
+	Who     string    `json:"who"`
+	Created time.Time `json:"created"`
+}
+
 type View struct {
 	Record
 	State string      `json:"state"`
@@ -256,6 +262,16 @@ func state(dir string, r Record, now time.Time) (View, error) {
 	if err != nil {
 		return v, err
 	}
+	if active && claim != nil {
+		var released Release
+		err := readJSON(filepath.Join(dir, r.ID+".release.json"), &released)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return v, err
+		}
+		if err == nil && released.Token == claim.Token {
+			active = false
+		}
+	}
 	if active {
 		v.State = "claimed"
 		v.Claim = claim
@@ -354,6 +370,40 @@ func (s Store) Renew(id, token string) (Claim, error) {
 			result.Until = until
 		}
 		return replaceJSON(filepath.Join(dir, id+".claim"), result)
+	})
+	if err == nil && result.Token == "" {
+		err = os.ErrNotExist
+	}
+	return result, err
+}
+
+// Release returns a live claim to pending without rewriting the request. The
+// release marker fences only its token, so later claims remain independent.
+// One atomic write both ends the claim and records the holder and release time;
+// leaving the old claim marker avoids a separate removal that could fail.
+func (s Store) Release(id, token string) (Release, error) {
+	var result Release
+	if !validID(id) || !validID(token) {
+		return result, ErrClaim
+	}
+	err := s.locked(false, func(dir string) error {
+		r, err := readRecord(dir, id)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		v, err := state(dir, r, now)
+		if err != nil {
+			return err
+		}
+		if v.State == "done" {
+			return ErrDone
+		}
+		if v.Claim == nil || v.Claim.Token != token {
+			return ErrClaim
+		}
+		result = Release{Token: token, Who: v.Claim.Who, Created: now}
+		return replaceJSON(filepath.Join(dir, id+".release.json"), result)
 	})
 	if err == nil && result.Token == "" {
 		err = os.ErrNotExist
