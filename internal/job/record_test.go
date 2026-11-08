@@ -2,6 +2,7 @@ package job_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -82,7 +83,7 @@ func TestJobRecordVerify(t *testing.T) {
 				if err := json.Unmarshal(data, &decoded); err != nil {
 					t.Fatal(err)
 				}
-				if decoded.Verify != tc.verify {
+				if !reflect.DeepEqual(decoded.Verify, tc.verify) {
 					t.Fatalf("verify = %+v, want %+v", decoded.Verify, tc.verify)
 				}
 			} else if err == nil || !strings.HasPrefix(err.Error(), "$.verify:") {
