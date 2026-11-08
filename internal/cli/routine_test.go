@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -9,8 +10,58 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/routine"
 )
+
+type routineOS struct{}
+
+func (routineOS) Run(context.Context, routine.OSCommand) error { return nil }
+
+func TestRoutineChangedTimerRecordsOneSignal(t *testing.T) {
+	for _, backend := range []routine.Backend{routine.Systemd{}, routine.Launchd{UID: 501}, routine.Schtasks{}} {
+		for _, lastRun := range []time.Time{{}, time.Date(2026, 1, 2, 3, 4, 0, 0, time.UTC)} {
+			h := newHarness(t)
+			store := routine.Store{GridHome: h.gridHome}
+			e, err := store.Add("daily", "1h", "grid version")
+			if err != nil {
+				t.Fatal(err)
+			}
+			scheduler := routine.Scheduler{Home: h.home, GridHome: h.gridHome, Binary: filepath.Join(h.root, "grid"), Backend: backend, Runner: routineOS{}}
+			if err := scheduler.Schedule(context.Background(), store); err != nil {
+				t.Fatal(err)
+			}
+			e.Run, e.LastRun = "grid brain index", lastRun
+			if !lastRun.IsZero() {
+				e.Outcome = "success"
+			}
+			if err := (brain.Store{GridHome: h.gridHome}).EditConfig("home", "routines", e.Name, func([]byte) ([]byte, error) {
+				return brain.EncodeConfig(e, "")
+			}); err != nil {
+				t.Fatal(err)
+			}
+			h.env.Executable = func() (string, error) { return filepath.Join(h.root, "missing-grid"), nil }
+			for i := 0; i < 2; i++ {
+				if code := h.run(h.root, "routine", "run", "daily", "--due", "--json"); code != 1 || !strings.Contains(h.errb.String(), "grid routine schedule") {
+					t.Fatalf("refusal: exit %d: %s", code, h.errb)
+				}
+				got, err := store.Get(e.Name)
+				if err != nil || !got.LastRun.Equal(e.LastRun) || got.Outcome != e.Outcome {
+					t.Fatalf("refusal changed run state: %+v %v", got, err)
+				}
+			}
+			notes := filepath.Join(h.gridHome, "projects", "personal", "notes")
+			files, err := os.ReadDir(notes)
+			if err != nil || len(files) != 1 {
+				t.Fatalf("expected one Personal note: %v %v", files, err)
+			}
+			body, err := os.ReadFile(filepath.Join(notes, files[0].Name()))
+			if err != nil || !strings.Contains(string(body), "grid routine schedule") {
+				t.Fatalf("note lacks approval instruction: %s %v", body, err)
+			}
+		}
+	}
+}
 
 func TestRoutineCLI(t *testing.T) {
 	h := newHarness(t)

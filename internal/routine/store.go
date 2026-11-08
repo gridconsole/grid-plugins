@@ -31,6 +31,8 @@ type Store struct {
 	Now      func() time.Time
 }
 
+var ErrScheduleChanged = errors.New("routine changed since it was scheduled")
+
 func (s Store) brain() brain.Store { return brain.Store{GridHome: s.GridHome, Project: s.Project} }
 func (s Store) level() string {
 	if s.Project != "" {
@@ -64,7 +66,7 @@ func (s Store) checkScheduled(e Entry) error {
 	if state.Label == "" || state.Hash == e.Fingerprint() {
 		return nil
 	}
-	return fmt.Errorf("routine %s changed since it was scheduled; run grid routine schedule again to approve it", e.Name)
+	return fmt.Errorf("%w: %s; run grid routine schedule again to approve it", ErrScheduleChanged, e.Name)
 }
 
 func (e Entry) Validate() error {
@@ -215,6 +217,11 @@ func (s Store) Execute(ctx context.Context, name string, due bool, runner Execut
 	}
 	if due {
 		if err := s.checkScheduled(e); err != nil {
+			// Keep last_run unchanged so repeated refusals share the failure
+			// signal's SourceID and produce one Personal note.
+			if onFailure != nil {
+				return result, errors.Join(err, onFailure(e, err))
+			}
 			return result, err
 		}
 	}

@@ -247,8 +247,16 @@ func TestTimerRunRefusesRoutineChangedSinceSchedule(t *testing.T) {
 	}
 	var runs atomic.Int32
 	runner := executorFunc(func(context.Context, Store, Entry) error { runs.Add(1); return nil })
+	var signals int
+	signalErr := errors.New("signal unavailable")
 	run := func(due bool) error {
-		_, err := store.Execute(context.Background(), "daily", due, runner, nil)
+		_, err := store.Execute(context.Background(), "daily", due, runner, func(e Entry, err error) error {
+			signals++
+			if !errors.Is(err, ErrScheduleChanged) || e.LastRun.Equal(now) {
+				t.Fatalf("wrong refusal signal: %+v %v", e, err)
+			}
+			return signalErr
+		})
 		return err
 	}
 	// Without a schedule nothing was approved, so there is nothing to compare.
@@ -277,10 +285,14 @@ func TestTimerRunRefusesRoutineChangedSinceSchedule(t *testing.T) {
 			t.Fatal(err)
 		}
 		before := runs.Load()
+		beforeSignals := signals
 		now = now.Add(2 * time.Hour)
 		err = run(true)
-		if err == nil || !strings.Contains(err.Error(), "grid routine schedule") || strings.Contains(err.Error(), "\n") || runs.Load() != before {
-			t.Fatalf("changed routine ran: %v %d", err, runs.Load())
+		if !errors.Is(err, ErrScheduleChanged) || !errors.Is(err, signalErr) || runs.Load() != before {
+			t.Fatalf("changed routine ran or signal error lost: %v %d", err, runs.Load())
+		}
+		if signals != beforeSignals+1 {
+			t.Fatalf("refusal signals: %d", signals-beforeSignals)
 		}
 		// A manual run is the person's own request.
 		if err = run(false); err != nil || runs.Load() != before+1 {
