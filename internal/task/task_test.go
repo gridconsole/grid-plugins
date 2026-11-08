@@ -304,7 +304,19 @@ func TestSlug(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestShowRejectsDuplicateIDsAcrossProjects(t *testing.T) {
+	s, home := storeFor(t)
+	created, err := s.New(NewOptions{Cwd: home, Words: "First task"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate := filepath.Join(s.Resolver.GridHome, "projects", "example", "tasks", created.ID+"-duplicate")
+	mkdir(t, duplicate)
+	if _, err := s.Show(home, created.ID); err == nil || !strings.Contains(err.Error(), "more than one folder") {
+		t.Fatalf("duplicate id error: %v", err)
+	}
 }
 
 func TestNewRefusesSymlinksAndFormat(t *testing.T) {

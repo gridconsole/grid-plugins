@@ -129,6 +129,9 @@ func TestTaskProjectAndPersonalSelection(t *testing.T) {
 			if code := h.run(output.Path, "task", "show", "--json"); code != 0 {
 				t.Fatalf("show exit %d: %s", code, h.errb)
 			}
+			if code := h.run(h.home, "task", "show", output.ID, "--json"); code != 0 {
+				t.Fatalf("show from another folder exit %d: %s", code, h.errb)
+			}
 		})
 	}
 }

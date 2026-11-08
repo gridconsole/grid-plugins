@@ -171,40 +171,49 @@ func Read(path string) (Task, error) {
 	return t, nil
 }
 
-// Show resolves a display id in the current project, or the enclosing task when
-// id is empty. It never creates project records or other files.
+// Show resolves a home-wide display id, or the enclosing task when id is empty.
+// It never creates project records or other files.
 func (s Store) Show(cwd, id string) (Task, error) {
+	if s.Resolver.GridHome == "" {
+		return Task{}, errors.New("cannot find the Grid home; set GRID_HOME")
+	}
 	if id != "" && !idPattern.MatchString(id) {
 		return Task{}, fmt.Errorf("invalid task id %q: use T-NN", id)
 	}
-	r, err := s.resolve(cwd, "")
-	if err != nil {
-		return Task{}, err
-	}
 	if id == "" {
+		r, err := s.resolve(cwd, "")
+		if err != nil {
+			return Task{}, err
+		}
 		if r.TaskPath == "" {
 			return Task{}, errors.New("give a task id (T-NN), or run inside a task folder")
 		}
 		return readProject(r.TaskPath, r.Project)
 	}
-	paths, err := folders(taskDir(s.Resolver.GridHome, r.Project))
+	dirs, err := taskDirs(s.Resolver.GridHome)
 	if err != nil {
 		return Task{}, err
 	}
-	var found string
-	for _, path := range paths {
-		name := filepath.Base(path)
-		if name == id || strings.HasPrefix(name, id+"-") {
-			if found != "" {
-				return Task{}, fmt.Errorf("task %s has more than one folder in project %s", id, r.Project)
+	var found, proj string
+	for _, dir := range dirs {
+		paths, err := folders(dir)
+		if err != nil {
+			return Task{}, err
+		}
+		for _, path := range paths {
+			name := filepath.Base(path)
+			if name == id || strings.HasPrefix(name, id+"-") {
+				if found != "" {
+					return Task{}, fmt.Errorf("task %s has more than one folder in the Grid home", id)
+				}
+				found, proj = path, filepath.Base(filepath.Dir(dir))
 			}
-			found = path
 		}
 	}
 	if found == "" {
-		return Task{}, fmt.Errorf("task %s not found in project %s", id, r.Project)
+		return Task{}, fmt.Errorf("task %s not found in the Grid home", id)
 	}
-	return readProject(found, r.Project)
+	return readProject(found, proj)
 }
 
 func readProject(path, proj string) (Task, error) {
@@ -266,4 +275,18 @@ func folders(dir string) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+func taskDirs(home string) ([]string, error) {
+	dirs := []string{taskDir(home, "personal")}
+	entries, err := os.ReadDir(filepath.Join(home, "projects"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs = append(dirs, filepath.Join(home, "projects", e.Name(), "tasks"))
+		}
+	}
+	return dirs, nil
 }

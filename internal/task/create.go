@@ -154,15 +154,9 @@ func safeDir(home, dir string) error {
 // nextID counts all project tasks and Personal tasks, including incomplete task
 // folders from older writers. Hidden staging folders are never display ids.
 func nextID(home string) (string, error) {
-	dirs := []string{taskDir(home, "personal")}
-	entries, err := os.ReadDir(filepath.Join(home, "projects"))
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+	dirs, err := taskDirs(home)
+	if err != nil {
 		return "", err
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			dirs = append(dirs, filepath.Join(home, "projects", e.Name(), "tasks"))
-		}
 	}
 	var maxID uint64
 	for _, dir := range dirs {
