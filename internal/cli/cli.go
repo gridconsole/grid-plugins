@@ -11,13 +11,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/gridconsole/grid-plugins/internal/doctor"
-	"github.com/gridconsole/grid-plugins/internal/gitx"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
-	"github.com/gridconsole/grid-plugins/internal/hook"
-	"github.com/gridconsole/grid-plugins/internal/version"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -34,6 +29,22 @@ type Env struct {
 	Machine    string                 // this machine's id, "" before it is made
 	Ceiling    string                 // "" walks to the root; tests set their fixture root
 	GitVersion func() (string, error) // nil runs git --version
+	Getenv     func(string) string    // nil reads the process environment
+	Executable func() (string, error) // nil asks os.Executable
+}
+
+func (e Env) getenv(key string) string {
+	if e.Getenv != nil {
+		return e.Getenv(key)
+	}
+	return os.Getenv(key)
+}
+
+func (e Env) executable() (string, error) {
+	if e.Executable != nil {
+		return e.Executable()
+	}
+	return os.Executable()
 }
 
 // OSEnv reads the real process environment.
@@ -67,10 +78,10 @@ type command struct {
 
 func commands() []command {
 	return []command{
-		{"version", "print the CLI, contract and app_min versions", runVersionCheck},
+		{"version", "print the CLI, contract and app_min versions", runVersion},
 		{"where", "show which project and task a folder belongs to", runWhere},
-		{"doctor", "check the Grid home, its format version and git", runDoctorChecks},
-		{"hook", "answer a Claude Code or Codex hook event", runSilentHook},
+		{"doctor", "check the Grid home, its format version and git", runDoctor},
+		{"hook", "answer a Claude Code or Codex hook event", runHook},
 		{"task", "new, show, status, stop, close, reopen, attach, move", nil},
 		{"plan", "write, check, items, hash", nil},
 		{"views", "render the task pages", nil},
@@ -207,23 +218,6 @@ func writeJSON(w io.Writer, v any) int {
 	return 0
 }
 
-func runVersion(args []string, env Env) int {
-	fs := newFlags("version", env)
-	asJSON := fs.Bool("json", false, "print JSON")
-	if code, stop := parse(fs, args, env); stop {
-		return code
-	}
-	if *asJSON {
-		return writeJSON(env.Stdout, struct {
-			Version  string `json:"version"`
-			Contract string `json:"contract"`
-			AppMin   string `json:"app_min"`
-		}{version.Version, version.Contract, version.AppMin})
-	}
-	fmt.Fprintf(env.Stdout, "grid %s\ncontract %s\napp_min %s\n", version.Version, version.Contract, version.AppMin)
-	return 0
-}
-
 func resolver(env Env) where.Resolver {
 	return where.Resolver{GridHome: env.GridHome, Home: env.Home, TempRoots: env.TempRoots,
 		Machine: env.Machine, Ceiling: env.Ceiling}
@@ -271,56 +265,4 @@ func runWhere(args []string, env Env) int {
 		fmt.Fprintf(w, "keys: %s\n", k)
 	}
 	return 0
-}
-
-func runDoctor(args []string, env Env) int {
-	fs := newFlags("doctor", env)
-	asJSON := fs.Bool("json", false, "print JSON")
-	bundle := fs.Bool("bundle", false, "write a support bundle")
-	if code, stop := parse(fs, args, env); stop {
-		return code
-	}
-	if *bundle {
-		fmt.Fprintln(env.Stderr, "doctor --bundle: not built yet")
-		return 2
-	}
-	if env.GridHome == "" {
-		fmt.Fprintln(env.Stderr, "grid: cannot find the Grid home; set GRID_HOME")
-		return 1
-	}
-	gitVersion := env.GitVersion
-	if gitVersion == nil {
-		gitVersion = gitx.Version
-	}
-	rep := doctor.Run(doctor.Options{
-		GridHome:   env.GridHome,
-		Label:      gridhome.Tilde(env.GridHome, env.Home),
-		GitVersion: gitVersion,
-	})
-	if *asJSON {
-		writeJSON(env.Stdout, rep)
-	} else {
-		for _, c := range rep.Checks {
-			status := "ok"
-			if !c.OK {
-				status = "fail"
-			}
-			fmt.Fprintf(env.Stdout, "%s %s: %s\n", status, c.Name, c.Detail)
-		}
-	}
-	if !rep.OK {
-		return 1
-	}
-	return 0
-}
-
-func runHook(args []string, env Env) int {
-	event := ""
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		event = args[0]
-	}
-	return hook.Run(hook.Options{
-		Event: event, Stdin: env.Stdin, Stdout: env.Stdout,
-		Resolver: resolver(env), Cwd: env.Cwd,
-	})
 }

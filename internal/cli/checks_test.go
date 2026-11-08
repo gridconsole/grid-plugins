@@ -71,3 +71,37 @@ func TestHookInvocationErrorsAreSilent(t *testing.T) {
 		}
 	}
 }
+
+func TestDoctorFindsHooksFromThePluginRoot(t *testing.T) {
+	const hooks = `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"grid hook sessionstart"}]}]}}`
+	for _, layout := range []string{"bin", "dist"} {
+		t.Run(layout, func(t *testing.T) {
+			h := newHarness(t)
+			h.write(filepath.Join(h.gridHome, "VERSION"), "1\n")
+			healthyDoctorEnvironment(t, h)
+			t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+			root := filepath.Join(h.root, "checkout")
+			h.write(filepath.Join(root, "hooks", "hooks.json"), hooks)
+			h.write(filepath.Join(root, layout, "grid"), "")
+			h.env.Executable = func() (string, error) { return filepath.Join(root, layout, "grid"), nil }
+			// h.tmp holds no hooks folder: the current folder must not matter.
+			if code := h.run(h.tmp, "doctor"); code != 0 {
+				t.Fatalf("exit %d: %s%s", code, h.out, h.errb)
+			}
+		})
+	}
+	t.Run("override", func(t *testing.T) {
+		h := newHarness(t)
+		h.write(filepath.Join(h.gridHome, "VERSION"), "1\n")
+		healthyDoctorEnvironment(t, h)
+		t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+		h.env.Executable = func() (string, error) { return filepath.Join(h.root, "nowhere", "grid"), nil }
+		if code := h.run(h.tmp, "doctor"); code != 1 {
+			t.Fatalf("a missing hooks file must fail: exit %d: %s", code, h.out)
+		}
+		file := filepath.Join(h.root, "plugin", "hooks", "hooks.json")
+		if code := h.run(h.tmp, "doctor", "--hooks-file", file); code != 0 {
+			t.Fatalf("exit %d: %s%s", code, h.out, h.errb)
+		}
+	})
+}

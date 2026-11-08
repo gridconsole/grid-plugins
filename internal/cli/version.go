@@ -2,20 +2,19 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/version"
 )
 
-func runVersionCheck(args []string, env Env) int {
+func runVersion(args []string, env Env) int {
 	fs := newFlags("version", env)
 	asJSON := fs.Bool("json", false, "print JSON")
 	check := fs.Bool("check", false, "check the release manifest (advisory)")
-	address := fs.String("manifest-url", os.Getenv("GRID_RELEASE_MANIFEST_URL"), "release manifest URL (or GRID_RELEASE_MANIFEST_URL)")
+	address := fs.String("manifest-url", env.getenv("GRID_RELEASE_MANIFEST_URL"), "release manifest URL (or GRID_RELEASE_MANIFEST_URL)")
 	timeout := fs.Duration("timeout", 2*time.Second, "release check timeout")
-	app := fs.String("app-version", os.Getenv("GRID_APP_VERSION"), "installed Grid app version (or GRID_APP_VERSION)")
-	session := fs.String("session-id", os.Getenv("GRID_SESSION_ID"), "session for the app warning (or GRID_SESSION_ID)")
+	app := fs.String("app-version", env.getenv("GRID_APP_VERSION"), "installed Grid app version (or GRID_APP_VERSION)")
+	session := fs.String("session-id", env.getenv("GRID_SESSION_ID"), "session for the app warning (or GRID_SESSION_ID)")
 	if code, stop := parse(fs, args, env); stop {
 		return code
 	}
@@ -24,7 +23,7 @@ func runVersionCheck(args []string, env Env) int {
 		return 2
 	}
 	if !*check {
-		return runVersion(argsWithoutCheckOptions(*asJSON), env)
+		return printVersion(*asJSON, env)
 	}
 	report := struct {
 		Version  string              `json:"version"`
@@ -51,9 +50,14 @@ func runVersionCheck(args []string, env Env) int {
 	return 0
 }
 
-func argsWithoutCheckOptions(asJSON bool) []string {
+func printVersion(asJSON bool, env Env) int {
 	if asJSON {
-		return []string{"--json"}
+		return writeJSON(env.Stdout, struct {
+			Version  string `json:"version"`
+			Contract string `json:"contract"`
+			AppMin   string `json:"app_min"`
+		}{version.Version, version.Contract, version.AppMin})
 	}
-	return nil
+	fmt.Fprintf(env.Stdout, "grid %s\ncontract %s\napp_min %s\n", version.Version, version.Contract, version.AppMin)
+	return 0
 }

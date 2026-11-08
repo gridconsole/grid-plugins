@@ -1,9 +1,19 @@
 package cli
 
-// Hooks tolerate every invocation error without emitting diagnostics.
-func runSilentHook(args []string, env Env) int {
-	if len(args) != 1 {
+import (
+	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/hook"
+)
+
+// runHook answers one hook event. A hook never speaks into a session, so a wrong
+// call (no event, an extra argument or flag) prints nothing and exits 0.
+func runHook(args []string, env Env) int {
+	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
 		return 0
 	}
-	return runHook(args, env)
+	return hook.Run(hook.Options{
+		Event: args[0], Stdin: env.Stdin, Stdout: env.Stdout,
+		Resolver: resolver(env), Cwd: env.Cwd, Getenv: env.getenv,
+	})
 }
