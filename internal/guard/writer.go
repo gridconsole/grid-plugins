@@ -1,0 +1,33 @@
+package guard
+
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/hookio"
+)
+
+// EvaluateOnlyWriter enforces the new CLI's ownership of task folders and the
+// brain (plugin-design.md:49,90). It is composed at the event boundary so the
+// individual legacy guard adapters remain useful for recording comparisons.
+// Shell writes still require the worker's settings/sandbox; a text guard cannot
+// reliably identify computed paths or arbitrary programs that write files.
+func EvaluateOnlyWriter(in hookio.Input, root string, env map[string]string) hookio.Decision {
+	if !fileTool(in.ToolName) {
+		return hookio.Decision{}
+	}
+	c := newContext(in, root, env)
+	if c.projects == "" || c.target() == "" {
+		return hookio.Decision{}
+	}
+	target := c.path(c.target())
+	owner := taskAtFold(strings.ToLower(target), strings.ToLower(realNative(c.projects, 0)))
+	if owner != nil || c.brain(target) {
+		return hookio.Deny("Task folders and the brain are written only by grid. Use the corresponding grid command to make this change.")
+	}
+	parts := strings.Split(relative(realNative(c.projects, 0), target), "/")
+	if len(parts) == 2 && parts[0] != ".." && strings.EqualFold(filepath.Base(target), "project.md") {
+		return hookio.Deny("Project records are written only by grid. Use grid project to make this change.")
+	}
+	return hookio.Decision{}
+}

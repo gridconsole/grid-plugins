@@ -34,6 +34,9 @@ func TestHostRules(t *testing.T) {
 		{"echo yes > .host/approval", true}, {"cat '/data/.HOST/approval'", true}, {"echo .host", true},
 		{"echo .host-old", false}, {"echo file.host", false}, {"echo .host.json", false},
 		{"grid approve T-01", true}, {"grid answer Q-01 yes", true}, {"grid job result J-01", false},
+		{"grid feed read", false},
+		{"grid feed post --type post --body '{}'", false},
+		{"grid feed read; echo yes >> feed/writer.0.jsonl", true},
 		{"echo yes >> feed/writer.0.jsonl", true}, {"echo yes >> feedback.txt", false},
 	} {
 		t.Run(tt.command, func(t *testing.T) {

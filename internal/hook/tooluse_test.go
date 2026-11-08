@@ -1,0 +1,103 @@
+package hook
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/where"
+)
+
+func TestGuardDispatch(t *testing.T) {
+	for _, event := range []string{"pretooluse", "permissionrequest"} {
+		for _, tt := range []struct{ name, tool, rel, want string }{
+			{"read home", "Read", "projects/example/notes.md", "allow"},
+			{"write own task", "Write", "projects/example/tasks/T-01/notes.md", "deny"},
+			{"write brain", "Edit", "knowledge/note.md", "deny"},
+			{"write feed", "Write", "projects/example/tasks/T-01/feed/record.jsonl", "deny"},
+			{"project record", "Write", "projects/example/project.md", "deny"},
+			{"ordinary home write", "Write", "notes.md", "allow"},
+		} {
+			t.Run(event+"/"+tt.name, func(t *testing.T) {
+				root := t.TempDir()
+				home := filepath.Join(root, "home")
+				grid := filepath.Join(home, ".grid")
+				cwd := filepath.Join(root, "repo")
+				data := filepath.Join(root, "data")
+				in := hookio.Input{ToolName: tt.tool, Cwd: cwd, ToolInput: map[string]any{"file_path": filepath.Join(grid, tt.rel), "content": "text"}}
+				stdin, _ := json.Marshal(in)
+				var out bytes.Buffer
+				code := Run(Options{
+					Event: event, Stdin: bytes.NewReader(stdin), Stdout: &out, Cwd: cwd,
+					Resolver: where.Resolver{GridHome: grid, Home: home},
+					Getenv: func(k string) string {
+						return map[string]string{"GRID_PLAN_GUARD": "off", "CLAUDE_PLUGIN_DATA": data}[k]
+					},
+				})
+				if code != 0 {
+					t.Fatal(code)
+				}
+				var decoded struct {
+					Output struct {
+						Event    string `json:"hookEventName"`
+						Behavior string `json:"permissionDecision"`
+						Decision struct {
+							Behavior string `json:"behavior"`
+						} `json:"decision"`
+					} `json:"hookSpecificOutput"`
+				}
+				if err := json.Unmarshal(out.Bytes(), &decoded); err != nil {
+					t.Fatalf("%s: %v", out.Bytes(), err)
+				}
+				got := decoded.Output.Behavior
+				if event == "permissionrequest" {
+					got = decoded.Output.Decision.Behavior
+					if decoded.Output.Event != "PermissionRequest" {
+						t.Fatal(decoded.Output.Event)
+					}
+				}
+				if got != tt.want {
+					t.Fatalf("got %s, want %s: %s", got, tt.want, out.Bytes())
+				}
+				// Only a fallback grant that won arbitration is counted.
+				counted, _ := os.ReadFile(filepath.Join(data, "home-allow.jsonl"))
+				wantCount := 0
+				if tt.want == "allow" {
+					wantCount = 1
+				}
+				if n := strings.Count(string(counted), "\n"); n != wantCount {
+					t.Fatalf("fallback count %d, want %d", n, wantCount)
+				}
+			})
+		}
+	}
+}
+
+func TestGuardMalformedAndUnknown(t *testing.T) {
+	for _, event := range []string{"pretooluse", "permissionrequest", "stop", "subagentstop", "unknown"} {
+		var out bytes.Buffer
+		if code := Run(Options{Event: event, Stdin: strings.NewReader("{"), Stdout: &out}); code != 0 || out.Len() != 0 {
+			t.Fatalf("%s: %d, %s", event, code, out.Bytes())
+		}
+	}
+}
+
+func TestHomeAllowCounter(t *testing.T) {
+	root := t.TempDir()
+	env := map[string]string{"CLAUDE_PLUGIN_DATA": root}
+	in := hookio.Input{HookEventName: "PreToolUse", ToolName: "Read", Cwd: "/private", SessionID: "not-recorded"}
+	CountHomeAllow(env, in)
+	CountHomeAllow(env, in)
+	got, err := os.ReadFile(filepath.Join(root, "home-allow.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Repeat("{\"event\":\"PreToolUse\",\"tool\":\"Read\"}\n", 2)
+	if string(got) != want {
+		t.Fatalf("got %s, want %s", got, want)
+	}
+}

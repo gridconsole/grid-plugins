@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/guard"
+	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -34,6 +36,8 @@ func Run(o Options) int {
 	switch strings.ToLower(o.Event) {
 	case "sessionstart":
 		sessionStart(o)
+	case "pretooluse", "permissionrequest":
+		toolUse(o)
 	}
 	return 0
 }
@@ -139,5 +143,53 @@ func ProjectLine(r where.Result, home string) string {
 		return fmt.Sprintf("Grid project: %s, folder %s.", r.Project, gridhome.Tilde(r.Folder, home))
 	default:
 		return fmt.Sprintf("Grid project: %s, folder %s. It has no Grid record yet; the first task makes one.", r.Project, gridhome.Tilde(r.Folder, home))
+	}
+}
+
+// guardEnv is the explicit environment the pure guard evaluators read. HOME and
+// GRID_HOME come from the resolver so the guards judge the same home as the CLI.
+func guardEnv(o Options) map[string]string {
+	env := map[string]string{"HOME": o.Resolver.Home, "GRID_HOME": o.Resolver.GridHome, "PWD": o.Cwd}
+	for _, key := range []string{"GRID_PROJECTS", "GRID_PLAN_GUARD", "CLAUDE_PLUGIN_DATA", "CLAUDE_PLUGIN_ROOT"} {
+		if v := o.Getenv(key); v != "" {
+			env[key] = v
+		}
+	}
+	return env
+}
+
+func toolUse(o Options) {
+	in := hookio.Read(o.Stdin)
+	if in == nil {
+		return
+	}
+	// The CLI event is authoritative; a mismatched stdin event cannot select a
+	// different decision envelope or bypass pre-tool guards.
+	if strings.EqualFold(o.Event, "permissionrequest") {
+		in.HookEventName = "PermissionRequest"
+	} else {
+		in.HookEventName = "PreToolUse"
+	}
+	if in.Cwd == "" {
+		in.Cwd = o.Cwd
+	}
+	env := guardEnv(o)
+	// PermissionRequest also rechecks denies before granting a home fallback.
+	// Convert a refusal to that event's decision shape after arbitration.
+	decision := hookio.Strongest(
+		guard.EvaluateHost(*in, o.Cwd, env),
+		guard.EvaluateOnlyWriter(*in, o.Cwd, env),
+		guard.EvaluatePlan(*in, o.Cwd, env),
+		guard.EvaluateBrief(*in, o.Cwd, env),
+		guard.EvaluateHome(*in, o.Cwd, env),
+	)
+	if decision.Behavior == "allow" {
+		CountHomeAllow(env, *in)
+	}
+	if in.HookEventName == "PermissionRequest" && decision.Behavior != "" {
+		decision.Event = "PermissionRequest"
+	}
+	if o.Stdout != nil {
+		_ = decision.Write(o.Stdout)
 	}
 }

@@ -389,3 +389,19 @@ func TestHookSessionStartGolden(t *testing.T) {
 		}
 	}
 }
+
+func TestHookPreToolUse(t *testing.T) {
+	h := newHarness(t)
+	h.env.Getenv = func(string) string { return "" }
+	h.env.Cwd = filepath.Join(h.root, "repo")
+	h.mkdir(h.env.Cwd)
+	path := filepath.Join(h.gridHome, "projects", "example", "tasks", "T-01", "task.md")
+	b, _ := json.Marshal(map[string]any{"tool_name": "Write", "tool_input": map[string]any{"file_path": path, "content": "text"}})
+	h.env.Stdin = bytes.NewReader(b)
+	if code := Run([]string{"hook", "pretooluse"}, h.env); code != 0 {
+		t.Fatal(code)
+	}
+	if !strings.Contains(h.out.String(), `"permissionDecision":"deny"`) {
+		t.Fatalf("got %s", h.out.String())
+	}
+}

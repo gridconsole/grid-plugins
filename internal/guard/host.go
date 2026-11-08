@@ -36,7 +36,11 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 		if c.set && namesHost.MatchString(command) {
 			return deny("this command names " + host)
 		}
-		if c.set && (namesPersonCommand.MatchString(command) || namesFeed.MatchString(command)) {
+		// A plain grid feed invocation uses the CLI's writer contract. Shell
+		// operators prevent this exemption, so a trailing raw write stays fenced.
+		tokens, simple := words(command)
+		feedCLI := simple && len(tokens) >= 2 && filepath.Base(tokens[0]) == "grid" && tokens[1] == "feed"
+		if c.set && (namesPersonCommand.MatchString(command) || (namesFeed.MatchString(command) && !feedCLI)) {
 			return person()
 		}
 		return hookio.Decision{}
