@@ -1,0 +1,12 @@
+id: T-01
+title: Fix the label
+project: personal
+size: small
+workflow: Check and ship
+state: queued
+created: 2026-01-02T03:04:05Z
+path: ~/.grid/personal/tasks/T-01-fix-the-label
+intent:
+Fix the label
+
+Keep these exact words.

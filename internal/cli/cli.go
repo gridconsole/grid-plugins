@@ -82,7 +82,7 @@ func commands() []command {
 		{"where", "show which project and task a folder belongs to", runWhere},
 		{"doctor", "check the Grid home, its format version and git", runDoctor},
 		{"hook", "answer a Claude Code or Codex hook event", runHook},
-		{"task", "new, show, status, stop, close, reopen, attach, move", nil},
+		{"task", "new, show, list, status, stop, close, reopen, attach, move", runTask},
 		{"plan", "write, check, items, hash", nil},
 		{"views", "render the task pages", nil},
 		{"job", "next, post, ack, result, cancel, lint, tree, blocked", nil},
