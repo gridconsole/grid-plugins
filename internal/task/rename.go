@@ -40,8 +40,8 @@ type RenameOptions struct {
 // It uses the same locked reread, journal and atomic commit as Change.
 func (s Store) Rename(o RenameOptions) (Event, error) {
 	title := strings.Join(strings.Fields(o.Title), " ")
-	if hasEditControls(o.Title) || strings.ContainsAny(o.Title, "\u2028\u2029") || !utf8.ValidString(o.Title) || title == "" || utf8.RuneCountInString(title) > 200 {
-		return Event{}, fmt.Errorf("%w: title must have 1-200 characters on one line without control or bidi override/isolate characters", ErrEditUsage)
+	if hasInvalidEditText(o.Title) || strings.ContainsAny(o.Title, "\u2028\u2029") || !utf8.ValidString(o.Title) || title == "" || utf8.RuneCountInString(title) > 200 {
+		return Event{}, fmt.Errorf("%w: title must have 1-200 characters on one line without control, bidi override/isolate, or noncharacter code points", ErrEditUsage)
 	}
 	if !RenameAllowed(strings.TrimSpace(o.Role)) {
 		return Event{}, errors.New("scope: role cannot rename tasks")
@@ -59,10 +59,10 @@ func (s Store) Rename(o RenameOptions) (Event, error) {
 }
 
 // Validate before whitespace folding so controls cannot disappear into spaces.
-// U+FFFE and U+FFFF are noncharacters rejected by YAML, not Unicode Cc.
-func hasEditControls(text string) bool {
+func hasInvalidEditText(text string) bool {
 	return strings.ContainsFunc(text, func(r rune) bool {
-		return unicode.IsControl(r) || r == '\ufffe' || r == '\uffff' || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')
+		return unicode.IsControl(r) || unicode.Is(unicode.Noncharacter_Code_Point, r) ||
+			(r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')
 	})
 }
 

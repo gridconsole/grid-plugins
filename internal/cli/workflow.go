@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
@@ -52,6 +53,10 @@ func runWorkflow(args []string, env Env) int {
 	}
 	answer, err := workflow.Read(env.GridHome, *project)
 	if err != nil {
+		if errors.Is(err, localdata.ErrUnsafePath) {
+			fmt.Fprintln(env.Stderr, "grid workflow show: workflow path is unsafe or inaccessible")
+			return 2
+		}
 		fmt.Fprintf(env.Stderr, "grid: %v\n", err)
 		return exitCode(err)
 	}

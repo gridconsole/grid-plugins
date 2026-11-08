@@ -345,13 +345,13 @@ Checks, in order: `grid home`, `grid home writable`, `format version`, `git`. Ex
 
 ### `grid workflow show [--project <name-or-id>] [--json]`
 
-Reads the workspace `workflows.md` and registered project files, or the workspace and exactly one project selected by name or ID. JSON contains `files`, `templates`, and `errors`; each file has `scope`, `project`, `rev`, and `text`. Revisions are the first 12 hex characters of SHA-256 of the bytes, or null when absent. Plain output remains the file label, template names, and error count.
+Reads the workspace `workflows.md` and registered project files, or the workspace and exactly one project selected by name or ID. JSON contains `files`, `templates`, and `errors`; each file has `scope`, `project`, `rev`, and `text`. Revisions are the first 12 hex characters of SHA-256 of the bytes, or null when absent. Plain output remains the file label, template names, and error count. Linked project folders are refused with exit 2 and a diagnostic that does not expose the path.
 
 ### `grid workflow write [--project <name-or-id>] --rev <12-hex|none> --file <path|-> [--json]`
 
 Replaces one workspace file, or `projects/<name>/workflows.md` for exactly one registered project. Input comes from a file (relative to the current folder) or stdin with `--file -`; it must be UTF-8, at most 32 KiB, start with a workflows heading on the first line, and pass workflow parsing. `--rev none` requires absence; otherwise the revision must match under the destination's persistent lock. A mismatch exits 3 with `workflow changed since read`; invalid input exits 2 and parse diagnostics are listed. Refusals leave existing bytes unchanged.
 
-Writes use a synced temporary file in the destination folder and atomic rename, with symlinks refused and destination operations confined by `os.Root`. JSON is `{ "file": "workflows.md", "rev": "<12-hex>" }`, with `"<project>/workflows.md"` for a project; plain output is `<file> <rev>` on one line. Diagnostics do not expose absolute paths. The replaceable `WriteDefaultAllowed` host policy accepts an unset/empty `GRID_ROLE`, `owner`, or `member`; other roles exit 3 before reading input or writing files. Application authorization remains the caller's responsibility.
+Writes use a synced temporary file in the destination folder and atomic rename, with symlinks refused and destination operations confined by `os.Root`. A linked or non-regular target exits 2. JSON is `{ "file": "workflows.md", "rev": "<12-hex>" }`, with `"<project>/workflows.md"` for a project; plain output is `<file> <rev>` on one line. Diagnostics do not expose absolute paths. The replaceable `WriteDefaultAllowed` host policy accepts an unset/empty `GRID_ROLE`, `owner`, or `member`; other roles exit 3 before reading input or writing files. Application authorization remains the caller's responsibility.
 
 ### `grid task new "<words>" [--project <name-or-id>] [--size <size>] [--workflow <name>] --json`
 
@@ -381,11 +381,11 @@ The title is the first nonblank line of the request, trimmed and limited to 120 
 
 ### `grid task rename <T-NN> --title <text> [--project <p>] [--json]`
 
-Renames an open task. Titles containing control characters (including tab or newline), U+FFFE, U+FFFF, or bidi override/isolate characters are refused with exit 2 before whitespace normalization. The title is trimmed and whitespace is collapsed, with 1–200 Unicode characters and no line breaks. Only `title` and `updated` change in `task.md`; the folder, intent, summary and other lines remain unchanged. Closed tasks must be reopened first; an unchanged title is rejected. History records `renamed · <title>` in the existing JSON receipt's `note` field, with `what: rename`.
+Renames an open task. The title is trimmed and whitespace is collapsed, with 1–200 Unicode characters and no line breaks. Titles containing control, bidi override/isolate, or Unicode noncharacter code points are refused with exit 2 before YAML encoding. Only `title` and `updated` change in `task.md`; the folder, intent, summary and other lines remain unchanged. Closed tasks must be reopened first; an unchanged title is rejected. History records `renamed · <title>` in the existing JSON receipt's `note` field, with `what: rename`.
 
 ### `grid task decline <T-NN> --reason <text> [--project <p>] [--json]`
 
-Closes an open task with a required reason after whitespace collapse. Decline reasons containing control characters (including tab or newline), U+FFFE, U+FFFF, or bidi override/isolate characters are refused with exit 2 before whitespace normalization. Tasks with `kind: planner` and already closed tasks are rejected. Writes `state: closed`, `next: declined by <who>` and `updated`; the host person comes from `GRID_ACTOR`, then `GRID_WHO`, otherwise `you`. History records `closed · declined · <reason>` in the existing JSON receipt's `note` field, with `what: decline`.
+Closes an open task with a required reason after whitespace collapse. Reasons containing control, bidi override/isolate, or Unicode noncharacter code points are refused with exit 2 before YAML encoding. Tasks with `kind: planner` and already closed tasks are rejected. Writes `state: closed`, `next: declined by <who>` and `updated`; the host person comes from `GRID_ACTOR`, then `GRID_WHO`, otherwise `you`. History records `closed · declined · <reason>` in the existing JSON receipt's `note` field, with `what: decline`.
 
 Both verbs use the same task lock, journal and atomic commit as stop and close, and refuse symlinked `task.md` files. `--project` constrains the task to a registered project name or id, or `personal`; omission uses the home-wide task id. `--json` prints the existing task write receipt; plain output uses `T-NN <verb>: <from-state> -> <to-state>`. Errors print one diagnostic line: exit 2 for invalid title or reason, 3 for a rejected task state or unchanged title, and 1 for scope, resolution or write failures. Success exits 0.
 
