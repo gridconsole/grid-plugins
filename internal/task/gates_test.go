@@ -258,8 +258,9 @@ func TestApproveAtShipGateRecordsShipApproval(t *testing.T) {
 		t.Fatalf("%+v: %v", stored, err)
 	}
 	b, _ = os.ReadFile(filepath.Join(task.Path, "approval.json"))
-	if err := json.Unmarshal(b, &stored); err != nil || stored != planEvent {
-		t.Fatalf("ship approval replaced the plan approval: %+v: %v", stored, err)
+	var planStored Event
+	if err := json.Unmarshal(b, &planStored); err != nil || planStored != planEvent {
+		t.Fatalf("ship approval replaced the plan approval: %+v: %v", planStored, err)
 	}
 	if !Approved(task.Path) {
 		t.Fatal("plan approval no longer valid")
