@@ -122,9 +122,6 @@ func (s Scheduler) checkGridHome() error {
 }
 
 func (s Scheduler) plan(project, name string) (TimerPlan, error) {
-	if err := s.checkGridHome(); err != nil {
-		return TimerPlan{}, err
-	}
 	if !brain.ValidName(name) || (project != "" && !brain.ValidName(project)) {
 		return TimerPlan{}, fmt.Errorf("invalid routine or project name")
 	}
@@ -429,8 +426,11 @@ func (s Scheduler) RemoveRoutine(ctx context.Context, store Store, name string) 
 // Preview returns the native Windows fallback: complete XML and schtasks argv,
 // without writing files, taking an unsupported lock or invoking schtasks.
 func (s Scheduler) Preview(store Store, remove bool) ([]TimerPlan, error) {
-	if err := s.checkGridHome(); err != nil {
-		return nil, err
+	// Removal must still work for timers installed under such a Grid home.
+	if !remove {
+		if err := s.checkGridHome(); err != nil {
+			return nil, err
+		}
 	}
 	plans := []TimerPlan{}
 	entries, err := store.List()

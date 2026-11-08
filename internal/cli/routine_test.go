@@ -117,6 +117,25 @@ func TestRoutineScheduleRejectsGridHomeWhitespace(t *testing.T) {
 	}
 }
 
+func TestRoutineRemoveAndUnscheduleWorkWithGridHomeWhitespace(t *testing.T) {
+	h := newHarness(t)
+	h.env.GridHome = h.gridHome + " "
+	if code := h.run(h.root, "routine", "add", "daily", "--every", "1h", "--run", "grid version"); code != 0 {
+		t.Fatal(h.errb.String())
+	}
+	h.errb.Reset()
+	if code := h.run(h.root, "routine", "unschedule"); code != 0 {
+		t.Fatalf("unschedule: exit %d: %s", code, h.errb)
+	}
+	if code := h.run(h.root, "routine", "remove", "daily"); code != 0 {
+		t.Fatalf("remove: exit %d: %s", code, h.errb)
+	}
+	h.out.Reset()
+	if code := h.run(h.root, "routine", "list", "--json"); code != 0 || strings.TrimSpace(h.out.String()) != "[]" {
+		t.Fatalf("routine remains: exit %d: %s %s", code, h.out, h.errb)
+	}
+}
+
 func TestRoutineProjectScope(t *testing.T) {
 	h := newHarness(t)
 	folder := filepath.Join(h.root, "work", "example")

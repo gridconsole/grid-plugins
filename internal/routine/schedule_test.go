@@ -337,11 +337,69 @@ func TestScheduleRejectsGridHomeEdgeWhitespace(t *testing.T) {
 				check(s.Schedule(context.Background(), store))
 				_, err := s.Preview(store, false)
 				check(err)
-				_, err = s.plan("", "daily")
-				check(err)
 				files, err := os.ReadDir(home)
 				if err != nil || len(files) != 0 || len(calls.calls) != 0 {
 					t.Fatalf("refused schedule made changes: %v %v %v", files, calls.calls, err)
+				}
+			}
+		}
+	}
+}
+
+// Timers installed before the whitespace refusal existed must stay removable.
+func TestRemovalWorksForGridHomeEdgeWhitespace(t *testing.T) {
+	for _, backend := range []Backend{Systemd{}, Launchd{UID: 501}, Schtasks{}} {
+		for _, space := range []string{" ", "\t", "\u00a0"} {
+			for _, op := range []string{"unschedule name", "unschedule all", "remove routine"} {
+				home := gridhome.Real(t.TempDir())
+				gh := filepath.Join(home, "data") + space
+				store := Store{GridHome: gh}
+				if _, err := store.Add("daily", "1h", "grid version"); err != nil {
+					t.Fatal(err)
+				}
+				calls := &fakeOS{}
+				s := Scheduler{Home: home, GridHome: gh, Binary: filepath.Join(home, "grid"), Backend: backend, Runner: calls}
+				p, err := s.plan("", "daily")
+				if err != nil {
+					t.Fatalf("plan for %q: %v", gh, err)
+				}
+				for _, f := range p.Files {
+					if err = os.MkdirAll(filepath.Dir(f.Path), 0o700); err != nil {
+						t.Fatal(err)
+					}
+					if err = os.WriteFile(f.Path, f.bytes(), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err = s.writeState(p, true, ""); err != nil {
+					t.Fatal(err)
+				}
+				switch op {
+				case "unschedule name":
+					err = s.Unschedule(context.Background(), "", "daily")
+				case "unschedule all":
+					err = s.Unschedule(context.Background(), "", "")
+				default:
+					err = s.RemoveRoutine(context.Background(), store, "daily")
+				}
+				if err != nil {
+					t.Fatalf("%s with Grid home %q: %v", op, gh, err)
+				}
+				if len(calls.calls) == 0 {
+					t.Fatalf("%s did not deregister the timer", op)
+				}
+				for _, f := range p.Files {
+					if _, err := os.Stat(f.Path); !errors.Is(err, os.ErrNotExist) {
+						t.Fatalf("%s left %s: %v", op, f.Path, err)
+					}
+				}
+				if _, err := s.Preview(store, true); err != nil {
+					t.Fatalf("removal preview refused for %q: %v", gh, err)
+				}
+				// Only removing the routine deletes its definition.
+				_, err = store.Get("daily")
+				if deleted := err != nil; deleted != (op == "remove routine") {
+					t.Fatalf("%s: routine definition deleted=%v: %v", op, deleted, err)
 				}
 			}
 		}
