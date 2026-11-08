@@ -52,7 +52,7 @@ func runLease(args []string, env Env) int {
 	if err != nil {
 		return livenessError(env, err)
 	}
-	store := lease.Store{ProjectDir: filepath.Join(env.GridHome, "projects", scope.Project)}
+	store := lease.Store{Project: scope.Project, ProjectDir: filepath.Join(env.GridHome, "projects", scope.Project)}
 	if action == "status" {
 		status, err := store.Status()
 		if err != nil {

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
@@ -313,6 +314,39 @@ func TestMultiProcessRace(t *testing.T) {
 		}
 		if winners != 1 {
 			t.Fatalf("round %d: %d winners", round, winners)
+		}
+	}
+}
+
+func TestWrittenMergeLeaseContract(t *testing.T) {
+	now := time.Date(2026, 1, 1, 1, 2, 3, 123456789, time.FixedZone("offset", 3600))
+	s := Store{ProjectDir: t.TempDir(), Project: "example", Now: func() time.Time { return now }}
+	holder := "worker@01K9J000000000000000000002"
+	r, err := s.Take(holder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"take", "renew", "release"} {
+		switch action {
+		case "renew":
+			now = now.Add(time.Minute)
+			r, err = s.Renew(holder, r.Fence)
+		case "release":
+			r, err = s.Release(holder, r.Fence)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(s.ProjectDir, "lease", "merge.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := contract.Validate("merge-lease", data); err != nil {
+			t.Fatalf("%s: %v: %s", action, err, data)
+		}
+		var wire contract.MergeLease
+		if err := json.Unmarshal(data, &wire); err != nil || wire.Project != "example" {
+			t.Fatalf("project: %+v %v", wire, err)
 		}
 	}
 }

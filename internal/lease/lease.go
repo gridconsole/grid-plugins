@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
@@ -28,11 +29,14 @@ var (
 
 // Record persists even after release, so fences never reset on a normal release.
 type Record struct {
-	Lease  string    `json:"lease"`
-	Holder *string   `json:"holder"`
-	Fence  uint64    `json:"fence"`
-	Since  time.Time `json:"since"`
-	Until  time.Time `json:"until"`
+	Lease     string     `json:"lease"`
+	Project   string     `json:"project"`
+	Gen       int64      `json:"gen"`
+	RenewedAt *time.Time `json:"renewed_at,omitempty"`
+	Holder    *string    `json:"holder"`
+	Fence     uint64     `json:"fence"`
+	Since     time.Time  `json:"since"`
+	Until     time.Time  `json:"until"`
 }
 
 type Status struct {
@@ -53,7 +57,15 @@ func (e *HeldError) Unwrap() error { return ErrHeld }
 // the same local filesystem and clock. A synced copy is not a distributed lock.
 type Store struct {
 	ProjectDir string
+	Project    string
 	Now        func() time.Time
+}
+
+func (s Store) project() string {
+	if s.Project != "" {
+		return s.Project
+	}
+	return filepath.Base(filepath.Clean(s.ProjectDir))
 }
 
 func (s Store) now() time.Time {
@@ -82,7 +94,7 @@ func (s Store) Take(holder string) (Record, error) {
 		if err != nil {
 			return Record{}, err
 		}
-		rec := Record{Lease: "merge", Holder: &holder, Fence: fence, Since: now, Until: now.Add(Duration)}
+		rec := Record{Lease: "merge", Project: s.project(), Holder: &holder, Fence: fence, Since: now, Until: now.Add(Duration)}
 		return rec, writeRecord(f, rec)
 	})
 }
@@ -105,6 +117,7 @@ func (s Store) owned(holder string, fence uint64, release bool) (Record, error) 
 		if release {
 			rec.Holder = nil
 		} else {
+			rec.RenewedAt = &now
 			rec.Until = now.Add(Duration)
 		}
 		return rec, writeRecord(f, rec)
@@ -154,6 +167,7 @@ func (s Store) change(fn func(*os.File, Record) (Record, error)) (Record, error)
 			return Record{}, err
 		}
 	}
+	rec.Project = s.project()
 	return fn(f, rec)
 }
 func (s Store) open(create bool) (*os.File, error) {
@@ -207,7 +221,12 @@ func readRecord(f *os.File) (rec Record, keep int64, torn bool, err error) {
 	return rec, int64(end), torn, nil
 }
 func writeRecord(f *os.File, rec Record) error {
-	b, err := json.Marshal(rec)
+	wire := contract.MergeLease{Lease: rec.Lease, Project: rec.Project, Holder: rec.Holder, Fence: int64(rec.Fence), Gen: rec.Gen, Since: contract.FormatTime(rec.Since), Until: contract.FormatTime(rec.Until)}
+	if rec.RenewedAt != nil {
+		stamp := contract.FormatTime(*rec.RenewedAt)
+		wire.RenewedAt = &stamp
+	}
+	b, err := json.Marshal(wire)
 	if err != nil {
 		return err
 	}

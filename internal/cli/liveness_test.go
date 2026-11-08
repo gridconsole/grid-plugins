@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/session"
 )
@@ -170,5 +171,24 @@ func TestLivenessCommandUsage(t *testing.T) {
 		if code := h.run(h.tmp, args...); code != 1 {
 			t.Errorf("%v: exit %d", args, code)
 		}
+	}
+}
+
+func TestLeaseCommandWritesContract(t *testing.T) {
+	h := newHarness(t)
+	task := livenessProject(h)
+	if code := h.run(task, "lease", "take", "--holder", "worker@01K9J000000000000000000002"); code != 0 {
+		t.Fatalf("take: %d %s", code, h.errb)
+	}
+	data, err := os.ReadFile(filepath.Join(h.gridHome, "projects", "example", "lease", "merge.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := contract.Validate("merge-lease", data); err != nil {
+		t.Fatal(err)
+	}
+	var r contract.MergeLease
+	if err := json.Unmarshal(data, &r); err != nil || r.Project != "example" {
+		t.Fatalf("project: %+v %v", r, err)
 	}
 }
