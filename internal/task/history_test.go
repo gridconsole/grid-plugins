@@ -47,6 +47,11 @@ func TestFolderAtPersonalPolicy(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "task.md"), []byte("legacy task"), 0600); err != nil {
 			t.Fatal(err)
 		}
+		if project == "alpha" {
+			if err := os.WriteFile(filepath.Join(home, "projects", project, "project-roles.json"), []byte(`{"people":[{"id":"gus"}]}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
 		for _, tc := range []struct {
 			name    string
 			caller  where.Caller
@@ -54,7 +59,7 @@ func TestFolderAtPersonalPolicy(t *testing.T) {
 			allowed bool
 		}{
 			{name: "owner", caller: where.Caller{Role: "owner"}, allowed: true},
-			{name: "guest", caller: where.Caller{Role: "guest"}},
+			{name: "guest", caller: where.Caller{Role: "guest", Member: "gus"}},
 			{name: "member", caller: where.Caller{Role: "member", Member: "sam"}},
 			{name: "override", caller: where.Caller{Role: "owner"}, policy: func(where.Caller) bool { return false }},
 		} {
