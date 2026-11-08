@@ -147,3 +147,43 @@ func TestTaskWriteRecordsRole(t *testing.T) {
 		})
 	}
 }
+
+// The normal path: read the hash from grid task show, approve exactly that.
+func TestTaskShowPrintsPlanHashForApprove(t *testing.T) {
+	h := newHarness(t)
+	h.env.Getenv = func(string) string { return "" }
+	fixture := taskFixture(t, h)
+	if code := h.run(h.home, "task", "show", "T-01"); code != 0 || strings.Contains(h.out.String(), "plan_hash") {
+		t.Fatalf("no plan yet, exit %d: %s%s", code, h.out, h.errb)
+	}
+	if _, err := taskWriter(h.env).Change(task.WriteOptions{ID: fixture.ID, Action: "status", State: "waiting"}); err != nil {
+		t.Fatal(err)
+	}
+	h.write(filepath.Join(fixture.Path, "plan.md"), approvedPlan)
+	want := plan.Hash(approvedPlan)
+	h.out.Reset()
+	if code := h.run(h.home, "task", "show", "T-01"); code != 0 || !strings.Contains(h.out.String(), "\nplan_hash: "+want+"\n") {
+		t.Fatalf("plain show, exit %d: %s%s", code, h.out, h.errb)
+	}
+	h.out.Reset()
+	if code := h.run(h.home, "task", "show", "T-01", "--json"); code != 0 {
+		t.Fatal(h.errb)
+	}
+	var shown struct {
+		ID       string `json:"id"`
+		PlanHash string `json:"plan_hash"`
+	}
+	if err := json.Unmarshal(h.out.Bytes(), &shown); err != nil || shown.ID != "T-01" || shown.PlanHash != want {
+		t.Fatalf("%+v: %v", shown, err)
+	}
+	// The plan changes between reading the hash and approving: the person's token no longer fits.
+	h.write(filepath.Join(fixture.Path, "plan.md"), approvedPlan+"\nA late change.\n")
+	if code := h.run(h.home, "approve", "T-01", "--plan-hash", want); code != 1 || !strings.Contains(h.errb.String(), "no longer matches") {
+		t.Fatalf("stale token, exit %d: %s", code, h.errb)
+	}
+	h.out.Reset()
+	h.errb.Reset()
+	if code := h.run(h.home, "approve", "T-01", "--plan-hash", plan.Hash(approvedPlan+"\nA late change.\n")); code != 0 {
+		t.Fatalf("current token, exit %d: %s", code, h.errb)
+	}
+}

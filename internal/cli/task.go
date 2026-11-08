@@ -4,9 +4,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
@@ -101,11 +103,23 @@ func runTask(args []string, env Env) int {
 		if err != nil {
 			return fail(err)
 		}
-		if *asJSON {
-			return writeJSON(env.Stdout, t)
+		// The hash a person passes to grid approve --plan-hash; absent before a plan exists.
+		hash, err := taskPlanHash(t.Path)
+		if err != nil {
+			fmt.Fprintf(env.Stderr, "grid task show: no plan hash: %v\n", err)
 		}
-		fmt.Fprintf(env.Stdout, "id: %s\ntitle: %s\nproject: %s\nsize: %s\nworkflow: %s\nstate: %s\ncreated: %s\npath: %s\nintent:\n%s",
-			t.ID, t.Title, t.Project, t.Size, t.Workflow, t.State, t.Created, gridhome.Tilde(t.Path, env.Home), t.Intent)
+		if *asJSON {
+			return writeJSON(env.Stdout, struct {
+				task.Task
+				PlanHash string `json:"plan_hash,omitempty"`
+			}{t, hash})
+		}
+		fmt.Fprintf(env.Stdout, "id: %s\ntitle: %s\nproject: %s\nsize: %s\nworkflow: %s\nstate: %s\ncreated: %s\npath: %s\n",
+			t.ID, t.Title, t.Project, t.Size, t.Workflow, t.State, t.Created, gridhome.Tilde(t.Path, env.Home))
+		if hash != "" {
+			fmt.Fprintf(env.Stdout, "plan_hash: %s\n", hash)
+		}
+		fmt.Fprintf(env.Stdout, "intent:\n%s", t.Intent)
 		if !strings.HasSuffix(t.Intent, "\n") {
 			fmt.Fprintln(env.Stdout)
 		}
@@ -122,6 +136,19 @@ func runTask(args []string, env Env) int {
 		}
 	}
 	return 0
+}
+
+// taskPlanHash is the hash of plan.md as grid plan hash prints it, or "" when
+// the task has no plan yet. Reading takes no lock: plan.md is replaced atomically.
+func taskPlanHash(dir string) (string, error) {
+	text, err := plan.Store{TaskDir: dir}.Read()
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return plan.Hash(text), nil
 }
 
 // taskArgs accepts flags before or after the single words/id argument. Values

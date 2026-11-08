@@ -78,7 +78,7 @@ const approveUsage = "Usage: grid approve <T-NN> [--plan-hash <hash>] [--note <t
 
 func runApprove(args []string, env Env) int {
 	fs := newFlags("approve", env)
-	hash := fs.String("plan-hash", "", "opaque hash of the reviewed plan")
+	hash := fs.String("plan-hash", "", "hash of the reviewed plan, as grid task show prints it")
 	note := fs.String("note", "", "approval note")
 	asJSON := fs.Bool("json", false, "print JSON")
 	pos, err := taskArgs(fs, args)
