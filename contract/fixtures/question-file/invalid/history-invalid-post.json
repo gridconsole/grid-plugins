@@ -1,0 +1,34 @@
+{
+  "id": "Q-1",
+  "question": "Which format?",
+  "who": "reviewer",
+  "why": "The export feeds the billing import.",
+  "blocking": false,
+  "options": [
+    "CSV",
+    "JSON"
+  ],
+  "recommended": "CSV",
+  "gate": {
+    "default": "CSV",
+    "at": "2026-11-09T10:00:00.000Z",
+    "id": "Q-1",
+    "kind": "person"
+  },
+  "asked": "2026-11-08T10:00:00.000Z",
+  "state": "answered",
+  "answer": "JSON",
+  "age_after_seconds": 28800,
+  "aging": 0,
+  "history": [
+    {
+      "kind": "answered",
+      "at": "2026-11-08T11:30:00.250Z",
+      "who": "reviewer",
+      "text": "JSON",
+      "post": "bad",
+      "role": "owner"
+    }
+  ],
+  "post": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+}

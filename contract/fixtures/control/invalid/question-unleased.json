@@ -1,0 +1,28 @@
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "control",
+  "type_v": 1,
+  "author": {
+    "id": "lead",
+    "role": "lead"
+  },
+  "tier": "person-team",
+  "worker": "lead@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "after": [],
+  "job": null,
+  "attempt": null,
+  "wake": null,
+  "body": {
+    "target": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "question_event": "aged",
+    "text": "Priority raised to 1",
+    "level": 1
+  }
+}

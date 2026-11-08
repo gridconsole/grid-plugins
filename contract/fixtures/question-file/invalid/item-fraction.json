@@ -1,0 +1,21 @@
+{
+  "id": "Q-1",
+  "question": "Which format?",
+  "who": "owner",
+  "blocking": true,
+  "gate": {
+    "default": "CSV",
+    "at": "2026-11-09T10:00:00.000Z",
+    "id": "Q-1",
+    "kind": "person"
+  },
+  "asked": "2026-11-08T10:00:00.000Z",
+  "state": "open",
+  "answer": "",
+  "age_after_seconds": 28800,
+  "aging": 0,
+  "history": [],
+  "post": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "job": "J-2.3",
+  "item": 1.5
+}
