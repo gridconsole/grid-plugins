@@ -49,6 +49,7 @@ func (s Store) New(o NewOptions) (Task, error) {
 	if err := checkFormat(home); err != nil {
 		return Task{}, err
 	}
+	sweepStale(home, time.Now().Add(-staleStage))
 	// Reload machine identity after taking the lock: another first writer may
 	// have registered this same folder while this process was waiting.
 	machine, err := os.ReadFile(filepath.Join(home, "machine"))
@@ -130,6 +131,38 @@ func (s Store) New(o NewOptions) (Task, error) {
 		return Task{}, err
 	}
 	return t, nil
+}
+
+// staleStage is how old a staging folder must be before New removes it. A live
+// writer holds the allocation lock for its whole run, so the age only guards
+// against a clock or lock mistake.
+const staleStage = 5 * time.Minute
+
+// sweepStale removes staging folders that a crashed New left in the task
+// folders. It runs under the allocation lock and is best effort: a folder it
+// cannot remove stays hidden from readers and from id allocation.
+func sweepStale(home string, before time.Time) {
+	dirs, err := taskDirs(home)
+	if err != nil {
+		return
+	}
+	for _, dir := range dirs {
+		if safeDir(home, dir) != nil {
+			continue
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() || !strings.HasPrefix(e.Name(), ".new-") {
+				continue
+			}
+			if info, err := e.Info(); err == nil && info.ModTime().Before(before) {
+				_ = os.RemoveAll(filepath.Join(dir, e.Name()))
+			}
+		}
+	}
 }
 
 func checkFormat(home string) error {

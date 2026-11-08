@@ -319,6 +319,60 @@ func TestShowRejectsDuplicateIDsAcrossProjects(t *testing.T) {
 	}
 }
 
+func TestNewSweepsOnlyStaleStagingFolders(t *testing.T) {
+	s, home := storeFor(t)
+	grid := s.Resolver.GridHome
+	old := time.Now().Add(-time.Hour)
+	for _, folder := range []string{"personal/tasks/.new-stale", "projects/other/tasks/.new-stale", "projects/other/tasks/.new-fresh"} {
+		mkdir(t, filepath.Join(grid, folder))
+		write(t, filepath.Join(grid, folder, "task.md"), "half written")
+	}
+	for _, folder := range []string{"personal/tasks/.new-stale", "projects/other/tasks/.new-stale"} {
+		if err := os.Chtimes(filepath.Join(grid, folder), old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(t, filepath.Join(grid, "personal/tasks/.new-file"), "not a folder")
+	if err := os.Chtimes(filepath.Join(grid, "personal/tasks/.new-file"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.New(NewOptions{Cwd: home, Words: "Fix the label"})
+	if err != nil || got.ID != "T-01" {
+		t.Fatalf("New = %+v, %v", got, err)
+	}
+	for folder, wantExist := range map[string]bool{
+		"personal/tasks/.new-stale":       false,
+		"projects/other/tasks/.new-stale": false,
+		"projects/other/tasks/.new-fresh": true,
+		"personal/tasks/.new-file":        true,
+	} {
+		if _, err := os.Lstat(filepath.Join(grid, folder)); (err == nil) != wantExist {
+			t.Errorf("%s exists = %t, want %t", folder, err == nil, wantExist)
+		}
+	}
+}
+
+func TestSweepSkipsTaskFoldersThroughSymlinks(t *testing.T) {
+	s, home := storeFor(t)
+	grid := s.Resolver.GridHome
+	stale := filepath.Join(home, "outside", "tasks", ".new-stale")
+	mkdir(t, stale)
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	mkdir(t, grid)
+	if err := os.Symlink(filepath.Join(home, "outside"), filepath.Join(grid, "personal")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.New(NewOptions{Cwd: home, Words: "Fix the label"}); err == nil {
+		t.Fatal("expected refusal")
+	}
+	if _, err := os.Stat(stale); err != nil {
+		t.Fatalf("sweep followed a symlink out of the Grid home: %v", err)
+	}
+}
+
 func TestNewRefusesSymlinksAndFormat(t *testing.T) {
 	for _, kind := range []string{"symlink", "old format", "new format", "bad format", "unknown project"} {
 		t.Run(kind, func(t *testing.T) {
