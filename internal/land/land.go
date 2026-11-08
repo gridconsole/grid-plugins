@@ -36,6 +36,7 @@ type Plan struct {
 	Project string `json:"project"`
 	Hash    string `json:"plan_hash"`
 	Rule    Rule   `json:"lands"`
+	Gate    string `json:"approval_gate"`
 }
 type Result struct {
 	Plan      Plan                `json:"plan"`
@@ -62,6 +63,10 @@ func (s Store) prepare(cwd, id string) (Plan, task.Task, string, error) {
 		return p, t, "", fmt.Errorf("deploy topic requires a project")
 	}
 	p.Task, p.Project = t.ID, t.Project
+	p.Gate, err = s.gate(t)
+	if err != nil {
+		return p, t, "", err
+	}
 	// The same hash grid approve records, so the approval check compares like with like.
 	text, err := plan.Store{TaskDir: t.Path}.Read()
 	if err != nil {
@@ -148,9 +153,7 @@ func (s Store) rule(project string) (Rule, error) {
 	return rule, nil
 }
 
-// Run is read-only for a dry run. Execution always requires approval for the
-// current plan.md hash, including when needs-approve is false: this field
-// describes the deploy rule and cannot bypass the task's approval boundary.
+// Run is read-only for a dry run. The task workflow selects the approval gate.
 func (s Store) Run(ctx context.Context, cwd, id string, dry bool) (Result, error) {
 	p, t, folder, err := s.prepare(cwd, id)
 	result := Result{Plan: p, Status: "planned"}
@@ -184,16 +187,16 @@ func (s Store) Run(ctx context.Context, cwd, id string, dry bool) (Result, error
 		return result, err
 	}
 	if !reflect.DeepEqual(p, current) || folder != currentFolder {
-		return result, fmt.Errorf("land plan changed; review it again")
+		return result, fmt.Errorf("%w: land plan changed; review it again", ErrRejected)
 	}
-	// Only grid approve writes approval.json, and the guard keeps agents from both;
-	// Approval also re-checks the hash against plan.md under the task lock.
-	approval, err := s.tasks().Approval(cwd, t.ID)
-	if err != nil {
-		return result, fmt.Errorf("land refused: %w", err)
-	}
-	if approval.PlanHash != p.Hash {
-		return result, fmt.Errorf("land refused: the approval is for another plan; review it again")
+	if p.Gate != "none" {
+		approval, err := s.tasks().ApprovalForGate(cwd, t.ID, p.Gate)
+		if err != nil {
+			return result, fmt.Errorf("%w: %w", ErrRejected, err)
+		}
+		if approval.PlanHash != p.Hash || approval.LandsHash != ruleHash(p.Rule) {
+			return result, fmt.Errorf("%w: the approval is for another plan or lands rule; review it again", ErrRejected)
+		}
 	}
 	timeout := s.Timeout
 	if timeout == 0 {

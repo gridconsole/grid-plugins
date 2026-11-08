@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -25,7 +26,7 @@ func runLand(args []string, env Env) int {
 	defer cancel()
 	result, err := (land.Store{Resolver: resolver(env), Who: writeOptions(env, "", "", "").Who}).Run(ctx, env.Cwd, operands[0], *dry)
 	if err != nil && result.Execution == nil {
-		return commandError(env, "land", err)
+		return landError(env, err)
 	}
 	if *asJSON {
 		if code := writeJSON(env.Stdout, result); code != 0 {
@@ -37,7 +38,15 @@ func runLand(args []string, env Env) int {
 		}
 	}
 	if err != nil {
-		return commandError(env, "land", err)
+		return landError(env, err)
 	}
 	return 0
+}
+
+func landError(env Env, err error) int {
+	fmt.Fprintf(env.Stderr, "land: %v\n", err)
+	if errors.Is(err, land.ErrRejected) {
+		return 3
+	}
+	return 1
 }

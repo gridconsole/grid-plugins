@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/land"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
@@ -95,7 +96,7 @@ func runApprove(args []string, env Env) int {
 	if !personWrite(env) {
 		return 1
 	}
-	event, err := taskWriter(env).Approve(writeOptions(env, pos[0], "approve", *note), *hash)
+	event, err := (land.Store{Resolver: resolver(env)}).Approve(writeOptions(env, pos[0], "approve", *note), *hash)
 	return taskWriteResult(env, event, err, *asJSON)
 }
 

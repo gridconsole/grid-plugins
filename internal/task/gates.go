@@ -46,7 +46,7 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 					if err := json.Unmarshal(previous, &old); err != nil {
 						return err
 					}
-					if old.PlanHash != current {
+					if old.PlanHash != current || old.LandsHash != o.LandsHash {
 						return errors.New("Changed since you approved: review the plan and pass --plan-hash with its current hash")
 					}
 				}
@@ -57,7 +57,7 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 			}
 			o.Action = "approve"
 			event = s.event(t, o, t.State)
-			event.PlanHash, event.Gate = want, gate
+			event.PlanHash, event.Gate, event.LandsHash = want, gate, o.LandsHash
 			data, err := json.Marshal(event)
 			if err != nil {
 				return err
@@ -76,14 +76,30 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 // Consumers must use this check (or Approved) instead of treating approval.json's
 // existence as permission. Plan writers hold .plan.lock, not .task.lock.
 func (s Store) Approval(cwd, id string) (Event, error) {
+	return s.ApprovalForGate(cwd, id, "plan")
+}
+
+// ApprovalForGate validates the selected plan or ship receipt under the task and plan locks.
+func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
+	name, eventGate := approvalFile, ""
+	switch gate {
+	case "plan":
+	case "ship":
+		name, eventGate = shipApprovalFile, "ship"
+	default:
+		return Event{}, fmt.Errorf("unknown approval gate %q", gate)
+	}
 	var event Event
 	err := s.withWrite(cwd, id, func(t Task) error {
-		data, err := readOptional(filepath.Join(t.Path, "approval.json"))
+		data, err := readOptional(filepath.Join(t.Path, name))
 		if err != nil {
 			return err
 		}
 		err = plan.Store{TaskDir: t.Path}.WithHash(func(hash string) (err error) {
 			event, err = checkApproval(t, data, hash)
+			if err == nil && event.Gate != eventGate {
+				return fmt.Errorf("approval is for another gate")
+			}
 			return err
 		})
 		if errors.Is(err, plan.ErrNoPlan) {

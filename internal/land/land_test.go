@@ -3,6 +3,7 @@ package land
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,7 +48,7 @@ func write(t *testing.T, path, content string) {
 // approve records the plan approval the way a person does, through grid approve's writer.
 func approve(t *testing.T, s Store) {
 	t.Helper()
-	if _, err := s.tasks().Approve(task.WriteOptions{ID: "T-01"}, ""); err != nil {
+	if _, err := s.Approve(task.WriteOptions{ID: "T-01"}, ""); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -73,6 +74,7 @@ func TestApprovalBoundary(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			write(t, filepath.Join(dir, "plan.hash"), plan.Hash(text)+"\n")
 			write(t, filepath.Join(dir, "approvals", "land.json"), fmt.Sprintf(landJSON, plan.Hash(text)))
 		}, false},
 	} {
@@ -244,5 +246,88 @@ func TestLandRefusesSymlinkedApproval(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(repo, "outcome")); !os.IsNotExist(err) {
 		t.Fatal("command ran")
+	}
+}
+
+func setWorkflow(t *testing.T, s Store, dir, gate string) {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(dir, "task.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "task.md"), strings.Replace(string(b), "state: waiting", "workflow: release\nstate: waiting", 1))
+	write(t, filepath.Join(s.Resolver.GridHome, "projects", "sample", "knowledge", "workflows", "release.md"), "---\nland-approval: "+gate+"\n---\n")
+}
+
+func TestWorkflowApproval(t *testing.T) {
+	for _, tc := range []struct {
+		gate, approval string
+		allow          bool
+	}{
+		{"plan", "plan", true}, {"plan", "ship", false},
+		{"ship", "ship", true}, {"ship", "plan", false},
+		{"none", "", true}, {"ship", "", false}, {"typo", "plan", false},
+	} {
+		t.Run(tc.gate+"/"+tc.approval, func(t *testing.T) {
+			s, dir, repo := fixture(t)
+			setWorkflow(t, s, dir, tc.gate)
+			if tc.approval == "ship" {
+				b, _ := os.ReadFile(filepath.Join(dir, "task.md"))
+				write(t, filepath.Join(dir, "task.md"), strings.Replace(string(b), "state: waiting", "gate: ship\nstate: waiting", 1))
+			}
+			if tc.approval != "" {
+				approve(t, s)
+			}
+			_, err := s.Run(context.Background(), repo, "T-01", false)
+			if (err == nil) != tc.allow {
+				t.Fatalf("allow %v, error %v", tc.allow, err)
+			}
+			_, err = os.Stat(filepath.Join(repo, "outcome"))
+			if (err == nil) != tc.allow {
+				t.Fatalf("command execution: %v", err)
+			}
+		})
+	}
+}
+
+func TestApprovalBindsLandsRule(t *testing.T) {
+	for _, pair := range [][2]string{{"target: local", "target: production"}, {"branch: main", "branch: release"}, {"printf landed > outcome", "printf changed > outcome"}, {"needs-approve: true", "needs-approve: false"}} {
+		t.Run(pair[0], func(t *testing.T) {
+			s, _, repo := fixture(t)
+			approve(t, s)
+			path := filepath.Join(s.Resolver.GridHome, "projects", "sample", "knowledge", "deploy", "lands.md")
+			b, _ := os.ReadFile(path)
+			write(t, path, strings.Replace(string(b), pair[0], pair[1], 1))
+			_, err := s.Run(context.Background(), repo, "T-01", false)
+			if !errors.Is(err, ErrRejected) {
+				t.Fatalf("expected final rejection, got %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(repo, "outcome")); !os.IsNotExist(err) {
+				t.Fatal("changed command ran")
+			}
+		})
+	}
+}
+
+// Both arms have a real plan, its stored hash, and the forged record. The only
+// difference is the authoritative receipt, so accepting land.json cannot pass.
+func TestForgedApprovalRequiresAuthoritativeReceipt(t *testing.T) {
+	s, dir, repo := fixture(t)
+	text, err := plan.Store{TaskDir: dir}.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "plan.hash"), plan.Hash(text)+"\n")
+	write(t, filepath.Join(dir, "approvals", "land.json"), fmt.Sprintf(landJSON, plan.Hash(text)))
+	_, err = s.Run(context.Background(), repo, "T-01", false)
+	if !errors.Is(err, ErrRejected) || !strings.Contains(err.Error(), "not been approved") {
+		t.Fatalf("expected missing authoritative receipt, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "outcome")); !os.IsNotExist(err) {
+		t.Fatal("forged approval ran command")
+	}
+	approve(t, s)
+	if _, err := s.Run(context.Background(), repo, "T-01", false); err != nil {
+		t.Fatalf("valid control: %v", err)
 	}
 }

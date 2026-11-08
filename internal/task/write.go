@@ -70,6 +70,7 @@ type Event struct {
 	FromState string          `json:"from_state"`
 	ToState   string          `json:"to_state"`
 	Note      string          `json:"note,omitempty"`
+	LandsHash string          `json:"lands_hash,omitempty"`
 	PlanHash  string          `json:"plan_hash,omitempty"`
 	Gate      string          `json:"gate,omitempty"`
 	RefusalID string          `json:"refusal_id,omitempty"`
@@ -81,6 +82,7 @@ type Event struct {
 // an OS username or an inferred remote identity.
 type WriteOptions struct {
 	Cwd, ID, Action, State, Note string
+	LandsHash                    string // optional deploy-rule binding supplied by the land approval integration
 	Who                          contract.Author
 }
 
