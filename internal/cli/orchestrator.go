@@ -100,6 +100,12 @@ func runOrchestrator(args []string, env Env) int {
 	if scope.TaskPath == "" {
 		return fail(errors.New("no task selected; use --task"))
 	}
+	if verb == "post" {
+		// A refused withdrawal must leave a legacy task untouched, so check before the identity write.
+		if err := (feed.Store{TaskDir: scope.TaskPath}).CheckWithdrawalPolicy(feed.Input{Type: *kind, Body: obj}); err != nil {
+			return fail(err)
+		}
+	}
 	if verb != "tree" && verb != "blocked" {
 		if _, err := feed.EnsureTaskID(scope.TaskPath); err != nil {
 			return fail(err)
@@ -114,9 +120,6 @@ func runOrchestrator(args []string, env Env) int {
 	}
 	store := feed.Store{TaskDir: scope.TaskPath, TaskID: taskID}
 	if verb == "post" {
-		if err := store.CheckWithdrawalPolicy(feed.Input{Type: *kind, Body: obj}); err != nil {
-			return fail(err)
-		}
 		postLease := *leaseFlag
 		if postLease == "" && *kind == "control" {
 			postLease = "task"
