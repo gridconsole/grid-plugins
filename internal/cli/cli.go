@@ -114,6 +114,7 @@ func commands() []command {
 		{"usage", "post and show usage, set budgets and notice thresholds, fold observed session totals", runUsage},
 		{"account", "agent accounts", nil},
 		{"project", "add, remove, list, scan and relink projects", runProject},
+		{"project-md", "get or set a project front-matter key", runProjectMD},
 		{"setup", "record validated project setup answers", runSetup},
 		{"signal", "add, act on and dismiss inbox signals", runSignal},
 		{"artifact", "import, link, list and publish task artifacts", runArtifact},
