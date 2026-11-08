@@ -181,21 +181,29 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 	if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected || j.Status == contract.Posted || j.Status == contract.Ready {
 		return nil
 	}
+	if j.Status == contract.Parked {
+		if j.Reason == "usage_limit" && s.UsageReady != nil && s.UsageReady(j.Assign.To) {
+			return s.control(j, contract.Ready, "usage capacity restored", j.Exited)
+		}
+		if j.Reason == "needs_person" {
+			for id, q := range snap.State.Questions {
+				r := snap.Records[id]
+				if r.Job == nil || *r.Job != j.ID || r.Wake == nil || *r.Wake != m.Failure+"/1" || q.Applied == nil {
+					continue
+				}
+				if snap.Records[*q.Applied].Body["answer"] == "Retry" {
+					m.Failures = nil
+					return s.control(j, contract.Ready, "owner requested retry", *q.Applied)
+				}
+			}
+		}
+		return nil
+	}
 	progress := s.progress(snap, j)
 	if m.Progress != "" && m.Progress != progress {
 		m.Failures = nil
 	}
 	m.Progress = progress
-	if j.Status == contract.Parked {
-		if j.Reason == "usage_limit" && s.UsageReady != nil && s.UsageReady(j.Assign.To) {
-			return s.control(j, contract.Ready, "usage capacity restored", j.Exited)
-		}
-		if j.Reason == "needs_person" && progress != m.ParkProgress {
-			m.Failures = nil
-			return s.control(j, contract.Ready, "progress resumed", "")
-		}
-		return nil
-	}
 	if j.Status == contract.Submitted {
 		return nil
 	}

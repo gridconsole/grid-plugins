@@ -14,6 +14,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/lease"
+	"github.com/gridconsole/grid-plugins/internal/question"
 	"github.com/gridconsole/grid-plugins/internal/session"
 )
 
@@ -630,5 +631,86 @@ func TestHeartbeatExpiryAndWake(t *testing.T) {
 				t.Fatal(f.state(t))
 			}
 		})
+	}
+}
+
+func TestParkOnlyResumesForItsAppliedRetry(t *testing.T) {
+	for _, kind := range []string{"keep", "chatter", "unrelated", "ambiguous", "file"} {
+		t.Run(kind, func(t *testing.T) {
+			f := setup(t)
+			f.job(t, "J-1", nil)
+			f.tick(t)
+			for range 3 {
+				f.ack(t)
+				f.exit(t, "crash")
+				f.tick(t)
+			}
+			state, err := f.s.Feed.State()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var own string
+			for id := range state.Questions {
+				own = id
+			}
+			person := feed.Writer{Author: feed.Author{ID: "owner", Role: "owner"}, Worker: "owner@" + machine}
+			switch kind {
+			case "keep":
+				f.post(t, feed.Input{Type: "answer", Re: own, Body: map[string]any{"answer": "Keep parked"}}, person)
+			case "chatter":
+				f.post(t, feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": "still looking"}}, feed.Writer{Author: f.worker.Author, Worker: f.worker.Worker})
+			case "unrelated":
+				other := f.post(t, feed.Input{Type: "question", Body: map[string]any{"question": "Other decision?", "who": "owner", "blocking": false}}, f.s.Writer)
+				f.post(t, feed.Input{Type: "answer", Re: other.ID, Body: map[string]any{"answer": "Retry"}}, person)
+			case "ambiguous":
+				f.post(t, feed.Input{Type: "answer", Re: own, Body: map[string]any{"answer": "Retry"}}, person)
+				f.post(t, feed.Input{Type: "answer", Re: own, Body: map[string]any{"answer": "Keep parked"}}, person)
+			case "file":
+				if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "research.md"), []byte("new evidence"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if f.tick(t).Assigned != 0 || f.state(t).Status != contract.Parked {
+				t.Fatal("unrelated progress or unselected answer released park")
+			}
+			if err := os.Remove(filepath.Join(f.s.Feed.Dir(), ".orchestrator.json")); err != nil {
+				t.Fatal(err)
+			}
+			if f.tick(t).Assigned != 0 || f.state(t).Status != contract.Parked {
+				t.Fatal("metadata recovery released park")
+			}
+		})
+	}
+}
+
+func TestParkGateReservesQuestionFileIDs(t *testing.T) {
+	f := setup(t)
+	qs := question.Store{TaskDir: f.s.Feed.TaskDir}
+	in := question.Input{Question: "Other decision?", Who: "owner", Options: []string{"Wait"}, Recommended: "Wait", Default: "Wait", Applies: f.now.Add(time.Hour)}
+	first, err := qs.Add(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	for range 3 {
+		f.ack(t)
+		f.exit(t, "crash")
+		f.tick(t)
+	}
+	records, err := f.s.Feed.Read(feed.Filter{Type: "question"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate := records.Records[0].Body["gate"].(map[string]any)["id"]
+	if gate == first.ID {
+		t.Fatal("crash gate reused question-file id", gate)
+	}
+	next, err := qs.Add(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.ID == gate {
+		t.Fatal("question file reused crash gate id", gate)
 	}
 }

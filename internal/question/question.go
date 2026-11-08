@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -111,19 +110,12 @@ func (s Store) Add(in Input) (rec Record, err error) {
 		return
 	}
 	err = s.locked(true, func(dir string) error {
-		records, e := s.readAll(dir)
-		if e != nil {
+		if _, e := s.readAll(dir); e != nil {
 			return e
 		}
-		next := 1
-		for _, r := range records {
-			n, _ := strconv.Atoi(strings.TrimPrefix(r.ID, "Q-"))
-			if n == int(^uint(0)>>1) {
-				return errors.New("question id range exhausted")
-			}
-			if n >= next {
-				next = n + 1
-			}
+		next, e := nextID(dir, 1)
+		if e != nil {
+			return e
 		}
 		age := in.AgeAfter
 		if age == 0 {
