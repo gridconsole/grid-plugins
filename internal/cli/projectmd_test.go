@@ -24,7 +24,7 @@ func TestProjectMD(t *testing.T) {
 			}
 			path := filepath.Join(home, "projects", "sample", "project.md")
 			b, _ := os.ReadFile(path)
-			b = append(b, []byte("# Notes\n\nKeep this body.\n")...)
+			b = append(b, []byte("# Notes\r\n\r\nKeep this body.\r\n")...)
 			if err := os.WriteFile(path, b, 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -46,7 +46,7 @@ func TestProjectMD(t *testing.T) {
 			if Run([]string{"project-md", "get", "sample", tc.key, "--json"}, env) != 0 || out.String() != set {
 				t.Fatalf("get mismatch: %s %s", &out, &stderr)
 			}
-			if !strings.HasSuffix(string(after), "# Notes\n\nKeep this body.\n") {
+			if !strings.HasSuffix(string(after), "# Notes\r\n\r\nKeep this body.\r\n") {
 				t.Fatal("body changed")
 			}
 			golden, err := os.ReadFile(filepath.Join("testdata", "project-md-"+tc.name+".json"))

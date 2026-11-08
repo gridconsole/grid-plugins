@@ -58,10 +58,22 @@ func TestTaskDecisions(t *testing.T) {
 				}
 			}
 			args := []string{"decide", "T-01", "lesson", action, "brain:project/target", "--note", "Reviewed", "--json"}
+			var firstIndex []byte
 			for i := 0; i < 2; i++ {
 				out.Reset()
 				if code := Run(args, env); code != 0 {
 					t.Fatalf("code %d: %s", code, &stderr)
+				}
+				if action != "reject" {
+					index, err := os.ReadFile(filepath.Join(env.GridHome, "projects", "sample", "knowledge", "backlinks.json"))
+					if err != nil {
+						t.Fatal(err)
+					}
+					if i == 0 {
+						firstIndex = index
+					} else if !bytes.Equal(firstIndex, index) {
+						t.Fatal("retry rewrote the index generation")
+					}
 				}
 			}
 			var result brain.TaskDecision

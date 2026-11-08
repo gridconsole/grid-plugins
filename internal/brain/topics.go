@@ -85,7 +85,7 @@ func topicAt(root *os.Root, name, level string) (Topic, error) {
 	}
 	description := def.Description
 	if description == "" {
-		for _, l := range strings.Split(body, "\n") {
+		for _, l := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
 			if strings.TrimSpace(l) != "" && !strings.HasPrefix(l, "#") {
 				description = strings.TrimSpace(l)
 				break

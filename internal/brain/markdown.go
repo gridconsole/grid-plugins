@@ -19,7 +19,7 @@ func Parse(data []byte) (Note, error) {
 	if err != nil {
 		return Note{}, err
 	}
-	n := Note{Body: body}
+	n := Note{Body: strings.ReplaceAll(body, "\r\n", "\n")}
 	if err := mdfile.Load(front, &n, true); err != nil {
 		return Note{}, err
 	}

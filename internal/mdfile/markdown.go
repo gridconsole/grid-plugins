@@ -3,8 +3,9 @@ package mdfile
 
 import (
 	"fmt"
-	"go.yaml.in/yaml/v4"
 	"strings"
+
+	"go.yaml.in/yaml/v4"
 )
 
 // Load decodes YAML that a writer of the brain controls, so it first
@@ -40,17 +41,18 @@ func plainNodes(n *yaml.Node) error {
 	return nil
 }
 
-// Split returns the text between the opening and closing --- lines
-// and the Markdown after them.
+// Split returns YAML between the opening and closing --- lines and the
+// unmodified Markdown body, including its original line endings.
 func Split(data []byte) ([]byte, string, error) {
-	text := strings.ReplaceAll(string(data), "\r\n", "\n")
-	lines := strings.Split(text, "\n")
-	if lines[0] != "---" {
+	lines := strings.SplitAfter(string(data), "\n")
+	content := func(line string) string { return strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r") }
+	if content(lines[0]) != "---" {
 		return nil, "", fmt.Errorf("Markdown must start with --- front matter")
 	}
 	for i, l := range lines[1:] {
-		if l == "---" {
-			return []byte(strings.Join(lines[1:i+1], "\n")), strings.Join(lines[i+2:], "\n"), nil
+		if content(l) == "---" {
+			front := strings.ReplaceAll(strings.Join(lines[1:i+1], ""), "\r\n", "\n")
+			return []byte(front), strings.Join(lines[i+2:], ""), nil
 		}
 	}
 	return nil, "", fmt.Errorf("front matter has no closing ---")

@@ -216,3 +216,22 @@ func TestInvalidDeployAndHash(t *testing.T) {
 		})
 	}
 }
+
+func TestLandRefusesSymlinkedApproval(t *testing.T) {
+	s, dir, repo := fixture(t)
+	target := filepath.Join(s.Resolver.GridHome, "approval.json")
+	write(t, target, `{"plan_hash":"opaque: revision/one + two","approved":true,"tier":"person-team"}`)
+	approvalDir := filepath.Join(dir, "approvals")
+	if err := os.Mkdir(approvalDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(approvalDir, "land.json")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := s.Run(context.Background(), repo, "T-01", false); err == nil {
+		t.Fatal("followed approval symlink")
+	}
+	if _, err := os.Stat(filepath.Join(repo, "outcome")); !os.IsNotExist(err) {
+		t.Fatal("command ran")
+	}
+}
