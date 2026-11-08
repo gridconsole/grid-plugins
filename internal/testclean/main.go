@@ -16,7 +16,7 @@ var prefixes = []string{
 	"host-test", "host-repos", "grid-allow", "grid-trust", "grid-core",
 	"ready-steps", "grid-lib", "brain-read", "brain-recall", "grid-fb",
 	"kill-test", "grid-env", "item-rec", "grid-cleanup-test",
-	"grid-outer-", "grid-eval-", "Test", "Benchmark", "Fuzz", "Example",
+	"grid-outer-", "grid-eval-",
 }
 
 func snapshot(dir string) (map[string]bool, error) {

@@ -8,8 +8,16 @@ This repo replaces the earlier JavaScript plugin. It is public and MIT licensed.
 
     make build    # ./dist/grid
     make test
+    make test-clean # same suite with the temp leak guard, also included in make test
     make lint     # go vet and a gofmt check
     make golden   # replays the legacy corpus and prints every case; UPDATE_GOLDEN=1 go test ./... rewrites the testdata golden files
+
+`make test` runs `go test -count=1 ./...` with the caller's default temp location.
+The guard compares directory entries before and after the suite and fails on new
+entries with the test prefixes listed in `internal/testclean/main.go`. Existing
+entries are left alone. Run it without other tests using the same prefixes in the
+same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` through
+`internal/testenv`; in-process CLI tests temporarily set TMPDIR with `t.Setenv`.
 
 `bin/grid` is a dev launcher: it follows symlinks to this checkout, runs `go build` into `dist/grid` on every call (a no-op when nothing changed) and runs that. A hook call whose build fails or takes over 8 seconds prints nothing and exits 0.
 
