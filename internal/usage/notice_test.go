@@ -419,13 +419,13 @@ func TestWorkspaceTokenReader(t *testing.T) {
 			if err := os.WriteFile(path, []byte(text), 0600); err != nil {
 				t.Fatal(err)
 			}
-			if n := s.workspaceTokens(); n == nil {
+			if n := s.WorkspaceTokens(); n == nil {
 				t.Fatal("valid size-boundary workspace ignored")
 			}
 			if err := os.WriteFile(path, []byte(text+"x"), 0600); err != nil {
 				t.Fatal(err)
 			}
-			if n := s.workspaceTokens(); n != nil {
+			if n := s.WorkspaceTokens(); n != nil {
 				t.Fatal("oversized workspace accepted")
 			}
 		})

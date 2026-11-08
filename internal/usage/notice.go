@@ -13,13 +13,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
-	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
 // PostResult reports the durable log delta even when a notice could not be saved.
@@ -421,7 +419,7 @@ func (s Store) tokenBudget(c Configuration) (*uint64, string) {
 		n, _ := ParseTokens(string(value)) // readConfig/Configure validated it.
 		return &n, "task"
 	}
-	if n := s.workspaceTokens(); n != nil {
+	if n := s.WorkspaceTokens(); n != nil {
 		return n, "workspace"
 	}
 	return nil, "none"
@@ -435,45 +433,3 @@ func (s Store) effectiveConfig(c Configuration) Configuration {
 	}
 	return c
 }
-
-// workspaceTokens reads the replaceable default tokens_per_task from workspace.md
-// using the existing front-matter reader. Missing, linked, non-regular, unreadable,
-// oversized, invalid UTF-8 or non-positive/non-digit settings mean no default.
-func (s Store) workspaceTokens() *uint64 {
-	if s.GridHome == "" {
-		return nil
-	}
-	path := filepath.Join(s.GridHome, "workspace.md")
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() > maxWorkspaceBytes {
-		return nil
-	}
-	f, err := fslock.OpenNoFollow(path, os.O_RDONLY, 0)
-	if err != nil {
-		return nil
-	}
-	defer f.Close()
-	opened, err := f.Stat()
-	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
-		return nil
-	}
-	data, err := io.ReadAll(io.LimitReader(f, maxWorkspaceBytes+1))
-	if err != nil || len(data) > maxWorkspaceBytes || !utf8.Valid(data) {
-		return nil
-	}
-	front := taskfile.ParseFrontmatter(string(data))
-	if front == nil {
-		return nil
-	}
-	value, ok := front.Data["tokens_per_task"].(string)
-	if !ok {
-		return nil
-	}
-	n, err := ParseTokens(value)
-	if err != nil || n == 0 {
-		return nil
-	}
-	return &n
-}
-
-const maxWorkspaceBytes = 64 * 1024

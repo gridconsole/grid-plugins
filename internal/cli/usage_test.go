@@ -526,3 +526,25 @@ func TestWorkspaceBudgetRefusalsCLI(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkspaceBudgetReplaceablePoliciesCLI(t *testing.T) {
+	h := newHarness(t)
+	t.Setenv("GRID_ROLE", "custom")
+	read, write := usage.WorkspaceBudgetReadAllowed, usage.WorkspaceBudgetWriteAllowed
+	t.Cleanup(func() { usage.WorkspaceBudgetReadAllowed, usage.WorkspaceBudgetWriteAllowed = read, write })
+	readCalls, writeCalls := 0, 0
+	usage.WorkspaceBudgetReadAllowed = func(role string) bool { readCalls++; return role == "custom" }
+	usage.WorkspaceBudgetWriteAllowed = func(role string) bool { writeCalls++; return role == "custom" }
+	for _, op := range []string{"set", "show", "clear"} {
+		args := []string{"usage", "budget", op, "--workspace", "--json"}
+		if op == "set" {
+			args = append(args, "--tokens", "100")
+		}
+		if code := h.run(h.home, args...); code != 0 {
+			t.Fatalf("replacement policy: exit %d: %s", code, h.errb)
+		}
+	}
+	if readCalls != 1 || writeCalls != 2 {
+		t.Fatalf("policy calls: read %d, write %d", readCalls, writeCalls)
+	}
+}
