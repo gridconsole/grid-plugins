@@ -46,7 +46,7 @@ func TestJobOwnerContext(t *testing.T) {
 					return ""
 				},
 			}
-			if code := Run([]string{"job", "render", "task", "1", "--json"}, env); code != 0 {
+			if code := Run([]string{"job", "render", "T-01", "1", "--json"}, env); code != 0 {
 				t.Fatalf("exit %d: stdout %s stderr %s", code, &out, &errs)
 			}
 			var result struct{ OK bool }

@@ -18,7 +18,7 @@ func TestMissingMemberContext(t *testing.T) {
 	base, out, errs := fixture(t)
 	// Deliberately omit caller context, as a new adapter might accidentally do.
 	env := Env{Cwd: base.Cwd, GridHome: base.GridHome, Machine: base.Machine, Stdout: out, Stderr: errs}
-	if code := Run([]string{"render", "task", "1"}, env); code != 2 {
+	if code := Run([]string{"render", "T-01", "1"}, env); code != 2 {
 		t.Fatalf("exit %d, want 2; stdout %s stderr %s", code, out, errs)
 	}
 	if !strings.Contains(errs.String(), "missing member context") {
@@ -27,7 +27,7 @@ func TestMissingMemberContext(t *testing.T) {
 	if out.Len() != 0 {
 		t.Fatalf("unexpected output: %s", out)
 	}
-	if _, err := os.Stat(filepath.Join(env.Cwd, "task", "jobs")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(env.Cwd, "T-01", "jobs")); !os.IsNotExist(err) {
 		t.Fatalf("refused render created artifacts: %v", err)
 	}
 }
@@ -43,10 +43,10 @@ func TestResolverContextRequiredForEveryCommand(t *testing.T) {
 		{"member without role", where.Resolver{Caller: where.Caller{Member: "sam"}}},
 	} {
 		for _, command := range [][]string{
-			{"render", "task", "1"},
+			{"render", "T-01", "1"},
 			{"lint", "brief.md"},
-			{"show", "task", "J-1"},
-			{"verify", "J-1", "--task", "task"},
+			{"show", "T-01", "J-1"},
+			{"verify", "J-1", "--task", "T-01"},
 			{"trace", "brain:project/x"},
 		} {
 			t.Run(context.name+"/"+command[0], func(t *testing.T) {
@@ -75,7 +75,7 @@ func TestResolverContextRequiredForEveryCommand(t *testing.T) {
 						t.Fatalf("missing context diagnostic: %s", message)
 					}
 				}
-				if _, err := os.Stat(filepath.Join(env.Cwd, "task", "jobs")); !os.IsNotExist(err) {
+				if _, err := os.Stat(filepath.Join(env.Cwd, "T-01", "jobs")); !os.IsNotExist(err) {
 					t.Fatalf("refused command created artifacts: %v", err)
 				}
 			})
@@ -86,7 +86,7 @@ func TestResolverContextRequiredForEveryCommand(t *testing.T) {
 func TestExplicitOwnerContext(t *testing.T) {
 	env, out, errs := fixture(t)
 	env.Resolver = ownerResolver(env.GridHome)
-	r := call(t, env, out, errs, 0, "render", "task", "1", "--json")
+	r := call(t, env, out, errs, 0, "render", "T-01", "1", "--json")
 	if !r.OK {
 		t.Fatalf("explicit owner render failed: %+v", r)
 	}
