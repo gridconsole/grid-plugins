@@ -77,7 +77,7 @@ func TestEnvironmentCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	port := ln.Addr().(*net.TCPAddr).Port
+	port := min(ln.Addr().(*net.TCPAddr).Port, 65526)
 	ln.Close()
 	command := "exec '" + strings.ReplaceAll(binary, "'", "'\"'\"'") + "'"
 	h.write(filepath.Join(h.gridHome, "projects", "example", "project.md"), fmt.Sprintf("---\nid: example\nfolders:\n  - machine: %s\n    path: %q\nenvironments:\n  command: %q\n  health_url: http://127.0.0.1:{port}/health\n  timeout: 3s\n  port_range: [%d, %d]\n---\n", h.env.Machine, dir, command, port, port+9))

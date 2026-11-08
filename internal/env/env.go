@@ -63,7 +63,14 @@ func (m Manager) Up(ctx context.Context, id string, c Config) (ports.Record, err
 		if ports.Alive(old.PID, true) {
 			healthCtx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
-			return old, waitHealth(healthCtx, c.HealthURL, old.Start, nil)
+			err := waitHealth(healthCtx, c.HealthURL, old.Start, nil)
+			if err != nil {
+				if stopErr := stop(old.PID, m.grace()); stopErr != nil {
+					return old, errors.Join(err, stopErr)
+				}
+				return old, errors.Join(err, l.Remove(old))
+			}
+			return old, nil
 		}
 		if err := l.Remove(old); err != nil {
 			return old, err
@@ -73,6 +80,9 @@ func (m Manager) Up(ctx context.Context, id string, c Config) (ports.Record, err
 	r, err := l.Claim(m.TaskDir, id, os.Getpid(), rnge)
 	if err != nil {
 		return r, err
+	}
+	if !r.Range.Available() {
+		return r, errors.Join(errors.New("reserved dev ports already have a listener; stop it or choose another port range"), l.Remove(r))
 	}
 	port := strconv.Itoa(r.Start)
 	cmd := exec.Command("/bin/sh", "-c", strings.ReplaceAll(c.Command, "{port}", port))

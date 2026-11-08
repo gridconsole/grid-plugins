@@ -2,7 +2,10 @@
 
 package ports
 
-import "syscall"
+import (
+	"errors"
+	"syscall"
+)
 
 // Alive treats permission errors as alive; only ESRCH proves death. A group
 // check retains a block while shell children survive their original leader.
@@ -14,4 +17,8 @@ func Alive(pid int, group bool) bool {
 		pid = -pid
 	}
 	return syscall.Kill(pid, 0) != syscall.ESRCH
+}
+
+func networkUnsupported(err error) bool {
+	return errors.Is(err, syscall.EAFNOSUPPORT) || errors.Is(err, syscall.EPROTONOSUPPORT)
 }

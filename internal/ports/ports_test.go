@@ -138,7 +138,11 @@ func TestGCExpiredLeaseAndListener(t *testing.T) {
 	}
 	defer ln.Close()
 	port := ln.Addr().(*net.TCPAddr).Port
-	_, err = s.Claim(task, "J-1", os.Getpid(), Range{port, port + 9})
+	start := port
+	if start > 65526 {
+		start = 65526
+	}
+	_, err = s.Claim(task, "J-1", os.Getpid(), Range{start, start + 9})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,5 +174,60 @@ func TestRefuseSymlinksAndBadPaths(t *testing.T) {
 	}
 	if _, err := s.Claim(filepath.Join(s.GridHome, "task"), "../J-1", os.Getpid(), Range{}); err == nil {
 		t.Fatal("accepted traversal")
+	}
+}
+
+func TestGCIPv6Listener(t *testing.T) {
+	ln, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skip("IPv6 is unavailable")
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	if !listening(Range{port, port}) {
+		t.Fatal("did not detect IPv6-only listener")
+	}
+}
+
+func TestClaimInSeparateProcesses(t *testing.T) {
+	if home := os.Getenv("GRID_PORT_CLAIM_TEST_HOME"); home != "" {
+		s := Store{GridHome: home}
+		_, err := s.Claim(filepath.Join(home, "tasks", "T-1"), os.Getenv("GRID_PORT_CLAIM_TEST_JOB"), os.Getppid(), Range{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	home := t.TempDir()
+	const count = 20
+	cmds := make([]*exec.Cmd, count)
+	for i := range cmds {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestClaimInSeparateProcesses$")
+		cmd.Env = append(os.Environ(), "GRID_PORT_CLAIM_TEST_HOME="+home, fmt.Sprintf("GRID_PORT_CLAIM_TEST_JOB=J-%d", i+1))
+		cmds[i] = cmd
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, cmd := range cmds {
+		if err := cmd.Wait(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	records, err := (Store{GridHome: home}).List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	used := map[int]bool{}
+	for _, r := range records {
+		for port := r.Start; port <= r.End; port++ {
+			if used[port] {
+				t.Fatalf("shared port %d", port)
+			}
+			used[port] = true
+		}
+	}
+	if len(records) != count || len(used) != count*BlockSize {
+		t.Fatalf("got %d blocks and %d ports", len(records), len(used))
 	}
 }

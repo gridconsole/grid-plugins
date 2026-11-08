@@ -33,7 +33,7 @@ func TestDevServerLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			port := ln.Addr().(*net.TCPAddr).Port
+			port := min(ln.Addr().(*net.TCPAddr).Port, 65526)
 			ln.Close()
 			c := Config{Command: "exec '" + strings.ReplaceAll(binary, "'", "'\"'\"'") + "' " + mode, HealthURL: "http://127.0.0.1:{port}/health", Timeout: "3s", PortRange: []int{port, port + 9}}
 			if mode == "unhealthy" || mode == "redirect" {
@@ -139,4 +139,23 @@ func TestBadConfigAndFailedStart(t *testing.T) {
 	if _, err := m.Up(ctx, "J-1", c); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
+}
+
+func TestUpRefusesExistingListener(t *testing.T) {
+	home := t.TempDir()
+	m := Manager{Ports: ports.Store{GridHome: home}, TaskDir: filepath.Join(home, "tasks", "T-1"), Dir: t.TempDir()}
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	port := min(listener.Addr().(*net.TCPAddr).Port, 65526)
+	c := Config{Command: "touch started", HealthURL: "http://127.0.0.1:{port}", PortRange: []int{port, port + 9}}
+	if _, err := m.Up(context.Background(), "J-1", c); err == nil || !strings.Contains(err.Error(), "listener") {
+		t.Fatalf("expected port conflict: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(m.Dir, "started")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("started command with occupied block")
+	}
+	assertEmpty(t, m.Ports)
 }

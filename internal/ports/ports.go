@@ -331,14 +331,20 @@ func (s Store) GC() ([]Record, error) {
 	return removed, nil
 }
 
+// Available checks both TCP address families before env starts a server, so an
+// unrelated listener cannot satisfy the new server's health check. This is a
+// probe, not an OS socket reservation; other programs can still bind later.
+func (r Range) Available() bool { return r.Validate() == nil && !listening(r) }
+
 func listening(r Range) bool {
 	for port := r.Start; port <= r.End; port++ {
 		// Binding wildcard addresses also detects listeners bound to non-loopback IPs.
 		for _, network := range []string{"tcp4", "tcp6"} {
 			listener, err := net.Listen(network, net.JoinHostPort("", strconv.Itoa(port)))
 			if err != nil {
-				// IPv6 may be disabled; the IPv4 check still protects ordinary dev servers.
-				if network == "tcp6" {
+				// An unsupported address family has no listeners. Any other
+				// bind failure is insufficient evidence that the port is free.
+				if networkUnsupported(err) {
 					continue
 				}
 				return true
