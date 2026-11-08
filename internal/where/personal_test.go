@@ -21,7 +21,7 @@ func TestDefaultPersonalAllowed(t *testing.T) {
 		{Caller{Role: "member"}, true}, {Caller{Role: "lead"}, true},
 		{Caller{Role: "member", Member: "sam"}, false}, {Caller{Role: "lead", Member: "sam"}, false},
 		{Caller{Role: "guest"}, false}, {Caller{Role: "external"}, false},
-		{Caller{Role: "unknown"}, true}, {Caller{Role: "OWNER"}, true},
+		{Caller{Role: "unknown"}, false}, {Caller{Role: "OWNER"}, true},
 		{Caller{Role: " owner "}, true}, {Caller{Role: " "}, true},
 		{Caller{Role: "cli"}, true}, {Caller{Role: "worker", Member: "sam"}, true}, {Caller{Role: "builder"}, true},
 	} {

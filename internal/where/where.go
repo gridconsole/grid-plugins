@@ -202,7 +202,9 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 		}
 		proj, task, ok := taskParts(gridHome, real)
 		if !ok {
-			return "", "", fmt.Errorf("%s is not inside a task folder of %s", real, gridHome)
+			// Invalid paths inside Grid home reveal neither its location nor
+			// whether a case variant names a private Personal task.
+			return "", "", fmt.Errorf("task not found")
 		}
 		dir := filepath.Join(gridhome.TasksDir(gridHome, proj), task)
 		if _, err := os.Stat(dir); err != nil {

@@ -34,7 +34,19 @@ func DefaultPersonalAllowed(c Caller) bool {
 	case contract.PersonTeam:
 		return role == "owner" || strings.TrimSpace(c.Member) == ""
 	default:
-		return true
+		// TierFor also maps unknown roles to Agent. Only known machine
+		// sessions and plugin agents may use the owner's Personal scope.
+		switch role {
+		case "", "cli", "host", "worker", "agent":
+			return true
+		}
+		switch strings.TrimPrefix(role, "grid-") {
+		case "builder", "checker", "curator", "designer", "library", "operator",
+			"planner", "researcher", "reviewer", "runner", "scout":
+			return true
+		default:
+			return false
+		}
 	}
 }
 

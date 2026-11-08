@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
 func settingsAccessFixture(t *testing.T, role string) (*harness, string) {
@@ -81,7 +83,7 @@ func TestSettingsPersonalReadsRefused(t *testing.T) {
 }
 
 func TestSettingsPersonalAllowedCallers(t *testing.T) {
-	for _, role := range []string{"", "owner", "OWNER", "cli", "worker", "agent", "builder", "reviewer", "curator", "host", "checker", "designer", "library", "operator", "planner", "researcher", "runner", "scout"} {
+	for _, role := range append([]string{"", "owner", "OWNER", "cli", "worker", "agent", "builder", "reviewer", "curator", "host", "checker", "designer", "library", "operator", "planner", "researcher", "runner", "scout"}, settings.AgentNames()...) {
 		t.Run(role, func(t *testing.T) {
 			h, cwd := settingsAccessFixture(t, role)
 			for _, args := range [][]string{{"hook", "level", "home-allow", "off"}, {"skill", "enable", "research"}, {"agent", "set", "grid-builder", "--model", "opus"}} {
@@ -124,4 +126,46 @@ func testPersonalTaskPaths(t *testing.T, roots []string) {
 			}
 		}
 	}
+}
+
+func TestSettingsRefusalCreatesNothing(t *testing.T) {
+	for _, role := range []string{"guest", "unknown"} {
+		for _, args := range [][]string{
+			{"hook", "level", "home-allow", "off"},
+			{"skill", "enable", "research"},
+			{"setup", "personal", "--answers", "-"},
+		} {
+			t.Run(role+"/"+args[0], func(t *testing.T) {
+				h, cwd := settingsAccessFixture(t, role)
+				h.env.Stdin = strings.NewReader(`{"test":"make test"}`)
+				before := settingsAccessTree(t, h.gridHome)
+				if code := h.run(cwd, args...); code != 1 || h.out.Len() != 0 {
+					t.Errorf("exit %d, stdout %q, stderr %q", code, h.out, h.errb)
+				}
+				if !reflect.DeepEqual(before, settingsAccessTree(t, h.gridHome)) {
+					t.Error("refused command changed Grid home")
+				}
+			})
+		}
+	}
+}
+
+func settingsAccessTree(t *testing.T, root string) map[string]string {
+	t.Helper()
+	files := map[string]string{}
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			files[path] = "directory"
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		files[path] = string(data)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return files
 }

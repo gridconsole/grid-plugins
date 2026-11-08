@@ -199,7 +199,7 @@ func TestPersonalBypassCallerMatrix(t *testing.T) {
 		role, member string
 		allowed      bool
 	}{
-		{"", "", true}, {"owner", "sam", true}, {"OWNER", "sam", true}, {"cli", "", true}, {"worker", "sam", true}, {"builder", "", true}, {"unknown", "", true}, {"member", "", true}, {"lead", "", true}, {"member", "sam", false}, {"lead", "sam", false}, {"external", "", false},
+		{"", "", true}, {"owner", "sam", true}, {"OWNER", "sam", true}, {"cli", "", true}, {"worker", "sam", true}, {"builder", "", true}, {"unknown", "", false}, {"member", "", true}, {"lead", "", true}, {"member", "sam", false}, {"lead", "sam", false}, {"external", "", false},
 	} {
 		t.Run(tc.role+"/"+tc.member, func(t *testing.T) {
 			h := newHarness(t)

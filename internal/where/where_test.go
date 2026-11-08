@@ -406,7 +406,7 @@ func TestResolveRefusals(t *testing.T) {
 		}, "no Grid home"},
 		{"task path inside the Grid home but not a task folder", func(f *fixture) Query {
 			return Query{Cwd: f.tmp, Task: f.gridHome}
-		}, "not inside a task folder"},
+		}, "task not found"},
 		{"task folder that does not exist", func(f *fixture) Query {
 			return Query{Cwd: f.tmp, Task: filepath.Join(f.gridHome, "projects", "p", "tasks", "T-99-gone")}
 		}, "does not exist"},

@@ -27,20 +27,23 @@ func settingsUsage(kind string, env Env) {
 }
 
 // A write without --project is personal. A list resolves the current project,
-// but an unregistered folder has only personal values to inherit.
+// but an unregistered folder has only personal values to inherit. Resolve that
+// fallback explicitly too: an unregistered folder does not grant Personal access.
 func settingsStore(env Env, project string, listing bool) (settings.Store, error) {
-	if listing || project != "" {
-		r, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Project: project})
+	if !listing && project == "" {
+		project = gridhome.Personal
+	}
+	r, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Project: project})
+	if err != nil {
+		return settings.Store{}, err
+	}
+	if !r.Record && r.Project != gridhome.Personal {
+		r, err = resolver(env).Resolve(where.Query{Cwd: env.Cwd, Project: gridhome.Personal})
 		if err != nil {
 			return settings.Store{}, err
 		}
-		if r.Record || r.Project == gridhome.Personal {
-			project = r.Project
-		} else {
-			project = ""
-		}
 	}
-	return settings.Store{Home: env.GridHome, Project: project}, nil
+	return settings.Store{Home: env.GridHome, Project: r.Project}, nil
 }
 
 func runSettings(kind string, args []string, env Env) int {
