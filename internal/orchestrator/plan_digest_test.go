@@ -19,6 +19,38 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
+func TestPlanPublicationRejectsChangedStepMetadata(t *testing.T) {
+	for _, section := range []string{"## Steps", "## Where it stands"} {
+		for _, field := range []string{"evidence", "needs"} {
+			t.Run(section+"/"+field, func(t *testing.T) {
+				f := setupPlan(t)
+				original := strings.Replace(plannedText(t), "- [ ] 1", section+"\n\n- [ ] 1", 1)
+				original = strings.Replace(original, "  kind:", "  "+field+": original\n  kind:", 1)
+				writePlan(t, f, original)
+				approvePlan(t, f)
+				changed := strings.Replace(original, field+": original", field+": injected", 1)
+				if plan.Digest(original) == plan.Digest(changed) || plan.Hash(original) != plan.Hash(changed) {
+					t.Fatal("metadata must change the digest while preserving the legacy short hash")
+				}
+				anchor, err := plan.Anchor(changed, "step-1")
+				if err != nil || !strings.Contains(anchor, field+": injected") {
+					t.Fatalf("injected metadata must reach worker anchor: %q err=%v", anchor, err)
+				}
+				writePlan(t, f, changed)
+				out := f.tick(t)
+				records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
+				if err != nil || len(records.Records) != 0 || out.Assigned != 0 {
+					t.Fatalf("changed metadata published jobs=%d assigned=%d err=%v", len(records.Records), out.Assigned, err)
+				}
+				approvePlan(t, f)
+				if out := f.tick(t); out.Assigned != 1 {
+					t.Fatalf("reapproved metadata did not publish: %+v", out)
+				}
+			})
+		}
+	}
+}
+
 // Brute force the actual 24-bit preimage, hashing already canonical bytes in the
 // hot loop. Both final plans are checked through the production canonicalizer.
 func forgedPlan(t *testing.T, original string) (string, string) {

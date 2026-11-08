@@ -584,10 +584,15 @@ no task or Feed record shapes.
 Local task receipts in `approval.json` (plan) and `approval-ship.json` (ship)
 retain `plan_hash`, the six lower-case hex digits used in the plan heading.
 New approvals also write `plan_digest`: all 64 lower-case hex digits of SHA-256
-of exactly the same canonical plan bytes. The snake_case name follows Rust's
+of canonical plan bytes, including step `evidence:` and `needs:` lines that the
+legacy short hash omits. The short hash is therefore not necessarily a prefix
+of the digest. The snake_case name follows Rust's
 `plan_hash` naming; it is an additive plugin receipt field, not a field claimed
 to exist in the Rust history format. Both values are computed from one snapshot
-under the plan lock and recorded together. The heading and CLI `--plan-hash`
+under the plan lock and recorded together. Publication checks the hash and
+digest computed from its exact publication snapshot without rereading the plan.
+Receipts made before step metadata was included may need explicit reapproval.
+The heading and CLI `--plan-hash`
 compare-and-set token remain short for compatibility.
 
 Publication, the guard, and locked approval readers require both values to

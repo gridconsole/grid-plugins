@@ -143,7 +143,7 @@ func (s Store) Read() (string, error) {
 }
 
 // WithHash calls fn with the hash of the current plan.md while holding
-// .plan.lock, so no plan write lands between the hash and what fn records.
+// .plan.lock, serializing cooperative plan writers with what fn records.
 // A caller that also holds another lock (a task's .task.lock) takes it first.
 func (s Store) WithHash(fn func(hash string) error) error {
 	return s.WithDigest(func(hash, _ string) error { return fn(hash) })
@@ -165,7 +165,7 @@ func (s Store) WithDigest(fn func(hash, digest string) error) error {
 			return err
 		}
 		digest := Digest(string(b))
-		return fn(digest[:6], digest)
+		return fn(Hash(string(b)), digest)
 	})
 }
 

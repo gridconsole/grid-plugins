@@ -42,8 +42,6 @@ func TestHashStability(t *testing.T) {
 		"CRLF":                strings.ReplaceAll(base, "\n", "\r\n"),
 		"trailing whitespace": strings.ReplaceAll(base, "\n", " \t\n") + "\n\n",
 		"status":              strings.ReplaceAll(base, "The store filter works. The toolbar and keyboard checks remain.", "Everything is ready."),
-		"evidence":            strings.ReplaceAll(base, "checks/R-1/store.txt", "checks/R-2/store.txt"),
-		"needs":               strings.ReplaceAll(base, "needs: 1", "needs: 1, 3"),
 		"heading":             strings.ReplaceAll(base, "rev 3 · 000000", "rev 4 · abcdef"),
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -107,10 +105,27 @@ func TestItemsBoundaries(t *testing.T) {
 }
 
 func TestDigestUsesFullCanonicalSHA256(t *testing.T) {
-	text := "# Plan, rev 9 · ignored\r\n\r\n- [X] 1 Build it  \r\n  evidence: ignored\r\n\r\n## Where it stands\r\nVolatile status.\r\n"
-	sum := sha256.Sum256([]byte("- [ ] 1 Build it\n"))
+	text := "# Plan, rev 9 · ignored\r\n\r\n- [X] 1 Build it  \r\n  evidence: proof\r\n\r\n## Where it stands\r\nVolatile status.\r\n"
+	sum := sha256.Sum256([]byte("- [ ] 1 Build it\n  evidence: proof\n"))
 	want := hex.EncodeToString(sum[:])
-	if got := Digest(text); got != want || Hash(text) != got[:6] {
+	if got := Digest(text); got != want {
 		t.Fatalf("digest = %s, want %s", got, want)
+	}
+}
+
+func TestDigestIncludesStepMetadata(t *testing.T) {
+	for _, section := range []string{"## Steps", "## Where it stands"} {
+		for _, field := range []string{"evidence", "needs"} {
+			t.Run(section+"/"+field, func(t *testing.T) {
+				base := "# Plan\n" + section + "\n- [ ] 1 Build it\n  " + field + ": original\n"
+				changed := strings.Replace(base, ": original", ": injected", 1)
+				if Digest(base) == Digest(changed) {
+					t.Fatal("worker-visible step metadata did not change digest")
+				}
+				if Hash(base) != Hash(changed) {
+					t.Fatal("legacy short hash compatibility changed")
+				}
+			})
+		}
 	}
 }

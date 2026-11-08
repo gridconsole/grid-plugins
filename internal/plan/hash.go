@@ -26,17 +26,20 @@ func lines(text string) []string { return strings.Split(strings.ReplaceAll(text,
 // The first line is always omitted, even on a plan without a revision heading.
 // Internal blank lines, leading indentation and spaces within text still count.
 func Hash(text string) string {
-	return Digest(text)[:6]
+	sum := sha256.Sum256([]byte(canonical(text)))
+	return fmt.Sprintf("%x", sum[:])[:6]
 }
 
-// Digest is the full SHA-256 of the same canonical bytes used by Hash.
-// Approval receipts use it to bind plan content without the short hash collisions.
+// Digest binds canonical plan content with full SHA-256. Unlike the legacy
+// short Hash, it includes evidence and needs lines that workers read in steps.
 func Digest(text string) string {
-	sum := sha256.Sum256([]byte(canonical(text)))
+	sum := sha256.Sum256([]byte(canonicalPlan(text, true)))
 	return fmt.Sprintf("%x", sum[:])
 }
 
-func canonical(text string) string {
+func canonical(text string) string { return canonicalPlan(text, false) }
+
+func canonicalPlan(text string, includeStepMetadata bool) string {
 	inStep, inStands := false, false
 	var kept []string
 	for _, line := range lines(text)[1:] {
@@ -51,7 +54,7 @@ func canonical(text string) string {
 			} else if !(inStep && indented.MatchString(line)) {
 				inStep = false
 				continue
-			} else if volatile.MatchString(line) {
+			} else if !includeStepMetadata && volatile.MatchString(line) {
 				continue
 			}
 		} else {
@@ -60,7 +63,7 @@ func canonical(text string) string {
 				inStep = true
 			} else if !indented.MatchString(line) {
 				inStep = false
-			} else if inStep && volatile.MatchString(line) {
+			} else if !includeStepMetadata && inStep && volatile.MatchString(line) {
 				continue
 			}
 		}

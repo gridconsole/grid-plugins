@@ -25,6 +25,30 @@ func waitingFixture(t *testing.T) (Store, Task) {
 const planV1 = "# Plan, rev 1 \u00b7 000000\n\n## Where it stands\n\n- [ ] 1 Build it\n\n## How we approach it\n\nUsed: brain:project/conventions/example\n"
 const planV2 = planV1 + "\nA new risk the person has not seen.\n"
 
+func TestApprovalBindsStepMetadata(t *testing.T) {
+	for _, field := range []string{"evidence", "needs"} {
+		t.Run(field, func(t *testing.T) {
+			s, task := waitingFixture(t)
+			text := strings.Replace(planV1, "Build it\n", "Build it\n  "+field+": original\n", 1)
+			hash := setPlan(t, task, text)
+			event, err := s.Approve(WriteOptions{ID: task.ID}, hash)
+			if err != nil || event.PlanHash != hash || event.PlanDigest != plan.Digest(text) || !Approved(task.Path) {
+				t.Fatalf("metadata approval: %+v err=%v", event, err)
+			}
+			if _, err := s.Approval("", task.ID); err != nil {
+				t.Fatal(err)
+			}
+			setPlan(t, task, strings.Replace(text, ": original", ": injected", 1))
+			if _, err := s.Approval("", task.ID); err == nil || Approved(task.Path) {
+				t.Fatal("changed metadata retained approval")
+			}
+			if _, err := s.Approve(WriteOptions{ID: task.ID}, ""); err == nil {
+				t.Fatal("changed metadata allowed implicit reapproval")
+			}
+		})
+	}
+}
+
 func setPlan(t *testing.T, task Task, text string) string {
 	t.Helper()
 	write(t, filepath.Join(task.Path, "plan.md"), text)
