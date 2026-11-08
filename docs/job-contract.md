@@ -21,6 +21,11 @@ and `review_reason` (text). Run fields such as `status`, `attempt`, and
 `worktree` do not belong in the plan and are refused there. Rendered brief
 metadata retains the step kind and supplied floor fields for later readers.
 
+Job-record contract version 1 also accepts these optional fields: `kind` matches
+`^[a-z][a-z-]*$` (1–40 characters), `visible` is `big` or `small`, `irreversible`
+is boolean, and `review_reason` is a nonempty sentence (at most 500 characters).
+Adding optional fields does not change the contract version.
+
 `grid job render` selects a Job by its id or an item number. An item number is
 ambiguous when it has more than one Job; select the Job id in that case.
 `plan.md#step-N` quotes the checklist line and prose only. `plan.md#verify`

@@ -9,6 +9,26 @@
       "minLength": 1,
       "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
     },
+    "kind": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^[a-z][a-z-]*$"
+    },
+    "visible": {
+      "enum": [
+        "big",
+        "small"
+      ]
+    },
+    "irreversible": {
+      "type": "boolean"
+    },
+    "review_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
     "item": {
       "type": "integer",
       "minimum": 1

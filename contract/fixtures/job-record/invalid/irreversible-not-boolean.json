@@ -1,0 +1,57 @@
+{
+  "id": "J-1",
+  "item": 1,
+  "title": "Build example feature",
+  "role": "builder",
+  "skills": [],
+  "review": "L1",
+  "risk": [],
+  "max_rounds": 2,
+  "intent": {
+    "owner": "intent.md#L1",
+    "item": "plan.md#step-1",
+    "goal": "plan.md#verify"
+  },
+  "links": [],
+  "keep": [],
+  "decisions": [],
+  "read": [
+    "repo:main.go:1-10"
+  ],
+  "write": [
+    "main.go"
+  ],
+  "out_of_scope": [],
+  "acceptance": [
+    {
+      "id": "A1",
+      "text": "Example feature passes its checks",
+      "traces": "item"
+    }
+  ],
+  "verify": {
+    "command": "go test ./...",
+    "min_tests": 1
+  },
+  "budget": {
+    "turns_estimate": 20,
+    "reads_before_first_edit": 15
+  },
+  "on_blocked": "ask-and-continue",
+  "after": [],
+  "attempt": 1,
+  "continues": null,
+  "discovered_from": null,
+  "close_reason": null,
+  "checkpoint": null,
+  "review_rounds": 0,
+  "level_raised": null,
+  "worktree": "example-worktree",
+  "posts_back": [
+    "result",
+    "question",
+    "knowledge",
+    "checkpoint"
+  ],
+  "irreversible": "yes"
+}
