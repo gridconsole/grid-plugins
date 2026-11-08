@@ -113,12 +113,8 @@ func runFeed(args []string, env Env) int {
 		return output(state)
 	}
 	if verb == "post" {
-		switch kind {
-		case "ack", "submit", "result", "checkpoint", "worker-exit", "integrate":
-			return fail(fmt.Errorf("Job-side writes require grid job post or grid job %s", kind))
-		}
-		if lease != "" && lease != "task" {
-			return fail(fmt.Errorf("Job lease writes require grid job post"))
+		if err := refuseJobSide(kind, lease); err != nil {
+			return fail(err)
 		}
 	}
 	if body == "-" {
@@ -240,6 +236,19 @@ func sessionStore(env Env, task, project string) (feed.Store, error) {
 
 // sessionDefaults is the MCP counterpart of feedDefaults: GRID_JOB and GRID_ATTEMPT
 // win over the arguments, and a differing argument is refused.
+// refuseJobSide keeps Job-side records and Job-lease writes on grid job post,
+// which checks the Job's lifecycle; feed post and the MCP feed_post must not.
+func refuseJobSide(kind, lease string) error {
+	switch kind {
+	case "ack", "submit", "result", "checkpoint", "worker-exit", "integrate":
+		return fmt.Errorf("Job-side writes require grid job post or grid job %s", kind)
+	}
+	if lease != "" && lease != "task" {
+		return fmt.Errorf("Job lease writes require grid job post")
+	}
+	return nil
+}
+
 func sessionDefaults(in feed.Input) (feed.Input, error) {
 	if job := os.Getenv("GRID_JOB"); job != "" && in.Job != "" && in.Job != job {
 		return in, fmt.Errorf("job %q conflicts with the session job GRID_JOB=%q; the session wins, so omit it or name the same job", in.Job, job)

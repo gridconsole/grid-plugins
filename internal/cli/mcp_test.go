@@ -191,3 +191,28 @@ func TestMCPSessionWinsOverArguments(t *testing.T) {
 		t.Fatalf("CLI flags: %d %s", code, h.errb)
 	}
 }
+
+// A worker must not bypass grid job post (and its lifecycle checks) through feed_post.
+func TestMCPFeedPostRefusesJobSideWrites(t *testing.T) {
+	h, task := feedHarness(t)
+	t.Setenv("GRID_FEED_TASK", task)
+	t.Setenv("GRID_ROLE", "worker")
+	t.Setenv("GRID_LEASE", "J-1")
+	t.Setenv("GRID_LEASE_EPOCH", "0.1")
+	for _, typ := range []string{"result", "worker-exit", "post"} {
+		line := mcpCall(t, h, "feed_post", `{"type":"`+typ+`","job":"J-1","attempt":1,"body":{}}`)
+		if !strings.Contains(line, `"isError":true`) || !strings.Contains(line, "grid job post") {
+			t.Fatalf("%s accepted through feed_post: %s", typ, line)
+		}
+	}
+	if code := h.run(h.home, "feed", "read", "--json"); code != 0 {
+		t.Fatalf("CLI read: %d %s", code, h.errb)
+	}
+	var read feed.ReadResult
+	if err := json.Unmarshal(h.out.Bytes(), &read); err != nil {
+		t.Fatal(err)
+	}
+	if len(read.Records) != 0 {
+		t.Fatalf("refused posts changed the feed: %+v", read.Records)
+	}
+}

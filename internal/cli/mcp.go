@@ -22,7 +22,13 @@ func runMCP(args []string, env Env) int {
 			if err != nil {
 				return in, feed.Writer{}, err
 			}
-			writer, err := feedWriter(env, os.Getenv("GRID_LEASE"), os.Getenv("GRID_LEASE_EPOCH"))
+			lease := os.Getenv("GRID_LEASE")
+			if in.Type != "" { // feed_handover posts no type
+				if err := refuseJobSide(in.Type, lease); err != nil {
+					return in, feed.Writer{}, err
+				}
+			}
+			writer, err := feedWriter(env, lease, os.Getenv("GRID_LEASE_EPOCH"))
 			return in, writer, err
 		},
 	}
