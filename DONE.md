@@ -1,0 +1,62 @@
+# Lane L22: task questions
+
+Implemented `internal/question` and registered `grid question` in the existing CLI command table. The protected packages and `go.mod` are unchanged.
+
+The commands are:
+
+```sh
+grid question add "Which format?" --who owner \
+  --option CSV --option JSON --recommended CSV \
+  --default CSV --applies 2026-11-09T10:00:00Z --blocking
+grid question answer Q-1 JSON
+grid question answer Q-1 "Use both formats" --by owner
+grid question withdraw Q-2 --reason "No longer needed"
+grid question list --json
+grid question tick
+```
+
+Run these inside an existing task under `GRID_HOME`, or add `--task <path>`. Resolution uses `internal/where`, including its existing requirement that explicit task paths belong to the Grid home. Flags can precede or follow operands; use `--` before literal operands starting with a dash. Quote a multiword answer as one argument. `--blocking` defaults to false; `--who` defaults to `owner`. `--applies` requires an RFC3339 timestamp with a timezone. The default can be free text; the recommendation must exactly match an option. `--age-after` defaults to `8h` and accepts a positive whole number of seconds.
+
+Each `questions/Q-n.md` contains JSON frontmatter (also valid YAML) and readable Markdown with options, a Recommended marker, Default, Applies, the recipient, blocking status, aging level and the current answer. The frontmatter is authoritative. The new embedded `contract/schemas/question-file.json` defines the record shape; every storage read and write goes through `internal/contract.Validate`. Additional history invariants prevent an inconsistent state from being silently applied. Files sort by numeric question ID.
+
+A task-wide `questions/.lock`, held with `internal/fslock`, serializes allocation, reads and changes across processes. The lock file is never renamed. A change writes and syncs a temporary file in the same directory, closes it, renames it, and syncs the directory. The current decision and its history therefore commit together. A default is applied once to the question record; repeating a tick is a no-op. A late human answer replaces the current default and retains the default event. Repeating an identical human answer or withdrawal is a no-op. A different answer after a human answer is refused. No arbitrary external action runs as a side effect of a default.
+
+Blocking open questions age at one and two intervals after being asked, at most twice. A delayed tick catches up both raises, but a due default takes precedence and closes the question without new aging. Nonblocking, answered, withdrawn and defaulted questions do not age. Symlinks below the resolved task directory are refused; ancestor symlinks, including macOS temporary-directory aliases, are supported.
+
+## Verification
+
+All of these passed:
+
+```sh
+make test
+make lint
+GOOS=windows go build ./...
+GOOS=darwin go build ./...
+```
+
+`make test` used the default TMPDIR. The focused suite is `go test ./internal/question`. It includes table-driven deadline boundary, aging, transition and invalid-input tests with temporary task folders and an injected clock; a golden `list --json` covering all four states; subprocesses released together to tick the same task, asserting exactly one default event and one changed result; concurrent question allocation; path/symlink and corruption checks; explicit and enclosing task resolution; and command parsing. `UPDATE_GOLDEN=1 make golden` regenerates golden files.
+
+Cross-compilation verifies builds only. The test suite was executed on Linux; native macOS execution was not available. The implementation introduces no platform-specific syscall. Native Windows operations retain the existing `internal/fslock.ErrUnsupported` behavior; runtime Windows locking is outside this lane.
+
+## Intended differences from the old plugin
+
+References below are paths within the supplied reference material, with line numbers.
+
+- CLI calls replace prose-directed edits. This implements `docs/plugin.md:243` and `docs/plugin.md:249`, replacing `old-plugin/skills/questions/SKILL.md:16` and `old-plugin/skills/questions/SKILL.md:47`.
+- Task scope comes from the enclosing task or explicit path through `internal/where`, rather than choosing the only open task or consulting `GRID_PROJECTS`. The old behavior is at `old-plugin/skills/questions/SKILL.md:8`; the resolution mapping is at `old-plugin-map.md:99`. No task is created implicitly.
+- One file per question replaces one file per recipient and multiple editable blocks (`old-plugin/skills/questions/SKILL.md:8`, `old-plugin/skills/questions/SKILL.md:16`). This is a storage choice for atomic state/history commits and concurrent writers, not a claim that the design mandates this filename. Legacy recipient files are refused with a migration error, never silently ignored or overwritten.
+- Required options and an exact recommended option replace optional slash-separated options and a prose recommendation (`old-plugin/skills/questions/SKILL.md:31`). This follows the option cards and Recommended marker in `prototype/task.html:14520` and `prototype/task.html:14532`. Free-text answers remain available without adding an artificial Other option (`old-plugin/skills/questions/SKILL.md:32`, `prototype/task.html:14537`). Context and recommendation explanations may be included in the question prose; they have no separate fields here.
+- Required Default and Applies fields, `defaulted` state and explicit ticking implement `docs/brain-feed.md:33`. Deadline timestamps use UTC RFC3339 with seconds rather than local minute timestamps from a shell command (`old-plugin/skills/questions/SKILL.md:16`). A passed deadline is accepted and applies on the next tick. The caller must explicitly choose the default and deadline; neither is guessed.
+- Late answers supersede defaults while preserving history, per `docs/go-architecture.md:25` and `docs/plugin-design.md:26`. The old immutable-answer rule (`old-plugin/skills/questions/SKILL.md:51`) remains for human answers. An identical retry is harmless, including when the human answer equals the earlier default.
+- Bounded aging implements `docs/brain-feed.md:219`. The spec leaves N unspecified; this implementation chooses 8 hours, configurable per question, and stores the interval so later ticks use the same policy. The persisted aging levels are 0, 1 and 2.
+- Only open questions can be newly withdrawn; a repeated withdrawal is harmless. Answered and defaulted decisions remain in the audit trail instead of being reclassified. The old general withdrawal prose is at `old-plugin/skills/questions/SKILL.md:56` and does not define these closed-state cases.
+- The recipient is explicit or owner by default. Automatic role/brain routing and Routed lines from `old-plugin/skills/questions/SKILL.md:14` remain the caller's responsibility. Semantic planning rules about refused commands, rework and question wording (`old-plugin/skills/questions/SKILL.md:12`, `old-plugin/skills/questions/SKILL.md:34`, `old-plugin/skills/questions/SKILL.md:36`) are not text filters in this storage command.
+- Question history is stored with its state instead of directly appending `history.md` or editing task waiting/needs/next fields (`old-plugin/skills/questions/SKILL.md:38`, `old-plugin/skills/questions/SKILL.md:39`, `old-plugin/skills/questions/SKILL.md:48`, `old-plugin/skills/questions/SKILL.md:49`). This avoids introducing a second writer ahead of the task/history APIs described at `docs/plugin.md:249`.
+- Setup-only `later`, `disputed` and follow-up groups from `old-plugin/skills/questions/SKILL.md:30` are not new states in this command. The supported lifecycle is open, answered, defaulted and withdrawn.
+
+## Remaining integration work and reasons
+
+- Feed publication, selected-answer controls, Job resumption and `gate:<Q-id>` readiness are not implemented by this lane. The checkout has no Feed writer API or task lease writer to call; `feed` and `job` are CLI placeholders. The protected contract package currently accepts question version 1 and requires a lease-holder control to select an answer. This implementation does not invent a competing Feed writer or fake an authorized control. It therefore does not yet fulfill the full answer-to-Feed path at `docs/brain-feed.md:215`, `docs/brain-feed.md:217`, `docs/brain-feed.md:218`, or gate folding at `docs/feed-contract.md:177` and `docs/feed-contract.md:188`. Its guarantee is exactly-once application to the local question record, not exactly-once execution of downstream work. Answer events are retained for that future integration, replacing neither the Feed nor its authority rules. The old delayed answer bridge is described at `old-plugin/skills/questions/SKILL.md:52`.
+- Automatic ticks on every command, hook and worker loop (`docs/go-architecture.md:25`, `docs/brain-feed.md:33`) remain unwired. The dispatcher is protected except for command registration, and the worker loop is absent. `Store.Tick` and `grid question tick` are ready for those callers. A caller waking after sleep must pull queued answers before ticking, as required by `docs/go-architecture.md:279`.
+- Task/history updates, automatic brief reruns and the prototype's What happens next choices require the task and planner APIs. No canonical task-record schema or task writer exists in this checkout; the lane must not introduce an independent task shape. See `old-plugin/skills/questions/SKILL.md:49`, `old-plugin/skills/questions/SKILL.md:50` and `prototype/task.html:14545`. The commands record answers without claiming that a planner or Job has resumed.
+- Needs you rendering, landing's once-only default summary, guest authorization and legacy migration are separate consumers/integrations. The relevant requirements are `docs/brain-feed.md:33`, `docs/brain-feed.md:219`, `docs/feed-contract.md:90` and the old recipient format at `old-plugin/skills/questions/SKILL.md:8`. `--by` records caller-supplied attribution; it is not an authentication mechanism. No UI, identity service or migration API exists here to complete those behaviors safely.
