@@ -14,6 +14,7 @@ fields:
   - item: the number of the plan item the Job serves, a whole number; the Orchestrator sets it from the plan
   - priority: high, normal (the default) or low; a later control post's priority wins
   - rerole: set by the Orchestrator when it posts a planned Job under another role than the plan gave, and why (a checker Job whose brief runs a command goes to a runner)
+  - host: the Host the Job must run on, from the plan step's `host:` line: `local`, this machine's name, an SSH Host added for the project, or a Host on the Feed; the Job runs there or waits, never elsewhere
 ---
 One piece of work that one Worker picks up. The envelope `job` is its id (J-1, J-2, ...); a Job post without one gets the next number.
 

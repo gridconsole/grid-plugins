@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers, priorityRank, firstById, PRIORITIES, handoverOwner, writerFile, fileOf, writtenByWorker, hostName, sameHost } from './lib.mjs';
+import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers, priorityRank, firstById, PRIORITIES, handoverOwner, writerFile, fileOf, writtenByWorker, hostName, sameHost, atMs } from './lib.mjs';
 import { postHolds } from './hold.mjs';
 import { jobDiscard, jobStart, taskIntegrate, taskLandAndClean } from './git-steps.mjs';
 import { runGit } from './git.mjs';
@@ -21,13 +21,15 @@ import { startWorker } from './worker-start.mjs';
 import { foldHosts, pickHost as scoreHost, whyNoHost } from './hosts.mjs';
 import { decide as askModel, jobRole } from './decide.mjs';
 import { isWait, stepWait, probe as probeWait, checkOf, WAIT_KIND } from './wait.mjs';
-import { retryStale, answeredPark } from './retry.mjs';
+import { retryStale, answeredPark, OPTIONS } from './retry.mjs';
 import { lock, beating } from './lock.mjs';
 import { planGate, planQuestion, reviewJob } from './planning.mjs';
 import { wakeTask, stoppedOn } from './wake.mjs';
 import { bridge } from './bridge.mjs';
 import { signalGroup } from './kill.mjs';
 import { openRegistry, SPAWNED } from './spawned.mjs';
+import { sshHooks, boxPaths, boxTaskDir } from './ssh-hosts.mjs';
+import { boxSession } from './remote-job.mjs';
 
 export { lock };
 import { isDeploy, isLand, deployOf, runDeploy, reopen, DEPLOY_KIND } from './deploy.mjs';
@@ -36,10 +38,14 @@ const LIVE = new Set(['assigned', 'running']);
 const FINISHED = new Set(['done', 'cancelled']);
 // Roles that only read the code: in a repo they need no submit, and after a code Job they check its work at the task head.
 const READ_ONLY_ROLES = new Set(['scout', 'researcher', 'runner', 'reviewer', 'checker', 'operator']);
+const STOP_TRIES = 3; // a stop on an SSH Host that fails is tried on this many ticks of a run, then given up and reported
 const VERDICTS = new Set(['accept', 'disagree']);
 const PLAN_MAX = 100 * 1024;
 const MAX_PASSES = 50;
 const GIT_STEPS = fileURLToPath(new URL('./git-steps.mjs', import.meta.url));
+// The plugin folder this loop runs from: what an SSH Host gets a copy of, so its Worker runs the same version.
+const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const HOST_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 // Each points git at another repository, index or work tree; inherited from a hook or a parent git, it would move a step's git elsewhere.
 export const GIT_REDIRECTS = Object.freeze(['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']);
@@ -88,6 +94,21 @@ export const defaultRetry = retryStale;
 
 export { startWorker }; // moved to worker-start.mjs so host.mjs does not import this module
 
+// The `host:` line of each plan step, by step number: the plan skill puts an indented `host: <name>` under `- [ ] <n> <title>` for a step that
+// must run on one machine (`local`, or the name of an SSH machine added in Grid for the project). A line that starts at the margin ends the step.
+export function planHosts(text) {
+  const out = new Map();
+  let step = null;
+  for (const line of str(text).split('\n')) {
+    const s = /^\s*- \[[ xX]\] (\d+)[.)]?\s/.exec(line);
+    if (s) { step = Number(s[1]); continue; }
+    if (/^\S/.test(line)) { step = null; continue; }
+    const h = /^\s+host:\s*(\S+)\s*$/.exec(line);
+    if (h && step !== null && HOST_NAME_RE.test(h[1]) && !out.has(step)) out.set(step, h[1]);
+  }
+  return out;
+}
+
 // The commit a Job without a task head starts from.
 function resolveBase(repo, rev, { env } = {}) {
   if (!str(rev) || rev.startsWith('-')) return { ok: false, errors: [`${rev} is not a revision`] };
@@ -119,6 +140,9 @@ function settings(taskDir, o) {
     decideOpts: { env, model: o.model, effort: o.effort }, model: o.model, alive: o.alive ?? pidAlive, kill: o.kill ?? killWorker,
     registry: o.registry ?? openRegistry(path.join(worktrees, SPAWNED), { identify: o.identify }),
     decide: o.decide ?? askModel, spawn: o.spawn ?? grantedSpawn({ home, fallback: startWorker }), pickHost: o.pickHost, retry: o.retry ?? defaultRetry,
+    ssh: o.ssh ?? sshHooks({ home, env, pluginRoot: PLUGIN_ROOT }), sshProbes: new Map(), // SSH Hosts (ssh-hosts.mjs), and each one's last probe
+    sshStopped: o.sshStopped ?? new Set(), // each Job/Worker/state stopped on its SSH Host in this run, or given up on
+    stopTries: o.stopTries ?? new Map(), // how many times each of those failed to stop so far in this run
     probe: o.probe ?? ((check) => probeWait(check, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })), probeAt: new Map(), // wait Jobs: the check, and when each was last read
     review: o.review === true, planMemory: { misses: 0, at: 0, reason: '' }, // tries of this process that left no beat
     deploy: o.deploy ?? ((d) => runDeploy(d, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })),
@@ -174,6 +198,56 @@ function work(taskDir, o) {
     return { ...r, ran, ok: r.ok === true && ran };
   };
 
+  // ---- SSH Hosts: the machines added in Grid for the project (ssh-hosts.mjs). A Job runs on one only when its plan step names it. ----
+  let sshList;
+  const sshHostsNow = () => {
+    if (sshList) return sshList;
+    try { sshList = o.ssh.hosts(o.project) ?? []; } catch (e) { sshList = []; out.errors.push(`the SSH Hosts could not be read: ${e?.message ?? e}`); }
+    return sshList;
+  };
+  const sshNamed = (name) => (name ? sshHostsNow().find((h) => h.name === name) ?? null : null);
+  const namedHost = (j) => str(j.jobPost?.body?.host).trim() || null;
+  // The SSH Host a Job was placed on: its Job names it and its assign is there.
+  const sshOf = (j) => {
+    const h = sshNamed(namedHost(j));
+    return h && j.assign?.host && hostName(j.assign.host) === h.name ? h : null;
+  };
+  const sessionsNow = new Map(); // each remote Worker's tmux session, read once per tick before the Feed pull
+  // Whether the Host answers and the HEAD of its clone, read once per interval.
+  const probed = (h, repo) => {
+    const key = `${h.name}\0${repo ?? ''}`;
+    const c = o.sshProbes.get(key);
+    if (c && now - c.at < o.intervalMs) return c.r;
+    let r;
+    try { r = o.ssh.probe(h, repo) ?? { online: false }; } catch (e) { r = { online: false, error: e?.message ?? String(e) }; }
+    o.sshProbes.set(key, { at: now, r });
+    return r;
+  };
+  // The Feed both ways with each SSH Host that holds a live (or stale) Job of the task: its Worker's posts come here, the loop's go there. A stale
+  // Job counts, so a Worker that hands in after its lease ran out is still read. With look, each live Worker's tmux session there is read
+  // first, before the pull: a Worker already gone wrote every post before it went, so the pull brings them all and a hand-in is never taken
+  // for an exit. A pull that fails leaves those sessions unknown.
+  const syncSsh = ({ look = false } = {}) => {
+    const live = fold(readFeed(dir), { now }).jobs.filter((j) => LIVE.has(j.recorded_status) || j.recorded_status === 'stale');
+    const byHost = new Map();
+    for (const j of live) {
+      const h = sshOf(j);
+      if (!h) continue;
+      if (!byHost.has(h.name)) byHost.set(h.name, { h, jobs: [] });
+      byHost.get(h.name).jobs.push(j);
+    }
+    for (const { h, jobs } of byHost.values()) {
+      const looked = look && o.ssh.alive ? jobs.filter((j) => LIVE.has(j.recorded_status) && j.assign?.worker).map((j) => {
+        const who = { project: o.project, task: o.task, worker: j.assign.worker };
+        try { return [boxSession(who), o.ssh.alive(h, who)]; } catch (e) { return [boxSession(who), { alive: null, error: e?.message ?? String(e) }]; }
+      }) : [];
+      let r;
+      try { r = o.ssh.sync(h, taskDir, boxTaskDir(h, o.project, path.basename(taskDir))); } catch (e) { r = { ok: false, errors: [e?.message ?? String(e)] }; }
+      if (!r?.ok) out.errors.push(`the Feed did not sync with ${h.name}: ${errText(r)}`);
+      for (const [session, a] of looked) sessionsNow.set(session, r?.ok ? a : { alive: null, error: 'the Feed did not sync' });
+    }
+  };
+
   let posts = readFeed(dir);
   const boss = orchestratorOf(posts);
   if (boss && boss.by !== me) return { ...out, ok: false, errors: [notOwner(boss)] };
@@ -187,7 +261,11 @@ function work(taskDir, o) {
     if (gate.state !== 'go') return gaveUp(gate);
     let text;
     try { text = fs.readFileSync(path.join(taskDir, 'plan.md'), 'utf8').slice(0, PLAN_MAX); } catch { return; }
-    const r = callDecide('plan', { task: o.task, plan: text, repo: o.repo ? path.basename(o.repo) : null, roles: [...ROLES] }, (res) => (res.ok ? 'plan' : `plan failed: ${oneLine(res.error)}`));
+    // The Hosts a Job may name: this machine (local), the project's SSH Hosts and the Hosts on the Feed. A step's own host: line wins over the model.
+    const planned = planHosts(text);
+    const known = [...new Set(['local', hostName(o.me.host), ...sshHostsNow().map((h) => h.name), ...Object.keys(fold(posts, { now }).hosts ?? {}).map(hostName)].filter(Boolean))];
+    const hostOf = (x) => (Number.isInteger(x.item) && planned.has(x.item) ? planned.get(x.item) : known.includes(str(x.host)) ? str(x.host) : null);
+    const r = callDecide('plan', { task: o.task, plan: text, repo: o.repo ? path.basename(o.repo) : null, roles: [...ROLES], hosts: known }, (res) => (res.ok ? 'plan' : `plan failed: ${oneLine(res.error)}`));
     const jobs = r.ok && Array.isArray(r.value?.jobs) ? r.value.jobs.filter((x) => isObj(x) && oneLine(x.title)) : [];
     if (!r.ok) out.errors.push(`${r.ran ? 'planning failed' : 'could not plan'}: ${oneLine(r.error) || 'no Jobs'}`);
     else if (!jobs.length) out.errors.push('planning failed: the plan gave no Jobs');
@@ -214,6 +292,7 @@ function work(taskDir, o) {
         ...(o.repo && !wait && needsRepo(role, code[i]) ? { repo: path.basename(o.repo) } : {}),
         ...(PRIORITIES.includes(x.priority) ? { priority: x.priority } : {}),
         ...(Number.isInteger(x.item) && x.item > 0 ? { item: x.item } : {}),
+        ...(!wait && hostOf(x) ? { host: hostOf(x) } : {}),
       }, { job: `J-${i + 1}` });
     });
     if (!jobs.length) { posts = readFeed(dir); const after = gateOf(); if (after.state === 'gave-up') gaveUp(after); }
@@ -280,8 +359,15 @@ function work(taskDir, o) {
     return { verdict, reason: oneLine(r.value.reason) || (verdict === 'accept' ? 'does what the Job asked' : 'does not do what the Job asked') };
   };
 
-  const integrate = (j) => {
+  const integrate = (j, submit) => {
     if (!o.repo) return failJob(j, `${j.id} has code to integrate and the loop has no --repo`);
+    // A Job on an SSH Host committed there and could not push: its ref comes here, checked against the submit, and goes to origin first.
+    const h = sshOf(j);
+    if (h) {
+      let rel;
+      try { rel = o.ssh.relay(h, { task: o.task, job: j.id, repo: o.repo, sha: str(submit?.body?.sha), remoteRepo: `${h.repos}/projects/${path.basename(o.repo)}` }); } catch (e) { rel = { ok: false, errors: [e?.message ?? String(e)] }; }
+      if (!rel?.ok) return failJob(j, `could not bring ${j.id} back from ${h.name}: ${errText(rel)}`);
+    }
     let r;
     try { r = o.steps.integrate({ task: o.task, job: j.id, repo: o.repo }, { env: gitEnv(o.env) }); } catch (e) { r = { ok: false, errors: [e?.message ?? String(e)] }; }
     if (r?.ok) {
@@ -371,6 +457,14 @@ function work(taskDir, o) {
 
   // True when `q` was written by the Worker `cur` of `j` itself, or by this loop as it: the loop's member on the Job's Host, in the file that writer owns.
   const fromWorker = (q, j, cur) => q.worker === cur && writtenByWorker(q, { member: o.me.member, host: j.assign?.host ?? null });
+  // When a Worker was last heard of: its own latest post from the Host it runs on (not a beat the loop wrote for it), or the loop's latest
+  // move of the Job to assigned or running, whichever is later.
+  const heardAt = (j, cur, v) => {
+    let at = -Infinity;
+    for (const x of j.history) if (LIVE.has(x.status)) at = Math.max(at, atMs(x.at) ?? -Infinity);
+    for (const p of v.posts) if (p.job === j.id && p.worker === cur && sameHost(p.author?.host, j.assign?.host)) at = Math.max(at, atMs(p.at) ?? -Infinity);
+    return at;
+  };
 
   // The Job `id` and every Job that comes after it, directly or through others.
   const dependents = (id, v) => {
@@ -413,10 +507,19 @@ function work(taskDir, o) {
       if (rec !== 'stale') return control({ target: j.id, status: 'stale', reason: 'result posted with no submit: the code was not handed in' });
     }
     if (LIVE.has(rec)) {
+      // A Worker on an SSH Host has no pid here: its tmux session there was read before this tick's Feed pull (syncSsh). One that runs is not
+      // stale on its lease, since its beats carry that machine's clock, which may be off from this one, for up to four leases from its last
+      // word there (or its last move here); after that the lease decides as for any Worker. Gone, or not read, leaves the lease to decide.
+      const box = sshOf(j);
+      const session = box ? boxSession({ project: o.project, task: o.task, worker: cur }) : null;
+      const alive = Boolean(box) && sessionsNow.get(session)?.alive === true;
+      const keepAlive = alive && now < heardAt(j, cur, v) + 4 * LEASE_MS;
+      const leaseOut = j.stale && !keepAlive;
       // A Worker that posted a blocking question is stopped and the Job parked: answeredPark (retry.mjs) restarts it once the question is answered.
+      // One on an SSH Host has no pid here; stopOnHosts ends its tmux session there once the Job reads parked.
       // Only the Worker's own question counts: any member can append a line that names a live Worker, so a question is acted on only when it was
       // written as that Worker by the loop's member on the Job's Host, in the Feed file that writer owns. Any other is refused and logged.
-      const blocking = cur && !j.stale && !own('worker-exit') ? j.open_questions.map((id) => v.byId.get(id))
+      const blocking = cur && !leaseOut && !own('worker-exit') ? j.open_questions.map((id) => v.byId.get(id))
         .filter((q) => q?.body?.blocking === true && q.worker === cur && q.body?.who !== 'owner') : [];
       for (const q of blocking) if (!fromWorker(q, j, cur)) out.errors.push(`refused to act on question ${q.id} naming ${cur} of ${j.id}: it is in ${fileOf(q) ?? 'no feed file'}, not written by the Worker itself (${writerFile({ member: o.me.member, host: hostName(j.assign?.host), worker: cur })})`);
       const asking = blocking.find((q) => fromWorker(q, j, cur));
@@ -440,7 +543,17 @@ function work(taskDir, o) {
         write('worker-exit', { reason: 'process ended without a result' }, { job: j.id }, { role: 'worker', worker: cur });
         return undefined;
       }
-      if (j.stale) return control({ target: j.id, status: 'stale', reason: `lease ran out at ${j.lease_expires}` });
+      // A box Worker whose tmux session is gone with no result is a Worker that ended. A session not read then, or whose answer could not be
+      // read, keeps the Job running until its lease runs out.
+      if (box && sessionsNow.get(session)?.alive === false) return control({ target: j.id, status: 'stale', reason: `worker exited without a result: its tmux session ${session} on ${box.name} is gone` });
+      if (leaseOut) {
+        return control({ target: j.id, status: 'stale', reason: `lease ran out at ${j.lease_expires}${alive ? `: ${cur} has said nothing for 4 leases though its tmux session ${session} on ${box.name} still runs` : ''}` });
+      }
+      // The loop beats for it, with this clock, before its lease runs out, so every fold of the Feed (here, in the app) reads it running too.
+      // No tail, session or model: those stay as the Worker gave them.
+      if (keepAlive && !(Date.parse(j.lease_expires) - now >= LEASE_MS / 2)) {
+        write('heartbeat', { note: `tmux session ${session} on ${box.name} runs` }, { job: j.id }, { role: 'worker', worker: cur });
+      }
       return undefined;
     }
     if (rec === 'submitted') {
@@ -455,7 +568,7 @@ function work(taskDir, o) {
           ? { target: submit.id, verdict: 'accept', reason: d.reason }
           : { target: submit.id, status: 'rejected', verdict: 'disagree', reason: d.reason });
       }
-      return verdict === 'accept' ? integrate(j) : undefined;
+      return verdict === 'accept' ? integrate(j, submit) : undefined;
     }
     if (rec === 'integrated') return control({ target: j.id, status: 'done', reason: 'in the task head' });
     if (rec === 'posted') {
@@ -474,6 +587,20 @@ function work(taskDir, o) {
     if ((rec === 'stale' || rec === 'rejected') && !asked.has(j.id)) {
       asked.add(j.id);
       const body = o.retry(j, v);
+      // A new attempt of a box Job starts only once the last one is stopped on its Host, so two never run side by side. A stop that fails holds the
+      // retry and is tried again on the next ticks, STOP_TRIES in all as for any box stop; then the Job parks and the Owner is asked.
+      const box = isObj(body) && body.status === 'ready' ? sshOf(j) : null;
+      const stop = box ? stopOne(j, v, rec) : 'stopped';
+      if (stop === 'pending') return undefined;
+      if (stop === 'gave-up') {
+        const session = boxSession({ project: o.project, task: o.task, worker: cur });
+        const why = `${cur} could not be stopped on ${box.name} after ${STOP_TRIES} tries, so no new attempt starts beside it`;
+        write('question', {
+          question: `${j.id} is parked: ${why}. Stop its tmux session ${session} there, then: ${OPTIONS.join(', ')}?`,
+          blocking: true, who: 'owner', job: j.id, why, options: OPTIONS.join('\n'),
+        }, { job: j.id });
+        return control({ target: j.id, status: 'parked', reason: why });
+      }
       if (isObj(body)) {
         const { question, ...rest } = body;
         if (isObj(question)) write('question', question, { job: j.id });
@@ -483,7 +610,8 @@ function work(taskDir, o) {
     return undefined;
   };
 
-  const launchFor = (j, { worker, cwd, base, code }, v) => {
+  // ssh: { h, paths } for a Worker on an SSH Host: its brief, plugin and variables name that machine's folders, and its commit stays there (--push no).
+  const launchFor = (j, { worker, cwd, base, code, ssh = null }, v) => {
     const role = ROLES.includes(j.role) ? j.role : 'builder';
     let brief = [j.title, str(jobPostOf(j, v)?.body?.brief).trim()].filter(Boolean).join('\n\n');
     // A Worker's blocking question that got an answer goes into the next attempt's brief.
@@ -497,29 +625,89 @@ function work(taskDir, o) {
     if (lastRejected >= 0 && !afterIt.some((h) => h.status === 'running')) {
       brief += `\n\nThe last attempt was rejected: ${str(j.history[j.history.length - 1 - lastRejected].reason)}`;
     }
+    // A brief may name the Host ("on box1"): the Worker is told it is already there, so it never tries to reach it over ssh.
+    if (ssh) brief += `\n\nThis machine is ${ssh.h.name}, the Host this Job runs on: run its commands here, never over ssh to another machine.`;
     if (code) {
       // The worktree is at the task head: the accepted work of the Jobs before this one. The task branch (grid/<task>) only receives the head when
       // the task lands, so a brief that sends the Worker to it is answered here.
       const head = str(v.state.head?.body?.sha);
-      brief += `\n\nYou work in ${cwd}, a worktree of ${o.repo} at ${base}, ${base === head ? 'the task head: it holds the work of the Jobs before this one' : 'the base of the task'}. `
+      const at = ssh ? { repo: ssh.paths.repo, steps: `${ssh.paths.plugin}/feed/git-steps.mjs`, feed: ssh.paths.taskDir, push: ' --push no' } : { repo: o.repo, steps: GIT_STEPS, feed: taskDir, push: '' };
+      brief += `\n\nYou work in ${cwd}, a worktree of ${at.repo} at ${base}, ${base === head ? 'the task head: it holds the work of the Jobs before this one' : 'the base of the task'}. `
         + 'The task branch is not updated until the task lands, so where the brief names it, this worktree is that state: never switch or check out branches here.';
       if (commitsCode(j, v)) {
         brief += ` Hand the code in before you post the result; it commits your changes, so never amend or rebase:\n`
-          + `node "${GIT_STEPS}" job submit ${o.task} ${j.id} --repo "${o.repo}" --worktree "${cwd}" --feed "${taskDir}"\n`
+          + `node "${at.steps}" job submit ${o.task} ${j.id} --repo "${at.repo}" --worktree "${cwd}" --feed "${at.feed}"${at.push}\n`
           + 'When the worktree is already clean because the head holds what the brief asks (an earlier Job made the change), run job submit all the same: it hands the head in as an empty submission. Then post the result saying so; do not ask.';
       } else {
         brief += ' Change nothing here and do not run job submit: read or run what the brief asks, then post the result.';
       }
     }
     const l = workerLaunch({
-      agent: o.agent, role, task: o.task, job: j.id, worker, member: o.me.member, host: o.me.host, project: o.project, cwd, brief, model: o.model,
-      args: o.agent === 'claude' ? ['--permission-mode', 'auto'] : [], codexHome: str(o.env.CODEX_HOME) || undefined,
+      agent: o.agent, role, task: o.task, job: j.id, worker, member: o.me.member, host: ssh ? ssh.h.name : o.me.host, project: o.project, cwd, brief, model: o.model,
+      args: o.agent === 'claude' ? ['--permission-mode', 'auto', ...(ssh ? ['--plugin-dir', ssh.paths.plugin] : [])] : [], codexHome: ssh ? undefined : str(o.env.CODEX_HOME) || undefined,
     });
+    // Nothing of this machine's environment goes to another: only Grid's variables, with that machine's folders, and for code the person the
+    // Worker commits as (the one running this loop), so a machine with no git user of its own still commits, and as them.
+    if (ssh) return { cmd: l.cmd, args: l.args, env: { ...l.env, GRID_TASK: o.task, GRID_PROJECTS: ssh.paths.projects, GRID_HOME: ssh.paths.grid, ...(code ? commitsAs() : {}) } };
     return { ...l, env: { ...gitEnv(o.env), ...l.env, GRID_TASK: o.task, GRID_PROJECTS: o.projects }, log: path.join(o.worktrees, `${worker}.log`) };
   };
 
-  // Assigns a ready Job to a Host, makes its worktree when it has code, and starts its Worker.
-  const start = (j, host, v) => {
+  // Who a box Worker commits as, read once per tick from git here; nothing when git here names no one.
+  let identOnce;
+  const commitsAs = () => {
+    if (!identOnce) {
+      try { identOnce = (o.repo && o.ssh.commitsAs?.(o.repo, gitEnv(o.env))) || {}; } catch { identOnce = {}; }
+    }
+    return identOnce;
+  };
+
+  // Stops a Job's Worker on its SSH Host (remote-job.mjs stop): its tmux sessions end and its worktrees go, and its Job ref too when its commit is
+  // here (a done Job's was relayed before the integrate) or it never handed one in; a handed-in commit of any other Job stays on the Host. Once per
+  // Job, Worker and state in this run. A failure is tried again on the next ticks, STOP_TRIES in all, then given up and reported; out.stops_pending
+  // counts the ones still to try, and run does not end on them. Returns 'stopped' (or nothing to stop), 'pending' or 'gave-up'.
+  const stopOne = (j, v, rec) => {
+    const h = sshOf(j);
+    if (!h || !o.ssh.stop) return 'stopped';
+    const key = `${o.task}/${j.id}/${j.assign?.worker}/${rec}`;
+    if (o.sshStopped.has(key)) return (o.stopTries.get(key) ?? 0) >= STOP_TRIES ? 'gave-up' : 'stopped';
+    const repo = codeJob(j, v) && o.repo ? path.basename(o.repo) : null;
+    let r;
+    try { r = o.ssh.stop(h, { project: o.project, task: o.task, job: j.id, repo, ref: rec === 'done' || !j.submits.length }); } catch (e) { r = { ok: false, errors: [e?.message ?? String(e)] }; }
+    if (r?.ok) {
+      o.stopTries.delete(key);
+      o.sshStopped.add(key);
+      return 'stopped';
+    }
+    const tries = (o.stopTries.get(key) ?? 0) + 1;
+    o.stopTries.set(key, tries);
+    if (tries < STOP_TRIES) {
+      out.stops_pending = (out.stops_pending ?? 0) + 1;
+      out.errors.push(`${j.id} was not stopped on ${h.name}: ${errText(r)}`);
+      return 'pending';
+    }
+    out.errors.push(`gave up stopping ${j.id} on ${h.name} after ${tries} tries: ${errText(r)}; its tmux session, worktree or Job ref may be left there`);
+    o.sshStopped.add(key);
+    return 'gave-up';
+  };
+  // A Job on an SSH Host that is done, cancelled or parked leaves nothing running or lying there.
+  const stopOnHosts = (jobs, v) => {
+    for (const j of jobs) if (['done', 'cancelled', 'parked'].includes(j.recorded_status)) stopOne(j, v, j.recorded_status);
+  };
+
+  // Starts the Worker of an assigned Job on an SSH Host (ssh-hosts.mjs startRemote): no worktree or process here, so nothing is recorded in the
+  // registry; its Feed posts come back with syncSsh, its commit with the relay before the integrate.
+  const startOn = (h, j, { worker, base, code }, v) => {
+    const paths = boxPaths(h, { project: o.project, taskFolder: path.basename(taskDir), task: o.task, repo: code ? path.basename(o.repo) : null, worker });
+    if (!paths) return control({ target: j.id, status: 'stale', reason: `worker did not start on ${h.name}: its folders there could not be named` });
+    const launch = launchFor(j, { worker, cwd: code ? paths.cwd : paths.taskDir, base, code, ssh: { h, paths } }, v);
+    let r;
+    try { r = o.ssh.start(h, { project: o.project, task: o.task, job: j.id, worker, code, base, repo: o.repo, taskDir, paths, launch }); } catch (e) { r = { ok: false, errors: [e?.message ?? String(e)] }; }
+    if (!r?.ok) return control({ target: j.id, status: 'stale', reason: `worker did not start on ${h.name}: ${errText(r)}` });
+    return control({ target: j.id, status: 'running', reason: `worker started on ${h.name} in tmux session ${str(r.session)}` });
+  };
+
+  // Assigns a ready Job to a Host, makes its worktree when it has code, and starts its Worker (on an SSH Host when `ssh` is one).
+  const start = (j, host, v, ssh = null) => {
     stillOwner();
     const attempt = j.attempt + 1;
     // A Job retried by the Owner starts counting again, so a name an earlier Worker used gets a suffix: its old posts must not count.
@@ -538,6 +726,7 @@ function work(taskDir, o) {
       }
     }
     control({ target: j.id, status: 'assigned', assign: { worker, host }, attempt, ...(base ? { base } : {}), reason: `${worker} on ${host}` });
+    if (ssh) return startOn(ssh, j, { worker, base, code }, v);
     const cwd = code ? path.join(o.worktrees, worker) : taskDir;
     if (code) {
       let s;
@@ -561,12 +750,41 @@ function work(taskDir, o) {
     return { repo, base: base || null };
   };
 
+  // A Job whose plan step names a Host runs there or waits, never elsewhere: `local` (or this machine's name) through localHost, an SSH Host
+  // scored on its record and probe, a Host on the Feed scored among the Feed Hosts of that name. Each waiting reason is posted once.
+  const placeNamed = (j, name, v) => {
+    const job = hostJob(j, v);
+    const wait = (why) => { if (j.history.at(-1)?.reason !== why) control({ target: j.id, status: 'ready', reason: why }); };
+    const go = (host, ssh) => { start(j, host, v, ssh); v.busy.set(host, (v.busy.get(host) ?? 0) + 1); };
+    if (name === 'local' || name === hostName(o.me.host)) {
+      const host = (o.pickHost ?? localHost)(j, v);
+      return host ? go(host) : wait('worker_cap');
+    }
+    const h = sshNamed(name);
+    if (h) {
+      if (o.agent !== 'claude') return wait(`${name} is an SSH Host, and only claude Workers start on one`);
+      const p = probed(h, job.repo);
+      const cand = {
+        name: `${o.me.member}@${h.name}`, member: o.me.member, host: h.name, online: p.online === true, grant: true,
+        repos: job.repo && p.sha ? { [job.repo]: p.sha } : {}, total: h.slots, free: h.slots, usage_left: 0,
+      };
+      const host = scoreHost([cand], job, v.busy);
+      if (host) return go(host, h);
+      return wait(!cand.online ? 'host_offline' : job.repo && !cand.repos[job.repo] ? `${name} has no clone of ${job.repo} at ${h.repos}/projects/${job.repo}` : 'worker_cap');
+    }
+    const feed = foldHosts(v.state.hosts, now).filter((x) => hostName(x.name) === name);
+    if (!feed.length) return wait(`no Host named ${name} is added for project ${o.project}`);
+    const host = scoreHost(feed, job, v.busy);
+    return host ? go(host) : wait(whyNoHost(feed, job, v.busy));
+  };
+
   const assign = (v) => {
     for (const j of v.state.jobs) if (LIVE.has(j.recorded_status) && j.assign?.host) v.busy.set(j.assign.host, (v.busy.get(j.assign.host) ?? 0) + 1);
     // A Job made ready by hand still waits for every Job it names in `after`.
     const ready = v.state.jobs.filter((j) => j.recorded_status === 'ready' && !failed.has(j.id) && !j.after.some((id) => v.status.get(id) !== 'done') && ![isWait, isDeploy, isLand].some((is) => is(jobPostOf(j, v))))
       .sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority) || jobNo(a.id) - jobNo(b.id));
     for (const j of ready) {
+      if (namedHost(j)) { placeNamed(j, namedHost(j), v); continue; }
       const scored = !o.pickHost && Object.keys(v.state.hosts).length > 0; // Hosts announced: score them; else the loop's own Host
       const hosts = scored ? foldHosts(v.state.hosts, now) : [];
       const own = scored && !hosts.some((h) => h.member === v.me.member && h.host === v.me.host); // not announced: a candidate through localHost
@@ -582,7 +800,9 @@ function work(taskDir, o) {
   };
 
   let state;
+  let lastView = null;
   try {
+    syncSsh({ look: true });
     bridged();
     planJobs();
     if (o.review) addReview();
@@ -598,12 +818,15 @@ function work(taskDir, o) {
       // A Worker's pid is kept only while its Job is live with it, so a finished Worker's pid, which the system may give to another process, is gone.
       const liveWorkers = new Set(state.jobs.filter((j) => LIVE.has(j.recorded_status) && j.assign?.worker).map((j) => `${j.id}/${j.assign.worker}`));
       o.registry.keep((worker, job) => liveWorkers.has(`${job}/${worker}`));
+      lastView = v;
       const before = out.writes.length;
       for (const j of [...state.jobs].sort((a, b) => jobNo(a.id) - jobNo(b.id))) if (!failed.has(j.id)) move(j, v);
       if (out.writes.length === before) assign(v);
       if (out.writes.length === before) break;
     }
     if (pass === MAX_PASSES) out.errors.push(`stopped after ${MAX_PASSES} passes`);
+    if (lastView) stopOnHosts(state.jobs, lastView);
+    syncSsh();
     bridged();
     // An idle Owner shows it is alive, so a teammate's take-over stays closed; only the Owner does this.
     if (!out.writes.length) {
@@ -636,8 +859,9 @@ export function tick(taskDir, opts = {}) {
   }
 }
 
-// Ticks every opts.intervalMs under one lock until every Job is done or cancelled, planning gave up, the loop may no longer write, or
-// SIGINT or SIGTERM. Every tick refreshes the lock's beat. onTick gets each tick that wrote or failed. Returns the last tick's result.
+// Ticks every opts.intervalMs under one lock until every Job is done or cancelled (and stopped on its SSH Host, or given up on), planning gave
+// up, the loop may no longer write, or SIGINT or SIGTERM. Every tick refreshes the lock's beat. onTick gets each tick that wrote or failed.
+// Returns the last tick's result.
 export async function run(taskDir, opts = {}, onTick = () => {}) {
   const o = settings(taskDir, opts);
   const held = lock(taskDir, { intervalMs: o.intervalMs });
@@ -657,7 +881,8 @@ export async function run(taskDir, opts = {}, onTick = () => {}) {
       last = work(taskDir, w);
       if (last.writes.length || last.errors.length) onTick(last);
       const states = Object.values(last.jobs);
-      finished = last.ok && states.length > 0 && states.every((s) => FINISHED.has(s));
+      // every Job finished and no stop on an SSH Host still to try again
+      finished = last.ok && states.length > 0 && states.every((s) => FINISHED.has(s)) && !last.stops_pending;
       // a stop on an error wakes the task too; planning that gave up asked the Owner, and a loop handed over leaves the task to the new one
       if (!last.ok && last.planning !== 'gave-up' && !(last.errors ?? []).some((e) => e.startsWith(NOT_OWNER))) failed = last.errors?.[0] ?? 'unknown';
       if (!last.ok || last.planning === 'gave-up' || finished) break;

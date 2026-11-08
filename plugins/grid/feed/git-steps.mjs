@@ -1,6 +1,6 @@
 // The five git steps of a task's Jobs, as functions and as a command (the Orchestrator loop and a terminal session use the same):
 //   node git-steps.mjs job start <task> <job> --repo <dir> --base <sha> --path <dir>
-//   node git-steps.mjs job submit <task> <job> --repo <dir> --worktree <dir> [--feed <task folder>]
+//   node git-steps.mjs job submit <task> <job> --repo <dir> --worktree <dir> [--feed <task folder>] [--push no]
 //   node git-steps.mjs task integrate <task> <job> --repo <dir>
 //   node git-steps.mjs task land <task> --repo <dir> --rule branch|pr|main --base-branch <name>
 //   node git-steps.mjs task cleanup <task> --repo <dir>
@@ -195,11 +195,13 @@ function ignoredAmong(dir, gitArgs, paths, c) {
 
 // Commits the worktree's changes, sets and pushes the Job ref, and returns the submit post's fields (and posts them when feed is a task folder).
 // A clean worktree whose base is the task head hands that head in as an empty submission (`empty: true`) instead of failing.
-export function jobSubmit({ task, job, repo, worktree, feed } = {}, o = {}) {
+// push 'no' keeps the Job ref here: a Host that cannot reach origin hands it in this way, and the Orchestrator brings the commit to origin.
+export function jobSubmit({ task, job, repo, worktree, feed, push } = {}, o = {}) {
   const c = conf(o);
   const errors = badInput(task, job, c);
   if (job === undefined) errors.push('job is required: a Job id such as J-3');
   if (typeof worktree !== 'string' || !worktree) errors.push('worktree is required: the folder `job start` made');
+  if (push !== undefined && push !== 'yes' && push !== 'no') errors.push(`--push takes yes or no, not ${JSON.stringify(push)}`);
   if (errors.length) return fail(...errors);
   const home = dirsOf(repo, c);
   if (!home.ok) return home;
@@ -250,14 +252,16 @@ export function jobSubmit({ task, job, repo, worktree, feed } = {}, o = {}) {
 
   const set = setRef(home.top, ref, sha, { env: c.env });
   if (!set.ok) return set;
-  const pushed = pushRefs(home.top, [ref], net(c));
-  if (!pushed.ok) return fail(...pushed.errors, `the commit ${sha} is on ${ref} here; submit again to push it`);
+  if (push !== 'no') {
+    const pushed = pushRefs(home.top, [ref], net(c));
+    if (!pushed.ok) return fail(...pushed.errors, `the commit ${sha} is on ${ref} here; submit again to push it`);
+  }
 
   const fields = { type: 'submit', job, body: { sha, ref, ...(inHead ? { summary: 'nothing new: the task head already holds the work' } : {}) } };
   let posted = null;
   if (feed) {
     const p = post(feed, fields, { env: c.env });
-    if (!p.ok) return { ok: false, errors: [`${sha} is pushed to ${ref}, but the submit post failed: ${p.errors.join('; ')}`], sha, ref };
+    if (!p.ok) return { ok: false, errors: [`${sha} is ${push === 'no' ? 'on' : 'pushed to'} ${ref}, but the submit post failed: ${p.errors.join('; ')}`], sha, ref };
     posted = p.post.id;
   }
   return { ok: true, task, job, sha, ref, ignored: ignored.items, ...(inHead ? { empty: true } : {}), post: fields, posted };
@@ -487,7 +491,7 @@ export function taskLandAndClean(input = {}, o = {}) {
 
 const STEPS = {
   'job start': { run: jobStart, ids: ['task', 'job'], flags: { repo: 'repo', base: 'base', path: 'path' } },
-  'job submit': { run: jobSubmit, ids: ['task', 'job'], flags: { repo: 'repo', worktree: 'worktree', feed: 'feed' } },
+  'job submit': { run: jobSubmit, ids: ['task', 'job'], flags: { repo: 'repo', worktree: 'worktree', feed: 'feed', push: 'push' } },
   'task integrate': { run: taskIntegrate, ids: ['task', 'job'], flags: { repo: 'repo' } },
   'task land': { run: taskLand, ids: ['task'], flags: { repo: 'repo', rule: 'rule', 'base-branch': 'baseBranch' } },
   'task cleanup': { run: taskCleanup, ids: ['task'], flags: { repo: 'repo' } },
