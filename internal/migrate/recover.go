@@ -10,8 +10,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
-	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 // A migration moves the old Grid home aside and puts the staged one in its place,
@@ -91,7 +91,7 @@ func writeJournal(j journal) error {
 	if err != nil {
 		return err
 	}
-	return task.AtomicWrite(journalPath(j.Home), append(data, '\n'))
+	return atomicfile.Write(journalPath(j.Home), append(data, '\n'), 0o600)
 }
 
 func removeJournal(home string) error {

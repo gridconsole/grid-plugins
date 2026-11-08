@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
-	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 // A backlink lives outside the Grid home, so both versions must be journaled.
@@ -114,10 +114,7 @@ func applyPointers(changes []pointerChange) error {
 	}
 	for _, c := range changes {
 		// Already completed changes are safe to repeat after a crash.
-		if err := task.AtomicWrite(c.Path, []byte(c.After)); err != nil {
-			return err
-		}
-		if err := os.Chmod(c.Path, os.FileMode(c.Mode)); err != nil {
+		if err := atomicfile.Write(c.Path, []byte(c.After), os.FileMode(c.Mode)); err != nil {
 			return err
 		}
 		reached("worktree-rewritten")

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
-	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 // The completed journal stays outside the home, so even edits to migration.log
@@ -107,7 +107,7 @@ func finishPublication(j journal) error {
 		if err != nil {
 			return err
 		}
-		if err := task.AtomicWrite(statePath(j.Home), append(data, '\n')); err != nil {
+		if err := atomicfile.Write(statePath(j.Home), append(data, '\n'), 0o600); err != nil {
 			return err
 		}
 	}
