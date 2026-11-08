@@ -107,10 +107,11 @@ func TestAgentWithdrawalPostVariants(t *testing.T) {
 }
 
 func TestAgentWithdrawalWithTaskFence(t *testing.T) {
-	for _, path := range []string{"feed", "job", "mcp"} {
+	for _, path := range []string{"feed", "job", "mcp", "question"} {
 		t.Run(path, func(t *testing.T) {
 			h, task, store := orchestratorHarness(t)
 			q := questionAdd(t, h, task, "member")
+			h.env.Procs = testProcs("codex")
 			t.Setenv("GRID_AGENT", "builder")
 			t.Setenv("GRID_ROLE", "")
 			t.Setenv("GRID_FEED_TASK", task)
@@ -130,6 +131,9 @@ func TestAgentWithdrawalWithTaskFence(t *testing.T) {
 				}
 			} else {
 				args := []string{path, "post", "--type", "control", "--re", q.Post, "--body", body}
+				if path == "question" {
+					args = []string{"question", "withdraw", q.ID}
+				}
 				if path == "job" {
 					args = append(args, "--job", "J-1")
 				}

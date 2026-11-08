@@ -321,7 +321,10 @@ func sessionDefaults(in feed.Input) (feed.Input, error) {
 }
 
 func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
-	member := os.Getenv("GRID_MEMBER")
+	member := env.getenv("GRID_MEMBER")
+	if env.personVia != "" && env.getenv("GRID_ACTOR") != "" {
+		member = env.getenv("GRID_ACTOR")
+	}
 	if member == "" {
 		cmd := exec.Command("git", "config", "user.email")
 		cmd.Dir = env.Cwd
@@ -342,7 +345,7 @@ func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
 	if !contract.ValidWorker(member + "@00000000000000000000000000") {
 		return feed.Writer{}, fmt.Errorf("writer must be <member>@<machine ULID> with no slash or whitespace")
 	}
-	role := contract.NormalizeRole(os.Getenv("GRID_ROLE"))
+	role := contract.NormalizeRole(env.getenv("GRID_ROLE"))
 	if role == "" {
 		role = "member"
 	}
@@ -351,7 +354,7 @@ func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
 		return feed.Writer{}, err
 	}
 	worker := member + "@" + machine
-	if supplied := os.Getenv("GRID_WORKER"); supplied != "" && supplied != worker {
+	if supplied := env.getenv("GRID_WORKER"); supplied != "" && supplied != worker {
 		return feed.Writer{}, fmt.Errorf("GRID_WORKER must match GRID_MEMBER and the local machine id")
 	}
 	writer := feed.Writer{Author: feed.Author{ID: member, Role: role}, Worker: worker, Lease: lease}

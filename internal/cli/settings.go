@@ -63,10 +63,10 @@ func runSettings(kind string, args []string, env Env) int {
 	}
 	fs := newFlags(kind+" "+op, env)
 	project := new(string)
-	asJSON := new(bool)
+	asJSON := fs.Bool("json", false, "print JSON")
 	model, effort := new(string), new(string)
 	if listing {
-		asJSON = fs.Bool("json", false, "print JSON")
+
 	} else {
 		project = fs.String("project", "", "registered project name or id; defaults to personal")
 	}
@@ -159,6 +159,9 @@ func runSettings(kind string, args []string, env Env) int {
 	if scope == "" {
 		scope = gridhome.Personal
 	}
+	if *asJSON {
+		return writeJSON(env.Stdout, map[string]string{"kind": kind, "name": operands[0], "project": scope})
+	}
 	fmt.Fprintf(env.Stdout, "%s %s updated in %s\n", kind, operands[0], scope)
 	return 0
 }
@@ -184,7 +187,8 @@ func runSetup(args []string, env Env) int {
 			projects = filepath.Join(env.Cwd, projects)
 		}
 		return settings.RunClaudeSetup(settings.ClaudeSetupOptions{
-			Home: env.Home, GridHome: env.GridHome, ConfigDir: env.getenv("CLAUDE_CONFIG_DIR"),
+			BeforeWrite: func() int { env.personSetupWrite = true; return gateCommand(append([]string{"setup"}, args...), &env) },
+			Home:        env.Home, GridHome: env.GridHome, ConfigDir: env.getenv("CLAUDE_CONFIG_DIR"),
 			Projects: projects, Yes: *yes, Remove: *remove, JSON: *asJSON,
 			Stdin: env.Stdin, Stdout: env.Stdout, Stderr: env.Stderr,
 		})

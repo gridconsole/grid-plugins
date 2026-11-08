@@ -6,6 +6,8 @@
 = Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)
 = Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)
 = Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])
+= Edit(~/.grid-person/**)
+= Write(~/.grid-person/**)
 = Edit(~/.grid/setup/**)
 = Write(~/.grid/setup/**)
 = $defaults
@@ -23,6 +25,8 @@
       "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
       "Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
       "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])",
+      "Edit(~/.grid-person/**)",
+      "Write(~/.grid-person/**)",
       "Edit(~/.grid/setup/**)",
       "Write(~/.grid/setup/**)"
     ]

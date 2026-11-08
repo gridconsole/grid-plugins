@@ -99,7 +99,7 @@ func TestTaskPersonGates(t *testing.T) {
 				}
 				return ""
 			}
-			if code := h.run(h.home, args...); code != 1 || !strings.Contains(h.errb.String(), "person or the app") {
+			if code := h.run(h.home, args...); code != 3 || !strings.Contains(h.errb.String(), "a person must run this") {
 				t.Fatalf("exit %d: %s", code, h.errb)
 			}
 		}

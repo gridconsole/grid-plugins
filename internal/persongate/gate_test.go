@@ -21,7 +21,14 @@ func chain(names ...string) map[int]Process {
 	tree := map[int]Process{}
 	for i, n := range names {
 		pid := 100 + i
-		tree[pid] = Process{PID: pid, PPID: pid + 1, Exe: n, Args: []string{n}}
+		parent := pid + 1
+		if i == len(names)-2 && (names[i+1] == "launchd" || names[i+1] == "systemd") {
+			parent = 1
+		}
+		if i == len(names)-1 && (n == "launchd" || n == "systemd") {
+			pid, parent = 1, 0
+		}
+		tree[pid] = Process{PID: pid, PPID: parent, Exe: n, Args: []string{n}}
 	}
 	return tree
 }
@@ -62,6 +69,13 @@ func TestProcessGate(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := request(t, tc.names...)
+			if tc.name == "renamed" {
+				tree := r.Procs.(fakeProcs).tree
+				self := tree[100]
+				self.Exe = "grid"
+				self.Args = []string{"g"}
+				tree[100] = self
+			}
 			if tc.env != nil {
 				r.Getenv = func(k string) string { return tc.env[k] }
 			}
@@ -239,5 +253,14 @@ func TestAccountHomeIgnoresEnvironment(t *testing.T) {
 	}
 	if strings.HasPrefix(dir, os.Getenv("HOME")) || strings.HasPrefix(dir, os.Getenv("XDG_CONFIG_HOME")) {
 		t.Fatal("person directory used environment home")
+	}
+}
+
+func TestNamespaceRootCannotBeLauncher(t *testing.T) {
+	r := request(t, "grid")
+	r.Procs = fakeProcs{tree: map[int]Process{100: {PID: 100, PPID: 1, Exe: "grid"}, 1: {PID: 1, Exe: "Terminal"}}}
+	d, err := Check(r)
+	if d.Reason != "detached" || d.Allow {
+		t.Fatalf("%+v %v", d, err)
 	}
 }

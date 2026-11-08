@@ -145,3 +145,9 @@ closed task. Lines follow the writer's format, `- {json event}`, and existing
 history is preserved, including a missing final newline. Runtime locking is
 supported on macOS and Linux; other platforms inherit `internal/fslock`'s
 existing unsupported-platform error.
+
+Person-only commands, including `grid approve` and `grid task status`, refuse
+with exit **3** when called from an agent environment or process ancestry. Run
+them from the Grid app or a separate person terminal. `grid person check --json`
+reports whether that entry point is available. `grid deliver` still raises the
+ship gate in-process and does not require the person gate.

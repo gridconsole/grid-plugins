@@ -174,7 +174,7 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 			// Setup-record defenses are additional to the writer guard and are tested
 			// through the CLI in settings.TestClaudeReworkCLIProjectAnchors.
 			rules := slices.DeleteFunc(doc.Permissions.Deny, func(rule string) bool {
-				return rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)"
+				return strings.Contains(rule, "~/.grid-person/**") || rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)"
 			})
 			env := map[string]string{"HOME": h.home, "GRID_HOME": h.gridHome, "GRID_PROJECTS": projects}
 			paths := []string{

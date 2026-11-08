@@ -64,6 +64,7 @@ func NextState(current, action, requested string) (string, error) {
 // Event is a local task write receipt, not a Feed post. The shared contract has
 // no task-write schema yet; author identity uses the contract's existing shape.
 type Event struct {
+	Via        string          `json:"via,omitempty"`
 	Task       string          `json:"task"`
 	Who        contract.Author `json:"who"`
 	When       string          `json:"when"`
@@ -83,6 +84,7 @@ type Event struct {
 // Who is supplied by the host; the terminal defaults to the local person, never
 // an OS username or an inferred remote identity.
 type WriteOptions struct {
+	Via                          string // person entry point, supplied by the CLI gate
 	Cwd, ID, Action, State, Note string
 	LandsHash                    string // optional deploy-rule binding supplied by the land approval integration
 	Who                          contract.Author
@@ -225,7 +227,7 @@ func (s Store) event(t Task, o WriteOptions, next string) Event {
 	if who.ID == "" {
 		who = contract.Author{ID: "local", Role: "owner"}
 	}
-	return Event{Task: t.ID, Who: who, When: contract.FormatTime(now), What: o.Action, FromState: t.State, ToState: next, Note: o.Note}
+	return Event{Via: o.Via, Task: t.ID, Who: who, When: contract.FormatTime(now), What: o.Action, FromState: t.State, ToState: next, Note: o.Note}
 }
 
 func (s Store) clock() time.Time {

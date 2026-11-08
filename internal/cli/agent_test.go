@@ -69,6 +69,7 @@ func TestAgentCheckDispatch(t *testing.T) {
 	}
 	var out, errs bytes.Buffer
 	env := Env{Home: home, Stdout: &out, Stderr: &errs, Getenv: func(string) string { return "" }}
+	personTestEnv(t, &env)
 	if code := Run([]string{"agent", "check", "--json"}, env); code != 0 {
 		t.Fatalf("code %d: %s", code, &errs)
 	}

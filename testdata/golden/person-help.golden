@@ -1,0 +1,8 @@
+Usage: grid person check [--json]
+       grid person list [--project P] [--json]
+       grid person show <handle> [--project P] [--json]
+       grid person approvers --area <area> [--task <folder or id>] [--project P] [--json]
+
+Reads the synced people cache. Without --project, reads home, or the supplied task's project then home.
+No match requires --task with an owner in task.md.
+Exit codes: 0 success, 1 read failure or unknown handle, 2 usage error.

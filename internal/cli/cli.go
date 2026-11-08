@@ -13,24 +13,29 @@ import (
 	"path/filepath"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/persongate"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 // Env is everything a command reads from the machine, so tests can set it.
 // Paths are expected to be symlink-resolved (see gridhome.Real).
 type Env struct {
-	Stdin      io.Reader
-	Stdout     io.Writer
-	Stderr     io.Writer
-	Cwd        string
-	Home       string
-	GridHome   string // "" when neither GRID_HOME nor a home folder is known
-	TempRoots  []string
-	Machine    string                 // this machine's id, "" before it is made
-	Ceiling    string                 // "" walks to the root; tests set their fixture root
-	GitVersion func() (string, error) // nil runs git --version
-	Getenv     func(string) string    // nil reads the process environment
-	Executable func() (string, error) // nil asks os.Executable
+	Stdin            io.Reader
+	Stdout           io.Writer
+	Stderr           io.Writer
+	Cwd              string
+	Home             string
+	GridHome         string // "" when neither GRID_HOME nor a home folder is known
+	TempRoots        []string
+	Machine          string                 // this machine's id, "" before it is made
+	Ceiling          string                 // "" walks to the root; tests set their fixture root
+	GitVersion       func() (string, error) // nil runs git --version
+	Procs            persongate.Procs       // nil snapshots the real process ancestry
+	PersonDir        func() (string, error) // nil resolves the account home
+	personVia        string
+	personSetupWrite bool
+	Getenv           func(string) string    // nil reads the process environment
+	Executable       func() (string, error) // nil asks os.Executable
 }
 
 func (e Env) getenv(key string) string {
@@ -104,7 +109,7 @@ func commands() []command {
 		{"env", "up, down browser Job dev environments", runEnv},
 		{"ports", "claim, release, list, gc dev port blocks", runPorts},
 		{"deploy", "deploy topic", nil},
-		{"person", "people topic", runPerson},
+		{"person", "check person access; list, show and find approvers", runPerson},
 		{"routine", "add, list, remove, run, schedule and unschedule routines", runRoutine},
 		{"worker", "list local grid-worker processes", runWorker},
 		{"agent", "check agent readiness; set models and efforts; list settings", runAgentCommand},
@@ -167,6 +172,9 @@ func Run(args []string, env Env) int {
 		if c.run == nil {
 			fmt.Fprintf(env.Stderr, "%s: not built yet\n", name)
 			return 2
+		}
+		if code := gateCommand(args, &env); code != 0 {
+			return code
 		}
 		return c.run(rest, env)
 	}

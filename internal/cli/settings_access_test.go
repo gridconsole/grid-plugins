@@ -44,7 +44,12 @@ func TestSettingsPersonalWritesRefused(t *testing.T) {
 					cmd := append(append([]string{}, args...), scope...)
 					code := h.run(cwd, cmd...)
 					want := args[0] + ": project \"personal\" is not registered\n"
-					if code != 1 || h.out.Len() != 0 || h.errb.String() != want {
+					wantCode := 1
+					if role != "member" {
+						wantCode = 3
+						want = "grid " + strings.Join(args[:2], " ") + ": " + personHint + " (reason: agent_env).\n"
+					}
+					if code != wantCode || h.out.Len() != 0 || h.errb.String() != want {
 						t.Errorf("%v: exit %d, stdout %q, stderr %q; want %q", cmd, code, h.out, h.errb, want)
 					}
 					after, err := os.ReadFile(path)
@@ -88,7 +93,14 @@ func TestSettingsPersonalAllowedCallers(t *testing.T) {
 		t.Run(role, func(t *testing.T) {
 			h, cwd := settingsAccessFixture(t, role)
 			for _, args := range [][]string{{"hook", "level", "home-allow", "off"}, {"skill", "enable", "research"}, {"agent", "set", "grid-builder", "--model", "opus"}} {
-				if code := h.run(cwd, args...); code != 0 || !strings.Contains(h.out.String(), "updated in personal") {
+				code := h.run(cwd, args...)
+				if role != "" && role != "owner" && role != "OWNER" && role != "cli" {
+					if code != 3 {
+						t.Fatalf("agent write exit %d", code)
+					}
+					return
+				}
+				if code != 0 || !strings.Contains(h.out.String(), "updated in personal") {
 					t.Fatalf("%v: exit %d: %s %s", args, code, h.out, h.errb)
 				}
 			}
@@ -140,7 +152,7 @@ func TestSettingsRefusalCreatesNothing(t *testing.T) {
 				h, cwd := settingsAccessFixture(t, role)
 				h.env.Stdin = strings.NewReader(`{"test":"make test"}`)
 				before := settingsAccessTree(t, h.gridHome)
-				if code := h.run(cwd, args...); code != 1 || h.out.Len() != 0 {
+				if code := h.run(cwd, args...); code != 3 || h.out.Len() != 0 {
 					t.Errorf("exit %d, stdout %q, stderr %q", code, h.out, h.errb)
 				}
 				if !reflect.DeepEqual(before, settingsAccessTree(t, h.gridHome)) {

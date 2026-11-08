@@ -47,6 +47,13 @@
         "role"
       ],
       "type": "object"
+    },
+    "via": {
+      "type": "string",
+      "enum": [
+        "app",
+        "terminal"
+      ]
     }
   },
   "required": [

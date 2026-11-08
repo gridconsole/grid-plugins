@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/cli"
+	"github.com/gridconsole/grid-plugins/internal/persongate"
 	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
@@ -46,6 +47,7 @@ func TestClaudeReworkCLIProjectAnchors(t *testing.T) {
 					return ""
 				},
 			}
+			personEnv(t, &env)
 			if code := cli.Run([]string{"setup", "--yes"}, env); code != 0 {
 				t.Fatalf("code=%d: %s", code, &stderr)
 			}
@@ -83,6 +85,7 @@ func TestClaudeCLIHomePatternCharacters(t *testing.T) {
 				Stdin: strings.NewReader(""), Stdout: &out, Stderr: &stderr,
 				Getenv: func(string) string { return "" },
 			}
+			personEnv(t, &env)
 			for _, args := range [][]string{{"setup", "--yes"}, {"setup", "--remove", "--yes"}} {
 				out.Reset()
 				stderr.Reset()
@@ -178,6 +181,7 @@ func TestClaudeReworkCLIRemoveForgedRecord(t *testing.T) {
 	}
 	var out, stderr bytes.Buffer
 	env := cli.Env{Home: home, GridHome: grid, Cwd: home, Stdin: strings.NewReader(""), Stdout: &out, Stderr: &stderr, Getenv: func(string) string { return "" }}
+	personEnv(t, &env)
 	if code := cli.Run([]string{"setup", "--yes"}, env); code != 0 {
 		t.Fatalf("install=%d: %s", code, &stderr)
 	}
@@ -225,4 +229,17 @@ func TestClaudeReworkCLIRemoveForgedRecord(t *testing.T) {
 			t.Errorf("missing warning for %s", value)
 		}
 	}
+}
+
+type terminalProcs struct{}
+
+func (terminalProcs) Snapshot() (map[int]persongate.Process, error) {
+	pid := os.Getpid()
+	return map[int]persongate.Process{pid: {PID: pid, PPID: pid + 1, Exe: "grid"}, pid + 1: {PID: pid + 1, Exe: "Terminal"}}, nil
+}
+func personEnv(t *testing.T, e *cli.Env) {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), ".grid-person")
+	e.Procs = terminalProcs{}
+	e.PersonDir = func() (string, error) { return dir, nil }
 }

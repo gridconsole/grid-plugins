@@ -20,6 +20,9 @@ func TestWithdrawUnreadablePolicy(t *testing.T) {
 			t.Run(failure+"/"+path, func(t *testing.T) {
 				h, task, store := orchestratorHarness(t)
 				q := questionAdd(t, h, task, "member")
+				if path == "question" {
+					t.Setenv("GRID_LEASE_EPOCH", "")
+				}
 				t.Setenv("GRID_FEED_TASK", task)
 				if path != "question" && path != "host" {
 					t.Setenv("GRID_LEASE", "task")
@@ -78,6 +81,7 @@ func TestQuestionWriteUnreadablePolicy(t *testing.T) {
 		for _, command := range commands {
 			t.Run(failure+"/"+command.name, func(t *testing.T) {
 				h, task, _ := orchestratorHarness(t)
+				t.Setenv("GRID_LEASE_EPOCH", "")
 				if !command.empty {
 					questionAdd(t, h, task, "member")
 					if command.withdrawn {
@@ -86,7 +90,9 @@ func TestQuestionWriteUnreadablePolicy(t *testing.T) {
 						}
 					}
 				}
-				t.Setenv("GRID_LEASE", "task")
+				if command.action != "answer" {
+					t.Setenv("GRID_LEASE", "task")
+				}
 				unreadableWorkflow(t, h, task, failure)
 				before := withdrawalFiles(t, task)
 				args := []string{"question", command.action, "--json"}
@@ -191,7 +197,11 @@ func TestAgentWithdrawUnreadablePolicy(t *testing.T) {
 					args = []string{"question", "withdraw", "Q-1"}
 				}
 				code := h.run(task, args...)
-				if code != 1 || h.out.Len() != 0 || strings.Count(h.errb.String(), "\n") != 1 || !strings.Contains(h.errb.String(), "cannot read task withdrawal policy") {
+				wantCode, wantText := 1, "cannot read task withdrawal policy"
+				if path == "question" {
+					wantCode, wantText = 3, "agent_env"
+				}
+				if code != wantCode || h.out.Len() != 0 || strings.Count(h.errb.String(), "\n") != 1 || !strings.Contains(h.errb.String(), wantText) {
 					t.Errorf("refusal: exit=%d stdout=%s stderr=%s", code, h.out, h.errb)
 				}
 			}

@@ -70,6 +70,8 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + path + ")"})
 	}
 	return append(rules,
+		ClaudeRule{"permissions", "deny", "Edit(~/.grid-person/**)"},
+		ClaudeRule{"permissions", "deny", "Write(~/.grid-person/**)"},
 		ClaudeRule{"permissions", "deny", "Edit(" + anchor + "/setup/**)"},
 		ClaudeRule{"permissions", "deny", "Write(" + anchor + "/setup/**)"},
 		ClaudeRule{"autoMode", "environment", "$defaults"},
@@ -140,6 +142,7 @@ func ClaudeSetupCommand(args []string) bool {
 // ClaudeSetupOptions supplies all paths and streams; tests never need a real
 // home. terminal and beforeRename are per-call test seams, not global hooks.
 type ClaudeSetupOptions struct {
+	BeforeWrite               func() int // CLI person gate, after previews and confirmation but before any write
 	Home, GridHome, ConfigDir string
 	Projects                  string // absolute GRID_PROJECTS; empty selects <GridHome>/projects
 	Yes, Remove, JSON         bool
@@ -338,6 +341,11 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		case "y", "yes":
 		default:
 			return finish("Nothing written.")
+		}
+	}
+	if o.BeforeWrite != nil {
+		if code := o.BeforeWrite(); code != 0 {
+			return code, nil
 		}
 	}
 	for _, rule := range changes {

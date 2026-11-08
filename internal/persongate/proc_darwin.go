@@ -39,6 +39,7 @@ func (SystemProcs) Snapshot() (map[int]Process, error) {
 	if err != nil {
 		return nil, err
 	}
+	joined := map[int]Process{}
 	for _, line := range strings.Split(string(raw), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
@@ -50,8 +51,8 @@ func (SystemProcs) Snapshot() (map[int]Process, error) {
 		}
 		if p, ok := tree[pid]; ok {
 			p.Args = fields[1:]
-			tree[pid] = p
+			joined[pid] = p
 		}
 	}
-	return tree, nil
+	return joined, nil
 }

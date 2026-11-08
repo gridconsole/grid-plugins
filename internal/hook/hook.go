@@ -156,7 +156,7 @@ func sessionContext(r where.Result, resolver where.Resolver, note string) string
 		"Task files are written by grid under the Grid home. Project records and task files live outside repositories.",
 		"Grid agents cover delegated work in any folder: grid:grid-scout maps code; grid:grid-researcher researches facts; grid:grid-builder changes files; grid:grid-runner runs checks; grid:grid-reviewer reviews work; grid:grid-designer designs interfaces; grid:grid-checker checks pages; grid:grid-operator changes browser state; grid:grid-planner plans tasks; grid:grid-curator curates knowledge; grid:grid-library answers questions from the brain. Job briefs are rendered by grid job.",
 		"The Grid brain holds shared topics, knowledge and decisions at home and project level.",
-		"Approvals come from a person through !grid approve in Claude Code bash mode, or grid approve in a shell.",
+		"Approvals come from a person through the Grid app or grid approve in a terminal outside Claude Code or Codex.",
 	}, "\n")
 	return boundContext(text)
 }

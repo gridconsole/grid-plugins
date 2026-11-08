@@ -415,7 +415,7 @@ func TestClaudeCustomGridHomeAndInvalidRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range rules {
-		if r.Value == "Bash(grid *)" || r.Value == "$defaults" {
+		if r.Value == "Bash(grid *)" || r.Value == "$defaults" || strings.Contains(r.Value, "~/.grid-person/**") {
 			continue
 		}
 		if !strings.Contains(r.Value, "~/data/grid") {

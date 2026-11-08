@@ -29,9 +29,14 @@ func questionAdd(t *testing.T, h *harness, task, who string, extra ...string) qu
 func TestAnswerFeedAndRecovery(t *testing.T) {
 	h, task := feedHarness(t)
 	q := questionAdd(t, h, task, "visitor", "--job", "J-2.1", "--item", "3")
-	// A person's answer never inherits an agent's lease environment.
+	// A person must clear agent lease markers before answering.
 	t.Setenv("GRID_LEASE", "J-2.1")
 	t.Setenv("GRID_LEASE_EPOCH", "7.42")
+	if code := h.run(h.gridHome, "answer", task, q.ID, "Ship a text export", "--json"); code != 3 {
+		t.Fatalf("lease-marked answer exit %d", code)
+	}
+	t.Setenv("GRID_LEASE", "")
+	t.Setenv("GRID_LEASE_EPOCH", "")
 	if code := h.run(h.gridHome, "answer", task, q.ID, "Ship a text export", "--json"); code != 0 {
 		t.Fatalf("answer %d: %s", code, h.errb)
 	}
@@ -120,7 +125,7 @@ func TestAnswerCallerRoles(t *testing.T) {
 			q := questionAdd(t, h, task, "visitor")
 			t.Setenv("GRID_MEMBER", "visitor")
 			t.Setenv("GRID_ROLE", role)
-			if role == "agent" || role == "cli" {
+			if role == "agent" || role == "cli" || role == "lead" || role == "guest" {
 				if code := h.run(task, "answer", task, q.ID, "Yes"); code == 0 {
 					t.Fatal("non-person answer accepted")
 				}

@@ -2873,7 +2873,7 @@
     },
     {
       "name": "person",
-      "summary": "people topic",
+      "summary": "check person access; list, show and find approvers",
       "built": true,
       "subcommands": [
         {
@@ -2898,6 +2898,19 @@
             {
               "name": "--task",
               "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "check",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
               "required": false
             }
           ],
@@ -3135,6 +3148,11 @@
               "required": false
             },
             {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--model",
               "takes": "value",
               "required": false
@@ -3145,7 +3163,7 @@
               "required": false
             }
           ],
-          "json": false,
+          "json": true,
           "output": ""
         }
       ]
@@ -3215,12 +3233,17 @@
           ],
           "flags": [
             {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
             }
           ],
-          "json": false,
+          "json": true,
           "output": ""
         },
         {
@@ -3230,12 +3253,17 @@
           ],
           "flags": [
             {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
             }
           ],
-          "json": false,
+          "json": true,
           "output": ""
         },
         {

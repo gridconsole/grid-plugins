@@ -50,7 +50,11 @@ func TestPersonalBypassTaskCommands(t *testing.T) {
 			}
 			code, stderr := run("T-01")
 			missingCode, missingErr := run("T-99")
-			if code != 1 || code != missingCode || stderr != missingErr {
+			wantCode := 1
+			if verb == "stop" {
+				wantCode = 3
+			}
+			if code != wantCode || code != missingCode || stderr != missingErr {
 				t.Errorf("hidden = (%d, %q), missing = (%d, %q)", code, stderr, missingCode, missingErr)
 			}
 			if !reflect.DeepEqual(before, bypassTree(t, personal)) {

@@ -90,7 +90,7 @@ func agent(p Process) bool {
 var entries = strings.Split("login,sshd,tmux,screen,zellij,terminal,iterm2,ghostty,kitty,wezterm,alacritty,warp,gnome-terminal-server,konsole,xterm,windowsterminal,openconsole,explorer,code helper,cursor,jetbrains,grid-desktop,grid-server", ",")
 
 func root(p Process) bool {
-	return p.PID == 1 || slices.Contains([]string{"systemd", "cron", "crond", "atd", "atrun", "services", "taskeng", "taskhostw"}, name(p.Exe)) || (name(p.Exe) == "svchost" && slices.Contains(p.Args, "Schedule"))
+	return p.PID == 1 || slices.Contains([]string{"cron", "crond", "atd", "atrun", "services", "taskeng", "taskhostw"}, name(p.Exe)) || (name(p.Exe) == "systemd" && slices.Contains(p.Args, "--user")) || (name(p.Exe) == "svchost" && slices.Contains(p.Args, "Schedule"))
 }
 
 func Check(r Request) (Decision, error) {

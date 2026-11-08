@@ -31,7 +31,9 @@ func landFixture(t *testing.T) (Env, string) {
 			t.Fatal(err)
 		}
 	}
-	return Env{GridHome: home, Machine: "machine-example", Cwd: gridhome.Real(home)}, dir
+	env := Env{GridHome: home, Machine: "machine-example", Cwd: gridhome.Real(home)}
+	personTestEnv(t, &env)
+	return env, dir
 }
 
 func TestLandDryRunJSON(t *testing.T) {
