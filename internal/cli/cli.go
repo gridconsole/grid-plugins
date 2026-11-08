@@ -110,7 +110,7 @@ func commands() []command {
 		{"project", "project lists, scan and merge", nil},
 		{"setup", "first-run scan and settings", nil},
 		{"signal", "inbox signals", nil},
-		{"artifact", "artifacts", nil},
+		{"artifact", "import, link, list and publish task artifacts", runArtifact},
 		{"eval", "list, run and show task evaluations", runEval},
 		{"migrate", "upgrade the Grid home to this format", nil},
 		{"sync", "sync with a Grid server", nil},
