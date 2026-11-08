@@ -204,13 +204,13 @@ func TestLegacyWithHash(t *testing.T) {
 func TestUpgradeLegacyProse(t *testing.T) {
 	for _, verification := range []string{"inspect it", "inspect it\n    and check the result", "inspect it\n  and check the result"} {
 		t.Run(verification, func(t *testing.T) {
-			old := "# Plan\n- [ ] 1 One\n  write: [docs/example.md]\n  verify: " + verification + "\n- [ ] 2 Two\n  verify: " + verification + "\n"
+			old := "# Plan\n- [ ] 1 One\n  write: [docs/example.md]\n  verify: " + verification + "\n- [ ] 2 Two\n  verify: " + verification + "\n- [ ] 3 Three\n  Only prose.\n"
 			out, form, err := plan.Upgrade(old)
 			if err != nil || form != "B" {
 				t.Fatalf("form %q: %v", form, err)
 			}
 			items, err := plan.Items(out)
-			if err != nil || len(items) != 2 || len(items[0].Jobs) != 1 || len(items[1].Jobs) != 0 {
+			if err != nil || len(items) != 3 || len(items[0].Jobs) != 1 || len(items[1].Jobs) != 0 || len(items[2].Jobs) != 0 {
 				t.Fatalf("items: %+v, %v", items, err)
 			}
 			want := "Verified by: " + strings.ReplaceAll(verification, "\n    ", "\n  ")

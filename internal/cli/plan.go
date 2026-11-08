@@ -188,7 +188,7 @@ func planFormatError(text string, err error) error {
 	if !strings.Contains(message, "front matter is refused") && !strings.Contains(message, "step-level") && !strings.Contains(message, "missing jobs list") {
 		return err
 	}
-	if _, form, _ := plan.Upgrade(text); form == "A" || form == "B" || form == "C" {
+	if _, form, upgradeErr := plan.Upgrade(text); upgradeErr == nil && form != "current" {
 		return fmt.Errorf("%w; this looks like an older plan format; run grid plan migrate --dry-run", err)
 	}
 	return err

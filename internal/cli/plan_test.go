@@ -453,3 +453,29 @@ func TestPlanMigrateApprovalLocked(t *testing.T) {
 		})
 	}
 }
+
+func TestPlanLegacyInvalidHint(t *testing.T) {
+	for name, text := range map[string]string{
+		"unknown C field":   strings.Replace(planFixture(t, "legacy/form-c.md"), "items:", "unknown: value\nitems:", 1),
+		"unknown B field":   "# Plan\n- [ ] 1 One\n  write: []\n- [ ] 2 Two\n  mystery: value\n",
+		"blank A paragraph": "# Plan\n- [ ] 1 One\n  verify: inspect it\n\n  Detached paragraph.\n",
+	} {
+		for _, action := range []string{"items", "check", "write"} {
+			t.Run(name+"/"+action, func(t *testing.T) {
+				h := newHarness(t)
+				task := planTask(h)
+				h.write(filepath.Join(task, "plan.md"), text+"\nRecall: nothing found\n")
+				args := []string{"plan", action}
+				if action == "write" {
+					args = append(args, "plan.md")
+				}
+				if code := h.run(task, args...); code != 1 {
+					t.Fatalf("exit %d", code)
+				}
+				if strings.Contains(h.out.String()+h.errb.String(), "migrate --dry-run") {
+					t.Fatalf("hint for an unconvertible plan: %s %s", h.out, h.errb)
+				}
+			})
+		}
+	}
+}
