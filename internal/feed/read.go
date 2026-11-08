@@ -8,13 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
-	"unicode/utf8"
 )
 
 // Entry adds reader verdicts and a trust label without altering the wire record.
 type Entry struct {
 	Record
+	Arrived string   `json:"arrived"`
 	File    string   `json:"file"`
 	End     int64    `json:"end"`
 	Verdict string   `json:"verdict"`
@@ -34,68 +35,58 @@ type ReadResult struct {
 // takeover snapshots are read after the files, so a concurrent takeover fences
 // everything that was read past its end. Filters are display-only.
 func (s Store) Read(filter Filter) (ReadResult, error) {
-	out := ReadResult{Records: []Entry{}, Bad: map[string]int{}}
-	if err := CheckFilesystem(s.Dir()); err != nil {
-		return out, err
-	}
-	files, err := filepath.Glob(filepath.Join(s.Dir(), "*.jsonl"))
+	out, err := s.scan()
 	if err != nil {
 		return out, err
 	}
+	// Canonical file/byte order chooses an idempotent retry's first copy.
+	sort.Slice(out.Records, func(i, j int) bool {
+		a, b := out.Records[i], out.Records[j]
+		if a.File != b.File {
+			return a.File < b.File
+		}
+		return a.End < b.End
+	})
 	seen := map[string]bool{}
-	for _, file := range files {
-		data, err := os.ReadFile(file)
-		if err != nil {
-			return out, err
+	entries := []Entry{}
+	for _, e := range out.Records {
+		r := e.Record
+		if seen[r.ID] {
+			continue
 		}
-		var end int64
-		var lastSeq int64
-		for _, line := range completeLines(data) {
-			end += int64(len(line) + 1)
-			name := filepath.Base(file)
-			var r Record
-			if len(line) > MaxLine || !utf8.Valid(line) || json.Unmarshal(line, &r) != nil || !wireValid(line, r, s.TaskID) || writerFile(r.Worker, r.Fence) != name || r.Seq <= lastSeq {
-				out.Bad[name]++
+		if ref, ok := r.Body["ref"]; ok && len(r.Body) == 1 && strings.HasPrefix(str(ref), "bodies/") {
+			if ref != "bodies/"+r.ID+".json" {
+				out.Bad[e.File]++
 				continue
 			}
-			lastSeq = r.Seq
-			if seen[r.ID] {
+			body, err := os.ReadFile(filepath.Join(s.Dir(), str(ref)))
+			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					e.Verdict = "held"
+					e.Reason = "waiting for body"
+				} else {
+					return out, err
+				}
+			} else if json.Unmarshal(body, &e.Body) != nil || e.Body == nil {
+				out.Bad[e.File]++
 				continue
 			}
-			seen[r.ID] = true
-			e := Entry{Record: r, File: name, End: end, Verdict: "counted", Waiting: []string{}}
-			if ref, ok := r.Body["ref"]; ok && len(r.Body) == 1 {
-				if ref != "bodies/"+r.ID+".json" {
-					out.Bad[name]++
-					continue
-				}
-				body, err := os.ReadFile(filepath.Join(s.Dir(), str(ref)))
-				if err != nil {
-					if errors.Is(err, os.ErrNotExist) {
-						e.Verdict = "held"
-						e.Reason = "waiting for body"
-					} else {
-						return out, err
-					}
-				} else if json.Unmarshal(body, &e.Body) != nil || e.Body == nil {
-					out.Bad[name]++
-					continue
-				}
-			}
-			e.Tier, e.Data = e.Record.Tier(), e.Record.Data()
-			t, known := lookup(r.Type)
-			if !known || t.Version != r.TypeV {
-				e.Verdict = "unknown"
-				e.Reason = "unknown type or type version"
-			} else if e.Verdict == "counted" {
-				if err := Validate(e.Record); err != nil {
-					e.Verdict = "ignored"
-					e.Reason = err.Error()
-				}
-			}
-			out.Records = append(out.Records, e)
 		}
+		seen[r.ID] = true
+		e.Tier, e.Data = e.Record.Tier(), e.Record.Data()
+		t, known := lookup(r.Type)
+		if !known || t.Version != r.TypeV {
+			e.Verdict = "unknown"
+			e.Reason = "unknown type or type version"
+		} else if e.Verdict == "counted" {
+			if err := Validate(e.Record); err != nil {
+				e.Verdict = "ignored"
+				e.Reason = err.Error()
+			}
+		}
+		entries = append(entries, e)
 	}
+	out.Records = entries
 	ends, err := s.readEnds()
 	if err != nil {
 		return out, err
@@ -158,7 +149,7 @@ func displayOrder(entries []Entry) []Entry {
 			if len(streams[name]) == 0 {
 				continue
 			}
-			if best == "" || streams[name][0].At < streams[best][0].At {
+			if best == "" || (streams[name][0].Arrived < streams[best][0].Arrived || streams[name][0].Arrived == streams[best][0].Arrived && streams[name][0].At < streams[best][0].At) {
 				best = name
 			}
 		}

@@ -66,10 +66,21 @@ func (s Store) State() (State, error) {
 // fence and file position; Job records must match a counted assignment.
 func Fold(task string, read ReadResult) State {
 	state := State{Task: task, Jobs: map[string]*JobState{}, Questions: map[string]*QuestionState{}, ByRef: map[string][]string{}, Hosts: map[string]Record{}, Records: append([]Entry{}, read.Records...), Bad: read.Bad, NeedsYou: []string{}}
+	sort.Slice(state.Records, func(i, j int) bool {
+		a, b := state.Records[i], state.Records[j]
+		if a.File != b.File {
+			return a.File < b.File
+		}
+		return a.End < b.End
+	})
+	for i := range state.Records {
+		state.Records[i].Arrived = ""
+	}
 	byID := map[string]*Entry{}
 	for i := range state.Records {
 		byID[state.Records[i].ID] = &state.Records[i]
 	}
+	duplicates := map[string]bool{}
 	// Questions and Jobs are immutable definitions. Multiple conflicting Job
 	// definitions are ignored instead of being chosen by a cross-writer clock.
 	for i := range state.Records {
@@ -80,10 +91,15 @@ func Fold(task string, read ReadResult) State {
 		switch e.Type {
 		case "job":
 			id := value(e.Job)
+			if duplicates[id] {
+				ignore(e, "duplicate Job definition")
+				continue
+			}
 			if old := state.Jobs[id]; old != nil {
 				ignore(e, "duplicate Job definition")
 				ignore(byID[old.Post], "duplicate Job definition")
 				delete(state.Jobs, id)
+				duplicates[id] = true
 				continue
 			}
 			state.Jobs[id] = &JobState{ID: id, Post: e.ID, Body: e.Body, Status: "posted", History: []string{}, Results: []string{}, Submits: []string{}}
@@ -173,8 +189,20 @@ func Fold(task string, read ReadResult) State {
 		}
 		job := state.Jobs[target]
 		if job == nil {
-			if post := byID[target]; post != nil {
-				job = state.Jobs[value(post.Job)]
+			if post := byID[target]; post != nil && post.Verdict == "counted" {
+				typ, _ := lookup(post.Type)
+				authorized := true
+				if typ.Lease != nil && *typ.Lease == "job" {
+					attempt := 0
+					if post.Attempt != nil {
+						attempt = *post.Attempt
+					}
+					grant := grants[fmt.Sprintf("%s/%d", value(post.Job), attempt)]
+					authorized = grant != nil && grant.To == post.Worker && grant.Fence == post.Fence && grant.Gen == post.Gen
+				}
+				if authorized {
+					job = state.Jobs[value(post.Job)]
+				}
 			}
 		}
 		if job == nil {

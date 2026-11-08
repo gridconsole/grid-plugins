@@ -146,6 +146,14 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	if err := s.prepare(); err != nil {
 		return Record{}, err
 	}
+	if r.Wake != nil {
+		guard, err := s.wakeLock()
+		if err != nil {
+			return Record{}, err
+		}
+		defer guard.Close()
+		defer unlock(guard)
+	}
 	lease, err := s.leaseLock(w, r.Attempt)
 	if err != nil {
 		return Record{}, err
@@ -184,6 +192,17 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		}
 		if r.Wake != nil && old.Wake != nil && wakeKey(old) == wakeKey(r) {
 			return old, nil
+		}
+	}
+	if r.Type == "ack" {
+		matched := false
+		state := Fold(s.TaskID, existing)
+		if job := state.Jobs[value(r.Job)]; job != nil && job.Assign != nil {
+			a := job.Assign
+			matched = a.To == r.Worker && a.Fence == r.Fence && a.Gen == r.Gen && r.Attempt != nil && a.Attempt == *r.Attempt && contains(r.After, a.Record)
+		}
+		if !matched {
+			return Record{}, fmt.Errorf("ack requires its counted assignment in after")
 		}
 	}
 	if r.Author.Role == "guest" && r.Type == "answer" {
@@ -332,6 +351,9 @@ func sameRequest(a, b Record) bool {
 func wakeKey(r Record) string {
 	target := value(r.Job)
 	if target == "" {
+		target = str(object(r.Body["assign"])["job"])
+	}
+	if target == "" {
 		target = str(r.Body["target"])
 	}
 	if target == "" {
@@ -384,4 +406,20 @@ func (s Store) saveBody(id string, body []byte) error {
 	}
 	defer d.Close()
 	return syncFile(d)
+}
+
+func (s Store) wakeLock() (*os.File, error) {
+	dir := filepath.Join(s.Dir(), ".cache")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "wake.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := lock(f, true); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
 }

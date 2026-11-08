@@ -120,6 +120,9 @@ func validWorker(worker string) bool {
 
 // Tier and Data are derived, so body fields cannot promote untrusted text.
 func (r Record) Tier() string {
+	if r.Body["external"] == true && r.Author.Role != "guest" {
+		return "external"
+	}
 	switch r.Author.Role {
 	case "guest":
 		return "person-guest"
