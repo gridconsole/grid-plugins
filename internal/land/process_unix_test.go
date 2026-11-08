@@ -13,10 +13,11 @@ import (
 
 func TestTimeoutKillsDescendants(t *testing.T) {
 	s, dir, repo := fixture(t)
-	s.Timeout = 100 * time.Millisecond
+	// Allow startup on loaded runners before testing descendant cancellation.
+	s.Timeout = time.Second
 	path := filepath.Join(s.Resolver.GridHome, "projects", "sample", "knowledge", "deploy", "lands.md")
 	// The background shell ignores TERM and survives killing only its parent.
-	write(t, path, "---\nlands:\n  target: local\n  branch: main\n  command: \"(trap '' TERM; printf ready > ready; sleep 0.4; printf survived > survived) & wait\"\n  needs-approve: true\n---\n")
+	write(t, path, "---\nlands:\n  target: local\n  branch: main\n  command: \"(trap '' TERM; printf ready > ready; sleep 2; printf survived > survived) & wait\"\n  needs-approve: true\n---\n")
 	approve(t, s)
 	result, err := s.Run(context.Background(), repo, "T-01", false)
 	if err == nil || result.Status != "timed-out" {
@@ -25,7 +26,7 @@ func TestTimeoutKillsDescendants(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo, "ready")); err != nil {
 		t.Fatalf("child never started: %v", err)
 	}
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(2100 * time.Millisecond)
 	if _, err := os.Stat(filepath.Join(repo, "survived")); !os.IsNotExist(err) {
 		t.Fatal("descendant survived timeout")
 	}
