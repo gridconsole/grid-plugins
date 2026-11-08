@@ -63,7 +63,8 @@ type Record struct {
 	WakePending bool       `json:"wake_pending,omitempty"`
 }
 
-// Live is the feed-contract.md section 8 file, separate from the Feed itself.
+// Live is the feed-contract.md section 8 file, kept in <task>/feed/.live/ but
+// separate from the Feed records.
 type Live struct {
 	Lease    string    `json:"lease"`
 	Holder   string    `json:"holder"`
@@ -126,7 +127,7 @@ func (s Store) recordPath(k Key, create bool) (string, error) {
 	return filepath.Join(dir, k.SessionID+".json"), nil
 }
 func (s Store) livePath(r Record, create bool) (string, error) {
-	dir, err := s.storageDir(create, ".live")
+	dir, err := s.storageDir(create, "feed", ".live")
 	if err != nil {
 		return "", err
 	}

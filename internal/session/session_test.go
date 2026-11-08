@@ -86,8 +86,18 @@ func TestHeartbeatAndReadOnlyFold(t *testing.T) {
 	if err != nil || string(before) != string(after) {
 		t.Fatal("hook activity renewed liveness")
 	}
-	if _, err := os.Stat(filepath.Join(f.store.TaskDir, "feed")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("heartbeat wrote a Feed")
+	root, err := filepath.EvalSymlinks(f.store.TaskDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(root, "feed", ".live", "member@machine-1.1.json"); f.livePath(t, r) != want {
+		t.Fatalf("heartbeat path %s, want %s", f.livePath(t, r), want)
+	}
+	if _, err := os.Stat(filepath.Join(f.store.TaskDir, ".live")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("heartbeat wrote outside feed/")
+	}
+	if entries, err := os.ReadDir(filepath.Join(f.store.TaskDir, "feed")); err != nil || len(entries) != 1 || entries[0].Name() != ".live" {
+		t.Fatalf("heartbeat wrote a Feed: %v %v", entries, err)
 	}
 }
 
@@ -229,13 +239,16 @@ func TestStorageRefusesTraversalAndSymlinks(t *testing.T) {
 			t.Fatalf("accepted %v", bad)
 		}
 	}
-	for _, target := range []string{"sessions", ".live"} {
+	for _, target := range []string{"sessions", "feed", "feed/.live"} {
 		t.Run(target, func(t *testing.T) {
 			f := newFixture(t, true)
 			if err := os.RemoveAll(filepath.Join(f.store.TaskDir, target)); err != nil {
 				t.Fatal(err)
 			}
 			outside := t.TempDir()
+			if err := os.MkdirAll(filepath.Dir(filepath.Join(f.store.TaskDir, target)), 0o700); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.Symlink(outside, filepath.Join(f.store.TaskDir, target)); err != nil {
 				t.Fatal(err)
 			}
