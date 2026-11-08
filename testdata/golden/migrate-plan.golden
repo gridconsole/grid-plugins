@@ -1,5 +1,7 @@
 migrate: plan format 1
-backup: sibling <home>-backup/<UTC-date>-<unique>/ before changes
+from: <SOURCE>
+home: <HOME>
+backup: <HOME>-backup/<UTC-date>-<unique>/ before changes
 copy: alpha/projects/widget -> projects/widget
 copy: alpha/projects/widget/knowledge -> projects/widget/knowledge
 copy: alpha/projects/widget/knowledge/research -> projects/widget/knowledge/research
@@ -45,6 +47,9 @@ create: machine
 create: VERSION
 write: migration.log (backup path, checksums and actions)
 note: beta/projects/widget: name collision resolved as widget-2
+note: alpha/projects/widget/project.md: repository folder unavailable; remote/root keys cannot be discovered, retaining folder identity
+note: beta/projects/notes/project.md: repository folder unavailable; remote/root keys cannot be discovered, retaining folder identity
+note: beta/projects/widget/project.md: repository folder unavailable; remote/root keys cannot be discovered, retaining folder identity
 note: alpha/worktrees/widget: preserves legacy task/worker subfolders; repo/job mapping is unavailable
 note: history, Feed, usage and recall files are preserved without schema conversion
 result: 43 actions, 0 conflicts, 0 unmapped

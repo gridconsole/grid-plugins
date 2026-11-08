@@ -87,6 +87,13 @@ func Scan(from, home string) (*Plan, error) {
 	if len(homes) == 0 {
 		return nil, fmt.Errorf("no old projects folder found")
 	}
+	if from != home {
+		for _, name := range children(p.destination, "") {
+			if e, ok := p.destination[path.Join(name, "projects")]; ok && e.Mode.IsDir() && !within(filepath.Join(home, name), from) {
+				p.Conflicts = append(p.Conflicts, name+": old destination home is outside --from; migrate the whole home together")
+			}
+		}
+	}
 	handled := map[string]bool{".": true, "VERSION": true}
 	occupied := map[string]bool{}
 	for _, name := range children(p.destination, "projects") {
@@ -336,6 +343,9 @@ func (p *Plan) projectRecord(src, dst string) {
 		return
 	}
 	folder = gridhome.Real(folder)
+	if info, err := os.Stat(folder); err != nil || !info.IsDir() {
+		p.Notes = append(p.Notes, file+": repository folder unavailable; remote/root keys cannot be discovered, retaining folder identity")
+	}
 	repos, keys := identity(folder)
 	id := r.value("id")
 	if !ulidRE.MatchString(id) {
@@ -380,7 +390,8 @@ func (p *Plan) WriteText(w io.Writer) error {
 		fmt.Fprintf(&b, "migrate: already at format %d; no changes\n", gridhome.FormatVersion)
 	} else {
 		fmt.Fprintf(&b, "migrate: plan format %d\n", gridhome.FormatVersion)
-		fmt.Fprintln(&b, "backup: sibling <home>-backup/<UTC-date>-<unique>/ before changes")
+		fmt.Fprintf(&b, "from: %s\nhome: %s\n", p.From, p.Home)
+		fmt.Fprintf(&b, "backup: %s-backup/<UTC-date>-<unique>/ before changes\n", p.Home)
 		for _, a := range p.Actions {
 			if a.From == "" {
 				fmt.Fprintf(&b, "%s: %s\n", a.Kind, a.To)
@@ -428,12 +439,19 @@ func versionAt(home string) (bool, error) {
 func (p *Plan) checkIdentities() {
 	keys, ids := map[string]string{}, map[string]string{}
 	for _, file := range sortedKeys(p.result) {
-		if !strings.HasPrefix(file, "projects/") || (path.Base(file) != "project.md" && path.Base(file) != "task.md") {
+		parts := strings.Split(file, "/")
+		isProject := len(parts) == 3 && parts[0] == "projects" && parts[2] == "project.md"
+		isTask := len(parts) == 5 && parts[0] == "projects" && parts[2] == "tasks" && parts[4] == "task.md"
+		if !isProject && !isTask {
 			continue
 		}
 		r, err := parseRecord(p.result[file].Data)
 		if err != nil {
+			p.Conflicts = append(p.Conflicts, file+": destination record is invalid")
 			continue
+		}
+		if !ulidRE.MatchString(r.value("id")) || (isTask && !taskRE.MatchString(r.value("display"))) {
+			p.Conflicts = append(p.Conflicts, file+": destination record still has a legacy identity")
 		}
 		if id := r.value("id"); ulidRE.MatchString(id) {
 			if prev, ok := ids[id]; ok {
@@ -441,7 +459,7 @@ func (p *Plan) checkIdentities() {
 			}
 			ids[id] = file
 		}
-		if path.Base(file) != "project.md" {
+		if !isProject {
 			continue
 		}
 		for _, key := range r.values("key") {

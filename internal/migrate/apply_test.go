@@ -18,6 +18,9 @@ func TestApplyTwice(t *testing.T) {
 			case "single-home":
 				from = filepath.Join(from, "alpha")
 			case "nested-source":
+				if err := os.RemoveAll(filepath.Join(from, "beta")); err != nil {
+					t.Fatal(err)
+				}
 				home = from
 				from = filepath.Join(from, "alpha")
 			}

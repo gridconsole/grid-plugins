@@ -112,7 +112,7 @@ func commands() []command {
 		{"signal", "inbox signals", nil},
 		{"artifact", "import, link, list and publish task artifacts", runArtifact},
 		{"eval", "list, run and show task evaluations", runEval},
-		{"migrate", "upgrade the Grid home to this format", nil},
+		{"migrate", "upgrade the Grid home to this format", runMigrate},
 		{"sync", "sync with a Grid server", nil},
 	}
 }

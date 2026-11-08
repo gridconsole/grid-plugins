@@ -216,7 +216,7 @@ func TestFormatVersionCheck(t *testing.T) {
 		{"hook stays silent", "99\n", []string{"hook", "sessionstart"}, 0, false, ""},
 		{"version runs on any format", "99\n", []string{"version"}, 0, true, ""},
 		{"doctor reports it", "99\n", []string{"doctor"}, 1, true, ""},
-		{"migrate is not refused", "0\n", []string{"migrate"}, 2, false, "migrate: not built yet\n"},
+		{"migrate is not refused", "0\n", []string{"migrate"}, 1, false, "grid migrate: no old projects folder found\n"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -298,7 +298,7 @@ func TestStubsAndUsageErrors(t *testing.T) {
 	}{
 		{[]string{"task"}, 2, "Usage:"},
 		{[]string{"mcp"}, 2, "mcp: not built yet\n"},
-		{[]string{"migrate"}, 2, "migrate: not built yet\n"},
+		{[]string{"migrate", "--dry-run", "--apply"}, 2, "mutually exclusive"},
 		{[]string{"nope"}, 2, `unknown command "nope"`},
 		{[]string{"version", "extra"}, 2, "unexpected argument"},
 		{[]string{"where", "--nope"}, 2, "flag provided but not defined"},

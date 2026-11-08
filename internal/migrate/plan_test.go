@@ -54,7 +54,7 @@ func TestPlanGolden(t *testing.T) {
 	if err := p.WriteText(&b); err != nil {
 		t.Fatal(err)
 	}
-	golden.Assert(t, "migrate-plan", b.String())
+	golden.Assert(t, "migrate-plan", strings.NewReplacer(from, "<SOURCE>", home, "<HOME>").Replace(b.String()))
 	after, _ := snapshot(from)
 	if !equal(before, after) {
 		t.Fatal("dry run changed the source")
@@ -79,7 +79,7 @@ func TestBlockedPlanGolden(t *testing.T) {
 	if err := p.WriteText(&b); err != nil {
 		t.Fatal(err)
 	}
-	golden.Assert(t, "migrate-blocked-plan", b.String())
+	golden.Assert(t, "migrate-blocked-plan", strings.NewReplacer(from, "<SOURCE>", home, "<HOME>").Replace(b.String()))
 	if len(p.Conflicts) == 0 || len(p.Unmapped) == 0 {
 		t.Fatal("missing blockers")
 	}
@@ -211,5 +211,22 @@ func TestMultiRepoIdentity(t *testing.T) {
 	}
 	if len(r.values("repo")) != 2 || strings.Join(r.values("key"), ",") != "remote:example.com/team/one,remote:example.com/team/two" {
 		t.Fatalf("bad multi-repo identity: %s", p.result["projects/suite/project.md"].Data)
+	}
+}
+
+func TestPartialSelectionCannotMarkWholeHomeMigrated(t *testing.T) {
+	from, _ := fixture(t)
+	home := from
+	from = filepath.Join(from, "alpha")
+	p := scan(t, from, home)
+	if len(p.Conflicts) == 0 || !strings.Contains(p.Conflicts[0], "outside --from") {
+		t.Fatalf("missing omitted-home conflict: %v", p.Conflicts)
+	}
+	before := gotTree(t, home)
+	if _, err := p.Apply(); err == nil {
+		t.Fatal("partial migration applied")
+	}
+	if !equal(before, gotTree(t, home)) {
+		t.Fatal("refusal changed home")
 	}
 }
