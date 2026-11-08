@@ -50,7 +50,10 @@ func cliDriver() golden.Driver {
 		Run: func(in golden.Invocation) golden.Output {
 			var stdout, stderr bytes.Buffer
 			getenv := func(key string) string { return in.Env[key] }
-			home := gridhome.Real(in.Env["HOME"])
+			home := in.Env["HOME"]
+			if home != "" {
+				home = gridhome.Real(home)
+			}
 			gh := gridhome.Dir(getenv, home)
 			if gh != "" {
 				gh = gridhome.Real(gh)

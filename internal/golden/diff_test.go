@@ -17,6 +17,11 @@ func TestNormalization(t *testing.T) {
 	if got := n.text("01ARZ3NDEKTSV4RRFFQ69G5FAV"); got != "<ID-1>" {
 		t.Fatal(got)
 	}
+	unicodeInput := "é2025-01-02T03:04 ٢٠٢٥-٠١-٠٢T٠٣:٠٤ é01ARZ3NDEKTSV4RRFFQ69G5FAV :١٧٣٥٧٨٧٠٤٥٠٠٠\u00a0"
+	unicodeWant := "é2025-01-02T03:04 <TIME> é01ARZ3NDEKTSV4RRFFQ69G5FAV :<TIME>\u00a0"
+	if got := n.text(unicodeInput); got != unicodeWant {
+		t.Fatalf("Unicode normalization: got %q want %q", got, unicodeWant)
+	}
 	untouched := `{"b":2, "a":"literal"}`
 	if got := n.text(untouched); got != untouched {
 		t.Fatal(got)

@@ -21,8 +21,8 @@ import (
 // Raw snapshots are compared BEFORE normalization; a clock-only change remains
 // visible in files.diff. No newline, whitespace or JSON-key sorting is performed.
 var (
-	isoTime      = regexp.MustCompile(`\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?Z?)?`)
-	snapshotTime = regexp.MustCompile(`:\d{13}(?:\.\d+)?`)
+	isoTime      = regexp.MustCompile(`\p{Nd}{4}-\p{Nd}\p{Nd}-\p{Nd}\p{Nd}T\p{Nd}\p{Nd}:\p{Nd}\p{Nd}(?::\p{Nd}\p{Nd}(?:\.\p{Nd}+)?Z?)?`)
+	snapshotTime = regexp.MustCompile(`:\p{Nd}{13}(?:\.\p{Nd}+)?`)
 	ulid         = regexp.MustCompile(`[0-9A-HJKMNP-TV-Z]{26}`)
 )
 
