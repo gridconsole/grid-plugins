@@ -27,7 +27,9 @@ func briefAt(dir, name, projects, sub string) *brief {
 		return nil
 	}
 	file := filepath.Join(at.dir, sub, name+".md")
-	if !exists(file) || realNative(file, 0) != filepath.Join(realNative(at.dir, 0), sub, name+".md") {
+	// Only a symlink may move the brief; a prompt that spells its name in another
+	// case still names the same file on a case-folding volume.
+	if !exists(file) || !strings.EqualFold(realNative(file, 0), filepath.Join(realNative(at.dir, 0), sub, name+".md")) {
 		return nil
 	}
 	return &brief{file, name}

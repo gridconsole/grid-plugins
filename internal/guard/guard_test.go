@@ -308,11 +308,12 @@ func TestPlanHeaderRules(t *testing.T) {
 			return f.input("Write", filepath.Join(f.task, p))
 		}},
 		{"tasks folder aliases", func(f *fixture, deny bool) hookio.Input {
-			p := "tasks"
+			// Where tasks already exists, a folding volume reads TASKS as that same
+			// folder; the other spelling only matters in a project without one.
 			if deny {
-				p = "TASKS"
+				return f.input("Write", filepath.Join(f.projects, "fresh", "TASKS", "T-03", "notes.md"))
 			}
-			return f.input("Write", filepath.Join(f.projects, "example", p, "T-03", "notes.md"))
+			return f.input("Write", filepath.Join(f.projects, "example", "tasks", "T-03", "notes.md"))
 		}},
 		{"tasks folder odd sibling", func(f *fixture, deny bool) hookio.Input {
 			p := "notes"

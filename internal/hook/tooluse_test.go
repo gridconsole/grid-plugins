@@ -101,3 +101,60 @@ func TestHomeAllowCounter(t *testing.T) {
 		t.Fatalf("got %s, want %s", got, want)
 	}
 }
+
+// foldsCase probes whether dir's volume reads two spellings of a name as one
+// entry (the macOS default); it never assumes this from the OS.
+func foldsCase(t *testing.T, dir string) bool {
+	t.Helper()
+	probe := filepath.Join(dir, "CaseProbe")
+	if err := os.WriteFile(probe, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(probe)
+	_, err := os.Stat(filepath.Join(dir, "caseprobe"))
+	return err == nil
+}
+
+// A builder must not reach the brain or a project record through another
+// spelling of the Grid home on a case-folding volume.
+func TestCaseAliasesOfTheGridHomeAreDenied(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !foldsCase(t, root) {
+		t.Skip("case-sensitive filesystem: another spelling names a different path")
+	}
+	home := filepath.Join(root, "home")
+	grid := filepath.Join(home, ".grid")
+	cwd := filepath.Join(root, "repo")
+	for _, d := range []string{filepath.Join(grid, "projects", "example", "knowledge"), filepath.Join(grid, "knowledge"), cwd} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(grid, "projects", "example", "project.md"), []byte("---\nname: example\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []string{"pretooluse", "permissionrequest"} {
+		for _, tt := range []struct{ name, path string }{
+			{"project knowledge", filepath.Join(grid, "PROJECTS", "example", "knowledge", "n.md")},
+			{"project record", filepath.Join(grid, "PROJECTS", "example", "project.md")},
+			{"home knowledge", filepath.Join(home, ".GRID", "knowledge", "n.md")},
+		} {
+			t.Run(event+"/"+tt.name, func(t *testing.T) {
+				in := hookio.Input{AgentType: "grid:grid-builder", ToolName: "Write", Cwd: cwd, ToolInput: map[string]any{"file_path": tt.path, "content": "text"}}
+				stdin, _ := json.Marshal(in)
+				var out bytes.Buffer
+				Run(Options{
+					Event: event, Stdin: bytes.NewReader(stdin), Stdout: &out, Cwd: cwd,
+					Resolver: where.Resolver{GridHome: grid, Home: home},
+					Getenv:   func(string) string { return "" },
+				})
+				if !strings.Contains(out.String(), `"deny"`) {
+					t.Fatalf("not denied: %s", out.Bytes())
+				}
+			})
+		}
+	}
+}
