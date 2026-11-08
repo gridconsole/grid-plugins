@@ -31,7 +31,8 @@ no `.go` file is newer, and otherwise builds `dist/grid` first; a hook stays sil
 that build is impossible. Releases never build and never touch the network.
 `make build` creates only the native development CLI at `dist/grid`.
 
-The release version is `git describe --tags --always --dirty`, stamped into
+The release version is `git describe --tags --always --dirty` mapped to semver by
+`version.FromDescribe` (no tag: `0.0.0-dev+<sha>`; after tag v0.2.0: `v0.2.1-dev.N+<sha>`), stamped into
 `internal/version.Version` through `-ldflags` and into both release manifests.
 `make dist VERSION=<version>` is available for source archives without Git.
 Builds disable cgo and VCS metadata, use `-trimpath` and `-buildid=`, and pin

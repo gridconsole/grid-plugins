@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/packaging"
 	"github.com/gridconsole/grid-plugins/internal/version"
@@ -12,8 +14,13 @@ import (
 
 func main() {
 	dist := flag.Bool("dist", false, "build all release platforms and the installable plugin")
-	release := flag.String("version", version.Version, "release version from git describe")
+	release := flag.String("version", version.Version, "release version")
+	describe := flag.Bool("describe", false, "print the semver version for this checkout from git describe and exit")
 	flag.Parse()
+	if *describe {
+		fmt.Println(checkoutVersion())
+		return
+	}
 	root, err := os.Getwd()
 	if err == nil {
 		if *dist {
@@ -26,4 +33,17 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// checkoutVersion falls back to the source default outside git or when describe is unreadable.
+func checkoutVersion() string {
+	out, err := exec.Command("git", "describe", "--tags", "--always", "--dirty").Output()
+	if err != nil {
+		return version.Version
+	}
+	v, err := version.FromDescribe(strings.TrimSpace(string(out)))
+	if err != nil {
+		return version.Version
+	}
+	return v
 }

@@ -1,5 +1,5 @@
 PKG     := github.com/gridconsole/grid-plugins
-VERSION ?= $(shell git describe --tags --always --dirty)
+VERSION ?= $(shell go run ./internal/packaging/cmd -describe)
 LDFLAGS := -buildid= -X $(PKG)/internal/version.Version=$(VERSION)
 
 .PHONY: build dist generate test test-clean lint golden clean
