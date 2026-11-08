@@ -80,9 +80,16 @@
                   "type": "object",
                   "properties": {
                     "target": {
-                      "type": "string",
-                      "minLength": 1,
-                      "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+                        }
+                      ]
                     },
                     "status": {
                       "enum": [
@@ -123,9 +130,16 @@
                   "type": "object",
                   "properties": {
                     "target": {
-                      "type": "string",
-                      "minLength": 1,
-                      "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+                        }
+                      ]
                     },
                     "reason": {
                       "type": "string",

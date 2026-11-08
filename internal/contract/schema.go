@@ -207,7 +207,13 @@ func validate(s map[string]any, v any, path string, depth int) error {
 			}
 		}
 		props, _ := s["properties"].(map[string]any)
-		for key, value := range object {
+		keys := make([]string, 0, len(object))
+		for key := range object {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			value := object[key]
 			child, exists := props[key]
 			if !exists {
 				switch extra := s["additionalProperties"].(type) {
@@ -337,11 +343,11 @@ func semantic(name string, value any) error {
 		return fmt.Errorf("$.file: must match writer and fence")
 	}
 	if body, ok := v["body"].(map[string]any); ok {
-		if _, external := body["ref"]; external && len(body) == 1 {
-			return nil
-		}
 		if isJobSide(name) && v["lease"] != v["job"] {
 			return fmt.Errorf("$.lease: must match job")
+		}
+		if _, external := body["ref"]; external && len(body) == 1 {
+			return nil
 		}
 		if name == "job" && v["job"] != body["id"] || name == "checkpoint" && v["job"] != body["job"] || name == "usage-notice" && v["task"] != body["task"] {
 			return fmt.Errorf("$.body: identifier must match envelope")

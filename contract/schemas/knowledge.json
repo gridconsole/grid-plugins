@@ -107,14 +107,32 @@
       "then": {
         "properties": {
           "body": {
-            "required": [
-              "external"
-            ],
-            "properties": {
-              "external": {
-                "const": true
+            "anyOf": [
+              {
+                "required": [
+                  "external"
+                ],
+                "properties": {
+                  "external": {
+                    "const": true
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                  }
+                },
+                "required": [
+                  "ref"
+                ],
+                "additionalProperties": false
               }
-            }
+            ]
           }
         }
       }

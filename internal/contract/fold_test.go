@@ -395,3 +395,50 @@ func TestQuestionAnswerSelection(t *testing.T) {
 		t.Fatal("guest answered another guest's question")
 	}
 }
+
+func TestResultTargetAndTenureBoundaries(t *testing.T) {
+	t.Run("control-targets-result", func(t *testing.T) {
+		r := side(t, "result", 4)
+		c := move(t, 5, Accepted)
+		changeBody(t, &c, func(v map[string]any) { v["target"] = r.ID })
+		state := Fold(append(base(t), r, c))
+		if state.Jobs["J-1"].Status != Accepted {
+			t.Fatalf("result target did not resolve: %+v", state.Verdicts)
+		}
+	})
+	t.Run("exit-counts-once", func(t *testing.T) {
+		x := side(t, "worker-exit", 4)
+		body(t, &x, map[string]string{"reason": "loop"})
+		y := x
+		y.ID, y.Seq = fmt.Sprintf("%026d", 5), 5
+		state := Fold(append(base(t), x, y))
+		if state.Jobs["J-1"].ReviewRounds != 1 || verdict(state, y.ID).Kind != "ignored" {
+			t.Fatal("second exit consumed another round")
+		}
+	})
+	t.Run("control-without-task-lease", func(t *testing.T) {
+		c := move(t, 4, Stale)
+		c.Lease, c.Fence = nil, 0
+		state := Fold(append(base(t), c))
+		if state.Jobs["J-1"].Status != Running || verdict(state, c.ID).Kind != "bad" {
+			t.Fatal("unleased control acted")
+		}
+	})
+	t.Run("mixed-tasks-refused", func(t *testing.T) {
+		posts := base(t)
+		posts[1].Task = fmt.Sprintf("%026d", 99)
+		if state := Fold(posts); len(state.Jobs) != 0 {
+			t.Fatal("Job IDs from different tasks must not be combined")
+		}
+	})
+	t.Run("bad-record-diagnostics-stable", func(t *testing.T) {
+		p := side(t, "result", 4)
+		p.Seq, p.Gen, p.TypeV = -1, -1, -1
+		first := Fold(append(base(t), p))
+		for range 10 {
+			if next := Fold(append(base(t), p)); !reflect.DeepEqual(first, next) {
+				t.Fatal("invalid-record verdict depends on map traversal")
+			}
+		}
+	})
+}
