@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
 )
 
 func putWorkflowFixture(t *testing.T, path, text string) {
