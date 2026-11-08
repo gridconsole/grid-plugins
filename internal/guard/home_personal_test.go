@@ -54,3 +54,15 @@ func TestHomePersonalLegacyScripts(t *testing.T) {
 		}
 	}
 }
+
+func TestHomePersonalGlobCannotEscape(t *testing.T) {
+	f := setup(t)
+	f.env["GRID_ROLE"], f.env["GRID_PROJECT"] = "guest", "example"
+	f.write(filepath.Join(f.projects, "example", "project.md"), "---\nid: example-id\n---\n")
+	for _, pattern := range []string{"../../personal/**", filepath.Join(f.grid, "personal", "*")} {
+		in := f.input("Glob", filepath.Join(f.projects, "example"))
+		in.Cwd = f.repo
+		in.ToolInput["pattern"] = pattern
+		expect(t, EvaluateHome(in, f.root, f.env), "deny")
+	}
+}

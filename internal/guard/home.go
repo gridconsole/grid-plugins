@@ -240,14 +240,17 @@ func EvaluateHome(in hookio.Input, root string, env map[string]string) (decision
 				return hookio.Deny("This caller cannot access Grid data outside the active project.")
 			}
 		}
-		if home == "" || !filepath.IsAbs(given) {
-			return hookio.Decision{}
-		}
 		if in.ToolName == "Glob" {
 			p := str(in.ToolInput["pattern"])
 			if filepath.IsAbs(p) || globEscape.MatchString(p) {
+				if restricted {
+					return hookio.Deny("This caller cannot search outside the active project.")
+				}
 				return hookio.Decision{}
 			}
+		}
+		if home == "" || !filepath.IsAbs(given) {
+			return hookio.Decision{}
 		}
 		if !inside(home, realNative(given, 0)) || scope == "" || !inside(scope, realNative(given, 0)) {
 			return hookio.Decision{}
