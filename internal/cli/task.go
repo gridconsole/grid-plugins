@@ -15,6 +15,9 @@ const taskUsage = `Usage:
   grid task show [T-NN] [--json]
   grid task list [--project <name-or-id>] [--state <state>] [--json]
   grid task move <machine> [--task <task>] [--project <project>] [--who <caller>] [--json]
+  grid task stop|close|reopen <T-NN> [--reason <text>] [--json]
+  grid task status <T-NN> <state> [--json]
+  grid task history <T-NN> [--json]
 `
 
 func runTask(args []string, env Env) int {
@@ -29,6 +32,10 @@ func runTask(args []string, env Env) int {
 	sub := args[0]
 	if sub == "move" {
 		return runTaskIntent(args, env)
+	}
+	switch sub {
+	case "stop", "close", "reopen", "status", "history":
+		return runTaskWrite(args, env)
 	}
 	if sub != "new" && sub != "show" && sub != "list" {
 		fmt.Fprintf(env.Stderr, "grid task: unknown command %q\n%s", sub, taskUsage)
