@@ -111,7 +111,7 @@ func commands() []command {
 		{"setup", "first-run scan and settings", nil},
 		{"signal", "inbox signals", nil},
 		{"artifact", "artifacts", nil},
-		{"eval", "run digests and the Codex eval arm", nil},
+		{"eval", "list, run and show task evaluations", runEval},
 		{"migrate", "upgrade the Grid home to this format", nil},
 		{"sync", "sync with a Grid server", nil},
 	}
