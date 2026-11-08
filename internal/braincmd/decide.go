@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -50,7 +51,12 @@ func runDecide(args []string, env Env) int {
 	if target == "" {
 		target = f.Arg(1)
 	}
-	result, err := s.DecideTask(brain.TaskRef{ID: t.ID, Path: t.Path}, f.Arg(1), action, target, *note)
+	tasks := task.Store{Resolver: where.Resolver{GridHome: env.GridHome, Home: env.Home, TempRoots: env.TempRoots}}
+	history := func(text string) error {
+		_, err := tasks.Note(task.WriteOptions{Cwd: env.Cwd, ID: t.ID, Note: text, Who: contract.Author{ID: "grid-curator", Role: "agent"}})
+		return err
+	}
+	result, err := s.DecideTask(brain.TaskRef{ID: t.ID, Path: t.Path}, f.Arg(1), action, target, *note, history)
 	if err != nil {
 		return fail(err)
 	}

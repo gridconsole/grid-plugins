@@ -12,8 +12,6 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/safefile"
-	"github.com/gridconsole/grid-plugins/internal/taskfile"
-	"github.com/gridconsole/grid-plugins/internal/taskhistory"
 )
 
 // TaskDecision is a durable receipt, also used to finish interrupted decisions.
@@ -30,17 +28,20 @@ type decisionWrite struct {
 	Entry        Note   `json:"entry"`
 	ProposalNote Note   `json:"proposal_note"`
 	Before       []byte `json:"before"`
+	Noted        bool   `json:"noted"`
 	Done         bool   `json:"done"`
 }
 
-// DecideTask files a task proposal through the same keeper gates as Accept.
-// The receipt precedes publication, so retries neither duplicate merges nor
-// overwrite an intervening edit. Completed proposals remain as audit records.
 // TaskRef names a resolved task folder; brain cannot import internal/task,
 // which reads brain proposals at delivery.
 type TaskRef struct{ ID, Path string }
 
-func (s Store) DecideTask(t TaskRef, proposal, action, target, note string) (TaskDecision, error) {
+// DecideTask files a task proposal through the same keeper gates as Accept.
+// The receipt precedes publication, so retries neither duplicate merges nor
+// overwrite an intervening edit. Completed proposals remain as audit records.
+// history appends the task's history line through the task writer; it runs
+// after the level lock is released, since delivery takes .task.lock first.
+func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, history func(string) error) (TaskDecision, error) {
 	if !ValidName(proposal) {
 		return TaskDecision{}, fmt.Errorf("proposal id must be a plain name")
 	}
@@ -223,16 +224,23 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string) (Tas
 		if err = safefile.AtomicWrite(tr, proposalPath, b); err != nil {
 			return err
 		}
-		detail := proposal + " " + action + " " + target
-		if note != "" {
-			detail += "; " + note
-		}
-		if err = taskhistory.Add(t.Path, taskfile.HistoryLine(w.At, "brain decided", detail, "grid-curator")); err != nil {
-			return err
-		}
 		pending = &w
 		return nil
 	})
+	receipt := filepath.Join("brain-proposals", ".decisions", proposal+".json")
+	if err == nil && pending != nil && !pending.Noted {
+		detail := "brain decided: " + proposal + " " + action + " " + target
+		if note != "" {
+			detail += "; " + note
+		}
+		if err = history(detail); err == nil {
+			pending.Noted = true
+			var b []byte
+			if b, err = json.Marshal(pending); err == nil {
+				err = safefile.AtomicWrite(tr, receipt, b)
+			}
+		}
+	}
 	if err == nil && pending != nil {
 		if action != "reject" {
 			_, err = s.RebuildIndex()
@@ -242,7 +250,7 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string) (Tas
 			var b []byte
 			b, err = json.Marshal(pending)
 			if err == nil {
-				err = safefile.AtomicWrite(tr, filepath.Join("brain-proposals", ".decisions", proposal+".json"), b)
+				err = safefile.AtomicWrite(tr, receipt, b)
 			}
 		}
 	}
