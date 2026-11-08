@@ -12,7 +12,7 @@ let lib = null;
 for (const rel of ['../feed/lib.mjs', '../../feed/lib.mjs']) {
   try { lib = await import(rel); break; } catch { /* the other layout */ }
 }
-const { atMs, feedDir, fold, post, readFeed, resolveTask } = lib ?? {};
+const { atMs, boundTail, feedDir, fold, post, readFeed, redact, resolveTask } = lib ?? {};
 
 export const BEAT_EVERY_MS = 60_000;
 const TAIL_BYTES = 64 * 1024;
@@ -54,6 +54,32 @@ function lastBeatMs(file, job) {
   return null;
 }
 
+// The tail as it is written to the Feed: obvious tokens and credentials hidden first, so a token cut at the line limit is not left half there, then the last lines.
+const cleanTail = (lines) => boundTail((Array.isArray(lines) ? lines : typeof lines === 'string' ? lines.split('\n') : []).map((l) => (typeof l === 'string' ? redact(l) : l)));
+
+// The last lines of the session's transcript (Claude Code's JSONL: text of messages and the commands of tool calls), bounded by boundTail.
+function sessionTail(file) {
+  try {
+    if (!file) return [];
+    const size = fs.statSync(file).size;
+    const len = Math.min(size, TAIL_BYTES);
+    const fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(len);
+    try { fs.readSync(fd, buf, 0, len, size - len); } finally { fs.closeSync(fd); }
+    const rows = buf.toString('utf8').split('\n');
+    if (size > len) rows.shift();
+    const out = [];
+    for (const row of rows) {
+      let m;
+      try { m = JSON.parse(row)?.message; } catch { continue; }
+      const parts = typeof m?.content === 'string' ? [m.content] : Array.isArray(m?.content)
+        ? m.content.map((c) => (typeof c?.text === 'string' ? c.text : c?.type === 'tool_use' ? `${str(c.name)} ${str(c.input?.command ?? c.input?.file_path ?? c.input?.pattern)}`.trim() : '')) : [];
+      for (const part of parts) out.push(...part.split('\n'));
+    }
+    return cleanTail(out);
+  } catch { return []; }
+}
+
 // Take the exclusive lock; false when another hook holds it. A lock older than 10 s is a dead hook's and is removed.
 function takeLock(lock) {
   for (let tries = 0; tries < 2; tries++) {
@@ -67,7 +93,7 @@ function takeLock(lock) {
 
 // One beat for the Job in the environment: 'posted', 'throttled' (the last beat is under a minute old), 'locked' (another hook is beating),
 // 'off' (not a Worker of a task, or the task is not found) or 'error'. Never throws. note is a few words on what the Worker is doing.
-export function beat(note, { env = process.env, cwd = process.cwd(), now = Date.now() } = {}) {
+export function beat(note, { env = process.env, cwd = process.cwd(), now = Date.now(), session = '', model = '', tail = [] } = {}) {
   try {
     if (!lib) return 'error';
     const task = str(env.GRID_FEED_TASK);
@@ -82,7 +108,7 @@ export function beat(note, { env = process.env, cwd = process.cwd(), now = Date.
     try {
       const last = lastBeatMs(path.join(dir, own), job);
       if (last !== null && now - last < BEAT_EVERY_MS) return 'throttled';
-      return post(found.dir, { type: 'heartbeat', job, body: { note: str(note).slice(0, 80) } }, { env, now }).ok ? 'posted' : 'error';
+      return post(found.dir, { type: 'heartbeat', job, body: { note: str(note).slice(0, 80), ...(str(session) ? { session: str(session) } : {}), ...(str(model) ? { model: str(model) } : {}), ...(tail.length ? { tail: cleanTail(tail) } : {}) } }, { env, now }).ok ? 'posted' : 'error';
     } finally {
       try { fs.unlinkSync(lock); } catch { /* removed */ }
     }
@@ -149,8 +175,12 @@ export function hookExit(input, { env = process.env, now = Date.now() } = {}) {
 }
 
 // One hook input (the Claude Code shape, which Codex sends too) as one beat: Stop is the Worker's exit beat, a tool call notes its tool.
+// The beat also carries the session id, the model and the last lines of the session, for the Feed tab.
 export function hookBeat(input, { env = process.env, now = Date.now() } = {}) {
-  return beat(input.hook_event_name === 'Stop' ? 'stopped' : str(input.tool_name), { env, cwd: str(input.cwd) || process.cwd(), now });
+  return beat(input.hook_event_name === 'Stop' ? 'stopped' : str(input.tool_name), {
+    env, cwd: str(input.cwd) || process.cwd(), now,
+    session: str(input.session_id), model: str(input.model) || str(env.GRID_MODEL), tail: sessionTail(str(input.transcript_path)),
+  });
 }
 
 async function readStdin() {

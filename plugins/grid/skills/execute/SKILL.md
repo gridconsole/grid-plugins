@@ -7,7 +7,7 @@ description: Run the task's current workflow step: pick the agent, have a brief 
 
 # Execute
 
-The task's `workflow` in task.md lists the steps with their kinds and `step` names the current one. Workflow steps go in order; this skill runs the current step, records it, and when the next step needs no one, runs that one in the same turn, and so on. Inside a `run` step with a plan, the plan's numbered steps are not a queue: every one whose `needs:` are ticked runs at the same time, up to the project's limit (the section "Run every ready step together").
+The task's `workflow` in task.md lists the steps with their kinds and `step` names the current one. Workflow steps go in order; this skill runs the current step, records it, and when the next step needs no one, runs that one in the same turn, and so on. Inside a `run` step with a plan, the plan's numbered steps are not a queue: the Feed loop runs them as Jobs (the section "Run a `run` step through the Feed loop"); on the old path, every one whose `needs:` are ticked runs at the same time, up to the project's limit (the section "Run every ready step together").
 
 A task keeps going on its own until it reaches something only a person can give. These are the only places to stop:
 
@@ -33,6 +33,25 @@ The task folder is `<projects folder>/<project>/tasks/T-NN-slug/`. The projects 
 - A blocking question in `needs` that is still open: stop.
 - The planner start line: the task sits on its `plan` step and has no `plan.md` yet. Plan it before anything else: unless task.md says `size: small`, run the research skill first (`grid-scout` maps the files when they are not obvious, `grid-researcher` writes `research.md`), then the plan skill, which asks the open decisions in `questions/` and starts `grid-reviewer` on the plan before `status: waiting`.
 - Never use AskUserQuestion: use the questions skill, then end the turn; the answer resumes the task.
+
+## Run a `run` step through the Feed loop
+
+On a `run` step whose task has a `plan.md`, the Feed loop does the work (the feed skill describes the Feed): the plan becomes Jobs, Workers on Hosts run them, their results come back on the Feed, and a review Job judges the whole. It replaces starting in-session subagents by hand. The logic is plain code in the plugin, so a plain terminal session runs it exactly as Grid does.
+
+**Old path.** A task started before the Feed loop existed keeps the section "Run every ready step together" (briefs and in-session agents): that is a task whose folder has a `subagents/` folder with briefs and no `feed/`. Every other task, including every new one, uses the Feed loop. A task with a `feed/` always continues on it.
+
+1. **Start it.** Run, on its own, with the project's repo clone from `project.md` after `--repo` when the plan changes code (leave `--repo` off for research and documents):
+
+   ```
+   node "${CLAUDE_PLUGIN_ROOT}/feed/start.mjs" T-NN --repo "<clone>"
+   ```
+
+   The first start saves its flags (`--repo`, `--base`, `--agent`, `--slots`, `--model`, `--interval`) in the task folder, `feed/.orchestrator.json`, never in the repo. A later start with no flags, such as a resume, runs the loop the same way; give a flag again only to change it, and the change is saved.
+
+   It prints one JSON line. `started`: a loop now runs detached (its output in `feed/.orchestrator.log`) and outlives this session; it plans the Jobs from `plan.md` with one model call, then starts Workers as Jobs become ready, within the Hosts' free slots. A first plan that fails is asked again by the loop, at most three times, spaced one interval apart; after that the loop asks the Owner "Planning failed: <reason>. Retry it / Drop it" and stops, and a Retry answer plans it again. `running`: a loop already holds the task, change nothing. A lock left by a loop that no longer runs (its process gone, or no beat for 2 minutes) is taken over, and the line then says `took_over: true`. `done`: every Job is finished, go to step 4. `no-plan`: plan the task first. `error`: say the reason from `errors` and stop; with `retrying: true` a loop was started and keeps trying, without it no loop runs until the Owner answers.
+2. **The review.** `start.mjs` plans the Jobs once, and when none of them is a `reviewer` it posts a review Job as the Orchestrator after every build Job, so the work always ends on a review. Write the review as the plan's last step anyway when the plan has specific things to check.
+3. **Watch, do not hand-run.** Read `grid-feed state --task T-NN` (or `feed_state`): each Job with its status, the open questions, the Hosts. Never start a subagent for a Job the loop owns. A `question` on the Feed is a question for Needs you: the loop files it itself in `questions/<owner>.md`, with a `feed: <post id>` line under the heading, and sets the task waiting when it blocks; do not file it again. End the turn. Once the person answers in the app or in a terminal (the questions skill's Record an answer), the loop posts the answer on the Feed as an `answer` from the Owner on its next tick, and carries on. A parked or rejected Job the loop cannot move is a blocker: say which and why. A loop that died resumes by running step 1 again (the Feed is the state, the saved settings are reused). Between checks end the turn; Grid resumes the task when a Job posts.
+4. **Record.** When every Job is `done`, read each Job's `result` and the review Job's result, tick the plan steps they cover with evidence from those results (plan skill), copy `repo:` lines from the `submit` posts' branches into `repos:` as in section 4, then go to section 5 and 6. A review that disagrees puts the work back: post a new Job for the fix and its re-review, and run step 1 again.
 
 ## Run every ready step together
 

@@ -11,10 +11,12 @@ fields:
   - after: ids of Jobs that must be done first
   - kind: `wait` for a Job that watches a pipeline and runs no model; leave out for a Job a Worker does
   - check: for a wait Job, `{command: [argv...]}` or `{url}`, with `interval_s` (15), `timeout_s` (3600) and `probe_timeout_s` (30); a command exits 0 green, 1 red, 3 asks for a manual approval, anything else is pending; never run through a shell
+  - item: the number of the plan item the Job serves, a whole number; the Orchestrator sets it from the plan
+  - priority: high, normal (the default) or low; a later control post's priority wins
 ---
 One piece of work that one Worker picks up. The envelope `job` is its id (J-1, J-2, ...); a Job post without one gets the next number.
 
-Only a Job posted by the Orchestrator counts: role `orchestrator`, and a Worker id (the Orchestrator's own session id, say) that is not the Worker id of any Job. A Job from anyone else is kept, shown and ignored with a reason, and never goes ready.
+Only a Job posted by the Orchestrator counts: role `orchestrator`, and a Worker id that is missing, or is not a Job attempt's Worker id (the Orchestrator's own session id, say). A Job from anyone else is kept, shown and ignored with a reason, and never goes ready; the same holds for a `handover`.
 
 Orchestrator: posts it, then moves it with control posts: ready when nothing blocks it, assigned to a Worker and Host, and on from there. A Job nobody moved stays posted.
 

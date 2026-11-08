@@ -9,4 +9,4 @@ fields:
 ---
 A Worker's process ended. Hooks post it when the session stops or ends; if no result came first, the Job needs a decision.
 
-Orchestrator: sees `exited` on the Job in the fold and, with no result, reassigns the Job or parks it with a reason.
+Orchestrator: a worker-exit with no result marks the Job stale; the loop retries it once, then asks the Owner and parks it (see the feed skill).

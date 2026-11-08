@@ -18,9 +18,13 @@ import { fileURLToPath } from 'node:url';
 const hookLib = ['../hooks/lib.mjs', '../hooks/grid/lib.mjs'].find((r) => fs.existsSync(fileURLToPath(new URL(r, import.meta.url)))) ?? '../hooks/lib.mjs';
 const { gridFolders, taskAt, projectFor, parseFrontmatter, str } = await import(hookLib);
 
-export const CORE_TYPES = ['job', 'result', 'submit', 'question', 'answer', 'knowledge', 'heartbeat', 'head', 'host', 'control', 'handover', 'worker-exit'];
+export const CORE_TYPES = ['job', 'result', 'submit', 'question', 'answer', 'knowledge', 'heartbeat', 'head', 'host', 'control', 'handover', 'worker-exit', 'claim', 'post', 'deploy-failed'];
 export const JOB_STATUSES = ['posted', 'ready', 'assigned', 'running', 'submitted', 'integrated', 'done', 'stale', 'parked', 'rejected', 'conflict', 'cancelled'];
 export const LEASE_MS = 10 * 60_000;
+export const PRIORITIES = ['high', 'normal', 'low'];
+export const HOLD_REASONS = ['dependency', 'worker_cap', 'needs_person', 'question', 'host_offline', 'conflict_hold', 'starting', 'orchestrator_stopped'];
+export const TAIL_LINES = 8;
+export const TAIL_CHARS = 200;
 const LIVE = new Set(['assigned', 'running']);
 const QUESTION_CLOSING = new Set(['closed', 'answered', 'done', 'cancelled']);
 const VERDICTS = new Set(['accept', 'disagree']);
@@ -239,11 +243,15 @@ function append(taskDir, input, ctx) {
   if (!fs.existsSync(taskDir) || !fs.statSync(taskDir).isDirectory()) errors.push(`task folder ${taskDir} does not exist`);
   const types = loadTypes(projectDirOf(taskDir));
   const note = typeof type === 'string' ? types.get(type) : undefined;
+  const id = typeof input.id === 'string' && ULID_RE.test(input.id) ? input.id : ulid();
+  if (type === 'post') errors.push(...postProblems(author.role, body, id));
   if (note && isObj(body)) for (const f of note.required) if (body[f] === undefined || body[f] === null || body[f] === '') errors.push(`body.${f} is required for a ${type} post: ${note.fields[f] ?? f}`);
   if (errors.length) return { ok: false, errors };
 
   const dir = feedDir(taskDir);
   const existing = readFeed(dir);
+  // An id names one post: a later post with the same id would stand in for the first wherever it is looked up by id.
+  if (existing.some((x) => x.id === id)) return fail(`post id ${id} is already used in this Feed`);
   const head = currentEpoch(existing, jobWorkers(existing));
   const epoch = Number.isInteger(ctx.epoch) && ctx.epoch >= 0 ? ctx.epoch : type === 'handover' ? (Number.isInteger(body.epoch) && body.epoch >= 0 ? body.epoch : head + 1) : head;
   if (type === 'job' && !jobId) {
@@ -251,7 +259,7 @@ function append(taskDir, input, ctx) {
     jobId = `J-${n + 1}`;
   }
   const p = {
-    id: ulid(), task: taskIdOf(taskDir), type, type_v: note?.version ?? 0,
+    id, task: taskIdOf(taskDir), type, type_v: note?.version ?? 0,
     author: { member: author.member, host: author.host, role: author.role }, worker: author.worker,
     at: nextAt(existing.at(-1)?.at, ctx.now), re, job: jobId, epoch, body,
   };
@@ -274,7 +282,69 @@ function append(taskDir, input, ctx) {
   return { ok: true, post: note ? p : { ...p, unknown_type: true }, file };
 }
 
+// ---- the task page's `post` ----
+
+export const POST_ROLES = ['owner', 'member', 'guest', 'planner', 'agent'];
+export const POST_KINDS = ['message', 'pickup', 'ask-pickup', 'ship', 'close', 'reopen'];
+// Characters are counted as code points, as the core counts them, not as UTF-16 units.
+export const POST_MAX_CHARS = 4000;
+// Digits only, leading zeros allowed: the core's is_post_ref accepts item:i-04 and question:Q-007.
+const POST_REF_RE = /^(task|item:i-[0-9]+|question:Q-[0-9]+)$/;
+
+// Why a `post` body from a writer of this role is not valid, as a list (empty when it is). `id` is the post's own id, which its attachments live under.
+export function postProblems(role, body, id) {
+  const out = [];
+  const b = isObj(body) ? body : {};
+  if (!POST_ROLES.includes(role)) out.push(`a post is written as owner, member, guest, planner or agent, not ${str(role) || 'no role'}`);
+  if (typeof b.ref !== 'string' || !POST_REF_RE.test(b.ref)) out.push('body.ref must be task, item:i-<n> or question:Q-<n>');
+  if (!POST_KINDS.includes(b.kind)) out.push(`body.kind must be one of ${POST_KINDS.join(', ')}`);
+  if (b.text !== undefined && typeof b.text !== 'string') out.push('body.text must be text');
+  else if (typeof b.text === 'string' && [...b.text].length > POST_MAX_CHARS) out.push(`body.text is at most ${POST_MAX_CHARS} characters`);
+  if (b.kind === 'message' && !(typeof b.text === 'string' && b.text.trim())) out.push('a message needs body.text');
+  if (role === 'guest' && (b.kind === 'pickup' || b.kind === 'ship')) out.push(`a guest may not post ${b.kind}`);
+  if (b.attachments !== undefined) {
+    const base = `attachments/posts/${id}/`;
+    if (!Array.isArray(b.attachments)) out.push('body.attachments must be a list of paths');
+    else for (const a of b.attachments) {
+      const parts = typeof a === 'string' ? a.split('/') : [];
+      const inside = typeof a === 'string' && a.startsWith(base) && a.length > base.length && !path.isAbsolute(a) && !a.includes('\\') && !a.includes('\0') && !parts.some((x) => x === '..' || x === '.' || x === '');
+      if (!inside) out.push(`attachment ${str(a).slice(0, 80)} must be a path under ${base}`);
+    }
+  }
+  return out;
+}
+
+// ---- Feed tab fields ----
+
+// A priority as a label or a whole number, else null (an unusable value is not kept).
+const cleanPriority = (v) => (PRIORITIES.includes(v) || Number.isInteger(v) ? v : null);
+// Higher goes first: high 1, normal 0, low -1; a whole number is its own rank.
+export const priorityRank = (v) => (v === 'high' ? 1 : v === 'low' ? -1 : Number.isInteger(v) ? v : 0);
+// The last 8 lines of a Worker's session, each cut to 200 characters, from an array of lines or one text.
+export function boundTail(v) {
+  const lines = (Array.isArray(v) ? v : typeof v === 'string' ? v.split('\n') : []).filter((l) => typeof l === 'string').map((l) => l.replace(/\s+$/, '')).filter(Boolean);
+  return lines.slice(-TAIL_LINES).map((l) => l.slice(0, TAIL_CHARS));
+}
+// A line with obvious secrets hidden as ***: the value after KEY=, TOKEN=, SECRET= or PASSWORD= (any case, in any name that ends so), a Bearer
+// token, and strings that look like a GitHub (ghp_, gho_, ...), sk- or Slack (xox) token. It cannot know every secret; it catches the usual ones.
+const SECRET_PATTERNS = [
+  [/([A-Za-z0-9_.-]*(?:key|token|secret|password)=)(?:"[^"]*"|'[^']*'|\S+)/gi, '$1***'],
+  [/\b(Bearer\s+)[A-Za-z0-9._~+/=-]{4,}/gi, '$1***'],
+  [/\b(?:gh[pousr]_[A-Za-z0-9]{6,}|sk-[A-Za-z0-9_-]{6,}|xox[a-z]?-[A-Za-z0-9-]{4,})/g, '***'],
+];
+export const redact = (line) => SECRET_PATTERNS.reduce((text, [re, to]) => text.replace(re, to), str(line));
+const holdOf = (b) => ({
+  reason: b.reason, after: list(b.after), question: str(b.question) || null, blocker: str(b.blocker) || null,
+});
+
 // ---- the fold ----
+
+// The posts by id, the first post of an id winning: a later post that reuses an id cannot stand in for the first one wherever a post is looked up by id.
+export function firstById(posts) {
+  const byId = new Map();
+  for (const p of posts) if (!byId.has(p.id)) byId.set(p.id, p);
+  return byId;
+}
 
 const parseLease = (v) => {
   if (typeof v === 'number' && Number.isFinite(v) && v >= 1e12) return v;
@@ -284,8 +354,10 @@ const parseLease = (v) => {
 const list = (v) => (Array.isArray(v) ? v.map(str).filter(Boolean) : str(v) ? [str(v)] : []);
 const who = (p) => `${str(p.author?.member)}@${str(p.author?.host)}`;
 
-// The state of a task from its posts (readFeed's result): { epoch, jobs, questions, open_questions, hosts, head, ignored, unknown }.
-// A job has a status, assign {worker, host}, priority, after, base, attempt, verdict, lease_expires (ISO), last_beat, history (one entry per
+// The state of a task from its posts (readFeed's result): { epoch, by_ref (the task page's posts per ref, in (at, id) order), jobs, questions, open_questions, hosts, head, ignored, unknown }.
+// A job has item (the plan item it serves, or null), session and model (the Worker's, from its latest post that names them), reason
+// ({reason, after, question, blocker} from the latest hold control post while the Job is unclaimed, else null), tail (the last 8 lines of
+// the Worker's session, from its latest beat; all three are cleared when the Job goes to another Worker), a status, assign {worker, host}, priority (high, normal or low; a whole number from older posts; normal by default), after, base, attempt, verdict, lease_expires (ISO), last_beat, history (one entry per
 // control post that counted, with its reason), results and submits (post ids), open_questions (ids) and exited (the worker-exit post id), and
 // the non-enumerable jobPost, the job post that was counted.
 // `now` (ms) decides which leases ran out: an assigned or running job past its lease reads as stale (recorded_status keeps the control post's).
@@ -303,8 +375,9 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
   const counted = new Map(); // job id -> the post the fold counted for it
   const jobOfPost = new Map();
   const questions = new Map();
-  const byId = new Map(sorted.map((p) => [p.id, p]));
+  const byId = firstById(sorted);
   const hosts = {};
+  const byRef = {};
   let head = null;
   const skip = (p, why) => ignored.push({ id: p.id, why });
   const isUnknown = (p) => p.unknown_type === true || (known !== null && !known.has(p.type));
@@ -339,7 +412,8 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
       if (why) { skip(p, `a job does not count: ${why}`); continue; }
       if (jobs.has(id)) { skip(p, `job ${id} is already posted`); continue; }
       jobs.set(id, {
-        id, post: p.id, title: str(body.title), role: str(body.role) || null, status: 'posted', recorded_status: 'posted', stale: false, assign: null, priority: null,
+        id, post: p.id, title: str(body.title), role: str(body.role) || null, status: 'posted', recorded_status: 'posted', stale: false, assign: null, priority: cleanPriority(body.priority) ?? 'normal',
+        item: Number.isInteger(body.item) && body.item > 0 ? body.item : null, session: null, model: null, reason: null, tail: [],
         after: list(body.after), base: null, attempt: 0, verdict: null, lease_expires: null, last_beat: null, history: [], results: [], submits: [], open_questions: [], exited: null,
         lease_ms: LEASE_MS, lease_at: null,
       });
@@ -369,12 +443,22 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
     if (b.status !== undefined && !JOB_STATUSES.includes(b.status)) return skip(p, `status ${str(b.status)} is not a job status`);
     if (b.verdict !== undefined && !VERDICTS.has(b.verdict)) return skip(p, `verdict ${str(b.verdict)} is not accept or disagree`);
     if (b.attempt !== undefined && !(Number.isInteger(b.attempt) && b.attempt >= 0)) return skip(p, 'attempt must be a whole number');
+    if (b.priority !== undefined && cleanPriority(b.priority) === null) return skip(p, 'priority must be high, normal, low or a whole number');
     const lease = b.lease === undefined ? undefined : parseLease(b.lease);
     if (lease === null) return skip(p, 'lease must be an ISO time');
     const at = atMs(p.at);
-    if (b.assign !== undefined) job.assign = isObj(b.assign) ? { worker: str(b.assign.worker) || null, host: str(b.assign.host) || null } : { worker: str(b.assign) || null, host: null };
+    // A control post with no status and a reason from HOLD_REASONS says why an unclaimed Job waits; its `after` is part of that reason.
+    const hold = b.status === undefined && HOLD_REASONS.includes(b.reason);
+    if (hold) job.reason = holdOf(b);
+    else if (b.status !== undefined) job.reason = null;
+    if (b.assign !== undefined) {
+      const next = isObj(b.assign) ? { worker: str(b.assign.worker) || null, host: str(b.assign.host) || null } : { worker: str(b.assign) || null, host: null };
+      // What the previous Worker posted is not the new one's: session, model and tail stay empty until it posts.
+      if (next.worker !== (job.assign?.worker ?? null)) { job.session = null; job.model = null; job.tail = []; }
+      job.assign = next;
+    }
     if (b.priority !== undefined) job.priority = b.priority;
-    if (b.after !== undefined) job.after = list(b.after);
+    if (b.after !== undefined && !hold) job.after = list(b.after);
     if (b.base !== undefined) job.base = str(b.base) || null;
     if (b.attempt !== undefined) job.attempt = b.attempt;
     if (b.verdict !== undefined) job.verdict = b.verdict;
@@ -385,6 +469,7 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
     } else if (LIVE.has(job.status) && (LIVE.has(b.status) || b.assign !== undefined) && at !== null) {
       job.lease_at = at + job.lease_ms;
     }
+    if (hold) return undefined; // a hold says why a Job waits; it is not a move, so it is not in the history
     job.history.push({ post: p.id, at: p.at, status: b.status ?? null, reason: str(b.reason) || null, verdict: b.verdict ?? null, by: who(p) });
     return undefined;
   };
@@ -392,6 +477,10 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
   for (const p of sorted) {
     if (isUnknown(p)) continue;
     const job = p.job ? jobs.get(p.job) : undefined;
+    if (job && p.type !== 'control' && !fromOrchestrator(p, workers) && (!job.assign?.worker || job.assign.worker === p.worker) && isObj(p.body)) {
+      if (typeof p.body.session === 'string' && p.body.session) job.session = p.body.session.slice(0, 120);
+      if (typeof p.body.model === 'string' && p.body.model) job.model = p.body.model.slice(0, 120);
+    }
     switch (p.type) {
       case 'control': control(p); break;
       case 'handover': {
@@ -401,11 +490,19 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
       }
       case 'heartbeat':
         if (job && (!job.assign?.worker || job.assign.worker === p.worker)) {
+          if (Array.isArray(p.body?.tail) || typeof p.body?.tail === 'string') job.tail = boundTail(p.body.tail);
           job.last_beat = p.at;
           const at = atMs(p.at);
           if (LIVE.has(job.status) && job.lease_at !== null && at !== null) job.lease_at = Math.max(job.lease_at, at + job.lease_ms);
         }
         break;
+      case 'post': {
+        const body = isObj(p.body) ? p.body : {};
+        const why = postProblems(p.author.role, body, p.id);
+        if (why.length) { skip(p, `a post does not count: ${why[0]}`); break; }
+        (byRef[body.ref] ??= []).push({ id: p.id, at: p.at, by: str(p.author.member), role: p.author.role, kind: body.kind, text: str(body.text), attachments: list(body.attachments) });
+        break;
+      }
       case 'result': job?.results.push(p.id); break;
       case 'submit': job?.submits.push(p.id); break;
       case 'worker-exit': if (job) job.exited = p.id; break;
@@ -430,7 +527,7 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
     return rec;
   });
   return {
-    epoch, posts: sorted.length, jobs: out, hosts, head, ignored, unknown,
+    epoch, posts: sorted.length, by_ref: byRef, jobs: out, hosts, head, ignored, unknown,
     questions: [...questions.values()].map(({ closed: _c, ...q }) => q), open_questions: open.map(({ closed: _c, ...q }) => q),
   };
 }

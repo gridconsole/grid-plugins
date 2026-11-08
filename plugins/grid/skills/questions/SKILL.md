@@ -5,7 +5,7 @@ description: Ask a person a question, record their answer, or withdraw a questio
 
 # Questions
 
-The task folder is `<projects folder>/<project>/tasks/T-NN-slug/`. The projects folder is `GRID_PROJECTS`, else `$GRID_HOME/projects` (`GRID_HOME` is the Grid data folder `~/.grid/<name>`, never the workspace folder; if both are empty, Grid is not set up for this folder: say so and write nothing). If the person does not say which task, take the only open one, else ask. One file per person asked: `<task folder>/questions/<person>.md` (the person's first name, lowercase, only `a-z`, `0-9` and `-`, such as `sam.md`; the same name goes after `to:`). Only the planner writes in this folder, one writer at a time. A subagent that needs an answer puts the question in its report; the planner records it. Every path below is under that absolute task folder; nothing is written relative to the working directory, which is the project's repo.
+The task folder is `<projects folder>/<project>/tasks/T-NN-slug/`. The projects folder is `GRID_PROJECTS`, else `$GRID_HOME/projects` (`GRID_HOME` is the Grid data folder `~/.grid/<name>`, never the workspace folder; if both are empty, Grid is not set up for this folder: say so and write nothing). If the person does not say which task, take the only open one, else ask. One file per person asked: `<task folder>/questions/<person>.md` (the person's first name, lowercase, only `a-z`, `0-9` and `-`, such as `sam.md`; the same name goes after `to:`). Only the planner writes in this folder, one writer at a time, with one exception: the task's Feed loop files a `question` post of the Feed as a block here (below). A subagent that needs an answer puts the question in its report; the planner records it. Every path below is under that absolute task folder; nothing is written relative to the working directory, which is the project's repo.
 
 ## Ask
 
@@ -34,6 +34,7 @@ Routed: brain sam
 - No money anywhere: a question, task.md, a plan or a history line never states a price, a cost or an estimate in a currency (no currency sign or currency word next to a number). Say it in tokens, minutes or a share of the usage limit, or leave it out.
 - A step or task that waits on a person always has an open question; never set `status: waiting` on a person with none. For a person's own action (for example "ask the client to create a Mollie account") write what they must do, with Options `Done, carry on / Not yet / Answer in my own words`; on Done, record the answer and carry on.
 - Never ask whether to rework. A reviewer's must-fix items go back to the step that built the work and the task carries on, with no question, until the workflow's review rounds are used up (see the execute skill). Only then ask, and name the must-fix items still open.
+   A question that came from a `question` post on the task's Feed is filed by the Feed loop, not by you: its block has a `feed: <post id>` line under the heading, and the loop adds it to task.md and history.md. Never file such a question twice.
 3. Append `- <time> · question asked · Q-<n> · by grid-planner` to `history.md` (Edit tool, not a shell append).
 4. In task.md: for a blocking question add `Q-<n>` to `needs: [...]`, set `status: waiting`, set `next` (for example "Sam answers Q-2"), set `updated` (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess), and add a body line.
    While the plan skill writes a plan, the planner leaves this step to the plan skill's last step, after the plan's review, so the task does not wait before the reviewer has read the plan.
@@ -48,6 +49,7 @@ Only when the person gives the answer in their own words (or says what another p
 3. In task.md remove `Q-<n>` from `needs`; if `needs` is now empty and `status` was `waiting`, set it to `running`. Set `next` to what happens now that `Q-<n>` is closed (it must not still name `Q-<n>`) and set `updated` (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess).
 4. When the question was raised because a brief is `blocked` on the person's action, the answer reruns that brief: the next step is the execute skill rerunning it (status `running`, `next` naming the step); never ask the person to resume or rerun.
 5. Never edit another block, and never change an answer once recorded; a new answer is a new question.
+6. A block with a `feed: <post id>` line came from the Feed: record the answer here as above and stop. The loop posts it on the Feed as an `answer` from the Owner on its next tick, once, whether it was recorded in the app or here; never post it by hand.
 
 ## Withdraw
 

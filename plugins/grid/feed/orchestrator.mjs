@@ -1,32 +1,38 @@
 // The Orchestrator loop of one task, in plain code: each tick reads the Feed, folds it and moves Jobs with control posts until nothing
 // more moves. Only two decisions call a model, both through one function (`decide`): planning Jobs from plan.md, and judging a Worker's
 // result. Leases, exits, integrating, readiness, picking the Host and starting Workers are code. Grid and a terminal run the same command:
-//   node orchestrator.mjs tick <task> [--repo <dir>] [--base <rev>] [--agent claude|codex] [--slots <n>] [--model <name>]
+//   node orchestrator.mjs tick <task> [--repo <dir>] [--base <rev>] [--agent claude|codex] [--slots <n>] [--model <name>] [--review]
 //   node orchestrator.mjs run <task> [same] [--interval <seconds>]
-// tick prints one JSON object; run prints one line per tick that wrote or failed, and stops when every Job is done or cancelled. Both hold
-// <task>/feed/.orchestrator.lock, so a second loop on the task exits having written nothing. Spend is read in dollars from the posts'
+// tick prints one JSON object; run prints one line per tick that wrote or failed, and stops when every Job is done or cancelled, or when
+// planning gave up (no Jobs, the Owner asked). Both hold <task>/feed/.orchestrator.lock (lock.mjs), so a second loop on the task exits having
+// written nothing. Each tick also bridges the Feed's questions with the task's questions/ folder (bridge.mjs); --review adds a review Job. Spend is read in dollars from the posts'
 // cost_usd and shown; nothing here sets a budget. Node built-ins and the feed modules only.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers } from './lib.mjs';
-import { jobStart, taskIntegrate } from './git-steps.mjs';
+import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers, priorityRank, firstById, PRIORITIES } from './lib.mjs';
+import { postHolds } from './hold.mjs';
+import { jobStart, taskIntegrate, taskLand } from './git-steps.mjs';
 import { runGit } from './git.mjs';
 import { workerLaunch, ROLES, AGENTS } from './worker.mjs';
 import { foldHosts, pickHost as scoreHost, whyNoHost } from './hosts.mjs';
 import { decide as askModel } from './decide.mjs';
 import { isWait, stepWait, probe as probeWait, checkOf, WAIT_KIND } from './wait.mjs';
+import { retryStale, answeredPark } from './retry.mjs';
+import { lock, beating } from './lock.mjs';
+import { planGate, planQuestion, reviewJob } from './planning.mjs';
+import { bridge } from './bridge.mjs';
+
+export { lock };
+import { isDeploy, isLand, deployOf, runDeploy, reopen, DEPLOY_KIND } from './deploy.mjs';
 
 const LIVE = new Set(['assigned', 'running']);
 const FINISHED = new Set(['done', 'cancelled']);
 const VERDICTS = new Set(['accept', 'disagree']);
 const PLAN_MAX = 100 * 1024;
 const MAX_PASSES = 50;
-const LOCK = '.orchestrator.lock';
-const GUARD_MS = 10_000;
 const GIT_STEPS = fileURLToPath(new URL('./git-steps.mjs', import.meta.url));
 
 // Each points git at another repository, index or work tree; inherited from a hook or a parent git, it would move a step's git elsewhere.
@@ -45,51 +51,6 @@ const jobNo = (id) => Number(/^J-(\d+)$/.exec(str(id))?.[1] ?? Infinity);
 const taskIdOf = (taskDir) => /^(T-\d+)/.exec(path.basename(taskDir))?.[1] ?? path.basename(taskDir);
 const lastOf = (posts, keep) => { for (let i = posts.length - 1; i >= 0; i--) if (keep(posts[i])) return posts[i]; return null; };
 
-// ---- the lock ----
-
-const readLock = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
-const ageMs = (file) => { try { return Date.now() - fs.statSync(file).mtimeMs; } catch { return Infinity; } };
-const writeNew = (file, data) => {
-  try { fs.writeFileSync(file, JSON.stringify(data), { flag: 'wx' }); return true; } catch (e) { if (e.code === 'EEXIST') return false; throw e; }
-};
-const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
-// Only a lock written on this machine can be judged by its pid; one that never got its contents is dead once it is old.
-const deadLock = (file, held) => (held ? held.host === os.hostname() && Number.isInteger(held.pid) && !alive(held.pid) : ageMs(file) > GUARD_MS);
-const lockedBy = (file, held) => ({ ok: false, locked: true, errors: [`another Orchestrator loop holds ${file}${held?.pid ? ` (pid ${held.pid} on ${held.host})` : ''}`] });
-
-// Takes the task's loop lock: { ok: true, file, release } or { ok: false, locked: true, errors }. A lock whose process is gone is taken
-// over under a second lock, so two loops that both find it dead do not both take it.
-export function lock(taskDir) {
-  const dir = feedDir(taskDir);
-  const file = path.join(dir, LOCK);
-  const mine = { pid: process.pid, host: os.hostname(), started: new Date().toISOString() };
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    if (!writeNew(file, mine)) {
-      const held = readLock(file);
-      if (!deadLock(file, held)) return lockedBy(file, held);
-      const guard = `${file}.reclaim`;
-      if (ageMs(guard) > GUARD_MS) fs.rmSync(guard, { force: true });
-      if (!writeNew(guard, mine)) return lockedBy(file, held);
-      try {
-        const again = readLock(file);
-        if (!deadLock(file, again)) return lockedBy(file, again);
-        fs.rmSync(file, { force: true });
-        if (!writeNew(file, mine)) return lockedBy(file, readLock(file));
-      } finally {
-        fs.rmSync(guard, { force: true });
-      }
-    }
-  } catch (e) {
-    return { ok: false, errors: [`could not take the lock ${file}: ${e?.message ?? e}`] };
-  }
-  const release = () => {
-    const now = readLock(file);
-    if (now?.pid === mine.pid && now?.started === mine.started) fs.rmSync(file, { force: true });
-  };
-  return { ok: true, file, release };
-}
-
 // ---- hooks ----
 
 // The Host for a ready Job, or null to leave it waiting. The loop's own Host while it has a free slot; once Hosts have posted, hosts.mjs scores them (see assign).
@@ -97,8 +58,8 @@ export function localHost(job, view) {
   return (view.busy.get(view.me.host) ?? 0) < view.slots ? view.me.host : null;
 }
 
-// What to do with a stale Job: a control body to post, or null to leave it. Retrying and asking the Owner is plan step 22.
-export const noRetry = () => null;
+// What to do with a stale Job: a control body to post, or null to leave it (see retry.mjs).
+export const defaultRetry = retryStale;
 
 // Why a start gave no pid, as the system's error code. The 'error' event that carries it comes after startWorker has returned, and the
 // reason is posted now, so the two causes are read again here: a cwd that is not usable, a command that is not on the PATH (ENOENT) or is
@@ -155,9 +116,11 @@ function settings(taskDir, o) {
     agent: o.agent ?? 'claude', slots: Number.isInteger(o.slots) && o.slots >= 0 ? o.slots : 2,
     intervalMs: Number.isFinite(o.intervalMs) && o.intervalMs > 0 ? o.intervalMs : 15_000,
     decideOpts: { env, model: o.model, effort: o.effort },
-    decide: o.decide ?? askModel, spawn: o.spawn ?? startWorker, pickHost: o.pickHost, retry: o.retry ?? noRetry,
+    decide: o.decide ?? askModel, spawn: o.spawn ?? startWorker, pickHost: o.pickHost, retry: o.retry ?? defaultRetry,
     probe: o.probe ?? ((check) => probeWait(check, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })), probeAt: new Map(), // wait Jobs: the check, and when each was last read
-    steps: { start: jobStart, integrate: taskIntegrate, base: resolveBase, ...o.steps },
+    review: o.review === true, planMemory: { misses: 0, at: 0, reason: '' }, // tries of this process that left no beat
+    deploy: o.deploy ?? ((d) => runDeploy(d, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })),
+    steps: { start: jobStart, integrate: taskIntegrate, land: taskLand, base: resolveBase, ...o.steps },
   };
 }
 
@@ -199,7 +162,7 @@ function work(taskDir, o) {
     let r;
     try { r = o.decide(kind, input, o.decideOpts) ?? {}; } catch (e) { r = { ok: false, ran: false, error: e?.message ?? String(e) }; }
     const ran = r.ran === true;
-    if (ran) write('heartbeat', { note, decision: kind, ...(target ? { target } : {}), ...(Number.isFinite(r.cost_usd) ? { cost_usd: r.cost_usd } : {}) });
+    if (ran) write('heartbeat', { note: typeof note === 'function' ? note(r) : note, decision: kind, ...(target ? { target } : {}), ...(Number.isFinite(r.cost_usd) ? { cost_usd: r.cost_usd } : {}) });
     return { ...r, ran, ok: r.ok === true && ran };
   };
 
@@ -209,15 +172,20 @@ function work(taskDir, o) {
     return { ...out, ok: false, errors: [`not the Orchestrator of epoch ${boss.epoch}: ${boss.by} is`] };
   }
 
+  // Asks the model for the Jobs unless there are some, or a try failed less than one interval ago, or the tries are used up (planning.mjs).
   const planJobs = () => {
     if (fold(posts, { now }).jobs.length) return; // a job the fold refused (not from the Orchestrator) is not a plan
-    const workers = jobWorkers(posts);
-    if (posts.some((p) => p.type === 'heartbeat' && fromOrchestrator(p, workers) && p.body?.decision === 'plan')) return;
+    const gateOf = () => planGate(posts, { workers: jobWorkers(posts), now, intervalMs: o.intervalMs, memory: o.planMemory });
+    const gate = gateOf();
+    if (gate.state === 'wait') { out.planning = 'wait'; return; }
+    if (gate.state !== 'go') return gaveUp(gate);
     let text;
     try { text = fs.readFileSync(path.join(taskDir, 'plan.md'), 'utf8').slice(0, PLAN_MAX); } catch { return; }
-    const r = callDecide('plan', { task: o.task, plan: text, repo: o.repo ? path.basename(o.repo) : null, roles: [...ROLES] }, 'plan');
-    if (!r.ok) { out.errors.push(`${r.ran ? 'planning failed' : 'could not plan'}: ${oneLine(r.error) || 'no Jobs'}`); return; }
-    const jobs = Array.isArray(r.value?.jobs) ? r.value.jobs.filter((x) => isObj(x) && oneLine(x.title)) : [];
+    const r = callDecide('plan', { task: o.task, plan: text, repo: o.repo ? path.basename(o.repo) : null, roles: [...ROLES] }, (res) => (res.ok ? 'plan' : `plan failed: ${oneLine(res.error)}`));
+    const jobs = r.ok && Array.isArray(r.value?.jobs) ? r.value.jobs.filter((x) => isObj(x) && oneLine(x.title)) : [];
+    if (!r.ok) out.errors.push(`${r.ran ? 'planning failed' : 'could not plan'}: ${oneLine(r.error) || 'no Jobs'}`);
+    else if (!jobs.length) out.errors.push('planning failed: the plan gave no Jobs');
+    if (!r.ran) Object.assign(o.planMemory, { misses: o.planMemory.misses + 1, at: now, reason: oneLine(r.error) });
     jobs.forEach((x, i) => {
       const after = (Array.isArray(x.after) ? x.after : []).map(str).filter((id) => jobNo(id) >= 1 && jobNo(id) <= jobs.length && jobNo(id) !== i + 1);
       // A wait Job keeps the checked, trimmed check; one that fails the check is still posted, so the numbering holds, and the loop rejects it with the reason.
@@ -228,9 +196,34 @@ function work(taskDir, o) {
         ...(after.length ? { after: [...new Set(after)] } : {}),
         ...(wait ? { kind: WAIT_KIND, ...(c.ok ? { check: c.check } : isObj(x.check) ? { check: x.check } : {}) } : {}),
         ...(x.code === true && o.repo && !wait ? { repo: path.basename(o.repo) } : {}),
-        ...(Number.isInteger(x.priority) ? { priority: x.priority } : {}),
+        ...(PRIORITIES.includes(x.priority) ? { priority: x.priority } : {}),
+        ...(Number.isInteger(x.item) && x.item > 0 ? { item: x.item } : {}),
       }, { job: `J-${i + 1}` });
     });
+    if (!jobs.length) { posts = readFeed(dir); const after = gateOf(); if (after.state === 'gave-up') gaveUp(after); }
+  };
+
+  // No Jobs and no more tries: the loop stops (run exits), after asking the Owner once.
+  const gaveUp = (gate) => {
+    out.planning = 'gave-up';
+    out.ok = false;
+    if (gate.state === 'gave-up' && !gate.asked) write('question', planQuestion(gate.reason));
+    out.errors.push(gate.state === 'dropped' ? 'planning was dropped by the Owner' : `planning failed ${gate.tries} times (${gate.reason}); the Owner was asked`);
+  };
+
+  // Every task ends on a review: a reviewer Job after the builds, once Jobs exist and none is a reviewer.
+  const addReview = () => {
+    posts = readFeed(dir);
+    const r = reviewJob(fold(posts, { now }).jobs);
+    if (r) write('job', r.body, { job: r.id });
+  };
+
+  // The Feed's questions to questions/ for the Owner, and the Owner's answers there back to the Feed.
+  const bridged = () => {
+    const b = bridge(taskDir, { me: o.me, env: o.env, now });
+    out.writes.push(...b.writes);
+    out.errors.push(...b.errors);
+    posts = readFeed(dir);
   };
 
   // The job post the fold counted, never a later line that reuses its id: this body decides what runs (a wait Job's command, a Worker's brief).
@@ -284,6 +277,67 @@ function work(taskDir, o) {
     if (s.control) control(s.control);
   };
 
+  const LEASE_MS = 10 * 60_000;
+
+  // A deploy Job that failed: the result, a deploy-failed post, the Task reopened and the Job rejected, the first three once per attempt.
+  // Then by on_fail: a revert Job (or a question to the Owner when there is no revert command); fix-forward does nothing more.
+  const deployFailed = (j, d, detail, v) => {
+    const done = v.posts.some((p) => p.type === 'deploy-failed' && p.job === j.id && p.body?.attempt === j.attempt);
+    if (!done) {
+      write('result', { outcome: `deploy failed on ${d.env}`, evidence: detail, changed: [] }, { job: j.id });
+      write('deploy-failed', { env: d.env, stage: d.stage, reason: detail || 'no output', on_fail: d.on_fail, attempt: j.attempt }, { job: j.id });
+      reopen(taskDir, { env: d.env, job: j.id, now });
+      if (d.on_fail === 'revert') {
+        if (d.revert_command) {
+          write('job', { title: `Revert ${d.env} after ${j.id}`, kind: DEPLOY_KIND, env: d.env, stage: d.stage, command: d.revert_command, on_fail: 'fix-forward' });
+        } else {
+          write('question', { who: 'owner', blocking: true, question: `Deploy to ${d.env} failed and no revert command is set. Revert it by hand, then answer done.` }, { job: j.id });
+        }
+      }
+    }
+    control({ target: j.id, status: 'rejected', reason: `deploy failed on ${d.env}: ${detail}` });
+  };
+
+  // A deploy Job runs no model and no Worker: the loop runs its argv itself (deploy.mjs). With approval the Owner is asked once and the
+  // command runs only after an answer that starts with approve.
+  const deployMove = (j, v) => {
+    const parsed = deployOf(jobPostOf(j, v)?.body);
+    if (!parsed.ok) return control({ target: j.id, status: 'rejected', reason: parsed.error });
+    const d = parsed.deploy;
+    if (d.approval) {
+      const q = v.state.questions.find((x) => x.job === j.id && x.body?.who === 'owner' && x.blocking);
+      if (!q) {
+        return write('question', { who: 'owner', blocking: true, question: `Deploy ${j.title || j.id} to ${d.env} (${d.stage})? Answer approve to go ahead.`, options: 'approve\ndecline' }, { job: j.id });
+      }
+      const said = str(v.byId.get(q.answers.at(-1))?.body?.answer).trim().toLowerCase();
+      if (said.startsWith('decline')) return control({ target: j.id, status: 'cancelled', reason: `the Owner declined the deploy to ${d.env}` });
+      if (!said.startsWith('approve')) return undefined;
+    }
+    control({ target: j.id, status: 'running', lease: new Date(now + LEASE_MS).toISOString(), reason: `deploying ${d.env} (${d.stage})` });
+    let r;
+    try { r = o.deploy(d); } catch (e) { r = { ok: false, detail: oneLine(e?.message ?? e, 400) }; }
+    if (r?.ok) {
+      write('result', { outcome: `deployed to ${d.env} (${d.stage})`, evidence: str(r.detail), changed: [] }, { job: j.id });
+      return control({ target: j.id, status: 'done', reason: `deployed to ${d.env}` });
+    }
+    return deployFailed(j, d, oneLine(r?.detail, 400), v);
+  };
+
+  // A land Job lands the task head by the project's rule (git-steps.mjs); it needs the loop's --repo.
+  const landMove = (j, v) => {
+    if (!o.repo) return failJob(j, `${j.id} lands the task head and the loop has no --repo`);
+    const body = jobPostOf(j, v)?.body;
+    control({ target: j.id, status: 'running', lease: new Date(now + LEASE_MS).toISOString(), reason: `landing by the ${str(body?.rule)} rule` });
+    let r;
+    try { r = o.steps.land({ task: o.task, repo: o.repo, rule: body?.rule, baseBranch: body?.base_branch }, { env: gitEnv(o.env) }); } catch (e) { r = { ok: false, errors: [e?.message ?? String(e)] }; }
+    if (r?.ok) {
+      write('result', { outcome: `landed by the ${r.rule ?? body?.rule} rule: ${r.branch} at ${r.sha}`, evidence: `${r.branch} at ${r.sha}`, changed: [] }, { job: j.id });
+      return control({ target: j.id, status: 'done', reason: `landed at ${r.sha}` });
+    }
+    write('result', { outcome: 'landing failed', evidence: errText(r), changed: [] }, { job: j.id });
+    return control({ target: j.id, status: 'rejected', reason: `landing failed: ${errText(r)}` });
+  };
+
   // One step for one Job, the first rule that applies.
   const move = (j, v) => {
     const rec = j.recorded_status;
@@ -291,6 +345,9 @@ function work(taskDir, o) {
     const own = (type) => (cur ? lastOf(v.posts, (p) => p.type === type && p.job === j.id && p.worker === cur) : null);
 
     if (isWait(jobPostOf(j, v))) waitMove(j, v);
+    // Deploy and land Jobs run only from ready; one already running after a crash is left to the stale path below, never run again.
+    if (rec === 'ready' && isDeploy(jobPostOf(j, v))) return deployMove(j, v);
+    if (rec === 'ready' && isLand(jobPostOf(j, v))) return landMove(j, v);
 
     // A result is read before the lease: a Worker that finished while the loop was down is handed in, not marked stale.
     const result = LIVE.has(rec) || rec === 'stale' ? own('result') : null;
@@ -334,10 +391,19 @@ function work(taskDir, o) {
         ...(Number.isInteger(priority) && j.priority === null ? { priority } : {}),
       });
     }
+    if (rec === 'parked') {
+      const body = answeredPark(j, v);
+      if (isObj(body)) control({ target: j.id, ...body });
+      return undefined;
+    }
     if (rec === 'stale' && !asked.has(j.id)) {
       asked.add(j.id);
       const body = o.retry(j, v);
-      if (isObj(body)) control({ target: j.id, ...body });
+      if (isObj(body)) {
+        const { question, ...rest } = body;
+        if (isObj(question)) write('question', question, { job: j.id });
+        control({ target: j.id, ...rest });
+      }
     }
     return undefined;
   };
@@ -359,7 +425,10 @@ function work(taskDir, o) {
   // Assigns a ready Job to a Host, makes its worktree when it has code, and starts its Worker.
   const start = (j, host, v) => {
     const attempt = j.attempt + 1;
-    const worker = `${j.id}-a${attempt}`;
+    // A Job retried by the Owner starts counting again, so a name an earlier Worker used gets a suffix: its old posts must not count.
+    let worker = `${j.id}-a${attempt}`;
+    const used = (w) => v.posts.some((p) => p.worker === w || p.body?.assign?.worker === w || p.body?.assign === w);
+    for (let n = 2; used(worker); n++) worker = `${j.id}-a${attempt}-r${n}`;
     const code = codeJob(j, v);
     let base;
     if (code) {
@@ -396,8 +465,8 @@ function work(taskDir, o) {
 
   const assign = (v) => {
     for (const j of v.state.jobs) if (LIVE.has(j.recorded_status) && j.assign?.host) v.busy.set(j.assign.host, (v.busy.get(j.assign.host) ?? 0) + 1);
-    const ready = v.state.jobs.filter((j) => j.recorded_status === 'ready' && !failed.has(j.id) && !isWait(jobPostOf(j, v)))
-      .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || jobNo(a.id) - jobNo(b.id));
+    const ready = v.state.jobs.filter((j) => j.recorded_status === 'ready' && !failed.has(j.id) && ![isWait, isDeploy, isLand].some((is) => is(jobPostOf(j, v))))
+      .sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority) || jobNo(a.id) - jobNo(b.id));
     for (const j of ready) {
       const scored = !o.pickHost && Object.keys(v.state.hosts).length > 0; // Hosts announced: score them; else the loop's own Host
       const hosts = scored ? foldHosts(v.state.hosts, now) : [];
@@ -415,14 +484,16 @@ function work(taskDir, o) {
 
   let state;
   try {
+    bridged();
     planJobs();
+    if (o.review) addReview();
     let pass = 0;
     for (; pass < MAX_PASSES; pass++) {
       posts = readFeed(dir);
       state = fold(posts, { now });
       const v = {
         task: o.task, now, posts, state, me: o.me, slots: o.slots, busy: new Map(),
-        byId: new Map(posts.map((p) => [p.id, p])), status: new Map(state.jobs.map((j) => [j.id, j.status])),
+        byId: firstById(posts), status: new Map(state.jobs.map((j) => [j.id, j.status])),
       };
       const before = out.writes.length;
       for (const j of [...state.jobs].sort((a, b) => jobNo(a.id) - jobNo(b.id))) if (!failed.has(j.id)) move(j, v);
@@ -430,10 +501,12 @@ function work(taskDir, o) {
       if (out.writes.length === before) break;
     }
     if (pass === MAX_PASSES) out.errors.push(`stopped after ${MAX_PASSES} passes`);
+    bridged();
   } catch (e) {
     out.ok = false;
     out.errors.push(e?.message ?? String(e));
   }
+  try { postHolds(taskDir, { slots: o.slots, stopped: o.stopped === true, now, ctx }); } catch { /* a reason is never worth a failed tick */ }
   posts = readFeed(dir);
   state = fold(posts, { now });
   out.jobs = Object.fromEntries(state.jobs.map((j) => [j.id, j.status]));
@@ -444,21 +517,23 @@ function work(taskDir, o) {
 // One tick under the task's lock. opts: { env, now, member, host, repo, base, agent, slots, model, effort } and the hooks
 // { decide, spawn, pickHost, retry, steps: { start, integrate, base } } the tests stub.
 export function tick(taskDir, opts = {}) {
-  const held = lock(taskDir);
+  const o = settings(taskDir, opts);
+  const held = lock(taskDir, { intervalMs: o.intervalMs });
   if (!held.ok) return { ...held, task: taskIdOf(taskDir), writes: [] };
   try {
-    return work(taskDir, settings(taskDir, opts));
+    return work(taskDir, beating(o, held));
   } finally {
     held.release();
   }
 }
 
-// Ticks every opts.intervalMs under one lock until every Job is done or cancelled, the loop may no longer write, or SIGINT or SIGTERM.
-// onTick gets each tick that wrote or failed. Returns the last tick's result.
+// Ticks every opts.intervalMs under one lock until every Job is done or cancelled, planning gave up, the loop may no longer write, or
+// SIGINT or SIGTERM. Every tick refreshes the lock's beat. onTick gets each tick that wrote or failed. Returns the last tick's result.
 export async function run(taskDir, opts = {}, onTick = () => {}) {
-  const held = lock(taskDir);
-  if (!held.ok) return { ...held, task: taskIdOf(taskDir), writes: [] };
   const o = settings(taskDir, opts);
+  const held = lock(taskDir, { intervalMs: o.intervalMs });
+  if (!held.ok) return { ...held, task: taskIdOf(taskDir), writes: [] };
+  const w = beating(o, held);
   let stopped = false;
   let wake = null;
   const halt = () => { stopped = true; wake?.(); };
@@ -467,15 +542,17 @@ export async function run(taskDir, opts = {}, onTick = () => {}) {
   try {
     let last = null;
     while (!stopped) {
-      last = work(taskDir, o);
+      if (!held.beat()) { last = { ok: false, task: taskIdOf(taskDir), writes: [], errors: ['the lock was taken over by another loop'], jobs: last?.jobs ?? {} }; onTick(last); break; }
+      last = work(taskDir, w);
       if (last.writes.length || last.errors.length) onTick(last);
       const states = Object.values(last.jobs);
-      if (!last.ok || (states.length && states.every((s) => FINISHED.has(s)))) break;
+      if (!last.ok || last.planning === 'gave-up' || (states.length && states.every((s) => FINISHED.has(s)))) break;
       await new Promise((resolve) => {
         const t = setTimeout(resolve, o.intervalMs);
         wake = () => { clearTimeout(t); resolve(); };
       });
     }
+    if (stopped) try { postHolds(taskDir, { slots: o.slots, stopped: true, ctx: { env: o.env, member: o.me.member, host: o.me.host, role: 'orchestrator', worker: null } }); } catch { /* best effort */ }
     return last;
   } finally {
     process.off('SIGINT', halt);
@@ -486,7 +563,7 @@ export async function run(taskDir, opts = {}, onTick = () => {}) {
 
 // ---- the command ----
 
-const USAGE = 'usage: orchestrator.mjs tick|run <task> [--repo <dir>] [--base <rev>] [--agent claude|codex] [--slots <n>] [--model <name>] [--interval <seconds>]';
+const USAGE = 'usage: orchestrator.mjs tick|run <task> [--repo <dir>] [--base <rev>] [--agent claude|codex] [--slots <n>] [--model <name>] [--interval <seconds>] [--review]';
 
 // Runs the command from its words; never throws. onTick gets run's ticks.
 export async function main(argv, env = process.env, onTick = () => {}) {
@@ -498,7 +575,7 @@ export async function main(argv, env = process.env, onTick = () => {}) {
   try {
     ({ values, positionals } = parseArgs({
       args: rest, allowPositionals: true, strict: true,
-      options: Object.fromEntries(['repo', 'base', 'agent', 'slots', 'model', 'interval'].map((k) => [k, { type: 'string' }])),
+      options: { ...Object.fromEntries(['repo', 'base', 'agent', 'slots', 'model', 'interval'].map((k) => [k, { type: 'string' }])), review: { type: 'boolean' } },
     }));
   } catch (e) {
     return bad(`${e?.message ?? e}; ${USAGE}`);
@@ -510,7 +587,7 @@ export async function main(argv, env = process.env, onTick = () => {}) {
   const t = resolveTask(positionals[0], { env });
   if (!t.ok) return bad(t.error);
   const opts = {
-    env, repo: values.repo, base: values.base, agent: values.agent, model: values.model,
+    env, repo: values.repo, base: values.base, agent: values.agent, model: values.model, review: values.review === true,
     slots: values.slots === undefined ? undefined : Number(values.slots),
     intervalMs: values.interval === undefined ? undefined : Number(values.interval) * 1000,
   };
