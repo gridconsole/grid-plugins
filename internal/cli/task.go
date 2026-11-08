@@ -148,10 +148,18 @@ func runTask(args []string, env Env) int {
 		if err != nil {
 			return fail(err)
 		}
+		for _, t := range tasks {
+			if t.Unreadable {
+				fmt.Fprintf(env.Stderr, "grid task list: warning: task folder %q is unreadable\n", filepath.Base(t.Path))
+			}
+		}
 		if *asJSON {
 			return writeJSON(env.Stdout, tasks)
 		}
 		for _, t := range tasks {
+			if t.Unreadable {
+				continue
+			}
 			fmt.Fprintf(env.Stdout, "%s %s %s\n", t.ID, t.State, t.Title)
 		}
 	}
@@ -195,6 +203,10 @@ func runTaskAttach(args []string, env Env) int {
 		Agent: agentShell(env), BoundTask: env.getenv("GRID_TASK"),
 	})
 	if err != nil {
+		if errors.Is(err, task.ErrEditUsage) {
+			fmt.Fprintf(env.Stderr, "grid task attach: %v\n", err)
+			return 2
+		}
 		return commandError(env, "grid task attach", err)
 	}
 	advice := env.Stdout

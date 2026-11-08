@@ -41,6 +41,8 @@ type Task struct {
 	Record `yaml:",inline"`
 	Path   string `json:"path"`
 	Intent string `json:"intent"`
+	// Unreadable marks a list placeholder; only ID, Project and Path are known.
+	Unreadable bool `json:"unreadable,omitempty" yaml:"-"`
 }
 
 // Store uses the existing project resolver. Now is optional and defaults to time.Now.
@@ -233,6 +235,7 @@ func readProject(path, proj string) (Task, error) {
 }
 
 // List returns tasks in numeric id order, with an optional exact state filter.
+// Unreadable folders remain as placeholders regardless of the state filter.
 func (s Store) List(cwd, proj, state string) ([]Task, error) {
 	r, err := s.resolve(cwd, proj)
 	if err != nil {
@@ -245,15 +248,19 @@ func (s Store) List(cwd, proj, state string) ([]Task, error) {
 	out := []Task{}
 	seen := map[string]bool{}
 	for _, path := range paths {
-		t, err := Read(path)
+		t, err := readProject(path, r.Project)
 		if err != nil {
-			return nil, err
+			n, err := number(filepath.Base(path))
+			if err != nil {
+				return nil, err
+			}
+			t = Task{Record: Record{ID: fmt.Sprintf("T-%02d", n), Project: r.Project}, Path: path, Unreadable: true}
 		}
-		if t.Project != r.Project || seen[t.ID] {
-			return nil, fmt.Errorf("task %s has a mismatched project or duplicate id", path)
+		if seen[t.ID] {
+			return nil, fmt.Errorf("task %s has a duplicate id", path)
 		}
 		seen[t.ID] = true
-		if state == "" || state == t.State {
+		if t.Unreadable || state == "" || state == t.State {
 			out = append(out, t)
 		}
 	}

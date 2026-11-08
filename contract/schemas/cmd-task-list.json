@@ -38,6 +38,10 @@
       "title": {
         "type": "string"
       },
+      "unreadable": {
+        "description": "True when the folder cannot be read as a task; only id, project and path are known, and state filters do not hide this entry.",
+        "type": "boolean"
+      },
       "workflow": {
         "type": "string"
       }

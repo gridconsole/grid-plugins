@@ -290,8 +290,9 @@ func TestListAndReadErrors(t *testing.T) {
 		}
 	}
 	write(t, filepath.Join(second.Path, "task.md"), "---\ntitle: [invalid\n---\n")
-	if _, err := s.List(home, "", ""); err == nil {
-		t.Fatal("malformed task was silently skipped")
+	listed, err := s.List(home, "", "")
+	if err != nil || len(listed) != 2 || listed[1].ID != second.ID || !listed[1].Unreadable {
+		t.Fatalf("malformed task needs an unreadable placeholder: %+v, %v", listed, err)
 	}
 }
 
