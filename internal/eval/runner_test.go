@@ -243,3 +243,98 @@ func TestResultValidationAndWriteFailure(t *testing.T) {
 		t.Fatal("result write failure ignored")
 	}
 }
+
+func envLines(out string) map[string]string {
+	env := map[string]string{}
+	for _, line := range strings.Split(out, "\n") {
+		if key, value, ok := strings.Cut(line, "="); ok {
+			env[key] = value
+		}
+	}
+	return env
+}
+
+func TestAgentDoesNotInheritSessionEnvironment(t *testing.T) {
+	leaked := []string{
+		"GRID_TASK", "GRID_PROJECTS", "GRID_HOME", "GRID_ANYTHING", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_MESSAGING_TOKEN",
+		"CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_ENV_FILE", "CLAUDE_PLUGIN_ROOT",
+		"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "SSH_AUTH_SOCK", "GITHUB_TOKEN",
+	}
+	for _, name := range leaked {
+		t.Setenv(name, "/leak/"+name)
+	}
+	t.Setenv("LANG", "en_US.UTF-8")
+	t.Setenv("LC_ALL", "en_US.UTF-8")
+	t.Setenv("TERM", "xterm")
+
+	task, runner := sampleTask(t), testRunner(t)
+	task.Setup = `env > setup-env.txt`
+	task.Checks = []Check{{ID: "check-env", Type: "command_passes", Command: []string{"sh", "-c", "env >&2"}}}
+	runner.Agent = []string{"sh", "-c", "cat setup-env.txt >&2; env"}
+	assertClean := func(phase, out string) {
+		t.Helper()
+		env := envLines(out)
+		for _, name := range leaked {
+			if value, ok := env[name]; ok && name != "GRID_HOME" && name != "GRID_PROJECTS" {
+				t.Errorf("%s inherited %s=%s", phase, name, value)
+			}
+		}
+		for _, name := range []string{"HOME", "TMPDIR", "GRID_HOME", "GRID_PROJECTS", "XDG_CONFIG_HOME"} {
+			if !strings.HasPrefix(env[name], runner.TempDir) {
+				t.Errorf("%s: %s=%q is not inside the attempt's temp folder %s", phase, name, env[name], runner.TempDir)
+			}
+		}
+		if env["PATH"] != os.Getenv("PATH") || env["LANG"] != "en_US.UTF-8" || env["LC_ALL"] != "en_US.UTF-8" || env["TERM"] != "xterm" {
+			t.Errorf("%s lost an allowed variable: %v", phase, env)
+		}
+		for name := range env {
+			switch {
+			case strings.HasPrefix(name, "GRID_"), strings.HasPrefix(name, "CLAUDE"):
+				if name != "GRID_HOME" && name != "GRID_PROJECTS" && name != "GRID_EVAL_TASK" {
+					t.Errorf("%s has unexpected %s", phase, name)
+				}
+			}
+		}
+	}
+	r := runTask(t, runner, task)
+	assertClean("setup", r.AgentResult.Stderr)
+	assertClean("agent", r.AgentResult.Stdout)
+	assertClean("check", r.Checks[0].Process.Stderr)
+}
+
+func TestAllowEnvPassesOnlyNamedVariables(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "key-1")
+	t.Setenv("OPENAI_API_KEY", "key-2")
+	task, runner := sampleTask(t), testRunner(t)
+	runner.Agent = []string{"sh", "-c", "env"}
+	if env := envLines(runTask(t, runner, task).AgentResult.Stdout); env["ANTHROPIC_API_KEY"] != "" || env["OPENAI_API_KEY"] != "" {
+		t.Fatalf("login variables passed without being allowed: %v", env)
+	}
+	runner.AllowEnv = []string{"ANTHROPIC_API_KEY", "CODEX_HOME_NOT_SET"}
+	env := envLines(runTask(t, runner, task).AgentResult.Stdout)
+	if env["ANTHROPIC_API_KEY"] != "key-1" || env["OPENAI_API_KEY"] != "" {
+		t.Fatalf("allow list not honoured: %v", env)
+	}
+	if _, ok := env["CODEX_HOME_NOT_SET"]; ok {
+		t.Fatal("an unset variable was invented")
+	}
+}
+
+func TestAllowEnvRejectsSessionVariables(t *testing.T) {
+	for _, name := range []string{
+		"GRID_HOME", "GRID_PROJECTS", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_ENV_FILE",
+		"CLAUDE_PLUGIN_ROOT", "SLACK_MESSAGING_TOKEN", "HOME", "TMPDIR", "", "A=B", "has space",
+	} {
+		if err := ValidateAllowEnv([]string{"ANTHROPIC_API_KEY", name}); err == nil {
+			t.Errorf("%q accepted", name)
+		}
+		runner := testRunner(t)
+		runner.AllowEnv = []string{name}
+		if _, err := runner.Run(context.Background(), sampleTask(t)); err == nil {
+			t.Errorf("Run accepted %q", name)
+		}
+	}
+	if err := ValidateAllowEnv([]string{"ANTHROPIC_API_KEY", "CODEX_HOME", "OPENAI_API_KEY"}); err != nil {
+		t.Fatal(err)
+	}
+}
