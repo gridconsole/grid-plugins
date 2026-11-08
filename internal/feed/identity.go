@@ -106,6 +106,11 @@ func taskID(r io.Reader) (string, error) {
 	return id, nil
 }
 
+// Test hooks surround lock acquisition and the protected metadata read.
+// They are nil in production and tests install them before starting writers.
+var beforeTaskIDLock func()
+var afterTaskIDRead func()
+
 // EnsureTaskID is for writers only. The stable task lock serializes allocation
 // with task metadata writers, and the atomic replacement is durable before any
 // Feed record can reference the identity. Readers must keep using TaskID.
@@ -115,6 +120,9 @@ func EnsureTaskID(taskDir string) (string, error) {
 		return "", err
 	}
 	defer lock.Close()
+	if beforeTaskIDLock != nil {
+		beforeTaskIDLock()
+	}
 	if err := fslock.LockExclusive(lock); err != nil {
 		return "", err
 	}
@@ -135,6 +143,9 @@ func EnsureTaskID(taskDir string) (string, error) {
 	data, err := io.ReadAll(f)
 	if err != nil {
 		return "", err
+	}
+	if afterTaskIDRead != nil {
+		afterTaskIDRead()
 	}
 	id, err := taskID(bytes.NewReader(data))
 	if !errors.Is(err, ErrNoTaskID) {
