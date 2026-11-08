@@ -195,6 +195,31 @@
           "output": ""
         },
         {
+          "name": "decline",
+          "args": [
+            "\u003cT-NN\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
           "name": "history",
           "args": [
             "\u003cT-NN\u003e"
@@ -292,6 +317,31 @@
               "name": "--workflow",
               "takes": "value",
               "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "rename",
+          "args": [
+            "\u003cT-NN\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--title",
+              "takes": "value",
+              "required": true
             }
           ],
           "json": true,

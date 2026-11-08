@@ -427,6 +427,8 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"task stop":             {args: []string{"<T-NN>"}},
 		"task close":            {args: []string{"<T-NN>"}},
 		"task reopen":           {args: []string{"<T-NN>"}},
+		"task rename":           {args: []string{"<T-NN>"}, required: map[string]bool{"--title": true}},
+		"task decline":          {args: []string{"<T-NN>"}, required: map[string]bool{"--reason": true}},
 		"task history":          {args: []string{"<T-NN>"}},
 		"task attach":           {args: []string{"<T-NN>"}},
 		"task move":             {args: []string{"[machine-or-task]"}, output: "cmd-task-move.json"},
