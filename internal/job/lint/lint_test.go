@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/job/jobtest"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
 )
 
@@ -18,6 +20,11 @@ func brief(t *testing.T) string {
 	}
 	return string(b)
 }
+func testFiles(t *testing.T) *job.Files {
+	t.Helper()
+	h := jobtest.New(t, filepath.Join("..", "..", "..", "testdata"))
+	return &job.Files{Task: h.Task, Owner: contract.PersonTeam, Notes: h.Store, Folders: []string{h.Folder}, Repo: h.Folder}
+}
 func has(fs []lint.Finding, rule string) bool {
 	for _, f := range fs {
 		if f.Rule == rule {
@@ -27,8 +34,7 @@ func has(fs []lint.Finding, rule string) bool {
 	return false
 }
 func TestGoldenBriefPasses(t *testing.T) {
-	task := filepath.Join("..", "..", "..", "testdata", "job", "task")
-	f := &job.Files{Task: task, Brain: map[string]string{"project": filepath.Join(task, "..", "knowledge")}}
+	f := testFiles(t)
 	fs := lint.Check(brief(t), lint.Options{Resolver: f})
 	if len(fs) != 0 {
 		t.Fatalf("findings: %+v", fs)
@@ -83,10 +89,10 @@ func TestContractRules(t *testing.T) {
 		{"verify", "job.verify", func(j *job.Job) { j.Verify = job.Verify{} }},
 		{"zero tests", "job.verify-tests", func(j *job.Job) { j.Verify = job.Verify{Command: "go test ./..."} }},
 		{"reason", "job.link-why", func(j *job.Job) {
-			j.Links = []job.Link{{To: "brain:project/conventions/export-format", Rel: "uses", Why: "see also"}}
+			j.Links = []job.Link{{To: "brain:project/export-format", Rel: "uses", Why: "see also"}}
 		}},
 		{"target name", "job.link-why", func(j *job.Job) {
-			j.Links = []job.Link{{To: "brain:project/conventions/export-format", Rel: "uses", Why: "export format"}}
+			j.Links = []job.Link{{To: "brain:project/export-format", Rel: "uses", Why: "export format"}}
 		}},
 		{"rel", "job.link-rel", func(j *job.Job) {
 			j.Links = []job.Link{{To: "brain:project/a", Rel: "informs", Why: "Explains the requirement"}}
@@ -138,8 +144,7 @@ func TestMissingFieldsAndReadRanges(t *testing.T) {
 			t.Errorf("missing required check for %s", key)
 		}
 	}
-	task := filepath.Join("..", "..", "..", "testdata", "job", "task")
-	f := &job.Files{Task: task, Brain: map[string]string{"project": filepath.Join(task, "..", "knowledge")}}
+	f := testFiles(t)
 	bad := strings.Replace(base, "task:research.md#format", "task:research.md:1-999", 1)
 	if !has(lint.Check(bad, lint.Options{Resolver: f}), "job.read-range") {
 		t.Fatal("bad read passed")

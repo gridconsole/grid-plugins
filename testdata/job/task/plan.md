@@ -13,8 +13,8 @@ items:
       item: plan.md#step-1
       goal: plan.md#verify
     links:
-      - {to: brain:project/conventions/export-format, rel: uses, why: "Keep the documented column order stable for readers"}
-    keep: [brain:project/conventions/export-format]
+      - {to: brain:project/export-format, rel: uses, why: "Keep the documented column order stable for readers"}
+    keep: [brain:project/export-format]
     decisions: []
     read: [task:research.md#format]
     write: [docs/export.md]

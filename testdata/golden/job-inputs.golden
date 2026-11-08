@@ -2,16 +2,14 @@
   "generation": "fixture-1",
   "sources": [
     {
-      "pointer": "brain:project/conventions/export-format",
+      "state": "accepted",
+      "pointer": "brain:project/export-format",
       "summary": "The export column order and compatibility rule.",
       "text": "Keep the id column before the title column.\nChanging the column order requires a recorded decision.",
       "tier": "person-team",
-      "sha256": "5b1c920b138ecba030b6b60ed8edd7ab86dca36e9551d103199f82731c5fabab",
+      "sha256": "2691a6de20d04ad63a98d0e309598ac0c07a53c44adc63560e00c9a2634555d7",
       "topic": "conventions",
-      "updated": "2026-01-01",
-      "items": [
-        1
-      ]
+      "updated": "2026-01-01T00:00:00Z"
     },
     {
       "pointer": "intent.md#request",
@@ -25,14 +23,14 @@
       "summary": "Step 1 {#step-1}",
       "text": "## Step 1 {#step-1}\n\nDocument the export format and column order.",
       "tier": "agent",
-      "sha256": "455d8144d92c386a92b55d9bc94fa06591c34e8804f76f45ad9a5754c5324832"
+      "sha256": "93685d9f7a62b3358c57464b1d7781a4828560cdb8b29d0170fb3a6f64bec564"
     },
     {
       "pointer": "plan.md#verify",
       "summary": "Verify {#verify}",
       "text": "## Verify {#verify}\n\nThe export documentation lists the column order.",
       "tier": "agent",
-      "sha256": "455d8144d92c386a92b55d9bc94fa06591c34e8804f76f45ad9a5754c5324832"
+      "sha256": "93685d9f7a62b3358c57464b1d7781a4828560cdb8b29d0170fb3a6f64bec564"
     },
     {
       "pointer": "task:research.md#format",
@@ -43,6 +41,6 @@
     }
   ],
   "not_rendered": [],
-  "brain_tokens": 86,
+  "brain_tokens": 80,
   "disableSkillShellExecution": true
 }
