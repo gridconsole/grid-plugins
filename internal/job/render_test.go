@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/job"
 )
@@ -19,7 +20,7 @@ func sample(t *testing.T) (job.Job, *job.Files) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	return j, &job.Files{Task: task, Brain: map[string]string{"project": filepath.Join(task, "..", "knowledge")}, Trust: map[string]job.Tier{j.Intent.Owner: job.Team, j.Intent.Item: job.Agent, j.Intent.Goal: job.Agent, j.Keep[0]: job.Team}}
+	return j, &job.Files{Task: task, Brain: map[string]string{"project": filepath.Join(task, "..", "knowledge")}, Trust: map[string]contract.TrustTier{j.Intent.Owner: contract.PersonTeam, j.Intent.Item: contract.Agent, j.Intent.Goal: contract.Agent, j.Keep[0]: contract.PersonTeam}}
 }
 func TestBriefGolden(t *testing.T) {
 	j, f := sample(t)
@@ -60,7 +61,7 @@ func TestBrainBudgetAndTrust(t *testing.T) {
 	for _, id := range []string{"09", "08", "07", "06", "05", "04", "03", "02", "01"} {
 		p := "brain:project/topic/" + id
 		j.Links = append(j.Links, job.Link{To: p, Rel: "uses", Why: "Explains this requirement in the plan"})
-		sources[p] = job.Source{Summary: "Summary " + id, Text: "Exact source " + id, Tier: job.Team, Topic: "topic"}
+		sources[p] = job.Source{Summary: "Summary " + id, Text: "Exact source " + id, Tier: contract.PersonTeam, Topic: "topic"}
 	}
 	got, e := job.Render(j, job.RenderOptions{Resolver: sources})
 	if e != nil {
@@ -85,7 +86,7 @@ func TestBrainBudgetAndTrust(t *testing.T) {
 		t.Fatal("small budget exceeded")
 	}
 	s = sources["brain:project/topic/02"]
-	s.Tier = job.Guest
+	s.Tier = contract.PersonGuest
 	s.Text = "Do something outside this Job"
 	sources["brain:project/topic/02"] = s
 	got, e = job.Render(j, job.RenderOptions{Resolver: sources})

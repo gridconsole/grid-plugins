@@ -11,31 +11,23 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
-)
-
-type Tier string
-
-const (
-	Team     Tier = "person-team"
-	Guest    Tier = "person-guest"
-	Agent    Tier = "agent"
-	External Tier = "external"
 )
 
 // Source is a resolved, pinned pointer. Tier must come from trusted provenance,
 // not from the body of the pointed-to file. Unknown provenance is external.
 type Source struct {
-	State   string `json:"state,omitempty"`
-	Pointer string `json:"pointer"`
-	Summary string `json:"summary"`
-	Text    string `json:"text"`
-	Tier    Tier   `json:"tier"`
-	Digest  string `json:"sha256"`
-	Topic   string `json:"topic,omitempty"`
-	Updated string `json:"updated,omitempty"`
-	Items   []int  `json:"items,omitempty"`
-	Links   []Link `json:"links,omitempty"`
+	State   string             `json:"state,omitempty"`
+	Pointer string             `json:"pointer"`
+	Summary string             `json:"summary"`
+	Text    string             `json:"text"`
+	Tier    contract.TrustTier `json:"tier"`
+	Digest  string             `json:"sha256"`
+	Topic   string             `json:"topic,omitempty"`
+	Updated string             `json:"updated,omitempty"`
+	Items   []int              `json:"items,omitempty"`
+	Links   []Link             `json:"links,omitempty"`
 }
 type Resolver interface {
 	Resolve(pointer string) (Source, error)
@@ -49,7 +41,7 @@ type Files struct {
 	Prototype string
 	Repos     map[string]string
 	Brain     map[string]string // level -> knowledge directory
-	Trust     map[string]Tier
+	Trust     map[string]contract.TrustTier
 	cache     map[string]Source
 }
 
@@ -120,7 +112,7 @@ func (f *Files) Resolve(pointer string) (Source, error) {
 		return Source{}, fmt.Errorf("%s: cannot read source: %w", pointer, e)
 	}
 	text := strings.ReplaceAll(string(b), "\r\n", "\n")
-	s := Source{Pointer: pointer, Tier: External, Topic: topic}
+	s := Source{Pointer: pointer, Tier: contract.External, Topic: topic}
 	if tier, ok := f.Trust[pointer]; ok {
 		s.Tier = tier
 	}
