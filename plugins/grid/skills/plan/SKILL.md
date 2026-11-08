@@ -23,6 +23,7 @@ If `research.md` already exists and still answers the intent, use it; research a
 
 ## Where it stands
 Research is done and the plan waits for your approval. Nothing is built yet. Once you approve, step 1 adds the filter to the store.
+As of: plan
 
 ## How we approach it
 Notes already carry tags, so one filter goes in the store, where the list and the coming search both call it.
@@ -78,7 +79,7 @@ Verify: `node --test` passes and the list narrows by tag
 
 - Line 1 is the revision line. Never type it by hand; the script writes it (below).
 - `## Where it stands` and `## How we approach it` are optional at every size; they come first, in this order and this shape, because the task page's status block and Overview read them. Without them the page falls back (`task-page-data.md`, "Overview text"). The hash leaves `## Where it stands` out, so keep it current as the work moves: rewriting it keeps rev and hash, needs no `--bump` and keeps an approval. `## How we approach it` is plan text the hash covers: rewriting it is a revision (`--bump`) and voids an earlier approval.
-- `## Where it stands`: two to four plain sentences for the status block above every tab: where the task is, what waits and on whom, what comes next. Words a guest understands, no file paths. It is not `## Where things stand now`, which holds the findings with their sources.
+- `## Where it stands`: two to four plain sentences for the status block above every tab: where the task is, what waits and on whom, what comes next. Words a guest understands, no file paths. It is not `## Where things stand now`, which holds the findings with their sources. Its last line is `As of: <step>`, the workflow step it was written at (`closed` once closed). Rewrite the section and that line at every step change (the approve, the build start, each later step, the ship and the close), in the same turn as the task.md change: the status block hides sentences from an earlier step, so a section left behind shows nothing of yours.
 - `## How we approach it`: the explanation for someone who did not read the research.
   - The lead: one or two sentences, the idea of the whole approach.
   - 3 to 6 cards, `- **Card title**: one or two lines.`: each a part of the approach a reader can point at, never a step list copied.
@@ -123,6 +124,18 @@ Run it as a single command on its own: the absolute path to plan.md, no `cd`, `&
 
 It writes line 1 as `# Plan, rev <n> · <hash>`. The hash is the first 6 hex digits of the SHA-256 of the file without line 1, with the `## Where it stands` section left out (its heading up to the next `## ` heading) except any unindented step line written there and the indented lines under it, which still count, every checkbox read as unticked, every `evidence:` and `needs:` line under a step left out, and trailing spaces cut. An evidence or needs line is an indented line that starts with `evidence:` or `needs:`, in the lines right under a `- [ ]` or `- [x]` step up to the next blank or unindented line. So ticking a step, adding its evidence or changing its `needs:` does not change rev or hash; changing a step's words, order or `verify:`, or any section above the steps, does (so does an `evidence:` or `needs:` line that is not indented under a step), and then you must use `--bump`. A new plan is rev 1. An approval names a rev and a hash, so a bump voids any earlier approval; say so to the person.
 
+## Items
+
+The task page shows the plan's steps as subtasks, with their state, read from `items.md` beside plan.md (`task-page-data.md`, "Items"). Write it with the plan and keep it moving, through the script, as a single command on its own like plan-hash:
+
+```
+node "${CLAUDE_SKILL_DIR}/scripts/items-sync.mjs" "<absolute task folder>/items.md"
+```
+
+- Run it after every plan write or bump, after every tick, and when you start or end a brief that has `item:`. It writes one block per step, keeps every state and line you wrote, moves a ticked `open` or `working` step to `built` and an `open` step whose brief runs to `working`, takes the titles from the plan and drops blocks of steps the plan no longer has.
+- The rest is yours, with the Edit tool on that block: `in-test` when a check run starts on the item, `live` when it ships, `closed` with a `why` when it is done or not needed, `why` for anything not done yet, `waits` when the item waits on a person, `ships-with` and `ship-approved: yes` from the item's `ship` posts. Read the item's `close`, `reopen`, `pickup` and `ship` posts on every turn and set these.
+- items.md is not part of the hash, so it never needs a `--bump`.
+
 ## After writing
 
 1. Append to `history.md` with the Edit tool, never a shell `>>`: `- <time> · plan ready · rev <n> · <hash> · by grid-planner` (use the numbers the script printed; `<time>` is the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess). Only a new plan or a bump needs this line.
@@ -134,7 +147,7 @@ It writes line 1 as `# Plan, rev <n> · <hash>`. The hash is the first 6 hex dig
 
 ## Ticking a step
 
-Tick `- [x]` only with evidence the step is done: a command's output saved under `checks/<run id>/` (for example `checks/R-1/store-tests.txt`, the `output:` of a point with `item: i-<n>` in `checks.md`; see `task-page-data.md`), a file you can name, or a reviewer's Verdict. Add the path under the step, after its `verify:` line, as `  evidence: checks/R-1/store-tests.txt`. No evidence, no tick. A step you started but cannot prove stays `[ ]`. Do not run the script for a tick or an evidence line; the hash ignores both. Then set `updated` in task.md (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess) and add a body line.
+Tick `- [x]` only with evidence the step is done: a command's output saved under `checks/<run id>/` (for example `checks/R-1/store-tests.txt`, the `output:` of a point with `item: i-<n>` in `checks.md`; see `task-page-data.md`), a file you can name, or a reviewer's Verdict. Add the path under the step, after its `verify:` line, as `  evidence: checks/R-1/store-tests.txt`. No evidence, no tick. A step you started but cannot prove stays `[ ]`. Do not run the plan-hash script for a tick or an evidence line; the hash ignores both. Do run items-sync (above), so the subtask reads `built`. Then set `updated` in task.md (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess) and add a body line.
 
 ## Revising
 

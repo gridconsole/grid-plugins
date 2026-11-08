@@ -17,6 +17,10 @@ Use the skills for the task-folder files, never write those files by hand from m
 
 Intent.md may hold only the person's description: in the first round read its body, fill the task's type (when task.md has none) and the done criteria into the plan, and ask a question for anything unclear instead of guessing.
 
+Keep `items.md` beside plan.md with the plan skill's items-sync script after every plan write, tick and brief start or end, and set the states and fields the script cannot see (in-test, live, closed, why, waits, ship) from the item's posts and check runs: the task page reads its subtasks from it (plan skill, "Items").
+
+At every step change (the approve, the build start, each later step, the ship and the close), rewrite plan.md's `## Where it stands` in the same turn as task.md: two to four sentences on where the task is now, what waits on whom and what comes next, ending with `As of: <step>` (`closed` once closed). The task page hides sentences written at an earlier step (plan skill, Format).
+
 Before writing views/plan.html, load the plan-page skill and build every section from its components by code; progress.html, result.html and questions.html are written through the views skill, as page frames.
 
 Write the plan page to `views/plan.html` in the task folder, following the skill's page contract (R1 to R6) in order. `views/` holds only the four task views, `progress.html`, `plan.html`, `result.html` and `questions.html`, and the plan's `<name>.svg` figures (the `Figure: views/<name>.svg` line of `## How we approach it`), as files straight in `views/`; write nothing else there (the contract checker fails any other file or folder). The page shows what plan.md says; change plan.md first, through the plan skill, then the page. A task with a plan.md always has `views/plan.html`: write it in the same turn as plan.md, and again after every plan revision. Open questions go on the page in the plan-page skill's R4 part, and always first into `questions/<person>.md` through the questions skill: a question only on the page reaches no one.

@@ -14,6 +14,7 @@ without a bump, and an approval stays.
 ```
 ## Where it stands
 Two to four plain sentences: where the task is, what waits, what is next.
+As of: <step>
 
 ## How we approach it
 One or two sentences: the lead.
@@ -27,7 +28,11 @@ One or two sentences: the lead.
 Figure: views/approach.svg — caption text
 ```
 
-- `## Where it stands`: the status block shows the sentences as written.
+- `## Where it stands`: the status block shows the sentences as written, while they are current. The last line, `As of: <step>`,
+  names the workflow step they were written at (`closed` once the task is closed). The planner rewrites the section, and that line,
+  at every step change: approve, build start, ship, close. The status block shows the sentences only while `As of` is the card's
+  current step (or `closed` for a closed task); a section without the line counts only at the first step. Otherwise it falls back
+  to task.md's `next`, as below.
 - `## How we approach it`: the paragraph before the first card is the lead; each `- **Title**: text` line is a card (3 to 6); each
   row under `| Without | With |` is a before and after pair (3 to 6); `Figure: <path> — <caption>` names an SVG in the task's
   `views/` folder and its caption. The figure line is optional.
@@ -58,6 +63,13 @@ ship-approved: yes
 - `ships-with`: the id of the item it goes live with.
 - `ship-approved: yes`: someone pressed Ship this; the item goes live when the task lands.
 - A step with no block is `open`. Lines other than these keys are kept out of the record.
+- No items.md: the task read takes the plan's steps as the items, so every task shows its subtasks. Step `n` is `i-<n>`, its
+  title the step line's text, its state `built` when the step is ticked, `working` when the brief that serves it (the rule
+  below) has `status: running`, else `open`; no `why`, `waits` or ship fields. `brief`, `progress` and `checks` are computed
+  for these items exactly as for written ones, so a check point with `item: i-<n>` lands on step `n`.
+- items.md wins whole when it is there: a step it has no block for is `open`, not read from the plan. So the planner writes a
+  block for every plan step, and writes the file at all only when a state, `why`, `waits` or ship field says more than the
+  plan's tick does (see the plan skill).
 - The planner keeps the file: it reads the item's `close`, `reopen`, `pickup` and `ship` posts and sets the state and fields. The
   core does not fold posts into items.
 
