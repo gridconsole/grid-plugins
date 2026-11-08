@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -26,10 +27,11 @@ import (
 
 // Rule is the lands mapping of one Markdown entry in knowledge/deploy/.
 type Rule struct {
-	Target       string `json:"target" yaml:"target"`
-	Branch       string `json:"branch" yaml:"branch"`
-	Command      string `json:"command" yaml:"command"`
-	NeedsApprove bool   `json:"needs_approve" yaml:"needs-approve"`
+	Target       string   `json:"target" yaml:"target"`
+	Branch       string   `json:"branch" yaml:"branch"`
+	Command      string   `json:"command" yaml:"command"`
+	NeedsApprove bool     `json:"needs_approve" yaml:"needs-approve"`
+	Env          []string `json:"env,omitempty" yaml:"env,omitempty"`
 }
 type Plan struct {
 	Task    string `json:"task"`
@@ -125,8 +127,13 @@ func (s Store) rule(project string) (Rule, error) {
 			return rule, fmt.Errorf("deploy topic has more than one lands rule")
 		}
 		found = true
-		if len(entry.Lands) != 4 {
-			return rule, fmt.Errorf("deploy topic lands requires exactly target, branch, command and needs-approve")
+		for key := range entry.Lands {
+			if key != "target" && key != "branch" && key != "command" && key != "needs-approve" && key != "env" {
+				return rule, fmt.Errorf("unknown deploy lands field %q", key)
+			}
+		}
+		if len(entry.Lands) < 4 {
+			return rule, fmt.Errorf("deploy topic lands requires target, branch, command and needs-approve (env is optional)")
 		}
 		var ok bool
 		if rule.Target, ok = entry.Lands["target"].(string); !ok {
@@ -140,6 +147,19 @@ func (s Store) rule(project string) (Rule, error) {
 		}
 		if rule.NeedsApprove, ok = entry.Lands["needs-approve"].(bool); !ok {
 			return rule, fmt.Errorf("deploy topic lands.needs-approve must be a boolean")
+		}
+		if value, present := entry.Lands["env"]; present {
+			names, ok := value.([]any)
+			if !ok {
+				return rule, fmt.Errorf("deploy topic lands.env must be a list of variable names")
+			}
+			for _, name := range names {
+				value, ok := name.(string)
+				if !ok || !envName.MatchString(value) {
+					return rule, fmt.Errorf("deploy topic lands.env contains an invalid variable name")
+				}
+				rule.Env = append(rule.Env, value)
+			}
 		}
 		for _, v := range []string{rule.Target, rule.Branch, rule.Command} {
 			if strings.TrimSpace(v) == "" || strings.ContainsAny(v, "\r\n\x00") {
@@ -215,19 +235,7 @@ func (s Store) Run(ctx context.Context, cwd, id string, dry bool) (Result, error
 	if runtime.GOOS == "windows" {
 		argv = []string{"cmd.exe", "/d", "/s", "/c", p.Rule.Command}
 	}
-	env := os.Environ()
-	// Replace rather than duplicate variables inherited from an earlier invocation.
-	for _, pair := range []struct{ key, value string }{{"GRID_LAND_TASK", p.Task}, {"GRID_LAND_TARGET", p.Rule.Target}, {"GRID_LAND_BRANCH", p.Rule.Branch}, {"GRID_PLAN_HASH", p.Hash}} {
-		prefix := pair.key + "="
-		next := env[:0]
-		for _, v := range env {
-			if !strings.HasPrefix(v, prefix) {
-				next = append(next, v)
-			}
-		}
-		env = append(next, prefix+pair.value)
-	}
-	execution := eval.RunProcess(ctx, argv, folder, env, "")
+	execution := runProcess(ctx, argv, folder, landEnvironment(p))
 	result.Execution = &execution
 	result.Status = "landed"
 	if execution.Status != "passed" {
@@ -244,8 +252,29 @@ func (s Store) Run(ctx context.Context, cwd, id string, dry bool) (Result, error
 	return result, historyErr
 }
 
-// note appends through main's task writer, the one history.md writer and lock.
+// note uses the same inode lock as hook history appenders, never the task
+// journal's read/replace path, which can overwrite a concurrent hook append.
 func (s Store) note(cwd, id, text string) error {
-	_, err := s.tasks().Note(task.WriteOptions{Cwd: cwd, ID: id, Note: text, Who: s.Who})
-	return err
+	t, err := s.tasks().Show(cwd, id)
+	if err != nil {
+		return err
+	}
+	// AppendHistory intentionally does not create history for uninitialized tasks.
+	// Land has resolved a real task and initializes an empty file without replacing it.
+	f, err := fslock.OpenNoFollow(filepath.Join(t.Path, "history.md"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err == nil {
+		if err := f.Close(); err != nil {
+			return err
+		}
+	} else if !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	who := s.Who.ID
+	if who == "" {
+		who = "local"
+	}
+	event, detail, _ := strings.Cut(text, ": ")
+	return task.AppendHistory(t.Path, event, detail, who, "grid land")
 }
+
+var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

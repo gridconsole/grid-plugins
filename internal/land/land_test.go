@@ -291,7 +291,7 @@ func TestWorkflowApproval(t *testing.T) {
 }
 
 func TestApprovalBindsLandsRule(t *testing.T) {
-	for _, pair := range [][2]string{{"target: local", "target: production"}, {"branch: main", "branch: release"}, {"printf landed > outcome", "printf changed > outcome"}, {"needs-approve: true", "needs-approve: false"}} {
+	for _, pair := range [][2]string{{"target: local", "target: production"}, {"branch: main", "branch: release"}, {"printf landed > outcome", "printf changed > outcome"}, {"needs-approve: true", "needs-approve: false"}, {"needs-approve: true", "needs-approve: true\n  env: [LAND_TOKEN]"}} {
 		t.Run(pair[0], func(t *testing.T) {
 			s, _, repo := fixture(t)
 			approve(t, s)
@@ -329,5 +329,80 @@ func TestForgedApprovalRequiresAuthoritativeReceipt(t *testing.T) {
 	approve(t, s)
 	if _, err := s.Run(context.Background(), repo, "T-01", false); err != nil {
 		t.Fatalf("valid control: %v", err)
+	}
+}
+
+func TestWorkflowDefaultAndInvalidDocuments(t *testing.T) {
+	for _, tc := range []struct {
+		name, document string
+		allow          bool
+	}{
+		{"default", "---\nname: release\n---\n", true},
+		{"wrong type", "---\nland-approval: false\n---\n", false},
+		{"empty", "---\nland-approval: ''\n---\n", false},
+		{"duplicate", "---\nland-approval: plan\nland-approval: none\n---\n", false},
+		{"missing", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, dir, repo := fixture(t)
+			setWorkflow(t, s, dir, "plan")
+			path := filepath.Join(s.Resolver.GridHome, "projects", "sample", "knowledge", "workflows", "release.md")
+			if tc.document == "" {
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				write(t, path, tc.document)
+			}
+			approve(t, s)
+			_, err := s.Run(context.Background(), repo, "T-01", false)
+			if (err == nil) != tc.allow {
+				t.Fatalf("allow %v: %v", tc.allow, err)
+			}
+		})
+	}
+}
+
+func TestUnboundApprovalCannotLand(t *testing.T) {
+	s, _, repo := fixture(t)
+	// A pre-L61 approval has a correct plan hash but no lands binding.
+	if _, err := s.tasks().Approve(task.WriteOptions{ID: "T-01"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Run(context.Background(), repo, "T-01", false); !errors.Is(err, ErrRejected) {
+		t.Fatalf("unbound receipt: %v", err)
+	}
+}
+
+func TestHistoryWithoutApprovalAndSymlinkRefusal(t *testing.T) {
+	for _, symlink := range []bool{false, true} {
+		t.Run(fmt.Sprint(symlink), func(t *testing.T) {
+			s, dir, repo := fixture(t)
+			setWorkflow(t, s, dir, "none")
+			if symlink {
+				other := filepath.Join(repo, "other-history")
+				write(t, other, "original\n")
+				if err := os.Symlink(other, filepath.Join(dir, "history.md")); err != nil {
+					t.Skip(err)
+				}
+			}
+			_, err := s.Run(context.Background(), repo, "T-01", false)
+			if symlink {
+				if err == nil {
+					t.Fatal("symlinked history accepted")
+				}
+				if _, err := os.Stat(filepath.Join(repo, "outcome")); !os.IsNotExist(err) {
+					t.Fatal("command ran before history failure")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := os.ReadFile(filepath.Join(dir, "history.md"))
+			if err != nil || !strings.Contains(string(b), "land started") || !strings.Contains(string(b), "land landed") {
+				t.Fatalf("history %s: %v", b, err)
+			}
+		})
 	}
 }
