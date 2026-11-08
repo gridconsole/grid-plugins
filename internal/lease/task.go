@@ -31,6 +31,9 @@ type Tenure struct {
 type TaskStore struct {
 	Feed feed.Store
 	Now  func() time.Time
+	// BeforeTaskGrant runs under the task lease lock once the new fence is chosen and
+	// before the tenure is written; an error leaves the old tenure in the lease file.
+	BeforeTaskGrant func(next, old Tenure) error
 }
 
 func (s TaskStore) now() string {
@@ -105,7 +108,7 @@ func (s TaskStore) TakeTask(w feed.Writer, pid int, start string) (Tenure, error
 			return taskHeld(old)
 		}
 		return nil
-	})
+	}, s.BeforeTaskGrant)
 }
 
 // ErrTaskHeld is wrapped by every refusal that names the tenure holding the task lease.
@@ -142,7 +145,7 @@ func (s TaskStore) AdoptTask(w feed.Writer, pid int, start string, probe func(se
 			return taskHeld(current)
 		}
 		return nil
-	})
+	}, s.BeforeTaskGrant)
 	return next, old, err
 }
 
@@ -182,12 +185,12 @@ func (s TaskStore) ReleaseTask(w feed.Writer) error {
 func (s TaskStore) GrantJob(task feed.Writer, id, to string, attempt int) (t Tenure, err error) {
 	err = s.Feed.WithLease(task, nil, func() error {
 		var e error
-		t, e = s.grant(Tenure{Lease: feed.Lease{Lease: id, Holder: &to, Gen: task.Gen, Attempt: &attempt}, Since: s.now()}, nil)
+		t, e = s.grant(Tenure{Lease: feed.Lease{Lease: id, Holder: &to, Gen: task.Gen, Attempt: &attempt}, Since: s.now()}, nil, nil)
 		return e
 	})
 	return
 }
-func (s TaskStore) grant(next Tenure, check func(Tenure) error) (Tenure, error) {
+func (s TaskStore) grant(next Tenure, check func(Tenure) error, prepare func(next, old Tenure) error) (Tenure, error) {
 	// Validate before creating anything or ending the old tenure.
 	next.Fence = 1
 	b, err := json.Marshal(next)
@@ -250,6 +253,11 @@ func (s TaskStore) grant(next Tenure, check func(Tenure) error) (Tenure, error) 
 	next.Fence = n + 1
 	if err := rewriteTenure(counter, []byte(strconv.FormatInt(next.Fence, 10)+"\n")); err != nil {
 		return Tenure{}, err
+	}
+	if prepare != nil {
+		if err := prepare(next, old); err != nil {
+			return Tenure{}, err
+		}
 	}
 	b, err = json.Marshal(next)
 	if err == nil {

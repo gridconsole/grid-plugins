@@ -137,6 +137,44 @@ func TestTaskAdoptionAndRelease(t *testing.T) {
 	}
 }
 
+func TestTaskGrantPreparesBeforeTheTenure(t *testing.T) {
+	s := TaskStore{Feed: feed.Store{TaskDir: t.TempDir(), TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}}
+	w := feed.Writer{Worker: "member@01ARZ3NDEKTSV4RRFFQ69G5FAW", Lease: "task"}
+	start := contract.FormatTime(time.Now())
+	path := filepath.Join(s.Feed.Dir(), "lease", "task.json")
+	failed := errors.New("prepare failed")
+	s.BeforeTaskGrant = func(next, old Tenure) error {
+		if b, _ := os.ReadFile(path); len(b) != 0 || old.Holder != nil || next.Fence < 1 {
+			t.Fatalf("prepare after the tenure: %s %+v", b, old)
+		}
+		return failed
+	}
+	if _, err := s.TakeTask(w, 42, start); !errors.Is(err, failed) {
+		t.Fatal(err)
+	}
+	if current, err := s.Read("task"); err != nil || current.Holder != nil {
+		t.Fatalf("failed prepare granted: %+v %v", current, err)
+	}
+	s.BeforeTaskGrant = nil
+	first, err := s.TakeTask(w, 42, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	s.BeforeTaskGrant = func(next, old Tenure) error {
+		called = true
+		if b, _ := os.ReadFile(path); !bytes.Contains(b, []byte(w.Worker)) || old.Holder == nil || *old.Holder != w.Worker || next.Fence <= first.Fence {
+			t.Fatalf("prepare after the adoption: %s %+v %+v", b, old, next)
+		}
+		return nil
+	}
+	next := w
+	next.Worker = "other@01ARZ3NDEKTSV4RRFFQ69G5FAW"
+	if _, _, err := s.AdoptTask(next, 43, start, func(session.Live) session.ProcessState { return session.Dead }); err != nil || !called {
+		t.Fatalf("adopt: %v %v", err, called)
+	}
+}
+
 func TestTaskConcurrentTake(t *testing.T) {
 	s := TaskStore{Feed: feed.Store{TaskDir: t.TempDir(), TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}}
 	w := feed.Writer{Worker: "member@01ARZ3NDEKTSV4RRFFQ69G5FAW", Lease: "task"}

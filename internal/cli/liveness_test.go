@@ -604,7 +604,46 @@ func TestTaskLeaseTakeProcess(t *testing.T) {
 	env.Ceiling = gridhome.Real(os.Getenv("GRID_TEST_ROOT"))
 	env.TempRoots = nil
 	pid, _ := strconv.Atoi(os.Getenv("GRID_TEST_PID"))
+	if os.Getenv("GRID_TEST_TAKE_CRASH") == "1" {
+		afterTaskGrant = func() { os.Exit(3) }
+	}
 	os.Exit(Run(taskTakeArgs(pid, os.Getenv("GRID_TEST_PID_START")), env))
+}
+
+func TestTaskLeaseAdoptionSurvivesACrashBeforeItsHandover(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	deadPID, deadStart := deadTaskProcess(t)
+	h, path := feedHarness(t)
+	store := lease.TaskStore{Feed: feed.Store{TaskDir: path, TaskID: feedTaskID}}
+	old := feed.Writer{Worker: "old@" + feedMachine, Lease: "task"}
+	if _, err := store.TakeTask(old, deadPID, deadStart); err != nil {
+		t.Fatal(err)
+	}
+	// The child exits as soon as its adoption is granted, before it posts the handover.
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTaskLeaseTakeProcess$")
+	cmd.Env = append(os.Environ(), "GRID_TEST_TAKE_PROCESS=1", "GRID_TEST_TAKE_CRASH=1", "GRID_TEST_TASK="+path, "GRID_TEST_ROOT="+h.root, "GRID_HOME="+h.gridHome, "GRID_TEST_PID="+strconv.Itoa(pid), "GRID_TEST_PID_START="+start)
+	out, err := cmd.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 3 {
+		t.Fatalf("crash: %v %s", err, out)
+	}
+	granted, err := store.Read("task")
+	if err != nil || granted.Holder == nil || *granted.Holder != "member@"+feedMachine || granted.Fence != 2 {
+		t.Fatalf("grant: %+v %v", granted, err)
+	}
+	if records, err := store.Feed.Read(feed.Filter{Type: "handover"}); err != nil || len(records.Records) != 0 {
+		t.Fatalf("crashed take posted: %+v %v", records, err)
+	}
+	if code := h.run(path, taskTakeArgs(pid, start)...); code != 0 {
+		t.Fatalf("retry: %d %s", code, h.errb)
+	}
+	records, err := store.Feed.Read(feed.Filter{Type: "handover"})
+	if err != nil || len(records.Records) != 1 {
+		t.Fatalf("retry handover: %+v %v", records, err)
+	}
+	if r := records.Records[0]; r.Fence != 2 || r.Body["adopted"] != "session-gone" || r.Body["from"] != old.Worker {
+		t.Fatalf("retry lost the adoption: %+v", r)
+	}
 }
 
 func TestTaskLeaseConcurrentCLI(t *testing.T) {

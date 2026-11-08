@@ -104,6 +104,16 @@ func runLease(args []string, env Env) int {
 	return 0
 }
 
+// taskRetry is what task-take.lock holds: the granted fence and its handover body.
+type taskRetry struct {
+	Fence int64
+	Body  map[string]any
+}
+
+// afterTaskGrant is a test hook, called once a task grant is durable and before its handover.
+// A test that exits the process in it leaves the disk as a crash at that point would.
+var afterTaskGrant func()
+
 var processStates = map[session.ProcessState]string{session.Alive: "alive", session.Dead: "dead", session.Unknown: "unknown"}
 
 func runTaskLease(action string, args []string, env Env) int {
@@ -290,10 +300,7 @@ func runTaskLease(action string, args []string, env Env) int {
 		if recovery {
 			// Retain adoption metadata after a failed post. The file is only a
 			// retry hint; the lease and Feed remain authoritative.
-			var pending struct {
-				Fence int64
-				Body  map[string]any
-			}
+			var pending taskRetry
 			if json.NewDecoder(lock).Decode(&pending) == nil && pending.Fence == tenure.Fence && pending.Body != nil {
 				body = pending.Body
 			}
@@ -301,17 +308,36 @@ func runTaskLease(action string, args []string, env Env) int {
 	}
 	if !recovery {
 		writer.Gen = tenure.Gen
+		// Save the retry metadata before the tenure is written, so a crash after the
+		// grant still leaves the adoption for the retry to post.
+		leases.BeforeTaskGrant = func(next, old lease.Tenure) error {
+			body = map[string]any{}
+			if old.Holder != nil { // only an adoption replaces a holder
+				body = map[string]any{"adopted": "session-gone", "from": *old.Holder}
+			}
+			if err := lock.Truncate(0); err != nil {
+				return err
+			}
+			if _, err := lock.Seek(0, 0); err != nil {
+				return err
+			}
+			if err := json.NewEncoder(lock).Encode(taskRetry{next.Fence, body}); err != nil {
+				return err
+			}
+			return feed.Sync(lock)
+		}
 		tenure, err = leases.TakeTask(writer, pid, start)
 		if err != nil && !errors.Is(err, lease.ErrTaskHeld) {
 			return livenessError(env, err)
 		}
 		if err != nil {
-			var old lease.Tenure
-			tenure, old, err = leases.AdoptTask(writer, pid, start, session.ProbeLocal)
+			tenure, _, err = leases.AdoptTask(writer, pid, start, session.ProbeLocal)
 			if err != nil {
 				return livenessError(env, err)
 			}
-			body = map[string]any{"adopted": "session-gone", "from": *old.Holder}
+		}
+		if afterTaskGrant != nil {
+			afterTaskGrant()
 		}
 	}
 	writer.Gen, writer.Fence = tenure.Gen, tenure.Fence
@@ -329,24 +355,7 @@ func runTaskLease(action string, args []string, env Env) int {
 		fmt.Fprintf(env.Stdout, "task lease taken, fence %d\nepoch %d.%d\n", tenure.Fence, tenure.Gen, tenure.Fence)
 		return 0
 	}
-	// Save only retry metadata under the same command lock before posting.
-	if !recovery {
-		if err = lock.Truncate(0); err == nil {
-			_, err = lock.Seek(0, 0)
-		}
-		if err == nil {
-			err = json.NewEncoder(lock).Encode(struct {
-				Fence int64
-				Body  map[string]any
-			}{tenure.Fence, body})
-		}
-		if err == nil {
-			err = feed.Sync(lock)
-		}
-	}
-	if err == nil {
-		_, err = store.Handover(feed.Input{Body: body}, writer)
-	}
+	_, err = store.Handover(feed.Input{Body: body}, writer)
 	code := printGrant()
 	if err != nil {
 		return livenessError(env, err)
