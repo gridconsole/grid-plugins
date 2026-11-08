@@ -9,7 +9,7 @@ This repo replaces the earlier JavaScript plugin. It is public and MIT licensed.
     make build    # ./dist/grid
     make test
     make lint     # go vet and a gofmt check
-    make golden   # golden-file tests; UPDATE_GOLDEN=1 make golden rewrites them
+    make golden   # replays the legacy corpus and prints every case; UPDATE_GOLDEN=1 go test ./... rewrites the testdata golden files
 
 `bin/grid` is a dev launcher: it follows symlinks to this checkout, runs `go build` into `dist/grid` on every call (a no-op when nothing changed) and runs that. A hook call whose build fails or takes over 8 seconds prints nothing and exits 0.
 
