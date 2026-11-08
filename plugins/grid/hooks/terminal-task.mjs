@@ -2,11 +2,9 @@
 // next task folder for that project (the session then attaches to it, session-attach.mjs). Never writes into the project's repo.
 import fs from 'node:fs';
 import path from 'node:path';
-import { str, gridFolders, projectFor, stamp, attachedTasks, pointerFile } from './lib.mjs';
+import { str, gridFolders, projectFor, stamp, attachedTasks, pointerFile, frontmatter } from './lib.mjs';
 import { nextTaskId } from '../skills/task/scripts/next-id.mjs';
-
-const LOCK_MS = 5000;
-const STALE_MS = 15000;
+import { withAllocLock } from '../skills/task/scripts/alloc-lock.mjs';
 
 // Real work: a line of its own, not a slash command, with at least two words and 12 characters. "yes" or "continue" make no task;
 // a later prompt that is real does.
@@ -36,22 +34,23 @@ export function slugOf(title) {
   return slug.includes('-') ? slug : `${slug}-task`;
 }
 
-const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+// A `claude -p` run or an SDK client is not a person typing: Claude Code (2.1.x) sets CLAUDE_CODE_ENTRYPOINT=sdk-cli and
+// CLAUDE_CODE_SESSION_ATTENDED=0 for it, and cli and 1 for an interactive terminal session (probed with a hook under both).
+export const unattended = (env) => env.CLAUDE_CODE_SESSION_ATTENDED === '0' || str(env.CLAUDE_CODE_ENTRYPOINT).startsWith('sdk');
 
-// One allocation at a time across processes: an atomic mkdir of a dot folder in the projects folder (no project is named that,
-// and the id counters read only <project>/tasks). A lock older than STALE_MS is a crashed hook's and is taken over.
-function withLock(projects, fn) {
-  const lock = path.join(projects, '.task-alloc.lock');
-  const deadline = Date.now() + LOCK_MS;
-  for (;;) {
-    try { fs.mkdirSync(lock); break; } catch (e) {
-      if (e.code !== 'EEXIST') throw e;
-      try { if (Date.now() - fs.statSync(lock).mtimeMs > STALE_MS) { fs.rmdirSync(lock); continue; } } catch { /* gone */ }
-      if (Date.now() > deadline) throw new Error('task allocation busy');
-      sleep(25);
-    }
+// The open task of this project the prompt names (`T-12`, `T-12-some-slug`, "carry on with T-12"), or null. The first name that
+// is a folder of the project and not closed wins.
+function namedTask(prompt, tasks) {
+  let names;
+  try { names = fs.readdirSync(tasks).filter((n) => /^T-\d+(-|$)/.test(n)); } catch { return null; }
+  for (const m of str(prompt).matchAll(/(?<![\w-])T-(\d+)(?![\w-]*\w)|(?<![\w-])(T-\d+-[a-z0-9-]+)/g)) {
+    const hit = names.find((n) => (m[2] ? n === m[2] : Number(n.match(/^T-(\d+)/)[1]) === Number(m[1])));
+    if (!hit) continue;
+    let status = '';
+    try { status = frontmatter(fs.readFileSync(path.join(tasks, hit, 'task.md'), 'utf8'))?.data.status; } catch { continue; }
+    if (status !== 'closed') return path.join(tasks, hit);
   }
-  try { return fn(); } finally { try { fs.rmdirSync(lock); } catch { /* already gone */ } }
+  return null;
 }
 
 const member = (home, env) => {
@@ -60,20 +59,29 @@ const member = (home, env) => {
 };
 
 // The new task's folder for this prompt, or null when it makes none: Grid started the session (GRID_TASK, GRID_BRIDGE=off), the
-// session is attached already or cannot remember that (no CLAUDE_PLUGIN_DATA), the prompt is not work, or cwd is in no project.
+// session is attached already or cannot remember that (no CLAUDE_PLUGIN_DATA), the run is unattended (`claude -p`), the prompt is not work, or cwd is in no project.
+// A prompt naming an open task of the project returns that task's folder instead of making one.
 export function terminalTask(input, env = process.env) {
-  if (input?.hook_event_name !== 'UserPromptSubmit' || !isWork(input.prompt)) return null;
-  if (str(env.GRID_TASK).trim() || env.GRID_BRIDGE === 'off' || !pointerFile(input)) return null;
+  if (input?.hook_event_name !== 'UserPromptSubmit') return null;
+  // A prompt that only names a task (`T-12`) is under the work rule but still attaches; anything else needs the rule.
+  const work = isWork(input.prompt);
+  const prompt = str(input.prompt).trim();
+  if (!work && (prompt.startsWith('/') || !/(?<![\w-])T-\d/.test(prompt))) return null;
+  if (unattended(env) || str(env.GRID_TASK).trim() || env.GRID_BRIDGE === 'off' || !pointerFile(input)) return null;
   const cwd = str(input.cwd);
   const { home, projects } = gridFolders(env, cwd);
   if (!cwd || !projects || attachedTasks(input, projects).length) return null;
   const project = projectFor(cwd, path.basename(projects) === 'projects' ? path.dirname(projects) : home ?? '');
   if (!project || !fs.existsSync(path.join(projects, project, 'project.md'))) return null;
-  const title = titleOf(input.prompt);
   const tasks = path.join(projects, project, 'tasks');
-  return withLock(projects, () => {
+  const named = namedTask(input.prompt, tasks);
+  if (named) return named;
+  if (!work) return null;
+  const title = titleOf(input.prompt);
+  return withAllocLock(projects, (refresh) => {
     fs.mkdirSync(tasks, { recursive: true });
     const id = nextTaskId(projects);
+    refresh();
     const dir = path.join(tasks, `${id}-${slugOf(title)}`);
     const staging = path.join(tasks, `.hook-${process.pid}-${id}`);
     const owner = member(home ?? path.dirname(projects), env);
