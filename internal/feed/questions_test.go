@@ -55,7 +55,7 @@ func TestQuestionControlRequiresTaskTenure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state, decisions := FoldRead(read)
+	state, decisions := FoldReadQuestions(read)
 	if !reflect.DeepEqual(state.Verdicts, contract.Fold(posts(read)).Verdicts) {
 		t.Fatal("person layer changed contract verdicts")
 	}
@@ -67,7 +67,7 @@ func TestQuestionControlRequiresTaskTenure(t *testing.T) {
 			read.Records[i].Verdict = "stale"
 		}
 	}
-	state, decisions = FoldRead(read)
+	state, decisions = FoldReadQuestions(read)
 	if !state.Questions[q.ID].Open || len(decisions[q.ID].Events) != 0 {
 		t.Fatal("stale control closed gate")
 	}
@@ -118,7 +118,7 @@ func TestPersonGateRejectsNonPersonSelection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			state, _ := FoldRead(read)
+			state, _ := FoldReadQuestions(read)
 			if !state.Questions[q.ID].Open || state.Questions[q.ID].Applied != nil || len(state.NeedsYou) != 1 {
 				t.Fatalf("ineligible answer selected: %+v", state)
 			}

@@ -160,8 +160,8 @@ func personAnswer(p Record, who string) bool {
 	}
 }
 
-// FoldRead uses the same admitted snapshot for state and question projections.
-func FoldRead(read ReadResult) (contract.State, map[string]QuestionDecision) {
+// FoldReadQuestions uses the same admitted snapshot for state and question projections.
+func FoldReadQuestions(read ReadResult) (contract.State, map[string]QuestionDecision) {
 	return FoldReadAt(read, time.Now())
 }
 
