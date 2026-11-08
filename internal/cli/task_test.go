@@ -94,6 +94,8 @@ func TestTaskNewRecordsTheOwnerFromTheEnvironment(t *testing.T) {
 		wantMachine bool
 	}{
 		{name: "GRID_WHO and GRID_ROLE", env: map[string]string{"GRID_WHO": "alex", "GRID_ROLE": "lead"}, who: "alex", role: "lead"},
+		{name: "GRID_ACTOR names the owner when GRID_WHO is not set", env: map[string]string{"GRID_ACTOR": "alex"}, who: "alex", role: "member"},
+		{name: "GRID_WHO wins over GRID_ACTOR", env: map[string]string{"GRID_WHO": "alex", "GRID_ACTOR": "sam"}, who: "alex", role: "member"},
 		{name: "GRID_WHO alone is a member", env: map[string]string{"GRID_WHO": "alex"}, who: "alex", role: "member"},
 		{name: "nothing set is the machine owner", env: map[string]string{}, wantMachine: true, role: "owner"},
 	} {
