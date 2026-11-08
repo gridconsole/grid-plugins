@@ -1,6 +1,6 @@
 {
   "name": "grid",
-  "version": "0.1.3244",
+  "version": "0.1.3255",
   "description": "Grid: task folders, a planner per task, plan pages built from a component library.",
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json",

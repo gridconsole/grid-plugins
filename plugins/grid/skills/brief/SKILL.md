@@ -54,6 +54,7 @@ Sections, in this order, all present, each a `## ` heading:
 - Keep the brief short. The writer is Write-only: one Write, never an edit of an earlier brief.
 - Job names exactly what to change and how. Where it leaves a choice open, the agent stops and asks; it never decides. Write the choice into the Job.
 - Context names the skills to load (conventions, design for UI) and the path:line ranges from a scout map. Write ranges, not whole files.
+- Context names the files in `attachments/` and `inputs/` that the step needs, as paths, never their content.
 - Context lists the brain entries that match the job, found by their one-line descriptions in the project's `knowledge/index.md`, then the Grid home's (`$GRID_HOME/knowledge/index.md`): one line each, `- [<name>](<absolute path>) — <description>`, never the entry's body. Entries from `decisions/` that constrain the job come first. No match, no lines.
 - Every agent reads ranges, batches independent calls, sends long output to a log file, never re-reads a file it just edited, never waits in a sleep loop, and writes its progress into its Outcome or Verdict as it goes. Its reply is at most 40 lines.
 - A brief for a bug seen in a run (a drive, a live session, a person's report) makes its first step a test that fails on main through the real path (the real watcher, transport or route), with a fixture shaped from that run's log. An agent that cannot make it fail stops and reports what it measured; it never fixes a guessed cause.

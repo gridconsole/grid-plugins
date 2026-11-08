@@ -99,6 +99,18 @@ Do not plan, research or build in this skill. Starting a task only makes the fol
 
 Other skills add their own entries; none of them is a stray, so do not delete or tidy them: `research.md` (research), `plan.md` (plan), `spec.md` (preview, Large tasks only), `questions/<person>.md` (questions), `subagents/NN-name.md` (briefs), `artifacts/` (what the task delivers), `checks.md` and `checks/<run id>/` (the check runs and their proof: screenshots, recordings, diffs, logs; older tasks may hold proof under `evidence/`), `views/` (views, the derived pages), `ds/` (views: copies of the design stylesheets the pages link) and `memory/<step>.md` (memory: short dated lines, one file per workflow step). Starting a task makes only `intent.md`, `task.md` and `history.md`.
 
+## Attachments
+
+`attachments/` holds the files the app saved for a person (any kind); `inputs/` holds files the person dropped in. Every agent that works from the task reads both, and never modifies, moves, renames or deletes a file in either. How to read each kind:
+
+- text, csv, json, md, images: the Read tool; a pdf with Read too, in page ranges when it is long.
+- docx: `textutil -convert txt <file> -stdout` (macOS) or `pandoc <file> -t plain`.
+- xlsx: a short script that prints every sheet, since Read cannot open it.
+- zip: `unzip -l` first, then extract into a new empty temp folder outside the task folder and read from there.
+- audio and video: cannot be read. Say so and raise a question (the questions skill).
+
+Name every file that could not be read, with the reason, in your Outcome (the plan lists it as unread in its sources).
+
 ## Show a task
 
 Read `task.md` of the named task (or list `<projects folder>/*/tasks/` with each task's id, title, step and status). Report: id, title, owner, size, step and where it sits in the workflow, status, `needs`, `next`, and how many plan steps are ticked and how many questions are open. Read only; change nothing.

@@ -56,3 +56,5 @@ Any app behaviour you change beyond the Build lines (a save, a default, a transi
 A test that waits for a retry or a timer uses a wait-until helper with a deadline, never a fixed tick.
 
 Code that runs in a page never stores a browser built-in (timers, fetch, locks, channels, requestAnimationFrame) on an object to call it as a method: browsers throw "Illegal invocation", Node does not. A test fake of such a built-in throws when called with the wrong receiver, as the browser does (example: `tests/app/transports/event-stream-boot.test.mjs`).
+
+Files in `attachments/` and `inputs/` are read by the task skill's Attachments rule; name any you could not read in your Outcome.

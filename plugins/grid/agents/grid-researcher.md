@@ -20,3 +20,5 @@ When you learn something another task would need (a command that is not obvious,
 When done, write a short Outcome in the brief (status stays the planner's to set) naming `research.md` and the three findings that matter most.
 
 Read the version the project pins first (lockfile, manifest), then that version's official docs and source. Each answer gives a working example, the permissions or feature flags it needs, known gaps, and its sources. Where sources disagree, keep both and say which you trust and why. Never answer from memory. Reply in at most 40 lines; details go in research.md. Read a file under about 100 lines whole, and several files in one call; do not re-search what a scout map already gives.
+
+Files in `attachments/` and `inputs/` are read by the task skill's Attachments rule; name any you could not read in your Outcome.

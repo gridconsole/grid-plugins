@@ -5,7 +5,7 @@ description: Write or revise a task's plan.md, or tick its steps. Use when the p
 
 # Plan
 
-`plan.md` sits in the task folder (`<projects folder>/<project>/tasks/T-NN-slug/`; the projects folder is `GRID_PROJECTS`, else `$GRID_HOME/projects`, and `GRID_HOME` is the Grid data folder `~/.grid/<name>`, never the workspace folder; if both are empty, Grid is not set up for this folder: say so and write nothing). If the person does not say which task, take the only open one, else ask. The planner is its only writer. Read `intent.md` and `task.md` first; the plan answers the intent in the person's words, not yours.
+`plan.md` sits in the task folder (`<projects folder>/<project>/tasks/T-NN-slug/`; the projects folder is `GRID_PROJECTS`, else `$GRID_HOME/projects`, and `GRID_HOME` is the Grid data folder `~/.grid/<name>`, never the workspace folder; if both are empty, Grid is not set up for this folder: say so and write nothing). If the person does not say which task, take the only open one, else ask. The planner is its only writer. Read `intent.md`, `task.md` and every file in `attachments/` and `inputs/` first, by the task skill's Attachments rule; the plan answers the intent in the person's words, not yours.
 
 ## Research first
 
@@ -86,6 +86,7 @@ Verify: `node --test` passes and the list narrows by tag
   - 3 to 6 rows under `| Without | With |`: each a concrete outcome before and after, in plain words, not file or hook names.
   - Optional last line `Figure: views/approach.svg — <caption>`: the caption says in one sentence what the drawing shows. Draw it in the task's `views/` folder: the parts, arrows labelled with what moves, old parts dashed, the new part in the accent colour. It must read at 400px: a `viewBox` about 360 wide, text 12 to 13px (11px for arrow labels), top to bottom when it has more than three parts. A standalone file: `role="img"` and an `aria-label` that says what the caption says; lines and text in `currentColor`, the new part's outline and tint in the accent `#2bd7f2`, all as attributes; no `<script>`, `<style>`, `style=`, `<foreignObject>` or outside references.
 - `## Where things stand now`: the findings that shape the plan, each with its source (a `file:line`, a `research.md` section, a link). Short paragraphs or bullets; a reader who skips the code still knows the situation.
+- Sources (a last bullet list inside `## Where things stand now`, not a heading): every file read from `attachments/` and `inputs/` as `attachments/<file>` or `inputs/<file>`; a file that could not be read is listed as unread, with the reason.
 - `## Approach and options`: two or three real options, each with its trade-off, then `Chosen:` with the reason. A choice that is the person's to make is an open question (below); name its `Q-n` here with the option you recommend.
 - `## Risks`: one bullet each, `- <high|medium|low>: <the risk>. Retired by step <n>.` A risk that no step retires needs a step, or a question.
 - `## Architecture` and `## Effort` are optional: add them when the shape of the change or its hours are a decision the person makes.
