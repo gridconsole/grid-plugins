@@ -16,8 +16,9 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
-// File is an editable source file. Rev is nil for an absent or unreadable file;
-// an unreadable file also has a diagnostic. Workspace files have no project.
+// File is a source file. Rev is the first 12 hex characters of its SHA-256,
+// including invalid UTF-8 and oversized files; absent files have a nil revision.
+// Workspace files have no project.
 type File struct {
 	Scope   string  `json:"scope"`
 	Project *string `json:"project"`
@@ -61,11 +62,10 @@ func readFiles(home, selector string) ([]File, []fileProblem, error) {
 	problems := []fileProblem{}
 	for i, path := range paths {
 		text, rev, err := readFile(home, path)
+		files[i].Text, files[i].Rev = text, rev
 		if err != nil {
 			problems = append(problems, fileProblem{index: i, err: err})
-			continue
 		}
-		files[i].Text, files[i].Rev = text, rev
 	}
 	return files, problems, nil
 }
@@ -109,13 +109,22 @@ func readFile(home, relative string) (string, *string, error) {
 	if !after.Mode().IsRegular() || !os.SameFile(before, opened) || !os.SameFile(after, opened) {
 		return "", nil, fmt.Errorf("%s changed while opening", relative)
 	}
-	data, err := io.ReadAll(f)
+	const maxFileBytes = 32 * 1024
+	data, err := io.ReadAll(io.LimitReader(f, maxFileBytes+1))
 	if err != nil {
 		return "", nil, err
 	}
-	if !utf8.Valid(data) {
-		return "", nil, fmt.Errorf("%s is not UTF-8", relative)
+	hash := sha256.New()
+	_, _ = hash.Write(data)
+	if _, err := io.Copy(hash, f); err != nil {
+		return "", nil, err
 	}
-	rev := fmt.Sprintf("%x", sha256.Sum256(data))
+	rev := fmt.Sprintf("%x", hash.Sum(nil))[:12]
+	if len(data) > maxFileBytes {
+		return "", &rev, fmt.Errorf("larger than %d bytes", maxFileBytes)
+	}
+	if !utf8.Valid(data) {
+		return "", &rev, errors.New("not UTF-8")
+	}
 	return string(data), &rev, nil
 }

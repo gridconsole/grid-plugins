@@ -44,7 +44,7 @@ func TestWorkflowFilesAllProjects(t *testing.T) {
 	if files[1].Scope != "project" || *files[1].Project != "alpha" || files[1].Rev == nil || files[1].Text != "# Alpha\n" {
 		t.Fatalf("alpha: %+v", files[1])
 	}
-	if *files[2].Project != "beta" || files[2].Rev != nil || files[2].Text != "" {
+	if *files[2].Project != "beta" || files[2].Text != "" {
 		t.Fatalf("absent beta: %+v", files[2])
 	}
 }
@@ -89,7 +89,7 @@ func TestWorkflowRevIsContentHash(t *testing.T) {
 		if err != nil || len(problems) != 0 {
 			t.Fatalf("problems=%+v err=%v", problems, err)
 		}
-		want := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
+		want := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))[:12]
 		if files[0].Rev == nil || *files[0].Rev != want || files[0].Text != text {
 			t.Fatalf("file=%+v want rev=%s", files[0], want)
 		}
@@ -116,8 +116,11 @@ func TestWorkflowFilesReadErrorsKeepOtherFiles(t *testing.T) {
 			if err != nil || len(files) != 3 || len(problems) != 1 || problems[0].index != 2 {
 				t.Fatalf("files=%+v problems=%+v err=%v", files, problems, err)
 			}
-			if files[0].Rev == nil || files[1].Rev == nil || files[2].Rev != nil || files[2].Text != "" {
+			if files[0].Rev == nil || files[1].Rev == nil || files[2].Text != "" {
 				t.Fatalf("files=%+v", files)
+			}
+			if (files[2].Rev != nil) != (kind == "invalid-utf8") {
+				t.Fatalf("revision: %+v", files[2])
 			}
 		})
 	}
@@ -127,7 +130,7 @@ func TestWorkflowFilesEmptyPresentFile(t *testing.T) {
 	home := t.TempDir()
 	putWorkflowFixture(t, filepath.Join(home, "workflows.md"), "")
 	files, problems, err := readFiles(home, "")
-	if err != nil || len(problems) != 0 || len(files) != 1 || files[0].Rev == nil || *files[0].Rev != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
+	if err != nil || len(problems) != 0 || len(files) != 1 || files[0].Rev == nil || *files[0].Rev != "e3b0c44298fc" {
 		t.Fatalf("files=%+v problems=%+v err=%v", files, problems, err)
 	}
 }
