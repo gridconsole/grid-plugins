@@ -190,3 +190,26 @@ func TestRootSessionsAndDestinationNameCollision(t *testing.T) {
 		t.Fatal("root session not mapped")
 	}
 }
+
+func TestMultiRepoIdentity(t *testing.T) {
+	testgit.Isolate(t)
+	root := t.TempDir()
+	folder := filepath.Join(root, "suite")
+	for _, name := range []string{"one", "libs/two"} {
+		repo := filepath.Join(folder, name)
+		if err := os.MkdirAll(repo, 0700); err != nil {
+			t.Fatal(err)
+		}
+		testgit.Init(t, repo, "https://example.com/team/"+filepath.Base(name)+".git", false)
+	}
+	from := filepath.Join(root, "old")
+	put(t, filepath.Join(from, "projects/suite/project.md"), "---\nfolder: "+folder+"\n---\n")
+	p := scan(t, from, filepath.Join(root, "new"))
+	r, err := parseRecord(p.result["projects/suite/project.md"].Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.values("repo")) != 2 || strings.Join(r.values("key"), ",") != "remote:example.com/team/one,remote:example.com/team/two" {
+		t.Fatalf("bad multi-repo identity: %s", p.result["projects/suite/project.md"].Data)
+	}
+}

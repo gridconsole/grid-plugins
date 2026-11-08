@@ -1,1 +1,1 @@
-{"session_id":"session-a","at":"2026-01-02T10:00:00Z","input_tokens":120,"output_tokens":40,"transcript":"/example/transcripts/session-a.jsonl"}
+{"event":"SessionStart","time":"2026-01-02T09:00:00Z","source":"startup","transcript":"/example/transcripts/session-a.jsonl"}

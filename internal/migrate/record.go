@@ -120,7 +120,12 @@ func identity(folder string) (repos, keys []string) {
 			seen["root:"+root] = true
 		}
 	}
-	if root, ok := gitx.FindRoot(folder, ""); ok {
+	root, found := gitx.FindRoot(folder, "")
+	if found {
+		_, err := gitx.CommonDir(root)
+		found = err == nil
+	}
+	if found {
 		add(root)
 	} else {
 		// Match the resolver's two-level multi-repo discovery without following links.
