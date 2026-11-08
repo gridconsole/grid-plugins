@@ -16,15 +16,17 @@ func main() {
 	if len(os.Args) > 1 {
 		mode = os.Args[1]
 	}
-	// Hold a lifetime witness in each process, including the tree's parent.
-	// Readers see EOF only after all processes exit, even if zombies remain.
-	lifetime, err := os.OpenFile("server.lifetime", os.O_WRONLY, 0)
-	if err != nil {
-		panic(err)
-	}
-	defer lifetime.Close()
-	if _, err := fmt.Fprintln(lifetime, "started"); err != nil {
-		panic(err)
+	// Env lifecycle tests provide a FIFO; CLI tests use this helper without one.
+	// Keep a writer in every process so EOF proves the whole tree exited.
+	if _, err := os.Stat("server.lifetime"); !os.IsNotExist(err) {
+		lifetime, err := os.OpenFile("server.lifetime", os.O_WRONLY, 0)
+		if err != nil {
+			panic(err)
+		}
+		defer lifetime.Close()
+		if _, err := fmt.Fprintln(lifetime, "started"); err != nil {
+			panic(err)
+		}
 	}
 	if mode == "tree" {
 		signal.Ignore(os.Interrupt, syscall.SIGTERM)
