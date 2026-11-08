@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/question-file.json",
+  "title": "Task question file",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^Q-[1-9][0-9]*$"
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "who": {
+      "type": "string",
+      "minLength": 1
+    },
+    "blocking": {
+      "type": "boolean"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "recommended": {
+      "type": "string",
+      "minLength": 1
+    },
+    "default": {
+      "type": "string",
+      "minLength": 1
+    },
+    "applies": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "asked": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "state": {
+      "enum": [
+        "open",
+        "answered",
+        "defaulted",
+        "withdrawn"
+      ]
+    },
+    "answer": {
+      "type": "string"
+    },
+    "age_after_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4611686018
+    },
+    "aging": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "answered",
+              "defaulted",
+              "withdrawn",
+              "aged"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "who": {
+            "type": "string",
+            "minLength": 1
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "who",
+          "text"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "id",
+    "question",
+    "who",
+    "blocking",
+    "options",
+    "recommended",
+    "default",
+    "applies",
+    "asked",
+    "state",
+    "answer",
+    "age_after_seconds",
+    "aging",
+    "history"
+  ],
+  "additionalProperties": false
+}
