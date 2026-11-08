@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/plan"
-	taskrecord "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -197,11 +195,18 @@ func planFormatError(text string, err error) error {
 }
 
 func runPlanMigrate(store plan.Store, dryRun, yes, asJSON bool, env Env) int {
-	text, err := store.Read()
-	if err != nil {
-		return planError(env, err)
+	var converted, form string
+	var written plan.Written
+	var err error
+	if dryRun {
+		var text string
+		text, err = store.Read()
+		if err == nil {
+			converted, form, err = plan.Upgrade(text)
+		}
+	} else {
+		written, form, err = store.Migrate(yes)
 	}
-	converted, form, err := plan.Upgrade(text)
 	if err != nil {
 		return planError(env, err)
 	}
@@ -230,23 +235,7 @@ func runPlanMigrate(store plan.Store, dryRun, yes, asJSON bool, env Env) int {
 		}
 		return 0
 	}
-	data, err := os.ReadFile(filepath.Join(store.TaskDir, "approval.json"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return planError(env, err)
-	}
-	if err == nil {
-		var approval taskrecord.Event
-		if err := json.Unmarshal(data, &approval); err != nil {
-			return planError(env, fmt.Errorf("approval.json: %w", err))
-		}
-		if approval.PlanHash == plan.Hash(text) && !yes {
-			return planError(env, errors.New("migration changes the approved plan; the plan will need approving again; use --yes to migrate"))
-		}
-	}
-	written, err := store.Write(converted)
-	if err != nil {
-		return planError(env, err)
-	}
+
 	if asJSON {
 		return writeJSON(env.Stdout, struct {
 			Form string `json:"form"`

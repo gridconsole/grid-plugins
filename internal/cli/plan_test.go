@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/plan"
@@ -147,7 +148,7 @@ func TestPlanUsageAndRefusals(t *testing.T) {
 }
 
 func TestPlanMigrate(t *testing.T) {
-	for _, name := range []string{"form-a", "form-b-fields", "form-b-revised"} {
+	for _, name := range []string{"form-a", "form-b", "form-b-revised"} {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness(t)
 			task := planTask(h)
@@ -198,7 +199,7 @@ func TestPlanMigrate(t *testing.T) {
 }
 
 func TestPlanMigrateDryRun(t *testing.T) {
-	for _, name := range []string{"form-a", "form-b-fields", "form-b-revised", "form-c"} {
+	for _, name := range []string{"form-a", "form-b", "form-b-revised", "form-c"} {
 		for _, asJSON := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/json=%t", name, asJSON), func(t *testing.T) {
 				h := newHarness(t)
@@ -242,55 +243,65 @@ func TestPlanMigrateDryRun(t *testing.T) {
 }
 
 func TestPlanMigrateApproval(t *testing.T) {
-	for _, tc := range []struct {
-		name, hash string
-		yes        bool
-		code       int
-	}{
-		{"matching approval refused", "matching", false, 1},
-		{"matching approval confirmed", "matching", true, 0},
-		{"stale approval", "000000", false, 0},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			h := newHarness(t)
-			task := planTask(h)
-			old := planFixture(t, "legacy/form-b-revised.md")
-			h.write(filepath.Join(task, "plan.md"), old)
-			hash := tc.hash
-			if hash == "matching" {
-				hash = plan.Hash(old)
+	for _, fixture := range []string{"form-b", "form-c"} {
+		for _, approvalFile := range []string{"approval.json", "approval-ship.json"} {
+			for _, tc := range []struct {
+				name, hash string
+				yes        bool
+				code       int
+			}{
+				{"matching approval refused", "matching", false, 1},
+				{"matching approval confirmed", "matching", true, 0},
+				{"stale approval", "000000", false, 0},
+			} {
+				t.Run(fixture+"/"+approvalFile+"/"+tc.name, func(t *testing.T) {
+					h := newHarness(t)
+					task := planTask(h)
+					old := planFixture(t, "legacy/"+fixture+".md") + "\nRecall: nothing found\n"
+					h.write(filepath.Join(task, "plan.md"), old)
+					hash := tc.hash
+					if hash == "matching" {
+						hash = plan.Hash(old)
+					}
+					approval := "{\"plan_hash\":\"" + hash + "\"}\n"
+					h.write(filepath.Join(task, approvalFile), approval)
+					args := []string{"plan", "migrate"}
+					if tc.yes {
+						args = append(args, "--yes")
+					}
+					if code := h.run(task, args...); code != tc.code {
+						t.Fatalf("%d: %s", code, h.errb)
+					}
+					if tc.code == 1 {
+						if !strings.Contains(h.errb.String(), "need approving again") {
+							t.Fatal(h.errb.String())
+						}
+						data, err := os.ReadFile(filepath.Join(task, "plan.md"))
+						if err != nil || string(data) != old {
+							t.Fatal("refusal changed plan")
+						}
+						if _, err := os.Stat(filepath.Join(task, "plan-revisions")); !os.IsNotExist(err) {
+							t.Fatal("refusal created archive")
+						}
+					}
+					if tc.code == 0 {
+						data, err := os.ReadFile(filepath.Join(task, "plan.md"))
+						if err != nil || plan.Hash(string(data)) == plan.Hash(old) {
+							t.Fatal("old approval still matches migrated plan")
+						}
+					}
+					data, err := os.ReadFile(filepath.Join(task, approvalFile))
+					if err != nil || string(data) != approval {
+						t.Fatal("approval changed")
+					}
+				})
 			}
-			approval := "{\"plan_hash\":\"" + hash + "\"}\n"
-			h.write(filepath.Join(task, "approval.json"), approval)
-			args := []string{"plan", "migrate"}
-			if tc.yes {
-				args = append(args, "--yes")
-			}
-			if code := h.run(task, args...); code != tc.code {
-				t.Fatalf("%d: %s", code, h.errb)
-			}
-			if tc.code == 1 {
-				if !strings.Contains(h.errb.String(), "need approving again") {
-					t.Fatal(h.errb.String())
-				}
-				data, err := os.ReadFile(filepath.Join(task, "plan.md"))
-				if err != nil || string(data) != old {
-					t.Fatal("refusal changed plan")
-				}
-				if _, err := os.Stat(filepath.Join(task, "plan-revisions")); !os.IsNotExist(err) {
-					t.Fatal("refusal created archive")
-				}
-			}
-			data, err := os.ReadFile(filepath.Join(task, "approval.json"))
-			if err != nil || string(data) != approval {
-				t.Fatal("approval changed")
-			}
-		})
+		}
 	}
 }
 
 func TestPlanMigrateMissingRecall(t *testing.T) {
-	for _, name := range []string{"form-a", "form-b-fields", "form-c"} {
+	for _, name := range []string{"form-a", "form-b", "form-c"} {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness(t)
 			task := planTask(h)
@@ -309,7 +320,7 @@ func TestPlanMigrateMissingRecall(t *testing.T) {
 }
 
 func TestPlanLegacyHint(t *testing.T) {
-	for _, name := range []string{"form-a", "form-b", "form-b-fields", "form-c"} {
+	for _, name := range []string{"form-a", "form-b", "form-c"} {
 		for _, action := range []string{"items", "check", "write"} {
 			t.Run(name+"/"+action, func(t *testing.T) {
 				h := newHarness(t)
@@ -355,21 +366,90 @@ func TestPlanMigrateCurrentNoOp(t *testing.T) {
 	}
 }
 
-func TestPlanMigrateLegacyFrontmatterRevisionRefusal(t *testing.T) {
-	// Store.Write cannot archive a plan without a revision heading. Keep this
-	// boundary explicit until the store's revision policy for form C is agreed.
+func TestPlanMigrateLegacyFrontmatterRevision(t *testing.T) {
 	h := newHarness(t)
 	task := planTask(h)
 	old := planFixture(t, "legacy/form-c.md") + "\nRecall: nothing found\n"
 	h.write(filepath.Join(task, "plan.md"), old)
-	if code := h.run(task, "plan", "migrate"); code != 1 || !strings.Contains(h.errb.String(), "current plan: plan must start with") {
+	// The ordinary write path must retain its revision requirement.
+	converted, _, err := plan.Upgrade(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (plan.Store{TaskDir: task}).Write(converted); err == nil {
+		t.Fatal("ordinary write accepted an unnumbered installed plan")
+	}
+	if code := h.run(task, "plan", "migrate"); code != 0 {
 		t.Fatalf("%d: %s", code, h.errb)
 	}
-	data, err := os.ReadFile(filepath.Join(task, "plan.md"))
+	data, err := os.ReadFile(filepath.Join(task, "plan-revisions", "1.md"))
 	if err != nil || string(data) != old {
-		t.Fatal("revision refusal changed plan")
+		t.Fatalf("original archive: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(task, "plan-revisions")); !os.IsNotExist(err) {
-		t.Fatal("revision refusal created archive")
+	installed, err := os.ReadFile(filepath.Join(task, "plan.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rev, err := plan.Revision(string(installed)); err != nil || rev != 2 {
+		t.Fatalf("revision %d: %v", rev, err)
+	}
+	if !strings.Contains(string(installed), converted) || plan.Hash(string(installed)) == plan.Hash(old) {
+		t.Fatal("migration lost converted content or kept the old approval hash")
+	}
+	if code := h.run(task, "plan", "diff", "1", "2"); code != 0 {
+		t.Fatalf("diff %d: %s", code, h.errb)
+	}
+	if code := h.run(task, "plan", "migrate"); code != 0 {
+		t.Fatalf("second migration %d: %s", code, h.errb)
+	}
+	data, err = os.ReadFile(filepath.Join(task, "plan.md"))
+	if err != nil || string(data) != string(installed) {
+		t.Fatal("second migration changed plan")
+	}
+	entries, err := os.ReadDir(filepath.Join(task, "plan-revisions"))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("archives: %v %v", entries, err)
+	}
+}
+
+func TestPlanMigrateApprovalLocked(t *testing.T) {
+	for _, name := range []string{"approval.json", "approval-ship.json"} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			task := planTask(h)
+			old := planFixture(t, "legacy/form-b.md")
+			h.write(filepath.Join(task, "plan.md"), old)
+			h.write(filepath.Join(task, name), "incomplete JSON")
+			done := make(chan int, 1)
+			var early, started bool
+			var code int
+			err := (plan.Store{TaskDir: task}).WithHash(func(hash string) error {
+				// Simulate approval installation while holding the same lock as Approve.
+				started = true
+				go func() { done <- h.run(task, "plan", "migrate") }()
+				select {
+				case code = <-done:
+					early = true
+				case <-time.After(100 * time.Millisecond):
+				}
+				return os.WriteFile(filepath.Join(task, name), []byte(`{"plan_hash":"`+hash+`"}`), 0600)
+			})
+			if started && !early {
+				code = <-done
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if early {
+				t.Fatal("migration read approval before acquiring the plan lock")
+			}
+			if code != 1 || !strings.Contains(h.errb.String(), "need approving again") {
+				t.Fatalf("%d: %s", code, h.errb)
+			}
+			data, err := os.ReadFile(filepath.Join(task, "plan.md"))
+			if err != nil || string(data) != old {
+				t.Fatal("approval refusal changed plan")
+			}
+		})
 	}
 }

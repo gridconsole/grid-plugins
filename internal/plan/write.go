@@ -94,53 +94,63 @@ func (s Store) Write(text string) (Written, error) {
 	}
 	var result Written
 	err = locked(dir, func() error {
-		current, err := readRegular(filepath.Join(dir, "plan.md"))
-		next := uint64(1)
-		if err == nil {
-			rev, err := Revision(string(current))
-			if err != nil {
-				return fmt.Errorf("current plan: %w", err)
-			}
-			if rev == math.MaxUint64 {
-				return errors.New("plan revision overflow")
-			}
-			next = rev + 1
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		ls := lines(text)
-		if planHeading.MatchString(ls[0]) {
-			ls = ls[1:]
-		}
-		body := strings.TrimLeft(strings.Join(ls, "\n"), "\n")
-		hash := Hash("x\n" + body)
-		if current != nil && string(current) == fmt.Sprintf("# Plan, rev %d · %s\n\n%s", next-1, hash, body) {
-			result = Written{Revision: next - 1, Hash: hash}
-			return nil
-		}
-		out := fmt.Sprintf("# Plan, rev %d · %s\n\n%s", next, hash, body)
-		if current != nil {
-			archiveDir, err := childDirectory(dir, "plan-revisions", true)
-			if err != nil {
-				return err
-			}
-			archive := filepath.Join(archiveDir, fmt.Sprintf("%d.md", next-1))
-			old, err := readRegular(archive)
-			if err == nil {
-				if string(old) != string(current) {
-					return errors.New("previous plan revision archive conflicts with current plan; refusing to overwrite it")
-				}
-			} else if !errors.Is(err, os.ErrNotExist) {
-				return err
-			} else if err := atomicWrite(archive, current); err != nil {
-				return err
-			}
-		}
-		if err := atomicWrite(filepath.Join(dir, "plan.md"), []byte(out)); err != nil {
-			return err
-		}
-		result = Written{Revision: next, Hash: hash}
-		return nil
+		var err error
+		result, err = writeLocked(dir, text, false)
+		return err
 	})
 	return result, err
+}
+
+// writeLocked is the shared installer; the caller holds .plan.lock and has
+// validated Items and recall. Only migration of form C permits an unnumbered
+// installed source, whose exact bytes become revision 1.
+func writeLocked(dir, text string, unnumbered bool) (Written, error) {
+	current, err := readRegular(filepath.Join(dir, "plan.md"))
+	next := uint64(1)
+	if err == nil {
+		rev, err := Revision(string(current))
+		if err != nil {
+			if !unnumbered {
+				return Written{}, fmt.Errorf("current plan: %w", err)
+			}
+			rev = 1
+		}
+		if rev == math.MaxUint64 {
+			return Written{}, errors.New("plan revision overflow")
+		}
+		next = rev + 1
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return Written{}, err
+	}
+	ls := lines(text)
+	if planHeading.MatchString(ls[0]) {
+		ls = ls[1:]
+	}
+	body := strings.TrimLeft(strings.Join(ls, "\n"), "\n")
+	hash := Hash("x\n" + body)
+	if current != nil && string(current) == fmt.Sprintf("# Plan, rev %d · %s\n\n%s", next-1, hash, body) {
+		return Written{Revision: next - 1, Hash: hash}, nil
+	}
+	out := fmt.Sprintf("# Plan, rev %d · %s\n\n%s", next, hash, body)
+	if current != nil {
+		archiveDir, err := childDirectory(dir, "plan-revisions", true)
+		if err != nil {
+			return Written{}, err
+		}
+		archive := filepath.Join(archiveDir, fmt.Sprintf("%d.md", next-1))
+		old, err := readRegular(archive)
+		if err == nil {
+			if string(old) != string(current) {
+				return Written{}, errors.New("previous plan revision archive conflicts with current plan; refusing to overwrite it")
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return Written{}, err
+		} else if err := atomicWrite(archive, current); err != nil {
+			return Written{}, err
+		}
+	}
+	if err := atomicWrite(filepath.Join(dir, "plan.md"), []byte(out)); err != nil {
+		return Written{}, err
+	}
+	return Written{Revision: next, Hash: hash}, nil
 }

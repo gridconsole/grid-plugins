@@ -106,6 +106,12 @@ func (s Store) Diff(from, to string) (Diff, error) {
 			return "", fmt.Errorf("revision %d: %w", n, err)
 		}
 		found, err := Revision(string(data))
+		if err != nil && n == 1 {
+			// Explicit form C migration archives the unnumbered source as 1.
+			if _, form, upgradeErr := Upgrade(string(data)); upgradeErr == nil && form == "C" {
+				return string(data), nil
+			}
+		}
 		if err != nil || found != n {
 			return "", fmt.Errorf("revision %d archive has an invalid or mismatched heading", n)
 		}
