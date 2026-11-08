@@ -147,7 +147,7 @@ func validateRecord(r Record) error {
 	if _, err := strconv.Atoi(strings.TrimPrefix(r.ID, "Q-")); err != nil {
 		return errors.New("question id exceeds the supported range")
 	}
-	if err := validateInput(Input{Question: r.Question, Who: r.Who, Options: r.Options, Recommended: r.Recommended, Default: r.Default, Applies: r.Applies}); err != nil {
+	if err := validateInput(Input{Question: r.Question, Who: r.Who, Why: r.Why, Options: r.Options, Recommended: r.Recommended, Default: r.Gate.Default, Applies: r.Gate.At.Time}); err != nil {
 		return err
 	}
 	if r.AgeAfterSeconds <= 0 || r.AgeAfterSeconds > int64((1<<63-1)/int64(time.Second)/2) {
@@ -163,7 +163,7 @@ func validateRecord(r Record) error {
 			}
 			aging++
 		case "defaulted":
-			if state != "open" || e.Text != r.Default {
+			if state != "open" || e.Text != r.Gate.Default {
 				return errors.New("invalid default history")
 			}
 			defaults++
@@ -221,6 +221,9 @@ func save(dir string, r Record) error {
 		blocking = "blocking"
 	}
 	fmt.Fprintf(&out, "## %s | to: %s | %s | %s\n\n%s\n\n", r.ID, r.Who, blocking, r.State, r.Question)
+	if r.Why != "" {
+		fmt.Fprintf(&out, "Why: %s\n\n", r.Why)
+	}
 	for _, o := range r.Options {
 		fmt.Fprintf(&out, "- %s", o)
 		if o == r.Recommended {
@@ -228,7 +231,7 @@ func save(dir string, r Record) error {
 		}
 		out.WriteByte('\n')
 	}
-	fmt.Fprintf(&out, "\nDefault: %s\nApplies: %s\nAging: %d\nAnswer: %s\n", r.Default, r.Applies.Format(time.RFC3339Nano), r.Aging, r.Answer)
+	fmt.Fprintf(&out, "\nDefault: %s\nApplies: %s\nAging: %d\nAnswer: %s\n", r.Gate.Default, r.Gate.At.UTC().Format(FeedTime), r.Aging, r.Answer)
 	if _, err = f.Write(out.Bytes()); err != nil {
 		return err
 	}

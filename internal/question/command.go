@@ -45,6 +45,7 @@ func Run(args []string, env Env) int {
 	if action == "add" {
 		fs.StringVar(&in.Question, "question", "", "question text (or a positional argument)")
 		fs.StringVar(&in.Who, "who", "owner", "person asked")
+		fs.StringVar(&in.Why, "why", "", "why the answer matters (optional)")
 		fs.Var(&opts, "option", "option label; repeat for each option")
 		fs.StringVar(&in.Recommended, "recommended", "", "recommended option label")
 		fs.StringVar(&in.Default, "default", "", "answer to apply at the deadline")
@@ -177,7 +178,7 @@ func Run(args []string, env Env) int {
 		if r.Blocking {
 			block = "blocking"
 		}
-		fmt.Fprintf(env.Stdout, "%s | %s | to: %s | %s | aging: %d\n%s\nRecommended: %s\nDefault: %s\nApplies: %s\n", r.ID, r.State, r.Who, block, r.Aging, r.Question, r.Recommended, r.Default, r.Applies.Format(time.RFC3339Nano))
+		fmt.Fprintf(env.Stdout, "%s | %s | to: %s | %s | aging: %d\n%s\nRecommended: %s\nDefault: %s\nApplies: %s\n", r.ID, r.State, r.Who, block, r.Aging, r.Question, r.Recommended, r.Gate.Default, r.Gate.At.UTC().Format(FeedTime))
 		if r.Answer != "" {
 			fmt.Fprintf(env.Stdout, "Answer: %s\n", r.Answer)
 		}

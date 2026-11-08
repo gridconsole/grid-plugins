@@ -17,6 +17,10 @@
       "type": "string",
       "minLength": 1
     },
+    "why": {
+      "type": "string",
+      "minLength": 1
+    },
     "blocking": {
       "type": "boolean"
     },
@@ -33,17 +37,31 @@
       "type": "string",
       "minLength": 1
     },
-    "default": {
-      "type": "string",
-      "minLength": 1
-    },
-    "applies": {
-      "type": "string",
-      "format": "date-time"
+    "gate": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at": {
+          "type": "string",
+          "minLength": 1,
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+        }
+      },
+      "required": [
+        "default",
+        "at"
+      ],
+      "additionalProperties": false
     },
     "asked": {
       "type": "string",
-      "format": "date-time"
+      "minLength": 1,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
     },
     "state": {
       "enum": [
@@ -81,7 +99,9 @@
           },
           "at": {
             "type": "string",
-            "format": "date-time"
+            "minLength": 1,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
           },
           "who": {
             "type": "string",
@@ -108,8 +128,7 @@
     "blocking",
     "options",
     "recommended",
-    "default",
-    "applies",
+    "gate",
     "asked",
     "state",
     "answer",

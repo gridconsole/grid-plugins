@@ -163,6 +163,7 @@ func TestInvalidInput(t *testing.T) {
 		{"no options", func(i *Input) { i.Options = nil }}, {"duplicate options", func(i *Input) { i.Options = []string{"CSV", "CSV"} }},
 		{"unknown recommendation", func(i *Input) { i.Recommended = "XML" }}, {"no default", func(i *Input) { i.Default = "" }},
 		{"no deadline", func(i *Input) { i.Applies = time.Time{} }}, {"negative aging", func(i *Input) { i.AgeAfter = -time.Hour }},
+		{"blank why", func(i *Input) { i.Why = " " }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, _ := setup(t)
@@ -194,7 +195,7 @@ func TestStorage(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		for _, text := range []string{"Default: CSV", "Applies: 2026-11-09T10:00:00Z", "CSV (Recommended)", "to: owner", "blocking"} {
+		for _, text := range []string{"Default: CSV", "Applies: 2026-11-09T10:00:00.000Z", "CSV (Recommended)", "to: owner", "blocking"} {
 			if !bytes.Contains(data, []byte(text)) {
 				t.Fatalf("missing %s", text)
 			}
@@ -391,7 +392,10 @@ func commandEnv(t *testing.T) (Env, Store, *bytes.Buffer, *bytes.Buffer) {
 func TestQuestionListGolden(t *testing.T) {
 	env, s, out, errout := commandEnv(t)
 	in := input()
+	in.Why = "The export feeds the billing import."
+	in.Applies = in.Applies.Add(250*time.Millisecond + 999*time.Microsecond)
 	add(t, s, in)
+	in = input()
 	in.Blocking = false
 	in.Who = "reviewer"
 	add(t, s, in)
