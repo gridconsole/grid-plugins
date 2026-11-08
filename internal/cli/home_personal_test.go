@@ -48,7 +48,8 @@ func TestHookPersonalScope(t *testing.T) {
 						behavior = reply.Output.Decision.Behavior
 					}
 					full := role == "owner" || role == "worker" || role == "grid-worker"
-					want := full || target == "projects/alpha/notes.md"
+					want := full || (role == "member" && target != "." && !strings.HasPrefix(target, "personal/")) ||
+						((role == "guest" || role == "grid-guest" || role == "external") && target == "projects/alpha/notes.md")
 					if (behavior == "allow") != want {
 						t.Fatalf("allow=%t, want %t: %s", behavior == "allow", want, h.out)
 					}
@@ -63,7 +64,10 @@ func TestHookPersonalScope(t *testing.T) {
 							}
 						}
 					}
-					if want && event != "PreToolUse" && len(reply.Output.Decision.Permissions) != 1 {
+					if role == "member" && len(reply.Output.Decision.Permissions) != 0 {
+						t.Fatalf("member received directory permissions: %s", h.out)
+					}
+					if want && role != "member" && event != "PreToolUse" && len(reply.Output.Decision.Permissions) != 1 {
 						t.Fatalf("missing scoped permission: %s", h.out)
 					}
 				})
