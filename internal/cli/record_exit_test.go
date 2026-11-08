@@ -60,7 +60,8 @@ func TestRecordExitFeed(t *testing.T) {
 				t.Fatalf("seed: %d %s", code, h.errb)
 			}
 		}, code: 3, stderr: "record id already used for a different post"},
-		{name: "guest answer", args: []string{"--type", "answer", "--re", exitRecordID, "--body", `{"answer":"yes"}`}, setup: func(t *testing.T, h *harness, path string) { t.Setenv("GRID_ROLE", "guest") }, code: 3, stderr: "guest answer must name a question addressed to that guest"},
+		// Every role is refused before the writer is resolved; the guest rule itself is pinned in the feed store tests.
+		{name: "answer post", args: []string{"--type", "answer", "--re", exitRecordID, "--body", `{"answer":"yes"}`}, setup: func(t *testing.T, h *harness, path string) { t.Setenv("GRID_ROLE", "guest") }, code: 1, stderr: "only a person may answer a gate: use grid answer, not an answer post"},
 		{name: "oversized envelope", args: []string{"--after", oversizedExitAfter()}, code: 3, stderr: "envelope exceeds 32 KB even with body reference"},
 		// The CLI stamps matching identities; a conflicting assertion remains a session error.
 		{name: "writer assertion", setup: func(t *testing.T, h *harness, path string) { t.Setenv("GRID_WORKER", "other@"+feedMachine) }, code: 1, stderr: "GRID_WORKER must match GRID_MEMBER and the local machine id"},
