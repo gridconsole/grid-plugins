@@ -2,13 +2,14 @@ package where
 
 import (
 	"errors"
-	"github.com/gridconsole/grid-plugins/internal/gridhome"
-	"github.com/gridconsole/grid-plugins/internal/project"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
 func TestDefaultPersonalAllowed(t *testing.T) {
