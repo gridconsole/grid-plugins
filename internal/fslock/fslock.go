@@ -5,6 +5,9 @@ package fslock
 
 import "errors"
 
+// ErrLocked is returned by TryLockExclusive when another descriptor holds the lock.
+var ErrLocked = errors.New("file is locked by another process")
+
 // ErrUnsupported is returned by every call on a platform without an
 // implementation, so a caller fails with a reason instead of not compiling.
 var ErrUnsupported = errors.New("file locking is not supported on this platform until the Windows Feed is decided; run grid on macOS, Linux or WSL2")

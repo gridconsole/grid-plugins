@@ -4,8 +4,9 @@ package fslock
 
 import "os"
 
-func LockShared(*os.File) error    { return ErrUnsupported }
-func LockExclusive(*os.File) error { return ErrUnsupported }
-func Unlock(*os.File)              {}
+func LockShared(*os.File) error       { return ErrUnsupported }
+func LockExclusive(*os.File) error    { return ErrUnsupported }
+func TryLockExclusive(*os.File) error { return ErrUnsupported }
+func Unlock(*os.File)                 {}
 
 func OpenNoFollow(string, int, os.FileMode) (*os.File, error) { return nil, ErrUnsupported }

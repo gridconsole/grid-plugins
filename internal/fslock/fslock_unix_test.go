@@ -3,6 +3,7 @@
 package fslock
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -57,4 +58,29 @@ func TestLocksConflictAcrossDescriptors(t *testing.T) {
 		t.Fatalf("second descriptor got the lock: %v", err)
 	}
 	Unlock(a)
+}
+
+func TestTryLockExclusiveDoesNotWait(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "lock")
+	a, err := OpenNoFollow(path, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	b, err := OpenNoFollow(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if err := TryLockExclusive(a); err != nil {
+		t.Fatal(err)
+	}
+	if err := TryLockExclusive(b); !errors.Is(err, ErrLocked) {
+		t.Fatalf("second descriptor: %v", err)
+	}
+	Unlock(a)
+	if err := TryLockExclusive(b); err != nil {
+		t.Fatalf("after unlock: %v", err)
+	}
+	Unlock(b)
 }

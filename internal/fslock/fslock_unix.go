@@ -14,6 +14,16 @@ func LockShared(f *os.File) error { return flock(f, syscall.LOCK_SH) }
 // LockExclusive blocks until f holds an exclusive flock.
 func LockExclusive(f *os.File) error { return flock(f, syscall.LOCK_EX) }
 
+// TryLockExclusive takes an exclusive flock without waiting; ErrLocked says that
+// another descriptor holds it.
+func TryLockExclusive(f *os.File) error {
+	err := flock(f, syscall.LOCK_EX|syscall.LOCK_NB)
+	if errors.Is(err, syscall.EWOULDBLOCK) {
+		return ErrLocked
+	}
+	return err
+}
+
 // Unlock drops the flock; closing f would drop it too.
 func Unlock(f *os.File) { _ = flock(f, syscall.LOCK_UN) }
 
