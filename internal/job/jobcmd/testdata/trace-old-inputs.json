@@ -1,0 +1,13 @@
+{
+  "generation": "legacy-generation",
+  "sources": [
+    {
+      "pointer": "brain:project/x#overview",
+      "summary": "An older saved input",
+      "text": "Preserve the original evidence.",
+      "tier": "person-team",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "updated": "2026-01-01"
+    }
+  ]
+}
