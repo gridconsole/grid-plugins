@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/knowledge.json",
+  "title": "knowledge",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "knowledge"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "owner",
+                "member",
+                "lead",
+                "agent",
+                "worker",
+                "reviewer",
+                "curator",
+                "host",
+                "cli",
+                "guest",
+                "external"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "enum": [
+                    "fact",
+                    "decision",
+                    "procedure",
+                    "type"
+                  ]
+                },
+                "concepts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "external": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "title",
+                "text"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "author": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "guest",
+                  "external"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "required": [
+              "external"
+            ],
+            "properties": {
+              "external": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "x-class": "chatter",
+  "x-roles": [
+    "owner",
+    "member",
+    "lead",
+    "agent",
+    "worker",
+    "reviewer",
+    "curator",
+    "host",
+    "cli",
+    "guest",
+    "external"
+  ]
+}

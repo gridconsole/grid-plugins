@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/answer.json",
+  "title": "answer",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "answer"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "owner",
+                "member",
+                "lead",
+                "agent",
+                "worker",
+                "reviewer",
+                "curator",
+                "host",
+                "cli",
+                "guest",
+                "external"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "answer": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "answer"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "re": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        }
+      }
+    }
+  ],
+  "x-class": "state",
+  "x-roles": [
+    "owner",
+    "member",
+    "lead",
+    "agent",
+    "worker",
+    "reviewer",
+    "curator",
+    "host",
+    "cli",
+    "guest",
+    "external"
+  ]
+}

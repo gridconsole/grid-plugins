@@ -1,0 +1,554 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/job-record.json",
+  "title": "job-record",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+    },
+    "item": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role": {
+      "type": "string",
+      "minLength": 1
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "review": {
+      "enum": [
+        "L0",
+        "L1",
+        "L2",
+        "L3"
+      ]
+    },
+    "risk": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "concurrency",
+          "security",
+          "data-format",
+          "cross-platform"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "max_rounds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "intent": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "item": {
+          "type": "string",
+          "minLength": 1
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "owner",
+        "item",
+        "goal"
+      ],
+      "additionalProperties": false
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rel": {
+            "enum": [
+              "uses",
+              "continues",
+              "validates",
+              "decided-by",
+              "duplicates",
+              "related",
+              "same-files"
+            ]
+          },
+          "why": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "to",
+          "rel",
+          "why"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "keep": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^brain:.+"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^brain:.+"
+      }
+    },
+    "read": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "write": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "out_of_scope": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "acceptance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^A[1-9][0-9]*$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "traces": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(item|owner|decisions/.+|brain:.+)$"
+          },
+          "state": {
+            "enum": [
+              "dropped"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "traces"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "verify": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1
+            },
+            "min_tests": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "command",
+            "min_tests"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "file-exists"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "reviewer-check"
+            },
+            "job": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+            }
+          },
+          "required": [
+            "kind",
+            "job"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "turns_estimate": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reads_before_first_edit": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "turns_estimate",
+        "reads_before_first_edit"
+      ],
+      "additionalProperties": false
+    },
+    "on_blocked": {
+      "enum": [
+        "ask-and-continue",
+        "exit"
+      ]
+    },
+    "after": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^gate:Q-[1-9][0-9]*$"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "job": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+              },
+              "kind": {
+                "enum": [
+                  "done",
+                  "failed",
+                  "children-done"
+                ]
+              },
+              "why": {
+                "type": "string",
+                "minLength": 8,
+                "maxLength": 160
+              }
+            },
+            "required": [
+              "job",
+              "kind",
+              "why"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "continues": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "discovered_from": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "close_reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "checkpoint": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "job": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+            },
+            "step": {
+              "type": "string",
+              "minLength": 1
+            },
+            "commit": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[0-9a-f]{7,64}$"
+            }
+          },
+          "required": [
+            "job",
+            "step",
+            "commit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "review_rounds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "level_raised": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "from": {
+              "enum": [
+                "L0",
+                "L1",
+                "L2",
+                "L3"
+              ]
+            },
+            "to": {
+              "enum": [
+                "L1",
+                "L2",
+                "L3"
+              ]
+            },
+            "why": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "from",
+            "to",
+            "why"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "worktree": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      ]
+    },
+    "posts_back": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "result",
+          "question",
+          "knowledge",
+          "checkpoint"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "status": {
+      "enum": [
+        "posted",
+        "ready",
+        "assigned",
+        "running",
+        "submitted",
+        "integrated",
+        "accepted",
+        "stale",
+        "parked",
+        "rejected",
+        "conflict",
+        "cancelled"
+      ]
+    },
+    "review_override": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "enum": [
+            "L0",
+            "L1",
+            "L2",
+            "L3"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "level",
+        "reason"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "id",
+    "item",
+    "title",
+    "role",
+    "skills",
+    "review",
+    "risk",
+    "max_rounds",
+    "intent",
+    "links",
+    "keep",
+    "decisions",
+    "read",
+    "write",
+    "out_of_scope",
+    "acceptance",
+    "verify",
+    "budget",
+    "on_blocked",
+    "after",
+    "attempt",
+    "continues",
+    "discovered_from",
+    "close_reason",
+    "checkpoint",
+    "review_rounds",
+    "level_raised",
+    "worktree",
+    "posts_back"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "rejected",
+              "cancelled"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "close_reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ]
+}

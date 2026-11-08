@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/worker-exit.json",
+  "title": "worker-exit",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "worker-exit"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "worker",
+                "agent",
+                "cli"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "enum": [
+                    "done",
+                    "crash",
+                    "usage_limit",
+                    "cancelled",
+                    "loop"
+                  ]
+                },
+                "code": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  ]
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "lease": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+        },
+        "fence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "job": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  ],
+  "x-class": "state",
+  "x-roles": [
+    "worker",
+    "agent",
+    "cli"
+  ]
+}

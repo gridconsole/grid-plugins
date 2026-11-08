@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/heartbeat.json",
+  "title": "heartbeat",
+  "type": "object",
+  "properties": {
+    "lease": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+    },
+    "holder": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^@/\\s]+@[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "fence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pid_start": {
+      "type": "string",
+      "minLength": 1,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "beat_at": {
+      "type": "string",
+      "minLength": 1,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "output_at": {
+      "type": "string",
+      "minLength": 1,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "until": {
+      "type": "string",
+      "minLength": 1,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    }
+  },
+  "required": [
+    "lease",
+    "holder",
+    "fence",
+    "attempt",
+    "pid",
+    "pid_start",
+    "beat_at",
+    "output_at",
+    "until"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/post.json",
+  "title": "post",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "post"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "owner",
+                "member",
+                "lead",
+                "agent",
+                "worker",
+                "reviewer",
+                "curator",
+                "host",
+                "cli",
+                "guest",
+                "external"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(task|item:i-[1-9][0-9]*|question:Q-[1-9][0-9]*)$"
+                },
+                "kind": {
+                  "enum": [
+                    "message",
+                    "pickup",
+                    "ask-pickup",
+                    "ship",
+                    "close",
+                    "reopen"
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                },
+                "attachments": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^attachments/posts/[0-7][0-9A-HJKMNP-TV-Z]{25}/[^/].*",
+                    "not": {
+                      "pattern": "(^|/)\\.\\.(/|$)|\\\\"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "ref",
+                "kind"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "kind": {
+                        "const": "message"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "text"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "author": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "guest",
+                  "external"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "properties": {
+              "kind": {
+                "const": "message"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "x-class": "chatter",
+  "x-roles": [
+    "owner",
+    "member",
+    "lead",
+    "agent",
+    "worker",
+    "reviewer",
+    "curator",
+    "host",
+    "cli",
+    "guest",
+    "external"
+  ]
+}

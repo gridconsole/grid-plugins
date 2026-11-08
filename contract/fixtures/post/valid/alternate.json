@@ -1,0 +1,27 @@
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "post",
+  "type_v": 1,
+  "author": {
+    "id": "owner",
+    "role": "owner"
+  },
+  "tier": "person-team",
+  "worker": "lead@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 2,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": null,
+  "attempt": null,
+  "wake": null,
+  "body": {
+    "ref": "task",
+    "kind": "message",
+    "text": "Example feedback."
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/found.json",
+  "title": "found",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "found"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "reviewer",
+                "lead",
+                "cli"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "job": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                },
+                "re": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+                },
+                "at": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "enum": [
+                    "bug",
+                    "security",
+                    "evolvability",
+                    "test"
+                  ]
+                },
+                "class": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "cut",
+                        "irreversible",
+                        "visible",
+                        "detail"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "job",
+                "re",
+                "at",
+                "text",
+                "kind",
+                "class"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "x-class": "chatter",
+  "x-roles": [
+    "reviewer",
+    "lead",
+    "cli"
+  ]
+}

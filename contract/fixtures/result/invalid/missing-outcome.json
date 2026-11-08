@@ -1,0 +1,42 @@
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "result",
+  "type_v": 2,
+  "author": {
+    "id": "worker",
+    "role": "worker"
+  },
+  "tier": "agent",
+  "worker": "worker@01K9J000000000000000000002",
+  "lease": "J-1",
+  "gen": 0,
+  "fence": 2,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-1",
+  "attempt": 1,
+  "wake": null,
+  "body": {
+    "changed": [
+      "main.go"
+    ],
+    "evidence": [
+      "go test ./... passed"
+    ],
+    "acceptance": [
+      {
+        "id": "A1",
+        "state": "met"
+      }
+    ],
+    "verified": null,
+    "must_fix": [],
+    "found": [],
+    "proposed_jobs": [],
+    "decisions_needed": [],
+    "knowledge": []
+  }
+}

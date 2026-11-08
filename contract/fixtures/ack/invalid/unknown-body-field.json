@@ -1,0 +1,27 @@
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "ack",
+  "type_v": 1,
+  "author": {
+    "id": "worker",
+    "role": "worker"
+  },
+  "tier": "agent",
+  "worker": "worker@01K9J000000000000000000002",
+  "lease": "J-1",
+  "gen": 0,
+  "fence": 2,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [
+    "01K9J000000000000000000001"
+  ],
+  "job": "J-1",
+  "attempt": 1,
+  "wake": null,
+  "body": {
+    "unexpected": true
+  }
+}

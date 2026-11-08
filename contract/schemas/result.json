@@ -1,0 +1,309 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/result.json",
+  "title": "result",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "result"
+        },
+        "type_v": {
+          "const": 2
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "worker",
+                "agent",
+                "cli"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "outcome": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "changed": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "acceptance": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^A[1-9][0-9]*$"
+                      },
+                      "state": {
+                        "enum": [
+                          "met",
+                          "not met",
+                          "dropped"
+                        ]
+                      },
+                      "decision": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "state"
+                    ],
+                    "additionalProperties": false,
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "state": {
+                              "const": "dropped"
+                            }
+                          }
+                        },
+                        "then": {
+                          "required": [
+                            "decision"
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                "verified": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "level": {
+                          "enum": [
+                            "L1",
+                            "L2",
+                            "L3"
+                          ]
+                        },
+                        "pass": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "enum": [
+                                "pass",
+                                "unsure"
+                              ]
+                            }
+                          ]
+                        },
+                        "by": {
+                          "enum": [
+                            "sonnet",
+                            "grid-reviewer"
+                          ]
+                        },
+                        "job": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                        },
+                        "evidence": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": [
+                        "level",
+                        "pass",
+                        "by",
+                        "evidence"
+                      ],
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "if": {
+                            "properties": {
+                              "level": {
+                                "const": "L1"
+                              }
+                            }
+                          },
+                          "then": {
+                            "required": [
+                              "job"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "must_fix": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "row": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^(A[1-9][0-9]*|write|verify|classify)$"
+                      },
+                      "at": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "row",
+                      "at"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "found": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+                  }
+                },
+                "proposed_jobs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "role": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "why": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 160
+                      },
+                      "gap": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "discovered_from": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "role",
+                      "why",
+                      "gap",
+                      "discovered_from"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "decisions_needed": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "knowledge": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "required": [
+                "outcome",
+                "changed",
+                "evidence",
+                "acceptance",
+                "verified",
+                "must_fix",
+                "found",
+                "proposed_jobs",
+                "decisions_needed",
+                "knowledge"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "lease": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+        },
+        "fence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "job": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  ],
+  "x-class": "state",
+  "x-roles": [
+    "worker",
+    "agent",
+    "cli"
+  ]
+}

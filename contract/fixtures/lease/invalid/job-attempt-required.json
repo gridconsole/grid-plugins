@@ -1,0 +1,10 @@
+{
+  "lease": "J-1",
+  "holder": "worker@01K9J000000000000000000002",
+  "fence": 2,
+  "gen": 0,
+  "attempt": null,
+  "since": "2026-11-08T10:00:00.000Z",
+  "pid": null,
+  "pid_start": null
+}

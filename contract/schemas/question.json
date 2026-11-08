@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/question.json",
+  "title": "question",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "question"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "lead",
+                "owner",
+                "member",
+                "worker",
+                "agent",
+                "cli"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "blocking": {
+                  "type": "boolean"
+                },
+                "who": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "why": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "job": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                },
+                "gate": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^Q-[1-9][0-9]*$"
+                    },
+                    "kind": {
+                      "enum": [
+                        "person",
+                        "timer",
+                        "ci",
+                        "job"
+                      ]
+                    },
+                    "default": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "at": {
+                      "type": "string",
+                      "minLength": 1,
+                      "format": "date-time",
+                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+                    },
+                    "check": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "job": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                    },
+                    "state": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind"
+                  ],
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "timer"
+                          }
+                        }
+                      },
+                      "then": {
+                        "required": [
+                          "at"
+                        ]
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "ci"
+                          }
+                        }
+                      },
+                      "then": {
+                        "required": [
+                          "check"
+                        ]
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "job"
+                          }
+                        }
+                      },
+                      "then": {
+                        "required": [
+                          "job",
+                          "state"
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "question",
+                "who"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "x-class": "state",
+  "x-roles": [
+    "lead",
+    "owner",
+    "member",
+    "worker",
+    "agent",
+    "cli"
+  ]
+}

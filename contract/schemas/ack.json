@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/ack.json",
+  "title": "ack",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "ack"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "worker",
+                "agent",
+                "cli"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "session": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "model": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "lease": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+        },
+        "fence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "job": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "after": {
+          "minItems": 1
+        }
+      }
+    }
+  ],
+  "x-class": "state",
+  "x-roles": [
+    "worker",
+    "agent",
+    "cli"
+  ]
+}

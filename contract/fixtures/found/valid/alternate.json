@@ -1,0 +1,30 @@
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "found",
+  "type_v": 1,
+  "author": {
+    "id": "reviewer",
+    "role": "reviewer"
+  },
+  "tier": "agent",
+  "worker": "lead@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 2,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": null,
+  "attempt": null,
+  "wake": null,
+  "body": {
+    "job": "J-1",
+    "re": "01K9J000000000000000000001",
+    "at": "main.go:10",
+    "text": "Check the example boundary.",
+    "kind": "bug",
+    "class": null
+  }
+}
