@@ -285,3 +285,25 @@ func TestScanIgnoresEnclosingRepo(t *testing.T) {
 		t.Fatalf("proposed enclosing checkout: %+v %v", got, err)
 	}
 }
+
+func TestAddingMemberCloneDoesNotRewriteMultiRepoProject(t *testing.T) {
+	s, root := fixture(t)
+	suite := mkdir(t, filepath.Join(root, "suite"))
+	for _, name := range []string{"a", "b"} {
+		p := mkdir(t, filepath.Join(suite, name))
+		testgit.Init(t, p, "https://example.com/org/"+name+".git", false)
+	}
+	original, err := s.Add(suite, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clone := mkdir(t, filepath.Join(root, "clone"))
+	testgit.Init(t, clone, "https://example.com/org/a.git", false)
+	if _, err := s.Add(clone, ""); err == nil {
+		t.Fatal("accepted partial multi-repo clone")
+	}
+	entries, err := s.List()
+	if err != nil || len(entries) != 1 || entries[0].ID != original.ID || len(entries[0].Repos) != 2 || len(entries[0].Folders) != 1 {
+		t.Fatalf("changed project: %+v %v", entries, err)
+	}
+}

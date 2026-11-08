@@ -231,6 +231,13 @@ func (s Store) add(path, name string) (Entry, error) {
 			rec = r
 		}
 	}
+	if res.Record && res.Rule == where.RuleGit {
+		for _, repo := range rec.Repos {
+			if repo.Path != "." {
+				return Entry{}, fmt.Errorf("repo belongs to multi-repo project %s; relink its containing folder instead", rec.Name)
+			}
+		}
+	}
 	if name != "" && name != rec.Name {
 		if res.Record || personal {
 			return Entry{}, fmt.Errorf("folder belongs to project %s", rec.Name)
