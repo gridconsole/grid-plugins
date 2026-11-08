@@ -108,7 +108,9 @@ func (s Store) now() time.Time {
 	return time.Now().UTC()
 }
 
-var component = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.@-]{0,159}$`)
+// component also names Job holders, whose member part is a git email that may
+// carry a +tag.
+var component = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.@+-]{0,159}$`)
 
 func validateKey(k Key) error {
 	if !component.MatchString(k.SessionID) || !component.MatchString(k.MachineID) {
@@ -323,6 +325,10 @@ func (s Store) Cleanup(probe func(Record) (Observation, error)) ([]Key, error) {
 			if err != nil {
 				obs.Process = Unknown
 				obs.PID, obs.PIDStart = r.PID, r.PIDStart
+			} else if obs.PID != r.PID || obs.PIDStart != r.PIDStart {
+				// Evidence about another incarnation proves nothing about this
+				// one; it must not abort the sweep over the other records.
+				obs = Observation{Process: Unknown, PID: r.PID, PIDStart: r.PIDStart}
 			}
 			next, err := s.reconcile(r, obs)
 			if err != nil {

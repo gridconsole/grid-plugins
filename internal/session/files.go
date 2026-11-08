@@ -70,6 +70,11 @@ func atomicJSON(path string, value any) error {
 	if err := json.NewEncoder(f).Encode(value); err != nil {
 		return err
 	}
+	// Without the sync a crash can rename an empty file over a good record, and one
+	// unreadable record fails the whole listing.
+	if err := f.Sync(); err != nil {
+		return err
+	}
 	if err := f.Close(); err != nil {
 		return err
 	}

@@ -208,6 +208,41 @@ func TestCleanupProbeFailureIsUnknown(t *testing.T) {
 	}
 }
 
+func TestCleanupMismatchedProbeIsUnknown(t *testing.T) {
+	f := newFixture(t, true)
+	other := f.record
+	other.SessionID, other.Holder, other.Fence, other.PID, other.PIDStart = "session-2", "member+tag@machine-1", 2, 43, "start-2"
+	if _, err := f.store.Start(other); err != nil {
+		t.Fatal(err)
+	}
+	// session-1 gets evidence about another pid; session-2 is confirmed dead.
+	cleaned, err := f.store.Cleanup(func(r Record) (Observation, error) {
+		if r.SessionID == "session-1" {
+			return Observation{Process: Dead, PID: 99, PIDStart: "other"}, nil
+		}
+		return Observation{Process: Dead, PID: r.PID, PIDStart: r.PIDStart}, nil
+	})
+	if err != nil || len(cleaned) != 1 || cleaned[0].SessionID != "session-2" {
+		t.Fatalf("a mismatched probe stopped the sweep: %v %v", cleaned, err)
+	}
+	r, err := f.store.Show(f.record.Key)
+	if err != nil || r.State != LivenessUnknown || r.Ended != nil {
+		t.Fatalf("mismatch marked dead: %+v %v", r, err)
+	}
+}
+
+func TestHolderMayCarryAPlusTag(t *testing.T) {
+	f := newFixture(t, true)
+	r := f.record
+	r.Holder = "name+tag@machine-1"
+	if _, err := f.store.Start(r); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.store.Reconcile(r.Key, Observation{Process: Alive, PID: r.PID, PIDStart: r.PIDStart}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMachineIdentityAndEnd(t *testing.T) {
 	f := newFixture(t, false)
 	other := f.record
