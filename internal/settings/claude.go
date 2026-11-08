@@ -274,12 +274,12 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	}
 	// Removing our $defaults entry must restore an absent environment array,
 	// rather than leave [] (which disables the classifier's built-in context).
-	if o.Remove && slices.Contains(record.Rules, ClaudeRule{"autoMode", "environment", "$defaults"}) {
-		values, _, err := claudeValues(doc, ClaudeRule{"autoMode", "environment", ""})
+	if o.Remove && slices.Contains(changes, ClaudeRule{"autoMode", "environment", "$defaults"}) {
+		values, exists, err := claudeValues(doc, ClaudeRule{"autoMode", "environment", ""})
 		if err != nil {
 			return 1, err
 		}
-		if len(values) == 0 {
+		if exists && len(values) == 0 {
 			obj, err := parseClaudeObject(doc.get("autoMode"))
 			if err != nil {
 				return 1, err

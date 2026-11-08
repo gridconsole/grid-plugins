@@ -424,3 +424,53 @@ func TestClaudeCustomGridHomeAndInvalidRules(t *testing.T) {
 	f.o.Yes = true
 	f.wantCode(2)
 }
+
+func TestClaudeRemoveAfterManualRemoval(t *testing.T) {
+	for _, missing := range []bool{false, true} {
+		t.Run(map[bool]string{false: "entries", true: "file"}[missing], func(t *testing.T) {
+			f := newClaudeFixture(t)
+			f.o.Yes = true
+			f.wantCode(0)
+			if missing {
+				if err := os.Remove(f.path); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				f.write(f.path, "{}")
+			}
+			f.o.Remove = true
+			f.wantCode(0)
+			if _, err := os.Stat(f.record); !os.IsNotExist(err) {
+				t.Fatal("record remains", err)
+			}
+			if missing {
+				if _, err := os.Stat(f.path); !os.IsNotExist(err) {
+					t.Fatal("recreated settings", err)
+				}
+			} else if string(f.read(f.path)) != "{}" {
+				t.Fatal("wrote settings")
+			}
+		})
+	}
+}
+
+func TestClaudeRemovePreservesManualClassifierReplacement(t *testing.T) {
+	f := newClaudeFixture(t)
+	f.o.Yes = true
+	f.wantCode(0)
+	doc, err := parseClaudeObject(f.read(f.path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.set("autoMode", []byte(`{"environment":[]}`))
+	f.write(f.path, string(doc.bytes()))
+	f.o.Remove = true
+	f.wantCode(0)
+	doc, err = parseClaudeObject(f.read(f.path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(doc.get("autoMode")) != `{"environment":[]}` {
+		t.Fatal("changed the user's replacement classifier context")
+	}
+}
