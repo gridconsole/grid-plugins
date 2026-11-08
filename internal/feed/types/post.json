@@ -1,0 +1,51 @@
+{
+  "type": "post",
+  "version": 1,
+  "class": "chatter",
+  "lease": null,
+  "roles": [
+    "owner",
+    "member",
+    "lead",
+    "planner",
+    "orchestrator",
+    "agent",
+    "worker",
+    "reviewer",
+    "cli",
+    "curator",
+    "brain",
+    "guest",
+    "external"
+  ],
+  "schema": {
+    "type": "object",
+    "required": [
+      "ref",
+      "kind"
+    ],
+    "properties": {
+      "ref": {
+        "type": "string",
+        "minLength": 1
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "message",
+          "pickup",
+          "ask-pickup",
+          "ship",
+          "close",
+          "reopen"
+        ]
+      },
+      "text": {
+        "type": "string"
+      },
+      "attachments": {
+        "type": "array"
+      }
+    }
+  }
+}

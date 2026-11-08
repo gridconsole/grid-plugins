@@ -1,0 +1,387 @@
+package feed
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
+)
+
+var ErrStaleLease = errors.New("stale lease")
+var ErrDiskFull = errors.New("disk full")
+
+// Store is one task's Feed. TaskID is the stable ULID, not its display number.
+type Store struct{ TaskDir, TaskID string }
+
+func (s Store) Dir() string { return filepath.Join(s.TaskDir, "feed") }
+
+// CheckFilesystem also serves callers such as doctor. It checks the nearest
+// existing ancestor before any directory is created.
+func CheckFilesystem(dir string) error {
+	for {
+		if _, err := os.Stat(dir); err == nil {
+			return checkFilesystem(dir)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return fmt.Errorf("cannot find Feed filesystem")
+		}
+		dir = parent
+	}
+}
+
+func (s Store) prepare() error {
+	if !IsID(s.TaskID) {
+		return fmt.Errorf("task id must be a ULID")
+	}
+	info, err := os.Stat(s.TaskDir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("task is not a folder")
+	}
+	if err := CheckFilesystem(s.Dir()); err != nil {
+		return err
+	}
+	return os.MkdirAll(s.Dir(), 0o700)
+}
+
+// Lease is the shared interface with the lease commands. Feed never grants a
+// lease or decides that a holder is dead.
+type Lease struct {
+	Lease   string  `json:"lease"`
+	Holder  *string `json:"holder"`
+	Fence   int64   `json:"fence"`
+	Gen     int64   `json:"gen"`
+	Attempt *int    `json:"attempt"`
+}
+
+type tenureEnd struct {
+	File      string `json:"file"`
+	EndOffset int64  `json:"end_offset"`
+}
+
+func (s Store) leaseLock(w Writer, attempt *int) (*os.File, error) {
+	if w.Lease == "" {
+		return nil, nil
+	}
+	f, err := os.Open(filepath.Join(s.Dir(), "lease", w.Lease+".json"))
+	if err != nil {
+		return nil, fmt.Errorf("%w: cannot read lease: %v", ErrStaleLease, err)
+	}
+	if err := lock(f, false); err != nil {
+		f.Close()
+		return nil, err
+	}
+	fail := func(err error) (*os.File, error) { unlock(f); f.Close(); return nil, err }
+	var lease Lease
+	if err := json.NewDecoder(f).Decode(&lease); err != nil {
+		return fail(fmt.Errorf("%w: invalid lease", ErrStaleLease))
+	}
+	if value(lease.Holder) != w.Worker || lease.Lease != w.Lease || lease.Fence != w.Fence || lease.Gen != w.Gen {
+		return fail(ErrStaleLease)
+	}
+	if w.Lease != "task" && (attempt == nil || lease.Attempt == nil || *attempt != *lease.Attempt) {
+		return fail(ErrStaleLease)
+	}
+	ends, err := s.readEnds()
+	if err != nil {
+		return fail(err)
+	}
+	if _, ended := ends[writerFile(w.Worker, w.Fence)]; ended {
+		return fail(ErrStaleLease)
+	}
+	return f, nil
+}
+
+func (s Store) readEnds() (map[string]int64, error) {
+	ends := map[string]int64{}
+	data, err := os.ReadFile(filepath.Join(s.Dir(), "lease", "takeovers.jsonl"))
+	if errors.Is(err, os.ErrNotExist) {
+		return ends, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, line := range completeLines(data) {
+		var end tenureEnd
+		// A malformed complete takeover is unsafe to ignore: do not admit zombies.
+		if json.Unmarshal(line, &end) != nil || end.File == "" || filepath.Base(end.File) != end.File || end.EndOffset < 0 {
+			return nil, fmt.Errorf("invalid takeover log entry")
+		}
+		if old, exists := ends[end.File]; !exists || end.EndOffset < old {
+			ends[end.File] = end.EndOffset
+		}
+	}
+	return ends, nil
+}
+
+func completeLines(data []byte) [][]byte {
+	cut := bytes.LastIndexByte(data, '\n')
+	if cut < 0 {
+		return nil
+	}
+	return bytes.Split(data[:cut], []byte{'\n'})
+}
+
+// Post appends with a file lock held across seq allocation, tail repair, the
+// whole-line write and required durability. A lease lock covers that interval.
+func (s Store) Post(in Input, w Writer) (Record, error) {
+	r, err := s.record(in, w)
+	if err != nil {
+		return Record{}, err
+	}
+	if err := Validate(r); err != nil {
+		return Record{}, err
+	}
+	if err := s.prepare(); err != nil {
+		return Record{}, err
+	}
+	lease, err := s.leaseLock(w, r.Attempt)
+	if err != nil {
+		return Record{}, err
+	}
+	if lease != nil {
+		defer lease.Close()
+		defer unlock(lease)
+	}
+	file := filepath.Join(s.Dir(), writerFile(w.Worker, w.Fence))
+	f, err := os.OpenFile(file, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return Record{}, diskError(err)
+	}
+	defer f.Close()
+	if err := lock(f, true); err != nil {
+		return Record{}, err
+	}
+	defer unlock(f)
+	existing, err := s.Read(Filter{})
+	if err != nil {
+		return Record{}, err
+	}
+	for _, entry := range existing.Records {
+		old := entry.Record
+		if old.ID == r.ID {
+			if sameRequest(old, r) {
+				t, _ := lookup(r.Type)
+				if t.Class == "state" {
+					if err := syncFile(f); err != nil {
+						return Record{}, diskError(err)
+					}
+				}
+				return old, nil
+			}
+			return Record{}, fmt.Errorf("record id already used for a different post")
+		}
+		if r.Wake != nil && old.Wake != nil && wakeKey(old) == wakeKey(r) {
+			return old, nil
+		}
+	}
+	if r.Author.Role == "guest" && r.Type == "answer" {
+		addressed := false
+		for _, entry := range existing.Records {
+			q := entry.Record
+			if q.ID == value(r.Re) && q.Type == "question" && entry.Verdict == "counted" && str(q.Body["who"]) == r.Author.Member {
+				addressed = true
+			}
+		}
+		if !addressed {
+			return Record{}, fmt.Errorf("guest answer must name a question addressed to that guest")
+		}
+	}
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		return Record{}, err
+	}
+	r.Seq = 1
+	for _, line := range completeLines(raw) {
+		var prev Record
+		if json.Unmarshal(line, &prev) == nil && prev.Worker == r.Worker && prev.Fence == r.Fence && prev.Seq >= r.Seq {
+			r.Seq = prev.Seq + 1
+		}
+	}
+	if r.Seq == 1 && r.Lease != nil {
+		first := "ack"
+		if *r.Lease == "task" {
+			first = "handover"
+		}
+		if r.Type != first {
+			return Record{}, fmt.Errorf("first record of a tenure must be %s", first)
+		}
+	}
+	line, err := json.Marshal(r)
+	if err != nil {
+		return Record{}, err
+	}
+	if len(line)+1 > MaxLine {
+		body, err := json.Marshal(r.Body)
+		if err != nil {
+			return Record{}, err
+		}
+		if err := s.saveBody(r.ID, body); err != nil {
+			return Record{}, diskError(err)
+		}
+		wire := r
+		wire.Body = map[string]any{"ref": "bodies/" + r.ID + ".json"}
+		line, err = json.Marshal(wire)
+		if err != nil {
+			return Record{}, err
+		}
+		if len(line)+1 > MaxLine {
+			return Record{}, fmt.Errorf("envelope exceeds 32 KB even with body reference")
+		}
+	}
+	line = append(line, '\n')
+	t, _ := lookup(r.Type)
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := repairTail(f, file); err != nil {
+			return Record{}, diskError(err)
+		}
+		n, err := f.Write(line)
+		if err != nil {
+			return Record{}, diskError(err)
+		}
+		if n != len(line) {
+			continue
+		}
+		if t.Class == "state" {
+			if err := syncFile(f); err != nil {
+				return Record{}, diskError(err)
+			}
+		}
+		return r, nil
+	}
+	return Record{}, io.ErrShortWrite
+}
+
+func diskError(err error) error {
+	if errors.Is(err, syscall.ENOSPC) {
+		return fmt.Errorf("%w: %v", ErrDiskFull, err)
+	}
+	return err
+}
+func repairTail(f *os.File, path string) error {
+	info, err := f.Stat()
+	if err != nil || info.Size() == 0 {
+		return err
+	}
+	reader, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	var last [1]byte
+	if _, err := reader.ReadAt(last[:], info.Size()-1); err != nil {
+		return err
+	}
+	if last[0] != '\n' {
+		n, err := f.Write([]byte{'\n'})
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			return io.ErrShortWrite
+		}
+	}
+	return nil
+}
+
+func (s Store) record(in Input, w Writer) (Record, error) {
+	id := in.ID
+	if id == "" {
+		var err error
+		id, err = NewID()
+		if err != nil {
+			return Record{}, err
+		}
+	}
+	// Normalize and copy the body to avoid mutating caller data and to apply the
+	// same JSON type checks to API and CLI inputs.
+	data, err := json.Marshal(in.Body)
+	if err != nil {
+		return Record{}, err
+	}
+	var body map[string]any
+	if err := json.Unmarshal(data, &body); err != nil {
+		return Record{}, err
+	}
+	t, _ := lookup(in.Type)
+	after := append([]string{}, in.After...)
+	r := Record{ID: id, Task: s.TaskID, Type: in.Type, TypeV: t.Version, Author: w.Author, Worker: w.Worker, Lease: ptr(w.Lease), Gen: w.Gen, Fence: w.Fence, At: time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), Re: ptr(in.Re), After: after, Job: ptr(in.Job), Wake: ptr(in.Wake), Body: body}
+	if in.Attempt != 0 {
+		r.Attempt = &in.Attempt
+	}
+	return r, nil
+}
+func sameRequest(a, b Record) bool {
+	a.At, b.At = "", ""
+	a.Seq, b.Seq = 0, 0
+	aa, _ := json.Marshal(a)
+	bb, _ := json.Marshal(b)
+	return bytes.Equal(aa, bb)
+}
+func wakeKey(r Record) string {
+	target := value(r.Job)
+	if target == "" {
+		target = str(r.Body["target"])
+	}
+	if target == "" {
+		target = value(r.Re)
+	}
+	if target == "" {
+		target = r.Task
+	}
+	return strings.Split(value(r.Wake), "/")[0] + "\x00" + r.Type + "\x00" + target
+}
+func (s Store) saveBody(id string, body []byte) error {
+	dir := filepath.Join(s.Dir(), "bodies")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	target := filepath.Join(dir, id+".json")
+	if old, err := os.ReadFile(target); err == nil {
+		if !bytes.Equal(old, body) {
+			return fmt.Errorf("body id already used")
+		}
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	f, err := os.CreateTemp(dir, ".body-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(body); err != nil {
+		f.Close()
+		return err
+	}
+	if err := syncFile(f); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	// Link publishes once, avoiding a partially visible body or replacement.
+	if err := os.Link(f.Name(), target); err != nil {
+		if old, e := os.ReadFile(target); e != nil || !bytes.Equal(old, body) {
+			return err
+		}
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return syncFile(d)
+}

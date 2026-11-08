@@ -1,0 +1,17 @@
+{
+  "type": "ack",
+  "version": 1,
+  "class": "state",
+  "lease": "job",
+  "roles": [
+    "agent",
+    "worker",
+    "reviewer",
+    "cli"
+  ],
+  "schema": {
+    "type": "object",
+    "required": [],
+    "properties": {}
+  }
+}

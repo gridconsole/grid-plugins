@@ -1,0 +1,47 @@
+{
+  "type": "question",
+  "version": 1,
+  "class": "state",
+  "lease": null,
+  "roles": [
+    "owner",
+    "member",
+    "lead",
+    "planner",
+    "orchestrator",
+    "agent",
+    "worker",
+    "reviewer",
+    "cli",
+    "curator",
+    "brain"
+  ],
+  "schema": {
+    "type": "object",
+    "required": [
+      "question"
+    ],
+    "properties": {
+      "question": {
+        "type": "string",
+        "minLength": 1
+      },
+      "who": {
+        "type": "string",
+        "minLength": 1
+      },
+      "blocking": {
+        "type": "boolean"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "person",
+          "timer",
+          "ci",
+          "job"
+        ]
+      }
+    }
+  }
+}

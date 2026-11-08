@@ -1,0 +1,33 @@
+{
+  "type": "job",
+  "version": 1,
+  "class": "state",
+  "lease": null,
+  "roles": [
+    "owner",
+    "member",
+    "lead",
+    "planner",
+    "orchestrator"
+  ],
+  "schema": {
+    "type": "object",
+    "required": [
+      "title",
+      "role"
+    ],
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "role": {
+        "type": "string",
+        "minLength": 1
+      },
+      "after": {
+        "type": "array"
+      }
+    }
+  }
+}

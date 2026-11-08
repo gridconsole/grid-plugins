@@ -1,0 +1,31 @@
+{
+  "type": "worker-exit",
+  "version": 1,
+  "class": "state",
+  "lease": "job",
+  "roles": [
+    "agent",
+    "worker",
+    "reviewer",
+    "cli"
+  ],
+  "schema": {
+    "type": "object",
+    "required": [],
+    "properties": {
+      "reason": {
+        "type": "string",
+        "enum": [
+          "done",
+          "crash",
+          "usage_limit",
+          "cancelled",
+          "loop"
+        ]
+      },
+      "code": {
+        "type": "number"
+      }
+    }
+  }
+}

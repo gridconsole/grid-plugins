@@ -1,0 +1,31 @@
+{
+  "type": "usage-notice",
+  "version": 1,
+  "class": "chatter",
+  "lease": null,
+  "roles": [
+    "cli"
+  ],
+  "schema": {
+    "type": "object",
+    "required": [
+      "task",
+      "threshold"
+    ],
+    "properties": {
+      "task": {
+        "type": "string",
+        "minLength": 1
+      },
+      "threshold": {
+        "type": "number"
+      },
+      "dollars": {
+        "type": "number"
+      },
+      "minutes": {
+        "type": "number"
+      }
+    }
+  }
+}

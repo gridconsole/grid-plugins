@@ -1,0 +1,34 @@
+{
+  "type": "handover",
+  "version": 1,
+  "class": "state",
+  "lease": null,
+  "roles": [
+    "owner",
+    "member",
+    "lead",
+    "planner",
+    "orchestrator",
+    "cli"
+  ],
+  "schema": {
+    "type": "object",
+    "required": [],
+    "properties": {
+      "from": {
+        "type": "string",
+        "minLength": 1
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1
+      },
+      "adopted": {
+        "type": "string",
+        "enum": [
+          "session-gone"
+        ]
+      }
+    }
+  }
+}

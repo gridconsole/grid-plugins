@@ -1,0 +1,34 @@
+{
+  "type": "checkpoint",
+  "version": 1,
+  "class": "state",
+  "lease": "job",
+  "roles": [
+    "agent",
+    "worker",
+    "reviewer",
+    "cli"
+  ],
+  "schema": {
+    "type": "object",
+    "required": [
+      "job",
+      "step",
+      "commit"
+    ],
+    "properties": {
+      "job": {
+        "type": "string",
+        "minLength": 1
+      },
+      "step": {
+        "type": "string",
+        "minLength": 1
+      },
+      "commit": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}
