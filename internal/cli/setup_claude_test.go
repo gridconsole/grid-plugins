@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -155,6 +156,12 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Setup-record defenses are additional to the writer guard and are tested
+	// through the CLI in settings.TestClaudeReworkCLIProjectAnchors.
+	rules = slices.DeleteFunc(rules, func(r settings.ClaudeRule) bool {
+		return r.Section == "permissions" && r.Key == "deny" &&
+			(r.Value == "Edit(~/.grid/setup/**)" || r.Value == "Write(~/.grid/setup/**)")
+	})
 	env := map[string]string{"HOME": h.home, "GRID_HOME": h.gridHome}
 	paths := []string{
 		"projects/p/tasks/T-01-work", "projects/p/tasks/T-01-work/task.md", "projects/p/tasks/T-1/sub/deep/file", "projects/p/TASKS/t-22-work/brief.md",
