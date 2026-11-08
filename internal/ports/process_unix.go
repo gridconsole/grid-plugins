@@ -57,8 +57,8 @@ func ProcessMatches(r Record) (bool, error) {
 	return start == r.PIDStart, nil
 }
 
-// StopRecord checks process identity before every signal so a reused PID is
-// never accepted merely because its process group exists.
+// StopRecord rechecks available process identity before every signal, with
+// the legacy-record and surviving-group behavior described by ProcessMatches.
 func StopRecord(r Record, grace time.Duration) error {
 	pid := r.PID
 	if pid <= 0 {
