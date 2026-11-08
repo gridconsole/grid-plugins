@@ -37,3 +37,40 @@ func TestRepoMarkers(t *testing.T) {
 		})
 	}
 }
+
+func TestIsRepoRootSameFolderOtherSpelling(t *testing.T) {
+	testgit.Isolate(t)
+	parent := t.TempDir()
+	repo := filepath.Join(parent, "Repo")
+	if err := os.Mkdir(repo, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	testgit.Init(t, repo, "", true)
+	inner := filepath.Join(repo, "inner")
+	if err := os.Mkdir(inner, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if IsRepoRoot(inner) {
+		t.Fatal("a folder below the root is not a root")
+	}
+	t.Run("symlink", func(t *testing.T) {
+		link := filepath.Join(parent, "link")
+		if err := os.Symlink(repo, link); err != nil {
+			t.Skipf("no symlinks: %v", err)
+		}
+		if !IsRepoRoot(link) {
+			t.Fatal("a symlink to the root is the root")
+		}
+	})
+	t.Run("other case", func(t *testing.T) {
+		lower := filepath.Join(parent, "repo")
+		a, errA := os.Stat(repo)
+		b, errB := os.Stat(lower)
+		if errA != nil || errB != nil || !os.SameFile(a, b) {
+			t.Skip("case-sensitive file system")
+		}
+		if !IsRepoRoot(lower) {
+			t.Fatal("the same folder spelled in another case is the root")
+		}
+	})
+}

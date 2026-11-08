@@ -37,7 +37,14 @@ func IsRepoRoot(dir string) bool {
 		return false
 	}
 	root, err := run(dir, "rev-parse", "--show-toplevel")
-	return err == nil && gridhome.Real(root) == gridhome.Real(dir)
+	if err != nil || root == "" {
+		return false
+	}
+	// SameFile, not a string compare: Git may report another case on a
+	// case-insensitive file system, or the real path behind a symlink.
+	rootInfo, rootErr := os.Stat(root)
+	dirInfo, dirErr := os.Stat(dir)
+	return rootErr == nil && dirErr == nil && os.SameFile(rootInfo, dirInfo)
 }
 
 // FindRoot returns the nearest folder at or above dir that is a repo root. The walk
