@@ -35,6 +35,8 @@ func TestGuestTasksDirs(t *testing.T) {
 		want         []string
 	}{
 		{"guest", "gus", []string{"alpha"}},
+		{"grid-guest", "gus", []string{"alpha"}},
+		{" GRID-GUEST ", " GUS ", []string{"alpha"}},
 		{" GUEST ", " GUS ", []string{"alpha"}},
 		{"guest", "nobody", []string{}},
 		{"guest", "", []string{}},

@@ -14,10 +14,14 @@ func TestGuestProjectLookups(t *testing.T) {
 	h.record(project.Record{Name: "beta", ID: "01BETA"})
 	h.write(filepath.Join(h.gridHome, "projects", "beta", "tasks", "T-03-hidden", "task.md"), "---\nid: T-03\nproject: beta\n---\n")
 	h.write(filepath.Join(h.gridHome, "projects", "beta", "tasks", "T-03-hidden", "jobs", "J-01", "inputs.json"), `{"sources":[{"pointer":"hidden.md"}]}`)
-	for _, member := range []string{"gus", "nobody"} {
-		t.Run(member, func(t *testing.T) {
+	for _, tc := range []struct{ role, member string }{
+		{"guest", "gus"}, {"guest", "nobody"},
+		{"grid-guest", "gus"}, {"grid-guest", "nobody"},
+	} {
+		t.Run(tc.role+"/"+tc.member, func(t *testing.T) {
+			member := tc.member
 			h.env.Getenv = func(k string) string {
-				return map[string]string{"GRID_ROLE": "guest", "GRID_MEMBER": member}[k]
+				return map[string]string{"GRID_ROLE": tc.role, "GRID_MEMBER": member}[k]
 			}
 			if code := h.run(cwd, "project", "list", "--json"); code != 0 {
 				t.Fatal(h.errb)
@@ -32,6 +36,9 @@ func TestGuestProjectLookups(t *testing.T) {
 			}
 			if len(entries) != want || len(entries) == 1 && entries[0].Name != "alpha" {
 				t.Errorf("project list = %v, want %d invited projects", entries, want)
+			}
+			if code := h.run(cwd, "where", "--project", "beta", "--json"); code != 1 {
+				t.Errorf("hidden project resolved: exit=%d", code)
 			}
 			if member == "gus" {
 				if code := h.run(cwd, "task", "show", "T-02", "--json"); code != 0 {

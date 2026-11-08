@@ -9,13 +9,14 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/safefile"
 )
 
 func (r Resolver) guest() bool {
-	return strings.EqualFold(strings.TrimSpace(r.Caller.Role), "guest")
+	return contract.TierFor(r.Caller.Role) == contract.PersonGuest
 }
 
 // GuestProjectAllowed limits guests to the app's project-roles.json people list.
