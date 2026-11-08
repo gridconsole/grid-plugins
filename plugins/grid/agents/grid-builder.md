@@ -39,6 +39,8 @@ When you learn something another task would need (a command that is not obvious,
 
 Commit with a one-sentence message when the brief's Job ends in a change, on the task's branch only: when `GRID_TASK_BRANCH` is set, commit only if the session cwd's branch (`git rev-parse --abbrev-ref HEAD`) is `GRID_TASK_BRANCH` or starts with `GRID_TASK_BRANCH` followed by `-` (a parallel builder branch such as `grid/T-03-header`); on any other branch (main or `GRID_BASE_BRANCH` included), commit nothing, stop and report it in the Outcome. When `GRID_TASK_BRANCH` is unset (not a git repo, or a task older than task branches), commit on the current branch. Never push, never switch or delete branches.
 
+In a Job worktree (the Job's brief says "You work in <path>, a worktree of ..."), `job submit` makes the commit and the Job ends there: never amend, rebase, switch branches or check out the task branch, and when the worktree already holds the change the brief asks for, run `job submit` anyway (it hands the head in as an empty submission) and post the result instead of asking.
+
 Commit after each Build step. Run only the tests of the changed crate or folder; premerge runs once, at land, on the merge result, so do not run it yourself unless the brief says so, and then once on the committed tree with its output in a log. Never start a second premerge while one runs, and never kill a process. A refused kill is a stop to report, not a step to retry.
 
 In `## Outcome` write what you did, the files changed, any test removed and its cover, and the verify output quoted. Write Outcome only: never write `## Verdict`, never edit `intent.md`, `task.md`, `plan.md` or `history.md`, apart from the one `brain proposed` line above. Reply in at most 40 lines; details go in the brief.

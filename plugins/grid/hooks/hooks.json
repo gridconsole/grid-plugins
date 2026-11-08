@@ -13,12 +13,21 @@
     ],
     "UserPromptSubmit": [
       {
-        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-attach.mjs\"", "timeout": 10 }]
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-attach.mjs\"", "timeout": 10 },
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/brain-recall.mjs\"", "timeout": 10 }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "grid-planner|grid:grid-planner",
+        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/brain-recall.mjs\"", "timeout": 10 }]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
         "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/plan-guard.mjs\"", "timeout": 10 }]
       },
       {
@@ -27,7 +36,10 @@
       },
       {
         "matcher": "Agent|Task",
-        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/brief-lint.mjs\"", "timeout": 10 }]
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/brief-lint.mjs\"", "timeout": 10 },
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/brain-recall.mjs\"", "timeout": 10 }
+        ]
       },
       {
         "matcher": "Bash",
@@ -50,6 +62,10 @@
       {
         "matcher": "Read",
         "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/brain-read.mjs\"", "timeout": 10 }]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/brain-recall.mjs\"", "timeout": 10 }]
       },
       {
         "matcher": "Agent|Task",

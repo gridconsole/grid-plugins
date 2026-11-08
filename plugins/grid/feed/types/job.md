@@ -13,6 +13,7 @@ fields:
   - check: for a wait Job, `{command: [argv...]}` or `{url}`, with `interval_s` (15), `timeout_s` (3600) and `probe_timeout_s` (30); a command exits 0 green, 1 red, 3 asks for a manual approval, anything else is pending; never run through a shell
   - item: the number of the plan item the Job serves, a whole number; the Orchestrator sets it from the plan
   - priority: high, normal (the default) or low; a later control post's priority wins
+  - rerole: set by the Orchestrator when it posts a planned Job under another role than the plan gave, and why (a checker Job whose brief runs a command goes to a runner)
 ---
 One piece of work that one Worker picks up. The envelope `job` is its id (J-1, J-2, ...); a Job post without one gets the next number.
 

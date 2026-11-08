@@ -98,6 +98,12 @@ function headOf(repo, task, c) {
   return fail(`the head of ${task} here (${mine}) and on ${c.remote} (${theirs}) have diverged; nothing was changed`);
 }
 
+// The commits this clone holds for the task's head: its own ref and every copy of a remote's or a Host's (refs/grid-remotes/<name>/<task>/head).
+function headCopies(repo, task, c) {
+  const r = g(repo, ['for-each-ref', '--format=%(objectname)', headRef(task), `refs/grid-remotes/*/${task}/head`], c);
+  return r.ok ? text(r).split('\n').filter(Boolean) : [];
+}
+
 // ---- job start ----
 
 // A detached worktree at the base sha, outside the repo folder, locked with the task and Job so cleanup can find it.
@@ -188,6 +194,7 @@ function ignoredAmong(dir, gitArgs, paths, c) {
 }
 
 // Commits the worktree's changes, sets and pushes the Job ref, and returns the submit post's fields (and posts them when feed is a task folder).
+// A clean worktree whose base is the task head hands that head in as an empty submission (`empty: true`) instead of failing.
 export function jobSubmit({ task, job, repo, worktree, feed } = {}, o = {}) {
   const c = conf(o);
   const errors = badInput(task, job, c);
@@ -234,22 +241,26 @@ export function jobSubmit({ task, job, repo, worktree, feed } = {}, o = {}) {
   if (!head.ok) return head;
   const sha = text(head);
   // A clean tree still submits when the Worker committed on its branch since the Job's base (HEAD is past the base), or when the Job ref
-  // already holds this commit (a retry after a failed push); otherwise there is nothing to hand in.
-  if (!changed.items.length && sha === base.sha && readCommit(home.top, ref, c) !== sha) return fail(`nothing to submit: ${worktree} has no changes`);
+  // already holds this commit (a retry after a failed push). It also submits, as an empty hand-in, when the base is the task head itself:
+  // the work the Job asks for (a "commit" Job, say) is already in the head an earlier Job integrated, so there is nothing to refuse and
+  // integrating it moves nothing. Any other clean tree has nothing to hand in.
+  const clean = !changed.items.length && sha === base.sha;
+  const inHead = clean && headCopies(home.top, task, c).includes(sha);
+  if (clean && !inHead && readCommit(home.top, ref, c) !== sha) return fail(`nothing to submit: ${worktree} has no changes`);
 
   const set = setRef(home.top, ref, sha, { env: c.env });
   if (!set.ok) return set;
   const pushed = pushRefs(home.top, [ref], net(c));
   if (!pushed.ok) return fail(...pushed.errors, `the commit ${sha} is on ${ref} here; submit again to push it`);
 
-  const fields = { type: 'submit', job, body: { sha, ref } };
+  const fields = { type: 'submit', job, body: { sha, ref, ...(inHead ? { summary: 'nothing new: the task head already holds the work' } : {}) } };
   let posted = null;
   if (feed) {
     const p = post(feed, fields, { env: c.env });
     if (!p.ok) return { ok: false, errors: [`${sha} is pushed to ${ref}, but the submit post failed: ${p.errors.join('; ')}`], sha, ref };
     posted = p.post.id;
   }
-  return { ok: true, task, job, sha, ref, ignored: ignored.items, post: fields, posted };
+  return { ok: true, task, job, sha, ref, ignored: ignored.items, ...(inHead ? { empty: true } : {}), post: fields, posted };
 }
 
 // ---- task integrate ----

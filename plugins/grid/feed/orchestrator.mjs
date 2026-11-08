@@ -19,7 +19,7 @@ import { workerLaunch, ROLES, AGENTS } from './worker.mjs';
 import { grantedSpawn } from './host.mjs';
 import { startWorker } from './worker-start.mjs';
 import { foldHosts, pickHost as scoreHost, whyNoHost } from './hosts.mjs';
-import { decide as askModel } from './decide.mjs';
+import { decide as askModel, jobRole } from './decide.mjs';
 import { isWait, stepWait, probe as probeWait, checkOf, WAIT_KIND } from './wait.mjs';
 import { retryStale, answeredPark } from './retry.mjs';
 import { lock, beating } from './lock.mjs';
@@ -91,6 +91,11 @@ function resolveBase(repo, rev, { env } = {}) {
   const r = runGit(repo, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], { env });
   return r.ok ? { ok: true, sha: r.out.trim() } : r;
 }
+
+// Whether a planned Job works in the repository, so it gets a worktree at the task head. The model's `code: true` says so, but a runner always
+// runs the repository's code, and a reviewer reads it when the plan changes any: left to the model's flag, a runner ran in the task folder
+// without the earlier Jobs' work. Planning.mjs's reviewJob holds the same rule for the review Job the loop adds itself.
+const needsRepo = (x, planHasCode) => x.code === true || x.role === 'runner' || (x.role === 'reviewer' && planHasCode);
 
 function settings(taskDir, o) {
   const env = o.env ?? process.env;
@@ -181,16 +186,18 @@ function work(taskDir, o) {
     if (!r.ok) out.errors.push(`${r.ran ? 'planning failed' : 'could not plan'}: ${oneLine(r.error) || 'no Jobs'}`);
     else if (!jobs.length) out.errors.push('planning failed: the plan gave no Jobs');
     if (!r.ran) Object.assign(o.planMemory, { misses: o.planMemory.misses + 1, at: now, reason: oneLine(r.error) });
+    const planHasCode = jobs.some((x) => x.code === true);
     jobs.forEach((x, i) => {
       const after = (Array.isArray(x.after) ? x.after : []).map(str).filter((id) => jobNo(id) >= 1 && jobNo(id) <= jobs.length && jobNo(id) !== i + 1);
       // A wait Job keeps the checked, trimmed check; one that fails the check is still posted, so the numbering holds, and the loop rejects it with the reason.
       const wait = x.kind === WAIT_KIND;
       const c = wait ? checkOf(x) : null;
+      const { role, rerole } = jobRole(x);
       write('job', {
-        title: oneLine(x.title, 200), role: ROLES.includes(x.role) ? x.role : 'builder', brief: str(x.brief).trim(),
+        title: oneLine(x.title, 200), role, brief: str(x.brief).trim(), ...(rerole ? { rerole } : {}),
         ...(after.length ? { after: [...new Set(after)] } : {}),
         ...(wait ? { kind: WAIT_KIND, ...(c.ok ? { check: c.check } : isObj(x.check) ? { check: x.check } : {}) } : {}),
-        ...(x.code === true && o.repo && !wait ? { repo: path.basename(o.repo) } : {}),
+        ...(o.repo && !wait && needsRepo(x, planHasCode) ? { repo: path.basename(o.repo) } : {}),
         ...(PRIORITIES.includes(x.priority) ? { priority: x.priority } : {}),
         ...(Number.isInteger(x.item) && x.item > 0 ? { item: x.item } : {}),
       }, { job: `J-${i + 1}` });
@@ -453,8 +460,18 @@ function work(taskDir, o) {
       brief += `\n\nThe last attempt was rejected: ${str(j.history[j.history.length - 1 - lastRejected].reason)}`;
     }
     if (code) {
-      brief += `\n\nYou work in ${cwd}, a worktree of ${o.repo} at ${base}. Hand the code in before you post the result:\n`
-        + `node "${GIT_STEPS}" job submit ${o.task} ${j.id} --repo "${o.repo}" --worktree "${cwd}" --feed "${taskDir}"`;
+      // The worktree is at the task head: the accepted work of the Jobs before this one. The task branch (grid/<task>) only receives the head when
+      // the task lands, so a brief that sends the Worker to it is answered here.
+      const head = str(v.state.head?.body?.sha);
+      brief += `\n\nYou work in ${cwd}, a worktree of ${o.repo} at ${base}, ${base === head ? 'the task head: it holds the work of the Jobs before this one' : 'the base of the task'}. `
+        + 'The task branch is not updated until the task lands, so where the brief names it, this worktree is that state: never switch or check out branches here.';
+      if (commitsCode(j, v)) {
+        brief += ` Hand the code in before you post the result; it commits your changes, so never amend or rebase:\n`
+          + `node "${GIT_STEPS}" job submit ${o.task} ${j.id} --repo "${o.repo}" --worktree "${cwd}" --feed "${taskDir}"\n`
+          + 'When the worktree is already clean because the head holds what the brief asks (an earlier Job made the change), run job submit all the same: it hands the head in as an empty submission. Then post the result saying so; do not ask.';
+      } else {
+        brief += ' Change nothing here and do not run job submit: read or run what the brief asks, then post the result.';
+      }
     }
     const l = workerLaunch({
       agent: o.agent, role, task: o.task, job: j.id, worker, member: o.me.member, host: o.me.host, project: o.project, cwd, brief, model: o.model,

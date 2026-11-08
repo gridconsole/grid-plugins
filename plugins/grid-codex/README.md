@@ -23,6 +23,7 @@ This folder is the source, not an installable plugin. When Grid stages it for an
 - `hooks/grid/`: a copy of `plugins/grid/hooks`, which the adapters run;
 - `skills/`: the Grid skills, which the manifest names;
 - `feed/` and `bin/grid-feed`: the Feed server and shell command from `plugins/grid` (copied as they are);
+- `brain/` and `bin/grid-brain`: the brain library and shell command from `plugins/grid` (copied as they are), which the recall hook runs;
 - `.mcp.json` (from this folder) registers the `grid-feed` server, whose tools Codex approves without asking (`default_tools_approval_mode` is set on that server only).
 
 The tests in `tests/hooks-codex/` stage the same layout with `hooks/grid` pointing at `plugins/grid/hooks`.
@@ -35,11 +36,17 @@ The tests in `tests/hooks-codex/` stage the same layout with `hooks/grid` pointi
 | PreToolUse | `^spawn_agent$` | brief-lint | brief-lint | `permissionDecision: "deny"` on an incomplete brief; nothing otherwise |
 | PreToolUse | `^Bash$` | history-log | history-log | none (snapshots the task folders the command names) |
 | PreToolUse | `^Bash$` | host-guard | host-guard | `permissionDecision: "deny"` on a command that names the host's `.host` folder (the approval queue); nothing otherwise |
+| UserPromptSubmit | none (Codex ignores it) | brain-recall | brain-recall | `hookSpecificOutput.additionalContext`: the brain recall for a task turn (`/grid:execute T-n`) whose plan is not accepted |
+| PreToolUse | `^spawn_agent$` | brain-recall | brain-recall | none (notes the task a `grid-planner` subagent is started on) |
+| SubagentStart | `^grid-planner$` (agent_type) | brain-recall | brain-recall | `hookSpecificOutput.additionalContext`: the recall for that planner |
+| PreToolUse | `^Bash$` | plan-guard | plan-guard (recall gate) | `permissionDecision: "deny"` on `plan-hash.mjs`, or a shell plan ready line, for a held task whose plan.md has no `Recall:` or `Used:` line |
 | PostToolUse | `^Bash$` | history-log | history-log | none (writes one history line per changed file, by the subagent's role or `codex`) |
 | Stop | any | stop-check | stop-check | `{"decision":"block","reason":...}` while task.md or a brief is not written up |
 | SubagentStop | any | stop-check | stop-check | same, for the brief that subagent was given |
 | PostToolUse | any tool (no matcher) | heartbeat | heartbeat (`hookBeat`) | none (one `heartbeat` post in the Worker's own Feed file, at most once a minute per Job) |
 | Stop | any | heartbeat | heartbeat (`hookBeat`) | none (the exit beat, note `stopped`, on the same throttle) |
+
+The recall follows the Claude Code plugin, with two nearest events: Claude Code also recalls when the Skill tool loads the plan skill, and Codex has no Skill tool, so a Codex planner that starts without a task turn runs `grid-brain recall` itself; and Claude Code refuses the plan ready edit of history.md, which in Codex is an apply_patch no hook sees, so the gate sits on the shell call that writes the plan's revision hash (`plan-hash.mjs`), without which Grid takes no plan ready line. Codex ships no `grid-planner` role (see Worker roles), so a Codex plan is made in the main session and reaches the recall through UserPromptSubmit; the spawn_agent and SubagentStart hooks are wired for parity and run only if such a role is added, and assume Codex reports the role's TOML name without a `grid:` prefix. UserPromptSubmit and SubagentStart are in the Codex source at `rust-v0.162.0` (`hooks/src/events/user_prompt_submit.rs`, `session_start.rs`: SubagentStart matches on `agent_type` and takes only additionalContext); not yet seen in a live run.
 
 There is no PermissionRequest hook, and no gate hooks apply_patch: Grid writes the history lines for file edits from the session's `item/completed` events, outside the plugin. The heartbeat is the one PostToolUse hook that sees apply_patch, MCP tools and `spawn_agent`.
 
@@ -93,6 +100,7 @@ Not confirmed. None of these has been seen in a live Codex run. The tool names a
 - That Codex sets `stop_hook_active` to true on the turn a Stop block continues. stop-check's loop guard depends on it.
 - That a hook sees the `GRID_*` variables of the Worker's own process. command_runner.rs builds a hook's environment from the session's environment snapshot (minus a short list of restricted names), so it should; no live run has shown it (the one real `codex exec` planned for step 20 was refused by the permission check, see Limitations).
 - The plugin id format in the trust keys and the input of `trusted_hash`.
+- That UserPromptSubmit's `prompt` carries `/grid:execute T-n` as text when Grid sends the turn as a skill item plus text (`host/spawn_codex.rs`); the recall finds the task by that text.
 - The marketplace format (documented only), and whether `skills` may be a folder path.
 
 ## Limitations

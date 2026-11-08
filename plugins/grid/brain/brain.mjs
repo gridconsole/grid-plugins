@@ -7,7 +7,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveTask, readFeed, fold } from '../feed/lib.mjs';
-import { parseFrontmatter as readFrontmatter } from '../hooks/lib.mjs';
+// The hooks' lib sits in hooks/ here, and in hooks/grid/ in a Codex plugin's staged copy (brain/ at the plugin root in both).
+const hooksLib = ['../hooks/lib.mjs', '../hooks/grid/lib.mjs'].map((rel) => new URL(rel, import.meta.url)).find((u) => fs.existsSync(u));
+const { parseFrontmatter: readFrontmatter } = await import(hooksLib ?? '../hooks/lib.mjs');
 
 const read = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return null; } };
 const oneLine = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();

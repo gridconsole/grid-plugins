@@ -288,6 +288,12 @@ export const gateLike = (s) => GATE_PHRASES.includes(str(s).replace(/\s+/g, ' ')
 const ACCEPTED_LINE = /^- \S+ · plan accepted · /;
 export const planAccepted = (historyText) => str(historyText).split(/\r?\n/).some((l) => ACCEPTED_LINE.test(l));
 
+// The brain recall a plan must carry before its `plan ready` line (plan-guard): a line that starts, after a list mark or
+// bold, with `Recall:` or `Used:` and says something, such as `Used: <path of a note>` or `Recall: nothing found`.
+export const PLAN_READY = '· plan ready ·';
+const RECALL_LINE = /^[ \t]*(?:[-*+][ \t]+)?(?:\*\*|__)?(?:Recall|Used)(?:\*\*|__)?[ \t]*:(?:\*\*|__)?[ \t]*[^\s*_]/im;
+export const hasRecallLine = (planText) => RECALL_LINE.test(str(planText));
+
 const STEP_NAME = /^[a-z0-9][a-z0-9-]*$/;
 
 // The workflow as [{ step, kind }] in its written order, or null when it cannot be read for sure: no

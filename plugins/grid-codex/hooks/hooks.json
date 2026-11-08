@@ -3,10 +3,18 @@
     "SessionStart": [
       { "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/session-context.mjs\"", "timeout_sec": 15 }] }
     ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/brain-recall.mjs\"", "timeout_sec": 15 }] }
+    ],
+    "SubagentStart": [
+      { "matcher": "^grid-planner$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/brain-recall.mjs\"", "timeout_sec": 15 }] }
+    ],
     "PreToolUse": [
       { "matcher": "^spawn_agent$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/brief-lint.mjs\"", "timeout_sec": 15 }] },
       { "matcher": "^Bash$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/history-log.mjs\"", "timeout_sec": 15 }] },
-      { "matcher": "^Bash$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/host-guard.mjs\"", "timeout_sec": 15 }] }
+      { "matcher": "^Bash$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/host-guard.mjs\"", "timeout_sec": 15 }] },
+      { "matcher": "^spawn_agent$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/brain-recall.mjs\"", "timeout_sec": 15 }] },
+      { "matcher": "^Bash$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/plan-guard.mjs\"", "timeout_sec": 15 }] }
     ],
     "PostToolUse": [
       { "matcher": "^Bash$", "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/hooks/history-log.mjs\"", "timeout_sec": 15 }] },

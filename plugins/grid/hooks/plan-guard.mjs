@@ -1,4 +1,4 @@
-// PreToolUse on Write|Edit|MultiEdit|NotebookEdit: no session builds in the repo before a person
+// PreToolUse on Write|Edit|MultiEdit|NotebookEdit (and on Bash for the recall gate only, see recallGate): no session builds in the repo before a person
 // accepts the plan. Grid's `plan accepted` line is the gate: the planner plans in normal mode, and
 // this keeps its file edits out of the repo until then. Every rule runs in every permission mode.
 // - A task is held while history.md has no `plan accepted` line of Grid's own shape ("- <time> · plan
@@ -33,13 +33,15 @@
 //   project's tasks folder's place, which could open a task unseen.
 // - In any task, whatever the plan's state, history.md (any letter case, or a trailing dot or space, or a colon stream) is not
 //   changed to add a `· preview approved ·` line: a person approves in Grid, and the brain trusts that line.
+// - In any task, history.md is not changed to add a `· plan ready ·` line while plan.md has no brain recall line
+//   (`Used: <path>` or `Recall: nothing found`, lib.mjs hasRecallLine): the plan reaches the gate with its recall cited.
 // - In any task, a top-level name that reads as a gate event (plan accepted, preview approved, ship
 //   approved; any case, spaces trimmed) is denied: history.md logs the names written.
 // - A grid-reviewer or grid-checker writes only inside the projects folder, in any mode (its Verdict);
 //   GRID_PLAN_GUARD=off turns this off too.
 // Paths are expanded (~), resolved against cwd and through symlinks (realpath.native, a link that
 // points nowhere followed from its own real folder) before they are compared.
-// Not protected: a Bash write; a repo inside the projects folder (GRID_PROJECTS or GRID_HOME/projects);
+// Not protected: a Bash write (beyond recallGate's text match); a repo inside the projects folder (GRID_PROJECTS or GRID_HOME/projects);
 // an agent before it first writes into a task folder or works in one (the app starts it in the repo);
 // a file changed between this check and the write. A held task left unaccepted keeps its agent out
 // of the repo until the person accepts, closes or pauses it. GRID_PLAN_GUARD=off (any case) in the
@@ -49,7 +51,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   main, readInput, str, gridFolders, taskAt, readText, agentTasks, heldTasks, agentName, planStage, heldStage, inactive, isHeld,
-  gateLike, PLAN_ACCEPTED, realNative,
+  gateLike, PLAN_ACCEPTED, PLAN_READY, hasRecallLine, realNative,
 } from './lib.mjs';
 
 const WRITES = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
@@ -68,8 +70,10 @@ const OFF = ' To turn this guard off, start Claude Code with GRID_PLAN_GUARD=off
 main(async () => {
   const input = await readInput();
   const { home, projects, set } = gridFolders(process.env, str(input?.cwd));
-  if (!input || !projects || !WRITES.has(input.tool_name)) return;
+  if (!input || !projects) return;
   if (str(process.env.GRID_PLAN_GUARD).trim().toLowerCase() === 'off') return;
+  if (input.tool_name === 'Bash') return recallGate(input, projects);
+  if (!WRITES.has(input.tool_name)) return;
   const toolInput = input.tool_input && typeof input.tool_input === 'object' ? input.tool_input : {};
   const given = str(input.tool_name === 'NotebookEdit' ? toolInput.notebook_path : toolInput.file_path);
   if (!given) return;
@@ -95,6 +99,10 @@ main(async () => {
     const next = after(input.tool_name, toolInput, historyText);
     if (next && next.some((t) => addsMark(historyText, t, [PREVIEW_APPROVED]))) {
       return deny(`${given} is not changed to add a preview approved line: a person approves the preview in Grid, and Grid writes the line.${OFF}`);
+    }
+    // The plan goes to the gate only with its brain recall cited (the s41 incident: a planner skipped recall and nothing said so).
+    if (next && next.some((t) => addsMark(historyText, t, [PLAN_READY])) && !hasRecallLine(readText(path.join(owner.dir, 'plan.md')))) {
+      return deny(`${given} is not changed to add a plan ready line: plan.md has no brain recall line. Add it under ## How we approach it: one \`Used: <path>\` line for each note of the recall you used, or \`Recall: nothing found\` when no note bears on the task (the recall hits are in your context, or run \`grid-brain recall --task <id>\`). Then run plan-hash.mjs again and add the plan ready line.${OFF}`);
     }
   }
   if (unaccepted && (NOT_ASCII.test(top) || ODD_PART.test(owner.rel))) {
@@ -137,6 +145,45 @@ main(async () => {
   if (!held.length || inside(root, target)) return;
   return deny(`A task whose plan is not accepted yet writes only inside its task folder or the Grid projects folder. Write inside ${held.join(' or ')}, not ${given}. Writes elsewhere start once the person accepts the plan in Grid.${OFF}`);
 });
+
+// Bash: the plan's recall gate for an agent that writes history.md where no file hook sees it (Codex's apply_patch, a shell
+// write). plan-hash.mjs writing the revision line of a held task's plan.md, or a shell command that puts a plan ready line in
+// a held task's history.md, is refused while plan.md has no Recall or Used line: without the hash there is no plan ready line
+// Grid takes. `plan-hash.mjs --print` writes nothing and is let through. A text match on the command, like host-guard's.
+const PLAN_HASH = /plan-hash\.mjs['"]?\s+(?:'([^']+)'|"([^"]+)"|(\S+))/g;
+const SHELL_READY = /(?:'([^']*history\.md)'|"([^"]*history\.md)"|((?:[^\s'"<>|;&]*\/)?history\.md))/g;
+const RECALL_MISSING = 'plan.md has no brain recall line. Add it under ## How we approach it: one `Used: <path>` line for each note of the recall you use, or `Recall: nothing found` when no note bears on the task (the recall hits are in your context, or run `grid-brain recall --task <id>`).';
+
+// Whether the command writes the file (a redirect into it, tee, sed -i), not only reads it: a grep for `plan ready` passes.
+const SHELL_WRITE = /\btee\b|\bsed\b[^|;&]*\s-[a-zA-Z]*i|>>?\s*(?:'[^']*history\.md'|"[^"]*history\.md"|[^\s'"<>|;&]*history\.md)/;
+const writesTo = (command) => SHELL_WRITE.test(command);
+
+function recallGate(input, projects) {
+  const command = str(input.tool_input?.command);
+  const cwd = str(input.cwd);
+  const root = realNative(projects);
+  const held = (file) => {
+    const owner = taskAt(realNative(path.resolve(cwd, expandHome(file))), root);
+    if (!owner) return null;
+    const taskText = readText(path.join(owner.dir, 'task.md'));
+    if (inactive(taskText)) return null;
+    const stage = planStage(taskText, readText(path.join(owner.dir, 'history.md')));
+    return heldStage(stage) && !hasRecallLine(readText(path.join(owner.dir, 'plan.md'))) ? owner : null;
+  };
+  if (!/(?:^|\s)--print(?:\s|$)/.test(command)) {
+    for (const m of command.matchAll(PLAN_HASH)) {
+      const file = m[1] ?? m[2] ?? m[3];
+      if (path.basename(file) === 'plan.md' && held(file)) return deny(`plan-hash.mjs is not run on ${file}: ${RECALL_MISSING} Then run it again.${OFF}`);
+    }
+  }
+  if (command.includes('plan ready')) {
+    for (const m of command.matchAll(SHELL_READY)) {
+      const file = m[1] ?? m[2] ?? m[3];
+      if (writesTo(command) && held(file)) return deny(`This command is not run: it adds a plan ready line to ${file}, and ${RECALL_MISSING}${OFF}`);
+    }
+  }
+  return undefined;
+}
 
 const deny = (reason) => ({ stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } }) });
 
