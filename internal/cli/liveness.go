@@ -114,6 +114,10 @@ type taskRetry struct {
 // A test that exits the process in it leaves the disk as a crash at that point would.
 var afterTaskGrant func()
 
+// Test barriers around the held-check/adoption gap and CLI lock acquisition.
+var beforeTaskAdopt func()
+var beforeTaskLeaseLock func(action string, lock *os.File)
+
 var processStates = map[session.ProcessState]string{session.Alive: "alive", session.Dead: "dead", session.Unknown: "unknown"}
 
 func runTaskLease(action string, args []string, env Env) int {
@@ -207,56 +211,61 @@ func runTaskLease(action string, args []string, env Env) int {
 	if err != nil {
 		return livenessError(env, err)
 	}
+	if !contract.ValidWorker(writer.Worker) {
+		return usage("writer must be <member>@<machine ULID> with no slash or whitespace")
+	}
 	if action == "release" {
 		if writer.Gen < 0 || writer.Fence < 1 {
 			return usage("--epoch must be a nonnegative generation and positive fence")
 		}
-		if err := leases.ReleaseTask(writer); err != nil {
+		// A free release must not create a directory or lock file.
+		current, err := leases.Read("task")
+		if errors.Is(err, os.ErrNotExist) || err == nil && current.Holder == nil {
+			return livenessError(env, lease.ErrTaskFree)
+		}
+		if err != nil {
 			return livenessError(env, err)
 		}
-		if *asJSON {
-			return writeJSON(env.Stdout, map[string]any{"lease": "task", "holder": nil, "gen": writer.Gen, "fence": writer.Fence})
-		}
-		fmt.Fprintf(env.Stdout, "task lease released, fence %d\n", writer.Fence)
-		return 0
 	}
-	if sessionID != "" {
-		rows, err := (session.Store{TaskDir: store.TaskDir}).List()
-		if err != nil {
-			return livenessError(env, err)
-		}
-		found := false
-		for _, r := range rows {
-			if r.SessionID == sessionID && strings.HasSuffix(writer.Worker, "@"+r.MachineID) {
-				found, pid, start = true, r.PID, r.PIDStart
-				break
-			}
-		}
-		if !found {
-			return livenessError(env, fmt.Errorf("local session %q not found", sessionID))
-		}
-		parsed, err := time.Parse(time.RFC3339Nano, start)
-		if err != nil {
-			// Older hooks may store proc ticks or raw lstart. Prove that identity
-			// before resolving its canonical timestamp; never bless a reused pid.
-			if session.ProbeLocal(session.Live{PID: pid, PIDStart: start}) != session.Alive {
-				return livenessError(env, errors.New("session process identity is not alive"))
-			}
-			parsed, err = session.ProcessStart(pid)
+	if action == "take" {
+		if sessionID != "" {
+			rows, err := (session.Store{TaskDir: store.TaskDir}).List()
 			if err != nil {
 				return livenessError(env, err)
 			}
-			if session.ProbeLocal(session.Live{PID: pid, PIDStart: start}) != session.Alive {
-				return livenessError(env, errors.New("session process identity changed"))
+			found := false
+			for _, r := range rows {
+				if r.SessionID == sessionID && strings.HasSuffix(writer.Worker, "@"+r.MachineID) {
+					found, pid, start = true, r.PID, r.PIDStart
+					break
+				}
 			}
+			if !found {
+				return livenessError(env, fmt.Errorf("local session %q not found", sessionID))
+			}
+			parsed, err := time.Parse(time.RFC3339Nano, start)
+			if err != nil {
+				// Older hooks may store proc ticks or raw lstart. Prove that identity
+				// before resolving its canonical timestamp; never bless a reused pid.
+				if session.ProbeLocal(session.Live{PID: pid, PIDStart: start}) != session.Alive {
+					return livenessError(env, errors.New("session process identity is not alive"))
+				}
+				parsed, err = session.ProcessStart(pid)
+				if err != nil {
+					return livenessError(env, err)
+				}
+				if session.ProbeLocal(session.Live{PID: pid, PIDStart: start}) != session.Alive {
+					return livenessError(env, errors.New("session process identity changed"))
+				}
+			}
+			start = contract.FormatTime(parsed)
 		}
-		start = contract.FormatTime(parsed)
+		// A stored identity that is not this live process would let a later taker adopt the real holder.
+		if state := session.ProbeLocal(session.Live{PID: pid, PIDStart: start}); state != session.Alive {
+			return livenessError(env, fmt.Errorf("task lease take refused: pid %d started %s is not a live process on this host (%s)", pid, start, processStates[state]))
+		}
 	}
-	// A stored identity that is not this live process would let a later taker adopt the real holder.
-	if state := session.ProbeLocal(session.Live{PID: pid, PIDStart: start}); state != session.Alive {
-		return livenessError(env, fmt.Errorf("task lease take refused: pid %d started %s is not a live process on this host (%s)", pid, start, processStates[state]))
-	}
-	// Serialize CLI grants through their first post, including handover recovery.
+	// Serialize release with the held check, adoption and first handover post.
 	// The lease owner still checks and probes under the lease file's own lock.
 	dir := filepath.Join(store.Dir(), "lease")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -274,10 +283,23 @@ func runTaskLease(action string, args []string, env Env) int {
 		return livenessError(env, err)
 	}
 	defer lock.Close()
+	if beforeTaskLeaseLock != nil {
+		beforeTaskLeaseLock(action, lock)
+	}
 	if err := fslock.LockExclusive(lock); err != nil {
 		return livenessError(env, err)
 	}
 	defer fslock.Unlock(lock)
+	if action == "release" {
+		if err := leases.ReleaseTask(writer); err != nil {
+			return livenessError(env, err)
+		}
+		if *asJSON {
+			return writeJSON(env.Stdout, map[string]any{"lease": "task", "holder": nil, "gen": writer.Gen, "fence": writer.Fence})
+		}
+		fmt.Fprintf(env.Stdout, "task lease released, fence %d\n", writer.Fence)
+		return 0
+	}
 	tenure, err := leases.Read("task")
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return livenessError(env, err)
@@ -331,6 +353,9 @@ func runTaskLease(action string, args []string, env Env) int {
 			return livenessError(env, err)
 		}
 		if err != nil {
+			if beforeTaskAdopt != nil {
+				beforeTaskAdopt()
+			}
 			tenure, _, err = leases.AdoptTask(writer, pid, start, session.ProbeLocal)
 			if err != nil {
 				return livenessError(env, err)
