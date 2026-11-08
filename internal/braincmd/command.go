@@ -24,13 +24,14 @@ type Env struct {
 	TempRoots           []string
 }
 
-const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep> [flags]
+const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide> [flags]
   show <id>                  Show an accepted note and its links.
   search <words>             Find notes by description, summary and body.
   topics                     List built-in and custom topics.
   index                      Rebuild the SessionStart index and backlinks.
   propose --name <id> --topic <topic> --description <when> --summary <what> --source <source> --body <text>
   keep [--task T-NN]         List waiting proposals without writing the brain.
+  decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>]
   accept <id>                File a proposal through the keeper gates.
   accept <id> --reject <why>  Record a rejection.
 
@@ -70,6 +71,9 @@ func Run(args []string, env Env) int {
 		return 0
 	}
 	verb := args[0]
+	if verb == "decide" {
+		return runDecide(args[1:], env)
+	}
 	switch verb {
 	case "show", "search", "topics", "index", "propose", "accept", "keep":
 	default:
