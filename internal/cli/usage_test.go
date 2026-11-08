@@ -364,3 +364,165 @@ func TestTokenHelp(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkspaceBudgetShowCLI(t *testing.T) {
+	for _, tc := range []struct{ name, data, want string }{
+		{"missing", "", "null"},
+		{"no-key", "---\nname: workspace\n---\n", "null"},
+		{"valid", "---\ntokens_per_task: 100\n---\n", "100"},
+		{"zero", "---\ntokens_per_task: 0\n---\n", "null"},
+		{"negative", "---\ntokens_per_task: -1\n---\n", "null"},
+		{"exponent", "---\ntokens_per_task: 1e3\n---\n", "null"},
+		{"linked", "---\ntokens_per_task: 100\n---\n", "null"},
+		{"oversized", "---\ntokens_per_task: 100\n---\n" + strings.Repeat("x", 65537), "null"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			t.Setenv("GRID_ROLE", "")
+			path := filepath.Join(h.gridHome, "workspace.md")
+			if tc.name == "linked" {
+				h.write(filepath.Join(h.gridHome, "other.md"), tc.data)
+				if err := os.Symlink("other.md", path); err != nil {
+					t.Fatal(err)
+				}
+			} else if tc.name != "missing" {
+				h.write(path, tc.data)
+			}
+			if code := h.run(h.home, "usage", "budget", "show", "--workspace", "--json"); code != 0 || h.out.String() != "{\"tokens_per_task\":"+tc.want+"}\n" {
+				t.Fatalf("workspace show: exit %d, stdout %q, stderr %q", code, h.out, h.errb)
+			}
+			want := tc.want
+			if want == "null" {
+				want = "none"
+			}
+			if code := h.run(h.home, "usage", "budget", "show", "--workspace"); code != 0 || h.out.String() != "tokens_per_task "+want+"\n" {
+				t.Fatalf("plain workspace show: exit %d, %s", code, h.out)
+			}
+		})
+	}
+}
+
+func TestWorkspaceBudgetMutationCLI(t *testing.T) {
+	h := newHarness(t)
+	t.Setenv("GRID_ROLE", "")
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"set", "--tokens", "100"}, "100"},
+		{[]string{"clear", "--tokens"}, "null"},
+		{[]string{"set", "--tokens", "18446744073709551615"}, "18446744073709551615"},
+		{[]string{"clear"}, "null"},
+	} {
+		args := append([]string{"usage", "budget"}, tc.args...)
+		args = append(args, "--workspace", "--json")
+		if code := h.run(h.home, args...); code != 0 || h.out.String() != "{\"tokens_per_task\":"+tc.want+"}\n" {
+			t.Fatalf("workspace mutation: exit %d, stdout %q, stderr %q", code, h.out, h.errb)
+		}
+	}
+}
+
+func TestWorkspaceBudgetFlagsCLI(t *testing.T) {
+	for _, args := range [][]string{
+		{"show", "--task", "T-01"}, {"show", "--task="},
+		{"set", "--tokens", "100", "--task", "T-01"},
+		{"set", "--dollars", "1"}, {"set", "--minutes", "1"}, {"set"},
+		{"set", "--tokens", "0"}, {"set", "--tokens", "-1"}, {"set", "--tokens", "1e3"},
+		{"set", "--tokens", "1", "--tokens", "2"},
+		{"clear", "--dollars"}, {"clear", "--minutes=false"}, {"clear", "--tokens=false"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			h := newHarness(t)
+			t.Setenv("GRID_ROLE", "guest") // Syntax errors precede authorization and I/O.
+			argv := append([]string{"usage", "budget"}, args...)
+			argv = append(argv, "--workspace", "--json")
+			if code := h.run(h.home, argv...); code != 2 {
+				t.Fatalf("invalid workspace flags: exit %d: %s", code, h.errb)
+			}
+			entries, err := os.ReadDir(h.gridHome)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("invalid flags touched home: %v %v", entries, err)
+			}
+		})
+	}
+}
+
+func TestWorkspaceBudgetRolesCLI(t *testing.T) {
+	for _, role := range []string{"guest", "unknown", "member", "owner", "", " owner "} {
+		for _, op := range []string{"show", "set", "clear"} {
+			t.Run(role+"/"+op, func(t *testing.T) {
+				h := newHarness(t)
+				t.Setenv("GRID_ROLE", role)
+				args := []string{"usage", "budget", op, "--workspace", "--json"}
+				if op == "set" {
+					args = append(args, "--tokens", "100")
+				}
+				want := 0
+				if role == "guest" || role == "unknown" || role == "member" && op != "show" {
+					want = 3
+				}
+				if code := h.run(h.home, args...); code != want {
+					t.Fatalf("role %q %s: exit %d, want %d: %s", role, op, code, want, h.errb)
+				}
+				if want == 3 {
+					entries, err := os.ReadDir(h.gridHome)
+					if err != nil || len(entries) != 0 || h.out.Len() != 0 {
+						t.Fatalf("denied role touched home: %v %v", entries, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestWorkspaceBudgetRefusalsCLI(t *testing.T) {
+	for _, kind := range []string{"linked", "directory", "invalid-utf8", "unparsable", "oversized"} {
+		for _, op := range []string{"set", "clear"} {
+			t.Run(kind+"/"+op, func(t *testing.T) {
+				h := newHarness(t)
+				t.Setenv("GRID_ROLE", "owner")
+				path := filepath.Join(h.gridHome, "workspace.md")
+				original := "---\ntokens_per_task: 100\n---\nBody\n"
+				switch kind {
+				case "linked":
+					h.write(filepath.Join(h.gridHome, "other.md"), original)
+					if err := os.Symlink("other.md", path); err != nil {
+						t.Fatal(err)
+					}
+				case "directory":
+					h.mkdir(path)
+				case "invalid-utf8":
+					original += "\xff"
+					h.write(path, original)
+				case "unparsable":
+					original = "---\ntokens_per_task: 100\n"
+					h.write(path, original)
+				case "oversized":
+					original += strings.Repeat("x", 65537)
+					h.write(path, original)
+				}
+				before, err := os.Lstat(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				args := []string{"usage", "budget", op, "--workspace", "--json"}
+				if op == "set" {
+					args = append(args, "--tokens", "200")
+				}
+				if code := h.run(h.home, args...); code != 2 || h.out.Len() != 0 {
+					t.Fatalf("unsafe workspace: exit %d: %s", code, h.errb)
+				}
+				after, err := os.Lstat(path)
+				if err != nil || !os.SameFile(before, after) || !before.ModTime().Equal(after.ModTime()) {
+					t.Fatal("refusal changed workspace")
+				}
+				if kind != "directory" {
+					data, err := os.ReadFile(path)
+					if err != nil || string(data) != original {
+						t.Fatal("refusal changed workspace bytes")
+					}
+				}
+			})
+		}
+	}
+}
