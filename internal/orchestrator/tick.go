@@ -294,10 +294,13 @@ func (s Store) liveness(j *contract.Job) string {
 			return "alive"
 		}
 	}
-	// Supervision's last successful observation is enough while unexpired.
-	// An expired heartbeat alone cannot distinguish sleep from process death.
+	// A failed explicit probe above never reaches the clock fallback. After a
+	// sleep, supervision must recheck identities before allowing expiry again.
+	if live.Until.IsZero() || s.AfterWake {
+		return "unknown"
+	}
 	if s.now().Before(live.Until) {
 		return "alive"
 	}
-	return "unknown"
+	return "dead"
 }

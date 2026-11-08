@@ -579,3 +579,32 @@ func TestReviewCapacityUsesReady(t *testing.T) {
 		t.Fatal("capacity exceeded")
 	}
 }
+
+func TestHeartbeatExpiryAndWake(t *testing.T) {
+	for _, wake := range []bool{false, true} {
+		t.Run(fmt.Sprint(wake), func(t *testing.T) {
+			f := setup(t)
+			f.job(t, "J-1", nil)
+			f.tick(t)
+			f.ack(t)
+			j := f.state(t)
+			live := session.Live{Lease: j.ID, Holder: f.worker.Worker, Fence: uint64(f.worker.Fence), Attempt: j.Attempt, PID: 123, PIDStart: "2000-01-01T00:00:00.000Z", BeatAt: f.now.Add(-11 * time.Minute), Until: f.now.Add(-time.Minute)}
+			dir := filepath.Join(f.s.Feed.Dir(), ".live")
+			if err := os.Mkdir(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := writeJSON(filepath.Join(dir, fmt.Sprintf("%s.%d.json", live.Holder, live.Fence)), live); err != nil {
+				t.Fatal(err)
+			}
+			f.s.AfterWake = wake
+			f.tick(t)
+			want := 2
+			if wake {
+				want = 1
+			}
+			if f.state(t).Attempt != want {
+				t.Fatal(f.state(t))
+			}
+		})
+	}
+}

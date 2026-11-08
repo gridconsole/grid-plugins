@@ -34,9 +34,11 @@ type Output struct {
 }
 
 // Store acts only as Writer, the current task lease holder. Probe must compare
-// both pid and start time; nil leaves a live file's process identity unknown.
+// both pid and start time. Without a probe, a readable heartbeat supplies its
+// expiry; AfterWake suppresses expiry until supervision has checked processes.
 // UsageReady must positively confirm capacity after a usage_limit exit.
 type Store struct {
+	AfterWake    bool
 	WorktreesDir string
 	Feed         feed.Store
 	Writer       feed.Writer
