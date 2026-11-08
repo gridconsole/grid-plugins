@@ -26,6 +26,7 @@ const (
 // Source is a resolved, pinned pointer. Tier must come from trusted provenance,
 // not from the body of the pointed-to file. Unknown provenance is external.
 type Source struct {
+	State   string `json:"state,omitempty"`
 	Pointer string `json:"pointer"`
 	Summary string `json:"summary"`
 	Text    string `json:"text"`
@@ -129,6 +130,10 @@ func (f *Files) Resolve(pointer string) (Source, error) {
 			return s, fmt.Errorf("%s: %w", pointer, e)
 		}
 		s.Summary, _ = d.Data["summary"].(string)
+		if !strings.HasPrefix(pointer, "brain:") && s.Summary == "" {
+			s.Summary, _ = d.Data["title"].(string)
+		}
+		s.State, _ = d.Data["status"].(string)
 		s.Updated, _ = d.Data["updated"].(string)
 		if v, ok := d.Data["items"]; ok && strings.HasPrefix(pointer, "brain:") {
 			if e := frontmatter.Into(v, &s.Items); e != nil {
@@ -286,15 +291,25 @@ func LoadPlan(task, selector string) (Job, error) {
 	if e != nil {
 		return Job{}, fmt.Errorf("plan.md: %w", e)
 	}
-	var items []Job
+	var items []map[string]any
 	if e = frontmatter.Into(d.Data["items"], &items); e != nil {
 		return Job{}, fmt.Errorf("plan.md items: %w", e)
 	}
 	var matches []Job
-	for _, j := range items {
-		if strconv.Itoa(j.Item) == selector || j.ID == selector {
-			matches = append(matches, j)
+	for _, raw := range items {
+		var j Job
+		if e = frontmatter.Into(raw, &j); e != nil {
+			return Job{}, fmt.Errorf("plan.md item: %w", e)
 		}
+		if strconv.Itoa(j.Item) != selector && j.ID != selector {
+			continue
+		}
+		for _, key := range PlannedFields {
+			if _, ok := raw[key]; !ok {
+				return Job{}, fmt.Errorf("plan.md item %s: missing required field %s", selector, key)
+			}
+		}
+		matches = append(matches, j)
 	}
 	if len(matches) != 1 {
 		return Job{}, fmt.Errorf("plan.md: expected one item %q, found %d", selector, len(matches))

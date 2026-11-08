@@ -26,7 +26,7 @@ type Options struct {
 }
 
 var sections = []string{"Intent", "Job", "Context", "Out of scope", "Open", "Acceptance", "Outcome", "Verdict", "Follow-up"}
-var required = []string{"id", "item", "title", "role", "skills", "review", "risk", "max_rounds", "intent", "links", "keep", "decisions", "read", "write", "out_of_scope", "acceptance", "verify", "budget", "on_blocked", "after"}
+
 var relations = wordSet("depends-on explains decided-by supersedes duplicates related blocks continues validates same-files uses owns decides approves knows")
 var acceptanceID = regexp.MustCompile(`^A[1-9][0-9]*$`)
 var words = regexp.MustCompile(`[\pL][\pL\pN_-]*`)
@@ -92,7 +92,7 @@ func Check(text string, o Options) []Finding {
 			c.addAt("brief.section", d.BodyLine, "error", "Missing section ## "+s, "Add ## "+s+"; Outcome, Verdict and Follow-up may be empty.")
 		}
 	}
-	for _, key := range required {
+	for _, key := range job.PlannedFields {
 		if _, ok := d.Data[key]; !ok {
 			c.add("job.required", key, "Missing Job field "+key, "Add the planned "+key+" field; use [] for an empty list.")
 		}
@@ -223,7 +223,7 @@ func (c *checker) validate(j job.Job, o Options) {
 		if a.Traces != "item" && a.Traces != "owner" && !decisions[a.Traces] {
 			c.add("job.acceptance-trace", "acceptance", "Uncited trace on "+a.ID, "Trace to item, owner, or an id in decisions.")
 		}
-		if a.State != "" && !wordSet("met not-met dropped pending")[a.State] {
+		if a.State != "" && a.State != "not met" && !wordSet("met not-met dropped pending")[a.State] {
 			c.add("job.acceptance-state", "acceptance", "Unknown state on "+a.ID, "Use pending, met, not-met or dropped.")
 		}
 		if a.State == "dropped" {

@@ -127,3 +127,6 @@ func (j *Job) Defaults() {
 		j.Attempt = 1
 	}
 }
+
+// PlannedFields are present even when their value is an empty list.
+var PlannedFields = []string{"id", "item", "title", "role", "skills", "review", "risk", "max_rounds", "intent", "links", "keep", "decisions", "read", "write", "out_of_scope", "acceptance", "verify", "budget", "on_blocked", "after"}
