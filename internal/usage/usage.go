@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 )
@@ -40,6 +41,10 @@ type Record struct {
 type Store struct {
 	TaskPath string
 	Now      func() time.Time
+	// Writer is resolved lazily, only when a notice needs posting.
+	Writer func() (feed.Writer, error)
+	// beforeSave simulates a failure after a Feed post but before saving fired.
+	beforeSave func() error
 }
 
 var jobPattern = regexp.MustCompile(`^(lead|J-[1-9][0-9]*(\.[1-9][0-9]*)*)$`)
@@ -122,11 +127,11 @@ func (s Store) Show() (Summary, error) {
 }
 
 // Post durably appends one delta, repairing an incomplete tail under the lock.
-func (s Store) Post(in Input) (Summary, error) {
+func (s Store) Post(in Input) (PostResult, error) {
 	if err := in.validate(); err != nil {
-		return Summary{}, err
+		return PostResult{}, err
 	}
-	out := emptySummary()
+	out := PostResult{Summary: emptySummary(), Notices: []feed.Record{}, Warnings: []string{}}
 	err := s.withData(true, func(dir string) error {
 		before, end, err := readLog(dir)
 		if err != nil {
@@ -170,7 +175,8 @@ func (s Store) Post(in Input) (Summary, error) {
 		if err := atomicfile.SyncDir(dir); err != nil {
 			return err
 		}
-		out = before
+		out.Summary = before
+		s.notices(dir, &out)
 		return nil
 	})
 	return out, err
