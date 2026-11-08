@@ -1,0 +1,1 @@
+{"brief-lint":"block","history-log":"warn","home-allow":"warn","host-guard":"block","job-lint":"block","needs-you":"warn","only-writer":"block","plan-guard":"block","precompact":"warn","session-check":"warn","session-end":"warn","session-start":"warn","stop-check":"block","subagent-start":"warn","topic-trigger":"warn","usage-log":"warn","user-prompt":"warn"}
