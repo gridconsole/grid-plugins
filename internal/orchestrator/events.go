@@ -164,7 +164,7 @@ func (s Store) proposals(snap Snapshot) error {
 			body["attempt"], body["review_rounds"], body["checkpoint"], body["close_reason"] = 1, 0, nil, nil
 			body["worktree"] = nil
 			event := j.Results[len(j.Results)-1]
-			if _, err := s.Feed.Post(feed.Input{Type: "job", Job: child, Re: event, Wake: event + "/1", Body: body}, s.Writer); err != nil {
+			if _, err := s.Feed.Post(feed.Input{Type: "job", Job: child, Re: event, Body: body}, s.Writer); err != nil {
 				return err
 			}
 		}
@@ -225,10 +225,56 @@ func (s Store) wake(snap Snapshot, m *memory) *Wake {
 		keys = append(keys, event)
 	}
 	sort.Strings(keys)
+	// Old metadata marked events delivered before the caller saw them. Rebuild
+	// that queue once; counted wake writes remain the acknowledgement authority.
+	if m.WakeVersion == 0 {
+		m.Delivered = map[string]bool{}
+		m.Pending = nil
+		m.WakeVersion = 1
+	}
+	if m.WakeCounts == nil {
+		m.WakeCounts = map[string]int{}
+	}
+	acknowledged := map[string]bool{}
+	for _, r := range snap.Records {
+		if r.Wake != nil {
+			acknowledged[*r.Wake] = true
+		}
+	}
+	key := func(w Wake) string { return fmt.Sprintf("%s/%d", w.Event, w.N) }
+	if m.Active != nil {
+		if !acknowledged[key(*m.Active)] {
+			return m.Active
+		}
+		done := map[string]bool{m.Active.Event: true}
+		for _, event := range m.Active.Events {
+			done[event] = true
+		}
+		pending := m.Pending[:0]
+		for _, w := range m.Pending {
+			if done[w.Event] {
+				m.Delivered[w.Event] = true
+			} else {
+				pending = append(pending, w)
+			}
+		}
+		m.Pending = pending
+		m.Active = nil
+	}
+	queued := map[string]bool{}
+	for _, w := range m.Pending {
+		queued[w.Event] = true
+	}
 	for _, event := range keys {
-		if !m.Delivered[event] {
-			m.Pending = append(m.Pending, Wake{Job: candidates[event], Event: event, N: 1})
-			m.Delivered[event] = true
+		if !m.Delivered[event] && !queued[event] {
+			job := candidates[event]
+			m.WakeCounts[job]++
+			w := Wake{Job: job, Event: event, N: m.WakeCounts[job]}
+			if acknowledged[key(w)] {
+				m.Delivered[event] = true
+			} else {
+				m.Pending = append(m.Pending, w)
+			}
 		}
 	}
 	times := m.Wakes[:0]
@@ -253,13 +299,11 @@ func (s Store) wake(snap Snapshot, m *memory) *Wake {
 		for _, w := range m.Pending {
 			out.Events = append(out.Events, w.Event)
 		}
-		m.Pending = nil
 		m.Overflow = false
-	} else {
-		m.Pending = m.Pending[1:]
 	}
 	m.Wakes = append(m.Wakes, s.now())
-	return &out
+	m.Active = &out
+	return m.Active
 }
 
 // A single eligible answer needs no arbitration. Multiple answers are a

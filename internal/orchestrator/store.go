@@ -65,11 +65,14 @@ type jobMemory struct {
 	Liveness     string   `json:"liveness,omitempty"`
 }
 type memory struct {
-	Overflow  bool                  `json:"overflow"`
-	Jobs      map[string]*jobMemory `json:"jobs"`
-	Delivered map[string]bool       `json:"delivered"`
-	Wakes     []time.Time           `json:"wakes"`
-	Pending   []Wake                `json:"pending"`
+	WakeVersion int                   `json:"wake_version"`
+	WakeCounts  map[string]int        `json:"wake_counts"`
+	Active      *Wake                 `json:"active,omitempty"`
+	Overflow    bool                  `json:"overflow"`
+	Jobs        map[string]*jobMemory `json:"jobs"`
+	Delivered   map[string]bool       `json:"delivered"`
+	Wakes       []time.Time           `json:"wakes"`
+	Pending     []Wake                `json:"pending"`
 }
 
 func (s Store) locked(fn func() error) error {

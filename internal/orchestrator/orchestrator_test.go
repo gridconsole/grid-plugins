@@ -341,8 +341,19 @@ func TestWakeIdempotency(t *testing.T) {
 	if out.Wake == nil || out.Wake.Event != first.ID {
 		t.Fatal(out)
 	}
+	again := f.tick(t).Wake
+	if !reflect.DeepEqual(out.Wake, again) {
+		t.Fatal("unacknowledged wake lost after pass save", out.Wake, again)
+	}
+	key := fmt.Sprintf("%s/%d", again.Event, again.N)
+	f.post(t, feed.Input{Type: "post", Wake: key, Body: map[string]any{"ref": "task", "kind": "message", "text": "judgement recorded"}}, f.s.Writer)
 	if f.tick(t).Wake != nil {
-		t.Fatal("delivered twice")
+		t.Fatal("acknowledged wake delivered twice")
+	}
+	next := f.post(t, feed.Input{Type: "result", Job: "J-1", Attempt: 1, Body: resultBody()}, f.worker)
+	later := f.tick(t).Wake
+	if later == nil || later.Event != next.ID || later.N != again.N+1 {
+		t.Fatal("wake number reused", later)
 	}
 }
 func TestWakeRateSummary(t *testing.T) {
@@ -360,7 +371,12 @@ func TestWakeRateSummary(t *testing.T) {
 		if n >= 20 && out != nil {
 			t.Fatal("wake cap exceeded")
 		}
+		if out != nil {
+			key := fmt.Sprintf("%s/%d", out.Event, out.N)
+			snap.Records[fmt.Sprint("ack-", n)] = feed.Record{Wake: &key}
+		}
 	}
+	f.s.wake(snap, &m)
 	if len(m.Pending) != 5 {
 		t.Fatal(len(m.Pending))
 	}
@@ -368,6 +384,14 @@ func TestWakeRateSummary(t *testing.T) {
 	out := f.s.wake(snap, &m)
 	if out == nil || len(out.Events) != 5 {
 		t.Fatal("queue was not summarized", out)
+	}
+	if again := f.s.wake(snap, &m); !reflect.DeepEqual(again, out) {
+		t.Fatal("summary lost before acknowledgement", again)
+	}
+	key := fmt.Sprintf("%s/%d", out.Event, out.N)
+	snap.Records["summary-ack"] = feed.Record{Wake: &key}
+	if again := f.s.wake(snap, &m); again != nil || len(m.Pending) != 0 {
+		t.Fatal("summary acknowledgement left events pending", again, m.Pending)
 	}
 }
 func TestWaitCancellation(t *testing.T) {
