@@ -54,8 +54,11 @@ func acquireLock(path string) (*lock, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := fslock.LockExclusive(f); err != nil {
+	if err := fslock.TryLockExclusive(f); err != nil {
 		f.Close()
+		if errors.Is(err, fslock.ErrLocked) {
+			return nil, fmt.Errorf("another grid migrate is running (lock %s); wait for it to finish", path)
+		}
 		return nil, err
 	}
 	return &lock{file: f}, nil

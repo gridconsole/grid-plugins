@@ -352,27 +352,31 @@ func TestLockOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.release()
-	cmd := exec.Command(os.Args[0], "-test.run=^TestCrashHelper$", "-test.count=1")
-	cmd.Env = append(testenv.Temp(t, os.Environ()), "GRID_CRASH_STEP=locked", "GRID_CRASH_FROM="+from, "GRID_CRASH_HOME="+home)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer cmd.Process.Kill()
+	// A second migrate says who holds the lock instead of waiting for it.
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	go func() {
+		_, err := Scan(from, home)
+		if err == nil {
+			p, _ := Scan(from, home)
+			_, err = p.Apply()
+		}
+		done <- err
+	}()
 	select {
 	case err := <-done:
-		t.Fatalf("passed a held lock: %v", err)
-	case <-time.After(100 * time.Millisecond):
-	}
-	l.release()
-	select {
-	case err := <-done:
-		var ee *exec.ExitError
-		if !errors.As(err, &ee) || ee.ExitCode() != crashExit {
-			t.Fatal(err)
+		if err == nil || !strings.Contains(err.Error(), "another grid migrate is running") {
+			t.Fatalf("second migrate: %v", err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("lock was not released")
+		t.Fatal("a second migrate waited for the lock")
 	}
+	if _, err := Rollback(home); err == nil || !strings.Contains(err.Error(), "another grid migrate is running") {
+		t.Fatalf("rollback: %v", err)
+	}
+	l.release()
+	l, err = acquireLock(lockPath(home))
+	if err != nil {
+		t.Fatalf("after release: %v", err)
+	}
+	l.release()
 }
