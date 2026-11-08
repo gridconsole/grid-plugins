@@ -10,6 +10,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
+	"github.com/gridconsole/grid-plugins/internal/job/jobtest"
 	"github.com/gridconsole/grid-plugins/internal/plan"
 )
 
@@ -120,8 +121,10 @@ func TestUpgradeLegacyJobFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
+	h := jobtest.New(t, filepath.Join("..", "..", "testdata"))
+	dir := h.Task
 	writeLegacyFile(t, filepath.Join(dir, "plan.md"), converted)
+	h.Approve(t)
 	actual, err := job.LoadPlan(dir, "J-1")
 	if err != nil {
 		t.Fatal(err)
@@ -218,8 +221,10 @@ func TestUpgradeLegacyProse(t *testing.T) {
 			if items[0].Prose != want {
 				t.Fatalf("prose %q, want %q", items[0].Prose, want)
 			}
-			dir := t.TempDir()
+			h := jobtest.New(t, filepath.Join("..", "..", "testdata"))
+			dir := h.Task
 			writeLegacyFile(t, filepath.Join(dir, "plan.md"), out)
+			h.Approve(t)
 			// A prose-only step has no executable Job, including when wrapped.
 			if _, err := job.LoadPlan(dir, "2"); err == nil || !strings.Contains(err.Error(), `expected one item "2", found 0`) {
 				t.Fatalf("prose became an executable Job: %v", err)

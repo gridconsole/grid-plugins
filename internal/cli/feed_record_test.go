@@ -10,6 +10,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/job/jobtest"
 )
 
 func TestFeedPlanJobRecordRoundTrip(t *testing.T) {
@@ -21,7 +22,11 @@ func TestFeedPlanJobRecordRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 			h.write(filepath.Join(task, "plan.md"), string(plan))
-			j, err := job.LoadPlan(task, "J-1")
+			// Keep the feed's ULID identity; plan approval requires a numbered task.
+			approved := jobtest.New(t, filepath.Join("..", "..", "testdata"))
+			h.write(filepath.Join(approved.Task, "plan.md"), string(plan))
+			approved.Approve(t)
+			j, err := job.LoadPlan(approved.Task, "J-1")
 			if err != nil {
 				t.Fatal(err)
 			}
