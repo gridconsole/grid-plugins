@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func writeTestFile(t *testing.T, path, contents string, mode os.FileMode) {
@@ -111,5 +112,70 @@ func TestCheckoutLauncherUsesDistribution(t *testing.T) {
 	b, err := exec.Command(filepath.Join(root, "bin", "grid"), "version").CombinedOutput()
 	if err != nil || string(b) != "built-release\n" {
 		t.Fatalf("%q %v", b, err)
+	}
+}
+
+// checkoutWithFakeGo makes a source checkout whose go builds a script that echoes its label.
+func checkoutWithFakeGo(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("release launcher supports macOS and Linux")
+	}
+	root := filepath.Join(t.TempDir(), "path with spaces")
+	if err := Write(root, "test"); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(root, "go.mod"), "module example.com/plugin\n", 0o644)
+	tools := filepath.Join(root, "tools")
+	writeTestFile(t, filepath.Join(tools, "uname"), "#!/bin/sh\ncase $1 in -s) echo Linux;; -m) echo x86_64;; esac\n", 0o755)
+	writeTestFile(t, filepath.Join(tools, "go"), `#!/bin/sh
+while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done
+printf '#!/bin/sh\necho freshly-built\n' > "$out" && chmod +x "$out"
+`, 0o755)
+	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return root
+}
+
+func runGrid(t *testing.T, root string) string {
+	t.Helper()
+	b, err := exec.Command(filepath.Join(root, "bin", "grid"), "version").CombinedOutput()
+	if err != nil {
+		t.Fatalf("%q %v", b, err)
+	}
+	return string(b)
+}
+
+func TestCheckoutLauncherBuildsMissingBinary(t *testing.T) {
+	root := checkoutWithFakeGo(t)
+	if got := runGrid(t, root); got != "freshly-built\n" {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestCheckoutLauncherRebuildsStaleBinary(t *testing.T) {
+	root := checkoutWithFakeGo(t)
+	stale := filepath.Join(root, "dist", "plugin", "bin", "grid-linux-amd64")
+	writeTestFile(t, stale, "#!/bin/sh\necho stale\n", 0o755)
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(root, "cmd", "grid", "main.go"), "package main\n", 0o644)
+	if got := runGrid(t, root); got != "freshly-built\n" {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestCheckoutLauncherHookFailsOpenWithoutGo(t *testing.T) {
+	root := checkoutWithFakeGo(t)
+	if err := os.Remove(filepath.Join(root, "tools", "go")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", filepath.Join(root, "tools")+string(os.PathListSeparator)+"/usr/bin:/bin")
+	if b, err := exec.Command(filepath.Join(root, "bin", "grid"), "hook", "pretooluse").CombinedOutput(); err != nil || len(b) != 0 {
+		t.Fatalf("%q %v", b, err)
+	}
+	if err := exec.Command(filepath.Join(root, "bin", "grid"), "version").Run(); err == nil {
+		t.Fatal("version succeeded without a binary")
 	}
 }

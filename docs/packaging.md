@@ -26,7 +26,9 @@ Codex supplies `CLAUDE_PLUGIN_ROOT` for compatibility with the shared hook comma
 `bin/grid` follows shell symlinks, maps uname to a shipped binary, and uses exec
 so arguments, stdin, output and exit status pass through unchanged.
 Unsupported OS/architecture and missing executables produce an error on stderr.
-In a source checkout it finds `dist/plugin/bin/`; run `make dist` after changes.
+In a source checkout (go.mod beside it) it uses a `dist/plugin/bin/` binary or `dist/grid` when
+no `.go` file is newer, and otherwise builds `dist/grid` first; a hook stays silent and exits 0 when
+that build is impossible. Releases never build and never touch the network.
 `make build` creates only the native development CLI at `dist/grid`.
 
 The release version is `git describe --tags --always --dirty`, stamped into

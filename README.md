@@ -21,7 +21,7 @@ entries are left alone. Run it without other tests using the same prefixes in th
 same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` through
 `internal/testenv`; in-process CLI tests temporarily set TMPDIR with `t.Setenv`.
 
-`bin/grid` selects the packaged binary for macOS or Linux on arm64 or amd64. In a source checkout, run `make dist` first; the launcher then uses `dist/plugin/bin/`. It follows shell symlinks and needs no Go or Node runtime. See [packaging](docs/packaging.md) for the generated layout and checksums.
+`bin/grid` selects the packaged binary for macOS or Linux on arm64 or amd64. In a source checkout the launcher builds `dist/grid` itself when it is missing or older than the sources (needs Go), or uses `dist/plugin/bin/` after `make dist`. It follows shell symlinks and needs no Go or Node runtime. See [packaging](docs/packaging.md) for the generated layout and checksums.
 
 ## Commands working today
 
