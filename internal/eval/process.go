@@ -80,5 +80,5 @@ func RunCommand(ctx context.Context, argv []string, dir string, env []string) Pr
 	if len(argv) == 0 {
 		return ProcessResult{Status: "error", ExitCode: -1, Error: "verification command is empty"}
 	}
-	return runProcess(ctx, argv, dir, env, "")
+	return RunProcess(ctx, argv, dir, env, "")
 }
