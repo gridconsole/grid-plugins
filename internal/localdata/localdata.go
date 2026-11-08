@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
 
@@ -168,7 +169,10 @@ func ValidID(s string) bool {
 	return true
 }
 
-// Lock serializes local writers. A leftover lock fails closed; it is never stolen.
+// Lock serializes local writers with an exclusive flock on a file in the Grid
+// home. It waits its turn. The kernel drops the lock when the holder exits, so a
+// killed writer leaves nothing to clear; the file stays in place, because
+// removing it would let two writers lock different inodes.
 func Lock(home, name string) (func(), error) {
 	if err := Init(home); err != nil {
 		return nil, err
@@ -177,18 +181,13 @@ func Lock(home, name string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	for i := 0; i < 200; i++ {
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err == nil {
-			if err := f.Close(); err != nil {
-				return nil, err
-			}
-			return func() { _ = os.Remove(path) }, nil
-		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, err
-		}
-		time.Sleep(10 * time.Millisecond)
+	f, err := fslock.OpenNoFollow(path, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("data is locked by %s; if no writer is running, remove the leftover lock", name)
+	if err := fslock.LockExclusive(f); err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("lock %s: %w", name, err)
+	}
+	return func() { fslock.Unlock(f); _ = f.Close() }, nil
 }
