@@ -78,7 +78,8 @@ func runTask(args []string, env Env) int {
 	}
 	switch sub {
 	case "new":
-		o := task.NewOptions{Cwd: env.Cwd, Words: pos[0], Project: proj, Size: size, Workflow: workflow}
+		o := task.NewOptions{Cwd: env.Cwd, Words: pos[0], Project: proj, Size: size, Workflow: workflow,
+			Who: env.getenv("GRID_WHO"), Role: env.getenv("GRID_ROLE")}
 		if err := o.Validate(); err != nil {
 			fmt.Fprintf(env.Stderr, "grid task new: %v\n", err)
 			return 2

@@ -19,7 +19,7 @@ func taskFixture(t *testing.T, h *harness) task.Task {
 	s := task.Store{Resolver: resolver(h.env), Now: func() time.Time {
 		return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	}}
-	got, err := s.New(task.NewOptions{Cwd: h.home, Words: "Fix the label\n\nKeep these exact words.\n", Size: "small", Workflow: "Check and ship"})
+	got, err := s.New(task.NewOptions{Cwd: h.home, Words: "Fix the label\n\nKeep these exact words.\n", Size: "small", Workflow: "Check and ship", Who: "alex", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +81,35 @@ func TestTaskFlagsAndIntent(t *testing.T) {
 			var shown task.Task
 			if err := json.Unmarshal(h.out.Bytes(), &shown); err != nil || shown.Intent != tc.words {
 				t.Fatalf("show %+v: %v", shown, err)
+			}
+		})
+	}
+}
+
+func TestTaskNewRecordsTheOwnerFromTheEnvironment(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		env         map[string]string
+		who, role   string
+		wantMachine bool
+	}{
+		{name: "GRID_WHO and GRID_ROLE", env: map[string]string{"GRID_WHO": "alex", "GRID_ROLE": "lead"}, who: "alex", role: "lead"},
+		{name: "GRID_WHO alone is a member", env: map[string]string{"GRID_WHO": "alex"}, who: "alex", role: "member"},
+		{name: "nothing set is the machine owner", env: map[string]string{}, wantMachine: true, role: "owner"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.env.Getenv = func(k string) string { return tc.env[k] }
+			if code := h.run(h.home, "task", "new", "Add a search label", "--json"); code != 0 {
+				t.Fatalf("exit %d: %s", code, h.errb)
+			}
+			var output struct{ ID, Path string }
+			if err := json.Unmarshal(h.out.Bytes(), &output); err != nil {
+				t.Fatal(err)
+			}
+			got, err := task.Read(output.Path)
+			if err != nil || got.Owner == "" || got.OwnerRole != tc.role || (!tc.wantMachine && got.Owner != tc.who) {
+				t.Fatalf("got %+v, %v; want owner %q role %q", got, err, tc.who, tc.role)
 			}
 		})
 	}

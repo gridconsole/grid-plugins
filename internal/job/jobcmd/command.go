@@ -350,8 +350,12 @@ func sources(task string, e Env) (*world, error) {
 		if err != nil {
 			return nil, fmt.Errorf("task.md: %w", err)
 		}
-		owner, _ := d.Data["owner"].(string)
-		f.Owner = ownerTier(owner)
+		// owner_role is what grid task new writes; older tasks kept the role in owner.
+		role, _ := d.Data["owner_role"].(string)
+		if role == "" {
+			role, _ = d.Data["owner"].(string)
+		}
+		f.Owner = ownerTier(role)
 		prototype, _ = d.Data["prototype"].(string)
 	}
 	if w.project != "" {
@@ -370,7 +374,7 @@ func sources(task string, e Env) (*world, error) {
 // without a known owner role is unknown provenance, and that is external.
 func ownerTier(role string) contract.TrustTier {
 	switch role {
-	case "member":
+	case "member", "owner", "lead":
 		return contract.PersonTeam
 	case "guest":
 		return contract.PersonGuest

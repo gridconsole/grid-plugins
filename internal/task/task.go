@@ -21,13 +21,18 @@ import (
 // Record is the front matter of task.md. An empty workflow leaves selection to
 // the workflow rules; creation does not start work or infer a small task.
 type Record struct {
-	ID       string `yaml:"id" json:"id"`
-	Title    string `yaml:"title" json:"title"`
-	Project  string `yaml:"project" json:"project"`
-	Size     string `yaml:"size" json:"size"`
-	Workflow string `yaml:"workflow" json:"workflow"`
-	State    string `yaml:"state" json:"state"`
-	Created  string `yaml:"created" json:"created"`
+	ID      string `yaml:"id" json:"id"`
+	Title   string `yaml:"title" json:"title"`
+	Project string `yaml:"project" json:"project"`
+	// Owner is the person who made the task. OwnerRole is the role job render
+	// trusts intent.md by (member, owner, lead or guest); a task without a known
+	// role is external there. Tasks made before these fields have neither.
+	Owner     string `yaml:"owner,omitempty" json:"owner,omitempty"`
+	OwnerRole string `yaml:"owner_role,omitempty" json:"owner_role,omitempty"`
+	Size      string `yaml:"size" json:"size"`
+	Workflow  string `yaml:"workflow" json:"workflow"`
+	State     string `yaml:"state" json:"state"`
+	Created   string `yaml:"created" json:"created"`
 }
 
 // Task folds the task record and the person's unmodified words into one view.
@@ -43,10 +48,16 @@ type Store struct {
 	Now      func() time.Time
 }
 
-// NewOptions contains only choices supplied by the caller.
+// NewOptions contains only choices supplied by the caller. Who and Role come
+// from GRID_WHO and GRID_ROLE; with no Who the task belongs to the machine's
+// owner, so a new task never has an empty owner.
 type NewOptions struct {
-	Cwd, Words, Project, Size, Workflow string
+	Cwd, Words, Project, Size, Workflow, Who, Role string
 }
+
+// IntentHead precedes the person's words in intent.md. The Request heading is
+// the anchor intent.md#request that Jobs cite for the owner's own words.
+const IntentHead = "# Intent\n\n## Request {#request}\n\n"
 
 // Validate checks creation choices before any files are written.
 func (o NewOptions) Validate() error {
@@ -60,6 +71,11 @@ func (o NewOptions) Validate() error {
 	}
 	if strings.ContainsAny(o.Workflow, "\r\n\x00") || (o.Workflow != "" && strings.TrimSpace(o.Workflow) == "") {
 		return errors.New("workflow must be a nonempty name on one line")
+	}
+	for _, v := range []string{o.Who, o.Role} {
+		if strings.ContainsAny(v, "\r\n\x00") {
+			return errors.New("who and role must be on one line")
+		}
 	}
 	return nil
 }
@@ -132,7 +148,8 @@ func Fold(path, text, intent string) (Task, error) {
 	if _, err := time.Parse(time.RFC3339, rec.Created); err != nil {
 		return Task{}, fmt.Errorf("task.md created must be an RFC3339 timestamp: %w", err)
 	}
-	return Task{Record: rec, Path: path, Intent: intent}, nil
+	// Intent is the person's words, without the heading New puts before them.
+	return Task{Record: rec, Path: path, Intent: strings.TrimPrefix(intent, IntentHead)}, nil
 }
 
 // Read folds both files of a published task folder.

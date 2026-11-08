@@ -2,6 +2,8 @@
 id: T-01
 title: 'Fix: the "quoted" label'
 project: personal
+owner: alex
+owner_role: member
 size: auto
 workflow: Check and ship
 state: queued

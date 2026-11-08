@@ -13,6 +13,8 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job/jobtest"
+	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 func fixture(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer) {
@@ -223,6 +225,95 @@ func TestOwnerRoleDecidesTheTierOfTheIntent(t *testing.T) {
 		if !found {
 			t.Errorf("owner %q: intent is not in the inputs", role)
 		}
+	}
+}
+
+// A task made with grid task new is the person's own: job render quotes the
+// request as the owner's tier, and the contract pointer intent.md#request resolves.
+func TestTaskNewThenRenderTrustsTheRequest(t *testing.T) {
+	plan, err := os.ReadFile(filepath.Join("..", "..", "..", "testdata", "job", "task", "plan.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The fixture's brain note and research file are not in a fresh Grid home.
+	text := string(plan)
+	for old, now := range map[string]string{
+		"    links:\n      - {to: brain:project/export-format, rel: uses, why: \"Keep the documented column order stable for readers\"}\n": "    links: []\n",
+		"keep: [brain:project/export-format]": "keep: []",
+		"read: [task:research.md#format]":     "read: []",
+	} {
+		if !strings.Contains(text, old) {
+			t.Fatalf("fixture plan lost %q", old)
+		}
+		text = strings.Replace(text, old, now, 1)
+	}
+	for _, tc := range []struct {
+		name, who, role string
+		want            contract.TrustTier
+	}{
+		{"machine owner", "", "", contract.PersonTeam},
+		{"member", "alex", "", contract.PersonTeam},
+		{"guest", "sam", "guest", contract.PersonGuest},
+		{"an agent role", "builder-1", "builder", contract.External},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			home := filepath.Join(root, "home")
+			if err := os.MkdirAll(home, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			store := task.Store{Resolver: where.Resolver{GridHome: filepath.Join(home, ".grid"), Home: home, Ceiling: root}}
+			made, err := store.New(task.NewOptions{Cwd: home, Project: where.Personal, Words: "I want the export format documented.", Who: tc.who, Role: tc.role})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(made.Path, "plan.md"), []byte(text), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			out, errs := &bytes.Buffer{}, &bytes.Buffer{}
+			e := Env{Cwd: home, GridHome: filepath.Join(home, ".grid"), Machine: jobtest.Machine, Stdout: out, Stderr: errs}
+			r := call(t, e, out, errs, 0, "render", made.Path, "1", "--json")
+			file, err := os.ReadFile(r.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			brief := string(file)
+			saved, err := os.ReadFile(r.Inputs)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var in struct {
+				Sources []struct {
+					Pointer string             `json:"pointer"`
+					Tier    contract.TrustTier `json:"tier"`
+				} `json:"sources"`
+			}
+			if err := json.Unmarshal(saved, &in); err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, src := range in.Sources {
+				if src.Pointer == "intent.md#request" {
+					found = true
+					if src.Tier != tc.want {
+						t.Errorf("intent.md#request is %q, want %q", src.Tier, tc.want)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("intent.md#request did not resolve")
+			}
+			label := "### Owner [" + string(tc.want) + "] (intent.md#request)"
+			if !strings.Contains(brief, label) {
+				t.Fatalf("brief lacks %q:\n%s", label, brief)
+			}
+			if tc.want == contract.External && !strings.Contains(brief, "<data tier=\"external\"") {
+				t.Fatalf("an external request must sit inside the data fence:\n%s", brief)
+			}
+			if tc.want != contract.External && (strings.Contains(brief, "<data tier=\"person-team\"") || !strings.Contains(brief, "I want the export format documented.")) {
+				t.Fatalf("the owner's own words are quoted, not fenced:\n%s", brief)
+			}
+		})
 	}
 }
 

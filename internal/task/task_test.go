@@ -50,7 +50,7 @@ func TestNewReadGolden(t *testing.T) {
 		t.Run("size="+size, func(t *testing.T) {
 			s, home := storeFor(t)
 			words := "  Fix: the \"quoted\" label\n\nKeep my spelling & spaces.  \n"
-			got, err := s.New(NewOptions{Cwd: home, Words: words, Size: size, Workflow: "Check and ship"})
+			got, err := s.New(NewOptions{Cwd: home, Words: words, Size: size, Workflow: "Check and ship", Who: "alex", Role: "member"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -89,6 +89,58 @@ func TestNewReadGolden(t *testing.T) {
 				golden.Assert(t, "task-intent", string(data))
 			}
 		})
+	}
+}
+
+func TestNewWritesOwnerAndRequestAnchor(t *testing.T) {
+	machine := machineOwner()
+	for _, tc := range []struct {
+		name, who, role, wantWho, wantRole string
+	}{
+		{"person and role", "alex", "guest", "alex", "guest"},
+		{"person defaults to member", "alex", "", "alex", "member"},
+		{"padding is trimmed", "  alex ", " lead ", "alex", "lead"},
+		{"nobody named is the machine owner", "", "", machine, "owner"},
+		{"blank is the machine owner", "  ", "", machine, "owner"},
+		{"role without a person stays", "", "member", machine, "member"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, home := storeFor(t)
+			words := "Add a search label\n\n## Not a heading of mine\n"
+			got, err := s.New(NewOptions{Cwd: home, Words: words, Who: tc.who, Role: tc.role})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Owner == "" || got.Owner != tc.wantWho || got.OwnerRole != tc.wantRole {
+				t.Fatalf("owner %q role %q, want %q %q", got.Owner, got.OwnerRole, tc.wantWho, tc.wantRole)
+			}
+			text, err := os.ReadFile(filepath.Join(got.Path, "task.md"))
+			if err != nil || !strings.Contains(string(text), "\nowner: "+tc.wantWho+"\n") || !strings.Contains(string(text), "\nowner_role: "+tc.wantRole+"\n") {
+				t.Fatalf("task.md does not record the owner: %s, %v", text, err)
+			}
+			file, err := os.ReadFile(filepath.Join(got.Path, "intent.md"))
+			if want := "# Intent\n\n## Request {#request}\n\n" + words; err != nil || string(file) != want {
+				t.Fatalf("intent.md %q, want %q, %v", file, want, err)
+			}
+			read, err := Read(got.Path)
+			if err != nil || read.Intent != words || read.Owner != tc.wantWho {
+				t.Fatalf("read %+v, %v: the person's words must come back without the heading", read, err)
+			}
+		})
+	}
+	t.Run("an older task keeps its whole file as the words", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "T-01-old")
+		write(t, filepath.Join(path, "task.md"), "---\nid: T-01\ntitle: Old\nproject: personal\nstate: queued\ncreated: 2026-01-02T03:04:05Z\n---\n")
+		write(t, filepath.Join(path, "intent.md"), "Just the words")
+		read, err := Read(path)
+		if err != nil || read.Intent != "Just the words" || read.Owner != "" || read.OwnerRole != "" {
+			t.Fatalf("read %+v, %v", read, err)
+		}
+	})
+	for _, bad := range []NewOptions{{Words: "Fix", Who: "a\nb"}, {Words: "Fix", Role: "member\r"}} {
+		if err := bad.Validate(); err == nil {
+			t.Errorf("%+v: expected a validation error", bad)
+		}
 	}
 }
 

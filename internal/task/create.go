@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
@@ -87,7 +88,8 @@ func (s Store) New(o NewOptions) (Task, error) {
 	if chars := []rune(title); len(chars) > 120 {
 		title = string(chars[:120])
 	}
-	t := Task{Record: Record{ID: id, Title: title, Project: r.Project,
+	owner, role := o.owner()
+	t := Task{Record: Record{ID: id, Title: title, Project: r.Project, Owner: owner, OwnerRole: role,
 		Size: o.Size, Workflow: o.Workflow, State: "queued", Created: now.UTC().Format(time.RFC3339)},
 		Path: filepath.Join(dir, id+"-"+slug(title)), Intent: o.Words}
 	front, err := yaml.Dump(t.Record, yaml.WithIndent(2), yaml.WithLineWidth(-1))
@@ -102,7 +104,7 @@ func (s Store) New(o NewOptions) (Task, error) {
 		return Task{}, err
 	}
 	defer os.RemoveAll(stage)
-	if err := writeSynced(filepath.Join(stage, "intent.md"), []byte(o.Words)); err != nil {
+	if err := writeSynced(filepath.Join(stage, "intent.md"), []byte(IntentHead+o.Words)); err != nil {
 		return Task{}, err
 	}
 	if err := writeSynced(filepath.Join(stage, "task.md"), append(append([]byte("---\n"), front...), []byte("---\n")...)); err != nil {
@@ -131,6 +133,34 @@ func (s Store) New(o NewOptions) (Task, error) {
 		return Task{}, err
 	}
 	return t, nil
+}
+
+// owner names who made the task and the role their words carry. Without Who the
+// person is the machine's owner, who sits at the terminal; the Grid home is theirs.
+func (o NewOptions) owner() (who, role string) {
+	who, role = strings.TrimSpace(o.Who), strings.TrimSpace(o.Role)
+	if who == "" {
+		who = machineOwner()
+		if role == "" {
+			role = "owner"
+		}
+	}
+	if role == "" {
+		role = "member"
+	}
+	return who, role
+}
+
+// machineOwner is the account that runs Grid on this computer; "owner" when the
+// system will not say.
+func machineOwner() string {
+	if u, err := user.Current(); err == nil && strings.TrimSpace(u.Username) != "" {
+		return strings.TrimSpace(u.Username)
+	}
+	if name := strings.TrimSpace(os.Getenv("USER")); name != "" {
+		return name
+	}
+	return "owner"
 }
 
 // staleStage is how old a staging folder must be before New removes it. A live
