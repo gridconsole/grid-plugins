@@ -134,18 +134,22 @@ func runRefusal(args []string, env Env) int {
 func personWrite(env Env) bool {
 	// This is a cooperative guard, not authentication. Host tool guards and
 	// worker deny settings enforce the boundary; a person's shell is supported.
-	for _, key := range []string{"GRID_AGENT", "GRID_WORKER_ID", "GRID_WORKER"} {
-		if strings.TrimSpace(env.getenv(key)) != "" {
-			fmt.Fprintln(env.Stderr, "Approval and refusal decisions require a person or the app; run this command in your own shell.")
-			return false
-		}
-	}
-	role := strings.TrimSpace(env.getenv("GRID_ROLE"))
-	if role != "" && role != "owner" && role != "member" && role != "cli" {
+	if agentShell(env) {
 		fmt.Fprintln(env.Stderr, "Approval and refusal decisions require a person or the app; run this command in your own shell.")
 		return false
 	}
 	return true
+}
+
+// agentShell reports whether the environment says a worker or a non-person role runs this command.
+func agentShell(env Env) bool {
+	for _, key := range []string{"GRID_AGENT", "GRID_WORKER_ID", "GRID_WORKER"} {
+		if strings.TrimSpace(env.getenv(key)) != "" {
+			return true
+		}
+	}
+	role := strings.TrimSpace(env.getenv("GRID_ROLE"))
+	return role != "" && role != "owner" && role != "member" && role != "cli"
 }
 
 func taskWriteResult(env Env, event task.Event, err error, asJSON bool) int {

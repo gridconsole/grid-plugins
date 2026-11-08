@@ -174,17 +174,11 @@ func runTaskAttach(args []string, env Env) int {
 	if *id == "" {
 		*id = env.getenv("CLAUDE_SESSION_ID")
 	}
-	agent := false
-	for _, key := range []string{"GRID_AGENT", "GRID_WORKER_ID", "GRID_WORKER"} {
-		agent = agent || strings.TrimSpace(env.getenv(key)) != ""
-	}
-	role := strings.TrimSpace(env.getenv("GRID_ROLE"))
-	agent = agent || (role != "" && role != "owner" && role != "member" && role != "cli")
 	pid := os.Getppid()
 	result, err := taskWriter(env).Attach(task.AttachOptions{
 		Cwd: env.Cwd, ID: pos[0], SessionID: *id, Runtime: *runtime,
 		PID: pid, PIDStart: migrate.ProcessStart(pid), Who: writeOptions(env, pos[0], "attach", "").Who,
-		Agent: agent, BoundTask: env.getenv("GRID_TASK"),
+		Agent: agentShell(env), BoundTask: env.getenv("GRID_TASK"),
 	})
 	if err != nil {
 		return commandError(env, "grid task attach", err)
