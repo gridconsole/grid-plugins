@@ -68,8 +68,9 @@ func TestTaskRenameDecline(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
-			// The fixture is created as a local caller: main refuses a guest the Personal project.
-			fixture := taskFixture(t, h)
+			// Use a shared project so member edit policy is exercised.
+			h.record(project.Record{Name: "example", ID: "01EXAMPLE"})
+			fixture := taskFixtureProject(t, h, "example")
 			h.env.Getenv = func(key string) string {
 				switch key {
 				case "GRID_ROLE":
@@ -96,7 +97,7 @@ func TestTaskRenameDecline(t *testing.T) {
 			if tc.verb == "decline" {
 				flag = "--reason"
 			}
-			args := []string{"task", tc.verb, fixture.ID, "--project", "personal", "--json"}
+			args := []string{"task", tc.verb, fixture.ID, "--project", "example", "--json"}
 			if tc.value != "" {
 				args = append(args, flag, tc.value)
 			}
@@ -279,7 +280,8 @@ func TestTaskRenameDeclineCustomPolicy(t *testing.T) {
 				}
 				return ""
 			}
-			fixture := taskFixture(t, h)
+			h.record(project.Record{Name: "example", ID: "01EXAMPLE"})
+			fixture := taskFixtureProject(t, h, "example")
 			seen := ""
 			policy := func(role string) bool { seen = role; return role != "member" }
 			task.RenameAllowed, task.DeclineAllowed = policy, policy

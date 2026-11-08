@@ -79,10 +79,15 @@ func TestTaskNewFeedCommands(t *testing.T) {
 
 func taskFixture(t *testing.T, h *harness) task.Task {
 	t.Helper()
+	return taskFixtureProject(t, h, "")
+}
+
+func taskFixtureProject(t *testing.T, h *harness, name string) task.Task {
+	t.Helper()
 	s := task.Store{Resolver: resolver(h.env), Now: func() time.Time {
 		return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	}}
-	got, err := s.New(task.NewOptions{Cwd: h.home, Words: "Fix the label\n\nKeep these exact words.\n", Size: "small", Workflow: "Check and ship", Who: "alex", Role: "member"})
+	got, err := s.New(task.NewOptions{Cwd: h.home, Project: name, Words: "Fix the label\n\nKeep these exact words.\n", Size: "small", Workflow: "Check and ship", Who: "alex", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,8 +169,9 @@ func TestTaskNewRecordsTheOwnerFromTheEnvironment(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
+			h.record(project.Record{Name: "example", ID: "01EXAMPLE"})
 			h.env.Getenv = func(k string) string { return tc.env[k] }
-			if code := h.run(h.home, "task", "new", "Add a search label", "--json"); code != 0 {
+			if code := h.run(h.home, "task", "new", "Add a search label", "--project", "example", "--json"); code != 0 {
 				t.Fatalf("exit %d: %s", code, h.errb)
 			}
 			var output struct{ ID, Path string }

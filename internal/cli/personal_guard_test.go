@@ -114,3 +114,31 @@ func TestPersonalGuardPreservesExplicitProjectMatching(t *testing.T) {
 		})
 	}
 }
+
+func TestPersonalGuardRefusesMissingMember(t *testing.T) {
+	for _, role := range []string{"member", "grid-member", "lead", "grid-lead"} {
+		for _, explicit := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/explicit=%t", role, explicit), func(t *testing.T) {
+				h := newHarness(t)
+				h.env.Getenv = func(key string) string {
+					if key == "GRID_ROLE" {
+						return role
+					}
+					return ""
+				}
+				args := []string{"where", "--json"}
+				want := "grid: this caller cannot use the Personal project\n"
+				if explicit {
+					args = append(args, "--project", "personal")
+					want = "grid: project \"personal\" is not registered\n"
+				}
+				if code := h.run(h.home, args...); code != 1 {
+					t.Fatalf("exit=%d, want 1 for caller without identity", code)
+				}
+				if h.out.Len() != 0 || h.errb.String() != want {
+					t.Fatalf("expected Personal refusal without a result")
+				}
+			})
+		}
+	}
+}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/plan"
+	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
@@ -125,7 +126,8 @@ func TestTaskWriteRecordsRole(t *testing.T) {
 				}
 				return ""
 			}
-			fixture := taskFixture(t, h)
+			h.record(project.Record{Name: "example", ID: "01EXAMPLE"})
+			fixture := taskFixtureProject(t, h, "example")
 			s := taskWriter(h.env)
 			if _, err := s.Change(task.WriteOptions{ID: fixture.ID, Action: "status", State: "waiting"}); err != nil {
 				t.Fatal(err)
