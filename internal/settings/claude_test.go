@@ -125,7 +125,7 @@ func TestClaudePreservesKeysValuesOrderAndMode(t *testing.T) {
 		t.Fatal("top-level order changed")
 	}
 	for _, key := range []string{"z", "a"} {
-		if !bytes.Equal(before.get(key), after.get(key)) {
+		if !equalClaudeJSON(before.get(key), after.get(key)) {
 			t.Fatalf("%s changed", key)
 		}
 	}
@@ -135,7 +135,7 @@ func TestClaudePreservesKeysValuesOrderAndMode(t *testing.T) {
 		t.Fatal("permission order changed")
 	}
 	for _, key := range []string{"ask", "extra"} {
-		if !bytes.Equal(bp.get(key), ap.get(key)) {
+		if !equalClaudeJSON(bp.get(key), ap.get(key)) {
 			t.Fatalf("%s changed", key)
 		}
 	}
@@ -477,7 +477,13 @@ func TestClaudeRemovePreservesManualClassifierReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(doc.get("autoMode")) != `{"environment":[]}` {
+	if !equalClaudeJSON(doc.get("autoMode"), []byte(`{"environment":[]}`)) {
 		t.Fatal("changed the user's replacement classifier context")
 	}
+}
+
+// Formatting may change, but raw JSON tokens, number precision, and order may not.
+func equalClaudeJSON(a, b []byte) bool {
+	var ac, bc bytes.Buffer
+	return json.Compact(&ac, a) == nil && json.Compact(&bc, b) == nil && bytes.Equal(ac.Bytes(), bc.Bytes())
 }

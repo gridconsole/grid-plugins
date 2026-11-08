@@ -321,18 +321,22 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	}
 	var settingsStage, recordStage string
 	if len(changes) > 0 {
-		settingsStage, err = stageClaudeFile(file.target, append(doc.bytes(), '\n'), file.mode)
+		data, encodeErr := encodeClaudeJSON(json.RawMessage(doc.bytes()))
+		if encodeErr != nil {
+			return 1, encodeErr
+		}
+		settingsStage, err = stageClaudeFile(file.target, data, file.mode)
 		if err != nil {
 			return 1, err
 		}
 		defer os.Remove(settingsStage)
 	}
 	if !o.Remove {
-		data, err := json.MarshalIndent(nextRecord, "", "  ")
+		data, err := encodeClaudeJSON(nextRecord)
 		if err != nil {
 			return 1, err
 		}
-		recordStage, err = stageClaudeFile(recordFile.target, append(data, '\n'), 0600)
+		recordStage, err = stageClaudeFile(recordFile.target, data, 0600)
 		if err != nil {
 			return 1, err
 		}
@@ -504,8 +508,8 @@ func (o claudeObject) bytes() []byte {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		key, _ := json.Marshal(f.key)
-		b.Write(key)
+		key, _ := encodeClaudeJSON(f.key)
+		b.Write(bytes.TrimSpace(key))
 		b.WriteByte(':')
 		b.Write(f.value)
 	}
@@ -566,11 +570,22 @@ func changeClaudeRule(doc *claudeObject, r ClaudeRule, remove bool) error {
 	if values == nil {
 		values = []string{}
 	}
-	data, err := json.Marshal(values)
+	data, err := encodeClaudeJSON(values)
 	if err != nil {
 		return err
 	}
 	obj.set(r.Key, data)
 	doc.set(r.Section, obj.bytes())
 	return nil
+}
+
+// Use one encoder for generated strings, records, and the final ordered document.
+// RawMessage retains number precision and key order while indentation is refreshed.
+func encodeClaudeJSON(value any) ([]byte, error) {
+	var b bytes.Buffer
+	encoder := json.NewEncoder(&b)
+	encoder.SetIndent("", "  ")
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(value)
+	return b.Bytes(), err
 }
