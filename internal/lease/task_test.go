@@ -152,7 +152,7 @@ func TestTaskGrantPreparesBeforeTheTenure(t *testing.T) {
 	if _, err := s.TakeTask(w, 42, start); !errors.Is(err, failed) {
 		t.Fatal(err)
 	}
-	if current, err := s.Read("task"); err != nil || current.Holder != nil {
+	if current, err := s.Read("task"); err != nil || current.Holder != nil || current.Fence != 0 || current.Lease.Lease != "task" {
 		t.Fatalf("failed prepare granted: %+v %v", current, err)
 	}
 	s.BeforeTaskGrant = nil
@@ -263,7 +263,7 @@ func TestLeaseReadersRejectTheSameInvalidGrant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, data := range [][]byte{nil, bytes.Replace(raw, []byte(`"J-1"`), []byte(`"J-2"`), 1), bytes.Replace(raw, []byte(`"lease": "J-1",`), nil, 1)} {
+	for _, data := range [][]byte{nil, []byte(" \t\r\n"), bytes.Replace(raw, []byte(`"J-1"`), []byte(`"J-2"`), 1), bytes.Replace(raw, []byte(`"lease": "J-1",`), nil, 1)} {
 		if err := os.WriteFile(path, data, 0600); err != nil {
 			t.Fatal(err)
 		}

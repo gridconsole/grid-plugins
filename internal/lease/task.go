@@ -65,7 +65,7 @@ func (s TaskStore) open(name string, flags int) (*os.File, error) {
 func readTenure(f *os.File) (Tenure, error) {
 	var t Tenure
 	b, err := io.ReadAll(f)
-	if err != nil || len(b) == 0 {
+	if err != nil || len(bytes.TrimSpace(b)) == 0 {
 		return t, err
 	}
 	dec := json.NewDecoder(bytes.NewReader(b))
