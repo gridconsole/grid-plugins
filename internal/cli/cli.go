@@ -109,7 +109,7 @@ func commands() []command {
 		{"intent", "list, claim, done (worker requests)", runIntent},
 		{"usage", "usage totals and holds", nil},
 		{"account", "agent accounts", nil},
-		{"project", "project lists, scan and merge", nil},
+		{"project", "add, remove, list, scan and relink projects", runProject},
 		{"setup", "first-run scan and settings", nil},
 		{"signal", "inbox signals", nil},
 		{"artifact", "import, link, list and publish task artifacts", runArtifact},
