@@ -146,7 +146,7 @@ func TestContractCommandsApp(t *testing.T) {
 					for _, key := range []string{"GRID_MEMBER", "GRID_ACTOR", "GRID_WHO"} {
 						t.Setenv(key, "member")
 					}
-					t.Setenv("GRID_ROLE", "member")
+					t.Setenv("GRID_ROLE", "owner")
 					h.env.Machine = feedMachine
 					// Use the shared harness; tasks and plans are made by their CLI writers.
 					run := func(cwd string, args ...string) []byte {

@@ -1396,7 +1396,7 @@
     },
     {
       "name": "lease",
-      "summary": "take task (adoption, takeover); take, renew, release, status merge",
+      "summary": "take, renew, release, status (merge or task lease)",
       "built": true,
       "subcommands": [
         {
@@ -2558,6 +2558,11 @@
               "required": false
             },
             {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--topic",
               "takes": "value",
               "required": false
@@ -2590,6 +2595,11 @@
             {
               "name": "--proposal",
               "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
               "required": false
             }
           ],
@@ -3006,6 +3016,34 @@
               "name": "--project",
               "takes": "value",
               "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "write",
+          "args": [],
+          "flags": [
+            {
+              "name": "--file",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--rev",
+              "takes": "value",
+              "required": true
             }
           ],
           "json": true,
@@ -3939,12 +3977,17 @@
           "args": [],
           "flags": [
             {
-              "name": "--answers",
-              "takes": "value",
+              "name": "--json",
+              "takes": "none",
               "required": false
             },
             {
-              "name": "--json",
+              "name": "--remove",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--yes",
               "takes": "none",
               "required": false
             }

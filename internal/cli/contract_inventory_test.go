@@ -332,7 +332,13 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 			}
 			// Hook deliberately ignores invalid input and has no flags.
 			// answer takes <task> first, so a leading probe flag is swallowed as the task.
-			if c.name == "answer" {
+			if key == "workflow write" {
+				// Its parser prints one fixed usage line for any bad flag, so the unknown-flag probe cannot read arity.
+				for _, f := range []struct{ name, takes string }{{"--file", "value"}, {"--json", "none"}, {"--project", "value"}, {"--rev", "value"}} {
+					sub.Flags = append(sub.Flags, contractCommandFlag{Name: f.name, Takes: f.takes, Required: annotation.required[f.name]})
+				}
+				sub.JSON = true
+			} else if c.name == "answer" {
 				sub.Flags = append(sub.Flags, contractCommandFlag{Name: "--json", Takes: "none"})
 				sub.JSON = true
 			} else if c.name != "hook" {
@@ -524,6 +530,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"project-md set":        {args: []string{"<project>", "<key>", "<value>"}},
 		"setup":                 {},
 		"workflow show":         {},
+		"workflow write":        {required: map[string]bool{"--file": true, "--rev": true}},
 		"usage post":            {required: map[string]bool{"--job": true}},
 		"usage show":            {},
 		"usage threshold set":   {},
