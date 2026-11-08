@@ -101,7 +101,8 @@ func sessionStart(o Options) {
 	levels, err := settings.ReadHookLevels(o.Resolver.GridHome, project)
 	if err != nil {
 		o.log("hook settings", err)
-		return
+		// Unreadable settings keep the default levels and say so, instead of hiding the context.
+		note += " Hook settings cannot be read: " + err.Error() + "."
 	}
 	context := sessionContext(res, o.Resolver, note)
 	brainProject := res.Project

@@ -102,3 +102,26 @@ func TestSessionStartLevelKeepsEnvironment(t *testing.T) {
 		t.Fatal(out)
 	}
 }
+
+func TestSessionStartSaysWhenSettingsCannotBeRead(t *testing.T) {
+	o, out, root := fixture(t)
+	if err := os.WriteFile(filepath.Join(o.Resolver.GridHome, "settings.json"), []byte(`{"hooks":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	envFile := filepath.Join(root, "env")
+	o.Getenv = func(key string) string {
+		if key == "CLAUDE_ENV_FILE" {
+			return envFile
+		}
+		return ""
+	}
+	o.Stdin = strings.NewReader(`{}`)
+	Run(o)
+	context := contextFrom(t, out)
+	if !strings.Contains(context, "Grid project: example") || !strings.Contains(context, "Hook settings cannot be read") {
+		t.Fatal(context)
+	}
+	if _, err := os.Stat(envFile); err != nil {
+		t.Fatal(err)
+	}
+}
