@@ -2,6 +2,7 @@
 package projectmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -115,6 +116,9 @@ func Key(home, name, key string, value *string) (Result, error) {
 		var decoded any
 		if err = yaml.Load([]byte(raw), &decoded); err != nil {
 			return result, err
+		}
+		if _, err = json.Marshal(decoded); err != nil {
+			return result, fmt.Errorf("value cannot be represented as JSON: %w", err)
 		}
 		if !jsonValue(decoded) {
 			return result, fmt.Errorf("value needs string mapping keys")

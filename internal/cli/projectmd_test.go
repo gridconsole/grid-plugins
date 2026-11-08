@@ -15,7 +15,7 @@ func TestProjectMD(t *testing.T) {
 		name, key, value string
 		code             int
 	}{
-		{"scalar", "lands", "reviewed", 0}, {"list", "labels", "[one, two]", 0}, {"empty", "summary", "", 0}, {"bad-key", "body.text", "x", 1}, {"bad-identity", "folders", "wrong type", 1}, {"bad-yaml", "lands", "[", 1},
+		{"scalar", "lands", "reviewed", 0}, {"list", "labels", "[one, two]", 0}, {"empty", "summary", "", 0}, {"bad-key", "body.text", "x", 1}, {"bad-identity", "folders", "wrong type", 1}, {"bad-yaml", "lands", "[", 1}, {"non-finite", "limit", ".inf", 1}, {"mapping-key", "data", "{1: two}", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()

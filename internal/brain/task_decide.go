@@ -83,6 +83,7 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string) (Tas
 	}
 	defer root.Close()
 	var result TaskDecision
+	var pending *decisionWrite
 	err = locked(root, func() error {
 		proposalPath := filepath.Join("brain-proposals", proposal+".md")
 		receipt := filepath.Join("brain-proposals", ".decisions", proposal+".json")
@@ -229,15 +230,21 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string) (Tas
 		if err = taskhistory.Add(t.Path, taskfile.HistoryLine(w.At, "brain decided", detail, "grid-curator")); err != nil {
 			return err
 		}
-		w.Done = true
-		b, err = json.Marshal(w)
-		if err != nil {
-			return err
-		}
-		return safefile.AtomicWrite(tr, receipt, b)
+		pending = &w
+		return nil
 	})
-	if err == nil && action != "reject" {
-		_, err = s.RebuildIndex()
+	if err == nil && pending != nil {
+		if action != "reject" {
+			_, err = s.RebuildIndex()
+		}
+		if err == nil {
+			pending.Done = true
+			var b []byte
+			b, err = json.Marshal(pending)
+			if err == nil {
+				err = safefile.AtomicWrite(tr, filepath.Join("brain-proposals", ".decisions", proposal+".json"), b)
+			}
+		}
 	}
 	return result, err
 }

@@ -137,3 +137,35 @@ func TestDecideRefusesUnsafeProposals(t *testing.T) {
 		})
 	}
 }
+
+func TestDecideRecoversAfterHistoryFailure(t *testing.T) {
+	env, dir := decideFixture(t)
+	env.Stdout = &bytes.Buffer{}
+	env.Stderr = &bytes.Buffer{}
+	// A directory in place of history prevents completion after publication.
+	if err := os.Mkdir(filepath.Join(dir, "history.md"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"decide", "T-01", "lesson", "accept", "target"}
+	if Run(args, env) == 0 {
+		t.Fatal("expected history failure")
+	}
+	if err := os.Remove(filepath.Join(dir, "history.md")); err != nil {
+		t.Fatal(err)
+	}
+	if Run(args, env) != 0 {
+		t.Fatalf("recovery failed: %s", env.Stderr)
+	}
+	s := brain.Store{GridHome: env.GridHome, Project: "sample"}
+	e, err := s.Show("brain:project/target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(e.Note.Body, "Run checks before landing.") != 1 {
+		t.Fatal("recovery duplicated content")
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "history.md"))
+	if err != nil || strings.Count(string(b), "brain decided") != 1 {
+		t.Fatalf("history %s: %v", b, err)
+	}
+}
