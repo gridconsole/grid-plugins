@@ -22,6 +22,7 @@ var ErrStaleLease = errors.New("stale lease")
 var ErrDiskFull = errors.New("disk full")
 
 // Store is one task's Feed. TaskID is the stable ULID, not its display number.
+// Post initializes a missing TaskID from task.md under the task lock.
 type Store struct {
 	TaskDir, TaskID string
 	Now             func() time.Time
@@ -166,6 +167,13 @@ func completeLines(data []byte) [][]byte {
 func (s Store) Post(in Input, w Writer) (Record, error) {
 	if err := s.CheckWithdrawalPolicy(in); err != nil {
 		return Record{}, err
+	}
+	if s.TaskID == "" {
+		var err error
+		s.TaskID, err = EnsureTaskID(s.TaskDir)
+		if err != nil {
+			return Record{}, err
+		}
 	}
 	r, err := s.record(in, w)
 	if err != nil {

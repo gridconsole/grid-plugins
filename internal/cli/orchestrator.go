@@ -100,6 +100,11 @@ func runOrchestrator(args []string, env Env) int {
 	if scope.TaskPath == "" {
 		return fail(errors.New("no task selected; use --task"))
 	}
+	if verb != "tree" && verb != "blocked" {
+		if _, err := feed.EnsureTaskID(scope.TaskPath); err != nil {
+			return fail(err)
+		}
+	}
 	taskID, taskOwner, err := taskstore.FeedIdentity(scope.TaskPath)
 	if err != nil {
 		return fail(err)

@@ -131,6 +131,13 @@ func (s Store) Sync() (records []Record, err error) {
 }
 
 func (s Store) project(dir string, write bool) ([]Record, error) {
+	if write && s.TaskID == "" {
+		var err error
+		s.TaskID, err = feed.EnsureTaskID(s.TaskDir)
+		if err != nil {
+			return nil, err
+		}
+	}
 	f, err := s.feed()
 	if err != nil {
 		return nil, err

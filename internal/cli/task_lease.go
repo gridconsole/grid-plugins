@@ -134,6 +134,13 @@ func runTaskLeaseAction(action string, args []string, env Env) int {
 		fmt.Fprintf(env.Stdout, "task lease held by %s since %s\ngen: %d\nfence: %d\npid: %d\nprocess: %s\n", *tenure.Holder, tenure.Since, tenure.Gen, tenure.Fence, *tenure.PID, state)
 		return 0
 	}
+	if action == "take" && store.TaskID == "" {
+		store.TaskID, err = feed.EnsureTaskID(store.TaskDir)
+		if err != nil {
+			return livenessError(env, err)
+		}
+		leases.Feed = store
+	}
 	if action == "take" {
 		epoch = fmt.Sprintf("%d.0", gen)
 	}

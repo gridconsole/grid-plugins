@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
@@ -338,6 +339,17 @@ func recoverWrite(dir string) error {
 		}
 	}
 	// Publish history last. Readers of several files must hold .task.lock.
+	// A Feed writer may have initialized a legacy task after this journal was
+	// left by a crash. Never replay an older image that drops that stable ID.
+	if data, ok := files["task.md"]; ok {
+		id, err := feed.TaskID(dir)
+		if err == nil {
+			files["task.md"], err = feed.WithTaskID(data, id)
+		}
+		if err != nil && !errors.Is(err, feed.ErrNoTaskID) {
+			return err
+		}
+	}
 	for name, data := range files {
 		if name != "history.md" {
 			if err := atomicWrite(filepath.Join(dir, name), data); err != nil {

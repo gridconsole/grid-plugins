@@ -2,6 +2,7 @@ package feed
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
@@ -61,7 +63,11 @@ func TaskID(taskDir string) (string, error) {
 		return "", err
 	}
 	defer f.Close()
-	scan := bufio.NewScanner(f)
+	return taskID(f)
+}
+
+func taskID(r io.Reader) (string, error) {
+	scan := bufio.NewScanner(r)
 	if !scan.Scan() || strings.TrimSpace(scan.Text()) != "---" {
 		return "", fmt.Errorf("task.md needs frontmatter with a stable id")
 	}
@@ -98,6 +104,97 @@ func TaskID(taskDir string) (string, error) {
 		return "", ErrNoTaskID
 	}
 	return id, nil
+}
+
+// EnsureTaskID is for writers only. The stable task lock serializes allocation
+// with task metadata writers, and the atomic replacement is durable before any
+// Feed record can reference the identity. Readers must keep using TaskID.
+func EnsureTaskID(taskDir string) (string, error) {
+	lock, err := fslock.OpenNoFollow(filepath.Join(taskDir, ".task.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return "", err
+	}
+	defer lock.Close()
+	if err := fslock.LockExclusive(lock); err != nil {
+		return "", err
+	}
+	defer fslock.Unlock(lock)
+	path := filepath.Join(taskDir, "task.md")
+	f, err := fslock.OpenNoFollow(path, os.O_RDONLY, 0)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("task.md must be a regular file")
+	}
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return "", err
+	}
+	id, err := taskID(bytes.NewReader(data))
+	if !errors.Is(err, ErrNoTaskID) {
+		return id, err
+	}
+	id, err = NewID()
+	if err != nil {
+		return "", err
+	}
+	updated, err := WithTaskID(data, id)
+	if err != nil {
+		return "", err
+	}
+	if err := atomicfile.Write(path, updated, info.Mode().Perm()); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// WithTaskID adds an identity without reformatting other metadata or the body.
+// Task journal recovery uses it to retain an identity allocated after a crash.
+// Existing identities must agree; malformed or conflicting IDs are not repaired.
+func WithTaskID(data []byte, id string) ([]byte, error) {
+	if !IsID(id) {
+		return nil, fmt.Errorf("task id must be a ULID")
+	}
+	old, err := taskID(bytes.NewReader(data))
+	if err == nil {
+		if old != id {
+			return nil, fmt.Errorf("conflicting stable task ids")
+		}
+		return data, nil
+	}
+	if !errors.Is(err, ErrNoTaskID) {
+		return nil, err
+	}
+	newline := "\n"
+	if bytes.HasPrefix(data, []byte("---\r\n")) {
+		newline = "\r\n"
+	}
+	lines := strings.SplitAfter(string(data), "\n")
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			lines[i] = "ulid: " + id + newline + lines[i]
+			return []byte(strings.Join(lines, "")), nil
+		}
+		if strings.HasPrefix(lines[i], "ulid:") {
+			value := strings.Trim(strings.TrimSpace(strings.TrimPrefix(lines[i], "ulid:")), "\"'")
+			if value != "" {
+				return nil, fmt.Errorf("invalid task ulid")
+			}
+			lines[i] = "ulid: " + id + newline
+			updated := []byte(strings.Join(lines, ""))
+			if got, err := taskID(bytes.NewReader(updated)); err != nil || got != id {
+				return nil, fmt.Errorf("invalid task identity fields")
+			}
+			return updated, nil
+		}
+	}
+	return nil, fmt.Errorf("task.md frontmatter is not closed")
 }
 
 // Handover announces a task lease already granted by the lease owner. It never

@@ -327,7 +327,7 @@ func (s Store) postNotices(dir string, out *PostResult) error {
 	if len(pending) == 0 {
 		return nil
 	}
-	taskID, err := feed.TaskID(s.TaskPath)
+	taskID, err := feed.EnsureTaskID(s.TaskPath)
 	if err != nil {
 		return err
 	}

@@ -413,7 +413,7 @@ func syncDir(path string) error {
 	return err
 }
 
-// ulid makes stable machine and project identities with 80 random bits.
+// ulid makes stable machine, project and task identities with 80 random bits.
 func ulid(now time.Time) (string, error) {
 	var raw [16]byte
 	if _, err := rand.Read(raw[6:]); err != nil {

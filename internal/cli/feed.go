@@ -104,6 +104,9 @@ func runFeed(args []string, env Env) int {
 	if err != nil {
 		return fail(err)
 	}
+	if !write && store.TaskID == "" {
+		return fail(feed.ErrNoTaskID)
+	}
 	switch verb {
 	case "read":
 		result, err := store.Read(feed.Filter{Since: since, Type: kind, Job: job})
@@ -210,7 +213,9 @@ func (withdrawalPostRefusal) Error() string {
 func (withdrawalPostRefusal) Unwrap() error { return feed.ErrInvalidRecord }
 func (withdrawalPostRefusal) ExitCode() int { return 3 }
 
-// feedStore is shared by the CLI and MCP front ends.
+// feedStore is shared by the CLI and MCP front ends. It leaves missing legacy
+// identities unresolved: Post initializes them only after session validation,
+// while read commands report ErrNoTaskID without changing the task.
 func feedStore(env Env, task, project string) (feed.Store, error) {
 	if env.GridHome == "" {
 		return feed.Store{}, fmt.Errorf("cannot find the Grid home; set GRID_HOME")
@@ -236,7 +241,7 @@ func feedStore(env Env, task, project string) (feed.Store, error) {
 		return feed.Store{}, fmt.Errorf("no task selected; use --task")
 	}
 	taskID, err := feed.TaskID(res.TaskPath)
-	if err != nil {
+	if err != nil && !errors.Is(err, feed.ErrNoTaskID) {
 		return feed.Store{}, err
 	}
 	return feed.Store{TaskDir: res.TaskPath, TaskID: taskID}, nil

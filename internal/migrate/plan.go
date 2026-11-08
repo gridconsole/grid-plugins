@@ -584,10 +584,17 @@ func (p *Plan) taskRecord(src, dst, projectName string) {
 	display := r.value("display")
 	if taskRE.MatchString(id) {
 		display = id
-		id = legacyID("task:" + p.From + ":" + src + ":" + string(data))
+		id = r.value("ulid")
+		if id == "" {
+			id = legacyID("task:" + p.From + ":" + src + ":" + string(data))
+		}
 	}
 	if !ulidRE.MatchString(id) || !taskRE.MatchString(display) {
 		p.Unmapped = append(p.Unmapped, file+": expected T-NN id or ULID with display number")
+		return
+	}
+	if stable := r.value("ulid"); stable != "" && stable != id {
+		p.Unmapped = append(p.Unmapped, file+": conflicting stable task ids")
 		return
 	}
 	text := r.rewrite(map[string][]string{"id": {id}, "display": {display}, "project": {projectName}, "contract": {version.Contract}})

@@ -184,6 +184,9 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if (tool.Name == "feed_read" || tool.Name == "feed_state") && store.TaskID == "" {
+		return Result{}, feed.ErrNoTaskID
+	}
 	switch tool.Name {
 	case "feed_read":
 		read, err := store.Read(feed.Filter{Since: a.Since, Type: a.Type, Job: a.Job})
