@@ -93,6 +93,28 @@ func TestAppendAndRead(t *testing.T) {
 	}
 }
 
+func TestLargeBodyRetry(t *testing.T) {
+	s := testStore(t)
+	w := testWriter()
+	in := Input{Type: "knowledge", Body: map[string]any{"title": "Example", "text": strings.Repeat("x", MaxLine*2)}}
+	first := mustPost(t, s, in, w)
+	in.ID = first.ID
+	retry := mustPost(t, s, in, w)
+	if retry.ID != first.ID || retry.Seq != first.Seq {
+		t.Fatalf("retry appended: %+v", retry)
+	}
+	if _, exists := retry.Body["ref"]; exists {
+		t.Fatal("storage reference leaked into expanded body")
+	}
+	read, err := s.Read(Filter{})
+	if err != nil || len(read.Records) != 1 {
+		t.Fatalf("read: %+v %v", read, err)
+	}
+	if _, exists := read.Records[0].Body["ref"]; exists {
+		t.Fatalf("storage reference leaked into the read body: %v", read.Records[0].Body["ref"])
+	}
+}
+
 func TestTailRepairAndLargeBody(t *testing.T) {
 	s := testStore(t)
 	w := testWriter()

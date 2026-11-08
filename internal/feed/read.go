@@ -68,9 +68,15 @@ func (s Store) Read(filter Filter) (ReadResult, error) {
 				} else {
 					return out, err
 				}
-			} else if json.Unmarshal(body, &e.Body) != nil || e.Body == nil {
-				out.Bad[e.File]++
-				continue
+			} else {
+				// Decode into a fresh map: unmarshalling into the reference map
+				// would retain its storage-only ref key and break retry equality.
+				var expanded map[string]any
+				if json.Unmarshal(body, &expanded) != nil || expanded == nil {
+					out.Bad[e.File]++
+					continue
+				}
+				e.Body = expanded
 			}
 		}
 		seen[r.ID] = true
