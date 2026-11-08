@@ -233,8 +233,9 @@ export function jobSubmit({ task, job, repo, worktree, feed } = {}, o = {}) {
   const head = g(wt.top, ['rev-parse', '--verify', 'HEAD'], c);
   if (!head.ok) return head;
   const sha = text(head);
-  // A clean tree is a retry only when the Job ref already holds this commit (a push that failed); otherwise there is nothing to hand in.
-  if (!changed.items.length && readCommit(home.top, ref, c) !== sha) return fail(`nothing to submit: ${worktree} has no changes`);
+  // A clean tree still submits when the Worker committed on its branch since the Job's base (HEAD is past the base), or when the Job ref
+  // already holds this commit (a retry after a failed push); otherwise there is nothing to hand in.
+  if (!changed.items.length && sha === base.sha && readCommit(home.top, ref, c) !== sha) return fail(`nothing to submit: ${worktree} has no changes`);
 
   const set = setRef(home.top, ref, sha, { env: c.env });
   if (!set.ok) return set;
