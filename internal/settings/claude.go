@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
 
 // ClaudeRule identifies an entry by its settings array as well as its value.
@@ -29,6 +30,16 @@ type ClaudeRule struct {
 // tasks, personal tasks, project knowledge, home knowledge, and project.md.
 // Keep its reserved kinds in step with that guard (see the parity test).
 func ClaudeBlock(home, gridHome string) ([]ClaudeRule, error) {
+	return claudeBlock(home, gridHome, "")
+}
+
+func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
+	if home != "" {
+		home = gridhome.Real(home)
+	}
+	if gridHome != "" {
+		gridHome = gridhome.Real(gridHome)
+	}
 	rel, err := filepath.Rel(home, gridHome)
 	if home == "" || gridHome == "" || err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == "." {
 		return nil, errors.New("Grid home must be a directory under the user home for ~/ permission anchors")
@@ -37,23 +48,61 @@ func ClaudeBlock(home, gridHome string) ([]ClaudeRule, error) {
 	if strings.ContainsAny(anchor, "*?[]()\n\r") {
 		return nil, errors.New("Grid home contains permission pattern characters")
 	}
+	if projects == "" {
+		projects = filepath.Join(gridHome, "projects")
+	}
+	projectAnchor, err := claudeProjectAnchor(home, gridhome.Real(projects))
+	if err != nil {
+		return nil, err
+	}
 	rules := []ClaudeRule{
 		{"permissions", "allow", "Bash(grid *)"},
 		{"permissions", "allow", "Read(" + anchor + "/**)"},
 		{"permissions", "allow", "Edit(" + anchor + "/**)"},
 	}
 	for _, path := range []string{
-		"/projects/*/" + claudeFold("tasks") + "/[Tt]-[0-9]*/**",
-		"/personal/tasks/[Tt]-[0-9]*/**",
-		"/projects/*/" + claudeFold("knowledge") + "/**",
-		"/" + claudeFold("knowledge") + "/**",
-		"/projects/*/" + claudeFold("project.md"),
+		projectAnchor + "/*/" + claudeFold("tasks") + "/[Tt]-[0-9]*/**",
+		anchor + "/" + claudeFold("personal/tasks") + "/[Tt]-[0-9]*/**",
+		projectAnchor + "/*/" + claudeFold("knowledge") + "/**",
+		anchor + "/" + claudeFold("knowledge") + "/**",
+		projectAnchor + "/*/" + claudeFold("project.md"),
 	} {
-		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + anchor + path + ")"})
+		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + path + ")"})
 	}
 	return append(rules,
+		ClaudeRule{"permissions", "deny", "Edit(" + anchor + "/setup/**)"},
+		ClaudeRule{"permissions", "deny", "Write(" + anchor + "/setup/**)"},
 		ClaudeRule{"autoMode", "environment", "$defaults"},
 		ClaudeRule{"autoMode", "environment", "The Grid home at " + anchor + " is trusted for Grid operations."}), nil
+}
+
+// Project denies can live outside the user home; Claude's // anchor is
+// filesystem-absolute (a single / would be relative to the settings source).
+func claudeProjectAnchor(home, projects string) (string, error) {
+	anchor := filepath.ToSlash(projects)
+	if strings.ContainsAny(anchor, "*?[]()\n\r") {
+		return "", errors.New("Grid projects contains permission pattern characters")
+	}
+	rel, err := filepath.Rel(home, projects)
+	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		anchor = "~"
+		if rel != "." {
+			anchor += "/" + filepath.ToSlash(rel)
+		}
+	} else {
+		// Claude normalizes Windows drive paths to /c/path before matching.
+		if volume := filepath.VolumeName(projects); len(volume) == 2 && volume[1] == ':' {
+			anchor = "/" + strings.ToLower(volume[:1]) + anchor[len(volume):]
+		}
+		anchor = "//" + strings.TrimLeft(anchor, "/")
+	}
+	parts := strings.Split(anchor, "/")
+	for i, part := range parts {
+		if strings.EqualFold(part, "projects") {
+			parts[i] = claudeFold("projects")
+		}
+	}
+	return strings.Join(parts, "/"), nil
 }
 
 // The writer guard folds these reserved names even for not-yet-created files.
@@ -92,6 +141,7 @@ func ClaudeSetupCommand(args []string) bool {
 // home. terminal and beforeRename are per-call test seams, not global hooks.
 type ClaudeSetupOptions struct {
 	Home, GridHome, ConfigDir string
+	Projects                  string // absolute GRID_PROJECTS; empty selects <GridHome>/projects
 	Yes, Remove, JSON         bool
 	Stdin                     io.Reader
 	Stdout, Stderr            io.Writer
@@ -188,7 +238,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	if err != nil {
 		return 2, claudeInvalid{path}
 	}
-	block, err := ClaudeBlock(o.Home, o.GridHome)
+	block, err := claudeBlock(o.Home, o.GridHome, o.Projects)
 	if err != nil {
 		return 1, err
 	}

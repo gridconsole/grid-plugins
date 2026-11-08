@@ -170,9 +170,13 @@ func runSetup(args []string, env Env) int {
 		if stop {
 			return code
 		}
+		projects := env.getenv("GRID_PROJECTS")
+		if projects != "" && !filepath.IsAbs(projects) {
+			projects = filepath.Join(env.Cwd, projects)
+		}
 		return settings.RunClaudeSetup(settings.ClaudeSetupOptions{
 			Home: env.Home, GridHome: env.GridHome, ConfigDir: env.getenv("CLAUDE_CONFIG_DIR"),
-			Yes: *yes, Remove: *remove, JSON: *asJSON,
+			Projects: projects, Yes: *yes, Remove: *remove, JSON: *asJSON,
 			Stdin: env.Stdin, Stdout: env.Stdout, Stderr: env.Stderr,
 		})
 	}
