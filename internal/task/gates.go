@@ -129,8 +129,10 @@ func Approved(dir string) bool {
 	if err != nil {
 		return false
 	}
-	_, err = checkApproval(t, data, plan.Hash(text))
-	return err == nil
+	event, err := checkApproval(t, data, plan.Hash(text))
+	// Match ApprovalForGate: the plan receipt has no gate field. A receipt for
+	// ship or an unknown gate cannot authorize plan work, even if misfiled.
+	return err == nil && event.Gate == ""
 }
 
 func checkApproval(t Task, data []byte, hash string) (Event, error) {

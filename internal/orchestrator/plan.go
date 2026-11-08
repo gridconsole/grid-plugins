@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,7 @@ func (s Store) publishPlan(snap Snapshot) error {
 			return err
 		}
 		if taskfile.PlanApprovalRequired(string(workflow)) && !task.Approved(s.Feed.TaskDir) {
+			log.Print("plan publication skipped: workflow requires approval of the current plan")
 			return nil
 		}
 		return s.publishPlanText(snap, text)
