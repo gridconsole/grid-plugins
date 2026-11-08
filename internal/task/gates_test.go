@@ -77,10 +77,10 @@ func TestApprovalTracksPlan(t *testing.T) {
 	if err != nil || got != event || !Approved(task.Path) {
 		t.Fatalf("%+v: %v", got, err)
 	}
-	// The display hash ignores ticks, but approval binds the entire snapshot.
+	// Ticking a step is not a plan change.
 	setPlan(t, task, strings.Replace(planV1, "[ ]", "[x]", 1))
-	if _, err := s.Approval("", task.ID); err == nil || Approved(task.Path) {
-		t.Fatalf("tick preserved the approval: %v", err)
+	if _, err := s.Approval("", task.ID); err != nil || !Approved(task.Path) {
+		t.Fatalf("tick lost the approval: %v", err)
 	}
 	before, _ := os.ReadFile(filepath.Join(task.Path, "history.md"))
 	oldApproval, _ := os.ReadFile(filepath.Join(task.Path, "approval.json"))
