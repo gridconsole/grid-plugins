@@ -9,7 +9,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 // A migration moves the old Grid home aside and puts the staged one in its place,
@@ -17,7 +19,7 @@ import (
 // written before the first of them, so a run that stops there can be finished or
 // undone from what the disk shows. Beside the Grid home, <home> being its path:
 //
-//	<home>.migrate-lock       held by one running migrate: its pid and start time
+//	<home>.migrate-lock       persistent advisory lock held by one running migrate
 //	<home>.migrate-journal    what the run is doing, written before each phase
 //	<home>.migrate-stage-ID   the new home, built and synced before it is journaled
 //	<home>.migrate-previous-ID the old home, between the two renames and until the end
@@ -44,101 +46,22 @@ func randomToken() string {
 	return hex.EncodeToString(b[:])
 }
 
-type lockInfo struct {
-	PID   int    `json:"pid"`
-	Start string `json:"start,omitempty"`
-	Host  string `json:"host,omitempty"`
-	At    string `json:"at"`
-}
+// The lock inode stays in place; the kernel releases ownership after a crash.
+type lock struct{ file *os.File }
 
-type lock struct{ path string }
-
-// acquireLock takes the lock file. A lock whose process is gone, or whose pid now
-// belongs to a newer process, is replaced.
 func acquireLock(path string) (*lock, error) {
-	for range 3 {
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-		if err == nil {
-			host, _ := os.Hostname()
-			b, _ := json.Marshal(lockInfo{os.Getpid(), pidStart(os.Getpid()), host, time.Now().UTC().Format(time.RFC3339)})
-			_, err = f.Write(append(b, '\n'))
-			if err == nil {
-				err = f.Sync()
-			}
-			if cerr := f.Close(); err == nil {
-				err = cerr
-			}
-			if err != nil {
-				os.Remove(path)
-				return nil, err
-			}
-			syncDir(filepath.Dir(path))
-			return &lock{path}, nil
-		}
-		if !errors.Is(err, fs.ErrExist) {
-			return nil, err
-		}
-		stale, why, err := lockStale(path)
-		if err != nil {
-			return nil, err
-		}
-		if !stale {
-			return nil, errors.New(why)
-		}
-		// Of two runs that both see a stale lock, only one wins this rename.
-		aside := path + ".stale-" + randomToken()
-		if err := os.Rename(path, aside); err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
-			return nil, err
-		}
-		os.Remove(aside)
+	f, err := fslock.OpenNoFollow(path, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("%s keeps being taken by another run", path)
+	if err := fslock.LockExclusive(f); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return &lock{file: f}, nil
 }
 
-func (l *lock) release() {
-	os.Remove(l.path)
-	syncDir(filepath.Dir(l.path))
-}
-
-// lockStale says whether the lock at path was left by a process that is gone. When
-// it is not stale, why is the error to show.
-func lockStale(path string) (stale bool, why string, err error) {
-	fi, err := os.Lstat(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return true, "", nil
-	}
-	if err != nil {
-		return false, "", err
-	}
-	if !fi.Mode().IsRegular() {
-		return false, fmt.Sprintf("%s is not a lock file; remove it if no grid migrate is running", path), nil
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false, "", err
-	}
-	var info lockInfo
-	if json.Unmarshal(data, &info) != nil || info.PID <= 0 {
-		// A run that died between creating the file and writing it leaves it empty.
-		if time.Since(fi.ModTime()) > 30*time.Second {
-			return true, "", nil
-		}
-		return false, fmt.Sprintf("%s was just created by another grid migrate", path), nil
-	}
-	if host, _ := os.Hostname(); info.Host != "" && info.Host != host {
-		return false, fmt.Sprintf("%s was taken on %s; remove it if no grid migrate is running there", path, info.Host), nil
-	}
-	if !pidAlive(info.PID) {
-		return true, "", nil
-	}
-	if start := pidStart(info.PID); info.Start != "" && start != "" && start != info.Start {
-		return true, "", nil // the pid was reused by a newer process
-	}
-	return false, fmt.Sprintf("another grid migrate is running (pid %d); lock %s", info.PID, path), nil
-}
+func (l *lock) release() { fslock.Unlock(l.file); _ = l.file.Close() }
 
 const (
 	phasePreparing  = "preparing"  // backup and staged copy are being made; the home is untouched
@@ -146,14 +69,15 @@ const (
 )
 
 type journal struct {
-	Version  int    `json:"version"`
-	Phase    string `json:"phase"`
-	Source   string `json:"source"`
-	Home     string `json:"home"`
-	Backup   string `json:"backup"`
-	Stage    string `json:"stage"`
-	Previous string `json:"previous"`
-	HadHome  bool   `json:"had_home"`
+	Version  int             `json:"version"`
+	Phase    string          `json:"phase"`
+	Source   string          `json:"source"`
+	Home     string          `json:"home"`
+	Backup   string          `json:"backup"`
+	Stage    string          `json:"stage"`
+	Previous string          `json:"previous"`
+	HadHome  bool            `json:"had_home"`
+	Pointers []pointerChange `json:"pointers,omitempty"`
 }
 
 // writeJournal replaces the journal atomically, so it is never half written.
@@ -162,17 +86,7 @@ func writeJournal(j journal) error {
 	if err != nil {
 		return err
 	}
-	path := journalPath(j.Home)
-	tmp := path + ".tmp"
-	os.Remove(tmp)
-	if err := writeSynced(tmp, append(data, '\n')); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		return err
-	}
-	syncDir(filepath.Dir(path))
-	return nil
+	return task.AtomicWrite(journalPath(j.Home), append(data, '\n'))
 }
 
 func removeJournal(home string) error {
@@ -281,6 +195,9 @@ func (r *recovery) run() (Result, error) {
 	case "forward":
 		err = step("recover-renamed", os.Rename(j.Stage, j.Home))
 		if err == nil {
+			err = applyPointers(j.Pointers)
+		}
+		if err == nil {
 			err = os.RemoveAll(j.Previous)
 		}
 		res.Changed = true
@@ -291,7 +208,10 @@ func (r *recovery) run() (Result, error) {
 		}
 		res.Rerun = true
 	case "finalize":
-		err = os.RemoveAll(j.Previous)
+		err = applyPointers(j.Pointers)
+		if err == nil {
+			err = os.RemoveAll(j.Previous)
+		}
 		res.Changed = true
 	}
 	if err == nil {

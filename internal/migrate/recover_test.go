@@ -1,7 +1,6 @@
 package migrate
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -341,76 +340,33 @@ func TestUnexplainedLeftoversAreNotGuessedAt(t *testing.T) {
 }
 
 func TestLockOwnership(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "home.migrate-lock")
-	write := func(info lockInfo) {
-		os.Remove(path)
-		b, _ := json.Marshal(info)
-		put(t, path, string(b))
+	from, home := fixture(t)
+	l, err := acquireLock(lockPath(home))
+	if err != nil {
+		t.Fatal(err)
 	}
-	host, _ := os.Hostname()
-	t.Run("held by a running process", func(t *testing.T) {
-		write(lockInfo{PID: os.Getpid(), Start: pidStart(os.Getpid()), Host: host})
-		if _, err := acquireLock(path); err == nil || !strings.Contains(err.Error(), "running") {
-			t.Fatalf("took a live lock: %v", err)
-		}
-	})
-	t.Run("left by a process that is gone", func(t *testing.T) {
-		cmd := exec.Command(os.Args[0], "-test.run=^$")
-		cmd.Env = testenv.Temp(t, cmd.Environ())
-		if err := cmd.Run(); err != nil {
+	defer l.release()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestCrashHelper$", "-test.count=1")
+	cmd.Env = append(os.Environ(), "GRID_CRASH_STEP=locked", "GRID_CRASH_FROM="+from, "GRID_CRASH_HOME="+home)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Process.Kill()
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		t.Fatalf("passed a held lock: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	l.release()
+	select {
+	case err := <-done:
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) || ee.ExitCode() != crashExit {
 			t.Fatal(err)
 		}
-		write(lockInfo{PID: cmd.Process.Pid, Host: host})
-		l, err := acquireLock(path)
-		if err != nil {
-			t.Fatalf("a dead owner still holds the lock: %v", err)
-		}
-		l.release()
-		absent(t, path)
-	})
-	t.Run("pid reused by another process", func(t *testing.T) {
-		start := pidStart(os.Getpid())
-		if start == "" {
-			t.Skip("this system cannot say when a process started")
-		}
-		write(lockInfo{PID: os.Getpid(), Start: "some other start time", Host: host})
-		l, err := acquireLock(path)
-		if err != nil {
-			t.Fatalf("a reused pid still holds the lock: %v", err)
-		}
-		l.release()
-	})
-	t.Run("another computer", func(t *testing.T) {
-		write(lockInfo{PID: 1, Host: "other-host-" + host})
-		if _, err := acquireLock(path); err == nil {
-			t.Fatal("took a lock from another computer")
-		}
-	})
-	t.Run("empty file from a run that died while creating it", func(t *testing.T) {
-		os.Remove(path)
-		put(t, path, "")
-		if _, err := acquireLock(path); err == nil {
-			t.Fatal("took a lock that may be being written")
-		}
-		old := time.Now().Add(-time.Hour)
-		if err := os.Chtimes(path, old, old); err != nil {
-			t.Fatal(err)
-		}
-		l, err := acquireLock(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		l.release()
-	})
-	t.Run("a folder is not a lock", func(t *testing.T) {
-		os.Remove(path)
-		if err := os.Mkdir(path, 0700); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := acquireLock(path); err == nil {
-			t.Fatal("took a folder for a stale lock")
-		}
-		os.Remove(path)
-	})
+	case <-time.After(5 * time.Second):
+		t.Fatal("lock was not released")
+	}
 }

@@ -46,6 +46,9 @@ type manifest struct {
 // unchanged compares sizes, times and modes, not contents: it runs several times,
 // and the backup carries the checksums.
 func (p *Plan) unchanged() error {
+	if err := checkPointers(p.pointers, false); err != nil {
+		return err
+	}
 	if p.pluginData != "" {
 		current, err := snapshot(p.pluginData)
 		if err != nil {
@@ -142,6 +145,7 @@ func (p *Plan) publish(parent string) (Result, error) {
 		Stage:    p.Home + ".migrate-stage-" + token,
 		Previous: p.Home + ".migrate-previous-" + token,
 		HadHome:  len(p.destination.m) > 0,
+		Pointers: p.pointers,
 	}
 	if err := writeJournal(j); err != nil {
 		return Result{}, err
@@ -221,6 +225,9 @@ func (p *Plan) publish(parent string) (Result, error) {
 	syncDir(parent)
 	reached("published")
 	result.Changed = true
+	if err := applyPointers(j.Pointers); err != nil {
+		return result, err
+	}
 	if j.HadHome {
 		if err := os.RemoveAll(j.Previous); err != nil {
 			return result, fmt.Errorf("migration published; remove old home %s: %w", j.Previous, err)

@@ -120,11 +120,11 @@ func TestApplyTwice(t *testing.T) {
 			if layout == "in-place" {
 				absent(t, filepath.Join(home, "alpha"))
 			}
-			for _, name := range []string{".migrate-lock", ".migrate-journal"} {
+			for _, name := range []string{".migrate-journal"} {
 				absent(t, home+name)
 			}
 			for _, s := range siblings(t, home) {
-				if strings.Contains(s, ".migrate-") {
+				if strings.Contains(s, ".migrate-") && !strings.HasSuffix(s, ".migrate-lock") {
 					t.Errorf("left behind: %s", s)
 				}
 			}
@@ -133,7 +133,7 @@ func TestApplyTwice(t *testing.T) {
 }
 
 func TestApplyRefusalsLeaveDataUntouched(t *testing.T) {
-	for _, kind := range []string{"unmapped", "conflict", "stale-source", "stale-home", "backup-file", "backup-symlink", "locked"} {
+	for _, kind := range []string{"unmapped", "conflict", "stale-source", "stale-home", "backup-file", "backup-symlink"} {
 		t.Run(kind, func(t *testing.T) {
 			from, home := fixture(t)
 			put(t, filepath.Join(home, "machine"), "existing-machine\n")
@@ -154,11 +154,6 @@ func TestApplyRefusalsLeaveDataUntouched(t *testing.T) {
 			case "backup-symlink":
 				if err := os.Symlink(t.TempDir(), home+"-backup"); err != nil {
 					t.Skip(err)
-				}
-			case "locked":
-				// A lock held by a running process, here this one.
-				if _, err := acquireLock(lockPath(home)); err != nil {
-					t.Fatal(err)
 				}
 			}
 			beforeSrc, beforeHome := view(t, from), view(t, home)
@@ -304,7 +299,6 @@ func TestChangedDuringCopyIsRefused(t *testing.T) {
 	}
 	absent(t, home)
 	absent(t, journalPath(home))
-	absent(t, lockPath(home))
 	if siblingsHave(t, home, ".migrate-stage-") {
 		t.Fatal("staged copy left behind")
 	}

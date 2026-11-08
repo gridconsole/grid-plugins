@@ -41,6 +41,7 @@ type Plan struct {
 	absLinks            []string
 	pluginData          string
 	plugin              snap
+	pointers            []pointerChange
 }
 
 // Option adjusts a scan.
@@ -182,11 +183,6 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 	for _, src := range sortedKeys(projectTargets) {
 		dst := projectTargets[src]
 		p.copyPrefix(src, dst, handled)
-		for _, f := range p.source.below(src) {
-			if path.Base(f) == ".git" {
-				p.Unmapped = append(p.Unmapped, f+": embedded git metadata needs separate relocation")
-			}
-		}
 		p.projectRecord(src, dst)
 		for _, task := range children(p.source, path.Join(src, "tasks")) {
 			p.taskRecord(path.Join(src, "tasks", task), path.Join(dst, "tasks", task), path.Base(dst))
@@ -205,18 +201,6 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 			dst, ok := projectTargets[path.Join(h, "projects", name)]
 			if !ok {
 				p.Unmapped = append(p.Unmapped, src+": no matching project")
-				continue
-			}
-			// Moving live git worktrees needs writes to the original repo's git metadata.
-			linked := false
-			for _, f := range p.source.below(src) {
-				if path.Base(f) == ".git" {
-					linked = true
-					break
-				}
-			}
-			if linked {
-				p.Unmapped = append(p.Unmapped, src+": git worktree needs repository metadata repair; leave stopped and relocate separately")
 				continue
 			}
 			target := path.Join(dst, "worktrees")
@@ -241,6 +225,7 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 	}
 	homeSet["CLAUDE_PLUGIN_DATA"] = true
 	p.rewriteSessions(homeSet, paths)
+	p.rewriteWorktrees(paths)
 	for _, f := range p.source.below("") {
 		if handled[f] {
 			continue
