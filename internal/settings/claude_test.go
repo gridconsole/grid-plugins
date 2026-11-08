@@ -487,3 +487,22 @@ func equalClaudeJSON(a, b []byte) bool {
 	var ac, bc bytes.Buffer
 	return json.Compact(&ac, a) == nil && json.Compact(&bc, b) == nil && bytes.Equal(ac.Bytes(), bc.Bytes())
 }
+
+func TestClaudeProjectPatternCharactersRefused(t *testing.T) {
+	for _, character := range []string{"(", ")", "[", "]", "*", "?", "\n", "\r"} {
+		for _, location := range []string{"inside home", "outside home"} {
+			t.Run(location+"/"+character, func(t *testing.T) {
+				root := t.TempDir()
+				home := filepath.Join(root, "user")
+				parent := home
+				if location == "outside home" {
+					parent = root
+				}
+				projects := filepath.Join(parent, "work"+character)
+				if _, err := claudeBlock(home, filepath.Join(home, ".grid"), projects); err == nil || err.Error() != "Grid projects contains permission pattern characters" {
+					t.Fatalf("unsafe project anchor: %v", err)
+				}
+			})
+		}
+	}
+}

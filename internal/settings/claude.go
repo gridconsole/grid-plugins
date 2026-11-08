@@ -80,9 +80,6 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 // filesystem-absolute (a single / would be relative to the settings source).
 func claudeProjectAnchor(home, projects string) (string, error) {
 	anchor := filepath.ToSlash(projects)
-	if strings.ContainsAny(anchor, "*?[]()\n\r") {
-		return "", errors.New("Grid projects contains permission pattern characters")
-	}
 	rel, err := filepath.Rel(home, projects)
 	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		anchor = "~"
@@ -95,6 +92,9 @@ func claudeProjectAnchor(home, projects string) (string, error) {
 			anchor = "/" + strings.ToLower(volume[:1]) + anchor[len(volume):]
 		}
 		anchor = "//" + strings.TrimLeft(anchor, "/")
+	}
+	if strings.ContainsAny(anchor, "*?[]()\n\r") {
+		return "", errors.New("Grid projects contains permission pattern characters")
 	}
 	parts := strings.Split(anchor, "/")
 	for i, part := range parts {

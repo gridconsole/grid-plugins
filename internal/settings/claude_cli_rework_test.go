@@ -18,7 +18,10 @@ import (
 func TestClaudeReworkCLIProjectAnchors(t *testing.T) {
 	for _, location := range []string{"default", "outside grid", "outside home", "relative"} {
 		t.Run(location, func(t *testing.T) {
-			root := t.TempDir()
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
 			home := filepath.Join(root, "home")
 			projects := ""
 			anchor := "~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]"
@@ -62,6 +65,47 @@ func TestClaudeReworkCLIProjectAnchors(t *testing.T) {
 			for _, tool := range []string{"Edit", "Write"} {
 				if !slices.Contains(doc.Permissions.Deny, tool+"(~/.grid/setup/**)") {
 					t.Errorf("missing %s setup protection", tool)
+				}
+			}
+		})
+	}
+}
+
+func TestClaudeCLIHomePatternCharacters(t *testing.T) {
+	for _, name := range []string{"John (Work)", "John [Work]", "John *", "John ?"} {
+		t.Run(name, func(t *testing.T) {
+			if runtime.GOOS == "windows" && strings.ContainsAny(name, "*?") {
+				t.Skip("character is not allowed in Windows directory names")
+			}
+			home := filepath.Join(t.TempDir(), name)
+			var out, stderr bytes.Buffer
+			env := cli.Env{Home: home, GridHome: filepath.Join(home, ".grid"), Cwd: home,
+				Stdin: strings.NewReader(""), Stdout: &out, Stderr: &stderr,
+				Getenv: func(string) string { return "" },
+			}
+			for _, args := range [][]string{{"setup", "--yes"}, {"setup", "--remove", "--yes"}} {
+				out.Reset()
+				stderr.Reset()
+				if code := cli.Run(args, env); code != 0 {
+					t.Fatalf("%v: code=%d: %s", args, code, &stderr)
+				}
+				data, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var doc struct {
+					Permissions struct{ Allow, Deny []string }
+				}
+				if err := json.Unmarshal(data, &doc); err != nil {
+					t.Fatal(err)
+				}
+				if len(args) == 2 {
+					if !slices.Contains(doc.Permissions.Allow, "Edit(~/.grid/**)") ||
+						!slices.Contains(doc.Permissions.Deny, "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])") {
+						t.Fatal("missing home-relative rules")
+					}
+				} else if len(doc.Permissions.Allow)+len(doc.Permissions.Deny) != 0 {
+					t.Fatal("owned rules remain after removal")
 				}
 			}
 		})
