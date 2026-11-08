@@ -492,9 +492,14 @@ func TestReadyCanonicalOrder(t *testing.T) {
 	}
 }
 
+// The person layer admits only person answers on a person gate; any other gate
+// kind keeps the contract's rule, so a ci gate opens on an answer from any role.
 func TestGateKinds(t *testing.T) {
-	for _, kind := range []string{"person", "timer", "ci", "job"} {
-		t.Run(kind, func(t *testing.T) {
+	for _, row := range []struct{ kind, role string }{
+		{"person", "owner"}, {"timer", ""}, {"ci", "owner"}, {"ci", "worker"}, {"ci", "reviewer"}, {"ci", "agent"}, {"job", ""},
+	} {
+		kind := row.kind
+		t.Run(kind+"/"+row.role, func(t *testing.T) {
 			f := setup(t)
 			f.job(t, "J-1", []any{"gate:Q-1"})
 			gate := map[string]any{"id": "Q-1", "kind": kind}
@@ -521,7 +526,7 @@ func TestGateKinds(t *testing.T) {
 					t.Fatal(err)
 				}
 			default:
-				f.post(t, feed.Input{Type: "answer", Re: q.ID, Body: map[string]any{"answer": "Proceed"}}, feed.Writer{Author: feed.Author{ID: "owner", Role: "owner"}, Worker: "owner@" + machine})
+				f.post(t, feed.Input{Type: "answer", Re: q.ID, Body: map[string]any{"answer": "Proceed"}}, feed.Writer{Author: feed.Author{ID: row.role, Role: row.role}, Worker: row.role + "@" + machine})
 			}
 			if f.tick(t).Assigned != 1 {
 				t.Fatal("gate did not open")
