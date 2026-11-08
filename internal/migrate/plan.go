@@ -39,6 +39,8 @@ type Plan struct {
 	recovery            *recovery
 	sums                map[string]string
 	absLinks            []string
+	pluginData          string
+	plugin              snap
 }
 
 // Option adjusts a scan.
@@ -46,6 +48,9 @@ type Option func(*Plan)
 
 // WithCeiling stops the walk for a project's git repo at dir, as grid where does.
 func WithCeiling(dir string) Option { return func(p *Plan) { p.ceiling = dir } }
+
+// WithPluginData selects the old hook data folder (defaults to CLAUDE_PLUGIN_DATA).
+func WithPluginData(dir string) Option { return func(p *Plan) { p.pluginData = dir } }
 
 // pendingMachine stands in for the machine id in a plan made before one exists.
 const pendingMachine = "MACHINE-ID-MADE-ON-APPLY"
@@ -61,7 +66,7 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 	if from != home && within(home, from) {
 		return nil, fmt.Errorf("destination must not be inside the source")
 	}
-	p := &Plan{From: from, Home: home, sums: map[string]string{}}
+	p := &Plan{From: from, Home: home, sums: map[string]string{}, pluginData: os.Getenv("CLAUDE_PLUGIN_DATA")}
 	for _, o := range opts {
 		o(p)
 	}
@@ -231,6 +236,10 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 		e.Src = filepath.Join(from, "machine")
 		p.add("copy", "machine", "machine", e)
 	}
+	if err := p.pluginSessions(); err != nil {
+		return nil, err
+	}
+	homeSet["CLAUDE_PLUGIN_DATA"] = true
 	p.rewriteSessions(homeSet, paths)
 	for _, f := range p.source.below("") {
 		if handled[f] {
@@ -354,8 +363,6 @@ func (p *Plan) rewriteSessions(homes map[string]bool, paths map[string]string) {
 		}
 		var data []byte
 		switch path.Ext(a.From) {
-		case ".usage", ".recalled":
-			continue
 		case ".json":
 			raw, err := readSmall(e.Src, e.Size)
 			if err == nil {
@@ -366,6 +373,10 @@ func (p *Plan) rewriteSessions(homes map[string]bool, paths map[string]string) {
 				continue
 			}
 		default:
+			ext := path.Ext(a.From)
+			if ext != "" && ext != ".attached" && ext != ".planner" && ext != ".tasks" && !strings.HasPrefix(ext, ".tasks-") {
+				continue
+			}
 			raw, err := readSmall(e.Src, e.Size)
 			if err != nil {
 				p.Unmapped = append(p.Unmapped, a.From+": "+err.Error())
@@ -376,11 +387,16 @@ func (p *Plan) rewriteSessions(homes map[string]bool, paths map[string]string) {
 				if line == "" {
 					continue
 				}
+				ending := ""
+				if strings.HasSuffix(line, "\r") {
+					line = strings.TrimSuffix(line, "\r")
+					ending = "\r"
+				}
 				mapped, ok := mapPath(line, paths)
 				if !ok {
 					p.Unmapped = append(p.Unmapped, a.From+": session pointer cannot map "+line)
 				}
-				lines[i] = mapped
+				lines[i] = mapped + ending
 			}
 			data = []byte(strings.Join(lines, "\n"))
 		}
@@ -722,4 +738,27 @@ func (p *Plan) checkIdentities() {
 			}
 		}
 	}
+}
+
+// pluginSessions imports hook pointers and usage without changing the old plugin data.
+func (p *Plan) pluginSessions() error {
+	if p.pluginData == "" {
+		return nil
+	}
+	p.pluginData = gridhome.Real(filepath.Join(p.pluginData, "sessions"))
+	var err error
+	p.plugin, err = snapshot(p.pluginData)
+	if err != nil {
+		return fmt.Errorf("CLAUDE_PLUGIN_DATA sessions: %w", err)
+	}
+	for _, rel := range p.plugin.keys {
+		e := p.plugin.m[rel]
+		if isSpecial(e.Mode) {
+			p.Unmapped = append(p.Unmapped, "CLAUDE_PLUGIN_DATA/sessions/"+rel+": cannot copy special file")
+			continue
+		}
+		e.Src = filepath.Join(p.pluginData, filepath.FromSlash(rel))
+		p.add("copy", path.Join("CLAUDE_PLUGIN_DATA/sessions", rel), path.Join("sessions", rel), e)
+	}
+	return nil
 }

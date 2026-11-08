@@ -39,11 +39,22 @@ type manifest struct {
 	Actions     []Action          `json:"actions"`
 	SourceFiles map[string]digest `json:"source_files"`
 	HomeFiles   map[string]digest `json:"home_files,omitempty"`
+	PluginData  string            `json:"plugin_data,omitempty"`
+	PluginFiles map[string]digest `json:"plugin_files,omitempty"`
 }
 
 // unchanged compares sizes, times and modes, not contents: it runs several times,
 // and the backup carries the checksums.
 func (p *Plan) unchanged() error {
+	if p.pluginData != "" {
+		current, err := snapshot(p.pluginData)
+		if err != nil {
+			return err
+		}
+		if !equalMeta(current, p.plugin) {
+			return fmt.Errorf("CLAUDE_PLUGIN_DATA sessions changed since planning; stop writers and run migrate again")
+		}
+	}
 	src, err := snapshot(p.From)
 	if err != nil {
 		return err
@@ -155,6 +166,12 @@ func (p *Plan) publish(parent string) (Result, error) {
 	}
 	if p.From != p.Home && len(p.destination.m) > 0 {
 		if man.HomeFiles, err = backupTree(filepath.Join(j.Backup, "home"), p.destination, p.Home); err != nil {
+			return fail(err)
+		}
+	}
+	if len(p.plugin.m) > 0 {
+		man.PluginData = p.pluginData
+		if man.PluginFiles, err = backupTree(filepath.Join(j.Backup, "plugin-sessions"), p.plugin, p.pluginData); err != nil {
 			return fail(err)
 		}
 	}
