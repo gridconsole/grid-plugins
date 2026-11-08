@@ -152,7 +152,7 @@ func TestTaskGrantPreparesBeforeTheTenure(t *testing.T) {
 	if _, err := s.TakeTask(w, 42, start); !errors.Is(err, failed) {
 		t.Fatal(err)
 	}
-	if current, err := s.Read("task"); err != nil || current.Holder != nil {
+	if current, err := s.Read("task"); err == nil || current.Holder != nil {
 		t.Fatalf("failed prepare granted: %+v %v", current, err)
 	}
 	s.BeforeTaskGrant = nil
