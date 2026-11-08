@@ -438,10 +438,10 @@ func TestCommand(t *testing.T) {
 	env, s, out, errout := commandEnv(t)
 	calls := [][]string{
 		{"add", "Which format?", "--who", "owner", "--option", "CSV", "--option", "JSON", "--recommended", "CSV", "--default", "CSV", "--applies", "2026-11-09T10:00:00Z", "--blocking"},
-		{"answer", "Q-1", "JSON", "--json", "--task", s.TaskDir},
+
 		{"tick", "--task", s.TaskDir},
 		{"add", "Ship today?", "--option", "Yes", "--recommended", "Yes", "--default", "Yes", "--applies", "2026-11-09T10:00:00Z"},
-		{"withdraw", "Q-2", "--by", "reviewer", "--reason", "Shipped"},
+		{"withdraw", "Q-2", "--reason", "Shipped"},
 	}
 	for _, args := range calls {
 		out.Reset()
@@ -450,10 +450,13 @@ func TestCommand(t *testing.T) {
 			t.Fatalf("%v: %d %s", args, code, errout)
 		}
 	}
+	if code := RunAnswer([]string{s.TaskDir, "Q-1", "JSON", "--json"}, env); code != 0 {
+		t.Fatalf("answer: %d %s", code, errout)
+	}
 	if r := list(t, s)[0]; r.State != "answered" || r.Answer != "JSON" {
 		t.Fatal(r)
 	}
-	if r := list(t, s)[1]; r.State != "withdrawn" || r.History[0].Who != "reviewer" || r.History[0].Text != "Shipped" {
+	if r := list(t, s)[1]; r.State != "withdrawn" || r.History[0].Who != "cli" || r.History[0].Text != "Shipped" {
 		t.Fatal(r)
 	}
 	for _, args := range [][]string{nil, {"bad"}, {"answer"}, {"withdraw"}, {"list", "extra"}, {"add", "--applies", "bad"}, {"list", "--bad"}} {

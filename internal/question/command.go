@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -17,6 +18,7 @@ type Env struct {
 	Resolver       where.Resolver
 	Stdout, Stderr io.Writer
 	Now            func() time.Time
+	Writer         func(bool) (feed.Writer, error)
 }
 
 type options []string
@@ -26,8 +28,29 @@ func (o *options) Set(v string) error { *o = append(*o, v); return nil }
 
 // Run is the command adapter; the store is also callable by hooks and workers.
 func Run(args []string, env Env) int {
+	if len(args) > 0 && args[0] == "answer" {
+		fmt.Fprintln(env.Stderr, "question: unknown action \"answer\"")
+		return 2
+	}
+	return run(args, env)
+}
+
+// RunAnswer is the sole answer command, with an explicit task operand.
+func RunAnswer(args []string, env Env) int {
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
+		fmt.Fprintln(env.Stdout, `Usage: grid answer <task> Q-N "text" [--json]`)
+		return 0
+	}
+	if len(args) < 3 {
+		fmt.Fprintln(env.Stderr, `Usage: grid answer <task> Q-N "text" [--json]`)
+		return 2
+	}
+	return run(append([]string{"answer", "--task", args[0]}, args[1:]...), env)
+}
+
+func run(args []string, env Env) int {
 	if len(args) == 0 {
-		fmt.Fprintln(env.Stderr, "Usage: grid question add|answer|withdraw|list|tick [--task <path>] [--json]")
+		fmt.Fprintln(env.Stderr, "Usage: grid question add|withdraw|list|tick [--task <path>] [--json]")
 		return 2
 	}
 	action := args[0]
@@ -41,7 +64,7 @@ func Run(args []string, env Env) int {
 	asJSON := fs.Bool("json", false, "print JSON")
 	var in Input
 	var opts options
-	var applies, by, reason string
+	var applies, reason string
 	if action == "add" {
 		fs.StringVar(&in.Question, "question", "", "question text (or a positional argument)")
 		fs.StringVar(&in.Who, "who", "owner", "person asked")
@@ -53,11 +76,7 @@ func Run(args []string, env Env) int {
 		fs.BoolVar(&in.Blocking, "blocking", false, "whether this question blocks work")
 		fs.DurationVar(&in.AgeAfter, "age-after", DefaultAgeAfter, "raise priority after this interval, at most twice")
 	}
-	if action == "answer" {
-		fs.StringVar(&by, "by", "", "answer author; defaults to the person asked")
-	}
 	if action == "withdraw" {
-		fs.StringVar(&by, "by", "", "who withdraws the question; defaults to cli")
 		fs.StringVar(&reason, "reason", "No longer needed", "reason for withdrawing")
 	}
 	// Permit flags before or after operands. -- protects literal option/text
@@ -137,6 +156,15 @@ func Run(args []string, env Env) int {
 		return 1
 	}
 	store := Store{TaskDir: scope.TaskPath, Now: env.Now, Warn: env.Stderr}
+	by := "cli"
+	if env.Writer != nil && action != "list" {
+		writer, e := env.Writer(action == "withdraw" || action == "tick")
+		if e != nil {
+			fmt.Fprintln(env.Stderr, "question:", e)
+			return 1
+		}
+		by = writer.Author.ID
+	}
 	var result any
 	switch action {
 	case "add":
