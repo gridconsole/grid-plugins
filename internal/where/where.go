@@ -2,7 +2,7 @@
 // The rules follow plugin-design.md, "How a session finds its project", in this order:
 //
 //  1. an explicit task or project wins
-//  2. a folder inside a task folder is that task
+//  2. a folder inside a task folder (projects/<p>/tasks/ or personal/tasks/) is that task
 //  3. the nearest folder above that a project record lists is that project
 //  4. a folder outside git that holds git repos (depth 2) is a multi-repo project
 //  5. a git repo is a one-repo project, keyed by git-common-dir and remote, or by its
@@ -40,7 +40,8 @@ const (
 )
 
 // Personal is the project for home, the root, temp folders and the Grid home itself.
-const Personal = "Personal"
+// Its tasks live in <grid home>/personal/tasks, not under projects/.
+const Personal = gridhome.Personal
 
 // Resolver holds the machine facts a resolution needs, so tests can set them.
 // Machine is this machine's id, "" before the first record is written here.
@@ -129,30 +130,37 @@ func (r Resolver) implicit(gridHome, cwd string, records []project.Record) Resul
 
 func (r Resolver) explicit(gridHome, cwd string, q Query, records []project.Record) (Result, error) {
 	var rec *project.Record
-	if q.Project != "" {
+	name := ""
+	switch {
+	case strings.EqualFold(q.Project, Personal):
+		name = Personal // Personal has no project record
+	case q.Project != "":
 		found, ok := findProject(records, q.Project)
 		if !ok {
 			return Result{}, fmt.Errorf("project %q is not in %s", q.Project, filepath.Join(gridHome, "projects"))
 		}
-		rec = &found
+		rec, name = &found, found.Name
 	}
 	if q.Task == "" {
+		if rec == nil {
+			return newResult(RuleExplicit, Personal, cwd), nil
+		}
 		return r.fromRecord(*rec, RuleExplicit, r.firstFolder(*rec)), nil
 	}
-	proj, task, err := r.explicitTask(gridHome, cwd, q.Task, rec, records)
+	proj, task, err := r.explicitTask(gridHome, cwd, q.Task, name, records)
 	if err != nil {
 		return Result{}, err
 	}
-	if rec != nil && rec.Name != proj {
-		return Result{}, fmt.Errorf("task %s belongs to project %s, not %s", task, proj, rec.Name)
+	if name != "" && name != proj {
+		return Result{}, fmt.Errorf("task %s belongs to project %s, not %s", task, proj, name)
 	}
 	return r.taskResult(gridHome, records, RuleExplicit, proj, task), nil
 }
 
 // explicitTask turns --task into a project and task folder name. A path is refused
-// unless it is inside the Grid home; an id is looked up in the explicit project, else
-// in the project the folder resolves to.
-func (r Resolver) explicitTask(gridHome, cwd, arg string, rec *project.Record, records []project.Record) (string, string, error) {
+// unless it is inside the Grid home; an id is looked up in the explicit project
+// (name), else in the project the folder resolves to.
+func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []project.Record) (string, string, error) {
 	if strings.ContainsAny(arg, "/"+string(filepath.Separator)) || strings.HasPrefix(arg, ".") {
 		abs := arg
 		if !filepath.IsAbs(abs) {
@@ -166,21 +174,21 @@ func (r Resolver) explicitTask(gridHome, cwd, arg string, rec *project.Record, r
 		if !ok {
 			return "", "", fmt.Errorf("%s is not inside a task folder of %s", real, gridHome)
 		}
-		if _, err := os.Stat(filepath.Join(gridHome, "projects", proj, "tasks", task)); err != nil {
-			return "", "", fmt.Errorf("task folder %s does not exist", filepath.Join(gridHome, "projects", proj, "tasks", task))
+		dir := filepath.Join(gridhome.TasksDir(gridHome, proj), task)
+		if _, err := os.Stat(dir); err != nil {
+			return "", "", fmt.Errorf("task folder %s does not exist", dir)
 		}
 		return proj, task, nil
 	}
-	name := ""
-	if rec != nil {
-		name = rec.Name
-	} else if res := r.implicit(gridHome, cwd, records); res.Record || res.Task != "" {
-		name = res.Project
+	if name == "" {
+		if res := r.implicit(gridHome, cwd, records); res.Record || res.Task != "" {
+			name = res.Project
+		}
 	}
 	if name == "" {
 		return "", "", fmt.Errorf("task %s needs --project: this folder is in no project with a record", arg)
 	}
-	entries, err := os.ReadDir(filepath.Join(gridHome, "projects", name, "tasks"))
+	entries, err := os.ReadDir(gridhome.TasksDir(gridHome, name))
 	if err != nil {
 		return "", "", fmt.Errorf("task %s not found in project %s", arg, name)
 	}
@@ -192,13 +200,17 @@ func (r Resolver) explicitTask(gridHome, cwd, arg string, rec *project.Record, r
 	return "", "", fmt.Errorf("task %s not found in project %s", arg, name)
 }
 
-// taskParts splits <grid home>/projects/<project>/tasks/<task>[/...].
+// taskParts splits <grid home>/projects/<project>/tasks/<task>[/...], or
+// <grid home>/personal/tasks/<task>[/...] for Personal.
 func taskParts(gridHome, path string) (proj, task string, ok bool) {
 	rel, err := filepath.Rel(gridHome, path)
 	if err != nil {
 		return "", "", false
 	}
 	parts := strings.Split(rel, string(filepath.Separator))
+	if len(parts) >= 3 && parts[0] == Personal && parts[1] == "tasks" && taskName.MatchString(parts[2]) {
+		return Personal, parts[2], true
+	}
 	if len(parts) < 4 || parts[0] != "projects" || parts[2] != "tasks" || !taskName.MatchString(parts[3]) {
 		return "", "", false
 	}
@@ -268,11 +280,11 @@ func (r Resolver) fromRecord(rec project.Record, rule Rule, folder string) Resul
 
 func (r Resolver) taskResult(gridHome string, records []project.Record, rule Rule, proj, task string) Result {
 	res := newResult(rule, proj, "")
-	if rec, ok := byName(records, proj); ok {
+	if rec, ok := byName(records, proj); ok && proj != Personal {
 		res = r.fromRecord(rec, rule, r.firstFolder(rec))
 	}
 	res.Task = task
-	res.TaskPath = filepath.Join(gridHome, "projects", proj, "tasks", task)
+	res.TaskPath = filepath.Join(gridhome.TasksDir(gridHome, proj), task)
 	return res
 }
 

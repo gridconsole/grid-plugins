@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -195,7 +196,7 @@ func scopedSessions(env Env, scope where.Result) ([]sessionView, error) {
 	if scope.TaskPath != "" {
 		return recordsForTask(scope.TaskPath, scope.Task)
 	}
-	dir := filepath.Join(env.GridHome, "projects", scope.Project, "tasks")
+	dir := gridhome.TasksDir(env.GridHome, scope.Project)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return records, nil

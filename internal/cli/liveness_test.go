@@ -110,6 +110,44 @@ func TestSessionCommands(t *testing.T) {
 	}
 }
 
+func TestSessionCommandsReachAPersonalTask(t *testing.T) {
+	h := newHarness(t)
+	task := filepath.Join(h.gridHome, "personal", "tasks", "T-01-note")
+	h.mkdir(task)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := session.Store{TaskDir: task, Now: func() time.Time { return now }}
+	record := session.Record{Key: session.Key{SessionID: "session-1", MachineID: "machine-1"}, PID: 42, PIDStart: "start-1"}
+	if _, err := store.Start(record); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		cwd  string
+		args []string
+	}{
+		{"inside the task", filepath.Join(task, "artifacts"), []string{"session", "list", "--json"}},
+		{"project personal", h.tmp, []string{"session", "list", "--project", "personal", "--json"}},
+		{"project Personal from the Grid home", h.gridHome, []string{"session", "list", "--project", "Personal", "--json"}},
+	} {
+		h.out.Reset()
+		if code := h.run(tc.cwd, tc.args...); code != 0 {
+			t.Fatalf("%s: %d %s", tc.name, code, h.errb)
+		}
+		var views []sessionView
+		if err := json.Unmarshal(h.out.Bytes(), &views); err != nil || len(views) != 1 || views[0].SessionID != "session-1" || views[0].Task != "T-01-note" {
+			t.Fatalf("%s: %+v %v %s", tc.name, views, err, h.out)
+		}
+	}
+	h.out.Reset()
+	if code := h.run(h.tmp, "session", "show", "session-1", "--project", "personal", "--task", "T-01", "--json"); code != 0 {
+		t.Fatalf("show by id: %d %s", code, h.errb)
+	}
+	var view sessionView
+	if err := json.Unmarshal(h.out.Bytes(), &view); err != nil || view.SessionID != "session-1" {
+		t.Fatalf("show by id: %+v %v", view, err)
+	}
+}
+
 func TestLivenessCommandUsage(t *testing.T) {
 	h := newHarness(t)
 	for _, args := range [][]string{

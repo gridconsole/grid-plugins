@@ -224,7 +224,7 @@ Every command except `help`, `version`, `doctor` and `migrate` first checks the 
 ### `grid where --json [--task <path or id>] [--project <name or id>]`
 
     {
-      "project":   string,    // project folder name under <GRID_HOME>/projects, or "Personal"
+      "project":   string,    // project folder name under <GRID_HOME>/projects, or "personal" (tasks in <GRID_HOME>/personal/tasks)
       "id":        string,    // the record's id; "" without a record
       "rule":      "explicit" | "task" | "record" | "multi-repo" | "git" | "folder" | "personal",
       "folder":    string,    // the project folder on this machine, the current folder for Personal; "" when unknown

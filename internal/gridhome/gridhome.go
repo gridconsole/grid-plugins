@@ -2,7 +2,9 @@
 package gridhome
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -92,4 +94,34 @@ func ReadFormat(dir string) (int, error) {
 		return 0, fmt.Errorf("VERSION does not hold a number")
 	}
 	return n, nil
+}
+
+// Personal is the project name, and the top-level folder name, of tasks that
+// belong to no project.
+const Personal = "personal"
+
+// TasksDir is the folder under home that holds a project's task folders:
+// personal/tasks for Personal, else projects/<project>/tasks. It is the one
+// owner of that layout.
+func TasksDir(home, proj string) string {
+	if proj == Personal {
+		return filepath.Join(home, Personal, "tasks")
+	}
+	return filepath.Join(home, "projects", proj, "tasks")
+}
+
+// TasksDirs lists the task folders of Personal and of every project folder
+// under home, whether or not they exist yet.
+func TasksDirs(home string) ([]string, error) {
+	dirs := []string{TasksDir(home, Personal)}
+	entries, err := os.ReadDir(filepath.Join(home, "projects"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs = append(dirs, TasksDir(home, e.Name()))
+		}
+	}
+	return dirs, nil
 }

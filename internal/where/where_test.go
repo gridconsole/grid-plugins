@@ -82,6 +82,22 @@ func (f *fixture) task(project, task string) string {
 	return p
 }
 
+// personalTask makes <grid home>/personal/tasks/<task>, where Personal tasks live.
+func (f *fixture) personalTask(task string) string {
+	f.t.Helper()
+	p := filepath.Join(f.gridHome, "personal", "tasks", task)
+	if err := os.MkdirAll(filepath.Join(p, "artifacts"), 0o755); err != nil {
+		f.t.Fatal(err)
+	}
+	return p
+}
+
+func wantPersonalTask(rule Rule, folder, task, path string) Result {
+	w := want(rule, Personal, folder)
+	w.Task, w.TaskPath = task, path
+	return w
+}
+
 func want(rule Rule, name, folder string) Result {
 	return Result{Project: name, Rule: rule, Folder: folder, Repos: []string{}, Keys: []string{}}
 }
@@ -128,6 +144,25 @@ func resolveCases() []resolveCase {
 			w := want(RuleExplicit, "example", folder)
 			w.Record, w.Task, w.TaskPath = true, "T-07-first", path
 			return Query{Cwd: filepath.Join(folder), Task: "T-07-first"}, w
+		}},
+		{"rule 1: explicit project personal needs no record", func(f *fixture) (Query, Result) {
+			return Query{Cwd: f.tmp, Project: "Personal"}, want(RuleExplicit, Personal, f.tmp)
+		}},
+		{"rule 1: explicit Personal task by path", func(f *fixture) (Query, Result) {
+			path := f.personalTask("T-03-note")
+			return Query{Cwd: f.dir("work", "elsewhere"), Task: filepath.Join(path, "artifacts")}, wantPersonalTask(RuleExplicit, "", "T-03-note", path)
+		}},
+		{"rule 1: explicit Personal task id with project personal", func(f *fixture) (Query, Result) {
+			path := f.personalTask("T-03-note")
+			return Query{Cwd: f.tmp, Task: "T-03", Project: "personal"}, wantPersonalTask(RuleExplicit, "", "T-03-note", path)
+		}},
+		{"rule 1: explicit Personal task id from inside a Personal task", func(f *fixture) (Query, Result) {
+			path := f.personalTask("T-03-note")
+			return Query{Cwd: path, Task: "T-03"}, wantPersonalTask(RuleExplicit, "", "T-03-note", path)
+		}},
+		{"rule 2: inside a Personal task folder", func(f *fixture) (Query, Result) {
+			path := f.personalTask("T-03-note")
+			return Query{Cwd: filepath.Join(path, "artifacts")}, wantPersonalTask(RuleTask, "", "T-03-note", path)
 		}},
 		{"rule 2: inside a task folder", func(f *fixture) (Query, Result) {
 			f.record(project.Record{Name: "example", ID: "01EXAMPLE"})
@@ -386,6 +421,17 @@ func TestResolveRefusals(t *testing.T) {
 			f.task("example", "T-01-a")
 			return Query{Cwd: f.tmp, Task: "T-02", Project: "example"}
 		}, "not found"},
+		{"Personal task under another project", func(f *fixture) Query {
+			f.record(project.Record{Name: "one", ID: "01ONE"})
+			return Query{Cwd: f.tmp, Task: f.personalTask("T-01-a"), Project: "one"}
+		}, "belongs to project personal, not one"},
+		{"Personal task id that is not there", func(f *fixture) Query {
+			f.personalTask("T-01-a")
+			return Query{Cwd: f.tmp, Task: "T-02", Project: "personal"}
+		}, "not found in project personal"},
+		{"Personal task folder that does not exist", func(f *fixture) Query {
+			return Query{Cwd: f.tmp, Task: filepath.Join(f.gridHome, "personal", "tasks", "T-99-gone")}
+		}, "does not exist"},
 		{"task of another project", func(f *fixture) Query {
 			f.record(project.Record{Name: "one", ID: "01ONE"})
 			f.record(project.Record{Name: "two", ID: "01TWO"})

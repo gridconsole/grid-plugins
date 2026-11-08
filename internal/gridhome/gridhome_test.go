@@ -3,6 +3,7 @@ package gridhome
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -85,5 +86,36 @@ func TestReal(t *testing.T) {
 	}
 	if got, want := Real(filepath.Join(link, "not", "yet")), filepath.Join(root, "not", "yet"); got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestTasksDir(t *testing.T) {
+	home := filepath.Join(t.TempDir(), ".grid")
+	if got, want := TasksDir(home, Personal), filepath.Join(home, "personal", "tasks"); got != want {
+		t.Errorf("Personal: got %q, want %q", got, want)
+	}
+	if got, want := TasksDir(home, "example"), filepath.Join(home, "projects", "example", "tasks"); got != want {
+		t.Errorf("project: got %q, want %q", got, want)
+	}
+}
+
+func TestTasksDirs(t *testing.T) {
+	home := filepath.Join(t.TempDir(), ".grid")
+	dirs, err := TasksDirs(home)
+	if err != nil || len(dirs) != 1 || dirs[0] != TasksDir(home, Personal) {
+		t.Fatalf("empty home: %v, %v", dirs, err)
+	}
+	for _, name := range []string{"b", "a"} {
+		if err := os.MkdirAll(filepath.Join(home, "projects", name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(home, "projects", "stray.txt"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dirs, err = TasksDirs(home)
+	want := []string{TasksDir(home, Personal), TasksDir(home, "a"), TasksDir(home, "b")}
+	if err != nil || !reflect.DeepEqual(dirs, want) {
+		t.Fatalf("got %v, %v; want %v", dirs, err, want)
 	}
 }
