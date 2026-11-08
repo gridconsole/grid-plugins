@@ -92,6 +92,9 @@ func (s Store) resolve(cwd, proj string) (where.Result, error) {
 	if s.Resolver.GridHome == "" {
 		return where.Result{}, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
+	if s.Resolver.Machine == "" {
+		s.Resolver.Machine = gridhome.Machine(s.Resolver.GridHome)
+	}
 	if strings.EqualFold(proj, "personal") {
 		return where.Result{Project: "personal", Rule: where.RulePersonal}, nil
 	}
@@ -182,7 +185,7 @@ func (s Store) Show(cwd, id string) (Task, error) {
 		if r.TaskPath == "" {
 			return Task{}, errors.New("give a task id (T-NN), or run inside a task folder")
 		}
-		return Read(r.TaskPath)
+		return readProject(r.TaskPath, r.Project)
 	}
 	paths, err := folders(taskDir(s.Resolver.GridHome, r.Project))
 	if err != nil {
@@ -201,7 +204,15 @@ func (s Store) Show(cwd, id string) (Task, error) {
 	if found == "" {
 		return Task{}, fmt.Errorf("task %s not found in project %s", id, r.Project)
 	}
-	return Read(found)
+	return readProject(found, r.Project)
+}
+
+func readProject(path, proj string) (Task, error) {
+	t, err := Read(path)
+	if err == nil && t.Project != proj {
+		return Task{}, fmt.Errorf("task %s has project %q, expected %q", path, t.Project, proj)
+	}
+	return t, err
 }
 
 // List returns tasks in numeric id order, with an optional exact state filter.

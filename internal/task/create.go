@@ -204,7 +204,7 @@ func slug(title string) string {
 	if b.Len() == 0 {
 		return "task"
 	}
-	return b.String()
+	return strings.TrimRight(b.String()[:min(b.Len(), 60)], "-")
 }
 
 func (s Store) register(r where.Result, now time.Time) error {

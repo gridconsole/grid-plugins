@@ -177,7 +177,12 @@ func TestProjectRegistration(t *testing.T) {
 			if kind == "multi-repo" && len(rec.Repos) != 2 {
 				t.Fatalf("multi-repo record %+v", rec)
 			}
-			s.Resolver.Machine = gridhome.Machine(s.Resolver.GridHome)
+			if kind != "explicit" {
+				listed, err := s.List(cwd, "", "")
+				if err != nil || len(listed) != 2 {
+					t.Fatalf("read after first registration: %d tasks, %v", len(listed), err)
+				}
+			}
 			if _, err := s.Show(first.Path, first.ID); err != nil {
 				t.Fatal(err)
 			}
@@ -257,6 +262,49 @@ func TestFold(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNumericListOrderAndProjectMismatch(t *testing.T) {
+	s, home := storeFor(t)
+	first, err := s.New(NewOptions{Cwd: home, Words: "First task"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(first.Path, "task.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"T-100", "T-99"} {
+		path := filepath.Join(filepath.Dir(first.Path), id+"-example")
+		write(t, filepath.Join(path, "task.md"), strings.Replace(string(data), "id: T-01", "id: "+id, 1))
+		write(t, filepath.Join(path, "intent.md"), "Example")
+	}
+	listed, err := s.List(home, "", "")
+	if err != nil || len(listed) != 3 || listed[1].ID != "T-99" || listed[2].ID != "T-100" {
+		t.Fatalf("numeric list: %+v, %v", listed, err)
+	}
+	write(t, filepath.Join(first.Path, "task.md"), strings.Replace(string(data), "project: personal", "project: another", 1))
+	for _, tc := range []struct{ cwd, id string }{{home, "T-01"}, {first.Path, ""}} {
+		if _, err := s.Show(tc.cwd, tc.id); err == nil {
+			t.Fatal("show accepted a task filed in the wrong project")
+		}
+	}
+}
+
+func TestSlug(t *testing.T) {
+	for _, tc := range []struct{ title, want string }{
+		{"Fix: the label", "fix-the-label"},
+		{"../../Example", "example"},
+		{"日本語", "task"},
+		{strings.Repeat("a", 59) + " b", strings.Repeat("a", 59)},
+	} {
+		t.Run(tc.title, func(t *testing.T) {
+			if got := slug(tc.title); got != tc.want {
+				t.Fatalf("slug %q, want %q", got, tc.want)
+			}
+		})
+	}
+
 }
 
 func TestNewRefusesSymlinksAndFormat(t *testing.T) {
