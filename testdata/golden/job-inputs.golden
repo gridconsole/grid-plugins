@@ -7,9 +7,9 @@
       "summary": "The export column order and compatibility rule.",
       "text": "Keep the id column before the title column.\nChanging the column order requires a recorded decision.",
       "tier": "person-team",
-      "sha256": "2691a6de20d04ad63a98d0e309598ac0c07a53c44adc63560e00c9a2634555d7",
+      "sha256": "2d82e2c5b126282a1cd2a14eba32029b8a7871b79e90dc5072b9fffa9501e27b",
       "topic": "conventions",
-      "updated": "2026-01-01T00:00:00Z"
+      "updated": "2026-01-01T00:00:00.000Z"
     },
     {
       "pointer": "intent.md#request",

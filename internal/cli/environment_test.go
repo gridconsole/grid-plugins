@@ -73,12 +73,24 @@ func TestEnvironmentCLI(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("helper build: %v %s", err, out)
 	}
-	ln, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	// The environment probes the whole block, so one free port is insufficient
+	// when other package tests or local servers occupy adjacent ports.
+	port := 0
+	for i := 0; i < 100; i++ {
+		ln, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		candidate := min(ln.Addr().(*net.TCPAddr).Port, 65526)
+		ln.Close()
+		if (ports.Range{Start: candidate, End: candidate + 9}).Available() {
+			port = candidate
+			break
+		}
 	}
-	port := min(ln.Addr().(*net.TCPAddr).Port, 65526)
-	ln.Close()
+	if port == 0 {
+		t.Fatal("no free ten-port block")
+	}
 	command := "exec '" + strings.ReplaceAll(binary, "'", "'\"'\"'") + "'"
 	h.write(filepath.Join(h.gridHome, "projects", "example", "project.md"), fmt.Sprintf("---\nid: example\nfolders:\n  - machine: %s\n    path: %q\nenvironments:\n  command: %q\n  health_url: http://127.0.0.1:{port}/health\n  timeout: 3s\n  port_range: [%d, %d]\n---\n", h.env.Machine, dir, command, port, port+9))
 	t.Cleanup(func() {
