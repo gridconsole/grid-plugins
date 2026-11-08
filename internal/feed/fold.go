@@ -41,7 +41,10 @@ func posts(read ReadResult) []contract.Post {
 // SaveState serializes concurrent folds and atomically publishes each projection.
 // Readers needing an indivisible snapshot should use State or state.json, which
 // includes needs_you as well as the separately published needs-you.json.
-func (s Store) SaveState() (contract.State, error) {
+func (s Store) SaveState() (contract.State, error) { return s.SaveStateLiveness(nil) }
+
+// SaveStateLiveness overlays holder observations for display only, never for folding.
+func (s Store) SaveStateLiveness(liveness map[string]string) (contract.State, error) {
 	if err := s.prepare(); err != nil {
 		return contract.State{}, err
 	}
@@ -61,7 +64,25 @@ func (s Store) SaveState() (contract.State, error) {
 	if err != nil {
 		return contract.State{}, err
 	}
-	if err := writeProjection(s.Dir(), "state.json", state); err != nil {
+	var projection any = state
+	if len(liveness) > 0 {
+		b, err := json.Marshal(state)
+		if err != nil {
+			return contract.State{}, err
+		}
+		var view map[string]any
+		if err := json.Unmarshal(b, &view); err != nil {
+			return contract.State{}, err
+		}
+		jobs := view["jobs"].(map[string]any)
+		for id, value := range liveness {
+			if j, ok := jobs[id].(map[string]any); ok {
+				j["liveness"] = value
+			}
+		}
+		projection = view
+	}
+	if err := writeProjection(s.Dir(), "state.json", projection); err != nil {
 		return contract.State{}, err
 	}
 	if err := writeProjection(s.Dir(), "needs-you.json", state.NeedsYou); err != nil {
@@ -76,3 +97,6 @@ func writeProjection(dir, name string, v any) error {
 	}
 	return atomicfile.Write(filepath.Join(dir, name), append(data, '\n'), 0o600)
 }
+
+// FoldRead folds precisely one reader snapshot, without reading the Feed again.
+func FoldRead(read ReadResult) contract.State { return contract.Fold(posts(read)) }
