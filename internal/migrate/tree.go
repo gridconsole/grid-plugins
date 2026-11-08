@@ -92,6 +92,10 @@ func writeSynced(path string, data []byte, mode os.FileMode) error {
 		f.Close()
 		return err
 	}
+	if err = f.Chmod(mode); err != nil {
+		f.Close()
+		return err
+	}
 	if err = f.Sync(); err != nil {
 		f.Close()
 		return err

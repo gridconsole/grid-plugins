@@ -160,3 +160,33 @@ func TestUnsafeAndUnknownInputs(t *testing.T) {
 		})
 	}
 }
+
+func TestDuplicateIdentityIsAConflict(t *testing.T) {
+	from, home := fixture(t)
+	put(t, filepath.Join(from, "beta/projects/widget/project.md"), "---\nfolder: /example/work/widget\n---\n")
+	p := scan(t, from, home)
+	if len(p.Conflicts) != 1 || !strings.Contains(p.Conflicts[0], "identity key also used") {
+		t.Fatalf("missing ambiguous identity conflict: %v", p.Conflicts)
+	}
+	if _, err := p.Apply(); err == nil {
+		t.Fatal("ambiguous projects were applied")
+	}
+}
+func TestRootSessionsAndDestinationNameCollision(t *testing.T) {
+	from, home := fixture(t)
+	put(t, filepath.Join(from, "sessions/root-session"), filepath.Join(from, "beta/projects/notes/tasks/T-01-note")+"\n")
+	put(t, filepath.Join(home, "projects/widget/project.md"), "---\nid: 01K00000000000000000000009\nfolder: /example/work/existing\n---\n")
+	p := scan(t, from, home)
+	if len(p.Unmapped) > 0 || len(p.Conflicts) > 0 {
+		t.Fatalf("blocked: %v %v", p.Unmapped, p.Conflicts)
+	}
+	if _, ok := p.result["projects/widget-2/tasks/T-07-first/task.md"]; !ok {
+		t.Fatal("existing project name was overwritten")
+	}
+	if _, ok := p.result["projects/widget-3/tasks/T-12-second/task.md"]; !ok {
+		t.Fatal("second collision not suffixed")
+	}
+	if !strings.Contains(string(p.result["sessions/root-session"].Data), home) {
+		t.Fatal("root session not mapped")
+	}
+}

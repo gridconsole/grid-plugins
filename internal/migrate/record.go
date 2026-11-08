@@ -177,3 +177,12 @@ func mapPath(path string, paths map[string]string) string {
 	}
 	return path
 }
+
+func knownPath(value string, paths map[string]string) bool {
+	for old := range paths {
+		if value == old || strings.HasPrefix(value, old+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}

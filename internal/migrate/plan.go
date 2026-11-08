@@ -40,12 +40,7 @@ func Scan(from, home string) (*Plan, error) {
 		return nil, fmt.Errorf("destination must not be inside the source")
 	}
 	p := &Plan{From: from, Home: home}
-	var err error
-	p.destination, err = snapshot(home)
-	if err != nil {
-		return nil, err
-	}
-	current, err := checkVersion(p.destination)
+	current, err := versionAt(home)
 	if err != nil {
 		return nil, err
 	}
@@ -53,9 +48,19 @@ func Scan(from, home string) (*Plan, error) {
 		p.Current = true
 		return p, nil
 	}
+	p.destination, err = snapshot(home)
+	if err != nil {
+		return nil, err
+	}
 	p.source, err = snapshot(from)
 	if err != nil {
 		return nil, err
+	}
+	if e, ok := p.destination["."]; ok && !e.Mode.IsDir() {
+		return nil, fmt.Errorf("Grid home is not a directory")
+	}
+	if e, ok := p.source["."]; ok && !e.Mode.IsDir() {
+		return nil, fmt.Errorf("source is not a directory")
 	}
 	if len(p.source) == 0 {
 		return nil, fmt.Errorf("old Grid data folder does not exist: %s", from)
@@ -118,6 +123,11 @@ func Scan(from, home string) (*Plan, error) {
 	for _, src := range sortedKeys(projectTargets) {
 		dst := projectTargets[src]
 		p.copyPrefix(src, dst, handled)
+		for _, f := range sortedKeys(p.source) {
+			if under(f, src) && path.Base(f) == ".git" {
+				p.Unmapped = append(p.Unmapped, f+": embedded git metadata needs separate relocation")
+			}
+		}
 		p.projectRecord(src, dst)
 		for _, task := range children(p.source, path.Join(src, "tasks")) {
 			p.taskRecord(path.Join(src, "tasks", task), path.Join(dst, "tasks", task), path.Base(dst))
@@ -156,6 +166,15 @@ func Scan(from, home string) (*Plan, error) {
 		}
 		handled[path.Join(h, "worktrees")] = true
 	}
+	if homes[0] != "" {
+		for _, kind := range []string{"knowledge", "sessions"} {
+			p.copyPrefix(kind, kind, handled)
+		}
+	}
+	if e, ok := p.source["machine"]; ok {
+		handled["machine"] = true
+		p.add("copy", "machine", "machine", e)
+	}
 	// Session JSON is structured; pointer lists are rewritten one full path per line.
 	for _, a := range p.Actions {
 		if a.Kind != "copy" {
@@ -185,7 +204,7 @@ func Scan(from, home string) (*Plan, error) {
 					continue
 				}
 				mapped := mapPath(line, paths)
-				if mapped == line {
+				if !knownPath(line, paths) {
 					p.Unmapped = append(p.Unmapped, a.From+": session pointer cannot map "+line)
 				}
 				lines[i] = mapped
@@ -229,13 +248,14 @@ func Scan(from, home string) (*Plan, error) {
 			}
 		}
 	}
-	if _, ok := p.destination["machine"]; !ok {
-		p.add("create", "", "machine", entry{Data: []byte(legacyID("machine:"+home) + "\n"), Mode: 0600})
+	if _, ok := p.result["machine"]; !ok {
+		p.add("create", "", "machine", entry{Data: []byte("<allocated on apply>" + "\n"), Mode: 0600})
 	}
 	p.add("create", "", "VERSION", entry{Data: []byte(strconv.Itoa(gridhome.FormatVersion) + "\n"), Mode: 0600})
 	if _, ok := p.destination["migration.log"]; ok {
 		p.Conflicts = append(p.Conflicts, "migration.log: existing migration log")
 	}
+	p.checkIdentities()
 	p.Notes = append(p.Notes, "history, Feed, usage and recall files are preserved without schema conversion")
 	return p, nil
 }
@@ -382,4 +402,53 @@ func (p *Plan) WriteText(w io.Writer) error {
 	}
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// versionAt allows a current home to be a true no-op, even with unrelated
+// symlinks or inaccessible files elsewhere in that already migrated home.
+func versionAt(home string) (bool, error) {
+	file := filepath.Join(home, "VERSION")
+	info, err := os.Lstat(file)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !info.Mode().IsRegular() {
+		return false, fmt.Errorf("VERSION must be a regular file")
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return false, err
+	}
+	return checkVersion(tree{"VERSION": entry{Data: data}})
+}
+
+func (p *Plan) checkIdentities() {
+	keys, ids := map[string]string{}, map[string]string{}
+	for _, file := range sortedKeys(p.result) {
+		if !strings.HasPrefix(file, "projects/") || (path.Base(file) != "project.md" && path.Base(file) != "task.md") {
+			continue
+		}
+		r, err := parseRecord(p.result[file].Data)
+		if err != nil {
+			continue
+		}
+		if id := r.value("id"); ulidRE.MatchString(id) {
+			if prev, ok := ids[id]; ok {
+				p.Conflicts = append(p.Conflicts, file+": id also used by "+prev)
+			}
+			ids[id] = file
+		}
+		if path.Base(file) != "project.md" {
+			continue
+		}
+		for _, key := range r.values("key") {
+			if prev, ok := keys[key]; ok && prev != file {
+				p.Conflicts = append(p.Conflicts, file+": identity key also used by "+prev)
+			}
+			keys[key] = file
+		}
+	}
 }
