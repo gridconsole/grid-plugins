@@ -9,13 +9,15 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 const testTask = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 const testMachine = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
 
 func testWriter() Writer {
-	return Writer{Author: Author{Member: "member", Role: "member"}, Worker: "member@" + testMachine}
+	return Writer{Author: Author{ID: "member", Role: "member"}, Worker: "member@" + testMachine}
 }
 func testStore(t *testing.T) Store { t.Helper(); return Store{TaskDir: t.TempDir(), TaskID: testTask} }
 func message(text string) Input {
@@ -81,8 +83,11 @@ func TestAppendAndRead(t *testing.T) {
 	if err := json.Unmarshal(completeLines(data)[0], &fields); err != nil {
 		t.Fatal(err)
 	}
-	if len(fields) != 17 || fields["lease"] != nil || fields["epoch"] != nil {
+	if len(fields) != 18 || fields["lease"] != nil || fields["epoch"] != nil {
 		t.Fatalf("envelope: %v", fields)
+	}
+	if err := contract.Validate("post", completeLines(data)[0]); err != nil {
+		t.Fatal(err)
 	}
 }
 

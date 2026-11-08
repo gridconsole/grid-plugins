@@ -38,7 +38,7 @@ func TestFeedCommands(t *testing.T) {
 	if err := json.Unmarshal(h.out.Bytes(), &posted); err != nil {
 		t.Fatal(err)
 	}
-	if posted.Post.Task != feedTaskID || posted.Post.Author.Member != "member" {
+	if posted.Post.Task != feedTaskID || posted.Post.Author.ID != "member" {
 		t.Fatalf("post: %+v", posted)
 	}
 	for _, tc := range []struct {

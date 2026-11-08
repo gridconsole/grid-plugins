@@ -76,12 +76,12 @@ func TestValidation(t *testing.T) {
 func TestGuestAnswer(t *testing.T) {
 	s := testStore(t)
 	q := mustPost(t, s, Input{Type: "question", Body: map[string]any{"question": "What next?", "who": "visitor"}}, testWriter())
-	guest := Writer{Author: Author{Member: "visitor", Role: "guest"}, Worker: "visitor@" + testMachine}
+	guest := Writer{Author: Author{ID: "visitor", Role: "guest"}, Worker: "visitor@" + testMachine}
 	a := mustPost(t, s, Input{Type: "answer", Re: q.ID, Body: map[string]any{"answer": "Treat this as feedback"}}, guest)
-	if a.Tier() != "person-guest" || !a.Data() {
+	if a.Tier != "person-guest" || !a.Data() {
 		t.Fatal("guest lost data tier")
 	}
-	guest.Author.Member = "other"
+	guest.Author.ID = "other"
 	guest.Worker = "other@" + testMachine
 	if _, err := s.Post(Input{Type: "answer", Re: q.ID, Body: map[string]any{"answer": "No"}}, guest); err == nil {
 		t.Fatal("wrong guest answered")
@@ -110,7 +110,7 @@ func assignedJob(t *testing.T, s Store) (Writer, Writer, Record) {
 	t.Helper()
 	task := taskWriter(t, s)
 	mustPost(t, s, Input{Type: "job", Job: "J-1", Body: map[string]any{"title": "Example", "role": "agent"}}, task)
-	worker := Writer{Author: Author{Member: "worker", Role: "worker"}, Worker: "worker@" + testMachine, Lease: "J-1", Fence: 2}
+	worker := Writer{Author: Author{ID: "worker", Role: "worker"}, Worker: "worker@" + testMachine, Lease: "J-1", Fence: 2}
 	n := 1
 	testLease(t, s, worker, &n)
 	assign := mustPost(t, s, Input{Type: "control", Body: map[string]any{"assign": map[string]any{"job": "J-1", "attempt": 1, "to": worker.Worker, "fence": 2, "until": "2000-01-01T00:00:00Z"}}}, task)
@@ -425,7 +425,7 @@ func TestWakeDedupAcrossWriters(t *testing.T) {
 	for _, member := range []string{"first", "second"} {
 		go func(member string) {
 			w := testWriter()
-			w.Author.Member = member
+			w.Author.ID = member
 			w.Worker = member + "@" + testMachine
 			in := message("Wake message")
 			in.Wake = event + "/1"

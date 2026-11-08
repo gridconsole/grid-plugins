@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 const MaxLine = 32 * 1024
@@ -17,33 +19,31 @@ var ulidPattern = regexp.MustCompile(`^[0-7][0-9A-HJKMNP-TV-Z]{25}$`)
 var jobPattern = regexp.MustCompile(`^J-[0-9]+(?:\.[0-9]+)*$`)
 var memberPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.@+\-]{0,199}$`)
 
-// Author is stamped from the caller's session, never from its body. The object
-// preserves the role required by the contract's trust rule.
-type Author struct {
-	Member string `json:"member"`
-	Role   string `json:"role"`
-}
+// Author is stamped from the caller's session, never from its body: the
+// contract's {id, role}, where id is the member part of the writer id.
+type Author = contract.Author
 
 // Record contains every envelope field, including explicit nulls and an empty
 // after array. At is display information and is never used to decide state.
 type Record struct {
-	ID      string         `json:"id"`
-	Task    string         `json:"task"`
-	Type    string         `json:"type"`
-	TypeV   int            `json:"type_v"`
-	Author  Author         `json:"author"`
-	Worker  string         `json:"worker"`
-	Lease   *string        `json:"lease"`
-	Gen     int64          `json:"gen"`
-	Fence   int64          `json:"fence"`
-	Seq     int64          `json:"seq"`
-	At      string         `json:"at"`
-	Re      *string        `json:"re"`
-	After   []string       `json:"after"`
-	Job     *string        `json:"job"`
-	Attempt *int           `json:"attempt"`
-	Wake    *string        `json:"wake"`
-	Body    map[string]any `json:"body"`
+	ID      string             `json:"id"`
+	Task    string             `json:"task"`
+	Type    string             `json:"type"`
+	TypeV   int                `json:"type_v"`
+	Author  Author             `json:"author"`
+	Tier    contract.TrustTier `json:"tier"`
+	Worker  string             `json:"worker"`
+	Lease   *string            `json:"lease"`
+	Gen     int64              `json:"gen"`
+	Fence   int64              `json:"fence"`
+	Seq     int64              `json:"seq"`
+	At      string             `json:"at"`
+	Re      *string            `json:"re"`
+	After   []string           `json:"after"`
+	Job     *string            `json:"job"`
+	Attempt *int               `json:"attempt"`
+	Wake    *string            `json:"wake"`
+	Body    map[string]any     `json:"body"`
 }
 
 // Input describes a post. Set ID to reuse an id across retries.
@@ -118,23 +118,16 @@ func validWorker(worker string) bool {
 	return i > 0 && memberPattern.MatchString(worker[:i]) && IsID(worker[i+1:])
 }
 
-// Tier and Data are derived, so body fields cannot promote untrusted text.
-func (r Record) Tier() string {
-	if r.Body["external"] == true && r.Author.Role != "guest" {
-		return "external"
-	}
-	switch r.Author.Role {
-	case "guest":
-		return "person-guest"
-	case "external":
-		return "external"
-	case "owner", "member", "lead":
-		return "person-team"
-	default:
-		if r.Body["external"] == true {
-			return "external"
-		}
-		return "agent"
-	}
+// Data reports whether the body is untrusted text, shown only in a data fence.
+// The tier follows the role; a body marked external is data for any author.
+func (r Record) Data() bool {
+	return r.Tier == contract.PersonGuest || r.Tier == contract.External || r.Body["external"] == true
 }
-func (r Record) Data() bool { return r.Tier() == "person-guest" || r.Tier() == "external" }
+
+// dataTier is the fence label: external when the body says so, else the tier.
+func (r Record) dataTier() string {
+	if r.Body["external"] == true && r.Tier != contract.PersonGuest {
+		return string(contract.External)
+	}
+	return string(r.Tier)
+}

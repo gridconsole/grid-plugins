@@ -11,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 var ErrStaleLease = errors.New("stale lease")
@@ -209,7 +211,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		addressed := false
 		for _, entry := range existing.Records {
 			q := entry.Record
-			if q.ID == value(r.Re) && q.Type == "question" && entry.Verdict == "counted" && str(q.Body["who"]) == r.Author.Member {
+			if q.ID == value(r.Re) && q.Type == "question" && entry.Verdict == "counted" && str(q.Body["who"]) == r.Author.ID {
 				addressed = true
 			}
 		}
@@ -346,7 +348,7 @@ func (s Store) record(in Input, w Writer) (Record, error) {
 	}
 	t, _ := lookup(in.Type)
 	after := append([]string{}, in.After...)
-	r := Record{ID: id, Task: s.TaskID, Type: in.Type, TypeV: t.Version, Author: w.Author, Worker: w.Worker, Lease: ptr(w.Lease), Gen: w.Gen, Fence: w.Fence, At: time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), Re: ptr(in.Re), After: after, Job: ptr(in.Job), Wake: ptr(in.Wake), Body: body}
+	r := Record{ID: id, Task: s.TaskID, Type: in.Type, TypeV: t.Version, Author: w.Author, Tier: contract.TierFor(w.Author.Role), Worker: w.Worker, Lease: ptr(w.Lease), Gen: w.Gen, Fence: w.Fence, At: time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), Re: ptr(in.Re), After: after, Job: ptr(in.Job), Wake: ptr(in.Wake), Body: body}
 	if in.Attempt != 0 {
 		r.Attempt = &in.Attempt
 	}

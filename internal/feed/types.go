@@ -136,10 +136,10 @@ func Validate(r Record) error {
 	if !IsID(r.ID) || !IsID(r.Task) {
 		return fmt.Errorf("record and task ids must be ULIDs")
 	}
-	if !validWorker(r.Worker) || !memberPattern.MatchString(r.Author.Member) {
+	if !validWorker(r.Worker) || !memberPattern.MatchString(r.Author.ID) {
 		return fmt.Errorf("invalid author or worker identity")
 	}
-	if !strings.HasPrefix(r.Worker, r.Author.Member+"@") {
+	if !strings.HasPrefix(r.Worker, r.Author.ID+"@") {
 		return fmt.Errorf("author and worker disagree")
 	}
 	if r.Gen < 0 || r.Fence < 0 {

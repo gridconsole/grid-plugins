@@ -15,7 +15,7 @@ const stressWriters = 125
 
 func stressWriter(i int) Writer {
 	member := fmt.Sprintf("w%03d", i)
-	return Writer{Author: Author{Member: member, Role: "member"}, Worker: member + "@" + testMachine}
+	return Writer{Author: Author{ID: member, Role: "member"}, Worker: member + "@" + testMachine}
 }
 
 // TestStressWriters mirrors exp1-appenders at a chosen size: 125 processes with

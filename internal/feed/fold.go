@@ -119,7 +119,7 @@ func Fold(task string, read ReadResult) State {
 			ignore(e, "answer target is not a question")
 			continue
 		}
-		if e.Author.Role == "guest" && str(q.Body["who"]) != e.Author.Member {
+		if e.Author.Role == "guest" && str(q.Body["who"]) != e.Author.ID {
 			ignore(e, "question is not addressed to this guest")
 			continue
 		}

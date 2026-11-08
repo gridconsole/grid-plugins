@@ -176,7 +176,7 @@ func runFeed(args []string, env Env) int {
 		Post feed.Record `json:"post"`
 		Tier string      `json:"tier"`
 		Data bool        `json:"data"`
-	}{record, record.Tier(), record.Data()})
+	}{record, string(record.Tier), record.Data()})
 }
 
 func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
@@ -204,7 +204,7 @@ func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
 	if err != nil {
 		return feed.Writer{}, err
 	}
-	writer := feed.Writer{Author: feed.Author{Member: member, Role: role}, Worker: member + "@" + machine, Lease: lease}
+	writer := feed.Writer{Author: feed.Author{ID: member, Role: role}, Worker: member + "@" + machine, Lease: lease}
 	if epoch != "" {
 		parts := strings.Split(epoch, ".")
 		if len(parts) != 2 {
