@@ -56,7 +56,25 @@ func (s Store) prepare() error {
 	if err := CheckFilesystem(s.Dir()); err != nil {
 		return err
 	}
-	return os.MkdirAll(s.Dir(), 0o700)
+	_, statErr := os.Stat(s.Dir())
+	if err := os.MkdirAll(s.Dir(), 0o700); err != nil {
+		return err
+	}
+	if errors.Is(statErr, os.ErrNotExist) {
+		return syncDir(s.TaskDir)
+	}
+	return nil
+}
+
+// syncDir makes the entries of a folder durable, so a new file or folder in it
+// survives a crash.
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return syncFile(d)
 }
 
 // Lease is the shared interface with the lease commands. Feed never grants a
@@ -167,7 +185,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		defer fslock.Unlock(lease)
 	}
 	file := filepath.Join(s.Dir(), writerFile(w.Worker, w.Fence))
-	f, err := os.OpenFile(file, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	f, err := fslock.OpenNoFollow(file, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0o600)
 	if err != nil {
 		return Record{}, diskError(err)
 	}
@@ -176,51 +194,20 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		return Record{}, err
 	}
 	defer fslock.Unlock(f)
-	existing, err := s.Read(Filter{})
+	// Repair on open: a writer that died mid-line left a fragment, and an empty
+	// file is new, so its name is made durable before any record in it is acked.
+	size, err := repairTail(f)
 	if err != nil {
-		return Record{}, err
+		return Record{}, diskError(err)
 	}
-	for _, entry := range existing.Records {
-		old := entry.Record
-		if old.ID == r.ID {
-			if sameRequest(old, r) {
-				t, _ := contract.LookupType(r.Type)
-				if t.Class == "state" {
-					if err := syncFile(f); err != nil {
-						return Record{}, diskError(err)
-					}
-				}
-				return old, nil
-			}
-			return Record{}, fmt.Errorf("record id already used for a different post")
-		}
-		if r.Wake != nil && old.Wake != nil && wakeKey(old) == wakeKey(r) {
-			return old, nil
+	if size == 0 {
+		if err := syncDir(s.Dir()); err != nil {
+			return Record{}, diskError(err)
 		}
 	}
-	if r.Type == "ack" {
-		matched := false
-		state := contract.Fold(posts(existing))
-		if job := state.Jobs[value(r.Job)]; job != nil && job.Assign != nil {
-			a := job.Assign
-			matched = a.To == r.Worker && a.Fence == r.Fence && job.Generation == r.Gen && r.Attempt != nil && a.Attempt == *r.Attempt && slices.Contains(r.After, job.AssignPost)
-		}
-		if !matched {
-			return Record{}, fmt.Errorf("ack requires its counted assignment in after")
-		}
-	}
-	if r.Author.Role == "guest" && r.Type == "answer" {
-		addressed := false
-		for _, entry := range existing.Records {
-			q := entry.Record
-			if q.ID == value(r.Re) && q.Type == "question" && entry.Verdict == "counted" && str(q.Body["who"]) == r.Author.ID {
-				addressed = true
-			}
-		}
-		if !addressed {
-			return Record{}, fmt.Errorf("guest answer must name a question addressed to that guest")
-		}
-	}
+	// Numbering and the retry check read only this tenure file, which the
+	// exclusive lock keeps stable; the whole Feed is read only by the checks
+	// that depend on other tenures.
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		return Record{}, err
@@ -228,8 +215,65 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	r.Seq = 1
 	for _, line := range completeLines(raw) {
 		var prev Record
-		if json.Unmarshal(line, &prev) == nil && prev.Worker == r.Worker && prev.Fence == r.Fence && prev.Seq >= r.Seq {
+		if json.Unmarshal(line, &prev) != nil || prev.Worker != r.Worker || prev.Fence != r.Fence {
+			continue
+		}
+		if prev.ID == r.ID {
+			old, err := s.stored(prev)
+			if err != nil {
+				return Record{}, err
+			}
+			if !sameRequest(old, r) {
+				return Record{}, fmt.Errorf("record id already used for a different post")
+			}
+			if t, _ := contract.LookupType(r.Type); t.Class == "state" {
+				if err := syncFile(f); err != nil {
+					return Record{}, diskError(err)
+				}
+			}
+			return old, nil
+		}
+		if prev.Seq >= r.Seq {
 			r.Seq = prev.Seq + 1
+		}
+	}
+	guestAnswer := r.Author.Role == "guest" && r.Type == "answer"
+	if r.Wake != nil || r.Type == "ack" || guestAnswer {
+		existing, err := s.Read(Filter{})
+		if err != nil {
+			return Record{}, err
+		}
+		for _, entry := range existing.Records {
+			old := entry.Record
+			if old.ID == r.ID {
+				return Record{}, fmt.Errorf("record id already used for a different post")
+			}
+			if r.Wake != nil && old.Wake != nil && wakeKey(old) == wakeKey(r) {
+				return old, nil
+			}
+		}
+		if r.Type == "ack" {
+			matched := false
+			state := contract.Fold(posts(existing))
+			if job := state.Jobs[value(r.Job)]; job != nil && job.Assign != nil {
+				a := job.Assign
+				matched = a.To == r.Worker && a.Fence == r.Fence && job.Generation == r.Gen && r.Attempt != nil && a.Attempt == *r.Attempt && slices.Contains(r.After, job.AssignPost)
+			}
+			if !matched {
+				return Record{}, fmt.Errorf("ack requires its counted assignment in after")
+			}
+		}
+		if guestAnswer {
+			addressed := false
+			for _, entry := range existing.Records {
+				q := entry.Record
+				if q.ID == value(r.Re) && q.Type == "question" && entry.Verdict == "counted" && str(q.Body["who"]) == r.Author.ID {
+					addressed = true
+				}
+			}
+			if !addressed {
+				return Record{}, fmt.Errorf("guest answer must name a question addressed to that guest")
+			}
 		}
 	}
 	if r.Seq == 1 && r.Lease != nil {
@@ -265,7 +309,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	}
 	line = append(line, '\n')
 	t, _ := contract.LookupType(r.Type)
-	if err := appendRecord(f, file, line, writeOnce); err != nil {
+	if err := appendRecord(f, line, writeOnce); err != nil {
 		return Record{}, err
 	}
 	if t.Class == "state" {
@@ -278,10 +322,12 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 
 // write is one OS write, not os.File.Write's internal partial-write loop. Repair
 // runs before every retry while the same tenure lock remains held.
-func appendRecord(f *os.File, file string, line []byte, write func(*os.File, []byte) (int, error)) error {
+func appendRecord(f *os.File, line []byte, write func(*os.File, []byte) (int, error)) error {
 	for attempt := 0; attempt < 3; attempt++ {
-		if err := repairTail(f, file); err != nil {
-			return diskError(err)
+		if attempt > 0 {
+			if _, err := repairTail(f); err != nil {
+				return diskError(err)
+			}
 		}
 		n, err := write(f, line)
 		if errors.Is(err, syscall.EINTR) || errors.Is(err, io.ErrShortWrite) {
@@ -303,30 +349,47 @@ func diskError(err error) error {
 	}
 	return err
 }
-func repairTail(f *os.File, path string) error {
+
+// repairTail ends a fragment left by a writer that died mid-line with one
+// newline, so the next line never glues onto it, and returns the file's size
+// before the repair.
+func repairTail(f *os.File) (int64, error) {
 	info, err := f.Stat()
 	if err != nil || info.Size() == 0 {
-		return err
+		return 0, err
 	}
-	reader, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
 	var last [1]byte
-	if _, err := reader.ReadAt(last[:], info.Size()-1); err != nil {
-		return err
+	if _, err := f.ReadAt(last[:], info.Size()-1); err != nil {
+		return 0, err
 	}
 	if last[0] != '\n' {
 		n, err := f.Write([]byte{'\n'})
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if n != 1 {
-			return io.ErrShortWrite
+			return 0, io.ErrShortWrite
 		}
 	}
-	return nil
+	return info.Size(), nil
+}
+
+// stored returns a record as the reader sees it, with a spilled body put back.
+func (s Store) stored(r Record) (Record, error) {
+	ref := str(r.Body["ref"])
+	if len(r.Body) != 1 || ref != "bodies/"+r.ID+".json" {
+		return r, nil
+	}
+	data, err := os.ReadFile(filepath.Join(s.Dir(), ref))
+	if err != nil {
+		return r, err
+	}
+	var body map[string]any
+	if err := json.Unmarshal(data, &body); err != nil || body == nil {
+		return r, fmt.Errorf("body of %s is unreadable", r.ID)
+	}
+	r.Body = body
+	return r, nil
 }
 
 func (s Store) record(in Input, w Writer) (Record, error) {
@@ -415,12 +478,7 @@ func (s Store) saveBody(id string, body []byte) error {
 			return err
 		}
 	}
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	return syncFile(d)
+	return syncDir(dir)
 }
 
 func (s Store) wakeLock() (*os.File, error) {

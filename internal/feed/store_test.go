@@ -219,7 +219,7 @@ func TestShortWriteRepairsBeforeRetry(t *testing.T) {
 	}
 	line = append(line, '\n')
 	path := filepath.Join(s.Dir(), writerFile(w.Worker, 0))
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_RDWR, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +229,7 @@ func TestShortWriteRepairsBeforeRetry(t *testing.T) {
 	}
 	defer fslock.Unlock(f)
 	calls := 0
-	err = appendRecord(f, path, line, func(file *os.File, data []byte) (int, error) {
+	err = appendRecord(f, line, func(file *os.File, data []byte) (int, error) {
 		calls++
 		if calls == 1 {
 			return writeOnce(file, data[:12])
