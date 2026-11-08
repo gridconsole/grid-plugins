@@ -106,6 +106,17 @@ func TestRoutineHelpExplainsEntryLock(t *testing.T) {
 	}
 }
 
+func TestRoutineScheduleRejectsGridHomeWhitespace(t *testing.T) {
+	h := newHarness(t)
+	h.env.GridHome = h.gridHome + " "
+	if code := h.run(h.root, "routine", "add", "daily", "--every", "1h", "--run", "grid version"); code != 0 {
+		t.Fatal(h.errb.String())
+	}
+	if code := h.run(h.root, "routine", "schedule"); code != 1 || !strings.Contains(h.errb.String(), "Grid home must not have leading or trailing whitespace") {
+		t.Fatalf("schedule: exit %d: %s", code, h.errb)
+	}
+}
+
 func TestRoutineProjectScope(t *testing.T) {
 	h := newHarness(t)
 	folder := filepath.Join(h.root, "work", "example")

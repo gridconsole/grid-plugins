@@ -316,6 +316,38 @@ func TestTimerEscaping(t *testing.T) {
 	}
 }
 
+func TestScheduleRejectsGridHomeEdgeWhitespace(t *testing.T) {
+	for _, backend := range []Backend{Systemd{}, Launchd{UID: 501}, Schtasks{}} {
+		for _, space := range []string{" ", "\t", "\n", "\u00a0"} {
+			for _, leading := range []bool{false, true} {
+				home := gridhome.Real(t.TempDir())
+				gh := filepath.Join(home, "data") + space
+				if leading {
+					gh = space + filepath.Join(home, "data")
+				}
+				calls := &fakeOS{}
+				s := Scheduler{Home: home, GridHome: gh, Binary: filepath.Join(home, "grid"), Backend: backend, Runner: calls}
+				store := Store{GridHome: gh}
+				check := func(err error) {
+					t.Helper()
+					if err == nil || !strings.Contains(err.Error(), "Grid home must not have leading or trailing whitespace") {
+						t.Fatalf("unclear whitespace refusal for %q: %v", gh, err)
+					}
+				}
+				check(s.Schedule(context.Background(), store))
+				_, err := s.Preview(store, false)
+				check(err)
+				_, err = s.plan("", "daily")
+				check(err)
+				files, err := os.ReadDir(home)
+				if err != nil || len(files) != 0 || len(calls.calls) != 0 {
+					t.Fatalf("refused schedule made changes: %v %v %v", files, calls.calls, err)
+				}
+			}
+		}
+	}
+}
+
 func TestFailedRegistrationNeverAuthorizesOSRemoval(t *testing.T) {
 	home := gridhome.Real(t.TempDir())
 	store := Store{GridHome: filepath.Join(home, ".grid")}

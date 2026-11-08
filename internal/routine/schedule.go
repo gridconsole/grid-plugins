@@ -114,7 +114,17 @@ type timerState struct {
 	Hash string `json:"hash,omitempty"`
 }
 
+func (s Scheduler) checkGridHome() error {
+	if strings.TrimSpace(s.GridHome) != s.GridHome {
+		return fmt.Errorf("cannot schedule routines: Grid home must not have leading or trailing whitespace")
+	}
+	return nil
+}
+
 func (s Scheduler) plan(project, name string) (TimerPlan, error) {
+	if err := s.checkGridHome(); err != nil {
+		return TimerPlan{}, err
+	}
 	if !brain.ValidName(name) || (project != "" && !brain.ValidName(project)) {
 		return TimerPlan{}, fmt.Errorf("invalid routine or project name")
 	}
@@ -212,6 +222,9 @@ func (s Scheduler) commands(ctx context.Context, commands []OSCommand) error {
 }
 
 func (s Scheduler) Schedule(ctx context.Context, store Store) error {
+	if err := s.checkGridHome(); err != nil {
+		return err
+	}
 	// The timer lock orders all install/remove operations; the entry lock also
 	// serializes against add, remove and execution while its definition is read.
 	unlock, err := localdata.Lock(s.GridHome, ".routine-timers.lock")
@@ -416,6 +429,9 @@ func (s Scheduler) RemoveRoutine(ctx context.Context, store Store, name string) 
 // Preview returns the native Windows fallback: complete XML and schtasks argv,
 // without writing files, taking an unsupported lock or invoking schtasks.
 func (s Scheduler) Preview(store Store, remove bool) ([]TimerPlan, error) {
+	if err := s.checkGridHome(); err != nil {
+		return nil, err
+	}
 	plans := []TimerPlan{}
 	entries, err := store.List()
 	if err != nil {
