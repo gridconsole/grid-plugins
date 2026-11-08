@@ -1032,7 +1032,8 @@ export const PERSON_KINDS = new Set(['ask', 'approve', 'make-together', 'schedul
 // as finished only when the newest task.md body line (`- <D Mon> · <step> · ...`) names it and the
 // latest brief is done: delivery and closing are then the person's. A task just created (no briefs,
 // history.md holding only the created line) is left to the host, so it gives null; so does one with
-// no readable workflow or step.
+// no readable workflow or step. A task whose Feed loop holds a fresh lock gives null too: the loop runs
+// its Jobs and writes task.md when they are all finished, which wakes the session to record them.
 export function carryOnStep(dir) {
   const text = readText(path.join(dir, 'task.md')) ?? '';
   const fm = frontmatter(text);
@@ -1041,6 +1042,7 @@ export function carryOnStep(dir) {
   const kinds = workflowKinds(text);
   if (!step || !['run', 'check'].includes(kinds[step])) return null;
   if (personQuestionOpen(dir, text, fm)) return null;
+  if (feedLoopLive(dir)) return null;
   const briefs = briefsOf(dir);
   if (!briefs.length) {
     const lines = (readText(path.join(dir, 'history.md')) ?? '').split('\n').filter((l) => l.trim());
@@ -1052,6 +1054,20 @@ export function carryOnStep(dir) {
   const recorded = (fm.body.split('\n').filter((l) => /^-\s+\S.*·/.test(l)).pop() ?? '').split('·')[1]?.trim() === step;
   if (status === 'done' && recorded && Object.keys(kinds).at(-1) === step) return null;
   return step;
+}
+
+// Whether feed/.orchestrator.lock is fresh: its beat (else its start) within max(3 intervals, 2 minutes), or
+// a model call it announced in busy_until (ms) not yet over. The same rule as core/next-action.mjs, so the
+// hook and the host agree; no pid check.
+export function feedLoopLive(dir, now = Date.now()) {
+  let held;
+  try { held = JSON.parse(fs.readFileSync(path.join(dir, 'feed', '.orchestrator.lock'), 'utf8')); } catch { return false; }
+  if (!held || typeof held !== 'object') return false;
+  if (Number.isFinite(held.busy_until) && now < held.busy_until) return true;
+  const at = Date.parse(held.beat) || Date.parse(held.started);
+  if (!Number.isFinite(at)) return false;
+  const interval = Number.isFinite(held.interval_ms) && held.interval_ms > 0 ? held.interval_ms : 15_000;
+  return now - at <= Math.max(3 * interval, 120_000);
 }
 
 // The briefs' frontmatter in number order (an unreadable brief gives {}).

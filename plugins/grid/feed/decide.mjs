@@ -80,6 +80,8 @@ export const PROMPTS = {
     'A code Job works in its own worktree at the task head, which already holds the accepted work of the Jobs it comes after, so list in after every Job whose change it needs. The task branch (grid/<task>) is not updated until the task lands: never name it in a brief, never say "on branch ...", and never tell a Worker to check it out; say "in your worktree".',
     'Handing in a code Job commits it onto the task head, so never make a Job whose only work is to commit, push or merge: fold a plan step that says "commit" into the Job that makes the change.',
     'Follow the plan\'s steps and their order. Do not invent work the plan does not ask for, and do not merge steps that need different roles.',
+    'Give each numbered plan item its own Job and never merge two items into one Job; a research item becomes a researcher Job. A Job\'s after mirrors the item\'s needs, and a Job that checks, runs or reviews other work names those Jobs in after.',
+    'A Job that checks, runs or reviews code works in the copy of the repository it is given, which holds the finished work; its brief never names a branch to check out.',
     `Task: ${str(input?.task)}. Repository: ${str(input?.repo) || 'none, so no Job has code'}.`,
     block('plan', input?.plan, PLAN_MAX),
   ].join('\n'),

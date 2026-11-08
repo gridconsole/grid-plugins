@@ -13,7 +13,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers, priorityRank, firstById, PRIORITIES, handoverOwner, writerFile, fileOf, writtenByWorker, hostName, sameHost } from './lib.mjs';
 import { postHolds } from './hold.mjs';
-import { jobStart, taskIntegrate, taskLandAndClean } from './git-steps.mjs';
+import { jobDiscard, jobStart, taskIntegrate, taskLandAndClean } from './git-steps.mjs';
 import { runGit } from './git.mjs';
 import { workerLaunch, ROLES, AGENTS } from './worker.mjs';
 import { grantedSpawn } from './host.mjs';
@@ -24,6 +24,7 @@ import { isWait, stepWait, probe as probeWait, checkOf, WAIT_KIND } from './wait
 import { retryStale, answeredPark } from './retry.mjs';
 import { lock, beating } from './lock.mjs';
 import { planGate, planQuestion, reviewJob } from './planning.mjs';
+import { wakeTask, stoppedOn } from './wake.mjs';
 import { bridge } from './bridge.mjs';
 import { signalGroup } from './kill.mjs';
 import { openRegistry, SPAWNED } from './spawned.mjs';
@@ -33,6 +34,8 @@ import { isDeploy, isLand, deployOf, runDeploy, reopen, DEPLOY_KIND } from './de
 
 const LIVE = new Set(['assigned', 'running']);
 const FINISHED = new Set(['done', 'cancelled']);
+// Roles that only read the code: in a repo they need no submit, and after a code Job they check its work at the task head.
+const READ_ONLY_ROLES = new Set(['scout', 'researcher', 'runner', 'reviewer', 'checker', 'operator']);
 const VERDICTS = new Set(['accept', 'disagree']);
 const PLAN_MAX = 100 * 1024;
 const MAX_PASSES = 50;
@@ -92,10 +95,12 @@ function resolveBase(repo, rev, { env } = {}) {
   return r.ok ? { ok: true, sha: r.out.trim() } : r;
 }
 
-// Whether a planned Job works in the repository, so it gets a worktree at the task head. The model's `code: true` says so, but a runner always
-// runs the repository's code, and a reviewer reads it when the plan changes any: left to the model's flag, a runner ran in the task folder
-// without the earlier Jobs' work. Planning.mjs's reviewJob holds the same rule for the review Job the loop adds itself.
-const needsRepo = (x, planHasCode) => x.code === true || x.role === 'runner' || (x.role === 'reviewer' && planHasCode);
+// Whether a planned Job works in the repository, so it gets a worktree at the task head. A code Job does (the model's `code: true`, or a
+// read-only Job that checks one: `code` in planJobs, which also gives a reviewer its repo), but the flag is not enough alone: a runner always
+// runs the repository's code, so left to the flag it ran in the task folder without the earlier Jobs' work. `role` is the one the Job is
+// posted with, a checker re-roled to a runner included. Planning.mjs's reviewJob holds the same rule for the review Job the loop adds
+// itself, with its repo from the Jobs it reviews.
+const needsRepo = (role, code) => code || role === 'runner';
 
 function settings(taskDir, o) {
   const env = o.env ?? process.env;
@@ -117,13 +122,14 @@ function settings(taskDir, o) {
     probe: o.probe ?? ((check) => probeWait(check, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })), probeAt: new Map(), // wait Jobs: the check, and when each was last read
     review: o.review === true, planMemory: { misses: 0, at: 0, reason: '' }, // tries of this process that left no beat
     deploy: o.deploy ?? ((d) => runDeploy(d, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })),
-    steps: { start: jobStart, integrate: taskIntegrate, land: taskLandAndClean, base: resolveBase, ...o.steps },
+    steps: { start: jobStart, integrate: taskIntegrate, land: taskLandAndClean, base: resolveBase, discard: jobDiscard, ...o.steps },
   };
 }
 
 // The member@host of the Orchestrator handover that counts (the fold's own verdict), or null before any.
 const orchestratorOf = handoverOwner;
-const notOwner = (boss) => `not the Orchestrator of epoch ${boss.epoch}: ${boss.by} is`;
+const NOT_OWNER = 'not the Orchestrator of epoch ';
+const notOwner = (boss) => `${NOT_OWNER}${boss.epoch}: ${boss.by} is`;
 const HEARTBEAT_AFTER_MS = 5 * 60_000;
 
 const spendOf = (posts) => Math.round(posts.reduce((sum, p) => {
@@ -186,9 +192,17 @@ function work(taskDir, o) {
     if (!r.ok) out.errors.push(`${r.ran ? 'planning failed' : 'could not plan'}: ${oneLine(r.error) || 'no Jobs'}`);
     else if (!jobs.length) out.errors.push('planning failed: the plan gave no Jobs');
     if (!r.ran) Object.assign(o.planMemory, { misses: o.planMemory.misses + 1, at: now, reason: oneLine(r.error) });
-    const planHasCode = jobs.some((x) => x.code === true);
+    const afters = jobs.map((x, i) => (Array.isArray(x.after) ? x.after : []).map(str).filter((id) => jobNo(id) >= 1 && jobNo(id) <= jobs.length && jobNo(id) !== i + 1));
+    // A read-only Job that waits on a code Job checks its work, so it runs in a worktree at the task head too (a code Job), along whole
+    // chains; any other role after a build (a designer writing notes) works in the task folder.
+    const code = jobs.map((x) => x.code === true && x.kind !== WAIT_KIND);
+    const checks = jobs.map((x) => x.kind !== WAIT_KIND && READ_ONLY_ROLES.has(x.role));
+    for (let grew = true; grew;) {
+      grew = false;
+      jobs.forEach((x, i) => { if (!code[i] && checks[i] && afters[i].some((id) => code[jobNo(id) - 1])) code[i] = grew = true; });
+    }
     jobs.forEach((x, i) => {
-      const after = (Array.isArray(x.after) ? x.after : []).map(str).filter((id) => jobNo(id) >= 1 && jobNo(id) <= jobs.length && jobNo(id) !== i + 1);
+      const after = afters[i];
       // A wait Job keeps the checked, trimmed check; one that fails the check is still posted, so the numbering holds, and the loop rejects it with the reason.
       const wait = x.kind === WAIT_KIND;
       const c = wait ? checkOf(x) : null;
@@ -197,7 +211,7 @@ function work(taskDir, o) {
         title: oneLine(x.title, 200), role, brief: str(x.brief).trim(), ...(rerole ? { rerole } : {}),
         ...(after.length ? { after: [...new Set(after)] } : {}),
         ...(wait ? { kind: WAIT_KIND, ...(c.ok ? { check: c.check } : isObj(x.check) ? { check: x.check } : {}) } : {}),
-        ...(o.repo && !wait && needsRepo(x, planHasCode) ? { repo: path.basename(o.repo) } : {}),
+        ...(o.repo && !wait && needsRepo(role, code[i]) ? { repo: path.basename(o.repo) } : {}),
         ...(PRIORITIES.includes(x.priority) ? { priority: x.priority } : {}),
         ...(Number.isInteger(x.item) && x.item > 0 ? { item: x.item } : {}),
       }, { job: `J-${i + 1}` });
@@ -233,8 +247,14 @@ function work(taskDir, o) {
   const codeJob = (j, v) => Boolean(str(jobPostOf(j, v)?.body?.repo));
   // Roles that only read, run or judge: they post a result and have nothing to commit, so their result ends the Job with no submit.
   // An unknown or missing role is treated as one that commits, so the safe default is still to park a result with no submit.
-  const READ_ONLY_ROLES = new Set(['scout', 'researcher', 'runner', 'reviewer', 'checker', 'operator']);
   const commitsCode = (j, v) => codeJob(j, v) && !READ_ONLY_ROLES.has(str(jobPostOf(j, v)?.body?.role));
+  // A finished read-only code Job's worktrees go, build output and all, so they neither fill the disk nor stop the land's cleanup.
+  // Best effort: a worktree that stays is reported by the cleanup.
+  const discard = (j) => {
+    if (!o.repo || !o.steps.discard) return;
+    try { o.steps.discard({ task: o.task, job: j.id, repo: o.repo }, { env: gitEnv(o.env) }); } catch { /* the cleanup reports it */ }
+  };
+  const discardChecks = (v) => v.state.jobs.filter((x) => FINISHED.has(x.status) && codeJob(x, v) && !commitsCode(x, v)).forEach(discard);
 
   // A verdict that counted on a post: the last control post in the Job's history that targets it.
   const verdictOn = (j, postId, v) => {
@@ -336,7 +356,10 @@ function work(taskDir, o) {
     control({ target: j.id, status: 'running', lease: new Date(now + LEASE_MS).toISOString(), reason: `landing by the ${str(body?.rule)} rule` });
     let r;
     // A sibling Job that is not done or cancelled may still hold a worktree or a Job ref, so the land goes ahead and the cleanup waits.
-    const open = v.state.jobs.filter((x) => x.id !== j.id && !FINISHED.has(x.status)).map((x) => x.id);
+    // A Job after the land that needs no repo never reads the task refs, so it does not hold the cleanup back; a code Job after it does.
+    const later = dependents(j.id, v);
+    const open = v.state.jobs.filter((x) => x.id !== j.id && !FINISHED.has(x.status) && !(later.has(x.id) && !codeJob(x, v))).map((x) => x.id);
+    if (!open.length) discardChecks(v);
     try { r = o.steps.land({ task: o.task, repo: o.repo, rule: body?.rule, baseBranch: body?.base_branch, cleanup: open.length === 0 }, { env: gitEnv(o.env) }); } catch (e) { r = { ok: false, errors: [e?.message ?? String(e)] }; }
     if (r?.ok) {
       write('result', { outcome: `landed by the ${r.rule ?? body?.rule} rule: ${r.branch} at ${r.sha}`, evidence: `${r.branch} at ${r.sha}${open.length ? `; cleanup skipped: ${open.join(', ')} still running` : ''}${r.cleanup_errors?.length ? `; refs not cleared: ${r.cleanup_errors.join('; ')}` : ''}`, changed: [] }, { job: j.id });
@@ -349,6 +372,16 @@ function work(taskDir, o) {
   // True when `q` was written by the Worker `cur` of `j` itself, or by this loop as it: the loop's member on the Job's Host, in the file that writer owns.
   const fromWorker = (q, j, cur) => q.worker === cur && writtenByWorker(q, { member: o.me.member, host: j.assign?.host ?? null });
 
+  // The Job `id` and every Job that comes after it, directly or through others.
+  const dependents = (id, v) => {
+    const later = new Set([id]);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const x of v.state.jobs) if (!later.has(x.id) && (x.after ?? []).some((a) => later.has(a))) { later.add(x.id); grew = true; }
+    }
+    return later;
+  };
+
   // One step for one Job, the first rule that applies.
   const move = (j, v) => {
     const rec = j.recorded_status;
@@ -357,8 +390,12 @@ function work(taskDir, o) {
 
     if (isWait(jobPostOf(j, v))) waitMove(j, v);
     // Deploy and land Jobs run only from ready; one already running after a crash is left to the stale path below, never run again.
-    if (rec === 'ready' && isDeploy(jobPostOf(j, v))) return deployMove(j, v);
-    if (rec === 'ready' && isLand(jobPostOf(j, v))) return landMove(j, v);
+    // A Job made ready by hand still waits for its `after`; a land Job also waits for every build and check Job, so nothing lands half
+    // done, but never for one that comes after it, directly or through others, which could only start once it has landed.
+    const waits = j.after.some((id) => v.status.get(id) !== 'done')
+      || (isLand(jobPostOf(j, v)) && ((later) => v.state.jobs.some((x) => !later.has(x.id) && !FINISHED.has(x.status) && ![isWait, isDeploy, isLand].some((is) => is(jobPostOf(x, v)))))(dependents(j.id, v)));
+    if (rec === 'ready' && isDeploy(jobPostOf(j, v))) return waits ? undefined : deployMove(j, v);
+    if (rec === 'ready' && isLand(jobPostOf(j, v))) return waits ? undefined : landMove(j, v);
 
     // A result is read before the lease: a Worker that finished while the loop was down is handed in, not marked stale.
     const result = LIVE.has(rec) || rec === 'stale' ? own('result') : null;
@@ -368,6 +405,7 @@ function work(taskDir, o) {
       if (!commitsCode(j, v)) {
         const d = judge(j, result, null, v);
         if (d) control({ target: result.id, status: d.verdict === 'accept' ? 'done' : 'rejected', verdict: d.verdict, reason: d.reason });
+        if (d?.verdict === 'accept' && codeJob(j, v)) discard(j);
         return undefined;
       }
       // A code Job's result with no submit has nothing to integrate: the work is unfinished, so it is stale (as for a Worker that exited
@@ -525,7 +563,8 @@ function work(taskDir, o) {
 
   const assign = (v) => {
     for (const j of v.state.jobs) if (LIVE.has(j.recorded_status) && j.assign?.host) v.busy.set(j.assign.host, (v.busy.get(j.assign.host) ?? 0) + 1);
-    const ready = v.state.jobs.filter((j) => j.recorded_status === 'ready' && !failed.has(j.id) && ![isWait, isDeploy, isLand].some((is) => is(jobPostOf(j, v))))
+    // A Job made ready by hand still waits for every Job it names in `after`.
+    const ready = v.state.jobs.filter((j) => j.recorded_status === 'ready' && !failed.has(j.id) && !j.after.some((id) => v.status.get(id) !== 'done') && ![isWait, isDeploy, isLand].some((is) => is(jobPostOf(j, v))))
       .sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority) || jobNo(a.id) - jobNo(b.id));
     for (const j of ready) {
       const scored = !o.pickHost && Object.keys(v.state.hosts).length > 0; // Hosts announced: score them; else the loop's own Host
@@ -609,6 +648,8 @@ export async function run(taskDir, opts = {}, onTick = () => {}) {
   const halt = () => { stopped = true; wake?.(); };
   process.on('SIGINT', halt);
   process.on('SIGTERM', halt);
+  let finished = false;
+  let failed = null;
   try {
     let last = null;
     while (!stopped) {
@@ -616,7 +657,10 @@ export async function run(taskDir, opts = {}, onTick = () => {}) {
       last = work(taskDir, w);
       if (last.writes.length || last.errors.length) onTick(last);
       const states = Object.values(last.jobs);
-      if (!last.ok || last.planning === 'gave-up' || (states.length && states.every((s) => FINISHED.has(s)))) break;
+      finished = last.ok && states.length > 0 && states.every((s) => FINISHED.has(s));
+      // a stop on an error wakes the task too; planning that gave up asked the Owner, and a loop handed over leaves the task to the new one
+      if (!last.ok && last.planning !== 'gave-up' && !(last.errors ?? []).some((e) => e.startsWith(NOT_OWNER))) failed = last.errors?.[0] ?? 'unknown';
+      if (!last.ok || last.planning === 'gave-up' || finished) break;
       await new Promise((resolve) => {
         const t = setTimeout(resolve, o.intervalMs);
         wake = () => { clearTimeout(t); resolve(); };
@@ -624,10 +668,16 @@ export async function run(taskDir, opts = {}, onTick = () => {}) {
     }
     if (stopped) try { postHolds(taskDir, { slots: o.slots, stopped: true, ctx: { env: o.env, member: o.me.member, host: o.me.host, role: 'orchestrator', worker: null } }); } catch { /* best effort */ }
     return last;
+  } catch (e) {
+    failed = e?.message ?? String(e);
+    throw e;
   } finally {
     process.off('SIGINT', halt);
     process.off('SIGTERM', halt);
     held.release();
+    // after the lock is gone, so the woken session is carried on and not told to wait for the loop
+    if (finished) wakeTask(taskDir);
+    else if (failed && !stopped) wakeTask(taskDir, stoppedOn(failed));
   }
 }
 

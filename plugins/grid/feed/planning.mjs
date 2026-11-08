@@ -45,10 +45,15 @@ export function reviewJob(jobs) {
   if (!jobs.length || jobs.some((j) => j.role === 'reviewer')) return null;
   const builds = jobs.filter((j) => j.role === 'builder');
   const next = Math.max(...jobs.map((j) => Number(/^J-(\d+)$/.exec(j.id)?.[1] ?? 0))) + 1;
-  // The reviewer reads the code in a worktree at the task head when a Job changed any, so it need not hunt for the head's ref.
-  const repo = jobs.map((j) => str(j.jobPost?.body?.repo)).find(Boolean);
+  const after = builds.length ? builds : jobs;
+  // The reviewer reads the code in a worktree at the task head when a Job it reviews changed any, so it need not hunt for the head's ref;
+  // only the Jobs it reviews give it a repo.
+  const repo = after.map((j) => str(j.jobPost?.body?.repo)).find(Boolean);
   return {
     id: `J-${next}`,
-    body: { title: 'Review the work', role: 'reviewer', brief: 'Review every finished Job of this task against the plan. Accept it, or list what must change.', after: (builds.length ? builds : jobs).map((j) => j.id), ...(repo ? { repo } : {}) },
+    body: {
+      title: 'Review the work', role: 'reviewer', brief: 'Review every finished Job of this task against the plan. Accept it, or list what must change.', after: after.map((j) => j.id),
+      ...(repo ? { repo } : {}),
+    },
   };
 }

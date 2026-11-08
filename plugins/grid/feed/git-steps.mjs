@@ -448,6 +448,29 @@ export function taskCleanup({ task, repo } = {}, o = {}) {
   };
 }
 
+// Removes the worktrees of a Job that only reads the code (a runner, reviewer or checker), whatever its build output left in them:
+// such a Job never submits, so there is nothing to keep. A worktree already gone is fine. Other Jobs' worktrees stay.
+export function jobDiscard({ task, job, repo } = {}, o = {}) {
+  const c = conf(o);
+  const errors = badInput(task, job, c);
+  if (job === undefined) errors.push('job is required: a Job id such as J-3');
+  if (errors.length) return fail(...errors);
+  const d = dirsOf(repo, c);
+  if (!d.ok) return d;
+  const wts = jobWorktrees(d.top, task, c);
+  if (!wts.ok) return wts;
+  const errs = [];
+  const removed = [];
+  for (const { dir } of wts.items.filter((w) => w.job === job)) {
+    g(d.top, ['worktree', 'unlock', dir], c);
+    const r = g(d.top, ['worktree', 'remove', '--force', dir], c);
+    if (r.ok || !fs.existsSync(dir)) removed.push(dir);
+    else errs.push(...r.errors);
+  }
+  g(d.top, ['worktree', 'prune'], c);
+  return errs.length ? fail(...errs) : { ok: true, task, job, worktrees: removed };
+}
+
 // What the Orchestrator's land Job runs: land, and only when that succeeded, clear the task's refs/grid/<task>/ refs (here and on the remote).
 // `cleanup: false` lands and leaves the refs (a sibling Job is still open). A failed land returns its own error and touches nothing, so a retry still finds the head. A cleanup that cannot finish (a Job worktree with
 // unsent work) does not undo the land: the result stays ok and carries `cleanup_errors`, and `task cleanup` can be run again.
