@@ -38,6 +38,9 @@ func TestPersonWithdrawCLI(t *testing.T) {
 			if err := os.MkdirAll(task, 0700); err != nil {
 				t.Fatal(err)
 			}
+			if err := os.WriteFile(filepath.Join(home, "projects", "example", "project-roles.json"), []byte(`{"people":[{"id":"person","perm":"Client"}]}`), 0600); err != nil {
+				t.Fatal(err)
+			}
 			const taskID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 			for path, data := range map[string]string{filepath.Join(home, "VERSION"): "1\n", filepath.Join(home, "machine"): "01ARZ3NDEKTSV4RRFFQ69G5FAW\n", filepath.Join(task, "task.md"): "---\nid: " + taskID + "\n---\n"} {
 				if err := os.WriteFile(path, []byte(data), 0600); err != nil {
