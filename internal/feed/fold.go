@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
@@ -73,18 +74,5 @@ func writeProjection(dir, name string, v any) error {
 	if err != nil {
 		return err
 	}
-	data = append(data, '\n')
-	f, err := os.CreateTemp(dir, ".projection-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), filepath.Join(dir, name))
+	return atomicfile.Write(filepath.Join(dir, name), append(data, '\n'), 0o600)
 }
