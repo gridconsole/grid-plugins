@@ -110,6 +110,7 @@ const BARE_CLI = new RegExp(`(?:^|[\\s(])(?:${CLI_NAMES})(?!-)\\s+(?!sure\\b|it\
 const BARE_CLI_WITH_ARGS = new RegExp(`(?:^\\s*|[\\s(])(?:${CLI_NAMES})(?!-)\\b[^.\\n;]*?(?:\\s--?[a-z][\\w-]*|[\\w.-]*/[\\w./-]+|\\b\\w+\\.(?:mjs|js|sh|rs|toml|json)\\b)`, 'i');
 // Interaction verbs mean a browser check whatever else the brief names; a bare "page" or "tab" does only when no command is run.
 const BROWSER_STRONG = /\b(?:click|clicks|clicking|screenshot|screenshots|navigate|navigates)\b/i;
+const INTERACTION_NOUN = /\b(?:click|clicks|clicking|screenshot|screenshots)[\s-]+(?:\w+[\s-]+)?(?:tests?|suites?|handlers?)\b/gi;
 const BROWSER_WEAK = /\b(?:page|pages|tab|tabs)\b/i;
 // A backticked span is a command when its first word is a CLI name, or it starts with ./ or /, or has a --flag; `Needs you` is a UI label.
 const commandSpans = (t) => [...t.matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim())
@@ -122,9 +123,10 @@ export function jobRole(job) {
   if (role !== 'checker') return { role };
   const brief = str(job?.brief);
   const words = prose(brief);
-  if (BROWSER_STRONG.test(words)) return { role };
   const spans = commandSpans(brief).length > 0;
   const explicit = RUN_VERB.test(brief) || (spans && /\b(?:run|runs|running|rerun|execute|executes|exec)\b/i.test(brief));
+  // With an explicit run verb, "click" or "screenshot" right before test(s), suite or handler is a noun ("the click-handler tests"), not an interaction.
+  if (BROWSER_STRONG.test(explicit ? words.replace(INTERACTION_NOUN, ' ') : words)) return { role };
   const command = explicit || spans || BARE_CLI_WITH_ARGS.test(brief) || BARE_CLI.test(brief) && /\b(?:run|execute)\b/i.test(brief);
   if (command && (explicit || !BROWSER_WEAK.test(words))) return { role: 'runner', rerole: REROLED };
   return { role };

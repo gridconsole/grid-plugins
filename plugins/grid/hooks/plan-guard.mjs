@@ -154,9 +154,33 @@ const PLAN_HASH = /plan-hash\.mjs['"]?\s+(?:'([^']+)'|"([^"]+)"|(\S+))/g;
 const SHELL_READY = /(?:'([^']*history\.md)'|"([^"]*history\.md)"|((?:[^\s'"<>|;&]*\/)?history\.md))/g;
 const RECALL_MISSING = 'plan.md has no brain recall line. Add it under ## How we approach it: one `Used: <path>` line for each note of the recall you use, or `Recall: nothing found` when no note bears on the task (the recall hits are in your context, or run `grid-brain recall --task <id>`).';
 
-// Whether the command writes the file (a redirect into it, tee, sed -i), not only reads it: a grep for `plan ready` passes.
-const SHELL_WRITE = /\btee\b|\bsed\b[^|;&]*\s-[a-zA-Z]*i|>>?\s*(?:'[^']*history\.md'|"[^"]*history\.md"|[^\s'"<>|;&]*history\.md)/;
-const writesTo = (command) => SHELL_WRITE.test(command);
+// Whether the command writes the file (a redirect into it, tee, sed -i, perl -i, a python open for writing), not only reads it: a
+// grep for `plan ready` passes. The whole command is judged, with the file named anywhere in it. One exemption: every write is a
+// tee whose arguments are all plain literal paths (no $, backtick, glob or quote) that are not the file, with no redirect into it
+// and no xargs, so a read piped into `tee /tmp/out` is let through.
+const REDIRECT_TO_FILE = />[>|]?\s*(?:'[^']*history\.md'|"[^"]*history\.md"|[^\s'"<>|;&]*history\.md)/;
+const OTHER_WRITE = /\b(?:sed|perl)\b[^|;&]*\s-[a-zA-Z]*i|\bpython3?\b[\s\S]*?\s-c\b[\s\S]*?(?:\bopen\([\s\S]*['"][wax]\+?b?['"]|\.write_text\()/;
+const LITERAL_PATH = /^[A-Za-z0-9_.\/~+@%,:=-]+$/;
+function writesTo(command, file, cwd) {
+  const hasTee = /\btee\b/.test(command);
+  if (REDIRECT_TO_FILE.test(command) || OTHER_WRITE.test(command)) return true;
+  if (!hasTee) return false;
+  if (/\bxargs\b/.test(command) || /\b(?:cp|mv|dd|install|ln)\b|\bof=/.test(command)) return true;
+  if (/\$/.test(command.replace(/'[^']*'/g, ''))) return true;
+  for (const m of command.matchAll(/\btee\b([^|;&\n<>]*)/g)) {
+    for (const w of m[1].trim().split(/\s+/).filter(Boolean)) {
+      if (w.startsWith('-')) continue;
+      if (!LITERAL_PATH.test(w)) return true;
+      if (realNative(path.resolve(cwd, expandHome(w))) === file) return true;
+    }
+  }
+  return false;
+}
+
+// A tee word with a glob whose last part matches history.md is a candidate file too (tee dir/hist*.md).
+const globCandidates = (command) => [...command.matchAll(/\btee\b([^|;&\n<>]*)/g)].flatMap((m) => m[1].trim().split(/\s+/))
+  .filter((w) => /[*?[]/.test(w) && new RegExp(`^${path.basename(w).replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`).test('history.md'))
+  .map((w) => path.join(path.dirname(w), 'history.md'));
 
 function recallGate(input, projects) {
   const command = str(input.tool_input?.command);
@@ -177,9 +201,9 @@ function recallGate(input, projects) {
     }
   }
   if (command.includes('plan ready')) {
-    for (const m of command.matchAll(SHELL_READY)) {
-      const file = m[1] ?? m[2] ?? m[3];
-      if (writesTo(command) && held(file)) return deny(`This command is not run: it adds a plan ready line to ${file}, and ${RECALL_MISSING}${OFF}`);
+    const files = [...[...command.matchAll(SHELL_READY), ...command.replace(/["']/g, '').matchAll(SHELL_READY)].map((m) => m[1] ?? m[2] ?? m[3]), ...globCandidates(command)];
+    for (const file of files) {
+      if (writesTo(command, realNative(path.resolve(cwd, expandHome(file))), cwd) && held(file)) return deny(`This command is not run: it adds a plan ready line to ${file}, and ${RECALL_MISSING}${OFF}`);
     }
   }
   return undefined;
