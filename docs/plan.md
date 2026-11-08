@@ -130,6 +130,35 @@ step prose, `verify:` and the new job fields still change the hash. In particula
 normalization is deliberately limited to the old algorithm. The short hash is
 an approval compatibility value, not a cryptographic integrity guarantee.
 
+## Approval digest
+
+Approval receipts also store a full SHA-256 `plan_digest`. It uses the same
+canonicalization as the short hash, but processes line one and retains indented
+`evidence:` and `needs:` lines in steps. A revision heading or first-step edit
+therefore changes the digest even when the six-digit hash stays the same.
+Bare checkbox ticks, trailing whitespace, CRLF, boundary blank lines, and
+`## Where it stands` prose rewrites preserve approval. Changing evidence or
+needs still requires approval; ticking a step together with new evidence is
+not a tick-only edit.
+
+Plan line ranges and generic heading anchors must select only lines retained
+by this canonicalization. Selecting the status heading, omitted status prose,
+or trimmed boundary blank lines is refused, including through plan aliases.
+Step and verify anchors continue to select their defined plan content.
+
+Receipts remain valid only if both the stored short hash and full digest match
+(and the task and gate checks pass). Pre-L107 canonical receipts omitted line
+one: a normal titled plan needs reapproval even if its heading has not changed.
+A blank first line can leave the old canonical digest unchanged. L107 raw-file
+receipts survive only if their stored digest equals the new canonical digest;
+raw text that already equals the canonical form is one such case. Receipts
+without a full digest remain invalid. See `docs/lanes/L107R.md` for tested cases.
+
+After reviewing a stale plan, obtain its current short hash with
+`grid plan hash --task T-NN`, then use
+`grid approve T-NN --plan-hash <current-hash>` while the task is waiting at the
+plan gate. An implicit approval does not migrate a stale receipt.
+
 ## Writes and history
 
 Write requires a nonempty `Used:` citation or exactly `Recall: nothing found`.
