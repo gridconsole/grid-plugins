@@ -44,7 +44,7 @@ func TestWorkflowFilesAllProjects(t *testing.T) {
 	if files[1].Scope != "project" || *files[1].Project != "alpha" || files[1].Rev == nil || files[1].Text != "# Alpha\n" {
 		t.Fatalf("alpha: %+v", files[1])
 	}
-	if *files[2].Project != "beta" || files[2].Text != "" {
+	if *files[2].Project != "beta" || files[2].Rev != nil || files[2].Text != "" {
 		t.Fatalf("absent beta: %+v", files[2])
 	}
 }

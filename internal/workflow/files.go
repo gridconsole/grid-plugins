@@ -26,7 +26,7 @@ type File struct {
 	Text    string  `json:"text"`
 }
 
-// fileProblem is kept separate from parser diagnostics until the answer is built.
+// fileProblem ties an I/O failure to its source-file entry.
 type fileProblem struct {
 	index int
 	err   error

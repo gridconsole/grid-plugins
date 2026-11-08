@@ -135,7 +135,7 @@ func TestWorkflowCheckAgent(t *testing.T) {
 	assertParsed(t, Parse(text, ""), Parsed{Templates: []Template{want}, Errors: []Problem{}})
 }
 
-// grid-core/src/workflows.rs:1404-1435: sizes and the old worker name.
+// grid-core/src/workflows.rs:1410-1435: sizes and the old worker name.
 func TestWorkflowSizesAndOldWorker(t *testing.T) {
 	for _, tc := range []struct{ cell, want string }{{"L S", "SL"}, {"all", "SNL"}, {"S S", ""}, {"", ""}, {"M", ""}} {
 		if got := sizesOf(tc.cell); got != tc.want {
@@ -196,5 +196,62 @@ func TestWorkflowSampleTemplates(t *testing.T) {
 			}
 			assertParsed(t, again, got)
 		})
+	}
+}
+
+func TestWorkflowParseBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		name, text, message string
+		line                int
+	}{
+		{"empty", "", "the file must start with \"# Workflows\"", 0},
+		{"NUL", "# Workflows\n\x00", "the file holds a NUL byte", 0},
+		{"indented heading", " # Workflows\n", "the file must start with \"# Workflows\"", 1},
+		{"nameless section", "# Workflows\n##\n", "the name is empty", 2},
+		{"missing applies", projectText("review rounds: 2", twoSteps), "the workflow has no \"applies when\" line", 3},
+		{"missing rounds", projectText("applies when: label a", twoSteps), "the workflow has no \"review rounds\" line", 3},
+		{"duplicate key", projectText(labelKeys+"\nreview rounds: 2", twoSteps), "\"review rounds\" is given twice", 6},
+		{"bad research", projectText(labelKeys+"\nresearch: later", twoSteps), "research must be \"first\"", 6},
+		{"no table", projectText(labelKeys, ""), "the workflow has no step table", 3},
+		{"bad header", projectText(labelKeys, strings.Replace(twoSteps, "| # |", "| number |", 1)), "the table header must be | # | step | kind | who | [runs |] [sizes |] on reject, back to |", 7},
+		{"bad separator", projectText(labelKeys, strings.Replace(twoSteps, "|---|", "|x|", 1)), "the line under the table header must be |---|---|...|", 8},
+		{"number", projectText(labelKeys, strings.Replace(twoSteps, "| 1 |", "| 01 |", 1)), "step 1 is numbered \"01\"", 9},
+		{"duplicate step", projectText(labelKeys, strings.Replace(twoSteps, "Approve it", "write it", 1)), "two steps are named \"write it\"", 10},
+		{"trailing prose", projectText(labelKeys, twoSteps+"\nprose\n"), "a line after the step table", 12},
+		{"bad ask", projectText(labelKeys, strings.Replace(twoSteps, "| run |", "| ask |", 1)), "an ask step's who is \"<agent> asks, you answer\"", 9},
+		{"bad together", projectText(labelKeys, strings.Replace(twoSteps, "| run |", "| make-together |", 1)), "a make-together step's who is \"you and <agent>\"", 9},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Parse(tc.text, "helios")
+			if len(got.Templates) != 0 || len(got.Errors) != 1 || got.Errors[0].Message != tc.message {
+				t.Fatalf("%+v", got)
+			}
+			line := 0
+			if got.Errors[0].Line != nil {
+				line = *got.Errors[0].Line
+			}
+			if line != tc.line {
+				t.Fatalf("line %d want %d", line, tc.line)
+			}
+		})
+	}
+	text := projectText(labelKeys, twoSteps)
+	want := Parsed{Templates: []Template{expectedTemplate("Rate change", "helios", false)}, Errors: []Problem{}}
+	assertParsed(t, Parse(strings.ReplaceAll(text, "\n", "\r\n"), "helios"), want)
+	assertParsed(t, Parse(strings.Replace(text, "review rounds: 2", "review rounds: +02", 1), "helios"), want)
+}
+
+// Go uses simple Unicode lowercase; Rust uses full/contextual lowercase.
+// These non-ASCII duplicate-name differences are recorded in the lane notes.
+func TestWorkflowUnicodeNameComparison(t *testing.T) {
+	for _, tc := range []struct {
+		first, second       string
+		templates, problems int
+	}{{"İ", "i", 1, 1}, {"ΟΣ", "ος", 2, 0}} {
+		text := "# Workflows\n" + sectionText(tc.first, labelKeys, twoSteps) + sectionText(tc.second, labelKeys, twoSteps)
+		got := Parse(text, "helios")
+		if len(got.Templates) != tc.templates || len(got.Errors) != tc.problems {
+			t.Fatalf("%+v: %+v", tc, got)
+		}
 	}
 }
