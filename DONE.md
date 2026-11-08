@@ -1,0 +1,78 @@
+# Lane L28 completion
+
+Built `internal/settings` and registered the agent, skill, setup and hook-settings
+commands. Added personal/project inheritance, strict JSON validation with allowed
+key lists, setup answer recording, shared hook-level reads, and nonblocking hook
+warnings. All settings writes use `internal/fslock` and the task store's atomic
+writer, moved into `internal/atomicfile` and reused by tasks. Project identity uses
+the existing `internal/project` and `internal/where` APIs. No project or signal
+commands were added. See [docs/settings.md](docs/settings.md) for the command,
+allowed-value and file-format tables.
+
+## Validation
+
+Run from this checkout, with the default TMPDIR:
+
+```sh
+make test
+make lint
+GOOS=windows go build ./...
+GOOS=darwin go build ./...
+```
+
+All four passed on the Linux host. macOS execution was not available; Darwin was
+cross-built, and tests resolve temporary-directory symlinks rather than assuming
+`/tmp` or `/var` is a real directory. No platform-specific lock or no-follow code
+was added; settings uses `internal/fslock`'s existing build-tagged implementations.
+
+Tests include table-driven allowed/invalid values, four checked-in CLI JSON
+goldens, project overrides of personal values, continued field inheritance,
+concurrent updates without lost writes, symlink refusals, and byte-identical
+settings/answer records after invalid input. Hook tests cover direct guard calls,
+PreToolUse, PermissionRequest, warning arbitration, invalid configuration, and
+SessionStart context suppression with environment initialization retained. Existing
+legacy golden tests still pass.
+
+## Intended differences from the old plugin
+
+Reference paths below are relative to the supplied read-only reference tree.
+
+| Difference | Reference and reason |
+| --- | --- |
+| Go commands own settings writes, with kernel locks and synced atomic replacement. The old setup scripts rewrote Markdown directly. | `docs/migration.md:68`; `docs/plugin-design.md:123`; `old-plugin/skills/setup/scripts/drop-proposed-questions.mjs:47`; `old-plugin/skills/setup/scripts/lands-recommendation.mjs:20`. |
+| Settings live outside repositories in the single Grid home, as personal and project JSON overrides. Project metadata is read through the new front-matter API and is not changed. | `docs/plugin-design.md:96`; `old-plugin/skills/setup/SKILL.md:12` describes the older named-home and folder/repo metadata. The JSON settings layout is this lane's explicit storage choice; the references do not specify one for these commands. |
+| Project model and effort fields inherit independently over personal values; unknown names, keys, types, duplicate keys and values are refused. Models are canonical lowercase; the prototype's title case is accepted at command/setup input. | `prototype/settings.html:2278`; `docs/plugin-design.md:247`; `old-plugin/skills/setup/SKILL.md:76`. The command exposes the complete prototype effort set, including low and xhigh. |
+| Agent defaults follow the new design: grid-library replaces grid-brief-writer, and grid-checker defaults to Sonnet. | `docs/plugin-design.md:234` through `docs/plugin-design.md:245`; the old checker's Haiku default is `old-plugin/agents/grid-checker.md:4`. |
+| The skill catalog uses the twelve new skills, with the renamed and merged skills; retired names, including routing, are refused with the allowed list. These are enablement settings, not edits to installed skill prose. | `docs/plugin-design.md:254` through `docs/plugin-design.md:269`; `old-plugin-map.md:88`. |
+| Routing Markdown is not read or rewritten. Agent model/effort settings are structured values; no routing-rule authoring command is introduced. | `old-plugin/skills/routing/SKILL.md:10` and `:47`; `docs/plugin-design.md:269` moves routing into the agents topic. Topic synchronization remains a separate integration, described below. |
+| Setup records accepted setting answers from a JSON file, with optional --answers file/stdin input, rather than reading repositories, writing proposals/questions, withdrawing questions, or recommending merges. Successful calls replace the answer set; invalid input writes nothing. The file is not auto-applied to settings or topics. | `old-plugin/skills/setup/SKILL.md:10`, `:71`, `:76`; `docs/plugin-design.md:261`; `docs/migration.md:68`. The supplied old skill has no answers-file format, so this lane documents one using its twelve setting keys. Landing/deploy/long-job enums come from `prototype/project.html:1273`; model/effort enums come from `prototype/settings.html:2278`. |
+| Explicit per-hook off/warn/block levels affect the existing guards. Warn emits a systemMessage without a permission refusal. Default deny behavior remains unchanged; informational hooks default to warn, translating the prototype's never-blocks presentation. | The lane request explicitly requires all three levels, superseding the prototype's always-on gates (`prototype/settings.html:4754`, `:4776`) and the new design's hard-never intent (`docs/plugin-design.md:90`). The legacy environment switch remains supported (`old-plugin-map.md:37`), and does not disable host-guard (`:38`). |
+| brief-lint remains a separately configurable existing guard; job-lint is reserved for its future consumer. Turning off SessionStart context keeps environment initialization. | `old-plugin-map.md:39`; `prototype/settings.html:4755`, `:4762`, `:4776`. Hook settings do not add currently absent hook implementations. |
+| Ordinary settings failures use the CLI house convention of exit 1; argument errors use exit 2. Hook events retain exit 0. | The broader installer flow at `docs/plugin-design.md:482` specifies exit 2 for malformed installer settings. This lane's setup command records project answers, so it follows the existing data-command error convention instead. |
+
+## Boundaries and remaining integration
+
+The supplied old setup skill writes proposals and question Markdown, not an
+answers file. The new references also do not specify an answers-file encoding.
+The implemented JSON contract is documented and tested, but an updated setup
+skill must emit it; no legacy Markdown importer is claimed.
+
+The design puts live values in the agents/skills topics
+(`docs/plugin-design.md:247`, `:269`; `docs/brain-feed.md:300`). This lane supplies
+the requested settings store and commands. It does not mirror values into brain
+entries, indexes, logs or Feed posts, because no settings-topic schema or atomic
+multi-record update contract was supplied. Workers and skill loaders must consume
+`settings.Store.Effective`; this lane does not implement those consumers or alter
+running sessions.
+
+Setup installation/removal, shell links, user permission blocks, Codex config,
+worker services, discovery and test-floor brain proposals are broader setup work
+(`docs/plugin-design.md:102`, `:106`, `:123`, `:482`). They are outside this lane's
+answer-recording deliverable. Project and signal commands belong to other lanes.
+
+The existing dispatcher silently suppresses every hook command when the Grid home
+has an unsupported format, including hook level/levels. That pre-dispatch behavior
+was preserved because changes to `internal/cli/cli.go` were restricted to command
+registration. It performs no settings writes in that case. Windows cross-builds
+pass, but writes retain `internal/fslock`'s existing unsupported-platform error;
+Windows lock support was not changed.
