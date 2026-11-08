@@ -4,15 +4,19 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"strings"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/intent"
+	"github.com/gridconsole/grid-plugins/internal/lease"
 
 	contractdata "github.com/gridconsole/grid-plugins/contract"
 	"github.com/gridconsole/grid-plugins/internal/testgit"
@@ -182,7 +186,7 @@ func TestContractCommandsApp(t *testing.T) {
 						}
 						out = run(cwd, "worker", "list", "--json")
 					} else if name == "feed-state" || name == "feed-post" || name == "job-next" {
-						out = contractCommandFeed(t, h, name, populated)
+						h, out = contractCommandFeed(t, name, populated)
 					} else {
 						if name == "task-move" {
 							cwd = filepath.Join(h.root, "checkout")
@@ -339,11 +343,48 @@ func contractCommandNormalize(h *harness, v any) any {
 	return v
 }
 
-// Pending the fixture exception: task new does not supply the stable Feed id.
-func contractCommandFeed(t *testing.T, h *harness, name string, populated bool) []byte {
+// Feed calls use the existing stable-ID task fixture until task new owns that ID.
+func contractCommandFeed(t *testing.T, name string, populated bool) (*harness, []byte) {
 	t.Helper()
-	t.Skip("Feed fixture setup requires a stable task id absent from task new")
-	return nil
+	h, task := feedHarness(t)
+	h.env.Machine = feedMachine
+	run := func(args ...string) []byte {
+		t.Helper()
+		if code := h.run(task, args...); code != 0 {
+			t.Fatalf("%s: exit %d: %s", strings.Join(args, " "), code, h.errb)
+		}
+		return append([]byte(nil), h.out.Bytes()...)
+	}
+	if name == "feed-post" {
+		args := []string{"feed", "post", "--type", "post", "--body", `{"ref":"task","kind":"message","text":"Example message"}`, "--json"}
+		if populated {
+			args = append(args, "--job", "J-1", "--attempt", "1")
+		}
+		return h, run(args...)
+	}
+	if populated || name == "job-next" {
+		store := feed.Store{TaskDir: task, TaskID: feedTaskID}
+		writer := feed.Writer{Author: feed.Author{ID: "member", Role: "member"}, Worker: "member@" + feedMachine, Lease: "task"}
+		// Task tenure has no CLI writer; all Feed records below go through the CLI.
+		grant, err := (lease.TaskStore{Feed: store}).TakeTask(writer, os.Getpid(), contract.FormatTime(time.Now()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GRID_LEASE_EPOCH", fmt.Sprintf("0.%d", grant.Fence))
+		run("feed", "handover", "--reason", "Example handover", "--lease", "task", "--json")
+		if populated {
+			body, err := os.ReadFile("../../contract/fixtures/job-record/valid/basic.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			run("job", "post", "J-1", "--type", "job", "--body", string(body), "--json")
+			run("feed", "post", "--type", "question", "--body", `{"question":"Continue?","who":"owner"}`, "--job", "J-1", "--lease", "task", "--json")
+		}
+	}
+	if name == "feed-state" {
+		return h, run("feed", "state", "--json")
+	}
+	return h, run("job", "next", "--json")
 }
 
 // This byte-for-byte baseline was captured before adding any cmd- schema.

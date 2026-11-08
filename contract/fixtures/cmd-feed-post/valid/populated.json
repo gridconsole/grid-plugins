@@ -1,0 +1,31 @@
+{
+  "data": false,
+  "post": {
+    "after": [],
+    "at": "2026-11-08T17:58:32.696Z",
+    "attempt": 1,
+    "author": {
+      "id": "member",
+      "role": "member"
+    },
+    "body": {
+      "kind": "message",
+      "ref": "task",
+      "text": "Example message"
+    },
+    "fence": 0,
+    "gen": 0,
+    "id": "01M6Y4ZPZRC5CRN0C9ARPFT8DG",
+    "job": "J-1",
+    "lease": null,
+    "re": null,
+    "seq": 1,
+    "task": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "tier": "person-team",
+    "type": "post",
+    "type_v": 1,
+    "wake": null,
+    "worker": "member@01ARZ3NDEKTSV4RRFFQ69G5FAW"
+  },
+  "tier": "person-team"
+}
