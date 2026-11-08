@@ -235,3 +235,44 @@ func TestFailedRegistrationNeverAuthorizesOSRemoval(t *testing.T) {
 		t.Fatal("removed OS label after failed registration")
 	}
 }
+
+func TestScheduleFollowsSymlinkedParentFolders(t *testing.T) {
+	home := gridhome.Real(t.TempDir())
+	// A dotfile manager keeps the real ~/.config elsewhere.
+	target := filepath.Join(home, "dotfiles", "config")
+	if err := os.MkdirAll(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(home, ".config")); err != nil {
+		t.Fatal(err)
+	}
+	store := Store{GridHome: filepath.Join(home, ".grid")}
+	if _, err := store.Add("daily", "1h", "grid version"); err != nil {
+		t.Fatal(err)
+	}
+	calls := &fakeOS{}
+	s := Scheduler{Home: home, GridHome: store.GridHome, Binary: filepath.Join(home, "grid"), Backend: Systemd{}, Runner: calls}
+	p, err := s.plan("", "daily")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Schedule(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(filepath.Join(target, "systemd", "user", filepath.Base(p.Files[0].Path))); err != nil {
+		t.Fatalf("timer not written through the symlinked folder: %v", err)
+	}
+	if err = s.Unschedule(context.Background(), "", "daily"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(p.Files[0].Path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("timer remains: %v", err)
+	}
+	// The timer file itself is still never followed.
+	if err = os.Symlink(filepath.Join(home, "elsewhere"), p.Files[0].Path); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Schedule(context.Background(), store); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("timer file symlink accepted: %v", err)
+	}
+}

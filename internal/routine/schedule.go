@@ -140,19 +140,21 @@ func (s Scheduler) readState(p TimerPlan) (timerState, error) {
 func (s Scheduler) checkFiles(p TimerPlan) error {
 	for _, f := range p.Files {
 		rel, err := filepath.Rel(s.Home, f.Path)
-		if err != nil {
-			return err
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("timer file is outside the home folder")
 		}
-		path, err := localdata.Safe(s.Home, rel)
-		if err != nil {
-			return err
-		}
+		// Dotfile managers symlink ~/.config and the like, so parent folders are
+		// followed; only the timer file itself must not be a symlink.
+		path := f.Path
 		st, err := os.Lstat(path)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if err != nil {
 			return err
+		}
+		if st.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing symlink: %s", path)
 		}
 		if !st.Mode().IsRegular() || st.Size() > 1<<20 {
 			return fmt.Errorf("timer file is not a small regular file")
