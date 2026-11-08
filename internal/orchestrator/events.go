@@ -102,7 +102,7 @@ func (s Store) park(snap Snapshot, j *contract.Job, m *jobMemory) error {
 	err := (question.Store{TaskDir: s.Feed.TaskDir}).ReserveGate(gate, func(id string) error {
 		_, err := s.Feed.Post(feed.Input{Type: "question", Job: j.ID, Wake: m.Failure + "/1", Body: map[string]any{
 			"question": "Three attempts made no progress. How should " + j.ID + " continue?",
-			"who":      owner, "blocking": true, "options": []string{"Keep parked", "Retry"}, "why": strings.Join(m.Failures, ", "),
+			"who":      owner, "blocking": true, "options": []string{"Keep parked", "Retry"}, "recommended": "Keep parked", "why": strings.Join(m.Failures, ", "),
 			"gate": map[string]any{"id": id, "kind": "person", "default": "Keep parked", "at": contract.FormatTime(s.now().Add(24 * time.Hour))},
 		}}, s.Writer)
 		return err
