@@ -144,3 +144,23 @@ func TestAppWarningOncePerSession(t *testing.T) {
 		t.Fatal(w)
 	}
 }
+
+func TestCheckRefusesHTTPSToHTTPRedirect(t *testing.T) {
+	plainHits := 0
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		plainHits++
+		fmt.Fprint(w, `{"version":"9.0.0"}`)
+	}))
+	defer plain.Close()
+	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL, http.StatusFound)
+	}))
+	defer secure.Close()
+	saved := manifestClient.Transport
+	manifestClient.Transport = secure.Client().Transport
+	defer func() { manifestClient.Transport = saved }()
+	r := Check(CheckOptions{URL: secure.URL, GridHome: t.TempDir(), Current: "1.0.0"})
+	if r.Status != "unavailable" || plainHits != 0 {
+		t.Fatalf("%+v plain hits=%d", r, plainHits)
+	}
+}

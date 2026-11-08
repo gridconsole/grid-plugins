@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -89,13 +90,24 @@ func Check(o CheckOptions) CheckResult {
 	return result(o.Current, release, false, false)
 }
 
+// manifestClient follows redirects except a step from https down to http.
+var manifestClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("too many redirects")
+	}
+	if via[0].URL.Scheme == "https" && req.URL.Scheme != "https" {
+		return errors.New("refusing a redirect from https to http")
+	}
+	return nil
+}}
+
 func fetch(ctx context.Context, address string) (Manifest, error) {
 	var m Manifest
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
 	if err != nil {
 		return m, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := manifestClient.Do(req)
 	if err != nil {
 		return m, err
 	}
