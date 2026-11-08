@@ -65,6 +65,10 @@ func check(ctx context.Context, env Env, name string) Report {
 		return r
 	}
 	r.Found, r.Path = true, gridhome.Tilde(binary, env.Home)
+	if isBatchLauncher(binary) {
+		r.Fix = fixLine(name, "install", false, runtime.GOOS)
+		return r
+	}
 	probe := func(args ...string) (string, int) {
 		child, cancel := context.WithTimeout(ctx, Wait)
 		defer cancel()

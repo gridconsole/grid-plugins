@@ -9,6 +9,26 @@ import (
 	"testing"
 )
 
+func TestIsBatchLauncher(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{"claude.CMD", true},
+		{"codex.bat", true},
+		{`C:\agents\claude.CmD`, true},
+		{`C:\agents\codex.BaT`, true},
+		{"claude", false},
+		{"codex.exe", false},
+		{"claude.cmd.exe", false},
+		{filepath.Join("agents.cmd", "claude"), false},
+	} {
+		if got := isBatchLauncher(tc.path); got != tc.want {
+			t.Errorf("isBatchLauncher(%q) = %v; want %v", tc.path, got, tc.want)
+		}
+	}
+}
+
 func TestResolveAgentLaunchPath(t *testing.T) {
 	first, second := t.TempDir(), t.TempDir()
 	name := "claude"

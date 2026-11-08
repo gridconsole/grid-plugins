@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -61,6 +62,34 @@ func TestAgentCheckMissing(t *testing.T) {
 		if r.Found || r.Path != "" || r.Version != "" || r.SignedIn != nil || r.Fix == "" {
 			t.Fatalf("%+v", r)
 		}
+	}
+}
+
+func TestAgentCheckBatchLaunchers(t *testing.T) {
+	for _, extensions := range [][2]string{{".CMD", ".bat"}, {".cmd", ".BAT"}, {".CmD", ".BaT"}} {
+		t.Run(strings.Join(extensions[:], "/"), func(t *testing.T) {
+			var calls atomic.Int32
+			env := fakeEnv(t, func(context.Context, []string) (string, int) {
+				calls.Add(1)
+				return "3.0.0", 0
+			})
+			env.Lookup = func(name string) (string, error) {
+				ext := extensions[0]
+				if name == "codex" {
+					ext = extensions[1]
+				}
+				return filepath.Join(env.Home, name+ext), nil
+			}
+			for i, r := range Check(context.Background(), env) {
+				wantPath := "~" + string(filepath.Separator) + r.Agent + extensions[i]
+				if !r.Found || r.Path != wantPath || r.Version != "" || r.SignedIn != nil || r.Fix != fixLine(r.Agent, "install", false, runtime.GOOS) {
+					t.Errorf("batch launcher report: %+v", r)
+				}
+			}
+			if got := calls.Load(); got != 0 {
+				t.Errorf("runner called %d times for batch launchers; want zero", got)
+			}
+		})
 	}
 }
 

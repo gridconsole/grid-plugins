@@ -3,7 +3,15 @@ package agent
 import (
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
+
+// isBatchLauncher is platform independent so every check refuses launchers
+// that Windows would run through cmd.exe instead of as a direct child.
+func isBatchLauncher(binary string) bool {
+	ext := filepath.Ext(binary)
+	return strings.EqualFold(ext, ".bat") || strings.EqualFold(ext, ".cmd")
+}
 
 // resolveAgent searches only the supplied launch PATH, in directory order.
 // Qualifying each candidate lets LookPath apply the platform's executable
