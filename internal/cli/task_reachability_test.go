@@ -16,7 +16,7 @@ func TestTaskLeaseFreshHomeSequence(t *testing.T) {
 	h.env.Machine = "" // Let task new allocate the identity of this fresh home.
 	t.Setenv("GRID_HOME", h.gridHome)
 	t.Setenv("GRID_MEMBER", "member")
-	t.Setenv("GRID_ROLE", "member")
+	t.Setenv("GRID_ROLE", "owner") // Personal is owner-only (L67R).
 	for _, key := range []string{"GRID_WORKER", "GRID_LEASE", "GRID_LEASE_EPOCH", "GRID_JOB", "GRID_WAKE", "GRID_ATTEMPT"} {
 		t.Setenv(key, "")
 	}
