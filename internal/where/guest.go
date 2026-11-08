@@ -16,7 +16,21 @@ import (
 )
 
 func (r Resolver) guest() bool {
-	return contract.TierFor(r.Caller.Role) == contract.PersonGuest
+	return r.Caller.IsGuest()
+}
+
+// IsGuest applies invitation-only access to guest, external and unknown callers.
+// TierFor describes wire tiers, so its Agent fallback needs the same explicit
+// machine-role allowlist as Personal access; an unknown string grants no access.
+func (c Caller) IsGuest() bool {
+	switch contract.TierFor(c.Role) {
+	case contract.PersonTeam:
+		return false
+	case contract.Agent:
+		return !DefaultPersonalAllowed(c)
+	default:
+		return true
+	}
 }
 
 // GuestProjectAllowed limits guests to the app's project-roles.json people list.

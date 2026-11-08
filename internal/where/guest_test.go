@@ -278,7 +278,7 @@ func TestProjectRoleScope(t *testing.T) {
 					t.Errorf("visible records=%d, want %d; err=%v", len(records), want, err)
 				}
 				for _, selector := range []string{"beta", "id-beta"} {
-					_, err := f.r.Resolve(Query{Project: selector})
+					_, err := f.r.Resolve(Query{Cwd: f.home, Project: selector})
 					if (err != nil) != tc.restricted {
 						t.Errorf("hidden selector %q: err=%v, restricted=%t", selector, err, tc.restricted)
 					}

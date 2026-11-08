@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/mdfile"
 	"github.com/gridconsole/grid-plugins/internal/project"
@@ -55,7 +54,7 @@ func Key(r where.Resolver, name, key string, value *string) (Result, error) {
 			found = &copy
 		}
 	}
-	guest := contract.TierFor(r.Caller.Role) == contract.PersonGuest
+	guest := r.Caller.IsGuest()
 	if found == nil {
 		if guest {
 			return result, fmt.Errorf("project not found")
