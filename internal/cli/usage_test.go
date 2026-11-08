@@ -170,3 +170,143 @@ func TestUsageCommandFoldsLocalRecords(t *testing.T) {
 		t.Fatalf("%d %s %s", code, out.String(), log.String())
 	}
 }
+
+func TestTokenUsageCLI(t *testing.T) {
+	h, task := usageTask(t)
+	for _, args := range [][]string{
+		{"post", "--job", "lead", "--tokens", "7", "--session", "session-a"},
+		{"post", "--job", "J-1", "--tokens", "3", "--session", "session-b"},
+		{"post", "--job", "lead", "--tokens", "0"},
+	} {
+		if code := h.run(task, append([]string{"usage"}, args...)...); code != 0 {
+			t.Fatalf("post tokens: exit %d: %s", code, h.errb)
+		}
+	}
+	if code := h.run(task, "usage", "show", "--json"); code != 0 {
+		t.Fatal(code, h.errb)
+	}
+	want := `{"jobs":[{"job":"J-1","dollars":0,"minutes":0,"tokens":3,"posts":1},{"job":"lead","dollars":0,"minutes":0,"tokens":7,"posts":2}],"totals":{"dollars":0,"minutes":0,"tokens":10,"posts":3}}` + "\n"
+	if h.out.String() != want {
+		t.Fatalf("token totals JSON: %s", h.out)
+	}
+	if code := h.run(task, "usage", "show"); code != 0 || !strings.Contains(h.out.String(), "tokens 10") {
+		t.Fatalf("show tokens: exit %d: %s %s", code, h.out, h.errb)
+	}
+}
+
+func TestTokenInvalidCLI(t *testing.T) {
+	for _, op := range []string{"post", "budget"} {
+		for _, value := range []string{"-1", "1.5", "lots", "1e3", "+1", "18446744073709551616"} {
+			t.Run(op+"/"+value, func(t *testing.T) {
+				h, task := usageTask(t)
+				args := []string{"usage", "post", "--job", "lead"}
+				if op == "budget" {
+					args = []string{"usage", "budget", "set"}
+				}
+				if code := h.run(task, append(args, "--tokens", value)...); code != 2 || !strings.Contains(h.errb.String(), "non-negative integer") {
+					t.Fatalf("invalid tokens: exit %d: %s", code, h.errb)
+				}
+				if _, err := os.Stat(filepath.Join(task, "usage")); !os.IsNotExist(err) {
+					t.Fatal("invalid tokens wrote data")
+				}
+			})
+		}
+	}
+}
+
+func TestTokenBudgetCLI(t *testing.T) {
+	h, task := usageTask(t)
+	h.write(filepath.Join(h.gridHome, "workspace.md"), "---\ntokens_per_task: 100\n---\n")
+	check := func(args []string, budget, source string) {
+		t.Helper()
+		if code := h.run(task, append(append([]string{"usage", "budget"}, args...), "--json")...); code != 0 {
+			t.Fatalf("token budget: exit %d: %s", code, h.errb)
+		}
+		want := `{"v":1,"dollars":[50,80,100],"minutes":[50,80,100],"tokens":[50,80,100],"budget":{"tokens":` + budget + `},"baseline":{"dollars":0,"minutes":0,"tokens":0},"fired":{},"token_budget_source":"` + source + `"}` + "\n"
+		if h.out.String() != want {
+			t.Fatalf("token budget JSON: %s", h.out)
+		}
+	}
+	check([]string{"show"}, "100", "workspace")
+	check([]string{"set", "--tokens", "200"}, "200", "task")
+	check([]string{"show"}, "200", "task")
+	check([]string{"clear", "--tokens"}, "100", "workspace")
+	if code := h.run(task, "usage", "budget", "show"); code != 0 || !strings.Contains(h.out.String(), "tokens  budget 100") || !strings.Contains(h.out.String(), "source workspace") {
+		t.Fatalf("token budget text: exit %d: %s %s", code, h.out, h.errb)
+	}
+	data, err := os.ReadFile(filepath.Join(task, "usage", "thresholds.json"))
+	if err != nil || strings.Contains(string(data), `"budget":{"tokens"`) || strings.Contains(string(data), "workspace") {
+		t.Fatalf("persisted inherited budget: %s %v", data, err)
+	}
+}
+
+func TestTokenWorkspaceInvalidCLI(t *testing.T) {
+	for _, value := range []string{"0", "-5", "1.5", "lots", "+5", "1e3", "[100]", "18446744073709551616", "missing", "linked", "oversized", "directory", "invalid-utf8"} {
+		t.Run(value, func(t *testing.T) {
+			h, task := usageTask(t)
+			path := filepath.Join(h.gridHome, "workspace.md")
+			switch value {
+			case "missing":
+			case "linked":
+				h.write(filepath.Join(h.gridHome, "other.md"), "---\ntokens_per_task: 100\n---\n")
+				if err := os.Symlink("other.md", path); err != nil {
+					t.Fatal(err)
+				}
+			case "oversized":
+				h.write(path, "---\ntokens_per_task: 100\n---\n"+strings.Repeat("x", 1024*1024+1))
+			case "directory":
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			case "invalid-utf8":
+				h.write(path, "---\ntokens_per_task: 100\n---\n\xff")
+			default:
+				h.write(path, "---\ntokens_per_task: "+value+"\n---\n")
+			}
+			if code := h.run(task, "usage", "budget", "show", "--json"); code != 0 || !strings.Contains(h.out.String(), `"budget":{}`) || !strings.Contains(h.out.String(), `"token_budget_source":"none"`) {
+				t.Fatalf("invalid workspace limit: exit %d: %s %s", code, h.out, h.errb)
+			}
+			if _, err := os.Stat(filepath.Join(task, "usage")); !os.IsNotExist(err) {
+				t.Fatal("budget show wrote data")
+			}
+		})
+	}
+}
+
+func TestTokenNoticeCLI(t *testing.T) {
+	for _, source := range []string{"workspace", "task"} {
+		t.Run(source, func(t *testing.T) {
+			h, task := usageTask(t)
+			if source == "workspace" {
+				h.write(filepath.Join(h.gridHome, "workspace.md"), "---\ntokens_per_task: 100\n---\n")
+			} else if code := h.run(task, "usage", "budget", "set", "--tokens", "100"); code != 0 {
+				t.Fatalf("set token budget: exit %d: %s", code, h.errb)
+			}
+			if code := h.run(task, "usage", "threshold", "set", "--tokens", "80"); code != 0 {
+				t.Fatalf("set token threshold: exit %d: %s", code, h.errb)
+			}
+			for i, amount := range []string{"79", "1", "1", "19", "1"} {
+				if code := h.run(task, "usage", "post", "--job", "lead", "--tokens", amount, "--json"); code != 0 || h.errb.Len() != 0 {
+					t.Fatalf("token notice post: exit %d: %s", code, h.errb)
+				}
+				var result struct {
+					Notices []feed.Record `json:"notices"`
+				}
+				if err := json.Unmarshal(h.out.Bytes(), &result); err != nil {
+					t.Fatal(err)
+				}
+				if i == 1 {
+					if len(result.Notices) != 1 || result.Notices[0].Body["threshold"] != float64(80) || result.Notices[0].Body["tokens"] != float64(80) {
+						t.Fatalf("80%% notice: %s", h.out)
+					}
+				} else if len(result.Notices) != 0 {
+					t.Fatalf("duplicate or early notice: %s", h.out)
+				}
+			}
+			rows, err := (feed.Store{TaskDir: task, TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}).Read(feed.Filter{Type: "usage-notice"})
+			if err != nil || len(rows.Records) != 1 || rows.Records[0].Verdict != "counted" {
+				t.Fatalf("token notice admission: %+v %v", rows, err)
+			}
+		})
+	}
+}

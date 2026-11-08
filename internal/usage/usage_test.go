@@ -160,3 +160,30 @@ func TestReadsCreateNothing(t *testing.T) {
 		t.Fatalf("read created lock: %v", err)
 	}
 }
+
+func TestTokenRecordCompatibility(t *testing.T) {
+	// Version 1 fixture captured from plugin main 5dcc524's Record encoding.
+	const old = `{"v":1,"at":"2026-01-02T03:04:05.678Z","job":"lead","session":"","model":"","dollars":1,"minutes":2}` + "\n"
+	out, _, err := fold(strings.NewReader(old))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(out)
+	if !strings.Contains(string(data), `"tokens":0`) {
+		t.Fatalf("old record tokens: %s", data)
+	}
+	withTokens := strings.Replace(old, `"minutes":2`, `"minutes":2,"tokens":7`, 1)
+	out, _, err = fold(strings.NewReader(old + withTokens))
+	if err != nil {
+		t.Fatalf("token record: %v", err)
+	}
+	data, _ = json.Marshal(out)
+	if !strings.Contains(string(data), `"tokens":7`) {
+		t.Fatalf("token record totals: %s", data)
+	}
+	for _, value := range []string{"null", "-1", "1.5", `"7"`, "18446744073709551616"} {
+		if _, _, err := fold(strings.NewReader(strings.Replace(withTokens, `"tokens":7`, `"tokens":`+value, 1))); err == nil {
+			t.Fatalf("accepted token record %s", value)
+		}
+	}
+}
