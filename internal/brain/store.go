@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
+	"github.com/gridconsole/grid-plugins/internal/safefile"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -83,7 +83,7 @@ func (s Store) scope(level string, create bool) (*os.Root, error) {
 		return root, nil
 	}
 	defer root.Close()
-	if err := noSymlinks(root, prefix); err != nil {
+	if err := safefile.NoSymlinks(root, prefix); err != nil {
 		return nil, err
 	}
 	if create {
@@ -92,59 +92,6 @@ func (s Store) scope(level string, create bool) (*os.Root, error) {
 		}
 	}
 	return root.OpenRoot(prefix)
-}
-
-// Reject symlink aliases as well as escapes: a home knowledge link into a
-// project would otherwise mix the private and shared namespaces.
-func noSymlinks(root *os.Root, path string) error {
-	if !filepath.IsLocal(path) {
-		return fmt.Errorf("brain path must stay within its level")
-	}
-	prefix := ""
-	for _, part := range strings.Split(filepath.Clean(path), string(filepath.Separator)) {
-		prefix = filepath.Join(prefix, part)
-		info, err := root.Lstat(prefix)
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("brain paths cannot be symbolic links")
-		}
-	}
-	return nil
-}
-
-func read(root *os.Root, path string) ([]byte, error) {
-	if err := noSymlinks(root, path); err != nil {
-		return nil, err
-	}
-	info, err := root.Lstat(path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() || info.Size() > 1<<20 {
-		return nil, fmt.Errorf("brain files must be regular files of at most 1 MiB")
-	}
-	f, err := root.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	info, err = f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() || info.Size() > 1<<20 {
-		return nil, fmt.Errorf("brain files must be regular files of at most 1 MiB")
-	}
-	b, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
-	if err == nil && len(b) > 1<<20 {
-		err = fmt.Errorf("brain file exceeds 1 MiB")
-	}
-	return b, err
 }
 
 func randomID() (string, error) {
@@ -163,43 +110,12 @@ func SessionOrigin() (Origin, error) {
 	return Origin{Kind: "session", ID: id, Tier: contract.Agent}, err
 }
 
-func atomicWrite(root *os.Root, path string, data []byte) error {
-	if err := noSymlinks(root, path); err != nil {
-		return err
-	}
-	if err := root.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	id, err := randomID()
-	if err != nil {
-		return err
-	}
-	tmp := filepath.Join(filepath.Dir(path), ".brain-"+id+".tmp")
-	f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
-	}
-	defer root.Remove(tmp)
-	_, err = f.Write(data)
-	if err == nil {
-		err = f.Sync()
-	}
-	closeErr := f.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	return root.Rename(tmp, path)
-}
-
 // locked runs fn while holding an exclusive advisory lock on a file that stays
 // in place. A second writer waits its turn. The kernel drops the lock when the
 // holder exits, so a killed writer leaves nothing to clean up; removing the file
 // would let two writers lock different inodes.
 func locked(root *os.Root, fn func() error) error {
-	if err := noSymlinks(root, lockName); err != nil {
+	if err := safefile.NoSymlinks(root, lockName); err != nil {
 		return err
 	}
 	f, err := root.OpenFile(lockName, os.O_RDWR|os.O_CREATE, 0o600)
@@ -250,7 +166,7 @@ func (s Store) Propose(n Note, origin Origin) (Entry, error) {
 	}
 	err = locked(root, func() error {
 		path := filepath.Join("brain-proposals", n.Name+".md")
-		if _, err := read(root, path); !errors.Is(err, fs.ErrNotExist) {
+		if _, err := safefile.Read(root, path); !errors.Is(err, fs.ErrNotExist) {
 			if err != nil {
 				return err
 			}
@@ -260,7 +176,7 @@ func (s Store) Propose(n Note, origin Origin) (Entry, error) {
 		if err != nil {
 			return err
 		}
-		return atomicWrite(root, path, b)
+		return safefile.AtomicWrite(root, path, b)
 	})
 	if err != nil {
 		return Entry{}, err
@@ -292,7 +208,7 @@ func (s Store) Proposal(level, name string) (Entry, error) {
 }
 
 func readProposal(root *os.Root, level, name string) (Note, error) {
-	b, err := read(root, filepath.Join("brain-proposals", name+".md"))
+	b, err := safefile.Read(root, filepath.Join("brain-proposals", name+".md"))
 	if err != nil {
 		return Note{}, err
 	}
@@ -362,7 +278,7 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 			if err := logDecision(root, n); err != nil {
 				return err
 			}
-			if err := atomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
+			if err := safefile.AtomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
 				return err
 			}
 			result = s.entry(n, true)
@@ -380,7 +296,7 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 				return fmt.Errorf("note name %q already belongs to topic %s", name, existing.Topic)
 			}
 		}
-		if before, err := read(root, path); err == nil {
+		if before, err := safefile.Read(root, path); err == nil {
 			old, err := Parse(before)
 			// The note may have been published before a failed proposal-status
 			// write. Preserve that publication time when recovering the write.
@@ -394,7 +310,7 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 			if err != nil {
 				return err
 			}
-			if err := atomicWrite(root, path, b); err != nil {
+			if err := safefile.AtomicWrite(root, path, b); err != nil {
 				return err
 			}
 		} else {
@@ -407,7 +323,7 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 		if err := logDecision(root, n); err != nil {
 			return err
 		}
-		if err := atomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
+		if err := safefile.AtomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
 			return err
 		}
 		result = s.entry(n, false)
@@ -422,7 +338,7 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 // logDecision runs under the level lock. A stable line makes retries safe when
 // publication succeeds but the final proposal status write is interrupted.
 func logDecision(root *os.Root, n Note) error {
-	before, err := read(root, "knowledge/log.md")
+	before, err := safefile.Read(root, "knowledge/log.md")
 	if errors.Is(err, fs.ErrNotExist) {
 		before = []byte("# Brain log\n\n")
 	} else if err != nil {
@@ -433,7 +349,7 @@ func logDecision(root *os.Root, n Note) error {
 	if strings.Contains(string(before), line) {
 		return nil
 	}
-	return atomicWrite(root, "knowledge/log.md", append(before, []byte(line)...))
+	return safefile.AtomicWrite(root, "knowledge/log.md", append(before, []byte(line)...))
 }
 
 func normalized(n Note) Note {

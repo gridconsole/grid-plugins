@@ -10,6 +10,8 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
+	"github.com/gridconsole/grid-plugins/internal/mdfile"
+	"github.com/gridconsole/grid-plugins/internal/safefile"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -36,7 +38,7 @@ func (s Store) ReadConfig(level, topic, name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return read(root, path)
+	return safefile.Read(root, path)
 }
 
 func (s Store) ConfigNames(level, topic string) ([]string, error) {
@@ -54,7 +56,7 @@ func (s Store) ConfigNames(level, topic string) ([]string, error) {
 		return nil, err
 	}
 	dir := filepath.Dir(path)
-	if err := noSymlinks(root, dir); err != nil {
+	if err := safefile.NoSymlinks(root, dir); err != nil {
 		return nil, err
 	}
 	entries, err := fs.ReadDir(root.FS(), dir)
@@ -91,7 +93,7 @@ func (s Store) EditConfig(level, topic, name string, edit func([]byte) ([]byte, 
 		return err
 	}
 	return locked(root, func() error {
-		old, err := read(root, path)
+		old, err := safefile.Read(root, path)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
@@ -108,7 +110,7 @@ func (s Store) EditConfig(level, topic, name string, edit func([]byte) ([]byte, 
 		if len(data) > 1<<20 {
 			return fmt.Errorf("config entry exceeds 1 MiB")
 		}
-		if err := atomicWrite(root, path, data); err != nil {
+		if err := safefile.AtomicWrite(root, path, data); err != nil {
 			return err
 		}
 		return atomicfile.SyncDir(filepath.Join(root.Name(), filepath.Dir(path)))
@@ -117,11 +119,11 @@ func (s Store) EditConfig(level, topic, name string, edit func([]byte) ([]byte, 
 
 // DecodeConfig uses the same strict front matter parser as knowledge notes.
 func DecodeConfig(data []byte, out any) (string, error) {
-	front, body, err := splitFrontMatter(data)
+	front, body, err := mdfile.Split(data)
 	if err != nil {
 		return "", err
 	}
-	return body, loadFrontMatter(front, out, true)
+	return body, mdfile.Load(front, out, true)
 }
 
 // EncodeConfig also preserves the entry's free-form notes on state updates.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/safefile"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -39,7 +40,7 @@ type Backlinks struct {
 }
 
 func readBacklinks(root *os.Root) (Backlinks, error) {
-	b, err := read(root, "knowledge/backlinks.json")
+	b, err := safefile.Read(root, "knowledge/backlinks.json")
 	if errors.Is(err, fs.ErrNotExist) {
 		return Backlinks{Links: map[string][]Backlink{}}, nil
 	}
@@ -79,7 +80,7 @@ func rows(root *os.Root, level string) ([]TopicRow, []Note, error) {
 				if entry.IsDir() || entry.Name() == "TOPIC.md" || !strings.HasSuffix(entry.Name(), ".md") {
 					continue
 				}
-				data, err := read(root, filepath.Join("knowledge", t.Name, entry.Name()))
+				data, err := safefile.Read(root, filepath.Join("knowledge", t.Name, entry.Name()))
 				var fields map[string]any
 				if err == nil {
 					_, err = DecodeConfig(data, &fields)
@@ -232,11 +233,11 @@ func (s Store) RebuildIndex() (Index, error) {
 			if err != nil {
 				return err
 			}
-			if err := atomicWrite(root, "knowledge/backlinks.json", append(b, '\n')); err != nil {
+			if err := safefile.AtomicWrite(root, "knowledge/backlinks.json", append(b, '\n')); err != nil {
 				return err
 			}
 			text := fmt.Sprintf("generation: %d\nlevel: %s\n", backlinks.Generation, level) + SessionStartText(r)
-			return atomicWrite(root, "knowledge/index.md", []byte(text))
+			return safefile.AtomicWrite(root, "knowledge/index.md", []byte(text))
 		})
 		root.Close()
 		if err != nil {

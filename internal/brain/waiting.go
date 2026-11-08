@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
+	"github.com/gridconsole/grid-plugins/internal/safefile"
 )
 
 // WaitingProposal is a read-only keeper queue row, not a decision or a brain note.
@@ -126,7 +127,7 @@ func (s Store) Waiting(taskDir string) ([]WaitingProposal, error) {
 // must parse strictly; an empty level is the task folder's lenient legacy reader.
 func waitingAt(root *os.Root, prefix, level string) ([]WaitingProposal, error) {
 	out := []WaitingProposal{}
-	if err := noSymlinks(root, "brain-proposals"); err != nil {
+	if err := safefile.NoSymlinks(root, "brain-proposals"); err != nil {
 		return nil, err
 	}
 	dir, err := root.Open("brain-proposals")
@@ -156,7 +157,7 @@ func waitingAt(root *os.Root, prefix, level string) ([]WaitingProposal, error) {
 				return nil, fmt.Errorf("proposal %s: %w", entry.Name(), err)
 			}
 		} else {
-			b, err := read(root, path)
+			b, err := safefile.Read(root, path)
 			if err != nil {
 				return nil, err
 			}

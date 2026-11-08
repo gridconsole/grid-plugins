@@ -3,6 +3,8 @@ package brain
 import (
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/mdfile"
+	"github.com/gridconsole/grid-plugins/internal/safefile"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -58,11 +60,11 @@ func topicAt(root *os.Root, name, level string) (Topic, error) {
 	if name == "skills" || name == "workflows" || name == "design" || name == "research" || name == "incidents" {
 		return Topic{}, fmt.Errorf("topic %s is not in the first slice; use conventions or decisions for knowledge", name)
 	}
-	b, err := read(root, filepath.Join("knowledge", name, "TOPIC.md"))
+	b, err := safefile.Read(root, filepath.Join("knowledge", name, "TOPIC.md"))
 	if err != nil {
 		return Topic{}, fmt.Errorf("topic %s needs a TOPIC.md definition: %w", name, err)
 	}
-	front, body, err := splitFrontMatter(b)
+	front, body, err := mdfile.Split(b)
 	if err != nil {
 		return Topic{}, err
 	}
@@ -72,7 +74,7 @@ func topicAt(root *os.Root, name, level string) (Topic, error) {
 		Level       any    `yaml:"level"`
 		Description string `yaml:"description"`
 	}
-	if err := loadFrontMatter(front, &def, false); err != nil {
+	if err := mdfile.Load(front, &def, false); err != nil {
 		return Topic{}, err
 	}
 	if def.Name != name || def.Kind != "knowledge" {
@@ -126,7 +128,7 @@ func scopeTopics(root *os.Root, level string) ([]Topic, error) {
 			topics = append(topics, t)
 		}
 	}
-	if err := noSymlinks(root, "knowledge"); err != nil {
+	if err := safefile.NoSymlinks(root, "knowledge"); err != nil {
 		return nil, err
 	}
 	dirs, err := fs.ReadDir(root.FS(), "knowledge")
@@ -193,7 +195,7 @@ func (s Store) Topics() ([]Topic, error) {
 func scan(root *os.Root, level string) ([]Note, map[string]int, error) {
 	notes := []Note{}
 	invalid := map[string]int{}
-	if err := noSymlinks(root, "knowledge"); err != nil {
+	if err := safefile.NoSymlinks(root, "knowledge"); err != nil {
 		return nil, nil, err
 	}
 	err := fs.WalkDir(root.FS(), "knowledge", func(path string, d fs.DirEntry, err error) error {
@@ -216,7 +218,7 @@ func scan(root *os.Root, level string) ([]Note, map[string]int, error) {
 		if definition, err := topicAt(root, topic, level); err == nil && definition.Kind == "config" {
 			return nil
 		}
-		b, err := read(root, path)
+		b, err := safefile.Read(root, path)
 		if err != nil {
 			return err
 		}
