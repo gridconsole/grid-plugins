@@ -13,10 +13,10 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
-	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 // These follow the CLI's existing status convention. There are no shared named
@@ -142,8 +142,8 @@ func traceProject(home, filter string, dirs []string) (string, error) {
 	return found, nil
 }
 
-// Trace reads filed inputs across Personal and all projects without consulting
-// live brain entries or changing Jobs. Problems do not discard other evidence.
+// Trace reads filed inputs across task roots visible to the caller without
+// consulting live brain entries or changing Jobs. Problems do not discard other evidence.
 func Trace(home, pointer, digest, projectFilter string) (TraceResult, error) {
 	result := TraceResult{Rows: []TraceRow{}, Problems: []TraceProblem{}}
 	if err := traceCheckQuery(pointer, digest); err != nil {
@@ -152,7 +152,7 @@ func Trace(home, pointer, digest, projectFilter string) (TraceResult, error) {
 	if home == "" {
 		return result, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
-	dirs, err := gridhome.TasksDirs(home)
+	dirs, err := (where.Resolver{GridHome: home, Caller: where.CallerFrom(os.Getenv)}).TasksDirs()
 	if err != nil {
 		return result, errors.New("cannot list project task folders")
 	}
