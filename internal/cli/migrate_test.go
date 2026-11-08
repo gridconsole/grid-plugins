@@ -5,7 +5,43 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/testgit"
 )
+
+// A migrated home works with grid where: a git project is found by its remote, a
+// folder without git by the folder the record names.
+func TestMigrateThenWhere(t *testing.T) {
+	h := newHarness(t)
+	repo := filepath.Join(h.root, "work", "app")
+	plain := filepath.Join(h.root, "notes", "ideas")
+	h.mkdir(repo, plain)
+	testgit.Init(t, repo, "git@example.com:org/app.git", true)
+	old := filepath.Join(h.root, "old")
+	h.write(filepath.Join(old, "projects", "app", "project.md"), "---\nfolder: "+repo+"\n---\n# App\n")
+	h.write(filepath.Join(old, "projects", "ideas", "project.md"), "---\nfolder: "+plain+"\n---\n")
+	h.write(filepath.Join(old, "projects", "app", "tasks", "T-01-first", "task.md"), "---\nid: T-01\nproject: app\n---\n")
+	h.write(filepath.Join(h.gridHome, "machine"), h.env.Machine+"\n")
+	if code := h.run(h.root, "migrate", "--apply", "--from", old); code != 0 {
+		t.Fatalf("apply: %d: %s%s", code, h.out, h.errb)
+	}
+	for cwd, want := range map[string][]string{
+		repo:  {"project: app\n", "record: true\n", "keys: remote:example.com/org/app\n"},
+		plain: {"project: ideas\n", "record: true\n", "rule: record\n"},
+	} {
+		if code := h.run(cwd, "where"); code != 0 {
+			t.Fatalf("where in %s: %d: %s", cwd, code, h.errb)
+		}
+		for _, w := range want {
+			if !strings.Contains(h.out.String(), w) {
+				t.Errorf("where in %s lacks %q:\n%s", cwd, w, h.out)
+			}
+		}
+	}
+	if code := h.run(h.root, "doctor"); code != 0 && strings.Contains(h.errb.String(), "migrate") {
+		t.Fatalf("doctor asks for a migration: %s", h.errb)
+	}
+}
 
 func TestMigrateCommand(t *testing.T) {
 	h := newHarness(t)

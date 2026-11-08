@@ -29,7 +29,7 @@ func runMigrate(args []string, env Env) int {
 	} else if !filepath.IsAbs(source) && env.Cwd != "" {
 		source = filepath.Join(env.Cwd, source)
 	}
-	p, err := migrate.Scan(source, env.GridHome)
+	p, err := migrate.Scan(source, env.GridHome, migrate.WithCeiling(env.Ceiling))
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid migrate: %v\n", err)
 		return 1
@@ -44,7 +44,10 @@ func runMigrate(args []string, env Env) int {
 			fmt.Fprintf(env.Stderr, "grid migrate: %v\n", err)
 			return 1
 		}
-		if res.Changed {
+		switch {
+		case res.Rerun:
+			fmt.Fprintln(env.Stdout, "migrate: the interrupted run was undone; run grid migrate --apply again")
+		case res.Changed:
 			if _, err := fmt.Fprintf(env.Stdout, "backup: %s\nmigrate: applied\n", res.Backup); err != nil {
 				return 1
 			}
