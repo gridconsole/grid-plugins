@@ -2878,7 +2878,7 @@
     },
     {
       "name": "agent",
-      "summary": "set agent models and efforts; list effective settings",
+      "summary": "check agent readiness; set models and efforts; list settings",
       "built": true,
       "subcommands": [
         {
