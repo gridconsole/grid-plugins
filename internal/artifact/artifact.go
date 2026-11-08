@@ -86,21 +86,15 @@ func newID() (string, error) {
 
 // Import copies the bytes of a regular file, preserving its source, and hashes
 // the bytes actually copied. Every import has a unique name, even for duplicates.
+// The file is inspected on the opened handle, so a source swapped for a pipe or
+// device after the call began cannot block it.
 func (s Store) Import(source, title string) (Record, error) {
-	// Inspect before opening so a pipe or device cannot block an ordinary import.
-	info, err := os.Stat(source)
-	if err != nil {
-		return Record{}, err
-	}
-	if !info.Mode().IsRegular() {
-		return Record{}, errors.New("source must be a regular file")
-	}
-	f, err := os.Open(source)
+	f, err := openSource(source)
 	if err != nil {
 		return Record{}, err
 	}
 	defer f.Close()
-	info, err = f.Stat()
+	info, err := f.Stat()
 	if err != nil {
 		return Record{}, err
 	}
