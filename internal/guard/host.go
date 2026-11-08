@@ -14,7 +14,7 @@ var namesHost = regexp.MustCompile(`(?i)(^|[^\w.-])\.host($|[^\w.-])`)
 // decision or a task state change. It is matched on flatten's output, where every
 // shell separator is " ; " and quotes are gone, so the binary may sit behind an
 // env prefix, &&, ;, a subshell, a path or quoting.
-var gateVerb = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:approve|answer|question\s+(?:answer|withdraw)|refusal\s+decide|task\s+(?:status|close|reopen|stop|delete|restore|rename|decline))(?:\s|$)`)
+var gateVerb = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:approve|decide|answer|question\s+(?:answer|withdraw)|refusal\s+decide|task\s+(?:status|close|reopen|stop|delete|restore|rename|decline))(?:\s|$)`)
 
 // feedAnswer matches answer posts and withdrawn controls in either flag order.
 // The lazy middle spans flattened separators, since a quoted body may hold some.
@@ -47,7 +47,7 @@ var readOnly = map[string]bool{"cat": true, "head": true, "tail": true, "grep": 
 	"cut": true, "echo": true, "printf": true, "cd": true, "pwd": true, "test": true, "[": true, "true": true}
 var findWrites = map[string]bool{"-delete": true, "-exec": true, "-execdir": true, "-ok": true, "-okdir": true, "-fprint": true, "-fprintf": true, "-fls": true}
 
-const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, approval.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
+const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, approval.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide, grid decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
 
 const switchReason = "The guards and agent settings are the person's: <home>/settings.json, projects/<name>/settings.json and .settings.lock are written only by Grid, and grid hook level, grid agent set, grid skill enable|disable and grid setup are the person's verbs; an agent cannot turn a guard off. Reading is allowed: cat, grep, ls, head or tail of a settings file works. Use the Write or Edit tool for any other settings.json."
 

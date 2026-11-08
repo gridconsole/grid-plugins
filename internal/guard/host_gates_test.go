@@ -11,6 +11,7 @@ import (
 
 // Every verb that writes a gate or turns a guard off, with the arguments a real call has.
 var gateVerbs = []string{
+	"decide T-01 R-1 allow",
 	"approve T-01", "answer T-01 Q-1 yes",
 	"feed post --type answer --re X --body -", "feed post --type=answer --re X --body -", "feed post -type answer --re X --body -",
 	"job post J-1 --attempt 1 --type answer --re X --body -", "job post J-1 --type=answer --re X --body -", "job post -type answer --re X --body -",
