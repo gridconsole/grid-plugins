@@ -187,6 +187,17 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		defer lease.Close()
 		defer fslock.Unlock(lease)
 	}
+	// Gate names belong to the task, not a writer tenure. Hold their lock
+	// across the cross-writer check and append, after lease validation and
+	// before taking the tenure file lock.
+	if gateID(r) != "" {
+		guard, err := s.gateLock()
+		if err != nil {
+			return Record{}, err
+		}
+		defer guard.Close()
+		defer fslock.Unlock(guard)
+	}
 	file := filepath.Join(s.Dir(), writerFile(w.Worker, w.Fence))
 	f, err := fslock.OpenNoFollow(file, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0o600)
 	if err != nil {
@@ -238,6 +249,17 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		}
 		if prev.Seq >= r.Seq {
 			r.Seq = prev.Seq + 1
+		}
+	}
+	if gid := gateID(r); gid != "" {
+		existing, err := s.Read(Filter{Type: "question"})
+		if err != nil {
+			return Record{}, err
+		}
+		for _, entry := range existing.Records {
+			if gateID(entry.Record) == gid {
+				return Record{}, fmt.Errorf("gate id %s already exists (question %s)", gid, entry.ID)
+			}
 		}
 	}
 	guestAnswer := r.Author.Role == "guest" && r.Type == "answer"
