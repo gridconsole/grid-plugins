@@ -1,0 +1,50 @@
+# Lane L32: remaining migration work
+
+Implemented and committed on the lane branch:
+
+- Unknown home entries are listed in the plan and copied at their original relative paths, including entries inside named homes. Conflicting files, reserved output paths and non-directory ancestors refuse publication.
+- A legacy `machine` directory produces a conflict with instructions to move it aside and rerun migration.
+- Linked Git worktrees move with their files intact, including untracked files. Their `.git` pointers and repository backlinks are rewritten. Backlink changes are journaled, validated before writes and recoverable after interruption. Unsupported or inconsistent worktrees report a removal command.
+- Knowledge from named homes merges. Equal files are shared; differing files appear in the conflict list and block apply.
+- Session JSON that needs no path change is copied byte for byte, including key order and CRLF. Resolving an unrelated symlink does not trigger a rewrite. Task front matter retains CRLF, and pointer lists retain their line endings.
+- `CLAUDE_PLUGIN_DATA/sessions` is scanned, backed up and imported into the new home's sessions folder. Known task pointer lists are remapped; usage and other opaque hook files are preserved. External plugin data is left intact, and changes since planning or destination conflicts refuse apply.
+- `grid migrate --rollback` restores the original home and its old VERSION or absence. An originally absent destination becomes absent again. An external source stays intact. Rollback reverses worktree backlinks and checks the immutable backup against its manifest.
+- A completed journal remains beside the home as `<home>.migration-state`. Its checksums and file/directory timestamps prevent rollback after detected writes to the migrated home. Interrupted rollback uses `<home>.migrate-journal`; a late write to the displaced home is retained and reported, not deleted.
+- Migration uses `internal/fslock` and the existing atomic writer, now exported as `task.AtomicWrite`. The persistent lock file uses kernel ownership; the old PID lock implementation was removed.
+
+## Validation
+
+Run from the checkout, with the normal TMPDIR:
+
+```sh
+make test
+make lint
+go test -count=1 ./internal/migrate
+go test -race -count=1 ./internal/migrate
+GOOS=windows go build ./...
+GOOS=darwin go build ./...
+```
+
+The tests cover publication and rollback crashes by exiting child test binaries at durable steps and rerunning recovery. They cover unknown entries, knowledge merging, unchanged JSON and CRLF, plugin sessions, live worktrees, backup integrity, post-migration writes and lock ownership. Refusal tests verify that source data remains unchanged. CLI tests exercise rollback and incompatible flags. All listed checks passed. The migration suite ran in 5.1 seconds under `make test`, and the race run passed in 10.5 seconds, below the 40-second limit.
+
+## Intended differences and specification references
+
+References to `migration.md` and `plugin-design.md` below mean the read-only reference specification.
+
+- Migration has no old JS command counterpart (`docs/old-plugin-map.md:118`). This lane extends the existing offline migration rather than recreating the CLI or module.
+- Unknown entries now survive instead of blocking apply (`docs/lanes/L9.md:47`). This deliberately preserves unknown workspace/config files instead of deleting them as proposed in `migration.md:311`; the lane explicitly requires untouched carryover.
+- A legacy `machine` directory is refused with a fix rather than converted or overwritten (`docs/lanes/L9.md:48`, `migration.md:310`). Its old contents have no defined mapping to the new machine ID file.
+- Live worktrees are relocated instead of universally blocked (`docs/lanes/L9.md:49`, `migration.md:309`). Legacy task/worker subfolders remain below the project worktrees directory; the repo/job naming proposed in `plugin-design.md:143` cannot be inferred from legacy data.
+- Knowledge merging never overwrites differing files (`docs/lanes/L9.md:50`). Conflicts require resolution before publication.
+- Unchanged session JSON and task CRLF retain their original representation (`docs/lanes/L9.md:51`). JSON requiring a path rewrite may still be re-encoded. Feed, history, usage and recall contents receive no schema conversion, preserving the histories required by `migration.md:314`.
+- External hook session data is now included (`docs/lanes/L9.md:52`). The old pointer/usage storage is described in reference `old-plugin/hooks/lib.mjs:406` and `:594`. Only the explicitly supplied `CLAUDE_PLUGIN_DATA` folder is imported; no other installed plugin directories are searched.
+- Rollback restores verified backup data and reports its format (`migration.md:319`, `plugin-design.md:145`, `plugin-design.md:483`). As explicitly required for L32, any detected post-migration write causes refusal. This intentionally differs from the worker-stop and after-cutover export workflow in `migration.md:320`.
+- The migration lock now persists and uses kernel locking instead of PID/start-time stale-lock removal (`docs/lanes/L9.md:28`). Locks remain outside the home during rename. Windows builds but runtime locking retains `internal/fslock`'s unsupported-platform behavior (`docs/lanes/L9.md:54`).
+
+## Limits and work not performed
+
+- No worker lifecycle control or export/re-import of tasks created after cutover was added. The requested refusal policy supersedes the export-on-rollback behavior; the broader export/re-import workflow in `migration.md:299` and `:320` remains unimplemented.
+- Embedded main repositories and linked worktrees whose Git administration directories themselves move with the home are refused. Normal linked worktrees with repository metadata outside the home are supported. Inconsistent backlinks are also refused rather than guessed at.
+- Rollback requires the completed journal produced by this implementation. Older completed L9 migrations have no recorded publication snapshot, so rollback cannot safely establish whether their home has changed.
+- Writers must be stopped by the operator. The migration lock serializes migrations, not old application writers. Checks detect changed contents, path sets, permissions and timestamps; they are not a filesystem audit of changes deliberately restored to identical metadata.
+- No real user data, signed Rust application or production server/database was available or used. The full cutover rehearsal in `migration.md:299` was not performed. macOS and Windows were cross-built; this environment ran tests on Linux.
