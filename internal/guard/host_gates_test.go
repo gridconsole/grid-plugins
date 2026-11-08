@@ -17,6 +17,7 @@ var gateVerbs = []string{
 	"question answer T-01 Q-1 yes", "question withdraw T-01 Q-1",
 	"refusal decide T-01 R-1 allow",
 	"task status T-01 closed", "task close T-01", "task reopen T-01", "task stop T-01",
+	"task delete T-01", "task restore T-01", "task rename T-01 --title renamed", "task decline T-01 --reason declined",
 }
 var switchVerbs = []string{
 	"hook level off", "agent set builder sonnet", "skill enable brain-keeper", "skill disable brain-keeper",
@@ -31,6 +32,30 @@ var bypassForms = []string{
 	"env -i grid %s", "command grid %s", "sh -c 'grid %s'", `bash -c "grid %s"`, "eval 'grid %s'",
 	"grid   %s", "grid\t%s", "grid \\\n%s", "Grid %s", "GRID %s", "./dist/grid %s", "go run ./cmd/grid %s", `C:\bin\grid.exe %s`,
 	"~/.local/bin/grid %s", "nohup grid %s &",
+}
+
+func TestHostDeniesTaskWriteVerbs(t *testing.T) {
+	f := setup(t)
+	f.env["GRID_PLAN_GUARD"] = "off"
+	for _, command := range []string{
+		"grid task delete T-01",
+		"grid task restore T-01",
+		"grid task rename T-01 --title renamed",
+		"grid task decline T-01 --reason declined",
+		"grid task close T-01",
+	} {
+		t.Run(command, func(t *testing.T) {
+			in := f.input("Bash", command)
+			in.AgentType = "grid-builder"
+			d := EvaluateHost(in, f.root, f.env)
+			if d.Behavior != "deny" {
+				t.Fatalf("behavior = %q, want deny", d.Behavior)
+			}
+			if d.Reason != gateReason {
+				t.Fatalf("reason = %q, want shared gate reason %q", d.Reason, gateReason)
+			}
+		})
+	}
 }
 
 func TestHostDeniesGateAndSwitchVerbsInEveryForm(t *testing.T) {
