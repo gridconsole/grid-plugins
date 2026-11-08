@@ -16,6 +16,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/session"
 )
 
 // Tenure is the lease-file schema; the shared fencing fields are owned by Feed.
@@ -96,22 +97,53 @@ func (s TaskStore) Read(name string) (Tenure, error) {
 	return t, err
 }
 
-// TakeTask creates the first task tenure. A live or unknown holder is never
-// replaced here; adoption requires a separate, proven process-identity decision.
-func (s TaskStore) TakeTask(w feed.Writer, pid int, start string) (Tenure, error) {
-	return s.grant(Tenure{Lease: feed.Lease{Lease: "task", Holder: &w.Worker, Gen: w.Gen}, Since: s.now(), PID: &pid, PIDStart: &start}, true)
+// TaskTake authorizes replacement of a specific tenure. OfflineSince is a
+// server observation supplied by the supervising caller, never a file timestamp.
+type TaskTake struct {
+	Adopt, Takeover bool
+	Gen, Fence      int64
+	OfflineSince    time.Time
+}
+
+// TakeTask grants the first tenure or checks replacement evidence while holding
+// task.json exclusively, so two adopters cannot both replace the same holder.
+func (s TaskStore) TakeTask(w feed.Writer, pid int, start string, options ...TaskTake) (Tenure, error) {
+	policy := TaskTake{}
+	if len(options) > 0 {
+		policy = options[0]
+	}
+	return s.grant(Tenure{Lease: feed.Lease{Lease: "task", Holder: &w.Worker, Gen: w.Gen}, Since: s.now(), PID: &pid, PIDStart: &start}, func(old Tenure) error {
+		if old.Holder == nil {
+			return nil
+		}
+		if policy.Adopt == policy.Takeover || policy.Gen != old.Gen || policy.Fence != old.Fence {
+			return errors.New("task lease held; adoption or takeover requires its current expected epoch")
+		}
+		if policy.Adopt {
+			_, host, _ := strings.Cut(w.Worker, "@")
+			if !strings.HasSuffix(*old.Holder, "@"+host) || old.PID == nil || old.PIDStart == nil || session.ProbeLocal(session.Live{PID: *old.PID, PIDStart: *old.PIDStart}) != session.Dead {
+				return errors.New("adoption requires a provably gone process on this host")
+			}
+			return nil
+		}
+		now, _ := time.Parse(time.RFC3339Nano, s.now())
+		if contract.TierFor(w.Author.Role) != contract.PersonTeam || policy.OfflineSince.IsZero() || now.Sub(policy.OfflineSince) < 15*time.Minute {
+			return errors.New("takeover requires a person and 15 minutes of server-observed offline time")
+		}
+		return nil
+	})
 }
 
 // GrantJob requires the current task holder throughout the grant and snapshot.
 func (s TaskStore) GrantJob(task feed.Writer, id, to string, attempt int) (t Tenure, err error) {
 	err = s.Feed.WithLease(task, nil, func() error {
 		var e error
-		t, e = s.grant(Tenure{Lease: feed.Lease{Lease: id, Holder: &to, Gen: task.Gen, Attempt: &attempt}, Since: s.now()}, false)
+		t, e = s.grant(Tenure{Lease: feed.Lease{Lease: id, Holder: &to, Gen: task.Gen, Attempt: &attempt}, Since: s.now()}, nil)
 		return e
 	})
 	return
 }
-func (s TaskStore) grant(next Tenure, first bool) (Tenure, error) {
+func (s TaskStore) grant(next Tenure, authorize func(Tenure) error) (Tenure, error) {
 	// Validate before creating anything or ending the old tenure.
 	next.Fence = 1
 	b, err := json.Marshal(next)
@@ -134,8 +166,10 @@ func (s TaskStore) grant(next Tenure, first bool) (Tenure, error) {
 	if err != nil {
 		return Tenure{}, err
 	}
-	if first && old.Holder != nil {
-		return Tenure{}, errors.New("task lease held")
+	if authorize != nil {
+		if err := authorize(old); err != nil {
+			return Tenure{}, err
+		}
 	}
 	if old.Holder != nil {
 		if next.Gen < old.Gen || next.Attempt != nil && old.Attempt != nil && *next.Attempt < *old.Attempt {

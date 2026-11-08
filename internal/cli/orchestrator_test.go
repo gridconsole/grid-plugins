@@ -174,3 +174,129 @@ func TestFeedPostCannotBypassExitedWorker(t *testing.T) {
 		t.Fatal("refused post changed feed")
 	}
 }
+
+func TestTakeTaskCLI(t *testing.T) {
+	h, path := feedHarness(t)
+	h.env.Machine = feedMachine
+	args := []string{"lease", "take", "task", "--pid", fmt.Sprint(os.Getpid()), "--pid-start", "2000-01-01T00:00:00.000Z", "--json"}
+	if code := h.run(path, args...); code != 0 {
+		t.Fatalf("first grant: %d %s", code, h.errb)
+	}
+	var first lease.Tenure
+	if err := json.Unmarshal(h.out.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+	if first.Fence != 1 {
+		t.Fatal(first)
+	}
+	if code := h.run(path, args...); code == 0 {
+		t.Fatal("silently replaced holder")
+	}
+	adopt := append(append([]string{}, args...), "--adopt", "--expected-epoch", "0.1")
+	if code := h.run(path, adopt...); code != 0 {
+		t.Fatalf("adoption: %d %s", code, h.errb)
+	}
+	var second lease.Tenure
+	if err := json.Unmarshal(h.out.Bytes(), &second); err != nil {
+		t.Fatal(err)
+	}
+	if second.Fence <= first.Fence {
+		t.Fatal(second)
+	}
+	if code := h.run(path, adopt...); code == 0 {
+		t.Fatal("stale adoption replaced newer tenure")
+	}
+	store := feed.Store{TaskDir: path, TaskID: feedTaskID}
+	records, err := store.Read(feed.Filter{Type: "handover"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records.Records) != 2 || records.Records[1].Body["adopted"] != "session-gone" {
+		t.Fatal(records)
+	}
+	if code := h.run(path, "lease", "take", "task", "--help"); code != 0 || !strings.Contains(h.errb.String(), "adoption") || !strings.Contains(h.errb.String(), "takeover") {
+		t.Fatalf("help: %d %s %s", code, h.out, h.errb)
+	}
+	t.Setenv("GRID_LEASE_EPOCH", fmt.Sprintf("0.%d", second.Fence))
+	if code := h.run(path, "job", "next"); code != 0 {
+		t.Fatal(h.errb)
+	}
+}
+
+func TestTaskTakeoverCLI(t *testing.T) {
+	for _, tc := range []struct {
+		name, role, since string
+		adopt, want       bool
+	}{
+		{"no evidence", "member", "", false, false},
+		{"too recent", "member", contract.FormatTime(time.Now()), false, false},
+		{"agent", "worker", contract.FormatTime(time.Now().Add(-16 * time.Minute)), false, false},
+		{"person", "member", contract.FormatTime(time.Now().Add(-16 * time.Minute)), false, true},
+		{"remote adoption", "member", "", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, path := feedHarness(t)
+			h.env.Machine = "01ARZ3NDEKTSV4RRFFQ69G5FAX"
+			args := []string{"lease", "take", "task", "--pid", fmt.Sprint(os.Getpid()), "--pid-start", "2000-01-01T00:00:00.000Z", "--json"}
+			if code := h.run(path, args...); code != 0 {
+				t.Fatalf("first: %d %s", code, h.errb)
+			}
+			h.env.Machine = feedMachine
+			t.Setenv("GRID_ROLE", tc.role)
+			mode := "--takeover"
+			if tc.adopt {
+				mode = "--adopt"
+			}
+			args = append(args, mode, "--expected-epoch", "0.1")
+			if tc.since != "" {
+				args = append(args, "--server-offline-since", tc.since)
+			}
+			if code := h.run(path, args...); (code == 0) != tc.want {
+				t.Fatalf("takeover: %d %s", code, h.errb)
+			}
+		})
+	}
+}
+
+func TestTaskAdoptionRefusesLiveAndUnknownCLI(t *testing.T) {
+	cmd := exec.Command("ps", "-o", "lstart=", "-p", fmt.Sprint(os.Getpid()))
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "TZ=UTC")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp, err := time.Parse("Mon Jan 2 15:04:05 2006", strings.TrimSpace(string(out)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, start := range []string{contract.FormatTime(stamp), "unknown"} {
+		t.Run(start, func(t *testing.T) {
+			h, path := feedHarness(t)
+			h.env.Machine = feedMachine
+			args := []string{"lease", "take", "task", "--pid", fmt.Sprint(os.Getpid()), "--pid-start", contract.FormatTime(stamp)}
+			if code := h.run(path, args...); code != 0 {
+				t.Fatal(h.errb)
+			}
+			if start == "unknown" {
+				file := filepath.Join(path, "feed", "lease", "task.json")
+				raw, err := os.ReadFile(file)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var grant map[string]any
+				if err := json.Unmarshal(raw, &grant); err != nil {
+					t.Fatal(err)
+				}
+				grant["pid"] = nil
+				grant["pid_start"] = nil
+				raw, _ = json.Marshal(grant)
+				if err := os.WriteFile(file, raw, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if code := h.run(path, append(args, "--adopt", "--expected-epoch", "0.1")...); code == 0 {
+				t.Fatal("adopted live or unknown process")
+			}
+		})
+	}
+}
