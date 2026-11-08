@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,10 +10,11 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/plan"
+	taskrecord "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
-const planUsage = "Usage: grid plan check [T-NN] [--json]\n       grid plan hash|items [--json] [--task <task>]\n       grid plan write <file> [--json] [--task <task>]\n       grid plan diff <rev-a> <rev-b> [--json] [--task <task>]"
+const planUsage = "Usage: grid plan check [T-NN] [--json]\n       grid plan hash|items [--json] [--task <task>]\n       grid plan write <file> [--json] [--task <task>]\n       grid plan diff <rev-a> <rev-b> [--json] [--task <task>]\n       grid plan migrate [--task <task>] [--dry-run] [--yes] [--json]"
 
 func runPlan(args []string, env Env) int {
 	if len(args) == 0 {
@@ -24,9 +26,9 @@ func runPlan(args []string, env Env) int {
 		return 0
 	}
 	action := args[0]
-	want, ok := map[string]int{"check": 0, "hash": 0, "items": 0, "write": 1, "diff": 2}[action]
+	want, ok := map[string]int{"check": 0, "hash": 0, "items": 0, "write": 1, "diff": 2, "migrate": 0}[action]
 	if !ok {
-		fmt.Fprintf(env.Stderr, "plan: unknown action %q; use check, hash, items, write or diff\n", action)
+		fmt.Fprintf(env.Stderr, "plan: unknown action %q; use check, hash, items, write, diff or migrate\n", action)
 		return 2
 	}
 	fs := newFlags("plan "+action, env)
@@ -34,6 +36,11 @@ func runPlan(args []string, env Env) int {
 	task := fs.String("task", "", "task folder or id; otherwise use the current task")
 	project := fs.String("project", "", "project name or id to disambiguate a task id")
 	asJSON := fs.Bool("json", false, "print JSON")
+	var dryRun, yes bool
+	if action == "migrate" {
+		fs.BoolVar(&dryRun, "dry-run", false, "preview conversion without writing")
+		fs.BoolVar(&yes, "yes", false, "allow migration to invalidate the current approval")
+	}
 	operands, err := planArguments(fs, args[1:])
 	if errors.Is(err, flag.ErrHelp) {
 		return 0
@@ -58,6 +65,8 @@ func runPlan(args []string, env Env) int {
 	}
 	store := plan.Store{TaskDir: scope.TaskPath}
 	switch action {
+	case "migrate":
+		return runPlanMigrate(store, dryRun, yes, *asJSON, env)
 	case "check":
 		text, err := store.Read()
 		if err != nil {
@@ -82,7 +91,8 @@ func runPlan(args []string, env Env) int {
 	case "items":
 		items, err := store.Items()
 		if err != nil {
-			return planError(env, err)
+			text, _ := store.Read()
+			return planError(env, planFormatError(text, err))
 		}
 		if *asJSON {
 			return writeJSON(env.Stdout, items)
@@ -108,7 +118,7 @@ func runPlan(args []string, env Env) int {
 		}
 		written, err := store.Write(string(data))
 		if err != nil {
-			return planError(env, err)
+			return planError(env, planFormatError(string(data), err))
 		}
 		if *asJSON {
 			return writeJSON(env.Stdout, written)
@@ -172,4 +182,79 @@ func planArguments(fs *flag.FlagSet, args []string) ([]string, error) {
 func planError(env Env, err error) int {
 	fmt.Fprintf(env.Stderr, "plan: %v\n", err)
 	return 1
+}
+
+// Keep migration advice in the CLI; Items remains the strict shared parser.
+func planFormatError(text string, err error) error {
+	message := err.Error()
+	if !strings.Contains(message, "front matter is refused") && !strings.Contains(message, "step-level") && !strings.Contains(message, "missing jobs list") {
+		return err
+	}
+	if _, form, _ := plan.Upgrade(text); form == "A" || form == "B" || form == "C" {
+		return fmt.Errorf("%w; this looks like an older plan format; run grid plan migrate --dry-run", err)
+	}
+	return err
+}
+
+func runPlanMigrate(store plan.Store, dryRun, yes, asJSON bool, env Env) int {
+	text, err := store.Read()
+	if err != nil {
+		return planError(env, err)
+	}
+	converted, form, err := plan.Upgrade(text)
+	if err != nil {
+		return planError(env, err)
+	}
+	if form == "current" {
+		message := "plan.md is already current"
+		if asJSON {
+			return writeJSON(env.Stdout, struct {
+				Form    string `json:"form"`
+				Message string `json:"message"`
+			}{form, message})
+		}
+		if _, err := fmt.Fprintln(env.Stdout, message); err != nil {
+			return 1
+		}
+		return 0
+	}
+	if dryRun {
+		if asJSON {
+			return writeJSON(env.Stdout, struct {
+				Form string `json:"form"`
+				Text string `json:"text"`
+			}{form, converted})
+		}
+		if _, err := fmt.Fprintf(env.Stdout, "form: %s\n%s", form, converted); err != nil {
+			return 1
+		}
+		return 0
+	}
+	data, err := os.ReadFile(filepath.Join(store.TaskDir, "approval.json"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return planError(env, err)
+	}
+	if err == nil {
+		var approval taskrecord.Event
+		if err := json.Unmarshal(data, &approval); err != nil {
+			return planError(env, fmt.Errorf("approval.json: %w", err))
+		}
+		if approval.PlanHash == plan.Hash(text) && !yes {
+			return planError(env, errors.New("migration changes the approved plan; the plan will need approving again; use --yes to migrate"))
+		}
+	}
+	written, err := store.Write(converted)
+	if err != nil {
+		return planError(env, err)
+	}
+	if asJSON {
+		return writeJSON(env.Stdout, struct {
+			Form string `json:"form"`
+			plan.Written
+		}{form, written})
+	}
+	if _, err := fmt.Fprintf(env.Stdout, "plan.md: migrated form %s, revision %d, hash %s\n", form, written.Revision, written.Hash); err != nil {
+		return 1
+	}
+	return 0
 }

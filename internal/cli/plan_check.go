@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,9 @@ import (
 func runPlanCheck(text string, asJSON bool, env Env) int {
 	report := jobgraph.CheckPlanReport(text)
 	problems := report.Problems
+	for i, problem := range problems {
+		problems[i] = planFormatError(text, errors.New(problem)).Error()
+	}
 	code := 0
 	if len(problems) > 0 {
 		code = 1

@@ -119,6 +119,18 @@ func (s Store) Diff(from, to string) (Diff, error) {
 	if err != nil {
 		return Diff{}, err
 	}
+	if _, err := Items(before); err != nil {
+		before, _, err = Upgrade(before)
+		if err != nil {
+			return Diff{}, fmt.Errorf("revision %d: %w", a, err)
+		}
+	}
+	if _, err := Items(after); err != nil {
+		after, _, err = Upgrade(after)
+		if err != nil {
+			return Diff{}, fmt.Errorf("revision %d: %w", b, err)
+		}
+	}
 	d, err := Compare(before, after)
 	d.From, d.To = a, b
 	return d, err

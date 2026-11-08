@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,5 +143,233 @@ func TestPlanUsageAndRefusals(t *testing.T) {
 	}
 	if code := h.run(task, "plan", "diff", "3", "99"); code != 1 {
 		t.Fatalf("missing revision: %d", code)
+	}
+}
+
+func TestPlanMigrate(t *testing.T) {
+	for _, name := range []string{"form-a", "form-b-fields", "form-b-revised"} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			task := planTask(h)
+			old := planFixture(t, "legacy/"+name+".md")
+			// The historical A example contains no citation; the owner supplies it.
+			if !plan.HasRecall(old) {
+				old += "\nRecall: nothing found\n"
+			}
+			h.write(filepath.Join(task, "plan.md"), old)
+			rev, err := plan.Revision(old)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if code := h.run(h.tmp, "plan", "migrate", "--task", task, "--json"); code != 0 {
+				t.Fatalf("%d: %s", code, h.errb)
+			}
+			var got struct {
+				Form     string
+				Revision uint64
+				Hash     string
+			}
+			if err := json.Unmarshal(h.out.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Revision != rev+1 || got.Hash == plan.Hash(old) {
+				t.Fatalf("%+v", got)
+			}
+			installed, err := os.ReadFile(filepath.Join(task, "plan.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := plan.Items(string(installed)); err != nil {
+				t.Fatal(err)
+			}
+			archived, err := os.ReadFile(filepath.Join(task, "plan-revisions", fmt.Sprintf("%d.md", rev)))
+			if err != nil || string(archived) != old {
+				t.Fatal("archive is not the original plan")
+			}
+			if code := h.run(task, "plan", "migrate"); code != 0 || !strings.Contains(h.out.String(), "plan.md is already current") {
+				t.Fatalf("%d: %s %s", code, h.out, h.errb)
+			}
+			unchanged, err := os.ReadFile(filepath.Join(task, "plan.md"))
+			if err != nil || string(unchanged) != string(installed) {
+				t.Fatal("second migration changed the plan")
+			}
+		})
+	}
+}
+
+func TestPlanMigrateDryRun(t *testing.T) {
+	for _, name := range []string{"form-a", "form-b-fields", "form-b-revised", "form-c"} {
+		for _, asJSON := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/json=%t", name, asJSON), func(t *testing.T) {
+				h := newHarness(t)
+				task := planTask(h)
+				old := planFixture(t, "legacy/"+name+".md")
+				h.write(filepath.Join(task, "plan.md"), old)
+				before, err := os.ReadDir(task)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want, form, err := plan.Upgrade(old)
+				if err != nil {
+					t.Fatal(err)
+				}
+				args := []string{"plan", "migrate", "--dry-run"}
+				if asJSON {
+					args = append(args, "--json")
+				}
+				if code := h.run(task, args...); code != 0 {
+					t.Fatalf("%d: %s", code, h.errb)
+				}
+				if asJSON {
+					var got struct{ Form, Text string }
+					if err := json.Unmarshal(h.out.Bytes(), &got); err != nil || got.Text != want || got.Form != form {
+						t.Fatalf("%s: %v", h.out, err)
+					}
+				} else if h.out.String() != "form: "+form+"\n"+want {
+					t.Fatalf("unexpected preview: %s", h.out)
+				}
+				after, err := os.ReadDir(task)
+				if err != nil || len(before) != len(after) {
+					t.Fatal("dry run created files")
+				}
+				data, err := os.ReadFile(filepath.Join(task, "plan.md"))
+				if err != nil || string(data) != old {
+					t.Fatal("dry run changed plan")
+				}
+			})
+		}
+	}
+}
+
+func TestPlanMigrateApproval(t *testing.T) {
+	for _, tc := range []struct {
+		name, hash string
+		yes        bool
+		code       int
+	}{
+		{"matching approval refused", "matching", false, 1},
+		{"matching approval confirmed", "matching", true, 0},
+		{"stale approval", "000000", false, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			task := planTask(h)
+			old := planFixture(t, "legacy/form-b-revised.md")
+			h.write(filepath.Join(task, "plan.md"), old)
+			hash := tc.hash
+			if hash == "matching" {
+				hash = plan.Hash(old)
+			}
+			approval := "{\"plan_hash\":\"" + hash + "\"}\n"
+			h.write(filepath.Join(task, "approval.json"), approval)
+			args := []string{"plan", "migrate"}
+			if tc.yes {
+				args = append(args, "--yes")
+			}
+			if code := h.run(task, args...); code != tc.code {
+				t.Fatalf("%d: %s", code, h.errb)
+			}
+			if tc.code == 1 {
+				if !strings.Contains(h.errb.String(), "need approving again") {
+					t.Fatal(h.errb.String())
+				}
+				data, err := os.ReadFile(filepath.Join(task, "plan.md"))
+				if err != nil || string(data) != old {
+					t.Fatal("refusal changed plan")
+				}
+				if _, err := os.Stat(filepath.Join(task, "plan-revisions")); !os.IsNotExist(err) {
+					t.Fatal("refusal created archive")
+				}
+			}
+			data, err := os.ReadFile(filepath.Join(task, "approval.json"))
+			if err != nil || string(data) != approval {
+				t.Fatal("approval changed")
+			}
+		})
+	}
+}
+
+func TestPlanMigrateMissingRecall(t *testing.T) {
+	for _, name := range []string{"form-a", "form-b-fields", "form-c"} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			task := planTask(h)
+			old := planFixture(t, "legacy/"+name+".md")
+			old = strings.ReplaceAll(old, "Used: brain:project/conventions/tag-matching\n", "")
+			h.write(filepath.Join(task, "plan.md"), old)
+			if code := h.run(task, "plan", "migrate"); code != 1 || !strings.Contains(h.errb.String(), "Used:") {
+				t.Fatalf("%d: %s", code, h.errb)
+			}
+			data, err := os.ReadFile(filepath.Join(task, "plan.md"))
+			if err != nil || string(data) != old {
+				t.Fatal("refusal changed plan")
+			}
+		})
+	}
+}
+
+func TestPlanLegacyHint(t *testing.T) {
+	for _, name := range []string{"form-a", "form-b", "form-b-fields", "form-c"} {
+		for _, action := range []string{"items", "check", "write"} {
+			t.Run(name+"/"+action, func(t *testing.T) {
+				h := newHarness(t)
+				task := planTask(h)
+				text := planFixture(t, "legacy/"+name+".md") + "\nRecall: nothing found\n"
+				h.write(filepath.Join(task, "plan.md"), text)
+				args := []string{"plan", action}
+				if action == "write" {
+					args = append(args, "plan.md")
+				}
+				if code := h.run(task, args...); code != 1 {
+					t.Fatalf("exit %d", code)
+				}
+				if !strings.Contains(h.out.String()+h.errb.String(), "this looks like an older plan format; run grid plan migrate --dry-run") {
+					t.Fatalf("missing hint: %s %s", h.out, h.errb)
+				}
+			})
+		}
+	}
+}
+
+func TestPlanMigrateCurrentNoOp(t *testing.T) {
+	h := newHarness(t)
+	task := planTask(h)
+	before, err := os.ReadDir(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run(task, "plan", "migrate", "--json"); code != 0 {
+		t.Fatalf("%d: %s", code, h.errb)
+	}
+	var got struct{ Form, Message string }
+	if err := json.Unmarshal(h.out.Bytes(), &got); err != nil || got.Form != "current" || got.Message != "plan.md is already current" {
+		t.Fatalf("%s: %v", h.out, err)
+	}
+	after, err := os.ReadDir(task)
+	if err != nil || len(before) != len(after) {
+		t.Fatal("current migration created files")
+	}
+	data, err := os.ReadFile(filepath.Join(task, "plan.md"))
+	if err != nil || string(data) != planFixture(t, "plan.md") {
+		t.Fatal("current migration changed plan")
+	}
+}
+
+func TestPlanMigrateLegacyFrontmatterRevisionRefusal(t *testing.T) {
+	// Store.Write cannot archive a plan without a revision heading. Keep this
+	// boundary explicit until the store's revision policy for form C is agreed.
+	h := newHarness(t)
+	task := planTask(h)
+	old := planFixture(t, "legacy/form-c.md") + "\nRecall: nothing found\n"
+	h.write(filepath.Join(task, "plan.md"), old)
+	if code := h.run(task, "plan", "migrate"); code != 1 || !strings.Contains(h.errb.String(), "current plan: plan must start with") {
+		t.Fatalf("%d: %s", code, h.errb)
+	}
+	data, err := os.ReadFile(filepath.Join(task, "plan.md"))
+	if err != nil || string(data) != old {
+		t.Fatal("revision refusal changed plan")
+	}
+	if _, err := os.Stat(filepath.Join(task, "plan-revisions")); !os.IsNotExist(err) {
+		t.Fatal("revision refusal created archive")
 	}
 }
