@@ -40,7 +40,7 @@ add('session-check', 'empty-data', 'Empty plugin data also warns.', env={'CLAUDE
 for name, inp in [('session', event('SessionStart')), ('empty-object', {}), ('invalid-json', '{')]:
     add('agent-routing', name, 'Routing is independent of stdin and lists shipped agents.', inp, contains='grid:grid-builder')
 config = json.dumps({'current': 'demo', 'workspaces': [{'name': 'demo', 'folder': R, 'data': '$GRID_HOME'}]})
-config_file = '$GRID_HOME/../user/.config/app.gridconsole.desktop/config.json'
+config_file = '$GRID_HOME/../user/$APP_CONFIG/app.gridconsole.desktop/config.json'
 add('grid-env', 'explicit', 'Explicit Grid variables prevent discovery and env-file writes.', event('SessionStart', cwd=R))
 add('grid-env', 'discovered', 'Desktop config selects a project and writes shell exports.', event('SessionStart', cwd=R), env={'GRID_HOME': None, 'GRID_PROJECTS': None}, files={config_file: config}, contains='Grid is set up', changed=['claude.env'])
 add('grid-env', 'no-config', 'No desktop configuration gives no output.', event('SessionStart', cwd=R), env={'GRID_HOME': None, 'GRID_PROJECTS': None})
