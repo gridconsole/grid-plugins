@@ -14,7 +14,7 @@ var namesHost = regexp.MustCompile(`(?i)(^|[^\w.-])\.host($|[^\w.-])`)
 // decision or a task state change. It is matched on flatten's output, where every
 // shell separator is " ; " and quotes are gone, so the binary may sit behind an
 // env prefix, &&, ;, a subshell, a path or quoting.
-var gateVerb = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:approve|answer|question\s+(?:answer|withdraw)|refusal\s+decide|task\s+(?:status|close|reopen|stop))(?:\s|$)`)
+var gateVerb = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:approve|answer|question\s+(?:answer|withdraw)|refusal\s+decide|task\s+(?:status|close|reopen|stop|delete|restore|rename|decline))(?:\s|$)`)
 
 // feedAnswer matches answer posts and withdrawn controls in either flag order.
 // The lazy middle spans flattened separators, since a quoted body may hold some.
