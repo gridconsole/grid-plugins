@@ -330,7 +330,7 @@ func TestHelpListsEveryCommand(t *testing.T) {
 }
 
 func TestHookUnknownEventsAreSilent(t *testing.T) {
-	for _, event := range []string{"posttooluse", "stop", "precompact", "madeup", ""} {
+	for _, event := range []string{"madeup", ""} {
 		h := newHarness(t)
 		h.env.Stdin = strings.NewReader(`{"cwd":"` + h.tmp + `"}`)
 		args := []string{"hook"}

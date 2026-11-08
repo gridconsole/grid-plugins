@@ -1,6 +1,22 @@
 package hook
 
-import "strings"
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/guard"
+	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/lease"
+	"github.com/gridconsole/grid-plugins/internal/session"
+	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/taskfile"
+	"github.com/gridconsole/grid-plugins/internal/where"
+)
 
 // Event describes one implemented dispatcher and its plugin registration.
 type Event struct {
@@ -10,13 +26,23 @@ type Event struct {
 }
 
 // This table is the source for dispatch, Handles and generated plugin hooks.
+// Timeouts are seconds: Stop and SubagentStop leave room for a bounded verify,
+// PermissionRequest for the 85 s answer wait.
 var events = []struct {
 	Event
-	run func(Options)
+	run func(Options) int
 }{
-	{Event{"SessionStart", "startup|resume|clear|compact|fork", 10}, sessionStart},
-	{Event{"PreToolUse", "", 10}, toolUse},
-	{Event{"PermissionRequest", "", 100}, toolUse},
+	{Event{"SessionStart", "startup|resume|clear|compact|fork", 10}, quiet(sessionStart)},
+	{Event{"UserPromptSubmit", "", 10}, remaining},
+	{Event{"SubagentStart", "", 10}, remaining},
+	{Event{"PreToolUse", "", 10}, quiet(toolUse)},
+	{Event{"PostToolUse", "", 10}, remaining},
+	{Event{"PreCompact", "", 10}, remaining},
+	{Event{"Stop", "", 60}, remaining},
+	{Event{"SubagentStop", "", 60}, remaining},
+	{Event{"SessionEnd", "", 10}, remaining},
+	{Event{"PostToolUseFailure", "", 10}, remaining},
+	{Event{"PermissionRequest", "", 100}, quiet(toolUse)},
 }
 
 // Events returns registration metadata without exposing the dispatcher table.
@@ -28,11 +54,289 @@ func Events() []Event {
 	return out
 }
 
-func handler(name string) func(Options) {
+func handler(name string) func(Options) int {
 	for _, e := range events {
 		if strings.EqualFold(name, e.Name) {
 			return e.run
 		}
 	}
 	return nil
+}
+
+func quiet(f func(Options)) func(Options) int {
+	return func(o Options) int { f(o); return 0 }
+}
+
+var components = map[string]bool{"heartbeat": true, "stop-check": true, "worker-exit": true, "history-log": true, "usage-log": true, "brain-read": true, "brain-recall": true, "permission-forward": true,
+	"lib-agentname": true, "lib-gatelike": true, "lib-historyline": true, "lib-parsefrontmatter": true, "lib-workflowsteps": true, "lib-planstage": true}
+
+func componentEvent(event string) bool { return components[strings.ToLower(event)] }
+func str(v any) string                 { s, _ := v.(string); return s }
+func (o Options) log(action string, err error) {
+	if err != nil && o.Stderr != nil {
+		fmt.Fprintf(o.Stderr, "grid hook: %s: %v\n", action, err)
+	}
+}
+
+func remaining(o Options) int {
+	in, large := hookio.Read(o.Stdin)
+	if in == nil || large {
+		return 0
+	}
+	if in.Cwd == "" {
+		in.Cwd = o.Cwd
+	}
+	name := strings.ToLower(o.Event)
+	if strings.HasPrefix(name, "lib-") {
+		helper(o, *in)
+		return 0
+	}
+	if !componentEvent(name) {
+		for _, event := range []string{"PostToolUse", "PostToolUseFailure", "Stop", "SubagentStop", "SessionEnd", "UserPromptSubmit", "SubagentStart", "PreCompact"} {
+			if strings.EqualFold(name, event) {
+				in.HookEventName = event
+			}
+		}
+	}
+	switch name {
+	case "heartbeat":
+		heartbeat(o, *in)
+	case "worker-exit":
+		workerExit(o, *in)
+	case "history-log":
+		history(o, *in)
+	case "usage-log":
+		recordSession(o, *in)
+	case "brain-read":
+		brainRead(o, *in)
+	case "brain-recall":
+		recall(o, *in)
+	case "stop-check":
+		return stopCheck(o, *in)
+	case "permission-forward":
+		// Local guards arbitrate first; no bridge answer means the terminal asks.
+		toolUse(Options{Event: "permissionrequest", Stdin: reader(*in), Stdout: o.Stdout, Stderr: o.Stderr, Resolver: o.Resolver, Cwd: o.Cwd, Getenv: o.Getenv})
+	default:
+		if name == "precompact" && o.Stdout != nil {
+			fmt.Fprintln(o.Stdout, "Keep the Job id, acceptance ids and open decisions in the summary.")
+		}
+		heartbeat(o, *in)
+		history(o, *in)
+		recordSession(o, *in)
+		brainRead(o, *in)
+		recall(o, *in)
+		if name == "stop" || name == "subagentstop" {
+			if code := stopCheck(o, *in); code != 0 {
+				return code
+			}
+		}
+		if name == "sessionend" || name == "subagentstop" {
+			workerExit(o, *in)
+		}
+	}
+	return 0
+}
+func reader(in hookio.Input) *strings.Reader {
+	b, _ := json.Marshal(in)
+	return strings.NewReader(string(b))
+}
+
+func taskDir(o Options, in hookio.Input) (string, error) {
+	if o.Resolver.GridHome == "" {
+		return "", nil
+	}
+	explicit := o.Getenv("GRID_TASK")
+	if explicit == "" {
+		explicit = o.Getenv("GRID_FEED_TASK")
+	}
+	if explicit != "" {
+		r, err := o.Resolver.Resolve(where.Query{Cwd: in.Cwd, Task: explicit})
+		if err != nil {
+			return "", err
+		}
+		return task.FolderAt(o.Resolver.GridHome, r.TaskPath)
+	}
+	return task.FolderAt(gridhome.Real(o.Resolver.GridHome), in.Cwd)
+}
+func activityStore(o Options, in hookio.Input) (session.Store, error) {
+	dir, err := taskDir(o, in)
+	if err != nil {
+		return session.Store{}, err
+	}
+	if dir == "" {
+		dir = o.Resolver.GridHome
+	}
+	return session.Store{TaskDir: dir}, nil
+}
+func writer(in hookio.Input) string {
+	if in.AgentType == "" {
+		return "claude"
+	}
+	return guard.AgentName(in.AgentType)
+}
+func safeReference(s string) string {
+	if len(s) > 1000 || strings.ContainsAny(s, "\x00\r\n") {
+		return ""
+	}
+	return s
+}
+
+func recordSession(o Options, in hookio.Input) {
+	if in.SessionID == "" || o.Resolver.GridHome == "" {
+		return
+	}
+	if in.HookEventName != "SessionStart" && in.HookEventName != "SubagentStop" && !(in.HookEventName == "PostToolUse" && (in.ToolName == "Agent" || in.ToolName == "Task")) {
+		return
+	}
+	store, err := activityStore(o, in)
+	if err != nil {
+		o.log("session", err)
+		return
+	}
+	if in.HookEventName == "PostToolUse" {
+		res := in.ToolResponse
+		usage, _ := res["usage"].(map[string]any)
+		num := func(m map[string]any, k string) float64 {
+			n, _ := m[k].(float64)
+			if n < 0 {
+				return 0
+			}
+			return n
+		}
+		u := session.Usage{Input: num(usage, "input_tokens"), Output: num(usage, "output_tokens"), CacheRead: num(usage, "cache_read_input_tokens"), CacheWrite: num(usage, "cache_creation_input_tokens"), Total: num(res, "totalTokens"), Milliseconds: num(res, "totalDurationMs")}
+		if in.ToolUseID != "" {
+			o.log("usage", store.RecordUsage(in.SessionID, in.ToolUseID, u))
+		}
+		return
+	}
+	o.log("session", store.UpdateActivity(in.SessionID, func(a *session.Activity) error {
+		if in.HookEventName == "SubagentStop" {
+			if p := safeReference(in.AgentTranscriptPath); p != "" && in.AgentID != "" {
+				if a.Transcripts == nil {
+					a.Transcripts = map[string]string{}
+				}
+				a.Transcripts[in.AgentID] = p
+			}
+		} else if p := safeReference(in.TranscriptPath); p != "" {
+			a.Transcript = p
+		}
+		return nil
+	}))
+}
+
+func heartbeat(o Options, in hookio.Input) {
+	if in.SessionID == "" || (in.HookEventName != "PostToolUse" && in.HookEventName != "Stop" && in.HookEventName != "PreCompact") {
+		return
+	}
+	dir, err := taskDir(o, in)
+	if err != nil {
+		o.log("heartbeat", err)
+		return
+	}
+	if dir == "" {
+		return
+	}
+	machine := o.Resolver.Machine
+	if machine == "" {
+		machine = gridhome.Machine(o.Resolver.GridHome)
+	}
+	if machine == "" {
+		return
+	}
+	err = lease.HookActivity(session.Store{TaskDir: dir}, session.Key{SessionID: in.SessionID, MachineID: machine}, safeReference(in.TranscriptPath))
+	if !errors.Is(err, os.ErrNotExist) {
+		o.log("heartbeat", err)
+	}
+}
+func workerExit(o Options, in hookio.Input) {
+	if in.HookEventName != "SessionEnd" && in.HookEventName != "SubagentStop" {
+		return
+	}
+	if in.SessionID == "" {
+		return
+	}
+	dir, err := taskDir(o, in)
+	if err != nil {
+		o.log("worker exit", err)
+		return
+	}
+	if dir == "" {
+		return
+	}
+	reason := "crash"
+	if in.HookEventName == "SubagentStop" {
+		reason = "done"
+	}
+	switch in.Reason {
+	case "done", "crash", "usage_limit", "cancelled", "loop":
+		reason = in.Reason
+	case "clear", "logout":
+		reason = "cancelled"
+	}
+	store := session.Store{TaskDir: dir}
+	key := "exit:" + in.AgentID + ":" + o.Getenv("GRID_JOB") + ":" + o.Getenv("GRID_FENCE") + ":" + o.Getenv("GRID_ATTEMPT")
+	o.log("worker exit", store.UpdateActivity(in.SessionID, func(a *session.Activity) error {
+		if !a.Seen[key] {
+			a.ExitReason = reason
+			if a.Exits == nil {
+				a.Exits = map[string]string{}
+			}
+			a.Exits[key] = reason
+			a.Seen[key] = true
+		}
+		return nil
+	}))
+	machine := o.Resolver.Machine
+	if machine == "" {
+		machine = gridhome.Machine(o.Resolver.GridHome)
+	}
+	if in.HookEventName == "SessionEnd" && machine != "" {
+		state := session.Finished
+		if reason == "crash" || reason == "loop" {
+			state = session.Errored
+		}
+		if reason == "cancelled" {
+			state = session.StoppedByYou
+		}
+		_, err = store.End(session.Key{SessionID: in.SessionID, MachineID: machine}, state)
+		if !errors.Is(err, os.ErrNotExist) {
+			o.log("end session", err)
+		}
+	}
+}
+
+// Helper events expose the same pure functions the handlers use. They are
+// migration diagnostics, not runtime hook subscriptions.
+func helper(o Options, in hookio.Input) {
+	arg := func(i int) string {
+		if i < len(in.Args) {
+			return str(in.Args[i])
+		}
+		return ""
+	}
+	var out any
+	switch strings.ToLower(o.Event) {
+	case "lib-agentname":
+		out = guard.AgentName(arg(0))
+	case "lib-gatelike":
+		out = guard.GateLike(arg(0))
+	case "lib-historyline":
+		out = task.HistoryLine(arg(0), arg(1), arg(2), arg(3), arg(4))
+	case "lib-parsefrontmatter":
+		out = taskfile.ParseFrontmatter(arg(0))
+	case "lib-workflowsteps":
+		out = guard.WorkflowSteps(arg(0))
+	case "lib-planstage":
+		out = guard.PlanStage(arg(0), arg(1))
+	}
+	if o.Stdout != nil {
+		o.log("helper output", json.NewEncoder(o.Stdout).Encode(out))
+	}
+}
+
+func absolute(cwd, path string) string {
+	if !filepath.IsAbs(path) {
+		return filepath.Join(cwd, path)
+	}
+	return filepath.Clean(path)
 }

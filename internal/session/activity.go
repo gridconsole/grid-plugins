@@ -22,15 +22,18 @@ type Usage struct {
 }
 
 type Activity struct {
-	Exits       map[string]string            `json:"exits,omitempty"`
-	PlannerTask string                       `json:"planner_task,omitempty"`
-	SessionID   string                       `json:"session_id"`
-	Last        time.Time                    `json:"last"`
-	Transcript  string                       `json:"transcript,omitempty"`
-	Usage       map[string]Usage             `json:"usage,omitempty"`
-	Seen        map[string]bool              `json:"seen,omitempty"`
-	Snapshots   map[string]map[string]string `json:"snapshots,omitempty"`
-	ExitReason  string                       `json:"exit_reason,omitempty"`
+	VerifyBlocks map[string]int               `json:"verify_blocks,omitempty"`
+	VerifyFailed map[string]bool              `json:"verify_failed,omitempty"`
+	Transcripts  map[string]string            `json:"transcripts,omitempty"`
+	Exits        map[string]string            `json:"exits,omitempty"`
+	PlannerTask  string                       `json:"planner_task,omitempty"`
+	SessionID    string                       `json:"session_id"`
+	Last         time.Time                    `json:"last"`
+	Transcript   string                       `json:"transcript,omitempty"`
+	Usage        map[string]Usage             `json:"usage,omitempty"`
+	Seen         map[string]bool              `json:"seen,omitempty"`
+	Snapshots    map[string]map[string]string `json:"snapshots,omitempty"`
+	ExitReason   string                       `json:"exit_reason,omitempty"`
 }
 
 // Activity is hook evidence, separate from the supervisor's process record.

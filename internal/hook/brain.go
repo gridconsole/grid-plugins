@@ -1,0 +1,243 @@
+package hook
+
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/guard"
+	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/session"
+	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
+)
+
+func brainStore(o Options, dir string) brain.Store {
+	project := filepath.Base(filepath.Dir(filepath.Dir(dir)))
+	if project == where.Personal {
+		project = ""
+	}
+	return brain.Store{GridHome: o.Resolver.GridHome, Project: project}
+}
+func brainRead(o Options, in hookio.Input) {
+	if in.HookEventName != "PostToolUse" || in.ToolName != "Read" || in.SessionID == "" {
+		return
+	}
+	path := str(in.ToolInput["file_path"])
+	if !strings.HasSuffix(path, ".md") {
+		return
+	}
+	dir, err := taskDir(o, in)
+	if err != nil {
+		o.log("brain read", err)
+		return
+	}
+	if dir == "" {
+		return
+	}
+	store := brainStore(o, dir)
+	name := strings.TrimSuffix(filepath.Base(path), ".md")
+	if !brain.ValidName(name) {
+		return
+	}
+	actual := gridhome.Real(absolute(in.Cwd, path))
+	// Explicit levels avoid a project note with the same name shadowing a home read.
+	for _, level := range []string{"project", "home"} {
+		if level == "project" && store.Project == "" {
+			continue
+		}
+		e, err := store.Show("brain:" + level + "/" + name)
+		if err != nil {
+			continue
+		}
+		if actual != gridhome.Real(filepath.Join(o.Resolver.GridHome, filepath.FromSlash(e.Path))) {
+			continue
+		}
+		s := session.Store{TaskDir: dir}
+		o.log("brain read", s.UpdateActivity(in.SessionID, func(a *session.Activity) error {
+			key := "read:" + e.ID
+			if a.Seen[key] {
+				return nil
+			}
+			if err := task.AppendHistory(dir, "brain read", e.ID, writer(in), ""); err != nil {
+				return err
+			}
+			a.Seen[key] = true
+			return nil
+		}))
+		return
+	}
+}
+
+var namedTask = regexp.MustCompile(`\bT-[0-9]+(?:-[A-Za-z0-9_.-]+)?\b`)
+
+func namedTaskDir(o Options, in hookio.Input, text string) (string, error) {
+	name := namedTask.FindString(text)
+	if name == "" {
+		return taskDir(o, in)
+	}
+	roots, err := gridhome.TasksDirs(o.Resolver.GridHome)
+	if err != nil {
+		return "", err
+	}
+	found := ""
+	for _, root := range roots {
+		entries, err := os.ReadDir(root)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		for _, e := range entries {
+			if !e.IsDir() || !(e.Name() == name || strings.HasPrefix(e.Name(), name+"-")) {
+				continue
+			}
+			dir, err := task.FolderAt(o.Resolver.GridHome, filepath.Join(root, e.Name()))
+			if err != nil {
+				return "", err
+			}
+			if found != "" && dir != "" {
+				return "", fmt.Errorf("ambiguous task %s", name)
+			}
+			found = dir
+		}
+	}
+	return found, nil
+}
+
+func recall(o Options, in hookio.Input) {
+	if o.Resolver.GridHome == "" {
+		return
+	}
+	text := ""
+	switch in.HookEventName {
+	case "PreToolUse":
+		if (in.ToolName != "Agent" && in.ToolName != "Task") || guard.AgentName(str(in.ToolInput["subagent_type"])) != "grid-planner" || in.SessionID == "" {
+			return
+		}
+		dir, err := namedTaskDir(o, in, str(in.ToolInput["prompt"])+" "+str(in.ToolInput["description"]))
+		if err != nil {
+			o.log("planner task", err)
+			return
+		}
+		if dir == "" {
+			return
+		}
+		o.log("planner task", (session.Store{TaskDir: o.Resolver.GridHome}).UpdateActivity(in.SessionID, func(a *session.Activity) error { a.PlannerTask = dir; return nil }))
+		return
+	case "UserPromptSubmit":
+		trimmed := strings.TrimSpace(in.Prompt)
+		command, _, _ := strings.Cut(trimmed, " ")
+		if command != "/grid:plan" && command != "/grid:execute" && command != "/grid:resume" {
+			return
+		}
+		text = in.Prompt
+	case "PostToolUse":
+		if in.ToolName != "Skill" {
+			return
+		}
+		skill := strings.TrimPrefix(str(in.ToolInput["skill"]), "grid:")
+		if skill != "plan" && skill != "execute" && skill != "resume" {
+			return
+		}
+		text = str(in.ToolInput["args"])
+	case "SubagentStart":
+		if name := guard.AgentName(in.AgentType); name != "grid-planner" && name != "grid-builder" {
+			return
+		}
+	default:
+		return
+	}
+	dir, err := namedTaskDir(o, in, text)
+	if err != nil {
+		o.log("recall", err)
+		return
+	}
+	if in.HookEventName == "SubagentStart" && guard.AgentName(in.AgentType) == "grid-planner" && in.SessionID != "" {
+		a, err := (session.Store{TaskDir: o.Resolver.GridHome}).Activity(in.SessionID)
+		if err != nil {
+			o.log("planner task", err)
+			return
+		}
+		if a.PlannerTask != "" {
+			dir, err = task.FolderAt(o.Resolver.GridHome, a.PlannerTask)
+			if err != nil {
+				o.log("planner task", err)
+				return
+			}
+		}
+	}
+	if dir == "" {
+		return
+	}
+	doc, err := task.Document(dir)
+	if err != nil {
+		o.log("recall", err)
+		return
+	}
+	history, _ := readBounded(filepath.Join(dir, "history.md"))
+	plan, _ := readBounded(filepath.Join(dir, "plan.md"))
+	if doc.Data["status"] != nil {
+		original, _ := readBounded(filepath.Join(dir, "task.md"))
+		stage := guard.PlanStage(original, history)
+		if stage == "" || stage == "past" {
+			return
+		}
+	}
+	query := str(doc.Data["title"]) + " " + str(doc.Data["summary"])
+	if intent, err := readBounded(filepath.Join(dir, "intent.md")); err == nil {
+		query += " " + intent
+	}
+	hits, err := brainStore(o, dir).Search(query, "", 5)
+	if err != nil {
+		o.log("recall", err)
+		return
+	}
+	context := "Brain recall: nothing found. Record Recall: nothing found in the plan when no note applies."
+	if len(hits) > 0 {
+		var lines []string
+		lines = append(lines, "Brain pointers for this task; open only notes that apply:")
+		used := len(lines[0]) + 200
+		for i, h := range hits {
+			line := fmt.Sprintf("- %s (%s): %s Why: %s", h.ID, h.Path, h.Summary, h.Description)
+			if used+len(line) > 2400 {
+				lines = append(lines, fmt.Sprintf("%d pointers cut; grid brain search lists more.", len(hits)-i))
+				break
+			}
+			lines = append(lines, line)
+			used += len(line) + 1
+		}
+		lines = append(lines, "Record Used: <pointer> in the plan for each note used.")
+		context = strings.Join(lines, "\n")
+	}
+	emit := true
+	if in.SessionID != "" {
+		// Content identity also recalls after a plan edit without a numeric revision.
+		key := fmt.Sprintf("recall:%s:%x", in.AgentID, sha256.Sum256([]byte(plan)))
+		err = (session.Store{TaskDir: dir}).UpdateActivity(in.SessionID, func(a *session.Activity) error {
+			if a.Seen[key] {
+				emit = false
+				return nil
+			}
+			if err := task.AppendHistory(dir, "brain recall", fmt.Sprintf("%d pointers", len(hits)), writer(in), ""); err != nil {
+				return err
+			}
+			a.Seen[key] = true
+			return nil
+		})
+		if err != nil {
+			o.log("recall", err)
+			return
+		}
+	}
+	if emit && o.Stdout != nil {
+		o.log("recall output", json.NewEncoder(o.Stdout).Encode(map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": in.HookEventName, "additionalContext": context}}))
+	}
+}

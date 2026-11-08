@@ -1,5 +1,5 @@
 // Package hook answers Claude Code and Codex hook events. A hook never fails the
-// session: every path returns exit code 0.
+// session on an internal error; a stop guard may return 2 to request completion.
 package hook
 
 import (
@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
@@ -22,6 +23,7 @@ type Options struct {
 	Event    string
 	Stdin    io.Reader
 	Stdout   io.Writer
+	Stderr   io.Writer
 	Resolver where.Resolver
 	Cwd      string
 	Getenv   func(string) string
@@ -30,25 +32,30 @@ type Options struct {
 // Handles reports whether Run answers the event, so callers can tell a handled
 // event from one that silently prints nothing.
 func Handles(event string) bool {
-	return handler(event) != nil
+	return handler(event) != nil || componentEvent(event)
 }
 
-// Run handles one event and returns the exit code (always 0). Unknown events and
+// Run handles one event. Internal errors allow the turn; stop guards may block. Unknown events and
 // malformed input print nothing. SessionStart never creates project/task records.
 func Run(o Options) int {
 	if o.Getenv == nil {
 		o.Getenv = os.Getenv
 	}
 	if run := handler(o.Event); run != nil {
-		run(o)
+		return run(o)
+	}
+	if componentEvent(o.Event) {
+		return remaining(o)
 	}
 	return 0
 }
 
 func sessionStart(o Options) {
 	var in struct {
-		Cwd    string `json:"cwd"`
-		Source string `json:"source"`
+		Cwd        string `json:"cwd"`
+		Source     string `json:"source"`
+		SessionID  string `json:"session_id"`
+		Transcript string `json:"transcript_path"`
 	}
 	if o.Stdin != nil {
 		const limit = 1 << 20
@@ -80,9 +87,19 @@ func sessionStart(o Options) {
 	if err != nil {
 		return
 	}
+	recordSession(o, hookio.Input{HookEventName: "SessionStart", SessionID: in.SessionID, TranscriptPath: in.Transcript, Cwd: cwd, Source: in.Source})
 	context := sessionContext(res, o.Resolver, note)
+	brainProject := res.Project
+	if brainProject == where.Personal {
+		brainProject = ""
+	}
+	if idx, err := (brain.Store{GridHome: o.Resolver.GridHome, Project: brainProject}).Index(); err == nil {
+		context += "\n" + idx.Text
+	} else {
+		o.log("brain index", err)
+	}
 	out := map[string]any{"hookSpecificOutput": map[string]string{
-		"hookEventName": "SessionStart", "additionalContext": context,
+		"hookEventName": "SessionStart", "additionalContext": boundContext(context),
 	}}
 	b, err := json.Marshal(out)
 	if err != nil {
@@ -127,6 +144,10 @@ func sessionContext(r where.Result, resolver where.Resolver, note string) string
 		"The Grid brain holds shared topics, knowledge and decisions at home and project level.",
 		"Approvals come from a person through !grid approve in Claude Code bash mode, or grid approve in a shell.",
 	}, "\n")
+	return boundContext(text)
+}
+
+func boundContext(text string) string {
 	const limit = 9900
 	runes := []rune(text)
 	if len(runes) > limit {
@@ -190,15 +211,16 @@ func toolUse(o Options) {
 	env := guardEnv(o)
 	// PermissionRequest also rechecks denies before granting a home fallback.
 	// Convert a refusal to that event's decision shape after arbitration.
-	decision := hookio.Strongest(
-		guard.EvaluateHost(*in, o.Cwd, env),
-		guard.EvaluateOnlyWriter(*in, o.Cwd, env),
-		guard.EvaluatePlan(*in, o.Cwd, env),
-		guard.EvaluateBrief(*in, o.Cwd, env),
-		guard.EvaluateHome(*in, o.Cwd, env),
-	)
+	decision := evaluateGuards(o, *in, env)
+	if in.HookEventName == "PreToolUse" && decision.Behavior != "deny" {
+		history(o, *in)
+		recall(o, *in)
+	}
 	if decision.Behavior == "allow" {
 		CountHomeAllow(env, *in)
+	}
+	if in.HookEventName == "PermissionRequest" && decision.Behavior == "" {
+		decision = forwardPermission(o, *in)
 	}
 	if in.HookEventName == "PermissionRequest" && decision.Behavior != "" {
 		decision.Event = "PermissionRequest"
@@ -206,4 +228,14 @@ func toolUse(o Options) {
 	if o.Stdout != nil {
 		_ = decision.Write(o.Stdout)
 	}
+}
+
+func evaluateGuards(o Options, in hookio.Input, env map[string]string) hookio.Decision {
+	return hookio.Strongest(
+		guard.EvaluateHost(in, o.Cwd, env),
+		guard.EvaluateOnlyWriter(in, o.Cwd, env),
+		guard.EvaluatePlan(in, o.Cwd, env),
+		guard.EvaluateBrief(in, o.Cwd, env),
+		guard.EvaluateHome(in, o.Cwd, env),
+	)
 }

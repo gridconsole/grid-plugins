@@ -38,6 +38,13 @@ func FolderAt(home, path string) (string, error) {
 		if gridhome.Real(dir) != dir {
 			continue
 		}
+		info, err := os.Lstat(filepath.Join(dir, "task.md"))
+		if err != nil {
+			return "", err
+		}
+		if !info.Mode().IsRegular() {
+			return "", errors.New("task metadata must be a regular file")
+		}
 		f, err := fslock.OpenNoFollow(filepath.Join(dir, "task.md"), os.O_RDONLY, 0)
 		if err != nil {
 			return "", err
@@ -50,14 +57,24 @@ func FolderAt(home, path string) (string, error) {
 
 // Document reads task metadata using the existing migration reader.
 func Document(dir string) (*taskfile.Frontmatter, error) {
+	info, err := os.Lstat(filepath.Join(dir, "task.md"))
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("task metadata must be a regular file")
+	}
 	f, err := fslock.OpenNoFollow(filepath.Join(dir, "task.md"), os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, 1<<20))
+	b, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(b) > 1<<20 {
+		return nil, errors.New("task metadata exceeds hook read limit")
 	}
 	doc := taskfile.ParseFrontmatter(string(b))
 	if doc == nil || doc.Odd {

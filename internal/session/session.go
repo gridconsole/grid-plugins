@@ -306,6 +306,9 @@ func (s Store) End(k Key, state State) (Record, error) {
 		return Record{}, errors.New("invalid session end state")
 	}
 	return s.update(k, func(r Record) (Record, error) {
+		if r.Ended != nil {
+			return r, nil
+		}
 		now := s.now()
 		r.State, r.Ended, r.Slept = state, &now, nil
 		if err := s.save(r); err != nil {

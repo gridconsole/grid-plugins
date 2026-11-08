@@ -72,3 +72,12 @@ func runProcess(ctx context.Context, argv []string, dir string, env []string, st
 	}
 	return result
 }
+
+// RunCommand exposes the existing bounded, cancellable process runner to hook
+// verification. Callers supply argv, cwd and the complete child environment.
+func RunCommand(ctx context.Context, argv []string, dir string, env []string) ProcessResult {
+	if len(argv) == 0 {
+		return ProcessResult{Status: "error", ExitCode: -1, Error: "verification command is empty"}
+	}
+	return runProcess(ctx, argv, dir, env, "")
+}

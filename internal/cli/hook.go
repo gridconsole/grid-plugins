@@ -13,7 +13,7 @@ func runHook(args []string, env Env) int {
 		return 0
 	}
 	return hook.Run(hook.Options{
-		Event: args[0], Stdin: env.Stdin, Stdout: env.Stdout,
+		Event: args[0], Stdin: env.Stdin, Stdout: env.Stdout, Stderr: env.Stderr,
 		Resolver: resolver(env), Cwd: env.Cwd, Getenv: env.getenv,
 	})
 }
