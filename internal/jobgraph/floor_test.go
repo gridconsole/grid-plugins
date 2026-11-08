@@ -128,6 +128,7 @@ func TestScopeOverlap(t *testing.T) {
 		{"**/pages/**", "app/pages/view.ts", true}, {"**/pages/**", "pages/view.ts", true},
 		{"src/**/auth/*", "src/auth/token.go", true}, {"src/*/auth/*", "src/auth/token.go", false},
 		{"repo:src/**", "src/**", false}, {"repo:src/**", "repo:src/auth/*", true},
+		{"**/*.go", "repo:src/main.go", false}, {"repo:**/*.go", "repo:src/main.go", true},
 		{"a/[ab].go", "a/[bc].go", true}, {"a/[a-c].go", "a/[d-f].go", false},
 		{"a/[^a-c].go", "a/b.go", false}, {"a/[^a-c].go", "a/d.go", true},
 		{"a/?.go", "a/*.go", true}, {"a/?.go", "a/ab.go", false}, {"a/*x", "a/y*", true},
@@ -146,7 +147,7 @@ func TestScopeOverlap(t *testing.T) {
 			}
 		})
 	}
-	for _, pattern := range []string{"", "../src", "/src/**", `src\foo`, "src//foo", "src/a**", "src/[", "src/[]", "src/./foo"} {
+	for _, pattern := range []string{"", "../src", "/src/**", `src\foo`, "src//foo", "src/a**", "src/[", "src/[]", "src/./foo", "repo:/src", ":src", "repo:", "*:src/**", "repo:src:bad"} {
 		if err := validatePattern(pattern); err == nil {
 			t.Fatalf("accepted %q", pattern)
 		}

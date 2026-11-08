@@ -11,10 +11,14 @@ import (
 // classes and ** as an entire segment. Repo prefixes are part of the pattern;
 // an unprefixed policy applies only to the primary repo's unprefixed paths.
 func validatePattern(pattern string) error {
-	if pattern == "" || strings.HasPrefix(pattern, "/") || strings.Contains(pattern, `\`) {
+	repo, local := splitScope(pattern)
+	if strings.Contains(pattern, ":") && (repo == "" || strings.ContainsAny(repo, "/*?[]\\") || strings.Contains(local, ":")) {
+		return fmt.Errorf("invalid scope repo prefix %q", pattern)
+	}
+	if local == "" || strings.HasPrefix(local, "/") || strings.Contains(local, `\`) {
 		return fmt.Errorf("invalid scope pattern %q: use relative slash-separated paths", pattern)
 	}
-	for _, part := range strings.Split(pattern, "/") {
+	for _, part := range strings.Split(local, "/") {
 		if part == "" || part == "." || part == ".." || strings.Contains(part, "**") && part != "**" {
 			return fmt.Errorf("invalid scope pattern %q", pattern)
 		}
@@ -23,6 +27,13 @@ func validatePattern(pattern string) error {
 		}
 	}
 	return nil
+}
+
+func splitScope(pattern string) (string, string) {
+	if repo, local, ok := strings.Cut(pattern, ":"); ok {
+		return repo, local
+	}
+	return "", pattern
 }
 
 type span struct{ lo, hi rune }
@@ -139,6 +150,12 @@ func segmentOverlap(a, b string) bool {
 }
 
 func scopeOverlap(a, b string) bool {
+	repoA, localA := splitScope(a)
+	repoB, localB := splitScope(b)
+	if repoA != repoB {
+		return false
+	}
+	a, b = localA, localB
 	x, y := strings.Split(a, "/"), strings.Split(b, "/")
 	type state struct{ i, j int }
 	queue := []state{{}}
