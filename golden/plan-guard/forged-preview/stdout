@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"$GRID_HOME/projects/demo/tasks/T-1-demo/history.md is not changed to add a preview approved line: a person approves the preview in Grid, and Grid writes the line. To turn this guard off, start Claude Code with GRID_PLAN_GUARD=off."}}

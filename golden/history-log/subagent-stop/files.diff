@@ -1,0 +1,6 @@
+diff --grid a/demo/projects/demo/tasks/T-1-demo/history.md b/demo/projects/demo/tasks/T-1-demo/history.md
+--- a/demo/projects/demo/tasks/T-1-demo/history.md
++++ b/demo/projects/demo/tasks/T-1-demo/history.md
+@@ -1 +1,2 @@
+ - <TIME> · created · demo task · by member
++- <TIME> · subagent finished · by grid-builder

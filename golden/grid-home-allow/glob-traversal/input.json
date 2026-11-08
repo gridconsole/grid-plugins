@@ -1,0 +1,10 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": "$GRID_HOME/../workspace/demo",
+  "session_id": "session-demo",
+  "tool_name": "Glob",
+  "tool_input": {
+    "path": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+    "pattern": "../*.md"
+  }
+}

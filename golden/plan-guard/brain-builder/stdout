@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Only a grid-curator (or a grid-planner) writes the brain; a grid-builder writes a proposal in its task's brain-proposals/ folder instead of $GRID_HOME/knowledge/demo.md."}}

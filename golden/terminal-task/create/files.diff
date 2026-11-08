@@ -1,0 +1,34 @@
+diff --grid a/demo/projects/demo/tasks/T-02-build-another-demo-example/history.md b/demo/projects/demo/tasks/T-02-build-another-demo-example/history.md
+new file mode 0644
+--- /dev/null
++++ b/demo/projects/demo/tasks/T-02-build-another-demo-example/history.md
+@@ -0,0 +1 @@
++- <TIME> · created · from a terminal session · by demo
+diff --grid a/demo/projects/demo/tasks/T-02-build-another-demo-example/intent.md b/demo/projects/demo/tasks/T-02-build-another-demo-example/intent.md
+new file mode 0644
+--- /dev/null
++++ b/demo/projects/demo/tasks/T-02-build-another-demo-example/intent.md
+@@ -0,0 +1 @@
++Build another demo example
+\ No newline at end of file
+diff --grid a/demo/projects/demo/tasks/T-02-build-another-demo-example/task.md b/demo/projects/demo/tasks/T-02-build-another-demo-example/task.md
+new file mode 0644
+--- /dev/null
++++ b/demo/projects/demo/tasks/T-02-build-another-demo-example/task.md
+@@ -0,0 +1,16 @@
++---
++id: T-02
++title: Build another demo example
++project: demo
++owner: demo
++source: idea
++size: normal
++workflow:
++  - {step: build, kind: run}
++  - {step: review, kind: approve}
++step: build
++status: running
++updated: <TIME>
++summary: Build another demo example
++next: Work in the terminal session
++---

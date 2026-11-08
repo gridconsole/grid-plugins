@@ -1,0 +1,6 @@
+{
+  "hook_event_name": "Stop",
+  "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+  "session_id": "session-demo",
+  "stop_hook_active": true
+}

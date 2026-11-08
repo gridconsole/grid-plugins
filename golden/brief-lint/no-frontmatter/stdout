@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"The brief subagents/01-build.md is not complete: it has no frontmatter block. Have grid-brief-writer write or fix the brief, then start the subagent again."}}

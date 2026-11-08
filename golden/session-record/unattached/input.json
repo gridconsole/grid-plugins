@@ -1,0 +1,5 @@
+{
+  "hook_event_name": "SessionEnd",
+  "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+  "session_id": "session-demo"
+}

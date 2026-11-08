@@ -1,0 +1,12 @@
+diff --grid a/demo/projects/demo/tasks/T-1-demo/subagents/01-build.md b/demo/projects/demo/tasks/T-1-demo/subagents/01-build.md
+--- a/demo/projects/demo/tasks/T-1-demo/subagents/01-build.md
++++ b/demo/projects/demo/tasks/T-1-demo/subagents/01-build.md
+@@ -1,7 +1,7 @@
+ ---
+ id: 01-build
+ role: builder
+-status: briefed
++status: done
+ verify: Check the demo output
+ follow_up: none
+ ---

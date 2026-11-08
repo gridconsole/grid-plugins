@@ -1,0 +1,5 @@
+{
+  "hook_event_name": "SubagentStop",
+  "cwd": "$GRID_HOME/../workspace/demo",
+  "session_id": "session-demo"
+}

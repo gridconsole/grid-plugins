@@ -1,0 +1,9 @@
+{
+  "hook_event_name": "PermissionRequest",
+  "cwd": "$GRID_HOME/../workspace/demo",
+  "session_id": "session-demo",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "$GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md"
+  }
+}

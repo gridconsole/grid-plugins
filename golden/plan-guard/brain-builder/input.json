@@ -1,0 +1,11 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+  "session_id": "session-demo",
+  "agent_type": "grid:grid-builder",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "$GRID_HOME/knowledge/demo.md",
+    "content": "demo\n"
+  }
+}

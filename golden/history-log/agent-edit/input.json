@@ -1,0 +1,11 @@
+{
+  "hook_event_name": "PostToolUse",
+  "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+  "session_id": "session-demo",
+  "agent_type": "grid:grid-worker",
+  "agent_id": "agent-demo",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "$GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md"
+  }
+}

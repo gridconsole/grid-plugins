@@ -1,0 +1,8 @@
+{
+  "hook_event_name": "SubagentStop",
+  "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+  "session_id": "session-demo",
+  "agent_type": "grid:grid-scout",
+  "agent_id": "agent-demo",
+  "agent_transcript_path": "$GRID_HOME/transcript.jsonl"
+}

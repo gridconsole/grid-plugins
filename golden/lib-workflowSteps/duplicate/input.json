@@ -1,0 +1,5 @@
+{
+  "args": [
+    "---\nid: T-1\ntitle: Demo task\nproject: demo\nowner: member\nsource: idea\nsize: normal\nworkflow:\n  - {step: plan, kind: run}\n  - {step: plan-review, kind: approve}\n  - {step: plan, kind: run}\n  - {step: review, kind: approve}\nstep: plan-review\nstatus: waiting\nupdated: 2025-01-02T03:04\nsummary: Build the demo example\nnext: Await plan acceptance\n---\n"
+  ]
+}

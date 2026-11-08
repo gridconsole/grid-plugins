@@ -1,0 +1,9 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": "$GRID_HOME/../workspace/demo",
+  "session_id": "session-demo",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "node $OLD_PLUGIN/skills/plan/scripts/plan-hash.mjs $GRID_HOME/../workspace/demo/plan.md"
+  }
+}

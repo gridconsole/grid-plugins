@@ -1,0 +1,10 @@
+{
+  "hook_event_name": "PostToolUse",
+  "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+  "session_id": "session-demo",
+  "agent_type": "grid:grid-planner",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "$GRID_HOME/knowledge/demo.md"
+  }
+}

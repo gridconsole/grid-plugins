@@ -1,0 +1,27 @@
+diff --grid a/demo/plugin-data/sessions/session-demo b/demo/plugin-data/sessions/session-demo
+new file mode 0644
+--- /dev/null
++++ b/demo/plugin-data/sessions/session-demo
+@@ -0,0 +1 @@
++$GRID_HOME/projects/demo/tasks/T-1-demo
+diff --grid a/demo/plugin-data/sessions/session-demo.bash-tool-demo b/demo/plugin-data/sessions/session-demo.bash-tool-demo
+deleted file mode 0644
+--- a/demo/plugin-data/sessions/session-demo.bash-tool-demo
++++ /dev/null
+@@ -1 +0,0 @@
+-{"dirs":{"$GRID_HOME/projects/demo/tasks/T-1-demo":{"intent.md":"53:<TIME>:<TIME>","plan.md":"114:<TIME>:<TIME>","subagents/01-build.md":"341:<TIME>:<TIME>","task.md":"347:<TIME>:<TIME>"}}}
+\ No newline at end of file
+diff --grid a/demo/plugin-data/sessions/session-demo.tasks b/demo/plugin-data/sessions/session-demo.tasks
+new file mode 0644
+--- /dev/null
++++ b/demo/plugin-data/sessions/session-demo.tasks
+@@ -0,0 +1 @@
++$GRID_HOME/projects/demo/tasks/T-1-demo
+diff --grid a/demo/projects/demo/tasks/T-1-demo/history.md b/demo/projects/demo/tasks/T-1-demo/history.md
+--- a/demo/projects/demo/tasks/T-1-demo/history.md
++++ b/demo/projects/demo/tasks/T-1-demo/history.md
+@@ -1 +1,4 @@
+ - <TIME> · created · demo task · by member
++- <TIME> · file edited · intent.md · by claude · via Bash
++- <TIME> · file written · notes.md · by claude · via Bash
++- <TIME> · file removed · subagents/01-build.md · by claude · via Bash

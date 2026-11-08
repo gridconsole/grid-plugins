@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"The host's folder is written only by Grid, so this command names $GRID_HOME/../.host. A held plan is approved by the person in Grid, never by a file an agent writes."}}

@@ -1,0 +1,1 @@
+[{"step":"plan","kind":"run"},{"step":"plan-review","kind":"approve"},{"step":"build","kind":"run"},{"step":"review","kind":"approve"}]

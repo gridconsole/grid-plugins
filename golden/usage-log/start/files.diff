@@ -1,0 +1,6 @@
+diff --grid a/demo/plugin-data/sessions/session-demo.usage b/demo/plugin-data/sessions/session-demo.usage
+new file mode 0644
+--- /dev/null
++++ b/demo/plugin-data/sessions/session-demo.usage
+@@ -0,0 +1 @@
++{"event":"SessionStart","time":"<TIME>","source":"startup","transcript":"$GRID_HOME/transcript.jsonl"}

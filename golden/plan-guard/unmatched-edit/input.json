@@ -1,0 +1,11 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+  "session_id": "session-demo",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "$GRID_HOME/projects/demo/tasks/T-1-demo/task.md",
+    "old_string": "missing text",
+    "new_string": "status: closed"
+  }
+}

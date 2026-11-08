@@ -1,0 +1,11 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+  "session_id": "session-demo",
+  "tool_name": "Agent",
+  "tool_input": {
+    "subagent_type": "grid:grid-builder",
+    "prompt": "Use $GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md",
+    "description": "Build demo"
+  }
+}

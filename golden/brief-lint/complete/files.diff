@@ -1,0 +1,6 @@
+diff --grid a/demo/plugin-data/sessions/session-demo.agents b/demo/plugin-data/sessions/session-demo.agents
+new file mode 0644
+--- /dev/null
++++ b/demo/plugin-data/sessions/session-demo.agents
+@@ -0,0 +1 @@
++{"type":"grid-builder","description":"Build demo","dir":"$GRID_HOME/projects/demo/tasks/T-1-demo","brief":"01-build"}

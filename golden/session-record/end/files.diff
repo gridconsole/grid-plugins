@@ -1,0 +1,6 @@
+diff --grid a/demo/projects/demo/tasks/T-1-demo/sessions/session-demo.json b/demo/projects/demo/tasks/T-1-demo/sessions/session-demo.json
+--- a/demo/projects/demo/tasks/T-1-demo/sessions/session-demo.json
++++ b/demo/projects/demo/tasks/T-1-demo/sessions/session-demo.json
+@@ -1 +1 @@
+-{"session_id":"session-demo","where":"grid","cwd":"$GRID_HOME/../workspace/demo","started":"<TIME>","last":"<TIME>"}
++{"session_id":"session-demo","where":"grid","cwd":"$GRID_HOME/../workspace/demo","started":"<TIME>","last":"<TIME>","ended":"<TIME>"}

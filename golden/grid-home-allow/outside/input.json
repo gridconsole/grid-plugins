@@ -1,0 +1,9 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": "$GRID_HOME/../workspace/demo",
+  "session_id": "session-demo",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "$GRID_HOME/../workspace/demo/demo.md"
+  }
+}

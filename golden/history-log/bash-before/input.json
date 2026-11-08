@@ -1,0 +1,10 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+  "session_id": "session-demo",
+  "tool_use_id": "tool-demo",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "write demo notes"
+  }
+}

@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Grid is set up for this folder: GRID_HOME is the Grid data folder $GRID_HOME and GRID_PROJECTS is $GRID_HOME/projects. Create tasks there, never inside a repo. This folder is the Grid project \"demo\": its tasks go in $GRID_HOME/projects/demo/tasks."}}

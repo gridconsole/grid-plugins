@@ -1,0 +1,6 @@
+{
+  "hook_event_name": "UserPromptSubmit",
+  "cwd": "$GRID_HOME/../workspace/demo",
+  "session_id": "session-demo",
+  "prompt": "Build another demo example"
+}
