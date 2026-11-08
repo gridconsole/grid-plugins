@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/fspath"
 	"github.com/gridconsole/grid-plugins/internal/gitx"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
@@ -101,8 +102,10 @@ func (s *Store) machine() error {
 	return err
 }
 
+// directory returns an existing folder spelled as the filesystem stores it, so
+// two spellings of one folder (Work/site, work/site) become one string.
 func directory(path string) (string, error) {
-	path = gridhome.Real(path)
+	path = fspath.OnDiskCase(gridhome.Real(path))
 	st, err := os.Stat(path)
 	if err != nil {
 		return "", err
@@ -190,7 +193,8 @@ func (s Store) Add(path, name string) (Entry, error) {
 			return Entry{}, err
 		}
 	}
-	if _, err := directory(path); err != nil {
+	path, err := directory(path)
+	if err != nil {
 		return Entry{}, err
 	}
 	unlock, err := localdata.Lock(s.Resolver.GridHome, ".projects.lock")
@@ -220,6 +224,9 @@ func (s Store) add(path, name string) (Entry, error) {
 		if common, err := gitx.CommonDir(root); err == nil && filepath.Base(common) == ".git" {
 			folder = filepath.Dir(common)
 		}
+	}
+	if folder != "" {
+		folder = fspath.OnDiskCase(folder)
 	}
 	personal := res.Rule == where.RulePersonal
 	rec := project.Record{Name: res.Project, ID: res.ID}
@@ -321,8 +328,12 @@ func mergeKeys(a, b []project.Key) []project.Key {
 	}
 	return a
 }
+
+// sameFolder and within compare folders as the volume stores them: on a
+// case-folding volume (macOS, Windows) Work/site and work/site are one folder.
+func sameFolder(a, b string) bool { return a == b || fspath.OnDiskCase(a) == fspath.OnDiskCase(b) }
 func within(a, b string) bool {
-	rel, err := filepath.Rel(a, b)
+	rel, err := filepath.Rel(fspath.OnDiskCase(a), fspath.OnDiskCase(b))
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 func (s Store) conflicts(records []project.Record, rec project.Record, folder string, keys []project.Key) error {

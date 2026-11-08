@@ -307,3 +307,47 @@ func TestAddingMemberCloneDoesNotRewriteMultiRepoProject(t *testing.T) {
 		t.Fatalf("changed project: %+v %v", entries, err)
 	}
 }
+
+// foldsCase probes the volume: macOS and Windows fold case by default, but a
+// volume can be formatted either way.
+func foldsCase(t *testing.T, dir string) bool {
+	t.Helper()
+	probe := filepath.Join(dir, "CaseProbe")
+	if err := os.WriteFile(probe, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(probe)
+	_, err := os.Stat(filepath.Join(dir, "caseprobe"))
+	return err == nil
+}
+
+func TestCaseSpellingsOfOneFolderAreOneProject(t *testing.T) {
+	s, root := fixture(t)
+	folder := mkdir(t, filepath.Join(root, "Work", "site"))
+	first, err := s.Add(folder, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !foldsCase(t, root) {
+		t.Skip("case-sensitive filesystem: another spelling names a different folder")
+	}
+	other := filepath.Join(root, "work", "site")
+	again, err := s.Add(other, "")
+	if err != nil || again.ID != first.ID || again.Name != first.Name || len(again.Folders) != 1 || again.Folders[0].Path != folder {
+		t.Fatalf("second spelling: %+v, %v", again, err)
+	}
+	if list, err := s.List(); err != nil || len(list) != 1 {
+		t.Fatalf("%d projects, %v", len(list), err)
+	}
+	if _, err := s.Add(filepath.Join(root, "WORK", "SITE"), "other"); err == nil {
+		t.Fatal("a third spelling registered a second project")
+	}
+	relinked, err := s.Relink(first.Name, filepath.Join(root, "WORK", "Site"))
+	if err != nil || len(relinked.Folders) != 1 || relinked.Folders[0].Path != folder {
+		t.Fatalf("relink: %+v, %v", relinked, err)
+	}
+	// A parent folder spelled differently still overlaps the registered one.
+	if _, err := s.Add(filepath.Join(root, "WORK"), "work"); err == nil {
+		t.Fatal("a parent folder in another spelling did not conflict")
+	}
+}
