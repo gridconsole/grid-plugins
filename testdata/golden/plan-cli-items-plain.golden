@@ -1,0 +1,14 @@
+i-1: in-test: Add a tag filter to the store
+  write: ["src/store/**","tests/store/**"]
+  after: []
+  review: "L1"
+  risk: ["data-format"]
+  verify: {"command":"go test ./internal/store/...","min_tests":3}
+i-2: working: Add the tag box to the list view
+  write: ["src/list/**","tests/list/**"]
+  after: ["J-1",{"job":"J-3","kind":"failed","why":"Use the fallback if indexing fails"},"gate:Q-7"]
+  review: "L2"
+  risk: ["concurrency","cross-platform"]
+  verify: {"command":"go test ./internal/list/...","min_tests":2}
+i-4: open: Write the release note
+  verify: "`go test ./...` passes; the release note names the filter"
