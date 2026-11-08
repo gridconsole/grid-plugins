@@ -17,6 +17,7 @@ type Check struct {
 	Name   string `json:"name"`
 	OK     bool   `json:"ok"`
 	Detail string `json:"detail"`
+	Fix    string `json:"fix"`
 }
 
 // Report is every check; OK is true when all hold.
@@ -31,6 +32,8 @@ type Options struct {
 	GridHome   string
 	Label      string
 	GitVersion func() (string, error)
+	HooksFile  string
+	LookPath   func(string) (string, error)
 }
 
 // Run runs the checks. The home checks that depend on the folder are skipped
@@ -46,7 +49,7 @@ func Run(o Options) Report {
 	}
 	rep := Report{OK: true, Checks: []Check{}}
 	add := func(name string, ok bool, detail string) {
-		rep.Checks = append(rep.Checks, Check{Name: name, OK: ok, Detail: detail})
+		rep.Checks = append(rep.Checks, Check{Name: name, OK: ok, Detail: detail, Fix: fixHint(name, detail)})
 		if !ok {
 			rep.OK = false
 		}
@@ -75,6 +78,7 @@ func Run(o Options) Report {
 	} else {
 		add("git", true, v)
 	}
+	checkInstallation(add, o)
 	return rep
 }
 

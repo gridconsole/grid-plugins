@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -45,4 +47,17 @@ func TestVersionCheckCLI(t *testing.T) {
 	if code := h.run(h.tmp, "version", "--check", "--timeout", "0s"); code != 2 {
 		t.Fatalf("%d: %s", code, h.errb)
 	}
+}
+
+func healthyDoctorEnvironment(t *testing.T, h *harness) {
+	t.Helper()
+	root := filepath.Join(h.root, "plugin")
+	h.write(filepath.Join(root, "hooks", "hooks.json"), `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"grid hook sessionstart"}]}]}}`)
+	bin := filepath.Join(h.root, "bin")
+	h.write(filepath.Join(bin, "grid"), "#!/bin/sh\nexit 0\n")
+	if err := os.Chmod(filepath.Join(bin, "grid"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_PLUGIN_ROOT", root)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 }

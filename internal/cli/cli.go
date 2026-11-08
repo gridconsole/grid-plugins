@@ -67,9 +67,9 @@ type command struct {
 
 func commands() []command {
 	return []command{
-		{"version", "print the CLI, contract and app_min versions", runVersion},
+		{"version", "print the CLI, contract and app_min versions", runVersionCheck},
 		{"where", "show which project and task a folder belongs to", runWhere},
-		{"doctor", "check the Grid home, its format version and git", runDoctor},
+		{"doctor", "check the Grid home, its format version and git", runDoctorChecks},
 		{"hook", "answer a Claude Code or Codex hook event", runHook},
 		{"task", "new, show, status, stop, close, reopen, attach, move", nil},
 		{"plan", "write, check, items, hash", nil},

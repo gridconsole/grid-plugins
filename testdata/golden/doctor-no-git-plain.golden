@@ -2,3 +2,6 @@ ok grid home: ~/.grid
 ok grid home writable: ~/.grid
 ok format version: 1
 fail git: git was not found on PATH
+fix: Install git and add its executable directory to PATH.
+ok grid on PATH: grid is on PATH
+ok plugin hooks: plugin hooks file is valid

@@ -2,3 +2,5 @@ ok grid home: ~/.grid
 ok grid home writable: ~/.grid
 ok format version: 1
 ok git: git version 2.0.0-test
+ok grid on PATH: grid is on PATH
+ok plugin hooks: plugin hooks file is valid

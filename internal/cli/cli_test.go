@@ -273,6 +273,7 @@ func TestDoctorGolden(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
+			healthyDoctorEnvironment(t, h)
 			tc.setup(h)
 			if code := h.run(h.tmp, tc.args...); code != tc.code {
 				t.Fatalf("exit %d, want %d; stdout %s stderr %s", code, tc.code, h.out, h.errb)
