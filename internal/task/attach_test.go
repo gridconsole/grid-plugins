@@ -224,14 +224,14 @@ func TestAttachFacts(t *testing.T) {
 	if _, err := s.Approve(WriteOptions{ID: task.ID}, hash); err != nil {
 		t.Fatal(err)
 	}
-	questions := question.Store{TaskDir: task.Path, Now: s.Now}
+	questions := question.Store{TaskDir: task.Path, TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV", Writer: feed.Writer{Author: feed.Author{ID: "local", Role: "member"}, Worker: "local@01ARZ3NDEKTSV4RRFFQ69G5FAW"}, Now: s.Now}
 	for i := range 2 {
 		q, err := questions.Add(question.Input{Question: "Which option?", Who: "local", Options: []string{"one", "two"}, Recommended: "one", Default: "one", Applies: s.Now().Add(time.Hour)})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if i == 1 {
-			if _, err := questions.Answer(q.ID, "two", "local"); err != nil {
+			if _, err := questions.Answer(q.ID, "two"); err != nil {
 				t.Fatal(err)
 			}
 		}
