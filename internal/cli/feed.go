@@ -332,6 +332,11 @@ func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
 	if member == "" {
 		return feed.Writer{}, fmt.Errorf("cannot find member identity; set GRID_MEMBER")
 	}
+	// Validate the member with a valid placeholder ULID before MachineID can
+	// create the home or its machine file. MachineID validates the actual ULID.
+	if !contract.ValidWorker(member + "@00000000000000000000000000") {
+		return feed.Writer{}, fmt.Errorf("writer must be <member>@<machine ULID> with no slash or whitespace")
+	}
 	role := os.Getenv("GRID_ROLE")
 	if role == "" {
 		role = "member"

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -158,5 +159,22 @@ func TestFeedErrors(t *testing.T) {
 	h.write(filepath.Join(h.gridHome, "VERSION"), "99\n")
 	if code := h.run(task, "feed", "read"); code != 1 || !strings.Contains(h.errb.String(), "Update grid.") {
 		t.Fatalf("format: %d %s", code, h.errb)
+	}
+}
+
+func TestFeedWriterInvalidMemberLeavesHomeEmpty(t *testing.T) {
+	for _, member := range []string{"bad/member", "bad member", "bad\tmember"} {
+		t.Run(member, func(t *testing.T) {
+			h := newHarness(t)
+			t.Setenv("GRID_MEMBER", member)
+			t.Setenv("GRID_WORKER", "")
+			if _, err := feedWriter(h.env, "task", "0.0"); err == nil {
+				t.Error("accepted invalid member")
+			}
+			entries, err := os.ReadDir(h.gridHome)
+			if err != nil || len(entries) != 0 {
+				t.Errorf("invalid member wrote GRID_HOME: %v %v", entries, err)
+			}
+		})
 	}
 }
