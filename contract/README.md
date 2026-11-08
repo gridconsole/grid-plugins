@@ -25,7 +25,8 @@ UPDATE_CONTRACT_COMMANDS=1 go test ./internal/cli -run '^TestContractCommandsPar
 ```
 
 The generator reads command dispatch expressions and probes the real parsers
-with `--help` to discover registered flags and whether they take values.
+with deliberately unknown sentinel flags to discover registered flags and
+whether they take values, stopping before command execution.
 `TestContractCommandsParserInventory` compares the complete generated document
 with the embedded inventory. Operand labels, required-flag semantics and output
 schema links are reviewed annotations in `contract_inventory_test.go`; new or

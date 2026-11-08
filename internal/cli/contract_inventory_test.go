@@ -32,7 +32,7 @@ type contractParserSource struct {
 type contractInventorySource struct {
 	t        *testing.T
 	packages map[string]contractParserSource
-	flags    map[string]bool // true if a registration can be boolean
+	flags    map[string]bool // candidate names found in parser source
 }
 
 func contractLiteral(e ast.Expr) string {
@@ -104,28 +104,7 @@ func (s *contractInventorySource) pkg(dir string) contractParserSource {
 			case "Bool", "String", "Int", "Int64", "Uint", "Uint64", "Float64", "Duration", "":
 				if len(call.Args) > index {
 					if name := contractLiteral(call.Args[index]); name != "" {
-						boolean := strings.HasPrefix(method, "Bool")
-						// The optional-message flag implements flag.boolFlag.
-						if method == "Var" {
-							if unary, ok := call.Args[0].(*ast.UnaryExpr); ok {
-								if value, ok := unary.X.(*ast.CompositeLit); ok {
-									if typ, ok := value.Type.(*ast.Ident); ok {
-										ast.Inspect(f, func(n ast.Node) bool {
-											fn, ok := n.(*ast.FuncDecl)
-											if ok && fn.Recv != nil && fn.Name.Name == "IsBoolFlag" {
-												star, ok := fn.Recv.List[0].Type.(*ast.StarExpr)
-												if ok {
-													id, ok := star.X.(*ast.Ident)
-													boolean = boolean || ok && id.Name == typ.Name
-												}
-											}
-											return true
-										})
-									}
-								}
-							}
-						}
-						s.flags["--"+name] = s.flags["--"+name] || boolean
+						s.flags["--"+name] = true
 					}
 				}
 			}
@@ -318,34 +297,36 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 				sub.Args = []string{}
 			}
 			prefix := append([]string{c.name}, strings.Fields(path)...)
-			probe := func(flag string, separate bool) (int, string) {
-				args := append([]string(nil), prefix...)
-				if separate {
-					args = append(args, flag, "1")
-				} else {
-					args = append(args, flag+"=__contract_probe__")
-				}
-				args = append(args, "--help")
+
+			// Two unknown flags fence off command execution. A value flag consumes
+			// the first sentinel (or rejects it as an invalid value); a boolean flag
+			// leaves it for the parser to reject. This also handles IsBoolFlag and
+			// hand-written parsers without guessing their arity from help text.
+			probe := func(flag string) (bool, string) {
+				const value = "--__contract_value"
+				const stop = "--__contract_stop"
+				args := append(append([]string(nil), prefix...), flag, value, stop)
 				code := h.run(h.home, args...)
-				return code, h.errb.String() + h.out.String()
+				output := h.errb.String() + h.out.String()
+				line, _, _ := strings.Cut(output, "\n")
+				unknown := func(name string) bool {
+					return strings.Contains(line, "flag provided but not defined: -"+strings.TrimPrefix(name, "--")) || strings.Contains(line, "unknown flag "+name)
+				}
+				if code != 2 {
+					t.Fatalf("%s: unsafe parser probe %s returned %d: %s", key, flag, code, output)
+				}
+				if unknown(flag) {
+					return false, ""
+				}
+				if unknown(value) {
+					return true, "none"
+				}
+				return true, "value"
 			}
 			// Hook deliberately ignores invalid input and has no flags.
 			if c.name != "hook" {
 				for _, flag := range candidates {
-					code, output := probe(flag, false)
-					takes := "value"
-					recognized := code == 0 || strings.HasPrefix(output, "invalid value ") || strings.HasPrefix(output, "invalid boolean value ")
-					if strings.HasPrefix(output, "invalid boolean value ") || code == 0 && source.flags[flag] {
-						takes = "none"
-					}
-					if !recognized {
-						// jobcmd's hand-written parser accepts separate values only.
-						code, _ = probe(flag, true)
-						recognized = code == 0
-						if recognized && source.flags[flag] {
-							takes = "none"
-						}
-					}
+					recognized, takes := probe(flag)
 					if recognized {
 						if flag == "--__contract_unknown" {
 							t.Fatalf("%s accepts the unknown-flag probe; cannot inspect this parser safely", key)

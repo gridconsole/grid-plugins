@@ -384,6 +384,10 @@ func contractCommandFeed(t *testing.T, name string, populated bool) (*harness, [
 	if name == "feed-state" {
 		return h, run("feed", "state", "--json")
 	}
+	if populated {
+		// The app's waiting call emits the assignment immediately and exits.
+		return h, run("job", "next", "--wait", "--json")
+	}
 	return h, run("job", "next", "--json")
 }
 
