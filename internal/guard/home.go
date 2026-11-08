@@ -16,7 +16,6 @@ var shellWord = regexp.MustCompile(`^[\w@%+=:,./-]$`)
 var flagWord = regexp.MustCompile(`^--?[A-Za-z][\w-]*$`)
 var pathLike = regexp.MustCompile(`[/\\]|\.\.|^[.~]|^[\w@%+,-]+\.[\w-]+$`)
 var httpURL = regexp.MustCompile(`^https?://[^\s]+$`)
-var globEscape = regexp.MustCompile(`^~|^[A-Za-z]:|(^|[\\/])\.\.([\\/]|$)`)
 
 func (c context) safeHome() string {
 	if !filepath.IsAbs(c.in.Cwd) || !filepath.IsAbs(c.home) {
@@ -276,14 +275,8 @@ func EvaluateHome(in hookio.Input, root string, env map[string]string) (decision
 		if c.homeRefused(scopedPath, scope, access) {
 			return hookio.Deny("This caller cannot access this Grid home scope.")
 		}
-		if in.ToolName == "Glob" {
-			p := str(in.ToolInput["pattern"])
-			if filepath.IsAbs(p) || globEscape.MatchString(p) {
-				if access != fullHome {
-					return hookio.Deny("This caller cannot search outside the active project.")
-				}
-				return hookio.Decision{}
-			}
+		if in.ToolName == "Glob" && !c.homeGlobAllowed(str(in.ToolInput["pattern"]), scope, access) {
+			return hookio.Deny("This glob pattern cannot stay inside the allowed home scope.")
 		}
 		if home == "" || !filepath.IsAbs(given) {
 			return hookio.Decision{}
@@ -304,4 +297,73 @@ func EvaluateHome(in hookio.Input, root string, env map[string]string) (decision
 		return hookio.Decision{}
 	}
 	return hookio.Allow("Grid: " + reason + ".")
+}
+
+// homeGlobAllowed checks every brace alternative structurally, before cleaning
+// paths could erase traversal elements. Absolute patterns need a literal prefix
+// inside the allowed root, checked both lexically and through existing symlinks.
+func (c context) homeGlobAllowed(pattern, scope string, access homeAccess) bool {
+	patterns, ok := expandHomeBraces(pattern)
+	if !ok {
+		return false
+	}
+	for _, p := range patterns {
+		p = strings.ReplaceAll(p, `\`, "/")
+		for _, part := range strings.Split(p, "/") {
+			if part == ".." {
+				return false
+			}
+		}
+		if strings.HasPrefix(p, "~") {
+			return false
+		}
+		// Refuse foreign drive spellings, including drive-relative patterns.
+		if len(p) >= 2 && p[1] == ':' && !filepath.IsAbs(p) {
+			return false
+		}
+		if !filepath.IsAbs(p) {
+			continue
+		}
+		prefix := p
+		if at := strings.IndexAny(prefix, "*?["); at >= 0 {
+			prefix = prefix[:at]
+		}
+		if scope == "" || !inside(scope, prefix) || !inside(scope, realNative(prefix, 0)) || c.homeRefused(prefix, scope, access) {
+			return false
+		}
+	}
+	return true
+}
+
+// Bound expansion work and refuse malformed or excessive patterns. Expanding
+// innermost braces first also catches traversal assembled across brace edges.
+func expandHomeBraces(pattern string) ([]string, bool) {
+	if len(pattern) > 16384 {
+		return nil, false
+	}
+	patterns := []string{pattern}
+	for i := 0; i < len(patterns); {
+		p := patterns[i]
+		end := strings.IndexByte(p, '}')
+		if end < 0 {
+			if strings.ContainsRune(p, '{') {
+				return nil, false
+			}
+			i++
+			continue
+		}
+		start := strings.LastIndexByte(p[:end], '{')
+		if start < 0 {
+			return nil, false
+		}
+		parts := strings.Split(p[start+1:end], ",")
+		if len(parts) < 2 || len(patterns)+len(parts)-1 > 256 {
+			return nil, false
+		}
+		patterns[i] = p[:start] + parts[0] + p[end+1:]
+		for _, part := range parts[1:] {
+			patterns = append(patterns, p[:start]+part+p[end+1:])
+		}
+	}
+	return patterns, true
 }

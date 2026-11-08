@@ -87,7 +87,7 @@ func TestHomeFileRules(t *testing.T) {
 			i := f.input("Glob", f.grid)
 			i.Cwd = f.repo
 			i.ToolInput["pattern"] = pattern
-			want := ""
+			want := "deny"
 			if pattern == "**/*.md" || pattern == "notes/*.md" {
 				want = "allow"
 			}

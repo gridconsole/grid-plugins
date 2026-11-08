@@ -2,6 +2,7 @@ package guard
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -122,6 +123,55 @@ func TestHomeRoleAccess(t *testing.T) {
 								t.Fatalf("directory grants=%d, want %d", len(got.Directories), wantDirs)
 							}
 						})
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestHomeGlobStructure(t *testing.T) {
+	for _, role := range []string{"owner", "member", "guest"} {
+		for _, event := range []string{"PreToolUse", "PermissionRequest"} {
+			f := setup(t)
+			f.env["GRID_ROLE"], f.env["GRID_PROJECT"] = role, "example"
+			f.write(filepath.Join(f.projects, "example", "project.md"), "---\nid: example-id\n---\n")
+			root := filepath.Join(f.projects, "example")
+			f.link(filepath.Join(root, "escape"), f.repo)
+			for _, row := range []struct {
+				name, pattern string
+				allow         bool
+			}{
+				{"recursive", "**/*.md", true},
+				{"braces", "{notes,docs}/**", true},
+				{"nested safe braces", "{notes,{docs,src}}/**", true},
+				{"absolute inside", filepath.Join(root, "notes", "*.md"), true},
+				{"parent", "../personal/**", false},
+				{"brace parent", "{..,x}/personal/**", false},
+				{"brace assembled parent", "{.,x}./personal/**", false},
+				{"nested parent", "{x,{.,y}}./personal/**", false},
+				{"split parent", "{.,x}{.,y}/personal/**", false},
+				{"empty alternative parent", "..{,x}/personal/**", false},
+				{"backslash parent", `{..,x}\personal\**`, false},
+				{"inner parent", "notes/{..,x}/**", false},
+				{"absolute outside", filepath.Join(f.repo, "*.md"), false},
+				{"absolute mixed braces", "{" + root + "," + f.repo + "}/**", false},
+				{"absolute symlink escape", filepath.Join(root, "escape", "*.md"), false},
+				{"unbalanced open", "{notes,docs/**", false},
+				{"unbalanced close", "notes,docs}/**", false},
+				{"expansion bound", strings.Repeat("{a,b}", 9) + "/**", false},
+			} {
+				t.Run(role+"/"+event+"/"+row.name, func(t *testing.T) {
+					in := f.input("Glob", root)
+					in.Cwd, in.HookEventName = f.repo, event
+					in.ToolInput["pattern"] = row.pattern
+					got := EvaluateHome(in, f.root, f.env)
+					want := "deny"
+					if row.allow {
+						want = "allow"
+					}
+					if got.Behavior != want {
+						t.Fatalf("glob behavior=%q, want %q", got.Behavior, want)
 					}
 				})
 			}
