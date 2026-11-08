@@ -27,9 +27,14 @@ A numbered plan item can declare an evidence kind:
 ```markdown
 - [ ] 1 Check the exported report
   proof: check
+  jobs: []
 - [ ] 2 Capture the result
   proof: screenshot
+  jobs: []
 ```
+
+`proof:` is one of the three step keys the plan reader allows (`kind:`, `jobs:`,
+`proof:`), in any order; every step still needs a `jobs:` list.
 
 The `proof:` key is provisional (see `docs/plan.md`), and no document defines a
 proof-level enum. This implementation uses `check`, `log`, `screenshot`, and
