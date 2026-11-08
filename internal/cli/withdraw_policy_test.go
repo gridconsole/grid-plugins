@@ -1,0 +1,126 @@
+package cli
+
+import (
+	"io"
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
+	"strings"
+	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/feed"
+)
+
+func TestWithdrawUnreadablePolicy(t *testing.T) {
+	for _, failure := range []string{"permissions", "directory"} {
+		for _, path := range []string{"question", "leased question", "feed", "job", "mcp", "host"} {
+			t.Run(failure+"/"+path, func(t *testing.T) {
+				if failure == "permissions" && (runtime.GOOS == "windows" || os.Geteuid() == 0) {
+					t.Skip("chmod does not deny reads on Windows or as root")
+				}
+				h, task, store := orchestratorHarness(t)
+				q := questionAdd(t, h, task, "member")
+				t.Setenv("GRID_FEED_TASK", task)
+				if path != "question" && path != "host" {
+					t.Setenv("GRID_LEASE", "task")
+					t.Setenv("GRID_AGENT", "builder")
+				}
+				policy := filepath.Join(task, "workflow.md")
+				if failure == "directory" {
+					h.mkdir(policy)
+				} else {
+					h.write(policy, "---\ngate_post_roles: {withdraw: [member]}\n---\n")
+					if err := os.Chmod(policy, 0); err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() { _ = os.Chmod(policy, 0600) })
+				}
+				before := withdrawalFiles(t, task)
+				body := `{"question_event":"withdrawn","target":"` + q.Post + `","text":"No longer needed"}`
+				switch path {
+				case "mcp":
+					line := mcpCall(t, h, "feed_post", `{"type":"control","re":"`+q.Post+`","body":`+body+`}`)
+					if !strings.Contains(line, `"isError":true`) || !strings.Contains(line, `\"code\":1`) || !strings.Contains(line, "cannot read task withdrawal policy") {
+						t.Errorf("MCP refusal: %s", line)
+					}
+				case "host":
+					_, err := store.Post(feed.Input{Type: "control", Re: q.Post, Body: map[string]any{"question_event": "withdrawn", "target": q.Post, "text": "No longer needed"}}, feed.Writer{Author: feed.Author{ID: "member", Role: "member"}, Worker: "member@" + feedMachine})
+					if err == nil || exitCode(err) != 1 || !strings.Contains(err.Error(), "cannot read task withdrawal policy") || strings.Contains(err.Error(), "\n") {
+						t.Errorf("host refusal: %v", err)
+					}
+				default:
+					args := []string{path, "post", "--type", "control", "--re", q.Post, "--body", body}
+					if path == "question" || path == "leased question" {
+						args = []string{"question", "withdraw", q.ID}
+					} else if path == "job" {
+						args = append(args, "--job", "J-1")
+					}
+					code := h.run(task, args...)
+					if code != 1 || h.out.Len() != 0 || strings.Count(h.errb.String(), "\n") != 1 || !strings.Contains(h.errb.String(), "cannot read task withdrawal policy") {
+						t.Errorf("refusal: exit=%d stdout=%s stderr=%s", code, h.out, h.errb)
+					}
+				}
+				if after := withdrawalFiles(t, task); !reflect.DeepEqual(before, after) {
+					t.Error("refusal changed task files")
+				}
+			})
+		}
+	}
+}
+
+func withdrawalFiles(t *testing.T, task string) map[string]string {
+	t.Helper()
+	files := map[string]string{}
+	err := filepath.WalkDir(task, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || entry.Name() == "workflow.md" {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		files[path] = string(raw)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
+func TestWithdrawPolicyWarningOnce(t *testing.T) {
+	h, task := feedHarness(t)
+	q := questionAdd(t, h, task, "member")
+	h.write(filepath.Join(task, "workflow.md"), "---\ngate_post_roles: [\n---\n")
+	stderr, err := os.CreateTemp(t.TempDir(), "stderr-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stderr.Close()
+	old := os.Stderr
+	os.Stderr = stderr
+	defer func() { os.Stderr = old }()
+	for i := 0; i < 2; i++ {
+		code := h.run(task, "question", "withdraw", q.ID)
+		os.Stderr = old
+		if _, err := stderr.Seek(0, 0); err != nil {
+			t.Fatal(err)
+		}
+		raw, err := io.ReadAll(stderr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		warnings := string(raw) + h.errb.String()
+		if code != 0 || strings.Count(warnings, "warning:") != 1 || strings.Count(warnings, "\n") != 1 || !strings.Contains(warnings, "using defaults") {
+			t.Fatalf("withdraw: exit=%d warnings=%q", code, warnings)
+		}
+		if err := stderr.Truncate(0); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := stderr.Seek(0, 0); err != nil {
+			t.Fatal(err)
+		}
+		os.Stderr = stderr
+	}
+}
