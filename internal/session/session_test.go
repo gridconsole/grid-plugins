@@ -29,6 +29,14 @@ func newFixture(t *testing.T, job bool) *fixture {
 	}
 	return f
 }
+func (f *fixture) livePath(t *testing.T, r Record) string {
+	t.Helper()
+	path, err := f.store.livePath(r, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
 func (f *fixture) observe(t *testing.T, state ProcessState, wake bool) Record {
 	t.Helper()
 	r, err := f.store.Reconcile(f.record.Key, Observation{Process: state, PID: f.record.PID, PIDStart: f.record.PIDStart, AfterWake: wake})
@@ -58,7 +66,7 @@ func TestHeartbeatAndReadOnlyFold(t *testing.T) {
 	if err != nil || live.BeatAt != f.now || live.OutputAt != out {
 		t.Fatalf("renew heartbeat: %+v %v", live, err)
 	}
-	before, err := os.ReadFile(f.store.livePath(r))
+	before, err := os.ReadFile(f.livePath(t, r))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +82,7 @@ func TestHeartbeatAndReadOnlyFold(t *testing.T) {
 	if err != nil || len(records) != 1 || records[0].State != Running {
 		t.Fatalf("list: %+v %v", records, err)
 	}
-	after, err := os.ReadFile(f.store.livePath(r))
+	after, err := os.ReadFile(f.livePath(t, r))
 	if err != nil || string(before) != string(after) {
 		t.Fatal("hook activity renewed liveness")
 	}
@@ -245,5 +253,35 @@ func TestStorageRefusesTraversalAndSymlinks(t *testing.T) {
 				t.Fatal("wrote outside storage")
 			}
 		})
+	}
+}
+
+// macOS keeps /var and /tmp as symlinks, and a Grid home may sit under any
+// symlinked parent. Only components below the task folder are refused.
+func TestSymlinksAboveTheTaskFolderAreAllowed(t *testing.T) {
+	real := t.TempDir()
+	if err := os.Mkdir(filepath.Join(real, "task"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	parent := filepath.Join(t.TempDir(), "home")
+	if err := os.Symlink(real, parent); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(filepath.Join(real, "task"), alias); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{filepath.Join(parent, "task"), alias} {
+		s := Store{TaskDir: dir}
+		r := Record{Key: Key{"session-1", "machine-1"}, PID: 42, PIDStart: "start-1"}
+		if _, err := s.Start(r); err != nil {
+			t.Fatalf("%s: %v", dir, err)
+		}
+		if records, err := s.List(); err != nil || len(records) != 1 {
+			t.Fatalf("%s: %v %v", dir, records, err)
+		}
+		if _, err := s.Show(r.Key); err != nil {
+			t.Fatalf("%s: %v", dir, err)
+		}
 	}
 }

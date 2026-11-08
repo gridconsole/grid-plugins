@@ -115,11 +115,22 @@ func validateKey(k Key) error {
 	}
 	return nil
 }
-func (s Store) recordPath(k Key) string {
-	return filepath.Join(s.TaskDir, "sessions", k.MachineID, k.SessionID+".json")
+
+// recordPath and livePath return paths inside verified folders; only validated
+// keys and tenures may reach them.
+func (s Store) recordPath(k Key, create bool) (string, error) {
+	dir, err := s.storageDir(create, "sessions", k.MachineID)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, k.SessionID+".json"), nil
 }
-func (s Store) livePath(r Record) string {
-	return filepath.Join(s.TaskDir, ".live", fmt.Sprintf("%s.%d.json", r.Holder, r.Fence))
+func (s Store) livePath(r Record, create bool) (string, error) {
+	dir, err := s.storageDir(create, ".live")
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, fmt.Sprintf("%s.%d.json", r.Holder, r.Fence)), nil
 }
 func validateTenure(r Record) error {
 	if r.PID <= 0 || r.PIDStart == "" {
@@ -218,7 +229,11 @@ func (s Store) reconcile(r Record, o Observation) (Record, error) {
 				o.OutputAt = previous.OutputAt
 			}
 			live := Live{r.Lease, r.Holder, r.Fence, r.Attempt, r.PID, r.PIDStart, now, o.OutputAt, r.Until}
-			if err := atomicJSON(s.livePath(r), live); err != nil {
+			path, err := s.livePath(r, true)
+			if err != nil {
+				return Record{}, err
+			}
+			if err := atomicJSON(path, live); err != nil {
 				return Record{}, err
 			}
 		}
@@ -326,8 +341,8 @@ func (s Store) Show(k Key) (Record, error) {
 	if err := validateKey(k); err != nil {
 		return Record{}, err
 	}
-	path := s.recordPath(k)
-	if err := realDirectory(filepath.Dir(path), false); err != nil {
+	path, err := s.recordPath(k, false)
+	if err != nil {
 		return Record{}, err
 	}
 	b, err := readFile(path)
@@ -353,8 +368,8 @@ func (s Store) Show(k Key) (Record, error) {
 }
 func (s Store) List() ([]Record, error) {
 	records := []Record{}
-	dir := filepath.Join(s.TaskDir, "sessions")
-	if err := realDirectory(dir, false); err != nil {
+	dir, err := s.storageDir(false, "sessions")
+	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return records, nil
 		}
@@ -395,10 +410,11 @@ func (s Store) ReadHeartbeat(r Record) (Live, error) {
 	if r.Lease == "" {
 		return Live{}, errors.New("session has no Job heartbeat")
 	}
-	if err := realDirectory(filepath.Join(s.TaskDir, ".live"), false); err != nil {
+	path, err := s.livePath(r, false)
+	if err != nil {
 		return Live{}, err
 	}
-	b, err := readFile(s.livePath(r))
+	b, err := readFile(path)
 	if err != nil {
 		return Live{}, err
 	}
@@ -411,7 +427,13 @@ func (s Store) ReadHeartbeat(r Record) (Live, error) {
 	}
 	return live, nil
 }
-func (s Store) save(r Record) error { return atomicJSON(s.recordPath(r.Key), r) }
+func (s Store) save(r Record) error {
+	path, err := s.recordPath(r.Key, true)
+	if err != nil {
+		return err
+	}
+	return atomicJSON(path, r)
+}
 func (s Store) removeLive(r Record) error {
 	if r.Lease == "" {
 		return nil
@@ -419,13 +441,10 @@ func (s Store) removeLive(r Record) error {
 	if err := validateTenure(r); err != nil {
 		return err
 	}
-	if err := realDirectory(filepath.Join(s.TaskDir, ".live"), false); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
+	path, err := s.livePath(r, false)
+	if err == nil {
+		err = os.Remove(path)
 	}
-	err := os.Remove(s.livePath(r))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}

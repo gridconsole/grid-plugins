@@ -10,28 +10,40 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
-// realDirectory rejects symlinked components, including sessions/ and .live/.
-func realDirectory(dir string, create bool) error {
-	if dir == "." || dir == string(filepath.Separator) {
-		return nil
+// storageDir returns the folder named by parts under the task folder, refusing
+// a symlink or non-directory at every component below it. The task folder is
+// resolved once instead: everything above it lies outside the Grid home, which
+// gridhome.Real has already resolved, and macOS keeps /var and /tmp as symlinks.
+func (s Store) storageDir(create bool, parts ...string) (string, error) {
+	if s.TaskDir == "" {
+		return "", errors.New("task directory is required")
 	}
-	if err := realDirectory(filepath.Dir(dir), create); err != nil {
-		return err
-	}
-	info, err := os.Lstat(dir)
-	if errors.Is(err, os.ErrNotExist) && create {
-		if err = os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-			return err
+	if create {
+		if err := os.MkdirAll(s.TaskDir, 0o700); err != nil {
+			return "", err
 		}
-		info, err = os.Lstat(dir)
 	}
+	dir, err := filepath.EvalSymlinks(s.TaskDir)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if !info.IsDir() {
-		return errors.New("session storage path must contain only real directories")
+	for _, part := range parts {
+		dir = filepath.Join(dir, part)
+		info, err := os.Lstat(dir)
+		if errors.Is(err, os.ErrNotExist) && create {
+			if err = os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+				return "", err
+			}
+			info, err = os.Lstat(dir)
+		}
+		if err != nil {
+			return "", err
+		}
+		if !info.IsDir() {
+			return "", errors.New("session storage path must contain only real directories")
+		}
 	}
-	return nil
+	return dir, nil
 }
 func readFile(path string) ([]byte, error) {
 	f, err := fslock.OpenNoFollow(path, os.O_RDONLY, 0)
@@ -41,10 +53,9 @@ func readFile(path string) ([]byte, error) {
 	defer f.Close()
 	return io.ReadAll(f)
 }
+
+// atomicJSON replaces path with value; the caller has verified the folder.
 func atomicJSON(path string, value any) error {
-	if err := realDirectory(filepath.Dir(path), true); err != nil {
-		return err
-	}
 	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
 		return errors.New("session storage file must be regular")
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -65,11 +76,8 @@ func atomicJSON(path string, value any) error {
 	return os.Rename(f.Name(), path)
 }
 func (s Store) locked(fn func() error) error {
-	if s.TaskDir == "" {
-		return errors.New("task directory is required")
-	}
-	dir := filepath.Join(s.TaskDir, "sessions")
-	if err := realDirectory(dir, true); err != nil {
+	dir, err := s.storageDir(true, "sessions")
+	if err != nil {
 		return err
 	}
 	f, err := fslock.OpenNoFollow(filepath.Join(dir, ".lock"), os.O_RDWR|os.O_CREATE, 0o600)
