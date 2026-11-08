@@ -224,6 +224,10 @@ function work(taskDir, o) {
   // The job post the fold counted, never a later line that reuses its id: this body decides what runs (a wait Job's command, a Worker's brief).
   const jobPostOf = (j) => j.jobPost;
   const codeJob = (j, v) => Boolean(str(jobPostOf(j, v)?.body?.repo));
+  // Roles that only read, run or judge: they post a result and have nothing to commit, so their result ends the Job with no submit.
+  // An unknown or missing role is treated as one that commits, so the safe default is still to park a result with no submit.
+  const READ_ONLY_ROLES = new Set(['scout', 'researcher', 'runner', 'reviewer', 'checker', 'operator']);
+  const commitsCode = (j, v) => codeJob(j, v) && !READ_ONLY_ROLES.has(str(jobPostOf(j, v)?.body?.role));
 
   // A verdict that counted on a post: the last control post in the Job's history that targets it.
   const verdictOn = (j, postId, v) => {
@@ -351,8 +355,8 @@ function work(taskDir, o) {
     const result = LIVE.has(rec) || rec === 'stale' ? own('result') : null;
     if (result) {
       const submit = own('submit');
-      if (codeJob(j, v) && submit) return control({ target: j.id, status: 'submitted', reason: 'submit received' });
-      if (!codeJob(j, v)) {
+      if (commitsCode(j, v) && submit) return control({ target: j.id, status: 'submitted', reason: 'submit received' });
+      if (!commitsCode(j, v)) {
         const d = judge(j, result, null, v);
         if (d) control({ target: result.id, status: d.verdict === 'accept' ? 'done' : 'rejected', verdict: d.verdict, reason: d.reason });
         return undefined;
