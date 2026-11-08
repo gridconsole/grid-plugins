@@ -5,15 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
@@ -65,89 +64,17 @@ func (s Store) locked(create bool, fn func(string) error) error {
 	return fn(dir)
 }
 
-// readAll skips Markdown files not named Q-n.md, such as the old plugin's
-// per-recipient files, and names them in one warning per call.
-func (s Store) readAll(dir string) ([]Record, error) {
-	records := []Record{}
-	if dir == "" {
-		return records, nil
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	skipped := []string{}
-	for _, entry := range entries {
-		if !strings.HasSuffix(entry.Name(), ".md") {
-			continue
-		}
-		id := strings.TrimSuffix(entry.Name(), ".md")
-		if !validID.MatchString(id) {
-			skipped = append(skipped, entry.Name())
-			continue
-		}
-		r, e := read(dir, id)
-		if e != nil {
-			return nil, e
-		}
-		records = append(records, r)
-	}
-	if len(skipped) > 0 && s.Warn != nil {
-		fmt.Fprintf(s.Warn, "question: skipping files in questions/ that are not Q-n.md: %s\n", strings.Join(skipped, ", "))
-	}
-	sort.Slice(records, func(i, j int) bool {
-		a, _ := strconv.Atoi(records[i].ID[2:])
-		b, _ := strconv.Atoi(records[j].ID[2:])
-		return a < b
-	})
-	return records, nil
-}
-
-func read(dir, id string) (r Record, err error) {
-	path := filepath.Join(dir, id+".md")
-	info, err := os.Lstat(path)
-	if err != nil {
-		return r, err
-	}
-	if !info.Mode().IsRegular() {
-		return r, errors.New("question file must be regular")
-	}
-	f, err := fslock.OpenNoFollow(path, os.O_RDONLY, 0)
-	if err != nil {
-		return r, err
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return r, err
-	}
-	if !bytes.HasPrefix(data, []byte("---\n")) {
-		return r, fmt.Errorf("%s: missing question frontmatter", id)
-	}
-	body, _, ok := bytes.Cut(data[4:], []byte("\n---\n"))
-	if !ok {
-		return r, fmt.Errorf("%s: incomplete question frontmatter", id)
-	}
-	if err = contract.Validate("question-file", body); err != nil {
-		return r, fmt.Errorf("%s: %w", id, err)
-	}
-	if err = json.Unmarshal(body, &r); err != nil {
-		return r, err
-	}
-	if r.ID != id {
-		return r, errors.New("question id does not match filename")
-	}
-	return r, validateRecord(r)
-}
-
 func validateRecord(r Record) error {
+	if r.Gate.ID != r.ID || r.Gate.Kind != "person" {
+		return errors.New("question gate must match its id and have kind person")
+	}
 	if !validID.MatchString(r.ID) {
 		return errors.New("invalid question id")
 	}
 	if _, err := strconv.Atoi(strings.TrimPrefix(r.ID, "Q-")); err != nil {
 		return errors.New("question id exceeds the supported range")
 	}
-	if err := validateInput(Input{Question: r.Question, Who: r.Who, Why: r.Why, Options: r.Options, Recommended: r.Recommended, Default: r.Gate.Default, Applies: r.Gate.At.Time}); err != nil {
+	if err := validateInput(Input{Job: r.Job, Item: r.Item, Question: r.Question, Who: r.Who, Why: r.Why, Options: r.Options, Recommended: r.Recommended, Default: r.Gate.Default, Applies: r.Gate.At.Time}); err != nil {
 		return err
 	}
 	if r.AgeAfterSeconds <= 0 || r.AgeAfterSeconds > int64((1<<63-1)/int64(time.Second)/2) {
@@ -206,12 +133,6 @@ func save(dir string, r Record) error {
 	} else if e != nil && !errors.Is(e, os.ErrNotExist) {
 		return e
 	}
-	f, err := os.CreateTemp(dir, ".question-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	defer f.Close()
 	var out bytes.Buffer
 	out.WriteString("---\n")
 	out.Write(data)
@@ -232,22 +153,13 @@ func save(dir string, r Record) error {
 		out.WriteByte('\n')
 	}
 	fmt.Fprintf(&out, "\nDefault: %s\nApplies: %s\nAging: %d\nAnswer: %s\n", r.Gate.Default, r.Gate.At.UTC().Format(FeedTime), r.Aging, r.Answer)
-	if _, err = f.Write(out.Bytes()); err != nil {
+	// Avoid rewriting identical projections on retries and reads.
+	old, err := os.ReadFile(path)
+	if err == nil && bytes.Equal(old, out.Bytes()) {
+		return nil
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err = f.Sync(); err != nil {
-		return err
-	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	if err = os.Rename(f.Name(), path); err != nil {
-		return err
-	}
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	return d.Sync()
+	return atomicfile.Write(path, out.Bytes(), 0600)
 }

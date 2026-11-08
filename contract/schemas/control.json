@@ -178,6 +178,36 @@
                     "status"
                   ],
                   "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+                    },
+                    "question_event": {
+                      "enum": [
+                        "withdrawn",
+                        "aged",
+                        "defaulted"
+                      ]
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "level": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2
+                    }
+                  },
+                  "required": [
+                    "target",
+                    "question_event",
+                    "text"
+                  ],
+                  "additionalProperties": false
                 }
               ],
               "allOf": [

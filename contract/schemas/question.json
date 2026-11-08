@@ -150,6 +150,19 @@
                       }
                     }
                   ]
+                },
+                "item": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "recommended": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "age_after_seconds": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4611686018
                 }
               },
               "required": [

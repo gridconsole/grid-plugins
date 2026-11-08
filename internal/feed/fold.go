@@ -20,7 +20,8 @@ func (s Store) State() (contract.State, error) {
 	if err != nil {
 		return contract.State{}, err
 	}
-	return contract.Fold(posts(read)), nil
+	state, _ := FoldRead(read)
+	return state, nil
 }
 
 // posts converts the admitted entries of a read to contract posts.

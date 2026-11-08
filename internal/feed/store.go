@@ -21,7 +21,10 @@ var ErrStaleLease = errors.New("stale lease")
 var ErrDiskFull = errors.New("disk full")
 
 // Store is one task's Feed. TaskID is the stable ULID, not its display number.
-type Store struct{ TaskDir, TaskID string }
+type Store struct {
+	TaskDir, TaskID string
+	Now             func() time.Time
+}
 
 func (s Store) Dir() string { return filepath.Join(s.TaskDir, "feed") }
 
@@ -413,7 +416,11 @@ func (s Store) record(in Input, w Writer) (Record, error) {
 	}
 	t, _ := contract.LookupType(in.Type)
 	after := append([]string{}, in.After...)
-	r := Record{ID: id, Task: s.TaskID, Type: in.Type, TypeV: t.Version, Author: w.Author, Tier: contract.TierFor(w.Author.Role), Worker: w.Worker, Lease: ptr(w.Lease), Gen: w.Gen, Fence: w.Fence, At: time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), Re: ptr(in.Re), After: after, Job: ptr(in.Job), Wake: ptr(in.Wake), Body: body}
+	now := time.Now()
+	if s.Now != nil {
+		now = s.Now()
+	}
+	r := Record{ID: id, Task: s.TaskID, Type: in.Type, TypeV: t.Version, Author: w.Author, Tier: contract.TierFor(w.Author.Role), Worker: w.Worker, Lease: ptr(w.Lease), Gen: w.Gen, Fence: w.Fence, At: now.UTC().Format("2006-01-02T15:04:05.000Z"), Re: ptr(in.Re), After: after, Job: ptr(in.Job), Wake: ptr(in.Wake), Body: body}
 	if in.Attempt != 0 {
 		r.Attempt = &in.Attempt
 	}

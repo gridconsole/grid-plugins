@@ -89,7 +89,7 @@ func commands() []command {
 		{"lease", "take task (adoption, takeover); take, renew, release, status merge", runTaskLease},
 		{"feed", "tick, post, read, state, types, handover, fold", runOrchestratorFeed},
 		{"mcp", "stdio server with the Feed tools", runMCP},
-		{"question", "add, withdraw, list and tick task questions", runQuestion},
+		{"question", "add, withdraw, list, tick and sync task questions", runQuestion},
 		{"ask", "ask a person a question", nil},
 		{"answer", "record a person's answer", runAnswer},
 		{"approve", "approve a gate (a person or the app only)", runApprove},

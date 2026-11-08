@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/testenv"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -25,7 +26,33 @@ func input() Input {
 func setup(t *testing.T) (Store, *time.Time) {
 	t.Helper()
 	now := start
-	return Store{TaskDir: t.TempDir(), Now: func() time.Time { return now }}, &now
+	return fixtureStore(t, t.TempDir(), func() time.Time { return now }), &now
+}
+
+const questionTaskID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+const questionMachine = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+
+func fixtureStore(t *testing.T, dir string, now func() time.Time) Store {
+	t.Helper()
+	w := feed.Writer{Author: feed.Author{ID: "owner", Role: "owner"}, Worker: "owner@" + questionMachine}
+	c := w
+	c.Lease = "task"
+	c.Fence = 1
+	if err := os.MkdirAll(filepath.Join(dir, "feed", "lease"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(feed.Lease{Lease: "task", Holder: &w.Worker, Fence: 1})
+	if err := os.WriteFile(filepath.Join(dir, "feed", "lease", "task.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "task.md"), []byte("---\nid: "+questionTaskID+"\n---\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f := feed.Store{TaskDir: dir, TaskID: questionTaskID, Now: now}
+	if _, err := f.Handover(feed.Input{Body: map[string]any{}}, c); err != nil {
+		t.Fatal(err)
+	}
+	return Store{TaskDir: dir, TaskID: questionTaskID, Writer: w, ControlWriter: c, Now: now}
 }
 func add(t *testing.T, s Store, in Input) Record {
 	t.Helper()
@@ -118,9 +145,9 @@ func TestTransitions(t *testing.T) {
 			var r Record
 			var e error
 			if tc.action == "answer" {
-				r, e = s.Answer("Q-1", tc.text, "owner")
+				r, e = s.Answer("Q-1", tc.text)
 			} else {
-				r, e = s.Withdraw("Q-1", tc.text, "owner")
+				r, e = s.Withdraw("Q-1", tc.text)
 			}
 			if e != nil {
 				t.Fatal(e)
@@ -141,9 +168,9 @@ func TestTransitions(t *testing.T) {
 			}
 			*now = now.Add(time.Hour)
 			if tc.action == "answer" {
-				_, e = s.Answer("Q-1", tc.text, "owner")
+				_, e = s.Answer("Q-1", tc.text)
 			} else {
-				_, e = s.Withdraw("Q-1", tc.text, "owner")
+				_, e = s.Withdraw("Q-1", tc.text)
 			}
 			if e != nil {
 				t.Fatal(e)
@@ -152,11 +179,11 @@ func TestTransitions(t *testing.T) {
 				t.Fatal("repeat rewrote the question file")
 			}
 			if tc.action == "answer" {
-				if _, e = s.Answer("Q-1", "Different answer", "owner"); e == nil {
+				if _, e = s.Answer("Q-1", "Different answer"); e == nil {
 					t.Fatal("overwrote human answer")
 				}
 			} else {
-				if _, e = s.Answer("Q-1", "JSON", "owner"); e == nil {
+				if _, e = s.Answer("Q-1", "JSON"); e == nil {
 					t.Fatal("answered withdrawn question")
 				}
 			}
@@ -175,7 +202,7 @@ func TestInvalidInput(t *testing.T) {
 		change func(*Input)
 	}{
 		{"empty question", func(i *Input) { i.Question = " " }}, {"empty who", func(i *Input) { i.Who = "" }},
-		{"no options", func(i *Input) { i.Options = nil }}, {"duplicate options", func(i *Input) { i.Options = []string{"CSV", "CSV"} }},
+		{"duplicate options", func(i *Input) { i.Options = []string{"CSV", "CSV"} }},
 		{"unknown recommendation", func(i *Input) { i.Recommended = "XML" }}, {"no default", func(i *Input) { i.Default = "" }},
 		{"no deadline", func(i *Input) { i.Applies = time.Time{} }}, {"negative aging", func(i *Input) { i.AgeAfter = -time.Hour }},
 		{"blank why", func(i *Input) { i.Why = " " }},
@@ -252,19 +279,19 @@ func TestStorage(t *testing.T) {
 	t.Run("reject traversal", func(t *testing.T) {
 		s, _ := setup(t)
 		add(t, s, input())
-		if _, e := s.Answer("../Q-1", "CSV", ""); e == nil {
+		if _, e := s.Answer("../Q-1", "CSV"); e == nil {
 			t.Fatal("accepted traversal")
 		}
 	})
-	t.Run("reject corruption", func(t *testing.T) {
+	t.Run("repair corruption", func(t *testing.T) {
 		s, _ := setup(t)
 		add(t, s, input())
 		path := filepath.Join(s.TaskDir, "questions", "Q-1.md")
 		if e := os.WriteFile(path, []byte("---\n{}\n---\n"), 0600); e != nil {
 			t.Fatal(e)
 		}
-		if _, e := s.Tick(); e == nil {
-			t.Fatal("silently skipped corrupt question")
+		if _, e := s.Tick(); e != nil {
+			t.Fatal(e)
 		}
 	})
 	t.Run("skip old per-recipient file", func(t *testing.T) {
@@ -311,14 +338,12 @@ func TestStorage(t *testing.T) {
 			t.Fatalf("warned without skipped files: %q", warn.String())
 		}
 	})
-	t.Run("empty list does not create storage", func(t *testing.T) {
+	t.Run("empty list is empty", func(t *testing.T) {
 		s, _ := setup(t)
 		if len(list(t, s)) != 0 {
 			t.Fatal("not empty")
 		}
-		if _, e := os.Stat(filepath.Join(s.TaskDir, "questions")); !os.IsNotExist(e) {
-			t.Fatal("created folder")
-		}
+
 	})
 }
 
@@ -326,7 +351,7 @@ func TestTickProcess(t *testing.T) {
 	if os.Getenv("GRID_QUESTION_HELPER") != "1" {
 		return
 	}
-	s := Store{TaskDir: os.Getenv("GRID_QUESTION_TASK"), Now: func() time.Time { return start.Add(24 * time.Hour) }}
+	s := Store{TaskDir: os.Getenv("GRID_QUESTION_TASK"), TaskID: questionTaskID, ControlWriter: feed.Writer{Author: feed.Author{ID: "owner", Role: "owner"}, Worker: "owner@" + questionMachine, Lease: "task", Fence: 1}, Now: func() time.Time { return start.Add(24 * time.Hour) }}
 	// Parent starts both children before releasing their stdin barriers.
 	var b [1]byte
 	if _, e := os.Stdin.Read(b[:]); e != nil {
@@ -402,7 +427,14 @@ func commandEnv(t *testing.T) (Env, Store, *bytes.Buffer, *bytes.Buffer) {
 	}
 	out, errout := &bytes.Buffer{}, &bytes.Buffer{}
 	env := Env{Cwd: cwd, Resolver: where.Resolver{GridHome: home}, Stdout: out, Stderr: errout, Now: func() time.Time { return start }}
-	return env, Store{TaskDir: task, Now: env.Now}, out, errout
+	s := fixtureStore(t, task, env.Now)
+	env.Writer = func(control bool) (feed.Writer, error) {
+		if control {
+			return s.ControlWriter, nil
+		}
+		return s.Writer, nil
+	}
+	return env, s, out, errout
 }
 
 func TestQuestionListGolden(t *testing.T) {
@@ -415,7 +447,7 @@ func TestQuestionListGolden(t *testing.T) {
 	in.Blocking = false
 	in.Who = "reviewer"
 	add(t, s, in)
-	if _, e := s.Answer("Q-2", "Use both formats", "reviewer"); e != nil {
+	if _, e := s.Answer("Q-2", "Use both formats"); e != nil {
 		t.Fatal(e)
 	}
 	in.Applies = start
@@ -425,13 +457,24 @@ func TestQuestionListGolden(t *testing.T) {
 	}
 	in.Applies = start.Add(24 * time.Hour)
 	add(t, s, in)
-	if _, e := s.Withdraw("Q-4", "No longer needed", ""); e != nil {
+	if _, e := s.Withdraw("Q-4", "No longer needed"); e != nil {
 		t.Fatal(e)
 	}
 	if code := Run([]string{"list", "--json"}, env); code != 0 {
 		t.Fatalf("code %d: %s", code, errout)
 	}
-	golden.Assert(t, "question-list", out.String())
+	var records []Record
+	if err := json.Unmarshal(out.Bytes(), &records); err != nil {
+		t.Fatal(err)
+	}
+	for i := range records {
+		records[i].Post = questionTaskID
+		for j := range records[i].History {
+			records[i].History[j].Post = questionTaskID
+		}
+	}
+	data, _ := json.Marshal(records)
+	golden.Assert(t, "question-list", string(data)+"\n")
 }
 
 func TestCommand(t *testing.T) {
@@ -456,7 +499,7 @@ func TestCommand(t *testing.T) {
 	if r := list(t, s)[0]; r.State != "answered" || r.Answer != "JSON" {
 		t.Fatal(r)
 	}
-	if r := list(t, s)[1]; r.State != "withdrawn" || r.History[0].Who != "cli" || r.History[0].Text != "Shipped" {
+	if r := list(t, s)[1]; r.State != "withdrawn" || r.History[0].Who != "owner" || r.History[0].Text != "Shipped" {
 		t.Fatal(r)
 	}
 	for _, args := range [][]string{nil, {"bad"}, {"answer"}, {"withdraw"}, {"list", "extra"}, {"add", "--applies", "bad"}, {"list", "--bad"}} {

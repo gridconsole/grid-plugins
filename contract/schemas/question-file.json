@@ -30,7 +30,7 @@
         "type": "string",
         "minLength": 1
       },
-      "minItems": 1,
+      "minItems": 0,
       "uniqueItems": true
     },
     "recommended": {
@@ -49,11 +49,20 @@
           "minLength": 1,
           "format": "date-time",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+        },
+        "kind": {
+          "const": "person"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^Q-[1-9][0-9]*$"
         }
       },
       "required": [
         "default",
-        "at"
+        "at",
+        "kind",
+        "id"
       ],
       "additionalProperties": false
     },
@@ -109,16 +118,44 @@
           },
           "text": {
             "type": "string"
+          },
+          "post": {
+            "type": "string",
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "member",
+              "guest",
+              "lead",
+              "agent",
+              "cli"
+            ]
           }
         },
         "required": [
           "kind",
           "at",
           "who",
-          "text"
+          "text",
+          "post",
+          "role"
         ],
         "additionalProperties": false
       }
+    },
+    "post": {
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "job": {
+      "type": "string",
+      "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+    },
+    "item": {
+      "type": "integer",
+      "minimum": 1
     }
   },
   "required": [
@@ -126,15 +163,33 @@
     "question",
     "who",
     "blocking",
-    "options",
-    "recommended",
     "gate",
     "asked",
     "state",
     "answer",
     "age_after_seconds",
     "aging",
-    "history"
+    "history",
+    "post"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "options"
+        ],
+        "properties": {
+          "options": {
+            "minItems": 1
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "recommended"
+        ]
+      }
+    }
+  ]
 }

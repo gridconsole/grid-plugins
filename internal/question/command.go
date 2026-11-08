@@ -49,16 +49,24 @@ func RunAnswer(args []string, env Env) int {
 }
 
 func run(args []string, env Env) int {
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
+		fmt.Fprintln(env.Stdout, "Usage: grid question add|withdraw|list|tick|sync [--task <path>] [--json]")
+		return 0
+	}
 	if len(args) == 0 {
-		fmt.Fprintln(env.Stderr, "Usage: grid question add|withdraw|list|tick [--task <path>] [--json]")
+		fmt.Fprintln(env.Stderr, "Usage: grid question add|withdraw|list|tick|sync [--task <path>] [--json]")
 		return 2
 	}
 	action := args[0]
-	if action != "add" && action != "answer" && action != "withdraw" && action != "list" && action != "tick" {
+	if action != "add" && action != "answer" && action != "withdraw" && action != "list" && action != "tick" && action != "sync" {
 		fmt.Fprintf(env.Stderr, "question: unknown action %q\n", action)
 		return 2
 	}
-	fs := flag.NewFlagSet("grid question "+action, flag.ContinueOnError)
+	name := "grid question " + action
+	if action == "answer" {
+		name = "grid answer"
+	}
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
 	task := fs.String("task", "", "task folder or id; otherwise the enclosing task")
 	asJSON := fs.Bool("json", false, "print JSON")
@@ -66,6 +74,8 @@ func run(args []string, env Env) int {
 	var opts options
 	var applies, reason string
 	if action == "add" {
+		fs.StringVar(&in.Job, "job", "", "related Job id")
+		fs.IntVar(&in.Item, "item", 0, "related plan item number")
 		fs.StringVar(&in.Question, "question", "", "question text (or a positional argument)")
 		fs.StringVar(&in.Who, "who", "owner", "person asked")
 		fs.StringVar(&in.Why, "why", "", "why the answer matters (optional)")
@@ -142,6 +152,12 @@ func run(args []string, env Env) int {
 			return usage("withdraw requires <Q-id>")
 		}
 		id = positionals[0]
+	case "sync":
+		if len(positionals) == 1 && *task == "" {
+			*task = positionals[0]
+		} else if len(positionals) != 0 {
+			return usage("sync takes at most one task")
+		}
 	default:
 		if len(positionals) != 0 {
 			return usage(action + " takes no arguments")
@@ -156,24 +172,25 @@ func run(args []string, env Env) int {
 		return 1
 	}
 	store := Store{TaskDir: scope.TaskPath, Now: env.Now, Warn: env.Stderr}
-	by := "cli"
-	if env.Writer != nil && action != "list" {
+
+	if env.Writer != nil && action != "list" && action != "sync" {
 		writer, e := env.Writer(action == "withdraw" || action == "tick")
 		if e != nil {
 			fmt.Fprintln(env.Stderr, "question:", e)
 			return 1
 		}
-		by = writer.Author.ID
+		store.Writer = writer
+		store.ControlWriter = writer
 	}
 	var result any
 	switch action {
 	case "add":
 		result, err = store.Add(in)
 	case "answer":
-		result, err = store.Answer(id, text, by)
+		result, err = store.Answer(id, text)
 	case "withdraw":
-		result, err = store.Withdraw(id, reason, by)
-	case "list":
+		result, err = store.Withdraw(id, reason)
+	case "list", "sync":
 		result, err = store.List()
 	case "tick":
 		result, err = store.Tick()

@@ -4,6 +4,7 @@ package question
 import (
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"io"
 	"slices"
 	"strings"
@@ -26,12 +27,15 @@ func (t Stamp) MarshalJSON() ([]byte, error) {
 // storage boundary. History and current state are committed in the same rename.
 type Record struct {
 	ID              string   `json:"id"`
+	Post            string   `json:"post"`
+	Job             string   `json:"job,omitempty"`
+	Item            int      `json:"item,omitempty"`
 	Question        string   `json:"question"`
 	Who             string   `json:"who"`
 	Why             string   `json:"why,omitempty"`
 	Blocking        bool     `json:"blocking"`
-	Options         []string `json:"options"`
-	Recommended     string   `json:"recommended"`
+	Options         []string `json:"options,omitempty"`
+	Recommended     string   `json:"recommended,omitempty"`
 	Gate            Gate     `json:"gate"`
 	Asked           Stamp    `json:"asked"`
 	State           string   `json:"state"`
@@ -43,11 +47,15 @@ type Record struct {
 
 // Gate holds the default and its time as the Feed question post's gate does.
 type Gate struct {
+	ID      string `json:"id"`
+	Kind    string `json:"kind"`
 	Default string `json:"default"`
 	At      Stamp  `json:"at"`
 }
 
 type Event struct {
+	Post string `json:"post"`
+	Role string `json:"role"`
 	Kind string `json:"kind"`
 	At   Stamp  `json:"at"`
 	Who  string `json:"who"`
@@ -55,6 +63,8 @@ type Event struct {
 }
 
 type Input struct {
+	Job                  string
+	Item                 int
 	Question, Who, Why   string
 	Options              []string
 	Recommended, Default string
@@ -64,9 +74,12 @@ type Input struct {
 }
 
 type Store struct {
-	TaskDir string
-	Now     func() time.Time
-	Warn    io.Writer // receives warnings about skipped files; nil discards them
+	TaskDir       string
+	TaskID        string
+	Writer        feed.Writer
+	ControlWriter feed.Writer
+	Now           func() time.Time
+	Warn          io.Writer // receives warnings about skipped files; nil discards them
 }
 
 func (s Store) now() time.Time {
@@ -80,8 +93,8 @@ func validateInput(in Input) error {
 	if strings.TrimSpace(in.Question) == "" || strings.TrimSpace(in.Who) == "" {
 		return errors.New("question and who are required")
 	}
-	if len(in.Options) == 0 {
-		return errors.New("at least one option is required")
+	if in.Item < 0 || in.Job != "" && !jobID.MatchString(in.Job) {
+		return errors.New("invalid job or plan item")
 	}
 	seen := map[string]bool{}
 	for _, option := range in.Options {
@@ -90,7 +103,7 @@ func validateInput(in Input) error {
 		}
 		seen[option] = true
 	}
-	if !slices.Contains(in.Options, in.Recommended) {
+	if len(in.Options) > 0 && !slices.Contains(in.Options, in.Recommended) {
 		return errors.New("recommended must name an option")
 	}
 	if in.Why != "" && strings.TrimSpace(in.Why) == "" {
@@ -110,7 +123,7 @@ func (s Store) Add(in Input) (rec Record, err error) {
 		return
 	}
 	err = s.locked(true, func(dir string) error {
-		if _, e := s.readAll(dir); e != nil {
+		if _, e := s.project(dir); e != nil {
 			return e
 		}
 		next, e := nextID(dir, 1)
@@ -121,44 +134,44 @@ func (s Store) Add(in Input) (rec Record, err error) {
 		if age == 0 {
 			age = DefaultAgeAfter
 		}
-		rec = Record{ID: fmt.Sprintf("Q-%d", next), Question: in.Question, Who: in.Who, Why: in.Why, Blocking: in.Blocking, Options: append([]string{}, in.Options...), Recommended: in.Recommended, Gate: Gate{Default: in.Default, At: Stamp{in.Applies.UTC().Truncate(time.Millisecond)}}, Asked: Stamp{s.now()}, State: "open", AgeAfterSeconds: int64(age / time.Second), History: []Event{}}
-		return save(dir, rec)
+		rec = Record{Job: in.Job, Item: in.Item, ID: fmt.Sprintf("Q-%d", next), Question: in.Question, Who: in.Who, Why: in.Why, Blocking: in.Blocking, Options: append([]string{}, in.Options...), Recommended: in.Recommended, Gate: Gate{ID: fmt.Sprintf("Q-%d", next), Kind: "person", Default: in.Default, At: Stamp{in.Applies.UTC().Truncate(time.Millisecond)}}, Asked: Stamp{s.now()}, State: "open", AgeAfterSeconds: int64(age / time.Second), History: []Event{}}
+		return s.publishQuestion(dir, &rec)
 	})
 	return
 }
 
 func (s Store) List() (records []Record, err error) {
 	records = []Record{}
-	err = s.locked(false, func(dir string) error { var e error; records, e = s.readAll(dir); return e })
+	err = s.locked(true, func(dir string) error { var e error; records, e = s.project(dir); return e })
 	return
 }
 
 // Answer accepts option labels or free text. Repeating an identical answer is a
 // no-op; a different human answer cannot silently overwrite an earlier answer.
 // A default is provisional and always permits a subsequent human answer.
-func (s Store) Answer(id, text, who string) (Record, error) {
+func (s Store) Answer(id, text string) (Record, error) {
 	if strings.TrimSpace(text) == "" {
 		return Record{}, errors.New("answer must not be empty")
 	}
 	return s.change(id, func(r *Record) error {
+		if s.Writer.Author.Role == "guest" && s.Writer.Author.ID != r.Who {
+			return errors.New("guest answer must name a question addressed to that guest")
+		}
 		if r.State == "answered" && r.Answer == text {
 			return nil
 		}
 		if r.State != "open" && r.State != "defaulted" {
 			return fmt.Errorf("%s is %s", id, r.State)
 		}
-		if who == "" {
-			who = r.Who
-		}
 		r.State = "answered"
 		r.Answer = text
-		r.History = append(r.History, Event{Kind: "answered", At: Stamp{s.now()}, Who: who, Text: text})
+		r.History = append(r.History, Event{Kind: "answered", At: Stamp{s.now()}, Text: text})
 		return nil
 	})
 }
 
-// Withdraw closes an open question; by defaults to "cli".
-func (s Store) Withdraw(id, reason, by string) (Record, error) {
+// Withdraw closes an open question with a task-lease control.
+func (s Store) Withdraw(id, reason string) (Record, error) {
 	return s.change(id, func(r *Record) error {
 		if r.State == "withdrawn" {
 			return nil
@@ -166,11 +179,8 @@ func (s Store) Withdraw(id, reason, by string) (Record, error) {
 		if r.State != "open" {
 			return fmt.Errorf("%s is %s", id, r.State)
 		}
-		if by == "" {
-			by = "cli"
-		}
 		r.State = "withdrawn"
-		r.History = append(r.History, Event{Kind: "withdrawn", At: Stamp{s.now()}, Who: by, Text: reason})
+		r.History = append(r.History, Event{Kind: "withdrawn", At: Stamp{s.now()}, Text: reason})
 		return nil
 	})
 }
@@ -179,13 +189,23 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 	if !validID.MatchString(id) {
 		return rec, errors.New("question id must be Q- followed by a positive number")
 	}
-	err = s.locked(false, func(dir string) error {
+	err = s.locked(true, func(dir string) error {
 		if dir == "" {
 			return fmt.Errorf("question %s does not exist", id)
 		}
-		r, e := read(dir, id)
+		records, e := s.project(dir)
 		if e != nil {
 			return e
+		}
+		var r Record
+		for _, candidate := range records {
+			if candidate.ID == id {
+				r = candidate
+				break
+			}
+		}
+		if r.ID == "" {
+			return fmt.Errorf("question %s does not exist", id)
 		}
 		before := len(r.History)
 		if e = fn(&r); e != nil {
@@ -195,7 +215,11 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 		if len(r.History) == before {
 			return nil
 		}
-		return save(dir, r)
+		if e = s.publishEvents(dir, &r, before); e != nil {
+			return e
+		}
+		rec = r
+		return nil
 	})
 	return
 }
@@ -205,8 +229,8 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 // contains only records changed by this invocation.
 func (s Store) Tick() (changed []Record, err error) {
 	changed = []Record{}
-	err = s.locked(false, func(dir string) error {
-		records, e := s.readAll(dir)
+	err = s.locked(true, func(dir string) error {
+		records, e := s.project(dir)
 		if e != nil {
 			return e
 		}
@@ -228,7 +252,7 @@ func (s Store) Tick() (changed []Record, err error) {
 				}
 			}
 			if len(r.History) != before {
-				if e = save(dir, r); e != nil {
+				if e = s.publishEvents(dir, &r, before); e != nil {
 					return e
 				}
 				changed = append(changed, r)

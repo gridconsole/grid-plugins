@@ -11,7 +11,9 @@
   "recommended": "CSV",
   "gate": {
     "default": "CSV",
-    "at": "2026-11-09T10:00:00.000Z"
+    "at": "2026-11-09T10:00:00.000Z",
+    "id": "Q-1",
+    "kind": "person"
   },
   "asked": "2026-11-08T10:00:00.000Z",
   "state": "answered",
@@ -23,7 +25,10 @@
       "kind": "answered",
       "at": "2026-11-08T11:30:00.250Z",
       "who": "reviewer",
-      "text": "JSON"
+      "text": "JSON",
+      "post": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+      "role": "owner"
     }
-  ]
+  ],
+  "post": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 }
