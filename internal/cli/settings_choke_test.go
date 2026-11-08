@@ -99,7 +99,8 @@ func settingsPackageBypasses(file string, f *ast.File) []string {
 	allowedReads := map[*ast.Ident]bool{}
 	exports := map[string]string{
 		"AlwaysBlock": "catalog.go", "AgentNames": "catalog.go", "SkillNames": "catalog.go", "HookNames": "catalog.go",
-		"ParseAnswers": "setup.go", "ReadHookLevels": "store.go",
+		"ParseAnswers": "setup.go", "ReadHookLevels": "store.go", "ResolveHookLevel": "store.go",
+		"ClaudeBlock": "claude.go", "ClaudeSetupCommand": "claude.go", "RunClaudeSetup": "claude.go", "claudeInvalid.Error": "claude.go",
 		"Store.Effective": "store.go", "Store.SetAgent": "store.go", "Store.SetSkill": "store.go", "Store.SetHook": "store.go", "Store.RecordSetup": "setup.go",
 	}
 	for _, decl := range f.Decls {
