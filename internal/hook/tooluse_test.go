@@ -158,3 +158,63 @@ func TestCaseAliasesOfTheGridHomeAreDenied(t *testing.T) {
 		}
 	}
 }
+
+func TestOversizedEventIsRefusedForGuardedTools(t *testing.T) {
+	huge := strings.Repeat("x", hookio.InputLimit)
+	named := func(tool string) string {
+		return `{"hook_event_name":"PreToolUse","tool_name":"` + tool + `","tool_input":{"file_path":"/repo/a.go","content":"` + huge + `"}}`
+	}
+	unnamed := `{"tool_input":{"content":"` + huge + `"},"tool_name":"Write"}`
+	for _, event := range []string{"pretooluse", "permissionrequest"} {
+		for _, tt := range []struct {
+			name, stdin string
+			deny        bool
+		}{
+			{"Write", named("Write"), true},
+			{"Edit", named("Edit"), true},
+			{"Bash", named("Bash"), true},
+			{"Agent", named("Agent"), true},
+			{"tool named after its input", unnamed, true},
+			{"Read", named("Read"), false},
+			{"Grep", named("Grep"), false},
+		} {
+			t.Run(event+"/"+tt.name, func(t *testing.T) {
+				var out bytes.Buffer
+				Run(Options{Event: event, Stdin: strings.NewReader(tt.stdin), Stdout: &out, Cwd: t.TempDir(), Getenv: func(string) string { return "" }})
+				if got := strings.Contains(out.String(), `"deny"`); got != tt.deny {
+					t.Fatalf("deny=%v want %v: %.200s", got, tt.deny, out.String())
+				}
+				if tt.deny {
+					if !strings.Contains(out.String(), "larger than") {
+						t.Fatalf("no reason given: %.300s", out.String())
+					}
+					if event == "permissionrequest" && !strings.Contains(out.String(), `"hookEventName":"PermissionRequest"`) {
+						t.Fatalf("wrong envelope: %.300s", out.String())
+					}
+				} else if out.Len() != 0 {
+					t.Fatalf("expected silence: %.200s", out.String())
+				}
+			})
+		}
+	}
+}
+
+func TestEventAtTheLimitIsStillGuarded(t *testing.T) {
+	root := t.TempDir()
+	grid := filepath.Join(root, "home", ".grid")
+	if err := os.MkdirAll(filepath.Join(grid, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	head := `{"tool_name":"Write","tool_input":{"file_path":"` + filepath.Join(grid, "knowledge", "n.md") + `","content":"`
+	tail := `"}}`
+	stdin := head + strings.Repeat("x", hookio.InputLimit-len(head)-len(tail)) + tail
+	if len(stdin) != hookio.InputLimit {
+		t.Fatal(len(stdin))
+	}
+	var out bytes.Buffer
+	Run(Options{Event: "pretooluse", Stdin: strings.NewReader(stdin), Stdout: &out, Cwd: root,
+		Resolver: where.Resolver{GridHome: grid, Home: filepath.Join(root, "home")}, Getenv: func(string) string { return "" }})
+	if !strings.Contains(out.String(), "written only by grid") {
+		t.Fatalf("the brain write was not judged by the guards: %.300s", out.String())
+	}
+}

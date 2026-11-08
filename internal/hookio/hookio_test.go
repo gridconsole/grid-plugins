@@ -17,8 +17,8 @@ func TestDecode(t *testing.T) {
 			t.Errorf("Decode(%s)=%v", tt.text, got)
 		}
 	}
-	if got := Read(strings.NewReader(`{"cwd":"/example"}`)); got == nil || got.Cwd != "/example" {
-		t.Fatal(got)
+	if got, large := Read(strings.NewReader(`{"cwd":"/example"}`)); got == nil || got.Cwd != "/example" || large {
+		t.Fatal(got, large)
 	}
 }
 func TestReadCap(t *testing.T) {
@@ -27,9 +27,9 @@ func TestReadCap(t *testing.T) {
 	defer w.Close()
 	go func() { _, _ = w.Write([]byte(`{"tool_name":"Read"}`)) }()
 	start := time.Now()
-	got := readWithin(r, 25*time.Millisecond)
-	if got == nil || got.ToolName != "Read" {
-		t.Fatal(got)
+	got, large := read(r, 25*time.Millisecond, InputLimit)
+	if got == nil || got.ToolName != "Read" || large {
+		t.Fatal(got, large)
 	}
 	if time.Since(start) > time.Second {
 		t.Fatal("read exceeded cap")
@@ -71,3 +71,54 @@ func TestDecisionUnicodeSeparators(t *testing.T) {
 		}
 	}
 }
+
+func TestReadByteLimit(t *testing.T) {
+	pad := func(n int) string { return strings.Repeat("x", n) }
+	body := func(first string, n int) string {
+		return `{"hook_event_name":"PreToolUse",` + first + `"tool_input":{"content":"` + pad(n) + `"}}`
+	}
+	for _, tt := range []struct {
+		name, text string
+		limit      int
+		tool       string
+		large      bool
+	}{
+		{"under", body(`"tool_name":"Write",`, 10), 1000, "Write", false},
+		{"exactly full", body(`"tool_name":"Write",`, 10), len(body(`"tool_name":"Write",`, 10)), "Write", false},
+		{"one byte over", body(`"tool_name":"Write",`, 10), len(body(`"tool_name":"Write",`, 10)) - 1, "Write", true},
+		{"far over, name first", body(`"tool_name":"Edit",`, 5000), 1000, "Edit", true},
+		{"far over, name after the input", `{"tool_input":{"content":"` + pad(5000) + `"},"tool_name":"Write"}`, 1000, "", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, large := read(strings.NewReader(tt.text), time.Second, tt.limit)
+			if large != tt.large || got == nil || got.ToolName != tt.tool {
+				t.Fatalf("large=%v input=%+v", large, got)
+			}
+			if large && len(got.ToolInput) != 0 {
+				t.Fatalf("an unreadable event kept a tool input: %+v", got.ToolInput)
+			}
+		})
+	}
+}
+
+// A reader that never ends must not be drained past the limit.
+func TestReadStopsAtLimit(t *testing.T) {
+	var served int
+	r := readerFunc(func(p []byte) (int, error) {
+		for i := range p {
+			p[i] = ' '
+		}
+		served += len(p)
+		return len(p), nil
+	})
+	if _, large := read(r, time.Second, 100); !large {
+		t.Fatal("not reported as too large")
+	}
+	if served > 100+4096 {
+		t.Fatalf("read %d bytes past a 100 byte limit", served)
+	}
+}
+
+type readerFunc func([]byte) (int, error)
+
+func (f readerFunc) Read(p []byte) (int, error) { return f(p) }

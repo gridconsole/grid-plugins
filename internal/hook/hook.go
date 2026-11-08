@@ -159,7 +159,7 @@ func guardEnv(o Options) map[string]string {
 }
 
 func toolUse(o Options) {
-	in := hookio.Read(o.Stdin)
+	in, tooLarge := hookio.Read(o.Stdin)
 	if in == nil {
 		return
 	}
@@ -172,6 +172,17 @@ func toolUse(o Options) {
 	}
 	if in.Cwd == "" {
 		in.Cwd = o.Cwd
+	}
+	if tooLarge {
+		// An event the guards could not read must not pass as one they approved.
+		if guard.Guarded(in.ToolName) && o.Stdout != nil {
+			d := hookio.Deny(fmt.Sprintf("This tool call is larger than %d bytes, more than the Grid guards read, so they cannot check it. Make the change in smaller steps.", hookio.InputLimit))
+			if in.HookEventName == "PermissionRequest" {
+				d.Event = "PermissionRequest"
+			}
+			_ = d.Write(o.Stdout)
+		}
+		return
 	}
 	env := guardEnv(o)
 	// PermissionRequest also rechecks denies before granting a home fallback.

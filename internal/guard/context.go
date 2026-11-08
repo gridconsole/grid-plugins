@@ -191,6 +191,13 @@ func fileTool(name string) bool {
 	return false
 }
 
+// Guarded reports whether a tool is one the guards can refuse (file tools, Bash
+// and subagent launches). A call that does not name its tool counts as guarded:
+// the guards cannot tell, so they must not let it through unread.
+func Guarded(tool string) bool {
+	return tool == "" || fileTool(tool) || tool == "Bash" || tool == "Agent" || tool == "Task"
+}
+
 type task struct{ dir, rel string }
 
 var taskName = regexp.MustCompile(`^T-\d+`)

@@ -52,23 +52,34 @@ func Decode(data []byte) *Input {
 	return &in
 }
 
-const InputTimeout = 3 * time.Second
+const (
+	InputTimeout = 3 * time.Second
+	// InputLimit is the most stdin bytes a hook reads. Claude Code's tool input
+	// for an ordinary edit is far smaller; a larger event is refused, not guessed.
+	InputLimit = 1 << 20
+)
 
-// Read waits at most three seconds, then parses the bytes received so far. If a
-// non-closable Reader blocks forever, its single read goroutine remains blocked;
-// hook processes exit after one call. Owned pipes should be closed by the caller.
-func Read(r io.Reader) *Input { return readWithin(r, InputTimeout) }
-func readWithin(r io.Reader, cap time.Duration) *Input {
+// Read waits at most three seconds and reads at most InputLimit bytes, then
+// parses what it has. If stdin held more than the limit, tooLarge is true and
+// the Input holds only the top-level fields found before the limit (usually the
+// tool name and cwd), never a tool input: the caller decides what to do with an
+// event it could not read. If a non-closable Reader blocks forever, its single
+// read goroutine remains blocked; hook processes exit after one call. Owned
+// pipes should be closed by the caller.
+func Read(r io.Reader) (in *Input, tooLarge bool) { return read(r, InputTimeout, InputLimit) }
+func read(r io.Reader, cap time.Duration, limit int) (*Input, bool) {
 	if r == nil {
-		return nil
+		return nil, false
 	}
 	var mu sync.Mutex
 	var buf bytes.Buffer
 	done := make(chan bool, 1)
 	go func() {
+		// One byte past the limit tells "exactly full" from "too large".
+		lr := io.LimitReader(r, int64(limit)+1)
 		b := make([]byte, 4096)
 		for {
-			n, err := r.Read(b)
+			n, err := lr.Read(b)
 			mu.Lock()
 			_, _ = buf.Write(b[:n])
 			mu.Unlock()
@@ -83,14 +94,53 @@ func readWithin(r io.Reader, cap time.Duration) *Input {
 	select {
 	case ok := <-done:
 		if !ok {
-			return nil
+			return nil, false
 		}
 	case <-timer.C:
 	}
 	mu.Lock()
 	data := bytes.Clone(buf.Bytes())
 	mu.Unlock()
-	return Decode(data)
+	if len(data) > limit {
+		return prefixFields(data[:limit]), true
+	}
+	return Decode(data), false
+}
+
+// prefixFields reads the scalar top-level fields of a JSON object cut off at
+// some point. It stops at the first value that does not complete.
+func prefixFields(data []byte) *Input {
+	in := &Input{}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return in
+	}
+	for dec.More() {
+		t, err := dec.Token()
+		key, ok := t.(string)
+		if err != nil || !ok {
+			break
+		}
+		var raw json.RawMessage
+		if dec.Decode(&raw) != nil {
+			break
+		}
+		var text string
+		if json.Unmarshal(raw, &text) != nil {
+			continue
+		}
+		switch key {
+		case "tool_name":
+			in.ToolName = text
+		case "cwd":
+			in.Cwd = text
+		case "hook_event_name":
+			in.HookEventName = text
+		case "agent_type":
+			in.AgentType = text
+		}
+	}
+	return in
 }
 
 // Decision's zero value is silence (defer to normal permission rules).
