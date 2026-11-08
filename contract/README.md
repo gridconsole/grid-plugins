@@ -192,6 +192,25 @@ Disagreements and defaults chosen:
   It rejects unsupported schema keywords, never fetches refs, preserves integer
   precision and counts Unicode code points. It is not a general schema engine.
 
+## Local state paths
+
+Under the Grid home, `projects/<project>/`:
+
+- `lease/merge.json` and `lease/seq`: the project merge lease and its fence
+  counter. The lease is one per project (feed-contract.md:113), so its fence
+  counter is per project too, not the task Feed's `lease/seq`. The lease
+  package writes `{lease, holder, fence, since, until}` and does not yet carry
+  `project`, `gen` or `renewed_at`, so it does not validate against
+  [merge-lease.json](schemas/merge-lease.json); settle that shape before task
+  and Job leases share the reader.
+- `tasks/<task>/sessions/<machine>/<session>.json`: one session record per
+  runtime session id and machine (plugin-design.md has no path entry for it).
+- `tasks/<task>/feed/.live/<holder>.<fence>.json`: the Job liveness file
+  (feed-contract.md:17 and :27), never shipped off the host.
+
+Merge lease and session code uses `flock`; on Windows it returns "not supported
+until the Windows Feed is decided" (feed-contract.md:12).
+
 ## Command output
 
 Plain output of `where` is one `name: value` line per field, with the same names as `--json`; a list gives one line per entry under the field's name, an empty field is left out, and paths under the home folder start with `~`; `--json` paths are absolute. `doctor` prints one `ok|fail <name>: <detail>` line per check. `version` prints `grid <version>`, `contract <n>` and `app_min <version>`. The golden files in `testdata/golden/` hold an example of each.
