@@ -20,6 +20,9 @@ type Command struct {
 	Hook string   `json:"hook"`
 	Call string   `json:"call"`
 	Argv []string `json:"argv"`
+	// Event is the hook_event_name of the case's input.json, set by Replay so a
+	// driver can tell which legacy event a script was recorded for.
+	Event string `json:"-"`
 }
 
 func (c Command) String() string {
@@ -259,6 +262,11 @@ func Replay(fixtures, caseDir, box string, driver Driver) (Result, error) {
 		}
 		wants[name] = string(b)
 	}
+	var event struct {
+		Name string `json:"hook_event_name"`
+	}
+	_ = json.Unmarshal(input, &event)
+	s.Command.Event = event.Name
 	argv, ok := driver.Resolve(s.Command)
 	if !ok {
 		result.Skip = "command not implemented: " + s.Command.String()

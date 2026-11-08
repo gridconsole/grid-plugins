@@ -117,6 +117,16 @@ func commands() []command {
 	}
 }
 
+// Implemented reports whether the command table has a built command of that name.
+func Implemented(name string) bool {
+	for _, c := range commands() {
+		if c.name == name {
+			return c.run != nil
+		}
+	}
+	return false
+}
+
 // anyFormat lists the commands that run whatever format the Grid home has: version
 // reads nothing, doctor reports the format, and migrate is how an old home moves on.
 var anyFormat = map[string]bool{"version": true, "doctor": true, "migrate": true}

@@ -27,6 +27,16 @@ type Options struct {
 	Getenv   func(string) string
 }
 
+// Handles reports whether Run answers the event, so callers can tell a handled
+// event from one that silently prints nothing.
+func Handles(event string) bool {
+	switch strings.ToLower(event) {
+	case "sessionstart", "pretooluse", "permissionrequest":
+		return true
+	}
+	return false
+}
+
 // Run handles one event and returns the exit code (always 0). Unknown events and
 // malformed input print nothing. SessionStart never creates project/task records.
 func Run(o Options) int {
