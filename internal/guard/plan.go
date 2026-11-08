@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 )
 
 const off = " To turn this guard off, start Claude Code with GRID_PLAN_GUARD=off."
@@ -57,7 +58,7 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 			}
 		}
 		for _, next := range after(in.ToolName, in.ToolInput, history) {
-			if addsMark(history, next, planReady) && !recallLine.MatchString(read(filepath.Join(owner.dir, "plan.md"))) {
+			if addsMark(history, next, planReady) && !plan.HasRecall(read(filepath.Join(owner.dir, "plan.md"))) {
 				return hookio.Deny(given + " is not changed to add a plan ready line: plan.md has no brain recall line. Add it under ## How we approach it: one `Used: <path>` line for each note of the recall you used, or `Recall: nothing found` when no note bears on the task (the recall hits are in your context, or run `grid-brain recall --task <id>`). Then run plan-hash.mjs again and add the plan ready line." + off)
 			}
 		}

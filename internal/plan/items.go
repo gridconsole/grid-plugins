@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v4"
+
+	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
 // Item is a plan projection, not a Feed Job or task record. Optional fields
@@ -123,24 +125,13 @@ func WithLegacyState(items []Item, blocks string, briefs []string) []Item {
 	}
 	running := map[string]bool{}
 	for _, brief := range briefs {
-		ls := lines(brief)
-		if ls[0] != "---" {
+		fm := taskfile.ScalarFrontmatter(brief)
+		if fm == nil {
 			continue
 		}
-		status, numbers, closed := "", "", false
-		for _, line := range ls[1:] {
-			if line == "---" {
-				closed = true
-				break
-			}
-			if strings.HasPrefix(line, "status:") {
-				status = strings.TrimSpace(strings.TrimPrefix(line, "status:"))
-			}
-			if strings.HasPrefix(line, "item:") {
-				numbers = strings.TrimSpace(strings.TrimPrefix(line, "item:"))
-			}
-		}
-		if !closed || status != "running" {
+		status, _ := fm.Data["status"].(string)
+		numbers, _ := fm.Data["item"].(string)
+		if status != "running" {
 			continue
 		}
 		for _, number := range strings.Split(numbers, ",") {

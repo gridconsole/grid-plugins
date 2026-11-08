@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 )
 
 var planHash = regexp.MustCompile(`plan-hash\.mjs['"]?\s+(?:'([^']+)'|"([^"]+)"|(\S+))`)
@@ -35,7 +36,7 @@ func (c context) recallHeld(file string) bool {
 		return false
 	}
 	text := read(filepath.Join(t.dir, "task.md"))
-	return !inactive(text) && heldStage(planStage(text, read(filepath.Join(t.dir, "history.md")))) && !recallLine.MatchString(read(filepath.Join(t.dir, "plan.md")))
+	return !inactive(text) && heldStage(planStage(text, read(filepath.Join(t.dir, "history.md")))) && !plan.HasRecall(read(filepath.Join(t.dir, "plan.md")))
 }
 func (c context) recallGate() hookio.Decision {
 	command := str(c.in.ToolInput["command"])
