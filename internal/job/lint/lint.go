@@ -165,7 +165,7 @@ func (c *checker) validate(j job.Job, o Options) {
 	} else {
 		switch j.Verify.Kind {
 		case "file-exists":
-			if j.Verify.Path == "" {
+			if j.Verify.Path == "" && len(j.Verify.Paths) == 0 {
 				c.add("job.verify", "verify", "file-exists needs a path", "Name a task or worktree proof file.")
 			}
 		case "reviewer-check":

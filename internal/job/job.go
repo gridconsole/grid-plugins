@@ -66,11 +66,12 @@ type Acceptance struct {
 	State  string `json:"state,omitempty"`
 }
 type Verify struct {
-	Command  string `json:"command,omitempty"`
-	MinTests int    `json:"min_tests"`
-	Kind     string `json:"kind,omitempty"`
-	Path     string `json:"path,omitempty"`
-	Job      string `json:"job,omitempty"`
+	Command  string   `json:"command,omitempty"`
+	MinTests int      `json:"min_tests"`
+	Kind     string   `json:"kind,omitempty"`
+	Path     string   `json:"path,omitempty"`
+	Paths    []string `json:"paths,omitempty"`
+	Job      string   `json:"job,omitempty"`
 }
 type Budget struct {
 	TurnsEstimate        int `json:"turns_estimate"`

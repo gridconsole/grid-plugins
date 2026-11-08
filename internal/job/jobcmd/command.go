@@ -36,6 +36,7 @@ type Env struct {
 type flags struct {
 	json   bool
 	task   string
+	dir    string
 	budget int
 	args   []string
 	help   bool
@@ -51,7 +52,7 @@ type report struct {
 	Error    string         `json:"error,omitempty"`
 }
 
-const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]\n"
+const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--json]\n       grid job verify <job> [--task <task>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]\n"
 
 func Run(args []string, e Env) int {
 	f, err := parse(args)
@@ -68,7 +69,12 @@ func Run(args []string, e Env) int {
 	fail := func(err error, code int) int {
 		return output(e, f, report{Error: err.Error(), Findings: []lint.Finding{}}, code)
 	}
+	if f.dir != "" && action != "verify" {
+		return fail(errors.New("--dir is only supported by verify"), 2)
+	}
 	switch action {
+	case "verify":
+		return runVerify(args, f, e)
 	case "render":
 		if len(args) != 2 || f.task != "" {
 			return fail(errors.New("render requires <task> <item>"), 2)
@@ -184,13 +190,15 @@ func parse(args []string) (flags, error) {
 		case a == "--json":
 		case a == "--help" || a == "-h":
 			f.help = true
-		case a == "--task" || a == "--budget":
+		case a == "--task" || a == "--budget" || a == "--dir":
 			if i+1 == len(args) {
 				return f, fmt.Errorf("%s needs a value", a)
 			}
 			i++
 			if a == "--task" {
 				f.task = args[i]
+			} else if a == "--dir" {
+				f.dir = args[i]
 			} else {
 				n, err := strconv.Atoi(args[i])
 				if err != nil || n < 1 || n > 2000 {

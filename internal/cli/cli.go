@@ -85,7 +85,7 @@ func commands() []command {
 		{"task", "new, show, list, status, stop, close, reopen, history, attach, move", runTask},
 		{"plan", "write, check, items, hash, diff", runPlan},
 		{"views", "render the task pages", nil},
-		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, cycles, floor", runOrchestratorJob},
+		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor", runOrchestratorJob},
 		{"lease", "take, renew, release, status (merge lease)", runLease},
 		{"feed", "tick, post, read, state, types, handover, fold", runOrchestratorFeed},
 		{"mcp", "stdio server with the Feed tools", runMCP},
