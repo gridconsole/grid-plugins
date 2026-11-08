@@ -10,9 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gitx"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
@@ -21,9 +21,10 @@ import (
 )
 
 // New serializes resolution, project registration and allocation across processes.
-// The kernel releases flock on exit, including a crash. The lock file stays in
-// place so every writer locks the same inode. Readers see a task only after its
-// complete staging folder is renamed into place.
+// The kernel releases the flock (internal/fslock) on exit, including a crash.
+// The lock file stays in place so every writer locks the same inode. Readers see
+// a task only after its complete staging folder is renamed into place. Where
+// fslock is unsupported, New fails with fslock.ErrUnsupported before it makes a task.
 func (s Store) New(o NewOptions) (Task, error) {
 	if err := o.Validate(); err != nil {
 		return Task{}, err
@@ -36,21 +37,15 @@ func (s Store) New(o NewOptions) (Task, error) {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		return Task{}, err
 	}
-	lock, err := os.OpenFile(filepath.Join(home, ".task-alloc.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	lock, err := fslock.OpenNoFollow(filepath.Join(home, ".task-alloc.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
-		return Task{}, err
+		return Task{}, fmt.Errorf("open task allocation lock: %w", err)
 	}
 	defer lock.Close()
-	for {
-		err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX)
-		if !errors.Is(err, syscall.EINTR) {
-			break
-		}
-	}
-	if err != nil {
+	if err := fslock.LockExclusive(lock); err != nil {
 		return Task{}, fmt.Errorf("lock task allocation: %w", err)
 	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	defer fslock.Unlock(lock)
 	if err := checkFormat(home); err != nil {
 		return Task{}, err
 	}

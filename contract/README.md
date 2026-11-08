@@ -208,8 +208,8 @@ Under the Grid home, `projects/<project>/`:
 - `tasks/<task>/feed/.live/<holder>.<fence>.json`: the Job liveness file
   (feed-contract.md:17 and :27), never shipped off the host.
 
-Merge lease and session code uses `flock`; on Windows it returns "not supported
-until the Windows Feed is decided" (feed-contract.md:12).
+Merge lease, session and task allocation code uses `flock`; on Windows it returns
+"not supported until the Windows Feed is decided" (feed-contract.md:12).
 
 ## Command output
 
