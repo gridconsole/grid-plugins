@@ -17,9 +17,10 @@ type controlBody struct {
 }
 
 type question struct {
-	post   Post
-	who    string
-	closed bool
+	post    Post
+	who     string
+	closed  bool
+	applied *string
 }
 
 // Fold materializes one task's admitted posts. The caller checks writer-file
@@ -32,7 +33,7 @@ type question struct {
 // affecting Jobs. This is an in-memory contract fold, not a filesystem reader
 // or the scheduling/liveness loop.
 func Fold(posts []Post) State {
-	out := State{Jobs: map[string]*Job{}, Verdicts: []Verdict{}}
+	out := State{Jobs: map[string]*Job{}, Verdicts: []Verdict{}, Questions: map[string]*Question{}, NeedsYou: []string{}, Wakes: []string{}, ByRef: map[string][]string{}, Hosts: map[string]string{}}
 	verdicts := map[string]Verdict{}
 	set := func(p Post, kind, reason string) { verdicts[p.ID] = Verdict{p.ID, kind, reason} }
 	seen := map[string]Post{}
@@ -155,7 +156,7 @@ func Fold(posts []Post) State {
 				set(p, "ignored", "control must select an eligible answer to this question")
 				continue
 			}
-			q.closed = true
+			q.closed, q.applied = true, &answer.ID
 			continue
 		}
 		id := b.Target
@@ -247,15 +248,71 @@ func Fold(posts []Post) State {
 		}
 	}
 	for id, q := range questions {
+		open := !q.closed
 		if q.post.Job != nil {
-			if j := out.Jobs[*q.post.Job]; j != nil && !q.closed && j.Status != Cancelled {
+			if j := out.Jobs[*q.post.Job]; j != nil && j.Status == Cancelled {
+				open = false
+			} else if j != nil && open {
 				j.OpenQuestions = append(j.OpenQuestions, id)
 			}
 		}
+		out.Questions[id] = &Question{ID: id, Job: q.post.Job, Who: q.who, Answers: []string{}, Applied: q.applied, Open: open}
+		if open {
+			out.NeedsYou = append(out.NeedsYou, id)
+		}
+	}
+	var head *Post
+	hosts := map[string]Post{}
+	for _, p := range active {
+		if verdicts[p.ID].Kind != "counted" {
+			continue
+		}
+		switch p.Type {
+		case "answer":
+			if q := out.Questions[deref(p.Re)]; q != nil {
+				q.Answers = append(q.Answers, p.ID)
+			}
+		case "post":
+			var b struct{ Ref string }
+			_ = json.Unmarshal(p.Body, &b)
+			out.ByRef[b.Ref] = append(out.ByRef[b.Ref], p.ID)
+		case "head":
+			// Only a task-lease head is ordered by tenure; unleased heads stay visible.
+			if deref(p.Lease) == "task" && (head == nil || newer(p, *head)) {
+				h := p
+				head = &h
+			}
+		case "host":
+			if old, ok := hosts[p.Worker]; !ok || newer(p, old) {
+				hosts[p.Worker] = p
+			}
+		case "found":
+			var b struct{ Job, Kind string }
+			_ = json.Unmarshal(p.Body, &b)
+			if b.Kind == "security" && out.Jobs[b.Job] != nil {
+				out.Wakes = append(out.Wakes, p.ID)
+			}
+		case "loop-detected":
+			out.Wakes = append(out.Wakes, p.ID)
+		}
+	}
+	if head != nil {
+		out.Head = &head.ID
+	}
+	for worker, p := range hosts {
+		out.Hosts[worker] = p.ID
 	}
 	for _, j := range out.Jobs {
 		sort.Strings(j.OpenQuestions)
 	}
+	for _, q := range out.Questions {
+		sort.Strings(q.Answers)
+	}
+	for _, ids := range out.ByRef {
+		sort.Strings(ids)
+	}
+	sort.Strings(out.NeedsYou)
+	sort.Strings(out.Wakes)
 	for _, v := range verdicts {
 		out.Verdicts = append(out.Verdicts, v)
 	}
@@ -299,6 +356,18 @@ func applySide(j *Job, p Post) {
 			j.NeedsLead = true
 		}
 	}
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// newer orders posts of one stream or lease by tenure, never by timestamp.
+func newer(a, b Post) bool {
+	return a.Gen > b.Gen || a.Gen == b.Gen && (a.Fence > b.Fence || a.Fence == b.Fence && a.Seq > b.Seq)
 }
 
 func contains(values []string, target string) bool {

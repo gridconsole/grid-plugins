@@ -2,6 +2,8 @@ package contract
 
 import (
 	"encoding/json"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -14,9 +16,38 @@ const (
 	External    TrustTier = "external"
 )
 
+// TierFor maps a stamped author role to the tier the envelope schema requires.
+// Unknown roles map to agent; Validate refuses them by the role enum.
+func TierFor(role string) TrustTier {
+	switch role {
+	case "owner", "member", "lead":
+		return PersonTeam
+	case "guest":
+		return PersonGuest
+	case "external":
+		return External
+	}
+	return Agent
+}
+
 type Author struct {
 	ID   string `json:"id"`
 	Role string `json:"role"`
+}
+
+// workerPattern is the envelope's worker pattern; a test keeps them equal.
+var workerPattern = regexp.MustCompile(`^[^/\s]+@[0-7][0-9A-HJKMNP-TV-Z]{25}$`)
+
+// ValidWorker reports whether id is a writer id, <member>@<machine ULID>. The
+// member may hold any character but / and whitespace, including another @.
+func ValidWorker(id string) bool { return workerPattern.MatchString(id) }
+
+// WorkerMember returns the member part of a writer id, split on the last @.
+func WorkerMember(id string) string {
+	if i := strings.LastIndexByte(id, '@'); i > 0 {
+		return id[:i]
+	}
+	return ""
 }
 
 // Post is the wire envelope. Stale is reader metadata, never a JSON field:
@@ -127,9 +158,30 @@ type Verdict struct {
 	Reason string `json:"reason"`
 }
 
+// Question is a counted question with its answer candidates. Only a task
+// control that selects one of them closes it; arrival order never does.
+type Question struct {
+	ID      string   `json:"id"`
+	Job     *string  `json:"job"`
+	Who     string   `json:"who"`
+	Answers []string `json:"answers"`
+	Applied *string  `json:"applied"`
+	Open    bool     `json:"open"`
+}
+
+// State is the folded task. NeedsYou lists open questions, task-wide; Wakes
+// lists lead wake candidates (security findings on a known Job, loop-detected),
+// kept apart from human questions. ByRef indexes counted posts by their ref,
+// Head is the newest task-lease head and Hosts the newest host post per worker.
 type State struct {
-	Jobs     map[string]*Job `json:"jobs"`
-	Verdicts []Verdict       `json:"verdicts"`
+	Jobs      map[string]*Job      `json:"jobs"`
+	Verdicts  []Verdict            `json:"verdicts"`
+	Questions map[string]*Question `json:"questions"`
+	NeedsYou  []string             `json:"needs_you"`
+	Wakes     []string             `json:"wakes"`
+	ByRef     map[string][]string  `json:"by_ref"`
+	Head      *string              `json:"head"`
+	Hosts     map[string]string    `json:"hosts"`
 }
 
 // MergeLease belongs to a project, not a task. A release clears Holder. Its

@@ -65,6 +65,46 @@ func Schema(name string) ([]byte, error) {
 	return contractdata.Schemas.ReadFile("schemas/" + strings.TrimSuffix(name, ".json") + ".json")
 }
 
+// PostType is a Feed post type as its schema registers it: the type_v it pins,
+// its x-class (state or chatter) and the x-roles that may author it.
+type PostType struct {
+	Name    string   `json:"type"`
+	Version int      `json:"version"`
+	Class   string   `json:"class"`
+	Roles   []string `json:"roles"`
+}
+
+// PostTypes lists the writable Feed post types, sorted by name. Schemas without
+// x-class (envelope, leases, heartbeat, takeover) are not post types.
+func PostTypes() []PostType {
+	schemas.Do(loadSchemas)
+	out := []PostType{}
+	for _, name := range SchemaNames() {
+		if t, ok := LookupType(name); ok {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// LookupType returns the registration of one Feed post type.
+func LookupType(name string) (PostType, bool) {
+	schemas.Do(loadSchemas)
+	schema, ok := schemas.byName[name+".json"]
+	class, _ := schema["x-class"].(string)
+	if !ok || class == "" || strings.Contains(name, "/") {
+		return PostType{}, false
+	}
+	t := PostType{Name: name, Version: typeVersion(schema), Class: class, Roles: []string{}}
+	roles, _ := schema["x-roles"].([]any)
+	for _, role := range roles {
+		if r, ok := role.(string); ok {
+			t.Roles = append(t.Roles, r)
+		}
+	}
+	return t, true
+}
+
 // Validate checks the documented JSON Schema subset and cross-field rules that
 // JSON Schema cannot express (matching identifiers and fixed lease durations).
 // It does not fetch references or read clocks, files, processes or the network.

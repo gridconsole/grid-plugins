@@ -59,6 +59,13 @@ fence and sequence order. Each assignment consumes only its granted Job tenure,
 in sequence order, beginning with an ack that cites the assignment. Handover
 announces a change but never grants authority. Results and exits are evidence;
 explicit control posts make state transitions and new assignments make retries.
+The fold also indexes counted posts for the Feed: every question with its answer
+candidates and the answer a control applied, `needs_you` (open questions, not
+those on cancelled Jobs), `wakes` (security findings on a known Job and every
+loop-detected), `by_ref` (post IDs by ref), the newest task-lease `head` and the
+newest `host` per worker, both ordered by generation, fence and sequence.
+`TierFor`, `ValidWorker` and `PostTypes` give writers the envelope's tier, writer
+id pattern and type registrations so no second copy is needed.
 
 The scheduler, lease writer and renderer remain separate responsibilities. They
 check pid/start-time liveness, unknown liveness, sleep/wake, crash-loop progress,

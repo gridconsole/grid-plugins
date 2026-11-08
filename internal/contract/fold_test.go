@@ -451,3 +451,93 @@ func TestTypeVersionFromSchema(t *testing.T) {
 		}
 	}
 }
+
+func TestFoldIndexes(t *testing.T) {
+	q := sample(t, "question", 4)
+	q.Seq = 4
+	a := sample(t, "answer", 5)
+	a.Re, a.Seq = &q.ID, 5
+	b := sample(t, "answer", 6)
+	b.Re, b.Seq = &q.ID, 6
+	closed := sample(t, "question", 7)
+	closed.Seq = 7
+	c := sample(t, "answer", 8)
+	c.Re, c.Seq = &closed.ID, 8
+	pick := sample(t, "control", 9)
+	pick.Seq = 9
+	body(t, &pick, map[string]any{"target": closed.ID, "answer": c.ID, "status": "answered"})
+	cancelled := sample(t, "question", 10)
+	cancelled.Seq, cancelled.Job = 10, pointer("J-2")
+	j2 := sample(t, "job", 11)
+	j2.Seq, j2.Job = 11, pointer("J-2")
+	changeBody(t, &j2, func(v map[string]any) { v["id"] = "J-2" })
+	stop := move(t, 12, Cancelled)
+	changeBody(t, &stop, func(v map[string]any) { v["target"] = "J-2" })
+
+	security := sample(t, "found", 13)
+	security.Seq = 13
+	changeBody(t, &security, func(v map[string]any) { v["kind"] = "security" })
+	unknownJob := sample(t, "found", 14)
+	unknownJob.Seq = 14
+	changeBody(t, &unknownJob, func(v map[string]any) { v["kind"], v["job"] = "security", "J-9" })
+	bug := sample(t, "found", 15)
+	bug.Seq = 15
+	loop := sample(t, "loop-detected", 16)
+	loop.Seq = 16
+
+	h1 := sample(t, "head", 17)
+	h1.Lease, h1.Fence, h1.Seq = pointer("task"), 1, 17
+	h2 := sample(t, "head", 18)
+	h2.Lease, h2.Fence, h2.Seq = pointer("task"), 2, 1
+	free := sample(t, "head", 19)
+	free.Seq = 19
+	o1 := sample(t, "host", 20)
+	o1.Seq = 20
+	o2 := sample(t, "host", 21)
+	o2.Seq = 21
+	other := sample(t, "host", 22)
+	other.Worker, other.Seq = "host@01K9J000000000000000000003", 1
+
+	p1 := sample(t, "post", 23)
+	p1.Seq = 23
+	p2 := sample(t, "post", 24)
+	p2.Seq = 24
+	changeBody(t, &p2, func(v map[string]any) { v["ref"] = "item:i-1" })
+	held := sample(t, "post", 25)
+	held.Seq, held.Re = 25, pointer(fmt.Sprintf("%026d", 99))
+
+	posts := append(base(t), q, a, b, closed, c, pick, cancelled, j2, stop, security, unknownJob, bug, loop, h1, h2, free, o1, o2, other, p1, p2, held)
+	rand.New(rand.NewSource(7)).Shuffle(len(posts), func(i, j int) { posts[i], posts[j] = posts[j], posts[i] })
+	s := Fold(posts)
+
+	if !reflect.DeepEqual(s.NeedsYou, []string{q.ID}) {
+		t.Errorf("needs you = %v", s.NeedsYou)
+	}
+	if got := s.Questions[q.ID]; got == nil || !got.Open || got.Applied != nil || !reflect.DeepEqual(got.Answers, []string{a.ID, b.ID}) || got.Who != "owner" {
+		t.Errorf("open question = %+v", got)
+	}
+	if got := s.Questions[closed.ID]; got == nil || got.Open || got.Applied == nil || *got.Applied != c.ID {
+		t.Errorf("answered question = %+v", got)
+	}
+	if got := s.Questions[cancelled.ID]; got == nil || got.Open {
+		t.Errorf("question on a cancelled Job = %+v", got)
+	}
+	if !reflect.DeepEqual(s.Wakes, []string{security.ID, loop.ID}) {
+		t.Errorf("wakes = %v", s.Wakes)
+	}
+	if s.Head == nil || *s.Head != h2.ID {
+		t.Errorf("head = %v, want the higher task fence", s.Head)
+	}
+	if !reflect.DeepEqual(s.Hosts, map[string]string{o1.Worker: o2.ID, other.Worker: other.ID}) {
+		t.Errorf("hosts = %v", s.Hosts)
+	}
+	if !reflect.DeepEqual(s.ByRef, map[string][]string{"task": {p1.ID}, "item:i-1": {p2.ID}}) {
+		t.Errorf("by ref = %v", s.ByRef)
+	}
+	if s.Jobs["J-2"] == nil || s.Jobs["J-2"].Status != Cancelled || len(s.Jobs["J-2"].OpenQuestions) != 0 {
+		t.Errorf("J-2 = %+v", s.Jobs["J-2"])
+	}
+	if verdict(s, held.ID).Kind != "held" {
+		t.Errorf("post with a missing re = %+v", verdict(s, held.ID))
+	}
+}

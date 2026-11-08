@@ -195,3 +195,102 @@ func TestValidatorBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestTierForMatchesEnvelope(t *testing.T) {
+	var schema struct {
+		Properties struct {
+			Author struct {
+				Properties struct {
+					Role struct {
+						Enum []string `json:"enum"`
+					} `json:"role"`
+				} `json:"properties"`
+			} `json:"author"`
+		} `json:"properties"`
+	}
+	data, _ := Schema("envelope")
+	if err := json.Unmarshal(data, &schema); err != nil {
+		t.Fatal(err)
+	}
+	roles := schema.Properties.Author.Properties.Role.Enum
+	if len(roles) == 0 {
+		t.Fatal("envelope lists no roles")
+	}
+	for _, role := range roles {
+		for _, tier := range []TrustTier{PersonTeam, PersonGuest, Agent, External} {
+			var p map[string]any
+			_ = json.Unmarshal(fixture(t, "post", "valid/basic"), &p)
+			p["author"] = map[string]any{"id": "someone", "role": role}
+			p["tier"] = tier
+			data, _ := json.Marshal(p)
+			if err := Validate("envelope", data); (err == nil) != (tier == TierFor(role)) {
+				t.Errorf("role %s tier %s: %v", role, tier, err)
+			}
+		}
+	}
+}
+
+func TestWorkerPatternIsTheContracts(t *testing.T) {
+	var envelope struct {
+		Properties struct {
+			Worker struct {
+				Pattern string `json:"pattern"`
+			} `json:"worker"`
+		} `json:"properties"`
+	}
+	data, _ := Schema("envelope")
+	if err := json.Unmarshal(data, &envelope); err != nil || envelope.Properties.Worker.Pattern != workerPattern.String() {
+		t.Fatalf("envelope worker pattern %q, shared %s: %v", envelope.Properties.Worker.Pattern, workerPattern, err)
+	}
+	quoted, _ := json.Marshal(workerPattern.String())
+	for _, schema := range []string{"control", "handover"} {
+		data, _ := Schema(schema)
+		if !strings.Contains(string(data), string(quoted)) {
+			t.Errorf("%s writer pattern differs from the shared one", schema)
+		}
+	}
+	for id, want := range map[string]bool{
+		"jürgen@01K9J000000000000000000002":    true,
+		"a@b@01K9J000000000000000000002":       true,
+		"worker@01K9J000000000000000000002":    true,
+		"two words@01K9J000000000000000000002": false,
+		"a/b@01K9J000000000000000000002":       false,
+		"@01K9J000000000000000000002":          false,
+		"worker@81K9J000000000000000000002":    false,
+		"worker@01k9j000000000000000000002":    false,
+	} {
+		if ValidWorker(id) != want {
+			t.Errorf("ValidWorker(%q) = %v", id, !want)
+		}
+		var p map[string]any
+		_ = json.Unmarshal(fixture(t, "post", "valid/basic"), &p)
+		p["worker"] = id
+		data, _ := json.Marshal(p)
+		if err := Validate("envelope", data); (err == nil) != want {
+			t.Errorf("envelope worker %q: %v", id, err)
+		}
+	}
+	if got := WorkerMember("a@b@01K9J000000000000000000002"); got != "a@b" {
+		t.Fatalf("WorkerMember = %q", got)
+	}
+}
+
+func TestPostTypes(t *testing.T) {
+	types := PostTypes()
+	if len(types) != 19 {
+		t.Fatalf("post types = %d", len(types))
+	}
+	for _, typ := range types {
+		if typ.Version < 1 || len(typ.Roles) == 0 || typ.Class != "state" && typ.Class != "chatter" {
+			t.Errorf("bad registration %+v", typ)
+		}
+	}
+	if r, ok := LookupType("result"); !ok || r.Version != 2 || r.Class != "state" {
+		t.Fatalf("result = %+v", r)
+	}
+	for _, name := range []string{"envelope", "heartbeat", "claim", "../schemas/job"} {
+		if _, ok := LookupType(name); ok {
+			t.Errorf("%s registered as a post type", name)
+		}
+	}
+}
