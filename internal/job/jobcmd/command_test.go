@@ -21,7 +21,7 @@ func fixture(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	h := jobtest.New(t, filepath.Join("..", "..", "..", "testdata"))
 	out, errs := &bytes.Buffer{}, &bytes.Buffer{}
-	return Env{Cwd: filepath.Dir(h.Task), GridHome: h.GridHome, Machine: jobtest.Machine, Stdout: out, Stderr: errs}, out, errs
+	return Env{Resolver: ownerResolver(h.GridHome), Cwd: filepath.Dir(h.Task), GridHome: h.GridHome, Machine: jobtest.Machine, Stdout: out, Stderr: errs}, out, errs
 }
 func call(t *testing.T, e Env, out, errs *bytes.Buffer, want int, args ...string) report {
 	t.Helper()
@@ -271,7 +271,7 @@ func TestTaskNewThenRenderTrustsTheRequest(t *testing.T) {
 				t.Fatal(err)
 			}
 			out, errs := &bytes.Buffer{}, &bytes.Buffer{}
-			e := Env{Cwd: home, GridHome: filepath.Join(home, ".grid"), Machine: jobtest.Machine, Stdout: out, Stderr: errs}
+			e := Env{Resolver: ownerResolver(filepath.Join(home, ".grid")), Cwd: home, GridHome: filepath.Join(home, ".grid"), Machine: jobtest.Machine, Stdout: out, Stderr: errs}
 			r := call(t, e, out, errs, 0, "render", made.Path, "1", "--json")
 			file, err := os.ReadFile(r.Path)
 			if err != nil {

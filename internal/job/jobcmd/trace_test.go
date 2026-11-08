@@ -50,7 +50,7 @@ func traceTestBundle(t *testing.T, dir, id string, sources ...job.Source) string
 func traceCall(t *testing.T, home string, want int, args ...string) (map[string]json.RawMessage, string, string) {
 	t.Helper()
 	out, errs := &bytes.Buffer{}, &bytes.Buffer{}
-	code := Run(append([]string{"trace"}, args...), Env{GridHome: home, Stdout: out, Stderr: errs})
+	code := Run(append([]string{"trace"}, args...), Env{Resolver: ownerResolver(home), GridHome: home, Stdout: out, Stderr: errs})
 	if code != want {
 		t.Fatalf("trace %v: exit %d, want %d; stdout=%s stderr=%s", args, code, want, out, errs)
 	}
@@ -88,6 +88,38 @@ func TestJobTraceByBrainID(t *testing.T) {
 	rows := traceTestRows(t, home, "brain:project/x")
 	if len(rows) != 1 || rows[0]["task"] != "T-01" || rows[0]["job"] != "J-1" || rows[0]["project"] != "alpha" || rows[0]["updated"] != "2026-01-02" || rows[0]["tier"] != "agent" {
 		t.Fatalf("rows: %+v", rows)
+	}
+}
+
+func TestTraceCallerContext(t *testing.T) {
+	home := t.TempDir()
+	for _, project := range []string{"alpha", gridhome.Personal} {
+		traceTestBundle(t, traceTask(t, home, project, "T-01"), "J-1", job.Source{Pointer: "brain:project/x"})
+	}
+	for _, tc := range []struct {
+		role string
+		want int
+	}{
+		{"", 0},
+		{" \t\n", 0},
+		{"owner", 2},
+		{"member", 1},
+		{"guest", 1},
+	} {
+		t.Run("role="+tc.role, func(t *testing.T) {
+			resolver := where.Resolver{GridHome: home, Caller: where.Caller{Role: tc.role, Member: "sam"}}
+			result, err := Trace(resolver, "brain:project/x", "", "")
+			if strings.TrimSpace(tc.role) == "" {
+				if err == nil || !strings.Contains(err.Error(), "missing member context") {
+					t.Fatalf("expected missing member context, got %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Rows) != tc.want {
+				t.Fatalf("got %d rows, want %d: %+v", len(result.Rows), tc.want, result)
+			}
+		})
 	}
 }
 
@@ -296,7 +328,7 @@ func TestJobTraceUnsafePaths(t *testing.T) {
 			if err := os.Symlink(from, to); err != nil {
 				t.Fatal(err)
 			}
-			result, err := Trace(where.Resolver{GridHome: home}, "brain:project/x", "", "")
+			result, err := Trace(ownerResolver(home), "brain:project/x", "", "")
 			if err != nil || len(result.Rows) != 1 || len(result.Problems) != 1 {
 				t.Fatalf("%+v, %v", result, err)
 			}
@@ -330,7 +362,7 @@ func TestJobTraceSavedBundleReadOnly(t *testing.T) {
 	}
 	// The live brain entry need not exist, and omitted render candidates still
 	// appear in saved sources. Neither is a reason to discard historical evidence.
-	result, err := Trace(where.Resolver{GridHome: home}, source.Pointer, source.Digest, "")
+	result, err := Trace(ownerResolver(home), source.Pointer, source.Digest, "")
 	if err != nil || len(result.Rows) != 1 || len(result.Problems) != 0 {
 		t.Fatalf("%+v, %v", result, err)
 	}
@@ -363,7 +395,7 @@ func TestJobTraceInvalidInputs(t *testing.T) {
 		traceWrite(t, filepath.Join(dir, "jobs", fmt.Sprintf("J-%d", i+1), "inputs.json"), []byte(data))
 	}
 	traceWrite(t, filepath.Join(dir, "jobs", ".render-in-progress", "inputs.json"), []byte("unfinished"))
-	result, err := Trace(where.Resolver{GridHome: home}, "brain:project/x", "", "")
+	result, err := Trace(ownerResolver(home), "brain:project/x", "", "")
 	if err != nil || len(result.Rows) != 0 || len(result.Problems) != 4 {
 		t.Fatalf("%+v, %v", result, err)
 	}

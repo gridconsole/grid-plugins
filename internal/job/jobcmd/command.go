@@ -57,6 +57,16 @@ type report struct {
 const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip).\n"
 
 func Run(args []string, e Env) int {
+	if err := memberContext(e.Resolver); err != nil {
+		f := flags{}
+		for _, arg := range args {
+			f.json = f.json || arg == "--json"
+		}
+		if len(args) > 0 && args[0] == "trace" && f.json {
+			return traceOutput(e, TraceResult{Rows: []TraceRow{}, Problems: []TraceProblem{{Text: err.Error()}}}, true, 2)
+		}
+		return output(e, f, report{Error: err.Error()}, 2)
+	}
 	if len(args) > 0 {
 		switch args[0] {
 		case "trace":
@@ -185,6 +195,14 @@ func Run(args []string, e Env) int {
 		return fail(fmt.Errorf("unknown job command %q; use render, lint or show", action), 2)
 	}
 }
+
+func memberContext(resolver where.Resolver) error {
+	if strings.TrimSpace(resolver.Caller.Role) == "" {
+		return errors.New("missing member context: set Env.Resolver.Caller.Role; use owner for owner access")
+	}
+	return nil
+}
+
 func parse(args []string) (flags, error) {
 	f := flags{}
 	for _, a := range args {

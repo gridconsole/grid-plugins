@@ -142,11 +142,14 @@ func traceProject(resolver where.Resolver, filter string, dirs []string) (string
 	return found, nil
 }
 
-// Trace reads filed inputs across visible projects without consulting
+// Trace reads filed inputs across the caller's visible projects without consulting
 // live brain entries or changing Jobs. Problems do not discard other evidence.
 func Trace(resolver where.Resolver, pointer, digest, projectFilter string) (TraceResult, error) {
-	home := resolver.GridHome
 	result := TraceResult{Rows: []TraceRow{}, Problems: []TraceProblem{}}
+	if err := memberContext(resolver); err != nil {
+		return result, err
+	}
+	home := resolver.GridHome
 	if err := traceCheckQuery(pointer, digest); err != nil {
 		return result, err
 	}

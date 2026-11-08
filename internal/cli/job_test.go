@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/job/jobtest"
 )
 
 func TestJobRegistered(t *testing.T) {
@@ -26,5 +30,29 @@ func TestJobRegistered(t *testing.T) {
 	}
 	if len(out.Findings) != 1 || out.Findings[0].Rule != "brief.frontmatter" {
 		t.Fatalf("%+v", out)
+	}
+}
+
+func TestJobOwnerContext(t *testing.T) {
+	for _, role := range []string{"", "owner"} {
+		t.Run("role="+role, func(t *testing.T) {
+			fixture := jobtest.New(t, filepath.Join("..", "..", "testdata"))
+			var out, errs bytes.Buffer
+			env := Env{Cwd: filepath.Dir(fixture.Task), GridHome: fixture.GridHome, Machine: jobtest.Machine, Stdout: &out, Stderr: &errs,
+				Getenv: func(key string) string {
+					if key == "GRID_ROLE" {
+						return role
+					}
+					return ""
+				},
+			}
+			if code := Run([]string{"job", "render", "task", "1", "--json"}, env); code != 0 {
+				t.Fatalf("exit %d: stdout %s stderr %s", code, &out, &errs)
+			}
+			var result struct{ OK bool }
+			if err := json.Unmarshal(out.Bytes(), &result); err != nil || !result.OK {
+				t.Fatalf("render failed: %s (%v)", &out, err)
+			}
+		})
 	}
 }
