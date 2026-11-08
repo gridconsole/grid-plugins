@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -45,7 +46,7 @@ func TestGateReuse(t *testing.T) {
 					case "wake":
 						attempt.Wake = first.ID + "/1"
 					}
-					if _, err := s.Post(attempt, writer); err == nil || !strings.Contains(err.Error(), "gate id Q-1 already exists") {
+					if _, err := s.Post(attempt, writer); !errors.Is(err, ErrInvalidRecord) || !strings.Contains(err.Error(), "gate id Q-1 already exists") {
 						t.Errorf("%s from %s: %v", change, writer.Worker, err)
 					}
 				}

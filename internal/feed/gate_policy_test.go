@@ -2,8 +2,11 @@ package feed
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -70,4 +73,56 @@ func TestGatePolicyInvalidWritesNothing(t *testing.T) {
 	in := gatedQuestion("")
 	delete(in.Body, "gate")
 	mustPost(t, s, in, testWriter())
+}
+
+func TestGateRefusalsWriteNothing(t *testing.T) {
+	for _, refusal := range []string{"role", "reuse"} {
+		for _, tenure := range []string{"absent", "torn"} {
+			t.Run(refusal+"/"+tenure, func(t *testing.T) {
+				s, w := testStore(t), testWriter()
+				mustPost(t, s, gatedQuestion("Q-1"), w)
+				w.Author.ID = "other"
+				w.Worker = "other@" + testMachine
+				in := gatedQuestion("Q-1")
+				if refusal == "role" {
+					w.Author.Role = "agent"
+					in = gatedQuestion("Q-2")
+				}
+				// Refused large bodies must not be spilled, nor a torn tail repaired.
+				in.Body["question"] = strings.Repeat("x", MaxLine)
+				if tenure == "torn" {
+					if err := os.WriteFile(filepath.Join(s.Dir(), writerFile(w.Worker, 0)), []byte(`{"torn"`), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				before := gateTree(t, s.TaskDir)
+				if _, err := s.Post(in, w); !errors.Is(err, ErrInvalidRecord) {
+					t.Fatalf("not final rejection: %v", err)
+				}
+				if after := gateTree(t, s.TaskDir); !reflect.DeepEqual(before, after) {
+					t.Fatal("refusal changed task files")
+				}
+			})
+		}
+	}
+}
+
+func gateTree(t *testing.T, root string) map[string]string {
+	t.Helper()
+	tree := map[string]string{}
+	if err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			tree[path] = "directory"
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		tree[path] = string(raw)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return tree
 }

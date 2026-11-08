@@ -25,6 +25,8 @@ var ErrDiskFull = errors.New("disk full")
 type Store struct {
 	TaskDir, TaskID string
 	Now             func() time.Time
+	// afterGateCheck is a test hook inside the gate lock, before the append.
+	afterGateCheck func()
 }
 
 func (s Store) Dir() string { return filepath.Join(s.TaskDir, "feed") }
@@ -210,7 +212,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		defer fslock.Unlock(guard)
 	}
 	if gid := gateID(r); gid != "" {
-		existing, err := s.Read(Filter{Type: "question"})
+		existing, err := s.ReadOnly(Filter{Type: "question"})
 		if err != nil {
 			return Record{}, err
 		}
@@ -218,6 +220,9 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 			if gateID(entry.Record) == gid && !(entry.ID == r.ID && sameRequest(entry.Record, r)) {
 				return Record{}, &InvalidRecordError{Err: fmt.Errorf("gate id %s already exists (question %s)", gid, entry.ID)}
 			}
+		}
+		if s.afterGateCheck != nil {
+			s.afterGateCheck()
 		}
 	}
 	file := filepath.Join(s.Dir(), writerFile(w.Worker, w.Fence))
