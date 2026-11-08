@@ -61,6 +61,15 @@ type Store struct {
 	Now      func() time.Time
 	// Warn receives one line per damaged port file that List skips; nil is stderr.
 	Warn io.Writer
+	// Grace is the wait after each stop signal when gc stops a dev server; zero is two seconds.
+	Grace time.Duration
+}
+
+func (s Store) grace() time.Duration {
+	if s.Grace > 0 {
+		return s.Grace
+	}
+	return 2 * time.Second
 }
 
 func (s Store) warn(format string, args ...any) {
@@ -357,8 +366,9 @@ func (l *Locked) Remove(r Record) error {
 	return errors.Join(errs...)
 }
 
-// GC reclaims dead owners immediately. Expired leases are reclaimed only when
-// no TCP listener remains in the block (go-architecture.md:245).
+// GC reclaims dead owners immediately. When a Job's lease is released, expired
+// or superseded it stops the block's dev server group, or for a bare claim waits
+// until no TCP listener remains in the block (go-architecture.md:245).
 func (s Store) GC() ([]Record, error) {
 	l, err := s.Lock()
 	if err != nil {
@@ -370,7 +380,18 @@ func (s Store) GC() ([]Record, error) {
 		return nil, err
 	}
 	removed := []Record{}
+	stopped := map[int]bool{}
 	for _, d := range damaged {
+		// A start that crashed part-way left no parent to wait for its health, so
+		// a server recorded in a damaged block is an orphan too.
+		for _, r := range d.Records {
+			if r.Group && !stopped[r.PID] && Alive(r.PID, true) {
+				stopped[r.PID] = true
+				if err := Stop(r.PID, s.grace()); err != nil {
+					return removed, err
+				}
+			}
+		}
 		if err := os.Remove(filepath.Join(l.dir, strconv.Itoa(d.Port)+".json")); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return removed, err
 		}
@@ -383,7 +404,18 @@ func (s Store) GC() ([]Record, error) {
 			if err != nil {
 				return removed, err
 			}
-			reclaim = status.Expired(r.Fence, s.now()) && !listening(r.Range)
+			if status.Expired(r.Fence, s.now()) {
+				if r.Group {
+					// Released, superseded (fence moved) or expired: nobody is left to run
+					// grid env down, so gc stops the orphaned server itself.
+					if err := Stop(r.PID, s.grace()); err != nil {
+						return removed, err
+					}
+					reclaim = true
+				} else {
+					reclaim = !listening(r.Range)
+				}
+			}
 		}
 		if reclaim {
 			if err := l.Remove(r); err != nil {

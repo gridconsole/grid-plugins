@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	devenv "github.com/gridconsole/grid-plugins/internal/env"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
@@ -202,7 +204,10 @@ func runEnv(args []string, e Env) int {
 		return commandError(e, "env", errors.New("project must name exactly one checkout folder for this machine"))
 	}
 	m.Dir = folders[0]
-	r, err := m.Up(context.Background(), operands[0], cfg)
+	// An interrupted health wait must stop the server it started, not orphan it.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	r, err := m.Up(ctx, operands[0], cfg)
 	if err != nil {
 		return commandError(e, "env", err)
 	}

@@ -173,3 +173,83 @@ func TestUpRefusesExistingListener(t *testing.T) {
 	}
 	assertEmpty(t, m.Ports)
 }
+
+// The parent `env up` is killed after the server is healthy, so nothing runs
+// grid env down. gc must stop the server once the Job's lease has expired.
+func TestGCStopsOrphanedServerAfterParentKilledAndLeaseExpiry(t *testing.T) {
+	const holder = "worker@01K9J000000000000000000002"
+	if home := os.Getenv("GRID_ENV_UP_HOME"); home != "" {
+		start, _ := strconv.Atoi(os.Getenv("GRID_ENV_UP_PORT"))
+		m := Manager{Ports: ports.Store{GridHome: home}, TaskDir: filepath.Join(home, "tasks", "T-1"), Dir: os.Getenv("GRID_ENV_UP_DIR")}
+		c := Config{Command: os.Getenv("GRID_ENV_UP_COMMAND"), HealthURL: "http://127.0.0.1:{port}/health", Timeout: "10s", PortRange: []int{start, start + 9}}
+		if _, err := m.Up(context.Background(), "J-1", c); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Minute)
+		return
+	}
+	binary := filepath.Join(t.TempDir(), "server")
+	if out, err := exec.Command("go", "build", "-o", binary, "./testdata/server").CombinedOutput(); err != nil {
+		t.Fatalf("build helper: %v %s", err, out)
+	}
+	home, dir := t.TempDir(), t.TempDir()
+	task := filepath.Join(home, "tasks", "T-1")
+	write := func(path, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(task, "feed", "lease", "J-1.json"), `{"lease":"J-1","holder":"`+holder+`","fence":2,"gen":0,"attempt":1,"since":"2026-11-08T10:00:00.000Z","pid":null,"pid_start":null}`)
+	write(filepath.Join(task, "feed", ".live", holder+".2.json"), `{"lease":"J-1","holder":"`+holder+`","fence":2,"attempt":1,"pid":1234,"pid_start":"2026-11-08T10:00:00.000Z","beat_at":"2026-11-08T10:00:00.000Z","output_at":"2026-11-08T10:00:00.000Z","until":"2026-11-08T10:10:00.000Z"}`)
+	start := freeBlock(t)
+	parent := exec.Command(os.Args[0], "-test.run=^TestGCStopsOrphanedServerAfterParentKilledAndLeaseExpiry$")
+	parent.Env = append(os.Environ(), "GRID_ENV_UP_HOME="+home, "GRID_ENV_UP_DIR="+dir, "GRID_ENV_UP_PORT="+strconv.Itoa(start), "GRID_ENV_UP_COMMAND=exec '"+binary+"' healthy")
+	if err := parent.Start(); err != nil {
+		t.Fatal(err)
+	}
+	reaped := false
+	defer func() {
+		if !reaped {
+			_ = parent.Process.Kill()
+			_ = parent.Wait()
+		}
+	}()
+	at := func(clock string) ports.Store {
+		now, _ := time.Parse(time.RFC3339, clock)
+		return ports.Store{GridHome: home, Now: func() time.Time { return now }, Grace: 100 * time.Millisecond}
+	}
+	var rec ports.Record
+	deadline := time.Now().Add(20 * time.Second)
+	for rec.PID == 0 || !rec.Group {
+		if time.Now().After(deadline) {
+			t.Fatal("env up never recorded a server")
+		}
+		time.Sleep(20 * time.Millisecond)
+		if records, err := at("2026-11-08T10:05:00Z").List(); err == nil && len(records) == 1 {
+			rec = records[0]
+		}
+	}
+	if err := parent.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_ = parent.Wait()
+	reaped = true
+	t.Cleanup(func() { _ = ports.Stop(rec.PID, 100*time.Millisecond) })
+	if !ports.Alive(rec.PID, true) {
+		t.Fatal("server died with its parent")
+	}
+	if removed, err := at("2026-11-08T10:05:00Z").GC(); err != nil || len(removed) != 0 || !ports.Alive(rec.PID, true) {
+		t.Fatalf("gc touched a server under a live lease: %v %v", removed, err)
+	}
+	if removed, err := at("2026-11-08T11:00:00Z").GC(); err != nil || len(removed) != 1 {
+		t.Fatalf("gc after expiry: %v %v", removed, err)
+	}
+	if ports.Alive(rec.PID, true) {
+		t.Fatalf("expired lease left the server group %d running", rec.PID)
+	}
+	assertEmpty(t, ports.Store{GridHome: home})
+}
