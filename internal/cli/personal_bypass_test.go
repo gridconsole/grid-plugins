@@ -242,3 +242,31 @@ func bypassTree(t *testing.T, root string) map[string]string {
 	}
 	return out
 }
+
+func TestPersonalBypassJobTrace(t *testing.T) {
+	h, cwd, personal := bypassFixture(t)
+	h.write(filepath.Join(personal, "jobs", "J-1", "inputs.json"), `{"sources":[{"pointer":"brain:home/private-note"}]}`)
+	for _, role := range []string{"guest", "owner"} {
+		h.env.Getenv = func(key string) string { return map[string]string{"GRID_ROLE": role, "GRID_MEMBER": "sam"}[key] }
+		if code := h.run(cwd, "job", "trace", "brain:home/private-note", "--json"); code != 0 {
+			t.Fatalf("%s: %d %s", role, code, h.errb)
+		}
+		var result struct {
+			Rows     []struct{ Project string }
+			Problems []any
+		}
+		if err := json.Unmarshal(h.out.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		if len(result.Problems) != 0 {
+			t.Fatalf("%s problems: %+v", role, result.Problems)
+		}
+		if role == "owner" {
+			if len(result.Rows) != 1 || result.Rows[0].Project != "personal" {
+				t.Fatalf("owner rows: %+v", result.Rows)
+			}
+		} else if len(result.Rows) != 0 {
+			t.Fatalf("guest saw Personal: %+v", result.Rows)
+		}
+	}
+}

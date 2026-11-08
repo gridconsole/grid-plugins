@@ -233,3 +233,26 @@ func TestWritePersonalCallerPolicy(t *testing.T) {
 		t.Fatalf("owner could not write the same Personal workflow: %v", err)
 	}
 }
+
+func TestWritePreservesPersonalPolicy(t *testing.T) {
+	for _, allowed := range []bool{false, true} {
+		t.Run(fmt.Sprint(allowed), func(t *testing.T) {
+			home := t.TempDir()
+			putWorkflowFixture(t, filepath.Join(home, "projects", "personal", "project.md"), "---\nid: id-personal\n---\n")
+			r := where.Resolver{GridHome: home, Caller: where.Caller{Role: "owner"}, PersonalAllowed: func(where.Caller) bool { return allowed }}
+			_, err := Write(r, "id-personal", "none", strings.NewReader(strings.ReplaceAll(writeFixture(t, "project.md"), "helios", "personal")))
+			if allowed {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err == nil || err.Error() != "project is missing or ambiguous" {
+					t.Fatalf("refusal: %v", err)
+				}
+				if _, err := os.Stat(filepath.Join(home, "projects", "personal", "workflows.md")); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("hidden workflow was written: %v", err)
+				}
+			}
+		})
+	}
+}
