@@ -3,6 +3,7 @@ package question
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -745,5 +746,34 @@ func TestListWithoutFeedID(t *testing.T) {
 	}
 	if _, err := (Store{TaskDir: dir}).List(); err == nil {
 		t.Fatal("a non-regular question file listed")
+	}
+}
+
+func TestWithdrawPolicyRefusals(t *testing.T) {
+	for _, tc := range []struct {
+		name, role string
+		agent      bool
+		allowed    func(string) bool
+		want       string
+	}{
+		{name: "default guest", role: "guest", want: `Q-1 role "guest" may not withdraw`},
+		{name: "custom owner only", role: "member", allowed: func(role string) bool { return role == "owner" }, want: `Q-1 role "member" may not withdraw`},
+		{name: "agent cannot bypass policy", role: "agent", allowed: func(string) bool { return true }, want: "Q-1 agent shell requires a task lease to withdraw"},
+		{name: "worker shell", role: "owner", agent: true, want: "Q-1 agent shell requires a task lease to withdraw"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _ := setup(t)
+			q := add(t, s, input())
+			s.ControlWriter = feed.Writer{}
+			s.Writer.Author.Role = tc.role
+			s.AgentShell = tc.agent
+			s.WithdrawAllowed = tc.allowed
+			if _, err := s.Withdraw(q.ID, "Not needed"); !errors.Is(err, ErrWithdrawRefused) || err.Error() != tc.want {
+				t.Fatalf("refusal: %v; want %q", err, tc.want)
+			}
+			if got := list(t, s)[0]; got.State != "open" || len(got.History) != 0 {
+				t.Fatalf("refusal changed question: %+v", got)
+			}
+		})
 	}
 }

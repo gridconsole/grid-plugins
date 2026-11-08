@@ -73,13 +73,22 @@ type Input struct {
 	AgeAfter             time.Duration
 }
 
+// ErrWithdrawRefused marks a withdrawal the caller may not apply.
+var ErrWithdrawRefused = errors.New("question withdrawal refused")
+
+// DefaultWithdrawAllowed allows owners and members to withdraw without a lease.
+func DefaultWithdrawAllowed(role string) bool { return role == "owner" || role == "member" }
+
 type Store struct {
-	TaskDir       string
-	TaskID        string
-	Writer        feed.Writer
-	ControlWriter feed.Writer
-	Now           func() time.Time
-	Warn          io.Writer // receives warnings about skipped files; nil discards them
+	// WithdrawAllowed may be replaced by a host or the workflow; nil uses the default.
+	WithdrawAllowed func(role string) bool
+	AgentShell      bool
+	TaskDir         string
+	TaskID          string
+	Writer          feed.Writer
+	ControlWriter   feed.Writer
+	Now             func() time.Time
+	Warn            io.Writer // receives warnings about skipped files; nil discards them
 }
 
 func (s Store) now() time.Time {
@@ -184,20 +193,37 @@ func (s Store) Answer(id, text string) (Record, error) {
 	})
 }
 
-// Withdraw closes an open question with a task-lease control.
+// Withdraw closes an open question for an allowed person or a task lease holder.
 func (s Store) Withdraw(id, reason string) (Record, error) {
+	if s.ControlWriter.Lease != "task" {
+		allowed := s.WithdrawAllowed
+		if allowed == nil {
+			allowed = DefaultWithdrawAllowed
+		}
+		if !allowed(s.Writer.Author.Role) {
+			return Record{}, &withdrawRefusal{fmt.Sprintf("%s role %q may not withdraw", id, s.Writer.Author.Role)}
+		}
+		if s.AgentShell || s.Writer.Author.Role == "agent" || s.Writer.Author.Role == "cli" {
+			return Record{}, &withdrawRefusal{fmt.Sprintf("%s agent shell requires a task lease to withdraw", id)}
+		}
+	}
 	return s.change(id, func(r *Record) error {
 		if r.State == "withdrawn" {
 			return nil
 		}
 		if r.State != "open" {
-			return fmt.Errorf("%s is %s", id, r.State)
+			return &withdrawRefusal{fmt.Sprintf("%s is %s", id, r.State)}
 		}
 		r.State = "withdrawn"
 		r.History = append(r.History, Event{Kind: "withdrawn", At: Stamp{s.now()}, Text: reason})
 		return nil
 	})
 }
+
+type withdrawRefusal struct{ message string }
+
+func (e *withdrawRefusal) Error() string { return e.message }
+func (e *withdrawRefusal) Unwrap() error { return ErrWithdrawRefused }
 
 func (s Store) change(id string, fn func(*Record) error) (rec Record, err error) {
 	if !validID.MatchString(id) {

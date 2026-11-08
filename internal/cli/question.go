@@ -11,7 +11,7 @@ func runQuestion(args []string, env Env) int {
 }
 
 func questionEnv(env Env) question.Env {
-	return question.Env{Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Writer: func(control bool) (feed.Writer, error) {
+	return question.Env{AgentShell: func() bool { return agentShell(env) }, Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Writer: func(control bool) (feed.Writer, error) {
 		if control {
 			return feedWriter(env, os.Getenv("GRID_LEASE"), os.Getenv("GRID_LEASE_EPOCH"))
 		}

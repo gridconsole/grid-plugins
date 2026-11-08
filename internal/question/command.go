@@ -14,11 +14,13 @@ import (
 )
 
 type Env struct {
-	Cwd            string
-	Resolver       where.Resolver
-	Stdout, Stderr io.Writer
-	Now            func() time.Time
-	Writer         func(bool) (feed.Writer, error)
+	AgentShell      func() bool
+	WithdrawAllowed func(role string) bool
+	Cwd             string
+	Resolver        where.Resolver
+	Stdout, Stderr  io.Writer
+	Now             func() time.Time
+	Writer          func(bool) (feed.Writer, error)
 }
 
 type options []string
@@ -160,6 +162,9 @@ func run(args []string, env Env) int {
 			return usage("withdraw requires <Q-id>")
 		}
 		id = positionals[0]
+		if !validID.MatchString(id) {
+			return usage("question id must be Q- followed by a positive number")
+		}
 	case "sync":
 		if len(positionals) == 1 && *task == "" {
 			*task = positionals[0]
@@ -179,7 +184,10 @@ func run(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "question:", err)
 		return 1
 	}
-	store := Store{TaskDir: scope.TaskPath, Now: env.Now, Warn: env.Stderr}
+	store := Store{TaskDir: scope.TaskPath, Now: env.Now, Warn: env.Stderr, WithdrawAllowed: env.WithdrawAllowed}
+	if env.AgentShell != nil {
+		store.AgentShell = env.AgentShell()
+	}
 
 	if env.Writer != nil && action != "list" && action != "sync" {
 		writer, e := env.Writer(action == "withdraw" || action == "tick")
@@ -207,6 +215,9 @@ func run(args []string, env Env) int {
 	}
 	if err != nil {
 		fmt.Fprintln(env.Stderr, "question:", err)
+		if errors.Is(err, ErrWithdrawRefused) {
+			return 3
+		}
 		return 1
 	}
 	if *asJSON {
