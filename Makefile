@@ -12,6 +12,7 @@ dist:
 
 generate:
 	go run ./internal/packaging/cmd
+	UPDATE_CONTRACT_COMMANDS=1 go test ./internal/cli -run '^TestContractCommandsParserInventory$$' -count=1
 
 test: test-clean
 

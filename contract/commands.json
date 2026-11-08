@@ -3799,6 +3799,11 @@
               "name": "--tokens",
               "takes": "none",
               "required": false
+            },
+            {
+              "name": "--workspace",
+              "takes": "none",
+              "required": false
             }
           ],
           "json": true,
@@ -3832,6 +3837,11 @@
               "name": "--tokens",
               "takes": "value",
               "required": false
+            },
+            {
+              "name": "--workspace",
+              "takes": "none",
+              "required": false
             }
           ],
           "json": true,
@@ -3849,6 +3859,11 @@
             {
               "name": "--task",
               "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--workspace",
+              "takes": "none",
               "required": false
             }
           ],

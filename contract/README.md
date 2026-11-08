@@ -274,7 +274,23 @@ Disagreements and defaults chosen:
   in `<GRID_HOME>/workspace.md` front matter (digits only, at least 1; missing,
   linked, unreadable, invalid or oversized files give no default). Budget show
   reports the effective token budget and source: task, workspace or none.
-  `usage budget clear --tokens` restores that default. Notices are chatter;
+  `usage budget clear --tokens` restores that default.
+  `grid usage budget show|set|clear --workspace` accesses the workspace default
+  without resolving a task: show returns `{"tokens_per_task":100}` or
+  `{"tokens_per_task":null}` with `--json`, and `tokens_per_task 100` or
+  `tokens_per_task none` as plain text. Set requires `--tokens N`, a positive
+  integer; clear accepts optional `--tokens` and removes the key. All three
+  reject `--task`, `--dollars` and `--minutes` (exit 2). Workspace writes preserve
+  every byte outside the token-key lines, add an absent key last in the front
+  matter, and create front matter or the file when needed. They use an exclusive
+  `.workspace.lock` and atomic replacement; unsafe, oversized, invalid UTF-8 or
+  unparsable front matter is refused with exit 2. Clearing an absent key does
+  not rewrite the file. Replaceable `WorkspaceBudgetReadAllowed` and
+  `WorkspaceBudgetWriteAllowed` policies use `GRID_ROLE`: reads default to the
+  empty local role, owner and member; writes default to the empty role and owner.
+  Other roles are refused with exit 3 before workspace access. Workflow keys are
+  `token_limit_read_roles` and `token_limit_write_roles`; the CLI does not read a
+  workflow file to configure these policies. Notices are chatter;
   the hold at the limit is not enforced yet and requires worker/session hooks.
 - The task-local lease path table conflicts with the per-project merge rule.
   Merge leases explicitly require project and are stored by their caller at
@@ -443,7 +459,7 @@ Both verbs use the same task lock, journal and atomic commit as stop and close, 
 
 ### `grid task list [--project <name-or-id>] [--state <state>] --json`
 
-Returns an array of task records (without the show-only `folder` and `plan_hash` fields), sorted by numeric display id, or `[]` when none match. State filtering is exact and case sensitive. Plain output is one `T-NN state title` line per task, or no output for an empty list. Both read commands leave files unchanged and ignore hidden creation staging folders.
+Returns an array of task records (without the show-only `folder` and `plan_hash` fields), sorted by numeric display id, or `[]` when none match. State filtering is exact and case sensitive. Readable entries are full records; an unreadable task folder is listed as `{id, project, unreadable: true}` under any `--state` filter, with a warning on stderr. Plain output is one `T-NN state title` line per task, or no output for an empty list. Both read commands leave files unchanged and ignore hidden creation staging folders.
 
 Task commands exit 0 on success, 2 for invalid flags or argument counts (including invalid creation size and empty words), 3 for the rename/decline rejections described above, and 1 for resolution, data or filesystem errors. Errors go to stderr without JSON on stdout. Flags may precede or follow the positional argument; use `--` before words that start with a hyphen.
 
