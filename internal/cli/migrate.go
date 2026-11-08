@@ -11,9 +11,14 @@ func runMigrate(args []string, env Env) int {
 	fs := newFlags("migrate", env)
 	dry := fs.Bool("dry-run", false, "show actions without writing (the default)")
 	apply := fs.Bool("apply", false, "back up and apply the migration; stop old Grid writers first")
+	rollback := fs.Bool("rollback", false, "restore the old home if the migrated home is unchanged")
 	from := fs.String("from", "", "old Grid data folder (defaults to the Grid home)")
 	if code, stop := parse(fs, args, env); stop {
 		return code
+	}
+	if *rollback && (*dry || *apply || *from != "") {
+		fmt.Fprintln(env.Stderr, "grid migrate: --rollback cannot be combined with --apply, --dry-run or --from")
+		return 2
 	}
 	if *dry && *apply {
 		fmt.Fprintln(env.Stderr, "grid migrate: --dry-run and --apply are mutually exclusive")
@@ -22,6 +27,27 @@ func runMigrate(args []string, env Env) int {
 	if env.GridHome == "" {
 		fmt.Fprintln(env.Stderr, "grid migrate: cannot find the Grid home; set GRID_HOME")
 		return 1
+	}
+
+	if *rollback {
+		res, err := migrate.Rollback(env.GridHome)
+		if err != nil {
+			fmt.Fprintf(env.Stderr, "grid migrate: %v\n", err)
+			return 1
+		}
+		if res.Rerun {
+			fmt.Fprintln(env.Stdout, "migrate: interrupted rollback preparation discarded; run grid migrate --rollback again")
+			return 0
+		}
+		format, err := migrate.RestoredFormat(env.GridHome)
+		if err != nil {
+			fmt.Fprintf(env.Stderr, "grid migrate: %v\n", err)
+			return 1
+		}
+		if _, err := fmt.Fprintf(env.Stdout, "restored %s\nformat: %s\n", res.Backup, format); err != nil {
+			return 1
+		}
+		return 0
 	}
 	source := *from
 	if source == "" {

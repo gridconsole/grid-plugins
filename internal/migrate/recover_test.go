@@ -27,6 +27,12 @@ func TestCrashHelper(t *testing.T) {
 			os.Exit(crashExit)
 		}
 	}
+	if os.Getenv("GRID_CRASH_OPERATION") == "rollback" {
+		if _, err := Rollback(os.Getenv("GRID_CRASH_HOME")); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
 	p, err := Scan(os.Getenv("GRID_CRASH_FROM"), os.Getenv("GRID_CRASH_HOME"))
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +56,7 @@ func crashAt(t *testing.T, step, from, home string) {
 	}
 }
 
-var applySteps = []string{"locked", "journal-preparing", "backed-up", "staged", "journal-publishing", "displaced", "published", "previous-removed", "done"}
+var applySteps = []string{"locked", "journal-preparing", "backed-up", "staged", "journal-publishing", "displaced", "published", "receipt-written", "previous-removed", "done"}
 
 // crashLayout builds a source and a home in root, with a fixed machine id so that the
 // result of an interrupted migration can be compared with a clean one.
@@ -189,7 +195,7 @@ func finishAfterCrash(t *testing.T, from, home string) (first Result) {
 // new one under the names the journal gives.
 func checkOneHomeSurvives(t *testing.T, step, home string, hadHome bool, oldHome map[string]string) {
 	t.Helper()
-	publishedSteps := map[string]bool{"published": true, "previous-removed": true, "done": true}
+	publishedSteps := map[string]bool{"published": true, "receipt-written": true, "previous-removed": true, "done": true}
 	switch {
 	case !exists(home):
 		if hadHome && step != "displaced" || !hadHome && publishedSteps[step] {

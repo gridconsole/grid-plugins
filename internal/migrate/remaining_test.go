@@ -61,7 +61,7 @@ func TestCarryOverAndMerge(t *testing.T) {
 }
 
 func TestCarryOverRefusals(t *testing.T) {
-	for _, kind := range []string{"unknown overwrite", "knowledge", "machine directory", "ancestor"} {
+	for _, kind := range []string{"unknown overwrite", "knowledge", "machine directory", "ancestor", "generated log", "generated parent"} {
 		t.Run(kind, func(t *testing.T) {
 			from, home := fixture(t)
 			switch kind {
@@ -73,6 +73,10 @@ func TestCarryOverRefusals(t *testing.T) {
 				put(t, filepath.Join(from, "beta/knowledge/shared.md"), "beta")
 			case "machine directory":
 				put(t, filepath.Join(from, "machine/config.json"), "legacy")
+			case "generated log":
+				put(t, filepath.Join(from, "migration.log"), "unknown log")
+			case "generated parent":
+				put(t, filepath.Join(from, "projects"), "unknown file")
 			case "ancestor":
 				put(t, filepath.Join(home, "knowledge"), "file")
 				put(t, filepath.Join(from, "alpha/knowledge/shared.md"), "alpha")
@@ -95,5 +99,21 @@ func TestCarryOverRefusals(t *testing.T) {
 				t.Fatal("blocked plan wrote backup")
 			}
 		})
+	}
+}
+
+func TestUnchangedSessionThroughUnrelatedSymlink(t *testing.T) {
+	from, home := fixture(t)
+	alias := filepath.Join(filepath.Dir(from), "alias")
+	if err := os.Symlink(filepath.Dir(from), alias); err != nil {
+		t.Skip(err)
+	}
+	raw := "{\r\n  \"z\": 1, \"cwd\": \"" + filepath.Join(alias, "unrelated") + "\", \"a\": 2\r\n}\r\n"
+	put(t, filepath.Join(from, "alpha/sessions/alias.json"), raw)
+	if _, err := scan(t, from, home).Apply(); err != nil {
+		t.Fatal(err)
+	}
+	if read(t, home, "sessions/alias.json") != raw {
+		t.Fatal("unrelated symlink resolution re-encoded the session")
 	}
 }

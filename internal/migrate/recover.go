@@ -69,15 +69,20 @@ const (
 )
 
 type journal struct {
-	Version  int             `json:"version"`
-	Phase    string          `json:"phase"`
-	Source   string          `json:"source"`
-	Home     string          `json:"home"`
-	Backup   string          `json:"backup"`
-	Stage    string          `json:"stage"`
-	Previous string          `json:"previous"`
-	HadHome  bool            `json:"had_home"`
-	Pointers []pointerChange `json:"pointers,omitempty"`
+	Version     int               `json:"version"`
+	Phase       string            `json:"phase"`
+	Source      string            `json:"source"`
+	Home        string            `json:"home"`
+	Backup      string            `json:"backup"`
+	Stage       string            `json:"stage"`
+	Previous    string            `json:"previous"`
+	HadHome     bool              `json:"had_home"`
+	Pointers    []pointerChange   `json:"pointers,omitempty"`
+	Published   map[string]digest `json:"published,omitempty"`
+	Before      map[string]digest `json:"before,omitempty"`
+	ManifestSHA string            `json:"manifest_sha256,omitempty"`
+	Rollback    bool              `json:"rollback,omitempty"`
+	RemoveHome  bool              `json:"remove_home,omitempty"`
 }
 
 // writeJournal replaces the journal atomically, so it is never half written.
@@ -135,7 +140,7 @@ func findRecovery(home string) (*recovery, error) {
 		return nil, err
 	}
 	var j journal
-	if err := json.Unmarshal(data, &j); err != nil || j.Version != 1 || j.Home != home {
+	if err := json.Unmarshal(data, &j); err != nil || !validJournal(j, home) {
 		return nil, fmt.Errorf("cannot read the migration journal %s; check %s and the folders beside it, then remove the journal", journalPath(home), home)
 	}
 	h, p, s := exists(j.Home), exists(j.Previous), exists(j.Stage)
@@ -155,6 +160,9 @@ func findRecovery(home string) (*recovery, error) {
 	case !h && !p && s && !j.HadHome:
 		r.action = "forward"
 		r.text = "an earlier run stopped before the staged copy was moved into place; it is moved now (backup " + j.Backup + ")"
+	case j.Rollback && j.RemoveHome && !h && !s:
+		r.action = "finalize"
+		r.text = "finish restoring the absence of the old home"
 	case !h && p && !s:
 		r.action = "back"
 		r.text = "an earlier run stopped between the two renames and the staged copy is gone; the old home is put back"
@@ -185,7 +193,7 @@ func (r *recovery) run() (Result, error) {
 	var err error
 	switch r.action {
 	case "discard":
-		if !exists(filepath.Join(j.Backup, "manifest.json")) {
+		if !j.Rollback && !exists(filepath.Join(j.Backup, "manifest.json")) {
 			err = os.RemoveAll(j.Backup) // an incomplete backup is of no use
 		}
 		if err == nil {
@@ -193,9 +201,14 @@ func (r *recovery) run() (Result, error) {
 		}
 		res.Rerun = true
 	case "forward":
+		if len(j.Published) > 0 {
+			if err := verifyDigests(j.Stage, j.Published, true); err != nil {
+				return Result{}, err
+			}
+		}
 		err = step("recover-renamed", os.Rename(j.Stage, j.Home))
 		if err == nil {
-			err = applyPointers(j.Pointers)
+			err = finishPublication(j)
 		}
 		if err == nil {
 			err = os.RemoveAll(j.Previous)
@@ -208,7 +221,7 @@ func (r *recovery) run() (Result, error) {
 		}
 		res.Rerun = true
 	case "finalize":
-		err = applyPointers(j.Pointers)
+		err = finishPublication(j)
 		if err == nil {
 			err = os.RemoveAll(j.Previous)
 		}

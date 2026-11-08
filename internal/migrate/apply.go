@@ -23,10 +23,11 @@ type Result struct {
 }
 
 type digest struct {
-	SHA256 string `json:"sha256,omitempty"`
-	Mode   uint32 `json:"mode"`
-	Size   int64  `json:"size,omitempty"`
-	Link   string `json:"link,omitempty"`
+	SHA256  string `json:"sha256,omitempty"`
+	Mode    uint32 `json:"mode"`
+	Size    int64  `json:"size,omitempty"`
+	Link    string `json:"link,omitempty"`
+	ModTime int64  `json:"mtime_ns,omitempty"`
 }
 
 // manifest is the backup's manifest.json and, copied, the new home's migration.log.
@@ -113,6 +114,9 @@ func (p *Plan) Apply() (Result, error) {
 		return Result{}, err
 	}
 	if rec != nil {
+		if rec.j.Rollback {
+			return Result{}, fmt.Errorf("an interrupted rollback is pending; run grid migrate --rollback")
+		}
 		return rec.run()
 	}
 	if p.recovery != nil {
@@ -198,6 +202,10 @@ func (p *Plan) publish(parent string) (Result, error) {
 	if err := p.unchanged(); err != nil {
 		return fail(err)
 	}
+	j.ManifestSHA = hashBytes(data)
+	if j.Published, err = capture(j.Stage); err != nil {
+		return fail(err)
+	}
 	reached("staged")
 	j.Phase = phasePublishing
 	if err := writeJournal(j); err != nil {
@@ -225,7 +233,7 @@ func (p *Plan) publish(parent string) (Result, error) {
 	syncDir(parent)
 	reached("published")
 	result.Changed = true
-	if err := applyPointers(j.Pointers); err != nil {
+	if err := finishPublication(j); err != nil {
 		return result, err
 	}
 	if j.HadHome {

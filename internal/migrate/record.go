@@ -318,7 +318,9 @@ func mapPath(p string, paths map[string]string) (string, bool) {
 	}
 	if filepath.IsAbs(p) {
 		if r := gridhome.Real(p); r != p {
-			return lookup(r, paths)
+			if mapped, ok := lookup(r, paths); ok {
+				return mapped, true
+			}
 		}
 	}
 	return p, false

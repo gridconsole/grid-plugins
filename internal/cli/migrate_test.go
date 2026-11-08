@@ -99,7 +99,10 @@ func TestMigrateErrors(t *testing.T) {
 		{[]string{"--dry-run", "--apply"}, 2, "mutually exclusive"},
 		{[]string{"--from"}, 2, "flag needs an argument"},
 		{[]string{"extra"}, 2, "unexpected argument"},
-		{[]string{"--rollback"}, 2, "flag provided but not defined"},
+		{[]string{"--rollback"}, 1, "no completed migration journal"},
+		{[]string{"--rollback", "--apply"}, 2, "cannot be combined"},
+		{[]string{"--rollback", "--dry-run"}, 2, "cannot be combined"},
+		{[]string{"--rollback", "--from", "old"}, 2, "cannot be combined"},
 		{[]string{"--from", "missing"}, 1, "does not exist"},
 	} {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
@@ -118,7 +121,7 @@ func TestMigrateErrors(t *testing.T) {
 func TestMigrateBlockedExitCode(t *testing.T) {
 	h := newHarness(t)
 	h.write(filepath.Join(h.gridHome, "legacy/projects/example/project.md"), "---\nfolder: /example/work/project\n---\n")
-	h.write(filepath.Join(h.gridHome, "unknown.json"), "{}")
+	h.write(filepath.Join(h.gridHome, "legacy/projects/example/tasks/T-01-broken/task.md"), "invalid")
 	for _, flag := range []string{"--dry-run", "--apply"} {
 		if code := h.run(h.root, "migrate", flag); code != 1 || !strings.Contains(h.out.String(), "unmapped:") {
 			t.Fatalf("exit %d, stdout %s, stderr %s", code, h.out, h.errb)
@@ -126,5 +129,25 @@ func TestMigrateBlockedExitCode(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(h.gridHome, "VERSION")); !os.IsNotExist(err) {
 			t.Fatal("blocked plan wrote VERSION")
 		}
+	}
+}
+
+func TestMigrateRollbackCommand(t *testing.T) {
+	h := newHarness(t)
+	file := filepath.Join(h.gridHome, "legacy/projects/example/project.md")
+	original := "---\nfolder: /example/work/project\n---\n"
+	h.write(file, original)
+	if code := h.run(h.root, "migrate", "--apply"); code != 0 {
+		t.Fatal(h.errb.String())
+	}
+	if code := h.run(h.root, "migrate", "--rollback"); code != 0 {
+		t.Fatal(h.errb.String())
+	}
+	data, err := os.ReadFile(file)
+	if err != nil || string(data) != original {
+		t.Fatal("old home not restored", err)
+	}
+	if !strings.Contains(h.out.String(), "restored ") || !strings.Contains(h.out.String(), "format: unversioned") {
+		t.Fatal(h.out.String())
 	}
 }

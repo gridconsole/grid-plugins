@@ -164,7 +164,6 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 			src := path.Join(h, "projects", name)
 			e, _ := p.source.get(src)
 			if !e.Mode.IsDir() {
-				p.Unmapped = append(p.Unmapped, src+": expected project folder")
 				continue
 			}
 			target := name
@@ -263,7 +262,7 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 	}
 	p.makeMachine()
 	p.add("create", "", "VERSION", dataEntry([]byte(strconv.Itoa(gridhome.FormatVersion)+"\n"), 0600))
-	if _, ok := p.destination.get("migration.log"); ok {
+	if _, ok := p.result["migration.log"]; ok {
 		p.Conflicts = append(p.Conflicts, "migration.log: existing migration log")
 	}
 	p.addParents()
@@ -277,8 +276,10 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 func (p *Plan) addParents() {
 	for _, k := range sortedKeys(p.result) {
 		for d := path.Dir(k); d != "."; d = path.Dir(d) {
-			if _, ok := p.result[d]; !ok {
+			if parent, ok := p.result[d]; !ok {
 				p.result[d] = entry{Mode: os.ModeDir | 0700}
+			} else if !parent.Mode.IsDir() {
+				p.Conflicts = append(p.Conflicts, k+": would overwrite non-directory "+d)
 			}
 		}
 	}
@@ -369,7 +370,7 @@ func (p *Plan) rewriteSessions(homes map[string]bool, paths map[string]string) {
 			}
 			lines := strings.Split(string(raw), "\n")
 			for i, line := range lines {
-				if line == "" {
+				if line == "" || line == "\r" {
 					continue
 				}
 				ending := ""
@@ -589,7 +590,11 @@ func (p *Plan) WriteText(w io.Writer) error {
 	var b strings.Builder
 	switch {
 	case p.Interrupted != "":
-		fmt.Fprintf(&b, "migrate: interrupted run found\nrecover: %s\nrun: grid migrate --apply\n", p.Interrupted)
+		command := "--apply"
+		if p.recovery.j.Rollback {
+			command = "--rollback"
+		}
+		fmt.Fprintf(&b, "migrate: interrupted run found\nrecover: %s\nrun: grid migrate %s\n", p.Interrupted, command)
 	case p.Current:
 		fmt.Fprintf(&b, "migrate: already at format %d; no changes\n", gridhome.FormatVersion)
 	default:
