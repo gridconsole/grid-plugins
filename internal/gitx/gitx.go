@@ -30,10 +30,14 @@ func Version() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// IsRepoRoot reports whether dir holds a .git folder or file (a worktree has a file).
+// IsRepoRoot verifies a .git marker with Git; an empty folder or dangling
+// worktree pointer is not a repository.
 func IsRepoRoot(dir string) bool {
-	_, err := os.Lstat(filepath.Join(dir, ".git"))
-	return err == nil
+	if _, err := os.Lstat(filepath.Join(dir, ".git")); err != nil {
+		return false
+	}
+	root, err := run(dir, "rev-parse", "--show-toplevel")
+	return err == nil && gridhome.Real(root) == gridhome.Real(dir)
 }
 
 // FindRoot returns the nearest folder at or above dir that is a repo root. The walk
