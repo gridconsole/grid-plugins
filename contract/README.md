@@ -282,3 +282,68 @@ Reads the event JSON on stdin and always exits 0. `sessionstart` prints
     {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": string}}
 
 where `additionalContext` names the project or task `grid where` resolved for the event's `cwd`. Other events print nothing yet.
+
+## Task intent files
+
+Sources: go-architecture.md:178-199,273,372-384,596. Session actions and moves
+record requests for a worker. The CLI never launches, stops, signals or moves an
+agent, changes a task/session record, or writes a Feed post. With no worker,
+requests remain pending. These types live in `internal/intent`, not in the Feed
+record package.
+
+Each request is one immutable `intents/<id>.json` under an existing task folder:
+
+```json
+{"id":"01ARZ3NDEKTSV4RRFFQ69G5FAV","verb":"send","target":"session-example","args":{"text":"Continue the task"},"who":"member","created":"2016-07-30T23:54:10.259Z","idempotency_key":"<sha256-hex>"}
+```
+
+- `id`: canonical uppercase ULID (48-bit Unix milliseconds, 80 random bits).
+- `verb`: `start`, `stop`, `send`, `pause`, `resume`, `handback`, `switch`, `move`.
+- `target`: session identifier or task folder name for session actions; destination
+  worker identifier for `move`. The containing task folder always scopes the request.
+- `args`: string-valued object; `start` allows `agent`, `send` requires `text`,
+  `switch` requires `agent`; all other verbs use `{}`. Unknown arguments fail.
+- `who`: nonempty caller label, default `cli`; an audit label, not authentication.
+- `created`: UTC RFC3339 time at millisecond precision (zero fractions may be omitted).
+- `idempotency_key`: only on sends, SHA-256 of canonical JSON `[who,target,args]`,
+  or `[who,target,explicit-key]` when supplied. The task folder scopes the key.
+
+A matching send in the five seconds after the original creation returns that
+original request, including if already completed. Different text with the same
+explicit key during that window fails. Different targets or callers never
+coalesce. After five seconds a new request is written. Other verbs never coalesce.
+
+Worker lifecycle:
+
+- `intents/.lock` is a permanent fslock lock inode. All readers and transitions
+  lock it; never unlink or replace it. The shared filesystem must support
+  distributed advisory flock, atomic exclusive creation and hard links. Requests
+  and completions are synced before atomic no-replace publication by hard link.
+- Claim creates `<id>.claim` with `O_EXCL`, containing
+  `{token,who,created,until}`. `token` is a fresh ULID; `until` is five minutes
+  after claim creation. An existing unexpired marker rejects every other claimant.
+- Expiry makes the request available again. Under the same lock, a new claimant
+  removes the expired marker and exclusively creates its replacement. A crash
+  after exclusive creation but before complete JSON leaves a marker that expires
+  five minutes after its filesystem modification time. Workers need synchronized
+  clocks and must stop acting when their claim expires.
+- Done requires the current unexpired claim token. It publishes
+  `<id>.done.json` with `{token,created,error?}`. `error` records a worker failure;
+  a failed completion is terminal, not automatically retried. Repeating done with
+  the same token and error succeeds; a stale token cannot complete a newer claim.
+  The marker is retained as history. Claiming a completed request fails.
+- Delivery is at least once after a crash. Workers must make external effects
+  idempotent using the intent ID: a crash after an effect but before done can
+  cause another delivery. Claim tokens fence completion, not external processes.
+- Abandoned `.intent-*` temporary files are ignored. Symlinks at `intents`, lock,
+  request, claim and completion paths are refused. Ancestors of the task path
+  are resolved, so macOS temporary-directory aliases work.
+
+`grid intent list --json` is an array sorted by ULID. Each entry contains the
+request fields plus `state` (`pending`, `claimed`, `done`), `claim` for an active
+complete claim, and `done` for a completion. A partial unexpired claim has state
+`claimed` without a `claim` object. `--pending` returns only requests currently
+available to claim, including expired claims. Empty output is `[]`.
+
+The worker protocol runs on Linux and macOS. Windows builds, but the existing
+fslock implementation refuses operations requiring locks there.
