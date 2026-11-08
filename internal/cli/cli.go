@@ -87,7 +87,7 @@ func commands() []command {
 		{"views", "render the task pages", nil},
 		{"job", "render, lint, show (next, post, ack, result, cancel, tree, blocked come with the Feed)", runJob},
 		{"lease", "take, renew, release, status (merge lease)", runLease},
-		{"feed", "read, state, fold", nil},
+		{"feed", "post, read, state, types, handover, fold", runFeed},
 		{"mcp", "stdio server with the Feed tools", nil},
 		{"question", "add, answer, withdraw, list and tick task questions", runQuestion},
 		{"ask", "ask a person a question", nil},
