@@ -7,7 +7,7 @@ import (
 
 var secretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?s)-----BEGIN [A-Za-z0-9 /_-]+-----.*?(?:-----END [A-Za-z0-9 /_-]+-----|\z)`),
-	regexp.MustCompile(`(?i)\bbearer[ \t]+[^\s"'<>;,]+`),
+	regexp.MustCompile(`(?i)\bbearer[ \t\r\n]+[^\s"'<>;,]+`),
 	regexp.MustCompile(`sk-[A-Za-z0-9_-]{16,}`),
 }
 
@@ -15,7 +15,8 @@ var jwsPattern = regexp.MustCompile(`[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*\.[A-Za-z0
 
 // Redact removes support-bundle secrets and replaces the user's home with ~.
 // JWS recognition is deliberately conservative: any three base64url-like parts
-// are removed, including ordinary text that has that shape.
+// are removed, including ordinary text that has that shape. Numeric version
+// strings are retained; a valid encoded JWS header cannot be all digits.
 func Redact(text, home string) string {
 	// Home first, since a dotted home path could otherwise match the JWS pattern.
 	if home != "" {

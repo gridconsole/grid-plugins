@@ -3,6 +3,7 @@ package job
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -63,13 +64,20 @@ func (w *verifyOutput) finish() {
 	w.pending = nil
 }
 func (w *verifyOutput) tests() *int {
-	if w.overflow || (!w.known && !w.goSeen) {
+	if w.overflow || (!w.known && !w.goSeen) || w.goCount > math.MaxInt-w.total {
 		return nil
 	}
 	n := w.total + w.goCount
 	return &n
 }
-func count(s string) int { n, _ := strconv.Atoi(s); return n }
+func (w *verifyOutput) addCount(s string) {
+	n, err := strconv.Atoi(s)
+	if err != nil || n > math.MaxInt-w.total {
+		w.overflow = true
+		return
+	}
+	w.total += n
+}
 func (w *verifyOutput) line(line string) {
 	line = strings.TrimRight(ansiEscape.ReplaceAllString(line, ""), "\r ")
 	if strings.HasPrefix(line, "{") {
@@ -101,19 +109,21 @@ func (w *verifyOutput) line(line string) {
 	}
 	if m := nodeTests.FindStringSubmatch(line); m != nil {
 		w.known = true
-		w.total += count(m[1])
+		w.addCount(m[1])
 		return
 	}
 	if m := cargoTests.FindStringSubmatch(line); m != nil {
 		w.known = true
-		w.total += count(m[1]) + count(m[2]) + count(m[3])
+		w.addCount(m[1])
+		w.addCount(m[2])
+		w.addCount(m[3])
 		return
 	}
 	if pytestSummary.MatchString(line) {
 		w.known = true
 		for _, m := range pytestCount.FindAllStringSubmatch(line, -1) {
 			if m[2] != "deselected" {
-				w.total += count(m[1])
+				w.addCount(m[1])
 			}
 		}
 	} else if regexpNoTests.MatchString(line) {

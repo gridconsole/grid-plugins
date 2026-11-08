@@ -68,3 +68,49 @@ func TestVerifyCLI(t *testing.T) {
 		t.Fatalf("plan fallback: %+v %v", loaded, err)
 	}
 }
+
+func TestVerifyNamedWorktreeAndTaskProof(t *testing.T) {
+	e, out, errs := fixture(t)
+	oldTask := filepath.Join(e.Cwd, "task")
+	taskPath := filepath.Join(e.Cwd, "T-01-example")
+	if err := os.Rename(oldTask, taskPath); err != nil {
+		t.Fatal(err)
+	}
+	record := "---\nid: T-01\ntitle: Example\nproject: demo\nstate: active\ncreated: 2026-11-08T00:00:00Z\n---\n"
+	if err := os.WriteFile(filepath.Join(taskPath, "task.md"), []byte(record), 0600); err != nil {
+		t.Fatal(err)
+	}
+	worktree := filepath.Join(e.GridHome, "projects", "demo", "worktrees", "example-tree")
+	if err := os.MkdirAll(worktree, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worktree, "proof.txt"), []byte("proof"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	saved := filepath.Join(taskPath, "jobs", "J-1")
+	if err := os.MkdirAll(saved, 0700); err != nil {
+		t.Fatal(err)
+	}
+	metadata := "id: J-1\nworktree: example-tree\nverify:\n  kind: file-exists\n  paths: [proof.txt, 'task:research.md']\n"
+	if err := os.WriteFile(filepath.Join(saved, "job.yaml"), []byte(metadata), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if code := Run([]string{"verify", "J-1", "--task", taskPath}, e); code != 0 {
+		t.Fatalf("%d: %s %s", code, out, errs)
+	}
+	out.Reset()
+	if code := Run([]string{"verify", "J-1", "--task", taskPath, "--dir", e.Cwd, "--json"}, e); code != 1 {
+		t.Fatalf("%d: %s %s", code, out, errs)
+	}
+	var result job.VerifyResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil || !strings.Contains(result.Reason, "proof.txt") {
+		t.Fatalf("%s: %v", out, err)
+	}
+	// Malformed saved metadata must fail instead of silently running the plan.
+	if err := os.WriteFile(filepath.Join(saved, "job.yaml"), []byte("id: [broken"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadVerifyJob(taskPath, "J-1"); err == nil {
+		t.Fatal("invalid saved Job accepted")
+	}
+}

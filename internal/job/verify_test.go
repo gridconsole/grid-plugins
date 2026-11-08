@@ -77,6 +77,8 @@ func TestVerifyTotals(t *testing.T) {
 		{"pytest empty", "no tests ran in 0.01s\n", 0},
 		{"color", "\x1b[32m# tests 2\x1b[0m\r\n", 2},
 		{"unknown", "everything worked\n", -1},
+		{"overflow count", "# tests 99999999999999999999999\n", -1},
+		{"overflow sum", "# tests 9223372036854775807\n# tests 1\n", -1},
 		{"oversize line", strings.Repeat("x", verifyLineLimit+1) + "\n# tests 5\n", -1},
 		{"summary beyond retained output", strings.Repeat("diagnostic\n", 10000) + "# tests 9\n", 9},
 	}
@@ -162,5 +164,22 @@ func TestVerifyCancelKillsChild(t *testing.T) {
 	time.Sleep(1200 * time.Millisecond)
 	if _, err := os.Stat(filepath.Join(dir, "survived")); !os.IsNotExist(err) {
 		t.Fatal("child survived cancellation")
+	}
+}
+
+func TestVerifyExitedShellKillsDescendants(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX process group fixture")
+	}
+	dir := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	r, err := RunVerify(ctx, Job{Verify: Verify{Command: "(sleep 1; echo survived > survived) & exit 0"}}, dir)
+	if err == nil || r.Pass {
+		t.Fatalf("unclosed output pipe should fail: %+v %v", r, err)
+	}
+	time.Sleep(1200 * time.Millisecond)
+	if _, err := os.Stat(filepath.Join(dir, "survived")); !os.IsNotExist(err) {
+		t.Fatal("descendant survived its shell")
 	}
 }

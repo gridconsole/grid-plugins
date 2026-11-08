@@ -62,6 +62,9 @@ func RunVerify(ctx context.Context, j Job, dir string) (VerifyResult, error) {
 	if b, err := git.Output(); err == nil {
 		r.Commit = strings.TrimSpace(string(b))
 	}
+	if err := ctx.Err(); err != nil {
+		return fail(err)
+	}
 	v := j.Verify
 	if v.MinTests < 0 || (v.Command != "" && v.Kind != "") {
 		return fail(errors.New("verify requires a command or kind and nonnegative min_tests"))
@@ -112,6 +115,7 @@ func RunVerify(ctx context.Context, j Job, dir string) (VerifyResult, error) {
 	// exec serializes writes when stdout and stderr share the same writer.
 	cmd.Stdout, cmd.Stderr = output, output
 	err = cmd.Run()
+	cleanupVerifyProcess(cmd)
 	output.finish()
 	r.Tests, r.Output, r.OutputTruncated = output.tests(), output.output.String(), output.truncated
 	if cmd.ProcessState != nil {

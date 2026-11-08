@@ -20,3 +20,5 @@ func verifyShell(ctx context.Context, command string) *exec.Cmd {
 	}
 	return cmd
 }
+
+func cleanupVerifyProcess(cmd *exec.Cmd) {}
