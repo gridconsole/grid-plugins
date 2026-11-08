@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -200,13 +201,18 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 	if project && !inside(f.Folders, path) {
 		return s, fmt.Errorf("%s: source is outside the project folders", pointer)
 	}
-	info, err := os.Stat(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return s, fmt.Errorf("%s: cannot read source: %w", pointer, err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
 		return s, fmt.Errorf("%s: cannot read source: not a regular file", pointer)
 	}
 	isPlan := false
-	if !project {
-		if planInfo, err := os.Stat(filepath.Join(root, "plan.md")); err == nil {
+	if f.Task != "" {
+		if planInfo, err := os.Stat(filepath.Join(f.Task, "plan.md")); err == nil {
 			isPlan = os.SameFile(info, planInfo)
 		}
 	}
@@ -220,14 +226,14 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 	if f.afterIdentify != nil {
 		f.afterIdentify()
 	}
-	b, err := os.ReadFile(path)
+	b, err := io.ReadAll(file)
 	if err != nil {
 		return s, fmt.Errorf("%s: cannot read source: %w", pointer, err)
 	}
 	text := strings.ReplaceAll(string(b), "\r\n", "\n")
 	if isPlan && anchor != "" {
 		// Validate the bytes we will select from, not a second read of plan.md.
-		if !task.ApprovedDigest(root, plan.Hash(text), plan.Digest(text)) {
+		if !task.ApprovedDigest(f.Task, plan.Hash(string(b)), plan.Digest(string(b))) {
 			return s, fmt.Errorf("%s: %w", pointer, ErrPlanNeedsApproval)
 		}
 	}
