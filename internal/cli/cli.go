@@ -107,7 +107,7 @@ func commands() []command {
 		{"routine", "add, list, remove, run, schedule and unschedule routines", runRoutine},
 		{"worker", "list local grid-worker processes", runWorker},
 		{"agent", "set agent models and efforts; list effective settings", runAgent},
-		{"workflow", "workflows topic", nil},
+		{"workflow", "show workflow template files and parse problems", runWorkflow},
 		{"skill", "enable, disable and list skills", runSkill},
 		{"session", "list, show, start, stop, send, pause, resume, handback, switch", runSessionCommand},
 		{"intent", "list, claim, done (worker requests)", runIntent},
