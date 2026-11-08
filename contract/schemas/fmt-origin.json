@@ -1,47 +1,40 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "origin",
-  "description": "The origin block from brain note front matter. Null represents an absent legacy block at the Parse boundary only, never a valid new stamp or accepted knowledge.",
-  "oneOf": [
-    {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "enum": [
-            "session",
-            "job",
-            "server",
-            "import"
-          ]
-        },
-        "id": {
-          "type": "string",
-          "minLength": 1,
-          "pattern": "^[^\r\n\u0000]+$",
-          "not": {
-            "pattern": "^[\t\n\u000b\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$"
-          }
-        },
-        "tier": {
-          "type": "string",
-          "enum": [
-            "person-team",
-            "person-guest",
-            "agent",
-            "external"
-          ]
-        }
-      },
-      "required": [
-        "kind",
-        "id",
-        "tier"
-      ],
-      "additionalProperties": false
+  "description": "The required origin block from brain note front matter. Null and absent stamps are invalid. Legacy notes must pass through the external-import upgrade path documented in formats.md before validation.",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "session",
+        "job",
+        "server",
+        "import"
+      ]
     },
-    {
-      "type": "null"
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\r\n\u0000]+$",
+      "not": {
+        "pattern": "^[\t\n\u000b\f\r    -     　]*$"
+      }
+    },
+    "tier": {
+      "type": "string",
+      "enum": [
+        "person-team",
+        "person-guest",
+        "agent",
+        "external"
+      ]
     }
-  ]
+  },
+  "required": [
+    "kind",
+    "id",
+    "tier"
+  ],
+  "additionalProperties": false
 }

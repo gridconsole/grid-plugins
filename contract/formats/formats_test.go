@@ -145,7 +145,7 @@ func TestFormatOriginWriter(t *testing.T) {
 
 func TestFormatOriginLegacyRead(t *testing.T) {
 	h := newFormatCLI(t)
-	data := formatRead(t, filepath.Join("..", "fixtures", "fmt-origin", "valid", "legacy-note.md"))
+	data := formatRead(t, filepath.Join("..", "fixtures", "fmt-origin", "upgrade", "legacy-note.md"))
 	n, err := brain.Parse(data)
 	if err != nil {
 		t.Fatal(err)
@@ -153,8 +153,10 @@ func TestFormatOriginLegacyRead(t *testing.T) {
 	if n.Origin != (brain.Origin{}) || n.Body != "Run the checks.\n" {
 		t.Fatalf("legacy parse: %+v", n)
 	}
-	// Null denotes absence in this validation projection, not an empty stamp.
-	captureFormat(t, "fmt-origin", "legacy-absent", nil)
+	// Parsing alone does not upgrade the absent origin into a valid stamp.
+	if err := contract.Validate("fmt-origin", formatJSON(t, n.Origin)); err == nil {
+		t.Fatal("schema accepted the unstamped legacy note")
+	}
 	if n.Validate() == nil {
 		t.Fatal("legacy note unexpectedly qualifies as stamped knowledge")
 	}
@@ -170,7 +172,24 @@ func TestFormatOriginLegacyRead(t *testing.T) {
 	}
 	// The existing import path still reads it and supplies provenance itself.
 	h.env.Stdin = bytes.NewReader(data)
-	h.run(t, 0, "brain", "propose", "--level", "home", "--file", "-", "--external", "--json")
+	var entry brain.Entry
+	if err := json.Unmarshal(h.run(t, 0, "brain", "propose", "--level", "home", "--file", "-", "--external", "--json"), &entry); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := brain.Parse(formatRead(t, filepath.Join(h.env.GridHome, filepath.FromSlash(entry.Path))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upgraded.Origin.Kind != "import" || upgraded.Origin.Tier != contract.External || upgraded.Origin.ID == "" || upgraded.Body != n.Body {
+		t.Fatalf("legacy import did not normalize provenance: %+v", upgraded)
+	}
+	if err := upgraded.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := contract.Validate("fmt-origin", formatJSON(t, upgraded.Origin)); err != nil {
+		t.Fatal(err)
+	}
+	h.run(t, 1, "brain", "accept", "legacy", "--level", "home", "--json")
 }
 
 func TestFormatSavedRenderWriter(t *testing.T) {
@@ -233,10 +252,10 @@ func TestFormatFeedTypesUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(contract.PostTypes(), baseline.Types) {
-		t.Fatal("PostTypes differs from the pre-format baseline")
+		t.Fatal("PostTypes differs from the pre-format baseline; update formatFeedTypesBaseline only after checking no fmt- schema registered")
 	}
 	if got := h.run(t, 0, "feed", "types", "--json"); string(got) != formatFeedTypesBaseline {
-		t.Fatalf("feed types bytes changed: %s", got)
+		t.Fatalf("feed types bytes changed; update formatFeedTypesBaseline only after checking no fmt- schema registered: %s", got)
 	}
 	for _, name := range []string{"fmt-origin", "fmt-job-render", "fmt-sync-manifest"} {
 		b, err := contract.Schema(name)
