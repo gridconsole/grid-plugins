@@ -81,6 +81,45 @@ func TestOrchestratorCommands(t *testing.T) {
 		t.Fatalf("%d %s", code, h.errb)
 	}
 }
+
+// A Job session never answers: grid job post refuses the answer type for every
+// role, GRID_ROLE unset included (the CLI then writes as member, which a person
+// gate admits), and the gate stays open.
+func TestJobPostRefusesAnswer(t *testing.T) {
+	for _, role := range []string{"", "worker", "member", "owner"} {
+		t.Run("role="+role, func(t *testing.T) {
+			h, path, store := orchestratorHarness(t)
+			q := questionAdd(t, h, path, "member")
+			if code := h.run(path, "job", "next", "--json"); code != 0 {
+				t.Fatalf("next %d: %s", code, h.errb)
+			}
+			state, err := store.State()
+			if err != nil || state.Jobs["J-1"].Assign == nil {
+				t.Fatalf("J-1 not assigned: %+v %v", state.Jobs["J-1"], err)
+			}
+			t.Setenv("GRID_LEASE_EPOCH", fmt.Sprintf("0.%d", state.Jobs["J-1"].Assign.Fence))
+			t.Setenv("GRID_ROLE", "worker")
+			if code := h.run(path, "job", "ack", "J-1", "--attempt", "1", "--json"); code != 0 {
+				t.Fatalf("ack %d: %s", code, h.errb)
+			}
+			t.Setenv("GRID_ROLE", role)
+			if code := h.run(path, "job", "post", "J-1", "--attempt", "1", "--type", "answer", "--re", q.Post, "--body", `{"answer":"Yes"}`); code != 1 || !strings.Contains(h.errb.String(), "grid answer") {
+				t.Fatalf("job post %d: %s", code, h.errb)
+			}
+			read, err := store.Read(feed.Filter{Type: "answer"})
+			if err != nil || len(read.Records) != 0 {
+				t.Fatalf("refused answer posted: %+v %v", read, err)
+			}
+			state, err = store.State()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !state.Questions[q.Post].Open || state.Questions[q.Post].Applied != nil || len(state.NeedsYou) != 1 {
+				t.Fatalf("job post answer closed the gate: %+v", state)
+			}
+		})
+	}
+}
 func TestJobNextProcess(t *testing.T) {
 	if os.Getenv("GRID_TEST_NEXT_PROCESS") != "1" {
 		return

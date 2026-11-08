@@ -94,6 +94,11 @@ func runFeed(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "grid feed: %v\n", err)
 		return exitCode(err)
 	}
+	if verb == "post" {
+		if err := refuseAnswerPost(kind); err != nil {
+			return fail(err)
+		}
+	}
 	store, err := feedStore(env, *task, *project)
 	if err != nil {
 		return fail(err)
@@ -158,6 +163,17 @@ func runFeed(args []string, env Env) int {
 		Tier string      `json:"tier"`
 		Data bool        `json:"data"`
 	}{record, string(record.Tier), record.Data()})
+}
+
+// refuseAnswerPost keeps an answer post out of every agent-facing post path
+// (grid feed post, grid job post). An answer can close a person gate, and the
+// writer's role defaults to member where GRID_ROLE is unset, which a gate
+// admits, so the type is refused for all roles. The person's verb is grid answer.
+func refuseAnswerPost(typ string) error {
+	if typ == "answer" {
+		return errors.New("only a person may answer a gate: use grid answer, not an answer post")
+	}
+	return nil
 }
 
 // feedStore is shared by the CLI and MCP front ends.

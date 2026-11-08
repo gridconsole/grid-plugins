@@ -77,6 +77,11 @@ func runOrchestrator(args []string, env Env) int {
 		}
 		return exitCode(err)
 	}
+	if verb == "post" {
+		if err := refuseAnswerPost(*kind); err != nil {
+			return fail(err)
+		}
+	}
 	scope, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: *task, Project: *project})
 	if err != nil {
 		return fail(err)
