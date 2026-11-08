@@ -49,6 +49,26 @@ func TestHostRules(t *testing.T) {
 			expect(t, EvaluateHost(i, f.root, f.env), want)
 		})
 	}
+	t.Run("single home keeps .host inside it", func(t *testing.T) {
+		f := setup(t)
+		for _, rel := range []string{".host/approval", ".host", ".host/queue/one"} {
+			expect(t, EvaluateHost(f.input("Write", filepath.Join(f.grid, rel)), f.root, f.env), "deny")
+		}
+		expect(t, EvaluateHost(f.input("Write", filepath.Join(f.grid, ".hosting", "x")), f.root, f.env), "")
+		expect(t, EvaluateHost(f.input("Write", filepath.Join(f.grid, "notes.host")), f.root, f.env), "")
+		i := f.input("Write", filepath.Join(f.grid, ".host", "approval"))
+		if d := EvaluateHost(i, f.root, f.env); !strings.Contains(d.Reason, filepath.Join(f.grid, ".host")) {
+			t.Fatalf("reason names another folder: %s", d.Reason)
+		}
+	})
+	t.Run("single home .host spelled in another case", func(t *testing.T) {
+		f := setup(t)
+		skipUnlessFolding(t, f)
+		f.write(filepath.Join(f.grid, ".host", "existing"), "")
+		for _, p := range []string{alias(filepath.Join(f.grid, ".host", "approval"), ".grid"), alias(filepath.Join(f.grid, ".host", "existing"), ".host")} {
+			expect(t, EvaluateHost(f.input("Write", p), f.root, f.env), "deny")
+		}
+	})
 	for _, dangling := range []bool{false, true} {
 		t.Run(map[bool]string{false: "linked folder", true: "dangling link"}[dangling], func(t *testing.T) {
 			f := setup(t)

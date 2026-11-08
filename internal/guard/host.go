@@ -12,8 +12,15 @@ var namesHost = regexp.MustCompile(`(?i)(^|[^\w.-])\.host($|[^\w.-])`)
 var namesPersonCommand = regexp.MustCompile(`(^|[\s;&|])(?:[^\s;&|]*/)?grid\s+(?:approve|answer)(?:\s|$)`)
 var namesFeed = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:projects/[^\s'"/]+/tasks/T-\d[^\s'"/]*/feed|feed)(?:/|[\s'";|&<>]|$)`)
 
+// hostFolder is the legacy .host: beside the data folders, two levels above a
+// projects folder that sits in <grid>/<name>/projects.
 func hostFolder(projects string) string {
 	return filepath.Join(filepath.Dir(filepath.Dir(resolve(".", projects))), ".host")
+}
+
+// homeHostFolder is .host inside the single Grid home, the parent of projects.
+func homeHostFolder(projects string) string {
+	return filepath.Join(filepath.Dir(resolve(".", projects)), ".host")
 }
 
 // EvaluateHost protects legacy .host and the new task Feed, which contains the
@@ -24,7 +31,7 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 	if c.projects == "" {
 		return hookio.Decision{}
 	}
-	host := hostFolder(c.projects)
+	host := homeHostFolder(c.projects)
 	deny := func(what string) hookio.Decision {
 		return hookio.Deny("The host's folder is written only by Grid, so " + what + ". A held plan is approved by the person in Grid, never by a file an agent writes.")
 	}
@@ -53,7 +60,12 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 		return hookio.Decision{}
 	}
 	target := strings.ToLower(c.path(given))
-	for _, folder := range []string{host, hostFolder(realNative(c.projects, 0))} {
+	realProjects := realNative(c.projects, 0)
+	folders := []string{host, hostFolder(c.projects), homeHostFolder(realProjects), hostFolder(realProjects)}
+	if c.home != "" {
+		folders = append(folders, filepath.Join(resolve(c.root, c.expand(c.home)), ".host"))
+	}
+	for _, folder := range folders {
 		if inside(strings.ToLower(realNative(folder, 0)), target) {
 			return deny(given + " is in " + host)
 		}
