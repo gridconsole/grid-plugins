@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"github.com/gridconsole/grid-plugins/internal/plan"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -104,5 +105,18 @@ func TestPlanGuardRefusesAgentClosingThroughState(t *testing.T) {
 		if got := EvaluatePlan(i, f.root, f.env).Behavior; got != "deny" {
 			t.Fatalf("an agent writing state: %s: %q", state, got)
 		}
+	}
+}
+
+func TestSignOffPlanGate(t *testing.T) {
+	f, _ := newTaskFixture(t)
+	text := strings.Replace(newTask, "workflow: Check and ship", "step: sign-off\nworkflow: [{step: sign-off, kind: approve}, {step: build, kind: run}]", 1)
+	f.write(filepath.Join(f.task, "task.md"), text)
+	if got := writesRepo(f); got != "deny" {
+		t.Errorf("sign-off did not hold repository writes: %q", got)
+	}
+	f.write(filepath.Join(f.task, "history.md"), "- 2026-01-02T03:04 · plan accepted · rev 1 · "+plan.Hash(examplePlan)+" · by person\n")
+	if got := writesRepo(f); got != "" {
+		t.Fatalf("Rust history approval of sign-off: %q", got)
 	}
 }

@@ -46,3 +46,27 @@ func TestHostApprovalReceipts(t *testing.T) {
 		})
 	}
 }
+
+func TestHostProtectsTaskWorkflow(t *testing.T) {
+	f := setup(t)
+	f.env["GRID_PLAN_GUARD"] = "off"
+	for _, tool := range []string{"Write", "Edit", "MultiEdit", "NotebookEdit"} {
+		t.Run(tool, func(t *testing.T) {
+			i := f.input(tool, filepath.Join(f.task, "task.md"))
+			i.AgentType = "grid-builder"
+			i.ToolInput["content"] = "---\nworkflow: [{step: build, kind: run}]\n---\n"
+			i.ToolInput["old_string"] = "kind: approve"
+			i.ToolInput["new_string"] = "kind: run"
+			i.ToolInput["edits"] = []any{map[string]any{"old_string": "kind: approve", "new_string": "kind: run"}}
+			expect(t, EvaluateHost(i, f.root, f.env), "deny")
+		})
+	}
+	for _, command := range []string{"sed -i s/approve/run/ task.md", "echo changed > task.md", "rm task.md"} {
+		t.Run(command, func(t *testing.T) {
+			expect(t, EvaluateHost(f.input("Bash", command), f.root, f.env), "deny")
+		})
+	}
+	expect(t, EvaluateHost(f.input("Bash", "cat task.md"), f.root, f.env), "")
+	expect(t, EvaluateHost(f.input("Write", filepath.Join(f.repo, "task.md")), f.root, f.env), "")
+	expect(t, EvaluateHost(f.input("Write", filepath.Join(f.grid, "personal", "tasks", "T-02-mine", "TASK.MD")), f.root, f.env), "deny")
+}

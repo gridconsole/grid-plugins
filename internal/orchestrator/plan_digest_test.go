@@ -1,0 +1,121 @@
+package orchestrator
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/guard"
+	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/plan"
+	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
+)
+
+// Brute force the actual 24-bit preimage, hashing already canonical bytes in the
+// hot loop. Both final plans are checked through the production canonicalizer.
+func forgedPlan(t *testing.T, original string) (string, string) {
+	t.Helper()
+	_, body, _ := strings.Cut(original, "\n")
+	body = strings.Trim(body, "\n") + "\n"
+	sum := sha256.Sum256([]byte(body))
+	digest := hex.EncodeToString(sum[:])
+	if plan.Hash(original) != digest[:6] {
+		t.Fatal("collision fixture must already be canonical")
+	}
+	prefix := []byte(strings.Replace(body, "role: writer", "role: builder", 1) + "\nVariant: ")
+	buf := make([]byte, len(prefix), len(prefix)+32)
+	copy(buf, prefix)
+	for nonce := uint64(0); nonce < 1<<32; nonce++ {
+		candidate := strconv.AppendUint(buf[:len(prefix)], nonce, 10)
+		candidate = append(candidate, '\n')
+		got := sha256.Sum256(candidate)
+		if got[0] == sum[0] && got[1] == sum[1] && got[2] == sum[2] && got != sum {
+			forged := "# Plan, rev 1 · " + digest[:6] + "\n" + string(candidate)
+			if plan.Hash(forged) != plan.Hash(original) {
+				t.Fatal("brute force did not collide through plan.Hash")
+			}
+			t.Logf("found 24-bit collision after %d candidates", nonce+1)
+			return forged, digest
+		}
+	}
+	t.Fatal("exhausted collision search")
+	return "", ""
+}
+
+func TestForgedPlanDigest(t *testing.T) {
+	f := setupPlan(t)
+	root := t.TempDir()
+	home := filepath.Join(root, "grid")
+	dir := filepath.Join(home, "projects", "example", "tasks", "T-01-example")
+	if err := os.MkdirAll(filepath.Dir(dir), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(f.s.Feed.TaskDir, dir); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Feed.TaskDir = dir
+	original := plannedText(t)
+	forged, digest := forgedPlan(t, original)
+	writePlan(t, f, original)
+	store := task.Store{Resolver: where.Resolver{GridHome: home, Ceiling: root}}
+	if _, err := store.Approve(task.WriteOptions{ID: "T-01"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	// Supply the new field explicitly so this regression also runs on the base.
+	receipt := fmt.Sprintf(`{"task":"T-01","what":"approve","plan_hash":%q,"plan_digest":%q}`, plan.Hash(original), digest)
+	if err := os.WriteFile(filepath.Join(dir, "approval.json"), []byte(receipt), 0600); err != nil {
+		t.Fatal(err)
+	}
+	in := hookio.Input{Cwd: dir, ToolName: "Write", ToolInput: map[string]any{"file_path": filepath.Join(root, "result.go"), "content": "changed"}}
+	env := map[string]string{"GRID_HOME": home}
+	if got := guard.EvaluatePlan(in, root, env); got.Behavior != "" {
+		t.Fatalf("original approved plan refused: %+v", got)
+	}
+	writePlan(t, f, forged)
+	if _, err := store.Approval("", "T-01"); err == nil {
+		t.Error("locked approval accepted a forged plan with a matching short hash")
+	}
+	if got := guard.EvaluatePlan(in, root, env); got.Behavior != "deny" {
+		t.Error("guard accepted a forged plan with a matching short hash")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "history.md"), []byte("- 2026-01-02T03:04 · plan accepted · rev 1 · "+plan.Hash(original)+" · by person\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got := guard.EvaluatePlan(in, root, env); got.Behavior != "deny" {
+		t.Error("legacy history bypassed a mismatching full digest")
+	}
+	out := f.tick(t)
+	records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records.Records) != 0 || out.Assigned != 0 {
+		t.Errorf("forged plan published %d Jobs and assigned %d", len(records.Records), out.Assigned)
+	}
+	if _, err := store.Approve(task.WriteOptions{ID: "T-01"}, ""); err == nil {
+		t.Error("implicit reapproval accepted a forged plan with a matching short hash")
+	}
+	// The person may explicitly reapprove after reviewing the changed plan.
+	if _, err := store.Approve(task.WriteOptions{ID: "T-01"}, plan.Hash(forged)); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "approval.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var renewed map[string]any
+	if err := json.Unmarshal(data, &renewed); err != nil {
+		t.Fatal(err)
+	}
+	if value, ok := renewed["plan_digest"].(string); !ok || len(value) != 64 || value == digest {
+		t.Error("reapproval did not record the changed full digest")
+	}
+}

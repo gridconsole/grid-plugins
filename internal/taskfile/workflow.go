@@ -39,20 +39,34 @@ func WorkflowSteps(text string) []WorkflowStep {
 	return steps
 }
 
+// PlanApprovalIndex returns the first plan approval step, or -1. Rust names
+// plan gates; also treat an approve before any run/work as a plan gate, so a
+// custom name cannot remove the initial approval. Later unnamed approvals ship.
+func PlanApprovalIndex(steps []WorkflowStep) int {
+	beforeRun := true
+	for i, step := range steps {
+		switch step.Kind {
+		case "run", "work":
+			beforeRun = false
+		case "approve":
+			if beforeRun || strings.Contains(step.Step, "plan") {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
 // PlanApprovalRequired reads the inline workflow used by existing task guards.
 // Missing, unresolved named or malformed workflows require plan approval.
 func PlanApprovalRequired(text string) bool {
 	steps := WorkflowSteps(text)
-	if len(steps) == 0 {
+	if len(steps) == 0 || PlanApprovalIndex(steps) >= 0 {
 		return true
 	}
 	for _, step := range steps {
 		switch step.Kind {
-		case "run", "work":
-		case "approve":
-			if strings.Contains(step.Step, "plan") {
-				return true
-			}
+		case "run", "work", "approve":
 		default:
 			return true
 		}

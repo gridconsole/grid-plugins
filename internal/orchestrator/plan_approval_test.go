@@ -205,6 +205,7 @@ func TestPlanPublicationReadsWorkflowApprovalRule(t *testing.T) {
 		want           int
 	}{
 		{"default", "''", 0},
+		{"sign-off", "[{step: sign-off, kind: approve}, {step: build, kind: run}]", 0},
 		{"unresolved name", "Check and ship", 0},
 		{"plan gate", "[{step: plan, kind: run}, {step: plan-review, kind: approve}, {step: build, kind: run}]", 0},
 		{"no plan gate", "[{step: build, kind: run}, {step: review, kind: approve}]", 1},

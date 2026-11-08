@@ -164,13 +164,10 @@ func planStage(text, history string) string {
 	if !ok || current == "" {
 		return "unreadable"
 	}
-	at, gate := -1, -1
+	at, gate := -1, taskfile.PlanApprovalIndex(steps)
 	for i, item := range steps {
 		if item.Step == current {
 			at = i
-		}
-		if gate < 0 && item.Kind == "approve" && strings.Contains(item.Step, "plan") {
-			gate = i
 		}
 	}
 	if gate < 0 {
@@ -193,7 +190,12 @@ func heldStage(stage string) bool {
 // plan.md (taskstore.Approved); the old "plan accepted" history line, which tasks
 // migrated from the old plugin carry, releases it through planStage.
 func held(dir, text, history string) bool {
-	return heldStage(planStage(text, history)) && !taskstore.Approved(dir)
+	// A JSON receipt takes precedence over legacy history/step advancement:
+	// stale full digests must not be released by an old prose acceptance.
+	if _, err := os.Lstat(filepath.Join(dir, "approval.json")); !os.IsNotExist(err) {
+		return taskfile.PlanApprovalRequired(text) && !taskstore.Approved(dir)
+	}
+	return heldStage(planStage(text, history))
 }
 func inactive(text string) bool {
 	f := taskfile.ParseFrontmatter(text)
