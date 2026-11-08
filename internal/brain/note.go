@@ -101,10 +101,27 @@ func (n Note) Validate() error {
 	if len(lines) > 300 {
 		return fmt.Errorf("note exceeds 300 body lines")
 	}
-	if len(lines) > 60 && !strings.Contains("\n"+n.Body, "\n## Contents\n") {
+	if len(lines) > 60 && !hasContents(lines) {
 		return fmt.Errorf("note over 60 body lines needs a ## Contents list")
 	}
 	return nil
+}
+
+func hasContents(lines []string) bool {
+	inside := false
+	for _, l := range lines {
+		if l == "## Contents" {
+			inside = true
+			continue
+		}
+		if inside && strings.HasPrefix(l, "#") {
+			return false
+		}
+		if inside && (strings.HasPrefix(strings.TrimSpace(l), "- ") || strings.HasPrefix(strings.TrimSpace(l), "* ")) {
+			return true
+		}
+	}
+	return false
 }
 
 func summary(s string) error {
@@ -115,10 +132,10 @@ func summary(s string) error {
 }
 
 func (l Link) Validate() error {
-	base, anchor, _ := strings.Cut(l.To, "#")
+	base, anchor, anchored := strings.Cut(l.To, "#")
 	kind, id, ok := strings.Cut(base, ":")
 	parts := strings.Split(id, "/")
-	valid := ok && (anchor == "" || ValidName(anchor))
+	valid := ok && (!anchored || ValidName(anchor))
 	switch kind {
 	case "brain":
 		valid = valid && len(parts) == 2 && (parts[0] == "home" || parts[0] == "project") && ValidName(parts[1])

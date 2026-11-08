@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -19,7 +20,9 @@ import (
 type Store struct {
 	GridHome string
 	Project  string
-	Now      func() time.Time
+	// ReadLevel optionally restricts queries and generated indexes to one level.
+	ReadLevel string
+	Now       func() time.Time
 }
 
 type Entry struct {
@@ -37,6 +40,9 @@ func (s Store) stamp() string {
 }
 
 func (s Store) levels() []string {
+	if s.ReadLevel != "" {
+		return []string{s.ReadLevel}
+	}
 	if s.Project != "" {
 		return []string{"project", "home"}
 	}
@@ -112,19 +118,30 @@ func read(root *os.Root, path string) ([]byte, error) {
 	if err := noSymlinks(root, path); err != nil {
 		return nil, err
 	}
-	f, err := root.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	info, err := f.Stat()
+	info, err := root.Lstat(path)
 	if err != nil {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() || info.Size() > 1<<20 {
 		return nil, fmt.Errorf("brain files must be regular files of at most 1 MiB")
 	}
-	return root.ReadFile(path)
+	f, err := root.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err = f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > 1<<20 {
+		return nil, fmt.Errorf("brain files must be regular files of at most 1 MiB")
+	}
+	b, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
+	if err == nil && len(b) > 1<<20 {
+		err = fmt.Errorf("brain file exceeds 1 MiB")
+	}
+	return b, err
 }
 
 func randomID() (string, error) {
@@ -335,6 +352,9 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 			if err != nil {
 				return err
 			}
+			if err := logDecision(root, n); err != nil {
+				return err
+			}
 			if err := atomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
 				return err
 			}
@@ -355,10 +375,14 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 		}
 		if before, err := read(root, path); err == nil {
 			old, err := Parse(before)
+			// The note may have been published before a failed proposal-status
+			// write. Preserve that publication time when recovering the write.
+			n.Updated = old.Updated
 			if err != nil || !reflect.DeepEqual(old, normalized(n)) {
 				return fmt.Errorf("note %q already exists with different content", name)
 			}
 		} else if errors.Is(err, fs.ErrNotExist) {
+			n.Updated = s.stamp()
 			b, err := Encode(n)
 			if err != nil {
 				return err
@@ -373,6 +397,9 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 		if err != nil {
 			return err
 		}
+		if err := logDecision(root, n); err != nil {
+			return err
+		}
 		if err := atomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
 			return err
 		}
@@ -383,6 +410,23 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 		return result, err
 	}
 	return result, refusal
+}
+
+// logDecision runs under the level lock. A stable line makes retries safe when
+// publication succeeds but the final proposal status write is interrupted.
+func logDecision(root *os.Root, n Note) error {
+	before, err := read(root, "knowledge/log.md")
+	if errors.Is(err, fs.ErrNotExist) {
+		before = []byte("# Brain log\n\n")
+	} else if err != nil {
+		return err
+	}
+	clean := func(s string) string { return strings.ReplaceAll(strings.Join(strings.Fields(s), " "), "|", "/") }
+	line := fmt.Sprintf("- %s | %s | %s | %s:%s | %s\n", n.Updated, n.Status, n.Name, n.Origin.Kind, clean(n.Origin.ID), clean(n.Reason))
+	if strings.Contains(string(before), line) {
+		return nil
+	}
+	return atomicWrite(root, "knowledge/log.md", append(before, []byte(line)...))
 }
 
 func normalized(n Note) Note {

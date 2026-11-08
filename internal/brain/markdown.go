@@ -109,11 +109,17 @@ func frontmatter(data []byte) (map[string]string, string, error) {
 		if l == "---" {
 			return fields, strings.Join(lines[i+2:], "\n"), nil
 		}
-		if strings.TrimSpace(l) == "" || strings.HasPrefix(strings.TrimSpace(l), "#") {
-			continue
-		}
 		if strings.HasPrefix(l, " ") && last != "" {
 			fields[last] += "\n" + l
+			continue
+		}
+		if strings.TrimSpace(l) == "" {
+			if last != "" && (strings.HasPrefix(fields[last], "|") || strings.HasPrefix(fields[last], ">")) {
+				fields[last] += "\n  "
+			}
+			continue
+		}
+		if strings.HasPrefix(l, "#") {
 			continue
 		}
 		k, v, ok := strings.Cut(l, ":")

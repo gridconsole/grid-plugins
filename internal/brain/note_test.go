@@ -93,3 +93,15 @@ func TestSecretDetection(t *testing.T) {
 		t.Fatal("ordinary note detected as secret")
 	}
 }
+
+func TestLongNoteRequiresContentsList(t *testing.T) {
+	n := sample()
+	n.Body = "## Contents\n" + strings.Repeat("Text.\n", 65)
+	if err := n.Validate(); err == nil {
+		t.Fatal("heading without contents list accepted")
+	}
+	n.Body = "## Contents\n- [Checks](#checks)\n\n## Checks {#checks}\n" + strings.Repeat("Text.\n", 65)
+	if err := n.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

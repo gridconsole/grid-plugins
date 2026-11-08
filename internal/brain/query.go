@@ -115,6 +115,9 @@ func (s Store) Search(query, topic string, limit int) ([]Hit, error) {
 	hits := []Hit{}
 	for _, e := range entries {
 		n := e.Note
+		if n.SupersededBy != "" {
+			continue
+		}
 		if topic != "" && n.Topic != topic {
 			continue
 		}

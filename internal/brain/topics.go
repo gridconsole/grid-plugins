@@ -195,7 +195,7 @@ func scan(root *os.Root, level string) ([]Note, map[string]int, error) {
 			invalid[topic]++
 			return nil
 		}
-		if n.Status != "accepted" || n.SupersededBy != "" {
+		if n.Status != "accepted" {
 			return nil
 		}
 		notes = append(notes, n)

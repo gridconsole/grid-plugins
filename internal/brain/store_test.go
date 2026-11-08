@@ -68,6 +68,10 @@ func TestProposalLifecycle(t *testing.T) {
 	if _, err := s.Accept("project", n.Name); err != nil {
 		t.Fatalf("repeat accept: %v", err)
 	}
+	log, err := os.ReadFile(filepath.Join(s.GridHome, "projects/example/knowledge/log.md"))
+	if err != nil || strings.Count(string(log), "| accepted | checks |") != 1 {
+		t.Fatalf("accept log should appear once: %s %v", log, err)
+	}
 	p, err := s.Proposal("project", n.Name)
 	if err != nil || p.Note.Status != "accepted" {
 		t.Fatalf("proposal status: %+v, %v", p, err)

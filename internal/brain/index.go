@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 type TopicRow struct {
@@ -171,19 +172,10 @@ func SessionStartText(rows []TopicRow) string {
 
 func truncate(s string, bytes int) string {
 	for len(s) > bytes {
-		_, n := lastRune(s)
+		_, n := utf8.DecodeLastRuneInString(s)
 		s = s[:len(s)-n]
 	}
 	return s
-}
-
-func lastRune(s string) (rune, int) {
-	for i := len(s) - 1; i >= 0; i-- {
-		if s[i]&0xc0 != 0x80 {
-			return rune(s[i]), len(s) - i
-		}
-	}
-	return 0, len(s)
 }
 
 // RebuildIndex publishes a separate index and backlink generation at each
