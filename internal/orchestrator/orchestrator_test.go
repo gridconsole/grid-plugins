@@ -692,7 +692,7 @@ func TestParkOnlyResumesForItsAppliedRetry(t *testing.T) {
 
 func TestParkGateReservesQuestionFileIDs(t *testing.T) {
 	f := setup(t)
-	qs := question.Store{TaskDir: f.s.Feed.TaskDir}
+	qs := question.Store{TaskDir: f.s.Feed.TaskDir, TaskID: taskID, Writer: feed.Writer{Author: feed.Author{ID: "owner", Role: "member"}, Worker: "owner@" + machine}}
 	in := question.Input{Question: "Other decision?", Who: "owner", Options: []string{"Wait"}, Recommended: "Wait", Default: "Wait", Applies: f.now.Add(time.Hour)}
 	first, err := qs.Add(in)
 	if err != nil {
@@ -709,8 +709,14 @@ func TestParkGateReservesQuestionFileIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gate := records.Records[0].Body["gate"].(map[string]any)["id"]
-	if gate == first.ID {
+	// The question file is a Feed question too now; the crash gate is the Job's.
+	var gate any
+	for _, r := range records.Records {
+		if r.Job != nil && *r.Job == "J-1" {
+			gate = r.Body["gate"].(map[string]any)["id"]
+		}
+	}
+	if gate == nil || gate == first.ID {
 		t.Fatal("crash gate reused question-file id", gate)
 	}
 	next, err := qs.Add(in)
