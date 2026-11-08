@@ -1,7 +1,9 @@
 package feed
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -95,7 +97,16 @@ func writeProjection(dir, name string, v any) error {
 	if err != nil {
 		return err
 	}
-	return atomicfile.Write(filepath.Join(dir, name), append(data, '\n'), 0o600)
+	data = append(data, '\n')
+	path := filepath.Join(dir, name)
+	old, err := os.ReadFile(path)
+	if err == nil && bytes.Equal(old, data) {
+		return nil
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return atomicfile.Write(path, data, 0o600)
 }
 
 // FoldRead folds precisely one reader snapshot, without reading the Feed again.

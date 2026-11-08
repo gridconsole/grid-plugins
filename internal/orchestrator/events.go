@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +21,9 @@ import (
 )
 
 func (s Store) progress(snap Snapshot, j *contract.Job) string {
+	if v, ok := s.progressMemo[j.ID]; ok {
+		return v
+	}
 	h := sha256.New()
 	if s.WorktreesDir != "" {
 		paths := []string{}
@@ -59,28 +61,7 @@ func (s Store) progress(snap Snapshot, j *contract.Job) string {
 			}
 		}
 	}
-	// Only work products count. Mechanical projections, leases and spawn files
-	// must not reset a crash loop merely because this pass wrote them.
-	_ = filepath.WalkDir(s.Feed.TaskDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case "feed", "spawned", "questions", ".git", "brain-proposals":
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if d.Type().IsRegular() {
-			b, err := os.ReadFile(path)
-			if err == nil {
-				rel, _ := filepath.Rel(s.Feed.TaskDir, path)
-				fmt.Fprintf(h, "%s\x00%x\n", rel, sha256.Sum256(b))
-			}
-		}
-		return nil
-	})
+	fmt.Fprint(h, s.taskProgress)
 	evidence := []string{}
 	for id, r := range snap.Records {
 		if r.Type == "post" || r.Type == "checkpoint" && r.Job != nil && *r.Job == j.ID || r.Type == "answer" && r.Author.ID == s.Owner {
@@ -89,7 +70,11 @@ func (s Store) progress(snap Snapshot, j *contract.Job) string {
 	}
 	sort.Strings(evidence)
 	fmt.Fprint(h, evidence)
-	return hex.EncodeToString(h.Sum(nil))
+	value := hex.EncodeToString(h.Sum(nil))
+	if s.progressMemo != nil {
+		s.progressMemo[j.ID] = value
+	}
+	return value
 }
 func (s Store) park(snap Snapshot, j *contract.Job, m *jobMemory) error {
 	owner := s.Owner

@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,6 +31,11 @@ func (s Store) Tick() (out Output, err error) {
 		if e != nil {
 			return e
 		}
+		s.taskProgress, e = s.fileProgress(&m)
+		if e != nil {
+			return e
+		}
+		s.progressMemo = map[string]string{}
 		// Refuse graph errors before making any move.
 		if _, e = Ready(snap, s.now()); e != nil {
 			return e
@@ -107,6 +113,8 @@ func (s Store) Tick() (out Output, err error) {
 				if e := s.spawn(j); e != nil {
 					return e
 				}
+			} else if e := os.Remove(filepath.Join(s.Feed.TaskDir, "spawned", j.ID+".json")); e != nil && !errors.Is(e, os.ErrNotExist) {
+				return e
 			}
 			why := j.Reason
 			if why == "" {

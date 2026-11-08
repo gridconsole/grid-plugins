@@ -714,3 +714,68 @@ func TestParkGateReservesQuestionFileIDs(t *testing.T) {
 		t.Fatal("question file reused crash gate id", gate)
 	}
 }
+
+func TestProgressUsesSizeAndMtimeCache(t *testing.T) {
+	f := setup(t)
+	path := filepath.Join(f.s.Feed.TaskDir, "research.md")
+	if err := os.WriteFile(path, []byte("first"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	for range 2 {
+		f.ack(t)
+		f.exit(t, "crash")
+		f.tick(t)
+	}
+	if err := os.WriteFile(path, []byte("other"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	f.ack(t)
+	f.exit(t, "crash")
+	f.tick(t)
+	if f.state(t).Status != contract.Parked {
+		t.Fatal("unchanged size and mtime reread file content")
+	}
+}
+
+func TestIdlePassDoesNotRewriteProjections(t *testing.T) {
+	f := setup(t)
+	f.tick(t)
+	paths := []string{"state.json", "needs-you.json", ".orchestrator.json"}
+	stamp := time.Unix(1000000000, 0)
+	for _, name := range paths {
+		path := filepath.Join(f.s.Feed.Dir(), name)
+		if err := os.Chtimes(path, stamp, stamp); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.tick(t)
+	for _, name := range paths {
+		info, err := os.Stat(filepath.Join(f.s.Feed.Dir(), name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.ModTime().Equal(stamp) {
+			t.Errorf("idle pass rewrote %s", name)
+		}
+	}
+}
+
+func TestSpawnRequestRemovedAfterAck(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	f.ack(t)
+	f.tick(t)
+	if _, err := os.Stat(filepath.Join(f.s.Feed.TaskDir, "spawned", "J-1.json")); !os.IsNotExist(err) {
+		t.Fatal("old spawn request survived ack", err)
+	}
+}

@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -38,6 +39,8 @@ type Output struct {
 // expiry; AfterWake suppresses expiry until supervision has checked processes.
 // UsageReady must positively confirm capacity after a usage_limit exit.
 type Store struct {
+	taskProgress string
+	progressMemo map[string]string
 	AfterWake    bool
 	WorktreesDir string
 	Feed         feed.Store
@@ -64,15 +67,21 @@ type jobMemory struct {
 	ParkProgress string   `json:"park_progress"`
 	Liveness     string   `json:"liveness,omitempty"`
 }
+type progressFile struct {
+	Size  int64  `json:"size"`
+	Mtime int64  `json:"mtime"`
+	Hash  string `json:"hash"`
+}
 type memory struct {
-	WakeVersion int                   `json:"wake_version"`
-	WakeCounts  map[string]int        `json:"wake_counts"`
-	Active      *Wake                 `json:"active,omitempty"`
-	Overflow    bool                  `json:"overflow"`
-	Jobs        map[string]*jobMemory `json:"jobs"`
-	Delivered   map[string]bool       `json:"delivered"`
-	Wakes       []time.Time           `json:"wakes"`
-	Pending     []Wake                `json:"pending"`
+	Files       map[string]progressFile `json:"files,omitempty"`
+	WakeVersion int                     `json:"wake_version"`
+	WakeCounts  map[string]int          `json:"wake_counts"`
+	Active      *Wake                   `json:"active,omitempty"`
+	Overflow    bool                    `json:"overflow"`
+	Jobs        map[string]*jobMemory   `json:"jobs"`
+	Delivered   map[string]bool         `json:"delivered"`
+	Wakes       []time.Time             `json:"wakes"`
+	Pending     []Wake                  `json:"pending"`
 }
 
 func (s Store) locked(fn func() error) error {
@@ -113,7 +122,15 @@ func writeJSON(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	return atomicfile.Write(path, append(b, '\n'), 0o600)
+	b = append(b, '\n')
+	old, err := os.ReadFile(path)
+	if err == nil && bytes.Equal(old, b) {
+		return nil
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return atomicfile.Write(path, b, 0o600)
 }
 func (s Store) control(j *contract.Job, status contract.Status, reason, re string) error {
 	body := map[string]any{"target": j.ID, "reason": reason}
