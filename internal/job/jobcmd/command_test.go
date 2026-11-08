@@ -41,7 +41,7 @@ func call(t *testing.T, e Env, out, errs *bytes.Buffer, want int, args ...string
 }
 func TestRenderLintShow(t *testing.T) {
 	e, out, errs := fixture(t)
-	r := call(t, e, out, errs, 0, "render", "task", "1", "--json")
+	r := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
 	if !r.OK || r.ID != "J-1" || r.Path == "" || r.Inputs == "" {
 		t.Fatalf("%+v", r)
 	}
@@ -49,12 +49,12 @@ func TestRenderLintShow(t *testing.T) {
 	if e2 != nil {
 		t.Fatal(e2)
 	}
-	call(t, e, out, errs, 0, "render", "task", "J-1", "--json")
+	call(t, e, out, errs, 0, "render", "T-01", "J-1", "--json")
 	got := call(t, e, out, errs, 0, "lint", r.Path, "--json")
 	if !got.OK || len(got.Findings) != 0 {
 		t.Fatalf("%+v", got)
 	}
-	show := call(t, e, out, errs, 0, "show", "task", "J-1", "--json")
+	show := call(t, e, out, errs, 0, "show", "T-01", "J-1", "--json")
 	if show.Job == nil || show.Brief != string(first) {
 		t.Fatal("show does not match saved brief")
 	}
@@ -62,7 +62,7 @@ func TestRenderLintShow(t *testing.T) {
 	if out.String() != string(first) {
 		t.Fatal("plain show differs")
 	}
-	e.Cwd = filepath.Join(e.Cwd, "task")
+	e.Cwd = filepath.Join(e.Cwd, "T-01")
 	call(t, e, out, errs, 0, "show", "--json")
 	call(t, e, out, errs, 0, "show", "J-1", "--json")
 	call(t, e, out, errs, 0, "lint", r.Path)
@@ -72,7 +72,7 @@ func TestRenderLintShow(t *testing.T) {
 }
 func TestRenderRefusesInvalidAndChangedJobs(t *testing.T) {
 	e, out, errs := fixture(t)
-	plan := filepath.Join(e.Cwd, "task", "plan.md")
+	plan := filepath.Join(e.Cwd, "T-01", "plan.md")
 	original, err := os.ReadFile(plan)
 	if err != nil {
 		t.Fatal(err)
@@ -81,17 +81,20 @@ func TestRenderRefusesInvalidAndChangedJobs(t *testing.T) {
 	if err = os.WriteFile(plan, []byte(bad), 0644); err != nil {
 		t.Fatal(err)
 	}
-	r := call(t, e, out, errs, 1, "render", "task", "1", "--json")
+	h := jobtest.Home{GridHome: e.GridHome, Task: filepath.Join(e.Cwd, "T-01")}
+	h.Approve(t)
+	r := call(t, e, out, errs, 1, "render", "T-01", "1", "--json")
 	if len(r.Findings) == 0 {
 		t.Fatal("missing findings")
 	}
-	if _, err = os.Stat(filepath.Join(e.Cwd, "task", "jobs")); !os.IsNotExist(err) {
+	if _, err = os.Stat(filepath.Join(e.Cwd, "T-01", "jobs")); !os.IsNotExist(err) {
 		t.Fatal("invalid render created artifacts")
 	}
 	if err = os.WriteFile(plan, original, 0644); err != nil {
 		t.Fatal(err)
 	}
-	r = call(t, e, out, errs, 0, "render", "task", "1", "--json")
+	h.Approve(t)
+	r = call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
 	before, err := os.ReadFile(r.Path)
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +110,7 @@ func TestRenderRefusesInvalidAndChangedJobs(t *testing.T) {
 	if err = f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	rejected := call(t, e, out, errs, 1, "render", "task", "1", "--json")
+	rejected := call(t, e, out, errs, 1, "render", "T-01", "1", "--json")
 	if !strings.Contains(rejected.Error, "different saved inputs") {
 		t.Fatalf("%+v", rejected)
 	}
@@ -118,11 +121,11 @@ func TestRenderRefusesInvalidAndChangedJobs(t *testing.T) {
 }
 func TestArgumentAndLintFailures(t *testing.T) {
 	e, out, errs := fixture(t)
-	for _, args := range [][]string{{"render"}, {"render", "task", "1", "--budget", "0"}, {"lint"}, {"show", "a", "b", "c"}, {"unknown"}, {"lint", "a", "--unknown"}} {
+	for _, args := range [][]string{{"render"}, {"render", "T-01", "1", "--budget", "0"}, {"lint"}, {"show", "a", "b", "c"}, {"unknown"}, {"lint", "a", "--unknown"}} {
 		call(t, e, out, errs, 2, append(args, "--json")...)
 	}
-	call(t, e, out, errs, 1, "render", "task", "999", "--json")
-	call(t, e, out, errs, 1, "show", "task", "J-999", "--json")
+	call(t, e, out, errs, 1, "render", "T-01", "999", "--json")
+	call(t, e, out, errs, 1, "show", "T-01", "J-999", "--json")
 	path := filepath.Join(e.Cwd, "broken.md")
 	if err := os.WriteFile(path, []byte("broken\n"), 0644); err != nil {
 		t.Fatal(err)
@@ -142,13 +145,13 @@ func TestConcurrentIdenticalRender(t *testing.T) {
 			local := e
 			out, errs := &bytes.Buffer{}, &bytes.Buffer{}
 			local.Stdout, local.Stderr = out, errs
-			if code := Run([]string{"render", "task", "1", "--json"}, local); code != 0 {
+			if code := Run([]string{"render", "T-01", "1", "--json"}, local); code != 0 {
 				t.Errorf("exit %d: %s %s", code, out, errs)
 			}
 		}()
 	}
 	wg.Wait()
-	b, err := os.ReadFile(filepath.Join(e.Cwd, "task", "jobs", "J-1", "inputs.json"))
+	b, err := os.ReadFile(filepath.Join(e.Cwd, "T-01", "jobs", "J-1", "inputs.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +166,7 @@ func TestIndexGenerationRecorded(t *testing.T) {
 	if err != nil || idx.Generations["project"] == 0 {
 		t.Fatalf("%+v %v", idx, err)
 	}
-	r := call(t, e, out, errs, 0, "render", "task", "1", "--json")
+	r := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
 	b, err := os.ReadFile(r.Inputs)
 	if err != nil {
 		t.Fatal(err)
@@ -181,7 +184,7 @@ func TestIndexGenerationRecorded(t *testing.T) {
 
 func render(t *testing.T, e Env, out, errs *bytes.Buffer) (brief, inputs string) {
 	t.Helper()
-	r := call(t, e, out, errs, 0, "render", "task", "1", "--json")
+	r := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
 	b, err := os.ReadFile(r.Path)
 	if err != nil {
 		t.Fatal(err)
@@ -200,7 +203,12 @@ func TestOwnerRoleDecidesTheTierOfTheIntent(t *testing.T) {
 		if role == "" {
 			line = ""
 		}
-		if err := os.WriteFile(filepath.Join(e.Cwd, "task", "task.md"), []byte("---\nid: T-01\n"+line+"---\n# Export documentation\n"), 0o644); err != nil {
+		path := filepath.Join(e.Cwd, "T-01", "task.md")
+		metadata, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(strings.Replace(string(metadata), "owner: member\n", line, 1)), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		_, inputs := render(t, e, out, errs)
@@ -270,6 +278,10 @@ func TestTaskNewThenRenderTrustsTheRequest(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(made.Path, "plan.md"), []byte(text), 0o644); err != nil {
 				t.Fatal(err)
 			}
+			if _, err := store.Change(task.WriteOptions{Cwd: made.Path, ID: made.ID, Action: "status", State: "waiting"}); err != nil {
+				t.Fatal(err)
+			}
+			(jobtest.Home{GridHome: store.Resolver.GridHome, Task: made.Path}).Approve(t)
 			out, errs := &bytes.Buffer{}, &bytes.Buffer{}
 			e := Env{Resolver: ownerResolver(filepath.Join(home, ".grid")), Cwd: home, GridHome: filepath.Join(home, ".grid"), Machine: jobtest.Machine, Stdout: out, Stderr: errs}
 			r := call(t, e, out, errs, 0, "render", made.Path, "1", "--json")
@@ -327,7 +339,7 @@ func TestPersonalNoteStaysOutOfSavedFiles(t *testing.T) {
 	if _, err := store.Accept("home", "my-habits"); err != nil {
 		t.Fatal(err)
 	}
-	plan := filepath.Join(e.Cwd, "task", "plan.md")
+	plan := filepath.Join(e.Cwd, "T-01", "plan.md")
 	b, err := os.ReadFile(plan)
 	if err != nil {
 		t.Fatal(err)
@@ -339,6 +351,7 @@ func TestPersonalNoteStaysOutOfSavedFiles(t *testing.T) {
 	if err = os.WriteFile(plan, []byte(edited), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	(jobtest.Home{GridHome: e.GridHome, Task: filepath.Join(e.Cwd, "T-01")}).Approve(t)
 	brief, inputs := render(t, e, out, errs)
 	for _, text := range []string{brief, inputs} {
 		if strings.Contains(text, "HOME-BODY-MARKER") || strings.Contains(text, "HOME-SUMMARY-MARKER") {
@@ -347,5 +360,46 @@ func TestPersonalNoteStaysOutOfSavedFiles(t *testing.T) {
 		if !strings.Contains(text, "brain:home/my-habits") {
 			t.Fatal("pointer to the personal note is missing")
 		}
+	}
+}
+
+func TestRenderNeedsPlanApproval(t *testing.T) {
+	for _, change := range []string{"edited step", "missing approval"} {
+		t.Run(change, func(t *testing.T) {
+			e, out, errs := fixture(t)
+			dir := filepath.Join(e.Cwd, "T-01")
+			path := filepath.Join(dir, "plan.md")
+			text, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if change == "edited step" {
+				text = bytes.Replace(text, []byte("  Document the export format and column order."), []byte("  Document the export format and column order.\n  Include the revised format."), 1)
+				if err := os.WriteFile(path, text, 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.Remove(filepath.Join(dir, "approval.json")); err != nil {
+				t.Fatal(err)
+			}
+			for _, jsonOutput := range []bool{true, false} {
+				args := []string{"render", "T-01", "1"}
+				if jsonOutput {
+					args = append(args, "--json")
+				}
+				r := call(t, e, out, errs, 2, args...)
+				if r.OK || r.Brief != "" || r.Path != "" || r.Inputs != "" || !strings.Contains(out.String()+errs.String(), "plan needs approval") {
+					t.Fatal("approval refusal must explain the gate and return no brief artifacts")
+				}
+				if _, err := os.Stat(filepath.Join(dir, "jobs")); !os.IsNotExist(err) {
+					t.Fatal("approval refusal created a partial Job bundle")
+				}
+			}
+			(jobtest.Home{GridHome: e.GridHome, Task: dir}).Approve(t)
+			r := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
+			brief, err := os.ReadFile(r.Path)
+			if err != nil || !r.OK || (change == "edited step" && !bytes.Contains(brief, []byte("Include the revised format."))) {
+				t.Fatalf("reapproved plan did not render reviewed text: %v", err)
+			}
+		})
 	}
 }

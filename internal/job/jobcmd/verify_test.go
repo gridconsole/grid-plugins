@@ -16,7 +16,7 @@ func TestVerifyCLI(t *testing.T) {
 		t.Skip("POSIX shell command fixture")
 	}
 	e, out, errs := fixture(t)
-	taskPath := filepath.Join(e.Cwd, "task")
+	taskPath := filepath.Join(e.Cwd, "T-01")
 	j, err := job.LoadPlan(taskPath, "J-1")
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestVerifyCLI(t *testing.T) {
 	for _, dir := range []string{"", e.Cwd} {
 		out.Reset()
 		errs.Reset()
-		args := []string{"verify", "J-1", "--task", "task", "--json"}
+		args := []string{"verify", "J-1", "--task", "T-01", "--json"}
 		if dir != "" {
 			args = append(args, "--dir", dir)
 		}
@@ -57,7 +57,7 @@ func TestVerifyCLI(t *testing.T) {
 	j.Verify = job.Verify{Kind: "reviewer-check"}
 	save()
 	out.Reset()
-	if code := Run([]string{"verify", "J-1", "--task", "task"}, e); code != 3 || !strings.Contains(out.String(), "reviewer must check") {
+	if code := Run([]string{"verify", "J-1", "--task", "T-01"}, e); code != 3 || !strings.Contains(out.String(), "reviewer must check") {
 		t.Fatalf("%d: %s %s", code, out, errs)
 	}
 	if err = os.Remove(filepath.Join(saved, "job.yaml")); err != nil {
@@ -71,7 +71,7 @@ func TestVerifyCLI(t *testing.T) {
 
 func TestVerifyNamedWorktreeAndTaskProof(t *testing.T) {
 	e, out, errs := fixture(t)
-	oldTask := filepath.Join(e.Cwd, "task")
+	oldTask := filepath.Join(e.Cwd, "T-01")
 	taskPath := filepath.Join(e.Cwd, "T-01-example")
 	if err := os.Rename(oldTask, taskPath); err != nil {
 		t.Fatal(err)

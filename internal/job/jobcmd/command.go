@@ -85,6 +85,9 @@ func Run(args []string, e Env) int {
 	}
 	action, args := f.args[0], f.args[1:]
 	fail := func(err error, code int) int {
+		if errors.Is(err, job.ErrPlanNeedsApproval) {
+			code = 2
+		}
 		return output(e, f, report{Error: err.Error(), Findings: []lint.Finding{}}, code)
 	}
 	if f.dir != "" && action != "verify" {
@@ -121,7 +124,13 @@ func Run(args []string, e Env) int {
 		skeleton := meta + "\n## Intent\n## Job\n## Context\n## Out of scope\n## Open\n## Acceptance\n## Outcome\n## Verdict\n## Follow-up\n"
 		findings := lint.Check(skeleton, lint.Options{Resolver: w.files, Repos: w.repos})
 		if lint.HasErrors(findings) {
-			return output(e, f, report{ID: j.ID, Findings: findings}, 1)
+			code := 1
+			for _, finding := range findings {
+				if finding.Rule == "job.plan-approval" {
+					code = 2
+				}
+			}
+			return output(e, f, report{ID: j.ID, Findings: findings}, code)
 		}
 		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget})
 		if err != nil {

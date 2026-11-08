@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
 	"github.com/gridconsole/grid-plugins/internal/plan"
+	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 // Source is a resolved, pinned pointer. Tier comes from where the text was read
@@ -65,10 +67,10 @@ func ParseBrain(id string) (level, name string, ok bool) {
 	return level, name, strings.HasPrefix(id, "brain:") && ok && (level == "home" || level == "project") && brain.ValidName(name)
 }
 
+// ErrPlanNeedsApproval refuses worker text from an unapproved or changed plan.
+var ErrPlanNeedsApproval = errors.New("plan needs approval: review and approve the current plan before rendering a Job")
+
 func (f *Files) Resolve(pointer string) (Source, error) {
-	if s, ok := f.cache[pointer]; ok {
-		return s, nil
-	}
 	rel, anchor := pointer, ""
 	if at := strings.IndexByte(rel, '#'); at >= 0 {
 		anchor = rel[at+1:]
@@ -80,6 +82,14 @@ func (f *Files) Resolve(pointer string) (Source, error) {
 		}
 		anchor = "L" + m[1] + "-L" + m[2]
 		rel = strings.TrimSuffix(rel, m[0])
+	}
+	// Plan anchors must recheck the current snapshot and receipt on every read,
+	// including when lint and render share this resolver.
+	planAnchor := anchor != "" && filepath.ToSlash(filepath.Clean(strings.TrimPrefix(rel, "task:"))) == "plan.md"
+	if !planAnchor {
+		if s, ok := f.cache[pointer]; ok {
+			return s, nil
+		}
 	}
 	var s Source
 	var err error
@@ -202,6 +212,12 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 		return s, fmt.Errorf("%s: cannot read source: %w", pointer, err)
 	}
 	text := strings.ReplaceAll(string(b), "\r\n", "\n")
+	if !project && anchor != "" && filepath.ToSlash(filepath.Clean(rel)) == "plan.md" {
+		// Validate the bytes we will select from, not a second read of plan.md.
+		if !task.ApprovedDigest(root, plan.Hash(text), plan.Digest(text)) {
+			return s, fmt.Errorf("%s: %w", pointer, ErrPlanNeedsApproval)
+		}
+	}
 	// Only the task folder's own Markdown carries front matter worth reading; a repo
 	// file that starts with --- (a YAML file) is plain text.
 	if !project && strings.HasPrefix(text, "---\n") {

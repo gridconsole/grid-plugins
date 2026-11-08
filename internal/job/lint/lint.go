@@ -2,6 +2,7 @@
 package lint
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"regexp"
@@ -41,6 +42,12 @@ type checker struct {
 
 func (c *checker) add(rule, key, message, fix string) {
 	c.addAt(rule, c.line(key), "error", message, fix)
+}
+func (c *checker) sourceError(rule, key string, err error, fix string) {
+	if errors.Is(err, job.ErrPlanNeedsApproval) {
+		rule, fix = "job.plan-approval", "Review and approve the current plan before rendering a Job."
+	}
+	c.add(rule, key, err.Error(), fix)
 }
 func (c *checker) line(key string) int {
 	if n := c.doc.Lines[key]; n > 0 {
@@ -267,7 +274,7 @@ func (c *checker) validate(j job.Job, o Options) {
 			}
 			s, e := o.Resolver.Resolve(p)
 			if e != nil {
-				c.add("job.pointer", "intent", e.Error(), "Repair the pointer to the intended source lines.")
+				c.sourceError("job.pointer", "intent", e, "Repair the pointer to the intended source lines.")
 			} else if p == j.Intent.Item {
 				itemText = s.Text
 			}
@@ -277,7 +284,7 @@ func (c *checker) validate(j job.Job, o Options) {
 				c.add("job.read-range", "read", "Read pointer has no range: "+p, "Name a line range or an explicit anchor.")
 			}
 			if _, e := o.Resolver.Resolve(p); e != nil {
-				c.add("job.read-range", "read", e.Error(), "Update the read range or anchor to match the source.")
+				c.sourceError("job.read-range", "read", e, "Update the read range or anchor to match the source.")
 			}
 		}
 		for _, group := range []struct {
@@ -286,7 +293,7 @@ func (c *checker) validate(j job.Job, o Options) {
 		}{{"keep", j.Keep}, {"decisions", j.Decisions}} {
 			for _, p := range group.ids {
 				if s, e := o.Resolver.Resolve(p); e != nil {
-					c.add("job.pointer", group.key, e.Error(), "Use an existing brain entry id.")
+					c.sourceError("job.pointer", group.key, e, "Use an existing brain entry id.")
 				} else if s.PointerOnly {
 					c.personal(group.key, p)
 				}
@@ -342,7 +349,7 @@ func (c *checker) link(l job.Link, key string, o Options) {
 	if o.Resolver != nil {
 		s, e := o.Resolver.Resolve(l.To)
 		if e != nil {
-			c.add("job.pointer", key, e.Error(), "Repair the link to an existing target.")
+			c.sourceError("job.pointer", key, e, "Repair the link to an existing target.")
 		} else if s.PointerOnly {
 			c.personal(key, l.To)
 		} else if strings.TrimSpace(s.Summary) == "" || utf8.RuneCountInString(s.Summary) > 300 {

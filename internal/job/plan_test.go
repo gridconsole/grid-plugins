@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/job/jobtest"
 )
 
 func TestLoadChecklistPlan(t *testing.T) {
@@ -14,7 +15,8 @@ func TestLoadChecklistPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
+	h := jobtest.New(t, testdata())
+	dir := h.Task
 	path := filepath.Join(dir, "plan.md")
 	write := func(text string) {
 		t.Helper()

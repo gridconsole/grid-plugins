@@ -11,6 +11,9 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/plan"
+	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 const (
@@ -31,7 +34,7 @@ type Home struct {
 func New(t *testing.T, testdata string) Home {
 	t.Helper()
 	gh := t.TempDir()
-	h := Home{GridHome: gh, Task: filepath.Join(gh, "projects", Project, "tasks", "task"), Folder: filepath.Join(gh, "work")}
+	h := Home{GridHome: gh, Task: filepath.Join(gh, "projects", Project, "tasks", "T-01"), Folder: filepath.Join(gh, "work")}
 	if err := os.MkdirAll(h.Folder, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -57,6 +60,11 @@ func New(t *testing.T, testdata string) Home {
 	if err != nil {
 		t.Fatal(err)
 	}
+	metadata := "---\nid: T-01\ntitle: Export documentation\nproject: demo\nstate: waiting\ncreated: 2026-01-01T00:00:00Z\nowner: member\n---\n# Export documentation\n"
+	if err := os.WriteFile(filepath.Join(h.Task, "task.md"), []byte(metadata), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.Approve(t)
 	record := "---\nfolders:\n  - {machine: " + Machine + ", path: " + h.Folder + "}\n---\n"
 	if err := os.WriteFile(filepath.Join(gh, "projects", Project, "project.md"), []byte(record), 0o644); err != nil {
 		t.Fatal(err)
@@ -78,4 +86,21 @@ func (h Home) Note(level, name, topic, summary, body string, tier contract.Trust
 		panic(err)
 	}
 	return e
+}
+
+// Approve records a real receipt for the current fixture plan, including reapproval.
+func (h Home) Approve(t *testing.T) {
+	t.Helper()
+	text, err := (plan.Store{TaskDir: h.Task}).Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := task.Read(h.Task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := task.Store{Resolver: where.Resolver{GridHome: h.GridHome}}
+	if _, err := s.Approve(task.WriteOptions{Cwd: h.Task, ID: current.ID}, plan.Hash(text)); err != nil {
+		t.Fatal(err)
+	}
 }
