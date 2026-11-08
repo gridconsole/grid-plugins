@@ -25,7 +25,7 @@ same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` thro
 
 ## Commands working today
 
-`grid version`, `grid where`, `grid doctor`, `grid hook <event>`, and `grid task new|show|list`. The other command groups are listed by `grid help` and print "not built yet". The `--json` shapes are in [contract/README.md](contract/README.md).
+`grid version`, `grid where`, `grid doctor`, `grid hook <event>`, `grid task new|show|list`, `grid feed post|read|state|types|handover|fold`, and `grid mcp`. The other command groups are listed by `grid help` and print "not built yet". The `--json` shapes are in [contract/README.md](contract/README.md).
 
     grid task new "Fix the search label" --size small --json
     grid task show T-01 --json
@@ -34,12 +34,12 @@ same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` thro
 
 Tasks use the current folder's project, or Personal when no project applies. `--project` accepts a registered project's name or id, or `personal`. A new task preserves the quoted request exactly in `intent.md`, starts in `state: queued`, and defaults to `size: auto`. `--workflow` stores a workflow name; omitting it leaves selection to the workflow rules. Creation does not start work. `show` needs no id inside a task folder or its descendants. `list` reads one project and optionally filters by an exact state.
 
-To do: `grid mcp`, the stdio server with the Feed tools. The plugin's `.mcp.json` comes back with it.
+`grid mcp` serves the five Feed tools (`feed_post`, `feed_read`, `feed_state`, `feed_types`, `feed_handover`) over stdio MCP. The plugin's `.mcp.json` starts `${CLAUDE_PLUGIN_ROOT}/bin/grid mcp` as the `grid-feed` server, so Claude Code needs nothing more. To run it by hand, build with `make build` and start `./dist/grid mcp` with `GRID_HOME` and the session variables (`GRID_FEED_TASK`, `GRID_JOB`, `GRID_ATTEMPT`, ...) set; it speaks JSON-RPC lines on stdin and stdout. Codex uses `grid feed` in its shell without Feed MCP configuration. See [Feed MCP and Codex](docs/feed-mcp.md) for session context, tools, and examples.
 
 ## Layout
 
     cmd/grid/        entry point
-    internal/        packages: cli, task, where, doctor, hook, project, gitx, gridhome, version
+    internal/        packages: cli, task, feed, mcp, where, doctor, hook, project, gitx, gridhome, version
     agents/ skills/  shipped with the plugin
     topics/          brain topic schemas
     contract/        Feed contract schemas and fixtures
