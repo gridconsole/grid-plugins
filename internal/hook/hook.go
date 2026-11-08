@@ -188,7 +188,7 @@ func ProjectLine(r where.Result, home string) string {
 // GRID_HOME come from the resolver so the guards judge the same home as the CLI.
 func guardEnv(o Options) map[string]string {
 	env := map[string]string{"HOME": o.Resolver.Home, "GRID_HOME": o.Resolver.GridHome, "PWD": o.Cwd, "GRID_MACHINE": o.Resolver.Machine}
-	for _, key := range []string{"GRID_PROJECTS", "GRID_PROJECT", "GRID_TASK", "GRID_PLAN_GUARD", "CLAUDE_PLUGIN_DATA", "CLAUDE_PLUGIN_ROOT"} {
+	for _, key := range []string{"GRID_ROLE", "GRID_MEMBER", "GRID_PROJECTS", "GRID_PROJECT", "GRID_TASK", "GRID_PLAN_GUARD", "CLAUDE_PLUGIN_DATA", "CLAUDE_PLUGIN_ROOT"} {
 		if v := o.Getenv(key); v != "" {
 			env[key] = v
 		}

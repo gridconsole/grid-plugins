@@ -16,7 +16,8 @@ func configuredLevel(name string, in hookio.Input, root string, env map[string]s
 	if d.Behavior == "" || settings.AlwaysBlock(name) {
 		return d
 	}
-	home := gridhome.Dir(func(key string) string { return env[key] }, env["HOME"])
+	resolver := callerResolver(env)
+	home := resolver.GridHome
 	if home == "" {
 		return d
 	}
@@ -24,8 +25,10 @@ func configuredLevel(name string, in hookio.Input, root string, env map[string]s
 	if cwd == "" {
 		cwd = root
 	}
-	level, err := settings.ResolveHookLevel(name,
-		where.Resolver{GridHome: home, Home: env["HOME"], Machine: env["GRID_MACHINE"], Caller: where.CallerFrom(func(key string) string { return env[key] })},
+	if cwd == "" {
+		cwd = "."
+	}
+	level, err := settings.ResolveHookLevel(name, resolver,
 		where.Query{Cwd: cwd, Project: env["GRID_PROJECT"], Task: env["GRID_TASK"]})
 	if err != nil {
 		if d.Behavior == "deny" || d.Behavior == "ask" {
@@ -44,4 +47,14 @@ func configuredLevel(name string, in hookio.Input, root string, env map[string]s
 		}
 	}
 	return d
+}
+
+// callerResolver is shared by hook settings and automatic folder permissions.
+func callerResolver(env map[string]string) where.Resolver {
+	home := gridhome.Dir(func(key string) string { return env[key] }, env["HOME"])
+	machine := env["GRID_MACHINE"]
+	if machine == "" {
+		machine = gridhome.Machine(home)
+	}
+	return where.Resolver{GridHome: home, Home: env["HOME"], Machine: machine, Caller: where.CallerFrom(func(key string) string { return env[key] })}
 }

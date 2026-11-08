@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -100,5 +101,35 @@ func TestPermissionSlowAnswerWithinWindowIsUsed(t *testing.T) {
 	out, log, code := f.run(t, "PermissionRequest", hookio.Input{ToolName: "Read", ToolInput: map[string]any{"file_path": filepath.Join(filepath.Dir(f.home), "outside.md")}})
 	if code != 0 || log != "" || !strings.Contains(out, `"behavior":"allow"`) {
 		t.Fatalf("slow answer lost: %d %s %s", code, out, log)
+	}
+}
+
+func TestPermissionForwardCannotApprovePersonal(t *testing.T) {
+	for _, level := range []string{"off", "warn", "block"} {
+		t.Run(level, func(t *testing.T) {
+			f := eventSetup(t)
+			f.env["GRID_ROLE"], f.env["GRID_MEMBER"] = "guest", "gus"
+			if err := os.WriteFile(filepath.Join(f.home, "settings.json"), []byte(`{"hooks":{"home-allow":"`+level+`"}}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var calls atomic.Int32
+			personal := filepath.Join(f.dir, "task.md")
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				_ = json.NewEncoder(w).Encode(map[string]any{"behavior": "allow", "updatedInput": map[string]any{"file_path": personal}})
+			}))
+			defer server.Close()
+			f.env["GRID_URL"] = server.URL
+			outside := filepath.Join(filepath.Dir(f.home), "outside.md")
+			for _, path := range []string{personal, outside} {
+				out, _, code := f.run(t, "PermissionRequest", hookio.Input{ToolName: "Read", ToolInput: map[string]any{"file_path": path}})
+				if code != 0 || !strings.Contains(out, `"behavior":"deny"`) || strings.Contains(out, "updatedPermissions") || strings.Contains(out, personal) {
+					t.Fatalf("Personal approved or disclosed: %d %s", code, out)
+				}
+			}
+			if calls.Load() != 1 {
+				t.Fatalf("server calls = %d, want only the outside request", calls.Load())
+			}
+		})
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 var shellWord = regexp.MustCompile(`^[\w@%+=:,./-]$`)
@@ -157,19 +158,50 @@ func proofAddPaths(args []string) []string {
 	return pathsIn(judged)
 }
 
-// EvaluateHome only grants permission; an empty decision means normal permission
-// handling. Invalid settings fail closed. Combine it with other guards using
-// hookio.Strongest.
+// homeScope uses the CLI's caller policy and project resolution. A caller who
+// cannot use Personal may only receive the active registered project's data
+// directory. Project records have no membership ACL; never infer access from
+// the requested tool path or enumerate every project as an allowed directory.
+func (c context) homeScope() (string, bool) {
+	r := callerResolver(c.env)
+	if r.PersonalOK() {
+		return c.safeHome(), false
+	}
+	result, err := r.Resolve(where.Query{Cwd: c.in.Cwd, Project: c.env["GRID_PROJECT"], Task: c.env["GRID_TASK"]})
+	if err != nil || !result.Record || result.Project == where.Personal {
+		return "", true
+	}
+	home := realNative(c.home, 0)
+	dir := filepath.Join(home, "projects", result.Project)
+	// A record must not redirect a session directory through a symlink.
+	if realNative(dir, 0) != dir || !inside(filepath.Join(home, "projects"), dir) {
+		return "", true
+	}
+	return dir, true
+}
+
+// EvaluateHome grants only within the caller's scope and refuses home paths
+// outside it. Scope refusals cannot be disabled by home-allow settings.
 func EvaluateHome(in hookio.Input, root string, env map[string]string) (decision hookio.Decision) {
-	defer func() { decision = configuredLevel("home-allow", in, root, env, decision) }()
+	defer func() {
+		if decision.Behavior != "deny" {
+			decision = configuredLevel("home-allow", in, root, env, decision)
+		}
+	}()
 	c := newContext(in, root, env)
 	// Do not reinterpret a missing cwd as an absolute hook-supplied directory.
 	c.in.Cwd = in.Cwd
+	scope, restricted := c.homeScope()
 	reason := ""
 	if in.ToolName == "Bash" {
 		script, args := c.ownScript(str(in.ToolInput["command"]))
 		if script == "" {
 			return hookio.Decision{}
+		}
+		// These legacy scripts can choose Personal implicitly (even with no
+		// path arguments). They cannot establish a project-scoped permission.
+		if restricted {
+			return hookio.Deny("This caller cannot authorize legacy scripts with implicit Personal access.")
 		}
 		paths := pathsIn(args)
 		if script == "deliver/proof-add.mjs" {
@@ -196,6 +228,18 @@ func EvaluateHome(in hookio.Input, root string, env map[string]string) (decision
 		}
 		home := c.safeHome()
 		given := str(in.ToolInput[key])
+		if restricted {
+			scopedPath := given
+			if scopedPath == "" && key == "path" {
+				scopedPath = in.Cwd
+			}
+			target := c.path(scopedPath)
+			personal := filepath.Join(realNative(c.home, 0), where.Personal)
+			if inside(personal, resolve(in.Cwd, c.expand(scopedPath))) || inside(realNative(personal, 0), target) ||
+				(inside(realNative(c.home, 0), target) && (scope == "" || !inside(scope, target))) {
+				return hookio.Deny("This caller cannot access Grid data outside the active project.")
+			}
+		}
 		if home == "" || !filepath.IsAbs(given) {
 			return hookio.Decision{}
 		}
@@ -205,13 +249,13 @@ func EvaluateHome(in hookio.Input, root string, env map[string]string) (decision
 				return hookio.Decision{}
 			}
 		}
-		if !inside(home, realNative(given, 0)) {
+		if !inside(home, realNative(given, 0)) || scope == "" || !inside(scope, realNative(given, 0)) {
 			return hookio.Decision{}
 		}
 		reason = in.ToolName + " stays inside the Grid home"
 	}
 	if in.HookEventName == "PermissionRequest" {
-		return hookio.PermissionAllow(c.safeHome())
+		return hookio.PermissionAllow(scope)
 	}
 	if in.HookEventName != "PreToolUse" {
 		return hookio.Decision{}
