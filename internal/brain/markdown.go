@@ -14,11 +14,7 @@ func Encode(n Note) ([]byte, error) {
 	if n.Links == nil {
 		n.Links = []Link{}
 	}
-	front, err := yaml.Dump(n, yaml.WithIndent(2), yaml.WithLineWidth(-1))
-	if err != nil {
-		return nil, err
-	}
-	return []byte(fmt.Sprintf("---\n%s---\n%s\n", front, strings.TrimRight(n.Body, "\n"))), nil
+	return EncodeConfig(n, n.Body)
 }
 
 // Parse reads a note's front matter strictly: an unknown field, a duplicate key,
