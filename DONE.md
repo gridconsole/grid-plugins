@@ -144,3 +144,24 @@ References below name the supplied reference documents and their line numbers.
   lifecycle operations described in `docs/go-architecture.md:245` and
   `docs/go-architecture.md:246`; worker ownership is described in
   `docs/plugin-design.md:121`.
+
+## Rework after review (rework-L30)
+
+These supersede the matching statements above.
+
+- Lease reader: `lease.ReadJob` reads `<task>/feed/lease/<J>.json` and `<task>/feed/.live/...` through `feed.Store{TaskDir}.Dir()`. `TestReadJobFindsLeaseAndBeatWrittenByTheRealStores` builds the task with the real Feed and session stores.
+- Listener probe: a port is busy when connecting to 127.0.0.1 or ::1 succeeds, or when binding 127.0.0.1, ::1 or the wildcard (tcp4, tcp6) fails. macOS runtime tests now run and pass; `make test` was run three times on macOS. A listener bound only to a non-loopback address is still invisible on BSD/macOS (SO_REUSEADDR lets the wildcard bind succeed).
+- Damaged port files are no longer fail-closed. Every writer holds the allocator lock and writes each file whole by `atomicfile.Write`, so an empty, unparsable, mismatched or incomplete block is a crash leftover: `List` skips it with a warning and `grid ports gc` removes it (and stops a server group recorded in it).
+- Orphaned dev servers: `grid env up` stops the process group on SIGINT or SIGTERM; `grid ports gc` stops the group (SIGINT, SIGTERM, SIGKILL ladder, now `ports.Stop`) once the Job's lease is released, expired or superseded, then frees the block. `TestGCStopsOrphanedServerAfterParentKilledAndLeaseExpiry` kills the `env up` parent and runs gc before and after expiry.
+- `environments.timeout` is capped at 2m (`env.MaxTimeout`); `health_url` must name 127.0.0.1, ::1 or localhost.
+
+## Left open
+
+- Process start time (`pid_start`) is not recorded with the dev server pid, so pid reuse after a reboot or wrap can still make `env down` or gc signal an unrelated process group of the same user (review should-fix 1).
+- `grid ports claim` still records the parent pid as owner; the owner should be the Job (task, job id, fence) (should-fix 2).
+- The allocator lock is still held across the health wait and shutdown grace in `env up`; only the timeout is capped (should-fix 3).
+- The dev command inherits the full environment, including agent and API keys (should-fix 4).
+- `environments` is read from `project.md` front matter, not a brain config topic (should-fix 6); the `environments` brain-topic command still needs a verb now that `grid env` means up/down (nit 3).
+- Windows: `ports.Alive` is always true and fslock refuses, so `grid ports` and `grid env` fail at run time; the error text does not say so (should-fix 7).
+- Child logs `ports/env-<port>.log` are never removed (nit 1). DONE.md moves to docs/lanes/L30.md at merge.
+- Noticed: `session.Store` writes `beat_at`/`until` with Go's shortest fraction, which fails the heartbeat schema's `.000Z` pattern unless the time has three significant millisecond digits; `lease.ReadJob` then errors and `grid ports gc` stops at that block.
