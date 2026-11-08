@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -93,6 +94,34 @@ func TestSuiteContinuesAfterFailure(t *testing.T) {
 	}
 	if code, out, stderr := command(t, "show", runs[0].ID, "--results", results); code != 0 || !strings.Contains(out, "exit 7") {
 		t.Fatalf("show failed run: %d %s %s", code, out, stderr)
+	}
+}
+
+func TestDefaultResultsLiveUnderGridHome(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cwd, gridHome := t.TempDir(), t.TempDir()
+	runCmd := func(args ...string) (int, string) {
+		var out, errout bytes.Buffer
+		code := Run(args, Env{Cwd: cwd, GridHome: gridHome, Stdout: &out, Stderr: &errout})
+		return code, out.String() + errout.String()
+	}
+	suite := filepath.Join(root, "evals", "tasks")
+	code, out := runCmd("run", "release-notes", "--suite", suite, "--json")
+	var runs []eval.Result
+	if code != 0 || json.Unmarshal([]byte(out), &runs) != nil || len(runs) != 1 {
+		t.Fatalf("run: %d %s", code, out)
+	}
+	if _, err := eval.LoadResult(filepath.Join(gridHome, "evals", "runs"), runs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if entries, err := os.ReadDir(cwd); err != nil || len(entries) != 0 {
+		t.Fatalf("results leaked into the working directory: %v %v", entries, err)
+	}
+	if code, out := runCmd("show", runs[0].ID); code != 0 || !strings.Contains(out, runs[0].ID) {
+		t.Fatalf("show: %d %s", code, out)
 	}
 }
 

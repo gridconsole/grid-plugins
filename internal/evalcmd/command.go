@@ -19,9 +19,10 @@ import (
 )
 
 type Env struct {
-	Cwd    string
-	Stdout io.Writer
-	Stderr io.Writer
+	Cwd      string
+	GridHome string // "" when unknown; the default results folder then falls back to evals/runs under Cwd
+	Stdout   io.Writer
+	Stderr   io.Writer
 }
 
 // stringList collects a repeated flag.
@@ -53,7 +54,7 @@ func Run(args []string, env Env) int {
 		fs.StringVar(&size, "size", "", "filter tiny, small, normal or large tasks")
 	}
 	if verb != "list" {
-		fs.StringVar(&results, "results", "evals/runs", "result directory")
+		fs.StringVar(&results, "results", "", "result directory (default <grid home>/evals/runs)")
 	}
 	var allowEnv stringList
 	if verb == "run" {
@@ -72,6 +73,12 @@ func Run(args []string, env Env) int {
 			return 0
 		}
 		return 2
+	}
+	if results == "" {
+		results = filepath.Join("evals", "runs")
+		if env.GridHome != "" {
+			results = filepath.Join(env.GridHome, "evals", "runs")
+		}
 	}
 	if fs.NArg() == 1 && positional == "" && verb != "list" {
 		positional = fs.Arg(0)
