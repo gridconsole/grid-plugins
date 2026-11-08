@@ -12,6 +12,7 @@
 // says otherwise; the ssh child git leaves behind is stopped with it), and a git older than 2.29 is refused up front (fetchRefs needs
 // --no-write-fetch-head). The four remote calls take `url` too: an scp-style ssh address (a Host's repo) that stands for the remote `label`.
 import { spawnSync } from 'node:child_process';
+import { signalGroup, refusal } from './kill.mjs';
 
 const TASK_RE = /^T-\d+$/;
 const JOB_RE = /^J-\d+$/;
@@ -75,12 +76,12 @@ function batchSsh(repo, env) {
 // Stops what a timed-out git left behind: its ssh child. POSIX: git's process group (runGit starts a remote call in its own group).
 // Windows has no process group, so taskkill takes the process tree; its result is ignored, the timeout error stays as it is.
 function stopLeftovers(pid, platform, spawn) {
-  if (!Number.isInteger(pid) || pid <= 1) return;
+  if (refusal(pid)) return; // not a pid, or ours: nothing is stopped
   if (platform === 'win32') {
     try { spawn('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore', windowsHide: true }); } catch { /* nothing to stop */ }
     return;
   }
-  try { process.kill(-pid, 'SIGKILL'); } catch { /* the group is already gone */ }
+  try { signalGroup(pid, 'SIGKILL'); } catch { /* refused, or the group is already gone */ }
 }
 
 // A Host's repo as git is given it: an scp-style ssh address, `[user@]host:path` (the path is relative to the login's home folder

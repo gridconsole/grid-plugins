@@ -3,11 +3,13 @@
 // Job goes stale: a lease that ran out, a worker-exit with no result, a result with no submit, a start that failed.
 import { fromOrchestrator } from './lib.mjs';
 import { isWait } from './wait.mjs';
+import { isDeploy } from './deploy.mjs';
 
 export const MAX_ATTEMPTS = 2;
 export const OPTIONS = ['Retry it', 'Change the brief', 'Drop it'];
 
-const lastStale = (job) => [...job.history].reverse().find((h) => h.status === 'stale');
+// The latest failure of the Job: it went stale, or the judge rejected it (the reason is the judge's).
+const lastStale = (job) => [...job.history].reverse().find((h) => h.status === 'stale' || h.status === 'rejected');
 const indexOf = (v) => new Map(v.posts.map((p, i) => [p.id, i]));
 
 // The loop's own question to the Owner about this Job, posted after the attempt went stale: the latest, or null. Answered or not.
@@ -23,14 +25,16 @@ function ownQuestion(job, v) {
 export function retryStale(job, v) {
   // A stale wait Job stays stale: a new watch is a fresh post by the Orchestrator or a person, never a retry.
   if (isWait(job.jobPost)) return null;
+  // A failed deploy has its own policy (fix forward, or a revert Job), never a second attempt.
+  if (isDeploy(job.jobPost)) return null;
   const why = lastStale(job)?.reason ?? 'the Worker went stale';
   // A Worker that stopped with a blocking question still open is waiting on an answer: no second Worker, the Job waits parked.
   const waiting = job.open_questions.map((id) => v.byId.get(id)).find((p) => p?.body?.blocking === true && p.worker && p.worker === job.assign?.worker);
   if (job.attempt < MAX_ATTEMPTS) {
     if (waiting) return { status: 'parked', reason: `${waiting.worker} stopped with a question still open (${waiting.id}), waiting for the answer` };
-    return { status: 'ready', reason: `attempt ${job.attempt} went stale, trying once more` };
+    return { status: 'ready', reason: job.status === 'rejected' ? `attempt ${job.attempt} was rejected: ${why}` : `attempt ${job.attempt} went stale, trying once more` };
   }
-  const body = { status: 'parked', reason: `attempt ${job.attempt} went stale too: ${why}; asked the Owner` };
+  const body = { status: 'parked', reason: `attempt ${job.attempt} ${job.status === 'rejected' ? 'was rejected again' : 'went stale too'}: ${why}; asked the Owner` };
   // The loop's question, once posted, is not posted again (the loop stopped between the question and the park, or the Owner answered).
   if (ownQuestion(job, v)) return body;
   return {

@@ -7,6 +7,7 @@
 // Every probe is bounded (time and output) and the whole watch ends at timeout_s through the Job's lease. A probe runs in its own process group
 // and the group is killed when the probe returns or is cut off, so a program it started in the background does not outlive it. Node built-ins only.
 import { spawnSync } from 'node:child_process';
+import { signalGroup } from './kill.mjs';
 
 export const WAIT_KIND = 'wait';
 export const DEFAULTS = { interval_s: 15, timeout_s: 3600, probe_timeout_s: 30 };
@@ -47,10 +48,10 @@ export function checkOf(body) {
   return { ok: true, check: { ...base, url: u.href } };
 }
 
-// Kills the process group a probe led (it was spawned detached, so its pid is its group id), grandchildren included. A group that is gone is fine.
+// Kills the process group a probe led (it was spawned detached, so its pid is its group id), grandchildren included. A group that is gone is
+// fine; a pid the guard refuses (a failed spawn's 0, a fake 1) sends nothing.
 function killGroup(pid) {
-  if (!Number.isInteger(pid) || pid <= 1) return;
-  try { process.kill(-pid, 'SIGKILL'); } catch { /* already gone */ }
+  try { signalGroup(pid, 'SIGKILL'); } catch { /* refused, or already gone */ }
 }
 
 // The URL read in a child node with the address as an argument, so it is bounded and killable like a command. Prints {status, body}.

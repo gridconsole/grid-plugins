@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { signalGroup } from './kill.mjs';
 
 export const DEPLOY_KIND = 'deploy';
 export const LAND_KIND = 'land';
@@ -45,7 +46,7 @@ export function deployOf(body) {
 // Kills the process group the command led (it was spawned detached). A group that is gone is fine.
 function killGroup(pid) {
   if (!Number.isInteger(pid) || pid <= 1) return;
-  try { process.kill(-pid, 'SIGKILL'); } catch { /* already gone */ }
+  try { signalGroup(pid, 'SIGKILL'); } catch { /* refused, or already gone */ }
 }
 
 // Runs the command once: { ok, detail }. Exit 0 is ok; a non-zero exit, a timeout or a command that is not there is failed, with the last

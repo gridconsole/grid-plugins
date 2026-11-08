@@ -10,13 +10,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers, priorityRank, firstById, PRIORITIES, handoverOwner } from './lib.mjs';
 import { postHolds } from './hold.mjs';
 import { jobStart, taskIntegrate, taskLand } from './git-steps.mjs';
 import { runGit } from './git.mjs';
 import { workerLaunch, ROLES, AGENTS } from './worker.mjs';
+import { grantedSpawn } from './host.mjs';
+import { startWorker } from './worker-start.mjs';
 import { foldHosts, pickHost as scoreHost, whyNoHost } from './hosts.mjs';
 import { decide as askModel } from './decide.mjs';
 import { isWait, stepWait, probe as probeWait, checkOf, WAIT_KIND } from './wait.mjs';
@@ -24,6 +25,8 @@ import { retryStale, answeredPark } from './retry.mjs';
 import { lock, beating } from './lock.mjs';
 import { planGate, planQuestion, reviewJob } from './planning.mjs';
 import { bridge } from './bridge.mjs';
+import { signalGroup } from './kill.mjs';
+import { openRegistry, SPAWNED } from './spawned.mjs';
 
 export { lock };
 import { isDeploy, isLand, deployOf, runDeploy, reopen, DEPLOY_KIND } from './deploy.mjs';
@@ -56,11 +59,18 @@ export function pidAlive(pid) {
   try { process.kill(pid, 0); return true; } catch (e) { return e?.code === 'EPERM'; }
 }
 
-// The pid in the reason of the Job's latest "running" control post ("worker started, pid N"), or null.
-function workerPid(j, v) {
+// Stops a Worker (started detached, so its pid leads its group), through the guard in kill.mjs; a refused or gone group is left alone.
+// The caller passes only a pid from the loop's own spawn registry (spawned.mjs), never one read from a post.
+export function killWorker(pid) {
+  try { signalGroup(pid, 'SIGTERM'); } catch { /* refused or already gone */ }
+}
+
+// The pid named in the reason of the Job's latest "running" control post ("worker started, pid N"), or null. Any member can post that text, so
+// it is never a target: it is read only to say in the log which pid was refused.
+function postedPid(j, v) {
   const p = lastOf(v.posts, (x) => x.type === 'control' && x.body?.target === j.id && x.body?.status === 'running');
   const n = Number(/\bpid (\d+)/.exec(str(p?.body?.reason))?.[1]);
-  return Number.isInteger(n) && n > 0 ? n : null;
+  return Number.isInteger(n) && n > 1 ? n : null;
 }
 
 // ---- hooks ----
@@ -73,39 +83,7 @@ export function localHost(job, view) {
 // What to do with a stale Job: a control body to post, or null to leave it (see retry.mjs).
 export const defaultRetry = retryStale;
 
-// Why a start gave no pid, as the system's error code. The 'error' event that carries it comes after startWorker has returned, and the
-// reason is posted now, so the two causes are read again here: a cwd that is not usable, a command that is not on the PATH (ENOENT) or is
-// there and not executable (EACCES). Undefined when neither explains it.
-function startFailure(cmd, cwd, env) {
-  try { if (!fs.statSync(cwd).isDirectory()) return 'ENOTDIR'; } catch (e) { return e.code; }
-  let denied = false;
-  for (const dir of cmd.includes(path.sep) ? [''] : str(env?.PATH).split(path.delimiter).filter(Boolean)) {
-    try { fs.accessSync(path.join(dir, cmd), fs.constants.X_OK); return undefined; } catch (e) { denied ||= e.code === 'EACCES'; }
-  }
-  return denied ? 'EACCES' : 'ENOENT';
-}
-
-// Starts a Worker as its own detached process with stdout and stderr in its log, and lets it go: the loop never waits for it.
-export function startWorker(launch) {
-  let fd;
-  try {
-    fs.mkdirSync(path.dirname(launch.log), { recursive: true });
-    fd = fs.openSync(launch.log, 'a');
-    const child = spawn(launch.cmd, launch.args, { cwd: launch.cwd, env: launch.env, detached: true, stdio: ['ignore', fd, fd] });
-    // A command or cwd that is not there comes back as no pid now and an 'error' event later, which would end the loop unheard.
-    child.on('error', () => {});
-    if (!Number.isInteger(child.pid)) {
-      const code = startFailure(launch.cmd, launch.cwd, launch.env);
-      return { ok: false, error: `${launch.cmd} could not be started in ${launch.cwd}${code ? ` (${code})` : ''}` };
-    }
-    child.unref();
-    return { ok: true, pid: child.pid };
-  } catch (e) {
-    return { ok: false, error: e?.message ?? String(e) };
-  } finally {
-    if (fd !== undefined) fs.closeSync(fd);
-  }
-}
+export { startWorker }; // moved to worker-start.mjs so host.mjs does not import this module
 
 // The commit a Job without a task head starts from.
 function resolveBase(repo, rev, { env } = {}) {
@@ -120,15 +98,17 @@ function settings(taskDir, o) {
   const projects = path.dirname(projectDir);
   const task = taskIdOf(taskDir);
   const home = str(env.GRID_HOME) || path.dirname(projects);
+  const worktrees = path.join(home, 'worktrees', path.basename(projectDir), task);
   return {
     env, task, now: o.now, project: path.basename(projectDir), projects,
     me: identity({ env, member: o.member, host: o.host, role: 'orchestrator', worker: null }),
-    worktrees: path.join(home, 'worktrees', path.basename(projectDir), task),
+    worktrees,
     repo: o.repo ? path.resolve(o.repo) : null, baseRev: o.base || 'HEAD',
     agent: o.agent ?? 'claude', slots: Number.isInteger(o.slots) && o.slots >= 0 ? o.slots : 2,
     intervalMs: Number.isFinite(o.intervalMs) && o.intervalMs > 0 ? o.intervalMs : 15_000,
-    decideOpts: { env, model: o.model, effort: o.effort }, model: o.model, alive: o.alive ?? pidAlive,
-    decide: o.decide ?? askModel, spawn: o.spawn ?? startWorker, pickHost: o.pickHost, retry: o.retry ?? defaultRetry,
+    decideOpts: { env, model: o.model, effort: o.effort }, model: o.model, alive: o.alive ?? pidAlive, kill: o.kill ?? killWorker,
+    registry: o.registry ?? openRegistry(path.join(worktrees, SPAWNED)),
+    decide: o.decide ?? askModel, spawn: o.spawn ?? grantedSpawn({ home, fallback: startWorker }), pickHost: o.pickHost, retry: o.retry ?? defaultRetry,
     probe: o.probe ?? ((check) => probeWait(check, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })), probeAt: new Map(), // wait Jobs: the check, and when each was last read
     review: o.review === true, planMemory: { misses: 0, at: 0, reason: '' }, // tries of this process that left no beat
     deploy: o.deploy ?? ((d) => runDeploy(d, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })),
@@ -379,9 +359,23 @@ function work(taskDir, o) {
       if (rec !== 'stale') return control({ target: j.id, status: 'stale', reason: 'result posted with no submit: the code was not handed in' });
     }
     if (LIVE.has(rec)) {
+      // A Worker that posted a blocking question is stopped and the Job parked: answeredPark (retry.mjs) restarts it once the question is answered.
+      const asking = cur && !j.stale && !own('worker-exit') ? j.open_questions.map((id) => v.byId.get(id))
+        .find((q) => q?.body?.blocking === true && q.worker === cur && q.body?.who !== 'owner') : null;
+      if (asking) {
+        // Only the pid this loop recorded when it started the Worker is signalled; a pid in a post is refused and logged.
+        const pid = o.registry.pidOf(cur, j.id);
+        const named = postedPid(j, v);
+        if (named && named !== pid) out.errors.push(`refused to signal pid ${named} named in the Feed for ${j.id}: this loop did not start it as ${cur}`);
+        if (j.assign?.host === o.me.host) {
+          if (pid) { try { o.kill(pid); } catch { /* already gone */ } }
+          else out.errors.push(`${cur} was not stopped: this loop has no pid recorded for it`);
+        }
+        return control({ target: j.id, status: 'parked', reason: `${cur} stopped with a question still open (${asking.id}), waiting for the answer` });
+      }
       if (own('worker-exit')) return control({ target: j.id, status: 'stale', reason: 'worker exited without a result' });
       // A `claude -p` session may end without the SessionEnd hook firing, so a Worker on this Host whose pid is gone is reported here, as the hook would.
-      const pid = workerPid(j, v);
+      const pid = o.registry.pidOf(cur, j.id); // the recorded pid, not one a post names: a post's pid would make any live process keep a Job running
       if (pid && j.assign?.host === o.me.host && !o.alive(pid)) {
         write('worker-exit', { reason: 'process ended without a result' }, { job: j.id }, { role: 'worker', worker: cur });
         return undefined;
@@ -417,7 +411,7 @@ function work(taskDir, o) {
       if (isObj(body)) control({ target: j.id, ...body });
       return undefined;
     }
-    if (rec === 'stale' && !asked.has(j.id)) {
+    if ((rec === 'stale' || rec === 'rejected') && !asked.has(j.id)) {
       asked.add(j.id);
       const body = o.retry(j, v);
       if (isObj(body)) {
@@ -432,6 +426,16 @@ function work(taskDir, o) {
   const launchFor = (j, { worker, cwd, base, code }, v) => {
     const role = ROLES.includes(j.role) ? j.role : 'builder';
     let brief = [j.title, str(jobPostOf(j, v)?.body?.brief).trim()].filter(Boolean).join('\n\n');
+    // A Worker's blocking question that got an answer goes into the next attempt's brief.
+    const qa = v.posts.filter((q) => q.type === 'question' && q.job === j.id && q.worker && q.body?.blocking === true && q.body?.who !== 'owner')
+      .map((q) => ({ q, a: v.posts.filter((p) => p.type === 'answer' && p.re === q.id && !p.worker).at(-1) })).filter((x) => x.a);
+    if (qa.length) brief += `\n\nQuestions an earlier attempt asked, with the answers:\n${qa.map(({ q, a }) => `Q: ${str(q.body.question)}\nA: ${str(a.body?.answer)}`).join('\n\n')}`;
+    // A Job sent again after the judge rejected it carries the judge's reason.
+    const lastRejected = [...j.history].reverse().findIndex((h) => h.status === 'rejected');
+    const afterIt = lastRejected < 0 ? [] : j.history.slice(j.history.length - lastRejected);
+    if (lastRejected >= 0 && !afterIt.some((h) => h.status === 'running')) {
+      brief += `\n\nThe last attempt was rejected: ${str(j.history[j.history.length - 1 - lastRejected].reason)}`;
+    }
     if (code) {
       brief += `\n\nYou work in ${cwd}, a worktree of ${o.repo} at ${base}. Hand the code in before you post the result:\n`
         + `node "${GIT_STEPS}" job submit ${o.task} ${j.id} --repo "${o.repo}" --worktree "${cwd}" --feed "${taskDir}"`;
@@ -470,8 +474,9 @@ function work(taskDir, o) {
       if (!s?.ok) return control({ target: j.id, status: 'stale', reason: `the worktree did not start: ${errText(s)}` });
     }
     let r;
-    try { r = o.spawn(launchFor(j, { worker, cwd, base, code }, v), { task: o.task, job: j.id, host }); } catch (e) { r = { ok: false, error: e?.message ?? String(e) }; }
+    try { r = o.spawn(launchFor(j, { worker, cwd, base, code }, v), { task: o.task, job: j.id, host, repo: o.repo ? path.basename(o.repo) : null, project: o.project, taskDir }); } catch (e) { r = { ok: false, error: e?.message ?? String(e) }; }
     if (!r?.ok) return control({ target: j.id, status: 'stale', reason: `worker did not start: ${errText(r)}` });
+    if (Number.isInteger(r.pid) && !o.registry.add(worker, j.id, r.pid)) out.errors.push(`${worker} (pid ${r.pid}) could not be recorded, so this loop cannot stop it`);
     return control({ target: j.id, status: 'running', reason: `worker started${Number.isInteger(r.pid) ? `, pid ${r.pid}` : ''}` });
   };
 
@@ -518,6 +523,9 @@ function work(taskDir, o) {
         task: o.task, now, posts, state, me: o.me, slots: o.slots, busy: new Map(),
         byId: firstById(posts), status: new Map(state.jobs.map((j) => [j.id, j.status])),
       };
+      // A Worker's pid is kept only while its Job is live with it, so a finished Worker's pid, which the system may give to another process, is gone.
+      const liveWorkers = new Set(state.jobs.filter((j) => LIVE.has(j.recorded_status) && j.assign?.worker).map((j) => `${j.id}/${j.assign.worker}`));
+      o.registry.keep((worker, job) => liveWorkers.has(`${job}/${worker}`));
       const before = out.writes.length;
       for (const j of [...state.jobs].sort((a, b) => jobNo(a.id) - jobNo(b.id))) if (!failed.has(j.id)) move(j, v);
       if (out.writes.length === before) assign(v);
