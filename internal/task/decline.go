@@ -24,8 +24,8 @@ type DeclineOptions struct {
 // locked reread, journal and atomic commit path.
 func (s Store) Decline(o DeclineOptions) (Event, error) {
 	reason := strings.Join(strings.Fields(o.Reason), " ")
-	if reason == "" || strings.ContainsRune(reason, '\x00') || !utf8.ValidString(o.Reason) {
-		return Event{}, fmt.Errorf("%w: a decline needs a reason without NUL", ErrEditUsage)
+	if reason == "" || hasEditControls(o.Reason) || !utf8.ValidString(o.Reason) {
+		return Event{}, fmt.Errorf("%w: a decline needs a reason without control or bidi override/isolate characters", ErrEditUsage)
 	}
 	if !DeclineAllowed(strings.TrimSpace(o.Role)) {
 		return Event{}, errors.New("scope: role cannot decline tasks")

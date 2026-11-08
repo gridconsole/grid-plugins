@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"go.yaml.in/yaml/v4"
@@ -39,8 +40,8 @@ type RenameOptions struct {
 // It uses the same locked reread, journal and atomic commit as Change.
 func (s Store) Rename(o RenameOptions) (Event, error) {
 	title := strings.Join(strings.Fields(o.Title), " ")
-	if strings.ContainsAny(o.Title, "\r\n\x00\u0085\u2028\u2029") || !utf8.ValidString(o.Title) || title == "" || utf8.RuneCountInString(title) > 200 {
-		return Event{}, fmt.Errorf("%w: title must have 1-200 characters on one line", ErrEditUsage)
+	if hasEditControls(o.Title) || strings.ContainsAny(o.Title, "\u2028\u2029") || !utf8.ValidString(o.Title) || title == "" || utf8.RuneCountInString(title) > 200 {
+		return Event{}, fmt.Errorf("%w: title must have 1-200 characters on one line without control or bidi override/isolate characters", ErrEditUsage)
 	}
 	if !RenameAllowed(strings.TrimSpace(o.Role)) {
 		return Event{}, errors.New("scope: role cannot rename tasks")
@@ -55,6 +56,24 @@ func (s Store) Rename(o RenameOptions) (Event, error) {
 		}
 		return map[string]string{"title": title, "updated": event.When}, nil
 	})
+}
+
+// Validate before whitespace folding so controls cannot disappear into spaces.
+func hasEditControls(text string) bool {
+	return strings.ContainsFunc(text, func(r rune) bool {
+		return unicode.IsControl(r) || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')
+	})
+}
+
+// JSON strings are valid YAML scalars; keep HTML punctuation readable.
+func encodeTaskScalar(value string) (string, error) {
+	var out bytes.Buffer
+	encoder := json.NewEncoder(&out)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(out.String(), "\n"), nil
 }
 
 // editTask shares Change's transaction primitives; the callback sees the task
@@ -149,11 +168,11 @@ func patchTaskFields(data []byte, mapping *yaml.Node, fields map[string]string) 
 			}
 			stop--
 		}
-		encoded, err := json.Marshal(changed) // JSON strings are valid YAML scalars.
+		encoded, err := encodeTaskScalar(changed)
 		if err != nil {
 			return nil, err
 		}
-		replacements[start] = replacement{stop, key.Value + ": " + string(encoded) + newline}
+		replacements[start] = replacement{stop, key.Value + ": " + encoded + newline}
 		found[key.Value] = true
 	}
 	var out strings.Builder
@@ -174,11 +193,11 @@ func patchTaskFields(data []byte, mapping *yaml.Node, fields map[string]string) 
 	}
 	sort.Strings(missing)
 	for _, key := range missing {
-		encoded, err := json.Marshal(fields[key])
+		encoded, err := encodeTaskScalar(fields[key])
 		if err != nil {
 			return nil, err
 		}
-		out.WriteString(key + ": " + string(encoded) + newline)
+		out.WriteString(key + ": " + encoded + newline)
 	}
 	out.WriteString(strings.Join(lines[end:], ""))
 	return []byte(out.String()), nil
