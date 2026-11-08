@@ -35,7 +35,7 @@ func TestReadJobIsReadOnlyAndRequiresMatchingBeat(t *testing.T) {
 		t.Fatal(err)
 	}
 	var fields map[string]any
-	path := filepath.Join(task, "lease", "J-1.json")
+	path := filepath.Join(task, "feed", "lease", "J-1.json")
 	write(path, grant)
 	s, err = ReadJob(task, "J-1")
 	if err != nil || !s.Known || s.Expired(2, time.Now()) {
@@ -48,7 +48,7 @@ func TestReadJobIsReadOnlyAndRequiresMatchingBeat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	live := filepath.Join(task, ".live", "worker@01K9J000000000000000000002.2.json")
+	live := filepath.Join(task, "feed", ".live", "worker@01K9J000000000000000000002.2.json")
 	write(live, beat)
 	s, err = ReadJob(task, "J-1")
 	if err != nil {

@@ -125,9 +125,9 @@ func TestGCExpiredLeaseAndListener(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	leasePath := filepath.Join(task, "lease", "J-1.json")
+	leasePath := filepath.Join(task, "feed", "lease", "J-1.json")
 	write(leasePath, map[string]any{"lease": "J-1", "holder": holder, "fence": 2, "gen": 0, "attempt": 1, "since": "2026-11-08T10:00:00.000Z", "pid": nil, "pid_start": nil})
-	livePath := filepath.Join(task, ".live", holder+".2.json")
+	livePath := filepath.Join(task, "feed", ".live", holder+".2.json")
 	write(livePath, map[string]any{"lease": "J-1", "holder": holder, "fence": 2, "attempt": 1, "pid": os.Getpid(), "pid_start": "2026-11-08T10:00:00.000Z", "beat_at": "2026-11-08T10:00:00.000Z", "output_at": "2026-11-08T10:00:00.000Z", "until": "2026-11-08T10:10:00.000Z"})
 	before, _ := os.ReadFile(leasePath)
 	beatBefore, _ := os.ReadFile(livePath)

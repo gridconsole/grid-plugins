@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/job"
 )
@@ -24,13 +25,16 @@ type JobStatus struct {
 	Known   bool `json:"-"`
 }
 
-// ReadJob reads lease/<id>.json under LOCK_SH, then the matching local .live
-// record. The contract schemas validate both wire shapes; Record is only a view.
+// ReadJob reads feed/lease/<id>.json under LOCK_SH, then the matching local
+// feed/.live record. The folder is the Feed's own (feed.Store.Dir), the one its
+// writers and the session store use. The contract schemas validate both wire
+// shapes; Record is only a view.
 func ReadJob(taskDir, id string) (JobStatus, error) {
 	if !job.ValidID(id) {
 		return JobStatus{}, errors.New("invalid Job id")
 	}
-	dir := filepath.Join(taskDir, "lease")
+	feedDir := feed.Store{TaskDir: taskDir}.Dir()
+	dir := filepath.Join(feedDir, "lease")
 	info, err := os.Lstat(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return JobStatus{}, nil
@@ -72,7 +76,7 @@ func ReadJob(taskDir, id string) (JobStatus, error) {
 	if status.Holder == nil {
 		return status, nil
 	}
-	liveDir := filepath.Join(taskDir, ".live")
+	liveDir := filepath.Join(feedDir, ".live")
 	info, err = os.Lstat(liveDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return status, nil
