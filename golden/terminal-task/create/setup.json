@@ -1,0 +1,13 @@
+{
+  "call": "terminalTask",
+  "changed": [
+    "T-02-build-another-demo-example"
+  ],
+  "contains": "T-02-build-another-demo-example",
+  "env": {
+    "GRID_BRIDGE": null
+  },
+  "hook": "terminal-task",
+  "name": "create",
+  "proves": "The exported terminalTask creates the next task from a work prompt."
+}

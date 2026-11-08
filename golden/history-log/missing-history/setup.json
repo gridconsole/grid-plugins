@@ -1,0 +1,11 @@
+{
+  "changed": [
+    ".tasks"
+  ],
+  "files": {
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/history.md": null
+  },
+  "hook": "history-log",
+  "name": "missing-history",
+  "proves": "The hook does not create a missing history file."
+}

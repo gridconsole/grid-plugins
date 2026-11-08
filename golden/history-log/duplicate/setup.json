@@ -1,0 +1,19 @@
+{
+  "hook": "history-log",
+  "name": "duplicate",
+  "pre": [
+    {
+      "hook": "history-log",
+      "input": {
+        "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+        "hook_event_name": "PostToolUse",
+        "session_id": "session-demo",
+        "tool_input": {
+          "file_path": "$GRID_HOME/projects/demo/tasks/T-1-demo/notes.md"
+        },
+        "tool_name": "Write"
+      }
+    }
+  ],
+  "proves": "Consecutive identical file events are deduplicated."
+}

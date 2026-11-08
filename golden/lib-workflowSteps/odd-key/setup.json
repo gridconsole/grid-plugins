@@ -1,0 +1,6 @@
+{
+  "call": "workflowSteps",
+  "hook": "lib-workflowSteps",
+  "name": "odd-key",
+  "proves": "workflowSteps preserves the odd key behavior."
+}

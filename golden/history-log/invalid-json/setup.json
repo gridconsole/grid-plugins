@@ -1,0 +1,5 @@
+{
+  "hook": "history-log",
+  "name": "invalid-json",
+  "proves": "Malformed input has no effects."
+}

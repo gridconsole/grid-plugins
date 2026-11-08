@@ -1,0 +1,6 @@
+{
+  "call": "gateLike",
+  "hook": "lib-gateLike",
+  "name": "non-string",
+  "proves": "gateLike preserves the non string behavior."
+}

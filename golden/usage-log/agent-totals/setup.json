@@ -1,0 +1,8 @@
+{
+  "changed": [
+    ".usage"
+  ],
+  "hook": "usage-log",
+  "name": "agent-totals",
+  "proves": "Agent totals are whitelisted without copying prompt or result text."
+}

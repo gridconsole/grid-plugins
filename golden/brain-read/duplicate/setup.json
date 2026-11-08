@@ -1,0 +1,19 @@
+{
+  "hook": "brain-read",
+  "name": "duplicate",
+  "pre": [
+    {
+      "hook": "brain-read",
+      "input": {
+        "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+        "hook_event_name": "PostToolUse",
+        "session_id": "session-demo",
+        "tool_input": {
+          "file_path": "$GRID_HOME/projects/demo/knowledge/demo.md"
+        },
+        "tool_name": "Read"
+      }
+    }
+  ],
+  "proves": "Repeated note reads are suppressed."
+}

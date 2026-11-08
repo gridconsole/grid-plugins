@@ -1,0 +1,6 @@
+{
+  "call": "workflowSteps",
+  "hook": "lib-workflowSteps",
+  "name": "valid",
+  "proves": "workflowSteps preserves the valid behavior."
+}

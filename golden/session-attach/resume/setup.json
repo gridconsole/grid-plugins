@@ -1,0 +1,9 @@
+{
+  "changed": [
+    "session-demo.json",
+    ".attached"
+  ],
+  "hook": "session-attach",
+  "name": "resume",
+  "proves": "A resume prompt creates the session record and attachment pointer."
+}

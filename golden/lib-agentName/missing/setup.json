@@ -1,0 +1,6 @@
+{
+  "call": "agentName",
+  "hook": "lib-agentName",
+  "name": "missing",
+  "proves": "agentName preserves the missing behavior."
+}

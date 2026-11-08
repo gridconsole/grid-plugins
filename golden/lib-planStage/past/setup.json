@@ -1,0 +1,6 @@
+{
+  "call": "planStage",
+  "hook": "lib-planStage",
+  "name": "past",
+  "proves": "planStage preserves the past behavior."
+}

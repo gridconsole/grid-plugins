@@ -1,0 +1,5 @@
+{
+  "hook": "terminal-task",
+  "name": "direct-work",
+  "proves": "Direct execution only defines exports; it has no stdin entrypoint."
+}

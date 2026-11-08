@@ -1,0 +1,8 @@
+{
+  "changed": [
+    ".tasks"
+  ],
+  "hook": "history-log",
+  "name": "history-self",
+  "proves": "History edits remember the task without recursively logging."
+}

@@ -1,0 +1,6 @@
+{
+  "call": "gateLike",
+  "hook": "lib-gateLike",
+  "name": "substring",
+  "proves": "gateLike preserves the substring behavior."
+}

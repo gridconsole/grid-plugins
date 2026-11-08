@@ -1,0 +1,5 @@
+{
+  "hook": "plan-guard",
+  "name": "recall-present",
+  "proves": "Plan ready passes when the plan cites recall."
+}

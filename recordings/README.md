@@ -58,6 +58,10 @@ A case directory contains:
   An absent key is unset; an empty value is present but empty.
 - `stdout` and `stderr`: captured bytes, with only the normalizations below.
   No newline is added. Empty files mean zero bytes.
+- `setup.json`: the case setup from `cases.py` (files, dirs, links, env, `pre`,
+  `after_pre`, `call`, expected exit and markers), so a replay needs `golden/`
+  alone. `$APP_CONFIG` stands for the desktop config folder under the home:
+  `Library/Application Support` on macOS, `.config` elsewhere.
 - `exit`: the actual numeric process status followed by a newline. Denial JSON
   usually has exit 0; stop-check deliberately uses exit 2.
 - `files.diff`: sorted unified content diffs for all created, removed or changed

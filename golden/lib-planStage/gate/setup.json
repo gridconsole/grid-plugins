@@ -1,0 +1,6 @@
+{
+  "call": "planStage",
+  "hook": "lib-planStage",
+  "name": "gate",
+  "proves": "planStage preserves the gate behavior."
+}

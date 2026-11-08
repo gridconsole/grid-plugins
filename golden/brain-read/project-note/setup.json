@@ -1,0 +1,9 @@
+{
+  "changed": [
+    "history.md",
+    ".brain-read"
+  ],
+  "hook": "brain-read",
+  "name": "project-note",
+  "proves": "A project brain read appends history and a deduplication marker."
+}

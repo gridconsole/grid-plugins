@@ -1,0 +1,8 @@
+{
+  "changed": [
+    ".agents"
+  ],
+  "hook": "brief-lint",
+  "name": "no-brief",
+  "proves": "A prompt without a brief may start an agent."
+}

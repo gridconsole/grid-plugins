@@ -1,0 +1,6 @@
+{
+  "contains": "deny",
+  "hook": "host-guard",
+  "name": "bash-uppercase",
+  "proves": "Bash host-name matching is case insensitive."
+}

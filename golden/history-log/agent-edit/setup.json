@@ -1,0 +1,9 @@
+{
+  "changed": [
+    "history.md",
+    ".tasks-agent-demo"
+  ],
+  "hook": "history-log",
+  "name": "agent-edit",
+  "proves": "An old worker alias is logged as grid-builder with its own task pointer."
+}

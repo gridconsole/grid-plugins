@@ -1,0 +1,5 @@
+{
+  "hook": "session-record",
+  "name": "unattached",
+  "proves": "An unattached session creates no record."
+}

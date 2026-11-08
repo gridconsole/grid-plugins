@@ -1,0 +1,19 @@
+{
+  "changed": [
+    "session-demo.json"
+  ],
+  "hook": "session-record",
+  "name": "end",
+  "pre": [
+    {
+      "hook": "session-attach",
+      "input": {
+        "cwd": "$GRID_HOME/../workspace/demo",
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": "/grid:resume T-1",
+        "session_id": "session-demo"
+      }
+    }
+  ],
+  "proves": "An attached session ends on SessionEnd."
+}

@@ -1,0 +1,8 @@
+{
+  "files": {
+    "$GRID_HOME/transcript.jsonl": "{\"type\": \"user\", \"message\": {\"content\": \"Use $GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md\"}}\n"
+  },
+  "hook": "stop-check",
+  "name": "scout",
+  "proves": "A scout is not required to write an Outcome."
+}

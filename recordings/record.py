@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from cases import CASES, ROOT
@@ -73,8 +74,12 @@ def record(case, source, node, scratch, destination):
     user.mkdir()
     replacements = {'$GRID_HOME': str(home), '$OLD_PLUGIN': str(source), '$RECORDER': str(ROOT / 'recordings')}
 
+    # The old appConfigFile (lib.mjs) picks the desktop config folder by platform.
+    app_config = 'Library/Application Support' if sys.platform == 'darwin' else '.config'
+
     def expand(value):
         if isinstance(value, str):
+            value = value.replace('$APP_CONFIG', app_config)
             for token, actual in replacements.items():
                 value = value.replace(token, actual)
             return value
@@ -209,6 +214,9 @@ def record(case, source, node, scratch, destination):
     artifacts = {'input.json': raw_input, 'env.txt': ''.join(f'{k}={normalize(v)}\n' for k, v in sorted(env.items())),
                  'stdout': normalize(result.stdout), 'stderr': normalize(result.stderr),
                  'exit': str(result.returncode) + '\n', 'files.diff': ''.join(chunks)}
+    # The unexpanded case, so a replay needs golden/ alone.
+    setup = {k: v for k, v in case.items() if k != 'input'}
+    artifacts['setup.json'] = json.dumps(setup, ensure_ascii=False, indent=2, sort_keys=True) + '\n'
     for name, content in artifacts.items():
         (target / name).write_bytes(content.encode())
     shutil.rmtree(box)

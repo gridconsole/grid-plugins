@@ -1,0 +1,6 @@
+{
+  "call": "agentName",
+  "hook": "lib-agentName",
+  "name": "qualified",
+  "proves": "agentName preserves the qualified behavior."
+}

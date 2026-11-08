@@ -1,0 +1,8 @@
+{
+  "env": {
+    "GRID_BRIDGE": null
+  },
+  "hook": "needs-you",
+  "name": "no-bridge",
+  "proves": "Missing desktop bridge data falls through silently."
+}

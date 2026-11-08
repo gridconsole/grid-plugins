@@ -1,0 +1,6 @@
+{
+  "call": "historyLine",
+  "hook": "lib-historyLine",
+  "name": "literal-text",
+  "proves": "historyLine preserves the literal text behavior."
+}

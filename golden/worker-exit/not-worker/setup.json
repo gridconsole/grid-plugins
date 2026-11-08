@@ -1,0 +1,5 @@
+{
+  "hook": "worker-exit",
+  "name": "not-worker",
+  "proves": "A session without worker environment writes no feed event."
+}

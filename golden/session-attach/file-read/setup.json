@@ -1,0 +1,5 @@
+{
+  "hook": "session-attach",
+  "name": "file-read",
+  "proves": "Reading a task file does not attach a session."
+}

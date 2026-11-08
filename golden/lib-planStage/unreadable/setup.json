@@ -1,0 +1,6 @@
+{
+  "call": "planStage",
+  "hook": "lib-planStage",
+  "name": "unreadable",
+  "proves": "planStage preserves the unreadable behavior."
+}

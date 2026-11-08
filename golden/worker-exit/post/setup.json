@@ -1,0 +1,16 @@
+{
+  "changed": [
+    "member@example~worker-demo.jsonl"
+  ],
+  "dirs": [
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/feed"
+  ],
+  "env": {
+    "GRID_FEED_TASK": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+    "GRID_JOB": "J-1",
+    "GRID_WORKER": "worker-demo"
+  },
+  "hook": "worker-exit",
+  "name": "post",
+  "proves": "A worker writes its local feed event without a server."
+}

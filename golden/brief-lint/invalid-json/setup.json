@@ -1,0 +1,5 @@
+{
+  "hook": "brief-lint",
+  "name": "invalid-json",
+  "proves": "Malformed input is ignored."
+}

@@ -1,0 +1,9 @@
+{
+  "changed": [
+    "history.md",
+    ".tasks"
+  ],
+  "hook": "history-log",
+  "name": "file-write",
+  "proves": "A file write appends history and remembers the task."
+}

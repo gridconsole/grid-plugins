@@ -1,0 +1,5 @@
+{
+  "hook": "plan-guard",
+  "name": "task-write",
+  "proves": "A held task may write its own plan."
+}

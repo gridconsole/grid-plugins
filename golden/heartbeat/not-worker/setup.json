@@ -1,0 +1,5 @@
+{
+  "hook": "heartbeat",
+  "name": "not-worker",
+  "proves": "A session without worker environment writes no feed event."
+}

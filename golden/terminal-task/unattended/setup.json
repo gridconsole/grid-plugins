@@ -1,0 +1,11 @@
+{
+  "call": "terminalTask",
+  "contains": "null",
+  "env": {
+    "CLAUDE_CODE_SESSION_ATTENDED": "0",
+    "GRID_BRIDGE": null
+  },
+  "hook": "terminal-task",
+  "name": "unattended",
+  "proves": "SDK work prompts do not create tasks."
+}

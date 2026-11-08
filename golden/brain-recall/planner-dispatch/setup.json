@@ -1,0 +1,8 @@
+{
+  "changed": [
+    ".planner"
+  ],
+  "hook": "brain-recall",
+  "name": "planner-dispatch",
+  "proves": "Planner dispatch records the named task."
+}

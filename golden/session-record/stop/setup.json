@@ -1,0 +1,16 @@
+{
+  "hook": "session-record",
+  "name": "stop",
+  "pre": [
+    {
+      "hook": "session-attach",
+      "input": {
+        "cwd": "$GRID_HOME/../workspace/demo",
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": "/grid:resume T-1",
+        "session_id": "session-demo"
+      }
+    }
+  ],
+  "proves": "An attached session is not refreshed inside the ten second throttle."
+}

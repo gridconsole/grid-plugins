@@ -1,0 +1,8 @@
+{
+  "changed": [
+    ".usage"
+  ],
+  "hook": "usage-log",
+  "name": "start",
+  "proves": "SessionStart records source and transcript path."
+}

@@ -1,0 +1,8 @@
+{
+  "hook": "grid-home-allow",
+  "links": {
+    "$GRID_HOME/escape": "$GRID_HOME/../workspace/demo"
+  },
+  "name": "symlink-escape",
+  "proves": "Symlink escape receives no automatic permission."
+}

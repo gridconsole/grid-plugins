@@ -1,0 +1,6 @@
+{
+  "call": "agentName",
+  "hook": "lib-agentName",
+  "name": "legacy-alias",
+  "proves": "agentName preserves the legacy alias behavior."
+}

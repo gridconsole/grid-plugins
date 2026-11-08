@@ -1,0 +1,6 @@
+{
+  "call": "planStage",
+  "hook": "lib-planStage",
+  "name": "fake-acceptance",
+  "proves": "planStage preserves the fake acceptance behavior."
+}

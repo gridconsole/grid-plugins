@@ -1,0 +1,9 @@
+{
+  "contains": "deny",
+  "files": {
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/plan.md": "# Plan\n"
+  },
+  "hook": "plan-guard",
+  "name": "bash-recall",
+  "proves": "Bash cannot write plan ready without recall."
+}

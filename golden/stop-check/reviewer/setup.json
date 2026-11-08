@@ -1,0 +1,10 @@
+{
+  "contains_stderr": "Verdict",
+  "exit": 2,
+  "files": {
+    "$GRID_HOME/transcript.jsonl": "{\"type\": \"user\", \"message\": {\"content\": \"Use $GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md\"}}\n"
+  },
+  "hook": "stop-check",
+  "name": "reviewer",
+  "proves": "A reviewer must write Verdict even on a builder brief."
+}

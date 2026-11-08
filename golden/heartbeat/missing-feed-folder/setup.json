@@ -1,0 +1,10 @@
+{
+  "env": {
+    "GRID_FEED_TASK": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+    "GRID_JOB": "J-1",
+    "GRID_WORKER": "worker-demo"
+  },
+  "hook": "heartbeat",
+  "name": "missing-feed-folder",
+  "proves": "A missing feed directory prevents lock acquisition and silently skips posting."
+}

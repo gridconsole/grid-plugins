@@ -1,0 +1,10 @@
+{
+  "contains_stderr": "Outcome",
+  "exit": 2,
+  "files": {
+    "$GRID_HOME/transcript.jsonl": "{\"type\": \"user\", \"message\": {\"content\": \"Use $GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md\"}}\n"
+  },
+  "hook": "stop-check",
+  "name": "subagent-missing",
+  "proves": "A builder must fill its own brief Outcome."
+}

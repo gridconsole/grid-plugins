@@ -1,0 +1,5 @@
+{
+  "hook": "needs-you",
+  "name": "invalid-json",
+  "proves": "Malformed event input is ignored."
+}

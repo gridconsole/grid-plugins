@@ -1,0 +1,6 @@
+{
+  "contains": "deny",
+  "hook": "plan-guard",
+  "name": "forged-acceptance",
+  "proves": "An agent cannot insert a plan acceptance."
+}

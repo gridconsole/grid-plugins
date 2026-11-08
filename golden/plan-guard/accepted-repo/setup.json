@@ -1,0 +1,8 @@
+{
+  "files": {
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/history.md": "- 2025-01-02T03:04 · created · demo task · by member\n- 2025-01-02T03:04 · plan accepted · rev 1 · by member\n"
+  },
+  "hook": "plan-guard",
+  "name": "accepted-repo",
+  "proves": "Plan acceptance releases repository writes."
+}

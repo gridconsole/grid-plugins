@@ -1,0 +1,16 @@
+{
+  "changed": [
+    "claude.env"
+  ],
+  "contains": "Grid is set up",
+  "env": {
+    "GRID_HOME": null,
+    "GRID_PROJECTS": null
+  },
+  "files": {
+    "$GRID_HOME/../user/$APP_CONFIG/app.gridconsole.desktop/config.json": "{\"current\": \"demo\", \"workspaces\": [{\"name\": \"demo\", \"folder\": \"$GRID_HOME/../workspace/demo\", \"data\": \"$GRID_HOME\"}]}"
+  },
+  "hook": "grid-env",
+  "name": "discovered",
+  "proves": "Desktop config selects a project and writes shell exports."
+}

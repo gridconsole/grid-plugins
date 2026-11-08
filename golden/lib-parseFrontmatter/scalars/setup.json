@@ -1,0 +1,6 @@
+{
+  "call": "parseFrontmatter",
+  "hook": "lib-parseFrontmatter",
+  "name": "scalars",
+  "proves": "parseFrontmatter preserves the scalars behavior."
+}

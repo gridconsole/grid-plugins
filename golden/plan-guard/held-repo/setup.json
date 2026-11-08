@@ -1,0 +1,6 @@
+{
+  "contains": "deny",
+  "hook": "plan-guard",
+  "name": "held-repo",
+  "proves": "A held task cannot write into the repository."
+}

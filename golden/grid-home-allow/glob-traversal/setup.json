@@ -1,0 +1,5 @@
+{
+  "hook": "grid-home-allow",
+  "name": "glob-traversal",
+  "proves": "Glob traversal receives no automatic permission."
+}

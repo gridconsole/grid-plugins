@@ -1,0 +1,6 @@
+{
+  "call": "workflowSteps",
+  "hook": "lib-workflowSteps",
+  "name": "scalar",
+  "proves": "workflowSteps preserves the scalar behavior."
+}

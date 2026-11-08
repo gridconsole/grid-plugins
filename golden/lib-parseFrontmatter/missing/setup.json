@@ -1,0 +1,6 @@
+{
+  "call": "parseFrontmatter",
+  "hook": "lib-parseFrontmatter",
+  "name": "missing",
+  "proves": "parseFrontmatter preserves the missing behavior."
+}

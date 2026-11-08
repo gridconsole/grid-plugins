@@ -1,0 +1,10 @@
+{
+  "call": "terminalTask",
+  "contains": "null",
+  "env": {
+    "GRID_BRIDGE": null
+  },
+  "hook": "terminal-task",
+  "name": "short-prompt",
+  "proves": "The exported helper rejects a short acknowledgement."
+}

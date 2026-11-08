@@ -1,0 +1,5 @@
+{
+  "hook": "stop-check",
+  "name": "complete",
+  "proves": "A waiting task with summary and next may stop."
+}

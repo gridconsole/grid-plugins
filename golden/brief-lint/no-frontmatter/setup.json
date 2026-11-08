@@ -1,0 +1,9 @@
+{
+  "contains": "no frontmatter",
+  "files": {
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md": "# Brief\n"
+  },
+  "hook": "brief-lint",
+  "name": "no-frontmatter",
+  "proves": "A readable brief without frontmatter denies dispatch."
+}

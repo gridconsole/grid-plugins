@@ -1,0 +1,6 @@
+{
+  "call": "planStage",
+  "hook": "lib-planStage",
+  "name": "missing",
+  "proves": "planStage preserves the missing behavior."
+}

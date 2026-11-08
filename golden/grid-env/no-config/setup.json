@@ -1,0 +1,9 @@
+{
+  "env": {
+    "GRID_HOME": null,
+    "GRID_PROJECTS": null
+  },
+  "hook": "grid-env",
+  "name": "no-config",
+  "proves": "No desktop configuration gives no output."
+}

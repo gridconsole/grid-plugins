@@ -1,0 +1,8 @@
+{
+  "changed": [
+    "history.md"
+  ],
+  "hook": "history-log",
+  "name": "subagent-stop",
+  "proves": "SubagentStop records the canonical agent name."
+}

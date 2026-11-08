@@ -1,0 +1,6 @@
+{
+  "call": "gateLike",
+  "hook": "lib-gateLike",
+  "name": "approval",
+  "proves": "gateLike preserves the approval behavior."
+}

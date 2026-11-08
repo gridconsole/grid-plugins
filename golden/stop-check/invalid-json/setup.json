@@ -1,0 +1,5 @@
+{
+  "hook": "stop-check",
+  "name": "invalid-json",
+  "proves": "Malformed Stop input fails open."
+}

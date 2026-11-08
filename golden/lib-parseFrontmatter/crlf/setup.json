@@ -1,0 +1,6 @@
+{
+  "call": "parseFrontmatter",
+  "hook": "lib-parseFrontmatter",
+  "name": "crlf",
+  "proves": "parseFrontmatter preserves the crlf behavior."
+}

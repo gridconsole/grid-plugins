@@ -1,0 +1,6 @@
+{
+  "call": "planStage",
+  "hook": "lib-planStage",
+  "name": "accepted",
+  "proves": "planStage preserves the accepted behavior."
+}

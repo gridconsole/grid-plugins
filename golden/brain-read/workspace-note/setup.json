@@ -1,0 +1,8 @@
+{
+  "changed": [
+    "history.md"
+  ],
+  "hook": "brain-read",
+  "name": "workspace-note",
+  "proves": "A shared brain note uses the workspace prefix."
+}

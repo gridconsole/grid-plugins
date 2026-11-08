@@ -1,0 +1,6 @@
+{
+  "call": "agentName",
+  "hook": "lib-agentName",
+  "name": "punctuation",
+  "proves": "agentName preserves the punctuation behavior."
+}

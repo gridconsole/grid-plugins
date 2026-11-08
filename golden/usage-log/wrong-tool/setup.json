@@ -1,0 +1,5 @@
+{
+  "hook": "usage-log",
+  "name": "wrong-tool",
+  "proves": "Non-Agent tool usage is ignored."
+}

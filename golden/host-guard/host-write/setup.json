@@ -1,0 +1,9 @@
+{
+  "contains": "deny",
+  "env": {
+    "GRID_PLAN_GUARD": "off"
+  },
+  "hook": "host-guard",
+  "name": "host-write",
+  "proves": "Host approval files are denied even with plan guard off."
+}

@@ -1,0 +1,5 @@
+{
+  "hook": "history-log",
+  "name": "background",
+  "proves": "Background Bash calls do not take a premature snapshot."
+}

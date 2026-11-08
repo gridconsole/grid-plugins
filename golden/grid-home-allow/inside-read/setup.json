@@ -1,0 +1,6 @@
+{
+  "contains": "allow",
+  "hook": "grid-home-allow",
+  "name": "inside-read",
+  "proves": "An absolute read inside Grid home is allowed."
+}

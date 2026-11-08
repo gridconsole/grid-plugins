@@ -1,0 +1,9 @@
+{
+  "contains": "2.1.78",
+  "env": {
+    "CLAUDE_PLUGIN_DATA": ""
+  },
+  "hook": "session-check",
+  "name": "empty-data",
+  "proves": "Empty plugin data also warns."
+}

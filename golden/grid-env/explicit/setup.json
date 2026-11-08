@@ -1,0 +1,5 @@
+{
+  "hook": "grid-env",
+  "name": "explicit",
+  "proves": "Explicit Grid variables prevent discovery and env-file writes."
+}

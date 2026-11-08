@@ -1,0 +1,6 @@
+{
+  "contains": "allow",
+  "hook": "grid-home-allow",
+  "name": "own-script",
+  "proves": "A single plugin script with safe arguments is allowed."
+}

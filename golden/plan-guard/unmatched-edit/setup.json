@@ -1,0 +1,6 @@
+{
+  "contains": "deny",
+  "hook": "plan-guard",
+  "name": "unmatched-edit",
+  "proves": "An edit with an unknown result cannot change task metadata."
+}

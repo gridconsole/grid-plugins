@@ -1,0 +1,9 @@
+{
+  "contains": "Outcome",
+  "files": {
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md": "---\nid: 01-build\nrole: builder\nstatus: briefed\nverify: Check the demo output\nfollow_up: none\n---\n## Intent\nBuild the demo example.\n## Job\nWrite the example output.\n## Context\nUse placeholder content only.\n## Out of scope\nExternal services.\n## Open\nNone.\n## Acceptance\nThe output matches the example.\n## Verdict\n## Follow-up\nNone.\n"
+  },
+  "hook": "brief-lint",
+  "name": "missing-section",
+  "proves": "A missing Outcome heading denies dispatch."
+}

@@ -1,0 +1,10 @@
+{
+  "env": {
+    "GRID_FEED_TASK": "T-999",
+    "GRID_JOB": "J-1",
+    "GRID_WORKER": "worker-demo"
+  },
+  "hook": "heartbeat",
+  "name": "missing-task",
+  "proves": "An unresolved worker task fails open."
+}

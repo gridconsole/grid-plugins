@@ -1,0 +1,6 @@
+{
+  "call": "planStage",
+  "hook": "lib-planStage",
+  "name": "before",
+  "proves": "planStage preserves the before behavior."
+}

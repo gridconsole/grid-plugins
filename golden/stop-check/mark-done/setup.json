@@ -1,0 +1,12 @@
+{
+  "changed": [
+    "01-build.md"
+  ],
+  "files": {
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md": "---\nid: 01-build\nrole: builder\nstatus: briefed\nverify: Check the demo output\nfollow_up: none\n---\n## Intent\nBuild the demo example.\n## Job\nWrite the example output.\n## Context\nUse placeholder content only.\n## Out of scope\nExternal services.\n## Open\nNone.\n## Acceptance\nThe output matches the example.\n## Outcome\nBuilt and checked the demo.\n## Verdict\n## Follow-up\nNone.\n",
+    "$GRID_HOME/transcript.jsonl": "{\"type\": \"user\", \"message\": {\"content\": \"Use $GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md\"}}\n"
+  },
+  "hook": "stop-check",
+  "name": "mark-done",
+  "proves": "A completed Outcome marks the brief done."
+}

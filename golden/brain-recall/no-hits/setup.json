@@ -1,0 +1,10 @@
+{
+  "changed": [
+    "history.md",
+    ".recalled"
+  ],
+  "contains": "Recall: nothing found",
+  "hook": "brain-recall",
+  "name": "no-hits",
+  "proves": "An empty brain emits recall guidance and records zero hits."
+}

@@ -1,0 +1,9 @@
+{
+  "contains": "2.1.78",
+  "env": {
+    "CLAUDE_PLUGIN_DATA": null
+  },
+  "hook": "session-check",
+  "name": "missing-data",
+  "proves": "Missing plugin data emits a version warning."
+}

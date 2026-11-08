@@ -1,0 +1,28 @@
+{
+  "dirs": [
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/feed"
+  ],
+  "env": {
+    "GRID_FEED_TASK": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+    "GRID_JOB": "J-1",
+    "GRID_WORKER": "worker-demo"
+  },
+  "hook": "heartbeat",
+  "name": "repeat",
+  "pre": [
+    {
+      "hook": "heartbeat",
+      "input": {
+        "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+        "hook_event_name": "PostToolUse",
+        "reason": "clear",
+        "session_id": "session-demo",
+        "tool_input": {
+          "file_path": "$GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md"
+        },
+        "tool_name": "Read"
+      }
+    }
+  ],
+  "proves": "A repeated event is throttled or deduplicated."
+}

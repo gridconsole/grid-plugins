@@ -1,0 +1,5 @@
+{
+  "hook": "needs-you",
+  "name": "bridge-off",
+  "proves": "With the bridge disabled no request or decision is made."
+}

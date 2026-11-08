@@ -1,0 +1,5 @@
+{
+  "hook": "host-guard",
+  "name": "ordinary-write",
+  "proves": "Ordinary task files pass."
+}

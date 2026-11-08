@@ -1,0 +1,10 @@
+{
+  "contains_stderr": "\"next\" is empty",
+  "exit": 2,
+  "files": {
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/task.md": "---\nid: T-1\ntitle: Demo task\nproject: demo\nowner: member\nsource: idea\nsize: normal\nworkflow:\n  - {step: plan, kind: run}\n  - {step: plan-review, kind: approve}\n  - {step: build, kind: run}\n  - {step: review, kind: approve}\nstep: plan-review\nstatus: waiting\nupdated: 2025-01-02T03:04\nsummary: Build the demo example\nnext:\n---\n"
+  },
+  "hook": "stop-check",
+  "name": "empty-next",
+  "proves": "Empty task next blocks Stop with exit 2."
+}

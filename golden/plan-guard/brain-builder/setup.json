@@ -1,0 +1,6 @@
+{
+  "contains": "deny",
+  "hook": "plan-guard",
+  "name": "brain-builder",
+  "proves": "Builders must propose rather than write brain notes."
+}

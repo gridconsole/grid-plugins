@@ -1,0 +1,5 @@
+{
+  "hook": "brain-read",
+  "name": "other-project",
+  "proves": "A different project brain note is ignored."
+}

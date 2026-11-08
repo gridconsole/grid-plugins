@@ -1,0 +1,6 @@
+{
+  "call": "workflowSteps",
+  "hook": "lib-workflowSteps",
+  "name": "duplicate",
+  "proves": "workflowSteps preserves the duplicate behavior."
+}

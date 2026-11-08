@@ -1,0 +1,5 @@
+{
+  "hook": "plan-guard",
+  "name": "invalid-json",
+  "proves": "Malformed input fails open."
+}

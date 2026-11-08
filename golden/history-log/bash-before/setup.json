@@ -1,0 +1,8 @@
+{
+  "changed": [
+    ".bash-tool-demo"
+  ],
+  "hook": "history-log",
+  "name": "bash-before",
+  "proves": "Bash before saves file size and clock signatures."
+}

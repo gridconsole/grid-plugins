@@ -1,0 +1,6 @@
+{
+  "call": "historyLine",
+  "hook": "lib-historyLine",
+  "name": "empty-detail",
+  "proves": "historyLine preserves the empty detail behavior."
+}

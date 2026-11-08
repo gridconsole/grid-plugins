@@ -1,0 +1,6 @@
+{
+  "call": "historyLine",
+  "hook": "lib-historyLine",
+  "name": "via",
+  "proves": "historyLine preserves the via behavior."
+}

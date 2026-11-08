@@ -1,0 +1,6 @@
+{
+  "contains": "grid:grid-builder",
+  "hook": "agent-routing",
+  "name": "invalid-json",
+  "proves": "Routing is independent of stdin and lists shipped agents."
+}

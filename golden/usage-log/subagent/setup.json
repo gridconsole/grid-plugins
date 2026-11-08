@@ -1,0 +1,8 @@
+{
+  "changed": [
+    ".usage"
+  ],
+  "hook": "usage-log",
+  "name": "subagent",
+  "proves": "SubagentStop stores the canonical agent and transcript."
+}

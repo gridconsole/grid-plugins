@@ -1,0 +1,8 @@
+{
+  "env": {
+    "GRID_PLAN_GUARD": "OFF"
+  },
+  "hook": "plan-guard",
+  "name": "guard-off",
+  "proves": "The explicit off switch releases repository writes."
+}

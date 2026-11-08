@@ -1,0 +1,5 @@
+{
+  "hook": "plan-guard",
+  "name": "brain-curator",
+  "proves": "Curators can write brain notes."
+}

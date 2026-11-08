@@ -1,0 +1,6 @@
+{
+  "call": "parseFrontmatter",
+  "hook": "lib-parseFrontmatter",
+  "name": "odd-key",
+  "proves": "parseFrontmatter preserves the odd key behavior."
+}

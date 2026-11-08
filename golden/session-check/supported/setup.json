@@ -1,0 +1,5 @@
+{
+  "hook": "session-check",
+  "name": "supported",
+  "proves": "Plugin data suppresses the version warning."
+}

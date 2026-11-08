@@ -1,0 +1,29 @@
+{
+  "after_pre": {
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/intent.md": "changed demo intent\n",
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/notes.md": "new demo\n",
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/subagents/01-build.md": null
+  },
+  "changed": [
+    "history.md",
+    ".bash-tool-demo"
+  ],
+  "hook": "history-log",
+  "name": "bash-failure",
+  "pre": [
+    {
+      "hook": "history-log",
+      "input": {
+        "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
+        "hook_event_name": "PreToolUse",
+        "session_id": "session-demo",
+        "tool_input": {
+          "command": "write demo notes"
+        },
+        "tool_name": "Bash",
+        "tool_use_id": "tool-demo"
+      }
+    }
+  ],
+  "proves": "Bash completion logs created, edited and removed files even on failure."
+}

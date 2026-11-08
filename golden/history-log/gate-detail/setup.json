@@ -1,0 +1,8 @@
+{
+  "changed": [
+    "history.md"
+  ],
+  "hook": "history-log",
+  "name": "gate-detail",
+  "proves": "An approval-like file name is quoted in history."
+}

@@ -1,0 +1,6 @@
+{
+  "contains": "addDirectories",
+  "hook": "grid-home-allow",
+  "name": "permission",
+  "proves": "PermissionRequest adds the home as a session directory."
+}

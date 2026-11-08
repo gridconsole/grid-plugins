@@ -1,0 +1,11 @@
+{
+  "changed": [
+    "session-demo.json"
+  ],
+  "env": {
+    "GRID_TASK": "T-1"
+  },
+  "hook": "session-attach",
+  "name": "grid-task",
+  "proves": "GRID_TASK attaches a session started by Grid."
+}

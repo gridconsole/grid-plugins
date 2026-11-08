@@ -1,0 +1,5 @@
+{
+  "hook": "permission-forward",
+  "name": "invalid-json",
+  "proves": "Malformed event input is ignored."
+}

@@ -1,0 +1,9 @@
+{
+  "contains": "deny",
+  "files": {
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/plan.md": "# Plan, rev 1\n"
+  },
+  "hook": "plan-guard",
+  "name": "missing-recall",
+  "proves": "Plan ready requires a recall citation."
+}

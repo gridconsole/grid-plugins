@@ -1,0 +1,6 @@
+{
+  "call": "historyLine",
+  "hook": "lib-historyLine",
+  "name": "detail",
+  "proves": "historyLine preserves the detail behavior."
+}

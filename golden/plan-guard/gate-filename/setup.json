@@ -1,0 +1,6 @@
+{
+  "contains": "deny",
+  "hook": "plan-guard",
+  "name": "gate-filename",
+  "proves": "Approval-like filenames are forbidden."
+}
