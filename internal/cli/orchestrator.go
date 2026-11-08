@@ -290,7 +290,7 @@ func orchestratorRows(env Env, rows []orchestrator.Row, asJSON bool) int {
 	return 0
 }
 func orchestratorWriter(env Env, name, epoch string) (feed.Writer, error) {
-	member, role := env.getenv("GRID_MEMBER"), env.getenv("GRID_ROLE")
+	member, role := env.getenv("GRID_MEMBER"), contract.NormalizeRole(env.getenv("GRID_ROLE"))
 	if member == "" {
 		return feed.Writer{}, errors.New("GRID_MEMBER is required")
 	}

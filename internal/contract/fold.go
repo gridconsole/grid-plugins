@@ -152,7 +152,7 @@ func Fold(posts []Post) State {
 		_ = json.Unmarshal(p.Body, &b)
 		if q := questions[b.Target]; q != nil {
 			answer, exists := seen[b.Answer]
-			if !exists || answer.Type != "answer" || verdicts[answer.ID].Kind != "counted" || answer.Re == nil || *answer.Re != q.post.ID || answer.Author.Role == "guest" && answer.Author.ID != q.who {
+			if !exists || answer.Type != "answer" || verdicts[answer.ID].Kind != "counted" || answer.Re == nil || *answer.Re != q.post.ID || NormalizeRole(answer.Author.Role) == "guest" && answer.Author.ID != q.who {
 				set(p, "ignored", "control must select an eligible answer to this question")
 				continue
 			}
@@ -229,7 +229,7 @@ func Fold(posts []Post) State {
 		if isJobSide(p.Type) && !consumed[p.ID] {
 			set(p, "ignored", "no matching counted assign for this tenure")
 		}
-		if p.Type == "answer" && p.Author.Role == "guest" {
+		if p.Type == "answer" && NormalizeRole(p.Author.Role) == "guest" {
 			q := questions[*p.Re]
 			if q == nil || q.who != p.Author.ID {
 				set(p, "ignored", "question is not addressed to this guest")

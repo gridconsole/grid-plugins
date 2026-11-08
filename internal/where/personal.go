@@ -27,7 +27,7 @@ func CallerFrom(getenv func(string) string) Caller {
 // The workflow key "personal roles:" will carry this policy once L60R and L68
 // land; this default does not read workflow files.
 func DefaultPersonalAllowed(c Caller) bool {
-	role := strings.ToLower(strings.TrimSpace(c.Role))
+	role := contract.NormalizeRole(c.Role)
 	switch contract.TierFor(role) {
 	case contract.PersonGuest, contract.External:
 		return false
@@ -40,7 +40,7 @@ func DefaultPersonalAllowed(c Caller) bool {
 		case "", "cli", "host", "worker", "agent":
 			return true
 		}
-		switch strings.TrimPrefix(role, "grid-") {
+		switch role {
 		case "builder", "checker", "curator", "designer", "library", "operator",
 			"planner", "researcher", "reviewer", "runner", "scout":
 			return true

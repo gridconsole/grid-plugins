@@ -196,7 +196,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 			return Record{}, &InvalidRecordError{Err: err}
 		}
 		kind := str(object(r.Body["gate"])["kind"])
-		if !slices.Contains(roles[kind], r.Author.Role) {
+		if !slices.Contains(roles[kind], contract.NormalizeRole(r.Author.Role)) {
 			return Record{}, &InvalidRecordError{Err: fmt.Errorf("role %s may not post %s gates", r.Author.Role, kind)}
 		}
 	}
@@ -297,7 +297,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 			r.Seq = prev.Seq + 1
 		}
 	}
-	guestAnswer := r.Author.Role == "guest" && r.Type == "answer"
+	guestAnswer := contract.NormalizeRole(r.Author.Role) == "guest" && r.Type == "answer"
 	if r.Wake != nil || r.Type == "ack" || guestAnswer {
 		existing, err := s.Read(Filter{})
 		if err != nil {

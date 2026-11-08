@@ -171,3 +171,16 @@ func TestPersonalRecordIDRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestPersonalRolePrefix(t *testing.T) {
+	for _, role := range []string{"owner", "member", "lead", "guest", "external", "cli", "host", "worker", "agent", "builder", "checker", "curator", "designer", "library", "operator", "planner", "researcher", "reviewer", "runner", "scout", "unknown"} {
+		for _, member := range []string{"", "sam"} {
+			want := DefaultPersonalAllowed(Caller{Role: role, Member: member})
+			for _, spelling := range []string{"grid-" + role, " GRID-" + strings.ToUpper(role) + " "} {
+				if got := DefaultPersonalAllowed(Caller{Role: spelling, Member: member}); got != want {
+					t.Errorf("%q member=%q: %t, want %t", spelling, member, got, want)
+				}
+			}
+		}
+	}
+}

@@ -160,7 +160,7 @@ func runTaskLeaseAction(action string, args []string, env Env) int {
 	policy := lease.TaskTake{Adopt: adopt, Takeover: takeover}
 	if action == "take" {
 		typ, _ := contract.LookupType("handover")
-		if !slices.Contains(typ.Roles, writer.Author.Role) {
+		if !slices.Contains(typ.Roles, contract.NormalizeRole(writer.Author.Role)) {
 			return livenessError(env, errors.New("task acquisition requires a task-holder role"))
 		}
 		if gen < 0 || adopt && takeover {

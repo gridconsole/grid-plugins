@@ -167,7 +167,7 @@ func (s Store) proposals(snap Snapshot) error {
 	return nil
 }
 func fits(parent map[string]any, j *contract.Job, p contract.ProposedJob) bool {
-	if p.DiscoveredFrom != j.ID || p.Role != j.Role {
+	if p.DiscoveredFrom != j.ID || contract.NormalizeRole(p.Role) != contract.NormalizeRole(j.Role) {
 		return false
 	}
 	b, _ := json.Marshal(parent["acceptance"])

@@ -389,7 +389,7 @@ func sources(task string, e Env) (*world, error) {
 // ownerTier maps the role task.md records for the owner to a trust tier. A task
 // without a known owner role is unknown provenance, and that is external.
 func ownerTier(role string) contract.TrustTier {
-	switch role {
+	switch contract.NormalizeRole(role) {
 	case "member", "owner", "lead":
 		return contract.PersonTeam
 	case "guest":

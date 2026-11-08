@@ -187,7 +187,7 @@ func PersonAnswer(p Record, who string) bool {
 	if p.Type != "answer" {
 		return false
 	}
-	switch p.Author.Role {
+	switch contract.NormalizeRole(p.Author.Role) {
 	case "owner", "member", "lead":
 		return true
 	case "guest":

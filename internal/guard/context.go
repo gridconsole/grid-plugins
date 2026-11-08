@@ -4,6 +4,7 @@
 package guard
 
 import (
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -224,7 +225,7 @@ var agentChars = regexp.MustCompile(`[^a-z0-9]+`)
 func agentName(s string) string {
 	p := strings.Split(s, ":")
 	s = strings.Trim(agentChars.ReplaceAllString(strings.ToLower(p[len(p)-1]), "-"), "-")
-	if s == "grid-worker" {
+	if contract.NormalizeRole(s) == "worker" {
 		s = "grid-builder"
 	}
 	if s == "" {

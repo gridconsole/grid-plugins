@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -82,11 +83,11 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 		return hookio.Deny("This task's plan is not accepted yet: Grid records the acceptance, so " + given + " is not changed to say so or to move the task past its plan step." + off)
 	}
 	agent := agentName(in.AgentType)
-	if c.set && (agent == "grid-reviewer" || agent == "grid-checker") && !inside(projects, target) {
+	if c.set && (contract.NormalizeRole(agent) == "reviewer" || contract.NormalizeRole(agent) == "checker") && !inside(projects, target) {
 		return hookio.Deny("A " + agent + " writes only its Verdict inside a task folder; " + target + " is outside it.")
 	}
-	role := strings.TrimPrefix(strings.TrimSpace(in.AgentType), "grid:")
-	if role != "grid-curator" && role != "grid-planner" {
+	role := contract.NormalizeRole(strings.TrimPrefix(strings.TrimSpace(in.AgentType), "grid:"))
+	if role != "curator" && role != "planner" {
 		role = ""
 	}
 	if strings.TrimSpace(in.AgentType) != "" && role == "" && c.brain(target) {
@@ -106,13 +107,13 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 	if len(tasks) > 0 {
 		where = strings.Join(tasks, " or ")
 	}
-	if role == "grid-curator" {
+	if role == "curator" {
 		if c.brain(target) {
 			return hookio.Decision{}
 		}
 		return hookio.Deny("A curator writes only the brain (a project's knowledge/ folder or the Grid home's) and its task folder. Write inside " + where + ", not " + given + "." + off)
 	}
-	if c.set && role == "grid-planner" {
+	if c.set && role == "planner" {
 		if unaccepted || (owner == nil && len(tasks) == 0 && inside(projects, target)) || artifact(projects, target, owner) || c.brain(target) {
 			return hookio.Decision{}
 		}

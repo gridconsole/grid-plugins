@@ -24,7 +24,7 @@ func writeOptions(env Env, id, action, note string) task.WriteOptions {
 	// A member's write is recorded as the member's; "owner" is only the
 	// no-account default (also for the plain "cli" role of a person's shell).
 	role := "owner"
-	if strings.TrimSpace(env.getenv("GRID_ROLE")) == "member" {
+	if contract.NormalizeRole(env.getenv("GRID_ROLE")) == "member" {
 		role = "member"
 	}
 	return task.WriteOptions{Cwd: env.Cwd, ID: id, Action: action, Note: note, Who: contract.Author{ID: who, Role: role}}
@@ -210,7 +210,7 @@ func agentShell(env Env) bool {
 			return true
 		}
 	}
-	role := strings.TrimSpace(env.getenv("GRID_ROLE"))
+	role := contract.NormalizeRole(env.getenv("GRID_ROLE"))
 	return role != "" && role != "owner" && role != "member" && role != "cli"
 }
 

@@ -16,10 +16,15 @@ const (
 	External    TrustTier = "external"
 )
 
+// NormalizeRole accepts caller roles with an optional plugin prefix.
+func NormalizeRole(role string) string {
+	return strings.TrimPrefix(strings.ToLower(strings.TrimSpace(role)), "grid-")
+}
+
 // TierFor maps a stamped author role to the tier the envelope schema requires.
 // Unknown roles map to agent; Validate refuses them by the role enum.
 func TierFor(role string) TrustTier {
-	switch role {
+	switch NormalizeRole(role) {
 	case "owner", "member", "lead":
 		return PersonTeam
 	case "guest":

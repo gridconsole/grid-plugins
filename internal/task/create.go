@@ -149,7 +149,7 @@ func (s Store) New(o NewOptions) (Task, error) {
 // owner names who made the task and the role their words carry. Without Who the
 // person is the machine's owner, who sits at the terminal; the Grid home is theirs.
 func (o NewOptions) owner() (who, role string) {
-	who, role = strings.TrimSpace(o.Who), strings.TrimSpace(o.Role)
+	who, role = strings.TrimSpace(o.Who), contract.NormalizeRole(o.Role)
 	if who == "" {
 		who = machineOwner()
 		if role == "" {

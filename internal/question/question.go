@@ -4,6 +4,7 @@ package question
 import (
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"io"
 	"slices"
@@ -175,7 +176,7 @@ func (s Store) List() ([]Record, error) {
 // no-op; a different human answer cannot silently overwrite an earlier answer.
 // A default is provisional and always permits a subsequent human answer.
 func (s Store) Answer(id, text string) (Record, error) {
-	switch s.Writer.Author.Role {
+	switch contract.NormalizeRole(s.Writer.Author.Role) {
 	case "owner", "member", "lead", "guest":
 	default:
 		return Record{}, errors.New("only a person may answer a person gate")
@@ -184,7 +185,7 @@ func (s Store) Answer(id, text string) (Record, error) {
 		return Record{}, errors.New("answer must not be empty")
 	}
 	return s.change(id, func(r *Record) error {
-		if s.Writer.Author.Role == "guest" && s.Writer.Author.ID != r.Who {
+		if contract.NormalizeRole(s.Writer.Author.Role) == "guest" && s.Writer.Author.ID != r.Who {
 			return errors.New("guest answer must name a question addressed to that guest")
 		}
 		if r.State == "answered" && r.Answer == text {

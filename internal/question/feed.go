@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"os"
 	"regexp"
 	"sort"
@@ -73,7 +74,7 @@ func (s Store) publishEvents(dir string, r *Record, before int) error {
 		in := feed.Input{Re: r.Post, Job: r.Job}
 		w := s.Writer
 		if e.Kind == "answered" {
-			if w.Author.Role == "agent" || w.Author.Role == "cli" {
+			if contract.NormalizeRole(w.Author.Role) == "agent" || contract.NormalizeRole(w.Author.Role) == "cli" {
 				return fmt.Errorf("only a person may answer a person gate")
 			}
 			w.Lease, w.Fence, w.Gen = "", 0, 0
@@ -97,7 +98,7 @@ func (s Store) publishEvents(dir string, r *Record, before int) error {
 				in.Body["level"] = level
 			}
 		}
-		switch w.Author.Role {
+		switch contract.NormalizeRole(w.Author.Role) {
 		case "owner", "member", "guest", "lead", "agent", "cli":
 		default:
 			return fmt.Errorf("unsupported question author role %q", w.Author.Role)
