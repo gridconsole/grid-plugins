@@ -15,7 +15,7 @@ func TestTaskNewThenQuestionAdd(t *testing.T) {
 	h := newHarness(t)
 	h.env.Machine = ""
 	t.Setenv("GRID_MEMBER", "member")
-	t.Setenv("GRID_ROLE", "member")
+	t.Setenv("GRID_ROLE", "owner") // Personal is owner-only.
 	t.Setenv("GRID_WORKER", "")
 	if code := h.run(h.home, "task", "new", "Choose the export format", "--project", "personal", "--json"); code != 0 {
 		t.Fatalf("new: %d %s", code, h.errb)
@@ -77,5 +77,39 @@ func TestLegacyTaskIdentityCLIAndMCP(t *testing.T) {
 				t.Fatalf("post identity: %+v, %v", read, err)
 			}
 		})
+	}
+}
+
+func TestLegacyTaskLeaseInitializesIdentityOnTake(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	h, dir := feedHarness(t)
+	path := filepath.Join(dir, "task.md")
+	original := "---\nid: T-07\n---\n"
+	h.write(path, original)
+	if code := h.run(dir, "lease", "status", "task"); code != 0 {
+		t.Fatalf("status: %d %s", code, h.errb)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != original {
+		t.Fatalf("status changed legacy metadata: %q, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".task.lock")); !os.IsNotExist(err) {
+		t.Fatalf("status created task lock: %v", err)
+	}
+	if code := h.run(dir, taskTakeArgs(pid, start)...); code != 0 {
+		t.Fatalf("take: %d %s", code, h.errb)
+	}
+	id, err := feed.TaskID(dir)
+	if err != nil || !feed.IsID(id) {
+		t.Fatalf("take identity: %q, %v", id, err)
+	}
+	read, err := (feed.Store{TaskDir: dir, TaskID: id}).ReadOnly(feed.Filter{})
+	if err != nil || len(read.Records) != 1 || read.Records[0].Type != "handover" || read.Records[0].Task != id || read.Records[0].Verdict != "counted" {
+		t.Fatalf("handover: %+v, %v", read, err)
+	}
+	if code := h.run(dir, "lease", "release", "task", "--epoch", "0.1"); code != 0 {
+		t.Fatalf("release: %d %s", code, h.errb)
+	}
+	if got, err := feed.TaskID(dir); err != nil || got != id {
+		t.Fatalf("release changed identity: %q, %v", got, err)
 	}
 }
