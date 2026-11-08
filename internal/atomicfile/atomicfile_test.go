@@ -76,3 +76,77 @@ func TestWriteFailureKeepsTheOldFile(t *testing.T) {
 		t.Fatalf("unexpected files: %v", got)
 	}
 }
+
+func TestWriteRootPinnedDirectory(t *testing.T) {
+	home := t.TempDir()
+	original := filepath.Join(home, "original")
+	if err := os.Mkdir(original, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := WriteRoot(root, "note.md", []byte("old"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(home, "moved")
+	if err := os.Rename(original, moved); err != nil {
+		t.Skip(err)
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, original); err != nil {
+		t.Skip(err)
+	}
+	if err := WriteRoot(root, "note.md", []byte("new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(moved, "note.md"))
+	if err != nil || string(data) != "new" {
+		t.Fatalf("pinned directory: %q, %v", data, err)
+	}
+	if got := names(t, outside); len(got) != 0 {
+		t.Fatalf("wrote outside: %v", got)
+	}
+	if got := names(t, moved); len(got) != 1 {
+		t.Fatalf("temporary files: %v", got)
+	}
+	if runtime.GOOS != "windows" {
+		st, err := os.Stat(filepath.Join(moved, "note.md"))
+		if err != nil || st.Mode().Perm() != 0o640 {
+			t.Fatalf("permissions: %v, %v", st, err)
+		}
+	}
+}
+
+func TestWriteRootRefusals(t *testing.T) {
+	home := t.TempDir()
+	root, err := os.OpenRoot(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.WriteFile(outside, []byte("untouched"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.Mkdir("directory", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.Symlink(outside, "link"); err != nil {
+		t.Skip(err)
+	}
+	for _, name := range []string{"link", "directory", "../escape", outside, "missing/note.md"} {
+		if err := WriteRoot(root, name, []byte("new"), 0o600); err == nil {
+			t.Fatalf("accepted %q", name)
+		}
+	}
+	data, err := os.ReadFile(outside)
+	if err != nil || string(data) != "untouched" {
+		t.Fatalf("changed outside: %q, %v", data, err)
+	}
+	if got := names(t, home); len(got) != 2 {
+		t.Fatalf("unexpected files: %v", got)
+	}
+}
