@@ -38,11 +38,15 @@ func TestSetupClaudeCLI(t *testing.T) {
 	if code := h.run(h.home, "setup", "--yes"); code != 0 {
 		t.Fatalf("%d %s", code, h.errb)
 	}
-	golden, err := os.ReadFile(filepath.Join("..", "settings", "testdata", "claude", "fresh.txt"))
+	golden, err := os.ReadFile(filepath.Join("..", "settings", "testdata", "claude", "fresh.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := strings.TrimSuffix(string(golden), "Write these? [y/N] ")
+	var output string
+	if err := json.Unmarshal(golden, &output); err != nil {
+		t.Fatal(err)
+	}
+	want := strings.TrimSuffix(output, "Write these? [y/N] ")
 	if h.out.String() != want {
 		t.Fatalf("got %s want %s", h.out, want)
 	}

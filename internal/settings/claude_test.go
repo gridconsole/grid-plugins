@@ -62,6 +62,13 @@ func (f *claudeFixture) wantCode(want int) {
 func (f *claudeFixture) golden(name string) {
 	f.t.Helper()
 	want := f.read(filepath.Join("testdata", "claude", name))
+	if filepath.Ext(name) == ".json" {
+		var output string
+		if err := json.Unmarshal(want, &output); err != nil {
+			f.t.Fatal(err)
+		}
+		want = []byte(output)
+	}
 	if !bytes.Equal(f.out.Bytes(), want) {
 		f.t.Fatalf("output:\n%s\nwant:\n%s", &f.out, want)
 	}
@@ -72,7 +79,7 @@ func TestClaudeFreshAndSecondRun(t *testing.T) {
 	f.o.terminal = func(_ io.Reader) bool { return true }
 	f.o.Stdin = strings.NewReader("yes\n")
 	f.wantCode(0)
-	f.golden("fresh.txt")
+	f.golden("fresh.json")
 	if f.err.Len() != 0 {
 		t.Fatal(&f.err)
 	}
