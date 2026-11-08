@@ -11,13 +11,15 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
 
-// A backlink lives outside the Grid home, so both versions must be journaled.
-// Changes are applied only after the complete new home has been published.
+// A worktree backlink or a plugin session pointer lives outside the Grid home, so
+// both versions must be journaled. Changes are applied only after the complete new
+// home has been published, and reversed by a rollback.
 type pointerChange struct {
-	Path   string `json:"path"`
-	Before string `json:"before"`
-	After  string `json:"after"`
-	Mode   uint32 `json:"mode"`
+	Path    string `json:"path"`
+	Before  string `json:"before"`
+	After   string `json:"after"`
+	Mode    uint32 `json:"mode"`
+	Session bool   `json:"session,omitempty"` // a plugin session pointer, not a worktree backlink
 }
 
 func (p *Plan) rewriteWorktrees(paths map[string]string) {
@@ -94,15 +96,19 @@ func checkPointers(changes []pointerChange, allowAfter bool) error {
 		if err != nil {
 			return err
 		}
+		what := "worktree backlink"
+		if c.Session {
+			what = "plugin session pointer"
+		}
 		if !info.Mode().IsRegular() {
-			return fmt.Errorf("worktree backlink is not a regular file: %s", c.Path)
+			return fmt.Errorf("%s is not a regular file: %s", what, c.Path)
 		}
 		b, err := readSmall(c.Path, info.Size())
 		if err != nil {
 			return err
 		}
 		if string(b) != c.Before && (!allowAfter || string(b) != c.After) {
-			return fmt.Errorf("worktree backlink changed: %s; stop writers and resolve it before retrying", c.Path)
+			return fmt.Errorf("%s changed: %s; stop writers and resolve it before retrying", what, c.Path)
 		}
 	}
 	return nil

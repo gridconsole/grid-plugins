@@ -339,6 +339,12 @@ func (p *Plan) specialFiles() {
 // and in the session records of each task. Other files named sessions, such as
 // those inside a worktree's repo, are user content and are left alone.
 func (p *Plan) rewriteSessions(homes map[string]bool, paths map[string]string) {
+	sessionPointers := 0
+	defer func() {
+		if sessionPointers > 0 {
+			p.Notes = append(p.Notes, fmt.Sprintf("%s: %d pointer files will be rewritten in place to the new paths", pluginSessionsPrefix, sessionPointers))
+		}
+	}()
 	for _, a := range p.Actions {
 		if a.Kind != "copy" || !isSessionFile(a.From, homes) {
 			continue
@@ -385,6 +391,12 @@ func (p *Plan) rewriteSessions(homes map[string]bool, paths map[string]string) {
 				lines[i] = mapped + ending
 			}
 			data = []byte(strings.Join(lines, "\n"))
+			// The Go plugin reads these pointers only in the plugin folder, so a copy in
+			// the new home is not enough: the originals are rewritten in place.
+			if strings.HasPrefix(a.From, pluginSessionsPrefix) && string(data) != string(raw) {
+				p.pointers = append(p.pointers, pointerChange{Path: e.Src, Before: string(raw), After: string(data), Mode: uint32(e.Mode.Perm()), Session: true})
+				sessionPointers++
+			}
 		}
 		e.Data, e.Size = data, int64(len(data))
 		p.result[a.To] = e
@@ -730,6 +742,8 @@ func (p *Plan) checkIdentities() {
 	}
 }
 
+const pluginSessionsPrefix = "CLAUDE_PLUGIN_DATA/sessions"
+
 // pluginSessions imports hook pointers and usage without changing the old plugin data.
 func (p *Plan) pluginSessions() error {
 	if p.pluginData == "" {
@@ -744,11 +758,11 @@ func (p *Plan) pluginSessions() error {
 	for _, rel := range p.plugin.keys {
 		e := p.plugin.m[rel]
 		if isSpecial(e.Mode) {
-			p.Unmapped = append(p.Unmapped, "CLAUDE_PLUGIN_DATA/sessions/"+rel+": cannot copy special file")
+			p.Unmapped = append(p.Unmapped, pluginSessionsPrefix+"/"+rel+": cannot copy special file")
 			continue
 		}
 		e.Src = filepath.Join(p.pluginData, filepath.FromSlash(rel))
-		p.add("copy", path.Join("CLAUDE_PLUGIN_DATA/sessions", rel), path.Join("sessions", rel), e)
+		p.add("copy", path.Join(pluginSessionsPrefix, rel), path.Join("sessions", rel), e)
 	}
 	return nil
 }
