@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/golden"
 )
 
@@ -92,8 +93,11 @@ func TestProposalLifecycle(t *testing.T) {
 }
 
 func TestAcceptanceGates(t *testing.T) {
-	for _, tc := range []struct{ name, topic, tier string }{
-		{"config", "agents", "agent"}, {"guest", "decisions", "person-guest"}, {"external", "decisions", "external"},
+	for _, tc := range []struct {
+		name, topic string
+		tier        contract.TrustTier
+	}{
+		{"config", "agents", contract.Agent}, {"guest", "decisions", contract.PersonGuest}, {"external", "decisions", contract.External},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := testStore(t)

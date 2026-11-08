@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -267,7 +268,7 @@ func Run(args []string, env Env) int {
 		var origin brain.Origin
 		origin, err = brain.SessionOrigin()
 		if external {
-			origin.Kind, origin.Tier = "import", "external"
+			origin.Kind, origin.Tier = "import", contract.External
 		}
 		if err == nil {
 			result, err = store.Propose(n, origin)

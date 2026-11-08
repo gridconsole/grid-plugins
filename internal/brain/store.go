@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
@@ -159,7 +160,7 @@ func randomID() (string, error) {
 // server integration, and imported text must explicitly use external.
 func SessionOrigin() (Origin, error) {
 	id, err := randomID()
-	return Origin{Kind: "session", ID: id, Tier: "agent"}, err
+	return Origin{Kind: "session", ID: id, Tier: contract.Agent}, err
 }
 
 func atomicWrite(root *os.Root, path string, data []byte) error {
@@ -457,7 +458,7 @@ func gate(root *os.Root, n Note) string {
 	if topic.Kind != "knowledge" {
 		return "Config topics must be changed through their own commands."
 	}
-	if n.Origin.Tier == "external" || n.Origin.Tier == "person-guest" {
+	if n.Origin.Tier == contract.External || n.Origin.Tier == contract.PersonGuest {
 		return "Guest and external proposals are quarantined from accepted knowledge."
 	}
 	return ""

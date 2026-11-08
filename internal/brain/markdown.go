@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 // Encode writes YAML-compatible front matter: quoted scalar strings and JSON
@@ -74,7 +76,7 @@ func Parse(data []byte) (Note, error) {
 								err = fmt.Errorf("unsupported origin field %q", k)
 							}
 						}
-						n.Origin = Origin{Kind: m["kind"], ID: m["id"], Tier: m["tier"]}
+						n.Origin = Origin{Kind: m["kind"], ID: m["id"], Tier: contract.TrustTier(m["tier"])}
 					}
 				}
 			default:

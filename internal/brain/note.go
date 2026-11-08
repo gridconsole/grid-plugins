@@ -6,14 +6,16 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 // Origin is supplied by the caller's session or authenticated source, never by
 // note text. Unknown imports must use external; local CLI sessions use agent.
 type Origin struct {
-	Kind string `json:"kind"`
-	ID   string `json:"id"`
-	Tier string `json:"tier"`
+	Kind string             `json:"kind"`
+	ID   string             `json:"id"`
+	Tier contract.TrustTier `json:"tier"`
 }
 
 // Link keeps the destination's summary with the reason to follow this edge.
@@ -85,7 +87,7 @@ func (n Note) Validate() error {
 		return fmt.Errorf("origin kind must be session, job, server or import")
 	}
 	switch n.Origin.Tier {
-	case "person-team", "person-guest", "agent", "external":
+	case contract.PersonTeam, contract.PersonGuest, contract.Agent, contract.External:
 	default:
 		return fmt.Errorf("origin tier is required")
 	}
