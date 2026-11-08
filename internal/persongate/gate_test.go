@@ -42,6 +42,7 @@ func TestProcessGate(t *testing.T) {
 		{"renamed", []string{"g", "zsh", "claude"}, "agent_ancestor", "", nil, nil},
 		{"node_claude", []string{"grid", "bash", "node"}, "agent_ancestor", "", nil, []string{"node", "claude-code/cli.js"}},
 		{"bun_codex", []string{"grid", "bash", "bun"}, "agent_ancestor", "", nil, []string{"bun", "@openai/codex/bin.js"}},
+		{"native_claude", []string{"grid", "bash", "claude/versions/2.1.319", "Terminal"}, "agent_ancestor", "", nil, nil},
 		{"codex", []string{"grid", "bash", "Codex.EXE"}, "agent_ancestor", "", nil, nil},
 		{"codex_variant", []string{"grid", "bash", "codex-linux"}, "agent_ancestor", "", nil, nil},
 		{"worker", []string{"grid", "bash", "grid-worker"}, "agent_ancestor", "", nil, nil},

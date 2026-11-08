@@ -61,10 +61,17 @@ func PersonDir() (string, error) {
 }
 
 func name(exe string) string {
-	exe = strings.ReplaceAll(exe, `\`, "/")
+	exe = strings.TrimSuffix(strings.ReplaceAll(exe, `\`, "/"), " (deleted)")
 	return strings.TrimSuffix(strings.ToLower(filepath.Base(exe)), ".exe")
 }
 func agent(p Process) bool {
+	// Native Claude installs use a version as the executable filename. Match
+	// the stable install suffix as well as the advertised runtime basenames.
+	exe := strings.ToLower(strings.ReplaceAll(p.Exe, `\`, "/"))
+	parts := strings.Split(exe, "/")
+	if len(parts) >= 3 && parts[len(parts)-3] == "claude" && parts[len(parts)-2] == "versions" {
+		return true
+	}
 	n := name(p.Exe)
 	if n == "claude" || n == "codex" || strings.HasPrefix(n, "codex-") || n == "grid-worker" {
 		return true

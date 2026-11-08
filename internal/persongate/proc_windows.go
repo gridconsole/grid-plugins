@@ -66,6 +66,9 @@ func (SystemProcs) Snapshot() (map[int]Process, error) {
 		}
 		start, args, err := processDetails(pid)
 		if err != nil {
+			if pid != os.Getpid() && errors.Is(err, syscall.Errno(87)) {
+				break
+			} // parent exited after the snapshot
 			return nil, err
 		}
 		if childTime != 0 && start > childTime {
