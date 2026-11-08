@@ -286,7 +286,8 @@ const who = (p) => `${str(p.author?.member)}@${str(p.author?.host)}`;
 
 // The state of a task from its posts (readFeed's result): { epoch, jobs, questions, open_questions, hosts, head, ignored, unknown }.
 // A job has a status, assign {worker, host}, priority, after, base, attempt, verdict, lease_expires (ISO), last_beat, history (one entry per
-// control post that counted, with its reason), results and submits (post ids), open_questions (ids) and exited (the worker-exit post id).
+// control post that counted, with its reason), results and submits (post ids), open_questions (ids) and exited (the worker-exit post id), and
+// the non-enumerable jobPost, the job post that was counted.
 // `now` (ms) decides which leases ran out: an assigned or running job past its lease reads as stale (recorded_status keeps the control post's).
 // `ignored` lists the posts that did not count, with why. `epoch` is the highest; a control post is checked against the epoch current at its
 // place in (at, id) order, set by the Orchestrator handover with the highest epoch before it (the later one on a tie), so moves made before
@@ -299,6 +300,7 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
   const ignored = [];
   const unknown = [];
   const jobs = new Map();
+  const counted = new Map(); // job id -> the post the fold counted for it
   const jobOfPost = new Map();
   const questions = new Map();
   const byId = new Map(sorted.map((p) => [p.id, p]));
@@ -342,6 +344,7 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
         lease_ms: LEASE_MS, lease_at: null,
       });
       jobOfPost.set(p.id, id);
+      counted.set(id, p);
     } else if (p.type === 'question') {
       questions.set(p.id, { id: p.id, job: p.job, at: p.at, author: who(p), body: p.body, blocking: body.blocking === true, answers: [], open: true, closed: false });
     }
@@ -421,7 +424,10 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
   const out = [...jobs.values()].map((j) => {
     const stale = LIVE.has(j.status) && j.lease_at !== null && j.lease_at < now;
     const { lease_ms: _ms, lease_at: leaseAt, ...rest } = j;
-    return { ...rest, status: stale ? 'stale' : j.status, recorded_status: j.status, stale, lease_expires: leaseAt === null ? null : new Date(leaseAt).toISOString(), open_questions: open.filter((q) => q.job === j.id).map((q) => q.id) };
+    const rec = { ...rest, status: stale ? 'stale' : j.status, recorded_status: j.status, stale, lease_expires: leaseAt === null ? null : new Date(leaseAt).toISOString(), open_questions: open.filter((q) => q.job === j.id).map((q) => q.id) };
+    // `jobPost` is the post that made the Job, for a caller that reads its body: another writer's post with the same id is not it. Not in the JSON.
+    Object.defineProperty(rec, 'jobPost', { value: counted.get(j.id) });
+    return rec;
   });
   return {
     epoch, posts: sorted.length, jobs: out, hosts, head, ignored, unknown,

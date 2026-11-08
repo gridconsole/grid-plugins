@@ -6,6 +6,7 @@ required: [question]
 fields:
   - question: the question, in plain words
   - blocking: true when the Job cannot go on without the answer
+  - who: `owner` when the person to ask is the Owner of the task, as for a wait Job that needs a manual approval
   - options: the answers the asker can already see, one per line
 ---
 A question to a person or to the Orchestrator. It stays open until an answer post names it in `re`, or a control post closes it.

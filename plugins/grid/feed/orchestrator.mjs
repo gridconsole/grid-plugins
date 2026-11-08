@@ -18,6 +18,7 @@ import { runGit } from './git.mjs';
 import { workerLaunch, ROLES, AGENTS } from './worker.mjs';
 import { foldHosts, pickHost as scoreHost, whyNoHost } from './hosts.mjs';
 import { decide as askModel } from './decide.mjs';
+import { isWait, stepWait, probe as probeWait, checkOf, WAIT_KIND } from './wait.mjs';
 
 const LIVE = new Set(['assigned', 'running']);
 const FINISHED = new Set(['done', 'cancelled']);
@@ -155,6 +156,7 @@ function settings(taskDir, o) {
     intervalMs: Number.isFinite(o.intervalMs) && o.intervalMs > 0 ? o.intervalMs : 15_000,
     decideOpts: { env, model: o.model, effort: o.effort },
     decide: o.decide ?? askModel, spawn: o.spawn ?? startWorker, pickHost: o.pickHost, retry: o.retry ?? noRetry,
+    probe: o.probe ?? ((check) => probeWait(check, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })), probeAt: new Map(), // wait Jobs: the check, and when each was last read
     steps: { start: jobStart, integrate: taskIntegrate, base: resolveBase, ...o.steps },
   };
 }
@@ -218,16 +220,21 @@ function work(taskDir, o) {
     const jobs = Array.isArray(r.value?.jobs) ? r.value.jobs.filter((x) => isObj(x) && oneLine(x.title)) : [];
     jobs.forEach((x, i) => {
       const after = (Array.isArray(x.after) ? x.after : []).map(str).filter((id) => jobNo(id) >= 1 && jobNo(id) <= jobs.length && jobNo(id) !== i + 1);
+      // A wait Job keeps the checked, trimmed check; one that fails the check is still posted, so the numbering holds, and the loop rejects it with the reason.
+      const wait = x.kind === WAIT_KIND;
+      const c = wait ? checkOf(x) : null;
       write('job', {
         title: oneLine(x.title, 200), role: ROLES.includes(x.role) ? x.role : 'builder', brief: str(x.brief).trim(),
         ...(after.length ? { after: [...new Set(after)] } : {}),
-        ...(x.code === true && o.repo ? { repo: path.basename(o.repo) } : {}),
+        ...(wait ? { kind: WAIT_KIND, ...(c.ok ? { check: c.check } : isObj(x.check) ? { check: x.check } : {}) } : {}),
+        ...(x.code === true && o.repo && !wait ? { repo: path.basename(o.repo) } : {}),
         ...(Number.isInteger(x.priority) ? { priority: x.priority } : {}),
       }, { job: `J-${i + 1}` });
     });
   };
 
-  const jobPostOf = (j, v) => v.byId.get(j.post);
+  // The job post the fold counted, never a later line that reuses its id: this body decides what runs (a wait Job's command, a Worker's brief).
+  const jobPostOf = (j) => j.jobPost;
   const codeJob = (j, v) => Boolean(str(jobPostOf(j, v)?.body?.repo));
 
   // A verdict that counted on a post: the last control post in the Job's history that targets it.
@@ -266,11 +273,24 @@ function work(taskDir, o) {
     return failJob(j, `could not integrate ${j.id}: ${errText(r)}`);
   };
 
+  // A wait Job runs no model and no Worker: the loop reads its pipeline check itself (wait.mjs). A timeout is the lease, left to the stale path below.
+  const waitMove = (j, v) => {
+    const s = stepWait({ job: j, jobPost: jobPostOf(j, v), posts: v.posts, questions: v.state.questions, now, lastProbe: o.probeAt.get(j.id), probeFn: o.probe });
+    if (!s) return;
+    if (s.probed) o.probeAt.set(j.id, now);
+    if (s.question) write('question', s.question, { job: j.id });
+    if (s.result) write('result', s.result, { job: j.id });
+    for (const id of s.close ?? []) control({ target: id, status: 'closed', reason: 'the watch ended' });
+    if (s.control) control(s.control);
+  };
+
   // One step for one Job, the first rule that applies.
   const move = (j, v) => {
     const rec = j.recorded_status;
     const cur = j.assign?.worker ?? null;
     const own = (type) => (cur ? lastOf(v.posts, (p) => p.type === type && p.job === j.id && p.worker === cur) : null);
+
+    if (isWait(jobPostOf(j, v))) waitMove(j, v);
 
     // A result is read before the lease: a Worker that finished while the loop was down is handed in, not marked stale.
     const result = LIVE.has(rec) || rec === 'stale' ? own('result') : null;
@@ -376,7 +396,7 @@ function work(taskDir, o) {
 
   const assign = (v) => {
     for (const j of v.state.jobs) if (LIVE.has(j.recorded_status) && j.assign?.host) v.busy.set(j.assign.host, (v.busy.get(j.assign.host) ?? 0) + 1);
-    const ready = v.state.jobs.filter((j) => j.recorded_status === 'ready' && !failed.has(j.id))
+    const ready = v.state.jobs.filter((j) => j.recorded_status === 'ready' && !failed.has(j.id) && !isWait(jobPostOf(j, v)))
       .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || jobNo(a.id) - jobNo(b.id));
     for (const j of ready) {
       const scored = !o.pickHost && Object.keys(v.state.hosts).length > 0; // Hosts announced: score them; else the loop's own Host
