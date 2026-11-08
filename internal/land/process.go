@@ -5,12 +5,22 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/eval"
 )
 
 const outputLimit = 64 * 1024
+
+// windowsTaskkillPath uses Windows separators on every host so it can be tested
+// without a Windows runtime. An unset SystemRoot must never yield a relative path.
+func windowsTaskkillPath(systemRoot string) string {
+	if systemRoot == "" {
+		systemRoot = `C:\Windows`
+	}
+	return strings.TrimRight(strings.ReplaceAll(systemRoot, "/", `\`), `\`) + `\System32\taskkill.exe`
+}
 
 type boundedBuffer struct {
 	buffer    bytes.Buffer
