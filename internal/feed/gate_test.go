@@ -30,7 +30,7 @@ func TestGateReuse(t *testing.T) {
 				t.Fatalf("identical record retry changed: %+v", retry)
 			}
 			for _, change := range []string{"identical", "kind", "question", "who", "default", "job", "wake"} {
-				for _, writer := range []Writer{w, {Author: Author{ID: "agent", Role: "agent"}, Worker: "agent@" + testMachine}} {
+				for _, writer := range []Writer{w, {Author: Author{ID: "agent", Role: "member"}, Worker: "agent@" + testMachine}} {
 					attempt := gatedQuestion("Q-1")
 					attempt.Body["question"] = in.Body["question"]
 					switch change {
@@ -77,7 +77,7 @@ func TestGateConcurrentWriters(t *testing.T) {
 			<-start
 			w := testWriter()
 			w.Author.ID = fmt.Sprintf("agent%d", i)
-			w.Author.Role = "agent"
+			w.Author.Role = "member"
 			w.Worker = w.Author.ID + "@" + testMachine
 			_, err := s.Post(gatedQuestion("Q-1"), w)
 			results <- err

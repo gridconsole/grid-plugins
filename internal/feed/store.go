@@ -15,6 +15,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
 var ErrStaleLease = errors.New("stale lease")
@@ -168,6 +169,16 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	if err := validate(r); err != nil {
 		return Record{}, err
 	}
+	if gateID(r) != "" {
+		roles, err := workflow.GatePostRoles(s.TaskDir)
+		if err != nil {
+			return Record{}, &InvalidRecordError{Err: err}
+		}
+		kind := str(object(r.Body["gate"])["kind"])
+		if !slices.Contains(roles[kind], r.Author.Role) {
+			return Record{}, &InvalidRecordError{Err: fmt.Errorf("role %s may not post %s gates", r.Author.Role, kind)}
+		}
+	}
 	if err := s.prepare(); err != nil {
 		return Record{}, err
 	}
@@ -197,6 +208,17 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		}
 		defer guard.Close()
 		defer fslock.Unlock(guard)
+	}
+	if gid := gateID(r); gid != "" {
+		existing, err := s.Read(Filter{Type: "question"})
+		if err != nil {
+			return Record{}, err
+		}
+		for _, entry := range existing.Records {
+			if gateID(entry.Record) == gid && !(entry.ID == r.ID && sameRequest(entry.Record, r)) {
+				return Record{}, &InvalidRecordError{Err: fmt.Errorf("gate id %s already exists (question %s)", gid, entry.ID)}
+			}
+		}
 	}
 	file := filepath.Join(s.Dir(), writerFile(w.Worker, w.Fence))
 	f, err := fslock.OpenNoFollow(file, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0o600)
@@ -249,17 +271,6 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		}
 		if prev.Seq >= r.Seq {
 			r.Seq = prev.Seq + 1
-		}
-	}
-	if gid := gateID(r); gid != "" {
-		existing, err := s.Read(Filter{Type: "question"})
-		if err != nil {
-			return Record{}, err
-		}
-		for _, entry := range existing.Records {
-			if gateID(entry.Record) == gid {
-				return Record{}, fmt.Errorf("gate id %s already exists (question %s)", gid, entry.ID)
-			}
 		}
 	}
 	guestAnswer := r.Author.Role == "guest" && r.Type == "answer"
