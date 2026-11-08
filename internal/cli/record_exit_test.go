@@ -102,8 +102,8 @@ func TestRecordExitWorkerArgv(t *testing.T) {
 				t.Fatal(err)
 			}
 			args := []string{"feed", "post", "--type", kind, "--id", exitRecordID, "--job", "J-1", "--attempt", "1", "--lease", "J-1", "--lease-epoch", epoch, "--body", `{"reason":"done"}`, "--after", assign, "--json"}
-			if code := h.run(path, args...); code != 1 || !strings.Contains(h.errb.String(), "grid job post") {
-				t.Errorf("exit %d, stderr %q; want 1 naming grid job post", code, h.errb)
+			if code := h.run(path, args...); code != 3 || !strings.Contains(h.errb.String(), "grid job post") {
+				t.Errorf("exit %d, stderr %q; want 3 naming grid job post", code, h.errb)
 			}
 			records, err := store.Read(feed.Filter{})
 			if err != nil {

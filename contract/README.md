@@ -422,8 +422,11 @@ prints the renewed claim like claim does. Done and renew read the token from
 `--token`, its alias `--claim`, or `GRID_INTENT_CLAIM`; a token is required even
 though the environment permits the short `grid intent done <id>` spelling.
 A bare `--error` records `worker reported an error`; `--error=message` supplies
-the reason. Exit codes are 0 for success, 1 for storage/scope errors or a claim
-refusal, and 2 for invalid command usage. Existing session list/show behavior is
-preserved. These new commands define no task or Feed record shapes.
+the reason. Exit codes are 0 for success, 1 for storage/scope errors (may retry),
+2 for invalid command usage, 3 for no current claim token (do not retry),
+and 5 taken for an already claimed or done intent (skip the intent quietly;
+ownership may change). These refusal codes apply to claim, renew, release and
+done. Existing session list/show behavior is preserved. These new commands define
+no task or Feed record shapes.
 
-`grid feed` and `grid job post|ack|result|cancel` exit with 0 for success, 1 for storage/scope/resolution or other errors, 2 for usage, 3 for final rejection (stale lease or invalid record; do not retry), and 4 for disk full.
+`grid feed` and `grid job post|ack|result|cancel` exit with 0 for success, 1 for storage/scope/resolution or other errors, 2 for usage, 3 for final rejection (stale lease, invalid record, or Job-side kind/Job lease refused by `grid feed post`; do not retry), and 4 for disk full. Status 5 taken applies to the intent refusals above.

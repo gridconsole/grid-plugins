@@ -250,7 +250,8 @@ func runIntent(args []string, env Env) int {
 	case "claim":
 		claim, err := store.Claim(id, who)
 		if err != nil {
-			return livenessError(env, err)
+			livenessError(env, err)
+			return exitCode(err)
 		}
 		if *asJSON {
 			return writeJSON(env.Stdout, claim)
@@ -259,7 +260,8 @@ func runIntent(args []string, env Env) int {
 	case "renew":
 		claim, err := store.Renew(id, token)
 		if err != nil {
-			return livenessError(env, err)
+			livenessError(env, err)
+			return exitCode(err)
 		}
 		if *asJSON {
 			return writeJSON(env.Stdout, claim)
@@ -268,7 +270,8 @@ func runIntent(args []string, env Env) int {
 	case "release":
 		released, err := store.Release(id, token)
 		if err != nil {
-			return livenessError(env, err)
+			livenessError(env, err)
+			return exitCode(err)
 		}
 		if *asJSON {
 			return writeJSON(env.Stdout, released)
@@ -277,7 +280,8 @@ func runIntent(args []string, env Env) int {
 	case "done":
 		done, err := store.Done(id, token, failure)
 		if err != nil {
-			return livenessError(env, err)
+			livenessError(env, err)
+			return exitCode(err)
 		}
 		if *asJSON {
 			return writeJSON(env.Stdout, done)

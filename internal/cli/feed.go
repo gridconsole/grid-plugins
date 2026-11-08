@@ -258,10 +258,10 @@ func sessionStore(env Env, task, project string) (feed.Store, error) {
 func refuseJobSide(kind, lease string) error {
 	switch kind {
 	case "ack", "submit", "result", "checkpoint", "worker-exit", "integrate":
-		return fmt.Errorf("Job-side writes require grid job post or grid job %s", kind)
+		return &feed.InvalidRecordError{Err: fmt.Errorf("Job-side writes require grid job post or grid job %s", kind)}
 	}
 	if lease != "" && lease != "task" {
-		return fmt.Errorf("Job lease writes require grid job post")
+		return &feed.InvalidRecordError{Err: fmt.Errorf("Job lease writes require grid job post")}
 	}
 	return nil
 }

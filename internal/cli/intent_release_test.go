@@ -101,7 +101,11 @@ func TestIntentReleaseCommandRefusals(t *testing.T) {
 			}
 			dir := filepath.Join(task, "intents")
 			before := intentFiles(t, dir)
-			if code := h.run(task, "intent", "release", r.ID, "--token", token); code != 1 {
+			want := 3
+			if scenario == "done" {
+				want = 5
+			}
+			if code := h.run(task, "intent", "release", r.ID, "--token", token); code != want {
 				t.Fatalf("refusal: exit %d: %s", code, h.errb)
 			}
 			after := intentFiles(t, dir)

@@ -79,7 +79,7 @@ func TestIntentCommandsLifecycle(t *testing.T) {
 	if err := json.Unmarshal(h.out.Bytes(), &claim); err != nil {
 		t.Fatal(err)
 	}
-	if code := h.run(task, "intent", "claim", id); code != 1 {
+	if code := h.run(task, "intent", "claim", id); code != 5 {
 		t.Fatal("second claim", code)
 	}
 	if code := h.run(task, "intent", "list", "--pending", "--json"); code != 0 || h.out.String() != "[]\n" {
@@ -95,7 +95,7 @@ func TestIntentCommandsLifecycle(t *testing.T) {
 	if err := json.Unmarshal(h.out.Bytes(), &done); err != nil || done.Error != "worker reported an error" {
 		t.Fatal(done, err)
 	}
-	if code := h.run(task, "intent", "claim", id); code != 1 {
+	if code := h.run(task, "intent", "claim", id); code != 5 {
 		t.Fatal("completed claim", code)
 	}
 	if code := h.run(task, "intent", "list"); code != 0 || !strings.Contains(h.out.String(), "state: done") {
@@ -141,7 +141,7 @@ func TestIntentRenewCommand(t *testing.T) {
 	if err := json.Unmarshal(h.out.Bytes(), &r); err != nil {
 		t.Fatal(err)
 	}
-	if code := h.run(task, "intent", "renew", r.ID, "--token", "01ARZ3NDEKTSV4RRFFQ69G5FAV"); code != 1 {
+	if code := h.run(task, "intent", "renew", r.ID, "--token", "01ARZ3NDEKTSV4RRFFQ69G5FAV"); code != 3 {
 		t.Fatal("renew without a claim", code, h.errb)
 	}
 	if code := h.run(task, "intent", "claim", r.ID, "--json"); code != 0 {
@@ -163,7 +163,7 @@ func TestIntentRenewCommand(t *testing.T) {
 			t.Fatalf("%s renewed %+v from %+v", flag, renewed, claim)
 		}
 	}
-	if code := h.run(task, "intent", "renew", r.ID, "--token", "01ARZ3NDEKTSV4RRFFQ69G5FAV"); code != 1 || !strings.Contains(h.errb.String(), "claim token") {
+	if code := h.run(task, "intent", "renew", r.ID, "--token", "01ARZ3NDEKTSV4RRFFQ69G5FAV"); code != 3 || !strings.Contains(h.errb.String(), "claim token") {
 		t.Fatal("renew with a stale token", code, h.errb)
 	}
 	if code := h.run(task, "intent", "renew", r.ID); code != 2 {
@@ -181,7 +181,7 @@ func TestIntentRenewCommand(t *testing.T) {
 	if code := h.run(task, "intent", "done", r.ID, "--token", claim.Token); code != 0 {
 		t.Fatal("done with --token", code, h.errb)
 	}
-	if code := h.run(task, "intent", "renew", r.ID); code != 1 {
+	if code := h.run(task, "intent", "renew", r.ID); code != 5 {
 		t.Fatal("renew after done", code)
 	}
 }
