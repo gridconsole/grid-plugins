@@ -135,3 +135,42 @@ func TestTwoProcessesJobNext(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestFeedPostCannotBypassExitedWorker(t *testing.T) {
+	h, path, store := orchestratorHarness(t)
+	if code := h.run(path, "job", "next"); code != 0 {
+		t.Fatal(h.errb)
+	}
+	state, err := store.State()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GRID_ROLE", "worker")
+	t.Setenv("GRID_LEASE", "J-1")
+	t.Setenv("GRID_LEASE_EPOCH", fmt.Sprintf("0.%d", state.Jobs["J-1"].Assign.Fence))
+	if code := h.run(path, "job", "ack", "J-1", "--attempt", "1"); code != 0 {
+		t.Fatal(h.errb)
+	}
+	if code := h.run(path, "job", "post", "J-1", "--attempt", "1", "--type", "worker-exit", "--body", `{"reason":"done"}`); code != 0 {
+		t.Fatal(h.errb)
+	}
+	before, _ := store.Read(feed.Filter{})
+	body, err := os.ReadFile("../../contract/fixtures/result/valid/basic.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Body json.RawMessage `json:"body"`
+	}
+	if err := json.Unmarshal(body, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	body = fixture.Body
+	if code := h.run(path, "feed", "post", "--type", "result", "--job", "J-1", "--attempt", "1", "--body", string(body)); code == 0 {
+		t.Fatal("feed post accepted result after worker-exit")
+	}
+	after, _ := store.Read(feed.Filter{})
+	if len(before.Records) != len(after.Records) {
+		t.Fatal("refused post changed feed")
+	}
+}

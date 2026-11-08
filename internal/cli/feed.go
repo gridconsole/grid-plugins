@@ -112,6 +112,15 @@ func runFeed(args []string, env Env) int {
 		}
 		return output(state)
 	}
+	if verb == "post" {
+		switch kind {
+		case "ack", "submit", "result", "checkpoint", "worker-exit", "integrate":
+			return fail(fmt.Errorf("Job-side writes require grid job post or grid job %s", kind))
+		}
+		if lease != "" && lease != "task" {
+			return fail(fmt.Errorf("Job lease writes require grid job post"))
+		}
+	}
 	if body == "-" {
 		data, err := io.ReadAll(env.Stdin)
 		if err != nil {

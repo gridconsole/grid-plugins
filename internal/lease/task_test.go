@@ -1,8 +1,10 @@
 package lease
 
 import (
+	"bytes"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -48,5 +50,28 @@ func TestTaskAndJobTenures(t *testing.T) {
 	}
 	if _, err := s.Read("../task"); err == nil {
 		t.Fatal("accepted traversal")
+	}
+}
+
+func TestLeaseReadersRejectTheSameInvalidGrant(t *testing.T) {
+	s := TaskStore{Feed: feed.Store{TaskDir: t.TempDir()}}
+	path := filepath.Join(s.Feed.Dir(), "lease", "J-1.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile("../../contract/fixtures/lease/valid/alternate.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, data := range [][]byte{nil, bytes.Replace(raw, []byte(`"J-1"`), []byte(`"J-2"`), 1), bytes.Replace(raw, []byte(`"lease": "J-1",`), nil, 1)} {
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Read("J-1"); err == nil {
+			t.Errorf("TaskStore accepted invalid grant %s", data)
+		}
+		if _, err := ReadJob(s.Feed.TaskDir, "J-1"); err == nil {
+			t.Errorf("ReadJob accepted invalid grant %s", data)
+		}
 	}
 }

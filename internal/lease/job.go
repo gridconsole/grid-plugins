@@ -34,50 +34,27 @@ func ReadJob(taskDir, id string) (JobStatus, error) {
 		return JobStatus{}, errors.New("invalid Job id")
 	}
 	feedDir := feed.Store{TaskDir: taskDir}.Dir()
-	dir := filepath.Join(feedDir, "lease")
-	info, err := os.Lstat(dir)
+	tenure, err := (TaskStore{Feed: feed.Store{TaskDir: taskDir}}).Read(id)
 	if errors.Is(err, os.ErrNotExist) {
 		return JobStatus{}, nil
 	}
 	if err != nil {
 		return JobStatus{}, err
 	}
-	if !info.IsDir() {
-		return JobStatus{}, errors.New("lease directory must be a real directory")
-	}
-	f, err := fslock.OpenNoFollow(filepath.Join(dir, id+".json"), os.O_RDONLY, 0)
-	if errors.Is(err, os.ErrNotExist) {
-		return JobStatus{}, nil
-	}
+	since, err := time.Parse(time.RFC3339Nano, tenure.Since)
 	if err != nil {
 		return JobStatus{}, err
 	}
-	defer f.Close()
-	if err := fslock.LockShared(f); err != nil {
-		return JobStatus{}, err
-	}
-	defer fslock.Unlock(f)
-	// A writer can leave an old tail after rewriting in place; decode one value.
-	var raw json.RawMessage
-	if err := json.NewDecoder(io.LimitReader(f, 64<<10)).Decode(&raw); err != nil {
-		return JobStatus{}, err
-	}
-	if err := contract.Validate("lease", raw); err != nil {
-		return JobStatus{}, err
-	}
-	var status JobStatus
-	if err := json.Unmarshal(raw, &status); err != nil {
-		return status, err
-	}
-	if status.Lease != id {
-		return JobStatus{}, errors.New("Job lease identity mismatch")
+	status := JobStatus{Record: Record{Lease: id, Holder: tenure.Holder, Fence: uint64(tenure.Fence), Since: since}}
+	if tenure.Attempt != nil {
+		status.Attempt = *tenure.Attempt
 	}
 	status.Known = true
 	if status.Holder == nil {
 		return status, nil
 	}
 	liveDir := filepath.Join(feedDir, ".live")
-	info, err = os.Lstat(liveDir)
+	info, err := os.Lstat(liveDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return status, nil
 	}
@@ -95,7 +72,7 @@ func ReadJob(taskDir, id string) (JobStatus, error) {
 		return JobStatus{}, err
 	}
 	defer live.Close()
-	raw, err = io.ReadAll(io.LimitReader(live, 64<<10))
+	raw, err := io.ReadAll(io.LimitReader(live, 64<<10))
 	if err != nil {
 		return JobStatus{}, err
 	}

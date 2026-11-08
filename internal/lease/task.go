@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/job"
 )
 
 // Tenure is the lease-file schema; the shared fencing fields are owned by Feed.
@@ -32,8 +32,6 @@ type TaskStore struct {
 	Now  func() time.Time
 }
 
-var jobName = regexp.MustCompile(`^J-[1-9][0-9]*(\.[1-9][0-9]*)*$`)
-
 func (s TaskStore) now() string {
 	now := time.Now()
 	if s.Now != nil {
@@ -42,7 +40,7 @@ func (s TaskStore) now() string {
 	return contract.FormatTime(now)
 }
 func (s TaskStore) open(name string, create bool) (*os.File, error) {
-	if name != "task" && !jobName.MatchString(name) {
+	if name != "task" && !job.ValidID(name) {
 		return nil, errors.New("invalid lease name")
 	}
 	dir := filepath.Join(s.Feed.Dir(), "lease")
@@ -71,13 +69,14 @@ func readTenure(f *os.File) (Tenure, error) {
 		return t, err
 	}
 	dec := json.NewDecoder(bytes.NewReader(b))
-	if err := dec.Decode(&t); err != nil {
+	var raw json.RawMessage
+	if err := dec.Decode(&raw); err != nil {
 		return t, err
 	}
-	b, err = json.Marshal(t)
-	if err == nil {
-		err = contract.Validate("lease", b)
+	if err := contract.Validate("lease", raw); err != nil {
+		return t, err
 	}
+	err = json.Unmarshal(raw, &t)
 	return t, err
 }
 func (s TaskStore) Read(name string) (Tenure, error) {
@@ -90,7 +89,11 @@ func (s TaskStore) Read(name string) (Tenure, error) {
 		return Tenure{}, err
 	}
 	defer fslock.Unlock(f)
-	return readTenure(f)
+	t, err := readTenure(f)
+	if err == nil && t.Lease.Lease != name {
+		err = errors.New("lease identity mismatch")
+	}
+	return t, err
 }
 
 // TakeTask creates the first task tenure. A live or unknown holder is never
