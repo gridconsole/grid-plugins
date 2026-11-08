@@ -55,6 +55,8 @@ type Files struct {
 	Repos     map[string]string // named repo roots
 	Prototype string
 	cache     map[string]Source
+	// afterIdentify is a per-resolver test seam for path replacement races.
+	afterIdentify func()
 }
 
 var lineAnchor = regexp.MustCompile(`^L([0-9]+)(?:-L?([0-9]+))?$`)
@@ -214,6 +216,9 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 		if cached, ok := f.cache[pointer]; ok {
 			return cached, nil
 		}
+	}
+	if f.afterIdentify != nil {
+		f.afterIdentify()
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
