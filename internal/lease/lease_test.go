@@ -1,0 +1,175 @@
+package lease
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestLifecycle(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	s := Store{ProjectDir: t.TempDir(), Now: func() time.Time { return now }}
+	status, err := s.Status()
+	if err != nil || status.Held {
+		t.Fatalf("initial status: %+v, %v", status, err)
+	}
+	if _, err := os.Stat(filepath.Join(s.ProjectDir, "lease")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("status wrote files: %v", err)
+	}
+	first, err := s.Take("session-a")
+	if err != nil || first.Fence != 1 || first.Until.Sub(now) != Duration {
+		t.Fatalf("take: %+v, %v", first, err)
+	}
+	for _, holder := range []string{"session-a", "session-b"} {
+		if _, err := s.Take(holder); !errors.Is(err, ErrHeld) {
+			t.Fatalf("take held: %v", err)
+		}
+	}
+	if _, err := s.Renew("session-b", first.Fence); !errors.Is(err, ErrNotHolder) {
+		t.Fatalf("wrong holder: %v", err)
+	}
+	now = now.Add(14 * time.Minute)
+	renewed, err := s.Renew("session-a", first.Fence)
+	if err != nil || renewed.Until.Sub(now) != Duration || renewed.Since != first.Since {
+		t.Fatalf("renew: %+v, %v", renewed, err)
+	}
+	now = renewed.Until
+	if _, err := s.Renew("session-a", first.Fence); !errors.Is(err, ErrExpired) {
+		t.Fatalf("expired renew: %v", err)
+	}
+	if _, err := s.Release("session-a", first.Fence); !errors.Is(err, ErrExpired) {
+		t.Fatalf("expired release: %v", err)
+	}
+	status, err = s.Status()
+	if err != nil || status.Held {
+		t.Fatalf("expired status: %+v, %v", status, err)
+	}
+	// Reusing the same holder must still fence out the old invocation.
+	second, err := s.Take("session-a")
+	if err != nil || second.Fence != 2 {
+		t.Fatalf("steal: %+v, %v", second, err)
+	}
+	if _, err := s.Release("session-a", first.Fence); !errors.Is(err, ErrNotHolder) {
+		t.Fatalf("old release: %v", err)
+	}
+	if _, err := s.Renew("session-a", first.Fence); !errors.Is(err, ErrNotHolder) {
+		t.Fatalf("old renew: %v", err)
+	}
+	if _, err := s.Release("session-a", second.Fence); err != nil {
+		t.Fatal(err)
+	}
+	third, err := s.Take("session-b")
+	if err != nil || third.Fence != 3 {
+		t.Fatalf("take after release: %+v, %v", third, err)
+	}
+}
+
+func TestCorruptionAndSymlinks(t *testing.T) {
+	for _, name := range []string{"merge.json", "seq"} {
+		t.Run(name, func(t *testing.T) {
+			s := Store{ProjectDir: t.TempDir()}
+			if _, err := s.Take("session-a"); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(s.ProjectDir, "lease", name), []byte("broken"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			s.Now = func() time.Time { return time.Now().Add(time.Hour) }
+			if _, err := s.Take("session-b"); err == nil {
+				t.Fatal("corrupt state granted a lease")
+			}
+		})
+	}
+	dir := t.TempDir()
+	s := Store{ProjectDir: dir}
+	if err := os.Symlink(t.TempDir(), filepath.Join(dir, "lease")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Take("session-a"); err == nil {
+		t.Fatal("followed lease directory symlink")
+	}
+}
+
+// Child processes wait on stdin so the parent can release all contenders only
+// after they have started. They share real flock locks, not Go mutexes.
+func TestLeaseProcessHelper(t *testing.T) {
+	if os.Getenv("GRID_LEASE_TEST_HELPER") != "1" {
+		return
+	}
+	var ready [1]byte
+	if _, err := os.Stdin.Read(ready[:]); err != nil {
+		os.Exit(3)
+	}
+	seconds, err := strconv.ParseInt(os.Getenv("GRID_LEASE_TEST_NOW"), 10, 64)
+	if err != nil {
+		os.Exit(3)
+	}
+	s := Store{ProjectDir: os.Getenv("GRID_LEASE_TEST_DIR"), Now: func() time.Time { return time.Unix(seconds, 0) }}
+	rec, err := s.Take("contender-" + os.Getenv("GRID_LEASE_TEST_ID"))
+	if errors.Is(err, ErrHeld) {
+		os.Exit(10)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(3)
+	}
+	fmt.Fprintln(os.Stdout, rec.Fence)
+	os.Exit(0)
+}
+
+func TestMultiProcessRace(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for round := 0; round < 2; round++ {
+		// The second race steals exactly at expiry of the first winner.
+		at := now.Add(time.Duration(round) * Duration)
+		const count = 12
+		cmds := make([]*exec.Cmd, count)
+		outputs := make([]*strings.Builder, count)
+		starts := make([]func(), count)
+		for i := range cmds {
+			cmd := exec.Command(os.Args[0], "-test.run=^TestLeaseProcessHelper$")
+			cmd.Env = append(os.Environ(), "GRID_LEASE_TEST_HELPER=1", "GRID_LEASE_TEST_DIR="+dir,
+				"GRID_LEASE_TEST_NOW="+strconv.FormatInt(at.Unix(), 10), "GRID_LEASE_TEST_ID="+strconv.Itoa(i))
+			pipe, err := cmd.StdinPipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			outputs[i] = &strings.Builder{}
+			cmd.Stdout, cmd.Stderr = outputs[i], outputs[i]
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = pipe.Close(); _ = cmd.Process.Kill() })
+			starts[i] = func() { _, _ = pipe.Write([]byte{1}); _ = pipe.Close() }
+			cmds[i] = cmd
+		}
+		for _, start := range starts {
+			start()
+		}
+		winners := 0
+		for i, cmd := range cmds {
+			err := cmd.Wait()
+			if err == nil {
+				winners++
+				if strings.TrimSpace(outputs[i].String()) != strconv.Itoa(round+1) {
+					t.Errorf("wrong fence: %s", outputs[i])
+				}
+			} else {
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 10 {
+					t.Errorf("contender: %v: %s", err, outputs[i])
+				}
+			}
+		}
+		if winners != 1 {
+			t.Fatalf("round %d: %d winners", round, winners)
+		}
+	}
+}
