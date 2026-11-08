@@ -34,7 +34,6 @@ type Env struct {
 	Stdout      io.Writer
 	Stderr      io.Writer
 	ResolveTask func(string) (string, error)
-	Resolver    where.Resolver
 }
 type flags struct {
 	json   bool
