@@ -104,6 +104,8 @@ func runLease(args []string, env Env) int {
 	return 0
 }
 
+var processStates = map[session.ProcessState]string{session.Alive: "alive", session.Dead: "dead", session.Unknown: "unknown"}
+
 func runTaskLease(action string, args []string, env Env) int {
 	if action == "renew" {
 		fmt.Fprintln(env.Stderr, "task lease has no renewal; use take, release or status")
@@ -175,7 +177,7 @@ func runTaskLease(action string, args []string, env Env) int {
 				if tenure.PIDStart != nil {
 					live.PIDStart = *tenure.PIDStart
 				}
-				state = map[session.ProcessState]string{session.Alive: "alive", session.Dead: "dead", session.Unknown: "unknown"}[session.ProbeLocal(live)]
+				state = processStates[session.ProbeLocal(live)]
 			}
 		}
 		if *asJSON {
@@ -239,6 +241,10 @@ func runTaskLease(action string, args []string, env Env) int {
 			}
 		}
 		start = contract.FormatTime(parsed)
+	}
+	// A stored identity that is not this live process would let a later taker adopt the real holder.
+	if state := session.ProbeLocal(session.Live{PID: pid, PIDStart: start}); state != session.Alive {
+		return livenessError(env, fmt.Errorf("task lease take refused: pid %d started %s is not a live process on this host (%s)", pid, start, processStates[state]))
 	}
 	// Serialize CLI grants through their first post, including handover recovery.
 	// The lease owner still checks and probes under the lease file's own lock.

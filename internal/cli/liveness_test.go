@@ -367,9 +367,41 @@ func deadTaskProcess(t *testing.T) (int, string) {
 	return cmd.Process.Pid, contract.FormatTime(start)
 }
 
+// liveTaskProcess starts a child that runs until the test ends.
+func liveTaskProcess(t *testing.T) (int, string) {
+	t.Helper()
+	cmd := exec.Command("sh", "-c", "read line")
+	in, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = in.Close(); _ = cmd.Wait() })
+	return cmd.Process.Pid, contract.FormatTime(mustTaskStart(t, cmd.Process.Pid))
+}
+
+// unknownProbe puts a ps first on PATH whose answer for pid does not parse, so
+// that pid probes unknown while every other process is still probed by the real ps.
+func unknownProbe(t *testing.T, pid int) {
+	t.Helper()
+	ps, err := exec.LookPath("ps")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	script := fmt.Sprintf("#!/bin/sh\nfor a; do [ \"$a\" = %d ] && { echo unparseable; exit 0; }; done\nexec %s \"$@\"\n", pid, ps)
+	if err := os.WriteFile(filepath.Join(dir, "ps"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
 func TestTaskLeaseAdoptionAndStatus(t *testing.T) {
 	pid, start := taskLeaseIdentity(t)
 	deadPID, deadStart := deadTaskProcess(t)
+	livePID, liveStart := liveTaskProcess(t)
 	for _, tc := range []struct {
 		name, machine, state string
 		pid                  int
@@ -380,7 +412,7 @@ func TestTaskLeaseAdoptionAndStatus(t *testing.T) {
 		{"local dead", feedMachine, "dead", deadPID, deadStart, false, 0},
 		{"local alive", feedMachine, "alive", pid, start, false, 1},
 		{"remote dead", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "remote", deadPID, deadStart, false, 1},
-		{"local unknown", feedMachine, "unknown", pid, start, true, 1},
+		{"local unknown", feedMachine, "unknown", livePID, liveStart, true, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, path := feedHarness(t)
@@ -395,7 +427,8 @@ func TestTaskLeaseAdoptionAndStatus(t *testing.T) {
 				t.Fatal(err)
 			}
 			if tc.unknown {
-				t.Setenv("PATH", "")
+				// The holder probes unknown while the taker's own identity still probes alive.
+				unknownProbe(t, tc.pid)
 			}
 			if code := h.run(path, "lease", "status", "task"); code != 0 || !strings.Contains(h.out.String(), "process: "+tc.state+"\n") {
 				t.Fatalf("status: %d %s %s", code, h.out, h.errb)
@@ -653,6 +686,36 @@ func TestTaskLeaseReachabilityWithFeedTaskFixture(t *testing.T) {
 		t.Fatalf("ready Job: %d %s %s", code, h.out, h.errb)
 	}
 	t.Log("task new -> plan write -> lease take -> job next reaches the Orchestrator; publishing the Job via feed post makes J-1 ready")
+}
+
+func TestTaskLeaseTakeRefusesIdentityNotAlive(t *testing.T) {
+	pid, _ := taskLeaseIdentity(t)
+	deadPID, deadStart := deadTaskProcess(t)
+	shifted := contract.FormatTime(mustTaskStart(t, pid).Add(2 * time.Second))
+	for _, tc := range []struct {
+		name, state string
+		args        []string
+	}{
+		{"wrong start", "dead", taskTakeArgs(pid, shifted)},
+		{"reaped child", "dead", taskTakeArgs(deadPID, deadStart)},
+		{"session with wrong start", "dead", []string{"lease", "take", "task", "--session", "session-1"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, path := feedHarness(t)
+			if _, err := (session.Store{TaskDir: path}).Start(session.Record{Key: session.Key{SessionID: "session-1", MachineID: feedMachine}, PID: pid, PIDStart: shifted}); err != nil {
+				t.Fatal(err)
+			}
+			if code := h.run(path, tc.args...); code != 1 || !strings.Contains(h.errb.String(), "is not a live process on this host ("+tc.state+")") {
+				t.Fatalf("take: %d %s %s", code, h.out, h.errb)
+			}
+			if _, err := os.Stat(filepath.Join(path, "feed", "lease", "task.json")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("refused take wrote a lease: %v", err)
+			}
+			if records, err := (feed.Store{TaskDir: path, TaskID: feedTaskID}).Read(feed.Filter{}); err != nil || len(records.Records) != 0 {
+				t.Fatalf("refused take posted: %+v %v", records, err)
+			}
+		})
+	}
 }
 
 func TestTaskLeaseTakeReportsGrantErrors(t *testing.T) {
