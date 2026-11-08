@@ -140,17 +140,43 @@ func TestSourceSwapUsesIdentifiedHandle(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			s, err := f.Resolve(name + "#L1")
+			pointer := name + "#L1"
+			j := Job{Intent: Intent{Owner: pointer, Item: pointer, Goal: pointer}}
+			rendered, err := Render(j, RenderOptions{Resolver: f})
 			if err != nil {
 				if !errors.Is(err, ErrPlanNeedsApproval) {
 					t.Fatal(err)
 				}
 				return // Refusal is also safe; replacement text must never escape.
 			}
+			if len(rendered.Inputs.Sources) != 1 {
+				t.Fatalf("rendered %d sources, want one", len(rendered.Inputs.Sources))
+			}
+			s := rendered.Inputs.Sources[0]
 			want, _, _ := strings.Cut(string(before), "\n")
 			if s.Text != want || s.Digest != fmt.Sprintf("%x", sha256.Sum256(before)) {
 				t.Errorf("path swap returned replacement bytes instead of identified snapshot")
 			}
 		})
+	}
+}
+
+func TestApprovedCRLFPlanAnchor(t *testing.T) {
+	h := jobtest.New(t, filepath.Join("..", "..", "testdata"))
+	path := filepath.Join(h.Task, "plan.md")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.ReplaceAll(string(b), "\n", "\r\n")), 0600); err != nil {
+		t.Fatal(err)
+	}
+	h.Approve(t)
+	if _, err := LoadPlan(h.Task, "1"); err != nil {
+		t.Fatal(err)
+	}
+	s, err := (&Files{Task: h.Task}).Resolve("plan.md#step-1")
+	if err != nil || !strings.Contains(s.Text, "Document the export format") {
+		t.Fatalf("approved CRLF snapshot must render: %v", err)
 	}
 }

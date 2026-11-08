@@ -75,7 +75,7 @@ func forgedPlan(t *testing.T, original string) (string, string) {
 				t.Fatal("brute force did not collide through plan.Hash")
 			}
 			t.Logf("found 24-bit collision after %d candidates", nonce+1)
-			return forged, digest
+			return forged, plan.Digest(original)
 		}
 	}
 	t.Fatal("exhausted collision search")

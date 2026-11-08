@@ -52,7 +52,7 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 					if err := readApproval(previous, &old); err != nil {
 						return err
 					}
-					if old.PlanHash != current || (old.PlanDigest != "" && old.PlanDigest != digest) || old.LandsHash != o.LandsHash {
+					if old.PlanHash != current || old.PlanDigest != digest || old.LandsHash != o.LandsHash {
 						return errors.New("Changed since you approved: review the plan and pass --plan-hash with its current hash")
 					}
 				}
@@ -120,7 +120,7 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 }
 
 // Approved is the lock-free form of Approval for a hook: it answers whether dir
-// holds an approval whose hash and optional digest still match plan.md now. It takes no lock and
+// holds an approval whose hash and full digest still match plan.md now. It takes no lock and
 // replays no journal, so a write in flight or any read failure is false.
 func Approved(dir string) bool {
 	text, err := plan.Store{TaskDir: dir}.Read()
@@ -159,14 +159,14 @@ func checkApproval(t Task, data []byte, hash, digest string) (Event, error) {
 	if err := readApproval(data, &event); err != nil {
 		return Event{}, err
 	}
-	if event.Task != t.ID || event.What != "approve" || event.PlanHash != hash || (event.PlanDigest != "" && event.PlanDigest != digest) {
+	if event.Task != t.ID || event.What != "approve" || event.PlanHash != hash || event.PlanDigest == "" || event.PlanDigest != digest {
 		return Event{}, errors.New("Changed since you approved: plan hash no longer matches")
 	}
 	return event, nil
 }
 
-// readApproval distinguishes an absent legacy digest from a present but empty,
-// null or malformed one. Only absence permits the short-hash compatibility path.
+// readApproval decodes legacy receipts so explicit reapproval can replace them;
+// checkApproval requires a matching full digest before authorizing plan work.
 func readApproval(data []byte, event *Event) error {
 	var receipt struct {
 		*Event

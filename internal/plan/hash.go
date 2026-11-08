@@ -30,10 +30,10 @@ func Hash(text string) string {
 	return fmt.Sprintf("%x", sum[:])[:6]
 }
 
-// Digest binds canonical plan content with full SHA-256. Unlike the legacy
-// short Hash, it includes evidence and needs lines that workers read in steps.
+// Digest binds the entire plan snapshot with full SHA-256, including line one.
+// Unlike the legacy display Hash, no rendered text is omitted or normalized.
 func Digest(text string) string {
-	sum := sha256.Sum256([]byte(canonicalPlan(text, true)))
+	sum := sha256.Sum256([]byte(text))
 	return fmt.Sprintf("%x", sum[:])
 }
 

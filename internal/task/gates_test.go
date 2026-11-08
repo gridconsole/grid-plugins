@@ -2,7 +2,9 @@ package task
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,10 +77,10 @@ func TestApprovalTracksPlan(t *testing.T) {
 	if err != nil || got != event || !Approved(task.Path) {
 		t.Fatalf("%+v: %v", got, err)
 	}
-	// Ticking a step is not a plan change (plan.Hash ignores it).
+	// The display hash ignores ticks, but approval binds the entire snapshot.
 	setPlan(t, task, strings.Replace(planV1, "[ ]", "[x]", 1))
-	if _, err := s.Approval("", task.ID); err != nil || !Approved(task.Path) {
-		t.Fatalf("tick staled the approval: %v", err)
+	if _, err := s.Approval("", task.ID); err == nil || Approved(task.Path) {
+		t.Fatalf("tick preserved the approval: %v", err)
 	}
 	before, _ := os.ReadFile(filepath.Join(task.Path, "history.md"))
 	oldApproval, _ := os.ReadFile(filepath.Join(task.Path, "approval.json"))
@@ -331,11 +333,14 @@ func TestApproveAtShipGateRecordsShipApproval(t *testing.T) {
 }
 
 func TestApprovalDigestCompatibility(t *testing.T) {
+	// The old canonical digest omitted the revision and status heading.
+	legacyDigest := fmt.Sprintf("%x", sha256.Sum256([]byte("- [ ] 1 Build it\n## How we approach it\n\nUsed: brain:project/conventions/example\n")))
 	for _, tc := range []struct {
 		name, digest string
 		want         bool
 	}{
-		{"legacy short hash", "", true},
+		{"legacy short hash", "", false},
+		{"legacy canonical digest", `,"plan_digest":"` + legacyDigest + `"`, false},
 		{"full digest", `,"plan_digest":"` + plan.Digest(planV1) + `"`, true},
 		{"wrong digest", `,"plan_digest":"` + strings.Repeat("0", 64) + `"`, false},
 		{"empty digest", `,"plan_digest":""`, false},
@@ -351,8 +356,13 @@ func TestApprovalDigestCompatibility(t *testing.T) {
 			if (err == nil) != tc.want || Approved(task.Path) != tc.want || ApprovedDigest(task.Path, hash, plan.Digest(planV1)) != tc.want {
 				t.Fatalf("approval allowed = %t, want %t: %v", err == nil, tc.want, err)
 			}
-			if tc.want {
-				event, err := s.Approve(WriteOptions{ID: task.ID}, "")
+			if tc.want || strings.HasPrefix(tc.name, "legacy ") {
+				if !tc.want {
+					if _, err := s.Approve(WriteOptions{ID: task.ID}, ""); err == nil {
+						t.Fatal("legacy receipt upgraded without explicit reapproval")
+					}
+				}
+				event, err := s.Approve(WriteOptions{ID: task.ID}, hash)
 				if err != nil || event.PlanDigest != plan.Digest(planV1) {
 					t.Fatalf("reapproval must upgrade legacy receipts: %+v %v", event, err)
 				}
