@@ -13,11 +13,12 @@ func runMigrate(args []string, env Env) int {
 	apply := fs.Bool("apply", false, "back up and apply the migration; stop old Grid writers first")
 	rollback := fs.Bool("rollback", false, "restore the old home if the migrated home is unchanged")
 	from := fs.String("from", "", "old Grid data folder (defaults to the Grid home)")
+	pluginData := fs.String("plugin-data", "", "old plugin data folder whose session pointers are migrated (defaults to CLAUDE_PLUGIN_DATA)")
 	if code, stop := parse(fs, args, env); stop {
 		return code
 	}
-	if *rollback && (*dry || *apply || *from != "") {
-		fmt.Fprintln(env.Stderr, "grid migrate: --rollback cannot be combined with --apply, --dry-run or --from")
+	if *rollback && (*dry || *apply || *from != "" || *pluginData != "") {
+		fmt.Fprintln(env.Stderr, "grid migrate: --rollback cannot be combined with --apply, --dry-run, --from or --plugin-data")
 		return 2
 	}
 	if *dry && *apply {
@@ -49,13 +50,15 @@ func runMigrate(args []string, env Env) int {
 		}
 		return 0
 	}
-	source := *from
+	source := absolute(*from, env)
 	if source == "" {
 		source = env.GridHome
-	} else if !filepath.IsAbs(source) && env.Cwd != "" {
-		source = filepath.Join(env.Cwd, source)
 	}
-	p, err := migrate.Scan(source, env.GridHome, migrate.WithCeiling(env.Ceiling))
+	opts := []migrate.Option{migrate.WithCeiling(env.Ceiling)}
+	if *pluginData != "" {
+		opts = append(opts, migrate.WithPluginData(absolute(*pluginData, env)))
+	}
+	p, err := migrate.Scan(source, env.GridHome, opts...)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid migrate: %v\n", err)
 		return 1
@@ -82,4 +85,12 @@ func runMigrate(args []string, env Env) int {
 		return 1
 	}
 	return 0
+}
+
+// absolute resolves a path given on the command line against the working folder.
+func absolute(dir string, env Env) string {
+	if dir != "" && !filepath.IsAbs(dir) && env.Cwd != "" {
+		return filepath.Join(env.Cwd, dir)
+	}
+	return dir
 }

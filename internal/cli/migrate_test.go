@@ -151,3 +151,27 @@ func TestMigrateRollbackCommand(t *testing.T) {
 		t.Fatal(h.out.String())
 	}
 }
+
+// The desktop app runs migrate without CLAUDE_PLUGIN_DATA, so the folder is a flag.
+func TestMigratePluginDataFlag(t *testing.T) {
+	t.Setenv("CLAUDE_PLUGIN_DATA", "")
+	h := newHarness(t)
+	old := filepath.Join(h.root, "old")
+	h.write(filepath.Join(old, "projects", "example", "project.md"), "---\nfolder: /example/work/project\n---\n")
+	h.write(filepath.Join(old, "projects", "example", "tasks", "T-01-example", "task.md"), "---\nid: T-01\nproject: example\n---\n")
+	pointer := filepath.Join(h.root, "plugin-data", "sessions", "s1.tasks")
+	h.write(pointer, filepath.Join(old, "projects", "example", "tasks", "T-01-example")+"\n")
+	if code := h.run(h.root, "migrate", "--apply", "--from", old, "--plugin-data", "plugin-data"); code != 0 {
+		t.Fatalf("apply: %d: %s%s", code, h.out, h.errb)
+	}
+	got, err := os.ReadFile(pointer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(h.gridHome, "projects", "example", "tasks", "T-01-example") + "\n"; string(got) != want {
+		t.Fatalf("pointer is %q, want %q", got, want)
+	}
+	if code := h.run(h.root, "migrate", "--rollback", "--plugin-data", "plugin-data"); code != 2 {
+		t.Fatalf("rollback with the flag: %d", code)
+	}
+}
