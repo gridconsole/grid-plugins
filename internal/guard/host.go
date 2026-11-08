@@ -27,6 +27,9 @@ var feedAnswer = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:fe
 // plan revision archive.
 var gateName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:approval\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock|plan-revisions|questions)(?:$|[^\w.-])`)
 
+// The task's workflow snapshot governs which roles may post gates.
+var workflowName = regexp.MustCompile(`(?i)(?:^|[^\w.-])workflow\.md(?:$|[^\w.-])`)
+
 // switchVerb is a grid verb that changes which guards or agents run, and
 // settingsName is a Grid settings file or its lock, where the same switches live.
 var switchVerb = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:hook\s+level|agent\s+set|skill\s+(?:enable|disable)|setup)(?:\s|$)`)
@@ -217,6 +220,9 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 		}
 		if c.set && (runsVerb(command, gateVerb) || runsVerb(command, feedAnswer) || writesNamed(command, gateName) || (namesFeed.MatchString(command) && !feedCLI)) {
 			return person()
+		}
+		if c.set && writesNamed(command, workflowName) {
+			return hookio.Deny("The task's workflow.md policy is written only by Grid; an agent cannot change its own gate posting roles. Reading is allowed: cat, grep, ls, head or tail of workflow.md work.")
 		}
 		return hookio.Decision{}
 	}
