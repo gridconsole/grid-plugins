@@ -151,21 +151,49 @@ func TestWorkflowWriteUsageAndPaths(t *testing.T) {
 	}
 }
 
-func TestWorkflowWriteSymlink(t *testing.T) {
-	h := newHarness(t)
-	h.env.Getenv = func(string) string { return "" }
-	outside := filepath.Join(h.root, "outside.md")
-	h.write(outside, "unchanged")
-	if err := os.Symlink(outside, filepath.Join(h.gridHome, "workflows.md")); err != nil {
-		t.Skip(err)
-	}
-	h.env.Stdin = strings.NewReader(cliWorkflow)
-	if code := h.run(h.root, workflowWriteArgs("none")...); code == 0 || strings.Contains(h.errb.String(), h.root) {
-		t.Fatalf("symlink: exit %d: %s", code, h.errb)
-	}
-	data, err := os.ReadFile(outside)
-	if err != nil || string(data) != "unchanged" {
-		t.Fatalf("symlink target changed: %q, %v", data, err)
+func TestWorkflowWriteInvalidTargets(t *testing.T) {
+	for _, kind := range []string{"target link", "internal target link", "directory", "project link"} {
+		t.Run(kind, func(t *testing.T) {
+			h := newHarness(t)
+			h.env.Getenv = func(string) string { return "" }
+			outside := filepath.Join(h.root, "outside")
+			if kind == "internal target link" {
+				outside = filepath.Join(h.gridHome, "other")
+			}
+			untouched := filepath.Join(outside, "workflows.md")
+			h.write(untouched, "unchanged")
+			args := workflowWriteArgs("none")
+			text := cliWorkflow
+			target := filepath.Join(h.gridHome, "workflows.md")
+			switch kind {
+			case "directory":
+				if err := os.Mkdir(target, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			case "project link":
+				h.write(filepath.Join(outside, "project.md"), "---\nid: id-alpha\n---\n")
+				if err := os.MkdirAll(filepath.Join(h.gridHome, "projects"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(outside, filepath.Join(h.gridHome, "projects", "alpha")); err != nil {
+					t.Skip(err)
+				}
+				args = append(args, "--project", "alpha")
+				text = strings.ReplaceAll(text, "nothing else matches", "label alpha")
+			default:
+				if err := os.Symlink(untouched, target); err != nil {
+					t.Skip(err)
+				}
+			}
+			h.env.Stdin = strings.NewReader(text)
+			if code := h.run(h.root, args...); code != 2 || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "workflow path is unsafe or inaccessible") && !strings.Contains(h.errb.String(), "workflow target is not a regular file") || strings.Contains(h.errb.String(), h.root) {
+				t.Fatalf("invalid target: exit %d: %s", code, h.errb)
+			}
+			data, err := os.ReadFile(untouched)
+			if err != nil || string(data) != "unchanged" {
+				t.Fatalf("target changed: %q, %v", data, err)
+			}
+		})
 	}
 }
 

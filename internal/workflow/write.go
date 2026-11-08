@@ -76,6 +76,9 @@ func Write(home, selector, expected string, input io.Reader) (WriteResult, error
 	if selector != "" {
 		entries, err := (projects.Store{Resolver: where.Resolver{GridHome: home}}).List()
 		if err != nil {
+			if errors.Is(err, localdata.ErrUnsafePath) {
+				return result, fmt.Errorf("%w: workflow path is unsafe or inaccessible", ErrInvalid)
+			}
 			return result, errors.New("cannot read registered projects")
 		}
 		matches := 0
@@ -137,7 +140,7 @@ func Write(home, selector, expected string, input io.Reader) (WriteResult, error
 		relative = filepath.Join("projects", project, relative)
 	}
 	if _, err := localdata.Safe(home, relative); err != nil {
-		return result, errors.New("workflow path is unsafe or inaccessible")
+		return result, fmt.Errorf("%w: workflow path is unsafe or inaccessible", ErrInvalid)
 	}
 	root, err := os.OpenRoot(home)
 	if err != nil {
@@ -145,7 +148,7 @@ func Write(home, selector, expected string, input io.Reader) (WriteResult, error
 	}
 	defer root.Close()
 	if err := safefile.NoSymlinks(root, relative); err != nil {
-		return result, errors.New("workflow path is unsafe or inaccessible")
+		return result, fmt.Errorf("%w: workflow path is unsafe or inaccessible", ErrInvalid)
 	}
 	dir, err := root.OpenRoot(filepath.Dir(relative))
 	if err != nil {
@@ -175,14 +178,14 @@ func Write(home, selector, expected string, input io.Reader) (WriteResult, error
 		return result, errors.New("workflow lock changed while opening")
 	}
 	if err := fslock.LockExclusive(lock); err != nil {
-		return result, errors.New("cannot lock workflow file")
+		return result, err
 	}
 	defer fslock.Unlock(lock)
 	current := "none"
 	before, err := dir.Lstat("workflows.md")
 	if err == nil {
 		if !before.Mode().IsRegular() {
-			return result, errors.New("workflow target is not a regular file")
+			return result, fmt.Errorf("%w: workflow target is not a regular file", ErrInvalid)
 		}
 		f, err := dir.Open("workflows.md")
 		if err != nil {

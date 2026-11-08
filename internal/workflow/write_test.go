@@ -181,6 +181,9 @@ func TestWriteSelectionAndUnsafeTargets(t *testing.T) {
 			if err == nil || strings.Contains(err.Error(), home) || strings.Contains(err.Error(), outside) {
 				t.Fatalf("refusal: %v", err)
 			}
+			if (kind == "directory" || kind == "target link" || kind == "project link") && !errors.Is(err, ErrInvalid) {
+				t.Fatalf("want invalid target, got %v", err)
+			}
 			data, err := os.ReadFile(filepath.Join(outside, "workflows.md"))
 			if err != nil || string(data) != "untouched" {
 				t.Fatalf("outside changed: %q, %v", data, err)

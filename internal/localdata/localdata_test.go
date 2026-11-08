@@ -1,6 +1,7 @@
 package localdata
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -87,8 +88,8 @@ func TestSafe(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"../escape", "linked/note.md"} {
-		if _, err := Safe(home, path); err == nil {
-			t.Errorf("accepted %s", path)
+		if _, err := Safe(home, path); !errors.Is(err, ErrUnsafePath) {
+			t.Errorf("want unsafe path for %s, got %v", path, err)
 		}
 	}
 }

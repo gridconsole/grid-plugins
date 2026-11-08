@@ -35,6 +35,9 @@ func ID() (string, error) {
 	return string(out[:]), nil
 }
 
+// ErrUnsafePath identifies a rejected symlink or escape, rather than an I/O error.
+var ErrUnsafePath = errors.New("unsafe path")
+
 // Safe checks existing path components below root, refusing symlinks and escapes.
 // The caller may choose a symlink-resolved Grid home as root.
 func Safe(root string, parts ...string) (string, error) {
@@ -44,7 +47,7 @@ func Safe(root string, parts ...string) (string, error) {
 	path := filepath.Join(append([]string{root}, parts...)...)
 	rel, err := filepath.Rel(root, path)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path is outside the Grid home")
+		return "", fmt.Errorf("%w: path is outside the Grid home", ErrUnsafePath)
 	}
 	p := root
 	for _, part := range strings.Split(rel, string(filepath.Separator)) {
@@ -57,7 +60,7 @@ func Safe(root string, parts ...string) (string, error) {
 			return "", err
 		}
 		if st.Mode()&os.ModeSymlink != 0 {
-			return "", fmt.Errorf("refusing symlink: %s", p)
+			return "", fmt.Errorf("%w: refusing symlink: %s", ErrUnsafePath, p)
 		}
 	}
 	return path, nil
