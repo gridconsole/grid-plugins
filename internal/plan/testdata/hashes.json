@@ -1,0 +1,62 @@
+[
+  {
+    "Name": "empty",
+    "Text": "",
+    "Hash": "01ba47"
+  },
+  {
+    "Name": "heading only",
+    "Text": "# Plan",
+    "Hash": "01ba47"
+  },
+  {
+    "Name": "no heading",
+    "Text": "The first line is still omitted\nSecond line",
+    "Hash": "17b6e5"
+  },
+  {
+    "Name": "fixture",
+    "Text": "# Plan, rev 3 · 000000\n\n## Where it stands\n\nThe store filter works. The toolbar and keyboard checks remain.\nAs of: build\n\n## How we approach it\n\nUse one filter for the list and search so matching stays consistent.\nUsed: brain:project/conventions/tag-matching\n\n## Risks\n\nCase differences could hide matching notes. Item 1 covers this.\n\n## Steps\n\n- [x] 1 Add a **tag filter** to the store\n  Match tags without case sensitivity and reuse the existing index.\n  write: [src/store/**, tests/store/**]\n  after: []\n  review: L1\n  risk: [data-format]\n  verify: {command: \"go test ./internal/store/...\", min_tests: 3}\n  needs: none\n  evidence: checks/R-1/store.txt\n- [ ] 2 Add the `tag box` to the list view\n  Keep the current selection when the query changes.\n  write:\n    - src/list/**\n    - tests/list/**\n  after:\n    - J-1\n    - {job: J-3, kind: failed, why: \"Use the fallback if indexing fails\"}\n    - gate:Q-7\n  review: L2\n  risk: [concurrency, cross-platform]\n  verify:\n    command: go test ./internal/list/...\n    min_tests: 2\n  needs: 1\n- [ ] 4 Write the release note\n  Explain the case-insensitive match and keyboard shortcut.\n  verify: `go test ./...` passes; the release note names the filter\n  needs: none\n\nVerify: filtering works with the keyboard and preserves the selected note.\n",
+    "Hash": "3853bc"
+  },
+  {
+    "Name": "status with steps",
+    "Text": "# Plan\n## Where it stands \t\nProgress\n- [X] 1 One\n  verify: check\n  evidence: proof\n  needs: 2\n\nMore status\n## Steps\n- [x] 2 Two\n",
+    "Hash": "d40065"
+  },
+  {
+    "Name": "nested status step",
+    "Text": "# Plan\n## Where it stands\n  - [ ] 1 Hidden\n  verify: hidden\n## End\nText\n",
+    "Hash": "1cb2fd"
+  },
+  {
+    "Name": "blank closes step",
+    "Text": "# Plan\n- [x] 1 One\n\n  evidence: counts\n  needs: counts\n",
+    "Hash": "dd02f4"
+  },
+  {
+    "Name": "unindented closes step",
+    "Text": "# Plan\n- [x] 1 One\nOutside\n  needs: counts\n",
+    "Hash": "f4db6f"
+  },
+  {
+    "Name": "unicode whitespace",
+    "Text": "# Plan\r\n﻿- [X] 1 One \n evidence: hidden\nnot-JS-whitespace\n\n",
+    "Hash": "954aa2"
+  },
+  {
+    "Name": "nonsteps",
+    "Text": "# Plan\n* [x] bullet\n- [X] unnumbered\n  needs: hidden\n- [-] partial\n",
+    "Hash": "d3ed45"
+  },
+  {
+    "Name": "status to EOF",
+    "Text": "# Plan\nText\n## Where it stands\nProgress\n### Subheading\nMore progress\n",
+    "Hash": "533bfd"
+  },
+  {
+    "Name": "nested step under status item",
+    "Text": "# Plan\n## Where it stands\n- [ ] 1 One\n  - [X] nested\n  verify: check\n\n",
+    "Hash": "215bbc"
+  }
+]

@@ -1,0 +1,53 @@
+[
+  {
+    "id": "i-1",
+    "title": "Add a tag filter to the store",
+    "state": "in-test",
+    "write": [
+      "src/store/**",
+      "tests/store/**"
+    ],
+    "after": [],
+    "review": "L1",
+    "risk": [
+      "data-format"
+    ],
+    "verify": {
+      "command": "go test ./internal/store/...",
+      "min_tests": 3
+    }
+  },
+  {
+    "id": "i-2",
+    "title": "Add the tag box to the list view",
+    "state": "working",
+    "write": [
+      "src/list/**",
+      "tests/list/**"
+    ],
+    "after": [
+      "J-1",
+      {
+        "job": "J-3",
+        "kind": "failed",
+        "why": "Use the fallback if indexing fails"
+      },
+      "gate:Q-7"
+    ],
+    "review": "L2",
+    "risk": [
+      "concurrency",
+      "cross-platform"
+    ],
+    "verify": {
+      "command": "go test ./internal/list/...",
+      "min_tests": 2
+    }
+  },
+  {
+    "id": "i-4",
+    "title": "Write the release note",
+    "state": "open",
+    "verify": "`go test ./...` passes; the release note names the filter"
+  }
+]
