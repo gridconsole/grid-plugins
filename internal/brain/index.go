@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -68,6 +69,27 @@ func rows(root *os.Root, level string) ([]TopicRow, []Note, error) {
 		seen[t.Name] = true
 		if t.Kind == "invalid" {
 			r.Invalid++
+		}
+		if t.Kind == "config" {
+			entries, err := fs.ReadDir(root.FS(), filepath.Join("knowledge", t.Name))
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return nil, nil, err
+			}
+			for _, entry := range entries {
+				if entry.IsDir() || entry.Name() == "TOPIC.md" || !strings.HasSuffix(entry.Name(), ".md") {
+					continue
+				}
+				data, err := read(root, filepath.Join("knowledge", t.Name, entry.Name()))
+				var fields map[string]any
+				if err == nil {
+					_, err = DecodeConfig(data, &fields)
+				}
+				if err != nil {
+					r.Invalid++
+				} else {
+					r.Entries++
+				}
+			}
 		}
 		for _, n := range notes {
 			if n.Topic == t.Name {

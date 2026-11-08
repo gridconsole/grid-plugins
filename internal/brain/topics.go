@@ -211,6 +211,11 @@ func scan(root *os.Root, level string) ([]Note, map[string]int, error) {
 			return nil
 		}
 		topic := parts[1]
+		// Config schemas belong to their command readers. Do not parse them as
+		// knowledge notes or let executable config enter the knowledge index.
+		if definition, err := topicAt(root, topic, level); err == nil && definition.Kind == "config" {
+			return nil
+		}
 		b, err := read(root, path)
 		if err != nil {
 			return err

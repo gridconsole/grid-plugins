@@ -45,6 +45,20 @@ func TestConfigScopesAndWriter(t *testing.T) {
 			t.Fatalf("accepted %+v", tc)
 		}
 	}
+	idx, err := s.Index()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range idx.Topics {
+		if row.Topic == "routines" && (row.Entries != 2 || row.Invalid != 0) {
+			t.Fatalf("config index: %+v", row)
+		}
+	}
+	notes, err := s.Search("daily", "", 10)
+	if err != nil || len(notes) != 0 {
+		t.Fatalf("config leaked into knowledge search: %v %v", notes, err)
+	}
+
 	path := filepath.Join(s.GridHome, "knowledge", "routines", "linked.md")
 	if err := os.Symlink(filepath.Join(t.TempDir(), "outside"), path); err != nil {
 		t.Fatal(err)

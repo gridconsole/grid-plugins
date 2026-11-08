@@ -108,13 +108,10 @@ func (s Store) EditConfig(level, topic, name string, edit func([]byte) ([]byte, 
 		if len(data) > 1<<20 {
 			return fmt.Errorf("config entry exceeds 1 MiB")
 		}
-		if err := noSymlinks(root, path); err != nil {
+		if err := atomicWrite(root, path, data); err != nil {
 			return err
 		}
-		if err := root.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-			return err
-		}
-		return atomicfile.Write(filepath.Join(root.Name(), path), data, 0o600)
+		return atomicfile.SyncDir(filepath.Join(root.Name(), filepath.Dir(path)))
 	})
 }
 
