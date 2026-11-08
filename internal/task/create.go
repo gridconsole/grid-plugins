@@ -101,10 +101,13 @@ func (s Store) New(o NewOptions) (Task, error) {
 		return Task{}, err
 	}
 	defer os.RemoveAll(stage)
-	if err := os.WriteFile(filepath.Join(stage, "intent.md"), []byte(o.Words), 0o644); err != nil {
+	if err := writeSynced(filepath.Join(stage, "intent.md"), []byte(o.Words)); err != nil {
 		return Task{}, err
 	}
-	if err := os.WriteFile(filepath.Join(stage, "task.md"), append(append([]byte("---\n"), front...), []byte("---\n")...), 0o644); err != nil {
+	if err := writeSynced(filepath.Join(stage, "task.md"), append(append([]byte("---\n"), front...), []byte("---\n")...)); err != nil {
+		return Task{}, err
+	}
+	if err := syncDir(stage); err != nil {
 		return Task{}, err
 	}
 	if err := atomicWrite(filepath.Join(home, "VERSION"), []byte(fmt.Sprintf("%d\n", gridhome.FormatVersion))); err != nil {
@@ -119,6 +122,11 @@ func (s Store) New(o NewOptions) (Task, error) {
 		}
 	}
 	if err := os.Rename(stage, t.Path); err != nil {
+		return Task{}, err
+	}
+	// Until the tasks folder is synced a power loss can drop the published entry,
+	// after the caller was told the id.
+	if err := syncDir(dir); err != nil {
 		return Task{}, err
 	}
 	return t, nil
@@ -280,21 +288,55 @@ func addKey(rec *project.Record, key project.Key) {
 	rec.Keys = append(rec.Keys, key)
 }
 
+// atomicWrite replaces path with data. The data is synced before the rename and
+// the folder after it, so a power loss leaves the old file or the new one, never
+// an empty file under the published name.
 func atomicWrite(path string, data []byte) error {
 	f, err := os.CreateTemp(filepath.Dir(path), ".write-")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(f.Name())
-	_, writeErr := f.Write(data)
-	closeErr := f.Close()
-	if writeErr != nil {
-		return writeErr
+	if err := writeAndSync(f, data); err != nil {
+		return err
 	}
-	if closeErr != nil {
-		return closeErr
+	if err := os.Rename(f.Name(), path); err != nil {
+		return err
 	}
-	return os.Rename(f.Name(), path)
+	return syncDir(filepath.Dir(path))
+}
+
+// writeSynced creates path, which must not exist, with data on disk.
+func writeSynced(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	return writeAndSync(f, data)
+}
+
+// writeAndSync writes data, syncs and closes f.
+func writeAndSync(f *os.File, data []byte) error {
+	_, err := f.Write(data)
+	if err == nil {
+		err = f.Sync()
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	return err
+}
+
+func syncDir(path string) error {
+	d, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	err = d.Sync()
+	if closeErr := d.Close(); err == nil {
+		err = closeErr
+	}
+	return err
 }
 
 // ulid makes stable machine and project identities with 80 random bits.
