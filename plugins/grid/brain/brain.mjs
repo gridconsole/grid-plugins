@@ -274,3 +274,35 @@ export function decisionsFor(taskArg, ctx = {}) {
   const t = resolveTask(taskArg, ctx);
   return t.ok ? decisionNotes(t.dir, t, ctx) : t;
 }
+
+// Recall: what earlier tasks left for this one. Searches the project's notes/ (the Notes tab inbox), the project's knowledge/ and the
+// Grid home's knowledge/ for the query's words (case, plural and stop words ignored), best match first. Read-only.
+const STOP = new Set('a an the in on of to for and or is are was be how what why when where which do does did it this that with from by at as we i you our my'.split(' '));
+const words = (s) => [...new Set(String(s ?? '').toLowerCase().match(/[a-z0-9]+/g)?.map((w) => (w.length > 3 ? w.replace(/(ies|es|s)$/, (m) => (m === 'ies' ? 'y' : m === 'es' ? 'e' : '')) : w)).filter((w) => w.length > 1 && !STOP.has(w)) ?? [])];
+
+export function recall(projectDir, query, { env = process.env, limit = 5 } = {}) {
+  const q = words(query);
+  const roots = [['notes', path.join(projectDir, 'notes')], ['project knowledge', path.join(projectDir, 'knowledge')]];
+  if (env.GRID_HOME) roots.push(['home knowledge', path.join(env.GRID_HOME, 'knowledge')]);
+  const hits = [];
+  for (const [where, root] of roots) {
+    let files = [];
+    try { files = fs.readdirSync(root, { recursive: true }).filter((f) => /\.md$/.test(f) && !['index.md', 'log.md'].includes(path.basename(f))); } catch { continue; }
+    for (const f of files) {
+      const text = read(path.join(root, f)) ?? '';
+      const body = text.replace(/^---\n[\s\S]*?\n---\n?/, '');
+      const have = new Set(words(`${path.basename(f, '.md')} ${body}`));
+      const score = q.filter((w) => have.has(w)).length;
+      if (score) hits.push({ path: path.join(root, f), where, score, excerpt: oneLine(body).slice(0, 200) });
+    }
+  }
+  return hits.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path)).slice(0, limit);
+}
+
+export function recallFor(taskArg, ctx = {}) {
+  const t = resolveTask(taskArg, ctx);
+  if (!t.ok) return t;
+  const fm = frontmatter(read(path.join(t.dir, 'task.md')));
+  const query = ctx.query || [fm.title, fm.summary, read(path.join(t.dir, 'intent.md'))?.slice(0, 500)].filter(Boolean).join(' ');
+  return { ok: true, query, hits: recall(t.projectDir, query, ctx) };
+}

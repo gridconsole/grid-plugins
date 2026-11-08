@@ -3,14 +3,21 @@
 // grid-brain concept --task T-12 --sha <landed sha> (repeatable): at landing, also writes the outcome, Job refs, shas and links to the notes the task produced.
 // GRID_ROLE=brain grid-brain knowledge --task T-12: write each knowledge post of the task's Feed as a linked note.
 // GRID_ROLE=brain grid-brain decisions --task T-12: after `preview approved`, write each `## Decisions` item of spec.md as a linked note.
+// grid-brain recall --task T-12 [--query "words"]: the project's notes, the project's and the Grid home's knowledge that match the task's words (read-only; the planner runs it before planning).
 // The brain's own path: run by the Brain agent (grid-curator) and the task skill, never by a Worker. Prints JSON; error on stderr, exit 1; usage exit 2.
 (async () => {
   const a = process.argv.slice(2);
   const cmd = a[0];
-  const task = cmd === 'concept' || cmd === 'knowledge' || cmd === 'decisions' ? (a[1] === '--task' ? a[2] : a[1]) : undefined;
-  if (!task) { process.stderr.write('usage: grid-brain concept|knowledge|decisions --task T-12\n'); process.exit(a.length ? 2 : 0); }
+  const task = cmd === 'concept' || cmd === 'knowledge' || cmd === 'decisions' || cmd === 'recall' ? (a[1] === '--task' ? a[2] : a[1]) : undefined;
+  if (!task) { process.stderr.write('usage: grid-brain concept|knowledge|decisions|recall --task T-12\n'); process.exit(a.length ? 2 : 0); }
   const shas = a.flatMap((x, i) => (x === '--sha' && a[i + 1] ? [a[i + 1]] : []));
-  const { conceptFor, knowledgeFor, decisionsFor } = await import('../brain/brain.mjs');
+  const { conceptFor, knowledgeFor, decisionsFor, recallFor } = await import('../brain/brain.mjs');
+  if (cmd === 'recall') {
+    const qi = a.indexOf('--query');
+    const r = recallFor(task, { query: qi > 0 ? a[qi + 1] : undefined });
+    if (!r.ok) { process.stderr.write(`${r.error}\n`); process.exit(1); }
+    process.stdout.write(`${JSON.stringify({ query: r.query, hits: r.hits })}\n`); return;
+  }
   const r = cmd === 'concept' ? conceptFor(task, { shas }) : cmd === 'decisions' ? decisionsFor(task) : knowledgeFor(task);
   if (!r.ok) { process.stderr.write(`${r.error}\n`); process.exit(1); }
   process.stdout.write(`${JSON.stringify(cmd === 'concept' ? { path: r.path, created: r.created, changed: r.changed } : { notes: r.notes.map((n) => ({ name: n.name, path: n.path, created: n.created, changed: n.changed, error: n.error })) })}\n`);
