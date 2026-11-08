@@ -36,6 +36,7 @@ func TestWorktreeCrashMatrix(t *testing.T) {
 	testgit.Isolate(t)
 	for _, step := range append(append([]string{}, applySteps...), "worktree-rewritten") {
 		t.Run(step, func(t *testing.T) {
+			t.Parallel()
 			from, _, repo := worktreeFixture(t)
 			home := from
 			crashAt(t, step, from, home)

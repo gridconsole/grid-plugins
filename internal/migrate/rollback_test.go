@@ -13,6 +13,10 @@ import (
 
 var rollbackSteps = []string{"rollback-locked", "rollback-preparing", "rollback-staged", "rollback-publishing", "rollback-displaced", "rollback-published", "receipt-written", "rollback-previous-removed", "rollback-done"}
 
+// rollbackEnv makes the crash helper die inside Rollback instead of Apply. It is passed
+// to crashAt, not set with t.Setenv, so that the cases can run in parallel.
+const rollbackEnv = "GRID_CRASH_OPERATION=rollback"
+
 func finishRollback(t *testing.T, home string) {
 	t.Helper()
 	for i := 0; i < 3; i++ {
@@ -26,10 +30,20 @@ func finishRollback(t *testing.T, home string) {
 	t.Fatal("rollback did not finish")
 }
 
+// The first layout runs every step. The others differ from it only where the home is
+// copied back from a separate backup or is not there to be put back, which is the
+// stage, the swap and the cleanup of the restored home.
+var rollbackLayoutSteps = []string{"rollback-staged", "rollback-displaced", "rollback-published", "receipt-written"}
+
 func TestRollbackCrashMatrix(t *testing.T) {
-	for _, layout := range crashLayouts() {
-		for _, step := range rollbackSteps {
+	for i, layout := range crashLayouts() {
+		steps := rollbackSteps
+		if i > 0 {
+			steps = rollbackLayoutSteps
+		}
+		for _, step := range steps {
 			t.Run(layout.name+"/"+step, func(t *testing.T) {
+				t.Parallel()
 				from, home := layout.build(t, gridhome.Real(t.TempDir()))
 				before := view(t, home)
 				res, err := scan(t, from, home).Apply()
@@ -37,8 +51,7 @@ func TestRollbackCrashMatrix(t *testing.T) {
 					t.Fatal(err)
 				}
 				backup := view(t, res.Backup)
-				t.Setenv("GRID_CRASH_OPERATION", "rollback")
-				crashAt(t, step, from, home)
+				crashAt(t, step, from, home, rollbackEnv)
 				// Preview recovery is still read-only, including the rename gap.
 				state := snapshotState(t, filepath.Dir(home))
 				if exists(journalPath(home)) {
@@ -124,16 +137,16 @@ func TestRollbackWorktreeCrash(t *testing.T) {
 	testgit.Isolate(t)
 	for _, step := range []string{"rollback-displaced", "worktree-rewritten", "recover-renamed"} {
 		t.Run(step, func(t *testing.T) {
+			t.Parallel()
 			from, _, repo := worktreeFixture(t)
 			before := view(t, from)
 			if _, err := scan(t, from, from).Apply(); err != nil {
 				t.Fatal(err)
 			}
-			t.Setenv("GRID_CRASH_OPERATION", "rollback")
 			if step == "recover-renamed" {
-				crashAt(t, "rollback-displaced", from, from)
+				crashAt(t, "rollback-displaced", from, from, rollbackEnv)
 			}
-			crashAt(t, step, from, from)
+			crashAt(t, step, from, from, rollbackEnv)
 			finishRollback(t, from)
 			if !sameView(before, view(t, from)) {
 				t.Fatal("worktree bytes not restored")
@@ -226,8 +239,7 @@ func TestRollbackFinishesAfterPartialRemovalOfDisplacedHome(t *testing.T) {
 	if _, err := scan(t, from, from).Apply(); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("GRID_CRASH_OPERATION", "rollback")
-	crashAt(t, "receipt-written", from, from)
+	crashAt(t, "receipt-written", from, from, rollbackEnv)
 	previous := globOne(from + ".migrate-previous-*")
 	if len(previous) != 1 {
 		t.Fatal(previous)

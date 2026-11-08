@@ -74,8 +74,7 @@ func TestPluginPointersRewrittenInPlaceAndRolledBack(t *testing.T) {
 			}
 			checkPluginPointers(t, data, filepath.Join(from, "projects/widget/tasks/T-07-first"))
 			if step != "" {
-				t.Setenv("GRID_CRASH_OPERATION", "rollback")
-				crashAt(t, step, from, from)
+				crashAt(t, step, from, from, rollbackEnv)
 			}
 			finishRollback(t, from)
 			if !sameView(oldHome, view(t, from)) {

@@ -45,10 +45,11 @@ func TestCrashHelper(t *testing.T) {
 const crashExit = 77
 
 // crashAt runs a migration that dies right after step.
-func crashAt(t *testing.T, step, from, home string) {
+func crashAt(t *testing.T, step, from, home string, env ...string) {
 	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCrashHelper$", "-test.count=1")
 	cmd.Env = append(testenv.Temp(t, os.Environ()), "GRID_CRASH_STEP="+step, "GRID_CRASH_FROM="+from, "GRID_CRASH_HOME="+home)
+	cmd.Env = append(cmd.Env, env...)
 	out, err := cmd.CombinedOutput()
 	var ee *exec.ExitError
 	if !errors.As(err, &ee) || ee.ExitCode() != crashExit {
