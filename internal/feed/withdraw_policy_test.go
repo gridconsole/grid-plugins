@@ -18,7 +18,7 @@ func TestStateWithdrawalTaskPolicy(t *testing.T) {
 		{name: "empty policy", policy: "---\ngate_post_roles: {withdraw: []}\n---\n", wantOpen: true},
 		{name: "missing policy"},
 		{name: "malformed policy", policy: "---\ngate_post_roles: [\n---\n", warning: true},
-		{name: "unreadable policy", unreadable: true},
+		{name: "unreadable policy", unreadable: true, wantOpen: true, warning: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
@@ -55,15 +55,6 @@ func TestStateWithdrawalTaskPolicy(t *testing.T) {
 			defer func() { os.Stderr = old }()
 			state, err := s.State()
 			os.Stderr = old
-			if tc.unreadable {
-				if err == nil || !strings.Contains(err.Error(), "cannot read task withdrawal policy") {
-					t.Fatalf("unreadable policy: %v", err)
-				}
-				if info, e := stderr.Stat(); e != nil || info.Size() != 0 {
-					t.Fatalf("read failure emitted a fallback warning: %v", e)
-				}
-				return
-			}
 			if err != nil || state.Questions[q.ID].Open != tc.wantOpen {
 				t.Fatalf("state=%+v error=%v", state, err)
 			}
@@ -78,7 +69,11 @@ func TestStateWithdrawalTaskPolicy(t *testing.T) {
 				t.Fatal(err)
 			}
 			if tc.warning {
-				if strings.Count(string(raw), "warning:") != 1 || !strings.Contains(string(raw), "using defaults") || strings.Count(string(raw), "\n") != 1 {
+				fallback := "using defaults"
+				if tc.unreadable {
+					fallback = "withdraw: []"
+				}
+				if strings.Contains(string(raw), dir) || strings.Count(string(raw), "warning:") != 1 || !strings.Contains(string(raw), fallback) || strings.Count(string(raw), "\n") != 1 {
 					t.Fatalf("want one fallback warning: %q", raw)
 				}
 			} else if len(raw) != 0 {

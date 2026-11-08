@@ -156,3 +156,83 @@ func TestAgentWithdrawUnreadablePolicy(t *testing.T) {
 		})
 	}
 }
+
+// Each operation must warn once, including repeat invocations in one process.
+func TestReadUnreadablePolicy(t *testing.T) {
+	commands := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"question list", []string{"question", "list", "--json"}, `"state":"defaulted"`},
+		{"question sync", []string{"question", "sync", "--json"}, `"state":"defaulted"`},
+		{"question tick", []string{"question", "tick", "--json"}, `"state":"defaulted"`},
+		{"feed state", []string{"feed", "state", "--json"}, `"open":false`},
+		{"MCP feed_state", []string{"mcp"}, `\"open\":false`},
+		{"job tree", []string{"job", "tree", "--json"}, `"id":"J-1"`},
+		{"orchestrator tick", []string{"feed", "tick", "--json"}, `"state":"assigned"`},
+		{"job post message", []string{"job", "post", "--job", "J-1", "--type", "post", "--body", `{"ref":"task","kind":"message","text":"Still moving"}`, "--json"}, `"type":"post"`},
+		{"job post control", []string{"job", "post", "--job", "J-1", "--type", "control", "--body", `{"target":"J-1","status":"ready","reason":"ready"}`, "--json"}, `"type":"control"`},
+	}
+	for _, failure := range []string{"permissions", "directory"} {
+		for _, command := range commands {
+			t.Run(failure+"/"+command.name, func(t *testing.T) {
+				if failure == "permissions" && (runtime.GOOS == "windows" || os.Geteuid() == 0) {
+					t.Skip("chmod does not deny reads on Windows or as root")
+				}
+				h, task, _ := orchestratorHarness(t)
+				questionAdd(t, h, task, "member", "--applies", "2000-01-01T00:00:00Z")
+				t.Setenv("GRID_FEED_TASK", task)
+				t.Setenv("GRID_LEASE", "task")
+				policy := filepath.Join(task, "workflow.md")
+				if failure == "directory" {
+					h.mkdir(policy)
+				} else {
+					h.write(policy, "---\ngate_post_roles: {withdraw: [member]}\n---\n")
+					if err := os.Chmod(policy, 0); err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() { _ = os.Chmod(policy, 0600) })
+				}
+				for attempt := 0; attempt < 2; attempt++ {
+					if command.name == "MCP feed_state" {
+						h.env.Stdin = strings.NewReader(mcpHello + `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"feed_state","arguments":{}}}` + "\n")
+					}
+					code := 0
+					warnings := capturePolicyStderr(t, func() { code = h.run(task, command.args...) }) + h.errb.String()
+					if code != 0 || strings.Contains(h.out.String(), `"isError":true`) {
+						t.Errorf("read: exit=%d; want exit=0", code)
+						return
+					}
+					if strings.Count(warnings, "warning:") != 1 || strings.Count(warnings, "\n") != 1 || !strings.Contains(warnings, "withdraw: []") || strings.Contains(warnings, task) {
+						t.Errorf("want one path-free withdraw: [] warning, got %q", warnings)
+					}
+					if attempt == 0 && !strings.Contains(h.out.String(), command.want) {
+						t.Errorf("missing %s in output: %s", command.want, h.out)
+					}
+				}
+			})
+		}
+	}
+}
+
+func capturePolicyStderr(t *testing.T, run func()) string {
+	t.Helper()
+	stderr, err := os.CreateTemp(t.TempDir(), "stderr-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stderr.Close()
+	old := os.Stderr
+	os.Stderr = stderr
+	defer func() { os.Stderr = old }()
+	run()
+	if _, err := stderr.Seek(0, 0); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(stderr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
+}
