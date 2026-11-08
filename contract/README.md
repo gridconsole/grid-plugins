@@ -363,7 +363,40 @@ Project defaults to the existing folder resolver's answer. `--project` selects a
 
 The title is the first nonblank line of the request, trimmed and limited to 120 Unicode characters. The folder slug uses lowercase ASCII letters and digits, separated by hyphens, limited to 60 characters, with `task` as the fallback. These transformations never change `intent.md`.
 
-### `grid task show [T-NN] --json`
+### Task operands
+
+`task show`, `approve`, `refusal decide` (also `decide`), and `task close`,
+`stop`, `reopen`, `status`, `history`, `attach`, `rename` and `decline` share
+one CLI task resolver. A task operand can be a display id (`T-01`), an exact
+folder name (`T-01-renamed`), or an absolute or current-directory-relative
+path to that folder. IDs and folder names retain home-wide lookup; an explicit
+folder suffix must match exactly. Omitted `task show` operands select the
+enclosing task.
+
+Explicit paths must name an immediate child of that project's tasks directory.
+Paths outside an accessible tasks directory, symlinks escaping that directory
+(including links into another project's tasks), and any `..` component exit 2
+before a write. Missing or ambiguous tasks still exit 1. The existing caller
+policy controls Personal enumeration and resolution; folder operands grant no
+additional access. Approval and refusal decisions still require a person.
+
+`task show --json` reports `id`, absolute `path`, and `folder` (the resolved
+folder basename). Task write receipts from `approve`, `refusal decide`/`decide`,
+`close`, `stop`, `reopen`, `status`, `rename` and `decline` retain their `task`
+display id and add `folder`. Persisted history receipts keep their existing
+shape. `task history` and `task attach` retain their existing JSON shapes.
+ID and folder forms produce identical output for the same state, apart from
+write timestamps. For example:
+
+```text
+grid task show T-01-renamed --json
+grid approve T-01-renamed --plan-hash <hash> --json
+grid refusal decide T-01-renamed R-1 allow --json
+grid decide T-01-renamed R-1 allow --json
+grid task close T-01-renamed --json
+```
+
+### `grid task show [<task>] --json`
 
     {
       "id": string,
@@ -374,16 +407,17 @@ The title is the first nonblank line of the request, trimmed and limited to 120 
       "state": string,
       "created": string,
       "path": string,
+      "folder": string,
       "intent": string
     }
 
 `created` is a UTC RFC3339 timestamp on creation; `path` is absolute. `intent` is the exact file content. The remaining fields come from YAML front matter in `task.md`. Show folds these files without changing them or inferring execution state. Plain output prints one `name: value` line per field, followed by `intent:` and its text. An omitted id selects the enclosing task; an explicit id is looked up across the Grid home, including Personal. Missing, duplicate or malformed tasks fail instead of returning a partial record.
 
-### `grid task rename <T-NN> --title <text> [--project <p>] [--json]`
+### `grid task rename <task> --title <text> [--project <p>] [--json]`
 
 Renames an open task. The title is trimmed and whitespace is collapsed, with 1–200 Unicode characters and no line breaks. Titles containing control, bidi override/isolate, or Unicode noncharacter code points are refused with exit 2 before YAML encoding. Only `title` and `updated` change in `task.md`; the folder, intent, summary and other lines remain unchanged. Closed tasks must be reopened first; an unchanged title is rejected. History records `renamed · <title>` in the existing JSON receipt's `note` field, with `what: rename`.
 
-### `grid task decline <T-NN> --reason <text> [--project <p>] [--json]`
+### `grid task decline <task> --reason <text> [--project <p>] [--json]`
 
 Closes an open task with a required reason after whitespace collapse. Reasons containing control, bidi override/isolate, or Unicode noncharacter code points are refused with exit 2 before YAML encoding. Tasks with `kind: planner` and already closed tasks are rejected. Writes `state: closed`, `next: declined by <who>` and `updated`; the host person comes from `GRID_ACTOR`, then `GRID_WHO`, otherwise `you`. History records `closed · declined · <reason>` in the existing JSON receipt's `note` field, with `what: decline`.
 
@@ -393,7 +427,7 @@ Both verbs use the same task lock, journal and atomic commit as stop and close, 
 
 ### `grid task list [--project <name-or-id>] [--state <state>] --json`
 
-Returns an array of the same records as `show`, sorted by numeric display id, or `[]` when none match. State filtering is exact and case sensitive. Plain output is one `T-NN state title` line per task, or no output for an empty list. Both read commands leave files unchanged and ignore hidden creation staging folders.
+Returns an array of task records (without the show-only `folder` and `plan_hash` fields), sorted by numeric display id, or `[]` when none match. State filtering is exact and case sensitive. Plain output is one `T-NN state title` line per task, or no output for an empty list. Both read commands leave files unchanged and ignore hidden creation staging folders.
 
 Task commands exit 0 on success, 2 for invalid flags or argument counts (including invalid creation size and empty words), 3 for the rename/decline rejections described above, and 1 for resolution, data or filesystem errors. Errors go to stderr without JSON on stdout. Flags may precede or follow the positional argument; use `--` before words that start with a hyphen.
 
