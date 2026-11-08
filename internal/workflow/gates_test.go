@@ -53,3 +53,32 @@ func TestGatePostRoles(t *testing.T) {
 		})
 	}
 }
+
+func TestWithdrawalGatePostRoles(t *testing.T) {
+	for _, tc := range []struct {
+		name, text string
+		want       []string
+		bad        bool
+	}{
+		{"missing", "", []string{"owner", "member"}, false},
+		{"omitted", "---\ngate_post_roles: {person: [owner]}\n---\n", []string{"owner", "member"}, false},
+		{"owner", "---\ngate_post_roles: {withdraw: [owner]}\n---\n", []string{"owner"}, false},
+		{"guest", "---\ngate_post_roles: {withdraw: [guest, lead]}\n---\n", []string{"guest", "lead"}, false},
+		{"empty", "---\ngate_post_roles: {withdraw: []}\n---\n", []string{}, false},
+		{"invalid role", "---\ngate_post_roles: {withdraw: [typo]}\n---\n", nil, true},
+		{"invalid list", "---\ngate_post_roles: {withdraw: owner}\n---\n", nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tc.text != "" {
+				if err := os.WriteFile(filepath.Join(dir, "workflow.md"), []byte(tc.text), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			roles, err := GatePostRoles(dir)
+			if (err != nil) != tc.bad || !tc.bad && !reflect.DeepEqual(roles["withdraw"], tc.want) {
+				t.Fatalf("roles=%v err=%v want=%v", roles, err, tc.want)
+			}
+		})
+	}
+}

@@ -318,5 +318,5 @@ func (s Store) withdrawPolicy() (func(string) bool, error) {
 	if s.WithdrawAllowed != nil {
 		return s.WithdrawAllowed, nil
 	}
-	return feed.QuestionWithdrawPolicy(s.TaskDir)
+	return feed.QuestionWithdrawPolicy(s.TaskDir), nil
 }

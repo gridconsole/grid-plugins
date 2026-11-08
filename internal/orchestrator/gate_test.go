@@ -173,3 +173,41 @@ func TestLegacyDuplicateGates(t *testing.T) {
 		})
 	}
 }
+
+func TestReadyWithdrawalUsesTaskPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name, roles, author string
+		open                bool
+	}{
+		{"refused member", "[owner]", "member", true},
+		{"allowed guest", "[guest]", "guest", false},
+		{"forbid all", "[]", "owner", true},
+		{"allowed member", "[member]", "member", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := setup(t)
+			f.job(t, "J-1", []any{"gate:Q-1"})
+			q := f.post(t, feed.Input{Type: "question", Body: map[string]any{"question": "Proceed?", "who": "owner", "gate": map[string]any{"id": "Q-1", "kind": "person"}}}, f.s.Writer)
+			person := feed.Writer{Author: feed.Author{ID: "person", Role: tc.author}, Worker: "person@" + machine}
+			f.post(t, feed.Input{Type: "control", Re: q.ID, Body: map[string]any{"target": q.ID, "question_event": "withdrawn", "text": "No longer needed"}}, person)
+			if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "workflow.md"), []byte("---\ngate_post_roles: {withdraw: "+tc.roles+"}\n---\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			state, err := f.s.Feed.State()
+			if err != nil {
+				t.Fatal(err)
+			}
+			snap, err := Load(f.s.Feed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.Questions[q.ID].Open != tc.open || snap.State.Questions[q.ID].Open != tc.open || !reflect.DeepEqual(state.NeedsYou, snap.State.NeedsYou) {
+				t.Fatalf("Feed/orchestrator disagree: %+v %+v", state, snap.State)
+			}
+			ready, err := Ready(snap, f.now)
+			if err != nil || (len(ready.Ready) == 0) != tc.open {
+				t.Fatalf("ready=%+v err=%v", ready, err)
+			}
+		})
+	}
+}

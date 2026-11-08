@@ -2,13 +2,9 @@ package workflow
 
 import (
 	"fmt"
-	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode"
-
-	"go.yaml.in/yaml/v4"
 )
 
 // Template is a parsed workflows.md section in the Settings page's wire format.
@@ -28,9 +24,6 @@ type Template struct {
 	File      string         `json:"file"`
 	UsedIn    []string       `json:"usedIn"`
 	OpenTasks []string       `json:"openTasks"`
-
-	// QuestionWithdrawRoles replaces the owner/member default when present.
-	QuestionWithdrawRoles []string `json:"question_withdraw_roles,omitempty"`
 }
 
 // Rule selects tasks by goal, title, project or label.
@@ -223,14 +216,6 @@ func parseSection(s section, project string) (Template, *Problem) {
 		case "only for project":
 			t.Only = &value
 			onlyLine = l.number
-		case "question_withdraw_roles":
-			for _, role := range strings.Split(value, ",") {
-				role = strings.TrimSpace(role)
-				if !slices.Contains([]string{"owner", "member", "guest", "lead"}, role) || slices.Contains(t.QuestionWithdrawRoles, role) {
-					return fail(l.number, "question_withdraw_roles must list distinct person roles: owner, member, guest or lead")
-				}
-				t.QuestionWithdrawRoles = append(t.QuestionWithdrawRoles, role)
-			}
 		case "approvers":
 			for _, who := range strings.Split(value, ",") {
 				who = strings.TrimSpace(who)
@@ -546,124 +531,4 @@ func checkValue(value string) string {
 		return "holds \", or \""
 	}
 	return ""
-}
-
-// QuestionWithdrawRoles reads policy for a task in the Grid home. An explicit
-// task workflow wins; otherwise the first matching rule or workspace default
-// applies. A project section replaces the same named workspace section.
-// Nil roles preserve the owner/member default, including absent workflow files.
-func QuestionWithdrawRoles(taskDir string) ([]string, error) {
-	taskDir = filepath.Clean(taskDir)
-	tasks := filepath.Dir(taskDir)
-	if filepath.Base(tasks) != "tasks" {
-		return nil, nil
-	}
-	projectDir := filepath.Dir(tasks)
-	parent := filepath.Dir(projectDir)
-	home, project := parent, ""
-	if filepath.Base(parent) == "projects" {
-		home, project = filepath.Dir(parent), filepath.Base(projectDir)
-	} else if filepath.Base(projectDir) != "personal" {
-		return nil, nil
-	}
-	templates := []Template{}
-	paths := []string{"workflows.md"}
-	if project != "" {
-		paths = append(paths, filepath.Join("projects", project, "workflows.md"))
-	}
-	for i, path := range paths {
-		text, rev, err := readFile(home, path)
-		if err != nil {
-			return nil, fmt.Errorf("question workflow: %w", err)
-		}
-		if rev == nil {
-			continue
-		}
-		scope := ""
-		if i > 0 {
-			scope = project
-		}
-		parsed := Parse(text, scope)
-		if len(parsed.Errors) > 0 {
-			return nil, fmt.Errorf("question workflow: %s", parsed.Errors[0].String())
-		}
-		for _, candidate := range parsed.Templates {
-			replaced := false
-			for j, existing := range templates {
-				if strings.EqualFold(existing.Name, candidate.Name) {
-					// A project copy inherits the workspace matching rule, but
-					// omission of the policy key restores the standard default.
-					if candidate.Overrides != nil {
-						candidate.Default, candidate.Applies = existing.Default, existing.Applies
-					}
-					templates[j], replaced = candidate, true
-					break
-				}
-			}
-			if !replaced {
-				templates = append(templates, candidate)
-			}
-		}
-	}
-	if len(templates) == 0 {
-		return nil, nil
-	}
-	relative, err := filepath.Rel(home, filepath.Join(taskDir, "task.md"))
-	if err != nil {
-		return nil, err
-	}
-	text, _, err := readFile(home, relative)
-	if err != nil {
-		return nil, err
-	}
-	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	if len(lines) < 3 || lines[0] != "---" {
-		return nil, fmt.Errorf("question workflow: task.md has no YAML front matter")
-	}
-	end := 1
-	for end < len(lines) && lines[end] != "---" {
-		end++
-	}
-	if end == len(lines) {
-		return nil, fmt.Errorf("question workflow: task.md front matter is not closed")
-	}
-	var meta struct {
-		Workflow, Title, Goal string
-		Labels                []string
-	}
-	if err := yaml.Load([]byte(strings.Join(lines[1:end], "\n")), &meta); err != nil {
-		return nil, fmt.Errorf("question workflow: %w", err)
-	}
-	var fallback []string
-	for _, t := range templates {
-		if meta.Workflow != "" {
-			if strings.EqualFold(t.Name, meta.Workflow) {
-				return t.QuestionWithdrawRoles, nil
-			}
-			continue
-		}
-		if t.Default {
-			fallback = t.QuestionWithdrawRoles
-		}
-		for _, rule := range t.Applies {
-			match := false
-			switch rule.By {
-			case "title":
-				match = strings.Contains(strings.ToLower(meta.Title), strings.ToLower(rule.V))
-			case "goal":
-				match = strings.EqualFold(meta.Goal, rule.V)
-			case "project":
-				match = strings.EqualFold(project, rule.V)
-			case "label":
-				match = slices.Contains(meta.Labels, rule.V)
-			}
-			if match {
-				return t.QuestionWithdrawRoles, nil
-			}
-		}
-	}
-	if meta.Workflow != "" {
-		return nil, fmt.Errorf("question workflow: unknown workflow %q", meta.Workflow)
-	}
-	return fallback, nil
 }

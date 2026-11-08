@@ -53,8 +53,8 @@ func TestPersonWithdrawCLI(t *testing.T) {
 			env := cli.Env{Cwd: root, Home: root, GridHome: home, Ceiling: root, Stdout: &out, Stderr: &stderr}
 			run := func(args ...string) int { out.Reset(); stderr.Reset(); return cli.Run(args, env) }
 			if tc.workflow != "" {
-				workflowText := "# Workflows\n\n## Default\napplies when: nothing else matches\nreview rounds: 1\nquestion_withdraw_roles: " + tc.workflow + "\n\n| # | step | kind | who | on reject, back to |\n|---|---|---|---|---|\n| 1 | Build | run | grid-builder | |\n"
-				if err := os.WriteFile(filepath.Join(home, "workflows.md"), []byte(workflowText), 0600); err != nil {
+				workflowText := "---\ngate_post_roles: {withdraw: [" + tc.workflow + "]}\n---\n"
+				if err := os.WriteFile(filepath.Join(task, "workflow.md"), []byte(workflowText), 0600); err != nil {
 					t.Fatal(err)
 				}
 			}

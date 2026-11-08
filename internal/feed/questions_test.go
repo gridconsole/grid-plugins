@@ -244,8 +244,8 @@ func TestQuestionStateUsesWorkflowWithdrawalPolicy(t *testing.T) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	policy := "# Workflows\n\n## Default\napplies when: nothing else matches\nreview rounds: 1\nquestion_withdraw_roles: owner\n\n| # | step | kind | who | on reject, back to |\n|---|---|---|---|---|\n| 1 | Build | run | grid-builder | |\n"
-	for path, text := range map[string]string{filepath.Join(home, "workflows.md"): policy, filepath.Join(dir, "task.md"): "---\nid: " + testTask + "\n---\n"} {
+	policy := "---\ngate_post_roles: {withdraw: [owner]}\n---\n"
+	for path, text := range map[string]string{filepath.Join(dir, "workflow.md"): policy, filepath.Join(dir, "task.md"): "---\nid: " + testTask + "\n---\n"} {
 		if err := os.WriteFile(path, []byte(text), 0600); err != nil {
 			t.Fatal(err)
 		}

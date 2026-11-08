@@ -1,12 +1,14 @@
 package feed
 
 import (
-	"github.com/gridconsole/grid-plugins/internal/workflow"
+	"fmt"
+	"os"
 	"slices"
 	"sort"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
 // QuestionDecision is the person-gate projection of admitted Feed records.
@@ -210,7 +212,9 @@ func FoldReadAt(read ReadResult, now time.Time, withdrawAllowed ...func(string) 
 }
 
 // DefaultWithdrawAllowed is the shared default for person withdrawal policy.
-func DefaultWithdrawAllowed(role string) bool { return role == "owner" || role == "member" }
+func DefaultWithdrawAllowed(role string) bool {
+	return slices.Contains(workflow.DefaultQuestionWithdrawRoles(), role)
+}
 
 func personWithdraw(p Record, allowed func(string) bool) bool {
 	return p.Type == "control" && p.Lease == nil && p.Fence == 0 && p.Gen == 0 &&
@@ -219,16 +223,15 @@ func personWithdraw(p Record, allowed func(string) bool) bool {
 }
 
 // QuestionWithdrawPolicy reads the task's workflow policy. Hosts can instead
-// supply a callback to FoldReadAt and question.Store.WithdrawAllowed.
-func QuestionWithdrawPolicy(taskDir string) (func(string) bool, error) {
-	roles, err := workflow.QuestionWithdrawRoles(taskDir)
+// supply a callback to FoldReadAt and question.Store.WithdrawAllowed. An unreadable
+// policy falls back to defaults with one warning per read.
+func QuestionWithdrawPolicy(taskDir string) func(string) bool {
+	roles, err := workflow.GatePostRoles(taskDir)
 	if err != nil {
-		return nil, err
+		fmt.Fprintf(os.Stderr, "warning: cannot read task withdrawal policy; using defaults: %v\n", err)
+		return DefaultWithdrawAllowed
 	}
-	if roles == nil {
-		return DefaultWithdrawAllowed, nil
-	}
-	return func(role string) bool { return slices.Contains(roles, role) }, nil
+	return func(role string) bool { return slices.Contains(roles["withdraw"], role) }
 }
 
 // questionEventOrder preserves Feed order except for explicit causal links.

@@ -196,10 +196,11 @@ Disagreements and defaults chosen:
   person question with `grid question withdraw <Q-id> [--task <folder|id>]
   [--reason <text>] [--json]`. It posts a leaseless control referencing the
   question with `{target, question_event: "withdrawn", text}`; the reason defaults
-  to `No longer needed`. Owners and members are allowed by default. The workflow
-  key `question_withdraw_roles: owner, member` replaces this policy; a host may
+  to `No longer needed`. Owners and members are allowed by default. The task snapshot's
+  `workflow.md` YAML front matter key `gate_post_roles: {withdraw: [owner, member]}`
+  replaces this policy (an empty list forbids person withdrawals); a host may
   also supply `question.Store.WithdrawAllowed`. Agent shells still need the task
-  lease, and lease holders retain the existing control path. Person withdrawal
+  lease fence on Feed, Job and MCP posting paths, and lease holders retain the existing control path. Person withdrawal
   follows Feed order and closes only an open question; an applied answer or
   default makes it a refusal. An already withdrawn question is a successful
   retry that prints the record. Refusals return exit 3 (HTTP 409 in the app),

@@ -45,7 +45,8 @@ func Load(store feed.Store) (Snapshot, error) {
 		now = store.Now()
 	}
 	// The person layer keeps a non-person answer from releasing a person gate.
-	state, _ := feed.FoldReadAt(r, now)
+	allowed := feed.QuestionWithdrawPolicy(store.TaskDir)
+	state, _ := feed.FoldReadAt(r, now, allowed)
 	s := Snapshot{State: state, Records: map[string]feed.Record{}, Bodies: map[string]map[string]any{}, Created: map[string]time.Time{}}
 	counted := map[string]bool{}
 	for _, v := range s.State.Verdicts {
