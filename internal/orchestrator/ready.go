@@ -10,6 +10,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/jobgraph"
 )
 
@@ -20,7 +21,7 @@ type Snapshot struct {
 	Assignee string
 	State    contract.State
 	Records  map[string]feed.Record
-	Items    []jobgraph.Item
+	Items    []job.Job
 	Bodies   map[string]map[string]any
 	Created  map[string]time.Time
 }
@@ -42,7 +43,7 @@ func Load(store feed.Store) (Snapshot, error) {
 		s.Records[e.ID] = e.Record
 		if e.Type == "job" {
 			b, _ := json.Marshal(e.Body)
-			var item jobgraph.Item
+			var item job.Job
 			if err := json.Unmarshal(b, &item); err != nil {
 				return s, err
 			}

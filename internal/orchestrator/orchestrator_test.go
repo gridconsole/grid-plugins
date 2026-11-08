@@ -388,7 +388,7 @@ func TestProposedJobsAndCheckpoints(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := setup(t)
 			f.job(t, "J-1", nil)
-			if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "plan.md"), []byte("# Plan\n\n- [ ] 1 Build example feature\n"), 0o600); err != nil {
+			if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "plan.md"), []byte("# Plan\n\n- [ ] 1 Build example feature\n  jobs: []\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			f.tick(t)
