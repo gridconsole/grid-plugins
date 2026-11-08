@@ -32,7 +32,9 @@ never runs it. Sources: C8 (`findings-concept.md:185`), server-F1
 All field spellings and policy tokens below are **default, owner may change**:
 the docs define the scope and authorities but do not supply a wire object.
 `manifest_v` is fixed at 1. The object is a paid-account selection manifest,
-with logical identities and classes rather than arbitrary paths or content.
+with logical identity and selection entries rather than arbitrary paths or content.
+It carries `manifest_v` and those entries; the fixed class policy lives only in
+the schema description and this contract. A `classes` property is forbidden.
 A local-only installation produces no sync manifest. Cut 1 mirrors a person's
 own task folders; other members see status and requests through the server.
 Cut 2 permits members' task folders on other members' desktops, subject to their
@@ -46,7 +48,8 @@ project role. Raw Feed replication remains deferred in both example cuts.
 | `account.person` | Opaque person id; no local username or filesystem path. | go-architecture.md:392; brain-feed.md:286 |
 | `account.paid` | Constant `true`; project brain sync requires the paid account. | brain-feed.md:286 |
 | `machines` | Nonempty list of participating computers. | go-architecture.md:392 |
-| `machines[].id`, `machines[].person` | Logical machine id and its owning person; identifier character restrictions are defaults. | feed-contract.md:34; brain-feed.md:286 |
+| `machines[].id` | Machine ULID: 26 uppercase Crockford Base32 characters, using the same pattern as task ids. | feed-contract.md:34 |
+| `machines[].person` | Owning person id; identifier character restrictions are defaults. | brain-feed.md:286 |
 | `projects` | Nonempty project list, keyed logically by hosted project id. | go-architecture.md:13; brain-feed.md:286 |
 | `projects[].id` | Hosted project id, not the readable local folder name. | brain-feed.md:286 |
 | `projects[].repos` | Nonempty list identifying the repos associated with the project. It selects no repo files. | go-architecture.md:13 |
@@ -57,15 +60,12 @@ project role. Raw Feed replication remains deferred in both example cuts.
 | `projects[].tasks` | Tasks whose task files and folded state are selected. | findings-concept.md:185; feed-contract.md:13 |
 | `projects[].tasks[].id` | Task ULID, never the display number `T-NN`. | feed-contract.md:43 |
 | `projects[].tasks[].owner` | Person whose computers receive the cut-1 mirror. | go-architecture.md:392 |
-| `projects[].tasks[].machine`, `.gen` | Server binding `(task, machine, gen)`; nonnegative generation, 0 before binding. | feed-contract.md:13,49 |
-| `classes` | Seven required data-class keys listed below. | findings-runtime.md:193; go-architecture.md:13 |
-| `classes.<class>.authority` | Who originates or authorizes the class. Fixed tokens below. | findings-runtime.md:193; feed-contract.md:13; findings-brain.md:72 |
-| `classes.<class>.server_holds` | Server's copy, or `nothing` for excluded classes. | findings-runtime.md:193; go-architecture.md:13 |
-| `classes.<class>.readers` | Reader scope, not a self-issued permission. | findings-runtime.md:193; go-architecture.md:392; brain-feed.md:285-286 |
-| `classes.<class>.conflict` | Fixed policy token; the three unresolved resolutions are defaults below. | findings-runtime.md:193; findings-concept.md:185; brain-feed.md:18,262,274 |
+| `projects[].tasks[].machine`, `.gen` | Server binding `(task, machine, gen)`; machine ULID and nonnegative generation, 0 before binding. | feed-contract.md:13,34,49 |
 
 These are server-F1's five columns. Backticked values are the exact policy tokens
-in the schema. Class scope references apply to each cell in that row.
+in the schema description, not fields repeated in each manifest. Class scope
+references apply to each cell in that row. The 8 November decision confirms
+that personal notes sync only to their owner's computers and secrets never sync.
 
 | Data class | Authority | What the server holds | Who reads | Conflict rule |
 | --- | --- | --- | --- | --- |
@@ -81,8 +81,9 @@ Class selectors must exclude local site files, locks, leases and caches
 (`brain-feed.md:289`), raw Feed files, secrets and repo files even when nested
 below a selected task. The schema does not enumerate physical files or implement
 a secret scanner. The invalid repo fixture substitutes a local path for a
-normalized remote; the invalid secret fixture changes only the server's secret
-holding policy. Both are rejected. Extra path or payload fields are also refused.
+normalized remote; the invalid secret fixture attempts to add a forbidden
+`classes` block to request server storage of secrets. Both are rejected. Extra
+path or payload fields are also refused.
 
 The eventual client/server must check account authentication, machine ownership,
 unique ids, reference membership, approver roles, the task binding and cut-specific
@@ -94,7 +95,6 @@ with the sync owner; the preservation rule above is frozen as the default.
 | Status | Difference or unresolved specification | Evidence |
 | --- | --- | --- |
 | diverges | A manifest is required by the spec, but there is no writer, reader, file path or sync transport in this checkout. This schema and its example path are proposals. | findings-runtime.md:193; go-architecture.md:13; internal/cli/cli.go:122 (`sync` has a nil handler) |
-| diverges | Architecture's cut paragraph says personal notes never sync; its summary and the brain spec permit own-computer sync. This schema uses the latter and never exposes personal notes to project members. No writer resolves the discrepancy yet. | go-architecture.md:392 versus go-architecture.md:13 and brain-feed.md:286; internal/cli/cli.go:122 |
 
 ## Saved Job render
 
@@ -105,7 +105,7 @@ Fixtures: [full](fixtures/fmt-job-render/valid/full.json),
 Files: `<task>/jobs/<job-id>/brief.md` and adjacent `inputs.json`. The same
 immutable bundle contains `job.yaml`, which currently contains JSON Job metadata;
 that Job record belongs to the Job contract, not this format's metadata object.
-The writer is `grid job render`, through `internal/job/jobcmd/command.go:102-118`
+The writer is `grid job render`, through `internal/job/jobcmd/command.go:108-124`
 and `internal/job/jobcmd/save.go:15-74`. Readers are `grid job show`, reviewers,
 the app and replay/audit consumers. Spec: review-F1 (`findings-concept.md:144`),
 `brain-feed.md:13,278-282`, and `job-contract.md:80-96`.
@@ -124,7 +124,7 @@ that the saved prompt exists. No hash is substituted for text.
 | --- | --- | --- |
 | `brief` | Complete nonempty UTF-8 prompt, including Job front matter and all rendered sections; exact contents of `brief.md`. | internal/job/jobcmd/save.go:36; findings-concept.md:144 |
 | `inputs` | Exact object stored as `inputs.json`; all five fields below are present. | internal/job/render.go:23-29; job-contract.md:80 |
-| `inputs.generation` | String containing the project generation map, such as `{"project":1}`, or `content:<sha256>` when no project index generation exists. | internal/job/jobcmd/command.go:113-116,442-458; job-contract.md:80 |
+| `inputs.generation` | String containing the project generation map, such as `{"project":1}`, or `content:<sha256>` when no project index generation exists. | internal/job/jobcmd/command.go:119-122,451-467; job-contract.md:80 |
 | `inputs.sources` | Array of every resolved source, including candidates omitted from the prompt, sorted by pointer. | internal/job/render.go:41,281-289; findings-concept.md:144 |
 | `inputs.not_rendered` | Sorted pointer strings omitted by the brain budget; never null. | internal/job/render.go:204-207; job-contract.md:96 |
 | `inputs.brain_tokens` | Integer 0–2000; character-count estimate for the brain section, not a cap on the full prompt. | internal/job/render.go:208,290; job-contract.md:96,98 |
@@ -147,16 +147,19 @@ one violation per fixture.
 | Status | Difference | Evidence |
 | --- | --- | --- |
 | diverges | The full text and what-it-read list exist, but storage is keyed by Job id, not attempt. A changed render of the same id is refused; separate per-attempt snapshots are missing. | findings-concept.md:144; internal/job/jobcmd/save.go:26-36,50-54 |
-| diverges | The spec asks for a pinned brain index generation; when no index exists the writer pins a digest of the source list instead. The schema preserves that string form. | job-contract.md:80; internal/job/jobcmd/command.go:113-116,442-458 |
+| diverges | The spec asks for a pinned brain index generation; when no index exists the writer pins a digest of the source list instead. The schema preserves that string form. | job-contract.md:80; internal/job/jobcmd/command.go:119-122,451-467 |
 | diverges | The complete what-it-read snapshot excludes personal note content and digests; it retains only a pointer, tier and state. This respects personal-note isolation. | findings-concept.md:144; brain-feed.md:285-286; internal/job/source.go:161-164 |
+
+Per-attempt prompt storage (review-F1) belongs to L45F and is outside this follow-up.
 
 ## Brain origin stamp
 
 Schema: [fmt-origin.json](schemas/fmt-origin.json).
 Fixtures: [session](fixtures/fmt-origin/valid/session.json),
-[import](fixtures/fmt-origin/valid/import.json),
-[old note](fixtures/fmt-origin/valid/legacy-note.md),
-[absent old stamp](fixtures/fmt-origin/valid/legacy-absent.json).
+[import](fixtures/fmt-origin/valid/import.json).
+Upgrade fixture: [old note](fixtures/fmt-origin/upgrade/legacy-note.md).
+Invalid absence fixtures: [null](fixtures/fmt-origin/invalid/absent.json),
+[missing fields](fixtures/fmt-origin/invalid/missing.json).
 
 Files: the `origin` block in YAML front matter at
 `$GRID_HOME/brain-proposals/<name>.md` or
@@ -173,7 +176,7 @@ not the entire note. Spec: keeper-F1 (`findings-brain.md:62`), keeper-F8
 | `kind` | Required: `session`, `job`, `server` or `import`; never `body`. These are main's accepted spellings. | brain-feed.md:15; internal/brain/note.go:84-88 |
 | `id` | Required nonblank single-line string; CR, LF and NUL are forbidden. The CLI makes a random session id. Other callers supply a Job or authenticated source id. | findings-brain.md:62; internal/brain/note.go:81; internal/brain/store.go:150-163 |
 | `tier` | Required: `person-team`, `person-guest`, `agent`, `external`. It is supplied independently of note text. | brain-feed.md:15; job-contract.md:87; internal/brain/note.go:89-94 |
-| Absent legacy block | Represented by JSON `null` in this projection only; not a new stamp and never permission to admit unstamped knowledge. | brain-feed.md:15; internal/brain/markdown.go:24-39; internal/brain/topics.go:223-229 |
+| Absent legacy block | Invalid: the schema rejects `null`, missing fields and an empty stamp. Upgrade must supply provenance before validation. | brain-feed.md:15; internal/brain/note.go:81-94 |
 
 Main's constants win (`internal/contract/types.go:12-17`). The current
 `brain-feed.md:15` and `job-contract.md:87` names map identically to them.
@@ -194,14 +197,20 @@ also supplies that block through `--file -` and verifies that the actual writer
 replaces it with `session/agent` or `import/external`. Acceptance preserves the
 session stamp; external acceptance is refused and its body stays out of the index.
 
-The old Markdown fixture has no origin. `brain.Parse` and the CLI import path
-still read it. `Note.Validate` rejects it and `Store.Show` excludes it from
-accepted knowledge until provenance is stamped. The capture test checks all
-three boundaries rather than treating successful parsing as acceptance.
+The old Markdown fixture has no origin and belongs to the `upgrade` set, never
+`valid`. The documented legacy reader path is
+`grid brain propose --level home --file <old-note.md> --external --json`:
+`brain.Parse` reads the old note, the CLI supplies a fresh `import/external`
+origin (`internal/braincmd/command.go:286-293`), and `Store.Propose` replaces
+provenance before calling `Note.Validate` (`internal/brain/store.go:227-238`).
+The capture test validates the stored upgraded stamp against the strict schema
+and confirms that the body is preserved. No absent stamp passes the schema.
+Direct `Note.Validate` and `Store.Show` reject the unstamped original; external
+imports remain proposals and cannot be accepted as trusted knowledge.
 
 | Status | Difference | Evidence |
 | --- | --- | --- |
 | diverges | The keeper finding's member/guest/external/unknown names are not the stored enum; the four current constants above win. | findings-brain.md:62 versus brain-feed.md:15; internal/contract/types.go:12-17 |
 | diverges | The CLI's local session stamp is a fresh random id and always agent; this path does not derive a team/guest identity or active Job id from authenticated session/server state. The type permits those sources, but this CLI does not implement that integration. | findings-brain.md:62; brain-feed.md:15; internal/brain/store.go:150-163; internal/braincmd/command.go:286-293 |
-| diverges | The spec says every entry has an origin; the parser still reads origin-less old notes. They are excluded from accepted knowledge, not silently upgraded. | brain-feed.md:15; internal/brain/markdown.go:24-39; internal/brain/topics.go:223-229 |
+| diverges | The spec says every entry has an origin; the parser still reads origin-less old notes outside schema validation. Explicit external import stamps them before validation; direct accepted-note reads exclude them. | brain-feed.md:15; internal/brain/markdown.go:24-39; internal/brain/topics.go:223-229 |
 | diverges | Guest/external knowledge is refused by the keeper and excluded by the accepted-note scan, rather than appearing as one labelled index line. | findings-brain.md:69; internal/brain/store.go:461-462; internal/brain/topics.go:227-229 |
