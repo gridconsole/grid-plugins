@@ -120,7 +120,7 @@ func (s TaskStore) TakeTask(w feed.Writer, pid int, start string, options ...Tas
 			return errors.New("task lease held; adoption or takeover requires its current expected epoch")
 		}
 		if policy.Adopt {
-			_, host, _ := strings.Cut(w.Worker, "@")
+			host := w.Worker[strings.LastIndexByte(w.Worker, '@')+1:]
 			if !strings.HasSuffix(*old.Holder, "@"+host) || old.PID == nil || old.PIDStart == nil || session.ProbeLocal(session.Live{PID: *old.PID, PIDStart: *old.PIDStart}) != session.Dead {
 				return errors.New("adoption requires a provably gone process on this host")
 			}

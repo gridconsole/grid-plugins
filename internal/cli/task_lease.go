@@ -2,8 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
@@ -35,6 +37,10 @@ func runTaskLease(args []string, env Env) int {
 	writer, err := orchestratorWriter(env, "task", fmt.Sprintf("%d.0", *gen))
 	if err != nil {
 		return fail(err)
+	}
+	typ, _ := contract.LookupType("handover")
+	if !slices.Contains(typ.Roles, writer.Author.Role) {
+		return fail(fmt.Errorf("task acquisition requires a task-holder role"))
 	}
 	policy := lease.TaskTake{Adopt: *adopt, Takeover: *takeover}
 	if *adopt || *takeover {

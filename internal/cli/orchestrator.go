@@ -258,6 +258,11 @@ func orchestratorWriter(env Env, name, epoch string) (feed.Writer, error) {
 	if role == "" {
 		role = "member"
 	}
+	// A worker supervising a task performs mechanical CLI controls. Its Job
+	// writes retain the worker role; this never grants person takeover authority.
+	if name == "task" && role == "worker" {
+		role = "cli"
+	}
 	machine := env.Machine
 	if machine == "" {
 		machine = gridhome.Machine(env.GridHome)

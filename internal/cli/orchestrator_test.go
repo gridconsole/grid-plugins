@@ -396,3 +396,33 @@ func TestTwoProcessesAdoptOneTaskTenure(t *testing.T) {
 		t.Fatal(read, err)
 	}
 }
+
+func TestWorkerCanBootstrapAndAdoptTaskCLI(t *testing.T) {
+	h, path := feedHarness(t)
+	h.env.Machine = feedMachine
+	t.Setenv("GRID_MEMBER", "worker@team")
+	t.Setenv("GRID_ROLE", "worker")
+	args := []string{"lease", "take", "task", "--pid", fmt.Sprint(os.Getpid()), "--pid-start", "2000-01-01T00:00:00.000Z"}
+	if code := h.run(path, args...); code != 0 {
+		t.Fatalf("worker bootstrap: %d %s", code, h.errb)
+	}
+	if code := h.run(path, append(args, "--adopt", "--expected-epoch", "0.1")...); code != 0 {
+		t.Fatalf("worker adoption: %d %s", code, h.errb)
+	}
+	t.Setenv("GRID_LEASE_EPOCH", "0.2")
+	if code := h.run(path, "job", "next"); code != 0 {
+		t.Fatalf("worker pass: %d %s", code, h.errb)
+	}
+}
+
+func TestTaskBootstrapRejectsUnsupportedRoleBeforeGrant(t *testing.T) {
+	h, path := feedHarness(t)
+	h.env.Machine = feedMachine
+	t.Setenv("GRID_ROLE", "guest")
+	if code := h.run(path, "lease", "take", "task", "--pid", fmt.Sprint(os.Getpid()), "--pid-start", "2000-01-01T00:00:00.000Z"); code == 0 {
+		t.Fatal("guest acquired task")
+	}
+	if _, err := os.Stat(filepath.Join(path, "feed", "lease", "task.json")); !os.IsNotExist(err) {
+		t.Fatal("failed handover left a granted lease", err)
+	}
+}
