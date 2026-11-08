@@ -95,7 +95,7 @@ func (s Store) Take(holder string) (Record, error) {
 		if err != nil {
 			return Record{}, err
 		}
-		rec := Record{Lease: "merge", Project: s.project(), Holder: &holder, Fence: fence, Since: now, Until: now.Add(Duration)}
+		rec := Record{Lease: "merge", Project: s.project(), Gen: old.Gen, Holder: &holder, Fence: fence, Since: now, Until: now.Add(Duration)}
 		return rec, writeRecord(f, rec)
 	})
 }

@@ -35,31 +35,31 @@ func TestLeaseCommands(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(project, "lease")); !os.IsNotExist(err) {
 		t.Fatal("status wrote files")
 	}
-	if code := h.run(task, "lease", "take", "merge", "--holder", "session-1"); code != 0 || h.out.String() != "merge lease taken, fence 1\n" {
+	if code := h.run(task, "lease", "take", "merge", "--holder", "worker@01K9J000000000000000000001"); code != 0 || h.out.String() != "merge lease taken, fence 1\n" {
 		t.Fatalf("take: %d %s %s", code, h.out, h.errb)
 	}
-	if code := h.run(h.tmp, "lease", "take", "merge", "--project", "example", "--holder", "session-2"); code != 1 || !strings.HasPrefix(h.errb.String(), "merge lease held by session-1 since ") {
+	if code := h.run(h.tmp, "lease", "take", "merge", "--project", "example", "--holder", "worker@01K9J000000000000000000002"); code != 1 || !strings.HasPrefix(h.errb.String(), "merge lease held by worker@01K9J000000000000000000001 since ") {
 		t.Fatalf("refusal: %d %s", code, h.errb)
 	}
-	if code := h.run(task, "lease", "renew", "merge", "--holder", "session-1", "--fence", "1", "--json"); code != 0 {
+	if code := h.run(task, "lease", "renew", "merge", "--holder", "worker@01K9J000000000000000000001", "--fence", "1", "--json"); code != 0 {
 		t.Fatalf("renew: %d %s", code, h.errb)
 	}
 	if err := json.Unmarshal(h.out.Bytes(), &status); err != nil || !status.Held || status.Fence != 1 {
 		t.Fatalf("renew: %+v %v", status, err)
 	}
-	if code := h.run(task, "lease", "release", "--holder", "session-2", "--fence", "1"); code != 1 {
+	if code := h.run(task, "lease", "release", "--holder", "worker@01K9J000000000000000000002", "--fence", "1"); code != 1 {
 		t.Fatalf("wrong owner: %d", code)
 	}
-	if code := h.run(task, "lease", "release", "merge", "--holder", "session-1", "--fence", "1", "--json"); code != 0 {
+	if code := h.run(task, "lease", "release", "merge", "--holder", "worker@01K9J000000000000000000001", "--fence", "1", "--json"); code != 0 {
 		t.Fatalf("release: %d %s", code, h.errb)
 	}
 	if err := json.Unmarshal(h.out.Bytes(), &status); err != nil || status.Held || status.Holder != nil {
 		t.Fatalf("release: %+v %v", status, err)
 	}
-	if code := h.run(task, "lease", "take", "--holder", "session-2"); code != 0 || h.out.String() != "merge lease taken, fence 2\n" {
+	if code := h.run(task, "lease", "take", "--holder", "worker@01K9J000000000000000000002"); code != 0 || h.out.String() != "merge lease taken, fence 2\n" {
 		t.Fatalf("retake: %d %s %s", code, h.out, h.errb)
 	}
-	if code := h.run(task, "lease", "release", "--holder", "session-1", "--fence", "1"); code != 1 {
+	if code := h.run(task, "lease", "release", "--holder", "worker@01K9J000000000000000000001", "--fence", "1"); code != 1 {
 		t.Fatalf("stale owner: %d", code)
 	}
 }
@@ -190,5 +190,64 @@ func TestLeaseCommandWritesContract(t *testing.T) {
 	var r contract.MergeLease
 	if err := json.Unmarshal(data, &r); err != nil || r.Project != "example" {
 		t.Fatalf("project: %+v %v", r, err)
+	}
+}
+
+func TestLeaseRejectsInvalidHolderBeforeWriting(t *testing.T) {
+	for _, holder := range []string{"foo", "worker@bad", "worker/name@01K9J000000000000000000002", "worker name@01K9J000000000000000000002", "worker@81K9J000000000000000000002"} {
+		t.Run(holder, func(t *testing.T) {
+			h := newHarness(t)
+			task := livenessProject(h)
+			for _, action := range []string{"take", "renew", "release"} {
+				if code := h.run(task, "lease", action, "--holder", holder, "--fence", "1"); code != 2 || !strings.Contains(h.errb.String(), "--holder must be <member>@<machine ULID>") {
+					t.Fatalf("%s: exit %d: %s", action, code, h.errb)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(h.gridHome, "projects", "example", "lease")); !os.IsNotExist(err) {
+				t.Fatalf("invalid holder created lease files: %v", err)
+			}
+		})
+	}
+}
+
+func TestLeaseCommandPreservesStoredGeneration(t *testing.T) {
+	for _, held := range []bool{false, true} {
+		name := "released"
+		if held {
+			name = "expired"
+		}
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			task := livenessProject(h)
+			holder := "worker@01K9J000000000000000000002"
+			r := contract.MergeLease{Lease: "merge", Project: "example", Gen: 7, Fence: 4, Since: "2000-01-01T00:00:00.000Z", Until: "2000-01-01T00:15:00.000Z"}
+			if held {
+				r.Holder = &holder
+			}
+			data, err := json.Marshal(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := contract.Validate("lease", data); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(h.gridHome, "projects", "example", "lease", "merge.json")
+			h.write(path, string(data))
+			for _, action := range []string{"take", "renew", "release"} {
+				if code := h.run(task, "lease", action, "--holder", holder, "--fence", "5"); code != 0 {
+					t.Fatalf("%s: exit %d: %s", action, code, h.errb)
+				}
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := contract.Validate("lease", data); err != nil {
+					t.Fatalf("%s: %v", action, err)
+				}
+				if err := json.Unmarshal(data, &r); err != nil || r.Gen != 7 || r.Fence != 5 {
+					t.Fatalf("%s lost generation or fence: %+v %v", action, r, err)
+				}
+			}
+		})
 	}
 }

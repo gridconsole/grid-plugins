@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/session"
@@ -42,6 +43,10 @@ func runLease(args []string, env Env) int {
 	}
 	if action != "status" && strings.TrimSpace(*holder) == "" {
 		fmt.Fprintln(env.Stderr, "lease: --holder is required")
+		return 2
+	}
+	if action != "status" && !contract.ValidWorker(*holder) {
+		fmt.Fprintln(env.Stderr, "lease: --holder must be <member>@<machine ULID> with no slash or whitespace (contract/schemas/lease.json)")
 		return 2
 	}
 	if (action == "renew" || action == "release") && *fence == 0 {
