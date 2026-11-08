@@ -1,0 +1,74 @@
+# Lane L38
+
+Built one checklist plan model in `internal/plan`. Items contain the stable
+number, title, prose, step kind, and planned Job maps. Job loading and graph
+validation share that parser without an import cycle. The graph now uses
+`job.Job`, including its floor inputs, and `grid plan check [T-NN]` reports
+planned-field, floor, verification, duplicate, and dependency problems.
+Converted the Job fixture, parser fixtures, and affected golden outputs.
+Updated `docs/plan.md` and added the previously absent `docs/job-contract.md`.
+
+Run validation from the checkout root:
+
+```sh
+make test
+make lint
+GOOS=windows go build ./...
+GOOS=darwin go build ./...
+```
+
+All four passed. `make test` used the default TMPDIR and reported no temporary
+file leaks. Parser tables cover prose/YAML boundaries, missing or malformed
+Jobs, forbidden step fields, duplicate numbers, derivation, anchors, and tick
+hash stability. Job tests cover the converted fixture, ambiguous item
+selection, and rejection of the old front-matter form. CLI tests cover valid
+plans, missing and unknown fields, floor exceptions, minimum test counts,
+duplicate Job ids, cycles, and positional task selection. Existing graph cycle,
+readiness, floor, rendering, and revision tests also pass. Cross-platform builds
+were checked here; native macOS and Windows runtime tests were not run because
+this environment is Linux.
+
+Intended differences from the old plugin and the previous Go readers:
+
+- Jobs live in a list beneath each checklist item; step-level verification and
+  dependency fields are no longer executable plan instructions. Front-matter
+  Job lists are refused. Missing derived values come from the item, while the
+  remaining planned fields must be present. See `docs/plan.md:38`,
+  `docs/plan.md:45`, and `docs/plan.md:87`; the old shape is documented at
+  `old-plugin/skills/plan/SKILL.md:61` and `:93` in the read-only reference tree.
+- Checkbox ticks never supply run state, including historical comparisons.
+  Existing legacy state files can still supply the read-only display overlay.
+  See `docs/plan.md:35` and `docs/plan.md:106`; the old tick promotion is at
+  `old-plugin/skills/plan/SKILL.md:137` and `:153` in the reference tree.
+- Step anchors quote only the checklist line and prose, excluding Job YAML.
+  The Verify anchor quotes the first paragraph under `## Verify`, replacing
+  the final `Verify:` sentence and heading-based item anchors. See
+  `docs/plan.md:92` and `docs/job-contract.md:26`; the old Verify sentence is at
+  `old-plugin/skills/plan/SKILL.md:98` in the reference tree.
+- Item JSON now includes `n`, `prose`, `kind`, and `jobs`; the old step-level
+  field projection is removed. Compatibility `id`, `title`, and display
+  `state` remain. Plain item output lists those item summaries; Job details
+  are available through JSON. See `docs/plan.md:33` and `docs/plan.md:45`.
+- Plan check performs static planned-field, unknown-field, floor, verification,
+  duplicate, target, and cycle validation. It reports one line per problem
+  and exits 1 on errors. It does not run verification. A structural parsing
+  error stops that parse; subsequent checks follow after repair. See
+  `docs/plan.md:97` and `docs/job-contract.md:29`.
+- The graph shares the Job dependency and verification types. Bare dependency
+  ids remain shorthand for done; object dependencies require an explanation
+  and reject unknown keys. `build` is accepted as a code step kind and
+  `visible: small` is accepted without lowering the floor. Optional floor
+  fields and the inherited kind survive rendered brief metadata. See
+  `docs/job-contract.md:16`, `docs/job-contract.md:20`, and
+  `docs/job-contract.md:31`.
+
+The hash algorithm is unchanged, including checkbox normalization and the
+legacy volatile-line exclusions (`docs/plan.md:114`). No Feed or task record
+shapes, storage locks, or atomic-write helpers were introduced.
+
+Limitations: plan check applies explicit Job fields and built-in path rules.
+Automatic discovery of project path tags from brain notes is not implemented:
+this checkout's floor API receives an explicit Policy and has no canonical
+brain-to-Policy loader. The existing `grid job floor --policy` supports supplied
+tags (`docs/job-contract.md:54`). Check validates the written exception reason;
+it does not authenticate the author of an exception or inspect live gate state.

@@ -5,6 +5,7 @@ Task lookup uses the same `internal/where` rules as `grid where`. A task path mu
 belong to the Grid home. `--project <name-or-id>` can disambiguate a task id.
 
 ```sh
+grid plan check T-07
 grid plan hash --task T-07
 grid plan items --task T-07 --json
 grid plan write draft.md --task T-07
@@ -16,7 +17,7 @@ filename that starts with a dash. Relative input filenames resolve from the
 working directory. The input may have any filename, including `plan.md` itself.
 The source file is read before the destination is replaced.
 
-All four commands support `--json`. Hash returns `{"hash":"abcdef"}`; items
+All commands support `--json`. Hash returns `{"hash":"abcdef"}`; items
 returns an array; write returns `{"revision":4,"hash":"abcdef"}`; diff returns
 `from`, `to`, `added`, `removed`, and `changed`. Changed entries contain `before`
 and `after` items, one-based positions, and canonical step text for both sides.
@@ -25,57 +26,88 @@ storage or content refusal, and 2 for invalid command syntax.
 
 ## Plan format
 
-The first line is `# Plan, rev <positive integer> · <six hex digits>`.
-`grid plan write` generates it. An input without this heading is also accepted;
-an existing destination must already have a valid revision heading.
+The first line is `# Plan, rev N · <hash>`, where N is the positive revision
+number and hash is `plan.Hash` (six hex digits, ticks normalized).
+`grid plan write` generates it and also accepts drafts without a revision heading.
 
-Plan items are top-level numbered checklist lines, in document order. Numbers
-are stable ids, so removing an item does not require renumbering the others.
-`- [ ] 5 Write the release note` becomes `i-5`, with state `open`. Either `x` or
-`X` makes it `built`. Duplicate ids, zero ids and numbers outside uint64 are
-refused. Bold markers and backticks are removed from display titles.
+A plan item is a top-level line `- [ ] N Title`. N is a stable positive item
+number; removing an item does not renumber the others. Duplicate numbers are
+refused. The checkbox is display only: neither `x` nor `X` supplies run state.
+Bold markers and backticks are removed from display titles.
 
-Ids are the author's step numbers, so they are stable across revisions only while
-steps keep their numbers. Renumbering shows in `grid plan diff` as the old ids
-removed and the new ids added.
+Under the item, prose lines have two leading spaces. No blank line falls inside
+the block. The YAML part starts at the first line beginning with exactly two
+spaces and `kind:` or `jobs:` and continues to the block end. `kind` is the step
+kind; `build` is ordinary code work. `jobs` is always a list, including `[]` when
+there are no Jobs yet. Prose must come before YAML. Only `kind` and `jobs` are
+allowed as step YAML keys.
 
-Optional job fields sit under a step, indented with spaces. Nested YAML values
-must be indented further. A blank or unindented line ends the step block.
+Each Job carries the names in `job.PlannedFields`, even when a list is empty.
+When omitted, `item` is N, `title` is the checklist title, `intent.item` is
+`plan.md#step-N`, and `intent.goal` is `plan.md#verify`. Explicit values are
+preserved. `intent.owner` must still be supplied. The optional per-Job floor
+fields are `visible: big|small`, `irreversible: true|false`, and `review_reason`.
+A review below its floor requires a nonempty `review_reason`.
 
 ```markdown
-# Plan
+# Plan, rev 1 · 000000
 
-## How we approach it
+Used: brain:project/conventions/task-page
 
-Used: brain:project/conventions/tag-matching
+- [ ] 5 Composer with Attach on the task page
+  The composer sits on a plan item, a question reply and Talk to the planner.
+  kind: build
+  jobs:
+    - id: J-14
+      role: builder
+      skills: []
+      review: L1
+      risk: []
+      max_rounds: 2
+      intent: {owner: intent.md#request}
+      links: []
+      keep: []
+      decisions: []
+      read: []
+      write: ["app/pages/task/**"]
+      out_of_scope: []
+      acceptance:
+        - {id: A1, text: "The task page has a composer with Attach.", traces: item}
+      verify: {command: "node --test tests/app/pages/task*.test.mjs", min_tests: 1}
+      budget: {turns_estimate: 20, reads_before_first_edit: 5}
+      on_blocked: ask-and-continue
+      after: []
 
-## Steps
+## Verify
 
-- [ ] 5 Add the tag box to the list
-  Preserve the selected note while narrowing the list.
-  write: [src/list/**, tests/list/**]
-  after:
-    - J-1
-    - {job: J-3, kind: failed, why: "Use the fallback if indexing fails"}
-    - gate:Q-7
-  review: L2
-  risk: [concurrency, cross-platform]
-  verify: {command: "go test ./internal/list/...", min_tests: 2}
-
-Verify: filtering preserves the selected note.
+The task page composer attaches a file and sends the message.
 ```
 
-The reader returns the fields present without inventing defaults. Structured
-values must be valid JSON-compatible YAML. Duplicate fields and malformed YAML
-are refused. A legacy `verify:` sentence remains a string, including backticks
-and colons. This reader does not perform job schema, dependency cycle, review
-floor, or risk validation.
+The example's hash is a placeholder; install it with `grid plan write`.
+Step-level `write:`, `after:`, `review:`, `risk:`, and `verify:` outside `jobs`
+are refused with the offending line and line number. Front matter is refused;
+the checklist is the only source of plan membership and planned Jobs.
+`internal/plan` is the only parser, shared by Job loading and graph validation.
 
-When legacy `items.md` exists, its states are retained. A tick promotes `open`
-or `working` to `built`. A running `subagents/*.md` brief listing an item promotes
-`open` to `working`. Titles and membership always come from the plan. Reads never
-rewrite these files; missing optional files are allowed, while unreadable files
-are reported. With no steps, items returns an empty array.
+`plan.md#step-N` resolves to the item line plus its prose lines, excluding YAML.
+`plan.md#verify` resolves to the first paragraph under exactly `## Verify`,
+excluding the heading and later paragraphs. Old `Verify:` sentences and
+heading-based item anchors do not substitute for these forms.
+
+`grid plan check [T-NN]` checks planned-field presence after derivation, unknown
+fields (including nested fields), review floors and exceptions, positive
+`verify.min_tests` with a named test command, duplicate item numbers and Job ids,
+dependency targets, and cycles. Non-code Jobs can use `file-exists` or
+`reviewer-check`. It prints one line per reported problem and exits 1 when any
+problem exists; a valid plan exits 0 without output. `--json` returns `ok` and
+`problems`. A malformed block stops structural parsing; fix it and rerun to
+check subsequent blocks. Check does not execute verification commands.
+
+When legacy `items.md` exists, `grid plan items` retains its states. A running
+`subagents/*.md` brief can promote `open` to `working`. Checkboxes never promote
+state. Titles and membership always come from the checklist. Reads do not
+rewrite these files; missing optional files are allowed. An empty plan returns
+an empty item list. Revision comparisons contain no run-state inference.
 
 ## Hash compatibility
 
@@ -133,8 +165,8 @@ Items match by id. Content or absolute position changes are reported as changed;
 inserting an item can therefore also move later items. Comparison uses the full
 canonical step text rather than the truncated hash. Changes to descriptions and
 job fields count. Tick, evidence, and legacy `needs:` changes alone do not count.
-Historical states come only from each revision's checkboxes. Current `items.md`
-and running briefs do not leak into a historical comparison.
+Checkboxes supply no historical run state. Current `items.md` and running
+briefs do not leak into a historical comparison.
 
 Diff reports item changes only. Changes to introductory prose, risks outside
 items, or other plan sections can change the plan hash without producing an item
