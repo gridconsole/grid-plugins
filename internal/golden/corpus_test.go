@@ -19,8 +19,8 @@ import (
 
 // legacyHooks maps a recorded script to the hook events whose Go handler
 // replaces it. Unknown events silently return 0, so each pair is explicit and
-// also has to be an event hook.Handles. Scripts with no Go counterpart on main
-// (history-log, brain-read, brain-recall, permission-forward, ...) are absent.
+// also has to be an event hook.Handles. Component replacements below use their own entry points so recorded
+// effects do not include unrelated hooks subscribed to the same runtime event.
 var legacyHooks = map[string][]string{
 	"grid-env":        {"SessionStart"},
 	"agent-routing":   {"SessionStart"},
@@ -37,10 +37,20 @@ func cliDriver(t *testing.T) golden.Driver {
 		Resolve: func(c golden.Command) ([]string, bool) {
 			if len(c.Argv) > 0 {
 				// Explicit argv recordings run when the command table builds that command.
-				if !cli.Implemented(c.Argv[0]) {
+				if !cli.Implemented(c.Argv[0]) || (c.Argv[0] == "hook" && (len(c.Argv) != 2 || !hook.Handles(c.Argv[1]))) {
 					return nil, false
 				}
 				return c.Argv, true
+			}
+			// Component entry points isolate the recorded script's effects while
+			// runtime events compose these same handlers with the guards.
+			if cli.Implemented("hook") {
+				event := strings.ToLower(c.Hook)
+				components := map[string]bool{"heartbeat": true, "stop-check": true, "worker-exit": true, "history-log": true, "usage-log": true, "brain-read": true, "brain-recall": true, "permission-forward": true}
+				helper := strings.HasPrefix(event, "lib-") && strings.EqualFold(strings.TrimPrefix(event, "lib-"), c.Call)
+				if (components[event] && c.Call == "" || helper) && hook.Handles(event) {
+					return []string{"hook", event}, true
+				}
 			}
 			if c.Call != "" || !cli.Implemented("hook") {
 				return nil, false

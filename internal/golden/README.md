@@ -2,8 +2,7 @@
 
 Run `make golden` from the repository root for a per-case table and totals.
 `make test` runs the harness unit tests (including tiny pass and deliberate-diff
-cases) without replaying the corpus. The corpus uses an explicit opt-in so future
-command implementations cannot make the normal unit suite unexpectedly slow.
+cases) and replays the corpus. `make golden` adds the verbose case report.
 Neither path invokes Node, Python, the reference plugin or a shell command.
 
 Each subtest uses `t.TempDir()`. `Replay` copies `fixtures/`, expands tokens,
@@ -21,8 +20,11 @@ The original corpus stores invocation identity in `setup.json` as `hook` and an
 optional exported-function `call`, rather than a literal argv array. The explicit
 `legacyArgv` table in `corpus_test.go` maps implemented replacements to Go argv.
 The implemented SessionStart command replaces `grid-env` and `agent-routing`.
-Other legacy scripts and helper calls are skipped with their names. Do not infer
-support from exit zero: unknown hook events deliberately succeed silently.
+The remaining session scripts use component entry points in `internal/hook`,
+and lib helpers call the existing shared Go functions through those entry points.
+Component calls isolate effects; runtime events compose the same handlers.
+Unsupported scripts are skipped with their names. Do not infer support from
+exit zero: unknown hook events deliberately succeed silently.
 When a replacement is implemented, add its mapping and review its cases. New
 cases may instead record `argv`, excluding the `grid` executable. Explicit hook
 argv also needs a recognized event. Unsupported setup commands skip the case
@@ -36,8 +38,13 @@ IDs are shared across file diffs, sorted environment values and output streams
 in the same order as the recorder. Empty directories and timestamp-only metadata
 changes are excluded from snapshots.
 
-An intended change requires `golden/<hook>/<case>/go-diff.md`, with a specific
-`doc.md:line` (or source-file:line) citation and an explanation. Put all four
+A running case with an intended difference may be listed in
+`golden/known-differences.txt` with a reason citing `docs/lanes/L<n>.md:<line>`.
+A listed case that matches again fails, requiring removal of the obsolete entry.
+These known differences are reported separately from unsupported-command skips.
+To pin alternate byte expectations instead, use
+`golden/<hook>/<case>/go-diff.md`, with a specific `doc.md:line` (or source-file:line)
+citation and an explanation. Put all four
 artifacts (`stdout`, `stderr`, `exit`, `files.diff`) in that case's `go-expected/`.
 They replace the four legacy expectations together; missing files or citations
 fail. There is no automatic acceptance or update mode for corpus expectations.

@@ -60,7 +60,11 @@ func sessionStart(o Options) {
 	if o.Stdin != nil {
 		const limit = 1 << 20
 		b, err := io.ReadAll(io.LimitReader(o.Stdin, limit+1))
-		if err != nil || len(b) > limit {
+		if err != nil {
+			o.log("read input", err)
+			return
+		}
+		if len(b) > limit {
 			return
 		}
 		if len(strings.TrimSpace(string(b))) > 0 {
@@ -85,6 +89,7 @@ func sessionStart(o Options) {
 		note = " GRID_TASK or GRID_PROJECT names something that is gone; ignored."
 	}
 	if err != nil {
+		o.log("resolve session", err)
 		return
 	}
 	recordSession(o, hookio.Input{HookEventName: "SessionStart", SessionID: in.SessionID, TranscriptPath: in.Transcript, Cwd: cwd, Source: in.Source})
@@ -107,10 +112,12 @@ func sessionStart(o Options) {
 	}
 	if envFile := o.Getenv("CLAUDE_ENV_FILE"); envFile != "" {
 		if err := writeEnv(envFile, o.Resolver.GridHome, res.Task); err != nil {
+			o.log("session environment", err)
 			return
 		}
 	}
-	_, _ = o.Stdout.Write(append(b, '\n'))
+	_, err = o.Stdout.Write(append(b, '\n'))
+	o.log("session context", err)
 }
 
 func writeEnv(path, home, task string) error {
@@ -226,7 +233,7 @@ func toolUse(o Options) {
 		decision.Event = "PermissionRequest"
 	}
 	if o.Stdout != nil {
-		_ = decision.Write(o.Stdout)
+		o.log("guard output", decision.Write(o.Stdout))
 	}
 }
 

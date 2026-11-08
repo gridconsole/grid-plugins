@@ -1,21 +1,58 @@
 # case<TAB>reason; every reason cites docs/lanes/L<n>.md:<line>. Edits need review like a code change.
-brief-lint/complete	Go does not append the dispatch pointer file; evaluators are read-only See docs/lanes/L4.md:58.
-brief-lint/missing-field	the repair instruction names grid job lint and grid job render See docs/lanes/L4.md:58.
-brief-lint/missing-file	Go does not append the dispatch pointer file; evaluators are read-only See docs/lanes/L4.md:58.
-brief-lint/missing-section	the repair instruction names grid job lint and grid job render See docs/lanes/L4.md:58.
-brief-lint/no-brief	Go does not append the dispatch pointer file; evaluators are read-only See docs/lanes/L4.md:58.
-brief-lint/no-frontmatter	the repair instruction names grid job lint and grid job render See docs/lanes/L4.md:58.
-grid-home-allow/inside-read	a winning home fallback is counted in home-allow.jsonl See docs/lanes/L4.md:71.
-grid-home-allow/own-script	the script allowance needs CLAUDE_PLUGIN_ROOT, which the recorded env does not set See docs/lanes/L4.md:77.
-grid-home-allow/permission	the only-writer rule denies the recorded task-folder write before any home grant See docs/lanes/L4.md:63.
-host-guard/bash-uppercase	the denial names the .host folder inside the single Grid home See docs/lanes/L4.md:47.
-host-guard/ordinary-write	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63.
-plan-guard/brain-builder	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63.
-plan-guard/brain-curator	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63.
-plan-guard/forged-acceptance	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63.
-plan-guard/forged-preview	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63.
-plan-guard/gate-filename	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63.
-plan-guard/missing-recall	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63.
-plan-guard/recall-present	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63.
-plan-guard/task-write	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63.
-plan-guard/unmatched-edit	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63.
+brief-lint/complete	Go does not append the dispatch pointer file; evaluators are read-only See docs/lanes/L4.md:58. Also see docs/lanes/L29.md:98.
+brief-lint/missing-field	the repair instruction names grid job lint and grid job render See docs/lanes/L4.md:58. Also see docs/lanes/L29.md:98.
+brief-lint/missing-file	Go does not append the dispatch pointer file; evaluators are read-only See docs/lanes/L4.md:58. Also see docs/lanes/L29.md:98.
+brief-lint/missing-section	the repair instruction names grid job lint and grid job render See docs/lanes/L4.md:58. Also see docs/lanes/L29.md:98.
+brief-lint/no-brief	Go does not append the dispatch pointer file; evaluators are read-only See docs/lanes/L4.md:58. Also see docs/lanes/L29.md:98.
+brief-lint/no-frontmatter	the repair instruction names grid job lint and grid job render See docs/lanes/L4.md:58. Also see docs/lanes/L29.md:98.
+grid-home-allow/inside-read	a winning home fallback is counted in home-allow.jsonl See docs/lanes/L4.md:71. Also see docs/lanes/L29.md:98.
+grid-home-allow/own-script	the script allowance needs CLAUDE_PLUGIN_ROOT, which the recorded env does not set See docs/lanes/L4.md:77. Also see docs/lanes/L29.md:98.
+grid-home-allow/permission	the only-writer rule denies the recorded task-folder write before any home grant See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+host-guard/bash-uppercase	the denial names the .host folder inside the single Grid home See docs/lanes/L4.md:47. Also see docs/lanes/L29.md:98.
+host-guard/ordinary-write	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+plan-guard/brain-builder	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+plan-guard/brain-curator	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+plan-guard/forged-acceptance	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+plan-guard/forged-preview	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+plan-guard/gate-filename	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+plan-guard/missing-recall	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+plan-guard/recall-present	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+plan-guard/task-write	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+plan-guard/unmatched-edit	the only-writer rule denies direct file-tool writes to task folders and the brain, so the legacy plan-guard path is not reached See docs/lanes/L4.md:63. Also see docs/lanes/L29.md:98.
+
+# L29 session hook migration differences.
+agent-routing/session	SessionStart now records locked session evidence and includes the brain topic index. See docs/lanes/L29.md:59.
+grid-env/discovered	SessionStart now records locked session evidence and includes the brain topic index. See docs/lanes/L29.md:59.
+grid-env/explicit	SessionStart now records locked session evidence and includes the brain topic index. See docs/lanes/L29.md:59.
+grid-env/no-config	SessionStart now records locked session evidence and includes the brain topic index. See docs/lanes/L29.md:59.
+heartbeat/missing-task	Hook activity never posts a Feed heartbeat; missing explicit tasks log and allow. See docs/lanes/L29.md:63.
+heartbeat/post	Hook activity never posts a Feed heartbeat; missing explicit tasks log and allow. See docs/lanes/L29.md:63.
+history-log/agent-edit	Task history omits legacy attachment lists and stores bounded content snapshots in session JSON. See docs/lanes/L29.md:66.
+history-log/bash-before	Task history omits legacy attachment lists and stores bounded content snapshots in session JSON. See docs/lanes/L29.md:66.
+history-log/bash-failure	Task history omits legacy attachment lists and stores bounded content snapshots in session JSON. See docs/lanes/L29.md:66.
+history-log/bash-success	Task history omits legacy attachment lists and stores bounded content snapshots in session JSON. See docs/lanes/L29.md:66.
+history-log/file-write	Task history omits legacy attachment lists and stores bounded content snapshots in session JSON. See docs/lanes/L29.md:66.
+history-log/gate-detail	Task history omits legacy attachment lists and stores bounded content snapshots in session JSON. See docs/lanes/L29.md:66.
+history-log/history-self	Task history omits legacy attachment lists and stores bounded content snapshots in session JSON. See docs/lanes/L29.md:66.
+history-log/missing-history	Task history omits legacy attachment lists and stores bounded content snapshots in session JSON. See docs/lanes/L29.md:66.
+brain-read/project-note	Loose untyped files are not accepted brain notes. See docs/lanes/L29.md:71.
+brain-read/workspace-note	Loose untyped files are not accepted brain notes. See docs/lanes/L29.md:71.
+brain-recall/no-hits	Recall uses bounded pointers, revised wording and locked JSON markers. See docs/lanes/L29.md:76.
+brain-recall/planner-dispatch	Recall uses bounded pointers, revised wording and locked JSON markers. See docs/lanes/L29.md:76.
+stop-check/empty-next	Stop messages use concise names; brief transitions use the shared atomic writer and persistent lock. See docs/lanes/L29.md:80.
+stop-check/empty-summary	Stop messages use concise names; brief transitions use the shared atomic writer and persistent lock. See docs/lanes/L29.md:80.
+stop-check/finished-no-outcome	Stop messages use concise names; brief transitions use the shared atomic writer and persistent lock. See docs/lanes/L29.md:80.
+stop-check/mark-blocked	Stop messages use concise names; brief transitions use the shared atomic writer and persistent lock. See docs/lanes/L29.md:80.
+stop-check/mark-done	Stop messages use concise names; brief transitions use the shared atomic writer and persistent lock. See docs/lanes/L29.md:80.
+stop-check/reviewer	Stop messages use concise names; brief transitions use the shared atomic writer and persistent lock. See docs/lanes/L29.md:80.
+stop-check/subagent-missing	Stop messages use concise names; brief transitions use the shared atomic writer and persistent lock. See docs/lanes/L29.md:80.
+usage-log/agent-totals	Usage folds numeric observations and transcript references in session records, never Feed posts. See docs/lanes/L29.md:84.
+usage-log/start	Usage folds numeric observations and transcript references in session records, never Feed posts. See docs/lanes/L29.md:84.
+usage-log/subagent	Usage folds numeric observations and transcript references in session records, never Feed posts. See docs/lanes/L29.md:84.
+worker-exit/missing-feed-folder	Exit evidence is recorded in sessions pending the fenced Feed writer; missing tasks log and allow. See docs/lanes/L29.md:88.
+worker-exit/missing-task	Exit evidence is recorded in sessions pending the fenced Feed writer; missing tasks log and allow. See docs/lanes/L29.md:88.
+worker-exit/not-worker	Exit evidence is recorded in sessions pending the fenced Feed writer; missing tasks log and allow. See docs/lanes/L29.md:88.
+worker-exit/post	Exit evidence is recorded in sessions pending the fenced Feed writer; missing tasks log and allow. See docs/lanes/L29.md:88.
+lib-parseFrontmatter/lists	The shared parser retains values but Go sorts JSON object keys. See docs/lanes/L29.md:94.
+lib-parseFrontmatter/scalars	The shared parser retains values but Go sorts JSON object keys. See docs/lanes/L29.md:94.
+agent-routing/empty-object	SessionStart now includes the brain topic index. See docs/lanes/L29.md:59.
