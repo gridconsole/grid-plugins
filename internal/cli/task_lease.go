@@ -334,13 +334,9 @@ func runTaskLeaseAction(action string, args []string, env Env) int {
 	printGrant := func() int {
 		if *asJSON {
 			return writeJSON(env.Stdout, struct {
-				Lease   string  `json:"lease"`
-				Holder  *string `json:"holder"`
-				Gen     int64   `json:"gen"`
-				Fence   int64   `json:"fence"`
-				Since   string  `json:"since"`
-				Adopted any     `json:"adopted"`
-			}{"task", tenure.Holder, tenure.Gen, tenure.Fence, tenure.Since, body["adopted"]})
+				lease.Tenure
+				Adopted any `json:"adopted"`
+			}{tenure, body["adopted"]})
 		}
 		fmt.Fprintf(env.Stdout, "task lease taken, fence %d\nepoch %d.%d\n", tenure.Fence, tenure.Gen, tenure.Fence)
 		return 0

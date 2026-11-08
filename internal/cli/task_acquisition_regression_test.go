@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"os"
@@ -55,5 +56,20 @@ func TestTaskTakeoverPreservesGenerationAndEpochChecks(t *testing.T) {
 		if err != nil || got.Gen != 3 || got.Fence != 2 {
 			t.Fatalf("refusal changed grant: %+v %v", got, err)
 		}
+	}
+}
+
+func TestTaskTakeJSONIncludesTenure(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	h, path := feedHarness(t)
+	if code := h.run(path, append(taskTakeArgs(pid, start), "--json")...); code != 0 {
+		t.Fatal(h.errb)
+	}
+	var grant lease.Tenure
+	if err := json.Unmarshal(h.out.Bytes(), &grant); err != nil {
+		t.Fatal(err)
+	}
+	if grant.PID == nil || *grant.PID != pid || grant.PIDStart == nil || *grant.PIDStart != start {
+		t.Fatalf("JSON lost process identity: %+v", grant)
 	}
 }
