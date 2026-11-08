@@ -38,7 +38,8 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func runProcess(ctx context.Context, argv []string, dir string, env []string, stdin string) ProcessResult {
+// RunProcess executes a bounded command with process-group cancellation on macOS and Linux.
+func RunProcess(ctx context.Context, argv []string, dir string, env []string, stdin string) ProcessResult {
 	started := time.Now()
 	result := ProcessResult{Status: "error", ExitCode: -1}
 	if err := ctx.Err(); err != nil {

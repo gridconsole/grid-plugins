@@ -95,7 +95,7 @@ func evaluate(ctx context.Context, task Task, c Check, dir string, env []string,
 			r.Evidence = fmt.Sprintf("%s:%d", c.Path, 1+strings.Count(string(data[:index]), "\n"))
 		}
 	case "command_passes":
-		p := runProcess(ctx, c.Command, dir, env, "")
+		p := RunProcess(ctx, c.Command, dir, env, "")
 		r.Process, r.Status, r.Reason = &p, p.Status, p.Error
 		if p.Status != "error" {
 			mark(&r, p.Status == "passed")

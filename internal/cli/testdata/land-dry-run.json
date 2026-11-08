@@ -1,0 +1,1 @@
+{"plan":{"task":"T-01","project":"sample","plan_hash":"opaque: revision/one + two","lands":{"target":"local","branch":"main","command":"printf landed > outcome","needs_approve":true}},"status":"planned"}

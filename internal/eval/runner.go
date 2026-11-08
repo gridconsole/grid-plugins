@@ -176,9 +176,9 @@ func (r Runner) attempt(ctx context.Context, task Task, tempRoot string) (Result
 	env := taskEnvironment(home, workspace, tmp, task.ID, r.AllowEnv)
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
-	result.Setup = runProcess(ctx, []string{"sh", "-eu", "-c", task.Setup}, workspace, env, "")
+	result.Setup = RunProcess(ctx, []string{"sh", "-eu", "-c", task.Setup}, workspace, env, "")
 	if result.Setup.Status == "passed" {
-		result.AgentResult = runProcess(ctx, agent, workspace, env, task.Prompt)
+		result.AgentResult = RunProcess(ctx, agent, workspace, env, task.Prompt)
 	}
 	for _, check := range task.Checks {
 		if result.Setup.Status != "passed" || result.AgentResult.Status != "passed" {
