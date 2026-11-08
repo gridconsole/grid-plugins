@@ -222,7 +222,7 @@
         {
           "name": "delete",
           "args": [
-            "\u003cT-NN\u003e"
+            "\u003ctask\u003e"
           ],
           "flags": [
             {
