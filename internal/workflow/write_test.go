@@ -20,6 +20,51 @@ func writeFixture(t *testing.T, name string) string {
 	return string(data)
 }
 
+func TestLockOpenConcurrent(t *testing.T) {
+	dir, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dir.Close()
+	const name = ".workflows.lock"
+	const writers = 32
+	for trial := range 32 {
+		start := make(chan struct{})
+		results := make(chan error, writers)
+		for range writers {
+			go func() {
+				<-start
+				lock, err := openLock(dir, name)
+				if err == nil {
+					opened, statErr := lock.Stat()
+					after, lstatErr := dir.Lstat(name)
+					switch {
+					case statErr != nil:
+						err = statErr
+					case lstatErr != nil:
+						err = lstatErr
+					case !after.Mode().IsRegular() || !os.SameFile(opened, after):
+						err = errors.New("lock identity changed")
+					}
+					if closeErr := lock.Close(); err == nil {
+						err = closeErr
+					}
+				}
+				results <- err
+			}()
+		}
+		close(start)
+		for range writers {
+			if err := <-results; err != nil {
+				t.Errorf("trial %d: %v", trial, err)
+			}
+		}
+		if err := dir.Remove(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestWriteRustValidation(t *testing.T) {
 	workspace := writeFixture(t, "root.md")
 	project := writeFixture(t, "project.md")

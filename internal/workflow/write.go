@@ -161,7 +161,7 @@ func Write(home, selector, expected string, input io.Reader) (WriteResult, error
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return result, errors.New("cannot inspect workflow lock")
 	}
-	lock, err := dir.OpenFile(lockName, os.O_CREATE|os.O_RDWR, 0o600)
+	lock, err := openLock(dir, lockName)
 	if err != nil {
 		return result, errors.New("cannot open workflow lock")
 	}
@@ -215,6 +215,23 @@ func Write(home, selector, expected string, input io.Reader) (WriteResult, error
 	}
 	result.Rev = fmt.Sprintf("%x", sha256.Sum256(data))[:12]
 	return result, nil
+}
+
+// openLock separates creation from opening an existing lock: concurrent
+// O_CREATE opens through os.Root can spuriously return ENOENT on Darwin.
+func openLock(dir *os.Root, name string) (*os.File, error) {
+	var err error
+	for range 20 {
+		var lock *os.File
+		lock, err = dir.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
+		if errors.Is(err, os.ErrExist) {
+			lock, err = dir.OpenFile(name, os.O_RDWR, 0)
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return lock, err
+		}
+	}
+	return nil, err
 }
 
 // Parser errors can quote user-provided values. Redact path-like words, even on
