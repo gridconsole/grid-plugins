@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers, priorityRank, firstById, PRIORITIES, handoverOwner } from './lib.mjs';
+import { post, readFeed, fold, feedDir, identity, resolveTask, fromOrchestrator, jobWorkers, priorityRank, firstById, PRIORITIES, handoverOwner, writerFile, fileOf, writtenByWorker, hostName, sameHost } from './lib.mjs';
 import { postHolds } from './hold.mjs';
 import { jobStart, taskIntegrate, taskLand } from './git-steps.mjs';
 import { runGit } from './git.mjs';
@@ -107,7 +107,7 @@ function settings(taskDir, o) {
     agent: o.agent ?? 'claude', slots: Number.isInteger(o.slots) && o.slots >= 0 ? o.slots : 2,
     intervalMs: Number.isFinite(o.intervalMs) && o.intervalMs > 0 ? o.intervalMs : 15_000,
     decideOpts: { env, model: o.model, effort: o.effort }, model: o.model, alive: o.alive ?? pidAlive, kill: o.kill ?? killWorker,
-    registry: o.registry ?? openRegistry(path.join(worktrees, SPAWNED)),
+    registry: o.registry ?? openRegistry(path.join(worktrees, SPAWNED), { identify: o.identify }),
     decide: o.decide ?? askModel, spawn: o.spawn ?? grantedSpawn({ home, fallback: startWorker }), pickHost: o.pickHost, retry: o.retry ?? defaultRetry,
     probe: o.probe ?? ((check) => probeWait(check, { cwd: o.repo ? path.resolve(o.repo) : taskDir, env })), probeAt: new Map(), // wait Jobs: the check, and when each was last read
     review: o.review === true, planMemory: { misses: 0, at: 0, reason: '' }, // tries of this process that left no beat
@@ -333,6 +333,9 @@ function work(taskDir, o) {
     return control({ target: j.id, status: 'rejected', reason: `landing failed: ${errText(r)}` });
   };
 
+  // True when `q` was written by the Worker `cur` of `j` itself, or by this loop as it: the loop's member on the Job's Host, in the file that writer owns.
+  const fromWorker = (q, j, cur) => q.worker === cur && writtenByWorker(q, { member: o.me.member, host: j.assign?.host ?? null });
+
   // One step for one Job, the first rule that applies.
   const move = (j, v) => {
     const rec = j.recorded_status;
@@ -360,23 +363,29 @@ function work(taskDir, o) {
     }
     if (LIVE.has(rec)) {
       // A Worker that posted a blocking question is stopped and the Job parked: answeredPark (retry.mjs) restarts it once the question is answered.
-      const asking = cur && !j.stale && !own('worker-exit') ? j.open_questions.map((id) => v.byId.get(id))
-        .find((q) => q?.body?.blocking === true && q.worker === cur && q.body?.who !== 'owner') : null;
+      // Only the Worker's own question counts: any member can append a line that names a live Worker, so a question is acted on only when it was
+      // written as that Worker by the loop's member on the Job's Host, in the Feed file that writer owns. Any other is refused and logged.
+      const blocking = cur && !j.stale && !own('worker-exit') ? j.open_questions.map((id) => v.byId.get(id))
+        .filter((q) => q?.body?.blocking === true && q.worker === cur && q.body?.who !== 'owner') : [];
+      for (const q of blocking) if (!fromWorker(q, j, cur)) out.errors.push(`refused to act on question ${q.id} naming ${cur} of ${j.id}: it is in ${fileOf(q) ?? 'no feed file'}, not written by the Worker itself (${writerFile({ member: o.me.member, host: hostName(j.assign?.host), worker: cur })})`);
+      const asking = blocking.find((q) => fromWorker(q, j, cur));
       if (asking) {
-        // Only the pid this loop recorded when it started the Worker is signalled; a pid in a post is refused and logged.
+        // Only the pid this loop recorded when it started the Worker, and that still is that process, is signalled; a pid in a post is refused and logged.
         const pid = o.registry.pidOf(cur, j.id);
         const named = postedPid(j, v);
         if (named && named !== pid) out.errors.push(`refused to signal pid ${named} named in the Feed for ${j.id}: this loop did not start it as ${cur}`);
-        if (j.assign?.host === o.me.host) {
+        if (sameHost(j.assign?.host, o.me.host)) {
           if (pid) { try { o.kill(pid); } catch { /* already gone */ } }
-          else out.errors.push(`${cur} was not stopped: this loop has no pid recorded for it`);
+          else out.errors.push(`${cur} was not stopped: this loop has no live pid recorded for it`);
         }
         return control({ target: j.id, status: 'parked', reason: `${cur} stopped with a question still open (${asking.id}), waiting for the answer` });
       }
       if (own('worker-exit')) return control({ target: j.id, status: 'stale', reason: 'worker exited without a result' });
       // A `claude -p` session may end without the SessionEnd hook firing, so a Worker on this Host whose pid is gone is reported here, as the hook would.
-      const pid = o.registry.pidOf(cur, j.id); // the recorded pid, not one a post names: a post's pid would make any live process keep a Job running
-      if (pid && j.assign?.host === o.me.host && !o.alive(pid)) {
+      // The recorded pid, not one a post names: a post's pid would make any live process keep a Job running. A pid that now belongs to another process
+      // is a Worker that has ended, as is one with no process.
+      const entry = sameHost(j.assign?.host, o.me.host) ? o.registry.lookup(cur, j.id) : null;
+      if (entry && (entry.state === 'gone' || entry.state === 'reused' || (entry.state === 'ours' && !o.alive(entry.pid)))) {
         write('worker-exit', { reason: 'process ended without a result' }, { job: j.id }, { role: 'worker', worker: cur });
         return undefined;
       }
@@ -427,7 +436,8 @@ function work(taskDir, o) {
     const role = ROLES.includes(j.role) ? j.role : 'builder';
     let brief = [j.title, str(jobPostOf(j, v)?.body?.brief).trim()].filter(Boolean).join('\n\n');
     // A Worker's blocking question that got an answer goes into the next attempt's brief.
-    const qa = v.posts.filter((q) => q.type === 'question' && q.job === j.id && q.worker && q.body?.blocking === true && q.body?.who !== 'owner')
+    // Only questions the Workers wrote themselves: a line that names a Worker from another member's file is not a question that Worker asked.
+    const qa = v.posts.filter((q) => q.type === 'question' && q.job === j.id && q.worker && q.body?.blocking === true && q.body?.who !== 'owner' && writtenByWorker(q, { member: o.me.member }))
       .map((q) => ({ q, a: v.posts.filter((p) => p.type === 'answer' && p.re === q.id && !p.worker).at(-1) })).filter((x) => x.a);
     if (qa.length) brief += `\n\nQuestions an earlier attempt asked, with the answers:\n${qa.map(({ q, a }) => `Q: ${str(q.body.question)}\nA: ${str(a.body?.answer)}`).join('\n\n')}`;
     // A Job sent again after the judge rejected it carries the judge's reason.

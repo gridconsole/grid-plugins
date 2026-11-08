@@ -102,7 +102,7 @@ export function identity(ctx) {
 
 export const feedDir = (taskDir) => path.join(taskDir, 'feed');
 // A worker id may hold a colon, which a file name that syncs between machines should not; only the file name is cleaned.
-const writerFile = (a) => {
+export const writerFile = (a) => {
   const worker = cleanName(a.worker);
   return `${a.member}@${a.host}${worker ? `~${worker}` : ''}.jsonl`;
 };
@@ -151,6 +151,29 @@ export function loadTypes(projectDir) {
 
 // ---- reading ----
 
+// The feed file each post of readFeed was read from, kept beside the post (not in it, so it never shows in a post's JSON and a line cannot set it).
+const sources = new WeakMap();
+// The name of the feed file `p` was read from, or null for a post that did not come from readFeed. A post written by the member and host it names,
+// as the worker it names, is in writerFile({ member, host, worker }); one in another file was put there by someone else.
+export const fileOf = (p) => (p !== null && typeof p === 'object' ? sources.get(p) ?? null : null);
+
+// A Host's name without its owner: Hosts that have announced themselves are named member@host, while a Worker's author host (GRID_HOST) is the bare
+// host. The part after the last "@", so a bare name is unchanged; '' for anything that is not a name.
+export const hostName = (h) => (typeof h === 'string' ? h.slice(h.lastIndexOf('@') + 1) : '');
+// Whether two Host names, bare or member@host, are the same machine. Never true for a name that is empty or missing.
+export const sameHost = (a, b) => hostName(a) !== '' && hostName(a) === hostName(b);
+
+// True when `q`, a post that names a Worker, was written as that Worker by `member` (and on `host`, bare or member@host, when one is given: null
+// or another machine never matches), in the one feed file that writer owns. A line another member appended to their own file, or to someone
+// else's, claims a Worker without being it. Every place that acts on what a Worker's post says (stop it, park its Job, brief its successor)
+// checks this first.
+export function writtenByWorker(q, { member, host } = {}) {
+  const a = q?.author;
+  if (a === null || typeof a !== 'object' || typeof q.worker !== 'string' || !q.worker || typeof member !== 'string' || a.member !== member) return false;
+  if (host !== undefined && !sameHost(a.host, host)) return false;
+  return fileOf(q) === writerFile({ member: a.member, host: a.host, worker: q.worker });
+}
+
 const usable = (p) => {
   if (!isObj(p)) return 'not a post';
   if (typeof p.id !== 'string' || typeof p.at !== 'string' || typeof p.type !== 'string') return 'a post needs id, at and type';
@@ -173,7 +196,7 @@ export function readFeed(dir, opts = {}) {
       let p;
       try { p = JSON.parse(line); } catch { onError({ file, line: i + 1, error: 'not JSON' }); return; }
       const why = usable(p);
-      if (why) onError({ file, line: i + 1, error: why }); else all.push(p);
+      if (why) onError({ file, line: i + 1, error: why }); else { sources.set(p, file); all.push(p); }
     });
   }
   all.sort(byAtId);
@@ -520,8 +543,15 @@ export function fold(posts, { now = Date.now(), known = null } = {}) {
 
   // The epoch at the current place of the walk below, and the member@host whose handover set it (null before any handover).
   const live = { epoch: 0, by: null };
+  // Before the first handover nobody is known as the Orchestrator, so a control post counts only when it sits in the feed file its own author writes:
+  // a line that claims another member's Orchestrator and was appended to a file of someone else's does not move a Job. A post that did not come from
+  // readFeed has no file and is not checked.
+  const unsigned = (p, at) => {
+    const file = at.by === null ? fileOf(p) : null;
+    return file === null || file === writerFile({ member: str(p.author.member), host: str(p.author.host), worker: p.worker }) ? '' : `author ${who(p)} is not the writer of ${file}`;
+  };
   const control = (p) => {
-    const why = refusal(p, live);
+    const why = refusal(p, live) || unsigned(p, live);
     if (why) return skip(p, why);
     const b = isObj(p.body) ? p.body : {};
     const target = str(b.target);

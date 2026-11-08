@@ -1,7 +1,7 @@
 // What the loop does with a stale Job: the first failure is retried once as a new attempt (a new Worker; the old attempt's posts do not
 // count, as the loop reads only the current Worker's); the second failure asks the Owner and parks the Job. One rule for every way a
 // Job goes stale: a lease that ran out, a worker-exit with no result, a result with no submit, a start that failed.
-import { fromOrchestrator } from './lib.mjs';
+import { fromOrchestrator, writtenByWorker } from './lib.mjs';
 import { isWait } from './wait.mjs';
 import { isDeploy } from './deploy.mjs';
 
@@ -29,7 +29,9 @@ export function retryStale(job, v) {
   if (isDeploy(job.jobPost)) return null;
   const why = lastStale(job)?.reason ?? 'the Worker went stale';
   // A Worker that stopped with a blocking question still open is waiting on an answer: no second Worker, the Job waits parked.
-  const waiting = job.open_questions.map((id) => v.byId.get(id)).find((p) => p?.body?.blocking === true && p.worker && p.worker === job.assign?.worker);
+  // Only a question the Worker wrote itself counts (the loop's member, the Job's Host, the Worker's own file): any member can append a line naming it.
+  const waiting = job.open_questions.map((id) => v.byId.get(id)).find((p) => p?.body?.blocking === true && p.worker && p.worker === job.assign?.worker
+    && writtenByWorker(p, { member: v.me?.member, host: job.assign?.host ?? null }));
   if (job.attempt < MAX_ATTEMPTS) {
     if (waiting) return { status: 'parked', reason: `${waiting.worker} stopped with a question still open (${waiting.id}), waiting for the answer` };
     return { status: 'ready', reason: job.status === 'rejected' ? `attempt ${job.attempt} was rejected: ${why}` : `attempt ${job.attempt} went stale, trying once more` };
