@@ -1,0 +1,9 @@
+{
+  "name": "grid",
+  "version": "0.1.0",
+  "description": "Grid: task folders, a planner per task, the Feed and the brain, all written through one grid command.",
+  "author": { "name": "Grid" },
+  "homepage": "https://github.com/gridconsole/grid-plugins",
+  "repository": "https://github.com/gridconsole/grid-plugins",
+  "license": "MIT"
+}
