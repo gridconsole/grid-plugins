@@ -11,6 +11,8 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
+const maxBrief = 1 << 20
+
 var briefStatus = regexp.MustCompile(`(?m)^status:[ \t]*[^\r\n]*`)
 
 // MarkBrief uses the task writer's atomic replacement under a stable file lock.
@@ -41,10 +43,14 @@ func MarkBrief(dir, name, state string) error {
 	if err != nil {
 		return err
 	}
-	b, err := io.ReadAll(io.LimitReader(f, 1<<20))
+	b, err := io.ReadAll(io.LimitReader(f, maxBrief+1))
 	f.Close()
 	if err != nil {
 		return err
+	}
+	// Rewriting what was read would silently cut a longer brief.
+	if len(b) > maxBrief {
+		return errors.New("brief is over 1 MiB; shorten it before the hook marks it")
 	}
 	doc := taskfile.ParseFrontmatter(string(b))
 	if doc == nil || doc.Odd {
