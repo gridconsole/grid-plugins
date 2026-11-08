@@ -20,8 +20,43 @@ func TestSupportedSubset(t *testing.T) {
 		t.Fatal(m)
 	}
 }
-func TestRejectUnsupportedAndMalformed(t *testing.T) {
-	for _, body := range []string{"id: J-1\nid: J-2", "x: [a, b", "x: {a: one, a: two}", "x: *alias", "x: |\n  text", "x:\n\t- one"} {
+
+func TestDatesStayText(t *testing.T) {
+	d, e := Parse("---\nupdated: 2026-01-01\nitems: [1, 2]\nok: true\n---\n")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if d.Data["updated"] != "2026-01-01" || d.Data["ok"] != true || len(d.Data["items"].([]any)) != 2 {
+		t.Fatalf("%#v", d.Data)
+	}
+	var out struct {
+		Updated string `json:"updated"`
+		Items   []int  `json:"items"`
+	}
+	if e = Into(d.Data, &out); e != nil || out.Updated != "2026-01-01" || len(out.Items) != 2 {
+		t.Fatalf("%+v %v", out, e)
+	}
+}
+
+func TestLinesAndBodyAreFileLines(t *testing.T) {
+	d, e := Parse("---\nid: J-1\n\nrole: builder\n---\nBody\n")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if d.Lines["id"] != 2 || d.Lines["role"] != 4 || d.BodyLine != 6 {
+		t.Fatalf("%+v", d)
+	}
+}
+
+func TestEmptyFrontmatter(t *testing.T) {
+	d, e := Parse("---\n---\nBody\n")
+	if e != nil || len(d.Data) != 0 || d.Body != "Body\n" {
+		t.Fatalf("%+v %v", d, e)
+	}
+}
+
+func TestRejectMalformed(t *testing.T) {
+	for _, body := range []string{"id: J-1\nid: J-2", "x: [a, b", "x: {a: one, a: two}", "x: *alias", "x:\n\t- one", "- a\n- b", "? [a]\n: b"} {
 		if _, e := Parse("---\n" + body + "\n---\n"); e == nil {
 			t.Errorf("accepted %q", body)
 		}
