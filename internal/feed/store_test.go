@@ -56,7 +56,7 @@ func TestAppendAndRead(t *testing.T) {
 	if retry.ID != r.ID || retry.Seq != 1 {
 		t.Fatal("retry changed record")
 	}
-	mustPost(t, s, Input{Type: "question", Job: "J-1", Body: map[string]any{"question": "Proceed?"}}, w)
+	mustPost(t, s, Input{Type: "question", Job: "J-1", Body: contractBody(t, "question", map[string]any{"question": "Proceed?"})}, w)
 	for _, tc := range []struct {
 		name string
 		f    Filter

@@ -191,9 +191,8 @@ func Fold(task string, read ReadResult) State {
 		job := state.Jobs[target]
 		if job == nil {
 			if post := byID[target]; post != nil && post.Verdict == "counted" {
-				typ, _ := lookup(post.Type)
 				authorized := true
-				if typ.Lease != nil && *typ.Lease == "job" {
+				if jobSide(post.Type) {
 					attempt := 0
 					if post.Attempt != nil {
 						attempt = *post.Attempt
@@ -231,8 +230,7 @@ func Fold(task string, read ReadResult) State {
 			continue
 		}
 		r := e.Record
-		t, _ := lookup(r.Type)
-		if t.Lease != nil && *t.Lease == "job" {
+		if jobSide(r.Type) {
 			attempt := 0
 			if r.Attempt != nil {
 				attempt = *r.Attempt
@@ -381,4 +379,13 @@ func writeProjection(dir, name string, v any) error {
 		return err
 	}
 	return os.Rename(f.Name(), filepath.Join(dir, name))
+}
+
+// jobSide lists the types the contract writes under their Job's lease.
+func jobSide(typ string) bool {
+	switch typ {
+	case "ack", "submit", "result", "checkpoint", "worker-exit":
+		return true
+	}
+	return false
 }

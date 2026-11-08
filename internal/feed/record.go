@@ -131,3 +131,27 @@ func (r Record) dataTier() string {
 	}
 	return string(r.Tier)
 }
+
+// validate checks a record against its contract schema, which includes the
+// envelope, and checks that the author is the member of the writer id. The
+// store additionally checks the lease and a guest answer's addressee.
+func validate(r Record) error {
+	if _, ok := contract.LookupType(r.Type); !ok {
+		return fmt.Errorf("unregistered post type %q", r.Type)
+	}
+	// Post validates before it numbers the record under the writer lock.
+	if r.Seq < 1 {
+		r.Seq = 1
+	}
+	data, err := json.Marshal(r)
+	if err != nil {
+		return err
+	}
+	if err := contract.Validate(r.Type, data); err != nil {
+		return err
+	}
+	if contract.WorkerMember(r.Worker) != r.Author.ID {
+		return fmt.Errorf("author and worker disagree")
+	}
+	return nil
+}

@@ -11,12 +11,18 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 func TestTypesRegistered(t *testing.T) {
-	for _, typ := range Types() {
+	types := contract.PostTypes()
+	if len(types) != 19 {
+		t.Fatalf("got %d post types", len(types))
+	}
+	for _, typ := range types {
 		t.Run(typ.Name, func(t *testing.T) {
-			if typ.Name == "" || typ.Version < 1 || len(typ.Roles) == 0 || typ.Schema["type"] != "object" || typ.Schema["properties"] == nil || typ.Schema["required"] == nil {
+			if typ.Name == "" || typ.Version < 1 || len(typ.Roles) == 0 {
 				t.Fatalf("incomplete registration: %+v", typ)
 			}
 			if typ.Class != "state" && typ.Class != "chatter" {
@@ -25,7 +31,7 @@ func TestTypesRegistered(t *testing.T) {
 		})
 	}
 	for _, name := range []string{"claim", "heartbeat", "proposed_jobs"} {
-		if _, ok := lookup(name); ok {
+		if _, ok := contract.LookupType(name); ok {
 			t.Fatalf("retired type %s", name)
 		}
 	}
@@ -65,7 +71,7 @@ func TestValidation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = Validate(r)
+			err = validate(r)
 			if (err == nil) != tc.valid {
 				t.Fatalf("valid=%v error=%v", tc.valid, err)
 			}
@@ -75,7 +81,7 @@ func TestValidation(t *testing.T) {
 
 func TestGuestAnswer(t *testing.T) {
 	s := testStore(t)
-	q := mustPost(t, s, Input{Type: "question", Body: map[string]any{"question": "What next?", "who": "visitor"}}, testWriter())
+	q := mustPost(t, s, Input{Type: "question", Body: contractBody(t, "question", map[string]any{"question": "What next?", "who": "visitor"})}, testWriter())
 	guest := Writer{Author: Author{ID: "visitor", Role: "guest"}, Worker: "visitor@" + testMachine}
 	a := mustPost(t, s, Input{Type: "answer", Re: q.ID, Body: map[string]any{"answer": "Treat this as feedback"}}, guest)
 	if a.Tier != "person-guest" || !a.Data() {
@@ -109,11 +115,11 @@ func taskWriter(t *testing.T, s Store) Writer {
 func assignedJob(t *testing.T, s Store) (Writer, Writer, Record) {
 	t.Helper()
 	task := taskWriter(t, s)
-	mustPost(t, s, Input{Type: "job", Job: "J-1", Body: map[string]any{"title": "Example", "role": "agent"}}, task)
+	mustPost(t, s, Input{Type: "job", Job: "J-1", Body: contractBody(t, "job", map[string]any{"title": "Example"})}, task)
 	worker := Writer{Author: Author{ID: "worker", Role: "worker"}, Worker: "worker@" + testMachine, Lease: "J-1", Fence: 2}
 	n := 1
 	testLease(t, s, worker, &n)
-	assign := mustPost(t, s, Input{Type: "control", Body: map[string]any{"assign": map[string]any{"job": "J-1", "attempt": 1, "to": worker.Worker, "fence": 2, "until": "2000-01-01T00:00:00Z"}}}, task)
+	assign := mustPost(t, s, Input{Type: "control", Body: map[string]any{"assign": map[string]any{"job": "J-1", "attempt": 1, "to": worker.Worker, "fence": 2, "until": "2000-01-01T00:00:00.000Z"}}}, task)
 	return task, worker, assign
 }
 
@@ -121,8 +127,8 @@ func TestAssignmentFold(t *testing.T) {
 	s := testStore(t)
 	task, worker, assign := assignedJob(t, s)
 	ack := mustPost(t, s, Input{Type: "ack", Job: "J-1", Attempt: 1, After: []string{assign.ID}, Body: map[string]any{}}, worker)
-	checkpoint := mustPost(t, s, Input{Type: "checkpoint", Job: "J-1", Attempt: 1, Body: map[string]any{"job": "J-1", "step": "tests", "commit": "abc123"}}, worker)
-	result := mustPost(t, s, Input{Type: "result", Job: "J-1", Attempt: 1, Body: map[string]any{"outcome": "Done"}}, worker)
+	checkpoint := mustPost(t, s, Input{Type: "checkpoint", Job: "J-1", Attempt: 1, Body: map[string]any{"job": "J-1", "step": "tests", "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}, worker)
+	result := mustPost(t, s, Input{Type: "result", Job: "J-1", Attempt: 1, Body: contractBody(t, "result", map[string]any{"outcome": "Done"})}, worker)
 	mustPost(t, s, Input{Type: "worker-exit", Job: "J-1", Attempt: 1, Body: map[string]any{"reason": "usage_limit"}}, worker)
 	state, err := s.State()
 	if err != nil {
@@ -132,7 +138,7 @@ func TestAssignmentFold(t *testing.T) {
 	if j.Status != "running" || j.Attempt != 1 || value(j.ExitReason) != "usage_limit" || j.Checkpoint.ID != checkpoint.ID || !reflect.DeepEqual(j.Results, []string{result.ID}) {
 		t.Fatalf("Job: %+v ack=%s", j, ack.ID)
 	}
-	mustPost(t, s, Input{Type: "control", Body: map[string]any{"target": result.ID, "verdict": "accept"}}, task)
+	mustPost(t, s, Input{Type: "control", Body: map[string]any{"target": "J-1", "status": "accepted", "reason": "Reviewed"}}, task)
 	state, err = s.SaveState()
 	if err != nil || state.Jobs["J-1"].Status != "accepted" {
 		t.Fatalf("accept: %+v %v", state, err)
@@ -176,10 +182,10 @@ func TestFencingAndHolds(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(s.Dir(), "lease", "takeovers.jsonl"), append(end, '\n'), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Post(Input{Type: "result", Job: "J-1", Attempt: 1, Body: map[string]any{"outcome": "late"}}, worker); !errors.Is(err, ErrStaleLease) {
+	if _, err := s.Post(Input{Type: "result", Job: "J-1", Attempt: 1, Body: contractBody(t, "result", map[string]any{"outcome": "late"})}, worker); !errors.Is(err, ErrStaleLease) {
 		t.Fatalf("stale write: %v", err)
 	}
-	zombie, err := s.record(Input{Type: "result", Job: "J-1", Attempt: 1, Body: map[string]any{"outcome": "zombie"}}, worker)
+	zombie, err := s.record(Input{Type: "result", Job: "J-1", Attempt: 1, Body: contractBody(t, "result", map[string]any{"outcome": "zombie"})}, worker)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +294,7 @@ func TestWorkerExitReasonsAndResultValidation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = Validate(r)
+			err = validate(r)
 			if (err != nil) != (reason == "other") {
 				t.Fatalf("reason %q: %v", reason, err)
 			}
@@ -299,18 +305,18 @@ func TestWorkerExitReasonsAndResultValidation(t *testing.T) {
 		body  map[string]any
 		valid bool
 	}{
-		{"result", map[string]any{"outcome": "done"}, true},
-		{"must fix", map[string]any{"outcome": "needs changes", "must_fix": []any{map[string]any{"row": "A1", "at": "file.go:1"}}}, true},
-		{"no row", map[string]any{"outcome": "needs changes", "must_fix": []any{map[string]any{"at": "file.go:1"}}}, false},
-		{"next", map[string]any{"outcome": "done", "next": "do more"}, false},
-		{"L1 no job", map[string]any{"outcome": "done", "verified": map[string]any{"level": "L1", "by": "sonnet", "pass": true, "evidence": []any{}}}, false},
+		{"result", contractBody(t, "result", map[string]any{"outcome": "done"}), true},
+		{"must fix", contractBody(t, "result", map[string]any{"outcome": "needs changes", "must_fix": []any{map[string]any{"row": "A1", "at": "file.go:1"}}}), true},
+		{"no row", contractBody(t, "result", map[string]any{"outcome": "needs changes", "must_fix": []any{map[string]any{"at": "file.go:1"}}}), false},
+		{"next", contractBody(t, "result", map[string]any{"outcome": "done", "next": "do more"}), false},
+		{"L1 no job", contractBody(t, "result", map[string]any{"outcome": "done", "verified": map[string]any{"level": "L1", "by": "sonnet", "pass": true, "evidence": []any{}}}), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, err := s.record(Input{Type: "result", Job: "J-1", Attempt: 1, Body: tc.body}, w)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = Validate(r)
+			err = validate(r)
 			if (err == nil) != tc.valid {
 				t.Fatalf("%s: %v", tc.name, err)
 			}
@@ -373,13 +379,13 @@ func TestDiskFullCode(t *testing.T) {
 func TestWarmSnapshotRejudgesAndFilenameCheck(t *testing.T) {
 	s := testStore(t)
 	task := taskWriter(t, s)
-	mustPost(t, s, Input{Type: "job", Job: "J-1", Body: map[string]any{"title": "Example", "role": "agent"}}, task)
+	mustPost(t, s, Input{Type: "job", Job: "J-1", Body: contractBody(t, "job", map[string]any{"title": "Example"})}, task)
 	path := filepath.Join(s.Dir(), writerFile(task.Worker, 1))
 	before, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	control := mustPost(t, s, Input{Type: "control", Body: map[string]any{"target": "J-1", "status": "accepted"}}, task)
+	control := mustPost(t, s, Input{Type: "control", Body: map[string]any{"target": "J-1", "status": "accepted", "reason": "Reviewed"}}, task)
 	state, err := s.State()
 	if err != nil || state.Jobs["J-1"].Status != "accepted" {
 		t.Fatalf("before snapshot: %v", err)
@@ -451,10 +457,10 @@ func TestWakeDedupAcrossWriters(t *testing.T) {
 func TestQuestionAnswerSelection(t *testing.T) {
 	s := testStore(t)
 	task := taskWriter(t, s)
-	q := mustPost(t, s, Input{Type: "question", Body: map[string]any{"question": "Which option?"}}, testWriter())
+	q := mustPost(t, s, Input{Type: "question", Body: contractBody(t, "question", map[string]any{"question": "Which option?"})}, testWriter())
 	first := mustPost(t, s, Input{Type: "answer", Re: q.ID, Body: map[string]any{"answer": "First"}}, testWriter())
 	mustPost(t, s, Input{Type: "answer", Re: q.ID, Body: map[string]any{"answer": "Second"}}, testWriter())
-	mustPost(t, s, Input{Type: "control", Body: map[string]any{"target": q.ID, "answer": first.ID}}, task)
+	mustPost(t, s, Input{Type: "control", Body: map[string]any{"target": q.ID, "answer": first.ID, "status": "answered"}}, task)
 	state, err := s.State()
 	if err != nil {
 		t.Fatal(err)
@@ -499,11 +505,11 @@ func TestJobDependencyValidation(t *testing.T) {
 		{"not a job", "invalid", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := s.record(Input{Type: "job", Job: "J-1", Body: map[string]any{"title": "Example", "role": "agent", "after": []any{tc.edge}}}, testWriter())
+			r, err := s.record(Input{Type: "job", Job: "J-1", Body: contractBody(t, "job", map[string]any{"title": "Example", "after": []any{tc.edge}})}, testWriter())
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = Validate(r)
+			err = validate(r)
 			if (err == nil) != tc.valid {
 				t.Fatalf("valid=%v error=%v", tc.valid, err)
 			}

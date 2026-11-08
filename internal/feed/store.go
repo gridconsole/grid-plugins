@@ -142,7 +142,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
-	if err := Validate(r); err != nil {
+	if err := validate(r); err != nil {
 		return Record{}, err
 	}
 	if err := s.prepare(); err != nil {
@@ -182,7 +182,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		old := entry.Record
 		if old.ID == r.ID {
 			if sameRequest(old, r) {
-				t, _ := lookup(r.Type)
+				t, _ := contract.LookupType(r.Type)
 				if t.Class == "state" {
 					if err := syncFile(f); err != nil {
 						return Record{}, diskError(err)
@@ -262,7 +262,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		}
 	}
 	line = append(line, '\n')
-	t, _ := lookup(r.Type)
+	t, _ := contract.LookupType(r.Type)
 	if err := appendRecord(f, file, line, writeOnce); err != nil {
 		return Record{}, err
 	}
@@ -346,7 +346,7 @@ func (s Store) record(in Input, w Writer) (Record, error) {
 	if err := json.Unmarshal(data, &body); err != nil {
 		return Record{}, err
 	}
-	t, _ := lookup(in.Type)
+	t, _ := contract.LookupType(in.Type)
 	after := append([]string{}, in.After...)
 	r := Record{ID: id, Task: s.TaskID, Type: in.Type, TypeV: t.Version, Author: w.Author, Tier: contract.TierFor(w.Author.Role), Worker: w.Worker, Lease: ptr(w.Lease), Gen: w.Gen, Fence: w.Fence, At: time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), Re: ptr(in.Re), After: after, Job: ptr(in.Job), Wake: ptr(in.Wake), Body: body}
 	if in.Attempt != 0 {

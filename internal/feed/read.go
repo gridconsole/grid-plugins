@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 // Entry adds reader verdicts and a trust label without altering the wire record.
@@ -73,12 +75,12 @@ func (s Store) Read(filter Filter) (ReadResult, error) {
 		}
 		seen[r.ID] = true
 		e.Data = e.Record.Data()
-		t, known := lookup(r.Type)
+		t, known := contract.LookupType(r.Type)
 		if !known || t.Version != r.TypeV {
 			e.Verdict = "unknown"
 			e.Reason = "unknown type or type version"
 		} else if e.Verdict == "counted" {
-			if err := Validate(e.Record); err != nil {
+			if err := validate(e.Record); err != nil {
 				e.Verdict = "ignored"
 				e.Reason = err.Error()
 			}

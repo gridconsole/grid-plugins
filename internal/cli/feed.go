@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -87,8 +88,8 @@ func runFeed(args []string, env Env) int {
 	}
 	if verb == "types" {
 		return output(struct {
-			Types []feed.Type `json:"types"`
-		}{feed.Types()})
+			Types []contract.PostType `json:"types"`
+		}{contract.PostTypes()})
 	}
 	fail := func(err error) int {
 		fmt.Fprintf(env.Stderr, "grid feed: %v\n", err)

@@ -61,3 +61,23 @@ func TestWrittenRecordsMatchContract(t *testing.T) {
 		}
 	}
 }
+
+// contractBody returns the body of the contract's basic valid fixture of typ
+// with over applied, so tests post bodies the contract schema accepts.
+func contractBody(t *testing.T, typ string, over map[string]any) map[string]any {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "contract", "fixtures", typ, "valid", "basic.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fx struct {
+		Body map[string]any `json:"body"`
+	}
+	if err := json.Unmarshal(raw, &fx); err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range over {
+		fx.Body[k] = v
+	}
+	return fx.Body
+}
