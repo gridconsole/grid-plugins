@@ -215,6 +215,11 @@ func inactive(text string) bool {
 	case "closed", "paused", "pausing":
 		return true
 	}
+	// `grid task close` writes the state key, not the old status one.
+	switch str(f.Data["state"]) {
+	case "closed", "done", "cancelled":
+		return true
+	}
 	return false
 }
 func isHeld(dir string) bool {

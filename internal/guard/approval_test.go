@@ -2,6 +2,7 @@ package guard
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
@@ -70,5 +71,38 @@ func TestPlanGuardReadsOldProseAcceptance(t *testing.T) {
 	f.accept()
 	if got := writesRepo(f); got != "" {
 		t.Fatalf("with the old prose line: %q", got)
+	}
+}
+
+// A task closed through `grid task close` carries state: closed, which releases
+// the hold like the old status: closed does; reopening holds the plan again.
+func TestPlanGuardReleasedByTaskClose(t *testing.T) {
+	f, store := newTaskFixture(t)
+	if got := writesRepo(f); got != "deny" {
+		t.Fatalf("a plan nobody approved: %q", got)
+	}
+	if _, err := store.Change(taskstore.WriteOptions{ID: "T-01", Action: "close"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := writesRepo(f); got != "" {
+		t.Fatalf("after grid task close: %q", got)
+	}
+	if _, err := store.Change(taskstore.WriteOptions{ID: "T-01", Action: "reopen"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := writesRepo(f); got != "deny" {
+		t.Fatalf("after grid task reopen: %q", got)
+	}
+}
+
+// The state key is also a way out of the hold, so an agent may not write it.
+func TestPlanGuardRefusesAgentClosingThroughState(t *testing.T) {
+	f, _ := newTaskFixture(t)
+	for _, state := range []string{"closed", "done", "cancelled"} {
+		i := f.input("Write", filepath.Join(f.task, "task.md"))
+		i.ToolInput["content"] = strings.Replace(newTask, "state: waiting", "state: "+state, 1)
+		if got := EvaluatePlan(i, f.root, f.env).Behavior; got != "deny" {
+			t.Fatalf("an agent writing state: %s: %q", state, got)
+		}
 	}
 }
