@@ -1,14 +1,23 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/session"
 )
@@ -250,4 +259,398 @@ func TestLeaseCommandPreservesStoredGeneration(t *testing.T) {
 			}
 		})
 	}
+}
+
+func taskLeaseIdentity(t *testing.T) (int, string) {
+	t.Helper()
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("Unix process identity")
+	}
+	start, err := session.ProcessStart(os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return os.Getpid(), contract.FormatTime(start)
+}
+
+func taskTakeArgs(pid int, start string) []string {
+	return []string{"lease", "take", "task", "--pid", strconv.Itoa(pid), "--pid-start", start}
+}
+
+func TestTaskLeaseTakeStatusRelease(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	h, path := feedHarness(t)
+	store := lease.TaskStore{Feed: feed.Store{TaskDir: path, TaskID: feedTaskID}}
+	if code := h.run(path, "lease", "status", "task"); code != 0 || h.out.String() != "task lease free\n" {
+		t.Fatalf("free: %d %s %s", code, h.out, h.errb)
+	}
+	args := taskTakeArgs(pid, start)
+	if code := h.run(path, args...); code != 0 || h.out.String() != "task lease taken, fence 1\nepoch 0.1\n" {
+		t.Fatalf("take: %d %s %s", code, h.out, h.errb)
+	}
+	raw, err := os.ReadFile(filepath.Join(store.Feed.Dir(), "lease", "task.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := contract.Validate("lease", raw); err != nil {
+		t.Fatal(err)
+	}
+	records, err := store.Feed.Read(feed.Filter{})
+	if err != nil || len(records.Records) != 1 {
+		t.Fatalf("records: %+v %v", records, err)
+	}
+	r := records.Records[0]
+	wire, _ := json.Marshal(r.Record)
+	if r.Type != "handover" || r.Fence != 1 || r.Seq != 1 || r.Verdict != "counted" {
+		t.Fatalf("handover: %+v", r)
+	}
+	if err := contract.Validate("handover", wire); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run(path, args...); code != 1 || !strings.Contains(h.errb.String(), "task lease held by member@"+feedMachine+" since ") {
+		t.Fatalf("held: %d %s", code, h.errb)
+	}
+	unchanged, err := os.ReadFile(filepath.Join(store.Feed.Dir(), "lease", "task.json"))
+	if err != nil || !bytes.Equal(raw, unchanged) {
+		t.Fatal("held lease changed")
+	}
+	if code := h.run(path, "lease", "status", "task", "--json"); code != 0 || !strings.Contains(h.out.String(), `"process":"alive"`) {
+		t.Fatalf("status: %d %s %s", code, h.out, h.errb)
+	}
+	for _, tc := range []struct {
+		name, member, epoch string
+		code                int
+	}{
+		{"stale fence", "member", "0.2", 1}, {"stale gen", "member", "1.1", 1},
+		{"other holder", "other", "0.1", 1}, {"correct", "member", "0.1", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GRID_MEMBER", tc.member)
+			code := h.run(path, "lease", "release", "task", "--epoch", tc.epoch, "--json")
+			if code != tc.code {
+				t.Fatalf("release: %d %s", code, h.errb)
+			}
+			if code == 1 && !strings.Contains(h.errb.String(), "member@"+feedMachine) {
+				t.Fatalf("missing current holder: %s", h.errb)
+			}
+		})
+	}
+	tenure, err := store.Read("task")
+	if err != nil || tenure.Holder != nil {
+		t.Fatalf("release: %+v %v", tenure, err)
+	}
+	if code := h.run(path, append(args, "--json")...); code != 0 || !strings.Contains(h.out.String(), `"fence":2`) {
+		t.Fatalf("retake: %d %s %s", code, h.out, h.errb)
+	}
+}
+
+func deadTaskProcess(t *testing.T) (int, string) {
+	t.Helper()
+	taskLeaseIdentity(t)
+	cmd := exec.Command("sh", "-c", "read line")
+	in, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = in.Close(); _ = cmd.Process.Kill() })
+	start, err := session.ProcessStart(cmd.Process.Pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := in.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_ = cmd.Wait()
+	return cmd.Process.Pid, contract.FormatTime(start)
+}
+
+func TestTaskLeaseAdoptionAndStatus(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	deadPID, deadStart := deadTaskProcess(t)
+	for _, tc := range []struct {
+		name, machine, state string
+		pid                  int
+		start                string
+		unknown              bool
+		code                 int
+	}{
+		{"local dead", feedMachine, "dead", deadPID, deadStart, false, 0},
+		{"local alive", feedMachine, "alive", pid, start, false, 1},
+		{"remote dead", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "remote", deadPID, deadStart, false, 1},
+		{"local unknown", feedMachine, "unknown", pid, start, true, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, path := feedHarness(t)
+			store := lease.TaskStore{Feed: feed.Store{TaskDir: path, TaskID: feedTaskID}}
+			old := feed.Writer{Author: feed.Author{ID: "old", Role: "member"}, Worker: "old@" + tc.machine, Lease: "task", Gen: 3}
+			first, err := store.TakeTask(old, tc.pid, tc.start)
+			if err != nil {
+				t.Fatal(err)
+			}
+			old.Fence = first.Fence
+			if _, err := store.Feed.Handover(feed.Input{}, old); err != nil {
+				t.Fatal(err)
+			}
+			if tc.unknown {
+				t.Setenv("PATH", "")
+			}
+			if code := h.run(path, "lease", "status", "task"); code != 0 || !strings.Contains(h.out.String(), "process: "+tc.state+"\n") {
+				t.Fatalf("status: %d %s %s", code, h.out, h.errb)
+			}
+			if code := h.run(path, append(taskTakeArgs(pid, start), "--json")...); code != tc.code {
+				t.Fatalf("take: %d %s %s", code, h.out, h.errb)
+			}
+			if tc.code != 0 {
+				if !strings.Contains(h.errb.String(), "held by "+old.Worker) {
+					t.Fatal(h.errb)
+				}
+				current, err := store.Read("task")
+				if err != nil || current.Fence != first.Fence || *current.Holder != old.Worker {
+					t.Fatalf("refusal changed lease: %+v %v", current, err)
+				}
+				return
+			}
+			var grant struct {
+				Gen, Fence int64
+				Adopted    string
+			}
+			if err := json.Unmarshal(h.out.Bytes(), &grant); err != nil || grant.Gen != 3 || grant.Fence != 2 || grant.Adopted != "session-gone" {
+				t.Fatalf("grant: %+v %v", grant, err)
+			}
+			records, err := store.Feed.Read(feed.Filter{Type: "handover"})
+			if err != nil || len(records.Records) != 2 {
+				t.Fatalf("records: %+v %v", records, err)
+			}
+			var adopted feed.Record
+			for _, r := range records.Records {
+				if r.Fence == 2 {
+					adopted = r.Record
+				}
+			}
+			if adopted.Body["adopted"] != "session-gone" || adopted.Body["from"] != old.Worker || adopted.Seq != 1 {
+				t.Fatalf("adoption: %+v", adopted)
+			}
+			b, _ := json.Marshal(adopted)
+			if err := contract.Validate("handover", b); err != nil {
+				t.Fatal(err)
+			}
+			log, err := os.ReadFile(filepath.Join(store.Feed.Dir(), "lease", "takeovers.jsonl"))
+			if err != nil || !bytes.Contains(log, []byte(old.Worker)) {
+				t.Fatalf("log: %s %v", log, err)
+			}
+		})
+	}
+}
+
+func TestTaskLeaseHandoverRecovery(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	for _, adopt := range []bool{false, true} {
+		t.Run(fmt.Sprint("adopt=", adopt), func(t *testing.T) {
+			h, path := feedHarness(t)
+			store := lease.TaskStore{Feed: feed.Store{TaskDir: path, TaskID: feedTaskID}}
+			fence := int64(1)
+			if adopt {
+				deadPID, deadStart := deadTaskProcess(t)
+				w := feed.Writer{Worker: "old@" + feedMachine, Lease: "task"}
+				if _, err := store.TakeTask(w, deadPID, deadStart); err != nil {
+					t.Fatal(err)
+				}
+				fence = 2
+			}
+			// This role cannot post handover, so the grant succeeds and its post fails.
+			t.Setenv("GRID_ROLE", "worker")
+			args := taskTakeArgs(pid, start)
+			if code := h.run(path, args...); code != 1 || !strings.Contains(h.out.String(), fmt.Sprintf("epoch 0.%d", fence)) || h.errb.Len() == 0 {
+				t.Fatalf("failure: %d %s %s", code, h.out, h.errb)
+			}
+			before, err := store.Read("task")
+			if err != nil || before.Fence != fence {
+				t.Fatalf("lost grant: %+v %v", before, err)
+			}
+			t.Setenv("GRID_ROLE", "member")
+			if code := h.run(path, args...); code != 0 {
+				t.Fatalf("recovery: %d %s", code, h.errb)
+			}
+			after, err := store.Read("task")
+			if err != nil || after.Fence != before.Fence || after.Since != before.Since {
+				t.Fatalf("recovery changed grant: %+v %v", after, err)
+			}
+			records, err := store.Feed.Read(feed.Filter{Type: "handover"})
+			if err != nil || len(records.Records) != 1 || records.Records[0].Fence != fence {
+				t.Fatalf("handover: %+v %v", records, err)
+			}
+			if adopt && records.Records[0].Body["adopted"] != "session-gone" {
+				t.Fatal("recovery lost adoption")
+			}
+			if code := h.run(path, args...); code != 1 || !strings.Contains(h.errb.String(), "held by") {
+				t.Fatalf("duplicate: %d %s", code, h.errb)
+			}
+		})
+	}
+}
+
+func TestTaskLeaseSessionAndUsage(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	for _, tc := range []struct{ name, start string }{{"RFC3339", start}, {"lstart", mustTaskStart(t, pid).Format("Mon Jan _2 15:04:05 2006")}} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, path := feedHarness(t)
+			h.write(filepath.Join(h.gridHome, "projects", "example", "project.md"), "---\nid: EXAMPLE\n---\n")
+			_, err := (session.Store{TaskDir: path}).Start(session.Record{Key: session.Key{SessionID: "session-1", MachineID: feedMachine}, PID: pid, PIDStart: tc.start})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if code := h.run(h.home, "lease", "take", "task", "--task", "T-07", "--project", "example", "--session", "session-1", "--json"); code != 0 {
+				t.Fatalf("session: %d %s", code, h.errb)
+			}
+			got, err := (lease.TaskStore{Feed: feed.Store{TaskDir: path}}).Read("task")
+			if err != nil || *got.PIDStart != start || *got.PID != pid {
+				t.Fatalf("identity: %+v %v", got, err)
+			}
+		})
+	}
+	h, path := feedHarness(t)
+	for _, args := range [][]string{
+		{"take", "task"}, {"take", "task", "--pid", "1"}, {"take", "task", "--pid", "-1", "--pid-start", start},
+		{"take", "task", "--pid", "1", "--pid-start", "proc:1"}, {"take", "task", "--session", "x", "--pid", "1"},
+		{"release", "task"}, {"renew", "task"},
+	} {
+		if code := h.run(path, append([]string{"lease"}, args...)...); code != 2 {
+			t.Fatalf("%v: %d %s", args, code, h.errb)
+		}
+	}
+	if code := h.run(path, "lease", "take", "task", "--session", "missing"); code != 1 {
+		t.Fatalf("missing session: %d", code)
+	}
+}
+
+func mustTaskStart(t *testing.T, pid int) time.Time {
+	t.Helper()
+	start, err := session.ProcessStart(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return start
+}
+
+func TestTaskLeaseTakeProcess(t *testing.T) {
+	if os.Getenv("GRID_TEST_TAKE_PROCESS") != "1" {
+		return
+	}
+	env := OSEnv()
+	env.Cwd = gridhome.Real(os.Getenv("GRID_TEST_TASK"))
+	env.Ceiling = gridhome.Real(os.Getenv("GRID_TEST_ROOT"))
+	env.TempRoots = nil
+	pid, _ := strconv.Atoi(os.Getenv("GRID_TEST_PID"))
+	os.Exit(Run(taskTakeArgs(pid, os.Getenv("GRID_TEST_PID_START")), env))
+}
+
+func TestTaskLeaseConcurrentCLI(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	for _, processes := range []bool{false, true} {
+		t.Run(fmt.Sprint("processes=", processes), func(t *testing.T) {
+			h, path := feedHarness(t)
+			outputs := [2]bytes.Buffer{}
+			codes := [2]int{}
+			if processes {
+				cmds := [2]*exec.Cmd{}
+				for i := range cmds {
+					cmds[i] = exec.Command(os.Args[0], "-test.run=^TestTaskLeaseTakeProcess$")
+					cmds[i].Env = append(os.Environ(), "GRID_TEST_TAKE_PROCESS=1", "GRID_TEST_TASK="+path, "GRID_TEST_ROOT="+h.root, "GRID_HOME="+h.gridHome, "GRID_TEST_PID="+strconv.Itoa(pid), "GRID_TEST_PID_START="+start)
+					cmds[i].Stdout, cmds[i].Stderr = &outputs[i], &outputs[i]
+					if err := cmds[i].Start(); err != nil {
+						t.Fatal(err)
+					}
+				}
+				for i, cmd := range cmds {
+					if err := cmd.Wait(); err != nil {
+						var exit *exec.ExitError
+						if !errors.As(err, &exit) {
+							t.Fatal(err)
+						}
+						codes[i] = exit.ExitCode()
+					}
+				}
+			} else {
+				var wg sync.WaitGroup
+				ready := make(chan struct{})
+				for i := range codes {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						env := h.env
+						env.Cwd = path
+						env.Stdout, env.Stderr = &outputs[i], &outputs[i]
+						<-ready
+						codes[i] = Run(taskTakeArgs(pid, start), env)
+					}()
+				}
+				close(ready)
+				wg.Wait()
+			}
+			wins := 0
+			for i, code := range codes {
+				if code == 0 {
+					wins++
+				} else if code != 1 || !strings.Contains(outputs[i].String(), "held by") {
+					t.Fatalf("loser: %d %s", code, &outputs[i])
+				}
+			}
+			seq, err := os.ReadFile(filepath.Join(path, "feed", "lease", "seq"))
+			if wins != 1 || err != nil || string(seq) != "1\n" {
+				t.Fatalf("wins=%d seq=%q err=%v outputs=%v", wins, seq, err, outputs)
+			}
+		})
+	}
+}
+
+func TestTaskLeaseReachabilityWithFeedTaskFixture(t *testing.T) {
+	pid, start := taskLeaseIdentity(t)
+	h, _ := feedHarness(t)
+	h.env.Machine = feedMachine
+	if code := h.run(h.home, "task", "new", "Build example feature", "--json"); code != 0 {
+		t.Fatalf("task new: %d %s", code, h.errb)
+	}
+	var created struct{ Path string }
+	if err := json.Unmarshal(h.out.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	// Main's task new still emits only a display id. Supply the stable-id
+	// fixture required by all existing Feed commands without changing creation.
+	taskPath := filepath.Join(created.Path, "task.md")
+	raw, err := os.ReadFile(taskPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.write(taskPath, strings.Replace(string(raw), "---\n", "---\nulid: "+feedTaskID+"\n", 1))
+	t.Log("fixture prerequisite: task new does not yet write the stable Feed ULID")
+	draft := filepath.Join(h.home, "draft.md")
+	h.write(draft, "# Plan\n\nRecall: nothing found\n\n## Steps\n\n- [ ] 1 Build example feature\n  needs: none\n  kind: build\n  jobs:\n    - id: J-1\n      write: [main.go]\n      after: []\n      review: L1\n      verify: {command: go test ./..., min_tests: 1}\n\n## Verify\n\nExample feature passes its checks.\n")
+	if code := h.run(created.Path, "plan", "write", draft); code != 0 {
+		t.Fatalf("plan write: %d %s", code, h.errb)
+	}
+	if code := h.run(created.Path, taskTakeArgs(pid, start)...); code != 0 {
+		t.Fatalf("take: %d %s", code, h.errb)
+	}
+	parts := strings.Split(strings.TrimSpace(h.out.String()), "\n")
+	epoch := strings.TrimPrefix(parts[len(parts)-1], "epoch ")
+	// Plan write stores a checklist; main's Orchestrator reads Jobs from Feed.
+	// With the stable-id fixture, next now reaches the lease guard successfully.
+	if code := h.run(created.Path, "job", "next", "--lease-epoch", epoch); code != 0 || h.out.String() != "Nothing ready.\n" {
+		t.Fatalf("next before publication: %d %s %s", code, h.out, h.errb)
+	}
+	// Publish the plan's Job through the existing shell command, not a Go grant.
+	body, err := os.ReadFile("../../contract/fixtures/job-record/valid/basic.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run(created.Path, "feed", "post", "--type", "job", "--job", "J-1", "--body", string(body), "--lease", "task", "--lease-epoch", epoch); code != 0 {
+		t.Fatalf("publish Job: %d %s", code, h.errb)
+	}
+	if code := h.run(created.Path, "job", "next", "--lease-epoch", epoch, "--json"); code != 0 || !strings.Contains(h.out.String(), `"id":"J-1"`) || !strings.Contains(h.out.String(), `"state":"assigned"`) {
+		t.Fatalf("ready Job: %d %s %s", code, h.out, h.errb)
+	}
+	t.Log("task new -> plan write -> lease take -> job next reaches the Orchestrator; publishing the Job via feed post makes J-1 ready")
 }
