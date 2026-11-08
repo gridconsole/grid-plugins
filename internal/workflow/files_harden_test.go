@@ -233,7 +233,9 @@ func TestWorkflowHardenOpenChild(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "socket":
-				listener, err := net.Listen("unix", path)
+				// Relative socket names also work with long macOS temp roots.
+				t.Chdir(home)
+				listener, err := net.Listen("unix", relative)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -265,7 +267,8 @@ func TestWorkflowHardenSocketAndDevice(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	listener, err := net.Listen("unix", path)
+	t.Chdir(home)
+	listener, err := net.Listen("unix", filepath.Join("projects", "alpha", "workflows.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
