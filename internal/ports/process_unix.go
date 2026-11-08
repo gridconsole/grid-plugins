@@ -20,5 +20,6 @@ func Alive(pid int, group bool) bool {
 }
 
 func networkUnsupported(err error) bool {
-	return errors.Is(err, syscall.EAFNOSUPPORT) || errors.Is(err, syscall.EPROTONOSUPPORT)
+	// EADDRNOTAVAIL: no IPv6 loopback address, as in containers with IPv6 off.
+	return errors.Is(err, syscall.EAFNOSUPPORT) || errors.Is(err, syscall.EPROTONOSUPPORT) || errors.Is(err, syscall.EADDRNOTAVAIL)
 }

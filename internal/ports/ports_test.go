@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -111,6 +112,25 @@ func TestRangeReleaseAndSameJob(t *testing.T) {
 	}
 }
 
+// freeBlock returns the start of ten ports with no listener, since a machine
+// can have other servers in the ephemeral range.
+func freeBlock(t *testing.T) int {
+	t.Helper()
+	for i := 0; i < 100; i++ {
+		ln, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		start := min(ln.Addr().(*net.TCPAddr).Port, 65526)
+		ln.Close()
+		if (Range{start, start + BlockSize - 1}).Available() {
+			return start
+		}
+	}
+	t.Fatal("no free ten-port block")
+	return 0
+}
+
 func TestGCExpiredLeaseAndListener(t *testing.T) {
 	s := Store{GridHome: t.TempDir(), Now: func() time.Time { return time.Date(2026, 11, 8, 11, 0, 0, 0, time.UTC) }}
 	task := filepath.Join(s.GridHome, "tasks", "T-1")
@@ -131,19 +151,14 @@ func TestGCExpiredLeaseAndListener(t *testing.T) {
 	write(livePath, map[string]any{"lease": "J-1", "holder": holder, "fence": 2, "attempt": 1, "pid": os.Getpid(), "pid_start": "2026-11-08T10:00:00.000Z", "beat_at": "2026-11-08T10:00:00.000Z", "output_at": "2026-11-08T10:00:00.000Z", "until": "2026-11-08T10:10:00.000Z"})
 	before, _ := os.ReadFile(leasePath)
 	beatBefore, _ := os.ReadFile(livePath)
-	// Let the OS choose a free port and place it in this block.
-	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	// Listen inside a block nobody else uses, so the second gc sees it empty.
+	start := freeBlock(t)
+	ln, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(start+3)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ln.Close()
-	port := ln.Addr().(*net.TCPAddr).Port
-	start := port
-	if start > 65526 {
-		start = 65526
-	}
-	_, err = s.Claim(task, "J-1", os.Getpid(), Range{start, start + 9})
-	if err != nil {
+	if _, err = s.Claim(task, "J-1", os.Getpid(), Range{start, start + 9}); err != nil {
 		t.Fatal(err)
 	}
 	if removed, err := s.GC(); err != nil || len(removed) != 0 {
@@ -186,6 +201,31 @@ func TestGCIPv6Listener(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	if !listening(Range{port, port}) {
 		t.Fatal("did not detect IPv6-only listener")
+	}
+}
+
+// Each listener hides from a plain wildcard bind on some OS; each must be seen.
+func TestListeningSeesEveryAddressKind(t *testing.T) {
+	for _, tc := range []struct{ name, network, addr string }{
+		{"ipv4 loopback", "tcp4", "127.0.0.1:0"},
+		{"ipv6 loopback", "tcp6", "[::1]:0"},
+		{"ipv4 wildcard", "tcp4", ":0"},
+		{"ipv6 wildcard", "tcp6", "[::]:0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ln, err := net.Listen(tc.network, tc.addr)
+			if err != nil {
+				t.Skip("address family is unavailable")
+			}
+			port := ln.Addr().(*net.TCPAddr).Port
+			if !listening(Range{port, port}) {
+				t.Fatal("listener not seen")
+			}
+			ln.Close()
+			if listening(Range{port, port}) {
+				t.Fatal("closed listener still seen")
+			}
+		})
 	}
 }
 

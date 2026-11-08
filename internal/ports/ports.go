@@ -338,19 +338,36 @@ func (r Range) Available() bool { return r.Validate() == nil && !listening(r) }
 
 func listening(r Range) bool {
 	for port := r.Start; port <= r.End; port++ {
-		// Binding wildcard addresses also detects listeners bound to non-loopback IPs.
-		for _, network := range []string{"tcp4", "tcp6"} {
-			listener, err := net.Listen(network, net.JoinHostPort("", strconv.Itoa(port)))
-			if err != nil {
-				// An unsupported address family has no listeners. Any other
-				// bind failure is insufficient evidence that the port is free.
-				if networkUnsupported(err) {
-					continue
-				}
-				return true
-			}
-			_ = listener.Close()
+		if busy(strconv.Itoa(port)) {
+			return true
 		}
+	}
+	return false
+}
+
+// busy reports a listener on one port. On BSD and macOS a wildcard bind succeeds
+// while 127.0.0.1:p or [::1]:p is listening (Go sets SO_REUSEADDR), so a loopback
+// dev server is found by connecting to it and by binding its exact address; the
+// wildcard bind still finds a listener on any other address of the machine.
+func busy(port string) bool {
+	for _, host := range []string{"127.0.0.1", "::1"} {
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), time.Second)
+		if err == nil {
+			_ = conn.Close()
+			return true
+		}
+	}
+	for _, addr := range []struct{ network, host string }{{"tcp4", "127.0.0.1"}, {"tcp6", "::1"}, {"tcp4", ""}, {"tcp6", ""}} {
+		listener, err := net.Listen(addr.network, net.JoinHostPort(addr.host, port))
+		if err != nil {
+			// An address family the machine lacks has no listeners. Any other bind
+			// failure is insufficient evidence that the port is free.
+			if networkUnsupported(err) {
+				continue
+			}
+			return true
+		}
+		_ = listener.Close()
 	}
 	return false
 }

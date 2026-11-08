@@ -29,12 +29,7 @@ func TestDevServerLifecycle(t *testing.T) {
 			dir := t.TempDir()
 			m := Manager{Ports: ports.Store{GridHome: home}, TaskDir: filepath.Join(home, "tasks", "T-1"), Dir: dir, Grace: 100 * time.Millisecond}
 			// Avoid assuming the standard dev range is unused on the test machine.
-			ln, err := net.Listen("tcp4", "127.0.0.1:0")
-			if err != nil {
-				t.Fatal(err)
-			}
-			port := min(ln.Addr().(*net.TCPAddr).Port, 65526)
-			ln.Close()
+			port := freeBlock(t)
 			c := Config{Command: "exec '" + strings.ReplaceAll(binary, "'", "'\"'\"'") + "' " + mode, HealthURL: "http://127.0.0.1:{port}/health", Timeout: "3s", PortRange: []int{port, port + 9}}
 			if mode == "unhealthy" || mode == "redirect" {
 				c.Timeout = "300ms"
@@ -108,6 +103,25 @@ func TestDevServerLifecycle(t *testing.T) {
 			}
 		})
 	}
+}
+
+// freeBlock returns the start of ten ports with no listener, since a machine
+// can have other servers in the ephemeral range.
+func freeBlock(t *testing.T) int {
+	t.Helper()
+	for i := 0; i < 100; i++ {
+		ln, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		start := min(ln.Addr().(*net.TCPAddr).Port, 65526)
+		ln.Close()
+		if (ports.Range{Start: start, End: start + ports.BlockSize - 1}).Available() {
+			return start
+		}
+	}
+	t.Fatal("no free ten-port block")
+	return 0
 }
 func assertEmpty(t *testing.T, s ports.Store) {
 	t.Helper()
