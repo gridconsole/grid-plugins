@@ -79,8 +79,8 @@ func validateInput(in Input) error {
 	if strings.TrimSpace(in.Default) == "" || in.Applies.IsZero() {
 		return errors.New("default and applies time are required")
 	}
-	if in.AgeAfter < 0 || in.AgeAfter > 0 && in.AgeAfter%time.Second != 0 {
-		return errors.New("age-after must be a positive whole number of seconds")
+	if in.AgeAfter < 0 || in.AgeAfter > time.Duration(1<<63-1)/2 || in.AgeAfter > 0 && in.AgeAfter%time.Second != 0 {
+		return errors.New("age-after must be a positive whole number of seconds within the supported range")
 	}
 	return nil
 }
@@ -97,6 +97,9 @@ func (s Store) Add(in Input) (rec Record, err error) {
 		next := 1
 		for _, r := range records {
 			n, _ := strconv.Atoi(strings.TrimPrefix(r.ID, "Q-"))
+			if n == int(^uint(0)>>1) {
+				return errors.New("question id range exhausted")
+			}
 			if n >= next {
 				next = n + 1
 			}

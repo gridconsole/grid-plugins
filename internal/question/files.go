@@ -134,6 +134,12 @@ func read(dir, id string) (r Record, err error) {
 }
 
 func validateRecord(r Record) error {
+	if !validID.MatchString(r.ID) {
+		return errors.New("invalid question id")
+	}
+	if _, err := strconv.Atoi(strings.TrimPrefix(r.ID, "Q-")); err != nil {
+		return errors.New("question id exceeds the supported range")
+	}
 	if err := validateInput(Input{Question: r.Question, Who: r.Who, Options: r.Options, Recommended: r.Recommended, Default: r.Default, Applies: r.Applies}); err != nil {
 		return err
 	}
