@@ -136,3 +136,11 @@ func TestStoreErrors(t *testing.T) {
 		t.Fatalf("empty list: %v, %v", records, err)
 	}
 }
+
+func TestListRequiresExistingTask(t *testing.T) {
+	for _, path := range []string{"", filepath.Join(t.TempDir(), "missing")} {
+		if _, err := (Store{TaskPath: path}).List(); err == nil {
+			t.Fatal("list accepted a missing task")
+		}
+	}
+}

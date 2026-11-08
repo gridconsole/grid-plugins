@@ -87,12 +87,20 @@ func newID() (string, error) {
 // Import copies the bytes of a regular file, preserving its source, and hashes
 // the bytes actually copied. Every import has a unique name, even for duplicates.
 func (s Store) Import(source, title string) (Record, error) {
+	// Inspect before opening so a pipe or device cannot block an ordinary import.
+	info, err := os.Stat(source)
+	if err != nil {
+		return Record{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return Record{}, errors.New("source must be a regular file")
+	}
 	f, err := os.Open(source)
 	if err != nil {
 		return Record{}, err
 	}
 	defer f.Close()
-	info, err := f.Stat()
+	info, err = f.Stat()
 	if err != nil {
 		return Record{}, err
 	}
@@ -161,6 +169,12 @@ func (s Store) Link(source, title string) (Record, error) {
 
 // List returns records in stable ID order. Files without sidecars are not records.
 func (s Store) List() ([]Record, error) {
+	if s.TaskPath == "" {
+		return nil, errors.New("a task is required")
+	}
+	if _, err := os.Stat(s.TaskPath); err != nil {
+		return nil, err
+	}
 	records := []Record{}
 	dir, err := s.directory(false)
 	if errors.Is(err, os.ErrNotExist) {
