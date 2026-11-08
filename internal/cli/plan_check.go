@@ -8,7 +8,8 @@ import (
 )
 
 func runPlanCheck(text string, asJSON bool, env Env) int {
-	problems := jobgraph.CheckPlan(text)
+	report := jobgraph.CheckPlanReport(text)
+	problems := report.Problems
 	code := 0
 	if len(problems) > 0 {
 		code = 1
@@ -17,13 +18,17 @@ func runPlanCheck(text string, asJSON bool, env Env) int {
 		if writeJSON(env.Stdout, struct {
 			OK       bool     `json:"ok"`
 			Problems []string `json:"problems"`
-		}{code == 0, problems}) != 0 {
+			Warnings []string `json:"warnings"`
+		}{code == 0, problems, report.Warnings}) != 0 {
 			return 1
 		}
 		return code
 	}
 	for _, problem := range problems {
 		fmt.Fprintln(env.Stdout, strings.Join(strings.Fields(problem), " "))
+	}
+	for _, warning := range report.Warnings {
+		fmt.Fprintln(env.Stdout, "warning: "+strings.Join(strings.Fields(warning), " "))
 	}
 	return code
 }

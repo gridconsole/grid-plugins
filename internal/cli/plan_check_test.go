@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"github.com/gridconsole/grid-plugins/internal/jobgraph"
 	"os"
 	"path/filepath"
@@ -88,5 +89,52 @@ func TestPlanCheckDuplicatesAndCycles(t *testing.T) {
 	h.write(filepath.Join(task, "plan.md"), text)
 	if code := h.run(task, "plan", "check"); code != 1 || !strings.Contains(h.out.String(), "review_reason") || !strings.Contains(h.out.String(), "missing required field skills") {
 		t.Fatalf("%d: %s", code, h.out)
+	}
+}
+
+func TestPlanCheckVerifyCountWarnings(t *testing.T) {
+	for _, tc := range []struct {
+		command, kind string
+		warn          bool
+	}{
+		{"go test ./...", "code", true},
+		{"make test", "code", true},
+		{"go test -v ./...", "code", false},
+		{"go test -json ./...", "code", false},
+		{"go test -v=false ./...", "code", true},
+		{"go test -v=true ./...", "code", false},
+		{"make test GOFLAGS=-v", "code", false},
+		{"go test -v ./one && go test ./two", "code", true},
+		{"go test ./one && go test -v ./two", "code", true},
+		{"env GOOS=linux go test ./...", "code", true},
+		{"node --test", "code", false},
+		{"go test ./...", "non-code", false},
+	} {
+		t.Run(tc.command+"/"+tc.kind, func(t *testing.T) {
+			h := newHarness(t)
+			task := planTask(h)
+			text := strings.Replace(checkFixture(t), "kind: non-code", "kind: "+tc.kind, 1)
+			text = strings.Replace(text, "verify: {kind: file-exists, path: docs/export.md}", "verify: {command: '"+tc.command+"', min_tests: 1}", 1)
+			h.write(filepath.Join(task, "plan.md"), text)
+			if code := h.run(task, "plan", "check"); code != 0 {
+				t.Fatalf("warning must not reject plan: %d: %s %s", code, h.out, h.errb)
+			}
+			if strings.Contains(h.out.String(), "warning: J-1: verify test totals may be unknown") != tc.warn {
+				t.Fatalf("warning=%t, output=%s", tc.warn, h.out)
+			}
+			if code := h.run(task, "plan", "check", "--json"); code != 0 {
+				t.Fatalf("JSON exit %d: %s %s", code, h.out, h.errb)
+			}
+			var report struct {
+				OK                 bool `json:"ok"`
+				Problems, Warnings []string
+			}
+			if err := json.Unmarshal(h.out.Bytes(), &report); err != nil {
+				t.Fatal(err)
+			}
+			if !report.OK || len(report.Problems) != 0 || (len(report.Warnings) > 0) != tc.warn {
+				t.Fatalf("report: %+v", report)
+			}
+		})
 	}
 }
