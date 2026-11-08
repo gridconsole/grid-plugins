@@ -52,6 +52,9 @@ type Resolver struct {
 	TempRoots []string
 	Machine   string
 	Ceiling   string
+	Role      string
+	// PersonalAllowed overrides DefaultPersonalAllowed when non-nil.
+	PersonalAllowed func(role string) bool
 }
 
 // Query is what to resolve: the folder, or an explicit task or project.
@@ -90,10 +93,25 @@ func (r Resolver) Resolve(q Query) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("read projects: %w", err)
 	}
+	var res Result
 	if q.Task != "" || q.Project != "" {
-		return r.explicit(gridHome, cwd, q, records)
+		res, err = r.explicit(gridHome, cwd, q, records)
+		if err != nil {
+			return Result{}, err
+		}
+	} else {
+		res = r.implicit(gridHome, cwd, records)
 	}
-	return r.implicit(gridHome, cwd, records), nil
+	if res.Project == Personal {
+		allowed := r.PersonalAllowed
+		if allowed == nil {
+			allowed = DefaultPersonalAllowed
+		}
+		if !allowed(r.Role) {
+			return Result{}, ErrPersonalRefused
+		}
+	}
+	return res, nil
 }
 
 func (r Resolver) implicit(gridHome, cwd string, records []project.Record) Result {
