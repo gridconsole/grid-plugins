@@ -43,18 +43,21 @@ func WorkflowSteps(text string) []WorkflowStep {
 // plan gates; also treat an approve before any run/work as a plan gate, so a
 // custom name cannot remove the initial approval. Later unnamed approvals ship.
 func PlanApprovalIndex(steps []WorkflowStep) int {
-	beforeRun := true
 	for i, step := range steps {
-		switch step.Kind {
-		case "run", "work":
-			beforeRun = false
-		case "approve":
-			if beforeRun || strings.Contains(step.Step, "plan") {
-				return i
-			}
+		if step.Kind == "approve" && (strings.Contains(step.Step, "plan") || beforeFirstRun(steps[:i])) {
+			return i
 		}
 	}
 	return -1
+}
+
+func beforeFirstRun(steps []WorkflowStep) bool {
+	for _, step := range steps {
+		if step.Kind == "run" || step.Kind == "work" {
+			return false
+		}
+	}
+	return true
 }
 
 // PlanApprovalRequired reads the inline workflow used by existing task guards.

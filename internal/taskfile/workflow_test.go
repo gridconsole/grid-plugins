@@ -7,6 +7,7 @@ func TestPlanApprovalKinds(t *testing.T) {
 		name, workflow string
 		want           bool
 	}{
+		{"sign-off before work", "[{step: sign-off, kind: approve}, {step: build, kind: work}]", true},
 		{"sign-off", "[{step: sign-off, kind: approve}, {step: build, kind: run}]", true},
 		{"named plan after run", "[{step: research, kind: run}, {step: plan-review, kind: approve}]", true},
 		{"ship after run", "[{step: build, kind: run}, {step: sign-off, kind: approve}]", false},
