@@ -220,3 +220,104 @@ func TestJobTraceExactPathAndSort(t *testing.T) {
 		previous = key
 	}
 }
+
+func TestJobTraceUnsafePaths(t *testing.T) {
+	for _, kind := range []string{"escaping-bundle", "linked-inputs", "escaping-jobs", "dangling-jobs", "linked-task"} {
+		t.Run(kind, func(t *testing.T) {
+			home := t.TempDir()
+			good := traceTask(t, home, "alpha", "T-01")
+			traceTestBundle(t, good, "J-1", job.Source{Pointer: "brain:project/x"})
+			bad := traceTask(t, home, "alpha", "T-02")
+			outside := filepath.Join(home, "outside")
+			traceWrite(t, filepath.Join(outside, "inputs.json"), []byte(`{"sources":[{"pointer":"brain:project/x"}]}`))
+			var from, to string
+			switch kind {
+			case "escaping-bundle":
+				from, to = outside, filepath.Join(bad, "jobs", "J-2")
+			case "linked-inputs":
+				from, to = filepath.Join(outside, "inputs.json"), filepath.Join(bad, "jobs", "J-2", "inputs.json")
+			case "escaping-jobs":
+				from, to = outside, filepath.Join(bad, "jobs")
+			case "dangling-jobs":
+				from, to = filepath.Join(home, "absent"), filepath.Join(bad, "jobs")
+			case "linked-task":
+				from, to = good, filepath.Join(filepath.Dir(bad), "T-03-link")
+			}
+			if err := os.MkdirAll(filepath.Dir(to), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(from, to); err != nil {
+				t.Fatal(err)
+			}
+			result, err := Trace(home, "brain:project/x", "", "")
+			if err != nil || len(result.Rows) != 1 || len(result.Problems) != 1 {
+				t.Fatalf("%+v, %v", result, err)
+			}
+			b, err := json.Marshal(result.Problems)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(b), home) {
+				t.Fatal("home path leaked")
+			}
+		})
+	}
+}
+
+func TestJobTraceSavedBundleReadOnly(t *testing.T) {
+	home := t.TempDir()
+	dir := traceTask(t, home, "alpha", "T-01")
+	source := job.Source{Pointer: "brain:project/x", Digest: strings.Repeat("a", 64), Tier: contract.PersonTeam}
+	rendered := job.Rendered{Brief: "A saved brief", Inputs: job.Inputs{Sources: []job.Source{source}, NotRendered: []string{source.Pointer}, BrainTokens: 100}}
+	brief, err := save(dir, job.Job{ID: "J-1"}, rendered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := map[string][]byte{}
+	for _, name := range []string{"brief.md", "inputs.json", "job.yaml"} {
+		b, err := os.ReadFile(filepath.Join(filepath.Dir(brief), name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[name] = b
+	}
+	// The live brain entry need not exist, and omitted render candidates still
+	// appear in saved sources. Neither is a reason to discard historical evidence.
+	result, err := Trace(home, source.Pointer, source.Digest, "")
+	if err != nil || len(result.Rows) != 1 || len(result.Problems) != 0 {
+		t.Fatalf("%+v, %v", result, err)
+	}
+	for name, want := range before {
+		got, err := os.ReadFile(filepath.Join(filepath.Dir(brief), name))
+		if err != nil || !bytes.Equal(got, want) {
+			t.Fatalf("changed %s", name)
+		}
+	}
+}
+
+func TestJobTraceHomeAlias(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "real")
+	traceTestBundle(t, traceTask(t, home, "alpha", "T-01"), "J-1", job.Source{Pointer: "brain:project/x"})
+	alias := filepath.Join(base, "alias")
+	if err := os.Symlink(home, alias); err != nil {
+		t.Fatal(err)
+	}
+	rows := traceTestRows(t, alias, "brain:project/x")
+	if len(rows) != 1 {
+		t.Fatal(rows)
+	}
+}
+
+func TestJobTraceInvalidInputs(t *testing.T) {
+	home := t.TempDir()
+	dir := traceTask(t, home, "alpha", "T-01")
+	for i, data := range []string{"null", "[]", `{"sources":"wrong"}`, `{} {}`} {
+		traceWrite(t, filepath.Join(dir, "jobs", fmt.Sprintf("J-%d", i+1), "inputs.json"), []byte(data))
+	}
+	traceWrite(t, filepath.Join(dir, "jobs", ".render-in-progress", "inputs.json"), []byte("unfinished"))
+	result, err := Trace(home, "brain:project/x", "", "")
+	if err != nil || len(result.Rows) != 0 || len(result.Problems) != 4 {
+		t.Fatalf("%+v, %v", result, err)
+	}
+}

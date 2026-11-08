@@ -52,9 +52,15 @@ type report struct {
 	Error    string         `json:"error,omitempty"`
 }
 
-const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--json]\n       grid job verify <job> [--task <task>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease or invalid record; do not retry), 4 disk full.\n"
+const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease or invalid record; do not retry), 4 disk full.\n"
 
 func Run(args []string, e Env) int {
+	if len(args) > 0 {
+		switch args[0] {
+		case "trace":
+			return runTrace(args[1:], e)
+		}
+	}
 	f, err := parse(args)
 	if err != nil {
 		return output(e, f, report{Error: err.Error(), Findings: []lint.Finding{}}, 2)
