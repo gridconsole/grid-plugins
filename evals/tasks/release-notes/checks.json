@@ -1,0 +1,6 @@
+[
+  {"id":"notes","type":"file_exists","path":"RELEASE.md","gate":true},
+  {"id":"heading","type":"text_contains","path":"RELEASE.md","text":"# Release notes","rubric":"S3"},
+  {"id":"fix","type":"text_contains","path":"RELEASE.md","text":"- Fix empty search results","rubric":"S3"},
+  {"id":"feature","type":"text_contains","path":"RELEASE.md","text":"- Add CSV export","rubric":"S3"}
+]

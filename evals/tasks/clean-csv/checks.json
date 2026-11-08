@@ -1,0 +1,5 @@
+[
+  {"id":"csv","type":"file_exists","path":"clean.csv","gate":true},
+  {"id":"rows","type":"command_passes","command":["sh","-c","printf '%s\\n' 'item,quantity' 'apple,2' 'pear,3' | cmp - clean.csv"],"rubric":"S3","weight":2},
+  {"id":"summary","type":"text_contains","path":"summary.txt","text":"Unique items: 2","rubric":"S3"}
+]

@@ -1,0 +1,5 @@
+[
+  {"id":"script","type":"file_exists","path":"total.sh","gate":true},
+  {"id":"sum","type":"command_passes","command":["sh","-c","test \"$(sh total.sh 2 3)\" = 5 && test \"$(sh total.sh)\" = 0 && test \"$(sh total.sh -2 2)\" = 0"],"rubric":"S3","weight":3},
+  {"id":"zero","type":"text_contains","path":"total.sh","text":"sum=0","rubric":"S3"}
+]
