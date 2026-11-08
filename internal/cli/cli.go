@@ -70,7 +70,7 @@ func commands() []command {
 		{"version", "print the CLI, contract and app_min versions", runVersionCheck},
 		{"where", "show which project and task a folder belongs to", runWhere},
 		{"doctor", "check the Grid home, its format version and git", runDoctorChecks},
-		{"hook", "answer a Claude Code or Codex hook event", runHook},
+		{"hook", "answer a Claude Code or Codex hook event", runSilentHook},
 		{"task", "new, show, status, stop, close, reopen, attach, move", nil},
 		{"plan", "write, check, items, hash", nil},
 		{"views", "render the task pages", nil},

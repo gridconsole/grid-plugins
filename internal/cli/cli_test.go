@@ -357,16 +357,19 @@ func TestHookSessionStartGolden(t *testing.T) {
 			return `{"session_id":"s1","cwd":"` + repo + `","hook_event_name":"SessionStart","source":"startup"}`, h.tmp
 		}},
 		{"hook-sessionstart-personal", func(h *harness) (string, string) { return `{"cwd":"` + h.home + `"}`, h.tmp }},
-		{"hook-sessionstart-bad-json-uses-cwd", func(h *harness) (string, string) {
+		{"hook-sessionstart-empty-input-uses-cwd", func(h *harness) (string, string) {
 			dir := filepath.Join(h.root, "notes", "ideas")
 			h.mkdir(dir)
-			return `not json`, dir
+			return ``, dir
 		}},
 	}
 	for _, mode := range inRepoModes {
 		for _, tc := range tests {
 			t.Run(tc.name+mode.suffix, func(t *testing.T) {
 				h := harnessFor(t, mode.inRepo)
+				t.Setenv("CLAUDE_ENV_FILE", "")
+				t.Setenv("GRID_TASK", "")
+				t.Setenv("GRID_PROJECT", "")
 				stdin, cwd := tc.setup(h)
 				h.env.Stdin = strings.NewReader(stdin)
 				if code := h.run(cwd, "hook", "sessionstart"); code != 0 {

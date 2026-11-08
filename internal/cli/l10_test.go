@@ -61,3 +61,13 @@ func healthyDoctorEnvironment(t *testing.T, h *harness) {
 	t.Setenv("CLAUDE_PLUGIN_ROOT", root)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
+
+func TestHookInvocationErrorsAreSilent(t *testing.T) {
+	for _, args := range [][]string{{"hook", "sessionstart", "--bad"}, {"hook", "--bad"}, {"hook", "sessionstart"}} {
+		h := newHarness(t)
+		h.env.Stdin = strings.NewReader("invalid json")
+		if code := h.run(h.tmp, args...); code != 0 || h.out.Len() != 0 || h.errb.Len() != 0 {
+			t.Fatalf("%v exit=%d stdout=%s stderr=%s", args, code, h.out, h.errb)
+		}
+	}
+}
