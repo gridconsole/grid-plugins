@@ -2712,8 +2712,75 @@
     {
       "name": "person",
       "summary": "people topic",
-      "built": false,
-      "subcommands": []
+      "built": true,
+      "subcommands": [
+        {
+          "name": "approvers",
+          "args": [],
+          "flags": [
+            {
+              "name": "--area",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "show",
+          "args": [
+            "\u003chandle\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
     },
     {
       "name": "routine",
