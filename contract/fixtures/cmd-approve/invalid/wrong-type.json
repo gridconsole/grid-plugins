@@ -1,0 +1,13 @@
+{
+  "from_state": "waiting",
+  "note": "Reviewed",
+  "plan_hash": "0be2f7",
+  "task": false,
+  "to_state": "waiting",
+  "what": "approve",
+  "when": "2026-11-08T17:32:15.057078226Z",
+  "who": {
+    "id": "member",
+    "role": "member"
+  }
+}

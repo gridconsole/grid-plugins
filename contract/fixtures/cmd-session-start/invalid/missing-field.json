@@ -1,0 +1,9 @@
+{
+  "args": {
+    "agent": "builder"
+  },
+  "created": "2026-11-08T17:32:15.074Z",
+  "target": "session-example",
+  "verb": "start",
+  "who": "app"
+}

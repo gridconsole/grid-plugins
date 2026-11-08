@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-worker-list.json",
+  "description": "JSON output of grid worker list --json; internal/cli/worker.go:44.",
+  "items": {
+    "additionalProperties": false,
+    "properties": {
+      "machine": {
+        "type": "string"
+      },
+      "pid": {
+        "type": "integer"
+      },
+      "presence": {
+        "type": "string"
+      },
+      "started_at": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "updated_at": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "version": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "version",
+      "machine",
+      "pid",
+      "started_at",
+      "updated_at",
+      "state",
+      "presence"
+    ],
+    "type": "object"
+  },
+  "title": "grid worker list output",
+  "type": "array"
+}

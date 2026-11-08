@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-plan-hash.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid plan hash --json; internal/cli/plan.go:74.",
+  "properties": {
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{6}$"
+    }
+  },
+  "required": [
+    "hash"
+  ],
+  "title": "grid plan hash output",
+  "type": "object"
+}

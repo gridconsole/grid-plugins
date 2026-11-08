@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-task-show.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid task show --json; internal/cli/task.go:122.",
+  "properties": {
+    "created": {
+      "type": "string"
+    },
+    "gate": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "intent": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "owner_role": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "plan_hash": {
+      "type": "string"
+    },
+    "project": {
+      "type": "string"
+    },
+    "size": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "workflow": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "project",
+    "size",
+    "workflow",
+    "state",
+    "created",
+    "path",
+    "intent"
+  ],
+  "title": "grid task show output",
+  "type": "object"
+}

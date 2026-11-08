@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-session-show.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid session show --json; internal/cli/liveness.go:162.",
+  "properties": {
+    "attempt": {
+      "type": "integer"
+    },
+    "cwd": {
+      "type": "string"
+    },
+    "ended": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "fence": {
+      "type": "integer"
+    },
+    "holder": {
+      "type": "string"
+    },
+    "host_offline": {
+      "type": "boolean"
+    },
+    "last": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "last_alive": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "lease": {
+      "type": "string"
+    },
+    "machine_id": {
+      "type": "string"
+    },
+    "pid": {
+      "type": "integer"
+    },
+    "pid_start": {
+      "type": "string"
+    },
+    "runtime": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "slept": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "started": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "task": {
+      "type": "string"
+    },
+    "transcript": {
+      "type": "string"
+    },
+    "until": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "wake_pending": {
+      "type": "boolean"
+    },
+    "where": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "session_id",
+    "machine_id",
+    "runtime",
+    "where",
+    "started",
+    "last",
+    "state",
+    "pid",
+    "pid_start",
+    "last_alive",
+    "until",
+    "task"
+  ],
+  "title": "grid session show output",
+  "type": "object"
+}

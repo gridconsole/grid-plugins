@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-intent-list.json",
+  "description": "JSON output of grid intent list --json; internal/cli/intent.go:247.",
+  "items": {
+    "additionalProperties": false,
+    "properties": {
+      "args": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "claim": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "until": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "who": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "who",
+          "created",
+          "until"
+        ],
+        "type": "object"
+      },
+      "created": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "done": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "created"
+        ],
+        "type": "object"
+      },
+      "id": {
+        "type": "string"
+      },
+      "idempotency_key": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "target": {
+        "type": "string"
+      },
+      "verb": {
+        "type": "string"
+      },
+      "who": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "verb",
+      "target",
+      "args",
+      "who",
+      "created",
+      "state"
+    ],
+    "type": "object"
+  },
+  "title": "grid intent list output",
+  "type": "array"
+}

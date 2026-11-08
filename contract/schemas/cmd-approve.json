@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-approve.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid approve --json; internal/cli/task_write.go:161.",
+  "properties": {
+    "from_state": {
+      "type": "string"
+    },
+    "gate": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    },
+    "plan_hash": {
+      "type": "string"
+    },
+    "task": {
+      "type": "string"
+    },
+    "to_state": {
+      "type": "string"
+    },
+    "what": {
+      "const": "approve"
+    },
+    "when": {
+      "type": "string"
+    },
+    "who": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "role"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "task",
+    "who",
+    "when",
+    "what",
+    "from_state",
+    "to_state",
+    "plan_hash"
+  ],
+  "title": "grid approve output",
+  "type": "object"
+}

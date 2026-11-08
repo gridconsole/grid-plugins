@@ -1,0 +1,13 @@
+{
+  "decision": "deny",
+  "from_state": "queued",
+  "refusal_id": "R-1",
+  "task": "T-01",
+  "to_state": "queued",
+  "what": "refusal decide",
+  "when": "2026-11-08T17:32:15.063332085Z",
+  "who": {
+    "id": "member",
+    "role": "member"
+  }
+}

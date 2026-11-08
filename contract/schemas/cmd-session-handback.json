@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-session-handback.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid session handback --json; internal/cli/intent.go:140.",
+  "properties": {
+    "args": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "required": []
+    },
+    "created": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "target": {
+      "type": "string"
+    },
+    "verb": {
+      "const": "handback"
+    },
+    "who": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "verb",
+    "target",
+    "args",
+    "who",
+    "created"
+  ],
+  "title": "grid session handback output",
+  "type": "object"
+}

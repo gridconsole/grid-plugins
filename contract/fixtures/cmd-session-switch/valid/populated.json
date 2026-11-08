@@ -1,0 +1,10 @@
+{
+  "args": {
+    "agent": "builder"
+  },
+  "created": "2026-11-08T17:32:15.089Z",
+  "id": "01M6Y3FJBHZ33J1M8MD45QEWTV",
+  "target": "session-example",
+  "verb": "switch",
+  "who": "app"
+}

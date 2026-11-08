@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-task-list.json",
+  "description": "JSON output of grid task list --json; internal/cli/task.go:142.",
+  "items": {
+    "additionalProperties": false,
+    "properties": {
+      "created": {
+        "type": "string"
+      },
+      "gate": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "intent": {
+        "type": "string"
+      },
+      "owner": {
+        "type": "string"
+      },
+      "owner_role": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string"
+      },
+      "project": {
+        "type": "string"
+      },
+      "size": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "workflow": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "title",
+      "project",
+      "size",
+      "workflow",
+      "state",
+      "created",
+      "path",
+      "intent"
+    ],
+    "type": "object"
+  },
+  "title": "grid task list output",
+  "type": "array"
+}

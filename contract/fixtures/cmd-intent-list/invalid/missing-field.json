@@ -1,0 +1,18 @@
+[
+  {
+    "args": {
+      "text": "Example message"
+    },
+    "created": "2026-11-08T17:32:15.092Z",
+    "done": {
+      "created": "2026-11-08T17:32:15.093Z",
+      "error": "example failure",
+      "token": "01M6Y3FJBNH84ZHPPCG3F4VWRN"
+    },
+    "idempotency_key": "fccc5add970af1894d28cdde90c607b06b1efe2d11dc6adfa6e6a9d4a482375c",
+    "state": "done",
+    "target": "T-01-example-task",
+    "verb": "send",
+    "who": "cli"
+  }
+]

@@ -1,0 +1,15 @@
+[
+  {
+    "created": "2026-11-08T17:32:14Z",
+    "id": "T-01",
+    "intent": "Example task",
+    "owner": "member",
+    "owner_role": "member",
+    "path": "\u003cROOT\u003e/home/.grid/personal/tasks/T-01-example-task",
+    "project": "personal",
+    "size": "auto",
+    "state": "queued",
+    "title": "Example task",
+    "workflow": ""
+  }
+]

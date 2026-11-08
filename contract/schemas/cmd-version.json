@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-version.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid version --json; internal/cli/version.go:54.",
+  "properties": {
+    "app_min": {
+      "type": "string"
+    },
+    "check": {
+      "additionalProperties": false,
+      "properties": {
+        "cached": {
+          "type": "boolean"
+        },
+        "release": {
+          "additionalProperties": false,
+          "properties": {
+            "app_min": {
+              "type": "string"
+            },
+            "contract": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "version"
+          ],
+          "type": "object"
+        },
+        "stale": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "cached",
+        "stale"
+      ],
+      "type": "object"
+    },
+    "contract": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "warning": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "contract",
+    "app_min"
+  ],
+  "title": "grid version output",
+  "type": "object"
+}

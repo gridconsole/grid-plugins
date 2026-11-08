@@ -1,0 +1,15 @@
+{
+  "cwd": "\u003cROOT\u003e/home/.grid/personal/tasks/T-01-example-task",
+  "last": "2026-11-08T17:32:15.071595567Z",
+  "last_alive": "0001-01-01T00:00:00Z",
+  "machine_id": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+  "pid": 42,
+  "pid_start": "example-start",
+  "runtime": "claude",
+  "session_id": "session-example",
+  "started": "2026-11-08T17:32:15.071595567Z",
+  "state": "Liveness unknown",
+  "task": "T-01-example-task",
+  "until": "0001-01-01T00:00:00Z",
+  "where": "terminal"
+}

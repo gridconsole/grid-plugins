@@ -1,0 +1,11 @@
+{
+  "args": {
+    "text": "Example message"
+  },
+  "created": "2026-11-08T17:32:15.079Z",
+  "id": false,
+  "idempotency_key": "40b693c518b4aa1d818d981afe27cabeb3afc7528ae592d588a824a29d15e3d2",
+  "target": "session-example",
+  "verb": "send",
+  "who": "app"
+}

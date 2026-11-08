@@ -1,0 +1,10 @@
+{
+  "args": {
+    "agent": "builder"
+  },
+  "created": "2026-11-08T17:32:15.087Z",
+  "id": "01M6Y3FJBF8XFNMNZAY36N3WTJ",
+  "target": "T-01-example-task",
+  "verb": "switch",
+  "who": "cli"
+}

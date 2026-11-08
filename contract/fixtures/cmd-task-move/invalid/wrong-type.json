@@ -1,0 +1,8 @@
+{
+  "args": {},
+  "created": "2026-11-08T17:32:15.046Z",
+  "id": false,
+  "target": "worker-example",
+  "verb": "move",
+  "who": "cli"
+}

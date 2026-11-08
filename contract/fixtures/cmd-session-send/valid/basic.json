@@ -1,0 +1,11 @@
+{
+  "args": {
+    "text": "Example message"
+  },
+  "created": "2026-11-08T17:32:15.078Z",
+  "id": "01M6Y3FJB6WNP60C6FYGA22QN4",
+  "idempotency_key": "16c61e1ef07423fa1758607f374ac86b7fd045f419b281fd573c99fddceb8dc2",
+  "target": "T-01-example-task",
+  "verb": "send",
+  "who": "cli"
+}
