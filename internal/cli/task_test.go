@@ -2,14 +2,18 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/golden"
+	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/testgit"
 )
@@ -214,4 +218,206 @@ func TestTaskReadsDoNotWrite(t *testing.T) {
 			t.Fatalf("%v: exit %d, %s", args, code, h.errb)
 		}
 	}
+}
+
+func TestTaskAttachGolden(t *testing.T) {
+	for _, asJSON := range []bool{false, true} {
+		name := "task-attach-plain"
+		args := []string{"task", "attach", "T-01", "--session", "terminal-example"}
+		if asJSON {
+			name = "task-attach-json"
+			args = append(args, "--json")
+		}
+		t.Run(name, func(t *testing.T) {
+			h := newTaskAttachHarness(t)
+			h.env.Getenv = func(string) string { return "" }
+			taskFixture(t, h)
+			h.write(filepath.Join(h.gridHome, "machine"), "01ARZ3NDEKTSV4RRFFQ69G5FAV\n")
+			if code := h.run(h.home, args...); code != 0 {
+				t.Fatalf("exit %d: %s", code, h.errb)
+			}
+			golden.Assert(t, name, h.out.String())
+		})
+	}
+}
+
+func TestTaskAttachSessionSelection(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  map[string]string
+		args []string
+		want string
+	}{
+		{"explicit before", map[string]string{"GRID_SESSION_ID": "grid", "CLAUDE_SESSION_ID": "claude"}, []string{"--session", "explicit", "T-01"}, "explicit"},
+		{"explicit after", map[string]string{"GRID_SESSION_ID": "grid"}, []string{"T-01", "--session=explicit"}, "explicit"},
+		{"grid before claude", map[string]string{"GRID_SESSION_ID": "grid", "CLAUDE_SESSION_ID": "claude"}, []string{"T-01"}, "grid"},
+		{"claude fallback", map[string]string{"CLAUDE_SESSION_ID": "claude"}, []string{"T-01"}, "claude"},
+		{"generated", map[string]string{}, []string{"T-01"}, ""},
+		{"protected operand", map[string]string{}, []string{"--session", "protected", "--", "T-01"}, "protected"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTaskAttachHarness(t)
+			h.env.Getenv = func(key string) string { return tc.env[key] }
+			task := taskFixture(t, h)
+			args := append([]string{"task", "attach", "--json"}, tc.args...)
+			if code := h.run(h.home, args...); code != 0 {
+				t.Fatalf("exit %d: %s", code, h.errb)
+			}
+			records, err := (session.Store{TaskDir: task.Path}).List()
+			if err != nil || len(records) != 1 {
+				t.Fatalf("records: %+v %v", records, err)
+			}
+			got := records[0]
+			if tc.want != "" && got.SessionID != tc.want || tc.want == "" && !feed.IsID(got.SessionID) {
+				t.Fatalf("id: %s", got.SessionID)
+			}
+			if got.PID != os.Getppid() || got.PIDStart == "" || got.PIDStart != migrate.ProcessStart(os.Getppid()) || got.Where != "terminal" || got.Cwd != h.home || !feed.IsID(got.MachineID) {
+				t.Fatalf("session: %+v", got)
+			}
+			started := got.Started
+			if code := h.run(h.home, "task", "attach", task.ID, "--session", got.SessionID); code != 0 {
+				t.Fatalf("resume: %s", h.errb)
+			}
+			resumed, err := (session.Store{TaskDir: task.Path}).Show(got.Key)
+			if err != nil || !resumed.Started.Equal(started) {
+				t.Fatalf("resume: %+v %v", resumed, err)
+			}
+		})
+	}
+}
+
+func TestTaskAttachErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		args  []string
+		code  int
+		cause string
+	}{
+		{"missing task", nil, 2, "Usage:"},
+		{"extra operand", []string{"T-01", "T-02"}, 2, "Usage:"},
+		{"unknown task", []string{"T-99"}, 1, "T-99"},
+		{"closed task", []string{"T-01"}, 1, "grid task reopen T-01"},
+		{"unknown flag", []string{"T-01", "--unknown"}, 2, "flag provided"},
+		{"file out of scope", []string{"T-01", "--file", "example.txt"}, 2, "flag provided"},
+		{"note out of scope", []string{"T-01", "--note", "example"}, 2, "flag provided"},
+		{"missing session", []string{"T-01", "--session"}, 2, "flag needs an argument"},
+		{"bad session", []string{"T-01", "--session", "../outside"}, 1, "session and machine ids"},
+		{"bad runtime", []string{"T-01", "--runtime", "other"}, 2, "--runtime must be claude"},
+		{"protected dash", []string{"--", "-task"}, 1, "invalid task id"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTaskAttachHarness(t)
+			h.env.Getenv = func(string) string { return "" }
+			got := taskFixture(t, h)
+			if tc.name == "closed task" {
+				if _, err := taskWriter(h.env).Change(task.WriteOptions{ID: got.ID, Action: "close"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if code := h.run(h.home, append([]string{"task", "attach"}, tc.args...)...); code != tc.code || !strings.Contains(h.errb.String(), tc.cause) {
+				t.Fatalf("exit %d, stderr %s", code, h.errb)
+			}
+		})
+	}
+}
+
+func TestTaskAttachOtherProject(t *testing.T) {
+	h := newTaskAttachHarness(t)
+	h.env.Getenv = func(string) string { return "" }
+	personal := taskFixture(t, h)
+	h.record(project.Record{Name: "example", ID: "01EXAMPLE"})
+	other, err := taskWriter(h.env).New(task.NewOptions{Cwd: h.home, Project: "example", Words: "Other project task"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run(personal.Path, "task", "attach", other.ID, "--json"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.errb)
+	}
+	var got task.Attachment
+	if err := json.Unmarshal(h.out.Bytes(), &got); err != nil || got.ID != other.ID || got.Title != other.Title {
+		t.Fatalf("result: %+v %v", got, err)
+	}
+	records, err := (session.Store{TaskDir: other.Path}).List()
+	if err != nil || len(records) != 1 {
+		t.Fatalf("records: %+v %v", records, err)
+	}
+}
+
+func TestTaskAttachTakeoverAdvice(t *testing.T) {
+	for _, asJSON := range []bool{false, true} {
+		t.Run(fmt.Sprint(asJSON), func(t *testing.T) {
+			h := newTaskAttachHarness(t)
+			h.env.Getenv = func(string) string { return "" }
+			task := taskFixture(t, h)
+			sessions := session.Store{TaskDir: task.Path}
+			rec, err := sessions.Start(session.Record{Key: session.Key{SessionID: "other", MachineID: "other-machine"}, PID: 43, PIDStart: "start-43", Lease: "J-1", Holder: "member@other-machine", Fence: 1, Attempt: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec, err = sessions.Reconcile(rec.Key, session.Observation{Process: session.Alive, PID: rec.PID, PIDStart: rec.PIDStart})
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := sessions.ReadHeartbeat(rec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"task", "attach", task.ID}
+			if asJSON {
+				args = append(args, "--json")
+			}
+			if code := h.run(h.home, args...); code != 0 {
+				t.Fatalf("exit %d: %s", code, h.errb)
+			}
+			advice := h.out.String()
+			if asJSON {
+				if !json.Valid(h.out.Bytes()) {
+					t.Fatalf("invalid JSON: %s", h.out)
+				}
+				advice = h.errb.String()
+			}
+			if !strings.Contains(advice, "grid lease take-over") || !strings.Contains(advice, rec.Holder) {
+				t.Fatalf("missing advice: %s", advice)
+			}
+			after, err := sessions.ReadHeartbeat(rec)
+			if err != nil || after != before {
+				t.Fatalf("heartbeat changed: %+v %v", after, err)
+			}
+		})
+	}
+}
+
+func TestTaskAttachAgentCannotSwitchTasks(t *testing.T) {
+	for _, marker := range []string{"GRID_AGENT", "GRID_WORKER_ID", "GRID_WORKER", "GRID_ROLE"} {
+		t.Run(marker, func(t *testing.T) {
+			h := newTaskAttachHarness(t)
+			first := taskFixture(t, h)
+			second, err := taskWriter(h.env).New(task.NewOptions{Cwd: h.home, Project: "personal", Words: "Other task"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			h.env.Getenv = func(key string) string {
+				if key == marker {
+					return "grid-builder"
+				}
+				if key == "GRID_TASK" {
+					return first.Path
+				}
+				return ""
+			}
+			if code := h.run(second.Path, "task", "attach", second.ID); code != 1 || !strings.Contains(h.errb.String(), "another task's folder") {
+				t.Fatalf("exit %d: %s", code, h.errb)
+			}
+			if _, err := os.Stat(filepath.Join(second.Path, "sessions")); !os.IsNotExist(err) {
+				t.Fatal("agent wrote other task")
+			}
+		})
+	}
+}
+
+func newTaskAttachHarness(t *testing.T) *harness {
+	t.Helper()
+	h := newHarness(t)
+	h.env.Machine = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+	return h
 }

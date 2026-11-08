@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/plan"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
@@ -15,6 +16,7 @@ import (
 const taskUsage = `Usage:
   grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--json]
   grid task show [T-NN] [--json]
+  grid task attach <T-NN> [--session ID] [--runtime claude] [--json]
   grid task list [--project <name-or-id>] [--state <state>] [--json]
   grid task move <machine> [--task <task>] [--project <project>] [--who <caller>] [--json]
   grid task stop|close|reopen <T-NN> [--reason <text>] [--json]
@@ -36,6 +38,8 @@ func runTask(args []string, env Env) int {
 		return runTaskIntent(args, env)
 	}
 	switch sub {
+	case "attach":
+		return runTaskAttach(args[1:], env)
 	case "stop", "close", "reopen", "status", "history":
 		return runTaskWrite(args, env)
 	}
@@ -141,6 +145,62 @@ func runTask(args []string, env Env) int {
 			fmt.Fprintf(env.Stdout, "%s %s %s\n", t.ID, t.State, t.Title)
 		}
 	}
+	return 0
+}
+
+func runTaskAttach(args []string, env Env) int {
+	fs := newFlags("task attach", env)
+	id := fs.String("session", "", "session id; defaults to GRID_SESSION_ID, then CLAUDE_SESSION_ID, then a generated id")
+	runtime := fs.String("runtime", "claude", "session runtime (claude)")
+	asJSON := fs.Bool("json", false, "print JSON")
+	pos, err := taskArgs(fs, args)
+	if errors.Is(err, flag.ErrHelp) {
+		return 0
+	}
+	if err != nil {
+		return 2
+	}
+	if len(pos) != 1 {
+		fmt.Fprint(env.Stderr, taskUsage)
+		return 2
+	}
+	if *runtime != "claude" {
+		fmt.Fprintln(env.Stderr, "grid task attach: --runtime must be claude")
+		return 2
+	}
+	if *id == "" {
+		*id = env.getenv("GRID_SESSION_ID")
+	}
+	if *id == "" {
+		*id = env.getenv("CLAUDE_SESSION_ID")
+	}
+	agent := false
+	for _, key := range []string{"GRID_AGENT", "GRID_WORKER_ID", "GRID_WORKER"} {
+		agent = agent || strings.TrimSpace(env.getenv(key)) != ""
+	}
+	role := strings.TrimSpace(env.getenv("GRID_ROLE"))
+	agent = agent || (role != "" && role != "owner" && role != "member" && role != "cli")
+	pid := os.Getppid()
+	result, err := taskWriter(env).Attach(task.AttachOptions{
+		Cwd: env.Cwd, ID: pos[0], SessionID: *id, Runtime: *runtime,
+		PID: pid, PIDStart: migrate.ProcessStart(pid), Who: writeOptions(env, pos[0], "attach", "").Who,
+		Agent: agent, BoundTask: env.getenv("GRID_TASK"),
+	})
+	if err != nil {
+		return commandError(env, "grid task attach", err)
+	}
+	advice := env.Stdout
+	if *asJSON {
+		advice = env.Stderr
+	}
+	for _, holder := range result.Holders {
+		fmt.Fprintf(advice, "Live holder: %s. Use grid lease take-over to take over; attach does not change leases.\n", holder)
+	}
+	if *asJSON {
+		return writeJSON(env.Stdout, result)
+	}
+	fmt.Fprintf(env.Stdout, "id: %s\ntitle: %s\nstate: %s\napproved: %t\nopen_questions: %d\nAttached. %s %s\n",
+		result.ID, result.Title, result.State, result.Approved, result.OpenQuestions, result.ID, result.Title)
 	return 0
 }
 

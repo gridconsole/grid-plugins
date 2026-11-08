@@ -122,3 +122,14 @@ func TestBriefNamedInAnotherCaseIsStillLinted(t *testing.T) {
 	i := f.input("Agent", "Read subagents/01-WORK.md")
 	expect(t, EvaluateBrief(i, f.root, f.env), "deny")
 }
+
+func TestOnlyWriterBlocksTaskInputsAndAttachments(t *testing.T) {
+	f := setup(t)
+	for _, folder := range []string{"inputs", "attachments"} {
+		t.Run(folder, func(t *testing.T) {
+			if got := f.onlyWriter(filepath.Join(f.task, folder, "example.txt")); got != "deny" {
+				t.Fatalf("got %q, want deny", got)
+			}
+		})
+	}
+}
