@@ -15,6 +15,7 @@ const feedMachine = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
 func feedHarness(t *testing.T) (*harness, string) {
 	t.Helper()
 	h := newHarness(t)
+	h.env.Machine = feedMachine
 	t.Setenv("GRID_MEMBER", "member")
 	t.Setenv("GRID_ROLE", "member")
 	t.Setenv("GRID_LEASE", "")

@@ -493,8 +493,8 @@ func TestTaskLeaseHandoverRecovery(t *testing.T) {
 				}
 				fence = 2
 			}
-			// This role cannot post handover, so the grant succeeds and its post fails.
-			t.Setenv("GRID_ROLE", "worker")
+			// Inject an I/O failure after the grant; workers now stamp handovers as CLI.
+			restore := blockTaskHandover(t, store.Feed.Dir(), fence)
 			args := taskTakeArgs(pid, start)
 			if code := h.run(path, args...); code != 1 || !strings.Contains(h.out.String(), fmt.Sprintf("epoch 0.%d", fence)) || h.errb.Len() == 0 {
 				t.Fatalf("failure: %d %s %s", code, h.out, h.errb)
@@ -503,7 +503,7 @@ func TestTaskLeaseHandoverRecovery(t *testing.T) {
 			if err != nil || before.Fence != fence {
 				t.Fatalf("lost grant: %+v %v", before, err)
 			}
-			t.Setenv("GRID_ROLE", "member")
+			restore()
 			if code := h.run(path, args...); code != 0 {
 				t.Fatalf("recovery: %d %s", code, h.errb)
 			}
@@ -530,12 +530,12 @@ func TestTaskLeaseRecoveryNeedsTheGrantedProcess(t *testing.T) {
 	otherPID, otherStart := liveTaskProcess(t)
 	h, path := feedHarness(t)
 	store := lease.TaskStore{Feed: feed.Store{TaskDir: path, TaskID: feedTaskID}}
-	// This role cannot post handover, so the grant succeeds and its post fails.
-	t.Setenv("GRID_ROLE", "worker")
+	// Inject an I/O failure after the grant.
+	restore := blockTaskHandover(t, store.Feed.Dir(), 1)
 	if code := h.run(path, taskTakeArgs(pid, start)...); code != 1 || !strings.Contains(h.out.String(), "epoch 0.1") {
 		t.Fatalf("failure: %d %s %s", code, h.out, h.errb)
 	}
-	t.Setenv("GRID_ROLE", "member")
+	restore()
 	if code := h.run(path, taskTakeArgs(otherPID, otherStart)...); code != 1 || !strings.Contains(h.errb.String(), "held by member@"+feedMachine) {
 		t.Fatalf("other process: %d %s %s", code, h.out, h.errb)
 	}
@@ -766,4 +766,17 @@ func TestTaskLeaseTakeReportsGrantErrors(t *testing.T) {
 	if code := h.run(path, taskTakeArgs(pid, start)...); code != 1 || strings.Contains(h.errb.String(), "held by") || !strings.Contains(h.errb.String(), "seq") {
 		t.Fatalf("grant error: %d %s", code, h.errb)
 	}
+}
+
+func blockTaskHandover(t *testing.T, dir string, fence int64) func() {
+	t.Helper()
+	path := filepath.Join(dir, fmt.Sprintf("member@%s.%d.jsonl", feedMachine, fence))
+	afterTaskGrant = func() {
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	restore := func() { afterTaskGrant = nil; _ = os.Remove(path) }
+	t.Cleanup(restore)
+	return restore
 }

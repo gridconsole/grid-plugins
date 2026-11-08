@@ -90,18 +90,48 @@ func (s TaskStore) Read(name string) (Tenure, error) {
 	}
 	defer fslock.Unlock(f)
 	t, err := readTenure(f)
+	if err == nil && name == "task" && t.Lease.Lease == "" {
+		// A first grant can crash after creating the file but before writing it.
+		t.Lease.Lease = name
+	}
 	if err == nil && t.Lease.Lease != name {
 		err = errors.New("lease identity mismatch")
 	}
 	return t, err
 }
 
-// TakeTask creates the first task tenure. A live or unknown holder is never
-// replaced here; adoption requires a separate, proven process-identity decision.
-func (s TaskStore) TakeTask(w feed.Writer, pid int, start string) (Tenure, error) {
+// TaskTake authorizes replacement of a specific tenure. OfflineSince is a
+// server observation supplied by the supervising caller, never a file timestamp.
+type TaskTake struct {
+	Adopt, Takeover bool
+	Gen, Fence      int64
+	OfflineSince    time.Time
+}
+
+// TakeTask grants the first tenure or checks replacement evidence while holding
+// task.json exclusively, so two adopters cannot both replace the same holder.
+func (s TaskStore) TakeTask(w feed.Writer, pid int, start string, options ...TaskTake) (Tenure, error) {
+	policy := TaskTake{}
+	if len(options) > 0 {
+		policy = options[0]
+	}
 	return s.grant(Tenure{Lease: feed.Lease{Lease: "task", Holder: &w.Worker, Gen: w.Gen}, Since: s.now(), PID: &pid, PIDStart: &start}, func(old Tenure) error {
-		if old.Holder != nil {
+		if old.Holder == nil {
+			return nil
+		}
+		if policy.Adopt == policy.Takeover || policy.Gen != old.Gen || policy.Fence != old.Fence {
 			return taskHeld(old)
+		}
+		if policy.Adopt {
+			host := w.Worker[strings.LastIndexByte(w.Worker, '@')+1:]
+			if !strings.HasSuffix(*old.Holder, "@"+host) || old.PID == nil || old.PIDStart == nil || session.ProbeLocal(session.Live{PID: *old.PID, PIDStart: *old.PIDStart}) != session.Dead {
+				return errors.New("adoption requires a provably gone process on this host")
+			}
+			return nil
+		}
+		now, _ := time.Parse(time.RFC3339Nano, s.now())
+		if contract.TierFor(w.Author.Role) != contract.PersonTeam || policy.OfflineSince.IsZero() || now.Sub(policy.OfflineSince) < 15*time.Minute {
+			return errors.New("takeover requires a person and 15 minutes of server-observed offline time")
 		}
 		return nil
 	}, s.BeforeTaskGrant)
