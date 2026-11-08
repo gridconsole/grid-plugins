@@ -3,13 +3,19 @@ package jobgraph
 import (
 	"fmt"
 	"path"
+	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
 // Scope patterns use slash-separated paths on every OS, with *, ?, character
 // classes and ** as an entire segment. Repo prefixes are part of the pattern;
-// an unprefixed policy applies only to the primary repo's unprefixed paths.
+// an unprefixed policy applies only to the primary repo's unprefixed paths, and
+// Policy.Repo names the primary repo so its own prefix reads as unprefixed.
+// Matching that can raise a review floor folds case, because the macOS and
+// Windows defaults treat Src/Auth and src/auth as one folder; matching that can
+// lower a floor stays exact.
 func validatePattern(pattern string) error {
 	repo, local := splitScope(pattern)
 	if strings.Contains(pattern, ":") && (repo == "" || strings.ContainsAny(repo, "/*?[]\\") || strings.Contains(local, ":")) {
@@ -36,6 +42,27 @@ func splitScope(pattern string) (string, string) {
 	return "", pattern
 }
 
+// stripRepo drops the primary repo's own prefix, so "main:src/x" and "src/x"
+// name the same path. fold also matches the prefix across case.
+func stripRepo(pattern, primary string, fold bool) string {
+	if primary == "" {
+		return pattern
+	}
+	repo, local := splitScope(pattern)
+	if repo == primary || fold && repo != "" && strings.EqualFold(repo, primary) {
+		return local
+	}
+	return pattern
+}
+
+func stripRepos(patterns []string, primary string) []string {
+	out := make([]string, len(patterns))
+	for i, p := range patterns {
+		out[i] = stripRepo(p, primary, false)
+	}
+	return out
+}
+
 type span struct{ lo, hi rune }
 type globToken struct {
 	star  bool
@@ -44,7 +71,7 @@ type globToken struct {
 
 // Segment automata need only the character boundaries present in the patterns.
 // Intersecting their transitions avoids guessing a sample filename for a glob.
-func segmentTokens(pattern string) []globToken {
+func segmentTokens(pattern string, fold bool) []globToken {
 	runes := []rune(pattern)
 	tokens := []globToken{}
 	for i := 0; i < len(runes); i++ {
@@ -89,16 +116,42 @@ func segmentTokens(pattern string) []globToken {
 				}
 				ranges = allowed
 			}
-			tokens = append(tokens, globToken{spans: ranges})
+			tokens = append(tokens, globToken{spans: foldSpans(ranges, fold)})
 		default:
-			tokens = append(tokens, globToken{spans: []span{{r, r}}})
+			tokens = append(tokens, globToken{spans: foldSpans([]span{{r, r}}, fold)})
 		}
 	}
 	return tokens
 }
 
-func segmentOverlap(a, b string) bool {
-	x, y := segmentTokens(a), segmentTokens(b)
+// foldSpans adds the case variants of each span. ASCII letters fold exactly at
+// any width; other runes fold only in narrow spans, because a wide span comes
+// from a wildcard or a negated class that already holds both cases.
+func foldSpans(spans []span, fold bool) []span {
+	if !fold {
+		return spans
+	}
+	out := slices.Clone(spans)
+	for _, s := range spans {
+		if lo, hi := max(s.lo, 'a'), min(s.hi, 'z'); lo <= hi {
+			out = append(out, span{lo - 'a' + 'A', hi - 'a' + 'A'})
+		}
+		if lo, hi := max(s.lo, 'A'), min(s.hi, 'Z'); lo <= hi {
+			out = append(out, span{lo - 'A' + 'a', hi - 'A' + 'a'})
+		}
+		if s.hi-s.lo < 256 {
+			for r := s.lo; r <= s.hi; r++ {
+				for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+					out = append(out, span{f, f})
+				}
+			}
+		}
+	}
+	return out
+}
+
+func segmentOverlap(a, b string, fold bool) bool {
+	x, y := segmentTokens(a, fold), segmentTokens(b, fold)
 	type state struct {
 		i, j int
 		used bool
@@ -149,10 +202,12 @@ func segmentOverlap(a, b string) bool {
 	return false
 }
 
-func scopeOverlap(a, b string) bool {
+func scopeOverlap(a, b string) bool { return overlap(a, b, false) }
+
+func overlap(a, b string, fold bool) bool {
 	repoA, localA := splitScope(a)
 	repoB, localB := splitScope(b)
-	if repoA != repoB {
+	if repoA != repoB && !(fold && strings.EqualFold(repoA, repoB)) {
 		return false
 	}
 	a, b = localA, localB
@@ -179,7 +234,7 @@ func scopeOverlap(a, b string) bool {
 		if s.i == len(x) || s.j == len(y) {
 			continue
 		}
-		if x[s.i] == "**" || y[s.j] == "**" || segmentOverlap(x[s.i], y[s.j]) {
+		if x[s.i] == "**" || y[s.j] == "**" || segmentOverlap(x[s.i], y[s.j], fold) {
 			i, j := s.i, s.j
 			if x[i] != "**" {
 				i++
@@ -193,10 +248,12 @@ func scopeOverlap(a, b string) bool {
 	return false
 }
 
-func anyScope(write, tags []string) bool {
+// anyScope is the raising test: it folds case and treats the primary repo's
+// prefix as no prefix, so a differently spelled scope cannot dodge a tag.
+func anyScope(write, tags []string, primary string) bool {
 	for _, w := range write {
 		for _, tag := range tags {
-			if scopeOverlap(w, tag) {
+			if overlap(stripRepo(w, primary, true), stripRepo(tag, primary, true), true) {
 				return true
 			}
 		}

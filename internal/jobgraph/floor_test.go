@@ -48,6 +48,54 @@ func TestReviewFloor(t *testing.T) {
 	}
 }
 
+func TestReviewFloorCaseAndPrimaryRepo(t *testing.T) {
+	policy := Policy{Repo: "main", EnvironmentPaths: []string{"infra/**"}, RiskPaths: []string{"src/auth/**", "main:src/billing/**", "other:transport/**"}, UIPaths: []string{"web/**"}, GeneratedPaths: []string{"generated/**"}, TaskPaths: []string{"task/**"}}
+	for _, tc := range []struct {
+		name         string
+		write        []string
+		kind         string
+		floor        string
+		classify, ui bool
+	}{
+		{"risk path in other case", []string{"Src/Auth/x.go"}, "", "L2", false, false},
+		{"environment path in other case", []string{"INFRA/a.yaml"}, "", "L2", true, false},
+		{"UI tag in other case", []string{"Web/index.html"}, "", "L1", false, true},
+		{"built-in UI directory in other case", []string{"app/Pages/page.test.ts"}, "", "L1", false, true},
+		{"built-in UI extension in other case", []string{"src/Widget.TSX"}, "", "L1", false, true},
+		{"glob in other case", []string{"SRC/**"}, "", "L2", false, false},
+		{"primary prefix on an unprefixed tag", []string{"main:src/auth/x.go"}, "", "L2", false, false},
+		{"primary prefix in other case", []string{"MAIN:src/auth/x.go"}, "", "L2", false, false},
+		{"unprefixed scope on a primary-prefixed tag", []string{"src/billing/x.go"}, "", "L2", false, false},
+		{"primary prefix on an environment tag", []string{"main:infra/a.yaml"}, "", "L2", true, false},
+		{"other repo stays apart", []string{"other:src/auth/x.go"}, "", "L1", false, false},
+		{"other repo with its own tag", []string{"OTHER:transport/x.go"}, "", "L2", false, false},
+		{"docs in other case do not lower", []string{"Docs/guide.txt"}, "", "L1", false, false},
+		{"generated in other case does not lower", []string{"Generated/x.go"}, "", "L1", false, false},
+		{"task path in other case does not lower", []string{"Task/notes.txt"}, "research", "L1", false, false},
+		{"generated under the primary prefix lowers", []string{"main:generated/x.go"}, "", "L0", false, false},
+		{"generated under another case of the prefix does not", []string{"MAIN:generated/x.go"}, "", "L1", false, false},
+		{"task path under the primary prefix lowers", []string{"main:task/notes.txt"}, "research", "L0", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			item := Item{ID: "J-1", Write: tc.write, Kind: tc.kind, Review: "L3", Verify: Verify{Command: "go test ./...", MinTests: 1}}
+			got, err := ReviewFloor(item, policy)
+			if err != nil || got.Floor != tc.floor || got.Classify != tc.classify || got.CaptureAtL3 != tc.ui || len(got.Errors) > 0 {
+				t.Fatalf("got %+v, %v", got, err)
+			}
+		})
+	}
+	// Without a primary repo name every prefix is another repo, as before.
+	item := Item{ID: "J-1", Write: []string{"main:src/auth/x.go"}, Review: "L3", Verify: Verify{Command: "go test ./...", MinTests: 1}}
+	if got, err := ReviewFloor(item, Policy{RiskPaths: []string{"src/auth/**"}}); err != nil || got.Floor != "L1" {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	for _, repo := range []string{"a:b", "a/b", "a*", "a\\b"} {
+		if _, err := ReviewFloor(item, Policy{Repo: repo}); err == nil {
+			t.Fatalf("accepted policy repo %q", repo)
+		}
+	}
+}
+
 func TestFloorRefusalsAndOverride(t *testing.T) {
 	for _, tc := range []struct {
 		name, review, reason string
@@ -116,6 +164,43 @@ func TestVerifyCommands(t *testing.T) {
 		if err := ValidateVerify(Item{Kind: tc.kind, Verify: tc.verify}); (err == nil) != tc.valid {
 			t.Fatalf("%+v: %v", tc, err)
 		}
+	}
+}
+
+// The strict test stays exact for lowering; the fold test is the raising one.
+func TestScopeOverlapFold(t *testing.T) {
+	for _, tc := range []struct {
+		a, b         string
+		strict, fold bool
+	}{
+		{"src/auth/**", "Src/Auth/x.go", false, true},
+		{"infra/**", "INFRA/a.yaml", false, true},
+		{"src/auth/**", "src/auth/x.go", true, true},
+		{"repo:src/**", "Repo:SRC/x.go", false, true},
+		{"repo:src/**", "other:src/x.go", false, false},
+		{"src/*.go", "src/*.md", false, false},
+		{"a/[A-C].go", "a/b.go", false, true},
+		{"a/[^a-c].go", "a/b.go", false, true},
+		{"a/[^a-c].go", "a/d.go", true, true},
+		{"a/k.go", "a/\u212a.go", false, true},
+		{"a/?.go", "a/B.go", true, true},
+		{"**/Pages/**", "app/pages/view.ts", false, true},
+	} {
+		t.Run(tc.a+" vs "+tc.b, func(t *testing.T) {
+			for _, p := range []string{tc.a, tc.b} {
+				if err := validatePattern(p); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, pair := range [][2]string{{tc.a, tc.b}, {tc.b, tc.a}} {
+				if got := scopeOverlap(pair[0], pair[1]); got != tc.strict {
+					t.Fatalf("strict %q vs %q: %v, want %v", pair[0], pair[1], got, tc.strict)
+				}
+				if got := overlap(pair[0], pair[1], true); got != tc.fold {
+					t.Fatalf("fold %q vs %q: %v, want %v", pair[0], pair[1], got, tc.fold)
+				}
+			}
+		})
 	}
 }
 

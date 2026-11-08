@@ -12,6 +12,9 @@ import (
 // global or filesystem state supplies these lists. Built-in UI and low-risk
 // conventions supplement the lists; a project can tag additional paths.
 type Policy struct {
+	// Repo names the primary repo: "Repo:path" in a scope or tag then means the
+	// unprefixed "path". Empty leaves every prefix a different repo.
+	Repo             string   `json:"repo,omitempty"`
 	EnvironmentPaths []string `json:"environment_paths,omitempty"`
 	RiskPaths        []string `json:"risk_paths,omitempty"`
 	UIPaths          []string `json:"ui_paths,omitempty"`
@@ -35,6 +38,7 @@ func uiScope(write []string) bool {
 		if i := strings.IndexByte(w, ':'); i >= 0 {
 			w = w[i+1:]
 		}
+		w = strings.ToLower(w) // raising path: Pages/ and .TSX count
 		parts := strings.Split(w, "/")
 		for _, part := range parts[:len(parts)-1] {
 			if part == "pages" || part == "ui" || part == "components" {
@@ -55,6 +59,9 @@ func uiScope(write []string) bool {
 // permits a lower request but does not remove classify or capture requirements.
 func ReviewFloor(item Item, policy Policy) (Floor, error) {
 	out := Floor{Job: item.ID, Review: item.Review, Errors: []string{}}
+	if strings.ContainsAny(policy.Repo, ":/*?[]\\") {
+		return out, fmt.Errorf("invalid policy repo %q", policy.Repo)
+	}
 	for _, patterns := range [][]string{item.Write, policy.EnvironmentPaths, policy.RiskPaths, policy.UIPaths, policy.GeneratedPaths, policy.TaskPaths} {
 		for _, pattern := range patterns {
 			if err := validatePattern(pattern); err != nil {
@@ -77,18 +84,21 @@ func ReviewFloor(item Item, policy Policy) (Floor, error) {
 	if item.Visible != "" && item.Visible != "big" {
 		return out, fmt.Errorf("%s: unknown visible value %q", item.ID, item.Visible)
 	}
+	// Lowering is exact: only the primary repo's own spelling reads as unprefixed.
+	generated, tasks := stripRepos(policy.GeneratedPaths, policy.Repo), stripRepos(policy.TaskPaths, policy.Repo)
 	lowRisk := len(item.Write) > 0
 	taskOnly := len(item.Write) > 0
 	for _, w := range item.Write {
-		lowRisk = lowRisk && (lowRiskPath(w) || covered(w, policy.GeneratedPaths))
-		taskOnly = taskOnly && covered(w, policy.TaskPaths)
+		w = stripRepo(w, policy.Repo, false)
+		lowRisk = lowRisk && (lowRiskPath(w) || covered(w, generated))
+		taskOnly = taskOnly && covered(w, tasks)
 	}
 	switch {
-	case item.Irreversible || anyScope(item.Write, policy.EnvironmentPaths):
+	case item.Irreversible || anyScope(item.Write, policy.EnvironmentPaths, policy.Repo):
 		out.Floor, out.Reason, out.Classify = "L2", "environment scope or irreversible step", true
-	case len(item.Risk) > 0 || anyScope(item.Write, policy.RiskPaths):
+	case len(item.Risk) > 0 || anyScope(item.Write, policy.RiskPaths, policy.Repo):
 		out.Floor, out.Reason = "L2", "declared risk or risk path"
-	case item.Visible == "big" || uiScope(item.Write) || anyScope(item.Write, policy.UIPaths):
+	case item.Visible == "big" || uiScope(item.Write) || anyScope(item.Write, policy.UIPaths, policy.Repo):
 		out.Floor, out.Reason, out.CaptureAtL3 = "L1", "visible change or UI scope", true
 	case lowRisk || item.Kind == "rename" || item.Kind == "generated" || (item.Kind == "research" || item.Kind == "scout") && taskOnly:
 		out.Floor, out.Reason = "L0", "tests, docs, renames, generated files, or task-only research"
