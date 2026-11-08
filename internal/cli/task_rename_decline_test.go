@@ -18,7 +18,19 @@ func TestTaskRenameDecline(t *testing.T) {
 		name, verb, value, role, actor, state, kind, diagnostic string
 		code                                                    int
 	}{
-		{name: "rename_open", verb: "rename", value: "  Better\t title  "},
+		{name: "rename_open", verb: "rename", value: "  Better\u2003 title  "},
+		{name: "rename_esc", verb: "rename", value: "before\x1bafter", code: 2, diagnostic: "title"},
+		{name: "rename_bel", verb: "rename", value: "before\x07after", code: 2, diagnostic: "title"},
+		{name: "rename_bidi_override", verb: "rename", value: "before\u202eafter", code: 2, diagnostic: "title"},
+		{name: "rename_bidi_isolate", verb: "rename", value: "before\u2066after", code: 2, diagnostic: "title"},
+		{name: "rename_tab", verb: "rename", value: "before\tafter", code: 2, diagnostic: "title"},
+		{name: "rename_newline", verb: "rename", value: "before\nafter", code: 2, diagnostic: "title"},
+		{name: "decline_esc", verb: "decline", value: "before\x1bafter", code: 2, diagnostic: "reason"},
+		{name: "decline_bel", verb: "decline", value: "before\x07after", code: 2, diagnostic: "reason"},
+		{name: "decline_bidi_override", verb: "decline", value: "before\u202eafter", code: 2, diagnostic: "reason"},
+		{name: "decline_bidi_isolate", verb: "decline", value: "before\u2066after", code: 2, diagnostic: "reason"},
+		{name: "decline_tab", verb: "decline", value: "before\tafter", code: 2, diagnostic: "reason"},
+		{name: "decline_newline", verb: "decline", value: "before\nafter", code: 2, diagnostic: "reason"},
 		{name: "rename_member", verb: "rename", value: "Member title", role: "member"},
 		{name: "rename_owner", verb: "rename", value: "Owner title", role: "owner"},
 		{name: "rename_same", verb: "rename", value: "  Fix the label  ", code: 3, diagnostic: "already has that title"},
@@ -31,7 +43,7 @@ func TestTaskRenameDecline(t *testing.T) {
 		{name: "rename_unicode_limit", verb: "rename", value: strings.Repeat("界", 200)},
 		{name: "rename_yaml", verb: "rename", value: `A: "quoted" # title`},
 		{name: "rename_guest", verb: "rename", value: "Guest title", role: "guest", code: 1, diagnostic: "scope"},
-		{name: "decline_reason", verb: "decline", value: "  Out\t of\n scope  ", actor: "alex"},
+		{name: "decline_reason", verb: "decline", value: "  Out\u2003 of  scope  ", actor: "alex"},
 		{name: "decline_member", verb: "decline", value: "Later", role: "member"},
 		{name: "decline_owner", verb: "decline", value: "Later", role: "owner"},
 		{name: "decline_missing", verb: "decline", code: 2, diagnostic: "reason"},
@@ -86,7 +98,7 @@ func TestTaskRenameDecline(t *testing.T) {
 						t.Fatalf("refusal changed %s", name)
 					}
 				}
-				if tc.role == "guest" && len(after) != len(before) {
+				if (tc.role == "guest" || tc.code == 2) && len(after) != len(before) {
 					t.Fatal("guest refusal created files")
 				}
 				return

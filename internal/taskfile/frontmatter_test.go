@@ -34,3 +34,25 @@ func TestHistoryLine(t *testing.T) {
 		}
 	}
 }
+
+func TestQuotedJSONScalars(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{`"A \u003c B \u0026 C"`, "A < B & C"},
+		{`"issue #12"`, "issue #12"},
+		{`"issue # 12" # outside`, "issue # 12"},
+		{`"say \"hi\"" # outside`, `say "hi"`},
+		{`"back\\slash\nline\tend"`, "back\\slash\nline\tend"},
+		{`"\ud83d\ude80"`, "🚀"},
+		{`"[one, two]"`, "[one, two]"},
+		{`"{key: value}"`, "{key: value}"},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			for name, parse := range map[string]func(string) *Frontmatter{"full": ParseFrontmatter, "scalar": ScalarFrontmatter} {
+				got := parse("---\ntitle: " + tc.raw + "\n---\nbody")
+				if got == nil || got.Data["title"] != tc.want || got.Body != "body" {
+					t.Errorf("%s: got %+v, want title %q", name, got, tc.want)
+				}
+			}
+		})
+	}
+}

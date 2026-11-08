@@ -2,6 +2,7 @@ package task
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
 func TestRenamePolicy(t *testing.T) {
@@ -156,6 +158,63 @@ func TestRenameScalarStyles(t *testing.T) {
 			want = strings.Replace(want, "---\n\ntitle: Body", "updated: \""+event.When+"\"\n---\n\ntitle: Body", 1)
 			if string(got) != want {
 				t.Fatalf("unrelated bytes changed:\n%s", got)
+			}
+		})
+	}
+}
+
+// Check the original input, including controls that whitespace folding removes.
+func TestRenameDeclineRejectControls(t *testing.T) {
+	var forbidden []rune
+	for r := rune(0); r <= 0x9f; r++ {
+		if r <= 0x1f || r >= 0x7f {
+			forbidden = append(forbidden, r)
+		}
+	}
+	for r := rune(0x202a); r <= 0x202e; r++ {
+		forbidden = append(forbidden, r)
+	}
+	for r := rune(0x2066); r <= 0x2069; r++ {
+		forbidden = append(forbidden, r)
+	}
+	for _, r := range forbidden {
+		t.Run(fmt.Sprintf("U+%04X", r), func(t *testing.T) {
+			value := "before" + string(r) + "after"
+			if _, err := (Store{}).Rename(RenameOptions{Title: value}); !errors.Is(err, ErrEditUsage) {
+				t.Errorf("rename: %v", err)
+			}
+			if _, err := (Store{}).Decline(DeclineOptions{Reason: value}); !errors.Is(err, ErrEditUsage) {
+				t.Errorf("decline: %v", err)
+			}
+		})
+	}
+}
+
+func TestRenameTitleRoundTrip(t *testing.T) {
+	for _, title := range []string{"A < B & C", "A > B", "issue #12", "issue # 12", `say "hi"`, `back\slash`, "修正 café 🚀", "[one, two]", "{key: value}"} {
+		t.Run(title, func(t *testing.T) {
+			s, task := writeFixture(t)
+			if _, err := s.Rename(RenameOptions{WriteOptions: WriteOptions{ID: task.ID}, Title: title}); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(filepath.Join(task.Path, "task.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, escape := range []string{`\u003c`, `\u003e`, `\u0026`} {
+				if strings.Contains(string(data), escape) {
+					t.Errorf("HTML escape %s in task.md", escape)
+				}
+			}
+			for name, parse := range map[string]func(string) *taskfile.Frontmatter{"frontmatter": taskfile.ParseFrontmatter, "scalar": taskfile.ScalarFrontmatter} {
+				got := parse(string(data))
+				if got == nil || got.Data["title"] != title {
+					t.Errorf("%s: got %+v, want %q", name, got, title)
+				}
+			}
+			got, err := Read(task.Path)
+			if err != nil || got.Title != title {
+				t.Errorf("task reader: got %q, %v; want %q", got.Title, err, title)
 			}
 		})
 	}
