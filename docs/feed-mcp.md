@@ -18,17 +18,21 @@ Supply these values through the trusted launch environment, not tool arguments:
 | Variable | Meaning |
 | --- | --- |
 | `GRID_HOME` | Grid data folder; defaults to `~/.grid`. Its `VERSION` must match this CLI. |
-| `GRID_FEED_TASK` | Default task folder or display id; an explicit task argument wins, then normal current-folder resolution applies. |
+| `GRID_FEED_TASK` | The session's task folder or display id. For MCP it wins: a `task` or `project` argument that resolves elsewhere is refused. Without it, normal current-folder resolution applies. |
 | `GRID_MEMBER` | Member identity; otherwise Git identity, then the OS account. |
 | `GRID_ROLE` | Author role; defaults to `member`, matching the CLI. |
 | `GRID_WORKER` | Optional `<member>@<machine ULID>` assertion. It must match the resolved member and the persistent `GRID_HOME/machine` id. Legacy worker suffixes are not accepted. |
-| `GRID_JOB` | Default Job for writes. Read filters remain explicit so a task read includes every Job. |
-| `GRID_ATTEMPT` | Default positive attempt number for writes. |
+| `GRID_JOB` | The session's Job for writes. For MCP writes a different `job` argument is refused. Read filters remain explicit so a task read includes every Job. |
+| `GRID_ATTEMPT` | The session's positive attempt number for writes. For MCP a different `attempt` argument is refused. |
 | `GRID_LEASE` | An already granted task or Job lease. |
 | `GRID_LEASE_EPOCH` | The lease's `gen.fence` pair. |
 | `GRID_WAKE` | Optional wake idempotency key, `<event ULID>/<n>`. |
 
-Explicit write arguments override Job and attempt defaults. The lease component
+The session environment wins over tool arguments. `task` and `project` (all
+tools) and `job` and `attempt` (writes) that name the session's value are
+accepted; a differing one fails with an error that names the variable. The
+`grid feed` flags are for a person at a terminal and still override the
+environment. The lease component
 must grant the matching tenure first; a tool call cannot acquire it. The MCP
 schemas exclude member, author, worker, role, lease, generation, fence, wake and
 tier arguments. Unknown arguments are rejected. Fields inside a body never

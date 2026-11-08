@@ -41,18 +41,21 @@ func Tools() []Tool {
 		{"feed_handover", "Announce an already granted task lease. This does not transfer or take a lease.", []string{"body", "id", "re", "job", "attempt", "after", "reason"}, nil},
 	} {
 		props := map[string]Property{
-			"task":    {Type: "string", Description: "Task folder or display id; defaults to GRID_FEED_TASK, then the current folder."},
+			"task":    {Type: "string", Description: "Task folder or display id. The session's GRID_FEED_TASK wins and a different value is refused; without it, the current folder."},
 			"project": {Type: "string", Description: "Project name or id for task resolution."},
 		}
 		for _, field := range spec.fields {
 			props[field] = Property{Type: "string"}
+		}
+		if _, ok := props["job"]; ok && spec.name != "feed_read" {
+			props["job"] = Property{Type: "string", Description: "Job id; the session's GRID_JOB wins and a different value is refused."}
 		}
 		if _, ok := props["body"]; ok {
 			props["body"] = Property{Type: "object", Description: "Fields of the post type; see feed_types."}
 		}
 		if _, ok := props["attempt"]; ok {
 			min := 1
-			props["attempt"] = Property{Type: "integer", Minimum: &min}
+			props["attempt"] = Property{Type: "integer", Description: "Attempt number; the session's GRID_ATTEMPT wins and a different value is refused.", Minimum: &min}
 			props["after"] = Property{Type: "array", Items: &Property{Type: "string"}}
 		}
 		required := append([]string{}, spec.required...)

@@ -212,6 +212,48 @@ func feedDefaults(in feed.Input) (feed.Input, error) {
 	return in, nil
 }
 
+// sessionStore is the MCP resolver. The trusted launch's GRID_FEED_TASK wins over
+// the model-supplied task and project; an argument that points elsewhere is refused.
+func sessionStore(env Env, task, project string) (feed.Store, error) {
+	session := os.Getenv("GRID_FEED_TASK")
+	if session == "" || (task == session || task == "") && project == "" {
+		return feedStore(env, task, project)
+	}
+	want, err := feedStore(env, session, "")
+	if err != nil {
+		return feed.Store{}, err
+	}
+	if task == "" {
+		task = session
+	}
+	got, err := feedStore(env, task, project)
+	if err != nil {
+		return feed.Store{}, fmt.Errorf("task %q, project %q cannot be shown to be the session task GRID_FEED_TASK=%q (%v); the session wins, so omit them", task, project, session, err)
+	}
+	if got.TaskDir != want.TaskDir {
+		return feed.Store{}, fmt.Errorf("task %q, project %q conflicts with the session task GRID_FEED_TASK=%q; the session wins, so omit them or name the same task", task, project, session)
+	}
+	return want, nil
+}
+
+// sessionDefaults is the MCP counterpart of feedDefaults: GRID_JOB and GRID_ATTEMPT
+// win over the arguments, and a differing argument is refused.
+func sessionDefaults(in feed.Input) (feed.Input, error) {
+	if job := os.Getenv("GRID_JOB"); job != "" && in.Job != "" && in.Job != job {
+		return in, fmt.Errorf("job %q conflicts with the session job GRID_JOB=%q; the session wins, so omit it or name the same job", in.Job, job)
+	}
+	if raw := os.Getenv("GRID_ATTEMPT"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			return in, fmt.Errorf("GRID_ATTEMPT must be a positive integer")
+		}
+		if in.Attempt != 0 && in.Attempt != n {
+			return in, fmt.Errorf("attempt %d conflicts with the session attempt GRID_ATTEMPT=%d; the session wins, so omit it or name the same attempt", in.Attempt, n)
+		}
+	}
+	return feedDefaults(in)
+}
+
 func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
 	member := os.Getenv("GRID_MEMBER")
 	if member == "" {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
 const mcpHello = `{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}` + "\n" + `{"jsonrpc":"2.0","method":"notifications/initialized"}` + "\n"
@@ -108,5 +109,85 @@ func TestMCPFormatAndLeaseErrors(t *testing.T) {
 				t.Fatalf("result: %d %s %s", code, h.out, h.errb)
 			}
 		})
+	}
+}
+
+// mcpCall runs one tools/call through `grid mcp` and returns the response line.
+func mcpCall(t *testing.T, h *harness, tool, arguments string) string {
+	t.Helper()
+	h.out.Reset()
+	h.errb.Reset()
+	h.env.Stdin = strings.NewReader(mcpHello + `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + tool + `","arguments":` + arguments + `}}` + "\n")
+	if code := h.run(h.home, "mcp"); code != 0 || h.errb.Len() != 0 {
+		t.Fatalf("mcp: %d %s %s", code, h.out, h.errb)
+	}
+	lines := strings.Split(strings.TrimSpace(h.out.String()), "\n")
+	return lines[len(lines)-1]
+}
+
+func TestMCPSessionWinsOverArguments(t *testing.T) {
+	h, task := feedHarness(t)
+	other := filepath.Join(h.gridHome, "projects", "example", "tasks", "T-08-other")
+	h.write(filepath.Join(other, "task.md"), "---\nid: 01ARZ3NDEKTSV4RRFFQ69G5FB0\n---\n")
+	h.record(project.Record{Name: "example", ID: "01EXAMPLE"})
+	t.Setenv("GRID_FEED_TASK", task)
+	t.Setenv("GRID_JOB", "J-1")
+	t.Setenv("GRID_ATTEMPT", "2")
+	body := `"type":"post","body":{"ref":"task","kind":"message","text":"example"}`
+	for _, tc := range []struct{ name, args, refused string }{
+		{"other task path", `{` + body + `,"task":"` + other + `"}`, "GRID_FEED_TASK"},
+		{"other task id", `{` + body + `,"task":"T-08","project":"example"}`, "GRID_FEED_TASK"},
+		{"task id with no project", `{` + body + `,"task":"T-07"}`, "GRID_FEED_TASK"},
+		{"unknown project", `{` + body + `,"project":"elsewhere"}`, "GRID_FEED_TASK"},
+		{"other job", `{` + body + `,"job":"J-2"}`, "GRID_JOB"},
+		{"other attempt", `{` + body + `,"attempt":3}`, "GRID_ATTEMPT"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mcpCall(t, h, "feed_post", tc.args)
+			if !strings.Contains(got, `"isError":true`) || !strings.Contains(got, tc.refused) || !strings.Contains(got, "session wins") {
+				t.Fatalf("not refused clearly: %s", got)
+			}
+		})
+	}
+	if got := mcpCall(t, h, "feed_read", `{"task":"`+other+`"}`); !strings.Contains(got, `"isError":true`) || !strings.Contains(got, "GRID_FEED_TASK") {
+		t.Fatalf("read of another task: %s", got)
+	}
+	// Nothing reached either task's Feed.
+	for _, dir := range []string{task, other} {
+		if entries, err := os.ReadDir(filepath.Join(dir, "feed")); err == nil && len(entries) > 0 {
+			t.Fatalf("%s holds a feed after refused calls: %v", dir, entries)
+		}
+	}
+	// The same values, or the session's own task path, are accepted.
+	for _, args := range []string{
+		`{` + body + `}`,
+		`{` + body + `,"job":"J-1","attempt":2}`,
+		`{` + body + `,"task":"` + task + `"}`,
+		`{` + body + `,"task":"T-07","project":"example"}`,
+	} {
+		if got := mcpCall(t, h, "feed_post", args); strings.Contains(got, `"isError":true`) {
+			t.Fatalf("session-consistent call refused: %s: %s", args, got)
+		}
+	}
+	h.out.Reset()
+	if code := h.run(h.home, "feed", "read", "--json"); code != 0 {
+		t.Fatalf("read: %d %s", code, h.errb)
+	}
+	var read feed.ReadResult
+	if err := json.Unmarshal(h.out.Bytes(), &read); err != nil {
+		t.Fatal(err)
+	}
+	if len(read.Records) != 4 {
+		t.Fatalf("want the four accepted posts: %+v", read.Records)
+	}
+	for _, r := range read.Records {
+		if r.Job == nil || *r.Job != "J-1" || r.Attempt == nil || *r.Attempt != 2 {
+			t.Fatalf("session context lost: %+v", r)
+		}
+	}
+	// A human at a terminal keeps explicit flags over the environment.
+	h.out.Reset()
+	if code := h.run(h.home, "feed", "post", "--task", other, "--job", "J-9", "--type", "post", "--body", `{"ref":"task","kind":"message","text":"flag"}`); code != 0 {
+		t.Fatalf("CLI flags: %d %s", code, h.errb)
 	}
 }
