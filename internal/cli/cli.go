@@ -80,7 +80,7 @@ func commands() []command {
 	return []command{
 		{"version", "print the CLI, contract and app_min versions", runVersion},
 		{"where", "show which project and task a folder belongs to", runWhere},
-		{"doctor", "check the Grid home, its format version and git", runDoctor},
+		{"doctor", "check machine health and collect a support bundle", runDoctor},
 		{"hook", "answer a Claude Code or Codex hook event", runHook},
 		{"task", "new, show, list, status, stop, close, reopen, history, attach, move", runTask},
 		{"plan", "write, check, items, hash, diff", runPlan},

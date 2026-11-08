@@ -283,13 +283,6 @@ func TestDoctorGolden(t *testing.T) {
 	}
 }
 
-func TestDoctorBundleIsNotBuilt(t *testing.T) {
-	h := newHarness(t)
-	if code := h.run(h.tmp, "doctor", "--bundle"); code != 2 || !strings.Contains(h.errb.String(), "not built yet") {
-		t.Errorf("exit %d, stderr %q", code, h.errb)
-	}
-}
-
 func TestStubsAndUsageErrors(t *testing.T) {
 	tests := []struct {
 		args       []string

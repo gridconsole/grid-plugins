@@ -12,12 +12,13 @@ func runDoctor(args []string, env Env) int {
 	fs := newFlags("doctor", env)
 	asJSON := fs.Bool("json", false, "print JSON")
 	bundle := fs.Bool("bundle", false, "write a support bundle")
+	out := fs.String("out", "", "support zip path (requires --bundle)")
 	hooks := fs.String("hooks-file", "", "plugin hooks file (defaults to hooks/hooks.json in the plugin root: CLAUDE_PLUGIN_ROOT, else found from the grid executable)")
 	if code, stop := parse(fs, args, env); stop {
 		return code
 	}
-	if *bundle {
-		fmt.Fprintln(env.Stderr, "doctor --bundle: not built yet")
+	if *out != "" && !*bundle {
+		fmt.Fprintln(env.Stderr, "doctor: --out requires --bundle")
 		return 2
 	}
 	if env.GridHome == "" {
@@ -28,20 +29,34 @@ func runDoctor(args []string, env Env) int {
 		*hooks = defaultHooksFile(env)
 	}
 	rep := doctor.Run(doctor.Options{GridHome: env.GridHome, Label: gridhome.Tilde(env.GridHome, env.Home), GitVersion: env.GitVersion, HooksFile: *hooks})
+	if *bundle {
+		path := *out
+		if path != "" && !filepath.IsAbs(path) {
+			path = filepath.Join(env.Cwd, path)
+		}
+		path, err := doctor.Bundle(doctor.BundleOptions{GridHome: env.GridHome, Home: env.Home, Out: path, Report: rep})
+		if err != nil {
+			fmt.Fprintf(env.Stderr, "doctor --bundle: %v\n", err)
+			return 1
+		}
+		if *asJSON {
+			return writeJSON(env.Stdout, struct {
+				Path   string        `json:"path"`
+				Doctor doctor.Report `json:"doctor"`
+			}{path, rep})
+		}
+		if _, err = fmt.Fprintln(env.Stdout, path); err != nil {
+			return 1
+		}
+		return 0
+	}
 	if *asJSON {
 		if code := writeJSON(env.Stdout, rep); code != 0 {
 			return code
 		}
 	} else {
-		for _, c := range rep.Checks {
-			status := "ok"
-			if !c.OK {
-				status = "fail"
-			}
-			fmt.Fprintf(env.Stdout, "%s %s: %s\n", status, c.Name, c.Detail)
-			if !c.OK {
-				fmt.Fprintf(env.Stdout, "fix: %s\n", c.Fix)
-			}
+		if err := doctor.WriteReport(env.Stdout, rep); err != nil {
+			return 1
 		}
 	}
 	if !rep.OK {
