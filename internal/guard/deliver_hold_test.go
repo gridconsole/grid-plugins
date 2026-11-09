@@ -64,7 +64,7 @@ func TestDeliverCannotReleaseAHeldPlan(t *testing.T) {
 				f, store, path := deliverableTask(t, c.workflow, state)
 				text, _ := os.ReadFile(path)
 				stage := planStage(string(text), "")
-				if !heldStage(stage) || !held(f.task, string(text), "") {
+				if !heldStage(stage) || !held(stepsFor(f.env, f.task), f.task, string(text), "") {
 					t.Fatalf("fixture stage %q is not held", stage)
 				}
 				if got := writesRepo(f); got != "deny" {
@@ -79,7 +79,7 @@ func TestDeliverCannotReleaseAHeldPlan(t *testing.T) {
 					t.Fatalf("a refused Deliver changed the task:\n%v\nwas:\n%v", after, before)
 				}
 				after, _ := os.ReadFile(path)
-				if got := planStage(string(after), ""); got != stage || !held(f.task, string(after), "") {
+				if got := planStage(string(after), ""); got != stage || !held(stepsFor(f.env, f.task), f.task, string(after), "") {
 					t.Fatalf("stage %q, want %q still held", got, stage)
 				}
 				if got := writesRepo(f); got != "deny" {
@@ -102,7 +102,7 @@ func TestDeliverStillReleasesAnApprovedPlan(t *testing.T) {
 			}
 			f.write(path, "---\nid: T-01\ntitle: Example task\nproject: example\nsize: normal\n"+c.workflow+"state: running\ncreated: 2026-01-02T03:04:05Z\n---\n")
 			text, _ := os.ReadFile(path)
-			if held(f.task, string(text), "") {
+			if held(stepsFor(f.env, f.task), f.task, string(text), "") {
 				t.Fatal("an approved plan is held")
 			}
 			if err := deliver(store, f); err != nil {

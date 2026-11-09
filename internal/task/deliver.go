@@ -188,7 +188,7 @@ func (d delivery) check(t Task) error {
 	if err != nil {
 		return err
 	}
-	if PlanHeld(d.dir, string(data), string(history)) {
+	if PlanHeldWith(StepsFor(d.s.Resolver, d.dir), d.dir, string(data), string(history)) {
 		return fmt.Errorf("%w: %s waits for a person to approve its plan, and delivery would move it past that gate", ErrPlanNotApproved, t.ID)
 	}
 	return nil

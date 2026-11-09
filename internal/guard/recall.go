@@ -36,7 +36,7 @@ func (c context) recallHeld(file string) bool {
 		return false
 	}
 	text := read(filepath.Join(t.dir, "task.md"))
-	return !inactive(text) && held(t.dir, text, read(filepath.Join(t.dir, "history.md"))) && !plan.HasRecall(read(filepath.Join(t.dir, "plan.md")))
+	return !inactive(text) && held(stepsFor(c.env, t.dir), t.dir, text, read(filepath.Join(t.dir, "history.md"))) && !plan.HasRecall(read(filepath.Join(t.dir, "plan.md")))
 }
 func (c context) recallGate() hookio.Decision {
 	command := str(c.in.ToolInput["command"])

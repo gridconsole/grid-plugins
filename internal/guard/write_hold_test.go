@@ -39,7 +39,7 @@ func TestChangeCannotReleaseAHeldInlineTask(t *testing.T) {
 			if string(after) != string(before) {
 				t.Fatalf("a refused write changed task.md:\n%s", after)
 			}
-			if got := planStage(string(after), ""); got != stage || !held(f.task, string(after), "") {
+			if got := planStage(string(after), ""); got != stage || !held(stepsFor(f.env, f.task), f.task, string(after), "") {
 				t.Fatalf("stage %q, want %q still held", got, stage)
 			}
 			if got := writesRepo(f); got != "deny" {

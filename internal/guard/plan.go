@@ -44,7 +44,7 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 		history = read(filepath.Join(owner.dir, "history.md"))
 		top = strings.Split(owner.rel, "/")[0]
 	}
-	unaccepted := owner != nil && held(owner.dir, text, history)
+	unaccepted := owner != nil && held(stepsFor(c.env, owner.dir), owner.dir, text, history)
 	slot := strings.Split(relative(projects, target), "/")
 	if owner == nil && inside(projects, target) && len(slot) > 2 && slot[1] != "tasks" && (oddName.MatchString(slot[1]) || strings.EqualFold(slot[1], "tasks")) {
 		return hookio.Deny("A folder beside a project's tasks folder keeps a plain name (printable ASCII, no colon, no dot or space at the end, not tasks in other letters): on macOS or Windows it can be the tasks folder under another spelling, so " + given + " is not written." + off)
@@ -69,7 +69,7 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 	}
 	forged := ""
 	if unaccepted {
-		forged = leavesPlan(in.ToolName, in.ToolInput, strings.ToLower(owner.rel), text, history)
+		forged = leavesPlan(stepsFor(c.env, owner.dir), in.ToolName, in.ToolInput, strings.ToLower(owner.rel), text, history)
 	}
 	switch forged {
 	case "status":
@@ -128,7 +128,7 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 	}
 	held := []string{}
 	for _, d := range unique(all) {
-		if isHeld(d) {
+		if c.isHeld(d) {
 			held = append(held, d)
 		}
 	}
@@ -173,7 +173,7 @@ func addsMark(text, next string, markers ...string) bool {
 	}
 	return false
 }
-func leavesPlan(tool string, input map[string]any, file, text, history string) string {
+func leavesPlan(lookup stepLookup, tool string, input map[string]any, file, text, history string) string {
 	if file != "task.md" && file != "history.md" {
 		return ""
 	}
@@ -189,14 +189,14 @@ func leavesPlan(tool string, input map[string]any, file, text, history string) s
 	if len(nexts) == 0 {
 		return "unclear"
 	}
-	unreadable := planStage(text, history) == "unreadable"
+	unreadable := planStageWith(lookup, text, history) == "unreadable"
 	for _, next := range nexts {
 		if !isTask && addsMark(history, next, planAcceptedMark, previewApproved) {
 			return "accepted"
 		}
-		stage := planStage(text, next)
+		stage := planStageWith(lookup, text, next)
 		if isTask {
-			stage = planStage(next, history)
+			stage = planStageWith(lookup, next, history)
 		}
 		if !heldStage(stage) && !(isTask && text == "" && stage == "") {
 			return "accepted"

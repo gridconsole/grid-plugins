@@ -143,12 +143,28 @@ const planAcceptedMark = "· plan accepted ·"
 const previewApproved = "· preview approved ·"
 const planReady = "· plan ready ·"
 
+// stepLookup resolves the steps of one task from the task.md text it is given.
+type stepLookup = taskstore.StepLookup
+
+// stepsFor resolves a task's steps through its workflow, named templates
+// included, with the caller's resolver: the lookup Deliver builds too.
+func stepsFor(env map[string]string, taskDir string) stepLookup {
+	return taskstore.StepsFor(callerResolver(env), taskDir)
+}
+
+// planStage reads the inline list alone; it backs the PlanStage export the
+// session hooks use, which have no Grid home to resolve a named workflow from.
 func planStage(text, history string) string { return taskstore.PlanStage(text, history) }
-func heldStage(stage string) bool           { return taskstore.HeldStage(stage) }
+func planStageWith(lookup stepLookup, text, history string) string {
+	return taskstore.PlanStageWith(lookup, text, history)
+}
+func heldStage(stage string) bool { return taskstore.HeldStage(stage) }
 
 // held is the one answer to "does this task's plan still wait for a person?";
 // it lives in the task package so the writers ask the same question.
-func held(dir, text, history string) bool { return taskstore.PlanHeld(dir, text, history) }
+func held(lookup stepLookup, dir, text, history string) bool {
+	return taskstore.PlanHeldWith(lookup, dir, text, history)
+}
 func inactive(text string) bool {
 	f := taskfile.ParseFrontmatter(text)
 	if f == nil {
@@ -165,9 +181,9 @@ func inactive(text string) bool {
 	}
 	return false
 }
-func isHeld(dir string) bool {
+func (c context) isHeld(dir string) bool {
 	t := read(filepath.Join(dir, "task.md"))
-	return exists(dir) && !inactive(t) && held(dir, t, read(filepath.Join(dir, "history.md")))
+	return exists(dir) && !inactive(t) && held(stepsFor(c.env, dir), dir, t, read(filepath.Join(dir, "history.md")))
 }
 func gateLike(s string) bool {
 	s = strings.ToLower(strings.Join(strings.Fields(s), " "))
