@@ -151,7 +151,9 @@ func TestUsageBudgetGateKeepsSyntaxAndWorkspaceAnswers(t *testing.T) {
 	if code := h.run(task, "usage", "budget", "set", "--tokens", "lots"); code != 2 || !strings.Contains(h.errb.String(), "non-negative integer") {
 		t.Fatalf("syntax error: exit %d: %s", code, h.errb)
 	}
-	// --workspace is not a task write: it keeps its own role gate and is not refused here.
+	// --workspace is not a task write: a person's workspace write is allowed (an agent's is
+	// refused in usage_workspace_gate_test.go).
+	h.env.Procs = testProcs("Terminal")
 	if code := h.run(h.home, "usage", "budget", "set", "--tokens", "5", "--workspace"); code != 0 {
 		t.Fatalf("workspace set: exit %d: %s", code, h.errb)
 	}

@@ -563,12 +563,13 @@ func TestWorkspaceBudgetRefusalsCLI(t *testing.T) {
 
 func TestWorkspaceBudgetReplaceablePoliciesCLI(t *testing.T) {
 	h := newHarness(t)
-	t.Setenv("GRID_ROLE", "custom")
+	// A role the person gate accepts, so a write reaches the replaced policy and the store.
+	t.Setenv("GRID_ROLE", "member")
 	read, write := usage.WorkspaceBudgetReadAllowed, usage.WorkspaceBudgetWriteAllowed
 	t.Cleanup(func() { usage.WorkspaceBudgetReadAllowed, usage.WorkspaceBudgetWriteAllowed = read, write })
 	readCalls, writeCalls := 0, 0
-	usage.WorkspaceBudgetReadAllowed = func(role string) bool { readCalls++; return role == "custom" }
-	usage.WorkspaceBudgetWriteAllowed = func(role string) bool { writeCalls++; return role == "custom" }
+	usage.WorkspaceBudgetReadAllowed = func(role string) bool { readCalls++; return role == "member" }
+	usage.WorkspaceBudgetWriteAllowed = func(role string) bool { writeCalls++; return role == "member" }
 	for _, op := range []string{"set", "show", "clear"} {
 		args := []string{"usage", "budget", op, "--workspace", "--json"}
 		if op == "set" {

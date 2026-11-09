@@ -238,7 +238,11 @@ func runUsageConfig(kind string, args []string, env Env) int {
 			fmt.Fprintln(env.Stderr, "usage budget: --workspace accepts only tokens; set requires --tokens of at least 1")
 			return 2
 		}
-		return runWorkspaceBudget(op, tokenBudget.amount(), *asJSON, env)
+		// The workspace write is person-only like the task write; its role check runs first.
+		personGate := func() int {
+			return withPersonErrorCode(&env, func(e *Env) int { return gateCommand(append([]string{"usage", "budget", op}, args[1:]...), e) })
+		}
+		return runWorkspaceBudgetGated(op, tokenBudget.amount(), *asJSON, env, personGate)
 	}
 	res, err := taskFor(env, *task)
 	if err != nil {
@@ -311,15 +315,16 @@ func runUsageConfig(kind string, args []string, env Env) int {
 	return 0
 }
 
-// usageBudgetWrite reports a task-level budget write command, which the handler gates
-// itself once it knows whether --workspace was meant; Run skips the early gate for it.
+// usageBudgetWrite reports a budget write command, which the handler gates itself once it
+// knows whether --workspace was meant; Run skips the early gate for it.
 func usageBudgetWrite(name string, rest []string) bool {
 	return name == "usage" && len(rest) >= 2 && rest[0] == "budget" && (rest[1] == "set" || rest[1] == "clear")
 }
 
 // parseBudgetWrite is parse for budget set and clear with the person gate between the flag
 // parse and its diagnostics, so an agent is refused whatever else is wrong with the call.
-// --workspace keeps its own role gate and a failed flag parse writes nothing, so neither is gated.
+// A failed flag parse writes nothing, so it is not gated. A --workspace write is gated later,
+// after its flag diagnostics and its role check, which both keep their exit codes.
 func parseBudgetWrite(fs *flag.FlagSet, op string, args []string, workspace *bool, env *Env) (int, bool) {
 	held := &bytes.Buffer{}
 	fs.SetOutput(held)
@@ -345,7 +350,15 @@ func parseBudgetWrite(fs *flag.FlagSet, op string, args []string, workspace *boo
 	return 0, false
 }
 
+// runWorkspaceBudget is the role check and the store call, with no person gate; the command
+// goes through runWorkspaceBudgetGated.
 func runWorkspaceBudget(op string, value *uint64, asJSON bool, env Env) int {
+	return runWorkspaceBudgetGated(op, value, asJSON, env, nil)
+}
+
+// runWorkspaceBudgetGated checks the caller role, then runs person (exit 3 refuses) before a
+// write, then reads or writes the workspace budget. A show never runs person.
+func runWorkspaceBudgetGated(op string, value *uint64, asJSON bool, env Env, person func() int) int {
 	allowed := usage.WorkspaceBudgetReadAllowed
 	if op != "show" {
 		allowed = usage.WorkspaceBudgetWriteAllowed
@@ -353,6 +366,11 @@ func runWorkspaceBudget(op string, value *uint64, asJSON bool, env Env) int {
 	if !allowed(env.getenv("GRID_ROLE")) {
 		fmt.Fprintln(env.Stderr, "usage budget: caller role is not allowed to access the workspace budget")
 		return 3
+	}
+	if op != "show" && person != nil {
+		if code := person(); code != 0 {
+			return code
+		}
 	}
 	s := usage.Store{GridHome: env.GridHome}
 	if op == "show" {
