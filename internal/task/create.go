@@ -145,9 +145,10 @@ func (s Store) New(o NewOptions) (Task, error) {
 }
 
 // taskFront is task.md's header. Once the project is registered it binds the
-// task to the steps its workflow resolves to now (workflow_digest), so a later
-// resolution that differs holds the task; steps that do not resolve yet leave
-// the field out, and the task keeps the folder check alone.
+// task to its workflow's definition (workflow_digest), whether or not its size
+// is known yet, so a later definition that differs holds the task; a workflow
+// with no template to find leaves the field out, and the task keeps the folder
+// check alone.
 func (s Store) taskFront(t *Task, project, stableID string) ([]byte, error) {
 	dump := func() ([]byte, error) {
 		return yaml.Dump(struct {
@@ -159,11 +160,11 @@ func (s Store) taskFront(t *Task, project, stableID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	steps, err := workflow.TaskSteps(s.Resolver, project, "---\n"+string(front)+"---\n")
-	if err != nil {
+	tmpl, steps, err := workflow.TaskWorkflow(s.Resolver, project, "---\n"+string(front)+"---\n")
+	if tmpl == nil && err != nil {
 		return front, nil
 	}
-	t.WorkflowDigest = WorkflowDigest(steps)
+	t.WorkflowDigest = DefinitionDigest(definition(tmpl, steps))
 	return dump()
 }
 

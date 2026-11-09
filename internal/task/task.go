@@ -31,8 +31,8 @@ type Record struct {
 	OwnerRole string `yaml:"owner_role,omitempty" json:"owner_role,omitempty"`
 	Size      string `yaml:"size" json:"size"`
 	Workflow  string `yaml:"workflow" json:"workflow"`
-	// WorkflowDigest binds the task to the steps its workflow resolved to when
-	// it was made (WorkflowDigest); only Grid writes it, and no command shows it.
+	// WorkflowDigest binds the task to its workflow's definition when it was
+	// made (DefinitionDigest); only Grid writes it, and no command shows it.
 	WorkflowDigest string `yaml:"workflow_digest,omitempty" json:"-"`
 	State          string `yaml:"state" json:"state"`
 	Gate           string `yaml:"gate,omitempty" json:"gate,omitempty"`

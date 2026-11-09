@@ -21,32 +21,42 @@ var sizeLetter = map[string]string{"": "", "auto": "", "small": "S", "normal": "
 // else the workspace default when no rule needs a choice. Every failure is an
 // error; it never returns an empty list without one.
 func TaskSteps(r where.Resolver, project, taskText string) ([]taskfile.WorkflowStep, error) {
+	_, steps, err := TaskWorkflow(r, project, taskText)
+	return steps, err
+}
+
+// TaskWorkflow is TaskSteps with the template the steps come from: nil for an
+// inline list. The template comes back even when its steps do not resolve for
+// the task's size (size auto with size-only steps), so a caller can check the
+// definition the task was made with before the size is known.
+func TaskWorkflow(r where.Resolver, project, taskText string) (*Template, []taskfile.WorkflowStep, error) {
 	fm := taskfile.ParseFrontmatter(taskText)
 	if fm == nil || fm.Odd {
-		return nil, errors.New("task.md front matter cannot be read")
+		return nil, nil, errors.New("task.md front matter cannot be read")
 	}
 	raw := fm.Data["workflow"]
 	if _, ok := raw.([]any); ok {
-		return inlineSteps(taskText)
+		steps, err := inlineSteps(taskText)
+		return nil, steps, err
 	}
 	name, ok := raw.(string)
 	if raw != nil && !ok {
-		return nil, errors.New("task.md workflow is not a name or a list")
+		return nil, nil, errors.New("task.md workflow is not a name or a list")
 	}
 	size, ok := fm.Data["size"].(string)
 	if _, has := fm.Data["size"]; has && !ok {
-		return nil, errors.New("task.md size is not a word")
+		return nil, nil, errors.New("task.md size is not a word")
 	}
 	letter, ok := sizeLetter[size]
 	if !ok {
-		return nil, fmt.Errorf("task size %q is not small, normal, large or auto", size)
+		return nil, nil, fmt.Errorf("task size %q is not small, normal, large or auto", size)
 	}
 	if project == "" {
-		return nil, errors.New("the task has no project")
+		return nil, nil, errors.New("the task has no project")
 	}
 	scope, err := scopeTemplates(r, project)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var t *Template
 	if name == "" {
@@ -55,9 +65,10 @@ func TaskSteps(r where.Resolver, project, taskText string) ([]taskfile.WorkflowS
 		t, err = namedTemplate(scope, name)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return templateSteps(*t, letter, size)
+	steps, err := templateSteps(*t, letter, size)
+	return t, steps, err
 }
 
 func inlineSteps(taskText string) ([]taskfile.WorkflowStep, error) {
