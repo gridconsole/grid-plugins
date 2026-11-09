@@ -926,9 +926,8 @@ approval without `plan` in its name remains a delivery gate.
 `grid task new` binds a task to its workflow: once the project is registered it
 writes `workflow_digest:` in `task.md`, the hex sha256 of the steps the task
 resolves to (each step's name, kind and whether it is the plan gate, in order).
-Only Grid writes the field, and `grid task show` does not print it. The guard,
-`grid task deliver` and every other reader of the plan hold resolve the steps
-again and compare: a different digest is code `workflow_changed`, which holds the
+Only Grid writes the field, and `grid task show --json` does not include it. The
+guard and `grid task deliver` resolve the steps again and compare: a different digest is code `workflow_changed`, which holds the
 task as a folder under another project than its `project:` does, and no receipt
 releases it. A project folder renamed away and back, or rebuilt with identical
 files, keeps the digest and changes nothing. Steps that do not resolve at
