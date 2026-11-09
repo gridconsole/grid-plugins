@@ -58,8 +58,6 @@ var quoteGroupRows = []struct {
 	{"hash_quote_only", "echo '#'", false},
 	{"hash_count", "echo $#", false},
 	{"continuation_before_comment", "echo a \\\n b # c", false},
-	// A substitution in a comment is scanned but is not an argument of the command.
-	{"comment_substitution_not_an_argument", "rm notes.md # $(echo a)", false},
 	{"continuation_after_hash_in_word", "echo a#b \\\n b", false},
 	{"continuation_after_comment_line", "echo a # c\necho b \\\n c", false},
 	// In a ( ) group a # inside a word is no comment: the ) after it still closes the

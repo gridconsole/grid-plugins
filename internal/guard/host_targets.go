@@ -240,9 +240,7 @@ func hostShellTokens(command string) []hostShellToken {
 			} else {
 				groups = append(groups, body)
 			}
-			if !comment {
-				word.WriteString(command[i:end])
-			}
+			word.WriteString(command[i:end])
 			started = true
 			i = end - 1
 			continue
