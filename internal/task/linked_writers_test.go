@@ -160,7 +160,9 @@ func TestTaskWritersRefuseALinkedFile(t *testing.T) {
 	t.Run("recoverWrite", func(t *testing.T) {
 		_, tk := deliverFixture(t, "")
 		seedHistory(t, tk.Path)
-		journal, err := json.Marshal(map[string][]byte{"task.md": []byte("replayed\n"), "history.md": []byte("replayed\n")})
+		text, _ := os.ReadFile(filepath.Join(tk.Path, "task.md"))
+		history, _ := os.ReadFile(filepath.Join(tk.Path, "history.md"))
+		journal, err := json.Marshal(map[string][]byte{"task.md": append(text, "\nReplayed.\n"...), "history.md": append(history, "- replayed\n"...)})
 		if err != nil {
 			t.Fatal(err)
 		}
