@@ -138,6 +138,16 @@ var tildeDeniedRows = []struct{ name, command string }{
 	{"z04_zsh_dirstack1_rg_tplus", `dirstack[1]=--pre=tee; rg -n x ~+1 LNK`},
 	{"m07_oldpwd_tminus", `OLDPWD=-exec; find . -maxdepth 0 ~- tee LNK \;`},
 	{"m08_pwd_tplus", `PWD=-exec; find . -maxdepth 0 ~+ tee LNK \;`},
+	{"n06_z_tilde_var", `x=1; dirstack[1]=-exec; find . -maxdepth 0 ~$x tee LNK \;`},
+	{"n07_z_tilde_var_rg", `x=1; dirstack[1]=--pre=tee; rg -n x ~$x LNK`},
+	{"n14_emptyq_t1", `dirstack[1]=-exec; find . -maxdepth 0 ''~1 tee LNK \;`},
+	{"n15_emptydq_t1", `dirstack[1]=-exec; find . -maxdepth 0 ""~1 tee LNK \;`},
+	{"p03_emptydq_tplus1", `dirstack[1]=-exec; find . -maxdepth 0 ""~+1 tee LNK \;`},
+	{"p04_emptyq_tminus0", `dirstack[1]=-exec; find . -maxdepth 0 ''~-0 tee LNK \;`},
+	{"p05_emptyq_rg", `dirstack[1]=--pre=tee; rg -n x ''~1 LNK`},
+	{"p06_tvar_plus", `x=+1; dirstack[1]=-exec; find . -maxdepth 0 ~$x tee LNK \;`},
+	{"p07_tvar_dq", `x=1; dirstack[1]=-exec; find . -maxdepth 0 ~"$x" tee LNK \;`},
+	{"p08_tvar_optind", `dirstack[1]=-exec; find . -maxdepth 0 ~$OPTIND tee LNK \;`},
 }
 
 // tildeKeptRows keep the verdict they had before the ~ rule: a home (~, ~/x, ~user) is no option, and a quoted

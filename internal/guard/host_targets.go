@@ -825,20 +825,21 @@ func hostPlainVar(word, whole string) bool {
 
 // hostNumericSubscript matches the name of an assignment to an array element by number: x[0]=,
 // x[0]+=. A number names no command, so BASH_CMDS[0]=, functions[0]= and aliases[0]= shadow nothing;
-// PATH[0]= and zsh path[1]= change where a command is found, and IFS[0]= how words split.
+// PATH[0]= and zsh path[1]= change where a command is found, IFS[0]= how words split, and zsh dirstack[1]= what ~1 expands to.
 var hostNumericSubscript = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\[[0-9]+\]\+?$`)
 
 // subscripted reports an assignment word whose name has a subscript: a[..]=, and
 // BASH_CMDS[..]= or zsh functions[..]= and commands[..]=, which shadow a command. The
 // shells read the text inside the brackets as an expression, not as words. A numeric
-// subscript is let through when relaxed.
+// subscript is let through when relaxed, except path, ifs and the zsh dirstack, which an
+// expansion such as ~N, an empty quote before ~1 or ~$x reads back as a word.
 func (g hostSegment) subscripted(relaxed bool) bool {
 	for _, assign := range g.assigns {
 		name, _, _ := strings.Cut(assign.text, "=")
 		if !strings.Contains(name, "[") {
 			continue
 		}
-		if m := hostNumericSubscript.FindStringSubmatch(name); !relaxed || m == nil || strings.EqualFold(m[1], "path") || strings.EqualFold(m[1], "ifs") {
+		if m := hostNumericSubscript.FindStringSubmatch(name); !relaxed || m == nil || strings.EqualFold(m[1], "path") || strings.EqualFold(m[1], "ifs") || strings.EqualFold(m[1], "dirstack") {
 			return true
 		}
 	}
