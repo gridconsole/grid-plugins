@@ -229,14 +229,19 @@ func projectWorkflowAt(root, target string) bool {
 // that only read are skipped, so cat alias; echo x > notes.md stays allowed; the
 // inside of every substitution is scanned as a command of its own.
 func (c context) writesProjectWorkflow(command string) bool {
+	return c.writesWorkflowIn(command, hostWholeOf(command))
+}
+
+// writesWorkflowIn scans command, a part of whole, the text the tool gave.
+func (c context) writesWorkflowIn(command string, whole hostWhole) bool {
 	var roots []string
-	for _, seg := range hostSegments(command) {
+	for _, seg := range hostSegments(command, whole) {
 		if seg.refuse {
 			return true
 		}
 		for _, tok := range seg.tokens() {
 			for _, body := range tok.groups {
-				if c.writesProjectWorkflow(body) {
+				if c.writesWorkflowIn(body, whole) {
 					return true
 				}
 			}
@@ -264,7 +269,7 @@ func (c context) writesProjectWorkflow(command string) bool {
 // heredoc bodies and comments included, so a tokenizer mistake refuses instead of
 // letting a write through.
 func (c context) floorReason(command string) string {
-	if hostProvenReads(command, 0) {
+	if hostProvenReads(command) {
 		return ""
 	}
 	s := &writeScan{c: c}

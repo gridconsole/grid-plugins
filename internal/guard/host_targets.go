@@ -26,6 +26,11 @@ type hostShellToken struct {
 	// word, and any of those nested in ${..}. Nothing runs them; they are scanned.
 	groups []string
 	ansi   bool // the word holds $'..' or $"..", which the guard does not decode
+	// live: the word holds a $, a backtick or a { the shell expands (none inside '..', no { inside "..").
+	// dq: the word is one "..", nothing before or after it. calm: an argument that is not live, or that is
+	// "$NAME" for a name the command never sets, in a command main's textual check reads as a read; set
+	// by hostSegmentsOf.
+	live, dq, calm bool
 }
 
 // hostMaxGroupDepth bounds nested substitutions; deeper text fails closed.
@@ -400,13 +405,14 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 	var groups []string
 	var docs []hostHeredoc
 	started, comment, ansi := false, false, false // a word has begun, even an empty one; inside a comment; $'..' or $".." in the word
+	live, dqStart, dqEnd := false, false, -1      // an expansion in the word; the word began with "; where that " closed
 	flush := func() {
 		started = false
 		if word.Len() > 0 || len(groups) > 0 { // groups alone: substitutions in a heredoc body
-			out = append(out, hostShellToken{text: word.String(), groups: groups, ansi: ansi})
+			out = append(out, hostShellToken{text: word.String(), groups: groups, ansi: ansi, live: live, dq: dqStart && dqEnd == word.Len()})
 		}
 		word.Reset()
-		groups, ansi = nil, false
+		groups, ansi, live, dqStart, dqEnd = nil, false, false, false, -1
 	}
 	emit := func(kind hostShellKind, text string) {
 		flush()
@@ -427,7 +433,7 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 			next := at(i + 2)
 			refuse = refuse || next == '(' || next == '{' || next == '\'' && quote == 0
 			word.WriteString("$$")
-			started = true
+			started, live = true, true
 			i++
 			continue
 		}
@@ -454,6 +460,7 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 			}
 			word.WriteString(command[i:end])
 			started = true
+			live = live || ch != '<' && ch != '>'
 			i = end - 1
 			continue
 		}
@@ -473,18 +480,23 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 		}
 		if quote != 0 {
 			if quote == '$' && ch == '\'' || quote != '$' && ch == quote { // quote '$' is $'..'
+				if quote == '"' && dqStart && dqEnd < 0 {
+					dqEnd = word.Len()
+				}
 				quote = 0
 			} else {
 				word.WriteByte(ch)
+				live = live || ch == '$' && quote == '"'
 			}
 			continue
 		}
 		switch ch {
 		case '\'', '"':
+			dqStart = dqStart || ch == '"' && !started
 			quote, started = ch, true
 		case '$':
 			word.WriteByte(ch)
-			started = true
+			started, live = true, true
 			ansi = ansi || at(i+1) == '\'' || at(i+1) == '"'
 			if at(i+1) == '\'' { // $'..': a backslash escapes in it
 				quote = '$'
@@ -583,6 +595,7 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 		default:
 			word.WriteByte(ch)
 			started = true
+			live = live || ch == '{'
 		}
 	}
 	flush()
@@ -607,9 +620,9 @@ var hostFdOperand = regexp.MustCompile(`^(?:[0-9]+-?|-)$`)
 
 // hostSegments returns the commands as bash reads the text and, where zsh reads it
 // differently, the zsh reading after them, so a write either shell runs is scanned.
-func hostSegments(command string) []hostSegment {
-	out := hostSegmentsOf(hostShellTokensAs(command, false))
-	if zsh := hostSegmentsOf(hostShellTokensAs(command, true)); !slices.EqualFunc(out, zsh, hostSameSegment) {
+func hostSegments(command string, whole hostWhole) []hostSegment {
+	out := hostSegmentsOf(hostShellTokensAs(command, false), whole)
+	if zsh := hostSegmentsOf(hostShellTokensAs(command, true), whole); !slices.EqualFunc(out, zsh, hostSameSegment) {
 		zsh[0].restart = true
 		out = append(out, zsh...)
 	}
@@ -618,13 +631,35 @@ func hostSegments(command string) []hostSegment {
 
 func hostSameSegment(a, b hostSegment) bool {
 	same := func(x, y hostShellToken) bool {
-		return x.text == y.text && x.kind == y.kind && x.ansi == y.ansi && slices.Equal(x.groups, y.groups)
+		return x.text == y.text && x.kind == y.kind && x.ansi == y.ansi && x.live == y.live && x.dq == y.dq && slices.Equal(x.groups, y.groups)
 	}
 	return a.separator == b.separator && a.refuse == b.refuse && a.skipped == b.skipped && slices.EqualFunc(a.tokens(), b.tokens(), same) &&
 		slices.EqualFunc(a.writes, b.writes, same) && slices.EqualFunc(a.args, b.args, same)
 }
 
-func hostSegmentsOf(tokens []hostShellToken) []hostSegment {
+// hostWhole is the entire command the tool gave, of which a substitution body is only a part.
+// relaxed: main's own textual check, onlyReads on the flattened text, reads all of it as reads.
+// Only then may the guard trust more than the strict reading: a comment, a numeric
+// subscript, an expansion in '..' or a "$NAME" for a name the command never sets. So a line
+// that the lane allows and main denied stays denied.
+type hostWhole struct {
+	text    string
+	relaxed bool
+}
+
+func hostWholeOf(text string) hostWhole { return hostWhole{text, hostMainReads(text)} }
+
+// hostMainReads is main's check: onlyReads holds for both readings of the flattened command.
+func hostMainReads(command string) bool {
+	for _, flat := range flattened(command) {
+		if !onlyReads(command, flat) {
+			return false
+		}
+	}
+	return true
+}
+
+func hostSegmentsOf(tokens []hostShellToken, whole hostWhole) []hostSegment {
 	var out []hostSegment
 	var seg hostSegment
 	for i := 0; i < len(tokens); i++ {
@@ -643,6 +678,7 @@ func hostSegmentsOf(tokens []hostShellToken) []hostSegment {
 			} else if len(seg.args) == 0 && strings.Contains(tok.text, "=") {
 				seg.assigns = append(seg.assigns, tok)
 			} else {
+				tok.calm = whole.relaxed && (!tok.live || tok.dq && hostPlainVar(tok.text, whole.text))
 				seg.args = append(seg.args, tok)
 			}
 		default:
@@ -687,22 +723,64 @@ func (g hostSegment) readCommand() bool {
 
 // hostOpaqueOption reports a find or rg argument that may expand to an option the
 // guard cannot read: $'..' and $"..", or a word that starts with - or an expansion
-// and holds one ($x, $(..), a backtick, {a,b}). It counts as a runner, never a read.
+// and holds one ($x, $(..), a backtick, {a,b}). It counts as a runner, never a read,
+// unless it is calm: no expansion runs in it ('-x$'), or it is a lone "$NAME" for a
+// name the command never sets, which holds what the shell inherited and no command chooses.
 func hostOpaqueOption(name string, arg hostShellToken) bool {
 	if name != "find" && name != "rg" {
 		return false
 	}
 	const expansion = "$`{"
-	return arg.ansi || arg.text != "" && strings.ContainsAny(arg.text, expansion) &&
+	return arg.ansi || arg.text != "" && !arg.calm && strings.ContainsAny(arg.text, expansion) &&
 		(arg.text[0] == '-' || strings.IndexByte(expansion, arg.text[0]) >= 0)
 }
 
+var hostPlainName = regexp.MustCompile(`^\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))$`)
+var hostPrintf = regexp.MustCompile(`(?:^|[^A-Za-z0-9_])printf(?:[^A-Za-z0-9_]|$)`)
+
+// hostPlainVar reports the word $NAME or ${NAME} for a variable that whole only ever
+// reads: each use of the name is $NAME or ${NAME}, and no printf runs, since printf -v
+// sets a variable by its name. $_ is the last argument of the command before it.
+func hostPlainVar(word, whole string) bool {
+	m := hostPlainName.FindStringSubmatch(word)
+	if m == nil || hostPrintf.MatchString(whole) {
+		return false
+	}
+	name := m[1] + m[2]
+	if name == "_" {
+		return false
+	}
+	for from := 0; ; {
+		i := strings.Index(whole[from:], name)
+		if i < 0 {
+			return true
+		}
+		i, from = from+i, from+i+len(name)
+		if i > 0 && hostWordByte(whole[i-1]) || from < len(whole) && hostWordByte(whole[from]) {
+			continue // a longer name
+		}
+		if !(i > 0 && whole[i-1] == '$') && !(i > 1 && whole[i-2:i] == "${" && from < len(whole) && whole[from] == '}') {
+			return false
+		}
+	}
+}
+
+// hostNumericSubscript matches the name of an assignment to an array element by number: x[0]=,
+// x[0]+=. A number names no command, so BASH_CMDS[0]=, functions[0]= and aliases[0]= shadow nothing;
+// PATH[0]= and zsh path[1]= change where a command is found, and IFS[0]= how words split.
+var hostNumericSubscript = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\[[0-9]+\]\+?$`)
+
 // subscripted reports an assignment word whose name has a subscript: a[..]=, and
-// BASH_CMDS[..]= or zsh functions[..]= and commands[..]=, which shadow a command.
-// The shells read the text inside the brackets as an expression, not as words.
-func (g hostSegment) subscripted() bool {
+// BASH_CMDS[..]= or zsh functions[..]= and commands[..]=, which shadow a command. The
+// shells read the text inside the brackets as an expression, not as words. A numeric
+// subscript is let through when relaxed.
+func (g hostSegment) subscripted(relaxed bool) bool {
 	for _, assign := range g.assigns {
-		if name, _, _ := strings.Cut(assign.text, "="); strings.Contains(name, "[") {
+		name, _, _ := strings.Cut(assign.text, "=")
+		if !strings.Contains(name, "[") {
+			continue
+		}
+		if m := hostNumericSubscript.FindStringSubmatch(name); !relaxed || m == nil || strings.EqualFold(m[1], "path") || strings.EqualFold(m[1], "ifs") {
 			return true
 		}
 	}
@@ -722,9 +800,20 @@ func (g hostSegment) readsOnly() bool { return len(g.writes) == 0 && g.readComma
 // readings and in every substitution. A heredoc skip is trusted only for a quoted
 // delimiter, and never with $[ or ((, or after a [ left open on its line, where the
 // shells read << as a shift and run the lines the tokenizer took for a body. A
-// comment skipped, or an assignment to a subscript, is never proven: the shells can
-// read the text after # as commands, and a[..]=, BASH_CMDS[..]= shadow a command.
-func hostProvenReads(command string, depth int) bool {
+// comment skipped, or an assignment to a subscript, is never proven (the shells can read
+// the text after # as commands, and a[..]=, BASH_CMDS[..]= shadow a command) unless
+// main's own textual check, onlyReads on the flattened text, reads the whole command as
+// reads too: flatten sees every word, comments and subscripts included.
+func hostProvenReads(command string) bool {
+	if hostReadsIn(command, hostWhole{text: command}, 0) {
+		return true
+	}
+	loose := hostWholeOf(command)
+	return loose.relaxed && hostReadsIn(command, loose, 0)
+}
+
+// hostReadsIn proves command, a part of whole.
+func hostReadsIn(command string, whole hostWhole, depth int) bool {
 	if depth > hostMaxGroupDepth || strings.Contains(command, "$[") || strings.Contains(command, "((") {
 		return false
 	}
@@ -740,13 +829,13 @@ func hostProvenReads(command string, depth int) bool {
 			i++
 		}
 	}
-	for _, seg := range hostSegments(command) {
-		if seg.refuse || seg.skipped || seg.subscripted() || !seg.readsOnly() {
+	for _, seg := range hostSegments(command, whole) {
+		if seg.refuse || seg.skipped && !whole.relaxed || seg.subscripted(whole.relaxed) || !seg.readsOnly() {
 			return false
 		}
 		for _, tok := range seg.tokens() {
 			for _, body := range tok.groups {
-				if !hostProvenReads(body, depth+1) {
+				if !hostReadsIn(body, whole, depth+1) {
 					return false
 				}
 			}
@@ -853,7 +942,8 @@ func hostStarExpansions(word string) string {
 // variables.
 type writeScan struct {
 	c     context
-	roots []string // loaded on first use: resolving them reads the file system
+	whole hostWhole // the command as the tool gave it; run scans parts of it
+	roots []string  // loaded on first use: resolving them reads the file system
 }
 
 func (s *writeScan) gridRoots() []string {
@@ -870,7 +960,7 @@ var hostKnownVar = regexp.MustCompile(`\$(?:\{(HOME|GRID_HOME|GRID_PROJECTS|PWD)
 // reads and echo/printf data are never treated as write targets. The inside of
 // every substitution is a command of its own.
 func (c context) protectedWriteReason(command string) string {
-	return (&writeScan{c: c}).run(command, c.in.Cwd, false, 0)
+	return (&writeScan{c: c, whole: hostWholeOf(command)}).run(command, c.in.Cwd, false, 0)
 }
 
 func (s *writeScan) under(path string) bool {
@@ -939,7 +1029,7 @@ func (s *writeScan) run(command, base string, uncertain bool, depth int) string 
 		return gateReason
 	}
 	start, startUncertain := base, uncertain
-	for _, seg := range hostSegments(command) {
+	for _, seg := range hostSegments(command, s.whole) {
 		if seg.refuse {
 			return gateReason
 		}
