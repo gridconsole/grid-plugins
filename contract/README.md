@@ -633,6 +633,45 @@ quoted text. Exit 0 with no findings, 3 with findings, 1 when the brain cannot
 be read, 2 on usage. Prose never changes the result: a knowledge proposal that
 asks to become a skill has no finding.
 
+### `grid brain changes [--level home|project] [--project <p>] [--since <RFC3339>] [--limit <n>] [--json]`
+
+Lists the audit lines of the level's `knowledge/log.md`, newest first (lines with
+the same time keep the later one first). `--since` keeps lines at or after that
+RFC 3339 time and `--limit` caps the count (0 or less: all); both filter as
+`Store.Changes` does. The level is `--level`, else the resolved project, else
+home. `--json` prints `{"changes": [...]}`, each with `at`, `status`, `topic`,
+`name`, `version`, `hash`, `origin_kind`, `origin_id` and `reason`; lines written
+before versions existed have no topic, version 0 and an empty hash. Plain output
+is one line per change, `<at> <status> <topic>/<name> v<n> <hash> <reason>`
+(`-` for an empty hash, no reason field when empty, control characters shown as
+`?`). A missing log is an empty list: `{"changes":[]}` or no output, exit 0.
+
+### `grid brain revert <topic>/<name> --to <n> [--level home|project] [--project <p>] [--json]`
+
+Publishes stored version `n` of a knowledge entry again, as a new version, so the
+history only grows: after versions 1 to 3, `--to 1` makes version 4 with version
+1's bytes. Under the level lock it stores the copy, publishes the entry
+atomically, appends an audit line with status `reverted`, reason `revert to v<n>`
+and the new version and hash, then rebuilds that level's index. When the entry
+already holds those bytes (and the newest stored copy does too) nothing is written
+and the current version is reported. Config topics are refused (they are changed
+through their own commands), as is a copy that is not a valid entry for that
+topic, name and level, and a name another topic already holds. A project without
+a Grid record is refused as for `propose`; use `--level home`.
+
+Plain output is `v<new>`, or `already at v<current>` for the no-op. `--json`
+prints `{"version": <n>, "noop": <bool>}`. `--to` is required and must be 1 or
+more, and `<topic>/<name>` must be two plain names (exit 2). A missing version or
+entry, or any store error, exits 1.
+
+Both verbs check `GRID_ROLE` after the flags parse and before any resolution,
+read or write. The replaceable `brain.ChangesReadAllowed` (host key
+`brain_changes_read_roles`) and `brain.RevertAllowed` (host key
+`brain_revert_roles`) policies default to the empty local role, `owner` and
+`member`; any other role, including `guest`, exits 3 with
+`grid brain <changes|revert>: caller role is not allowed to <read brain changes|revert brain entries>`.
+The CLI does not read a workflow file to configure them.
+
 ## Task intent files
 
 Sources: go-architecture.md:178-199,273,372-384,596. Session actions and moves
