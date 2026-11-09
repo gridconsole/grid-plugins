@@ -14,6 +14,7 @@ const (
 	hostReadRedirect
 	hostWriteRedirect
 	hostDupRedirect // >&: a file unless the operand is an fd number or -
+	hostRefuse      // the tokenizer cannot tell what the shell runs: refuse the command
 )
 
 type hostShellToken struct {
@@ -45,24 +46,57 @@ func hostWordByte(b byte) bool {
 	return b == '_' || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
 }
 
+// hostWordEnds are the bytes after which a new shell word begins: a # there starts
+// a comment, anywhere else a # is an ordinary character.
+const hostWordEnds = " \t\r\n;&|()<>"
+
 // hostJoinLines drops every backslash-newline pair, as the shells do before they
-// read words. A backslash escapes the byte after it, so \\<newline> stays.
-func hostJoinLines(text string) string {
+// read words. A backslash escapes the byte after it, so \\<newline> stays. A comment
+// ends at its newline even after a backslash, so a pair inside a comment is not a
+// join: the second result reports one and the caller refuses the command. With no
+// substitution, backtick, heredoc or $'..' in the text the quotes are tracked and
+// only a # outside quotes starts a comment, and a backslash in '..' is literal;
+// otherwise every # at the start of a word counts and every pair is joined.
+func hostJoinLines(text string) (string, bool) {
 	if !strings.Contains(text, "\\\n") {
-		return text
+		return text, false
+	}
+	exact := !strings.Contains(text, "`")
+	for _, marker := range []string{"$(", "${", "$'", "<(", ">(", "<<"} {
+		exact = exact && !strings.Contains(text, marker)
 	}
 	var b strings.Builder
+	var quote byte
+	comment, refuse := false, false
+	prev := byte(' ')
 	for i := 0; i < len(text); i++ {
-		if text[i] == '\\' && i+1 < len(text) {
+		ch := text[i]
+		if ch == '\\' && i+1 < len(text) && quote != '\'' {
 			i++
 			if text[i] == '\n' {
+				refuse = refuse || comment
 				continue
 			}
 			b.WriteByte('\\')
+			ch, prev = text[i], 'x'
+		} else {
+			switch {
+			case comment:
+				comment = ch != '\n'
+			case exact && quote != 0:
+				if ch == quote {
+					quote = 0
+				}
+			case exact && (ch == '\'' || ch == '"'):
+				quote = ch
+			case ch == '#' && strings.IndexByte(hostWordEnds, prev) >= 0:
+				comment = true
+			}
+			prev = ch
 		}
-		b.WriteByte(text[i])
+		b.WriteByte(ch)
 	}
-	return b.String()
+	return b.String(), refuse
 }
 
 // hostShellGroup finds the end of a quote, substitution or brace group that
@@ -71,27 +105,62 @@ func hostJoinLines(text string) string {
 // the group, so it takes the rest of the text and that text is scanned as
 // commands. Nothing ever lowers the count: esac in an argument, a comment or a
 // heredoc would otherwise close the group early. A mistake only keeps a group open.
+// Quotes follow the shells: in '..' nothing but ' is special, not even a backslash;
+// in ".." only \, ", a backtick, $( and ${ are; $'..' escapes with a backslash; a ( )
+// group skips a comment, which begins at a # that starts a word and ends at the newline.
 func hostShellGroup(text string, start int, close byte) (int, bool) {
 	cases := 0
+	atWord := true // the next byte starts a word
 	for i := start; i < len(text); i++ {
-		switch {
-		case text[i] == '\\':
+		ch, wordStart := text[i], atWord
+		atWord = strings.IndexByte(hostWordEnds, ch) >= 0
+		if close == '\'' {
+			if ch == '\'' {
+				return i + 1, true
+			}
+			continue
+		}
+		if close == '"' && ch != '\\' && ch != '"' && ch != '`' && !(ch == '$' && i+1 < len(text) && (text[i+1] == '(' || text[i+1] == '{')) {
+			continue
+		}
+		if close == '"' && ch == '$' {
 			i++
+			ch = text[i]
+		}
+		switch {
+		case ch == '\\':
+			i++
+			atWord = false
 		case close == ')' && hostKeywordAt(text, i, start, "case"):
 			cases++
 			i += len("case") - 1
-		case text[i] == close && cases == 0:
+			atWord = false
+		case ch == close && cases == 0:
 			return i + 1, true
-		case close == '\'':
-		case text[i] == '\'' || text[i] == '"' || text[i] == '`':
-			end, _ := hostShellGroup(text, i+1, text[i])
-			i = end - 1
-		case text[i] == '(':
+		case close == ')' && ch == '#' && wordStart:
+			for i+1 < len(text) && text[i+1] != '\n' {
+				i++
+			}
+		case ch == '$' && i+1 < len(text) && text[i+1] == '\'':
+			// $'..' is the one single-quoted form where a backslash escapes.
+			i += 2
+			for i < len(text) && text[i] != '\'' {
+				if text[i] == '\\' {
+					i++
+				}
+				i++
+			}
+			atWord = false
+		case ch == '\'' || ch == '"' || ch == '`':
+			end, _ := hostShellGroup(text, i+1, ch)
+			i, atWord = end-1, false
+		case ch == '(':
 			end, _ := hostShellGroup(text, i+1, ')')
-			i = end - 1
-		case text[i] == '{':
+			// A subshell ends a word; $( ) and <( ) are words, so a # after them is not a comment.
+			i, atWord = end-1, i == start || strings.IndexByte("$<>", text[i-1]) < 0
+		case ch == '{':
 			end, _ := hostShellGroup(text, i+1, '}')
-			i = end - 1
+			i, atWord = end-1, false
 		}
 	}
 	return len(text), false
@@ -125,14 +194,19 @@ func hostDigits(text string) bool {
 // Redirect operators come out whole: >, >>, >|, >!, >>|, >>!, >&, >&|, >&!, >>&,
 // &>, &>>, &>|, &>!, <>, <, <<, <<<, <&, each with an optional leading fd number,
 // which is dropped. Only >& followed by a word is a dup (a file unless an fd).
-// Backslash-newline pairs go first, before any word is matched.
+// Backslash-newline pairs go first, before any word is matched. A # that starts a
+// word, outside quotes, begins a comment that ends at the newline; a substitution
+// in it is still scanned, since an unquoted heredoc line runs it. A hostRefuse token
+// ends the list when the tokenizer cannot tell what the shell runs.
 func hostShellTokens(command string) []hostShellToken {
-	command = hostJoinLines(command)
+	command, refuse := hostJoinLines(command)
 	var out []hostShellToken
 	var word strings.Builder
 	var groups []string
+	started, comment := false, false // a word has begun, even an empty one; inside a comment
 	flush := func() {
-		if word.Len() > 0 {
+		started = false
+		if word.Len() > 0 || len(groups) > 0 { // groups alone: substitutions in a comment
 			out = append(out, hostShellToken{text: word.String(), groups: groups})
 		}
 		word.Reset()
@@ -151,7 +225,7 @@ func hostShellTokens(command string) []hostShellToken {
 	var quote byte
 	for i := 0; i < len(command); i++ {
 		ch := command[i]
-		subst := ch == '`' || (ch == '$' && (at(i+1) == '(' || at(i+1) == '{')) || ((ch == '<' || ch == '>') && quote == 0 && at(i+1) == '(')
+		subst := ch == '`' || (ch == '$' && (at(i+1) == '(' || at(i+1) == '{')) || ((ch == '<' || ch == '>') && quote == 0 && !comment && at(i+1) == '(')
 		if subst {
 			start, close := i+1, byte('`')
 			if ch != '`' {
@@ -165,23 +239,34 @@ func hostShellTokens(command string) []hostShellToken {
 			if close == '}' {
 				for _, tok := range hostShellTokens(body) {
 					groups = append(groups, tok.groups...)
+					refuse = refuse || tok.kind == hostRefuse
 				}
 			} else {
 				groups = append(groups, body)
 			}
-			word.WriteString(command[i:end])
+			if !comment {
+				word.WriteString(command[i:end])
+			}
+			started = true
 			i = end - 1
 			continue
+		}
+		if comment {
+			if ch != '\n' {
+				continue
+			}
+			comment = false
 		}
 		if ch == '\\' && quote != '\'' && i+1 < len(command) {
 			i++
 			if command[i] != '\n' {
 				word.WriteByte(command[i])
 			}
+			started = true
 			continue
 		}
 		if quote != 0 {
-			if ch == quote {
+			if quote == '$' && ch == '\'' || quote != '$' && ch == quote { // quote '$' is $'..'
 				quote = 0
 			} else {
 				word.WriteByte(ch)
@@ -190,7 +275,20 @@ func hostShellTokens(command string) []hostShellToken {
 		}
 		switch ch {
 		case '\'', '"':
-			quote = ch
+			quote, started = ch, true
+		case '$':
+			word.WriteByte(ch)
+			started = true
+			if at(i+1) == '\'' { // $'..': a backslash escapes in it
+				quote = '$'
+				i++
+			}
+		case '#':
+			if started {
+				word.WriteByte(ch)
+			} else {
+				comment = true
+			}
 		case ' ', '\t', '\r':
 			flush()
 		case '\n', ';', '(', ')':
@@ -265,9 +363,13 @@ func hostShellTokens(command string) []hostShellToken {
 			emit(kind, text)
 		default:
 			word.WriteByte(ch)
+			started = true
 		}
 	}
 	flush()
+	if refuse {
+		out = append(out, hostShellToken{kind: hostRefuse})
+	}
 	return out
 }
 
@@ -275,7 +377,9 @@ func hostShellTokens(command string) []hostShellToken {
 // separator that ended it.
 type hostSegment struct {
 	assigns, args, writes, reads []hostShellToken
+	comments                     []hostShellToken // substitutions in a comment: scanned, never words
 	separator                    string
+	refuse                       bool // the tokenizer could not tell what the shell runs
 }
 
 var hostFdOperand = regexp.MustCompile(`^(?:[0-9]+-?|-)$`)
@@ -290,8 +394,12 @@ func hostSegments(command string) []hostSegment {
 			seg.separator = tok.text
 			out = append(out, seg)
 			seg = hostSegment{}
+		case hostRefuse:
+			seg.refuse = true
 		case hostWord:
-			if len(seg.args) == 0 && strings.Contains(tok.text, "=") {
+			if tok.text == "" {
+				seg.comments = append(seg.comments, tok)
+			} else if len(seg.args) == 0 && strings.Contains(tok.text, "=") {
 				seg.assigns = append(seg.assigns, tok)
 			} else {
 				seg.args = append(seg.args, tok)
@@ -318,7 +426,8 @@ func (g hostSegment) tokens() []hostShellToken {
 	all := append([]hostShellToken{}, g.assigns...)
 	all = append(all, g.args...)
 	all = append(all, g.writes...)
-	return append(all, g.reads...)
+	all = append(all, g.reads...)
+	return append(all, g.comments...)
 }
 
 // readCommand reports a command that only reads, whatever its redirects do.
@@ -520,6 +629,9 @@ func (s *writeScan) run(command, base string, uncertain bool, depth int) string 
 		return gateReason
 	}
 	for _, seg := range hostSegments(command) {
+		if seg.refuse {
+			return gateReason
+		}
 		for _, tok := range seg.tokens() {
 			for _, body := range tok.groups {
 				if reason := s.run(body, base, uncertain, depth+1); reason != "" {

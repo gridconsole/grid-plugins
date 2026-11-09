@@ -209,6 +209,9 @@ func projectWorkflowAt(root, target string) bool {
 func (c context) writesProjectWorkflow(command string) bool {
 	var roots []string
 	for _, seg := range hostSegments(command) {
+		if seg.refuse {
+			return true
+		}
 		for _, tok := range seg.tokens() {
 			for _, body := range tok.groups {
 				if c.writesProjectWorkflow(body) {
