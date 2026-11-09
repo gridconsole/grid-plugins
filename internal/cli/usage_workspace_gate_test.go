@@ -172,3 +172,52 @@ func TestUsageWorkspaceBudgetShowStaysOpen(t *testing.T) {
 		}
 	}
 }
+
+// A workflow person_verbs extension that names the verb (or the whole usage command) applies to
+// the --workspace form as it does to the task form: fixes L148 review must-fix 1, where the
+// early policy gate was skipped for every budget write and the handler gated only the task form.
+func TestUsageWorkspaceBudgetWorkflowPolicy(t *testing.T) {
+	for _, op := range []string{"set", "clear"} {
+		for _, policy := range []string{"[usage budget " + op + "]", "[usage]", "{usage budget " + op + ": [owner]}"} {
+			t.Run(op+" "+policy, func(t *testing.T) {
+				h := workspaceGateHarness(t, map[string]string{"GRID_ROLE": "owner"})
+				task := taskFixture(t, h).Path
+				h.write(filepath.Join(task, "workflow.md"), "---\nperson_verbs: "+policy+"\n---\n")
+				h.env.Procs = testProcs("codex")
+				before := fileBytes(t, h.gridHome)
+				if code := h.run(task, workspaceArgs(op, "--json")...); code != 3 {
+					t.Fatalf("exit %d: %s %s", code, h.out, h.errb)
+				}
+				var refusal map[string]string
+				if err := json.Unmarshal(h.out.Bytes(), &refusal); err != nil {
+					t.Fatal(err, h.out.String())
+				}
+				if refusal["error"] != "person_required" || refusal["reason"] != "agent_ancestor" {
+					t.Fatal(refusal)
+				}
+				if !reflect.DeepEqual(before, fileBytes(t, h.gridHome)) {
+					t.Fatal("refused write changed the Grid home")
+				}
+			})
+		}
+		// The role map reaches a person's workspace write: an empty role is a member, not an owner.
+		t.Run(op+" role map applies to a person", func(t *testing.T) {
+			policy := "{usage budget " + op + ": [owner]}"
+			for role, want := range map[string]int{"": 3, "owner": 0} {
+				h := workspaceGateHarness(t, map[string]string{"GRID_ROLE": role})
+				task := taskFixture(t, h).Path
+				h.write(filepath.Join(task, "workflow.md"), "---\nperson_verbs: "+policy+"\n---\n")
+				before := fileBytes(t, h.gridHome)
+				code := h.run(task, workspaceArgs(op, "--json")...)
+				if code != want {
+					t.Fatalf("role %q: exit %d, want %d: %s %s", role, code, want, h.out, h.errb)
+				}
+				if want == 3 {
+					if !strings.Contains(h.out.String(), `"reason":"agent_env"`) || !reflect.DeepEqual(before, fileBytes(t, h.gridHome)) {
+						t.Fatalf("role %q: %s, home changed %v", role, h.out, !reflect.DeepEqual(before, fileBytes(t, h.gridHome)))
+					}
+				}
+			}
+		})
+	}
+}
