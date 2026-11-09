@@ -1,0 +1,382 @@
+{
+  "cwd": "$folder",
+  "folder": ".grid/projects/digest/tasks/T-01",
+  "task": "T-01",
+  "scenarios": [
+    {
+      "name": "digest-and-stale",
+      "remove_receipt": true,
+      "steps": [
+        {
+          "argv": [
+            "plan",
+            "hash",
+            "--task",
+            "$folder",
+            "--json"
+          ],
+          "exit": 0,
+          "stdout_keys": [
+            "digest",
+            "hash"
+          ],
+          "receipt_keys": []
+        },
+        {
+          "argv": [
+            "approve",
+            "$task",
+            "--plan-hash",
+            "$digest",
+            "--note",
+            "Reviewed",
+            "--json"
+          ],
+          "exit": 0,
+          "stdout_keys": [
+            "folder",
+            "from_state",
+            "note",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "receipt_keys": [
+            "from_state",
+            "note",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ]
+        },
+        {
+          "argv": [
+            "task",
+            "attach",
+            "$task"
+          ],
+          "exit": 0,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "from_state",
+            "note",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "stdout_contains": "approved: true\n"
+        },
+        {
+          "argv": [
+            "job",
+            "render",
+            "$task",
+            "1"
+          ],
+          "exit": 0,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "from_state",
+            "note",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "stdout_contains": "J-1"
+        },
+        {
+          "argv": [
+            "approve",
+            "$task",
+            "--plan-hash",
+            "$digest",
+            "--json"
+          ],
+          "exit": 1,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "from_state",
+            "note",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "stderr_contains": "plan hash no longer matches",
+          "append_plan": "\nThe export also documents compatibility.\n"
+        },
+        {
+          "argv": [
+            "task",
+            "attach",
+            "$task"
+          ],
+          "exit": 0,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "from_state",
+            "note",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "stdout_contains": "approved: false\n"
+        },
+        {
+          "argv": [
+            "job",
+            "render",
+            "$task",
+            "1"
+          ],
+          "exit": 2,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "from_state",
+            "note",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "stderr_contains": "plan needs approval: review and approve the current plan before rendering a Job"
+        }
+      ]
+    },
+    {
+      "name": "legacy-reapprove",
+      "steps": [
+        {
+          "argv": [
+            "plan",
+            "hash",
+            "--task",
+            "$folder",
+            "--json"
+          ],
+          "exit": 0,
+          "stdout_keys": [
+            "digest",
+            "hash"
+          ],
+          "receipt_keys": [
+            "plan_hash",
+            "task",
+            "what"
+          ]
+        },
+        {
+          "argv": [
+            "task",
+            "attach",
+            "$task"
+          ],
+          "exit": 0,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "plan_hash",
+            "task",
+            "what"
+          ],
+          "stdout_contains": "approved: false\n"
+        },
+        {
+          "argv": [
+            "job",
+            "render",
+            "$task",
+            "1"
+          ],
+          "exit": 2,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "plan_hash",
+            "task",
+            "what"
+          ],
+          "stderr_contains": "plan needs approval: review and approve the current plan before rendering a Job"
+        },
+        {
+          "argv": [
+            "approve",
+            "$task",
+            "--plan-hash",
+            "$digest"
+          ],
+          "exit": 0,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "from_state",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ]
+        },
+        {
+          "argv": [
+            "task",
+            "attach",
+            "$task"
+          ],
+          "exit": 0,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "from_state",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "stdout_contains": "approved: true\n"
+        },
+        {
+          "argv": [
+            "job",
+            "render",
+            "$task",
+            "1"
+          ],
+          "exit": 0,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "from_state",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "stdout_contains": "J-1"
+        }
+      ]
+    },
+    {
+      "name": "short-token",
+      "remove_receipt": true,
+      "steps": [
+        {
+          "argv": [
+            "plan",
+            "hash",
+            "--task",
+            "$folder",
+            "--json"
+          ],
+          "exit": 0,
+          "stdout_keys": [
+            "digest",
+            "hash"
+          ],
+          "receipt_keys": []
+        },
+        {
+          "argv": [
+            "approve",
+            "$task",
+            "--plan-hash",
+            "$hash",
+            "--json"
+          ],
+          "exit": 0,
+          "stdout_keys": [
+            "folder",
+            "from_state",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "receipt_keys": [
+            "from_state",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ]
+        },
+        {
+          "argv": [
+            "task",
+            "attach",
+            "$task"
+          ],
+          "exit": 0,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "from_state",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "stdout_contains": "approved: true\n"
+        },
+        {
+          "argv": [
+            "job",
+            "render",
+            "$task",
+            "1"
+          ],
+          "exit": 0,
+          "stdout_keys": [],
+          "receipt_keys": [
+            "from_state",
+            "plan_digest",
+            "plan_hash",
+            "task",
+            "to_state",
+            "what",
+            "when",
+            "who"
+          ],
+          "stdout_contains": "J-1"
+        }
+      ]
+    }
+  ]
+}
