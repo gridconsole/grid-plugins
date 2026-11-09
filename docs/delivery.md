@@ -157,12 +157,14 @@ not match `plan.md`, when the spec (a regular file inside the task folder, no
 symlink) is missing or blank, and from paused, closed or already waiting tasks.
 Usage errors exit 2. `--dry-run` lists the actions and writes nothing.
 
-The plan hold that `grid task deliver` and the guard share also compares the
-task's resolved steps with the `workflow_digest:` that `grid task new` wrote
-in `task.md`: steps that differ (a project folder renamed or rebuilt around the
-task, or a person's change to `workflows.md`) hold the task with code
-`workflow_changed`, and delivery refuses it with `plan not approved`. Tasks
-without the field keep the folder-name check alone (contract/README.md).
+The plan hold that `grid deliver` and the guard share also compares the
+task's workflow, as its template defines it at every size, with the
+`workflow_digest:` that `grid task new` wrote in `task.md`, also for a task made
+with size `auto`: a different definition (a project folder renamed or rebuilt
+around the task, or a person's change to `workflows.md`) holds the task with
+code `workflow_changed`, and `grid deliver` refuses it with `plan not approved`
+(with `--json`, the `workflow_changed` error envelope). Tasks without the field
+keep the folder-name check alone (contract/README.md).
 
 ### The gate a person saw
 
