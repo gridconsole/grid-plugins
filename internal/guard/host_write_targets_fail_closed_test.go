@@ -69,6 +69,16 @@ var failClosedRows = []struct {
 	{"dq_brace_default", `echo "${VAR:-'none'}"`, false},
 	{"dq_text", `echo "it's a test" 'a "b"'`, false},
 	{"grep_hash", `grep -rn "fix #12" . && grep -n '#' notes.md`, false},
+	// At the top level nothing in '..' is special until the closing ': no $(, ${ or
+	// backtick opens a group there.
+	{"sq_dollar_paren", `echo '$(' ; tee ALIAS </dev/null ; echo ')'`, true},
+	{"sq_backtick", "echo 'a`' ; tee ALIAS </dev/null ; echo '`'", true},
+	{"sq_brace", `echo '${' ; tee ALIAS </dev/null ; echo '}'`, true},
+	{"ansi_sq_dollar_paren", `echo $'$(' ; tee ALIAS </dev/null ; echo ')'`, true},
+	{"ansi_sq_backtick", "echo $'a`' ; tee ALIAS </dev/null ; echo '`'", true},
+	{"ansi_sq_brace", `echo $'${' ; tee ALIAS </dev/null ; echo '}'`, true},
+	{"sq_date", `echo '$(date)'`, false},
+	{"sq_brace_grep", `grep '${x}' file`, false},
 }
 
 // Rows for the L135R5 rework: where bash and zsh can read a line differently the
