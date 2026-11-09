@@ -240,6 +240,9 @@ func TestMovePreservesExtendedFrontMatter(t *testing.T) {
 	if err := os.WriteFile(source, before, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Chmod(source, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	got, err := s.Move(r.ID, "example", "second")
 	if err != nil {
 		t.Fatal(err)
@@ -258,5 +261,35 @@ func TestMovePreservesExtendedFrontMatter(t *testing.T) {
 	}
 	if runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %o", st.Mode().Perm())
+	}
+}
+
+func TestMoveStatusSpellings(t *testing.T) {
+	for _, tc := range []struct{ before, after string }{
+		{`"new"`, `"placed"`},
+		{`"n\x65w"`, `"placed"`},
+		{"!!str new", "!!str placed"},
+		{"&state new", "&state placed"},
+		{"|-\n  new", "|-\n  placed"},
+		{">-\n  new", ">-\n  placed"},
+	} {
+		t.Run(tc.before, func(t *testing.T) {
+			s, r, path, before := moveFixture(t)
+			before = bytes.Replace(before, []byte("status: new"), []byte("status: "+tc.before), 1)
+			if err := os.WriteFile(path, before, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Move(r.ID, "example", "second"); err != nil {
+				t.Fatal(err)
+			}
+			after, err := os.ReadFile(filepath.Join(s.GridHome, "projects", "second", "notes", r.Note))
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := bytes.Replace(before, []byte("status: "+tc.before), []byte("status: "+tc.after), 1)
+			if !bytes.Equal(expected, after) {
+				t.Fatalf("status spelling changed other bytes: %s", after)
+			}
+		})
 	}
 }

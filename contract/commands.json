@@ -4319,6 +4319,31 @@
           ],
           "json": true,
           "output": ""
+        },
+        {
+          "name": "move",
+          "args": [
+            "\u003cid\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": ""
         }
       ]
     },

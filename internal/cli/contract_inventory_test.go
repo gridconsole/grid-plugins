@@ -521,6 +521,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"project relink":        {args: []string{"<name-or-id>", "<path>"}},
 		"signal add":            {required: map[string]bool{"--title": true}},
 		"signal act":            {args: []string{"<id>"}},
+		"signal move":           {args: []string{"<id>"}, required: map[string]bool{"--to": true}},
 		"signal dismiss":        {args: []string{"<id>"}},
 		"artifact import":       {args: []string{"<file>"}},
 		"artifact link":         {args: []string{"<https-url>"}},

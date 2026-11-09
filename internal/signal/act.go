@@ -111,7 +111,7 @@ func (s Store) Apply(id string, o ActOptions) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	open := n.Status == "new" || n.Status == "placed" || n.Status == "snoozed"
+	open := openStatus(n.Status)
 	switch {
 	case o.Act == "wake" && n.Status != "snoozed":
 		return Result{}, &RefusedError{Message: "this note is not snoozed"}
@@ -170,4 +170,8 @@ func (s Store) Apply(id string, o ActOptions) (Result, error) {
 		return Result{}, err
 	}
 	return result(s, n, "updated"), nil
+}
+
+func openStatus(status string) bool {
+	return status == "new" || status == "placed" || status == "snoozed"
 }

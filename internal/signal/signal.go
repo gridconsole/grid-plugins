@@ -50,6 +50,7 @@ type Note struct {
 	Body     string `yaml:"-"`
 }
 type Result struct {
+	From    string `json:"from,omitempty"`
 	Result  string `json:"result"`
 	ID      string `json:"id"`
 	Project string `json:"project"`

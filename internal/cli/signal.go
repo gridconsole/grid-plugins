@@ -14,17 +14,21 @@ import (
 
 func runSignal(args []string, env Env) int {
 	if len(args) == 0 {
-		fmt.Fprintln(env.Stderr, "usage: grid signal add|act|dismiss")
+		fmt.Fprintln(env.Stderr, "usage: grid signal add|act|dismiss|move")
 		return 2
 	}
 	verb := args[0]
-	if verb != "add" && verb != "act" && verb != "dismiss" {
+	if verb != "add" && verb != "act" && verb != "dismiss" && verb != "move" {
 		fmt.Fprintf(env.Stderr, "grid signal: unknown command %q\n", verb)
 		return 2
 	}
 	fs := newFlags("signal "+verb, env)
 	asJSON := fs.Bool("json", false, "print JSON")
 	proj := fs.String("project", "", "project name or id; defaults to this folder's project")
+	var to string
+	if verb == "move" {
+		fs.StringVar(&to, "to", "", "destination project; - means the workspace inbox (Personal)")
+	}
 	var in signal.Input
 	var act signal.ActOptions
 	if verb == "act" {
@@ -61,7 +65,19 @@ func runSignal(args []string, env Env) int {
 		}
 		return signalFailure(env, &signal.RefusedError{Message: "guests cannot act on signals"}, *asJSON)
 	}
-	if verb != "add" {
+	if verb == "move" {
+		if to == "-" {
+			to = where.Personal
+		}
+		from := *proj
+		if from == "" {
+			from = where.Personal
+		}
+		if err := signal.ValidateMove(fs.Arg(0), from, to); err != nil {
+			return signalFailure(env, err, *asJSON)
+		}
+	}
+	if verb == "act" || verb == "dismiss" {
 		if verb == "dismiss" {
 			act.Act = "dismiss"
 		}
@@ -101,9 +117,12 @@ func runSignal(args []string, env Env) int {
 	ps := projectStore(env)
 	res, err := ps.Resolver.Resolve(where.Query{Cwd: env.Cwd, Project: *proj})
 	if err != nil {
+		if verb == "move" && (errors.Is(err, where.ErrProjectUnregistered) || errors.Is(err, where.ErrPersonalRefused)) {
+			return signalFailure(env, &signal.RefusedError{Message: "no such project"}, *asJSON)
+		}
 		return failure(env, err)
 	}
-	if !res.Record && res.Rule == where.RulePersonal {
+	if !res.Record && (res.Rule == where.RulePersonal || verb == "move" && res.Project == where.Personal) {
 		entries, err := ps.List()
 		if err != nil {
 			return failure(env, err)
@@ -114,7 +133,11 @@ func runSignal(args []string, env Env) int {
 			}
 		}
 	}
+
 	if !res.Record {
+		if verb == "move" {
+			return signalFailure(env, &signal.RefusedError{Message: "no such project"}, *asJSON)
+		}
 		if res.Rule != where.RulePersonal {
 			return failure(env, fmt.Errorf("project is not registered; run grid project add"))
 		}
@@ -134,6 +157,8 @@ func runSignal(args []string, env Env) int {
 		got, err = s.Add(in)
 	case "act", "dismiss":
 		got, err = s.Apply(fs.Arg(0), act)
+	case "move":
+		got, err = s.Move(fs.Arg(0), res.Project, to)
 	}
 	if err != nil {
 		return signalFailure(env, err, *asJSON)

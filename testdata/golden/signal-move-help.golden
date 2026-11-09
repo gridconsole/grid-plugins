@@ -1,0 +1,7 @@
+Usage of grid signal move:
+  -json
+    	print JSON
+  -project string
+    	project name or id; defaults to this folder's project
+  -to string
+    	destination project; - means the workspace inbox (Personal)
