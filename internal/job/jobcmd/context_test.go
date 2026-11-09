@@ -224,6 +224,14 @@ func TestGuestFilePathMembership(t *testing.T) {
 			if err := os.WriteFile(outside, saved, 0o644); err != nil {
 				t.Fatal(err)
 			}
+			// A task of a second project the guest is never invited to.
+			betaTask := filepath.Join(env.GridHome, "projects", "beta", "tasks", "T-02")
+			if err := os.CopyFS(betaTask, os.DirFS(filepath.Join(env.Cwd, "T-01"))); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(env.GridHome, "projects", "beta", "project-roles.json"), []byte(`{"people":[{"id":"someone-else"}]}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
 			link := filepath.Join(filepath.Dir(brief), "link.md")
 			linked := os.Symlink(outside, link) == nil
 			projectPath := filepath.Dir(env.Cwd)
@@ -300,6 +308,56 @@ func TestGuestFilePathMembership(t *testing.T) {
 								t.Fatalf("%s: show did not print the saved brief", label)
 							}
 						}
+					}
+				}
+			}
+			// lint --task does not widen the by-path gate: a guest still reads the
+			// file only when it lies in a task they are invited to, and --task has to
+			// name that same task. Owners and members keep any file with any task.
+			betaBrief := filepath.Join(betaTask, "jobs", "J-1", "brief.md")
+			for _, form := range []struct {
+				name, file, task string
+				inside           bool
+				other            int // the exit of an owner or member: 1 for a missing file or the unapproved plan of the copied task
+			}{
+				{"own file in own task", brief, "T-01", true, 0},
+				{"outside file", outside, "T-01", false, 0},
+				{"outside missing file", filepath.Join(filepath.Dir(outside), "missing.md"), "T-01", false, 1},
+				{"uninvited project file", betaBrief, "T-01", false, 0},
+				{"uninvited project file, its task", betaBrief, betaTask, false, 1},
+				{"uninvited project missing file, its task", filepath.Join(betaTask, "jobs", "J-1", "missing.md"), betaTask, false, 1},
+				{"outside file, uninvited task", outside, betaTask, false, 1},
+				{"own file, uninvited task", brief, betaTask, false, 1},
+			} {
+				for _, asJSON := range []bool{false, true} {
+					args := []string{"lint", form.file, "--task", form.task}
+					if asJSON {
+						args = append(args, "--json")
+					}
+					out.Reset()
+					errs.Reset()
+					code := Run(args, env)
+					text := out.String() + errs.String()
+					label := state + " " + form.name + " " + strings.Join(args, " ")
+					if guest && (!form.inside || state != "invited") {
+						want := "job: task not found\n"
+						if asJSON {
+							want = `"error":"task not found"`
+						}
+						if code != 1 || !strings.Contains(text, want) || strings.Contains(text, env.GridHome) || strings.Contains(text, filepath.Dir(outside)) || strings.Contains(text, string(saved[:20])) {
+							t.Fatalf("%s: exit %d, output %q; want exit 1 and %q only", label, code, text, want)
+						}
+						if !asJSON && out.Len() != 0 {
+							t.Fatalf("%s: stdout %q, want empty", label, out)
+						}
+						continue
+					}
+					want := form.other
+					if guest {
+						want = 0
+					}
+					if code != want || strings.Contains(text, "task not found") {
+						t.Fatalf("%s: exit %d, output %q; want exit %d and no task refusal", label, code, text, want)
 					}
 				}
 			}

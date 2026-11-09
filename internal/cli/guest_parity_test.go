@@ -390,6 +390,10 @@ func TestGuestProjectParity(t *testing.T) {
 					if outputs["invited"] == unknown && !guestParityEarlyAnswer(row.command, mode, unknown) {
 						t.Fatalf("invited guest still gets unknown answer: %+v", unknown)
 					}
+					// The file is outside the Grid home: lint --task must not read it.
+					if row.command == "job lint" && slices.Contains(row.args, "--task") && outputs["invited"] != unknown {
+						t.Fatalf("invited guest lint --task read a file outside the Grid home: %+v", outputs["invited"])
+					}
 				})
 				t.Run("parity", func(t *testing.T) {
 					if outputs["uninvited"] == unknown && outputs["no-roles"] == unknown {
@@ -436,6 +440,13 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 			}
 		case "workflow write":
 			want = guestParityOutput{3, "", "grid workflow write: caller role is not allowed to write workflows\n"}
+		case "job lint":
+			// The row lints a file outside the Grid home with --task: the by-path
+			// gate answers as an unknown task whatever the invitation.
+			want = guestParityOutput{1, "", "job: task not found\n"}
+			if mode == "json" {
+				want = guestParityOutput{1, "{\"ok\":false,\"findings\":[],\"error\":\"task not found\"}\n", ""}
+			}
 		case "feed types":
 			// This command returns the public schema without resolving any scope.
 			return out.Code == 0 && out.Stderr == "" && strings.Contains(out.Stdout, "knowledge")
