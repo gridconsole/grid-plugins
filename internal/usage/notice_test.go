@@ -331,7 +331,7 @@ func TestTokenConfigurationCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	c, err := s.Config()
-	if err != nil || c.Budget["dollars"] != "200" || c.Baseline["tokens"] != "0" || !reflect.DeepEqual(c.Tokens, []float64{50, 80, 100}) || c.TokenBudgetSource != "none" {
+	if err != nil || c.Budget["dollars"] != "200" || c.Baseline["tokens"] != "0" || !reflect.DeepEqual(c.Tokens, []float64{80, 100}) || c.TokenBudgetSource != "none" {
 		t.Fatalf("old settings: %+v %v", c, err)
 	}
 	configure(t, s, Change{Budget: true, BudgetTokens: []uint64{math.MaxUint64}})
@@ -455,6 +455,140 @@ func TestTokenNoticeLargeCountAndSchema(t *testing.T) {
 			if err := contract.Validate("usage-notice", []byte(bad)); err == nil {
 				t.Fatal("accepted invalid token notice")
 			}
+		}
+	}
+}
+
+// Older version-1 files omitted tokens; both read paths must use the same default.
+func TestTokenNoticeDefaults(t *testing.T) {
+	for _, source := range []string{"missing-folder", "missing-file", "legacy-file"} {
+		t.Run(source, func(t *testing.T) {
+			s := noticeStore(t)
+			setNoticeWorkspaceBudget(t, &s)
+			if source != "missing-folder" {
+				dir := filepath.Join(s.TaskPath, "usage")
+				if err := os.Mkdir(dir, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if source == "legacy-file" {
+					const old = `{"v":1,"dollars":[50,80,100],"minutes":[50,80,100],"budget":{},"baseline":{"dollars":0,"minutes":0},"fired":{}}`
+					if err := os.WriteFile(filepath.Join(dir, "thresholds.json"), []byte(old), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			c, err := s.Config()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(c.Tokens, []float64{80, 100}) {
+				t.Errorf("default tokens = %v, want [80 100]", c.Tokens)
+			}
+			if !reflect.DeepEqual(c.Dollars, []float64{50, 80, 100}) || !reflect.DeepEqual(c.Minutes, []float64{50, 80, 100}) {
+				t.Fatal("changed non-token defaults")
+			}
+			for _, step := range []struct {
+				delta uint64
+				want  []float64
+			}{
+				{60, nil}, {25, []float64{80}}, {0, nil}, {15, []float64{100}}, {1, nil},
+			} {
+				out := postNoticeTokens(t, s, step.delta)
+				if got := noticePercentages(out); !reflect.DeepEqual(got, step.want) {
+					t.Errorf("total %d: notices %v, want %v", out.Totals.Tokens, got, step.want)
+				}
+				if _, err := s.Show(); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := s.Config(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := len(notices(t, s)); got != 2 {
+				t.Errorf("got %d lifetime notices, want 2", got)
+			}
+		})
+	}
+}
+
+func setNoticeWorkspaceBudget(t *testing.T, s *Store) {
+	t.Helper()
+	s.GridHome = t.TempDir()
+	if err := os.WriteFile(filepath.Join(s.GridHome, "workspace.md"), []byte("---\ntokens_per_task: 100\n---\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func postNoticeTokens(t *testing.T, s Store, delta uint64) PostResult {
+	t.Helper()
+	out, err := s.Post(Input{Job: "lead", Tokens: &delta})
+	if err != nil || len(out.Warnings) != 0 {
+		t.Fatalf("Post tokens: %v, warnings %v", err, out.Warnings)
+	}
+	return out
+}
+
+func noticePercentages(out PostResult) []float64 {
+	var percentages []float64
+	for _, record := range out.Notices {
+		percentages = append(percentages, record.Body["threshold"].(float64))
+	}
+	return percentages
+}
+
+func TestTokenNoticeExplicitFifty(t *testing.T) {
+	s := noticeStore(t)
+	configure(t, s, Change{Budget: true, BudgetTokens: []uint64{100}, Dollars: []float64{100}, Minutes: []float64{100}})
+	configure(t, s, Change{Tokens: []float64{50, 80, 100}})
+	out := postNoticeTokens(t, s, 50)
+	if !reflect.DeepEqual(noticePercentages(out), []float64{50}) {
+		t.Fatalf("explicit token 50 lost: %+v", out)
+	}
+	out = post(t, s, 50, 50)
+	if !reflect.DeepEqual(noticePercentages(out), []float64{50, 50}) || out.Notices[0].Body["dollars"] != float64(50) || out.Notices[1].Body["minutes"] != float64(50) {
+		t.Fatalf("non-token 50 lost: %+v", out)
+	}
+}
+
+func TestTokenNoticeExistingFilesUnchanged(t *testing.T) {
+	s := noticeStore(t)
+	setNoticeWorkspaceBudget(t, &s)
+	writer, err := s.Writer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := feed.Store{TaskDir: s.TaskPath, TaskID: taskID}
+	// Simulate old notices surviving a crash before thresholds.json was saved.
+	for _, percent := range []float64{50, 80} {
+		if _, err := fs.Post(feed.Input{Type: "usage-notice", Body: map[string]any{"task": taskID, "threshold": percent, "tokens": uint64(85)}}, writer); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, err := filepath.Glob(filepath.Join(fs.Dir(), "*.jsonl"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("notice files missing: %v", err)
+	}
+	before := make(map[string]string)
+	for _, path := range files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[path] = string(data)
+	}
+	if out := postNoticeTokens(t, s, 85); len(out.Notices) != 0 {
+		t.Fatal("rewrote existing notices")
+	}
+	if out := postNoticeTokens(t, s, 0); len(out.Notices) != 0 {
+		t.Fatal("repeated existing notices")
+	}
+	if len(notices(t, s)) != 2 {
+		t.Fatal("lost or duplicated old notice")
+	}
+	for path, want := range before {
+		data, err := os.ReadFile(path)
+		if err != nil || string(data) != want {
+			t.Fatal("existing notice file changed")
 		}
 	}
 }
