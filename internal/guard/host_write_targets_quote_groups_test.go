@@ -58,6 +58,19 @@ var quoteGroupRows = []struct {
 	{"hash_quote_only", "echo '#'", false},
 	{"hash_count", "echo $#", false},
 	{"continuation_before_comment", "echo a \\\n b # c", false},
+	// A substitution in a comment is scanned but is not an argument of the command.
+	{"comment_substitution_not_an_argument", "rm notes.md # $(echo a)", false},
+	{"continuation_after_hash_in_word", "echo a#b \\\n b", false},
+	{"continuation_after_comment_line", "echo a # c\necho b \\\n c", false},
+	// In a ( ) group a # inside a word is no comment: the ) after it still closes the
+	// group, so the words after it are echo arguments, not a command (foo would write).
+	{"group_hash_mid_word", "echo $(echo a#b) foo ALIAS", false},
+	{"group_hash_after_substitution", "echo $(echo $(echo a)#b) foo ALIAS", false},
+	{"group_hash_after_process", "echo $(echo <(echo a)#b) foo ALIAS", false},
+	{"group_hash_after_quote", "echo $(echo 'a'#b) foo ALIAS", false},
+	{"group_hash_after_escape", "echo $(echo a\\ #b) foo ALIAS", false},
+	{"group_hash_after_brace", "echo $(echo ${x}#b) foo ALIAS", false},
+	{"group_hash_after_ansi", "echo $(echo $'a'#b) foo ALIAS", false},
 }
 
 // Rows for the L135R4 rework: the quote rules inside $( ) and <( ) groups follow
@@ -93,5 +106,22 @@ func TestHostWriteTargetsQuoteGroups(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A refusal reaches both scans: the project policy check and the protected-write
+// check each end on it, so removing either leaves the other to deny.
+func TestHostRefuseReachesBothScans(t *testing.T) {
+	f := setup(t)
+	project := filepath.Join(f.projects, "example")
+	command := "echo \"fix #12\" $(echo a) \\\n b"
+	in := f.input("Bash", command)
+	in.Cwd = project
+	c := newContext(in, f.root, f.env)
+	if !c.writesProjectWorkflow(command) {
+		t.Fatal("writesProjectWorkflow did not refuse")
+	}
+	if c.protectedWriteReason(command) == "" {
+		t.Fatal("protectedWriteReason did not refuse")
 	}
 }

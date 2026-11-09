@@ -130,11 +130,9 @@ func hostShellGroup(text string, start int, close byte) (int, bool) {
 		switch {
 		case ch == '\\':
 			i++
-			atWord = false
 		case close == ')' && hostKeywordAt(text, i, start, "case"):
 			cases++
 			i += len("case") - 1
-			atWord = false
 		case ch == close && cases == 0:
 			return i + 1, true
 		case close == ')' && ch == '#' && wordStart:
@@ -150,7 +148,6 @@ func hostShellGroup(text string, start int, close byte) (int, bool) {
 				}
 				i++
 			}
-			atWord = false
 		case ch == '\'' || ch == '"' || ch == '`':
 			end, _ := hostShellGroup(text, i+1, ch)
 			i, atWord = end-1, false
@@ -239,7 +236,6 @@ func hostShellTokens(command string) []hostShellToken {
 			if close == '}' {
 				for _, tok := range hostShellTokens(body) {
 					groups = append(groups, tok.groups...)
-					refuse = refuse || tok.kind == hostRefuse
 				}
 			} else {
 				groups = append(groups, body)
