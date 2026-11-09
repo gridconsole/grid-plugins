@@ -13,7 +13,8 @@ import (
 
 // A linked workflows.md may be forged (here it would drop every person verb),
 // so a person verb refuses with linked_file for a person and an agent alike,
-// and changes nothing. A verb outside the floor and the default policy runs.
+// and changes nothing. Since FP1R2 (fail closed) the agent note row, a verb
+// outside the floor and the default policy, refuses the same way: it ran in FP1R.
 func TestLinkedWorkflowsFileRefusesPersonVerbs(t *testing.T) {
 	for _, scope := range []string{"workspace", "project"} {
 		for _, caller := range []string{"person", "agent", "agent note"} {
@@ -40,12 +41,6 @@ func TestLinkedWorkflowsFileRefusesPersonVerbs(t *testing.T) {
 				}
 				before := fileBytes(t, h.gridHome)
 				code := h.run(cwd, "signal", "act", actID, "--act", act, "--json")
-				if caller == "agent note" {
-					if code != 0 {
-						t.Fatalf("a verb outside the policy refused: exit %d %s %s", code, h.out, h.errb)
-					}
-					return
-				}
 				if code != 1 {
 					t.Fatalf("exit %d; want 1 (linked_file): %s %s", code, h.out, h.errb)
 				}

@@ -80,6 +80,11 @@ func runSignal(args []string, env Env) int {
 		if inbox {
 			var err error
 			to, err = workflow.InboxWorkspace(env.GridHome)
+			if errors.Is(err, workflow.ErrLinkedFile) {
+				fmt.Fprintf(env.Stderr, "grid signal move: %v\n", err)
+				env.recordError(err)
+				return 1
+			}
 			if err != nil {
 				fmt.Fprintf(env.Stderr, "grid signal move: %s\n", workflow.ErrInboxWorkspace)
 				if *asJSON {

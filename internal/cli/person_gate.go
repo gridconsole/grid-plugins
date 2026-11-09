@@ -118,13 +118,14 @@ func gateCommand(args []string, env *Env) int {
 		match := ""
 		apply := func(policy map[string][]string, policyErr error) {
 			if errors.Is(policyErr, workflow.ErrLinkedFile) {
-				// A linked workflows.md may be forged, so neither it nor the
-				// floor alone decides: the default policy applies and every
-				// person verb refuses below until the link is removed.
+				// A linked workflows.md or workflow.md may be forged, and the
+				// verbs it would add are unknown, so no policy can say this verb
+				// needs no person. The verb refuses below, before Required, for
+				// a person and an agent alike, until the link is removed.
 				if linkedErr == nil {
 					linkedErr = policyErr
 				}
-				policy, policyErr = workflow.DefaultPersonVerbs(), nil
+				return
 			}
 			if policyErr != nil {
 				// A broken extension cannot remove the floor or another scope's policy.
@@ -165,13 +166,15 @@ func gateCommand(args []string, env *Env) int {
 		}
 	}
 
-	if !persongate.Required(verb, extra) {
-		return 0
-	}
+	// Fail closed: every verb whose gate read a linked policy file refuses,
+	// whether or not the rest of the policy names it.
 	if linkedErr != nil {
 		fmt.Fprintf(env.Stderr, "grid %s: %v\n", personDisplayVerb(verb), linkedErr)
 		env.recordError(linkedErr)
 		return 1
+	}
+	if !persongate.Required(verb, extra) {
+		return 0
 	}
 	request := gateRequest(*env, verb, args)
 	request.ExtraVerbs = extra
