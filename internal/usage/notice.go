@@ -68,6 +68,14 @@ type Configuration struct {
 	TokenBudgetSource string            `json:"token_budget_source,omitempty"`
 }
 
+// settings keeps persistence provenance out of the effective CLI/API response.
+// A present threshold in an old file is authoritative, even if it matched a
+// default when written; its original intent cannot be recovered.
+type settings struct {
+	Configuration
+	explicit [3]bool // dollars, minutes, tokens
+}
+
 // Change replaces the supplied units' thresholds, or budgets when Budget is true.
 // Nil leaves a unit unchanged; an empty slice explicitly clears it.
 type Change struct {
@@ -157,10 +165,10 @@ func (s Store) Configure(change Change) (Configuration, error) {
 	if len(change.BudgetTokens) > 1 || len(change.BudgetTokens) == 1 && change.BudgetTokens[0] == 0 {
 		return Configuration{}, errors.New("supply one positive token budget; use budget clear to remove it")
 	}
-	var c Configuration
+	var c settings
 	err = s.withData(func(dir string) error {
 		var err error
-		c, err = s.readConfig(dir)
+		c, err = s.readSettings(dir)
 		if err != nil {
 			return err
 		}
@@ -168,7 +176,7 @@ func (s Store) Configure(change Change) (Configuration, error) {
 		if err != nil {
 			return err
 		}
-		for _, unit := range []string{"dollars", "minutes"} {
+		for i, unit := range []string{"dollars", "minutes"} {
 			values, total := dollars, summary.Totals.Dollars
 			if unit == "minutes" {
 				values, total = minutes, summary.Totals.Minutes
@@ -184,8 +192,10 @@ func (s Store) Configure(change Change) (Configuration, error) {
 				}
 			} else if unit == "dollars" {
 				c.Dollars = values
+				c.explicit[i] = true
 			} else {
 				c.Minutes = values
+				c.explicit[i] = true
 			}
 		}
 		if tokens != nil || change.BudgetTokens != nil {
@@ -197,14 +207,15 @@ func (s Store) Configure(change Change) (Configuration, error) {
 				}
 			} else {
 				c.Tokens = tokens
+				c.explicit[2] = true
 			}
 		}
 		return s.saveConfig(dir, c)
 	})
 	if err == nil {
-		c = s.effectiveConfig(c)
+		c.Configuration = s.effectiveConfig(c.Configuration)
 	}
-	return c, err
+	return c.Configuration, err
 }
 
 func readConfig(dir string) (Configuration, error) {
@@ -212,7 +223,12 @@ func readConfig(dir string) (Configuration, error) {
 }
 
 func (s Store) readConfig(dir string) (Configuration, error) {
-	c := defaults()
+	c, err := s.readSettings(dir)
+	return c.Configuration, err
+}
+
+func (s Store) readSettings(dir string) (settings, error) {
+	c := settings{Configuration: defaults()}
 	var workflowErr error
 	readWorkflow := s.UsageNoticeThresholds == nil && s.TaskPath != ""
 	if readWorkflow {
@@ -239,7 +255,7 @@ func (s Store) readConfig(dir string) (Configuration, error) {
 			if err != nil {
 				err = fmt.Errorf("usage_notice_thresholds %s: %w", unit.name, err)
 				if !readWorkflow {
-					return Configuration{}, err
+					return settings{}, err
 				}
 				workflowErr = errors.Join(workflowErr, err)
 				continue
@@ -258,25 +274,57 @@ func (s Store) readConfig(dir string) (Configuration, error) {
 		return c, nil
 	}
 	if err != nil {
-		return Configuration{}, err
+		return settings{}, err
 	}
 	defer f.Close()
-	// Only tokens may be absent in old version-1 files. All other fields
-	// retain their existing required-field checks, including explicit nulls.
-	c = Configuration{Tokens: c.Tokens}
+	// Decode storage separately from inherited thresholds. Version 1 requires
+	// dollars/minutes; version 2 omits any unit still following the workflow.
+	inherited := c.Configuration
+	c = settings{}
 	dec := json.NewDecoder(f)
-	// New optional fields must remain readable by older version-1 readers.
-	// Known fields are still type-checked here and validated below.
-	if err := dec.Decode(&c); err != nil {
+	// Ignore unknown optional fields, but validate all known storage fields.
+	var data json.RawMessage
+	if err := dec.Decode(&data); err != nil {
 		return c, fmt.Errorf("thresholds.json: %w", err)
 	}
 	var extra any
 	if dec.Decode(&extra) != io.EOF {
 		return c, errors.New("thresholds.json: expected one JSON object")
 	}
-	if c.V != 1 || c.Dollars == nil || c.Minutes == nil || c.Tokens == nil || c.Budget == nil || c.Baseline == nil || c.Fired == nil {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return c, fmt.Errorf("thresholds.json: %w", err)
+	}
+	if err := json.Unmarshal(data, &c.Configuration); err != nil {
+		return c, fmt.Errorf("thresholds.json: %w", err)
+	}
+	if (c.V != 1 && c.V != 2) || c.Budget == nil || c.Baseline == nil || c.Fired == nil {
 		return c, errors.New("thresholds.json: invalid version or missing fields")
 	}
+	for i, unit := range []struct {
+		name     string
+		target   *[]float64
+		fallback []float64
+	}{
+		{"dollars", &c.Dollars, inherited.Dollars},
+		{"minutes", &c.Minutes, inherited.Minutes},
+		{"tokens", &c.Tokens, inherited.Tokens},
+	} {
+		_, present := fields[unit.name]
+		if present {
+			if *unit.target == nil {
+				return c, errors.New("thresholds.json: null thresholds")
+			}
+			c.explicit[i] = true
+		} else {
+			if c.V == 1 && unit.name != "tokens" {
+				return c, errors.New("thresholds.json: missing fields")
+			}
+			*unit.target = unit.fallback
+		}
+	}
+	// The effective response stays version 1; only the storage format changes.
+	c.V = 1
 	for _, values := range [][]float64{c.Dollars, c.Minutes, c.Tokens} {
 		normal, err := normalize(values, false)
 		if err != nil || !slices.Equal(normal, values) {
@@ -311,7 +359,7 @@ func (s Store) readConfig(dir string) (Configuration, error) {
 	return c, nil
 }
 
-func (s Store) saveConfig(dir string, c Configuration) error {
+func (s Store) saveConfig(dir string, c settings) error {
 	if s.beforeSave != nil {
 		if err := s.beforeSave(); err != nil {
 			return err
@@ -321,7 +369,26 @@ func (s Store) saveConfig(dir string, c Configuration) error {
 	if err != nil {
 		return err
 	}
-	data, err := json.Marshal(c)
+	// Pointers preserve an explicit empty list while omitting inherited units.
+	stored := struct {
+		V        int               `json:"v"`
+		Dollars  *[]float64        `json:"dollars,omitempty"`
+		Minutes  *[]float64        `json:"minutes,omitempty"`
+		Tokens   *[]float64        `json:"tokens,omitempty"`
+		Budget   Amounts           `json:"budget"`
+		Baseline Amounts           `json:"baseline"`
+		Fired    map[string]string `json:"fired"`
+	}{V: 2, Budget: c.Budget, Baseline: c.Baseline, Fired: c.Fired}
+	if c.explicit[0] {
+		stored.Dollars = &c.Dollars
+	}
+	if c.explicit[1] {
+		stored.Minutes = &c.Minutes
+	}
+	if c.explicit[2] {
+		stored.Tokens = &c.Tokens
+	}
+	data, err := json.Marshal(stored)
 	if err != nil {
 		return err
 	}
@@ -339,7 +406,7 @@ func (s Store) notices(dir string, out *PostResult) {
 }
 
 func (s Store) postNotices(dir string, out *PostResult) error {
-	c, err := s.readConfig(dir)
+	c, err := s.readSettings(dir)
 	if err != nil {
 		return err
 	}
@@ -369,7 +436,7 @@ func (s Store) postNotices(dir string, out *PostResult) error {
 			}
 		}
 	}
-	if budget, _ := s.tokenBudget(c); budget != nil {
+	if budget, _ := s.tokenBudget(c.Configuration); budget != nil {
 		base, _ := strconv.ParseUint(string(c.Baseline["tokens"]), 10, 64)
 		for _, percent := range c.Tokens {
 			if tokenCrossing(base, out.Totals.Tokens, *budget, percent) && c.Fired[noticeKey("tokens", percent)] == "" {

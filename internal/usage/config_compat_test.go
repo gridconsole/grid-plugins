@@ -23,7 +23,7 @@ func TestConfigurationUnknownFields(t *testing.T) {
 		name, field, value string
 	}{
 		{name: "unknown optional field"},
-		{"bad version", "v", `2`},
+		{"bad version", "v", `3`},
 		{"bad type", "minutes", `"bad"`},
 		{"bad percent", "dollars", `[101]`},
 		{"unsorted", "tokens", `[80,50]`},
