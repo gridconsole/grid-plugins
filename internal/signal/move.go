@@ -138,10 +138,14 @@ func (s Store) moveNotes() (string, error) {
 	dir, err := s.notes()
 	// notes owns registration and Personal access. Keep storage/path errors as
 	// I/O failures, and translate only its registration refusals.
-	if err != nil && (errors.Is(err, where.ErrProjectUnregistered) || strings.HasPrefix(err.Error(), "project ") && strings.Contains(err.Error(), " is not registered")) {
-		return "", &RefusedError{Message: "no such project"}
+	return dir, moveNotesError(err)
+}
+
+func moveNotesError(err error) error {
+	if errors.Is(err, where.ErrProjectUnregistered) || errors.Is(err, where.ErrPersonalRefused) {
+		return &RefusedError{Message: "no such project"}
 	}
-	return dir, err
+	return err
 }
 
 // Patch the status scalar in the original header rather than re-encoding Note:

@@ -127,7 +127,7 @@ func (s Store) notes() (string, error) {
 	r := s.Resolver
 	r.GridHome = s.GridHome
 	if strings.EqualFold(s.Project, where.Personal) && !r.PersonalOK() {
-		return "", fmt.Errorf("project %q is not registered", s.Project)
+		return "", notesProjectError{fmt.Sprintf("project %q is not registered", s.Project), fmt.Errorf("signal notes: %w", where.ErrPersonalRefused)}
 	}
 	entries, err := (projects.Store{Resolver: r}).List()
 	if err != nil {
@@ -140,7 +140,7 @@ func (s Store) notes() (string, error) {
 		}
 	}
 	if !found {
-		return "", fmt.Errorf("project %q is not registered; run grid project add", s.Project)
+		return "", notesProjectError{fmt.Sprintf("project %q is not registered; run grid project add", s.Project), fmt.Errorf("signal notes: %w", where.ErrProjectUnregistered)}
 	}
 	return localdata.Safe(s.GridHome, "projects", s.Project, "notes")
 }
