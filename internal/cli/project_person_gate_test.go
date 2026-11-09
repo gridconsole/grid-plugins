@@ -38,7 +38,7 @@ func TestProjectPersonSignalDefault(t *testing.T) {
 					if err := json.Unmarshal(h.out.Bytes(), &got); err != nil {
 						t.Fatal(err)
 					}
-					want := map[string]string{"error": "person_required", "reason": "agent_ancestor", "hint": personHint}
+					want := map[string]string{"error": "person_required", "reason": "agent_ancestor", "hint": personHint, "code": CodePersonRequired, "message": strings.TrimSuffix(h.errb.String(), "\n")}
 					if !reflect.DeepEqual(got, want) || !strings.HasPrefix(h.errb.String(), "grid signal act: a person must run this") {
 						t.Fatalf("refusal: %s %s", h.out, h.errb)
 					}
