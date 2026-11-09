@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
@@ -160,6 +161,34 @@ func TestExternalAndUnknownProjectAccess(t *testing.T) {
 			}
 			if !reflect.DeepEqual(before, bypassTree(t, h.gridHome)) {
 				t.Error("GRID_HOME tree changed after restricted-role write")
+			}
+		})
+	}
+}
+
+func TestGuestWhereTaskOutsideGridHome(t *testing.T) {
+	for _, role := range []string{"guest", "external", "unknown", "owner", "member"} {
+		t.Run(role, func(t *testing.T) {
+			h, cwd := guestLeakFixture(t, role)
+			outside := filepath.Join(h.root, "elsewhere")
+			h.mkdir(outside)
+			code := h.run(cwd, "where", "--task", outside)
+			if h.out.Len() != 0 || code != 1 {
+				t.Fatalf("exit %d, stdout %q, stderr %q; want exit 1 and empty stdout", code, h.out, h.errb)
+			}
+			if role == "owner" || role == "member" {
+				if !strings.Contains(h.errb.String(), "outside the Grid home") {
+					t.Errorf("stderr %q, want the outside-the-Grid-home message", h.errb)
+				}
+				return
+			}
+			if !strings.Contains(h.errb.String(), "task not found") || strings.Contains(h.errb.String(), "outside") {
+				t.Errorf("stderr %q, want the unknown-task answer", h.errb)
+			}
+			for _, home := range []string{h.gridHome, gridhome.Real(h.gridHome)} {
+				if strings.Contains(h.errb.String(), home) {
+					t.Errorf("stderr %q names the Grid home", h.errb)
+				}
 			}
 		})
 	}
