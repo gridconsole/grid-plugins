@@ -29,11 +29,13 @@ type Report struct {
 // Options sets what to check. Label is how the Grid home is named in messages
 // (for example ~/.grid); GitVersion defaults to running git --version.
 type Options struct {
-	GridHome   string
-	Label      string
-	GitVersion func() (string, error)
-	HooksFile  string
-	LookPath   func(string) (string, error)
+	Home         string // user home for the same permission anchors as setup
+	SettingsPath string // Claude settings file; supplied by the caller, never guessed
+	GridHome     string
+	Label        string
+	GitVersion   func() (string, error)
+	HooksFile    string
+	LookPath     func(string) (string, error)
 }
 
 // Run runs the checks. The home checks that depend on the folder are skipped
@@ -80,6 +82,7 @@ func Run(o Options) Report {
 		add("git", true, v)
 	}
 	checkInstallation(add, o)
+	checkAllowBlock(add, o)
 	return rep
 }
 

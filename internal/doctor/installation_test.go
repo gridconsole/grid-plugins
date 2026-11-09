@@ -48,7 +48,7 @@ func TestInstallationChecksAndHints(t *testing.T) {
 	home := t.TempDir()
 	writeVersion(t, home, "1")
 	path := healthyHooks(t)
-	o := Options{GridHome: home, GitVersion: gitOK, HooksFile: path, LookPath: gridOK}
+	o := Options{Home: filepath.Dir(home), SettingsPath: healthyAllowSettings(t, filepath.Dir(home), home), GridHome: home, GitVersion: gitOK, HooksFile: path, LookPath: gridOK}
 	rep := Run(o)
 	if !rep.OK {
 		t.Fatal(rep)

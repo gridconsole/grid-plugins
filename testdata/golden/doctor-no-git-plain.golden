@@ -5,3 +5,4 @@ fail git: git was not found on PATH
 fix: Install git and add its executable directory to PATH.
 ok grid on PATH: grid is on PATH
 ok plugin hooks: plugin hooks file is valid
+ok allow block: all setup allow rules are present

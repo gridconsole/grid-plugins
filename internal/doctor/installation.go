@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
 func fixHint(name, detail string) string {
@@ -26,8 +28,22 @@ func fixHint(name, detail string) string {
 		return "Reinstall the Grid plugin, or pass --hooks-file with its hooks/hooks.json path."
 	case "grid on PATH":
 		return "Run grid setup and add the directory containing the grid launcher to PATH."
+	case "allow block":
+		return "Run grid setup to add the allow block; grid setup --remove takes it out."
 	}
 	return ""
+}
+
+func checkAllowBlock(add func(string, bool, string), o Options) {
+	status := settings.ReadClaudeAllowStatus(o.SettingsPath, o.Home, o.GridHome)
+	switch {
+	case status.Reason != "":
+		add("allow block", false, status.Reason)
+	case len(status.Missing) > 0:
+		add("allow block", false, "missing rules: "+strings.Join(status.Missing, ", "))
+	default:
+		add("allow block", true, "all setup allow rules are present")
+	}
 }
 
 func checkInstallation(add func(string, bool, string), o Options) {

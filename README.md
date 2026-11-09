@@ -36,6 +36,12 @@ Tasks use the current folder's project, or Personal when no project applies. `--
 
 `grid mcp` serves the five Feed tools (`feed_post`, `feed_read`, `feed_state`, `feed_types`, `feed_handover`) over stdio MCP. The plugin's `.mcp.json` starts `${CLAUDE_PLUGIN_ROOT}/bin/grid mcp` as the `grid-feed` server, so Claude Code needs nothing more. To run it by hand, build with `make build` and start `./dist/grid mcp` with `GRID_HOME` and the session variables (`GRID_FEED_TASK`, `GRID_JOB`, `GRID_ATTEMPT`, ...) set; it speaks JSON-RPC lines on stdin and stdout. Codex uses `grid feed` in its shell without Feed MCP configuration. See [Feed MCP and Codex](docs/feed-mcp.md) for session context, tools, and examples.
 
+## Doctor
+
+`grid doctor` checks the Grid home, writability, format version, git, the grid launcher on PATH, plugin hooks, and the setup allow block in Claude settings. The allow block check requires every allow rule written by setup: `Bash(grid *)`, `Read(<anchor>/**)`, and `Edit(<anchor>/**)`, using the same home-relative anchor. It reads the setup destination (`CLAUDE_CONFIG_DIR/settings.json`, or `~/.claude/settings.json` by default) without changing it and reports missing rules or an unreadable, malformed, missing, or symlinked settings file.
+
+Each failing check includes a fix hint. For the allow block: run `grid setup` to add it; `grid setup --remove` takes it out. `grid doctor --json` includes the check in `checks`. `grid doctor --bundle` writes a local support archive with the settings path redacted from diagnostics and logs.
+
 ## Layout
 
     cmd/grid/        entry point

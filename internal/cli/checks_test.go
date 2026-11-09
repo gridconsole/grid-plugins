@@ -51,6 +51,11 @@ func TestVersionCheckCLI(t *testing.T) {
 
 func healthyDoctorEnvironment(t *testing.T, h *harness) {
 	t.Helper()
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("GRID_PROJECTS", "")
+	if code := h.run(h.tmp, "setup", "--yes"); code != 0 {
+		t.Fatalf("setup exit %d: %s", code, h.errb)
+	}
 	root := filepath.Join(h.root, "plugin")
 	h.write(filepath.Join(root, "hooks", "hooks.json"), `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"grid hook sessionstart"}]}]}}`)
 	bin := filepath.Join(h.root, "bin")

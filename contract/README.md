@@ -385,7 +385,7 @@ Exit 1 with one line on stderr when the folder cannot be resolved (a task path o
 
     {"ok": bool, "checks": [{"name": string, "ok": bool, "detail": string}]}
 
-Checks, in order: `grid home`, `grid home writable`, `format version`, `git`. Exit 1 when any check fails.
+Checks, in order: `grid home`, `grid home writable`, `format version`, `git`, `grid on PATH`, `plugin hooks`, `allow block`. Writability and format checks are skipped when the Grid home is unavailable. Failing checks also include a `fix` string. The allow block check reports missing setup allow rules or a path-free settings-file failure. Exit 1 when any check fails.
 
 ### `grid workflow show [--project <name-or-id>] [--json]`
 

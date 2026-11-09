@@ -48,7 +48,7 @@ func TestRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
 			tc.setup(t, home)
-			rep := Run(Options{GridHome: home, Label: "~/.grid", GitVersion: tc.git, HooksFile: healthyHooks(t), LookPath: gridOK})
+			rep := Run(Options{Home: filepath.Dir(home), SettingsPath: healthyAllowSettings(t, filepath.Dir(home), home), GridHome: home, Label: "~/.grid", GitVersion: tc.git, HooksFile: healthyHooks(t), LookPath: gridOK})
 			assertChecks(t, rep, tc.want, tc.wantOK)
 		})
 	}
@@ -57,7 +57,7 @@ func TestRun(t *testing.T) {
 func TestRunMissingHome(t *testing.T) {
 	rep := Run(Options{GridHome: filepath.Join(t.TempDir(), "absent"), Label: "~/.grid", GitVersion: gitOK})
 	assertChecks(t, rep, map[string]string{"grid home": "!~/.grid does not exist", "git": ""}, false)
-	if len(rep.Checks) != 4 {
+	if len(rep.Checks) != 5 {
 		t.Errorf("checks that need the folder should be skipped, got %+v", rep.Checks)
 	}
 }

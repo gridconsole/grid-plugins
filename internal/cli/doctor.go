@@ -6,6 +6,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/doctor"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
 func runDoctor(args []string, env Env) int {
@@ -28,13 +29,14 @@ func runDoctor(args []string, env Env) int {
 	if *hooks == "" {
 		*hooks = defaultHooksFile(env)
 	}
-	rep := doctor.Run(doctor.Options{GridHome: env.GridHome, Label: gridhome.Tilde(env.GridHome, env.Home), GitVersion: env.GitVersion, HooksFile: *hooks})
+	settingsPath, _ := settings.ClaudeSettingsPath(env.Home, env.getenv("CLAUDE_CONFIG_DIR"))
+	rep := doctor.Run(doctor.Options{Home: env.Home, SettingsPath: settingsPath, GridHome: env.GridHome, Label: gridhome.Tilde(env.GridHome, env.Home), GitVersion: env.GitVersion, HooksFile: *hooks})
 	if *bundle {
 		path := *out
 		if path != "" && !filepath.IsAbs(path) {
 			path = filepath.Join(env.Cwd, path)
 		}
-		path, err := doctor.Bundle(doctor.BundleOptions{GridHome: env.GridHome, Home: env.Home, Out: path, Report: rep})
+		path, err := doctor.Bundle(doctor.BundleOptions{GridHome: env.GridHome, Home: env.Home, SettingsPath: settingsPath, Out: path, Report: rep})
 		if err != nil {
 			fmt.Fprintf(env.Stderr, "doctor --bundle: %v\n", err)
 			return 1

@@ -34,31 +34,17 @@ func ClaudeBlock(home, gridHome string) ([]ClaudeRule, error) {
 }
 
 func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
-	if home != "" {
-		home = gridhome.Real(home)
+	rules, anchor, err := claudeAllowRules(home, gridHome)
+	if err != nil {
+		return nil, err
 	}
-	if gridHome != "" {
-		gridHome = gridhome.Real(gridHome)
-	}
-	rel, err := filepath.Rel(home, gridHome)
-	if home == "" || gridHome == "" || err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == "." {
-		return nil, errors.New("Grid home must be a directory under the user home for ~/ permission anchors")
-	}
-	anchor := "~/" + filepath.ToSlash(rel)
-	if strings.ContainsAny(anchor, "*?[]()\n\r") {
-		return nil, errors.New("Grid home contains permission pattern characters")
-	}
+	home, gridHome = gridhome.Real(home), gridhome.Real(gridHome)
 	if projects == "" {
 		projects = filepath.Join(gridHome, "projects")
 	}
 	projectAnchor, err := claudeProjectAnchor(home, gridhome.Real(projects))
 	if err != nil {
 		return nil, err
-	}
-	rules := []ClaudeRule{
-		{"permissions", "allow", "Bash(grid *)"},
-		{"permissions", "allow", "Read(" + anchor + "/**)"},
-		{"permissions", "allow", "Edit(" + anchor + "/**)"},
 	}
 	for _, path := range []string{
 		projectAnchor + "/*/" + claudeFold("tasks") + "/[Tt]-[0-9]*/**",
@@ -76,6 +62,29 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 		ClaudeRule{"permissions", "deny", "Write(" + anchor + "/setup/**)"},
 		ClaudeRule{"autoMode", "environment", "$defaults"},
 		ClaudeRule{"autoMode", "environment", "The Grid home at " + anchor + " is trusted for Grid operations."}), nil
+}
+
+// claudeAllowRules shares the allow entries and validated anchor with setup.
+func claudeAllowRules(home, gridHome string) ([]ClaudeRule, string, error) {
+	if home != "" {
+		home = gridhome.Real(home)
+	}
+	if gridHome != "" {
+		gridHome = gridhome.Real(gridHome)
+	}
+	rel, err := filepath.Rel(home, gridHome)
+	if home == "" || gridHome == "" || err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == "." {
+		return nil, "", errors.New("Grid home must be a directory under the user home for ~/ permission anchors")
+	}
+	anchor := "~/" + filepath.ToSlash(rel)
+	if strings.ContainsAny(anchor, "*?[]()\n\r") {
+		return nil, "", errors.New("Grid home contains permission pattern characters")
+	}
+	return []ClaudeRule{
+		{"permissions", "allow", "Bash(grid *)"},
+		{"permissions", "allow", "Read(" + anchor + "/**)"},
+		{"permissions", "allow", "Edit(" + anchor + "/**)"},
+	}, anchor, nil
 }
 
 // Project denies can live outside the user home; Claude's // anchor is
@@ -186,15 +195,20 @@ func RunClaudeSetup(o ClaudeSetupOptions) int {
 	return code
 }
 
-func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
-	dir := o.ConfigDir
+// ClaudeSettingsPath locates the setup destination without consulting XDG paths.
+func ClaudeSettingsPath(home, configDir string) (string, error) {
+	dir := configDir
 	if dir == "" {
-		if o.Home == "" {
-			return 1, errors.New("Cannot locate user home. Nothing written.")
+		if home == "" {
+			return "", errors.New("Cannot locate user home. Nothing written.")
 		}
-		dir = filepath.Join(o.Home, ".claude")
+		dir = filepath.Join(home, ".claude")
 	}
-	path, err := filepath.Abs(filepath.Join(dir, "settings.json"))
+	return filepath.Abs(filepath.Join(dir, "settings.json"))
+}
+
+func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
+	path, err := ClaudeSettingsPath(o.Home, o.ConfigDir)
 	if err != nil {
 		return 1, err
 	}

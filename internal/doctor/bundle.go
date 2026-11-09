@@ -25,11 +25,12 @@ const bundleLogLimit = 20
 // checks. Now is optional. Out defaults to GridHome/support; existing output
 // files are refused so a bundle cannot accidentally replace another document.
 type BundleOptions struct {
-	GridHome string
-	Home     string
-	Out      string
-	Report   Report
-	Now      func() time.Time
+	SettingsPath string
+	GridHome     string
+	Home         string
+	Out          string
+	Report       Report
+	Now          func() time.Time
 }
 
 // WriteReport prints the same plain diagnostics used by doctor and doctor.txt.
@@ -79,7 +80,7 @@ func Bundle(o BundleOptions) (string, error) {
 	archive := zip.NewWriter(&data)
 	names := map[string]bool{}
 	add := func(name, content string) error {
-		name = Redact(name, o.Home)
+		name = Redact(name, o.Home, o.SettingsPath)
 		if names[name] {
 			return errors.New("redacted archive names collide")
 		}
@@ -90,7 +91,7 @@ func Bundle(o BundleOptions) (string, error) {
 		if err != nil {
 			return err
 		}
-		content = Redact(content, o.Home)
+		content = Redact(content, o.Home, o.SettingsPath)
 		if strings.HasPrefix(name, "logs/") && int64(len(content)) > bundleFileLimit {
 			content = content[int64(len(content))-bundleFileLimit:]
 		}

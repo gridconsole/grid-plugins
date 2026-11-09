@@ -17,30 +17,37 @@ var secretPatterns = []*regexp.Regexp{
 var jwsPattern = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]{2,}`)
 
 // Redact removes support-bundle secrets and emails and replaces the user's home
-// with ~. Windows homes also match case, slash and JSON-escaped variants.
-func Redact(text, home string) string {
-	if home != "" {
-		pattern := regexp.QuoteMeta(home)
-		normalized := strings.ReplaceAll(home, `\`, "/")
-		if len(normalized) >= 3 && normalized[1:3] == ":/" {
-			variants := []string{normalized, "/" + normalized[:1] + normalized[2:]}
-			for i, variant := range variants {
-				parts := strings.Split(variant, "/")
-				for j, part := range parts {
-					parts[j] = regexp.QuoteMeta(part)
-				}
-				variants[i] = strings.Join(parts, `(?:\\{1,2}|/)`)
-			}
-			pattern = `(?i)(?:` + strings.Join(variants, "|") + `)`
+// with ~. Explicit private paths (such as the Claude settings file) are removed
+// before home substitution. Windows paths match case and separator variants.
+func Redact(text, home string, privatePaths ...string) string {
+	for _, path := range privatePaths {
+		if path != "" {
+			text = regexp.MustCompile(redactPathPattern(path)).ReplaceAllString(text, `[REDACTED]${1}`)
 		}
-		// Preserve the delimiter and avoid treating /home/example-two as the
-		// home /home/example: only a character that can continue a name keeps
-		// the home from ending. This also handles homes inside JSON strings.
-		pattern += `($|[^A-Za-z0-9_-])`
-		text = regexp.MustCompile(pattern).ReplaceAllString(text, `~${1}`)
+	}
+	if home != "" {
+		text = regexp.MustCompile(redactPathPattern(home)).ReplaceAllString(text, `~${1}`)
 	}
 	for _, pattern := range secretPatterns {
 		text = pattern.ReplaceAllString(text, "[REDACTED]")
 	}
 	return jwsPattern.ReplaceAllString(text, "[REDACTED]")
+}
+
+func redactPathPattern(home string) string {
+	pattern := regexp.QuoteMeta(home)
+	normalized := strings.ReplaceAll(home, `\`, "/")
+	if len(normalized) >= 3 && normalized[1:3] == ":/" {
+		variants := []string{normalized, "/" + normalized[:1] + normalized[2:]}
+		for i, variant := range variants {
+			parts := strings.Split(variant, "/")
+			for j, part := range parts {
+				parts[j] = regexp.QuoteMeta(part)
+			}
+			variants[i] = strings.Join(parts, `(?:\\{1,2}|/)`)
+		}
+		pattern = `(?i)(?:` + strings.Join(variants, "|") + `)`
+	}
+	// Preserve the delimiter without matching a longer filename or home.
+	return pattern + `($|[^A-Za-z0-9_-])`
 }
