@@ -34,7 +34,6 @@ var gateName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:task\.md|approval(?:-ship
 
 // Workspace and project workflows govern inherited person-only verbs.
 var projectWorkflowName = regexp.MustCompile(`(?i)(?:^|[^\w.-])workflows\.md(?:$|[^\w.-])`)
-var shellPathWord = regexp.MustCompile(`(?:[^\s\x27"<>|;&()]+|'[^']*'|"[^"]*")+`)
 
 // The task's workflow snapshot governs person-only verbs and gate posting roles.
 var workflowName = regexp.MustCompile(`(?i)(?:^|[^\w.-])workflow\.md(?:$|[^\w.-])`)
@@ -54,6 +53,8 @@ var readOnly = map[string]bool{"cat": true, "head": true, "tail": true, "grep": 
 var findWrites = map[string]bool{"-delete": true, "-exec": true, "-execdir": true, "-ok": true, "-okdir": true, "-fprint": true, "-fprintf": true, "-fls": true}
 
 const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, workflow.md, workflows.md, approval.json, approval-preview.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide, grid decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
+
+const workflowReason = "The task's workflow.md policy is written only by Grid; an agent cannot change its own person-only verbs or gate posting roles. Reading is allowed: cat, grep, ls, head or tail of workflow.md work."
 
 const switchReason = "The guards and agent settings are the person's: <home>/settings.json, projects/<name>/settings.json and .settings.lock are written only by Grid, and grid hook level, grid agent set, grid skill enable|disable and grid setup are the person's verbs; an agent cannot turn a guard off. Reading is allowed: cat, grep, ls, head or tail of a settings file works. Use the Write or Edit tool for any other settings.json."
 
@@ -201,28 +202,6 @@ func projectWorkflowAt(root, target string) bool {
 	return len(rel) == 1 || len(rel) == 2 || (len(rel) == 3 && rel[0] == "projects")
 }
 
-// Resolve literal shell words too: an alias need not contain workflows.md.
-// This is a textual guard, not shell execution or variable expansion.
-func (c context) writesProjectWorkflow(command string) bool {
-	if onlyReads(command, flatten(command, false)) {
-		return false
-	}
-	roots := c.gridRoots()
-	for _, word := range shellPathWord.FindAllString(command, -1) {
-		path, ok := words(word)
-		if !ok || len(path) != 1 {
-			continue
-		}
-		target := strings.ToLower(c.path(path[0]))
-		for _, root := range roots {
-			if projectWorkflowAt(root, target) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 var namesFeed = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:projects/[^\s'"/]+/tasks/T-\d[^\s'"/]*/feed|feed)(?:/|[\s'";|&<>]|$)`)
 
 // hostFolder is the legacy .host: beside the data folders, two levels above a
@@ -269,11 +248,16 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 		if c.set && (runsVerb(command, gateVerb) || runsVerb(command, feedAnswer) || writesNamed(command, gateName) || (namesFeed.MatchString(command) && !feedCLI)) {
 			return person()
 		}
-		if c.set && (writesNamed(command, projectWorkflowName) || c.writesProjectWorkflow(command)) {
+		if c.set && writesNamed(command, projectWorkflowName) {
 			return person()
 		}
 		if c.set && writesNamed(command, workflowName) {
-			return hookio.Deny("The task's workflow.md policy is written only by Grid; an agent cannot change its own person-only verbs or gate posting roles. Reading is allowed: cat, grep, ls, head or tail of workflow.md work.")
+			return hookio.Deny(workflowReason)
+		}
+		if c.set {
+			if reason := c.protectedWriteReason(command); reason != "" {
+				return hookio.Deny(reason)
+			}
 		}
 		return hookio.Decision{}
 	}
