@@ -16,6 +16,7 @@ const (
 	hostWriteRedirect
 	hostDupRedirect // >&: a file unless the operand is an fd number or -
 	hostRefuse      // the tokenizer cannot tell what the shell runs: refuse the command
+	hostSkipped     // a # comment was skipped here: the shells may read its text as commands
 )
 
 type hostShellToken struct {
@@ -494,6 +495,7 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 				word.WriteByte(ch)
 			} else {
 				comment = true
+				out = append(out, hostShellToken{kind: hostSkipped})
 				refuse = refuse || i > 0 && strings.IndexByte(hostHashRefused, command[i-1]) >= 0
 			}
 		case ' ', '\t':
@@ -597,6 +599,7 @@ type hostSegment struct {
 	comments                     []hostShellToken // substitutions in a heredoc body: scanned, never words
 	separator                    string
 	refuse                       bool // the tokenizer could not tell what the shell runs
+	skipped                      bool // a # comment was skipped in the command
 	restart                      bool // the zsh reading of the command starts here
 }
 
@@ -617,7 +620,7 @@ func hostSameSegment(a, b hostSegment) bool {
 	same := func(x, y hostShellToken) bool {
 		return x.text == y.text && x.kind == y.kind && x.ansi == y.ansi && slices.Equal(x.groups, y.groups)
 	}
-	return a.separator == b.separator && a.refuse == b.refuse && slices.EqualFunc(a.tokens(), b.tokens(), same) &&
+	return a.separator == b.separator && a.refuse == b.refuse && a.skipped == b.skipped && slices.EqualFunc(a.tokens(), b.tokens(), same) &&
 		slices.EqualFunc(a.writes, b.writes, same) && slices.EqualFunc(a.args, b.args, same)
 }
 
@@ -632,6 +635,8 @@ func hostSegmentsOf(tokens []hostShellToken) []hostSegment {
 			seg = hostSegment{}
 		case hostRefuse:
 			seg.refuse = true
+		case hostSkipped:
+			seg.skipped = true
 		case hostWord:
 			if tok.text == "" {
 				seg.comments = append(seg.comments, tok)
@@ -673,19 +678,52 @@ func (g hostSegment) readCommand() bool {
 	}
 	name := strings.ToLower(filepath.Base(g.args[0].text))
 	for _, arg := range g.args[1:] {
-		if readerRuns(name, arg.text) {
+		if readerRuns(name, arg.text) || hostOpaqueOption(name, arg) {
 			return false
 		}
 	}
 	return readOnly[name]
 }
 
+// hostOpaqueOption reports a find or rg argument that may expand to an option the
+// guard cannot read: $'..' and $"..", or a word that starts with - or an expansion
+// and holds one ($x, $(..), a backtick, {a,b}). It counts as a runner, never a read.
+func hostOpaqueOption(name string, arg hostShellToken) bool {
+	if name != "find" && name != "rg" {
+		return false
+	}
+	const expansion = "$`{"
+	return arg.ansi || arg.text != "" && strings.ContainsAny(arg.text, expansion) &&
+		(arg.text[0] == '-' || strings.IndexByte(expansion, arg.text[0]) >= 0)
+}
+
+// subscripted reports an assignment word whose name has a subscript: a[..]=, and
+// BASH_CMDS[..]= or zsh functions[..]= and commands[..]=, which shadow a command.
+// The shells read the text inside the brackets as an expression, not as words.
+func (g hostSegment) subscripted() bool {
+	for _, assign := range g.assigns {
+		if name, _, _ := strings.Cut(assign.text, "="); strings.Contains(name, "[") {
+			return true
+		}
+	}
+	return false
+}
+
+// hostInSubscript reports a [ left open on the line of text[i]: a << there is a
+// shift in an array subscript to bash and zsh, so the lines after it run.
+func hostInSubscript(text string, i int) bool {
+	line := text[strings.LastIndexByte(text[:i], '\n')+1 : i]
+	return strings.Count(line, "[") > strings.Count(line, "]")
+}
+
 func (g hostSegment) readsOnly() bool { return len(g.writes) == 0 && g.readCommand() }
 
 // hostProvenReads reports a command the tokenizer shows to only read, in both shell
 // readings and in every substitution. A heredoc skip is trusted only for a quoted
-// delimiter, and never with $[ or ((, where the shells read << as a shift and run
-// the lines the tokenizer took for a body.
+// delimiter, and never with $[ or ((, or after a [ left open on its line, where the
+// shells read << as a shift and run the lines the tokenizer took for a body. A
+// comment skipped, or an assignment to a subscript, is never proven: the shells can
+// read the text after # as commands, and a[..]=, BASH_CMDS[..]= shadow a command.
 func hostProvenReads(command string, depth int) bool {
 	if depth > hostMaxGroupDepth || strings.Contains(command, "$[") || strings.Contains(command, "((") {
 		return false
@@ -696,14 +734,14 @@ func hostProvenReads(command string, depth int) bool {
 		case strings.HasPrefix(command[i:], "<<<"):
 			i += 2
 		default:
-			if doc, _, ok := hostHeredocAt(command, i); !ok || !doc.quoted {
+			if doc, _, ok := hostHeredocAt(command, i); !ok || !doc.quoted || hostInSubscript(command, i) {
 				return false
 			}
 			i++
 		}
 	}
 	for _, seg := range hostSegments(command) {
-		if seg.refuse || !seg.readsOnly() {
+		if seg.refuse || seg.skipped || seg.subscripted() || !seg.readsOnly() {
 			return false
 		}
 		for _, tok := range seg.tokens() {

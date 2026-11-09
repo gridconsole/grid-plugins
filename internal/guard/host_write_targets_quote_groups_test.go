@@ -51,8 +51,9 @@ var quoteGroupRows = []struct {
 	// continuation after it is refused, quoted or not.
 	{"quoted_hash_continuation_with_substitution", "echo \"fix #12\" $(echo a) \\\n b", true},
 	{"comment_continuation_after_quote", "echo a # it's\necho \"b\" # c \\\ntee ALIAS </dev/null", true},
-	// Real comments and plain # words run nothing protected.
-	{"comment_text", "echo a # tee ALIAS </dev/null", false},
+	// Real comments run nothing, but main's literal-word check reads their text, so the
+	// floor does too (L135R9): a protected word in a comment is refused. Plain # words run nothing.
+	{"comment_text", "echo a # tee ALIAS </dev/null", true},
 	{"comment_lone_quote", "echo a # it's\necho b", false},
 	{"hash_word", "echo a#b", false},
 	{"hash_quote_only", "echo '#'", false},
