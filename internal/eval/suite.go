@@ -46,6 +46,7 @@ type Check struct {
 	InputContains map[string]any `json:"input_contains,omitempty"`
 	CountMin      int            `json:"count_min,omitempty"` // zero defaults to one
 	Absent        bool           `json:"absent,omitempty"`
+	TopLevel      bool           `json:"top_level,omitempty"` // only the run's own calls, not its subagents'
 	Before        *ToolMatch     `json:"before,omitempty"`
 	After         *ToolMatch     `json:"after,omitempty"`
 }
@@ -127,6 +128,9 @@ func (t Task) Validate() error {
 		seen[c.ID] = true
 		if math.IsNaN(c.Weight) || c.Weight < 0 || c.Weight > 1000 {
 			return fmt.Errorf("check %s: weight must be between 0 and 1000", c.ID)
+		}
+		if c.TopLevel && c.Type != "tool_used" && c.Type != "tool_order" {
+			return fmt.Errorf("check %s: top_level applies only to tool_used and tool_order", c.ID)
 		}
 		switch c.Type {
 		case "file_exists", "text_contains":

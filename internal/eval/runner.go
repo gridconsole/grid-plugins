@@ -183,10 +183,7 @@ func (r Runner) attempt(ctx context.Context, task Task, tempRoot string) (Result
 	result.Setup = RunProcess(ctx, []string{"sh", "-eu", "-c", task.Setup}, workspace, env, "")
 	var trace traceInput
 	if result.Setup.Status == "passed" {
-		var err error
-		if result.AgentResult, trace, err = r.runAgent(ctx, agent, root, workspace, env, task.Prompt); err != nil {
-			return result, err
-		}
+		result.AgentResult, trace = r.runAgent(ctx, agent, workspace, env, task.Prompt)
 	}
 	trace.parser = r.TraceParser
 	for _, check := range task.Checks {
@@ -213,27 +210,15 @@ func (r Runner) attempt(ctx context.Context, task Task, tempRoot string) (Result
 }
 
 // runAgent runs the agent and keeps its full stdout, up to the trace limit, in
-// root/trace.jsonl beside the workspace, so the agent's own checks do not see it.
-func (r Runner) runAgent(ctx context.Context, agent []string, root, workspace string, env []string, prompt string) (ProcessResult, traceInput, error) {
+// memory. The trace checks read those bytes, never a file the agent could reach.
+func (r Runner) runAgent(ctx context.Context, agent []string, workspace string, env []string, prompt string) (ProcessResult, traceInput) {
 	limit := r.TraceLimit
 	if limit <= 0 {
 		limit = DefaultTraceLimit
 	}
-	path := filepath.Join(root, traceFile)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return ProcessResult{}, traceInput{}, err
-	}
-	sink := &cappedFile{file: f, limit: limit}
+	sink := &cappedBuffer{limit: limit}
 	process := runProcess(ctx, agent, workspace, env, prompt, sink)
-	if err := f.Close(); err != nil {
-		return process, traceInput{}, err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return process, traceInput{}, err
-	}
-	return process, traceInput{data: data, truncated: sink.truncated}, nil
+	return process, traceInput{data: sink.bytes(), truncated: sink.truncated}
 }
 
 // removeTree deletes root, first making directories the agent left read-only

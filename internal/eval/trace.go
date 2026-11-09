@@ -5,17 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 )
 
-// DefaultTraceLimit is eval_trace_stdout_limit: the most agent stdout kept in the
-// trace file. It is separate from outputLimit, which bounds the stored result.
+// DefaultTraceLimit is eval_trace_stdout_limit: the most agent stdout kept in
+// memory for the trace checks. It is separate from outputLimit, which bounds the stored result.
 const DefaultTraceLimit int64 = 64 << 20
-
-// traceFile is the trace's name beside the workspace in the attempt folder.
-const traceFile = "trace.jsonl"
 
 // ErrNoTrace means the agent's stdout held no line the parser could read. It is
 // never an empty trace, which would let a negative check pass.
@@ -26,6 +22,9 @@ type ToolCall struct {
 	Index int            `json:"index"`
 	Name  string         `json:"name"`
 	Input map[string]any `json:"input,omitempty"`
+	// Parent is the tool-use id of the call that started the subagent making
+	// this call; empty for the run's own calls.
+	Parent string `json:"parent,omitempty"`
 }
 
 // TraceParser turns the agent's stdout into its tool calls. An agent that does
@@ -45,8 +44,9 @@ func parseStreamJSON(data []byte) ([]ToolCall, error) {
 			continue
 		}
 		var event struct {
-			Type    string `json:"type"`
-			Message struct {
+			Type            string  `json:"type"`
+			ParentToolUseID *string `json:"parent_tool_use_id"`
+			Message         struct {
 				Content json.RawMessage `json:"content"`
 			} `json:"message"`
 		}
@@ -66,9 +66,13 @@ func parseStreamJSON(data []byte) ([]ToolCall, error) {
 		if json.Unmarshal(event.Message.Content, &items) != nil {
 			continue
 		}
+		parent := ""
+		if event.ParentToolUseID != nil {
+			parent = *event.ParentToolUseID
+		}
 		for _, item := range items {
 			if item.Type == "tool_use" {
-				calls = append(calls, ToolCall{Index: len(calls), Name: item.Name, Input: item.Input})
+				calls = append(calls, ToolCall{Index: len(calls), Name: item.Name, Input: item.Input, Parent: parent})
 			}
 		}
 	}
@@ -111,6 +115,18 @@ func (m ToolMatch) validate() error {
 	return nil
 }
 
+// topLevel keeps the run's own calls and numbers them again from zero.
+func topLevel(calls []ToolCall) []ToolCall {
+	out := make([]ToolCall, 0, len(calls))
+	for _, call := range calls {
+		if call.Parent == "" {
+			call.Index = len(out)
+			out = append(out, call)
+		}
+	}
+	return out
+}
+
 func (m ToolMatch) first(calls []ToolCall) int {
 	for _, call := range calls {
 		if m.matches(call) {
@@ -141,6 +157,9 @@ func evaluateTrace(r CheckResult, c Check, t traceInput) CheckResult {
 	if err != nil {
 		r.Reason = err.Error()
 		return r
+	}
+	if c.TopLevel {
+		calls = topLevel(calls)
 	}
 	switch c.Type {
 	case "tool_used":
@@ -185,29 +204,28 @@ func evaluateTrace(r CheckResult, c Check, t traceInput) CheckResult {
 	return r
 }
 
-// cappedFile keeps the first limit bytes written and reports the rest as dropped.
-// It never fails a Write, so a full trace cannot stop the agent.
-type cappedFile struct {
+// cappedBuffer keeps the first limit bytes written in memory and reports the
+// rest as dropped. It never fails a Write, so a full trace cannot stop the agent.
+type cappedBuffer struct {
 	mu        sync.Mutex
-	file      *os.File
+	buf       bytes.Buffer
 	limit     int64
-	written   int64
 	truncated bool
 }
 
-func (c *cappedFile) Write(p []byte) (int, error) {
+func (c *cappedBuffer) Write(p []byte) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	n := len(p)
-	if room := c.limit - c.written; int64(len(p)) > room {
+	if room := c.limit - int64(c.buf.Len()); int64(len(p)) > room {
 		p, c.truncated = p[:room], true
 	}
-	if len(p) > 0 {
-		if _, err := c.file.Write(p); err != nil {
-			c.truncated = true // a lost write must never read as a complete trace
-			return n, nil
-		}
-		c.written += int64(len(p))
-	}
+	c.buf.Write(p)
 	return n, nil
+}
+
+func (c *cappedBuffer) bytes() []byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.buf.Bytes()
 }
