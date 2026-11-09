@@ -51,6 +51,8 @@ type Store struct {
 	// WorkflowWarning reports invalid workflow units once per configuration read;
 	// valid units still apply and invalid units retain built-in defaults.
 	WorkflowWarning func(error)
+	// HoldPolicy judges a task that has a budget in Hold; nil means DefaultHoldPolicy.
+	HoldPolicy HoldPolicy
 	// beforeSave simulates a failure after a Feed post but before saving fired.
 	beforeSave func() error
 }
