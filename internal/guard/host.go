@@ -32,6 +32,10 @@ var feedAnswer = regexp.MustCompile(`(?i)` + feedPostCommand +
 // plan revision archive. task.md is protected too: its workflow selects the gates.
 var gateName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:task\.md|approval(?:-ship)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock|plan-revisions|questions)(?:$|[^\w.-])`)
 
+// Workspace and project workflows govern inherited person-only verbs.
+var projectWorkflowName = regexp.MustCompile(`(?i)(?:^|[^\w.-])workflows\.md(?:$|[^\w.-])`)
+var shellPathWord = regexp.MustCompile(`(?:[^\s\x27"<>|;&()]+|'[^']*'|"[^"]*")+`)
+
 // The task's workflow snapshot governs person-only verbs and gate posting roles.
 var workflowName = regexp.MustCompile(`(?i)(?:^|[^\w.-])workflow\.md(?:$|[^\w.-])`)
 
@@ -40,7 +44,7 @@ var workflowName = regexp.MustCompile(`(?i)(?:^|[^\w.-])workflow\.md(?:$|[^\w.-]
 var switchVerb = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:hook\s+level|agent\s+set|skill\s+(?:enable|disable)|setup)(?:\s|$)`)
 var settingsName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:settings\.json|\.settings\.lock)(?:$|[^\w.-])`)
 var settingsFile = regexp.MustCompile(`(?i)^(?:settings\.json|\.settings\.lock)$`)
-var gateFile = regexp.MustCompile(`(?i)^(?:task\.md|workflow\.md|approval(?:-ship)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock)$`)
+var gateFile = regexp.MustCompile(`(?i)^(?:task\.md|workflows?\.md|approval(?:-ship)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock)$`)
 
 // readOnly are the commands that may name a gate path: none of them writes a file
 // when the command has no redirect and, for find, no action flag.
@@ -49,7 +53,7 @@ var readOnly = map[string]bool{"cat": true, "head": true, "tail": true, "grep": 
 	"cut": true, "echo": true, "printf": true, "cd": true, "pwd": true, "test": true, "[": true, "true": true}
 var findWrites = map[string]bool{"-delete": true, "-exec": true, "-execdir": true, "-ok": true, "-okdir": true, "-fprint": true, "-fprintf": true, "-fls": true}
 
-const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, workflow.md, approval.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide, grid decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
+const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, workflow.md, workflows.md, approval.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide, grid decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
 
 const switchReason = "The guards and agent settings are the person's: <home>/settings.json, projects/<name>/settings.json and .settings.lock are written only by Grid, and grid hook level, grid agent set, grid skill enable|disable and grid setup are the person's verbs; an agent cannot turn a guard off. Reading is allowed: cat, grep, ls, head or tail of a settings file works. Use the Write or Edit tool for any other settings.json."
 
@@ -176,12 +180,47 @@ func settingsAt(root, target string) bool {
 // grid root: its questions folder, its plan and ship approvals, a refusal decision or its plan
 // revisions. The home root finds personal tasks, which sit beside projects.
 func gateAt(root, target string) bool {
+	if projectWorkflowAt(root, target) {
+		return true
+	}
 	t := taskAtFold(target, root)
 	if t == nil {
 		return false
 	}
 	first, _, _ := strings.Cut(t.rel, "/")
 	return first == "questions" || first == "plan-revisions" || (t.rel == first && gateFile.MatchString(first))
+}
+
+// projectWorkflowAt recognizes workspace and project policy files, including
+// aliases after the caller resolves the target path.
+func projectWorkflowAt(root, target string) bool {
+	if !inside(root, target) || filepath.Base(target) != "workflows.md" {
+		return false
+	}
+	rel := strings.Split(relative(root, target), "/")
+	return len(rel) == 1 || len(rel) == 2 || (len(rel) == 3 && rel[0] == "projects")
+}
+
+// Resolve literal shell words too: an alias need not contain workflows.md.
+// This is a textual guard, not shell execution or variable expansion.
+func (c context) writesProjectWorkflow(command string) bool {
+	if onlyReads(command, flatten(command, false)) {
+		return false
+	}
+	roots := c.gridRoots()
+	for _, word := range shellPathWord.FindAllString(command, -1) {
+		path, ok := words(word)
+		if !ok || len(path) != 1 {
+			continue
+		}
+		target := strings.ToLower(c.path(path[0]))
+		for _, root := range roots {
+			if projectWorkflowAt(root, target) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 var namesFeed = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:projects/[^\s'"/]+/tasks/T-\d[^\s'"/]*/feed|feed)(?:/|[\s'";|&<>]|$)`)
@@ -228,6 +267,9 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 			return switches()
 		}
 		if c.set && (runsVerb(command, gateVerb) || runsVerb(command, feedAnswer) || writesNamed(command, gateName) || (namesFeed.MatchString(command) && !feedCLI)) {
+			return person()
+		}
+		if c.set && (writesNamed(command, projectWorkflowName) || c.writesProjectWorkflow(command)) {
 			return person()
 		}
 		if c.set && writesNamed(command, workflowName) {
