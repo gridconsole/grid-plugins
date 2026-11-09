@@ -8,6 +8,8 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 )
 
+var personDirName = regexp.MustCompile(`(?i)(?:^|[^\w.-])\.grid-person(?:$|[^\w.-])`)
+
 var namesHost = regexp.MustCompile(`(?i)(^|[^\w.-])\.host($|[^\w.-])`)
 
 // gateVerb is a grid verb that writes a gate: an approval, an answer, a refusal
@@ -200,6 +202,10 @@ func homeHostFolder(projects string) string {
 // plan guard switch. Shell checks are deliberately textual, not a sandbox.
 func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.Decision {
 	c := newContext(in, root, env)
+	// The account person directory is protected even outside a Grid project.
+	if in.ToolName == "Bash" && writesNamed(str(in.ToolInput["command"]), personDirName) {
+		return hookio.Deny("The person directory ~/.grid-person is written only by the person or Grid; an agent cannot change its policy or launchers. Reading is allowed.")
+	}
 	if c.projects == "" {
 		return hookio.Decision{}
 	}
