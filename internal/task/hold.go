@@ -1,6 +1,7 @@
 package task
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,12 @@ var acceptedLine = regexp.MustCompile(`(?m)^- \d{4}-\d\d-\d\dT\d\d:\d\d · plan 
 // StepLookup resolves a task's steps from the task.md text it is given: the
 // file, or an edit the guard is deciding. It never reads task.md again.
 type StepLookup func(text string) ([]taskfile.WorkflowStep, error)
+
+// ErrProjectMismatch is the lookup error of a task whose task.md names another
+// project than the folder it sits in. Nothing legitimate makes one: a person's
+// receipt does not release it, because the receipt was given to a task in its
+// own project.
+var ErrProjectMismatch = errors.New("task.md names another project than its folder")
 
 // StepsFor resolves the steps of the task in dir through its workflow: the
 // inline list, the named template (the project's copy first) or the workspace
@@ -54,7 +61,7 @@ func inFolderProject(text, folder string) error {
 	if declared == folder || (declared == "" && folder == where.Personal) {
 		return nil
 	}
-	return fmt.Errorf("task.md has project %q but its folder is in project %q", declared, folder)
+	return fmt.Errorf("%w: task.md has project %q but its folder is in project %q", ErrProjectMismatch, declared, folder)
 }
 
 // InlineSteps reads only an inline workflow list. It is the lookup for callers
@@ -124,7 +131,11 @@ func PlanHeldWith(lookup StepLookup, dir, text, history string) bool {
 	// A JSON receipt takes precedence over legacy history/step advancement:
 	// stale full digests must not be released by an old prose acceptance.
 	if _, err := os.Lstat(filepath.Join(dir, approvalFile)); !os.IsNotExist(err) {
-		return approvalRequired(lookup(text)) && !Approved(dir)
+		steps, err := lookup(text)
+		if errors.Is(err, ErrProjectMismatch) {
+			return true
+		}
+		return approvalRequired(steps, err) && !Approved(dir)
 	}
 	return HeldStage(PlanStageWith(lookup, text, history))
 }

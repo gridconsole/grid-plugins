@@ -176,6 +176,8 @@ var namedRows = []struct {
 	{name: "moved to a project whose same-name workflow has no plan gate", size: "large", workflow: "Large", project: namedWorkflows(namedLarge), moved: namedWorkflows(namedLargeOpen), step: "plan", stage: "unreadable", held: true},
 	{name: "moved to a project whose copy of the default has no plan gate", workspace: namedWorkflows(namedStandard), moved: namedWorkflows(namedStandardCopy), size: "large", step: "plan", stage: "unreadable", held: true},
 	{name: "moved past plan to a project with the same workflow", size: "large", workflow: "Large", project: namedWorkflows(namedLarge), moved: namedWorkflows(namedLarge), step: "build", stage: "unreadable", held: true},
+	{name: "moved at plan with a fresh receipt", size: "large", workflow: "Large", project: namedWorkflows(namedLarge), moved: namedWorkflows(namedLarge), step: "plan", receipt: "fresh", stage: "unreadable", held: true},
+	{name: "moved at plan with a stale receipt", size: "large", workflow: "Large", project: namedWorkflows(namedLarge), moved: namedWorkflows(namedLargeOpen), step: "plan", receipt: "stale", stage: "unreadable", held: true},
 }
 
 // newNamedRow makes the row's task, running at its step and ready to deliver.
