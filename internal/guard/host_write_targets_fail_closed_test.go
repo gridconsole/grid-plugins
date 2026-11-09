@@ -65,7 +65,7 @@ var failClosedRows = []struct {
 	{"dq_brace_quote", `echo "${x:-'}" ; tee ALIAS </dev/null ; echo "'}"`, true},
 	{"dq_brace_quote_group", `echo $(echo "${x:-'}" ; tee ALIAS </dev/null ; echo "'}")`, true},
 	{"dq_brace_quote_nested", `echo "$(echo "${x:-'}")" ; tee ALIAS </dev/null ; echo "'}"`, true},
-	{"zsh_reading_after_cd", `echo "${x:-'}" ; tee ALIAS </dev/null ; echo "'}" ; cd /tmp`, true},
+	{"zsh_reading_after_cd", `echo "${x:-'}" ; tee ALIAS </dev/null ; echo "'}" ; cd .. ; true`, true},
 	{"dq_brace_default", `echo "${VAR:-'none'}"`, false},
 	{"dq_text", `echo "it's a test" 'a "b"'`, false},
 	{"grep_hash", `grep -rn "fix #12" . && grep -n '#' notes.md`, false},
@@ -101,5 +101,22 @@ func TestHostWriteTargetsFailClosed(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// The zsh reading starts again from the command's folder: a cd in the bash reading
+// must not move where the zsh reading's tee alias lands. writesProjectWorkflow does
+// not follow cd, so this is checked on the protected-write scan alone.
+func TestHostZshReadingRestartsAtCwd(t *testing.T) {
+	f := setup(t)
+	project := filepath.Join(f.projects, "example")
+	policy := filepath.Join(project, "workflows.md")
+	f.write(policy, "policy")
+	f.link(filepath.Join(project, "alias"), policy)
+	command := `echo "${x:-'}" ; tee alias </dev/null ; echo "'}" ; cd /tmp ; true`
+	in := f.input("Bash", command)
+	in.Cwd = project
+	if newContext(in, f.root, f.env).protectedWriteReason(command) != gateReason {
+		t.Fatal("protectedWriteReason did not refuse the zsh reading")
 	}
 }
