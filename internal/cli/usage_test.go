@@ -24,7 +24,6 @@ func usageTask(t *testing.T) (*harness, string) {
 	h.write(filepath.Join(task, "task.md"), "---\nid: 01ARZ3NDEKTSV4RRFFQ69G5FAV\n---\n")
 	h.write(filepath.Join(h.gridHome, "machine"), "01ARZ3NDEKTSV4RRFFQ69G5FAW\n")
 	t.Setenv("GRID_MEMBER", "example")
-	t.Setenv("GRID_ROLE", "worker") // usage notices are written by the CLI itself.
 	return h, task
 }
 

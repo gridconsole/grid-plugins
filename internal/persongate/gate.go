@@ -43,7 +43,7 @@ type Decision struct {
 }
 
 // Floor is the single default verb table. Workflow policy can only add to it.
-var floor = []string{"approve", "refusal decide", "decide", "answer", "question answer", "question withdraw", "task status", "task stop", "task close", "task reopen", "task delete", "task restore", "task rename", "task decline", "hook level", "agent set", "skill enable", "skill disable", "setup"}
+var floor = []string{"approve", "refusal decide", "decide", "answer", "question answer", "question withdraw", "task status", "task stop", "task close", "task reopen", "task delete", "task restore", "task rename", "task decline", "hook level", "agent set", "skill enable", "skill disable", "setup", "usage budget set", "usage budget clear"}
 
 func Floor() []string { return slices.Clone(floor) }
 

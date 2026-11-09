@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -219,7 +220,11 @@ func runUsageConfig(kind string, args []string, env Env) int {
 		fs.BoolVar(&clearMinutes, "minutes", false, "clear minutes only")
 		fs.BoolVar(&clearTokens, "tokens", false, "clear tokens only; budget clear restores the workspace default")
 	}
-	if code, stop := parse(fs, args[1:], env); stop {
+	if kind == "budget" && op != "show" {
+		if code, stop := parseBudgetWrite(fs, op, args[1:], &workspace, &env); stop {
+			return code
+		}
+	} else if code, stop := parse(fs, args[1:], env); stop {
 		return code
 	}
 	if workspace {
@@ -304,6 +309,40 @@ func runUsageConfig(kind string, args []string, env Env) int {
 		fmt.Fprintf(env.Stdout, "%s  budget %s  thresholds [%s]%s\n", unit, budget, strings.Join(percentages, ", "), source)
 	}
 	return 0
+}
+
+// usageBudgetWrite reports a task-level budget write command, which the handler gates
+// itself once it knows whether --workspace was meant; Run skips the early gate for it.
+func usageBudgetWrite(name string, rest []string) bool {
+	return name == "usage" && len(rest) >= 2 && rest[0] == "budget" && (rest[1] == "set" || rest[1] == "clear")
+}
+
+// parseBudgetWrite is parse for budget set and clear with the person gate between the flag
+// parse and its diagnostics, so an agent is refused whatever else is wrong with the call.
+// --workspace keeps its own role gate and a failed flag parse writes nothing, so neither is gated.
+func parseBudgetWrite(fs *flag.FlagSet, op string, args []string, workspace *bool, env *Env) (int, bool) {
+	held := &bytes.Buffer{}
+	fs.SetOutput(held)
+	err := fs.Parse(args)
+	fs.SetOutput(env.Stderr)
+	if err == nil && !*workspace {
+		gate := func(e *Env) int { return gateCommand(append([]string{"usage", "budget", op}, args...), e) }
+		if code := withPersonErrorCode(env, gate); code != 0 {
+			return code, true
+		}
+	}
+	_, _ = env.Stderr.Write(held.Bytes())
+	if errors.Is(err, flag.ErrHelp) {
+		return 0, true
+	}
+	if err != nil {
+		return 2, true
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintf(env.Stderr, "%s: unexpected argument %q\n", fs.Name(), fs.Arg(0))
+		return 2, true
+	}
+	return 0, false
 }
 
 func runWorkspaceBudget(op string, value *uint64, asJSON bool, env Env) int {

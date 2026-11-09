@@ -184,7 +184,9 @@ func Run(args []string, env Env) (exit int) {
 		// Move validates inbox policy before the gate can warn about malformed
 		// front matter, so a failed inbox policy has one exact diagnostic.
 		// Its handler still applies the same person gate before any move.
-		if name != "signal" || len(rest) == 0 || rest[0] != "move" {
+		// usage budget set and clear gate in their handler: --workspace keeps its own
+		// role gate and parse errors keep exit 2, so only the task-level write is checked.
+		if (name != "signal" || len(rest) == 0 || rest[0] != "move") && !usageBudgetWrite(name, rest) {
 			if code := withPersonErrorCode(&env, func(e *Env) int { return gateWorkflowPolicy(args, e) }); code != 0 {
 				return code
 			}
