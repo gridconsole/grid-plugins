@@ -244,7 +244,7 @@ func TestProjectPersonSignalTaskUnion(t *testing.T) {
 }
 
 func TestProjectPersonBadTaskWarning(t *testing.T) {
-	for _, body := range []string{"---\nperson_verbs: false\n---\n", "---\nperson_verbs: [task show\n---\n"} {
+	for _, body := range []string{"---\nperson_verbs: false\n---\n", "---\nperson_verbs: [task show, 5]\n---\n"} {
 		h := newHarness(t)
 		fixture := taskFixture(t, h)
 		h.write(filepath.Join(fixture.Path, "workflow.md"), body)

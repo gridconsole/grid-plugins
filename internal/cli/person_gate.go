@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -117,7 +118,7 @@ func gateCommand(args []string, env *Env) int {
 		apply := func(policy map[string][]string, policyErr error) {
 			if policyErr != nil {
 				// A broken extension cannot remove the floor or another scope's policy.
-				if !warned {
+				if errors.Is(policyErr, workflow.ErrPersonVerbs) && !warned {
 					fmt.Fprintln(env.Stderr, "grid: warning: invalid person_verbs; ignoring the key and keeping the person-only floor")
 					warned = true
 				}
