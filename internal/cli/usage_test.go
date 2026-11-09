@@ -359,11 +359,12 @@ func TestTokenHelp(t *testing.T) {
 	if code := h.run(task, "usage", "--help"); code != 0 {
 		t.Fatal(code, h.errb)
 	}
-	for _, text := range []string{"--tokens N", "--tokens PERCENT", "tokens_per_task", "workspace.md", "hold at the limit is not enforced yet", "worker and session hooks"} {
+	for _, text := range []string{"--tokens N", "--tokens PERCENT", "tokens_per_task", "workspace.md", "hold at the limit is not enforced yet", "worker and session hooks", "tokens 80%, 100%; dollars and minutes 50%, 80%, 100%"} {
 		if !strings.Contains(h.out.String(), text) {
 			t.Fatalf("help omits %q", text)
 		}
 	}
+	golden.Assert(t, "usage-help", h.out.String())
 }
 
 func TestWorkspaceBudgetShowCLI(t *testing.T) {

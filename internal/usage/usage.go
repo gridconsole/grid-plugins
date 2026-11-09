@@ -45,9 +45,12 @@ type Store struct {
 	Now      func() time.Time
 	// Writer is resolved lazily, only when a notice needs posting.
 	Writer func() (feed.Writer, error)
-	// UsageNoticeThresholds supplies workflow defaults without reading a workflow
-	// file. Nil uses built-in defaults; set it before concurrent Store calls.
+	// UsageNoticeThresholds overrides task workflow defaults when non-nil.
+	// Set it before concurrent Store calls.
 	UsageNoticeThresholds *NoticeThresholds
+	// WorkflowWarning reports invalid workflow units once per configuration read;
+	// valid units still apply and invalid units retain built-in defaults.
+	WorkflowWarning func(error)
 	// beforeSave simulates a failure after a Feed post but before saving fired.
 	beforeSave func() error
 }

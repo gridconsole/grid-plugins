@@ -268,10 +268,9 @@ Disagreements and defaults chosen:
 - Usage thresholds are numeric percentages from 0 through 100, defaulting to
   80 and 100 for tokens, and 50, 80 and 100 for dollars and minutes. Task
   `thresholds.json` values override per-unit `usage_notice_thresholds` workflow
-  defaults, which override the built-in defaults; the configuration seam does
-  not read workflow files yet. Existing explicit token thresholds, including
-  50, and previously written notices are preserved. Dollars and minutes are
-  nonnegative numbers; tokens are nonnegative integers. Exactly one unit is
+  defaults, which override the built-in defaults. Existing explicit token
+  thresholds, including 50, and previously written notices are preserved. Dollars
+  and minutes are nonnegative numbers; tokens are nonnegative integers. Exactly one unit is
   present in a usage-notice, and its
   body task must equal the envelope task. `grid usage post --tokens N` adds a
   delta; `usage show` includes token totals. `usage budget set --tokens N` sets
@@ -284,11 +283,11 @@ Disagreements and defaults chosen:
   Task `workflow.md` front matter may set `usage_notice_thresholds` to a map of
   `tokens`, `dollars`, and/or `minutes` to percentage lists, for example
   `usage_notice_thresholds: {tokens: [90, 100]}`. Each supplied list must contain
-  positive finite numbers in strictly increasing order and end at 100. Per unit,
-  explicit task `thresholds.json` settings win, then this workflow key, then the
-  default (tokens 80/100; dollars and minutes 50/80/100); omitted units retain
+  at most eight positive finite numbers in strictly increasing order and end
+  at 100. Per unit, explicit task `thresholds.json` settings win, then this
+  workflow key, then the default (tokens 80/100; dollars and minutes 50/80/100); omitted units retain
   their own settings or defaults. Invalid units fall back while valid units
-  still apply, with a diagnostic reported by the command; usage recording and
+  still apply, with one diagnostic per command; usage recording and
   notices continue, and existing fired notice files are never rewritten.
 
   `grid usage budget show|set|clear --workspace` accesses the workspace default

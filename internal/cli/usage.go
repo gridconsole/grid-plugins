@@ -24,7 +24,8 @@ All commands accept --json; task-scoped commands accept --task T-NN.
 Flags alone fold the token totals observed by the session hooks; they are not Job usage posts.
 Posts are deltas; at least one amount is required. Thresholds are percentages (0-100).
 Units are dollars, minutes and tokens; token amounts are non-negative integers.
-Default thresholds: 50%, 80%, 100%. A task token budget overrides the workspace
+Default thresholds: tokens 80%, 100%; dollars and minutes 50%, 80%, 100%.
+A task token budget overrides the workspace
 default tokens_per_task in <GRID_HOME>/workspace.md front matter (positive digits).
 Without a budget no notice fires. The hold at the limit is not enforced yet;
 worker and session hooks will enforce it in a follow-up.
@@ -121,7 +122,7 @@ func runUsage(args []string, env Env) int {
 	if err != nil {
 		return commandError(env, "usage", err)
 	}
-	s := usage.Store{TaskPath: res.TaskPath, GridHome: env.GridHome, Writer: func() (feed.Writer, error) {
+	s := usage.Store{TaskPath: res.TaskPath, GridHome: env.GridHome, WorkflowWarning: usageWorkflowWarning(env), Writer: func() (feed.Writer, error) {
 		if env.GridHome == "" {
 			return feed.Writer{}, fmt.Errorf("cannot find the Grid home; set GRID_HOME")
 		}
@@ -163,6 +164,12 @@ func runUsage(args []string, env Env) int {
 		fmt.Fprintf(env.Stdout, "usage-notice %s  %g%% of %s budget  %v %s\n", notice.ID, notice.Body["threshold"], unit, notice.Body[unit], unit)
 	}
 	return 0
+}
+
+func usageWorkflowWarning(env Env) func(error) {
+	return func(err error) {
+		fmt.Fprintf(env.Stderr, "usage: warning: %s\n", err)
+	}
 }
 
 func printUsage(env Env, summary usage.Summary) {
@@ -231,7 +238,7 @@ func runUsageConfig(kind string, args []string, env Env) int {
 	if err != nil {
 		return commandError(env, "usage", err)
 	}
-	s := usage.Store{TaskPath: res.TaskPath, GridHome: env.GridHome}
+	s := usage.Store{TaskPath: res.TaskPath, GridHome: env.GridHome, WorkflowWarning: usageWorkflowWarning(env)}
 	var config usage.Configuration
 	if op == "show" {
 		config, err = s.Config()

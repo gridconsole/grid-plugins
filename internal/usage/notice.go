@@ -18,6 +18,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
+	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
 // PostResult reports the durable log delta even when a notice could not be saved.
@@ -212,6 +213,15 @@ func readConfig(dir string) (Configuration, error) {
 
 func (s Store) readConfig(dir string) (Configuration, error) {
 	c := defaults()
+	var workflowErr error
+	readWorkflow := s.UsageNoticeThresholds == nil && s.TaskPath != ""
+	if readWorkflow {
+		var thresholds map[string][]float64
+		thresholds, workflowErr = workflow.UsageNoticeThresholds(s.TaskPath)
+		s.UsageNoticeThresholds = &NoticeThresholds{
+			Dollars: thresholds["dollars"], Minutes: thresholds["minutes"], Tokens: thresholds["tokens"],
+		}
+	}
 	if workflow := s.UsageNoticeThresholds; workflow != nil {
 		for _, unit := range []struct {
 			name   string
@@ -227,10 +237,18 @@ func (s Store) readConfig(dir string) (Configuration, error) {
 			}
 			values, err := normalize(unit.values, false)
 			if err != nil {
-				return Configuration{}, fmt.Errorf("usage_notice_thresholds %s: %w", unit.name, err)
+				err = fmt.Errorf("usage_notice_thresholds %s: %w", unit.name, err)
+				if !readWorkflow {
+					return Configuration{}, err
+				}
+				workflowErr = errors.Join(workflowErr, err)
+				continue
 			}
 			*unit.target = values
 		}
+	}
+	if workflowErr != nil && s.WorkflowWarning != nil {
+		s.WorkflowWarning(workflowErr)
 	}
 	if dir == "" {
 		return c, nil

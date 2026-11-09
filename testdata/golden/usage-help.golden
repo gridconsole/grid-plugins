@@ -1,0 +1,22 @@
+Usage: grid usage [--task T-NN] [--json]
+       grid usage post --job J-N|lead [--dollars N] [--minutes N] [--tokens N] [--session ID] [--model NAME]
+       grid usage show
+       grid usage threshold set [--dollars PERCENT ...] [--minutes PERCENT ...] [--tokens PERCENT ...]
+       grid usage threshold show | clear [--dollars] [--minutes] [--tokens]
+       grid usage budget set [--dollars N] [--minutes N] [--tokens N]
+       grid usage budget show | clear [--dollars] [--minutes] [--tokens]
+All commands accept --json; task-scoped commands accept --task T-NN.
+Flags alone fold the token totals observed by the session hooks; they are not Job usage posts.
+Posts are deltas; at least one amount is required. Thresholds are percentages (0-100).
+Units are dollars, minutes and tokens; token amounts are non-negative integers.
+Default thresholds: tokens 80%, 100%; dollars and minutes 50%, 80%, 100%.
+A task token budget overrides the workspace
+default tokens_per_task in <GRID_HOME>/workspace.md front matter (positive digits).
+Without a budget no notice fires. The hold at the limit is not enforced yet;
+worker and session hooks will enforce it in a follow-up.
+Set replaces the supplied units. Clear without unit flags clears all three units.
+Clearing a task token budget restores the workspace default when present.
+Budget show|set|clear --workspace accesses that default without a task.
+Workspace set requires --tokens N (integer, at least 1); clear [--tokens] removes it.
+Workspace mode rejects --task, --dollars and --minutes. Show prints tokens_per_task.
+Workspace reads allow the local role, owner and member; writes allow local or owner.

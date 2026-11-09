@@ -23,6 +23,8 @@ func TestUsageWorkflowThresholds(t *testing.T) {
 		{name: "task-clear-wins", policy: "tokens: [90, 100]", taskTokens: "[]", tokens: []float64{}, dollars: []float64{50, 80, 100}, minutes: []float64{50, 80, 100}},
 		{name: "omitted-token", policy: "dollars: [90, 100]", tokens: []float64{80, 100}, dollars: []float64{90, 100}, minutes: []float64{50, 80, 100}},
 		{name: "invalid-token", policy: "tokens: [90]\n  dollars: [90, 100]", warning: "usage_notice_thresholds.tokens: last value must be 100", tokens: []float64{80, 100}, dollars: []float64{90, 100}, minutes: []float64{50, 80, 100}},
+		{name: "seam-limit", policy: "tokens: [10, 20, 30, 40, 50, 60, 70, 80, 100]", warning: "usage_notice_thresholds tokens: at most 8 thresholds per unit", tokens: []float64{80, 100}, dollars: []float64{50, 80, 100}, minutes: []float64{50, 80, 100}},
+		{name: "multiple-invalid-units", policy: "tokens: [90]\n  minutes: []", warning: "usage_notice_thresholds.minutes: must be a nonempty list of numbers\nusage_notice_thresholds.tokens: last value must be 100", tokens: []float64{80, 100}, dollars: []float64{50, 80, 100}, minutes: []float64{50, 80, 100}},
 		{name: "invalid-shape", policy: "tokens: invalid", warning: "usage_notice_thresholds.tokens: must be a nonempty list of numbers", tokens: []float64{80, 100}, dollars: []float64{50, 80, 100}, minutes: []float64{50, 80, 100}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
