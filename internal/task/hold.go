@@ -1,11 +1,14 @@
 package task
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
@@ -27,22 +30,68 @@ type StepLookup func(text string) ([]taskfile.WorkflowStep, error)
 // own project.
 var ErrProjectMismatch = errors.New("task.md names another project than its folder")
 
+// ErrWorkflowChanged (code workflow_changed) is the lookup error of a task
+// whose steps now resolve to others than the ones task.md's workflow_digest was
+// made from: a project folder swapped or rebuilt under it, or a workflows.md a
+// person changed. It holds like ErrProjectMismatch, and no receipt releases it.
+var ErrWorkflowChanged = errors.New("workflow_changed: the task's workflow resolves to other steps than the ones it was created with")
+
+// WorkflowDigest is the hex sha256 of the canonical resolved steps: each step's
+// name, kind and whether it is the plan gate, one quoted line per step, in order.
+func WorkflowDigest(steps []taskfile.WorkflowStep) string {
+	gate := taskfile.PlanApprovalIndex(steps)
+	var b strings.Builder
+	for i, step := range steps {
+		b.WriteString(strconv.Quote(step.Step) + " " + strconv.Quote(step.Kind) + " " + strconv.FormatBool(i == gate) + "\n")
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])
+}
+
 // StepsFor resolves the steps of the task in dir through its workflow: the
 // inline list, the named template (the project's copy first) or the workspace
 // default. The project is the folder above tasks/, as the guard places a task,
 // and task.md must name that same project: a folder moved under another
 // project would otherwise read that project's same-name template, one that may
 // have no plan gate. A mismatch is an error, which holds. An inline list needs
-// no project, so it reads as it is. The guard and Deliver both build their
-// lookup here, so they resolve alike.
+// no project, so it reads as it is. A folder name proves nothing once folders
+// are renamed, so the steps must also match the workflow_digest the task was
+// created with (ErrWorkflowChanged); a task made before that field keeps the
+// folder check alone. The guard and Deliver both build their lookup here, so
+// they resolve alike.
 func StepsFor(r where.Resolver, dir string) StepLookup {
 	project := filepath.Base(filepath.Dir(filepath.Dir(dir)))
 	return func(text string) ([]taskfile.WorkflowStep, error) {
 		if err := inFolderProject(text, project); err != nil {
 			return nil, err
 		}
-		return workflow.TaskSteps(r, project, text)
+		steps, err := workflow.TaskSteps(r, project, text)
+		if err != nil {
+			return nil, err
+		}
+		if err := sameDigest(text, steps); err != nil {
+			return nil, err
+		}
+		return steps, nil
 	}
+}
+
+// sameDigest checks resolved steps against task.md's workflow_digest. A value
+// that is not a string, or any other digest, is a change.
+func sameDigest(text string, steps []taskfile.WorkflowStep) error {
+	fm := taskfile.ParseFrontmatter(text)
+	if fm == nil || fm.Odd {
+		return errors.New("task.md front matter cannot be read")
+	}
+	raw, has := fm.Data["workflow_digest"]
+	if !has {
+		return nil
+	}
+	want, _ := raw.(string)
+	if got := WorkflowDigest(steps); strings.TrimSpace(want) != got {
+		return fmt.Errorf("%w (task.md has %q, the steps now give %q)", ErrWorkflowChanged, want, got)
+	}
+	return nil
 }
 
 // inFolderProject checks that a task whose workflow is told through its project
@@ -132,7 +181,7 @@ func PlanHeldWith(lookup StepLookup, dir, text, history string) bool {
 	// stale full digests must not be released by an old prose acceptance.
 	if _, err := os.Lstat(filepath.Join(dir, approvalFile)); !os.IsNotExist(err) {
 		steps, err := lookup(text)
-		if errors.Is(err, ErrProjectMismatch) {
+		if errors.Is(err, ErrProjectMismatch) || errors.Is(err, ErrWorkflowChanged) {
 			return true
 		}
 		return approvalRequired(steps, err) && !Approved(dir)

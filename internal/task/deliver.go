@@ -188,7 +188,11 @@ func (d delivery) check(t Task) error {
 	if err != nil {
 		return err
 	}
-	if PlanHeldWith(StepsFor(d.s.Resolver, d.dir), d.dir, string(data), string(history)) {
+	lookup := StepsFor(d.s.Resolver, d.dir)
+	if PlanHeldWith(lookup, d.dir, string(data), string(history)) {
+		if _, err := lookup(string(data)); errors.Is(err, ErrWorkflowChanged) {
+			return fmt.Errorf("%w: %s: %w", ErrPlanNotApproved, t.ID, err)
+		}
 		return fmt.Errorf("%w: %s waits for a person to approve its plan, and delivery would move it past that gate", ErrPlanNotApproved, t.ID)
 	}
 	return nil

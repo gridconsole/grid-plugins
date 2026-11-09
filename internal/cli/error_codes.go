@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/signal"
+	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -26,6 +27,9 @@ const (
 	CodeInvalidArgument = "invalid_argument"
 	// CodeInvalidPolicy means a workflow policy value the command depends on is invalid.
 	CodeInvalidPolicy = "invalid_policy"
+	// CodeWorkflowChanged means the task's workflow now resolves to other steps
+	// than the ones it was created with, so it is held.
+	CodeWorkflowChanged = "workflow_changed"
 )
 
 func errorCode(err error) string {
@@ -37,6 +41,8 @@ func errorCode(err error) string {
 		return CodeNoSuchTask
 	case errors.Is(err, signal.ErrNoNote):
 		return CodeNoSuchNote
+	case errors.Is(err, task.ErrWorkflowChanged):
+		return CodeWorkflowChanged
 	case errors.As(err, &bad), errors.Is(err, errTaskOperand):
 		return CodeInvalidArgument
 	default:

@@ -20,6 +20,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/where"
+	"github.com/gridconsole/grid-plugins/internal/workflow"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -98,15 +99,6 @@ func (s Store) New(o NewOptions) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	// Keep the human id in Record; Feed reads the existing ulid field. Both
-	// identities are allocated under the lock and published in the same rename.
-	front, err := yaml.Dump(struct {
-		Record `yaml:",inline"`
-		ULID   string `yaml:"ulid"`
-	}{t.Record, stableID}, yaml.WithIndent(2), yaml.WithLineWidth(-1))
-	if err != nil {
-		return Task{}, err
-	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Task{}, err
 	}
@@ -116,12 +108,6 @@ func (s Store) New(o NewOptions) (Task, error) {
 	}
 	defer os.RemoveAll(stage)
 	if err := writeSynced(filepath.Join(stage, "intent.md"), []byte(IntentHead+o.Words)); err != nil {
-		return Task{}, err
-	}
-	if err := writeSynced(filepath.Join(stage, "task.md"), append(append([]byte("---\n"), front...), []byte("---\n")...)); err != nil {
-		return Task{}, err
-	}
-	if err := syncDir(stage); err != nil {
 		return Task{}, err
 	}
 	if err := atomicWrite(filepath.Join(home, "VERSION"), []byte(fmt.Sprintf("%d\n", gridhome.FormatVersion))); err != nil {
@@ -135,6 +121,18 @@ func (s Store) New(o NewOptions) (Task, error) {
 			return Task{}, err
 		}
 	}
+	// Keep the human id in Record; Feed reads the existing ulid field. Both
+	// identities are allocated under the lock and published in the same rename.
+	front, err := s.taskFront(&t, r.Project, stableID)
+	if err != nil {
+		return Task{}, err
+	}
+	if err := writeSynced(filepath.Join(stage, "task.md"), append(append([]byte("---\n"), front...), []byte("---\n")...)); err != nil {
+		return Task{}, err
+	}
+	if err := syncDir(stage); err != nil {
+		return Task{}, err
+	}
 	if err := os.Rename(stage, t.Path); err != nil {
 		return Task{}, err
 	}
@@ -144,6 +142,29 @@ func (s Store) New(o NewOptions) (Task, error) {
 		return Task{}, err
 	}
 	return t, nil
+}
+
+// taskFront is task.md's header. Once the project is registered it binds the
+// task to the steps its workflow resolves to now (workflow_digest), so a later
+// resolution that differs holds the task; steps that do not resolve yet leave
+// the field out, and the task keeps the folder check alone.
+func (s Store) taskFront(t *Task, project, stableID string) ([]byte, error) {
+	dump := func() ([]byte, error) {
+		return yaml.Dump(struct {
+			Record `yaml:",inline"`
+			ULID   string `yaml:"ulid"`
+		}{t.Record, stableID}, yaml.WithIndent(2), yaml.WithLineWidth(-1))
+	}
+	front, err := dump()
+	if err != nil {
+		return nil, err
+	}
+	steps, err := workflow.TaskSteps(s.Resolver, project, "---\n"+string(front)+"---\n")
+	if err != nil {
+		return front, nil
+	}
+	t.WorkflowDigest = WorkflowDigest(steps)
+	return dump()
 }
 
 // owner names who made the task and the role their words carry. Without Who the
