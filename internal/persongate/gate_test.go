@@ -60,6 +60,10 @@ func TestProcessGate(t *testing.T) {
 		{"windows_gone", []string{"grid.exe", "cmd.exe"}, "detached", "", nil, nil},
 		{"child_session", []string{"grid", "zsh", "Terminal"}, "agent_env", "", map[string]string{"CLAUDE_CODE_CHILD_SESSION": "1"}, nil},
 		{"terminal", []string{"grid", "zsh", "login", "Terminal", "launchd"}, "", "terminal", nil, nil},
+		{"ssh_session", []string{"grid", "bash", "sshd-session", "sshd", "systemd"}, "", "terminal", nil, nil},
+		{"ssh_session_only", []string{"grid", "bash", "sshd-session", "systemd"}, "", "terminal", nil, nil},
+		{"ssh_session_agent_env", []string{"grid", "bash", "sshd-session", "sshd", "systemd"}, "agent_env", "", map[string]string{"GRID_AGENT": "builder"}, nil},
+		{"agent_above_ssh_session", []string{"grid", "bash", "sshd-session", "codex", "systemd"}, "agent_ancestor", "", nil, nil},
 		{"ide", []string{"grid", "zsh", "Code Helper"}, "", "terminal", map[string]string{"CLAUDECODE": "1"}, nil},
 		// T1 gap: a person-owned tmux server can launch a detached agent request.
 		{"tmux_T1_gap", []string{"grid", "zsh", "tmux"}, "", "terminal", nil, nil},
