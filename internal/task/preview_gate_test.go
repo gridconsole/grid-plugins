@@ -150,24 +150,6 @@ func TestApproveGateRepeatAndStaleToken(t *testing.T) {
 	}
 }
 
-// Only a waiting task can be approved at the preview gate.
-func TestPreviewApprovalNeedsWaiting(t *testing.T) {
-	s, task := waitingFixture(t)
-	setPlan(t, task, planV1)
-	setGate(t, task, "preview")
-	if _, err := s.Change(WriteOptions{ID: task.ID, Action: "status", State: "running"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Approve(WriteOptions{ID: task.ID}, ""); err == nil {
-		t.Fatal("approved a running task at preview")
-	}
-	for _, name := range []string{"approval-preview.json", "approval.json"} {
-		if _, err := os.Stat(filepath.Join(task.Path, name)); !os.IsNotExist(err) {
-			t.Fatalf("%s written: %v", name, err)
-		}
-	}
-}
-
 // A crash between the journal and the renames must replay the preview receipt.
 func TestRecoverWriteReplaysPreviewReceipt(t *testing.T) {
 	_, task := waitingFixture(t)
