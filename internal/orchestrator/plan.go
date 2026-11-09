@@ -50,6 +50,11 @@ func (s Store) publishPlanWithReader(snap Snapshot, m *memory, read func() (stri
 		if err != nil {
 			return err
 		}
+		// A linked protected file may have been written through the link, so
+		// task.md cannot decide whether approval is required: post nothing.
+		if task.Linked(s.Feed.TaskDir) != nil {
+			return s.publicationBlocked(m, true)
+		}
 		workflow, err := os.ReadFile(filepath.Join(s.Feed.TaskDir, "task.md"))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
