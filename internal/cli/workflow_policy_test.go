@@ -231,3 +231,56 @@ func TestWorkflowPolicyUnreadable(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkflowPolicyPreservesGateRefusal(t *testing.T) {
+	h := newHarness(t)
+	h.write(filepath.Join(h.gridHome, "projects", "alpha", "project.md"), "---\nid: id-alpha\n---\n")
+	h.write(filepath.Join(h.gridHome, "projects", "alpha", "workflows.md"), "---\nperson_verbs: [workflow show]\n---\n"+cliWorkflow)
+	h.env.Procs = testProcs("codex")
+	h.env.Getenv = func(string) string { return "" }
+	args := []string{"workflow", "show", "--json", "--project", "alpha"}
+	if code := h.run(h.root, args...); code != 3 {
+		t.Fatalf("gate exit=%d", code)
+	}
+	out, stderr := h.out.String(), h.errb.String()
+	if !strings.Contains(out, "person_required") || stderr == "" {
+		t.Fatal("missing gate refusal")
+	}
+	if code := h.run(h.root, append(args, "--policy")...); code != 3 || h.out.String() != out || h.errb.String() != stderr {
+		t.Fatal("policy flag changed person-gate refusal")
+	}
+}
+
+func TestWorkflowPolicyIsolationAndReadOnly(t *testing.T) {
+	h := newHarness(t)
+	for _, name := range []string{"alpha", "beta"} {
+		h.write(filepath.Join(h.gridHome, "projects", name, "project.md"), "---\nid: id-"+name+"\n---\n")
+	}
+	h.write(filepath.Join(h.gridHome, "workflows.md"), strings.ReplaceAll("---\nrefusal_message: none\n---\n"+cliWorkflow, "\n", "\r\n"))
+	h.write(filepath.Join(h.gridHome, "projects", "alpha", "workflows.md"), "---\nrefusal_message: plugin\ninbox_act_roles: {turn: []}\n---\n"+cliWorkflow)
+	before := fileBytes(t, h.gridHome)
+	entries := showPolicy(t, h, "")
+	if len(entries) != 3 || entries[1].Keys["refusal_message"].Value != "plugin" || entries[2].Keys["refusal_message"].Value != "none" || entries[2].Keys["refusal_message"].From != "workspace" {
+		t.Fatal("project policy leaked into sibling")
+	}
+	if !reflect.DeepEqual(entries[1].Keys["inbox_act_roles"].Value, map[string]any{"turn": []any{}}) {
+		t.Fatal("empty role list changed")
+	}
+	if !reflect.DeepEqual(before, fileBytes(t, h.gridHome)) {
+		t.Fatal("policy read mutated files")
+	}
+}
+
+func TestWorkflowPolicyOptOut(t *testing.T) {
+	h := newHarness(t)
+	h.write(filepath.Join(h.gridHome, "workflows.md"), "---\nrefusal_message: invalid\n---\n"+cliWorkflow)
+	for _, args := range [][]string{{"workflow", "show"}, {"workflow", "show", "--json"}} {
+		if code := h.run(h.root, args...); code != 0 {
+			t.Fatal("legacy read validates app policy")
+		}
+		before, stderr := h.out.String(), h.errb.String()
+		if code := h.run(h.root, append(args, "--policy=false")...); code != 0 || before != h.out.String() || stderr != h.errb.String() {
+			t.Fatal("explicit policy opt-out changed legacy bytes")
+		}
+	}
+}

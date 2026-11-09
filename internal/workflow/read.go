@@ -10,9 +10,10 @@ import (
 
 // Answer is the workflows read response. Empty collections encode as arrays.
 type Answer struct {
-	Files     []File     `json:"files"`
-	Templates []Template `json:"templates"`
-	Errors    []Problem  `json:"errors"`
+	Files     []File        `json:"files"`
+	Templates []Template    `json:"templates"`
+	Errors    []Problem     `json:"errors"`
+	Policy    []PolicyEntry `json:"policy,omitempty"`
 }
 
 // Read returns the workspace file and registered project files, or just the
@@ -20,11 +21,27 @@ type Answer struct {
 // in Errors; home resolution and project selection failures return an error.
 // The caller filters discovery before project records or workflows are opened.
 func Read(r where.Resolver, project string) (Answer, error) {
+	return read(r, project, false)
+}
+
+// ReadPolicy adds validated effective policy without changing the legacy reader.
+// Invalid policy fails the entire response before any output is published.
+func ReadPolicy(r where.Resolver, project string) (Answer, error) {
+	return read(r, project, true)
+}
+
+func read(r where.Resolver, project string, withPolicy bool) (Answer, error) {
 	files, problems, err := readFiles(r, project)
 	if err != nil {
 		return Answer{}, err
 	}
 	out := Answer{Files: files, Templates: []Template{}, Errors: []Problem{}}
+	if withPolicy {
+		out.Policy, err = effectivePolicy(files, problems)
+		if err != nil {
+			return Answer{}, err
+		}
+	}
 	failed := make(map[int]error, len(problems))
 	for _, p := range problems {
 		failed[p.index] = p.err

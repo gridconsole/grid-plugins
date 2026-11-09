@@ -101,8 +101,14 @@ func TestWorkflowShowJSON(t *testing.T) {
 			}
 		})
 	}
-	if code := h.run(h.root, "workflow", "show", "--json", "--project", "unknown"); code != exitCode(os.ErrNotExist) || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "missing or ambiguous") {
-		t.Fatalf("exit %d: %s %s", code, h.out, h.errb)
+	for _, policy := range []bool{false, true} {
+		args := []string{"workflow", "show", "--json", "--project", "unknown"}
+		if policy {
+			args = append(args, "--policy")
+		}
+		if code := h.run(h.root, args...); code != exitCode(os.ErrNotExist) || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "missing or ambiguous") {
+			t.Fatalf("exit %d: %s %s", code, h.out, h.errb)
+		}
 	}
 }
 

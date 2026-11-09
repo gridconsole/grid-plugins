@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 )
 
 func runWorkflow(args []string, env Env) int {
-	const usage = "usage: grid workflow show [--project <name-or-id>] [--json]"
+	const usage = "usage: grid workflow show [--project <name-or-id>] [--json] [--policy]"
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(env.Stdout, usage)
 		fmt.Fprintln(env.Stdout, workflowWriteUsage)
@@ -31,13 +32,14 @@ func runWorkflow(args []string, env Env) int {
 	fs := newFlags("workflow show", env)
 	project := fs.String("project", "", "project name or ID")
 	asJSON := fs.Bool("json", false, "print JSON")
+	withPolicy := fs.Bool("policy", false, "include effective app policy (requires --json)")
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
 	}
-	if fs.NArg() != 0 {
+	if fs.NArg() != 0 || (*withPolicy && !*asJSON) {
 		fmt.Fprintln(env.Stderr, usage)
 		return 2
 	}
@@ -51,8 +53,16 @@ func runWorkflow(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "grid workflow show: --project requires a name or ID")
 		return 2
 	}
-	answer, err := workflow.Read(resolver(env), *project)
+	read := workflow.Read
+	if *withPolicy {
+		read = workflow.ReadPolicy
+	}
+	answer, err := read(resolver(env), *project)
 	if err != nil {
+		if errors.Is(err, workflow.ErrPolicy) {
+			fmt.Fprintf(env.Stderr, "grid workflow show: %v\n", err)
+			return 1
+		}
 		if errors.Is(err, localdata.ErrUnsafePath) {
 			fmt.Fprintln(env.Stderr, "grid workflow show: workflow path is unsafe or inaccessible")
 			return 2
@@ -159,4 +169,29 @@ func runWorkflowWrite(args []string, env Env) int {
 		returnCode = exitCode(err)
 	}
 	return returnCode
+}
+
+// gateWorkflowPolicy retains person-gate decisions, but lets the policy reader
+// own successful read diagnostics so malformed policy produces exactly one line.
+func gateWorkflowPolicy(args []string, env *Env) int {
+	if len(args) < 2 || args[0] != "workflow" || args[1] != "show" {
+		return gateCommand(args, env)
+	}
+	fs := flag.NewFlagSet("workflow policy diagnostics", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.String("project", "", "")
+	fs.Bool("json", false, "")
+	policy := fs.Bool("policy", false, "")
+	if err := fs.Parse(args[2:]); err != nil || !*policy {
+		return gateCommand(args, env)
+	}
+	stderr := env.Stderr
+	var diagnostics bytes.Buffer
+	env.Stderr = &diagnostics
+	code := gateCommand(args, env)
+	env.Stderr = stderr
+	if code != 0 {
+		_, _ = io.Copy(stderr, &diagnostics)
+	}
+	return code
 }

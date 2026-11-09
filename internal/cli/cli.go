@@ -177,7 +177,7 @@ func Run(args []string, env Env) int {
 		// front matter, so a failed inbox policy has one exact diagnostic.
 		// Its handler still applies the same person gate before any move.
 		if name != "signal" || len(rest) == 0 || rest[0] != "move" {
-			if code := gateCommand(args, &env); code != 0 {
+			if code := gateWorkflowPolicy(args, &env); code != 0 {
 				return code
 			}
 		}

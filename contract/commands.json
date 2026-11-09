@@ -3198,6 +3198,11 @@
               "required": false
             },
             {
+              "name": "--policy",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
