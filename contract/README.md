@@ -823,8 +823,8 @@ no task or Feed record shapes.
 
 ## Plan approval receipts
 
-Local task receipts in `approval.json` (plan) and `approval-ship.json` (ship)
-retain `plan_hash`, the six lower-case hex digits used in the plan heading.
+Local task receipts in `approval.json` (plan), `approval-preview.json` (preview)
+and `approval-ship.json` (ship) retain `plan_hash`, the six lower-case hex digits used in the plan heading.
 New approvals also write `plan_digest`: all 64 lower-case hex digits of SHA-256
 of canonical plan bytes, including step `evidence:` and `needs:` lines that the
 legacy short hash omits. The short hash is therefore not necessarily a prefix
@@ -856,6 +856,18 @@ token policy). An implicit reapproval also
 checks the previous digest, so a short-hash collision requires an explicit
 review and `--plan-hash` to replace the receipt. Plan receipts still have no
 `gate` field; ship receipts carry `gate: ship` and cannot release the plan gate.
+
+The preview receipt mirrors the ship one. While `task.md` has `gate: preview` and
+the task is `waiting`, `grid approve` writes `approval-preview.json` (the same
+event with `gate: preview`, the same hash, digest and `--plan-hash` compare-and-set
+rules) instead of `approval.json`, and appends the prose history line
+`- <time> · preview approved · <plan_hash> · by <who>` (`· via <via>` when the
+entry point is known) after the JSON event in the same journal write. Only Grid
+writes that line; the plan guard refuses an agent's attempt to add it, and the host
+guard fences `approval-preview.json` like the other receipts. A preview approval never
+touches `approval.json`, so the plan approval stays valid, and it cannot release the
+plan or ship gate. Reopening a task invalidates all three receipt files, and
+`grid plan migrate` treats a matching preview receipt like a matching plan or ship one.
 
 Rust's existing history receipt remains readable by the legacy guard path:
 `- <time> · plan accepted · rev <n> · <hash> · by <person>`.

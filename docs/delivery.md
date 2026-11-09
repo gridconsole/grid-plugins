@@ -135,6 +135,14 @@ the plan approval. `approval.json` is not touched, so the plan approval stays
 valid. Reopening a task invalidates both files. `gate` stays in `task.md` until
 a later writer replaces it, including after the task is sent back.
 
+### Preview approval
+
+A task whose `task.md` has `gate: preview` records the same way in
+`approval-preview.json` (`gate: preview`) and also gets the history line
+`- <time> · preview approved · <plan_hash> · by <who>`. `approval.json` and
+`approval-ship.json` are not touched. Nothing in the plugin sets `gate: preview`
+yet; the writer that raises it owns that step.
+
 ### History
 
 `history add` takes exactly one nonempty line and rejects newline and NUL input.
