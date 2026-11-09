@@ -26,6 +26,7 @@ func TestHostWriteTargetsCaseGroup(t *testing.T) {
 		{"case_process_absolute", f.repo, "cat <(case x in x) tee " + target + " </dev/null;; esac)", true},
 		{"case_subst_quoted", project, `echo "$(case x in x) tee alias </dev/null;; esac)"`, true},
 		{"case_subst_parameter", project, "echo ${E:-$(case x in x) tee alias </dev/null;; esac)}", true},
+		{"case_backticks", project, "echo `case x in x) tee alias </dev/null;; esac`", true},
 		{"case_subst_nested", project, "echo $(case x in x) case y in y) tee alias </dev/null;; esac;; esac)", true},
 		{"case_subst_second_pattern", project, "echo $(case x in a) echo a;; x) tee alias </dev/null;; esac)", true},
 		{"case_subst_leading_paren", project, "echo $(case x in (x) tee alias </dev/null;; esac)", true},
