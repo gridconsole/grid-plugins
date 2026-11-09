@@ -3,6 +3,7 @@ package guard
 import (
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -23,6 +24,7 @@ type hostShellToken struct {
 	// groups are the commands inside $(..), backticks, <(..) and >(..) in the
 	// word, and any of those nested in ${..}. Nothing runs them; they are scanned.
 	groups []string
+	ansi   bool // the word holds $'..' or $"..", which the guard does not decode
 }
 
 // hostMaxGroupDepth bounds nested substitutions; deeper text fails closed.
@@ -47,8 +49,9 @@ func hostWordByte(b byte) bool {
 }
 
 // hostWordEnds are the bytes after which a new shell word begins: a # there starts
-// a comment, anywhere else a # is an ordinary character.
-const hostWordEnds = " \t\r\n;&|()<>"
+// a comment, anywhere else a # is an ordinary character. A carriage return is a
+// word byte to the shells.
+const hostWordEnds = " \t\n;&|()<>"
 
 // hostJoinLines drops every backslash-newline pair, as the shells do before they
 // read words. A backslash escapes the byte after it, so \\<newline> stays. A comment
@@ -56,7 +59,8 @@ const hostWordEnds = " \t\r\n;&|()<>"
 // join: the second result reports one and the caller refuses the command. With no
 // substitution, backtick, heredoc or $'..' in the text the quotes are tracked and
 // only a # outside quotes starts a comment, and a backslash in '..' is literal;
-// otherwise every # at the start of a word counts and every pair is joined.
+// otherwise every # at the start of a word counts and every pair is joined. A pair
+// after a << is refused: a quoted heredoc body keeps it, an unquoted one joins it.
 func hostJoinLines(text string) (string, bool) {
 	if !strings.Contains(text, "\\\n") {
 		return text, false
@@ -74,7 +78,7 @@ func hostJoinLines(text string) (string, bool) {
 		if ch == '\\' && i+1 < len(text) && quote != '\'' {
 			i++
 			if text[i] == '\n' {
-				refuse = refuse || comment
+				refuse = refuse || comment || strings.Contains(b.String(), "<<")
 				continue
 			}
 			b.WriteByte('\\')
@@ -100,17 +104,26 @@ func hostJoinLines(text string) (string, bool) {
 }
 
 // hostShellGroup finds the end of a quote, substitution or brace group that
-// starts at start. An unfinished group consumes the remaining text. In a ( ) group
-// the ) of a case pattern does not end it: once a word named case is seen no ) closes
-// the group, so it takes the rest of the text and that text is scanned as
+// starts at start, as bash reads it. An unfinished group consumes the remaining text.
+func hostShellGroup(text string, start int, close byte) (int, bool) {
+	return hostShellGroupAs(text, start, close, false, false)
+}
+
+// hostShellGroupAs finds a group's end as bash reads it, or as zsh does. In a ( )
+// group the ) of a case pattern does not end it: once a word named case is seen no
+// ) closes the group, so it takes the rest of the text and that text is scanned as
 // commands. Nothing ever lowers the count: esac in an argument, a comment or a
 // heredoc would otherwise close the group early. A mistake only keeps a group open.
 // Quotes follow the shells: in '..' nothing but ' is special, not even a backslash;
 // in ".." only \, ", a backtick, $( and ${ are; $'..' escapes with a backslash; a ( )
-// group skips a comment, which begins at a # that starts a word and ends at the newline.
-func hostShellGroup(text string, start int, close byte) (int, bool) {
+// group skips a comment, which begins at a # that starts a word and ends at the
+// newline, and a heredoc body, up to its delimiter line. The readings differ in two
+// places: bash ends a backtick group at the first unescaped backtick while zsh reads
+// quotes in it, and in a ${..} inside ".." (quoted) zsh reads ' as a plain byte.
+func hostShellGroupAs(text string, start int, close byte, zsh, quoted bool) (int, bool) {
 	cases := 0
 	atWord := true // the next byte starts a word
+	var docs []hostHeredoc
 	for i := start; i < len(text); i++ {
 		ch, wordStart := text[i], atWord
 		atWord = strings.IndexByte(hostWordEnds, ch) >= 0
@@ -118,6 +131,21 @@ func hostShellGroup(text string, start int, close byte) (int, bool) {
 			if ch == '\'' {
 				return i + 1, true
 			}
+			continue
+		}
+		if close == '`' && !zsh {
+			if ch == '\\' {
+				i++
+			} else if ch == '`' {
+				return i + 1, true
+			}
+			continue
+		}
+		if ch == '$' && i+1 < len(text) && text[i+1] == '$' { // $$, the PID, is one unit
+			i++
+			continue
+		}
+		if close == '}' && quoted && zsh && ch == '\'' {
 			continue
 		}
 		if close == '"' && ch != '\\' && ch != '"' && ch != '`' && !(ch == '$' && i+1 < len(text) && (text[i+1] == '(' || text[i+1] == '{')) {
@@ -139,6 +167,20 @@ func hostShellGroup(text string, start int, close byte) (int, bool) {
 			for i+1 < len(text) && text[i+1] != '\n' {
 				i++
 			}
+		case (close == ')' || close == '}') && ch == '<' && strings.HasPrefix(text[i:], "<<") && !strings.HasPrefix(text[i:], "<<<"):
+			if doc, end, ok := hostHeredocAt(text, i); ok {
+				docs = append(docs, doc)
+				i, atWord = end-1, false
+			} else {
+				i++
+			}
+		case ch == '\n' && len(docs) > 0:
+			next, _, ok := hostHeredocBodies(text, i+1, docs, zsh)
+			if !ok {
+				return len(text), false
+			}
+			docs = nil
+			i, atWord = next-1, true
 		case ch == '$' && i+1 < len(text) && text[i+1] == '\'':
 			// $'..' is the one single-quoted form where a backslash escapes.
 			i += 2
@@ -149,18 +191,149 @@ func hostShellGroup(text string, start int, close byte) (int, bool) {
 				i++
 			}
 		case ch == '\'' || ch == '"' || ch == '`':
-			end, _ := hostShellGroup(text, i+1, ch)
+			end, _ := hostShellGroupAs(text, i+1, ch, zsh, false)
 			i, atWord = end-1, false
 		case ch == '(':
-			end, _ := hostShellGroup(text, i+1, ')')
+			end, _ := hostShellGroupAs(text, i+1, ')', zsh, false)
 			// A subshell ends a word; $( ) and <( ) are words, so a # after them is not a comment.
 			i, atWord = end-1, i == start || strings.IndexByte("$<>", text[i-1]) < 0
 		case ch == '{':
-			end, _ := hostShellGroup(text, i+1, '}')
+			end, _ := hostShellGroupAs(text, i+1, '}', zsh, close == '"' || close == '}' && quoted)
 			i, atWord = end-1, false
 		}
 	}
 	return len(text), false
+}
+
+// hostHeredoc is a pending heredoc: its delimiter, whether the delimiter word was
+// quoted (the body is then plain text) and whether <<- strips leading tabs.
+type hostHeredoc struct {
+	delim         string
+	quoted, strip bool
+}
+
+// hostHeredocAt reads the << or <<- operator at text[i] and its delimiter word, and
+// returns where the word ends. ok is false for a word the shells could read
+// differently: empty, unfinished, or holding an expansion.
+func hostHeredocAt(text string, i int) (hostHeredoc, int, bool) {
+	var doc hostHeredoc
+	j := i + 2
+	if j < len(text) && text[j] == '-' {
+		doc.strip = true
+		j++
+	}
+	for j < len(text) && (text[j] == ' ' || text[j] == '\t') {
+		j++
+	}
+	var b strings.Builder
+	for ; j < len(text) && strings.IndexByte(" \t\n;&|()<>", text[j]) < 0; j++ {
+		switch ch := text[j]; ch {
+		case '$', '`':
+			return doc, j, false
+		case '\\':
+			doc.quoted = true
+			if j++; j == len(text) || text[j] == '\n' {
+				return doc, j, false
+			}
+			b.WriteByte(text[j])
+		case '\'', '"':
+			doc.quoted = true
+			k := strings.IndexByte(text[j+1:], ch)
+			if k < 0 || ch == '"' && strings.ContainsAny(text[j+1:j+1+k], "\\$`") {
+				return doc, len(text), false
+			}
+			b.WriteString(text[j+1 : j+1+k])
+			j += k + 1
+		default:
+			b.WriteByte(ch)
+		}
+	}
+	doc.delim = b.String()
+	return doc, j, doc.delim != ""
+}
+
+// hostHeredocBodies skips the bodies of docs, which begin at text[start], and returns
+// where the commands go on and the substitutions the unquoted bodies run. ok is false
+// when a delimiter line never comes or a substitution in a body is unfinished.
+func hostHeredocBodies(text string, start int, docs []hostHeredoc, zsh bool) (int, []string, bool) {
+	var groups []string
+	for _, doc := range docs {
+		for body := start; ; {
+			if start >= len(text) {
+				return len(text), groups, false
+			}
+			end, next := len(text), len(text)
+			if at := strings.IndexByte(text[start:], '\n'); at >= 0 {
+				end, next = start+at, start+at+1
+			}
+			line := text[start:end]
+			if doc.strip {
+				line = strings.TrimLeft(line, "\t")
+			}
+			if line != doc.delim {
+				start = next
+				continue
+			}
+			if !doc.quoted {
+				found, ok := hostBodyGroups(text[body:start], zsh)
+				if !ok {
+					return len(text), groups, false
+				}
+				groups = append(groups, found...)
+			}
+			start = next
+			break
+		}
+	}
+	return start, groups, true
+}
+
+// hostBodyGroups returns the substitutions an unquoted heredoc body runs; ok is false
+// when one is unfinished. In the body only \, $( ), ${ } and backticks are special.
+func hostBodyGroups(body string, zsh bool) ([]string, bool) {
+	var groups []string
+	for i := 0; i < len(body); i++ {
+		ch := body[i]
+		switch {
+		case ch == '\\' || ch == '$' && i+1 < len(body) && body[i+1] == '$':
+			i++
+		case ch == '`' || ch == '$' && i+1 < len(body) && (body[i+1] == '(' || body[i+1] == '{'):
+			start, close := i+1, byte('`')
+			if ch == '$' {
+				start, close = i+2, ')'
+				if body[i+1] == '{' {
+					close = '}'
+				}
+			}
+			end, closed := hostShellGroupAs(body, start, close, zsh, close == '}')
+			if !closed {
+				return groups, false
+			}
+			inner := hostGroupBody(body, start, end, closed, close)
+			if close != '}' {
+				groups = append(groups, inner)
+			} else if found, ok := hostBraceGroups(inner, zsh); ok {
+				groups = append(groups, found...)
+			} else {
+				return groups, false
+			}
+			i = end - 1
+		}
+	}
+	return groups, true
+}
+
+// hostBraceGroups returns the substitutions nested in a ${..} body; ok is false when
+// the tokenizer refuses the body.
+func hostBraceGroups(body string, zsh bool) ([]string, bool) {
+	var groups []string
+	for _, tok := range hostShellTokensAs(body, zsh) {
+		if tok.kind == hostRefuse {
+			return groups, false
+		}
+		groups = append(groups, tok.groups...)
+	}
+	return groups, true
 }
 
 // hostGroupBody returns the text a substitution runs; backticks unescape \`, \$ and \\.
@@ -193,21 +366,29 @@ func hostDigits(text string) bool {
 // which is dropped. Only >& followed by a word is a dup (a file unless an fd).
 // Backslash-newline pairs go first, before any word is matched. A # that starts a
 // word, outside quotes, begins a comment that ends at the newline; a substitution
-// in it is still scanned, since an unquoted heredoc line runs it. A hostRefuse token
-// ends the list when the tokenizer cannot tell what the shell runs.
+// in it is still scanned. A heredoc body is skipped up to its delimiter line; an
+// unquoted body's substitutions are scanned. A hostRefuse token ends the list when
+// the tokenizer cannot tell what the shell runs: a carriage return outside quotes,
+// $$ before a quote, ( or {, or a heredoc without its delimiter line.
 func hostShellTokens(command string) []hostShellToken {
+	return hostShellTokensAs(command, false)
+}
+
+// hostShellTokensAs reads the command as bash does, or as zsh does (see hostShellGroupAs).
+func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 	command, refuse := hostJoinLines(command)
 	var out []hostShellToken
 	var word strings.Builder
 	var groups []string
-	started, comment := false, false // a word has begun, even an empty one; inside a comment
+	var docs []hostHeredoc
+	started, comment, ansi := false, false, false // a word has begun, even an empty one; inside a comment; $'..' or $".." in the word
 	flush := func() {
 		started = false
-		if word.Len() > 0 || len(groups) > 0 { // groups alone: substitutions in a comment
-			out = append(out, hostShellToken{text: word.String(), groups: groups})
+		if word.Len() > 0 || len(groups) > 0 { // groups alone: substitutions in a comment or heredoc body
+			out = append(out, hostShellToken{text: word.String(), groups: groups, ansi: ansi})
 		}
 		word.Reset()
-		groups = nil
+		groups, ansi = nil, false
 	}
 	emit := func(kind hostShellKind, text string) {
 		flush()
@@ -222,6 +403,16 @@ func hostShellTokens(command string) []hostShellToken {
 	var quote byte
 	for i := 0; i < len(command); i++ {
 		ch := command[i]
+		refuse = refuse || ch == '\r' && quote == 0
+		if ch == '$' && at(i+1) == '$' && quote != '\'' && quote != '$' && !comment {
+			// $$ is one unit; the shells disagree on a quote, ( or { right after it.
+			next := at(i + 2)
+			refuse = refuse || next == '(' || next == '{' || next == '\'' && quote == 0
+			word.WriteString("$$")
+			started = true
+			i++
+			continue
+		}
 		subst := ch == '`' || (ch == '$' && (at(i+1) == '(' || at(i+1) == '{')) || ((ch == '<' || ch == '>') && quote == 0 && !comment && at(i+1) == '(')
 		if subst {
 			start, close := i+1, byte('`')
@@ -231,12 +422,12 @@ func hostShellTokens(command string) []hostShellToken {
 					close = '}'
 				}
 			}
-			end, closed := hostShellGroup(command, start, close)
+			end, closed := hostShellGroupAs(command, start, close, zsh, close == '}' && quote == '"')
 			body := hostGroupBody(command, start, end, closed, close)
 			if close == '}' {
-				for _, tok := range hostShellTokens(body) {
-					groups = append(groups, tok.groups...)
-				}
+				found, ok := hostBraceGroups(body, zsh)
+				groups = append(groups, found...)
+				refuse = refuse || !ok
 			} else {
 				groups = append(groups, body)
 			}
@@ -273,6 +464,7 @@ func hostShellTokens(command string) []hostShellToken {
 		case '$':
 			word.WriteByte(ch)
 			started = true
+			ansi = ansi || at(i+1) == '\'' || at(i+1) == '"'
 			if at(i+1) == '\'' { // $'..': a backslash escapes in it
 				quote = '$'
 				i++
@@ -283,10 +475,15 @@ func hostShellTokens(command string) []hostShellToken {
 			} else {
 				comment = true
 			}
-		case ' ', '\t', '\r':
+		case ' ', '\t':
 			flush()
 		case '\n', ';', '(', ')':
 			emit(hostSeparator, string(ch))
+			if ch == '\n' && len(docs) > 0 {
+				next, found, ok := hostHeredocBodies(command, i+1, docs, zsh)
+				groups, docs, refuse = found, nil, refuse || !ok
+				i = next - 1
+			}
 		case '|':
 			text := "|"
 			if next := at(i + 1); next == '|' || next == '&' {
@@ -321,6 +518,11 @@ func hostShellTokens(command string) []hostShellToken {
 			kind, text := hostReadRedirect, string(ch)
 			switch next := at(i + 1); {
 			case ch == '<' && next == '<':
+				if third := at(i + 2); third != '<' {
+					doc, _, ok := hostHeredocAt(command, i)
+					docs = append(docs, doc)
+					refuse = refuse || !ok
+				}
 				text = "<<"
 				i++
 				if third := at(i + 1); third == '<' || third == '-' {
@@ -374,12 +576,31 @@ type hostSegment struct {
 	comments                     []hostShellToken // substitutions in a comment: scanned, never words
 	separator                    string
 	refuse                       bool // the tokenizer could not tell what the shell runs
+	restart                      bool // the zsh reading of the command starts here
 }
 
 var hostFdOperand = regexp.MustCompile(`^(?:[0-9]+-?|-)$`)
 
+// hostSegments returns the commands as bash reads the text and, where zsh reads it
+// differently, the zsh reading after them, so a write either shell runs is scanned.
 func hostSegments(command string) []hostSegment {
-	tokens := hostShellTokens(command)
+	out := hostSegmentsOf(hostShellTokensAs(command, false))
+	if zsh := hostSegmentsOf(hostShellTokensAs(command, true)); !slices.EqualFunc(out, zsh, hostSameSegment) {
+		zsh[0].restart = true
+		out = append(out, zsh...)
+	}
+	return out
+}
+
+func hostSameSegment(a, b hostSegment) bool {
+	same := func(x, y hostShellToken) bool {
+		return x.text == y.text && x.kind == y.kind && x.ansi == y.ansi && slices.Equal(x.groups, y.groups)
+	}
+	return a.separator == b.separator && a.refuse == b.refuse && slices.EqualFunc(a.tokens(), b.tokens(), same) &&
+		slices.EqualFunc(a.writes, b.writes, same) && slices.EqualFunc(a.args, b.args, same)
+}
+
+func hostSegmentsOf(tokens []hostShellToken) []hostSegment {
 	var out []hostSegment
 	var seg hostSegment
 	for i := 0; i < len(tokens); i++ {
@@ -622,9 +843,13 @@ func (s *writeScan) run(command, base string, uncertain bool, depth int) string 
 	if depth > hostMaxGroupDepth {
 		return gateReason
 	}
+	start, startUncertain := base, uncertain
 	for _, seg := range hostSegments(command) {
 		if seg.refuse {
 			return gateReason
+		}
+		if seg.restart {
+			base, uncertain = start, startUncertain
 		}
 		for _, tok := range seg.tokens() {
 			for _, body := range tok.groups {
@@ -634,6 +859,9 @@ func (s *writeScan) run(command, base string, uncertain bool, depth int) string 
 			}
 		}
 		for _, target := range seg.writes {
+			if target.ansi {
+				return gateReason
+			}
 			if reason := s.check(target.text, base, uncertain, true); reason != "" {
 				return reason
 			}
@@ -645,6 +873,9 @@ func (s *writeScan) run(command, base string, uncertain bool, depth int) string 
 			for _, arg := range seg.args[1:] {
 				if strings.HasPrefix(arg.text, "-") && !strings.Contains(arg.text, "=") {
 					continue
+				}
+				if arg.ansi { // $'..' and $".." may hold any path: the guard does not decode them
+					return gateReason
 				}
 				if reason := s.check(arg.text, base, uncertain, false); reason != "" {
 					return reason
