@@ -685,6 +685,11 @@
               "required": false
             },
             {
+              "name": "--person",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
@@ -785,6 +790,11 @@
               "required": false
             },
             {
+              "name": "--person",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
@@ -881,6 +891,11 @@
             },
             {
               "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--person",
               "takes": "value",
               "required": false
             },
@@ -1050,6 +1065,11 @@
               "required": false
             },
             {
+              "name": "--person",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
@@ -1147,6 +1167,11 @@
             },
             {
               "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--person",
               "takes": "value",
               "required": false
             },
@@ -1278,6 +1303,11 @@
             },
             {
               "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--person",
               "takes": "value",
               "required": false
             },
@@ -1433,6 +1463,11 @@
             },
             {
               "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--person",
               "takes": "value",
               "required": false
             },
@@ -1957,6 +1992,11 @@
             },
             {
               "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--person",
               "takes": "value",
               "required": false
             },
