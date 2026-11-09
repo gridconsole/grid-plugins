@@ -68,8 +68,8 @@ func replaceProposal(t testing.TB, path string, b []byte) {
 	}
 }
 
-// snapshot maps every file below the Grid home to its bytes.
-func snapshot(t *testing.T, s Store) map[string]string {
+// acceptSnapshot maps every file below the Grid home to its bytes.
+func acceptSnapshot(t *testing.T, s Store) map[string]string {
 	t.Helper()
 	out := map[string]string{}
 	err := filepath.WalkDir(s.GridHome, func(p string, d fs.DirEntry, err error) error {
@@ -112,7 +112,7 @@ func TestAcceptRefusedByCheckWritesNothing(t *testing.T) {
 		if _, err := s.Propose(n, n.Origin); err != nil {
 			t.Fatal(err)
 		}
-		before := snapshot(t, s)
+		before := acceptSnapshot(t, s)
 		_, err := s.Accept(level, n.Name)
 		var refusal *CheckRefusal
 		if !errors.As(err, &refusal) {
@@ -125,7 +125,7 @@ func TestAcceptRefusedByCheckWritesNothing(t *testing.T) {
 			t.Fatalf("the error text quotes proposal text: %q", refusal.Error())
 		}
 		// No entry, no version, no audit line, proposal still proposed: byte for byte.
-		sameSnapshot(t, before, snapshot(t, s))
+		sameSnapshot(t, before, acceptSnapshot(t, s))
 		got, err := s.Proposal(level, n.Name)
 		if err != nil || got.Note.Status != "proposed" {
 			t.Fatalf("%s: proposal after refusal: %+v %v", level, got.Note.Status, err)
