@@ -105,7 +105,7 @@ func commands() []command {
 		{"proof", "add evidence and rebuild the task proof index", runProof},
 		{"history", "append a dated task history line", runHistory},
 		{"land", "land a task per the deploy topic", runLand},
-		{"brain", "show, search, topics, index, propose, accept, keep, decide", runBrain},
+		{"brain", "show, search, topics, index, propose, accept, keep, decide, check", runBrain},
 		{"machine", "machines topic", nil},
 		{"env", "up, down browser Job dev environments", runEnv},
 		{"ports", "claim, release, list, gc dev port blocks", runPorts},

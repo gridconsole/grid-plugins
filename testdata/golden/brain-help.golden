@@ -1,4 +1,4 @@
-Usage: grid brain <show|search|topics|index|propose|accept|keep|decide> [flags]
+Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check> [flags]
   show <id> [--task <task>]  Show an accepted note and its links.
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
@@ -8,6 +8,8 @@ Usage: grid brain <show|search|topics|index|propose|accept|keep|decide> [flags]
   decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>]
   accept <id>                File a proposal through the keeper gates.
   accept <id> --reject <why>  Record a rejection.
+  check [<proposal-id>]      Read-only gate: flag proposals, skills and agents that change what runs.
+                             Exit 0 clean, 3 findings, 1 unreadable brain.
 
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 

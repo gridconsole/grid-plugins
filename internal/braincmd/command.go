@@ -28,7 +28,7 @@ type Env struct {
 	TaskOperandError func(string, error) int
 }
 
-const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide> [flags]
+const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check> [flags]
   show <id> [--task <task>]  Show an accepted note and its links.
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
@@ -38,6 +38,8 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
   decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>]
   accept <id>                File a proposal through the keeper gates.
   accept <id> --reject <why>  Record a rejection.
+  check [<proposal-id>]      Read-only gate: flag proposals, skills and agents that change what runs.
+                             Exit 0 clean, 3 findings, 1 unreadable brain.
 
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 
@@ -70,7 +72,8 @@ func (l *linkFlags) Set(raw string) error {
 	return nil
 }
 
-// Run returns 0 on success, 1 for a store/gate error, and 2 for usage errors.
+// Run returns 0 on success, 1 for a store/gate error, 2 for usage errors and 3
+// when check finds something.
 func Run(args []string, env Env) int {
 	if env.Resolver.GridHome == "" {
 		env.Resolver.GridHome = env.GridHome
@@ -97,7 +100,7 @@ func Run(args []string, env Env) int {
 		return runDecide(args[1:], env)
 	}
 	switch verb {
-	case "show", "search", "topics", "index", "propose", "accept", "keep":
+	case "show", "search", "topics", "index", "propose", "accept", "keep", "check":
 	default:
 		fmt.Fprintf(env.Stderr, "brain: unknown command %q. Run: grid brain help\n", verb)
 		return 2
@@ -180,6 +183,10 @@ func Run(args []string, env Env) int {
 		if f.NArg() != 1 {
 			return usageError("expected one id")
 		}
+	case "check":
+		if f.NArg() > 1 {
+			return usageError("expected at most one proposal id")
+		}
 	case "search":
 		if f.NArg() == 0 || strings.TrimSpace(strings.Join(f.Args(), " ")) == "" {
 			return usageError("expected search words")
@@ -241,6 +248,16 @@ func Run(args []string, env Env) int {
 	}
 	var result any
 	switch verb {
+	case "check":
+		if f.NArg() == 1 {
+			var id string
+			id, writeLevel, err = proposalID(f.Arg(0), writeLevel, *level)
+			if err == nil {
+				result, err = store.CheckProposal(writeLevel, id)
+			}
+		} else {
+			result, err = store.Check()
+		}
 	case "keep":
 		result, err = store.Waiting(taskDir)
 	case "show":
@@ -347,6 +364,10 @@ func Run(args []string, env Env) int {
 	if err != nil {
 		return fail(err)
 	}
+	exit := 0
+	if checked, ok := result.(brain.CheckResult); ok && len(checked.Findings) > 0 {
+		exit = 3
+	}
 	if *asJSON {
 		enc := json.NewEncoder(env.Stdout)
 		enc.SetEscapeHTML(false)
@@ -357,10 +378,12 @@ func Run(args []string, env Env) int {
 		for _, row := range rows {
 			fmt.Fprintf(env.Stdout, "%s -> %s: %s\n", row.Path, row.Topic, row.Reason)
 		}
+	} else if checked, ok := result.(brain.CheckResult); ok {
+		plainCheck(env.Stdout, checked)
 	} else if err := plain(env.Stdout, result); err != nil {
 		return fail(err)
 	}
-	return 0
+	return exit
 }
 
 func readInput(r io.Reader) ([]byte, error) {
@@ -451,4 +474,24 @@ func plain(w io.Writer, value any) error {
 		return err
 	}
 	return facts(w, "", data)
+}
+
+// plainCheck fences every quoted text as data, so text from a proposal or
+// skill can never read as the command's own output.
+func plainCheck(w io.Writer, r brain.CheckResult) {
+	fmt.Fprintf(w, "checked: %d\nfindings: %d\n", r.Checked, len(r.Findings))
+	for _, f := range r.Findings {
+		where := f.File
+		if f.Line > 0 {
+			where = fmt.Sprintf("%s:%d", f.File, f.Line)
+		}
+		fmt.Fprintf(w, "%s %s: %s\n", f.Code, where, f.Message)
+		if f.Text != "" {
+			fence := "```"
+			for strings.Contains(f.Text, fence) {
+				fence += "`"
+			}
+			fmt.Fprintf(w, "%s\n%s\n%s\n", fence, f.Text, fence)
+		}
+	}
 }

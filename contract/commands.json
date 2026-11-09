@@ -2503,7 +2503,7 @@
     },
     {
       "name": "brain",
-      "summary": "show, search, topics, index, propose, accept, keep, decide",
+      "summary": "show, search, topics, index, propose, accept, keep, decide, check",
       "built": true,
       "subcommands": [
         {
@@ -2529,6 +2529,31 @@
             },
             {
               "name": "--reject",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "check",
+          "args": [
+            "[proposal-id]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
               "takes": "value",
               "required": false
             }
