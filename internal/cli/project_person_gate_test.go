@@ -101,7 +101,7 @@ func TestProjectPersonPolicy(t *testing.T) {
 			if tc.person && tc.want == 3 && !strings.Contains(h.out.String(), "agent_env") {
 				t.Fatal(h.out)
 			}
-			if tc.name == "invalid_warns" && (!strings.Contains(h.errb.String(), "workflow: invalid person_verbs:") || strings.Contains(h.errb.String(), h.root)) {
+			if tc.name == "invalid_warns" && (!strings.Contains(h.errb.String(), invalidPersonWarning) || strings.Contains(h.errb.String(), h.root)) {
 				t.Fatal("missing or unsafe warning")
 			}
 		})
@@ -117,9 +117,10 @@ func TestProjectPersonTaskIsolationAndFloor(t *testing.T) {
 	if code := h.run(fixture.Path, "task", "show", "T-01", "--json"); code != 0 {
 		t.Fatalf("project policy leaked into task: %d", code)
 	}
+	h.write(filepath.Join(h.gridHome, "workflows.md"), "# Workflows\n")
 	h.env.Cwd = fixture.Path
-	if code := gateCommand([]string{"signal", "act", actID, "--act", "turn"}, &h.env); code != 0 {
-		t.Fatalf("project default leaked into task: %d", code)
+	if code := gateCommand([]string{"signal", "act", actID, "--act", "turn"}, &h.env); code != 3 {
+		t.Fatalf("project default bypassed from task: %d", code)
 	}
 	h.write(filepath.Join(fixture.Path, "workflow.md"), "---\nperson_verbs: [signal act]\n---\n")
 	if code := gateCommand([]string{"signal", "act", actID, "--act", "note"}, &h.env); code != 3 {
@@ -161,6 +162,7 @@ func TestProjectPersonSignalFlagSemantics(t *testing.T) {
 		{"last_act_open", []string{"--act=turn", "--act", "note", "--project", "example"}, 0},
 		{"last_project", []string{"--project", "absent", "--project=example", "--act", "turn"}, 3},
 		{"option_value", []string{"--until", "--act=note", "--act", "turn", "--project", "example"}, 3},
+		{"to_value", []string{"--project", "example", "--act", "turn", "--to", "--act=note"}, 3},
 		{"fence", []string{"--project", "example", "--", "--act=turn"}, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -182,10 +184,69 @@ func TestProjectPersonUnreadableKeepsFloor(t *testing.T) {
 	h.env.Procs = testProcs("codex")
 	h.mkdir(filepath.Join(h.gridHome, "projects", "example", "workflows.md"))
 	before := fileBytes(t, h.gridHome)
-	if code := h.run(h.root, "approve", "--project", "example", "--json"); code != 3 || !strings.Contains(h.errb.String(), "keeping the person-gate floor") || strings.Contains(h.errb.String(), h.root) {
+	if code := h.run(h.root, "approve", "--project", "example", "--json"); code != 3 || !strings.Contains(h.errb.String(), invalidPersonWarning) || strings.Contains(h.errb.String(), h.root) {
 		t.Fatalf("exit %d: %s %s", code, h.out, h.errb)
 	}
 	if !reflect.DeepEqual(before, fileBytes(t, h.gridHome)) {
 		t.Fatal("refusal changed files")
+	}
+}
+
+func TestProjectPersonSignalTaskUnion(t *testing.T) {
+	for _, tc := range []struct {
+		name, workspace, project, task, act string
+		explicit                            bool
+	}{
+		{name: "task_cwd_without_policy", act: "turn"},
+		{name: "task_cwd_project", project: "[signal act note]", task: "[]", act: "note"},
+		{name: "task_cwd_workspace", workspace: "[signal act note]", task: "[task show]", act: "note"},
+		{name: "add_task_selector", project: "[signal act add]", task: "[task show]", act: "add", explicit: true},
+		{name: "task_act_specific", project: "[]", task: "[signal act note]", act: "note"},
+		{name: "task_dismiss_alias", project: "[]", task: "[signal act dismiss]", act: "dismiss"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _, _ := actFixture(t, "new")
+			fixture := taskFixtureProject(t, h, "example")
+			h.env.Getenv = func(string) string { return "" }
+			h.env.Procs = testProcs("codex")
+			for path, policy := range map[string]string{
+				filepath.Join(h.gridHome, "workflows.md"):                        tc.workspace,
+				filepath.Join(h.gridHome, "projects", "example", "workflows.md"): tc.project,
+				filepath.Join(fixture.Path, "workflow.md"):                       tc.task,
+			} {
+				if policy != "" {
+					h.write(path, "---\nperson_verbs: "+policy+"\n---\n")
+				}
+			}
+			cwd := fixture.Path
+			args := []string{"signal", "act", actID, "--act", tc.act, "--json"}
+			if tc.act == "dismiss" {
+				args = []string{"signal", "dismiss", actID, "--json"}
+			}
+			if tc.explicit {
+				cwd = h.root
+				args = append(args, "--project", "example", "--task", fixture.ID)
+			}
+			before := fileBytes(t, h.gridHome)
+			if code := h.run(cwd, args...); code != 3 {
+				t.Fatalf("exit %d; want person refusal", code)
+			}
+			if !reflect.DeepEqual(before, fileBytes(t, h.gridHome)) {
+				t.Fatal("refusal changed files")
+			}
+		})
+	}
+}
+
+func TestProjectPersonBadTaskWarning(t *testing.T) {
+	for _, body := range []string{"---\nperson_verbs: false\n---\n", "---\nperson_verbs: [task show\n---\n"} {
+		h := newHarness(t)
+		fixture := taskFixture(t, h)
+		h.write(filepath.Join(fixture.Path, "workflow.md"), body)
+		h.env.Getenv = func(string) string { return "" }
+		h.env.Procs = testProcs("codex")
+		if code := h.run(fixture.Path, "task", "show", fixture.ID); code != 0 || h.errb.String() != invalidPersonWarning {
+			t.Errorf("exit %d; want successful read with exact invalid policy warning", code)
+		}
 	}
 }
