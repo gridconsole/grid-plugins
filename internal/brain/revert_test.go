@@ -258,6 +258,69 @@ func TestRevertFinishesAnInterruptedPublication(t *testing.T) {
 	}
 }
 
+// A stale entry is not "already published" just because the newest copy holds
+// the requested bytes: the entry itself must hold them too.
+func TestRevertRepublishesAStaleEntryWhoseBytesTheNewestCopyHolds(t *testing.T) {
+	t.Run("newest copy", func(t *testing.T) {
+		s := threeVersions(t)
+		v2, v3 := versionBytes(t, s, 2), versionBytes(t, s, 3)
+		putFile(t, s, "projects/example/knowledge/conventions/checks.md", string(v2))
+		if _, n, err := s.Revert("project", "conventions", "checks", 3, keeper); err != nil || n != 3 {
+			t.Fatalf("revert: v%d, %v", n, err)
+		}
+		// The copy already exists, so no version is added, but the entry is published.
+		wantChain(t, s, "conventions", "checks", 3, v3)
+		if !bytes.Equal(published(t, s, "conventions", "checks"), v3) || strings.Count(readLog(t, s), "| reverted |") != 1 {
+			t.Fatalf("entry not republished:\n%s", readLog(t, s))
+		}
+	})
+	t.Run("older twin of the newest copy", func(t *testing.T) {
+		s := threeVersions(t)
+		v1, v2 := versionBytes(t, s, 1), versionBytes(t, s, 2)
+		if _, n, err := s.Revert("project", "conventions", "checks", 1, keeper); err != nil || n != 4 {
+			t.Fatalf("first revert: v%d, %v", n, err)
+		}
+		putFile(t, s, "projects/example/knowledge/conventions/checks.md", string(v2))
+		if _, n, err := s.Revert("project", "conventions", "checks", 1, keeper); err != nil || n != 4 {
+			t.Fatalf("second revert: v%d, %v", n, err)
+		}
+		wantChain(t, s, "conventions", "checks", 4, v1)
+		// The fixed test clock makes the second audit line identical to the first, so only the entry is checked.
+		if !bytes.Equal(published(t, s, "conventions", "checks"), v1) {
+			t.Fatal("entry not republished")
+		}
+	})
+}
+
+// The planted copy is a valid note of its topic, name and level, so nothing but
+// the config-topic guard can refuse it.
+func TestRevertRefusesAValidNoteInAConfigTopic(t *testing.T) {
+	for _, topic := range BuiltinTopics() {
+		if topic.Kind != "config" || !allows(topic, "project") {
+			continue
+		}
+		t.Run(topic.Name, func(t *testing.T) {
+			s := threeVersions(t)
+			planted := strings.Replace(string(versionBytes(t, s, 1)), "topic: conventions", "topic: "+topic.Name, 1)
+			planted = strings.Replace(planted, "name: checks", "name: daily", 1)
+			n, err := Parse([]byte(planted))
+			if err == nil {
+				err = n.Validate()
+			}
+			if err != nil || n.Topic != topic.Name || n.Name != "daily" || n.Level != "project" {
+				t.Fatalf("the planted copy must be a valid entry of %s/daily: %+v, %v", topic.Name, n, err)
+			}
+			putFile(t, s, "projects/example/knowledge/versions/"+topic.Name+"/daily/1.md", planted)
+			before := snapshot(t, s)
+			_, _, err = s.Revert("project", topic.Name, "daily", 1, keeper)
+			if err == nil || !strings.Contains(err.Error(), "config topics") {
+				t.Fatalf("revert error: %v", err)
+			}
+			wantSame(t, s, before)
+		})
+	}
+}
+
 func TestConcurrentRevertsKeepVersionsGapFree(t *testing.T) {
 	s := threeVersions(t)
 	v1 := versionBytes(t, s, 1)
