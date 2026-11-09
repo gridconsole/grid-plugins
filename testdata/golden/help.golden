@@ -24,7 +24,7 @@ Commands:
   proof       add evidence and rebuild the task proof index
   history     append a dated task history line
   land        land a task per the deploy topic
-  brain       show, search, topics, index, propose, accept, keep, decide
+  brain       show, search, topics, index, propose, accept, keep, decide, check
   machine     machines topic (not built yet)
   env         up, down browser Job dev environments
   ports       claim, release, list, gc dev port blocks
