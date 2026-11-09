@@ -1,0 +1,10 @@
+[
+  {"id":"progress-written","type":"file_exists","path":"home/projects/notes-app/tasks/T-01-sample/views/progress.html","gate":true},
+  {"id":"links-tokens","type":"text_contains","path":"home/projects/notes-app/tasks/T-01-sample/views/progress.html","text":"<link rel=\"stylesheet\" href=\"../ds/tokens.css\">"},
+  {"id":"no-literal-colours","type":"command_passes","command":["sh","-c","test -f home/projects/notes-app/tasks/T-01-sample/views/progress.html && ! grep -Eq ':[[:space:]]*#[0-9a-fA-F]{3,8}([^0-9A-Za-z_]|$)|rgba?[(]' home/projects/notes-app/tasks/T-01-sample/views/progress.html"]},
+  {"id":"no-placeholders","type":"command_passes","command":["sh","-c","test -f home/projects/notes-app/tasks/T-01-sample/views/progress.html && ! grep -Fq '{{' home/projects/notes-app/tasks/T-01-sample/views/progress.html"]},
+  {"id":"reads-workflow","type":"command_passes","command":["sh","-c","tr '\\n' '~' < home/projects/notes-app/tasks/T-01-sample/views/progress.html | grep -Eqi 'build.*review|review.*build'"]},
+  {"id":"shows-plan-items","type":"command_passes","command":["sh","-c","grep -Eqi 'tag filter' home/projects/notes-app/tasks/T-01-sample/views/progress.html"]},
+  {"id":"tokens-copied","type":"file_exists","path":"home/projects/notes-app/tasks/T-01-sample/ds/tokens.css"},
+  {"id":"views-css-copied","type":"file_exists","path":"home/projects/notes-app/tasks/T-01-sample/ds/views.css"}
+]

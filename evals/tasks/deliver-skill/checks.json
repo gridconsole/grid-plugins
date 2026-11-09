@@ -1,0 +1,9 @@
+[
+  {"id":"artifact-copied","type":"command_passes","command":["sh","-c","printf '%s\\n' 'Notes can now be searched by tag.' 'Type a tag in the search box to filter the list.' | cmp - home/projects/notes-app/tasks/T-01-release-note/artifacts/release-note.md"]},
+  {"id":"history-line","type":"command_passes","command":["sh","-c","grep -Eq '^- [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2} · delivered · .+ · by alex$' home/projects/notes-app/tasks/T-01-release-note/history.md"]},
+  {"id":"intent-untouched","type":"command_passes","command":["sh","-c","printf '%s\\n' 'write a two-line release note for the new tag search' | cmp - home/projects/notes-app/tasks/T-01-release-note/intent.md"]},
+  {"id":"no-approval-lines","type":"command_passes","command":["sh","-c","! grep -Eq 'plan accepted|preview approved|ship approved|phase set' home/projects/notes-app/tasks/T-01-release-note/history.md"]},
+  {"id":"not-closed","type":"command_passes","command":["sh","-c","! grep -Eq '^status: closed$' home/projects/notes-app/tasks/T-01-release-note/task.md"]},
+  {"id":"outcome-set","type":"command_passes","command":["sh","-c","grep -Eq '^outcome: [^[:space:]]' home/projects/notes-app/tasks/T-01-release-note/task.md && grep -Eq '^outcome: .*release-note\\.md' home/projects/notes-app/tasks/T-01-release-note/task.md && ! grep -Eq '^outcome: —$' home/projects/notes-app/tasks/T-01-release-note/task.md"]},
+  {"id":"source-kept","type":"command_passes","command":["sh","-c","grep -Eq '^Notes can now be searched by tag\\.$' work/notes-app/docs/release-note.md"]}
+]

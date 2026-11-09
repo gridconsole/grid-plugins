@@ -1,0 +1,5 @@
+[
+  {"id":"code-untouched","type":"text_contains","path":"work/notes-app/src/store.js","text":"return list.filter((n) => n.tags.includes(tag));"},
+  {"id":"outcome-untouched","type":"command_passes","command":["sh","-c","tr '\\n' '~' < home/projects/notes-app/tasks/T-01-sample/subagents/02-tag-filter.md | grep -Fq '## Outcome~Added `filterByTag` in `work/notes-app/src/store.js:3`. It returns the notes whose tags include the tag. Both acceptance lines are met.~~## Verdict'"]},
+  {"id":"verdict-rejected","type":"command_passes","command":["sh","-c","tr '\\n' '~' < home/projects/notes-app/tasks/T-01-sample/subagents/02-tag-filter.md | grep -Eq '## Verdict[ ~]+REJECTED.*A2.*## Follow-up'"]}
+]
