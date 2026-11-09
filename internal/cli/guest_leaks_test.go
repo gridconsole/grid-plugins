@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -96,15 +97,18 @@ func TestGuestClaudeSetupRemove(t *testing.T) {
 }
 
 func TestGuestWorkflowVisibility(t *testing.T) {
-	for _, mode := range []string{"plain", "json"} {
+	for _, mode := range []string{"plain", "json", "policy"} {
 		t.Run(mode, func(t *testing.T) {
 			h, cwd := guestLeakFixture(t, "guest")
 			for _, name := range []string{"alpha", "hidden"} {
 				h.write(filepath.Join(h.gridHome, "projects", name, "workflows.md"), strings.ReplaceAll(strings.ReplaceAll(cliWorkflow, "Default", name+"-secret"), "nothing else matches", "label example"))
 			}
 			args := []string{"workflow", "show"}
-			if mode == "json" {
+			if mode != "plain" {
 				args = append(args, "--json")
+			}
+			if mode == "policy" {
+				args = append(args, "--policy")
 			}
 			missingCode := h.run(cwd, append(args, "--project", "unknown")...)
 			missingOut, missingErr := h.out.String(), h.errb.String()
@@ -118,7 +122,19 @@ func TestGuestWorkflowVisibility(t *testing.T) {
 				if code := h.run(cwd, append(args, "--project", selector)...); code != 0 || !strings.Contains(h.out.String(), "alpha-secret") {
 					t.Errorf("%s: invited workflow missing", selector)
 				}
+				if mode == "policy" {
+					var envelope struct {
+						Policy []shownPolicy `json:"policy"`
+					}
+					if err := json.Unmarshal(h.out.Bytes(), &envelope); err != nil {
+						t.Fatal(err)
+					}
+					if len(envelope.Policy) != 2 || envelope.Policy[0].Project != nil || envelope.Policy[1].Project == nil || *envelope.Policy[1].Project != "alpha" {
+						t.Fatal("guest policy leaked another project")
+					}
+				}
 			}
+			h.write(filepath.Join(h.gridHome, "projects", "hidden", "workflows.md"), "---\nrefusal_message: secret\n---\n")
 			// A hidden malformed record must not introduce a diagnostic or hide invited files.
 			h.write(filepath.Join(h.gridHome, "projects", "hidden", "project.md"), "---\nbroken: [\n---\n")
 			if code := h.run(cwd, args...); code != 0 || strings.Contains(h.out.String()+h.errb.String(), "hidden") || !strings.Contains(h.out.String(), "alpha-secret") {
