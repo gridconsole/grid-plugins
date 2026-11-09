@@ -12,6 +12,7 @@ dist:
 
 generate:
 	go run ./internal/packaging/cmd
+	UPDATE_GOLDEN=1 go test ./internal/cli -run '^TestDoctorGolden$$' -count=1
 	UPDATE_CONTRACT_COMMANDS=1 go test ./internal/cli -run '^TestContractCommandsParserInventory$$' -count=1
 
 # Pre-push set: make test lint eval-check (eval-check stays out of test to keep it fast).

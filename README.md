@@ -38,9 +38,9 @@ Tasks use the current folder's project, or Personal when no project applies. `--
 
 ## Doctor
 
-`grid doctor` checks the Grid home, writability, format version, git, the grid launcher on PATH, plugin hooks, and the setup allow block in Claude settings. The allow block check requires every allow rule written by setup: `Bash(grid *)`, `Read(<anchor>/**)`, and `Edit(<anchor>/**)`, using the same home-relative anchor. It reads the setup destination (`CLAUDE_CONFIG_DIR/settings.json`, or `~/.claude/settings.json` by default) without changing it and reports missing rules or an unreadable, malformed, missing, or symlinked settings file.
+`grid doctor` checks the Grid home, writability, format version, git, the grid launcher on PATH, plugin hooks, and the setup allow block in Claude settings. The allow block check requires every allow rule written by setup: `Bash(grid *)`, `Read(<anchor>/**)`, and `Edit(<anchor>/**)`, using the same home-relative anchor. It reads the setup destination (`CLAUDE_CONFIG_DIR/settings.json`, or `~/.claude/settings.json` by default) without changing it and follows settings symlinks to regular, readable files just as setup does. It reports missing rules or an unreadable, malformed, missing, dangling, or nonregular settings file. When the Grid home is unavailable, the allow block check reports `skipped: Grid home is unavailable` without adding a failure.
 
-Each failing check includes a fix hint. For the allow block: run `grid setup` to add it; `grid setup --remove` takes it out. `grid doctor --json` includes the check in `checks`. `grid doctor --bundle` writes a local support archive with the settings path redacted from diagnostics and logs.
+Each failing check includes a fix hint. For missing rules or a missing settings file, the hint is `Run grid setup`. For invalid JSON, unreadable files, dangling symlinks, or nonregular files, it is `Fix or move the Claude settings file, then run grid setup.` These hints contain no paths or settings values. `grid setup --remove` takes the block out. `grid doctor --json` includes the check in `checks`. `grid doctor --bundle` writes a local support archive with the settings path redacted from diagnostics and logs.
 
 ## Routines
 

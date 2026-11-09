@@ -2,11 +2,7 @@ package settings
 
 import (
 	"errors"
-	"io"
-	"os"
 	"slices"
-
-	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
 // ClaudeAllowStatus reports exact matches for setup's allow rules. Reason is a
@@ -19,7 +15,7 @@ type ClaudeAllowStatus struct {
 }
 
 // ReadClaudeAllowStatus never writes settings or the setup ownership record.
-// Unlike setup, the health check refuses to follow a settings-file symlink.
+// It follows settings-file symlinks through the same reader used by setup.
 func ReadClaudeAllowStatus(path, home, gridHome string) ClaudeAllowStatus {
 	failure := func(reason string) ClaudeAllowStatus {
 		return ClaudeAllowStatus{Reason: reason}
@@ -27,31 +23,17 @@ func ReadClaudeAllowStatus(path, home, gridHome string) ClaudeAllowStatus {
 	if path == "" {
 		return failure("cannot locate the Claude settings file")
 	}
-	st, err := os.Lstat(path)
+	file, err := readClaudeFile(path)
+	var readErr claudeReadError
 	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return failure("Claude settings file is missing")
+	case errors.As(err, &readErr):
+		return failure(readErr.reason)
 	case err != nil:
 		return failure("cannot read the Claude settings file")
-	case st.Mode()&os.ModeSymlink != 0:
-		return failure("Claude settings file is a symlink")
-	case !st.Mode().IsRegular():
-		return failure("Claude settings file is not a regular file")
+	case !file.exists:
+		return failure("Claude settings file is missing")
 	}
-	f, err := fslock.OpenNoFollow(path, os.O_RDONLY, 0)
-	if err != nil {
-		return failure("cannot read the Claude settings file")
-	}
-	defer f.Close()
-	opened, err := f.Stat()
-	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(st, opened) {
-		return failure("Claude settings file changed while reading")
-	}
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return failure("cannot read the Claude settings file")
-	}
-	doc, err := parseClaudeObject(data)
+	doc, err := parseClaudeObject(file.data)
 	if err != nil {
 		return failure("Claude settings file is not valid JSON or has an invalid structure")
 	}

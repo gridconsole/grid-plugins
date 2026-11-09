@@ -57,3 +57,31 @@ func TestAllowBlockWithInjectedSettingsPath(t *testing.T) {
 		}
 	}
 }
+
+func TestAllowBlockSkipsUnavailableHome(t *testing.T) {
+	for _, kind := range []string{"missing", "file"} {
+		t.Run(kind, func(t *testing.T) {
+			home := t.TempDir()
+			gridHome := filepath.Join(home, ".grid")
+			if kind == "file" {
+				if err := os.WriteFile(gridHome, nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			report := Run(Options{Home: home, GridHome: gridHome, Label: "~/.grid", GitVersion: gitOK,
+				HooksFile: healthyHooks(t), LookPath: gridOK})
+			failures, skipped := 0, false
+			for _, check := range report.Checks {
+				if !check.OK {
+					failures++
+				}
+				if check.Name == "allow block" {
+					skipped = check.OK && check.Detail == "skipped: Grid home is unavailable" && check.Fix == ""
+				}
+			}
+			if report.OK || failures != 1 || !skipped {
+				t.Fatalf("expected one failure and a skipped allow check: %+v", report)
+			}
+		})
+	}
+}

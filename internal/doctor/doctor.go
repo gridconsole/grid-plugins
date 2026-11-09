@@ -12,7 +12,8 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
 
-// Check is one fact: its name, whether it holds, and one line of detail.
+// Check is one fact: its name, whether it passes, and one line of detail.
+// A skipped check has OK true and a detail beginning with "skipped:".
 type Check struct {
 	Name   string `json:"name"`
 	OK     bool   `json:"ok"`
@@ -58,6 +59,7 @@ func Run(o Options) Report {
 		}
 	}
 
+	homeAvailable := false
 	info, err := os.Stat(o.GridHome)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -67,6 +69,7 @@ func Run(o Options) Report {
 	case !info.IsDir():
 		add("grid home", false, label+" is not a folder")
 	default:
+		homeAvailable = true
 		add("grid home", true, label)
 		if writable(o.GridHome) {
 			add("grid home writable", true, label)
@@ -82,7 +85,11 @@ func Run(o Options) Report {
 		add("git", true, v)
 	}
 	checkInstallation(add, o)
-	checkAllowBlock(add, o)
+	if homeAvailable {
+		checkAllowBlock(add, o)
+	} else {
+		add("allow block", true, "skipped: Grid home is unavailable")
+	}
 	return rep
 }
 

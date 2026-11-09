@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
 
@@ -469,6 +470,16 @@ type claudeFile struct {
 	exists       bool
 }
 
+// Keep setup's detailed errors while giving doctor a path-free reason.
+type claudeReadError struct {
+	reason string
+	cause  error
+}
+
+func (e claudeReadError) Error() string { return e.cause.Error() }
+func (e claudeReadError) Unwrap() error { return e.cause }
+
+// Shared by setup (including its unchanged check) and read-only diagnostics.
 func readClaudeFile(path string) (claudeFile, error) {
 	f := claudeFile{path: path, target: path, mode: 0600}
 	st, err := os.Lstat(path)
@@ -480,6 +491,9 @@ func readClaudeFile(path string) (claudeFile, error) {
 	}
 	if st.Mode()&os.ModeSymlink != 0 {
 		f.target, err = filepath.EvalSymlinks(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return f, claudeReadError{"Claude settings file is a dangling symlink", err}
+		}
 		if err != nil {
 			return f, err
 		}
@@ -489,10 +503,26 @@ func readClaudeFile(path string) (claudeFile, error) {
 		}
 	}
 	if !st.Mode().IsRegular() {
-		return f, fmt.Errorf("Settings file %s is not a regular file. Nothing written.", path)
+		return f, claudeReadError{"Claude settings file is not a regular file",
+			fmt.Errorf("Settings file %s is not a regular file. Nothing written.", path)}
 	}
-	f.exists, f.mode = true, st.Mode().Perm()
-	f.data, err = os.ReadFile(f.target)
+	// Resolve supported links first, then reject replacement of the final target
+	// by a link and verify the opened file before reading it.
+	opened, err := fslock.OpenNoFollow(f.target, os.O_RDONLY, 0)
+	if err != nil {
+		return f, err
+	}
+	defer opened.Close()
+	info, err := opened.Stat()
+	if err != nil {
+		return f, err
+	}
+	if !info.Mode().IsRegular() || !os.SameFile(st, info) {
+		return f, claudeReadError{"Claude settings file changed while reading",
+			errors.New("Settings file changed while reading. Nothing written.")}
+	}
+	f.exists, f.mode = true, info.Mode().Perm()
+	f.data, err = io.ReadAll(opened)
 	return f, err
 }
 func (f claudeFile) unchanged() bool {

@@ -433,7 +433,7 @@ For a guest, `job show <file>` and `job lint <file> [--task <t>]` read the file 
 
     {"ok": bool, "checks": [{"name": string, "ok": bool, "detail": string}]}
 
-Checks, in order: `grid home`, `grid home writable`, `format version`, `git`, `grid on PATH`, `plugin hooks`, `allow block`. Writability and format checks are skipped when the Grid home is unavailable. Failing checks also include a `fix` string. The allow block check reports missing setup allow rules or a path-free settings-file failure. Exit 1 when any check fails.
+Checks, in order: `grid home`, `grid home writable`, `format version`, `git`, `grid on PATH`, `plugin hooks`, `allow block`. Writability and format checks are skipped when the Grid home is unavailable. The allow block check remains in the report with `ok: true`, detail `skipped: Grid home is unavailable`, and no `fix` when the Grid home is unavailable. Failing checks also include a `fix` string. The allow block check follows settings symlinks to regular, readable files through the same reader as setup and reports missing setup allow rules or a path-free settings-file failure. Missing rules or a missing file have the hint `Run grid setup`; invalid JSON, unreadable files, dangling symlinks, and nonregular files have `Fix or move the Claude settings file, then run grid setup.` Exit 1 when any check fails.
 
 ### `grid workflow show [--project <name-or-id>] [--json] [--policy]`
 

@@ -29,7 +29,13 @@ func fixHint(name, detail string) string {
 	case "grid on PATH":
 		return "Run grid setup and add the directory containing the grid launcher to PATH."
 	case "allow block":
-		return "Run grid setup to add the allow block; grid setup --remove takes it out."
+		if strings.HasPrefix(detail, "missing rules: ") || detail == "Claude settings file is missing" {
+			return "Run grid setup"
+		}
+		if strings.HasPrefix(detail, "Grid home ") {
+			return "Fix the Grid home location, then run grid setup."
+		}
+		return "Fix or move the Claude settings file, then run grid setup."
 	}
 	return ""
 }
