@@ -31,30 +31,44 @@ func ownerOrMember(role string) bool {
 	}
 }
 
-// Revert publishes version to of one entry again as a new version, so history
-// is only ever extended. It returns the entry, the version that now holds the
-// published bytes, and an error. When the published bytes already are version
-// to (and the newest stored copy), nothing is written and the current version
-// comes back. An error after the publication (the index rebuild) still returns
-// the entry and the new version.
+// RevertResult is what RevertTo did: the entry, the version that now holds its
+// published bytes, and whether anything was written.
+type RevertResult struct {
+	Entry   Entry
+	Version int
+	// Wrote is true when the entry was published or logged, even if the newest
+	// stored copy already held the bytes and no version was added.
+	Wrote bool
+}
+
+// Revert is RevertTo without the Wrote report: the entry, the version that now
+// holds the published bytes, and an error.
 func (s Store) Revert(level, topic, name string, to int, origin Origin) (Entry, int, error) {
+	res, err := s.RevertTo(level, topic, name, to, origin)
+	return res.Entry, res.Version, err
+}
+
+// RevertTo publishes version to of one entry again as a new version, so history
+// is only ever extended. When the published bytes already are version to (and
+// the newest stored copy), nothing is written and Wrote is false, with the
+// current version in Version. Wrote is decided under the level lock. An error
+// after the publication (the index rebuild) still returns the result.
+func (s Store) RevertTo(level, topic, name string, to int, origin Origin) (RevertResult, error) {
 	if !ValidName(topic) || !ValidName(name) {
-		return Entry{}, 0, fmt.Errorf("topic and name must be plain names")
+		return RevertResult{}, fmt.Errorf("topic and name must be plain names")
 	}
 	if to < 1 {
-		return Entry{}, 0, fmt.Errorf("version must be 1 or more")
+		return RevertResult{}, fmt.Errorf("version must be 1 or more")
 	}
 	root, err := s.scope(level, false)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Entry{}, 0, fmt.Errorf("%s/%s has no version %d", topic, name, to)
+		return RevertResult{}, fmt.Errorf("%s/%s has no version %d", topic, name, to)
 	}
 	if err != nil {
-		return Entry{}, 0, err
+		return RevertResult{}, err
 	}
 	defer root.Close()
-	var result Entry
-	var version int
-	wrote := false
+	var res RevertResult
 	err = locked(root, func() error {
 		// Only a knowledge topic has versions; a planted copy must not reach a config topic.
 		t, err := topicAt(root, topic, level)
@@ -109,7 +123,7 @@ func (s Store) Revert(level, topic, name string, to int, origin Origin) (Entry, 
 				}
 			}
 			if bytes.Equal(stored, data) {
-				result, version = s.entry(n, false), newest
+				res.Entry, res.Version = s.entry(n, false), newest
 				return nil
 			}
 		}
@@ -129,21 +143,21 @@ func (s Store) Revert(level, topic, name string, to int, origin Origin) (Entry, 
 		if err != nil {
 			return err
 		}
-		result, version, wrote = s.entry(n, false), v, true
+		res.Entry, res.Version, res.Wrote = s.entry(n, false), v, true
 		return nil
 	})
 	if err != nil {
-		return Entry{}, 0, err
+		return RevertResult{}, err
 	}
-	if wrote {
+	if res.Wrote {
 		// The index is rebuilt under its own lock, after this one is released.
 		idx := s
 		idx.ReadLevel = level
 		if _, err := idx.RebuildIndex(); err != nil {
-			return result, version, fmt.Errorf("reverted to v%d as v%d, but rebuilding the index failed: %w", to, version, err)
+			return res, fmt.Errorf("reverted to v%d as v%d, but rebuilding the index failed: %w", to, res.Version, err)
 		}
 	}
-	return result, version, nil
+	return res, nil
 }
 
 // topicHolding names another topic that has a file for the entry name.

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -213,6 +214,107 @@ func TestRevertPublishesAgainAndReportsTheNoOp(t *testing.T) {
 	}
 	if code := h.run("revert", "decisions/checks", "--to", "2", "--level", "home", "--json"); code != 0 || strings.TrimSpace(h.out.String()) != `{"version":5,"noop":false}` {
 		t.Fatalf("json: %d %q", code, &h.out)
+	}
+}
+
+// storedCopy reads version n of decisions/checks.
+func (h *harness) storedCopy(t *testing.T, n int) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(h.env.GridHome, "knowledge", "versions", "decisions", "checks", strconv.Itoa(n)+".md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// noop means nothing was written: a revert that republishes an entry which
+// differs from the newest stored copy is a write, even though no version is added.
+func TestRevertReportsAWriteWhenItRepublishedTheEntry(t *testing.T) {
+	publishedPath := func(h *harness) string {
+		return filepath.Join(h.env.GridHome, "knowledge", "decisions", "checks.md")
+	}
+	damage := map[string]func(t *testing.T, h *harness){
+		"entry holds v2": func(t *testing.T, h *harness) {
+			if err := os.WriteFile(publishedPath(h), []byte(h.storedCopy(t, 2)), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"entry deleted": func(t *testing.T, h *harness) {
+			if err := os.Remove(publishedPath(h)); err != nil {
+				t.Fatal(err)
+			}
+		},
+	}
+	for name, hurt := range damage {
+		for _, c := range []struct {
+			format string
+			args   []string
+			want   string
+		}{
+			{"text", nil, "v3\n"},
+			{"json", []string{"--json"}, `{"version":3,"noop":false}` + "\n"},
+		} {
+			t.Run(name+"/"+c.format, func(t *testing.T) {
+				h := newHarness(t)
+				h.threeVersions(t)
+				v3 := h.storedCopy(t, 3)
+				hurt(t, h)
+				before := h.changes(t)
+				args := append([]string{"revert", "decisions/checks", "--to", "3", "--level", "home"}, c.args...)
+				if code := h.run(args...); code != 0 || h.out.String() != c.want || h.err.Len() != 0 {
+					t.Fatalf("revert: %d %q %q, want %q", code, &h.out, &h.err, c.want)
+				}
+				if h.published(t) != v3 {
+					t.Fatal("the entry does not hold version 3")
+				}
+				after := h.changes(t)
+				if len(after.Changes) != len(before.Changes)+1 || after.Changes[0].Status != "reverted" || after.Changes[0].Version != 3 {
+					t.Fatalf("want one new reverted line for v3: %+v then %+v", before.Changes, after.Changes)
+				}
+				if versions, err := (brain.Store{GridHome: h.env.GridHome}).Versions("home", "decisions", "checks"); err != nil || len(versions) != 3 {
+					t.Fatalf("a copy was added: %+v, %v", versions, err)
+				}
+				// Now the entry is current, and the same request is the real no-op.
+				if code := h.run("revert", "decisions/checks", "--to", "3", "--level", "home"); code != 0 || h.out.String() != "already at v3\n" {
+					t.Fatalf("second revert: %d %q %s", code, &h.out, &h.err)
+				}
+			})
+		}
+	}
+}
+
+// The no-op writes nothing: not the entry, not the log, not a copy.
+func TestRevertToTheCurrentVersionWritesNothingAndSaysSo(t *testing.T) {
+	h := newHarness(t)
+	h.threeVersions(t)
+	log := filepath.Join(h.env.GridHome, "knowledge", "log.md")
+	logBefore, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entryBefore := h.published(t)
+	linesBefore := len(h.changes(t).Changes)
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{nil, "already at v3\n"},
+		{[]string{"--json"}, `{"version":3,"noop":true}` + "\n"},
+	} {
+		args := append([]string{"revert", "decisions/checks", "--to", "3", "--level", "home"}, c.args...)
+		if code := h.run(args...); code != 0 || h.out.String() != c.want || h.err.Len() != 0 {
+			t.Fatalf("%v: %d %q %q, want %q", c.args, code, &h.out, &h.err, c.want)
+		}
+	}
+	logAfter, err := os.ReadFile(log)
+	if err != nil || !bytes.Equal(logAfter, logBefore) {
+		t.Fatalf("the log changed: %v\n%s", err, logAfter)
+	}
+	if got := len(h.changes(t).Changes); got != linesBefore {
+		t.Fatalf("audit lines %d, want %d", got, linesBefore)
+	}
+	if h.published(t) != entryBefore {
+		t.Fatal("the entry changed")
 	}
 }
 

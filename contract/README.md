@@ -654,15 +654,19 @@ history only grows: after versions 1 to 3, `--to 1` makes version 4 with version
 atomically, appends an audit line with status `reverted`, reason `revert to v<n>`
 and the new version and hash, then rebuilds that level's index. When the entry
 already holds those bytes (and the newest stored copy does too) nothing is written
-and the current version is reported. Config topics are refused (they are changed
-through their own commands), as is a copy that is not a valid entry for that
-topic, name and level, and a name another topic already holds. A project without
-a Grid record is refused as for `propose`; use `--level home`.
+and the current version is reported (`noop` means nothing was written). A stale
+or missing entry is written again, so it is not a no-op even when the newest
+stored copy already held the bytes and no version is added. Config topics are
+refused (they are changed through their own commands), as is a copy that is not
+a valid entry for that topic, name and level, and a name another topic already
+holds. A project without a Grid record is refused as for `propose`; use
+`--level home`.
 
-Plain output is `v<new>`, or `already at v<current>` for the no-op. `--json`
-prints `{"version": <n>, "noop": <bool>}`. `--to` is required and must be 1 or
-more, and `<topic>/<name>` must be two plain names (exit 2). A missing version or
-entry, or any store error, exits 1.
+Plain output is `v<n>` for a write, or `already at v<current>` for the no-op.
+`--json` prints `{"version": <n>, "noop": <bool>}`, `noop` true only when nothing
+was written. `--to` is required and must be 1 or more, and `<topic>/<name>` must
+be two plain names (exit 2). A missing version or entry, or any store error,
+exits 1.
 
 Both verbs check `GRID_ROLE` after the flags parse and before any resolution,
 read or write. The replaceable `brain.ChangesReadAllowed` (host key

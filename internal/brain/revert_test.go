@@ -126,6 +126,46 @@ func TestRevertPublishesTheOldBytesAsANewVersion(t *testing.T) {
 	}
 }
 
+// Wrote is the store's own word on whether a revert wrote, whatever the
+// version number says: a republished entry keeps the newest version.
+func TestRevertToReportsWhetherItWrote(t *testing.T) {
+	entryPath := "projects/example/knowledge/conventions/checks.md"
+	for _, c := range []struct {
+		name  string
+		setup func(t *testing.T, s Store)
+		to    int
+		want  RevertResult
+	}{
+		{"new version", func(*testing.T, Store) {}, 1, RevertResult{Version: 4, Wrote: true}},
+		{"current bytes", func(*testing.T, Store) {}, 3, RevertResult{Version: 3, Wrote: false}},
+		{"stale entry", func(t *testing.T, s Store) {
+			putFile(t, s, entryPath, string(versionBytes(t, s, 2)))
+		}, 3, RevertResult{Version: 3, Wrote: true}},
+		{"missing entry", func(t *testing.T, s Store) {
+			if err := os.Remove(filepath.Join(s.GridHome, filepath.FromSlash(entryPath))); err != nil {
+				t.Fatal(err)
+			}
+		}, 3, RevertResult{Version: 3, Wrote: true}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := threeVersions(t)
+			c.setup(t, s)
+			lines := strings.Count(readLog(t, s), "| reverted |")
+			res, err := s.RevertTo("project", "conventions", "checks", c.to, keeper)
+			if err != nil || res.Version != c.want.Version || res.Wrote != c.want.Wrote || res.Entry.Note.Name != "checks" {
+				t.Fatalf("RevertTo: %+v, %v, want %+v", res, err, c.want)
+			}
+			wantLines := lines
+			if c.want.Wrote {
+				wantLines++
+			}
+			if got := strings.Count(readLog(t, s), "| reverted |"); got != wantLines {
+				t.Fatalf("reverted lines %d, want %d:\n%s", got, wantLines, readLog(t, s))
+			}
+		})
+	}
+}
+
 func TestRevertToTheCurrentBytesWritesNothing(t *testing.T) {
 	s := threeVersions(t)
 	before := snapshot(t, s)

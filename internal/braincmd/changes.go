@@ -229,17 +229,12 @@ func runRevert(args []string, env Env) int {
 	if err != nil {
 		return failWith(env, l.asJSON, err)
 	}
-	// Revert reports the version that holds the entry; one beyond the newest
-	// stored copy is a new version, anything else found it already there.
-	stored, err := store.Versions(level, topic, name)
+	// The store says whether it wrote, under the level lock; noop means it did not.
+	res, err := store.RevertTo(level, topic, name, *to, origin)
 	if err != nil {
 		return failWith(env, l.asJSON, err)
 	}
-	_, version, err := store.Revert(level, topic, name, *to, origin)
-	if err != nil {
-		return failWith(env, l.asJSON, err)
-	}
-	noop := len(stored) > 0 && version <= stored[len(stored)-1].N
+	version, noop := res.Version, !res.Wrote
 	if l.asJSON {
 		enc := json.NewEncoder(env.Stdout)
 		if err := enc.Encode(struct {
