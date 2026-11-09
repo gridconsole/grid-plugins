@@ -639,6 +639,16 @@ quoted text. Exit 0 with no findings, 3 with findings, 1 when the brain cannot
 be read, 2 on usage. Prose never changes the result: a knowledge proposal that
 asks to become a skill has no finding.
 
+`grid brain accept <id>` runs the proposal check on the bytes it is about to
+publish, under the level lock and after the keeper gate (a config topic is still
+refused by the gate: exit 1 and a rejected proposal). A finding refuses the
+accept with exit 3 and writes nothing: no entry, version, audit line or status
+change. `--json` prints `{"error":"check_failed","code":"check_failed","findings":[...]}`
+on stderr; plain output prints the findings as `brain check` does, on stderr. The
+replaceable `AcceptCheckRequired` host policy (key `brain_accept_check_levels`,
+default home and project) skips the check per level. `accept --reject` is never
+checked. The drift check does not run on accept.
+
 ### `grid brain changes [--level home|project] [--project <p>] [--since <RFC3339>] [--limit <n>] [--json]`
 
 Lists the audit lines of the level's `knowledge/log.md`, newest first (lines with
@@ -681,16 +691,6 @@ read or write. The replaceable `brain.ChangesReadAllowed` (host key
 `member`; any other role, including `guest`, exits 3 with
 `grid brain <changes|revert>: caller role is not allowed to <read brain changes|revert brain entries>`.
 The CLI does not read a workflow file to configure them.
-
-`grid brain accept <id>` runs the proposal check on the bytes it is about to
-publish, under the level lock and after the keeper gate (a config topic is still
-refused by the gate: exit 1 and a rejected proposal). A finding refuses the
-accept with exit 3 and writes nothing: no entry, version, audit line or status
-change. `--json` prints `{"error":"check_failed","code":"check_failed","findings":[...]}`
-on stderr; plain output prints the findings as `brain check` does, on stderr. The
-replaceable `AcceptCheckRequired` host policy (key `brain_accept_check_levels`,
-default home and project) skips the check per level. `accept --reject` is never
-checked. The drift check does not run on accept.
 
 ## Task intent files
 
