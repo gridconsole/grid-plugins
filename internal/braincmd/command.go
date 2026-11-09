@@ -78,7 +78,8 @@ func (l *linkFlags) Set(raw string) error {
 }
 
 // Run returns 0 on success, 1 for a store/gate error, 2 for usage errors and 3
-// when check finds something or changes and revert refuse the caller's role.
+// when check finds something, changes and revert refuse the caller's role, or the
+// accept-time check refuses a proposal.
 func Run(args []string, env Env) int {
 	if env.Resolver.GridHome == "" {
 		env.Resolver.GridHome = env.GridHome
@@ -373,6 +374,10 @@ func Run(args []string, env Env) int {
 		}
 	}
 	if err != nil {
+		var refusal *brain.CheckRefusal
+		if errors.As(err, &refusal) {
+			return refuseAccept(env, *asJSON, refusal.Result)
+		}
 		return fail(err)
 	}
 	exit := 0
@@ -485,6 +490,24 @@ func plain(w io.Writer, value any) error {
 		return err
 	}
 	return facts(w, "", data)
+}
+
+// refuseAccept reports an accept the proposal check refused: exit 3 (rejected),
+// findings on stderr, nothing on stdout, and nothing written to the brain.
+func refuseAccept(env Env, asJSON bool, res brain.CheckResult) int {
+	if asJSON {
+		enc := json.NewEncoder(env.Stderr)
+		enc.SetEscapeHTML(false)
+		_ = enc.Encode(struct {
+			Error    string          `json:"error"`
+			Code     string          `json:"code"`
+			Findings []brain.Finding `json:"findings"`
+		}{"check_failed", "check_failed", res.Findings})
+		return 3
+	}
+	fmt.Fprintln(env.Stderr, "brain: accept refused, the proposal check found problems")
+	plainCheck(env.Stderr, res)
+	return 3
 }
 
 // plainCheck fences every quoted text as data, so text from a proposal or

@@ -627,6 +627,12 @@ there is one), `message` and `text`, the quoted source, which is data:
   executable bit, `agents/openai.yaml`, `hooks/`, `.mcp.json` or `bin/`.
 - `agent_field`: agent front matter key outside `name, description, tools, model,
   effort, maxTurns, metadata`.
+- `audit_hash`: without an id only. A published entry whose bytes no longer hash to
+  the newest hashed line of `knowledge/log.md` for it (`entry changed outside the
+  keeper: v<n> was <hash>, now <hash>`). Entries logged before hashes existed,
+  rejections and lines that do not parse give no finding; an entry that is gone
+  is not drift. The replaceable `AuditHashCheck` host policy (key
+  `brain_audit_hash_levels`, default home and project) turns it off per level.
 
 `--json` prints `{"checked": n, "findings": [...]}`; plain output fences each
 quoted text. Exit 0 with no findings, 3 with findings, 1 when the brain cannot
@@ -675,6 +681,16 @@ read or write. The replaceable `brain.ChangesReadAllowed` (host key
 `member`; any other role, including `guest`, exits 3 with
 `grid brain <changes|revert>: caller role is not allowed to <read brain changes|revert brain entries>`.
 The CLI does not read a workflow file to configure them.
+
+`grid brain accept <id>` runs the proposal check on the bytes it is about to
+publish, under the level lock and after the keeper gate (a config topic is still
+refused by the gate: exit 1 and a rejected proposal). A finding refuses the
+accept with exit 3 and writes nothing: no entry, version, audit line or status
+change. `--json` prints `{"error":"check_failed","code":"check_failed","findings":[...]}`
+on stderr; plain output prints the findings as `brain check` does, on stderr. The
+replaceable `AcceptCheckRequired` host policy (key `brain_accept_check_levels`,
+default home and project) skips the check per level. `accept --reject` is never
+checked. The drift check does not run on accept.
 
 ## Task intent files
 
