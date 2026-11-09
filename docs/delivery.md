@@ -132,8 +132,9 @@ Once delivery has set `gate: ship`, `grid approve T-NN` records a ship approval 
 `approval-ship.json`, not a plan approval. It is the same event with
 `gate: ship` and the plan hash the person saw, under the same stale-hash rule as
 the plan approval. `approval.json` is not touched, so the plan approval stays
-valid. Reopening a task invalidates both files. `gate` stays in `task.md` until
-a later writer replaces it, including after the task is sent back.
+valid. Reopening a task invalidates all three receipt files (plan, ship and
+preview). `gate` stays in `task.md` until a later writer replaces it, including
+after the task is sent back.
 
 ### Preview approval
 
