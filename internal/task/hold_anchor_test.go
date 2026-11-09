@@ -74,12 +74,12 @@ func TestEventLineFromTheWriterDoesNotReleaseTheHold(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !PlanHeld(task.Path, string(text), string(history)) {
+			if !PlanHeldWith(StepsFor(s.Resolver, task.Path), task.Path, string(text), string(history)) {
 				t.Fatalf("PlanHeld released by %q", event)
 			}
 			// A real acceptance after it still releases.
 			released := string(history) + taskfile.HistoryLine("2026-01-02T03:04", "plan accepted", "000000", "person") + "\n"
-			if PlanHeld(task.Path, string(text), released) {
+			if PlanHeldWith(StepsFor(s.Resolver, task.Path), task.Path, string(text), released) {
 				t.Fatal("a dated prose acceptance no longer releases the hold")
 			}
 		})
