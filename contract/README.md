@@ -122,7 +122,7 @@ are reference-document names and original line numbers, not machine paths.
 | Heartbeat file, not a post | [heartbeat.json](schemas/heartbeat.json) | feed-contract.md:200-218 |
 | Takeover log entry | [takeover.json](schemas/takeover.json) | feed-contract.md:105-111 |
 | Trust tier field | [trust-tier.json](schemas/trust-tier.json) | feed-contract.md:90; job-contract.md:87-91 |
-| grid approve output | [cmd-approve.json](schemas/cmd-approve.json) | internal/cli/task_write.go:161 |
+| grid approve output | [cmd-approve.json](schemas/cmd-approve.json) | internal/cli/task_write.go:164 |
 | grid feed post output | [cmd-feed-post.json](schemas/cmd-feed-post.json) | internal/cli/feed.go:168 |
 | grid feed state output | [cmd-feed-state.json](schemas/cmd-feed-state.json) | internal/cli/feed.go:131 |
 | grid intent list output | [cmd-intent-list.json](schemas/cmd-intent-list.json) | internal/cli/intent.go:247 |
@@ -890,6 +890,17 @@ guard fences `approval-preview.json` like the other receipts. A preview approval
 touches `approval.json`, so the plan approval stays valid, and it cannot release the
 plan or ship gate. Reopening a task invalidates all three receipt files, and
 `grid plan migrate` treats a matching preview receipt like a matching plan or ship one.
+
+`grid approve --gate plan|preview|ship` names the gate the person approved. Under
+`.task.lock`, before the plan is read, it is compared with the task's gate (`ship`,
+`preview`, and `plan` for any other `gate` value in `task.md`); a mismatch exits 1
+with `Changed since you approved: the task is at gate <g>, not <want>` and writes
+nothing. Any other `--gate` value exits 2 before a lock is taken. Without `--gate`
+the task's gate decides, as before. The person check still comes first: an agent
+gets exit 3 with or without `--gate`. A repeat approve whose receipt for that gate
+already matches the current hash, digest and deploy rule (and the `--plan-hash`
+token, when one is given) writes nothing: no receipt rewrite and no second history
+line. It exits 0 and prints the stored receipt.
 `grid preview` raises the preview gate (agent-callable, like `deliver`): it sets
 `state: waiting`, `step: preview`, `gate: preview` and appends one `what: preview`
 event, after checking that the task's steps (the inline `workflow:` list, else the

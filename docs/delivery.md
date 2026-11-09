@@ -157,6 +157,19 @@ not match `plan.md`, when the spec (a regular file inside the task folder, no
 symlink) is missing or blank, and from paused, closed or already waiting tasks.
 Usage errors exit 2. `--dry-run` lists the actions and writes nothing.
 
+### The gate a person saw
+
+`grid approve --gate plan|preview|ship` names the gate on the card the person
+pressed. Under `.task.lock` it is compared with the task's gate (`ship`, `preview`,
+and `plan` for any other `gate` value); when the task has moved on, for example
+delivery raised `ship` after the person pressed Approve on the plan, the approval
+is refused with exit 1 and `Changed since you approved: the task is at gate <g>,
+not <want>`, and nothing is written. Another value exits 2 before any lock. Without
+`--gate` the task's gate decides. Approving again while the receipt for that gate
+still matches the plan's hash and digest (and the deploy rule) writes nothing: the
+receipt is not rewritten and no second `preview approved` line or approve event is
+added; the stored receipt is printed.
+
 ### History
 
 `history add` takes exactly one nonempty line and rejects newline and NUL input.

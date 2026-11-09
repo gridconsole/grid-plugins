@@ -2255,6 +2255,11 @@
           ],
           "flags": [
             {
+              "name": "--gate",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--json",
               "takes": "none",
               "required": false
