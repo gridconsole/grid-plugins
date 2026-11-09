@@ -16,6 +16,7 @@ func TestPersonVerbs(t *testing.T) {
 		{"legacy", "# Workflow", nil, false},
 		{"list", "---\nperson_verbs: [deliver, task attach]\n---", map[string][]string{"deliver": nil, "task attach": nil}, false},
 		{"roles", "---\nperson_verbs: {deliver: [owner], task attach: []}\n---", map[string][]string{"deliver": {"owner"}, "task attach": {}}, false},
+		{"answer_roles", "---\nperson_verbs: {answer: [guest, lead]}\n---", map[string][]string{"answer": {"guest", "lead"}}, false},
 		{"agent", "---\nperson_verbs: {deliver: [agent]}\n---", nil, true},
 		{"wrong_type", "---\nperson_verbs: false\n---", nil, true},
 	} {

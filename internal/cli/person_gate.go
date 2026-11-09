@@ -110,10 +110,11 @@ func gateCommand(args []string, env *Env) int {
 			roles = policy[match]
 		}
 	}
-	if !persongate.Required(verb, extra, env.PersonDir) {
+	if !persongate.Required(verb, extra) {
 		return 0
 	}
 	request := gateRequest(*env, verb, args)
+	request.ExtraVerbs = extra
 	if taskID != "" {
 		request.Task = taskID
 	}
@@ -139,7 +140,9 @@ func runPersonCheck(args []string, env Env) int {
 	if code, stop := parse(fs, args, env); stop {
 		return code
 	}
-	d, _ := persongate.Check(gateRequest(env, "check", append([]string{"person", "check"}, args...)))
+	// Probe the least privileged person write; each actual command still checks
+	// its own verb and workflow roles, and the store enforces question scope.
+	d, _ := persongate.Check(gateRequest(env, "answer", append([]string{"person", "check"}, args...)))
 	if *asJSON {
 		if d.Allow {
 			_ = writeJSON(env.Stdout, d)

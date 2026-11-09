@@ -25,6 +25,8 @@ type Procs interface {
 type SystemProcs struct{}
 type Request struct {
 	Verb, Argv []string
+	// ExtraVerbs are workflow additions that cannot be relaxed by local policy.
+	ExtraVerbs []string
 	Task       string
 	Getenv     func(string) string
 	// Environ supplies names for wildcard markers; nil uses os.Environ.
@@ -87,7 +89,7 @@ func agent(p Process) bool {
 	return false
 }
 
-var entries = strings.Split("login,sshd,tmux,screen,zellij,terminal,iterm2,ghostty,kitty,wezterm,alacritty,warp,gnome-terminal-server,konsole,xterm,windowsterminal,openconsole,explorer,code helper,cursor,jetbrains,grid-desktop,grid-server", ",")
+var entries = strings.Split("login,sshd,tmux,screen,zellij,terminal,iterm2,ghostty,kitty,wezterm,alacritty,warp,gnome-terminal-server,konsole,xterm,windowsterminal,openconsole,explorer,code helper,cursor,jetbrains,idea,goland,pycharm,webstorm,clion,rider,rubymine,phpstorm,datagrip,rustrover,grid-desktop,grid-server", ",")
 
 func root(p Process) bool {
 	return p.PID == 1 || slices.Contains([]string{"cron", "crond", "atd", "atrun", "services", "taskeng", "taskhostw"}, name(p.Exe)) || (name(p.Exe) == "systemd" && slices.Contains(p.Args, "--user")) || (name(p.Exe) == "svchost" && slices.Contains(p.Args, "Schedule"))
@@ -116,7 +118,9 @@ func Check(r Request) (Decision, error) {
 		}
 	}
 	role := strings.ToLower(strings.TrimSpace(getenv("GRID_ROLE")))
-	if role != "" && role != "owner" && role != "member" && role != "cli" {
+	verb := strings.Join(r.Verb, " ")
+	answerRole := (verb == "answer" || verb == "question answer") && (role == "guest" || role == "lead")
+	if role != "" && role != "owner" && role != "member" && role != "cli" && !answerRole {
 		return refuse("agent_env", nil)
 	}
 	procs := r.Procs
@@ -154,6 +158,13 @@ func Check(r Request) (Decision, error) {
 		resolve = PersonDir
 	}
 	dir, dirErr := resolve()
+	// Local policy may relax R2 and receipt checks only after env and R1 pass.
+	// Workflow additions (including role maps on floor verbs) retain the full gate.
+	if dirErr == nil && slices.Contains(floor, verb) && !slices.Contains(r.ExtraVerbs, verb) {
+		if lines, err := readConfig(dir, "policy"); err == nil && slices.Contains(lines, "remove "+verb) {
+			return Decision{Allow: true}, nil
+		}
+	}
 	// Optional launcher names are read only from a verified account directory.
 	launchers := slices.Clone(entries)
 	if dirErr == nil {
@@ -212,26 +223,8 @@ func Check(r Request) (Decision, error) {
 	return Decision{Allow: true, Via: via}, nil
 }
 
-// Required checks the floor plus workflow additions. A policy line of the form
-// "remove task close" is the only way to remove a floor verb. Unsafe policy is
-// never used to relax the floor.
-func Required(verb string, extra []string, resolve func() (string, error)) bool {
-	if slices.Contains(extra, verb) {
-		return true
-	}
-	if !slices.Contains(floor, verb) {
-		return false
-	}
-	if resolve == nil {
-		resolve = PersonDir
-	}
-	dir, err := resolve()
-	if err != nil {
-		return true
-	}
-	lines, err := readConfig(dir, "policy")
-	if err != nil {
-		return true
-	}
-	return !slices.Contains(lines, "remove "+verb)
+// Required checks the floor plus workflow additions. Local policy cannot remove
+// the env and R1 checks; Check applies any R2/person-dir relaxation afterward.
+func Required(verb string, extra []string) bool {
+	return slices.Contains(floor, verb) || slices.Contains(extra, verb)
 }

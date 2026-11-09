@@ -211,7 +211,7 @@ func TestEnvironmentMarkers(t *testing.T) {
 func TestPolicyFloor(t *testing.T) {
 	r := request(t, "grid", "Terminal")
 	dir, _ := r.PersonDir()
-	if !Required("approve", nil, r.PersonDir) || Required("version", nil, r.PersonDir) || !Required("version", []string{"version"}, r.PersonDir) {
+	if !Required("approve", nil) || Required("version", nil) || !Required("version", []string{"version"}) {
 		t.Fatal("floor/additions")
 	}
 	if err := os.Mkdir(dir, 0700); err != nil {
@@ -220,8 +220,8 @@ func TestPolicyFloor(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "policy"), []byte("remove approve\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if Required("approve", nil, r.PersonDir) {
-		t.Fatal("person removal ignored")
+	if !Required("approve", nil) {
+		t.Fatal("person removal bypassed env and R1")
 	}
 }
 func TestSystemSnapshot(t *testing.T) {
@@ -262,5 +262,83 @@ func TestNamespaceRootCannotBeLauncher(t *testing.T) {
 	d, err := Check(r)
 	if d.Reason != "detached" || d.Allow {
 		t.Fatalf("%+v %v", d, err)
+	}
+}
+
+func TestPersonAnswerRoles(t *testing.T) {
+	for _, role := range []string{"guest", "lead"} {
+		for _, verb := range Floor() {
+			t.Run(role+"/"+verb, func(t *testing.T) {
+				r := request(t, "grid", "bash", "Terminal")
+				r.Verb = strings.Fields(verb)
+				r.Getenv = func(k string) string {
+					if k == "GRID_ROLE" {
+						return role
+					}
+					return ""
+				}
+				d, err := Check(r)
+				answer := verb == "answer" || verb == "question answer"
+				if err != nil || d.Allow != answer || (!answer && d.Reason != "agent_env") {
+					t.Fatalf("decision %+v error %v", d, err)
+				}
+			})
+		}
+	}
+}
+
+func TestJetBrainsTerminals(t *testing.T) {
+	for _, exe := range []string{"idea", "goland", "pycharm", "webstorm", "clion", "rider", "rubymine", "phpstorm", "datagrip", "rustrover"} {
+		for _, host := range []string{exe, strings.ToUpper(exe) + ".EXE"} {
+			t.Run(host, func(t *testing.T) {
+				d, err := Check(request(t, "grid", "bash", host, "launchd"))
+				if err != nil || !d.Allow || d.Via != "terminal" {
+					t.Fatalf("decision %+v error %v", d, err)
+				}
+			})
+		}
+	}
+}
+
+func TestPolicyRemovalScope(t *testing.T) {
+	for _, tc := range []struct {
+		name, host, marker, reason string
+		extra                      bool
+	}{
+		{name: "detached_person", host: "cron"},
+		{name: "agent_ancestor", host: "codex", reason: "agent_ancestor"},
+		{name: "agent_env", host: "Terminal", marker: "builder", reason: "agent_env"},
+		{name: "workflow_retains_R2", host: "cron", extra: true, reason: "detached"},
+		{name: "workflow_retains_receipt", host: "Terminal", extra: true, reason: "person_dir"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := request(t, "grid", "bash", tc.host)
+			r.Verb = []string{"approve"}
+			if tc.extra {
+				r.ExtraVerbs = []string{"approve"}
+			}
+			r.Getenv = func(k string) string {
+				if k == "GRID_AGENT" {
+					return tc.marker
+				}
+				return ""
+			}
+			dir, _ := r.PersonDir()
+			if err := os.Mkdir(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "policy"), []byte("remove approve\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			// A directory at the receipt path cannot be appended to. Policy may
+			// skip it, but workflow additions must still require a valid receipt.
+			if err := os.Mkdir(filepath.Join(dir, "gate.log"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			d, err := Check(r)
+			if d.Allow != (tc.reason == "") || d.Reason != tc.reason {
+				t.Fatalf("decision %+v error %v", d, err)
+			}
+		})
 	}
 }

@@ -61,7 +61,7 @@ func PersonVerbs(dir string) (map[string][]string, error) {
 			roles := []string{}
 			for _, r := range list {
 				role, ok := r.(string)
-				if !ok || (role != "owner" && role != "member" && role != "cli") {
+				if !ok || (role != "owner" && role != "member" && role != "cli" && role != "lead" && role != "guest") {
 					return nil, fmt.Errorf("%w: invalid role", ErrPersonVerbs)
 				}
 				roles = append(roles, role)
