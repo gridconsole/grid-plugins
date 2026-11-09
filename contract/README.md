@@ -423,7 +423,11 @@ For an explicit `--project`, an exact project folder name match wins over an ID 
       "task_path": string     // the task folder path; "" outside a task
     }
 
-Exit 1 with one line on stderr when the folder cannot be resolved (a task path outside the Grid home, an unknown project or task, a project.md that does not parse).
+Exit 1 with one line on stderr when the folder cannot be resolved (a task path outside the Grid home, an unknown project or task, a project.md that does not parse). A guest (guest, external or an unknown role) gets `task not found`, exit 1, with no host path, for every task path it cannot use, a path outside the Grid home or a link that leaves it included; owners and members keep `task path <p> is outside the Grid home <home>`.
+
+### `grid job show <file>` and `grid job lint <file> [--task <task>]`
+
+For a guest, `job show <file>` and `job lint <file> [--task <t>]` read the file only when it lies (links resolved) in a task the guest is invited to, and answer `task not found` otherwise, before the file is opened. With `--task`, the task has to be the one the file lies in.
 
 ### `grid doctor --json`
 
