@@ -24,6 +24,8 @@ const (
 	CodePersonRequired = "person_required"
 	// CodeInvalidArgument means the command rejected its arguments.
 	CodeInvalidArgument = "invalid_argument"
+	// CodeInvalidPolicy means a workflow policy value the command depends on is invalid.
+	CodeInvalidPolicy = "invalid_policy"
 )
 
 func errorCode(err error) string {

@@ -84,9 +84,11 @@ func runSignal(args []string, env Env) int {
 				fmt.Fprintf(env.Stderr, "grid signal move: %s\n", workflow.ErrInboxWorkspace)
 				if *asJSON {
 					writeJSON(env.Stdout, struct {
-						Error string `json:"error"`
-						Key   string `json:"key"`
-					}{"invalid_policy", "inbox_workspace"})
+						Error   string `json:"error"`
+						Key     string `json:"key"`
+						Message string `json:"message"`
+						Code    string `json:"code"`
+					}{"invalid_policy", "inbox_workspace", workflow.ErrInboxWorkspace.Error(), CodeInvalidPolicy})
 				}
 				return 1
 			}

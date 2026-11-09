@@ -47,7 +47,7 @@ func TestSignalMoveInboxPolicy(t *testing.T) {
 					}
 					want := ""
 					if asJSON {
-						want = "{\"error\":\"invalid_policy\",\"key\":\"inbox_workspace\"}\n"
+						want = "{\"error\":\"invalid_policy\",\"key\":\"inbox_workspace\",\"message\":\"invalid inbox_workspace in workspace workflow (only personal is supported)\",\"code\":\"invalid_policy\"}\n"
 					}
 					if h.out.String() != want {
 						t.Errorf("stdout %q; want %q", h.out.String(), want)

@@ -35,6 +35,7 @@ specific gate refusal reason; it is not replaced by the general code.
 | `no_such_note` | A signal/inbox note does not exist. |
 | `person_required` | The existing person gate refused the request. |
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
+| `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
 
 The constants live in `internal/cli/error_codes.go`. Read `code` on existing
 failure objects, or `error.code` on new envelopes; never classify by message
@@ -810,7 +811,7 @@ workspace `workflows.md` YAML front matter defaults to `personal` when unset, an
 `personal` is the only supported value. Any other value, malformed front matter,
 or an unsafe workflow file refuses an inbox move with exit 1 and leaves the signal
 unchanged; with `--json` the policy error is
-`{"error":"invalid_policy","key":"inbox_workspace"}`. Named destinations do not
+`{"error":"invalid_policy","key":"inbox_workspace","message":"<msg>","code":"invalid_policy"}`. Named destinations do not
 consult this inbox policy. Both projects
 must pass registration and Personal access checks; guests receive the same
 `guests cannot act on signals` refusal, even in an invited project. Moving
@@ -872,8 +873,8 @@ and flag parsing errors use `invalid signal arguments`. Existing stderr
 diagnostics remain unchanged, including `grid: <msg>` for typed input errors
 and refusals. These errors never use `person_required`. A move refused for an
 invalid inbox policy exits 1 and writes
-`{"error":"invalid_policy","key":"inbox_workspace"}`, with no message and no path
-or value. Without `--json`, errors leave stdout empty.
+`{"error":"invalid_policy","key":"inbox_workspace","message":"<msg>","code":"invalid_policy"}`;
+the message is the unprefixed stderr text and contains no path or value. Without `--json`, errors leave stdout empty.
 
 | Exit | Meaning |
 | --- | --- |
