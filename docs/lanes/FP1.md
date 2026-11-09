@@ -138,7 +138,7 @@ Base lane-FP1b 5bbf22cd, already on plugin main 5cf3215f (the rebase is a no-op)
 - MF3: orchestrator `publishPlanWithReader` calls `task.Linked` under `.task.lock` before it reads task.md. A linked task sets `publicationBlocked` and posts no Jobs.
 - MF4, workflows.md:
   - `workflow.readFile` counts the links of the opened descriptor. That is fstat `Nlink` on unix and `NumberOfLinks` on Windows; elsewhere the count is an error, so the file fails closed. A linked workspace or project workflows.md returns `workflow.ErrLinkedFile`.
-  - `TaskSteps` returns an error. Corrected in FP1R2: its only caller is `RaisePreview`, so a linked workflows.md blocks raising a preview; it does not hold a task's steps or its plan (PlanStage reads task.md). `ProjectPersonVerbs` keeps `ErrLinkedFile` in the chain.
+  - `TaskSteps` returns an error. `ProjectPersonVerbs` keeps `ErrLinkedFile` in the chain. Corrected in FP1R3 (decision D4; the FP1R2 correction here was wrong for the rebased head): since the rebase onto L155S-U, the guard and Deliver resolve a task's workflow through `StepsFor` → `TaskWorkflow`, the same reader. So a linked workflows.md holds every named-workflow task in its scope that has no plan approval, not only previews. Since FP1R3 it also refuses task creation in that scope.
   - `workflow.Write` refuses a linked workflows.md too.
   - `task.ErrLinkedFile` is now the same value as `workflow.ErrLinkedFile` (task imports workflow, not the reverse), so both map to the CLI code `linked_file`.
   - The dead `<task>/workflows.md` entry is gone from `protectedNames`, and the contract/README.md `linked_file` row is reworded.
@@ -165,7 +165,7 @@ Base lane-FP1b 5bbf22cd, already on plugin main 5cf3215f (the rebase is a no-op)
 | journal writers refuse: commitWrite on linked task.md, history.md, approval.json; recoverWrite keeps the journal | `TestTaskWritersRefuseALinkedFile` (task) | yes, all 4 subtests |
 | P4: bash history, brain read and brain recall hooks against attach's lock order, 10 s timeout: both finish | `TestHookAndAttachLockOrderFinishes` (hook) | yes, all 3 subtests (deadlock at 10 s) |
 | a linked task.md (and plan.md) posts no Jobs; the unlinked control posts 1 | `TestLinkedTaskPostsNoJobs` (orchestrator) | yes, both linked subtests |
-| linked workspace and project workflows.md: TaskSteps fails (so no preview can be raised), ProjectPersonVerbs refuses, show reads nothing, Write refuses, bytes and inode unchanged | `TestLinkedWorkflowsFileIsUnreadable` (workflow) | yes, both subtests |
+| linked workspace and project workflows.md: TaskSteps fails (so the scope's named-workflow tasks are held and no preview can be raised; wording corrected in FP1R3), ProjectPersonVerbs refuses, show reads nothing, Write refuses, bytes and inode unchanged | `TestLinkedWorkflowsFileIsUnreadable` (workflow) | yes, both subtests |
 | Write refuses a linked workflows.md even with the right revision | `TestWriteRefusesALinkedWorkflowsFile` (workflow) | yes |
 | a person verb refuses with `linked_file` (workspace and project, person and agent); a verb outside the policy still runs | `TestLinkedWorkflowsFileRefusesPersonVerbs` (cli) | yes, the 4 refusal subtests (the 2 `agent note` controls pass on both) |
 
@@ -290,7 +290,7 @@ Brief: FP1R2-gate-fails-closed. Review: FP1R (must-fix 1, notes 1 and 4). Decisi
    - `GatePostRoles`: `feed.Store.Post` of a gate record fails with `read gate post policy: ...`. `QuestionWithdrawPolicy` fails closed like an unreadable file: a write exits 1, and the read-side projection allows no person withdrawal. It no longer falls back to the defaults.
    - `PlanHashToken` fails closed with its existing message (`grid approve` exit 3). The gate refuses `approve` first with `linked_file`.
    - `UsageNoticeThresholds` warns with `cannot read workflow.md: linked_file: ...` and the defaults apply. Thresholds only decide notices, not gates.
-5. **Report and contract (decision 6).** The FP1R section above is corrected in place: a linked workflows.md makes `TaskSteps` fail, which blocks raising a preview, and does not hold TaskSteps generally. The contract/README.md `linked_file` row now describes the fail-closed gate, the task's workflow.md, `signal move --inbox` and the preview. The `readFile` comment is corrected the same way.
+5. **Report and contract (decision 6).** The FP1R section above is corrected in place: a linked workflows.md makes `TaskSteps` fail, which blocks raising a preview, and does not hold TaskSteps generally. The contract/README.md `linked_file` row now describes the fail-closed gate, the task's workflow.md, `signal move --inbox` and the preview. The `readFile` comment is corrected the same way. (Corrected again in FP1R3, decision D4: on this rebased head a linked workflows.md also holds every named-workflow task in its scope that has no plan approval, because the guard and Deliver read it through `StepsFor` → `TaskWorkflow`. "Only previews" was wrong. The FP1R line, the contract row and the FP1R3 section below say so.)
 
 ## Writer and reader inventory after FP1R2
 
@@ -399,3 +399,141 @@ These ran on code head 5612551e in a fresh clone of `lane-FP1R2`. This report co
 - The checks ran as the builder user in a fresh local clone, not as user grid. `-timeout=30m` was passed as a flag, not through GOFLAGS. Nothing was pushed; the lane is delivered as a bundle.
 - Link counts on Windows and darwin were compiled and vetted, not run.
 - The probe ran as committed test rows. The reviewer's scratch probe file was not run as is.
+
+# FP1R3: task creation refuses a linked workflow file
+
+Brief: FP1R3-task-new-refuses-links. Review: FP1R2 (must-fix 1, PROBE2; notes 1 and 2). Decisions: FP1R2 review round 3, D1-D4 built here; D5 stays a follow-up.
+
+## Base
+
+- `lane-FP1R3` starts from `lane-FP1R2` fed96bef. Plugin ref main is still 9764ce4e (checked with `git ls-remote` before starting), so there was no rebase.
+- Code head 7a5dba11; this report commit changes docs/lanes/FP1.md only.
+
+## What changed
+
+1. **D2: the link survives the workflow reader** (internal/workflow).
+   - `Problem` has a new unexported `cause` field. JSON leaves it out, and it is never printed.
+   - `readProblem` (read.go) builds a file problem in `read()` and in the Personal branch of `scopeTemplates` (tasksteps.go). The message is still `fileReason`'s. Only a link is kept as the cause; other file errors keep none, so no new `fs` error shows through `errors.Is`.
+   - `problemError` returns a `resolveError` when the problem has a cause. Its text is unchanged ("the workflow cannot be resolved: alpha/workflows.md: has more than one hard link (linked_file)"), and `Unwrap` gives the link error. `errors.Is(err, ErrLinkedFile)` therefore holds for every `TaskWorkflow`, `TaskSteps` and `StepsFor` caller.
+   - `TaskWorkflow` returns a link problem first, before `namedTemplate` or `defaultTemplate` choose. Without that, an earlier problem in the workspace file (for example "not UTF-8") would hide a linked project file. Any file problem already failed resolution, so only which error comes back changes.
+   - The `readFile` comment now says what a link holds.
+2. **D1: taskFront refuses a link** (internal/task/create.go).
+   - When `TaskWorkflow`'s error is a link, `taskFront` returns it instead of leaving `workflow_digest` out. `New` returns before task.md is written or the stage folder is renamed into place, and the deferred `RemoveAll` drops the stage. No task is made.
+   - `grid task new` maps the error to `linked_file` through the existing `errorCode` and exits 1. `--json` prints `{"error":{"code":"linked_file","message":"grid task new: the workflow cannot be resolved: alpha/workflows.md: has more than one hard link (linked_file)"}}`. The message names no machine path. This is the same for an agent and a person: `task new` is not a person verb, and the refusal is in the task package.
+   - `signal act --act turn` (internal/signal/act.go:163) uses the same `task.Store.New`. Under a linked workflows.md its task creation fails with `linked_file`, and the note is not rewritten. In the CLI the person gate refuses first, because it reads the same files (FP1R2). The new signal row covers the layer under the gate.
+   - L155U's other "no template" cases are unchanged: an unknown name, and a default that needs a choice, still make a task without `workflow_digest`. An inline list never reaches `taskFront`'s reader.
+3. **D3: PROBE2 as rows**, in the cli, task, signal and workflow packages (table below).
+4. **D4: wording.** The FP1R line and acceptance row, and FP1R2 item 5, are corrected in place. The contract/README.md `linked_file` row now says: a linked workflows.md holds every named-workflow task in its scope, not only previews. That means a task whose workflow is a name or the default, not an inline list, and that has no plan approval: the guard holds it, `grid deliver` exits 1, and no preview can be raised. The row also says that task creation there refuses with no task made. The workspace file's scope is every project and Personal; a project file's scope is that project.
+
+## What a linked workflows.md blocks after FP1R3
+
+| Reader | Linked workspace or project workflows.md |
+|---|---|
+| person gate (every verb whose gate reads it) | refuses with `linked_file` before `Required` (FP1R2) |
+| guard and Deliver (`StepsFor` → `TaskWorkflow`) | hold every task in scope that resolves through the file and has no plan approval (PROBE4 in the FP1R2 review). This is wider than the FP1R and FP1R2 sections first said |
+| `RaisePreview` (`TaskSteps`) | refuses |
+| `task.Store.New` (`grid task new`, `signal act --act turn`) | **new: refuses with `linked_file`, no task, no stage left** |
+| `signal move --inbox` | `linked_file` (FP1R2) |
+
+The DoS scope is the same as before, plus task creation: anyone who can plant a hard link to a workflows.md can stop new tasks in its scope until a person removes the link. That is what decision D1 asks for (fail closed).
+
+## Acceptance rows (new in FP1R3)
+
+| Row | Test | Fails on fed96bef |
+|---|---|---|
+| PROBE2. With a linked alpha workflows.md, `task new Third --workflow Large --size large --json` from an alpha task folder without `--project`: exit 1, `error.code` `linked_file`, no path in the output, tasks folder unchanged. Person and agent. Unlinked control: digest written; at the plan gate with a checked plan and no approval, the guard denies before S1, the guard denies after S1, and deliver exits 1 with `workflow_changed` | `TestTaskNewFromTaskFolderRefusesLinkedWorkflows` (cli) | yes, `linked,_person` and `linked,_agent`. The `unlinked` control passes on both |
+| `Store.New` under a linked workflows.md: Personal with a name, Personal with no name (default), and a project from a task folder with no project. Each gives `errors.Is(err, ErrLinkedFile)` and leaves the tasks folder unchanged. Controls: unlinked Personal and project write the digest; an unknown name, unlinked, makes a task without it (L155U) | `TestNewRefusesALinkedWorkflowsFile` (task) | yes, the 3 linked subtests. The 3 controls pass on both |
+| `Apply` turn under a linked workspace or project workflows.md: `linked_file`, no task, note bytes unchanged. Unlinked control: the turned task has a digest | `TestTurnRefusesALinkedWorkflowsFile` (signal) | yes, both linked subtests. The control passes on both |
+| D2: `TaskWorkflow` (named and default) and `TaskSteps` give `errors.Is(err, ErrLinkedFile)` with the unchanged text, for the workspace file (project and Personal tasks) and the project file. The project file is also covered behind a non-UTF-8 workspace file. Before the link: no error, or for the broken workspace a non-link error | `TestTaskWorkflowKeepsTheLinkSentinel` (workflow) | yes, all 4 subtests |
+
+Failing lines on fed96bef. The lane's four test files were checked out on top of a fed96bef worktree, then `go test -count=1 -timeout 30m -run '<the 4 tests>' -v ./internal/workflow/ ./internal/task/ ./internal/cli/ ./internal/signal/` exited 1. Temp paths are shown as `<tmp>`, and long values are cut:
+
+```
+--- FAIL: TestTaskWorkflowKeepsTheLinkSentinel/workspace_file,_project_task
+    linked_resolve_test.go:54: TaskWorkflow = <nil>, [], the workflow cannot be resolved: workflows.md: has more than one hard link (linked_file); want errors.Is linked_file
+    linked_resolve_test.go:63: TaskSteps err = the workflow cannot be resolved: workflows.md: has more than one hard link (linked_file); want errors.Is linked_file
+--- FAIL: TestTaskWorkflowKeepsTheLinkSentinel/project_file
+    linked_resolve_test.go:54: TaskWorkflow = <nil>, [], the workflow cannot be resolved: alpha/workflows.md: has more than one hard link (linked_file); want errors.Is linked_file
+--- FAIL: TestTaskWorkflowKeepsTheLinkSentinel/project_file_behind_a_broken_workspace_file
+    linked_resolve_test.go:54: TaskWorkflow = <nil>, [], the workflow cannot be resolved: workflows.md: not UTF-8; want errors.Is linked_file
+--- FAIL: TestTaskWorkflowKeepsTheLinkSentinel/workspace_file,_personal_task
+    linked_resolve_test.go:54: TaskWorkflow = <nil>, [], the workflow cannot be resolved: workflows.md: has more than one hard link (linked_file); want errors.Is linked_file
+FAIL	github.com/gridconsole/grid-plugins/internal/workflow
+--- FAIL: TestNewRefusesALinkedWorkflowsFile/personal,_linked
+    create_linked_test.go:69: New = {Record:{ID:T-01 Title:Second Project:personal ... Workflow:Check WorkflowDigest: State:queued ...} ...}, <nil>; want linked_file
+    create_linked_test.go:72: tasks folder [T-01-second], before []; a refused New left a folder
+--- FAIL: TestNewRefusesALinkedWorkflowsFile/personal,_linked,_no_workflow_named
+    create_linked_test.go:69: New = {Record:{ID:T-01 ... Workflow: WorkflowDigest: ...} ...}, <nil>; want linked_file
+    create_linked_test.go:72: tasks folder [T-01-second], before []; a refused New left a folder
+--- FAIL: TestNewRefusesALinkedWorkflowsFile/project_from_a_task_folder,_linked
+    create_linked_test.go:69: New = {Record:{ID:T-02 Title:Second Project:example ... Workflow:Check WorkflowDigest: ...} ...}, <nil>; want linked_file
+    create_linked_test.go:72: tasks folder [T-01-first T-02-second], before [T-01-first]; a refused New left a folder
+FAIL	github.com/gridconsole/grid-plugins/internal/task
+--- FAIL: TestTaskNewFromTaskFolderRefusesLinkedWorkflows/linked,_person
+    task_new_linked_test.go:50: linked task new: exit 0, stdout "{\"id\":\"T-02\",\"path\":\"<tmp>/home/.grid/projects/alpha/tasks/T-02-third\"}\n", stderr ""; want exit 1 with linked_file
+    task_new_linked_test.go:53: linked task new names a path: {"id":"T-02","path":"<tmp>/home/.grid/projects/alpha/tasks/T-02-third"}
+    task_new_linked_test.go:56: tasks [T-01-swap-probe T-02-third], before [T-01-swap-probe]; want no task made
+    task_new_linked_test.go:72: task new wrote no workflow_digest: "---\nid: T-02\ntitle: Third\nproject: alpha\n...size: large\nworkflow: Large\nstate: queued\n...---\n"
+    task_new_linked_test.go:86: after S1: guard "", want deny
+    task_new_linked_test.go:90: after S1: deliver --json exit 0, stdout "{\"task\":\"T-02\",\"dry_run\":false,\"actions\":[\"Write Outcome in task.md\",\"Rebuild proof/index.json\",\"Append delivery history\",\"Raise ship gate\"],\"artifacts\":null}\n", stderr ""; want 1 with workflow_changed
+--- FAIL: TestTaskNewFromTaskFolderRefusesLinkedWorkflows/linked,_agent
+    (the same six lines)
+FAIL	github.com/gridconsole/grid-plugins/internal/cli
+--- FAIL: TestTurnRefusesALinkedWorkflowsFile/linked_workspace_file
+    turn_linked_test.go:64: turn = {... Result:updated ... Status:done Became:T-01 ...}, <nil>; want linked_file
+    turn_linked_test.go:67: turn made [<tmp>/projects/example/tasks/T-01-turn-me] under a linked workflows.md
+    turn_linked_test.go:70: a refused turn changed the note: "...status: done\n...became: T-01\n---\nbody"
+--- FAIL: TestTurnRefusesALinkedWorkflowsFile/linked_project_file
+    (the same three lines)
+FAIL	github.com/gridconsole/grid-plugins/internal/signal
+```
+
+On fed96bef the cli row goes on past the refusal and replays the review's finding: no digest, the guard allows after S1, and deliver exits 0 with "Raise ship gate". The line-53 "names a path" hit is the success JSON's own `path` field on base; on the head the refusal names no path.
+
+## Earlier rows still pass
+
+A verbose run over task, guard, cli, hook, orchestrator, workflow, feed and signal gave **318 PASS, 0 FAIL, 0 SKIP**, exit 0. The `-run` pattern was `WorkflowChanged|NamedWorkflow|Digest|SizedLater|InlineRewrite|Linked|TestP1|TestP2|PostToolUseHook|AppendHistory|LockOrder|TaskWriters|EnsureTaskID|InboxWorkspace|QuestionWithdraw|SignalMoveInbox` plus the four new tests. Every L155U digest row passed: `TestDeliverWorkflowChangedThroughCLI`, `TestSizedLaterKeepsWorkflowDigest`, `TestInlineRewriteOfStampedTaskNotHeld`, the 8 `TestNamedWorkflow*` rows and `TestFoldNamedWorkflowUnchanged`. Every FP1R row passed: P1, P2, the binary hook row, `TestAppendHistory*`, `TestTaskWritersRefuseALinkedFile`, `TestHookAndAttachLockOrderFinishes`, `TestLinkedTaskPostsNoJobs`, `TestLinkedWorkflowsFile*` and `TestWriteRefusesALinkedWorkflowsFile`. Every FP1R2 row passed: `TestLinkedPolicyRefusesTheVerbItAdds`, `TestLinkedTaskWorkflowFile*`, `TestSignalMoveInboxLinkedPolicy`, `TestInboxWorkspaceLinkedFile`, `TestEnsureTaskIDRefusesALinkedTaskMD` and `TestQuestionWithdrawPolicyRefusesALinkedWorkflowFile`. (This run was on d9cd03f4. 7a5dba11 changes only a comment, and the race run and the full `./...` run below cover it.)
+
+## Mutations (on the lane, each restored with `git checkout --`, porcelain empty after)
+
+Each run: `go test -count=1 -timeout 30m -v -run 'Linked|TestTaskWorkflowKeepsTheLinkSentinel|WorkflowChanged|NamedWorkflow|Digest' ./internal/workflow/ ./internal/task/ ./internal/cli/ ./internal/signal/`.
+
+| Mutation | Red leaf rows |
+|---|---|
+| M1: drop the taskFront link check (`false && errors.Is(err, ErrLinkedFile)`) | **7**: task 3 (`personal,_linked`, `personal,_linked,_no_workflow_named`, `project_from_a_task_folder,_linked`), cli 2 (PROBE2 `linked,_person`, `linked,_agent`), signal 2 (both linked turn rows). The workflow rows stay green, since the sentinel still survives |
+| M2: flatten the sentinel back to `%s` (`problemError` returns `fmt.Errorf("the workflow cannot be resolved: %s", p)` for every problem) | **11**: workflow 4 (all `TestTaskWorkflowKeepsTheLinkSentinel`), task 3, cli 2, signal 2 |
+| M3 (mine): drop the link precedence in `TaskWorkflow` (`false && ok`) | **1**: `TestTaskWorkflowKeepsTheLinkSentinel/project_file_behind_a_broken_workspace_file` |
+
+## Checks
+
+All ran at code head 7a5dba11 in a fresh clone of `lane-FP1R3`, in the foreground.
+
+| Check | Exit |
+|---|---|
+| `GOFLAGS=-timeout=30m go test -race -count=1 ./internal/task/... ./internal/workflow/... ./internal/cli/... ./internal/signal/... ./internal/guard/... ./internal/hook/...` | 0 (task 10.0 s, workflow 11.0 s, cli 52.7 s, signal 1.3 s, guard 9.4 s, hook 4.8 s) |
+| `make lint` (`go vet ./...` and gofmt) | 0 |
+| `make generate`, then `git status --porcelain` | 0, 0 lines |
+| `GOOS=windows go build ./...` | 0 |
+| `GOOS=darwin go build ./...` | 0 |
+| `GOOS=windows go vet ./internal/workflow ./internal/task ./internal/cli ./internal/signal` | 0 |
+| rule 14: `go test -count=1 -timeout=30m ./internal/cli/...` on the lane (d9cd03f4, same cli code) | 0 |
+| rule 14: the same on fed96bef and on main 9764ce4e | 0, 0 |
+| new rows on fed96bef (above) | 1, as intended |
+| `go test -count=1 -timeout=30m ./...` (whole module, not asked by the brief) | **1**: internal/golden and internal/job fail. Not from FP1R3; see open items |
+| hygiene: `git log -i -G '<paths, emails, IPs, remote shells, local names>' fed96bef..lane-FP1R3`; commit metadata | code commits: no hits. This report: only `<tmp>/home/.grid`, the test harness's fixture home, in the pasted failing lines. Every commit's author and committer is `grid <grid@localhost>`, with no trailers |
+
+## Open items
+
+- **The FP1 chain turns internal/golden and internal/job red against main.** This is not from FP1R3. Main 9764ce4e passes both. The first FP1 commit, 2792be12, fails both, and so do fed96bef and this head, with the same rows:
+  - `TestGoldenCorpus/history-log/subagent-stop`: files.diff gains `.task.lock` (new file, mode 0600), and history.md goes from mode 0664 to 0600. The cause is FP1's history rename into place and the task lock that AppendHistory takes.
+  - `TestProjectPlanAliasesNeedApproval/{repo,prototype}/hardlink`, `TestPlanAliasesNeedApproval/hardlink` and `TestPlanOmittedAnchorsRefused`: the hardlink rows now get `linked_file` or "plan needs approval" instead of what main's tests expect.
+  - No FP1 round ran these two packages, which is why nobody saw this. Fixing it means either changing main's existing goldens and test expectations or changing FP1 behaviour. Both are outside this brief, and the builder rules forbid editing existing tests to make them pass. The planner decides. A lander running the full suite will hit this.
+- Task creation registers a new project before `taskFront` runs, because the reader needs the project record. So the first task in an unregistered folder, under a linked workspace workflows.md, leaves the project registered with no task. This order is the existing one and was not changed.
+- D5 follow-ups are unchanged: internal/plan writers and routine/workflow.go.
+
+## NOT VERIFIED
+
+- Rule 18 was not run; the operator runs it. FP1R3 changes CLI output only under a linked workflows.md: `grid task new` exits 1 with `linked_file` where it used to exit 0 and make a task. `signal act --act turn` already refused at the gate.
+- The checks ran as the builder user in fresh local clones, not as user grid. Nothing was pushed; the lane is delivered as a bundle.
+- Link counts on Windows and darwin were compiled and vetted, not run.
+- The reviewer's scratch PROBE2 file was not run as is. It became the committed cli row, which follows its steps.
