@@ -53,6 +53,11 @@ func hostWordByte(b byte) bool {
 // word byte to the shells.
 const hostWordEnds = " \t\n;&|()<>"
 
+// hostHashRefused are the bytes a # may not follow where it would start a comment:
+// bash extglob @(#|x), a [[ =~ (#|x) ]] regex and a zsh glob group read it as a
+// pattern byte there, so the command is refused instead.
+const hostHashRefused = "()<>"
+
 // hostJoinLines drops every backslash-newline pair, as the shells do before they
 // read words. A backslash escapes the byte after it, so \\<newline> stays. A comment
 // ends at its newline even after a backslash, so a pair inside a comment is not a
@@ -95,6 +100,7 @@ func hostJoinLines(text string) (string, bool) {
 				quote = ch
 			case ch == '#' && strings.IndexByte(hostWordEnds, prev) >= 0:
 				comment = true
+				refuse = refuse || strings.IndexByte(hostHashRefused, prev) >= 0
 			}
 			prev = ch
 		}
@@ -163,7 +169,7 @@ func hostShellGroupAs(text string, start int, close byte, zsh, quoted bool) (int
 			i += len("case") - 1
 		case ch == close && cases == 0:
 			return i + 1, true
-		case close == ')' && ch == '#' && wordStart:
+		case close == ')' && ch == '#' && wordStart && (i == 0 || strings.IndexByte(hostHashRefused, text[i-1]) < 0):
 			for i+1 < len(text) && text[i+1] != '\n' {
 				i++
 			}
@@ -488,6 +494,7 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 				word.WriteByte(ch)
 			} else {
 				comment = true
+				refuse = refuse || i > 0 && strings.IndexByte(hostHashRefused, command[i-1]) >= 0
 			}
 		case ' ', '\t':
 			flush()
@@ -665,17 +672,50 @@ func (g hostSegment) readCommand() bool {
 		return true
 	}
 	name := strings.ToLower(filepath.Base(g.args[0].text))
-	if name == "find" {
-		for _, arg := range g.args[1:] {
-			if findWrites[arg.text] {
-				return false
-			}
+	for _, arg := range g.args[1:] {
+		if readerRuns(name, arg.text) {
+			return false
 		}
 	}
 	return readOnly[name]
 }
 
 func (g hostSegment) readsOnly() bool { return len(g.writes) == 0 && g.readCommand() }
+
+// hostProvenReads reports a command the tokenizer shows to only read, in both shell
+// readings and in every substitution. A heredoc skip is trusted only for a quoted
+// delimiter, and never with $[ or ((, where the shells read << as a shift and run
+// the lines the tokenizer took for a body.
+func hostProvenReads(command string, depth int) bool {
+	if depth > hostMaxGroupDepth || strings.Contains(command, "$[") || strings.Contains(command, "((") {
+		return false
+	}
+	for i := 0; i+1 < len(command); i++ {
+		switch {
+		case command[i] != '<' || command[i+1] != '<':
+		case strings.HasPrefix(command[i:], "<<<"):
+			i += 2
+		default:
+			if doc, _, ok := hostHeredocAt(command, i); !ok || !doc.quoted {
+				return false
+			}
+			i++
+		}
+	}
+	for _, seg := range hostSegments(command) {
+		if seg.refuse || !seg.readsOnly() {
+			return false
+		}
+		for _, tok := range seg.tokens() {
+			for _, body := range tok.groups {
+				if !hostProvenReads(body, depth+1) {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
 
 // hostProtectedNames are the entries a write must not reach: matched as a
 // basename pattern when the target is a glob or holds an expansion.

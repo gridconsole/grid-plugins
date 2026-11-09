@@ -50,7 +50,22 @@ var gateFile = regexp.MustCompile(`(?i)^(?:task\.md|workflows?\.md|approval(?:-s
 var readOnly = map[string]bool{"cat": true, "head": true, "tail": true, "grep": true, "egrep": true, "fgrep": true, "rg": true,
 	"ls": true, "wc": true, "stat": true, "file": true, "diff": true, "cmp": true, "jq": true, "find": true, "nl": true, "tac": true,
 	"cut": true, "echo": true, "printf": true, "cd": true, "pwd": true, "test": true, "[": true, "true": true}
-var findWrites = map[string]bool{"-delete": true, "-exec": true, "-execdir": true, "-ok": true, "-okdir": true, "-fprint": true, "-fprintf": true, "-fls": true}
+var findWrites = map[string]bool{"-delete": true, "-exec": true, "-execdir": true, "-ok": true, "-okdir": true, "-fprint": true, "-fprint0": true, "-fprintf": true, "-fls": true}
+
+// readerRuns reports an argument that makes a read-only command write or run
+// another: a find action, or rg --pre, which runs its command on every file.
+func readerRuns(name, arg string) bool {
+	switch name {
+	case "find":
+		return findWrites[arg]
+	case "rg":
+		return arg == "--pre" || strings.HasPrefix(arg, "--pre=")
+	}
+	return false
+}
+
+// shellPathWord is a literal shell word: metacharacters split it, quotes keep it whole.
+var shellPathWord = regexp.MustCompile(`(?:[^\s\x27"<>|;&()]+|'[^']*'|"[^"]*")+`)
 
 const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, workflow.md, workflows.md, approval.json, approval-preview.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide, grid decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
 
@@ -131,11 +146,9 @@ func onlyReads(command, flat string) bool {
 		if !readOnly[name] {
 			return false
 		}
-		if name == "find" {
-			for _, w := range words[1:] {
-				if findWrites[w] {
-					return false
-				}
+		for _, w := range words[1:] {
+			if readerRuns(name, w) {
+				return false
 			}
 		}
 	}
@@ -237,6 +250,27 @@ func (c context) writesProjectWorkflow(command string) bool {
 	return false
 }
 
+// floorReason is main's literal-word check, kept as a floor under the tokenizer: in a
+// command the tokenizer does not prove read-only, every literal word is resolved,
+// heredoc bodies and comments included, so a tokenizer mistake refuses instead of
+// letting a write through.
+func (c context) floorReason(command string) string {
+	if hostProvenReads(command, 0) {
+		return ""
+	}
+	s := &writeScan{c: c}
+	for _, word := range shellPathWord.FindAllString(command, -1) {
+		path, ok := words(word)
+		if !ok || len(path) != 1 {
+			continue
+		}
+		if reason := s.protected(c.path(path[0])); reason != "" {
+			return reason
+		}
+	}
+	return ""
+}
+
 var namesFeed = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:projects/[^\s'"/]+/tasks/T-\d[^\s'"/]*/feed|feed)(?:/|[\s'";|&<>]|$)`)
 
 // hostFolder is the legacy .host: beside the data folders, two levels above a
@@ -291,6 +325,9 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 		}
 		if c.set {
 			if reason := c.protectedWriteReason(command); reason != "" {
+				return hookio.Deny(reason)
+			}
+			if reason := c.floorReason(command); reason != "" {
 				return hookio.Deny(reason)
 			}
 		}

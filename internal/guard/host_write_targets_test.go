@@ -53,7 +53,8 @@ func TestHostWriteTargets(t *testing.T) {
 		{"read_glob", project, "cat workflow?.md", false},
 		{"read_expansion", project, "cat workflow${E}s.md", false},
 		{"read_alias", project, "cat alias", false},
-		{"read_then_write", project, "cat alias; echo x > notes.md", false},
+		// Refused again by the word-check floor (decision guard-word-floor), as on main.
+		{"read_then_write", project, "cat alias; echo x > notes.md", true},
 		{"echo_expansion", project, "echo $HOME > notes.md", false},
 		{"cd_outside", project, "cd " + f.repo + " && echo x > a*.txt", false},
 		{"outside_target_expansion", project, "echo x > " + filepath.Join(f.repo, "${NAME}.txt"), false},
