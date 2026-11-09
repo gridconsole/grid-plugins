@@ -690,8 +690,13 @@ refused before opening a note, including guests invited to that project.
 
 `grid signal move <id> [--project <from>] --to <project|-> [--json]` moves
 an open note between registered projects. The source resolves like the other
-signal verbs. `--to -` means the workspace inbox: workflow key `inbox_workspace`
-defaults to `personal`, the only supported value in this lane. Both projects
+signal verbs. `--to -` means the workspace inbox: key `inbox_workspace` in the
+workspace `workflows.md` YAML front matter defaults to `personal` when unset, and
+`personal` is the only supported value. Any other value, malformed front matter,
+or an unsafe workflow file refuses an inbox move with exit 1 and leaves the signal
+unchanged; with `--json` the policy error is
+`{"error":"invalid_policy","key":"inbox_workspace"}`. Named destinations do not
+consult this inbox policy. Both projects
 must pass registration and Personal access checks; guests receive the same
 `guests cannot act on signals` refusal, even in an invited project. Moving
 `new` into a named project changes it to `placed`; moving `placed` into Personal
@@ -701,7 +706,7 @@ content, including timestamps, is preserved. JSON adds optional `from`, sets
 `result: updated`.
 
 Move returns exit 0 on success, 2 for invalid operands or a missing/empty
-`--to`, 1 for I/O or lock errors, and 3 for these refusals: `no such project`,
+`--to`, 1 for I/O or lock errors or an invalid inbox policy, and 3 for these refusals: `no such project`,
 `no such note`, `this note is already decided (<status>)`,
 `the note is already there`, `a note with this id is already there`,
 `notes already holds 4000 files`, or the guest refusal above. Its typed errors
@@ -710,7 +715,8 @@ through checks, the atomic source update and the rename, never overwrites an
 existing target, and restores the source content if rename fails. Both folders
 are under one home on the same filesystem; there is no copy-and-delete fallback.
 The person-gate floor does not yet include `signal move`; local signed-out
-callers resolve as they do for the existing signal verbs.
+callers resolve as they do for the existing signal verbs. The existing
+`person_verbs` policy also applies to moves.
 
 Readable statuses are `new`, `placed`, `snoozed`, `kept`, `dismissed`, and `done`.
 Legacy `acted` reads as `done`; writers never emit `acted`. Open notes are
@@ -749,13 +755,15 @@ With `--json`, exit 2 also writes exactly one JSON object line to stdout:
 unknown act values containing path separators are omitted from the JSON message,
 and flag parsing errors use `invalid signal arguments`. Existing stderr
 diagnostics remain unchanged, including `grid: <msg>` for typed input errors
-and refusals. These errors never use `person_required`. Without `--json`,
-errors leave stdout empty.
+and refusals. These errors never use `person_required`. A move refused for an
+invalid inbox policy exits 1 and writes
+`{"error":"invalid_policy","key":"inbox_workspace"}`, with no message and no path
+or value. Without `--json`, errors leave stdout empty.
 
 | Exit | Meaning |
 | --- | --- |
 | 0 | Applied or unchanged |
-| 1 | I/O, lock, task creation, or unregistered project failure |
+| 1 | I/O, lock, task creation, unregistered project, or (move) invalid inbox policy failure |
 | 2 | Invalid signal id, unknown act, missing/invalid required option, `--task` or `--until` on another act, or any `--later` flag |
 | 3 | State refusal or guest caller |
 

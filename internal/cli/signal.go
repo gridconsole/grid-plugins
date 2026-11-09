@@ -10,6 +10,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/signal"
 	"github.com/gridconsole/grid-plugins/internal/where"
+	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
 func runSignal(args []string, env Env) int {
@@ -66,7 +67,8 @@ func runSignal(args []string, env Env) int {
 		return signalFailure(env, &signal.RefusedError{Message: "guests cannot act on signals"}, *asJSON)
 	}
 	if verb == "move" {
-		if to == "-" {
+		inbox := to == "-"
+		if inbox {
 			to = where.Personal
 		}
 		from := *proj
@@ -75,6 +77,23 @@ func runSignal(args []string, env Env) int {
 		}
 		if err := signal.ValidateMove(fs.Arg(0), from, to); err != nil {
 			return signalFailure(env, err, *asJSON)
+		}
+		if inbox {
+			var err error
+			to, err = workflow.InboxWorkspace(env.GridHome)
+			if err != nil {
+				fmt.Fprintf(env.Stderr, "grid signal move: %s\n", workflow.ErrInboxWorkspace)
+				if *asJSON {
+					writeJSON(env.Stdout, struct {
+						Error string `json:"error"`
+						Key   string `json:"key"`
+					}{"invalid_policy", "inbox_workspace"})
+				}
+				return 1
+			}
+		}
+		if code := gateCommand(append([]string{"signal"}, args...), &env); code != 0 {
+			return code
 		}
 	}
 	if verb == "act" || verb == "dismiss" {

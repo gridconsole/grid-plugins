@@ -34,7 +34,7 @@ func ValidateMove(id, from, to string) error {
 // Move relocates an open note within one Grid home. Add and Apply share this
 // lock, so the destination check and rename cannot overwrite another writer's
 // note. Both notes folders must be on the same filesystem; there is no copy
-// fallback. inbox_workspace defaults to personal, the only supported policy.
+// fallback. The CLI resolves its inbox marker through workspace policy.
 func (s Store) Move(id, from, to string) (Result, error) {
 	if s.Resolver.Caller.IsGuest() {
 		return Result{}, &RefusedError{Message: "guests cannot act on signals"}

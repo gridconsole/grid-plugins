@@ -173,8 +173,13 @@ func Run(args []string, env Env) int {
 			fmt.Fprintf(env.Stderr, "%s: not built yet\n", name)
 			return 2
 		}
-		if code := gateCommand(args, &env); code != 0 {
-			return code
+		// Move validates inbox policy before the gate can warn about malformed
+		// front matter, so a failed inbox policy has one exact diagnostic.
+		// Its handler still applies the same person gate before any move.
+		if name != "signal" || len(rest) == 0 || rest[0] != "move" {
+			if code := gateCommand(args, &env); code != 0 {
+				return code
+			}
 		}
 		return c.run(rest, env)
 	}
