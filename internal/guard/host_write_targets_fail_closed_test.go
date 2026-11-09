@@ -79,6 +79,16 @@ var failClosedRows = []struct {
 	{"ansi_sq_brace", `echo $'${' ; tee ALIAS </dev/null ; echo '}'`, true},
 	{"sq_date", `echo '$(date)'`, false},
 	{"sq_brace_grep", `grep '${x}' file`, false},
+	// A comment runs to its newline: no $(, ${, backtick or quote in it is special, at
+	// the top level and in a $( ) group. The zsh reading of a backtick group does not
+	// skip comments, so a # starting a word in one is refused.
+	{"comment_dollar_paren", "# $('\ntee ALIAS </dev/null\n#')", true},
+	{"comment_backtick", "# `'\ntee ALIAS </dev/null\n#'`", true},
+	{"comment_brace", "echo a # ${'\ntee ALIAS </dev/null\n#'}", true},
+	{"comment_in_group", "echo $(# $('\ntee ALIAS </dev/null\n#')\n)", true},
+	{"comment_zsh_backtick", "echo `echo a # '`", true},
+	{"comment_date", "echo a # $(date)\nls", false},
+	{"comment_apostrophe", "git commit -m x # it's fine", false},
 }
 
 // Rows for the L135R5 rework: where bash and zsh can read a line differently the
