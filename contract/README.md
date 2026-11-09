@@ -387,11 +387,79 @@ Exit 1 with one line on stderr when the folder cannot be resolved (a task path o
 
 Checks, in order: `grid home`, `grid home writable`, `format version`, `git`, `grid on PATH`, `plugin hooks`, `allow block`. Writability and format checks are skipped when the Grid home is unavailable. Failing checks also include a `fix` string. The allow block check reports missing setup allow rules or a path-free settings-file failure. Exit 1 when any check fails.
 
-### `grid workflow show [--project <name-or-id>] [--json]`
+### `grid workflow show [--project <name-or-id>] [--json] [--policy]`
 
 Reads the workspace `workflows.md` and registered project files, or the workspace and exactly one project selected by name or ID. JSON contains `files`, `templates`, and `errors`; each file has `scope`, `project`, `rev`, and `text`. Revisions are the first 12 hex characters of SHA-256 of the bytes, or null when absent. Plain output remains the file label, template names, and error count. Linked project folders are refused with exit 2 and a diagnostic that does not expose the path.
 
 An exact project folder name wins over an ID; otherwise the ID must be unique. A selector that matches no visible project, or an ID shared by several, exits 1 with empty stdout and `grid: project "<selector>" is missing or ambiguous` on stderr (paths inside the selector print as `[path]`). A guest, or a caller not allowed Personal access (for example a member), gets the same exit and the generic form `grid: project is missing or ambiguous` for every unavailable selector, so a hidden project's name or ID cannot be told apart from an unknown one. Those callers also never see the Personal project in the unfiltered listing.
+
+`--policy` requires `--json` (otherwise exit 2 with usage). It adds exactly one
+`policy` array to the existing envelope; without the flag, plain output and the
+three-key JSON envelope are unchanged:
+
+```json
+{
+  "files": [{"scope": "workspace", "project": null, "rev": null, "text": ""}],
+  "templates": [],
+  "errors": [],
+  "policy": [{
+    "project": null,
+    "keys": {
+      "refusal_message": {"value": "plugin", "source": "default"},
+      "inbox_act_roles": {
+        "value": {
+          "turn": ["owner", "member", "local", "agent"],
+          "add": ["owner", "member", "local", "agent"],
+          "note": ["owner", "member", "local", "agent"],
+          "snooze": ["owner", "member", "local", "agent"],
+          "dismiss": ["owner", "member", "local", "agent"],
+          "wake": ["owner", "member", "local", "agent"],
+          "reopen": ["owner", "member", "local", "agent"]
+        },
+        "source": "default"
+      },
+      "project_document_write_roles": {"value": ["owner", "member"], "source": "default"},
+      "task_undo_roles": {"value": ["owner", "member"], "source": "default"}
+    }
+  }]
+}
+```
+
+The example shows an absent workspace file with no registered projects. There is one policy entry
+per `files` entry, in the same order, with `project` null for the workspace or the
+project name. Every entry contains all four keys below. Each key has `value` and
+`source` (`default` or `workflow`); workflow values also have `from` (`workspace`
+or `project`). Values come from leading YAML front matter in those same
+`workflows.md` files. Each project key uses its own set value, otherwise the
+workspace value, otherwise the default. A set value replaces the inherited value
+wholly, including empty maps and lists; maps are never merged. Workspace entries
+use their own values or defaults.
+
+| Key | Allowed value | Default |
+| --- | --- | --- |
+| `refusal_message` | `plugin` or `none` | `plugin` |
+| `inbox_act_roles` | Map from `turn`, `add`, `note`, `snooze`, `dismiss`, `wake`, `reopen` to lists of `owner`, `member`, `local`, `agent` | Every act: `[owner, member, local, agent]` |
+| `project_document_write_roles` | List of `owner` or `member` | `[owner, member]` |
+| `task_undo_roles` | List of `owner` or `member` | `[owner, member]` |
+
+An act omitted from a set `inbox_act_roles` map keeps no roles and is refused;
+`{}` refuses every act and an empty role list refuses that act. `guest` is invalid
+in this key: guests are refused regardless. This command reports policy for app
+consumers; it does not change `signal act` enforcement.
+
+Only these four keys are reported and validated. Other keys are ignored, including
+`task_file_revision_roles` (its default is a rule, not a role list), `updates_folder`
+(future), `gate_post_roles` (gate policy owned by `gates.go`), and `person_verbs`
+(task/gate policy and L122 project inheritance). Existing person-gate checks still
+apply independently.
+
+A bad type, unknown act, role or value exits 1 with no stdout and exactly
+`grid workflow show: invalid <key> in <workspace|project> workflow` on stderr.
+Malformed front matter uses `invalid front matter` in place of `invalid <key>`;
+unreadable, unsafe, oversized or invalid-UTF-8 policy files fail the same way,
+without falling back to permissive defaults. Diagnostics contain no value or
+path. Policy uses the existing 32768-byte cap, symlink refusal and guest project
+filter; hidden and unknown project requests remain indistinguishable to guests.
 
 ### `grid workflow write [--project <name-or-id>] --rev <12-hex|none> --file <path|-> [--json]`
 
@@ -784,8 +852,9 @@ Guest refusal prints `grid: guests cannot act on signals`. `--later` is reserved
 until task creation supports `start: later`; even `--later=false` is rejected.
 The replaceable policy defaults are `inbox_act_roles` (existing owner/member,
 local and agent roles, guests refused), `inbox_acts` (the seven acts), and
-`inbox_turn_body` (`link`; a future `copy` policy may replace it). This CLI does
-not read workflow configuration for these keys yet.
+`inbox_turn_body` (`link`; a future `copy` policy may replace it).
+Use `grid workflow show --json --policy` to read effective `inbox_act_roles`;
+`inbox_acts` and `inbox_turn_body` are not included in that allowlist.
 
 Project-level `person_verbs` defaults to `[signal act turn, signal act dismiss,
 signal act snooze]`: default, owner may change. Set it in leading YAML front
