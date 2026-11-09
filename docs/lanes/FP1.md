@@ -138,11 +138,11 @@ Base lane-FP1b 5bbf22cd, already on plugin main 5cf3215f (the rebase is a no-op)
 - MF3: orchestrator `publishPlanWithReader` calls `task.Linked` under `.task.lock` before it reads task.md. A linked task sets `publicationBlocked` and posts no Jobs.
 - MF4, workflows.md:
   - `workflow.readFile` counts the links of the opened descriptor. That is fstat `Nlink` on unix and `NumberOfLinks` on Windows; elsewhere the count is an error, so the file fails closed. A linked workspace or project workflows.md returns `workflow.ErrLinkedFile`.
-  - `TaskSteps` returns an error, so the task holds. `ProjectPersonVerbs` keeps `ErrLinkedFile` in the chain.
+  - `TaskSteps` returns an error. Corrected in FP1R2: its only caller is `RaisePreview`, so a linked workflows.md blocks raising a preview; it does not hold a task's steps or its plan (PlanStage reads task.md). `ProjectPersonVerbs` keeps `ErrLinkedFile` in the chain.
   - `workflow.Write` refuses a linked workflows.md too.
   - `task.ErrLinkedFile` is now the same value as `workflow.ErrLinkedFile` (task imports workflow, not the reverse), so both map to the CLI code `linked_file`.
   - The dead `<task>/workflows.md` entry is gone from `protectedNames`, and the contract/README.md `linked_file` row is reworded.
-- cli person gate: when a workflows.md it reads is linked, the gate applies the default replaceable policy. A verb under the floor or that policy is then refused for a person and an agent alike: exit 1, stderr names the file, and the `--json` envelope carries `error.code` `linked_file`. Other verbs run as before.
+- cli person gate: when a workflows.md it reads is linked, the gate applies the default replaceable policy. A verb under the floor or that policy is then refused for a person and an agent alike: exit 1, stderr names the file, and the `--json` envelope carries `error.code` `linked_file`. Other verbs run as before. (Superseded in FP1R2: this let a verb that only the linked file listed run without a person. The gate now refuses every verb whose gate read the linked file.)
 
 ## Writer inventory after FP1R
 
@@ -165,7 +165,7 @@ Base lane-FP1b 5bbf22cd, already on plugin main 5cf3215f (the rebase is a no-op)
 | journal writers refuse: commitWrite on linked task.md, history.md, approval.json; recoverWrite keeps the journal | `TestTaskWritersRefuseALinkedFile` (task) | yes, all 4 subtests |
 | P4: bash history, brain read and brain recall hooks against attach's lock order, 10 s timeout: both finish | `TestHookAndAttachLockOrderFinishes` (hook) | yes, all 3 subtests (deadlock at 10 s) |
 | a linked task.md (and plan.md) posts no Jobs; the unlinked control posts 1 | `TestLinkedTaskPostsNoJobs` (orchestrator) | yes, both linked subtests |
-| linked workspace and project workflows.md: TaskSteps holds, ProjectPersonVerbs refuses, show reads nothing, Write refuses, bytes and inode unchanged | `TestLinkedWorkflowsFileIsUnreadable` (workflow) | yes, both subtests |
+| linked workspace and project workflows.md: TaskSteps fails (so no preview can be raised), ProjectPersonVerbs refuses, show reads nothing, Write refuses, bytes and inode unchanged | `TestLinkedWorkflowsFileIsUnreadable` (workflow) | yes, both subtests |
 | Write refuses a linked workflows.md even with the right revision | `TestWriteRefusesALinkedWorkflowsFile` (workflow) | yes |
 | a person verb refuses with `linked_file` (workspace and project, person and agent); a verb outside the policy still runs | `TestLinkedWorkflowsFileRefusesPersonVerbs` (cli) | yes, the 4 refusal subtests (the 2 `agent note` controls pass on both) |
 
@@ -260,3 +260,142 @@ Rule 18 ran inside the builder's agent session, without the pty and clean login 
 - The checks ran as the builder user in a fresh local clone, not as user grid. `-timeout=30m` was passed as a flag instead of through GOFLAGS. Nothing was pushed; the lane is delivered as a bundle.
 - Link counts on Windows and darwin are compiled but not run there. The fail-closed `linked_other.go` in workflow (plan9, js, wasip1) was not compiled.
 - TOCTOU between `Linked` and the rename is unchanged (review note: it needs an unsandboxed process).
+
+# FP1R2: the person gate fails closed on a linked policy; remaining writers
+
+Brief: FP1R2-gate-fails-closed. Review: FP1R (must-fix 1, notes 1 and 4). Decisions: FP1R review round 2, items 1-4 and 6 built here; item 5 stays a follow-up.
+
+## Base and rebase
+
+- `lane-FP1R2` started from `lane-FP1R` 71bd49c9 and was rebased onto plugin main 9764ce4e (L155U landed in between).
+- Three files conflicted. Both sides were kept:
+  - contract/README.md and internal/cli/error_codes.go: main added `workflow_changed` and FP1 added `linked_file`. Both codes stay, and the `errorCode` switch maps both.
+  - internal/task/hold.go: main renamed the core of `PlanHeld` to `PlanHeldWith(lookup, ...)`, and `PlanHeld` now wraps it. FP1's `Linked(dir)` hold moved into `PlanHeldWith`, so the guard, Deliver and the hook helpers all hold a linked task.
+- After the rebase, every FP1 and FP1R row passes (the race run below covers all of their packages).
+
+## What changed
+
+1. **Person gate fails closed (decision 1, option a)**, in internal/cli/person_gate.go:
+   - When a policy file the gate reads is linked, `apply` records the error and adds no policy. It no longer substitutes `workflow.DefaultPersonVerbs()`.
+   - The `linked_file` refusal now runs before `persongate.Required`. Every verb whose gate read a linked file refuses, for a person and an agent alike: exit 1, stderr names the file without a machine path, and `--json` gets `error.code` `linked_file`.
+   - Behaviour change: FP1R's `agent note` control rows in `TestLinkedWorkflowsFileRefusesPersonVerbs` flip from exit 0 to exit 1 `linked_file`, as decision 1 says. That test is FP1R's own (not on main), and the two subtests' expectation was changed to match the decision. No test on main was changed.
+   - What a linked file now blocks (the gate reads the file):
+     - A workspace or project workflows.md blocks signal verbs in any scope and every verb run in a project scope with no task. The project file is read first; the workspace file is read only when the project file sets no `person_verbs`.
+     - A task's workflow.md blocks every verb run in that task's context, including `task show` and `grid mcp`.
+   - Hook commands skip the gate, so hooks keep running. A person clears the refusal by removing the extra link.
+2. **`feed.EnsureTaskID` refuses a linked task.md (decision 2).** Under `.task.lock`, after the regular-file check and before it reads or writes, it counts links on the open descriptor with the new `workflow.RefuseLinked`, the exported form of the workflows.md check. It refuses with or without an existing id. feed cannot import task, which imports feed, so the check reuses workflow's link count, which feed already imports.
+3. **`signal move --inbox` on a linked workspace workflows.md reports `linked_file` (decision 3).** `workflow.InboxWorkspace` returns the path-free `ErrLinkedFile` error instead of `ErrInboxWorkspace`. The handler prints `grid signal move: linked_file: workflows.md has 2 hard links; ...`, exits 1, and `--json` gets `{"error":{"code":"linked_file",...}}` instead of the `invalid_policy` object.
+4. **Task-local workflow.md (decision 4).** `readTaskPolicy` (internal/workflow/policy_file.go) counts links on the opened regular file and refuses a linked one with `ErrLinkedFile`, wrapped as an `*os.PathError` read error. A directory is not counted, since its link count is its entries; reading it fails as before. Its readers:
+   - `PersonVerbs` keeps `ErrLinkedFile` in the chain without the task path, so the gate refuses (item 1).
+   - `GatePostRoles`: `feed.Store.Post` of a gate record fails with `read gate post policy: ...`. `QuestionWithdrawPolicy` fails closed like an unreadable file: a write exits 1, and the read-side projection allows no person withdrawal. It no longer falls back to the defaults.
+   - `PlanHashToken` fails closed with its existing message (`grid approve` exit 3). The gate refuses `approve` first with `linked_file`.
+   - `UsageNoticeThresholds` warns with `cannot read workflow.md: linked_file: ...` and the defaults apply. Thresholds only decide notices, not gates.
+5. **Report and contract (decision 6).** The FP1R section above is corrected in place: a linked workflows.md makes `TaskSteps` fail, which blocks raising a preview, and does not hold TaskSteps generally. The contract/README.md `linked_file` row now describes the fail-closed gate, the task's workflow.md, `signal move --inbox` and the preview. The `readFile` comment is corrected the same way.
+
+## Writer and reader inventory after FP1R2
+
+| Writer or reader | Linked file |
+|---|---|
+| `feed.EnsureTaskID` (feed post, question post, task lease, orchestrator, usage notice) | refuses under `.task.lock`, writes nothing, inode unchanged |
+| person gate, every verb whose gate read a linked workflows.md or workflow.md | refuses with `linked_file` before `Required` |
+| `workflow.InboxWorkspace` (`signal move --inbox`) | `linked_file` |
+| `readTaskPolicy`: PersonVerbs, GatePostRoles, PlanHashToken, UsageNoticeThresholds | refuses: see item 4 |
+| plan writers (internal/plan), routine/workflow.go | unchanged: follow-ups (decision 5) |
+
+## Acceptance rows (new in FP1R2)
+
+| Row | Test | Fails on 71bd49c9 |
+|---|---|---|
+| The review probe: workspace and project, linked and unlinked, agent and person, real file adds `signal act note`. Linked → exit 1 `linked_file`, no file changed. Unlinked agent → exit 3 `person_required`; unlinked person → exit 0 | `TestLinkedPolicyRefusesTheVerbItAdds` (cli) | yes, the 4 linked subtests; the 4 unlinked controls pass on both |
+| FP1R's `agent note` rows flipped by decision 1 | `TestLinkedWorkflowsFileRefusesPersonVerbs/{workspace,project}/agent_note` (cli) | yes, both |
+| Linked task workflow.md: `task show` (the verb it adds) for agent and person, and `task close` (floor) for a person → exit 1 `linked_file`, no file changed. Unlinked: agent exit 3, person exit 0 | `TestLinkedTaskWorkflowFileRefusesVerbs` (cli) | yes, the 3 linked subtests; the 2 unlinked controls pass on both |
+| `signal move --inbox` on a linked workspace workflows.md → `linked_file`, not `invalid_policy`, nothing moved | `TestSignalMoveInboxLinkedPolicy` (cli) | yes |
+| Linked task workflow.md: PersonVerbs, GatePostRoles, UsageNoticeThresholds return `ErrLinkedFile` without the path; PlanHashToken refuses; bytes and inode unchanged | `TestLinkedTaskWorkflowFileIsUnreadable` (workflow) | yes |
+| `InboxWorkspace` on a linked file returns `ErrLinkedFile`, not `ErrInboxWorkspace` | `TestInboxWorkspaceLinkedFile` (workflow) | yes |
+| `EnsureTaskID` on a linked task.md, without and with an id: refused, inode and bytes unchanged | `TestEnsureTaskIDRefusesALinkedTaskMD` (feed) | yes, both subtests |
+| A linked task workflow.md fails the withdrawal policy closed, not to the defaults | `TestQuestionWithdrawPolicyRefusesALinkedWorkflowFile` (feed) | yes |
+
+Failing lines on 71bd49c9, with the lane's four test files checked out on top (`go test -count=1 -run '<the 8 tests>' ./internal/cli/ ./internal/workflow/ ./internal/feed/`, exit 1; temp paths and long JSON cut):
+
+```
+--- FAIL: TestLinkedPolicyRefusesTheVerbItAdds/workspace/linked/agent
+    linked_policy_closed_test.go:74: exit 0; want 1 (linked_file): {"result":"updated","id":"S-01ARZ3NDEKTSV4RRFFQ69G5FAV","project":"example","note":"S-01ARZ3NDEKTSV4RRFFQ69G5FAV.md","status":"kept","became":"T-09"}
+--- FAIL: TestLinkedPolicyRefusesTheVerbItAdds/workspace/linked/person
+    linked_policy_closed_test.go:74: exit 0; want 1 (linked_file): {"result":"updated",...,"status":"kept","became":"T-09"}
+--- FAIL: TestLinkedPolicyRefusesTheVerbItAdds/project/linked/agent
+    linked_policy_closed_test.go:74: exit 0; want 1 (linked_file): {"result":"updated",...,"status":"kept","became":"T-09"}
+--- FAIL: TestLinkedPolicyRefusesTheVerbItAdds/project/linked/person
+    linked_policy_closed_test.go:74: exit 0; want 1 (linked_file): {"result":"updated",...,"status":"kept","became":"T-09"}
+--- FAIL: TestLinkedTaskWorkflowFileRefusesVerbs/linked/agent/task_show
+    linked_policy_closed_test.go:126: exit 3; want 1 (linked_file): {"code":"person_required","error":"person_required",...,"reason":"agent_ancestor"}
+--- FAIL: TestLinkedTaskWorkflowFileRefusesVerbs/linked/person/task_show
+    linked_policy_closed_test.go:126: exit 0; want 1 (linked_file): {"id":"T-01","title":"Fix the label",...}
+--- FAIL: TestLinkedTaskWorkflowFileRefusesVerbs/linked/person/task_close
+    linked_policy_closed_test.go:126: exit 0; want 1 (linked_file): {"via":"terminal","task":"T-01",...,"what":"close","from_state":"queued","to_state":"closed",...}
+--- FAIL: TestSignalMoveInboxLinkedPolicy
+    linked_policy_closed_test.go:152: refusal JSON = {"error":"invalid_policy","key":"inbox_workspace","message":"invalid inbox_workspace in workspace workflow (only personal is supported)","code":"invalid_policy"}
+         (json: cannot unmarshal string into Go struct field .error of type struct { Code string "json:\"code\"" }); want error.code linked_file
+--- FAIL: TestLinkedWorkflowsFileRefusesPersonVerbs/workspace/agent_note
+    linked_workflow_gate_test.go:45: exit 0; want 1 (linked_file): {"result":"updated",...,"status":"kept","became":"T-09"}
+--- FAIL: TestLinkedWorkflowsFileRefusesPersonVerbs/project/agent_note
+    linked_workflow_gate_test.go:45: exit 0; want 1 (linked_file): {"result":"updated",...,"status":"kept","became":"T-09"}
+FAIL	github.com/gridconsole/grid-plugins/internal/cli
+--- FAIL: TestLinkedTaskWorkflowFileIsUnreadable
+    linked_task_test.go:31: PersonVerbs = map[task show:[]], <nil>; want ErrPersonVerbs wrapping linked_file, no path
+    linked_task_test.go:34: GatePostRoles = map[ci:[...] job:[...] person:[...] timer:[...] withdraw:[owner]], <nil>; want linked_file
+    linked_task_test.go:37: PlanHashToken = "digest", <nil>; want a refusal
+    linked_task_test.go:40: UsageNoticeThresholds = map[tokens:[50 100]], <nil>; want linked_file, no path
+--- FAIL: TestInboxWorkspaceLinkedFile
+    linked_task_test.go:67: InboxWorkspace = "", invalid inbox_workspace in workspace workflow (only personal is supported); want linked_file, not invalid inbox_workspace, no path
+FAIL	github.com/gridconsole/grid-plugins/internal/workflow
+--- FAIL: TestEnsureTaskIDRefusesALinkedTaskMD/no_id
+    linked_task_test.go:34: EnsureTaskID = "01M70WESR1CCDG97Y8W6Q9B2T7", <nil>; want linked_file, no path
+    linked_task_test.go:39: task.md was replaced; the link evidence is gone
+    linked_task_test.go:43: task.md changed: "---\ntitle: probe\nworkflow: ''\nulid: 01M70WESR1CCDG97Y8W6Q9B2T7\n---\nBody.\n"
+--- FAIL: TestEnsureTaskIDRefusesALinkedTaskMD/with_id
+    linked_task_test.go:34: EnsureTaskID = "01ARZ3NDEKTSV4RRFFQ69G5FAV", <nil>; want linked_file, no path
+--- FAIL: TestQuestionWithdrawPolicyRefusesALinkedWorkflowFile
+    linked_task_test.go:64: QuestionWithdrawPolicy = true, <nil>; want a path-free linked_file refusal
+    linked_task_test.go:67: the read policy allowed a withdrawal from a linked workflow.md
+FAIL	github.com/gridconsole/grid-plugins/internal/feed
+```
+
+## Mutations (on the lane, each restored with `git checkout --`, porcelain empty after)
+
+| Mutation | Package run | Red rows |
+|---|---|---|
+| Move the `linkedErr` refusal back after `persongate.Required` (person_gate.go) | `go test -count=1 ./internal/cli/` | **12**: the 4 linked probe subtests, 2 task-local `task show` subtests, and all 6 `TestLinkedWorkflowsFileRefusesPersonVerbs` subtests. `task close` stays green because the floor makes it Required |
+| Drop the `RefuseLinked` check in `EnsureTaskID` (`false &&`) | `./internal/feed/` | **2**: both `TestEnsureTaskIDRefusesALinkedTaskMD` subtests |
+| Drop the link check in `readTaskPolicy` | `./internal/workflow/ ./internal/feed/ ./internal/cli/` | **5**: `TestLinkedTaskWorkflowFileIsUnreadable`, `TestQuestionWithdrawPolicyRefusesALinkedWorkflowFile`, 3 linked `TestLinkedTaskWorkflowFileRefusesVerbs` subtests |
+| Drop the `ErrLinkedFile` branch in the `signal move` handler (run together with the previous one; separate tests) | `./internal/cli/` | **1**: `TestSignalMoveInboxLinkedPolicy` |
+
+## Checks
+
+These ran on code head 5612551e in a fresh clone of `lane-FP1R2`. This report commit changes docs/lanes/FP1.md only.
+
+| Check | Exit |
+|---|---|
+| `go test -race -count=1 -timeout=30m ./internal/task/... ./internal/guard/... ./internal/cli/... ./internal/hook/... ./internal/land/... ./internal/orchestrator/... ./internal/workflow/... ./internal/feed/...` | 0 (task 12.3 s, guard 10.8 s, cli 57.0 s, hook 5.6 s, land 4.9 s, orchestrator 66.8 s, workflow 10.8 s, feed 8.7 s) |
+| `make lint` (`go vet ./...`) | 0 |
+| `make generate`, then `git status --porcelain` | 0, 0 lines |
+| `GOOS=windows go build ./...` | 0 |
+| `GOOS=darwin go build ./...` | 0 |
+| `GOOS=windows go vet ./internal/workflow ./internal/feed ./internal/cli ./internal/task` | 0 |
+| rule 14: `go test -count=1 -timeout=30m ./internal/cli/...` on the lane head | 0 |
+| rule 14: the same on base main 9764ce4e | 0 |
+| new rows on 71bd49c9 (above) | 1, as intended |
+| hygiene: the FP1R2 diff grepped for /srv, /Users, /home/, emails, IPs, ssh and local names | no hits |
+
+## Follow-ups (decision 5)
+
+- Plan writers in internal/plan (write.go and store.go `atomicWrite`): `grid plan write` resolves the task with `where.Resolve`, so no `Linked` check runs. On a linked plan.md it archives the bytes written through the link and renames a new plan.md into place. No plan release, since the approval binds the digest.
+- routine/workflow.go reads workflows.md through `safefile.Read`, with no link check. A forged file can raise the routine limits. No plan release.
+- `PlanHashToken` on a linked workflow.md gives its generic "must be any or digest" message, not `linked_file`. The gate refuses `approve` first, so the message only shows to a direct caller.
+- Unchanged from FP1R: `Linked` skips a symlink at a protected name, and the TOCTOU between the check and the rename.
+
+## NOT VERIFIED
+
+- Rule 18 (the app real-plugin set with a plugin built from this head) was not run; the operator runs it. This lane changes CLI output only when a policy file has a second hard link: exit 1 `linked_file` where a verb used to run or exit 3, and `linked_file` instead of `invalid_policy` for `signal move --inbox`.
+- The checks ran as the builder user in a fresh local clone, not as user grid. `-timeout=30m` was passed as a flag, not through GOFLAGS. Nothing was pushed; the lane is delivered as a bundle.
+- Link counts on Windows and darwin were compiled and vetted, not run.
+- The probe ran as committed test rows. The reviewer's scratch probe file was not run as is.
