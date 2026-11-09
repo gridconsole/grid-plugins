@@ -90,7 +90,9 @@ func selectProject(entries []workflowProject, selector string) (workflowProject,
 }
 
 func projectSelectionError(r where.Resolver, selector string) error {
-	if r.Caller.IsGuest() {
+	// Callers with hidden projects must get identical diagnostics for every
+	// unavailable selector, whether it is a private name, private ID or unknown.
+	if r.Caller.IsGuest() || !r.PersonalOK() {
 		return errors.New("project is missing or ambiguous")
 	}
 	return fmt.Errorf("project %q is missing or ambiguous", writeDiagnostic(selector))
@@ -141,7 +143,7 @@ func workflowProjects(r where.Resolver) ([]workflowProject, error) {
 		if !entry.IsDir() && entry.Type()&os.ModeSymlink == 0 {
 			continue
 		}
-		if !r.GuestProjectAllowed(entry.Name()) {
+		if !r.PersonalProjectAllowed(entry.Name()) || !r.GuestProjectAllowed(entry.Name()) {
 			continue
 		}
 		p := workflowProject{name: entry.Name()}

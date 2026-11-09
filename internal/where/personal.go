@@ -60,6 +60,12 @@ func (r Resolver) PersonalOK() bool {
 	return allowed(r.Caller)
 }
 
+// PersonalProjectAllowed applies the caller's Personal policy to a registry name.
+// Guest invitations are checked separately by each project's discovery path.
+func (r Resolver) PersonalProjectAllowed(name string) bool {
+	return !strings.EqualFold(name, Personal) || r.PersonalOK()
+}
+
 // TasksDirs lists the task roots visible to this caller.
 func (r Resolver) TasksDirs() ([]string, error) {
 	dirs, err := gridhome.TasksDirs(r.GridHome)

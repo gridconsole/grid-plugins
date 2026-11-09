@@ -246,7 +246,7 @@ func TestWritePreservesPersonalPolicy(t *testing.T) {
 					t.Fatal(err)
 				}
 			} else {
-				if err == nil || err.Error() != `project "id-personal" is missing or ambiguous` {
+				if err == nil || err.Error() != "project is missing or ambiguous" {
 					t.Fatalf("refusal: %v", err)
 				}
 				if _, err := os.Stat(filepath.Join(home, "projects", "personal", "workflows.md")); !errors.Is(err, os.ErrNotExist) {
