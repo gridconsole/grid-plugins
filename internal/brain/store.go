@@ -322,7 +322,8 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 	var result Entry
 	var refusal error
 	err = locked(root, func() error {
-		n, err := readProposal(root, level, name)
+		// One read: the check and the publication below both use n and raw.
+		n, raw, err := readProposalBytes(root, level, name)
 		if err != nil {
 			return err
 		}
@@ -355,6 +356,11 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 			}
 			result = s.entry(n, true)
 			return nil
+		}
+		// After the gate, so a refused topic keeps its exit 1 and rejected write;
+		// a finding here writes nothing at all.
+		if err := checkAccept(level, name, n, raw); err != nil {
+			return err
 		}
 		n.Status, n.Reason = "accepted", ""
 		path := filepath.Join("knowledge", n.Topic, name+".md")
