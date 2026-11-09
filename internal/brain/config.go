@@ -1,6 +1,7 @@
 package brain
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -110,10 +111,29 @@ func (s Store) EditConfig(level, topic, name string, edit func([]byte) ([]byte, 
 		if len(data) > 1<<20 {
 			return fmt.Errorf("config entry exceeds 1 MiB")
 		}
+		// Rewriting the same bytes is not a change: no version, no audit line.
+		changed := old == nil || !bytes.Equal(old, data)
+		version, hash := 0, ""
+		if changed {
+			if version, hash, err = recordVersion(root, topic, name, data); err != nil {
+				return err
+			}
+		}
 		if err := atomicWrite(root, path, data); err != nil {
 			return err
 		}
-		return atomicfile.SyncDir(filepath.Join(root.Name(), filepath.Dir(path)))
+		if err := atomicfile.SyncDir(filepath.Join(root.Name(), filepath.Dir(path))); err != nil {
+			return err
+		}
+		if !changed {
+			return nil
+		}
+		origin, err := SessionOrigin()
+		if err != nil {
+			return err
+		}
+		return logAudit(root, Change{At: s.stamp(), Status: "accepted", Topic: topic, Name: name,
+			Version: version, Hash: hash, OriginKind: "config", OriginID: origin.ID})
 	})
 }
 

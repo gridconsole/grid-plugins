@@ -56,6 +56,9 @@ func topicAt(root *os.Root, name, level string) (Topic, error) {
 			return t, nil
 		}
 	}
+	if name == versionsTopic {
+		return Topic{}, fmt.Errorf("topic %s is reserved for stored versions", name)
+	}
 	// Reserved deferred topics cannot be smuggled in as custom knowledge topics.
 	if name == "skills" || name == "workflows" || name == "design" || name == "research" || name == "incidents" {
 		return Topic{}, fmt.Errorf("topic %s is not in the first slice; use conventions or decisions for knowledge", name)
@@ -142,7 +145,7 @@ func scopeTopics(root *os.Root, level string) ([]Topic, error) {
 		if dir.Type()&os.ModeSymlink != 0 {
 			return nil, fmt.Errorf("brain paths cannot be symbolic links")
 		}
-		if !dir.IsDir() || known[dir.Name()] {
+		if !dir.IsDir() || known[dir.Name()] || dir.Name() == versionsTopic {
 			continue
 		}
 		t, err := topicAt(root, dir.Name(), level)
@@ -207,6 +210,9 @@ func scan(root *os.Root, level string) ([]Note, map[string]int, error) {
 		}
 		if d.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("brain paths cannot be symbolic links")
+		}
+		if d.IsDir() && path == "knowledge/"+versionsTopic {
+			return fs.SkipDir
 		}
 		parts := strings.Split(path, "/")
 		if d.IsDir() || len(parts) < 3 || filepath.Ext(path) != ".md" || d.Name() == "TOPIC.md" {

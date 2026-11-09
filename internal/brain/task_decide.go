@@ -195,6 +195,7 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 		if w.Done {
 			return nil
 		}
+		logged, version, hash := w.ProposalNote, 0, ""
 		if action != "reject" {
 			path := filepath.Join("knowledge", w.Entry.Topic, w.Entry.Name+".md")
 			after, err := Encode(w.Entry)
@@ -205,16 +206,22 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
+			if !bytes.Equal(before, after) && !bytes.Equal(before, w.Before) {
+				return fmt.Errorf("destination changed since decision; refusing to overwrite it")
+			}
+			// The version precedes the publication, and a retry reuses it.
+			if version, hash, err = recordVersion(root, w.Entry.Topic, w.Entry.Name, after); err != nil {
+				return err
+			}
 			if !bytes.Equal(before, after) {
-				if !bytes.Equal(before, w.Before) {
-					return fmt.Errorf("destination changed since decision; refusing to overwrite it")
-				}
 				if err = atomicWrite(root, path, after); err != nil {
 					return err
 				}
 			}
+			// The line names the published entry, which is what has versions.
+			logged.Topic, logged.Name = w.Entry.Topic, w.Entry.Name
 		}
-		if err := logDecision(root, w.ProposalNote); err != nil {
+		if err := logDecision(root, logged, version, hash); err != nil {
 			return err
 		}
 		b, err = Encode(w.ProposalNote)

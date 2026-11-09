@@ -347,7 +347,7 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 			if err != nil {
 				return err
 			}
-			if err := logDecision(root, n); err != nil {
+			if err := logDecision(root, n, 0, ""); err != nil {
 				return err
 			}
 			if err := atomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
@@ -368,6 +368,10 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 				return fmt.Errorf("note name %q already belongs to topic %s", name, existing.Topic)
 			}
 		}
+		// The newest stored version must hold the published bytes before they
+		// are logged. A retry of a completed accept finds them unchanged.
+		var published []byte
+		publish := false
 		if before, err := safefile.Read(root, path); err == nil {
 			old, err := Parse(before)
 			// The note may have been published before a failed proposal-status
@@ -376,23 +380,31 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 			if err != nil || !reflect.DeepEqual(old, normalized(n)) {
 				return fmt.Errorf("note %q already exists with different content", name)
 			}
+			published = before
 		} else if errors.Is(err, fs.ErrNotExist) {
 			n.Updated = s.stamp()
-			b, err := Encode(n)
+			published, err = Encode(n)
 			if err != nil {
 				return err
 			}
-			if err := atomicWrite(root, path, b); err != nil {
-				return err
-			}
+			publish = true
 		} else {
 			return err
+		}
+		version, hash, err := recordVersion(root, n.Topic, name, published)
+		if err != nil {
+			return err
+		}
+		if publish {
+			if err := atomicWrite(root, path, published); err != nil {
+				return err
+			}
 		}
 		b, err := Encode(n)
 		if err != nil {
 			return err
 		}
-		if err := logDecision(root, n); err != nil {
+		if err := logDecision(root, n, version, hash); err != nil {
 			return err
 		}
 		if err := atomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
@@ -407,21 +419,11 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 	return result, refusal
 }
 
-// logDecision runs under the level lock. A stable line makes retries safe when
-// publication succeeds but the final proposal status write is interrupted.
-func logDecision(root *os.Root, n Note) error {
-	before, err := safefile.Read(root, "knowledge/log.md")
-	if errors.Is(err, fs.ErrNotExist) {
-		before = []byte("# Brain log\n\n")
-	} else if err != nil {
-		return err
-	}
-	clean := func(s string) string { return strings.ReplaceAll(strings.Join(strings.Fields(s), " "), "|", "/") }
-	line := fmt.Sprintf("- %s | %s | %s | %s:%s | %s\n", n.Updated, n.Status, n.Name, n.Origin.Kind, clean(n.Origin.ID), clean(n.Reason))
-	if strings.Contains(string(before), line) {
-		return nil
-	}
-	return atomicWrite(root, "knowledge/log.md", append(before, []byte(line)...))
+// logDecision records a keeper decision. Version and hash describe the bytes
+// it published; a rejection publishes nothing and passes 0 and "".
+func logDecision(root *os.Root, n Note, version int, hash string) error {
+	return logAudit(root, Change{At: n.Updated, Status: n.Status, Topic: n.Topic, Name: n.Name,
+		Version: version, Hash: hash, OriginKind: n.Origin.Kind, OriginID: n.Origin.ID, Reason: n.Reason})
 }
 
 func normalized(n Note) Note {
