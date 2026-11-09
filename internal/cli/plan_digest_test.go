@@ -89,3 +89,24 @@ func TestApproveDigestCLI(t *testing.T) {
 		})
 	}
 }
+
+func TestApproveDigestOnlyUsageExit(t *testing.T) {
+	h := newHarness(t)
+	h.env.Getenv = func(string) string { return "" }
+	fixture := taskFixture(t, h)
+	if _, err := taskWriter(h.env).Change(task.WriteOptions{ID: fixture.ID, Action: "status", State: "waiting"}); err != nil {
+		t.Fatal(err)
+	}
+	h.write(filepath.Join(fixture.Path, "plan.md"), approvedPlan)
+	o := writeOptions(h.env, fixture.ID, "approve", "")
+	// Workflow loading is deferred; exercise the option and the CLI result mapper.
+	o.PlanHashToken = "digest"
+	before := taskTestSnapshot(t, fixture.Path)
+	event, err := taskWriter(h.env).Approve(o, plan.Hash(approvedPlan))
+	if code := taskWriteResult(h.env, event, err, true, fixture.Path); code != 2 {
+		t.Fatalf("digest-only short token: exit %d, want 2: %s", code, h.errb)
+	}
+	if !reflect.DeepEqual(before, taskTestSnapshot(t, fixture.Path)) {
+		t.Fatal("digest-only refusal wrote task data")
+	}
+}

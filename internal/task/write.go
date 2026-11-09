@@ -86,6 +86,9 @@ type WriteOptions struct {
 	Cwd, ID, Action, State, Note string
 	LandsHash                    string // optional deploy-rule binding supplied by the land approval integration
 	Who                          contract.Author
+	// PlanHashToken is the approval token policy: empty or "any" accepts either
+	// form; "digest" requires 64 hex digits for a non-empty token.
+	PlanHashToken string
 }
 
 // Change performs a checked state move and appends its receipt under one lock.

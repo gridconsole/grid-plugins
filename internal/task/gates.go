@@ -13,9 +13,11 @@ import (
 
 var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
 
-// Approve records the plan.md short hash and full digest the person saw. A supplied hash is a
-// compare-and-set token. With no token, an existing stale approval must be
-// explicitly replaced using --plan-hash after reviewing the new plan.
+var planHashToken = regexp.MustCompile(`^([0-9a-f]{6}|[0-9a-f]{64})$`)
+
+// Approve records the plan.md short hash and full digest the person saw. A supplied
+// short hash or full digest is a compare-and-set token. With no token, an existing
+// stale approval must be explicitly replaced using --plan-hash after reviewing the new plan.
 //
 // The gate the task raised decides what is recorded: a task at gate ship (set
 // by deliver) gets a ship approval in approval-ship.json, and any other waiting
@@ -26,8 +28,19 @@ var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
 // which only plan writers also take; nothing takes them the other way round.
 func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 	var event Event
-	if err := checkTaskText("plan hash", hash, false); err != nil {
-		return event, err
+	// Validate before withWrite can take a lock or replay a pending journal.
+	switch o.PlanHashToken {
+	case "", "any", "digest":
+	default:
+		return event, fmt.Errorf("%w: plan_hash_token must be any or digest", ErrEditUsage)
+	}
+	if hash != "" {
+		if !planHashToken.MatchString(hash) {
+			return event, fmt.Errorf("%w: plan hash must be 6 or 64 lowercase hex digits", ErrEditUsage)
+		}
+		if o.PlanHashToken == "digest" && len(hash) != 64 {
+			return event, fmt.Errorf("%w: plan_hash_token digest requires 64 lowercase hex digits", ErrEditUsage)
+		}
 	}
 	if err := o.validateText(); err != nil {
 		return event, err
@@ -58,12 +71,16 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 				}
 				want = current
 			}
-			if want != current {
+			match := current
+			if len(want) == 64 {
+				match = digest
+			}
+			if want != match {
 				return fmt.Errorf("plan hash no longer matches: approved %q, current %q", want, current)
 			}
 			o.Action = "approve"
 			event = s.event(t, o, t.State)
-			event.PlanHash, event.PlanDigest, event.Gate, event.LandsHash = want, digest, gate, o.LandsHash
+			event.PlanHash, event.PlanDigest, event.Gate, event.LandsHash = current, digest, gate, o.LandsHash
 			data, err := json.Marshal(event)
 			if err != nil {
 				return err

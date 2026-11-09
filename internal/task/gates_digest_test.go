@@ -129,6 +129,70 @@ func TestApproveTokenValidationBeforeWrite(t *testing.T) {
 	}
 }
 
+func TestApproveTokenPolicy(t *testing.T) {
+	for _, policy := range []string{"", "any", "digest", "unknown"} {
+		for _, token := range []string{"", plan.Hash(planV1), plan.Digest(planV1)} {
+			t.Run(fmt.Sprintf("%s/length-%d", policy, len(token)), func(t *testing.T) {
+				s, task := waitingFixture(t)
+				setPlan(t, task, planV1)
+				o := WriteOptions{ID: task.ID, PlanHashToken: policy}
+				before := treeSnapshot(t, task.Path)
+				_, err := s.Approve(o, token)
+				if policy == "unknown" || policy == "digest" && len(token) == 6 {
+					if !errors.Is(err, ErrEditUsage) {
+						t.Fatalf("policy %q: expected usage error, got %v", policy, err)
+					}
+					if !reflect.DeepEqual(before, treeSnapshot(t, task.Path)) {
+						t.Fatal("policy refusal wrote task data")
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Empty tokens retain the old receipt rule, including digest-only policy.
+				if _, err := s.Approve(o, ""); err != nil {
+					t.Fatalf("unchanged implicit reapproval refused: %v", err)
+				}
+				setPlan(t, task, planV2)
+				before = treeSnapshot(t, task.Path)
+				if _, err := s.Approve(o, ""); err == nil || !strings.HasPrefix(err.Error(), "Changed since you approved") {
+					t.Fatalf("changed implicit reapproval: %v", err)
+				}
+				if !reflect.DeepEqual(before, treeSnapshot(t, task.Path)) {
+					t.Fatal("implicit refusal changed receipt or history")
+				}
+			})
+		}
+	}
+}
+
+func TestApproveDigestKeepsPlanLockForReceipt(t *testing.T) {
+	s, task := waitingFixture(t)
+	setPlan(t, task, planV1)
+	lock, err := fslock.OpenNoFollow(filepath.Join(task.Path, ".plan.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	var lockErr error
+	called := false
+	s.Now = func() time.Time {
+		called = true
+		lockErr = fslock.TryLockExclusive(lock)
+		if lockErr == nil {
+			fslock.Unlock(lock)
+		}
+		return time.Now()
+	}
+	if _, err := s.Approve(WriteOptions{ID: task.ID}, plan.Digest(planV1)); err != nil {
+		t.Fatal(err)
+	}
+	if !called || !errors.Is(lockErr, fslock.ErrLocked) {
+		t.Fatalf("receipt constructed without holding plan lock: called=%v, lock=%v", called, lockErr)
+	}
+}
+
 func TestApproveDigestUsesLockedSnapshot(t *testing.T) {
 	for _, becomesCurrent := range []bool{false, true} {
 		t.Run(fmt.Sprint(becomesCurrent), func(t *testing.T) {

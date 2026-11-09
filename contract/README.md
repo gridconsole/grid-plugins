@@ -613,8 +613,13 @@ to exist in the Rust history format. Both values are computed from one snapshot
 under the plan lock and recorded together. Publication checks the hash and
 digest computed from its exact publication snapshot without rereading the plan.
 Receipts made before step metadata was included may need explicit reapproval.
-The heading and CLI `--plan-hash`
-compare-and-set token remain short for compatibility.
+The heading and history keep the short hash. The CLI `--plan-hash`
+compare-and-set token accepts either the six lower-case hex digits or the
+64 lower-case hex digest printed alongside `hash` by `grid plan hash --json`.
+Both token forms are checked under the same plan lock as the receipt write.
+Whichever token is supplied, the receipt stores the current six-hex hash in
+`plan_hash` and the current full digest in `plan_digest`. Plain `grid plan hash`
+output remains the short hash.
 
 Publication, the guard, and locked approval readers require both values to
 match when `plan_digest` is present. A present empty, null, non-string or

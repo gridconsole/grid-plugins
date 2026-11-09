@@ -79,8 +79,9 @@ func runPlan(args []string, env Env) int {
 		hash := plan.Hash(text)
 		if *asJSON {
 			return writeJSON(env.Stdout, struct {
-				Hash string `json:"hash"`
-			}{hash})
+				Hash   string `json:"hash"`
+				Digest string `json:"digest"`
+			}{hash, plan.Digest(text)})
 		}
 		_, err = fmt.Fprintln(env.Stdout, hash)
 		if err != nil {
