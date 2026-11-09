@@ -125,7 +125,7 @@ func TestAnswerCallerRoles(t *testing.T) {
 			q := questionAdd(t, h, task, "visitor")
 			t.Setenv("GRID_MEMBER", "visitor")
 			t.Setenv("GRID_ROLE", role)
-			if role == "agent" || role == "cli" || role == "lead" || role == "guest" {
+			if role == "agent" || role == "cli" {
 				if code := h.run(task, "answer", task, q.ID, "Yes"); code == 0 {
 					t.Fatal("non-person answer accepted")
 				}

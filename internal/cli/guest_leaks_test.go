@@ -53,8 +53,14 @@ func TestGuestProjectSettingsWrites(t *testing.T) {
 					}
 					return
 				}
-				if code != 1 || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "guests cannot") {
-					t.Errorf("exit=%d, refusal=%q; want exit 1, empty stdout and guest refusal", code, h.errb.String())
+				wantCode, wantReason := 1, "guests cannot"
+				switch tc.name {
+				case "hook_level", "agent_set", "skill_disable", "setup":
+					// Floor writes are refused by the origin gate before dispatch.
+					wantCode, wantReason = 3, "agent_env"
+				}
+				if code != wantCode || h.out.Len() != 0 || !strings.Contains(h.errb.String(), wantReason) {
+					t.Errorf("exit=%d, refusal=%q; want exit %d, empty stdout and %q", code, h.errb.String(), wantCode, wantReason)
 				}
 				if changed {
 					t.Error("GRID_HOME tree changed after guest write")
