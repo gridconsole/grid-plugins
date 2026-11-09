@@ -824,7 +824,8 @@ func hostPlainVar(word, whole string) bool {
 }
 
 // hostNumericSubscript matches the name of an assignment to an array element by number: x[0]=,
-// x[0]+=. A number names no command, so BASH_CMDS[0]=, functions[0]= and aliases[0]= shadow nothing;
+// x[0]+=. In bash a number names no command, so BASH_CMDS[0]= shadows nothing; in zsh functions[1]= and
+// commands[1]= do define a command named 1, and a =1 word expands only when commands[1] names an executable file;
 // PATH[0]= and zsh path[1]= change where a command is found, IFS[0]= how words split, and zsh dirstack[1]= what ~1 expands to.
 var hostNumericSubscript = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\[[0-9]+\]\+?$`)
 
