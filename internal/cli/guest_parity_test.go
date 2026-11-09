@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -392,6 +394,16 @@ func TestGuestProjectParity(t *testing.T) {
 	}
 }
 
+// guestParityPersonRefusal renders the floor refusal through the product's own
+// refusal and code path, so it carries whatever fields person_required has.
+func guestParityPersonRefusal(command string, asJSON bool) guestParityOutput {
+	var stdout, stderr bytes.Buffer
+	failure := &commandFailure{}
+	env := Env{Stdout: &stdout, Stderr: io.MultiWriter(&stderr, &failure.stderr), failure: failure}
+	code := withPersonErrorCode(&env, func(e *Env) int { return personRefusal(*e, command, "agent_env", asJSON) })
+	return guestParityOutput{code, stdout.String(), stderr.String()}
+}
+
 // Only documented pre-resolution answers may coincide with the invited case.
 // Usage errors and ordinary "not found" errors never qualify.
 func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
@@ -403,11 +415,7 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 	}
 	want := guestParityOutput{}
 	if floor[command] {
-		want.Code = 3
-		want.Stderr = "grid " + command + ": " + personHint + " (reason: agent_env).\n"
-		if mode == "json" {
-			want.Stdout = "{\"error\":\"person_required\",\"reason\":\"agent_env\",\"hint\":\"" + personHint + "\"}\n"
-		}
+		want = guestParityPersonRefusal(command, mode == "json")
 	} else {
 		switch command {
 		case "routine add", "routine remove", "routine run", "routine schedule", "routine unschedule",
