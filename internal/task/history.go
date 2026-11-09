@@ -97,8 +97,10 @@ func CleanHistory(s string) string {
 
 // AppendHistory serializes append and consecutive duplicate suppression. It
 // never follows a symlink or creates a history file for an uninitialized task.
-// The line lands by renaming a new file into place under .task.lock, so a hard
-// link planted beside history.md keeps the old inode and never aliases it.
+// It refuses a task with a linked protected file and writes nothing, so a
+// rename can never replace the linked inode and erase the evidence of the link.
+// Otherwise the line lands by renaming a new file into place under .task.lock.
+// Callers must not hold a session lock: .task.lock is always taken first.
 func AppendHistory(dir, event, detail, who, via string) error {
 	path := filepath.Join(dir, "history.md")
 	info, err := os.Lstat(path)
@@ -121,6 +123,9 @@ func AppendHistory(dir, event, detail, who, via string) error {
 		return err
 	}
 	defer fslock.Unlock(lock)
+	if err := Linked(dir); err != nil {
+		return err
+	}
 	f, err := fslock.OpenNoFollow(path, os.O_RDWR, 0)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil

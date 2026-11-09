@@ -1,6 +1,7 @@
 package task
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,8 +38,8 @@ func TestALinkedProtectedFileHoldsTheTask(t *testing.T) {
 	}
 }
 
-// Grid's history writer renames a new file into place, so a planted link keeps
-// the old inode: it neither sees the new line nor aliases the live file.
+// A Grid writer refuses a linked file and changes nothing: a rename would put a
+// new inode in place and erase the evidence of the planted link.
 func TestAppendHistoryLeavesAPlantedLinkOnTheOldInode(t *testing.T) {
 	_, tk := deliverFixture(t, "")
 	seedHistory(t, tk.Path)
@@ -48,19 +49,18 @@ func TestAppendHistoryLeavesAPlantedLinkOnTheOldInode(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := os.ReadFile(link)
-	if err := AppendHistory(tk.Path, "files changed", "notes.md", "grid", ""); err != nil {
-		t.Fatal(err)
+	if err := AppendHistory(tk.Path, "files changed", "notes.md", "grid", ""); !errors.Is(err, ErrLinkedFile) {
+		t.Fatalf("AppendHistory err = %v; want linked_file", err)
 	}
 	live, _ := os.Stat(path)
 	planted, _ := os.Stat(link)
-	if os.SameFile(live, planted) {
-		t.Error("the planted link still aliases history.md after a Grid write")
+	if !os.SameFile(live, planted) {
+		t.Error("history.md was replaced; the link evidence is gone")
 	}
-	if got, _ := os.ReadFile(link); string(got) != string(before) {
-		t.Errorf("the planted link changed: %q", got)
-	}
-	if got, _ := os.ReadFile(path); !strings.Contains(string(got), "files changed · notes.md") {
-		t.Errorf("history.md lacks the new line: %q", got)
+	for _, name := range []string{path, link} {
+		if got, _ := os.ReadFile(name); string(got) != string(before) {
+			t.Errorf("%s changed: %q", filepath.Base(name), got)
+		}
 	}
 }
 
