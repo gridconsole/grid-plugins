@@ -2382,6 +2382,46 @@
       ]
     },
     {
+      "name": "preview",
+      "summary": "check the spec and raise the preview gate",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [
+            {
+              "name": "--by",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--dry-run",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--spec",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
       "name": "proof",
       "summary": "add evidence and rebuild the task proof index",
       "built": true,
