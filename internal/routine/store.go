@@ -16,13 +16,15 @@ import (
 )
 
 type Entry struct {
-	Name    string    `json:"name" yaml:"name"`
-	Every   string    `json:"every" yaml:"every"`
-	Run     string    `json:"run" yaml:"run"`
-	Machine string    `json:"machine" yaml:"machine"`
-	LastRun time.Time `json:"last_run,omitzero" yaml:"last_run,omitempty"`
-	Outcome string    `json:"outcome,omitempty" yaml:"outcome,omitempty"`
-	Body    string    `json:"-" yaml:"-"`
+	LimitPolicy `yaml:",inline"`
+	Limits      Limits    `json:"limits" yaml:"-"`
+	Name        string    `json:"name" yaml:"name"`
+	Every       string    `json:"every" yaml:"every"`
+	Run         string    `json:"run" yaml:"run"`
+	Machine     string    `json:"machine" yaml:"machine"`
+	LastRun     time.Time `json:"last_run,omitzero" yaml:"last_run,omitempty"`
+	Outcome     string    `json:"outcome,omitempty" yaml:"outcome,omitempty"`
+	Body        string    `json:"-" yaml:"-"`
 }
 
 type Store struct {
@@ -70,6 +72,9 @@ func (s Store) checkScheduled(e Entry) error {
 }
 
 func (e Entry) Validate() error {
+	if _, err := e.EffectiveLimits(); err != nil {
+		return err
+	}
 	if !brain.ValidName(e.Name) || e.Name == "TOPIC" {
 		return fmt.Errorf("routine name must be a plain name")
 	}
@@ -102,7 +107,11 @@ func decode(name string, b []byte) (Entry, error) {
 	if e.Name != name {
 		return e, fmt.Errorf("routine name does not match its file")
 	}
-	return e, e.Validate()
+	if err := e.Validate(); err != nil {
+		return e, err
+	}
+	e.Limits, err = e.EffectiveLimits()
+	return e, err
 }
 func (s Store) Get(name string) (Entry, error) {
 	b, err := s.brain().ReadConfig(s.level(), "routines", name)
@@ -133,8 +142,19 @@ func (s Store) lock(name string) (func(), error) {
 	// Name is hashed with the scope so one home's locks cannot collide with a project.
 	return localdata.Lock(s.GridHome, ".routine-"+identity(s.GridHome, s.Project, name)+".lock")
 }
-func (s Store) Add(name, every, run string) (Entry, error) {
+func (s Store) Add(name, every, run string, policy ...LimitPolicy) (Entry, error) {
 	e := Entry{Name: name, Every: strings.TrimSpace(every), Run: strings.TrimSpace(run)}
+	if len(policy) > 1 {
+		return e, fmt.Errorf("expected at most one routine limit policy")
+	}
+	if len(policy) == 1 {
+		e.LimitPolicy = policy[0]
+	}
+	var err error
+	e.Limits, err = e.EffectiveLimits()
+	if err != nil {
+		return e, err
+	}
 	// Validate the command and interval before creating identity or config files.
 	if !brain.ValidName(name) {
 		return e, fmt.Errorf("routine name must be a plain name")

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/routine"
@@ -32,6 +34,12 @@ func TestRoutineLimitRefusals(t *testing.T) {
 			config := brain.Store{GridHome: h.gridHome}
 			var before []byte
 			err = config.EditConfig("home", "routines", e.Name, func(old []byte) ([]byte, error) {
+				e.LastRun = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+				e.Outcome = "success"
+				old, err = brain.EncodeConfig(e, "Keep these notes.")
+				if err != nil {
+					return nil, err
+				}
 				before = bytes.Replace(old, []byte("---\n"), []byte("---\n"+tc.key+": "+tc.value+"\n"), 1)
 				return before, nil
 			})
@@ -124,6 +132,44 @@ func TestRoutineAddRejectsBadLimits(t *testing.T) {
 		entries, err := (routine.Store{GridHome: h.gridHome}).List()
 		if err != nil || len(entries) != 0 {
 			t.Fatalf("bad add wrote routine: %v %v", entries, err)
+		}
+	}
+}
+
+func TestRoutineHelpNamesLimitDefaults(t *testing.T) {
+	h := newHarness(t)
+	for _, args := range [][]string{{"routine", "--help"}, {"routine", "add", "--help"}, {"routine", "run", "--help"}} {
+		if code := h.run(h.root, args...); code != 0 {
+			t.Fatalf("help: exit %d", code)
+		}
+		text := h.out.String() + h.errb.String()
+		for _, want := range []string{"routine_timeout (default 10m", "routine_max_turns (default 10", "routine_budget (default 1"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("help missing %q: %s", want, text)
+			}
+		}
+	}
+}
+
+func TestRoutineLimitErrorsDoNotEchoValues(t *testing.T) {
+	for _, key := range []string{"routine_timeout", "routine_max_turns", "routine_budget"} {
+		h := newHarness(t)
+		privateValue := filepath.Join(h.root, "private-value")
+		flag := "--" + strings.ReplaceAll(key, "_", "-")
+		if code := h.run(h.root, "routine", "add", "daily", "--every", "1h", "--run", "signals", flag, privateValue); code != 2 || strings.TrimSpace(h.errb.String()) != "grid: invalid "+key {
+			t.Fatalf("unsafe add refusal: exit %d: %s", code, h.errb)
+		}
+		e, err := (routine.Store{GridHome: h.gridHome}).Add("daily", "1h", "signals")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := (brain.Store{GridHome: h.gridHome}).EditConfig("home", "routines", e.Name, func(old []byte) ([]byte, error) {
+			return bytes.Replace(old, []byte("---\n"), []byte("---\n"+key+": "+strconv.Quote(privateValue)+"\n"), 1), nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if code := h.run(h.root, "routine", "run", e.Name); code != 2 || strings.TrimSpace(h.errb.String()) != "grid: invalid "+key {
+			t.Fatalf("unsafe run refusal: exit %d: %s", code, h.errb)
 		}
 	}
 }

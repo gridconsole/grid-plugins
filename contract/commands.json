@@ -2984,6 +2984,21 @@
               "required": false
             },
             {
+              "name": "--routine-budget",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--routine-max-turns",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--routine-timeout",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--run",
               "takes": "value",
               "required": true

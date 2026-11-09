@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -108,7 +109,13 @@ type ProcessExecutor struct {
 	Home           string
 	Getenv         func(string) string
 	Stdout, Stderr io.Writer
-	Timeout        time.Duration
+	// Zero fields use the entry policy, including its defaults.
+	Timeout  time.Duration
+	MaxTurns int
+	Budget   float64
+	// Tests replace process execution and the timeout clock without sleeping.
+	runCommand  func(*exec.Cmd) error
+	withTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)
 }
 
 func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
@@ -116,11 +123,24 @@ func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
 	if err != nil {
 		return err
 	}
-	timeout := p.Timeout
-	if timeout == 0 {
-		timeout = 10 * time.Minute
+	limits, err := e.EffectiveLimits()
+	if err != nil {
+		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	if p.Timeout == 0 {
+		p.Timeout, _ = time.ParseDuration(limits.Timeout)
+	}
+	if p.MaxTurns == 0 {
+		p.MaxTurns = limits.MaxTurns
+	}
+	if p.Budget == 0 {
+		p.Budget = limits.Budget
+	}
+	withTimeout := p.withTimeout
+	if withTimeout == nil {
+		withTimeout = context.WithTimeout
+	}
+	ctx, cancel := withTimeout(ctx, p.Timeout)
 	defer cancel()
 	get := p.Getenv
 	if get == nil {
@@ -140,7 +160,7 @@ func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
 		if s.Project != "" {
 			prompt += " The project is " + s.Project + "."
 		}
-		args = []string{"-p", prompt, "--allowedTools", "Read,Glob,Grep,Bash(grid brain:*),Bash(grid signal:*)", "--max-budget-usd", "1", "--max-turns", "10", "--permission-mode", "dontAsk"}
+		args = []string{"-p", prompt, "--allowedTools", "Read,Glob,Grep,Bash(grid brain:*),Bash(grid signal:*)", "--max-budget-usd", strconv.FormatFloat(p.Budget, 'f', -1, 64), "--max-turns", strconv.Itoa(p.MaxTurns), "--permission-mode", "dontAsk"}
 	}
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Dir = s.GridHome
@@ -154,7 +174,11 @@ func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
 	cmd.WaitDelay = 2 * time.Second
 	configureProcess(cmd)
 	defer cleanupProcess(cmd)
-	err = cmd.Run()
+	runCommand := p.runCommand
+	if runCommand == nil {
+		runCommand = func(cmd *exec.Cmd) error { return cmd.Run() }
+	}
+	err = runCommand(cmd)
 	if ctx.Err() != nil {
 		return fmt.Errorf("routine timed out or was cancelled: %w", ctx.Err())
 	}

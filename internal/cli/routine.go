@@ -19,21 +19,25 @@ const routineLockHelp = "Runs hold the entry lock until execution finishes; anot
 func runRoutine(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprintln(env.Stdout, "Usage: grid routine add <name> --every <cron or duration> --run <grid command or skill> [--project p]\n       grid routine list|schedule|unschedule [--project p] [--json]\n       grid routine remove|run <name> [--project p] [--json]")
-		fmt.Fprintln(env.Stdout, "\n"+routineLockHelp)
+		fmt.Fprintln(env.Stdout, "\n"+routineLockHelp+"\n"+routine.LimitsHelp())
 		return 0
 	}
 	verb := args[0]
 	fs := newFlags("routine "+verb, env)
 	fs.Usage = func() {
-		fmt.Fprintf(env.Stderr, "Usage: grid routine %s [options]\n\n%s\n", verb, routineLockHelp)
+		fmt.Fprintf(env.Stderr, "Usage: grid routine %s [options]\n\n%s\n", verb, routineLockHelp+"\n"+routine.LimitsHelp())
 		fs.PrintDefaults()
 	}
 	project := fs.String("project", "", "project name or id; defaults to home")
 	asJSON := fs.Bool("json", false, "print JSON")
 	var every, run, homeOverride string
 	var due bool
+	var timeout, turns, budget string
 	switch verb {
 	case "add":
+		fs.StringVar(&timeout, "routine-timeout", "", "routine_timeout override; see policy defaults above")
+		fs.StringVar(&turns, "routine-max-turns", "", "routine_max_turns override; see policy defaults above")
+		fs.StringVar(&budget, "routine-budget", "", "routine_budget override; see policy defaults above")
 		fs.StringVar(&every, "every", "", "duration of at least one minute or numeric five-field UTC cron")
 		fs.StringVar(&run, "run", "", "grid command or skill")
 	case "run":
@@ -73,7 +77,7 @@ func runRoutine(args []string, env Env) int {
 	if *project != "" {
 		res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Project: *project})
 		if err != nil {
-			return failure(env, err)
+			return routineError(env, err)
 		}
 		if !res.Record {
 			return failure(env, fmt.Errorf("project is not registered; run grid project add"))
@@ -85,7 +89,7 @@ func runRoutine(args []string, env Env) int {
 	case "list":
 		entries, err := store.List()
 		if err != nil {
-			return failure(env, err)
+			return routineError(env, err)
 		}
 		if *asJSON {
 			return writeJSON(env.Stdout, entries)
@@ -95,9 +99,30 @@ func runRoutine(args []string, env Env) int {
 		}
 		return 0
 	case "add":
-		entry, err := store.Add(fs.Arg(0), every, run)
+		var policy routine.LimitPolicy
+		var policyErr error
+		fs.Visit(func(f *flag.Flag) {
+			var key, value string
+			switch f.Name {
+			case "routine-timeout":
+				key, value = "routine_timeout", timeout
+			case "routine-max-turns":
+				key, value = "routine_max_turns", turns
+			case "routine-budget":
+				key, value = "routine_budget", budget
+			default:
+				return
+			}
+			if policyErr == nil {
+				policyErr = policy.SetText(key, value)
+			}
+		})
+		if policyErr != nil {
+			return routineError(env, policyErr)
+		}
+		entry, err := store.Add(fs.Arg(0), every, run, policy)
 		if err != nil {
-			return failure(env, err)
+			return routineError(env, err)
 		}
 		if *asJSON {
 			return writeJSON(env.Stdout, entry)
@@ -107,7 +132,7 @@ func runRoutine(args []string, env Env) int {
 	case "run":
 		binary, err := env.executable()
 		if err != nil {
-			return failure(env, err)
+			return routineError(env, err)
 		}
 		// Child output goes to stderr so --json remains exactly one JSON value.
 		output := env.Stdout
@@ -122,7 +147,7 @@ func runRoutine(args []string, env Env) int {
 			}
 		}
 		if err != nil {
-			return failure(env, err)
+			return routineError(env, err)
 		}
 		if !*asJSON {
 			if result.Skipped {
@@ -135,13 +160,13 @@ func runRoutine(args []string, env Env) int {
 	default:
 		binary, err := env.executable()
 		if err != nil {
-			return failure(env, err)
+			return routineError(env, err)
 		}
 		scheduler := routine.Scheduler{Home: env.Home, GridHome: env.GridHome, Binary: binary, Path: env.getenv("PATH"), Backend: routine.NativeBackend(), Runner: routine.ExecOSRunner{}}
 		if routine.NativePreviewOnly() && (verb == "schedule" || verb == "unschedule") {
 			plans, err := scheduler.Preview(store, verb == "unschedule")
 			if err != nil {
-				return failure(env, err)
+				return routineError(env, err)
 			}
 			if *asJSON {
 				return writeJSON(env.Stdout, struct {
@@ -175,7 +200,7 @@ func runRoutine(args []string, env Env) int {
 			err = scheduler.RemoveRoutine(context.Background(), store, fs.Arg(0))
 		}
 		if err != nil {
-			return failure(env, err)
+			return routineError(env, err)
 		}
 		result := struct {
 			Result  string `json:"result"`
@@ -219,4 +244,13 @@ func routineFailureSignal(env Env, project string) routine.FailureSignal {
 		})
 		return err
 	}
+}
+
+func routineError(env Env, err error) int {
+	var limitErr *routine.LimitError
+	if errors.As(err, &limitErr) {
+		fmt.Fprintf(env.Stderr, "grid: %s\n", limitErr)
+		return 2
+	}
+	return failure(env, err)
 }
