@@ -102,6 +102,7 @@ func commands() []command {
 		{"refusal", "decide a refused command (a person or the app only)", runRefusal},
 		{"decide", "alias for refusal decide", runDecide},
 		{"deliver", "write the outcome and raise the ship gate", runDeliver},
+		{"preview", "check the spec and raise the preview gate", runPreview},
 		{"proof", "add evidence and rebuild the task proof index", runProof},
 		{"history", "append a dated task history line", runHistory},
 		{"land", "land a task per the deploy topic", runLand},

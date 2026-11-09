@@ -475,6 +475,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"refusal decide":        {args: []string{"<task>", "<R-N>", "<allow|deny>"}, output: "cmd-refusal-decide.json"},
 		"decide":                {args: []string{"<task>", "<R-N>", "<allow|deny>"}, output: "cmd-refusal-decide.json"},
 		"deliver":               {args: []string{"[outcome]", "[files...]"}},
+		"preview":               {},
 		"proof add":             {args: []string{"<item>", "[file]"}},
 		"proof index":           {},
 		"history add":           {args: []string{"<line>"}},

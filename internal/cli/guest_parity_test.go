@@ -38,6 +38,7 @@ var guestParityCommands = map[string][]string{
 	"brain topics":     {},
 	"decide":           {"{task}", "R-01", "allow"},
 	"deliver":          {"--outcome", "parity"},
+	"preview":          {},
 
 	"feed fold":     {},
 	"feed handover": {},
