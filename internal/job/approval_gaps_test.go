@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/job/jobtest"
+	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 func TestProjectPlanAliasesNeedApproval(t *testing.T) {
@@ -34,6 +35,10 @@ func TestProjectPlanAliasesNeedApproval(t *testing.T) {
 				}
 				newFiles := func() *Files {
 					return &Files{Task: h.Task, Repo: h.GridHome, Prototype: h.GridHome, Folders: []string{h.GridHome}}
+				}
+				if link == "hardlink" {
+					projectHardlinkHeld(t, h, kind, name, newFiles)
+					return
 				}
 				f := newFiles()
 				pointer := kind + ":" + name + "#L3-L4"
@@ -71,6 +76,52 @@ func TestProjectPlanAliasesNeedApproval(t *testing.T) {
 			})
 		}
 	}
+}
+
+// projectHardlinkHeld is the project hardlink row since FP1 (2792be12): with a
+// second hard link to plan.md the task is held with linked_file before the
+// approval check. The alias and the canonical pointers give no text, before and
+// after an edit through the link, and no approval can be recorded.
+func projectHardlinkHeld(t *testing.T, h jobtest.Home, kind, name string, newFiles func() *Files) {
+	t.Helper()
+	receipt := filepath.Join(h.Task, "approval.json")
+	before, err := os.ReadFile(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newFiles()
+	held := func(when string) {
+		t.Helper()
+		for _, resolver := range []*Files{f, newFiles()} {
+			for _, suffix := range []string{"#L3-L4", ":3-4", "#step-1", "#verify"} {
+				for _, pointer := range []string{kind + ":" + name + suffix, "plan.md" + suffix} {
+					s, err := resolver.Resolve(pointer)
+					if !errors.Is(err, task.ErrLinkedFile) || s.Text != "" {
+						t.Errorf("%s: %s: want linked_file with no text; got %v, text %q", when, pointer, err, s.Text)
+					}
+				}
+			}
+		}
+	}
+	held("approved before the link")
+	path := filepath.Join(h.Task, "plan.md")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Preserve the inode so the alias still names this plan.
+	changed := strings.ReplaceAll(string(b), "Document the export format", "INJECTED instructions")
+	if err := os.WriteFile(path, []byte(changed), 0600); err != nil {
+		t.Fatal(err)
+	}
+	held("edited")
+	if err := h.TryApprove(); !errors.Is(err, task.ErrLinkedFile) {
+		t.Errorf("approve: want linked_file; got %v", err)
+	}
+	if after, err := os.ReadFile(receipt); err != nil || string(after) != string(before) {
+		t.Errorf("a refused approval changed approval.json: %v", err)
+	}
+	held("after approve")
 }
 
 func TestPlanFirstLineNeedsApproval(t *testing.T) {

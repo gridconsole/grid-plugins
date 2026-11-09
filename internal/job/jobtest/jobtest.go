@@ -104,3 +104,15 @@ func (h Home) Approve(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TryApprove asks for a receipt for the current fixture plan, as Approve does,
+// and returns the refusal instead of failing the test. The fixture task is T-01.
+func (h Home) TryApprove() error {
+	text, err := (plan.Store{TaskDir: h.Task}).Read()
+	if err != nil {
+		return err
+	}
+	s := task.Store{Resolver: where.Resolver{GridHome: h.GridHome}}
+	_, err = s.Approve(task.WriteOptions{Cwd: h.Task, ID: "T-01"}, plan.Hash(text))
+	return err
+}
