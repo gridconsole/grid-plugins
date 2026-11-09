@@ -36,7 +36,8 @@ type decisionWrite struct {
 // which reads brain proposals at delivery.
 type TaskRef struct{ ID, Path string }
 
-// DecideTask files a task proposal through the same keeper gates as Accept.
+// DecideTask files a task proposal through the same keeper gates and accept
+// check as Accept.
 // The receipt precedes publication, so retries neither duplicate merges nor
 // overwrite an intervening edit. Completed proposals remain as audit records.
 // history appends the task's history line through the task writer; it runs
@@ -126,6 +127,11 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 			} else {
 				if reason := gate(root, n); reason != "" {
 					return fmt.Errorf("proposal refused: %s", reason)
+				}
+				// The same check Accept runs, on the bytes read above and before
+				// the receipt, so a finding writes nothing.
+				if err := checkAccept(level, proposal, n, b); err != nil {
+					return err
 				}
 				n.Status = "accepted"
 				accepted := n
