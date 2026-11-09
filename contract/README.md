@@ -36,6 +36,7 @@ specific gate refusal reason; it is not replaced by the general code.
 | `person_required` | The existing person gate refused the request. |
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
 | `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
+| `workflow_changed` | The task's workflow now resolves to other steps than the ones its `task.md` `workflow_digest` was made from (a project folder renamed or rebuilt around it, or a `workflows.md` changed); the task is held and `grid task deliver` exits 1. |
 
 The constants live in `internal/cli/error_codes.go`. Read `code` on existing
 failure objects, or `error.code` on new envelopes; never classify by message
@@ -921,6 +922,23 @@ gates. Reads remain allowed. An `approve` step whose name contains `plan` is a
 plan gate, as in Rust; an `approve` step before the first `run` or `work` also
 requires plan approval, regardless of its name (for example, `sign-off`). A later
 approval without `plan` in its name remains a delivery gate.
+
+`grid task new` binds a task to its workflow: once the project is registered it
+writes `workflow_digest:` in `task.md`, the hex sha256 of the steps the task
+resolves to (each step's name, kind and whether it is the plan gate, in order).
+Only Grid writes the field, and `grid task show` does not print it. The guard,
+`grid task deliver` and every other reader of the plan hold resolve the steps
+again and compare: a different digest is code `workflow_changed`, which holds the
+task as a folder under another project than its `project:` does, and no receipt
+releases it. A project folder renamed away and back, or rebuilt with identical
+files, keeps the digest and changes nothing. Steps that do not resolve at
+creation (size `auto` with size-dependent steps, no matching template) leave the
+field out. Tasks without the field (made before it, or migrated) stay on the
+folder-name check alone until a person re-creates them. A person who changes a
+project's `workflows.md` on purpose holds each open task of that project whose
+steps change, with `workflow_changed`; the person clears one by re-creating the
+task, or by deleting the `workflow_digest:` line from its `task.md` by hand, which
+puts it back on the folder-name check. No `grid task rebind` verb exists yet.
 
 The task's `workflow.md` snapshot and workspace/project `workflows.md` files
 are protected by the host guard against Write, Edit, MultiEdit and literal
