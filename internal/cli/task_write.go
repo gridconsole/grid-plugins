@@ -121,16 +121,18 @@ func runTaskWrite(args []string, env Env) int {
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 
-const approveUsage = `Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--json]
+const approveUsage = `Usage: grid approve <task> [--plan-hash <hash>] [--gate plan|preview|ship] [--note <text>] [--json]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 --plan-hash accepts the 6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json.
 workflow.md with plan_hash_token: digest requires the 64-hex digest.
+--gate names the gate the person approved; a task now waiting at another gate is refused (exit 1) and nothing is written.
 `
 
 func runApprove(args []string, env Env) int {
 	fs := newFlags("approve", env)
 	fs.Usage = func() { fmt.Fprint(env.Stderr, approveUsage); fs.PrintDefaults() }
 	hash := fs.String("plan-hash", "", "6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json; workflow.md plan_hash_token: digest requires the digest")
+	gate := fs.String("gate", "", "the gate the person approved: plan, preview or ship; refused when the task waits at another gate")
 	note := fs.String("note", "", "approval note")
 	asJSON := fs.Bool("json", false, "print JSON")
 	pos, err := taskArgs(fs, args)
@@ -153,6 +155,7 @@ func runApprove(args []string, env Env) int {
 	}
 	pos[0] = resolved.ID
 	o := writeOptions(env, pos[0], "approve", *note)
+	o.Gate = *gate
 	o.PlanHashToken, err = workflow.PlanHashToken(resolved.Path)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
