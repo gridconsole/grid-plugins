@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -156,8 +157,21 @@ func rewriteTask(data []byte, edit func(mapping *yaml.Node) error, body func(str
 	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
 		return nil, errors.New("task.md front matter is not a mapping")
 	}
+	was := map[*yaml.Node]bool{}
+	for i := 1; i < len(doc.Content[0].Content); i += 2 {
+		was[doc.Content[0].Content[i]] = true
+	}
 	if err := edit(doc.Content[0]); err != nil {
 		return nil, err
+	}
+	// A key whose value node is new was set by the edit; every other key must
+	// read the same afterwards. An edit that changes a node in place counts as
+	// untouched, so the write is refused rather than trusted.
+	set := map[string]bool{}
+	for i := 0; i+1 < len(doc.Content[0].Content); i += 2 {
+		if !was[doc.Content[0].Content[i+1]] {
+			set[doc.Content[0].Content[i].Value] = true
+		}
 	}
 	// Sequences stay indented under their key: the plugin's reader only takes
 	// list items that are indented.
@@ -177,6 +191,12 @@ func rewriteTask(data []byte, edit func(mapping *yaml.Node) error, body func(str
 	if after == nil || !sameWorkflow(fm, after) {
 		return nil, errors.New("task.md workflow list is not readable as written; indent each item under workflow: (for example \"  - {step: build, kind: run}\") or remove the list, then retry; nothing was written")
 	}
+	// The reader takes a value from its key's own line, so a continuation line
+	// it cannot see (step: plan, then an indented build) would be joined by the
+	// dump and move a held task past its plan gate.
+	if key := changedKey(fm, after, set); key != "" {
+		return nil, fmt.Errorf("task.md key %q would read differently after this write; put its whole value on the key's own line (no indented continuation lines) or remove the key, then retry; nothing was written", key)
+	}
 	if fm.Odd != after.Odd {
 		return nil, errors.New("task.md has a __proto__, constructor or prototype key the plugin's reader refuses, and this write would change that; remove the key, then retry; nothing was written")
 	}
@@ -188,6 +208,32 @@ func rewriteTask(data []byte, edit func(mapping *yaml.Node) error, body func(str
 // never nil to the reader, so an absent key differs from every present one).
 func sameWorkflow(before, after *taskfile.Frontmatter) bool {
 	return reflect.DeepEqual(before.Data["workflow"], after.Data["workflow"])
+}
+
+// changedKey returns the first header key, in name order, that the edit did not
+// set and whose value the plugin's reader sees differently in the two headers
+// (present in one only, or of another value or type).
+func changedKey(before, after *taskfile.Frontmatter, set map[string]bool) string {
+	names := map[string]bool{}
+	for key := range before.Data {
+		names[key] = true
+	}
+	for key := range after.Data {
+		names[key] = true
+	}
+	sorted := make([]string, 0, len(names))
+	for key := range names {
+		sorted = append(sorted, key)
+	}
+	sort.Strings(sorted)
+	for _, key := range sorted {
+		was, wasThere := before.Data[key]
+		now, nowThere := after.Data[key]
+		if !set[key] && (wasThere != nowThere || !reflect.DeepEqual(was, now)) {
+			return key
+		}
+	}
+	return ""
 }
 
 // setScalar sets a string key of the header mapping, adding it at the end when
