@@ -114,6 +114,18 @@ func Parse(text, project string) Parsed {
 		}
 	}
 	first := 0
+	// Policy front matter is optional; retain physical source line numbers.
+	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "---" {
+		if _, err := parseFrontmatter([]byte(text)); err != nil {
+			whole(nil, "invalid workflow front matter")
+			return out
+		}
+		first = 1
+		for strings.TrimSpace(lines[first]) != "---" {
+			first++
+		}
+		first++
+	}
 	for first < len(lines) && strings.TrimSpace(lines[first]) == "" {
 		first++
 	}

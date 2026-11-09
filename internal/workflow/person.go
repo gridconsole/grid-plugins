@@ -4,10 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
-
-	"go.yaml.in/yaml/v4"
 )
 
 var ErrPersonVerbs = errors.New("invalid person_verbs")
@@ -15,28 +12,26 @@ var ErrPersonVerbs = errors.New("invalid person_verbs")
 // PersonVerbs reads additive task-local person policy. A list gates verbs for
 // all person roles; a map additionally restricts each verb to listed roles.
 func PersonVerbs(dir string) (map[string][]string, error) {
-	raw, err := os.ReadFile(filepath.Join(dir, "workflow.md"))
+	raw, err := readTaskPolicy(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, errors.New("cannot read workflow.md")
 	}
+	return personVerbs(raw)
+}
+
+// A nil policy is unset; a non-nil empty map explicitly replaces defaults.
+func personVerbs(raw []byte) (map[string][]string, error) {
 	lines := strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n")
 	// Legacy workflow prose carries no policy.
 	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
 		return nil, nil
 	}
-	end := 1
-	for end < len(lines) && strings.TrimSpace(lines[end]) != "---" {
-		end++
-	}
-	if end == len(lines) {
-		return nil, fmt.Errorf("workflow front matter is not closed")
-	}
-	var front map[string]any
-	if err = yaml.Load([]byte(strings.Join(lines[1:end], "\n")), &front); err != nil {
-		return nil, err
+	front, err := parseFrontmatter(raw)
+	if err != nil {
+		return nil, errors.New("malformed workflow front matter")
 	}
 	value, ok := front["person_verbs"]
 	if !ok {
