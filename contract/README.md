@@ -731,5 +731,6 @@ local and agent roles, guests refused), `inbox_acts` (the seven acts), and
 not read workflow configuration for these keys yet.
 
 `signal act` is not in the person-gate floor because its default roles (brief
-Goal 8) admit agent and local roles, like `task new`; a workflow can restrict it
-through `person_verbs` once L105 lands.
+Goal 8) admit agent and local roles, like `task new`; a task's workflow can add it
+through `person_verbs` once L105 lands, which gates only calls that resolve to
+that task.
