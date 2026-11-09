@@ -83,16 +83,15 @@ func Write(resolver where.Resolver, selector, expected string, input io.Reader) 
 			}
 			return result, errors.New("cannot read registered projects")
 		}
-		matches := 0
+		candidates := make([]workflowProject, 0, len(entries))
 		for _, entry := range entries {
-			if entry.Name == selector || entry.ID == selector {
-				project = entry.Name
-				matches++
-			}
+			candidates = append(candidates, workflowProject{name: entry.Name, id: entry.ID})
 		}
-		if matches != 1 {
-			return result, errors.New("project is missing or ambiguous")
+		selected, ok := selectProject(candidates, selector)
+		if !ok {
+			return result, projectSelectionError(resolver, selector)
 		}
+		project = selected.name
 	}
 	result.File = labelOf(project)
 	const maxBytes = 32 * 1024

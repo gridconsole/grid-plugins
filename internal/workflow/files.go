@@ -68,6 +68,34 @@ type workflowProject struct {
 	err      error
 }
 
+// selectProject applies where's name-before-ID rule to already-visible entries.
+// Keep the entry intact so show can still report damaged project records.
+func selectProject(entries []workflowProject, selector string) (workflowProject, bool) {
+	for _, entry := range entries {
+		if entry.name == selector {
+			return entry, true
+		}
+	}
+	var found workflowProject
+	ok := false
+	for _, entry := range entries {
+		if entry.id != "" && entry.id == selector {
+			if ok {
+				return workflowProject{}, false
+			}
+			found, ok = entry, true
+		}
+	}
+	return found, ok
+}
+
+func projectSelectionError(r where.Resolver, selector string) error {
+	if r.Caller.IsGuest() {
+		return errors.New("project is missing or ambiguous")
+	}
+	return fmt.Errorf("project %q is missing or ambiguous", writeDiagnostic(selector))
+}
+
 // Discover records independently: Store.List deliberately fails closed for
 // registry mutations, but one damaged record must not hide other workflows.
 func workflowProjects(r where.Resolver) ([]workflowProject, error) {
@@ -149,19 +177,11 @@ func readFiles(r where.Resolver, selector string) ([]File, []fileProblem, error)
 		return nil, nil, err
 	}
 	if selector != "" {
-		matches := []workflowProject{}
-		for _, entry := range entries {
-			if entry.name == selector || entry.id == selector {
-				matches = append(matches, entry)
-			}
+		selected, ok := selectProject(entries, selector)
+		if !ok {
+			return nil, nil, projectSelectionError(r, selector)
 		}
-		if len(matches) != 1 {
-			if r.Caller.IsGuest() {
-				return nil, nil, fmt.Errorf("project is missing or ambiguous")
-			}
-			return nil, nil, fmt.Errorf("project %q is missing or ambiguous", selector)
-		}
-		entries = matches
+		entries = []workflowProject{selected}
 	}
 	files := []File{{Scope: "workspace"}}
 	paths := []string{"workflows.md"}
