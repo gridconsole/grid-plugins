@@ -15,6 +15,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 // DeleteAllowed is the owner-only default policy. The workflow may replace it
@@ -293,7 +294,7 @@ func (s Store) Delete(o TrashOptions) (result TrashResult, err error) {
 			}
 		}
 		if path == "" {
-			return fmt.Errorf("task %s not found in the Grid home", o.ID)
+			return &where.LookupError{Kind: where.ErrTaskNotFound, Message: fmt.Sprintf("task %s not found in the Grid home", o.ID)}
 		}
 		if err := trashPersonal(o, proj); err != nil {
 			return err

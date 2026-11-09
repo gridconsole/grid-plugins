@@ -66,7 +66,7 @@ func (s Store) Move(id, from, to string) (Result, error) {
 	}
 	n, err := read(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return Result{}, &RefusedError{Message: "no such note"}
+		return Result{}, &RefusedError{Message: "no such note", Cause: ErrNoNote}
 	}
 	if err != nil {
 		return Result{}, err
@@ -143,7 +143,7 @@ func (s Store) moveNotes() (string, error) {
 
 func moveNotesError(err error) error {
 	if errors.Is(err, where.ErrProjectUnregistered) || errors.Is(err, where.ErrPersonalRefused) {
-		return &RefusedError{Message: "no such project"}
+		return &RefusedError{Message: "no such project", Cause: where.ErrProjectUnregistered}
 	}
 	return err
 }

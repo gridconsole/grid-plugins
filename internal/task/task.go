@@ -219,9 +219,9 @@ func (s Store) Show(cwd, id string) (Task, error) {
 	}
 	if found == "" {
 		if s.Resolver.PersonalOK() {
-			return Task{}, fmt.Errorf("task %s not found in the Grid home", id)
+			return Task{}, &where.LookupError{Kind: where.ErrTaskNotFound, Message: fmt.Sprintf("task %s not found in the Grid home", id)}
 		}
-		return Task{}, errors.New("task not found")
+		return Task{}, where.ErrTaskNotFound
 	}
 	return readProject(found, proj)
 }

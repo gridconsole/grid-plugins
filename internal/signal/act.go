@@ -19,9 +19,16 @@ type BadInputError struct{ Message string }
 func (e *BadInputError) Error() string { return e.Message }
 
 // RefusedError identifies a valid request refused by caller or note state.
-type RefusedError struct{ Message string }
+type RefusedError struct {
+	Message string
+	Cause   error
+}
 
 func (e *RefusedError) Error() string { return e.Message }
+func (e *RefusedError) Unwrap() error { return e.Cause }
+
+// ErrNoNote identifies a missing signal or inbox note.
+var ErrNoNote = errors.New("no such note")
 
 // ActOptions carries the decision and the same task author context as task new.
 // TaskSet and UntilSet distinguish explicitly empty flags from absent flags.
@@ -106,7 +113,7 @@ func (s Store) Apply(id string, o ActOptions) (Result, error) {
 	}
 	n, err := read(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return Result{}, &RefusedError{Message: "no such note"}
+		return Result{}, &RefusedError{Message: "no such note", Cause: ErrNoNote}
 	}
 	if err != nil {
 		return Result{}, err

@@ -98,7 +98,7 @@ func (r Resolver) Resolve(q Query) (Result, error) {
 				path = filepath.Join(q.Cwd, path)
 			}
 			if within(filepath.Join(r.GridHome, Personal, "tasks"), path) {
-				return Result{}, fmt.Errorf("task not found")
+				return Result{}, ErrTaskNotFound
 			}
 		}
 	}
@@ -124,7 +124,7 @@ func (r Resolver) Resolve(q Query) (Result, error) {
 		return Result{}, ErrProjectUnregistered
 	}
 	if res.TaskPath != "" && !r.guestTaskPathAllowed(res.TaskPath) {
-		return Result{}, fmt.Errorf("task not found")
+		return Result{}, ErrTaskNotFound
 	}
 	return res, nil
 }
@@ -210,7 +210,7 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 		}
 		real := gridhome.Real(abs)
 		if !personalOK && within(filepath.Join(gridHome, Personal, "tasks"), real) {
-			return "", "", fmt.Errorf("task not found")
+			return "", "", ErrTaskNotFound
 		}
 		if !within(gridHome, real) {
 			return "", "", fmt.Errorf("task path %s is outside the Grid home %s", real, gridHome)
@@ -219,11 +219,15 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 		if !ok || !r.GuestProjectAllowed(proj) {
 			// Invalid paths inside Grid home reveal neither its location nor
 			// whether a case variant names a private Personal task.
-			return "", "", fmt.Errorf("task not found")
+			return "", "", ErrTaskNotFound
 		}
 		dir := filepath.Join(gridhome.TasksDir(gridHome, proj), task)
 		if _, err := os.Stat(dir); err != nil {
-			return "", "", fmt.Errorf("task folder %s does not exist", dir)
+			message := fmt.Sprintf("task folder %s does not exist", dir)
+			if os.IsNotExist(err) {
+				return "", "", &LookupError{Kind: ErrTaskNotFound, Message: message}
+			}
+			return "", "", fmt.Errorf("%s", message)
 		}
 		return proj, task, nil
 	}
@@ -237,19 +241,23 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 	}
 	if name == "" {
 		if !personalOK {
-			return "", "", fmt.Errorf("task not found")
+			return "", "", ErrTaskNotFound
 		}
 		return "", "", fmt.Errorf("task %s needs --project: this folder is in no project with a record", arg)
 	}
 	if !r.GuestProjectAllowed(name) || !r.guestTaskPathAllowed(gridhome.TasksDir(gridHome, name)) {
-		return "", "", fmt.Errorf("task not found")
+		return "", "", ErrTaskNotFound
 	}
 	entries, err := os.ReadDir(gridhome.TasksDir(gridHome, name))
 	if err != nil {
 		if !personalOK {
-			return "", "", fmt.Errorf("task not found")
+			return "", "", ErrTaskNotFound
 		}
-		return "", "", fmt.Errorf("task %s not found in project %s", arg, name)
+		message := fmt.Sprintf("task %s not found in project %s", arg, name)
+		if os.IsNotExist(err) {
+			return "", "", &LookupError{Kind: ErrTaskNotFound, Message: message}
+		}
+		return "", "", fmt.Errorf("%s", message)
 	}
 	for _, e := range entries {
 		if e.IsDir() && (e.Name() == arg || strings.HasPrefix(e.Name(), arg+"-")) {
@@ -257,9 +265,9 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 		}
 	}
 	if !personalOK {
-		return "", "", fmt.Errorf("task not found")
+		return "", "", ErrTaskNotFound
 	}
-	return "", "", fmt.Errorf("task %s not found in project %s", arg, name)
+	return "", "", &LookupError{Kind: ErrTaskNotFound, Message: fmt.Sprintf("task %s not found in project %s", arg, name)}
 }
 
 // taskParts splits <grid home>/projects/<project>/tasks/<task>[/...], or
