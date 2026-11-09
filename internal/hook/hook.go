@@ -284,7 +284,7 @@ func usageHold(o Options, in hookio.Input, decision hookio.Decision) hookio.Deci
 	}
 	name := filepath.Base(dir)
 	deny := hookio.Deny("Task " + name + " is at its usage budget (" + held.Reason + "), so this session cannot start a new agent for it. " +
-		"Raise the budget with `grid usage budget set --task " + name + " --dollars N` (or --minutes N, --tokens N), or remove it with `grid usage budget clear --task " + name + "`, then start the agent again.")
+		"Stop and ask the person: a person raises the budget with `grid usage budget set --task " + name + " --dollars N` (or --minutes N, --tokens N) or removes it with `grid usage budget clear --task " + name + "`. Do not run these yourself.")
 	deny.Warnings = decision.Warnings
 	return deny
 }

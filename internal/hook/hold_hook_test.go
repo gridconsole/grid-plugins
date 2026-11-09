@@ -133,11 +133,15 @@ func TestHoldDeniesAnAgentStartAtTheBudget(t *testing.T) {
 				if got.behavior != "deny" || got.stderr != "" {
 					t.Fatalf("want deny, got %+v", got)
 				}
-				// The deny names the unit, the spent amount and the budget, and the command that lifts it.
-				for _, want := range append(tc.reason, "grid usage budget set --task T-01-demo", "grid usage budget clear --task T-01-demo") {
+				// The deny names the unit, the spent amount and the budget, and addresses the lift to the person.
+				for _, want := range append(tc.reason, "Stop and ask the person", "grid usage budget set --task T-01-demo", "grid usage budget clear --task T-01-demo", "Do not run these yourself") {
 					if !strings.Contains(got.reason, want) {
 						t.Fatalf("reason omits %q: %s", want, got.reason)
 					}
+				}
+				// The session is never told to lift the hold and retry.
+				if strings.Contains(got.reason, "start the agent again") {
+					t.Fatalf("reason tells the session to start again: %s", got.reason)
 				}
 				return
 			}
