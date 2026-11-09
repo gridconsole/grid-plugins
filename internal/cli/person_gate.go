@@ -57,6 +57,11 @@ func gateCommand(args []string, env *Env) int {
 			break
 		}
 	}
+	// Hook handlers must reach their decision protocol even when task policy is
+	// invalid or tries to gate hooks. Only hook level is in the person-only floor.
+	if args[0] == "hook" && !persongate.Required(verb, nil) {
+		return 0
+	}
 	// Only standalone help forms bypass the gate; a --help used as a flag value
 	// must not exempt an otherwise valid write.
 	words := len(strings.Fields(verb))
@@ -90,7 +95,7 @@ func gateCommand(args []string, env *Env) int {
 		taskID = res.Task
 		policy, err := workflow.PersonVerbs(res.TaskPath)
 		if errors.Is(err, workflow.ErrPersonVerbs) {
-			return commandError(*env, "workflow", err)
+			fmt.Fprintln(env.Stderr, "grid: warning: invalid person_verbs; ignoring the key and keeping the person-only floor")
 		}
 		if err != nil {
 			// Existing workflow readers retain their diagnostics and read-only behavior.
