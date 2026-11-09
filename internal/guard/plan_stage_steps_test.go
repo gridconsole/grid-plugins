@@ -70,7 +70,7 @@ func TestNamedWorkflowProposedEdit(t *testing.T) {
 		name, from, to string
 		stage, want    string
 	}{
-		{"names a template with no plan gate", "workflow: Large", "workflow: Quick", "", "deny"},
+		{"names a template with no plan gate", "workflow: Large", "workflow: Quick", "unreadable", "deny"},
 		{"keeps the template", "title: Named steps", "title: Named steps again", "gate", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
