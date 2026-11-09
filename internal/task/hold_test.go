@@ -1,8 +1,11 @@
 package task
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 const holdStandard = "# Workflows\n\n## Standard\napplies when: nothing else matches\nreview rounds: 2\n\n" +
@@ -57,5 +60,38 @@ func TestStepsForNeedsTheFolderProject(t *testing.T) {
 				t.Errorf("lookup err=%v, stage %q", err, tc.stage)
 			}
 		})
+	}
+}
+
+// The second filter the hold lookup applies, Personal's, is applied by the task
+// lookup first: a caller who cannot use Personal never gets a Personal task
+// from Deliver, so the hold lookup is only ever asked for a caller it reads
+// the task for (with the caller dropped it would read the task, as for an owner).
+func TestDeliverNeverAsksTheHoldForAFilteredCaller(t *testing.T) {
+	s, home := storeFor(t)
+	write(t, filepath.Join(s.Resolver.GridHome, "workflows.md"), holdStandard)
+	made, err := s.New(NewOptions{Cwd: home, Words: "Held", Size: "large"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := holdText("personal", "build", "''")
+	for _, tc := range []struct {
+		caller where.Caller
+		stage  string
+	}{
+		{where.Caller{Role: "member", Member: "mia"}, "unreadable"},
+		{where.Caller{Role: "guest", Member: "gus"}, "unreadable"},
+		{where.Caller{Role: "owner"}, "past"},
+	} {
+		r := s.Resolver
+		r.Caller = tc.caller
+		if got := PlanStageWith(StepsFor(r, made.Path), text, ""); got != tc.stage {
+			t.Errorf("%s: stage %q, want %q", tc.caller.Role, got, tc.stage)
+		}
+		filtered := Store{Resolver: r}
+		_, err := filtered.Deliver(DeliverOptions{Cwd: made.Path, Task: made.ID, Outcome: "Ready", By: "grid", DryRun: true})
+		if refused := errors.Is(err, where.ErrTaskNotFound); refused != (tc.stage == "unreadable") {
+			t.Errorf("%s: Deliver err=%v", tc.caller.Role, err)
+		}
 	}
 }
