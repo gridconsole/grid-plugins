@@ -14,6 +14,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/usage"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -227,8 +228,11 @@ func toolUse(o Options) {
 	// Convert a refusal to that event's decision shape after arbitration.
 	decision := evaluateGuards(o, *in, env)
 	if in.HookEventName == "PreToolUse" && decision.Behavior != "deny" {
-		history(o, *in)
-		recall(o, *in)
+		// A held agent start is refused before the history and planner records it would make.
+		if decision = usageHold(o, *in, decision); decision.Behavior != "deny" {
+			history(o, *in)
+			recall(o, *in)
+		}
 	}
 	if decision.Behavior == "allow" {
 		CountHomeAllow(env, *in)
@@ -252,4 +256,35 @@ func evaluateGuards(o Options, in hookio.Input, env map[string]string) hookio.De
 		guard.EvaluateBrief(in, o.Cwd, env),
 		guard.EvaluateHome(in, o.Cwd, env),
 	)
+}
+
+// usageHold denies a tool call that starts an agent for a task at its usage
+// budget. It never replaces a guard's deny. Without a task, with no budget, or
+// when the usage data cannot be read, the guards' decision stands and the
+// error is logged: the budget is a spending convenience, not a security gate.
+func usageHold(o Options, in hookio.Input, decision hookio.Decision) hookio.Decision {
+	if !usage.HoldsTool(in.ToolName) {
+		return decision
+	}
+	dir, err := taskDir(o, in)
+	if err != nil {
+		o.log("usage hold", err)
+		return decision
+	}
+	if dir == "" {
+		return decision
+	}
+	held, err := (usage.Store{TaskPath: dir, GridHome: o.Resolver.GridHome}).Hold()
+	if err != nil {
+		o.log("usage hold", err)
+		return decision
+	}
+	if !held.Hold {
+		return decision
+	}
+	name := filepath.Base(dir)
+	deny := hookio.Deny("Task " + name + " is at its usage budget (" + held.Reason + "), so this session cannot start a new agent for it. " +
+		"Raise the budget with `grid usage budget set --task " + name + " --dollars N` (or --minutes N, --tokens N), or remove it with `grid usage budget clear --task " + name + "`, then start the agent again.")
+	deny.Warnings = decision.Warnings
+	return deny
 }
