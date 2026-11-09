@@ -8,7 +8,9 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
-var acceptedLine = regexp.MustCompile(`(?m)^- \S+ · plan accepted · `)
+// Agent text reaches history inside a JSON event ("- {..."), so only the dated
+// prose line Grid itself writes, from the line start, reads as an acceptance.
+var acceptedLine = regexp.MustCompile(`(?m)^- \d{4}-\d\d-\d\dT\d\d:\d\d · plan accepted · `)
 
 // PlanStage places the task's step against its plan approval gate: "" (no gate
 // or accepted), "before", "gate", "past" or "unreadable". It is the one reading
