@@ -27,10 +27,10 @@ type hostShellToken struct {
 // hostMaxGroupDepth bounds nested substitutions; deeper text fails closed.
 const hostMaxGroupDepth = 16
 
-// hostWordAt reports whether word stands at text[i] as a whole shell word that
+// hostKeywordAt reports whether word stands at text[i] as a whole shell word that
 // begins at or after start: a command separator, blank or bracket before it and
-// one of after behind it.
-func hostWordAt(text string, i, start int, word, after string) bool {
+// anything but a word character behind it.
+func hostKeywordAt(text string, i, start int, word string) bool {
 	if !strings.HasPrefix(text[i:], word) {
 		return false
 	}
@@ -38,25 +38,48 @@ func hostWordAt(text string, i, start int, word, after string) bool {
 		return false
 	}
 	end := i + len(word)
-	return end == len(text) || strings.ContainsRune(after, rune(text[end]))
+	return end == len(text) || !hostWordByte(text[end])
+}
+
+func hostWordByte(b byte) bool {
+	return b == '_' || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
+}
+
+// hostJoinLines drops every backslash-newline pair, as the shells do before they
+// read words. A backslash escapes the byte after it, so \\<newline> stays.
+func hostJoinLines(text string) string {
+	if !strings.Contains(text, "\\\n") {
+		return text
+	}
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\\' && i+1 < len(text) {
+			i++
+			if text[i] == '\n' {
+				continue
+			}
+			b.WriteByte('\\')
+		}
+		b.WriteByte(text[i])
+	}
+	return b.String()
 }
 
 // hostShellGroup finds the end of a quote, substitution or brace group that
 // starts at start. An unfinished group consumes the remaining text. In a ( ) group
-// the ) of a case pattern does not end it: case and esac are counted, and every
-// word named case counts, so a mistake can only keep a group open and scanned.
+// the ) of a case pattern does not end it: once a word named case is seen no ) closes
+// the group, so it takes the rest of the text and that text is scanned as
+// commands. Nothing ever lowers the count: esac in an argument, a comment or a
+// heredoc would otherwise close the group early. A mistake only keeps a group open.
 func hostShellGroup(text string, start int, close byte) (int, bool) {
 	cases := 0
 	for i := start; i < len(text); i++ {
 		switch {
 		case text[i] == '\\':
 			i++
-		case close == ')' && hostWordAt(text, i, start, "case", " \t\r\n"):
+		case close == ')' && hostKeywordAt(text, i, start, "case"):
 			cases++
 			i += len("case") - 1
-		case close == ')' && cases > 0 && hostWordAt(text, i, start, "esac", " \t\r\n;&|()"):
-			cases--
-			i += len("esac") - 1
 		case text[i] == close && cases == 0:
 			return i + 1, true
 		case close == '\'':
@@ -102,7 +125,9 @@ func hostDigits(text string) bool {
 // Redirect operators come out whole: >, >>, >|, >!, >>|, >>!, >&, >&|, >&!, >>&,
 // &>, &>>, &>|, &>!, <>, <, <<, <<<, <&, each with an optional leading fd number,
 // which is dropped. Only >& followed by a word is a dup (a file unless an fd).
+// Backslash-newline pairs go first, before any word is matched.
 func hostShellTokens(command string) []hostShellToken {
+	command = hostJoinLines(command)
 	var out []hostShellToken
 	var word strings.Builder
 	var groups []string
