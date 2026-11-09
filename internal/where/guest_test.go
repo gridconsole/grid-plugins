@@ -241,3 +241,53 @@ func TestGuestHiddenBrokenRecord(t *testing.T) {
 		}
 	}
 }
+
+func TestGuestOutsideGridHomePath(t *testing.T) {
+	f := newFixture(t)
+	f.task("alpha", "T-01-invited")
+	hidden := f.task("beta", "T-02-hidden")
+	guestRoles(t, f.gridHome, "alpha", `{"people":[{"id":"gus","perm":"Client"}]}`)
+	outside := f.dir("elsewhere", "tasks", "T-01-x")
+	link := filepath.Join(f.gridHome, "projects", "alpha", "tasks", "T-03-link")
+	linked := os.Symlink(outside, link) == nil
+	queries := map[string]Query{
+		"absolute":       {Cwd: f.tmp, Task: outside},
+		"dots":           {Cwd: f.gridHome, Task: "../../elsewhere/tasks/T-01-x"},
+		"forward slash":  {Cwd: f.tmp, Task: "elsewhere/T-01-x"},
+		"cwd and dot":    {Cwd: f.dir("elsewhere"), Task: "./tasks/T-01-x"},
+		"symlink to out": {Cwd: f.tmp, Task: link},
+	}
+	f.r.Caller = Caller{Role: "guest", Member: "gus"}
+	_, unknown := f.r.Resolve(Query{Cwd: f.tmp, Task: hidden})
+	if unknown == nil || unknown.Error() != "task not found" {
+		t.Fatalf("unknown task answer = %v, want task not found", unknown)
+	}
+	for _, role := range []string{"guest", "external", "stranger"} {
+		for name, q := range queries {
+			if name == "symlink to out" && !linked {
+				continue
+			}
+			f.r.Caller = Caller{Role: role, Member: "gus"}
+			got, err := f.r.Resolve(q)
+			if err == nil || !reflect.DeepEqual(got, Result{}) {
+				t.Fatalf("%s/%s: got %+v, %v; want a refusal", role, name, got, err)
+			}
+			if err.Error() != unknown.Error() || strings.Contains(err.Error(), f.gridHome) || strings.Contains(err.Error(), f.root) {
+				t.Errorf("%s/%s: got %q, want %q with no host path", role, name, err, unknown)
+			}
+		}
+	}
+	// Owners, members and agents keep the message that names the Grid home.
+	for _, role := range []string{"owner", "member", "builder"} {
+		for name, q := range queries {
+			if name == "symlink to out" && !linked {
+				continue
+			}
+			f.r.Caller = Caller{Role: role, Member: "gus"}
+			_, err := f.r.Resolve(q)
+			if err == nil || !strings.Contains(err.Error(), "outside the Grid home "+f.gridHome) {
+				t.Errorf("%s/%s: got %v, want the outside-the-Grid-home message", role, name, err)
+			}
+		}
+	}
+}
