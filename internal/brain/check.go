@@ -137,6 +137,9 @@ func (s Store) checkScope(root *os.Root, level string, res *CheckResult) error {
 			}
 		}
 	}
+	if AuditHashCheck(level) {
+		return auditDrift(root, level, res)
+	}
 	return nil
 }
 
@@ -166,6 +169,15 @@ func checkProposal(root *os.Root, level, name string, res *CheckResult) error {
 	if err != nil {
 		return err
 	}
+	return ProposalCheck(level, name, n, b, res)
+}
+
+// ProposalCheck checks one proposal from the note parsed out of b, so a caller
+// that holds the bytes (Accept, under the level lock) checks what it read and
+// not a second read. It is replaceable so a test can make a proposal fail.
+var ProposalCheck = checkProposalBytes
+
+func checkProposalBytes(level, name string, n Note, b []byte, res *CheckResult) error {
 	res.Checked++
 	topic := strings.TrimSpace(n.Topic)
 	if configProposalTopics[topic] {
