@@ -78,6 +78,9 @@ func (s Store) WorkspaceTokens() *uint64 {
 	return &n
 }
 
+// ErrWorkspaceTokensInput identifies an invalid caller-supplied token budget.
+var ErrWorkspaceTokensInput = errors.New("workspace token budget must be at least 1")
+
 const maxWorkspaceBytes = 64 * 1024
 
 // SetWorkspaceTokens changes only tokens_per_task lines, or clears them when
@@ -85,7 +88,7 @@ const maxWorkspaceBytes = 64 * 1024
 // All writers must share the persistent lock, including writers of other keys.
 func (s Store) SetWorkspaceTokens(value *uint64) error {
 	if value != nil && *value == 0 {
-		return errors.New("workspace token budget must be at least 1")
+		return fmt.Errorf("%w", ErrWorkspaceTokensInput)
 	}
 	if s.GridHome == "" {
 		return errors.New("cannot find the Grid home; set GRID_HOME")

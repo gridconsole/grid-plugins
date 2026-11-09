@@ -2,6 +2,7 @@ package usage
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -237,5 +238,32 @@ func TestWorkspaceBudgetSizeBoundary(t *testing.T) {
 	got, err := os.ReadFile(path)
 	if err != nil || string(got) != data {
 		t.Fatal("size refusal changed file")
+	}
+}
+
+func TestWorkspaceBudgetInputError(t *testing.T) {
+	zero, positive := uint64(0), uint64(100)
+	for _, tc := range []struct {
+		name    string
+		value   *uint64
+		input   bool
+		message string
+	}{
+		{"zero", &zero, true, "workspace token budget must be at least 1"},
+		{"set-missing-home", &positive, false, "cannot find the Grid home; set GRID_HOME"},
+		{"clear-missing-home", nil, false, "cannot find the Grid home; set GRID_HOME"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := (Store{}).SetWorkspaceTokens(tc.value)
+			if errors.Is(err, ErrWorkspaceTokensInput) != tc.input {
+				t.Errorf("input classification = %v, want %v", err, tc.input)
+			}
+			if err == nil || err.Error() != tc.message {
+				t.Fatalf("error = %v, want %q", err, tc.message)
+			}
+			if tc.input && errors.Unwrap(err) != ErrWorkspaceTokensInput {
+				t.Fatal("input error does not wrap the sentinel")
+			}
+		})
 	}
 }

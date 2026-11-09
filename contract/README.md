@@ -284,13 +284,15 @@ Disagreements and defaults chosen:
   without resolving a task: show returns `{"tokens_per_task":100}` or
   `{"tokens_per_task":null}` with `--json`, and `tokens_per_task 100` or
   `tokens_per_task none` as plain text. Set requires `--tokens N`, a positive
-  integer; clear accepts optional `--tokens` and removes the key. All three
-  reject `--task`, `--dollars` and `--minutes` (exit 2). Workspace writes preserve
-  every byte outside the token-key lines, add an absent key last in the front
-  matter, and create front matter or the file when needed. They use an exclusive
-  `.workspace.lock` and atomic replacement; unsafe, oversized, invalid UTF-8 or
-  unparsable front matter is refused with exit 2. Clearing an absent key does
-  not rewrite the file. Replaceable `WorkspaceBudgetReadAllowed` and
+  integer; clear accepts optional `--tokens` and removes the key. Invalid flags
+  and amounts exit 2; all three reject `--task`, `--dollars` and `--minutes`.
+  Workspace writes preserve every byte outside the token-key lines, add an absent
+  key last in the front matter, and create front matter or the file when needed.
+  They use an exclusive
+  `.workspace.lock` and atomic replacement. An unsafe, oversized, non-UTF-8 or
+  unparsable workspace file, a lock failure or a write failure exits 1, leaving
+  the file unchanged. Clearing an absent key does not rewrite the file.
+  Replaceable `WorkspaceBudgetReadAllowed` and
   `WorkspaceBudgetWriteAllowed` policies use `GRID_ROLE`: reads default to the
   empty local role, owner and member; writes default to the empty role and owner.
   Other roles are refused with exit 3 before workspace access. Workflow keys are

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"strconv"
@@ -311,7 +312,10 @@ func runWorkspaceBudget(op string, value *uint64, asJSON bool, env Env) int {
 		value = s.WorkspaceTokens()
 	} else if err := s.SetWorkspaceTokens(value); err != nil {
 		fmt.Fprintf(env.Stderr, "usage budget: %v\n", err)
-		return 2
+		if errors.Is(err, usage.ErrWorkspaceTokensInput) {
+			return 2
+		}
+		return 1
 	}
 	if asJSON {
 		return writeJSON(env.Stdout, struct {
