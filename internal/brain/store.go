@@ -327,6 +327,9 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 		if err != nil {
 			return err
 		}
+		if afterProposalRead != nil {
+			afterProposalRead()
+		}
 		if n.Status == "rejected" {
 			return fmt.Errorf("proposal %q is already rejected", name)
 		}

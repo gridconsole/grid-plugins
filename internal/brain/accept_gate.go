@@ -21,6 +21,11 @@ func (e *CheckRefusal) Error() string {
 // proposal check on Accept. Reject is never gated.
 var AcceptCheckRequired = func(level string) bool { return level == "home" || level == "project" }
 
+// afterProposalRead is a test seam, nil in production: Accept calls it right
+// after it reads the proposal, so a test can change the file between that read
+// and the check and tell whether the check and the publication use one read.
+var afterProposalRead func()
+
 // checkAccept runs under the level lock on the bytes decide read, the same
 // bytes it publishes from, so what is checked is what is published.
 func checkAccept(level, name string, n Note, b []byte) error {

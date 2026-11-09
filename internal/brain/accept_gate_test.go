@@ -295,6 +295,64 @@ func TestAcceptRaceNeverPublishesFailingBytes(t *testing.T) {
 	}
 }
 
+// Row 3, deterministic: the proposal is swapped between Accept's read and its
+// check, by the seam and not by a racing writer. The check and the publication
+// both use the bytes read, so a re-read for the check (or for the publication)
+// is red on every run.
+func TestAcceptUsesOneReadAcrossASwapBetweenReadAndCheck(t *testing.T) {
+	failingCheck(t)
+	for _, tc := range []struct {
+		name, first, second string
+		refused             bool
+	}{
+		{"failing read, clean file at the check", failMarker, "Clean text.", true},
+		{"clean read, failing file at the check", "Clean text.", failMarker, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testStore(t)
+			n := gatedNote("project", tc.first+"\n")
+			if _, err := s.Propose(n, n.Origin); err != nil {
+				t.Fatal(err)
+			}
+			swapped := proposalBytes(t, s, gatedNote("project", tc.second+"\n"))
+			path := proposalPath(s, "project", n.Name)
+			calls := 0
+			afterProposalRead = func() {
+				calls++
+				replaceProposal(t, path, swapped)
+			}
+			t.Cleanup(func() { afterProposalRead = nil })
+
+			_, err := s.Accept("project", n.Name)
+			var refusal *CheckRefusal
+			if got := errors.As(err, &refusal); got != tc.refused || (!tc.refused && err != nil) {
+				t.Fatalf("refused = %v, want %v (err %v)", got, tc.refused, err)
+			}
+			if calls != 1 {
+				t.Fatalf("the seam ran %d times, want 1", calls)
+			}
+			entry, rerr := os.ReadFile(filepath.Join(s.GridHome, "projects", "example", "knowledge", "decisions", "gated.md"))
+			if tc.refused {
+				if !errors.Is(rerr, fs.ErrNotExist) || len(versionsOf(t, s, "decisions", "gated")) != 0 {
+					t.Fatalf("a refused accept published: %v", rerr)
+				}
+				return
+			}
+			if rerr != nil || !strings.Contains(string(entry), "Clean text.") || strings.Contains(string(entry), failMarker) {
+				t.Fatalf("published bytes are not the checked ones: %v\n%s", rerr, entry)
+			}
+			for _, v := range versionsOf(t, s, "decisions", "gated") {
+				if b, err := os.ReadFile(filepath.Join(s.GridHome, filepath.FromSlash(v.Path))); err != nil || strings.Contains(string(b), failMarker) {
+					t.Fatalf("version %d holds failing bytes: %v", v.N, err)
+				}
+			}
+			if strings.Contains(readLog(t, s), failMarker) {
+				t.Fatal("the audit log holds failing text")
+			}
+		})
+	}
+}
+
 // The host policy can turn the check off for one level; the other keeps it.
 func TestAcceptCheckRequiredSeamIsPerLevel(t *testing.T) {
 	failingCheck(t)
