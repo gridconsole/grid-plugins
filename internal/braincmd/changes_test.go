@@ -3,6 +3,7 @@ package braincmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -498,5 +499,33 @@ func TestRevertReportsTheVersionWhenTheIndexRebuildFails(t *testing.T) {
 				t.Fatalf("want one new reverted line: %+v then %+v", before.Changes, after.Changes)
 			}
 		})
+	}
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("stdout closed") }
+
+// When the index rebuild fails and the version line cannot be written either,
+// the message keeps the rebuild error beside the write error.
+func TestRevertKeepsTheRebuildErrorWhenStdoutFails(t *testing.T) {
+	h := newHarness(t)
+	h.threeVersions(t)
+	idx := filepath.Join(h.env.GridHome, "knowledge", "index.md")
+	if err := os.RemoveAll(idx); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(idx, "keep"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	h.env.Stdout = failingWriter{}
+	h.err.Reset()
+	if code := h.run("revert", "decisions/checks", "--to", "1", "--level", "home"); code != 1 {
+		t.Fatalf("exit %d, want 1: %q", code, &h.err)
+	}
+	for _, want := range []string{"stdout closed", "rebuilding the index failed"} {
+		if !strings.Contains(h.err.String(), want) {
+			t.Fatalf("stderr %q lacks %q", &h.err, want)
+		}
 	}
 }

@@ -257,7 +257,7 @@ func runRevert(args []string, env Env) int {
 	}
 	if err != nil {
 		if _, perr := fmt.Fprintf(env.Stdout, "v%d\n", version); perr != nil {
-			return failWith(env, l.asJSON, perr)
+			return failWith(env, l.asJSON, errors.Join(perr, err))
 		}
 		return failWith(env, l.asJSON, err)
 	}
