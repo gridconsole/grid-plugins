@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The agent's HOME is <attempt>/home, so ../trace.jsonl is within its reach.
@@ -18,10 +19,12 @@ func TestAgentCannotForgeTheTrace(t *testing.T) {
 	}
 }
 
-// The agent waits, bounded to about 2s, until the runner's copy of its stdout
-// holds the printed line, so the overwrite always lands after the copy.
+// The runner writes no trace file, so the agent's bounded wait (up to 2s) for a copy of
+// its stdout never ends early; it only gives a reintroduced trace.jsonl time to appear
+// before the overwrite. The 5s task timeout leaves the full wait a 3s margin.
 func TestOverwrittenTraceFileIsNotRead(t *testing.T) {
 	runner := testRunner(t)
+	runner.Timeout = 5 * time.Second
 	runner.Agent = []string{"sh", "-c", `printf '%s\n' "$1"; n=0; until grep -q Skill "$HOME/../trace.jsonl" 2>/dev/null || [ $n -ge 40 ]; do n=$((n+1)); sleep 0.05; done; printf '%s\n' "$2" > "$HOME/../trace.jsonl"`, "agent", toolLine, forgedLine}
 	r := runTask(t, runner, traceTask(
 		Check{ID: "absent", Type: "tool_used", Tool: "Forged", Absent: true},
