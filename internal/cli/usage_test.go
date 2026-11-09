@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -476,7 +477,17 @@ func TestWorkspaceBudgetRolesCLI(t *testing.T) {
 }
 
 func TestWorkspaceBudgetRefusalsCLI(t *testing.T) {
-	for _, kind := range []string{"linked", "directory", "invalid-utf8", "unparsable", "oversized"} {
+	for _, tc := range []struct{ kind, message string }{
+		{"linked", "workspace must be a regular file within the size limit"},
+		{"directory", "workspace must be a regular file within the size limit"},
+		{"invalid-utf8", "workspace must be UTF-8 within the size limit"},
+		{"unparsable", "workspace front matter does not parse"},
+		{"oversized", "workspace must be a regular file within the size limit"},
+		{"lock-directory", "workspace lock is not a regular file"},
+		{"read-only-home", "cannot save workspace budget"},
+		{"read-only-home-no-lock", "cannot open workspace lock"},
+	} {
+		kind := tc.kind
 		for _, op := range []string{"set", "clear"} {
 			t.Run(kind+"/"+op, func(t *testing.T) {
 				h := newHarness(t)
@@ -500,6 +511,25 @@ func TestWorkspaceBudgetRefusalsCLI(t *testing.T) {
 				case "oversized":
 					original += strings.Repeat("x", 65537)
 					h.write(path, original)
+				case "lock-directory":
+					h.write(path, original)
+					h.mkdir(filepath.Join(h.gridHome, ".workspace.lock"))
+				case "read-only-home", "read-only-home-no-lock":
+					if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+						t.Skip("requires unprivileged Unix permissions")
+					}
+					h.write(path, original)
+					if kind == "read-only-home" {
+						h.write(filepath.Join(h.gridHome, ".workspace.lock"), "")
+					}
+					if err := os.Chmod(h.gridHome, 0o555); err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() {
+						if err := os.Chmod(h.gridHome, 0o755); err != nil {
+							t.Error(err)
+						}
+					})
 				}
 				before, err := os.Lstat(path)
 				if err != nil {
@@ -509,8 +539,12 @@ func TestWorkspaceBudgetRefusalsCLI(t *testing.T) {
 				if op == "set" {
 					args = append(args, "--tokens", "200")
 				}
-				if code := h.run(h.home, args...); code != 2 || h.out.Len() != 0 {
-					t.Fatalf("unsafe workspace: exit %d: %s", code, h.errb)
+				if code := h.run(h.home, args...); code != 1 || h.out.Len() != 0 {
+					t.Errorf("unsafe workspace: exit %d, want 1: %s", code, h.errb)
+				}
+				// Exact diagnostics also ensure one stderr line with no private path.
+				if want := "usage budget: " + tc.message + "\n"; h.errb.String() != want {
+					t.Errorf("stderr = %q, want %q", h.errb.String(), want)
 				}
 				after, err := os.Lstat(path)
 				if err != nil || !os.SameFile(before, after) || !before.ModTime().Equal(after.ModTime()) {
@@ -546,5 +580,30 @@ func TestWorkspaceBudgetReplaceablePoliciesCLI(t *testing.T) {
 	}
 	if readCalls != 1 || writeCalls != 2 {
 		t.Fatalf("policy calls: read %d, write %d", readCalls, writeCalls)
+	}
+}
+
+// Bypass flag validation to exercise the store's input-error classification.
+func TestWorkspaceBudgetStoreErrorsCLI(t *testing.T) {
+	for _, tc := range []struct {
+		name, role, message string
+		value               uint64
+		code                int
+	}{
+		{"zero", "owner", "workspace token budget must be at least 1", 0, 2},
+		{"missing-home", "owner", "cannot find the Grid home; set GRID_HOME", 100, 1},
+		{"guest", "guest", "caller role is not allowed to access the workspace budget", 100, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			t.Setenv("GRID_ROLE", tc.role)
+			h.env.GridHome = ""
+			if code := runWorkspaceBudget("set", &tc.value, true, h.env); code != tc.code {
+				t.Errorf("store error: exit %d, want %d", code, tc.code)
+			}
+			if want := "usage budget: " + tc.message + "\n"; h.errb.String() != want || h.out.Len() != 0 {
+				t.Fatalf("stdout %q, stderr %q, want %q", h.out, h.errb, want)
+			}
+		})
 	}
 }
