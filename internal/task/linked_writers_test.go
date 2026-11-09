@@ -142,7 +142,8 @@ func TestTaskWritersRefuseALinkedFile(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := snapshot(tk.Path)
-			err := commitWrite(tk.Path, Event{Task: tk.ID, What: "note", Note: "x"}, map[string][]byte{"task.md": []byte("changed\n")})
+			image := before["task.md"] + "\nChanged through Grid.\n"
+			err := commitWrite(tk.Path, Event{Task: tk.ID, What: "note", Note: "x"}, map[string][]byte{"task.md": []byte(image)})
 			if !errors.Is(err, ErrLinkedFile) {
 				t.Errorf("commitWrite err = %v; want linked_file", err)
 			}
