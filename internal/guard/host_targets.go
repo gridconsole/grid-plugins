@@ -31,6 +31,8 @@ type hostShellToken struct {
 	// "$NAME" for a name the command never sets, in a command main's textual check reads as a read; set
 	// by hostSegmentsOf.
 	live, dq, calm bool
+	// tilde: the word begins with a ~ that is neither quoted nor escaped, so the shell may expand it.
+	tilde bool
 }
 
 // hostMaxGroupDepth bounds nested substitutions; deeper text fails closed.
@@ -406,13 +408,14 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 	var docs []hostHeredoc
 	started, comment, ansi := false, false, false // a word has begun, even an empty one; inside a comment; $'..' or $".." in the word
 	live, dqStart, dqEnd := false, false, -1      // an expansion in the word; the word began with "; where that " closed
+	tilde := false                                // the word began with an unquoted ~
 	flush := func() {
 		started = false
 		if word.Len() > 0 || len(groups) > 0 { // groups alone: substitutions in a heredoc body
-			out = append(out, hostShellToken{text: word.String(), groups: groups, ansi: ansi, live: live, dq: dqStart && dqEnd == word.Len()})
+			out = append(out, hostShellToken{text: word.String(), groups: groups, ansi: ansi, live: live, dq: dqStart && dqEnd == word.Len(), tilde: tilde})
 		}
 		word.Reset()
-		groups, ansi, live, dqStart, dqEnd = nil, false, false, false, -1
+		groups, ansi, live, dqStart, dqEnd, tilde = nil, false, false, false, -1, false
 	}
 	emit := func(kind hostShellKind, text string) {
 		flush()
@@ -593,6 +596,7 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 			}
 			emit(kind, text)
 		default:
+			tilde = tilde || ch == '~' && !started
 			word.WriteByte(ch)
 			started = true
 			live = live || ch == '{'
@@ -750,10 +754,16 @@ func (g hostSegment) readCommand() bool {
 // and holds one ($x, $(..), a backtick, {a,b}). It counts as a runner, never a read,
 // unless it is calm: no expansion runs in it ('-x$'), or it is a lone "$PWD" the command
 // never sets. Any other "$NAME" stays a runner: the environment or a startup file may
-// hold an option there (PAT=--pre=tee) that the command does not set.
+// hold an option there (PAT=--pre=tee) that the command does not set. An unquoted word
+// that starts with ~ and a +, - or digit is a runner too, calm or not: it expands to the
+// directory stack (zsh ~N, ~+N, ~-N), PWD (~+) or OLDPWD (~-), which the line may have set
+// to an option (dirstack[1]=-exec, OLDPWD=-exec). Plain ~, ~/x and ~user name a home.
 func hostOpaqueOption(name string, arg hostShellToken) bool {
 	if name != "find" && name != "rg" {
 		return false
+	}
+	if arg.tilde && len(arg.text) > 1 && strings.IndexByte("+-0123456789", arg.text[1]) >= 0 {
+		return true
 	}
 	const expansion = "$`{"
 	return arg.ansi || arg.text != "" && !arg.calm && strings.ContainsAny(arg.text, expansion) &&

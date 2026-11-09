@@ -124,3 +124,57 @@ func TestHostPlainVarRules(t *testing.T) {
 		})
 	}
 }
+
+// tildeDeniedRows are lines a real shell runs as a write (the L135R11 review: bash 5.3.9 on the VM, zsh 5.9
+// on the laptop) that the lane let through: an unquoted word that starts with ~ and a +, - or digit expands
+// to the zsh directory stack (~N, ~+N, ~-N), PWD (~+) or OLDPWD (~-), and find or rg reads the result as an
+// option. LNK is a symlink to workflows.md. Each stays denied.
+var tildeDeniedRows = []struct{ name, command string }{
+	{"m04_zsh_dirstack1_tilde", `dirstack[1]=-exec; find . -maxdepth 0 ~1 tee LNK \;`},
+	{"m05_zsh_dirstack1_tplus", `dirstack[1]=-exec; find . -maxdepth 0 ~+1 tee LNK \;`},
+	{"m06_zsh_dirstack1_tminus", `dirstack[1]=-exec; find . -maxdepth 0 ~-0 tee LNK \;`},
+	{"z05_zsh_dirstack2", `dirstack[2]=-exec; find . -maxdepth 0 ~2 tee LNK \;`},
+	{"m32_zsh_dirstack1_rg", `dirstack[1]=--pre=tee; rg -n x ~1 LNK`},
+	{"z04_zsh_dirstack1_rg_tplus", `dirstack[1]=--pre=tee; rg -n x ~+1 LNK`},
+	{"m07_oldpwd_tminus", `OLDPWD=-exec; find . -maxdepth 0 ~- tee LNK \;`},
+	{"m08_pwd_tplus", `PWD=-exec; find . -maxdepth 0 ~+ tee LNK \;`},
+}
+
+// tildeKeptRows keep the verdict they had before the ~ rule: a home (~, ~/x, ~user) is no option, and a quoted
+// or escaped ~ is no tilde. The L135R11 lane allowed each.
+var tildeKeptRows = []struct{ name, command string }{
+	{"c01_tilde_plain", `find . -maxdepth 0 ~ tee LNK \;`},
+	{"c02_tilde_slash", `find . -maxdepth 0 ~/x tee LNK \;`},
+	{"c03_tilde_user", `find . -maxdepth 0 ~root tee LNK \;`},
+	{"c04_quoted_tminus", `find . -maxdepth 0 '~-' tee LNK \;`},
+	{"c05_dq_tilde_digit", `find . -maxdepth 0 "~1" tee LNK \;`},
+	{"c06_escaped_tminus", `find . -maxdepth 0 \~- tee LNK \;`},
+	{"c07_rg_tilde_user", `rg -n x ~root LNK`},
+	{"c08_rg_tilde_slash", `rg -n x ~/x LNK`},
+}
+
+func TestHostTildeOpaque(t *testing.T) {
+	f := setup(t)
+	project := filepath.Join(f.projects, "example")
+	policy := filepath.Join(project, "workflows.md")
+	f.write(policy, "policy")
+	f.link(filepath.Join(project, "lnk"), policy)
+	for _, table := range []struct {
+		name string
+		rows []struct{ name, command string }
+		want string
+	}{{"denied", tildeDeniedRows, "deny"}, {"kept", tildeKeptRows, "allow"}} {
+		for _, tt := range table.rows {
+			for _, where := range []struct{ suffix, cwd, lnk string }{{"", project, "lnk"}, {"_absolute", f.repo, filepath.Join(project, "lnk")}} {
+				t.Run(table.name+"/"+tt.name+where.suffix, func(t *testing.T) {
+					command := strings.ReplaceAll(tt.command, "LNK", where.lnk)
+					in := f.input("Bash", command)
+					in.Cwd = where.cwd
+					if got := EvaluateHost(in, f.root, f.env); (got.Behavior == "deny") != (table.want == "deny") {
+						t.Fatalf("behavior = %q, want %s for %q", got.Behavior, table.want, command)
+					}
+				})
+			}
+		}
+	}
+}
