@@ -28,9 +28,35 @@ type Limits struct {
 }
 
 // LimitError never includes the supplied value, which may contain private data.
-type LimitError struct{ Key string }
+type LimitError struct{ Key, Routine string }
 
-func (e *LimitError) Error() string { return "invalid " + e.Key }
+func (e *LimitError) Error() string {
+	if e.Routine != "" {
+		return "routine " + e.Routine + ": invalid " + e.Key
+	}
+	return "invalid " + e.Key
+}
+
+func (p LimitPolicy) explicit() bool {
+	return p.RoutineTimeout.Kind != 0 || p.RoutineMaxTurns.Kind != 0 || p.RoutineBudget.Kind != 0
+}
+
+// EffectiveLimits overlays entry keys on the workflow snapshot. The snapshot
+// stays separate so saving run state cannot turn inherited defaults into keys.
+func (e Entry) EffectiveLimits() (Limits, error) {
+	p := e.workflowPolicy
+	for _, d := range limitDefinitions {
+		if n := *d.field(&e.LimitPolicy); n.Kind != 0 {
+			*d.field(&p) = n
+		}
+	}
+	return p.EffectiveLimits()
+}
+
+func (l Limits) fingerprint() string {
+	duration, _ := time.ParseDuration(l.Timeout) // validated by EffectiveLimits
+	return strconv.FormatInt(int64(duration), 10) + "\x00" + strconv.Itoa(l.MaxTurns) + "\x00" + strconv.FormatFloat(l.Budget, 'f', -1, 64)
+}
 
 var decimal = regexp.MustCompile(`^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$`)
 var integer = regexp.MustCompile(`^[+-]?[0-9]+$`)

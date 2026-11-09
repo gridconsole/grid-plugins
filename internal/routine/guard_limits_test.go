@@ -16,7 +16,7 @@ func TestRoutineLegacyFingerprint(t *testing.T) {
 	// Pinned from plugin base 0cd9a7cf8be54dbe6197ccd18a6a5efbdd9fc219.
 	const want = "a0b16821620a7c0a8f9bf3fd44d3890514df8094797106e4b3b316f6f6132ab9"
 	e := Entry{Run: "grid version", Every: "1h"}
-	if got := e.Fingerprint(); got != want {
+	if got, err := e.Fingerprint(); err != nil || got != want {
 		t.Fatalf("legacy fingerprint = %s, want %s", got, want)
 	}
 }
@@ -125,5 +125,60 @@ func testTimerLimitChange(t *testing.T, workflow bool, key, before, after string
 				}
 			}
 		})
+	}
+}
+
+func TestRoutineLimitFingerprintInputs(t *testing.T) {
+	const legacy = "a0b16821620a7c0a8f9bf3fd44d3890514df8094797106e4b3b316f6f6132ab9"
+	base := Entry{Run: "grid version", Every: "1h"}
+	fingerprint := func(e Entry) string {
+		t.Helper()
+		hash, err := e.Fingerprint()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return hash
+	}
+	var explicitHash string
+	for key, value := range map[string]string{"routine_timeout": "10m", "routine_max_turns": "10", "routine_budget": "1"} {
+		e := base
+		e.LimitPolicy = policyForTest(t, map[string]string{key: value})
+		hash := fingerprint(e)
+		if hash == legacy {
+			t.Fatalf("explicit default %s used legacy hash", key)
+		}
+		if explicitHash != "" && explicitHash != hash {
+			t.Fatal("explicit keys with identical effective policy hash differently")
+		}
+		explicitHash = hash
+	}
+	const extended = "973c78f1ca566fe32bfb1a02e7cb1c239eb841a3025635883c827b3e4b93ca14"
+	if explicitHash != extended {
+		t.Fatalf("fixed-order limit fingerprint = %s, want %s", explicitHash, extended)
+	}
+	// The extension is fixed-order, canonical effective values, not YAML text.
+	e := base
+	e.LimitPolicy = policyForTest(t, map[string]string{"routine_timeout": "600s", "routine_max_turns": "+10", "routine_budget": "1.00"})
+	if fingerprint(e) != explicitHash {
+		t.Fatal("equivalent policy spelling changed fingerprint")
+	}
+	e.Name, e.Machine, e.Body, e.Outcome = "other", "other", "notes", "success"
+	e.LastRun = time.Now()
+	e.Limits = Limits{Timeout: "2h", MaxTurns: 100, Budget: 50}
+	if fingerprint(e) != explicitHash {
+		t.Fatal("metadata or stale display limits changed fingerprint")
+	}
+	e = base
+	e.workflowPolicy = policyForTest(t, map[string]string{"routine_timeout": "600s", "routine_max_turns": "10", "routine_budget": "1.0"})
+	if fingerprint(e) != legacy {
+		t.Fatal("explicit default workflow changed legacy fingerprint")
+	}
+	e.workflowPolicy = policyForTest(t, map[string]string{"routine_budget": "2"})
+	if fingerprint(e) == legacy {
+		t.Fatal("nondefault workflow used legacy fingerprint")
+	}
+	e.LimitPolicy = policyForTest(t, map[string]string{"routine_budget": "1"})
+	if fingerprint(e) != explicitHash {
+		t.Fatal("hash used overridden workflow value instead of effective limit")
 	}
 }

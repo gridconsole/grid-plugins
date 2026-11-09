@@ -109,7 +109,7 @@ type timerState struct {
 	Installed bool   `json:"installed"`
 	Project   string `json:"project"`
 	Name      string `json:"name"`
-	// Hash is the fingerprint of the routine's run and every when the person
+	// Hash is the fingerprint of the command, interval and limits when the person
 	// last ran schedule; timer runs refuse a routine that no longer matches.
 	Hash string `json:"hash,omitempty"`
 }
@@ -273,7 +273,10 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 			return err
 		}
 	}
-	hash := e.Fingerprint()
+	hash, err := e.Fingerprint()
+	if err != nil {
+		return err
+	}
 	if state.Installed {
 		unchanged := true
 		for _, f := range p.Files {
@@ -283,7 +286,7 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 			}
 		}
 		if unchanged {
-			// The files do not carry the command, so a changed run or every
+			// The files do not carry execution policy, so a changed fingerprint
 			// only needs the approval record refreshed.
 			if state.Hash == hash {
 				return nil

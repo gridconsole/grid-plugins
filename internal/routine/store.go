@@ -25,6 +25,8 @@ type Entry struct {
 	LastRun     time.Time `json:"last_run,omitzero" yaml:"last_run,omitempty"`
 	Outcome     string    `json:"outcome,omitempty" yaml:"outcome,omitempty"`
 	Body        string    `json:"-" yaml:"-"`
+
+	workflowPolicy LimitPolicy // snapshot read with the entry; never persisted
 }
 
 type Store struct {
@@ -49,14 +51,32 @@ func (s Store) now() time.Time {
 	return time.Now().UTC()
 }
 
-// Fingerprint identifies what a schedule approved: the command and the interval.
-// The run value cannot hold NUL, so the pair is unambiguous.
-func (e Entry) Fingerprint() string {
-	sum := sha256.Sum256([]byte(e.Run + "\x00" + e.Every))
-	return hex.EncodeToString(sum[:])
+// Fingerprint identifies the command, interval and effective execution limits.
+// Legacy entries with default workflow policy retain exactly run + NUL + every.
+// Otherwise append NUL + "limits-v1" + NUL, then timeout nanoseconds, max turns
+// and budget (canonical decimals), separated by NUL, with no trailing separator.
+func (e Entry) Fingerprint() (string, error) {
+	limits, err := e.EffectiveLimits()
+	if err != nil {
+		return "", err
+	}
+	defaults, err := (LimitPolicy{}).EffectiveLimits()
+	if err != nil {
+		return "", err
+	}
+	workflow, err := e.workflowPolicy.EffectiveLimits()
+	if err != nil {
+		return "", err
+	}
+	input := e.Run + "\x00" + e.Every
+	if e.LimitPolicy.explicit() || limits.fingerprint() != defaults.fingerprint() || workflow.fingerprint() != defaults.fingerprint() {
+		input += "\x00limits-v1\x00" + limits.fingerprint()
+	}
+	sum := sha256.Sum256([]byte(input))
+	return hex.EncodeToString(sum[:]), nil
 }
 
-// checkScheduled refuses a timer run of a routine whose run or every differs
+// checkScheduled refuses a timer run whose command, interval or limits differ
 // from what `grid routine schedule` recorded, so a synced edit of a project
 // brain cannot change what an installed timer runs.
 func (s Store) checkScheduled(e Entry) error {
@@ -65,7 +85,11 @@ func (s Store) checkScheduled(e Entry) error {
 	if err != nil {
 		return err
 	}
-	if state.Label == "" || state.Hash == e.Fingerprint() {
+	hash, err := e.Fingerprint()
+	if err != nil {
+		return err
+	}
+	if state.Label == "" || state.Hash == hash {
 		return nil
 	}
 	return fmt.Errorf("%w: %s; run grid routine schedule again to approve it", ErrScheduleChanged, e.Name)
@@ -118,7 +142,11 @@ func (s Store) Get(name string) (Entry, error) {
 	if err != nil {
 		return Entry{}, err
 	}
-	return decode(name, b)
+	e, err := decode(name, b)
+	if err != nil {
+		return e, err
+	}
+	return s.resolveLimits(e)
 }
 func (s Store) List() ([]Entry, error) {
 	entries := []Entry{}
@@ -129,6 +157,10 @@ func (s Store) List() ([]Entry, error) {
 	for _, name := range names {
 		e, err := s.Get(name)
 		if err != nil {
+			var invalid *LimitError
+			if errors.As(err, &invalid) {
+				return nil, &LimitError{Key: invalid.Key, Routine: name}
+			}
 			return nil, fmt.Errorf("routine %s: %w", name, err)
 		}
 		entries = append(entries, e)
@@ -151,7 +183,7 @@ func (s Store) Add(name, every, run string, policy ...LimitPolicy) (Entry, error
 		e.LimitPolicy = policy[0]
 	}
 	var err error
-	e.Limits, err = e.EffectiveLimits()
+	e, err = s.resolveLimits(e)
 	if err != nil {
 		return e, err
 	}
