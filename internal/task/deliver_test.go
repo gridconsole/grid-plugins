@@ -19,6 +19,7 @@ func deliverFixture(t *testing.T, header string) (Store, Task) {
 	text := strings.Replace(string(data), "state: queued", header+"state: running", 1)
 	write(t, path, text+"\n## Notes\n\nKeep these.\n\n## Outcome\n\nOld result.\n\n## Follow-up\n\nKeep this too.\n")
 	write(t, filepath.Join(task.Path, "plan.md"), "# Plan 1\n- [x] 1 Check result\n  jobs: []\n")
+	approveFixturePlan(t, s, task)
 	if _, err := (proof.Store{TaskDir: task.Path}).Add(proof.Input{Item: "1", Text: "ok", Kind: "check", By: "grid"}); err != nil {
 		t.Fatal(err)
 	}
@@ -46,6 +47,8 @@ func TestDeliverKeepsHeaderAndCommitsOnce(t *testing.T) {
 	path := filepath.Join(task.Path, "task.md")
 	before, _ := os.ReadFile(path)
 	beforeKeys := keyOrder(t, string(before))
+	approved, _ := os.ReadFile(filepath.Join(task.Path, "approval.json"))
+	receiptBefore := string(approved)
 	write(t, filepath.Join(task.Path, "history.md"), "- legacy entry\n")
 
 	summary := `Done: "ready" # not a comment`
@@ -100,10 +103,12 @@ func TestDeliverKeepsHeaderAndCommitsOnce(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(task.Path, journalName)); !os.IsNotExist(err) {
 		t.Fatal("journal was not removed")
 	}
-	for _, name := range []string{"approval.json", "approval-ship.json"} {
-		if _, err := os.Stat(filepath.Join(task.Path, name)); !os.IsNotExist(err) {
-			t.Fatalf("delivery wrote %s", name)
-		}
+	// The fixture's approval of the plan is the only one: delivery adds none.
+	if got, _ := os.ReadFile(filepath.Join(task.Path, "approval.json")); string(got) != receiptBefore {
+		t.Fatalf("delivery wrote approval.json: %s", got)
+	}
+	if _, err := os.Stat(filepath.Join(task.Path, "approval-ship.json")); !os.IsNotExist(err) {
+		t.Fatal("delivery wrote approval-ship.json")
 	}
 }
 

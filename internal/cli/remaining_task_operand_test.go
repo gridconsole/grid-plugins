@@ -54,6 +54,7 @@ func remainingTaskFixture(t *testing.T, command string) (*harness, task.Task, ta
 	h.write(filepath.Join(shared.Path, "plan.md"), "# Plan 1\n- [x] 1 Check result\n  proof: check\n  jobs: []\n")
 	h.write(filepath.Join(h.gridHome, "projects", shared.Project, "knowledge", "deploy", "lands.md"), "---\nlands:\n  target: local\n  branch: main\n  command: echo landed\n  needs-approve: true\n---\n")
 	if command == "deliver" {
+		approveDeliveryPlan(t, h, shared)
 		addDeliveryProof(t, h, shared.Path)
 	}
 	if strings.HasPrefix(command, "brain ") {

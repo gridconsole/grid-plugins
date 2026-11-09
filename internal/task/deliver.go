@@ -19,6 +19,10 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
+// ErrPlanNotApproved identifies a delivery refused because the task's plan has
+// no valid approval yet.
+var ErrPlanNotApproved = errors.New("plan not approved")
+
 // DeliverOptions supplies the person's outcome and the files to copy. It is
 // command input; existing task records remain owned by task.Read and Fold.
 type DeliverOptions struct {
@@ -176,6 +180,16 @@ func (d delivery) check(t Task) error {
 		return errors.New("proof/index.json must be a regular file")
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
+	}
+	// Delivery writes step: ship, which would move a task whose plan still waits
+	// for a person past the plan gate. It asks the guard's own question, last,
+	// after the faults the agent can mend itself.
+	history, err := readOptional(filepath.Join(d.dir, "history.md"))
+	if err != nil {
+		return err
+	}
+	if PlanHeld(d.dir, string(data), string(history)) {
+		return fmt.Errorf("%w: %s waits for a person to approve its plan, and delivery would move it past that gate", ErrPlanNotApproved, t.ID)
 	}
 	return nil
 }

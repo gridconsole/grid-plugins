@@ -143,60 +143,12 @@ const planAcceptedMark = "· plan accepted ·"
 const previewApproved = "· preview approved ·"
 const planReady = "· plan ready ·"
 
-var acceptedLine = regexp.MustCompile(`(?m)^- \S+ · plan accepted · `)
+func planStage(text, history string) string { return taskstore.PlanStage(text, history) }
+func heldStage(stage string) bool           { return taskstore.HeldStage(stage) }
 
-func planStage(text, history string) string {
-	if acceptedLine.MatchString(history) {
-		return ""
-	}
-	if text == "" {
-		return "before"
-	}
-	fm := taskfile.ParseFrontmatter(text)
-	if fm == nil || fm.Odd {
-		return "unreadable"
-	}
-	steps := WorkflowSteps(text)
-	if len(steps) == 0 {
-		return "unreadable"
-	}
-	current, ok := fm.Data["step"].(string)
-	if !ok || current == "" {
-		return "unreadable"
-	}
-	at, gate := -1, taskfile.PlanApprovalIndex(steps)
-	for i, item := range steps {
-		if item.Step == current {
-			at = i
-		}
-	}
-	if gate < 0 {
-		return ""
-	}
-	if at < 0 || at > gate {
-		return "past"
-	}
-	if at == gate {
-		return "gate"
-	}
-	return "before"
-}
-func heldStage(stage string) bool {
-	return stage == "before" || stage == "gate" || stage == "unreadable"
-}
-
-// held is the one answer to "does this task's plan still wait for a person?".
-// An approval from `grid approve` releases it only while it still matches
-// plan.md (taskstore.Approved); the old "plan accepted" history line, which tasks
-// migrated from the old plugin carry, releases it through planStage.
-func held(dir, text, history string) bool {
-	// A JSON receipt takes precedence over legacy history/step advancement:
-	// stale full digests must not be released by an old prose acceptance.
-	if _, err := os.Lstat(filepath.Join(dir, "approval.json")); !os.IsNotExist(err) {
-		return taskfile.PlanApprovalRequired(text) && !taskstore.Approved(dir)
-	}
-	return heldStage(planStage(text, history))
-}
+// held is the one answer to "does this task's plan still wait for a person?";
+// it lives in the task package so the writers ask the same question.
+func held(dir, text, history string) bool { return taskstore.PlanHeld(dir, text, history) }
 func inactive(text string) bool {
 	f := taskfile.ParseFrontmatter(text)
 	if f == nil {

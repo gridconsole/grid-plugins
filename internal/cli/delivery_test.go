@@ -14,9 +14,12 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/artifact"
 	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
+	"github.com/gridconsole/grid-plugins/internal/plan"
 	"github.com/gridconsole/grid-plugins/internal/proof"
 	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
 func deliveryFixture(t *testing.T) (*harness, string) {
@@ -27,7 +30,37 @@ func deliveryFixture(t *testing.T) (*harness, string) {
 		t.Fatal(err)
 	}
 	h.write(filepath.Join(created.Path, "plan.md"), "# Plan 1\n- [x] 1 Check result\n  proof: check\n  jobs: []\n")
+	approveDeliveryPlan(t, h, created)
 	return h, created.Path
+}
+
+// approveDeliveryPlan leaves the receipt a person's approval of plan.md leaves,
+// so the task can be delivered. A test that later rewrites plan.md unapproves it.
+func approveDeliveryPlan(t *testing.T, h *harness, created task.Task) {
+	t.Helper()
+	text, err := os.ReadFile(filepath.Join(created.Path, "plan.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(task.Event{Task: created.ID, Who: contract.Author{ID: "local", Role: "owner"}, When: "2026-01-02T03:04:05.000Z", What: "approve", FromState: created.State, ToState: created.State, PlanHash: plan.Hash(string(text)), PlanDigest: plan.Digest(string(text))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.write(filepath.Join(created.Path, "approval.json"), string(data)+"\n")
+}
+
+// acceptPlanInHistory releases the plan as a task migrated from the old plugin
+// is: a "plan accepted" history line, with no approval.json.
+func acceptPlanInHistory(t *testing.T, h *harness, dir string) {
+	t.Helper()
+	if err := os.Remove(filepath.Join(dir, "approval.json")); err != nil {
+		t.Fatal(err)
+	}
+	history, err := os.ReadFile(filepath.Join(dir, "history.md"))
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	h.write(filepath.Join(dir, "history.md"), string(history)+taskfile.HistoryLine("2026-01-02T03:04", "plan accepted", "000000", "owner")+"\n")
 }
 
 func treeBytes(t *testing.T, root string) map[string]string {
@@ -420,6 +453,7 @@ func TestUnrelatedHomeProposalDoesNotBlockDelivery(t *testing.T) {
 // leaves the plan approval alone.
 func TestApproveAfterDeliveryRecordsShipApproval(t *testing.T) {
 	h, dir := deliveryFixture(t)
+	acceptPlanInHistory(t, h, dir)
 	addDeliveryProof(t, h, dir)
 	if code := h.run(dir, "deliver", "Ready"); code != 0 {
 		t.Fatal(h.errb)
