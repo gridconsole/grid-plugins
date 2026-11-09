@@ -202,6 +202,35 @@ func projectWorkflowAt(root, target string) bool {
 	return len(rel) == 1 || len(rel) == 2 || (len(rel) == 3 && rel[0] == "projects")
 }
 
+// Resolve literal shell words too: an alias need not contain workflows.md.
+// This is a textual guard, not shell execution or variable expansion. Commands
+// that only read are skipped, so cat alias; echo x > notes.md stays allowed; the
+// inside of every substitution is scanned as a command of its own.
+func (c context) writesProjectWorkflow(command string) bool {
+	roots := c.gridRoots()
+	for _, seg := range hostSegments(command) {
+		for _, tok := range seg.tokens() {
+			for _, body := range tok.groups {
+				if c.writesProjectWorkflow(body) {
+					return true
+				}
+			}
+		}
+		if seg.readsOnly() {
+			continue
+		}
+		for _, tok := range seg.tokens() {
+			target := strings.ToLower(c.path(tok.text))
+			for _, root := range roots {
+				if projectWorkflowAt(root, target) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 var namesFeed = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:projects/[^\s'"/]+/tasks/T-\d[^\s'"/]*/feed|feed)(?:/|[\s'";|&<>]|$)`)
 
 // hostFolder is the legacy .host: beside the data folders, two levels above a
@@ -248,7 +277,7 @@ func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 		if c.set && (runsVerb(command, gateVerb) || runsVerb(command, feedAnswer) || writesNamed(command, gateName) || (namesFeed.MatchString(command) && !feedCLI)) {
 			return person()
 		}
-		if c.set && writesNamed(command, projectWorkflowName) {
+		if c.set && (writesNamed(command, projectWorkflowName) || c.writesProjectWorkflow(command)) {
 			return person()
 		}
 		if c.set && writesNamed(command, workflowName) {
