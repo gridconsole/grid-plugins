@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/usage"
 )
 
@@ -217,6 +218,57 @@ func TestUsageWorkspaceBudgetWorkflowPolicy(t *testing.T) {
 						t.Fatalf("role %q: %s, home changed %v", role, h.out, !reflect.DeepEqual(before, fileBytes(t, h.gridHome)))
 					}
 				}
+			}
+		})
+	}
+}
+
+// With no task resolved, a workspace write takes the project's person_verbs policy
+// (projects/<name>/workflows.md) as the task form takes a task workflow.md.
+func TestUsageWorkspaceBudgetProjectWorkflowPolicy(t *testing.T) {
+	for _, op := range []string{"set", "clear"} {
+		t.Run(op, func(t *testing.T) {
+			policy := "{usage budget " + op + ": [owner]}"
+			for role, want := range map[string]int{"": 3, "owner": 0} {
+				h := workspaceGateHarness(t, map[string]string{"GRID_ROLE": role})
+				cwd := filepath.Join(h.root, "work")
+				h.mkdir(cwd)
+				h.record(project.Record{Name: "example", ID: "01ARZ3NDEKTSV4RRFFQ69G5FAV", Folders: []project.Folder{{Machine: h.env.Machine, Path: cwd}}})
+				h.write(filepath.Join(h.gridHome, "projects", "example", "workflows.md"), "---\nperson_verbs: "+policy+"\n---\n")
+				before := fileBytes(t, h.gridHome)
+				code := h.run(cwd, workspaceArgs(op, "--json")...)
+				if code != want {
+					t.Fatalf("role %q: exit %d, want %d: %s %s", role, code, want, h.out, h.errb)
+				}
+				if want == 3 && (!strings.Contains(h.out.String(), `"reason":"agent_env"`) || !reflect.DeepEqual(before, fileBytes(t, h.gridHome))) {
+					t.Fatalf("role %q: %s", role, h.out)
+				}
+			}
+		})
+	}
+}
+
+// The role-only workspace path has no person gate of its own: a person func that refuses
+// stops the write before the store, one that allows lets it through.
+func TestWorkspaceBudgetGatedRunsThePersonGate(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		person func() int
+		code   int
+		wrote  bool
+	}{
+		{"refused", func() int { return 3 }, 3, false},
+		{"allowed", func() int { return 0 }, 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := workspaceGateHarness(t, map[string]string{"GRID_ROLE": "owner"})
+			v := uint64(200)
+			if code := runWorkspaceBudgetGated("set", &v, true, h.env, tc.person); code != tc.code {
+				t.Fatalf("exit %d, want %d: %s %s", code, tc.code, h.out, h.errb)
+			}
+			got := workspaceBudget(t, h)
+			if wrote := strings.Contains(got, "200"); wrote != tc.wrote {
+				t.Fatalf("budget %s, wrote %v, want %v", got, wrote, tc.wrote)
 			}
 		})
 	}

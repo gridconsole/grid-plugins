@@ -350,12 +350,6 @@ func parseBudgetWrite(fs *flag.FlagSet, op string, args []string, workspace *boo
 	return 0, false
 }
 
-// runWorkspaceBudget is the role check and the store call, with no person gate; the command
-// goes through runWorkspaceBudgetGated.
-func runWorkspaceBudget(op string, value *uint64, asJSON bool, env Env) int {
-	return runWorkspaceBudgetGated(op, value, asJSON, env, nil)
-}
-
 // runWorkspaceBudgetGated checks the caller role, then runs person (exit 3 refuses) before a
 // write, then reads or writes the workspace budget. A show never runs person.
 func runWorkspaceBudgetGated(op string, value *uint64, asJSON bool, env Env, person func() int) int {
