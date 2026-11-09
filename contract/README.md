@@ -37,7 +37,7 @@ specific gate refusal reason; it is not replaced by the general code.
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
 | `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
 | `workflow_changed` | The task's workflow is now defined otherwise than when `grid task new` wrote the `workflow_digest` in its `task.md` (a project folder renamed or rebuilt around it, or a `workflows.md` changed); the task is held, and `grid deliver` exits 1 with this code in its `--json` envelope. |
-| `linked_file` | A protected file has more than one hard link: a task's task.md, history.md, approval*.json or plan.md, or the workspace or a project's workflows.md. Grid refuses to read or write the task and holds its gates; a linked workflows.md holds task steps and refuses person verbs, until the other links are removed. |
+| `linked_file` | A protected file has more than one hard link. For a task's task.md, history.md, approval*.json or plan.md, Grid refuses to read or write the task and holds its gates. The workspace or a project's workflows.md and a task's workflow.md are unreadable: every command whose person gate reads the file refuses for a person and an agent alike (signal verbs, other verbs in a project scope with no task, and every verb in that task), `signal move --inbox` refuses, and a linked workflows.md blocks raising a preview. Remove the other links to clear it. |
 
 The constants live in `internal/cli/error_codes.go`. Read `code` on existing
 failure objects, or `error.code` on new envelopes; never classify by message
