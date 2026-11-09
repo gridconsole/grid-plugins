@@ -298,18 +298,25 @@ func absolute(cwd, p string) string {
 }
 func display(p string, e Env) string { return gridhome.Tilde(p, e.Home) }
 func resolveTask(s string, e Env) (string, error) {
-	// Local folders and inferred tasks are selectors, not authorization. Send
-	// them through the same project-membership resolver as task IDs.
+	// A local plan.md folder or a task inferred from the cwd keeps its path for
+	// owners and members. For guests it is only a selector: the project-membership
+	// resolver decides, so no path form answers differently from an unknown task.
+	local := ""
 	p := absolute(e.Cwd, s)
 	if stat, err := os.Stat(filepath.Join(p, "plan.md")); err == nil && !stat.IsDir() {
-		var err error
-		s, err = filepath.Abs(p)
+		abs, err := filepath.Abs(p)
 		if err != nil {
 			return "", err
 		}
+		local = abs
+	} else if s == "" {
+		local = findTask(e.Cwd)
 	}
-	if s == "" {
-		s = findTask(e.Cwd)
+	if local != "" {
+		if !e.Resolver.Caller.IsGuest() {
+			return local, nil
+		}
+		s = local
 	}
 	var err error
 	if e.ResolveTask != nil {

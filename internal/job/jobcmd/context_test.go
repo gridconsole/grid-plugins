@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -119,14 +120,59 @@ func TestTaskPathMembership(t *testing.T) {
 			case "member", "owner":
 				env.Resolver.Caller.Role = state
 			}
+			// Owners and members get the path they gave; the resolver's symlink-free
+			// answer is only for guests.
+			want := taskPath
+			if state == "invited" {
+				want = gridhome.Real(taskPath)
+			}
 			for _, selector := range []string{taskPath, "./T-01", "T-01"} {
 				got, err := resolveTask(selector, env)
 				if state == "uninvited" || state == "no-roles" || state == "unknown" {
 					if got != "" || err == nil || err.Error() != "task not found" {
 						t.Fatalf("%q: got %q, %v; want task not found", selector, got, err)
 					}
-				} else if err != nil || got != taskPath {
-					t.Fatalf("%q: got %q, %v; want %q", selector, got, err, taskPath)
+				} else if err != nil || got != want {
+					t.Fatalf("%q: got %q, %v; want %q", selector, got, err, want)
+				}
+			}
+			// A task folder outside the Grid home: kept for owners and members,
+			// refused for every guest.
+			outside := filepath.Join(t.TempDir(), "T-09")
+			if err := os.MkdirAll(filepath.Join(outside, "nested"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(outside, "plan.md"), []byte("# plan\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for _, form := range []struct{ name, selector, cwd string }{
+				{"outside path", outside, env.Cwd},
+				{"outside relative path", "./T-09", filepath.Dir(outside)},
+				{"outside cwd", "", filepath.Join(outside, "nested")},
+			} {
+				e := env
+				e.Cwd = form.cwd
+				got, err := resolveTask(form.selector, e)
+				if state == "owner" || state == "member" {
+					if err != nil || got != outside {
+						t.Fatalf("%s: got %q, %v; want %q", form.name, got, err, outside)
+					}
+				} else if got != "" || err == nil {
+					t.Fatalf("%s: got %q, %v; want a refusal", form.name, got, err)
+				}
+			}
+			if state == "owner" || state == "member" || state == "invited" {
+				link := filepath.Join(t.TempDir(), "link")
+				if err := os.Symlink(taskPath, link); err != nil {
+					t.Skipf("symlink: %v", err)
+				}
+				wantLink := link
+				if state == "invited" {
+					wantLink = want
+				}
+				got, err := resolveTask(link, env)
+				if err != nil || got != wantLink {
+					t.Fatalf("symlink: got %q, %v; want %q", got, err, wantLink)
 				}
 			}
 		})
@@ -136,6 +182,8 @@ func TestTaskPathMembership(t *testing.T) {
 func TestTaskPathResolverRefusal(t *testing.T) {
 	env, _, _ := fixture(t)
 	taskPath := filepath.Join(env.Cwd, "T-01")
+	// Only guests go through the resolver; owners and members keep the local path.
+	env.Resolver.Caller = where.Caller{Role: "guest", Member: "gus"}
 	refused := errors.New("task not found")
 	calls := 0
 	env.ResolveTask = func(selector string) (string, error) {
