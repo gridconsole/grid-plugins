@@ -281,6 +281,11 @@ func guestParityRows(t *testing.T) []guestParityRow {
 			t.Errorf("stale guest parity command: %s", command)
 		}
 	}
+	// job show and job lint also take a task file by path, with no --task: the
+	// task folder the file lies in decides who may read it.
+	for _, command := range []string{"job show", "job lint"} {
+		rows = append(rows, guestParityRow{command, "file", append(strings.Fields(command), "{task-file}"), true})
+	}
 	// Name/ID and task ID/path enter different resolver branches.
 	originals := slices.Clone(rows)
 	for _, row := range originals {
@@ -363,6 +368,8 @@ func TestGuestProjectParity(t *testing.T) {
 						args[i] = "id-alpha"
 					case "{task-path}":
 						args[i] = filepath.Join(h.gridHome, "projects", "alpha", "tasks", "T-01-parity")
+					case "{task-file}":
+						args[i] = filepath.Join(h.gridHome, "projects", "alpha", "tasks", "T-01-parity", "plan.md")
 					case "{file}":
 						args[i] = filepath.Join(h.root, "input.md")
 					case "{cwd}":

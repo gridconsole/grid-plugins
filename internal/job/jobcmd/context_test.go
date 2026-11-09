@@ -205,3 +205,104 @@ func TestTaskPathResolverRefusal(t *testing.T) {
 		t.Fatalf("resolver called %d times, want 4", calls)
 	}
 }
+
+// show and lint take a saved brief by path. A guest is admitted only through the
+// task folder the file lies in, so a file of an uninvited project, of no task or
+// outside the Grid home answers as an unknown task, before it is read. Owners and
+// members keep reading any path.
+func TestGuestFilePathMembership(t *testing.T) {
+	for _, state := range []string{"uninvited", "no-roles", "unknown", "invited", "member", "owner"} {
+		t.Run(state, func(t *testing.T) {
+			env, out, errs := fixture(t)
+			rendered := call(t, env, out, errs, 0, "render", "T-01", "1", "--json")
+			brief := rendered.Path
+			saved, err := os.ReadFile(brief)
+			if err != nil {
+				t.Fatal(err)
+			}
+			outside := filepath.Join(t.TempDir(), "brief.md")
+			if err := os.WriteFile(outside, saved, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(filepath.Dir(brief), "link.md")
+			linked := os.Symlink(outside, link) == nil
+			projectPath := filepath.Dir(env.Cwd)
+			env.Resolver.Caller = where.Caller{Role: "guest", Member: "gus"}
+			switch state {
+			case "unknown":
+				if err := os.RemoveAll(projectPath); err != nil {
+					t.Fatal(err)
+				}
+			case "uninvited", "invited":
+				member := "someone-else"
+				if state == "invited" {
+					member = "gus"
+				}
+				if err := os.WriteFile(filepath.Join(projectPath, "project-roles.json"), []byte(`{"people":[{"id":"`+member+`"}]}`), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			case "member", "owner":
+				env.Resolver.Caller.Role = state
+			}
+			guest := state != "member" && state != "owner"
+			for _, form := range []struct {
+				name, file string
+				inside     bool
+			}{
+				{"task file", brief, true},
+				{"relative task file", "projects/demo/tasks/T-01/jobs/J-1/brief.md", true},
+				{"outside file", outside, false},
+				{"link out of the task", link, false},
+			} {
+				if form.name == "link out of the task" && !linked {
+					continue
+				}
+				e := env
+				file := form.file
+				if form.name == "relative task file" {
+					e.Cwd = env.GridHome
+				}
+				for _, action := range []string{"show", "lint"} {
+					for _, asJSON := range []bool{false, true} {
+						args := []string{action, file}
+						if asJSON {
+							args = append(args, "--json")
+						}
+						out.Reset()
+						errs.Reset()
+						code := Run(args, e)
+						text := out.String() + errs.String()
+						label := state + " " + form.name + " " + strings.Join(args, " ")
+						switch {
+						case guest && (!form.inside || state != "invited"):
+							// The same answer as an unknown task, with no host path.
+							want := "job: task not found\n"
+							if asJSON {
+								want = `"error":"task not found"`
+							}
+							if code != 1 || !strings.Contains(text, want) || strings.Contains(text, env.GridHome) || strings.Contains(text, string(saved[:20])) {
+								t.Fatalf("%s: exit %d, output %q; want exit 1 and %q only", label, code, text, want)
+							}
+							if !asJSON && out.Len() != 0 {
+								t.Fatalf("%s: stdout %q, want empty", label, out)
+							}
+						default:
+							// Owners, members and the invited guest read the file as before: a
+							// lint of a brief outside any task still reports its findings.
+							want := 0
+							if action == "lint" && form.name == "outside file" {
+								want = 1
+							}
+							if code != want || strings.Contains(text, "task not found") {
+								t.Fatalf("%s: exit %d, output %q; want exit %d and no task refusal", label, code, text, want)
+							}
+							if action == "show" && !asJSON && out.String() != string(saved) {
+								t.Fatalf("%s: show did not print the saved brief", label)
+							}
+						}
+					}
+				}
+			}
+		})
+	}
+}

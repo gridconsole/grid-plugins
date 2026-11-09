@@ -158,11 +158,22 @@ func Run(args []string, e Env) int {
 			return fail(errors.New("lint requires <file>"), 2)
 		}
 		path := absolute(e.Cwd, args[0])
+		// A guest without --task is admitted through the task the file lies in,
+		// before the file is read.
+		guestTask := ""
+		if f.task == "" && e.Resolver.Caller.IsGuest() {
+			if guestTask, err = guestFile(path, e); err != nil {
+				return fail(err, 1)
+			}
+		}
 		b, err := os.ReadFile(path)
 		if err != nil {
 			return fail(err, 1)
 		}
 		task := findTask(filepath.Dir(path))
+		if guestTask != "" {
+			task = guestTask
+		}
 		if f.task != "" {
 			task, err = resolveTask(f.task, e)
 			if err != nil {
@@ -346,9 +357,33 @@ func findTask(dir string) string {
 		dir = parent
 	}
 }
+
+// guestFile admits a guest to a file by path only through the task folder it lies
+// in: the project-membership resolver decides, so a file in an uninvited project,
+// in no task or outside the Grid home answers as an unknown task, and a link
+// that leaves the task is not followed. It returns the task folder.
+func guestFile(path string, e Env) (string, error) {
+	task, err := resolveTask(filepath.Dir(path), e)
+	if err != nil {
+		return "", err
+	}
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return task, nil // the read reports a file that is not there
+	}
+	if rel, err := filepath.Rel(task, real); err != nil || !filepath.IsLocal(rel) {
+		return "", errors.New("task not found")
+	}
+	return task, nil
+}
 func showPath(args []string, f flags, e Env) (string, error) {
 	if len(args) == 1 && !job.ValidID(args[0]) {
 		p := absolute(e.Cwd, args[0])
+		if e.Resolver.Caller.IsGuest() {
+			if _, err := guestFile(p, e); err != nil {
+				return "", err
+			}
+		}
 		if s, err := os.Stat(p); err == nil && !s.IsDir() {
 			return p, nil
 		}
