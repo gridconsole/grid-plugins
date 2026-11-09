@@ -149,7 +149,7 @@ func locked(root *os.Root, fn func() error) error {
 	if err := safefile.NoSymlinks(root, lockName); err != nil {
 		return err
 	}
-	f, err := root.OpenFile(lockName, os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := openLock(root)
 	if err != nil {
 		return err
 	}
@@ -158,6 +158,47 @@ func locked(root *os.Root, fn func() error) error {
 		return fmt.Errorf("brain write: %w", err)
 	}
 	return fn()
+}
+
+// openLock creates the lock file apart from opening it, because concurrent
+// O_CREATE opens of a missing file through os.Root can fail with ENOENT on
+// Darwin. The opened file must still be the regular file at the lock path.
+func openLock(root *os.Root) (*os.File, error) {
+	var err error
+	for range 20 {
+		c, cerr := root.OpenFile(lockName, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		if cerr == nil {
+			c.Close()
+		} else if !errors.Is(cerr, fs.ErrExist) && !errors.Is(cerr, fs.ErrNotExist) {
+			return nil, cerr
+		}
+		var f *os.File
+		f, err = root.OpenFile(lockName, os.O_RDWR, 0)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if err := checkLock(root, f); err != nil {
+			f.Close()
+			return nil, err
+		}
+		return f, nil
+	}
+	return nil, err
+}
+
+func checkLock(root *os.Root, f *os.File) error {
+	opened, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	at, err := root.Lstat(lockName)
+	if err != nil || !at.Mode().IsRegular() || !os.SameFile(opened, at) {
+		return fmt.Errorf("brain lock must be a regular file")
+	}
+	return nil
 }
 
 func (s Store) entry(n Note, proposal bool) Entry {
