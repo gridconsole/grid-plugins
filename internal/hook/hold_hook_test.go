@@ -169,7 +169,7 @@ func TestHoldLeavesOtherCallsAlone(t *testing.T) {
 	}{
 		{"Read", "pretooluse", "Read", map[string]any{"file_path": "main.go"}},
 		{"Bash", "pretooluse", "Bash", map[string]any{"command": "ls"}},
-		{"Write", "pretooluse", "Write", map[string]any{"file_path": "notes.txt", "content": "text"}},
+		{"Grep", "pretooluse", "Grep", map[string]any{"pattern": "TODO"}},
 		{"permission request for Agent", "permissionrequest", "Agent", agentInput},
 		{"permission request for Task", "permissionrequest", "Task", agentInput},
 		{"permission request for Read", "permissionrequest", "Read", map[string]any{"file_path": "main.go"}},
