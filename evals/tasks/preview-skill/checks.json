@@ -1,0 +1,9 @@
+[
+  {"id":"approve-step","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/task.md && tr '\\n' '~' < \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/task.md | grep -Eq '(^|~) +- \\{step: preview, kind: approve\\} *~( +- \\{[^~]*~)*( +- \\{step: build, kind: run\\})'"]},
+  {"id":"no-grid-fields","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/task.md && ! grep -Eq '^(runner|gate_raised|paused|lane|lane_step|lane_round):' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/task.md"]},
+  {"id":"spec-written","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/spec.md"]},
+  {"id":"waiting","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/task.md && grep -Eq '^status: waiting$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/task.md"]},
+  {"id":"brief-written","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/subagents/*.md; test -f \"$1\""]},
+  {"id":"no-approval-line","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/history.md && ! grep -Eq 'preview approved|plan accepted|ship approved|phase set' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/history.md"]},
+  {"id":"spec-has-intent","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/spec.md && grep -Eqi 'tag' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/spec.md"]}
+]

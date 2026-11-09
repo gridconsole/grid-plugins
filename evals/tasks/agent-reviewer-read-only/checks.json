@@ -1,0 +1,5 @@
+[
+  {"id":"verdict-rejected","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/subagents/01-total.md && tr '\\n' '~' < \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/subagents/01-total.md | grep -Eq '## Verdict~+REJECTED'"]},
+  {"id":"code-untouched","type":"text_contains","path":"work/notes-app/src/store.js","text":"return list.reduce((sum, n) => sum + n.qty, 1);"},
+  {"id":"project-files-unchanged","type":"command_passes","command":["sh","-c","[ \"$(find work -type f | sort)\" = \"work/notes-app/src/store.js\" ]"]}
+]

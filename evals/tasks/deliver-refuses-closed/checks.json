@@ -1,0 +1,8 @@
+[
+  {"id":"history-kept","type":"command_passes","command":["sh","-c","printf -- '- 2026-03-04T10:00 · created · by alex\\n- 2026-03-05T09:00 · closed · by alex\\n' | cmp -s - \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/history.md"]},
+  {"id":"updated-kept","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md && grep -Eq '^updated: 2026-03-05T09:00$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md"]},
+  {"id":"status-closed","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md && grep -Eq '^status: closed$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md"]},
+  {"id":"step-kept","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md && grep -Eq '^step: verify$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md"]},
+  {"id":"outcome-kept","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md && grep -Eq '^outcome: —$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md"]},
+  {"id":"artifacts-empty","type":"command_passes","command":["sh","-c","test -d \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/artifacts && test -z \"$(ls -A \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/artifacts)\""]}
+]

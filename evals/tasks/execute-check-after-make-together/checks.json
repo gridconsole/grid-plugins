@@ -1,0 +1,10 @@
+[
+  {"id":"project-file-unchanged","type":"command_passes","command":["sh","-c","grep -Fxq '<p>Questions? <a href=\"team.html\">Meet the team</a> or see <a href=\"careers.html\">careers</a>.</p>' work/site/pricing.html"]},
+  {"id":"no-approval-lines","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/history.md && ! grep -Eq 'plan accepted|preview approved|ship approved|phase set' \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/history.md"]},
+  {"id":"status-reworking","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/task.md && grep -Eq '^status: reworking$' \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/task.md"]},
+  {"id":"round-two","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/task.md && grep -Eq '^round: 2$' \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/task.md"]},
+  {"id":"no-grid-fields","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/task.md && ! grep -Eq '^(runner|gate_raised|paused|lane|lane_step|lane_round):' \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/task.md"]},
+  {"id":"rework-names-person","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/task.md && grep -Eqi '^next: (.*[^a-z])?sam([^a-z]|$)' \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/task.md"]},
+  {"id":"check-brief-written","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/subagents/02-*.md; test -f \"$1\""]},
+  {"id":"step-sent-back","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/task.md && grep -Eq '^step: draft$' \"$GRID_HOME\"/projects/site/tasks/T-01-team-blurb/task.md"]}
+]

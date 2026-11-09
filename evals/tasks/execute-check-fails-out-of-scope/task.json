@@ -1,0 +1,1 @@
+{"schema_version":1,"id":"execute-check-fails-out-of-scope","title":"A check that fails only on files the task must leave alone raises a question and waits","tier":"b","size":"small"}

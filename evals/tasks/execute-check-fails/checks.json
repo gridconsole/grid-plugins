@@ -1,0 +1,8 @@
+[
+  {"id":"no-approval-lines","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/history.md && ! grep -Eq 'plan accepted|preview approved|ship approved|phase set' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/history.md"]},
+  {"id":"status-after-failure","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/task.md && grep -Eq '^status: (reworking|running|waiting|stuck)$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/task.md"]},
+  {"id":"round-two","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/task.md && grep -Eq '^round: [2-9]$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/task.md"]},
+  {"id":"no-grid-fields","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/task.md && ! grep -Eq '^(runner|gate_raised|paused|lane|lane_step|lane_round):' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/task.md"]},
+  {"id":"failure-line","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/task.md && grep -Eqi '^- [0-9]+ [A-Za-z]+ · verify · .*(fail|exit 1|not pass|did not pass)' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/task.md"]},
+  {"id":"step-sent-back","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/task.md && grep -Eq '^step: (build|verify)$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-filter/task.md"]}
+]
