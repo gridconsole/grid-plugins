@@ -692,6 +692,12 @@ was written. `--to` is required and must be 1 or more, and `<topic>/<name>` must
 be two plain names (exit 2). A missing version or entry, or any store error,
 exits 1.
 
+When the new version is written and logged but the index rebuild then fails, the
+verb still reports the version before the error and exits 1: plain output prints
+`v<n>` on stdout and the error on stderr; `--json` prints
+`{"version": <n>, "noop": false, "error": "<message>"}` on stdout (`error` only in
+this case) and the usual `{"error": "<message>"}` on stderr.
+
 Both verbs check `GRID_ROLE` after the flags parse and before any resolution,
 read or write. The replaceable `brain.ChangesReadAllowed` (host key
 `brain_changes_read_roles`) and `brain.RevertAllowed` (host key

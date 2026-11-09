@@ -231,19 +231,35 @@ func runRevert(args []string, env Env) int {
 	}
 	// The store says whether it wrote, under the level lock; noop means it did not.
 	res, err := store.RevertTo(level, topic, name, *to, origin)
-	if err != nil {
+	if err != nil && !res.Wrote {
 		return failWith(env, l.asJSON, err)
 	}
+	// err with Wrote set means the version is stored and logged but the index
+	// rebuild failed: report the version, then the error, and exit 1.
 	version, noop := res.Version, !res.Wrote
 	if l.asJSON {
-		enc := json.NewEncoder(env.Stdout)
-		if err := enc.Encode(struct {
-			Version int  `json:"version"`
-			Noop    bool `json:"noop"`
-		}{version, noop}); err != nil {
-			return failWith(env, l.asJSON, err)
+		out := struct {
+			Version int    `json:"version"`
+			Noop    bool   `json:"noop"`
+			Error   string `json:"error,omitempty"`
+		}{Version: version, Noop: noop}
+		if err != nil {
+			out.Error = err.Error()
+		}
+		if encErr := json.NewEncoder(env.Stdout).Encode(out); encErr != nil {
+			return failWith(env, l.asJSON, encErr)
+		}
+		if err != nil {
+			_ = json.NewEncoder(env.Stderr).Encode(map[string]string{"error": err.Error()})
+			return 1
 		}
 		return 0
+	}
+	if err != nil {
+		if _, perr := fmt.Fprintf(env.Stdout, "v%d\n", version); perr != nil {
+			return failWith(env, l.asJSON, perr)
+		}
+		return failWith(env, l.asJSON, err)
 	}
 	text := fmt.Sprintf("v%d", version)
 	if noop {

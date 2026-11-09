@@ -438,3 +438,65 @@ func TestChangeLineNeverPrintsControlCharacters(t *testing.T) {
 		t.Fatalf("%q, want %q", line, want)
 	}
 }
+
+// A revert whose index rebuild fails has still written the version: the caller
+// must be told which one, with the error and exit 1.
+func TestRevertReportsTheVersionWhenTheIndexRebuildFails(t *testing.T) {
+	for _, asJSON := range []bool{false, true} {
+		name := "text"
+		if asJSON {
+			name = "json"
+		}
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			store := h.threeVersions(t)
+			v1, err := os.ReadFile(filepath.Join(h.env.GridHome, "knowledge", "versions", "decisions", "checks", "1.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := h.changes(t)
+			h.out.Reset()
+			h.err.Reset()
+			idx := filepath.Join(h.env.GridHome, "knowledge", "index.md")
+			if err := os.RemoveAll(idx); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(idx, "keep"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"revert", "decisions/checks", "--to", "1", "--level", "home"}
+			if asJSON {
+				args = append(args, "--json")
+			}
+			code := h.run(args...)
+			if code != 1 {
+				t.Fatalf("exit %d, want 1: %q %q", code, &h.out, &h.err)
+			}
+			if asJSON {
+				var got struct {
+					Version *int   `json:"version"`
+					Noop    *bool  `json:"noop"`
+					Error   string `json:"error"`
+				}
+				if err := json.Unmarshal(h.out.Bytes(), &got); err != nil || got.Version == nil || *got.Version != 4 || got.Noop == nil || *got.Noop || got.Error == "" {
+					t.Fatalf("stdout %q (%v)", &h.out, err)
+				}
+			} else if h.out.String() != "v4\n" {
+				t.Fatalf("stdout %q, want v4", &h.out)
+			}
+			if !strings.Contains(h.err.String(), "rebuilding the index failed") {
+				t.Fatalf("stderr %q", &h.err)
+			}
+			if h.published(t) != string(v1) {
+				t.Fatal("entry does not hold the reverted bytes")
+			}
+			if v, err := store.Versions("home", "decisions", "checks"); err != nil || len(v) != 4 {
+				t.Fatalf("versions: %+v, %v", v, err)
+			}
+			after := h.changes(t)
+			if len(after.Changes) != len(before.Changes)+1 || after.Changes[0].Status != "reverted" || after.Changes[0].Version != 4 {
+				t.Fatalf("want one new reverted line: %+v then %+v", before.Changes, after.Changes)
+			}
+		})
+	}
+}
