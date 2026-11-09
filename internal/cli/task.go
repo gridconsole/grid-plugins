@@ -129,21 +129,22 @@ func runTask(args []string, env Env) int {
 			return taskOperandError(env, "grid task show", err)
 		}
 		// The hash a person passes to grid approve --plan-hash; absent before a plan exists.
-		hash, err := taskPlanHash(t.Path)
+		hash, digest, err := taskPlanTokens(t.Path)
 		if err != nil {
 			fmt.Fprintf(env.Stderr, "grid task show: no plan hash: %v\n", err)
 		}
 		if *asJSON {
 			return writeJSON(env.Stdout, struct {
 				task.Task
-				PlanHash string `json:"plan_hash,omitempty"`
-				Folder   string `json:"folder"`
-			}{t, hash, filepath.Base(t.Path)})
+				PlanHash   string `json:"plan_hash,omitempty"`
+				PlanDigest string `json:"plan_digest,omitempty"`
+				Folder     string `json:"folder"`
+			}{t, hash, digest, filepath.Base(t.Path)})
 		}
 		fmt.Fprintf(env.Stdout, "id: %s\ntitle: %s\nproject: %s\nsize: %s\nworkflow: %s\nstate: %s\ncreated: %s\npath: %s\n",
 			t.ID, t.Title, t.Project, t.Size, t.Workflow, t.State, t.Created, gridhome.Tilde(t.Path, env.Home))
 		if hash != "" {
-			fmt.Fprintf(env.Stdout, "plan_hash: %s\n", hash)
+			fmt.Fprintf(env.Stdout, "plan_hash: %s\nplan digest: %s\n", hash, digest)
 		}
 		fmt.Fprintf(env.Stdout, "intent:\n%s", t.Intent)
 		if !strings.HasSuffix(t.Intent, "\n") {
@@ -230,17 +231,17 @@ func runTaskAttach(args []string, env Env) int {
 	return 0
 }
 
-// taskPlanHash is the hash of plan.md as grid plan hash prints it, or "" when
-// the task has no plan yet. Reading takes no lock: plan.md is replaced atomically.
-func taskPlanHash(dir string) (string, error) {
+// taskPlanTokens returns the hash and digest from one plan.md snapshot, or empty
+// tokens when the task has no plan yet. Reading takes no lock: plan.md is replaced atomically.
+func taskPlanTokens(dir string) (string, string, error) {
 	text, err := plan.Store{TaskDir: dir}.Read()
 	if errors.Is(err, os.ErrNotExist) {
-		return "", nil
+		return "", "", nil
 	}
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return plan.Hash(text), nil
+	return plan.Hash(text), plan.Digest(text), nil
 }
 
 // taskArgs accepts flags before or after the single words/id argument. Values

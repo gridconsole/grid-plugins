@@ -10,6 +10,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/land"
 	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
 func taskWriter(env Env) task.Store { return task.Store{Resolver: resolver(env)} }
@@ -119,12 +120,16 @@ func runTaskWrite(args []string, env Env) int {
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 
-const approveUsage = "Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--json]\n<task> is an id, exact folder name, or folder path inside a project tasks directory.\n"
+const approveUsage = `Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--json]
+<task> is an id, exact folder name, or folder path inside a project tasks directory.
+--plan-hash accepts the 6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json.
+workflow.md with plan_hash_token: digest requires the 64-hex digest.
+`
 
 func runApprove(args []string, env Env) int {
 	fs := newFlags("approve", env)
 	fs.Usage = func() { fmt.Fprint(env.Stderr, approveUsage); fs.PrintDefaults() }
-	hash := fs.String("plan-hash", "", "hash of the reviewed plan, as grid task show prints it")
+	hash := fs.String("plan-hash", "", "6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json; workflow.md plan_hash_token: digest requires the digest")
 	note := fs.String("note", "", "approval note")
 	asJSON := fs.Bool("json", false, "print JSON")
 	pos, err := taskArgs(fs, args)
@@ -146,7 +151,13 @@ func runApprove(args []string, env Env) int {
 		return taskOperandError(env, "grid approve", err)
 	}
 	pos[0] = resolved.ID
-	event, err := (land.Store{Resolver: resolver(env)}).Approve(writeOptions(env, pos[0], "approve", *note), *hash)
+	o := writeOptions(env, pos[0], "approve", *note)
+	o.PlanHashToken, err = workflow.PlanHashToken(resolved.Path)
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
+		return 3
+	}
+	event, err := (land.Store{Resolver: resolver(env)}).Approve(o, *hash)
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 

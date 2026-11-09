@@ -633,15 +633,22 @@ Receipts made before step metadata was included may need explicit reapproval.
 The heading and history keep the short hash. The CLI `--plan-hash`
 compare-and-set token accepts either the six lower-case hex digits or the
 64 lower-case hex digest printed alongside `hash` by `grid plan hash --json`.
+`grid task show --json` exposes these as `plan_hash` and `plan_digest`.
 Both token forms are checked under the same plan lock as the receipt write.
 Whichever token is supplied, the receipt stores the current six-hex hash in
 `plan_hash` and the current full digest in `plan_digest`. Plain `grid plan hash`
 output remains the short hash.
 
+The task's `workflow.md` front matter key `plan_hash_token` accepts `any`
+(the default when the file or key is missing) or `digest`, which requires the
+64-hex form of a supplied token. An invalid value, unreadable file or malformed
+front matter refuses CLI approval with exit 3; it never falls back to `any`.
+
 Publication, the guard, and locked approval readers require both values to
-match when `plan_digest` is present. A present empty, null, non-string or
-incorrect digest is refused. Only an absent digest permits legacy short-hash
-validation; reapproving writes the full digest. An implicit reapproval also
+match. A receipt without `plan_digest` does not count as approved; a present
+empty, null, non-string or incorrect digest is also refused. Explicitly
+reapproving with either token writes a digest receipt (subject to the workflow
+token policy). An implicit reapproval also
 checks the previous digest, so a short-hash collision requires an explicit
 review and `--plan-hash` to replace the receipt. Plan receipts still have no
 `gate` field; ship receipts carry `gate: ship` and cannot release the plan gate.
