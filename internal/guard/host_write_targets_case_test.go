@@ -39,7 +39,8 @@ func TestHostWriteTargetsCaseGroup(t *testing.T) {
 		{"case_subst_no_esac", project, "echo $(case x in x) tee alias </dev/null;;)", true},
 		{"case_subst_no_close", project, "echo $(case x in x) tee alias </dev/null;;", true},
 		{"case_process_no_close", project, "cat <(case x in x) tee alias </dev/null", true},
-		{"case_subst_read", project, "echo $(case x in x) cat alias;; esac)", false},
+		// Refused again by the word-check floor (decision guard-word-floor), as on main.
+		{"case_subst_read", project, "echo $(case x in x) cat alias;; esac)", true},
 		{"case_subst_outside", f.repo, "echo $(case x in x) tee out.txt </dev/null;; esac)", false},
 		{"case_subst_other_file", project, "echo $(case x in x) tee notes.md </dev/null;; esac)", false},
 		{"case_word_argument", project, "echo $(echo case x) > notes.md", false},
