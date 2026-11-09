@@ -7,10 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
-	"go.yaml.in/yaml/v4"
 )
 
 // GatePostRoles reads gate_post_roles from the task's workflow.md front matter.
@@ -33,20 +31,9 @@ func GatePostRoles(taskDir string) (map[string][]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	lines := strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n")
-	if len(lines) < 3 || strings.TrimSpace(lines[0]) != "---" {
-		return nil, fmt.Errorf("workflow.md needs YAML front matter")
-	}
-	end := 1
-	for end < len(lines) && strings.TrimSpace(lines[end]) != "---" {
-		end++
-	}
-	if end == len(lines) {
-		return nil, fmt.Errorf("workflow.md front matter is not closed")
-	}
-	var front map[string]any
-	if err := yaml.Load([]byte(strings.Join(lines[1:end], "\n")), &front); err != nil {
-		return nil, fmt.Errorf("workflow.md front matter: %w", err)
+	front, err := parseFrontmatter(raw)
+	if err != nil {
+		return nil, err
 	}
 	value, exists := front["gate_post_roles"]
 	if !exists {

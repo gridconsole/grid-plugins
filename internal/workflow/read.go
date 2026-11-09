@@ -1,6 +1,12 @@
 package workflow
 
-import "github.com/gridconsole/grid-plugins/internal/where"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/where"
+	"go.yaml.in/yaml/v4"
+)
 
 // Answer is the workflows read response. Empty collections encode as arrays.
 type Answer struct {
@@ -40,4 +46,24 @@ func Read(r where.Resolver, project string) (Answer, error) {
 		out.Errors = append(out.Errors, parsed.Errors...)
 	}
 	return out, nil
+}
+
+// parseFrontmatter reads task-local workflow policy using the shared YAML dialect.
+func parseFrontmatter(raw []byte) (map[string]any, error) {
+	lines := strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n")
+	if len(lines) < 3 || strings.TrimSpace(lines[0]) != "---" {
+		return nil, fmt.Errorf("workflow.md needs YAML front matter")
+	}
+	end := 1
+	for end < len(lines) && strings.TrimSpace(lines[end]) != "---" {
+		end++
+	}
+	if end == len(lines) {
+		return nil, fmt.Errorf("workflow.md front matter is not closed")
+	}
+	var front map[string]any
+	if err := yaml.Load([]byte(strings.Join(lines[1:end], "\n")), &front); err != nil {
+		return nil, fmt.Errorf("workflow.md front matter: %w", err)
+	}
+	return front, nil
 }
