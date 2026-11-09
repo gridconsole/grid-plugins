@@ -158,12 +158,21 @@ func Run(args []string, e Env) int {
 			return fail(errors.New("lint requires <file>"), 2)
 		}
 		path := absolute(e.Cwd, args[0])
-		// A guest without --task is admitted through the task the file lies in,
-		// before the file is read.
+		// A guest is admitted through the task the file lies in, before the file is
+		// read, and --task must name that same task.
 		guestTask := ""
-		if f.task == "" && e.Resolver.Caller.IsGuest() {
+		if e.Resolver.Caller.IsGuest() {
 			if guestTask, err = guestFile(path, e); err != nil {
 				return fail(err, 1)
+			}
+			if f.task != "" {
+				var named string
+				if named, err = resolveTask(f.task, e); err != nil {
+					return fail(err, 1)
+				}
+				if named != guestTask {
+					return fail(errors.New("task not found"), 1)
+				}
 			}
 		}
 		b, err := os.ReadFile(path)
