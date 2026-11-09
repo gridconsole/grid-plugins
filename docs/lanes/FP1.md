@@ -537,3 +537,145 @@ All ran at code head 7a5dba11 in a fresh clone of `lane-FP1R3`, in the foregroun
 - The checks ran as the builder user in fresh local clones, not as user grid. Nothing was pushed; the lane is delivered as a bundle.
 - Link counts on Windows and darwin were compiled and vetted, not run.
 - The reviewer's scratch PROBE2 file was not run as is. It became the committed cli row, which follows its steps.
+
+# FP1R4: internal/golden and internal/job green on the FP1 chain
+
+Brief: FP1R4-golden-job. Decision: FP1 golden-job (final), D1-D4 built here. This closes the FP1R3 open item "The FP1 chain turns internal/golden and internal/job red against main".
+
+## Base
+
+- `lane-FP1R4` starts from `lane-FP1R3` 22017808. Plugin ref main is still 9764ce4e (checked with `git ls-remote` before starting), so there was no rebase.
+- Code head 1bcbd443; the report commit after it changes docs/lanes/FP1.md only.
+
+## Which FP1 commit introduced each failure
+
+Main 9764ce4e passes both packages (`go test -count=1 ./internal/golden/... ./internal/job/...`, exit 0). 2792be12, the first FP1 commit (its parent is 9764ce4e), fails with exactly the rows 22017808 fails (both exit 1, lines below). Every failure therefore comes from 2792be12:
+
+| Failure | Cause in 2792be12 |
+|---|---|
+| golden `history-log/subagent-stop`: history.md `mode/type file 0664 -> file 0600` | internal/task/history.go: AppendHistory writes the new history through `atomicWrite` (a `CreateTemp` file, mode 0600) and renames it into place. Main appended in place, so the mode never changed |
+| golden `history-log/subagent-stop`: `.task.lock` new file, mode 0600 | internal/task/history.go: AppendHistory creates and locks `.task.lock` in the task folder |
+| job `TestPlanAliasesNeedApproval/hardlink`, `TestProjectPlanAliasesNeedApproval/{repo,prototype}/hardlink`, `TestPlanOmittedAnchorsRefused` | internal/task/task.go: `Read` calls `Linked` first. `task.ApprovedDigest` calls `Read` and returns false on any error, so `job.Files.Resolve` gave "plan needs approval" for every plan anchor on a linked task. The fixture's `Approve` (`task.Read`, then `Store.Approve`) failed with `linked_file` |
+
+## What changed
+
+1. **D1: a linked task's plan is refused with `linked_file`** (internal/job).
+   - New `planApproved` in source.go is the single approval check for a plan anchor in `Resolve` and for `LoadPlan`. It calls `task.Linked` before the receipt is read. A link returns `linkedPlanError`, whose text is `linked_file: a file of this task has more than one hard link; remove the other links before rendering a Job`. That text names no machine path. `errors.Is` matches both `task.ErrLinkedFile` and `ErrPlanNeedsApproval`, so `grid job render` still exits 2 and `job lint` still reports `job.plan-approval`, as for an unapproved plan. Any other `Linked` error falls through to `ApprovedDigest`, which fails as before.
+   - The rows the decision names now expect `linked_file` (`errors.Is(err, task.ErrLinkedFile)`), and still assert no approval and no release:
+     - `TestPlanAliasesNeedApproval/hardlink`: alias and canonical pointers give `linked_file` with no text, before and after an approval attempt and after an edit through the link. The approval is refused with `linked_file` and writes no approval.json. New: once the other link is removed, the plan can be approved and the canonical pointers resolve again.
+     - `TestProjectPlanAliasesNeedApproval/{repo,prototype}/hardlink`: `repo:`/`prototype:` alias and `plan.md` pointers, through the old and a new resolver, give `linked_file` with no text, before and after an in-place edit and after the approval attempt. The approval is refused with `linked_file`, and approval.json bytes are unchanged.
+     - `TestPlanOmittedAnchorsRefused`: the omitted-line refusals ("outside the approval digest") and the covered anchors now run before the hard link exists. A symlink alias (`repo:sym.md`, `prototype:sym.md`) keeps the alias rows at the digest check, since a hard-linked alias can no longer reach it. Then, with the hard link, all 40 pointers (4 names x 10 anchors, omitted and covered) give `linked_file` with no text. The approval is refused, and approval.json is unchanged.
+     - Every symlink and case row is unchanged. `jobtest.TryApprove` asks for the receipt and returns the refusal instead of failing the test.
+2. **D2: a rewrite keeps the file's mode** (internal/task/create.go `atomicWrite`).
+   - Before writing, `atomicWrite` stats the path. A regular file's permission bits are set on the temporary file through its handle (`f.Chmod`), so the renamed file keeps them. A missing path, or anything that is not a regular file (for example a symlink swapped in after the caller's own check, which reports 0777 on Linux), gets 0600, `CreateTemp`'s mode, which is what main gave every file this writer creates. A stat error other than "does not exist" is returned.
+   - The writer is fixed, not the golden. It covers AppendHistory and every other rename writer in internal/task: the journal replay (`task.md`, `history.md`, approval.json, approval-ship.json, approval-preview.json, refusal-R-n.json), project.md, a brief in subagents/ that `MarkBrief` marks done or blocked, the Grid home's VERSION and machine files, and the journal itself. The journal writers renamed task.md and history.md to 0600 on main too; the decision's "or any existing task file" covers that, and they now keep the mode as well.
+3. **D3: `.task.lock` is deliberate; it stays in the task folder and is golden data.**
+   - Since 2792be12, history.md is replaced by a rename, so a lock on history.md itself no longer serializes appenders: each would lock a different inode. AppendHistory takes `.task.lock`, which main 9764ce4e already creates and takes in the task folder in every journal writer (`withWrite`), trash, `feed.EnsureTaskID`, lease and orchestrator plan publication. It is first in the documented lock order (docs/delivery.md:125). FP1R (e606d1c3) built the hook lock order on it. It was not moved.
+   - golden/history-log/subagent-stop has a `go-diff.md` that cites internal/task/history.go:117, docs/delivery.md:125, internal/hook/history.go:173 and internal/task/create.go:400. It also has a complete `go-expected/`: exit, stdout and stderr copied unchanged, and files.diff with `.task.lock` as a new empty file of mode 0600 above the unchanged history diff. After D2 there is no mode line. The original artifacts are untouched.
+   - The task-folder readers ignore it, and none needed a row:
+
+| Reader | What it does with `.task.lock` |
+|---|---|
+| plugin hook Bash snapshot (`file added/changed` history lines) | skips every dot name (internal/hook/history.go:173) |
+| plugin artifact and proof listings | read only `artifacts/<id>.json` records (internal/artifact/artifact.go:304-307); proof has no folder listing |
+| plugin task, session and trace listings (`task.folders`, cli liveness and environment, jobcmd trace) | list `T-*` folders or `jobs/`, never task-root files |
+| plugin trash and folder moves | take `.task.lock` itself; trash moves it with the folder (existing `trash_test.go` row) |
+| plugin folder-move guard (L161, on lane-L161 8981cec0, not on main) | decides by path shape (`T-<n>`, `tasks/` and the Grid roots); it never lists a task folder's files |
+| plugin orchestrator progress fingerprint | hashes it as an empty, constant file. It first appears together with a history.md change, so it never adds a progress event of its own; main has the same behaviour from `withWrite` |
+| app task page file list (`taskfilesread`, app main a1158a8c) | `visiblePath` drops dot names; the existing row lists `.secret` at the task root as hidden |
+| app task page model (`taskview`) | classifies only `artifacts/`, `views/`, `questions/Q-n.md` and `plan-revisions/n.md`; a root dot file matches none. `taskfiles.Check` only lstats, and the lock is a regular file |
+| app artifact listing | lists `artifacts/` only and drops dot names (existing row `.hidden.md`) |
+| app folder moves | the app moves no task folders; inbox moves drop dot names |
+
+4. **D4:** `go test -count=1 ./...` over the whole module, below: exit 0.
+
+## Acceptance rows
+
+| Row | Test | Fails on 22017808 |
+|---|---|---|
+| `go test -count=1 ./internal/golden/... ./internal/job/...` | the two packages | on the head: exit 0. On 22017808 as it is: exit 1 with `TestGoldenCorpus/history-log/subagent-stop`, `TestProjectPlanAliasesNeedApproval/repo/hardlink`, `TestProjectPlanAliasesNeedApproval/prototype/hardlink`, `TestPlanOmittedAnchorsRefused`, `TestPlanAliasesNeedApproval/hardlink`. Same rows on 2792be12; main 9764ce4e exit 0 |
+| D1: the four hardlink rows expect `linked_file`, no approval, no release | the four rows above | yes, all four (lines below) |
+| D1: `LoadPlan` and a plan anchor on an approved task with a hard link to plan.md, task.md, history.md or approval.json: `errors.Is` linked_file and plan needs approval, no item, no text, no machine path. Unlinked control first | `TestLinkedPlanIsHeldWithLinkedFile` (job) | yes, all 4 subtests |
+| D2: rewrite an existing 0664 (also 0640, 0644) history.md with AppendHistory, and task.md plus history.md with a journal write (`Change close`); the mode is unchanged afterwards | `TestRewriteKeepsTheFileMode` (task) | yes, all 6 subtests, including `AppendHistory/0664` |
+| D2 control: a journal write creates history.md and approval.json at 0600, AppendHistory keeps 0600, and `.task.lock` is 0600 (main's modes) | `TestNewFilesKeepTheirMode` (task) | no, a control; passes on both |
+| D2 guard: a rewrite over a symlink leaves a regular 0600 file and does not write through the link | `TestRewriteOverASymlinkKeepsNoMode` (task) | no, a guard row for M4; passes on both |
+| D3: subagent-stop records `.task.lock` and no mode change | `TestGoldenCorpus/history-log/subagent-stop` with the go-expected data | yes |
+
+Failing lines on 22017808. The lane's test files, jobtest.go and the golden data were checked out on top of a 22017808 worktree; then `go test -count=1 -v -run '<the rows>' ./internal/task/ ./internal/golden/ ./internal/job/` exited 1. Repeated lines are cut:
+
+```
+--- FAIL: TestRewriteKeepsTheFileMode/AppendHistory/0664
+    mode_test.go:51: history.md mode 0600 after AppendHistory, want 0664
+--- FAIL: TestRewriteKeepsTheFileMode/journal/0664
+    mode_test.go:68: task.md mode 0600 after a journal write, want 0664
+    mode_test.go:68: history.md mode 0600 after a journal write, want 0664
+    (the same for 0640 and 0644)
+FAIL	github.com/gridconsole/grid-plugins/internal/task
+--- FAIL: TestGoldenCorpus/history-log/subagent-stop
+    corpus_test.go:128: files.diff differs:
+        +mode/type file 0664 -> file 0600
+FAIL	github.com/gridconsole/grid-plugins/internal/golden
+--- FAIL: TestPlanAliasesNeedApproval/hardlink
+    approval_alias_test.go:48: unapproved: steps.md#step-1: want linked_file with no text; got steps.md#step-1: plan needs approval: review and approve the current plan before rendering a Job, text ""
+--- FAIL: TestProjectPlanAliasesNeedApproval/repo/hardlink   (and prototype/hardlink)
+    approval_gaps_test.go:40: approved before the link: repo:copy.md#L3-L4: want linked_file with no text; got repo:copy.md#L3-L4: plan needs approval: review and approve the current plan before rendering a Job, text ""
+--- FAIL: TestPlanOmittedAnchorsRefused
+    approval_workflow_test.go:61: plan.md#L2: want linked_file without text, got plan.md#L2: plan needs approval: review and approve the current plan before rendering a Job
+--- FAIL: TestLinkedPlanIsHeldWithLinkedFile/plan.md   (and task.md, history.md, approval.json)
+    linked_plan_test.go:41: LoadPlan = plan needs approval: review and approve the current plan before rendering a Job; want errors.Is linked_file and plan needs approval
+    linked_plan_test.go:41: Resolve = plan.md#step-1: plan needs approval: review and approve the current plan before rendering a Job; want errors.Is linked_file and plan needs approval
+FAIL	github.com/gridconsole/grid-plugins/internal/job
+```
+
+The job files print 177 such lines on 22017808. On 22017808 as it is, the old rows fail as in the FP1R3 log: the golden diff also gains `.task.lock`, and `approval_alias_test.go:60` fails in the fixture's `Approve` with `linked_file`.
+
+## Earlier rows still pass
+
+With FP1R3's `-run` pattern, plus `TestTaskWorkflowKeepsTheLinkSentinel`, `TestLinkedPolicyRefusesTheVerbItAdds` and `TestWriteRefusesALinkedWorkflowsFile`, a verbose run over task, guard, cli, hook, orchestrator, workflow, feed and signal gave **312 PASS, 0 FAIL, 0 SKIP**, exit 0. Every named row passed:
+- FP1R: P1, P2, the binary hook row, `TestAppendHistory*`, `TestTaskWritersRefuseALinkedFile`, `TestHookAndAttachLockOrderFinishes`, `TestLinkedTaskPostsNoJobs`, `TestLinkedWorkflowsFile*`, `TestWriteRefusesALinkedWorkflowsFile`.
+- FP1R2: `TestLinkedPolicyRefusesTheVerbItAdds`, `TestLinkedTaskWorkflowFile*`, `TestSignalMoveInboxLinkedPolicy`, `TestInboxWorkspaceLinkedFile`, `TestEnsureTaskIDRefusesALinkedTaskMD`, `TestQuestionWithdrawPolicyRefusesALinkedWorkflowFile`.
+- FP1R3: the four rows.
+- L155U: `TestDeliverWorkflowChangedThroughCLI`, `TestSizedLaterKeepsWorkflowDigest`, `TestInlineRewriteOfStampedTaskNotHeld`, the 8 `TestNamedWorkflow*` rows and `TestFoldNamedWorkflowUnchanged`.
+
+FP1R3 counted 318 for its pattern; the named rows are the same, and the full and race runs below cover every row.
+
+## Mutations (on the lane, each restored with `git checkout --`, porcelain empty after)
+
+| Mutation | Red leaf rows |
+|---|---|
+| M1: never keep the mode (`if false && keep != 0`) | **7**: the 6 `TestRewriteKeepsTheFileMode` subtests and golden `history-log/subagent-stop` (`+mode/type file 0664 -> file 0600`) |
+| M2: drop the link check in `planApproved` (`false && errors.Is(...)`) | **8**: `TestPlanAliasesNeedApproval/hardlink`, both `TestProjectPlanAliasesNeedApproval/*/hardlink`, `TestPlanOmittedAnchorsRefused`, the 4 `TestLinkedPlanIsHeldWithLinkedFile` subtests |
+| M3: drop `ErrPlanNeedsApproval` from `linkedPlanError.Unwrap` | **4**: the `TestLinkedPlanIsHeldWithLinkedFile` subtests |
+| M4: keep the mode of any path, not only a regular file | **1**: `TestRewriteOverASymlinkKeepsNoMode` (`history.md after a rewrite over a symlink: -rwxrwxrwx`) |
+
+## Checks
+
+All ran at code head 1bcbd443 in a fresh clone of `lane-FP1R4`, in the foreground. GOFLAGS=-timeout=30m was set for the test runs.
+
+| Check | Exit |
+|---|---|
+| `go test -race -count=1 ./internal/task/... ./internal/job/... ./internal/golden/... ./internal/workflow/... ./internal/cli/... ./internal/guard/... ./internal/hook/...` | 0 (task 10.1 s, job 6.1 s, golden 2.0 s, workflow 11.1 s, cli 53.3 s, guard 9.5 s, hook 4.9 s) |
+| `go test -count=1 ./...` (whole module) | 0, 57 packages ok, no FAIL |
+| `make lint` (`go vet ./...` and its `gofmt -l .` check) | 0 |
+| `make generate`, then `git status --porcelain` | 0, 0 lines |
+| `GOOS=windows go build ./...` | 0 |
+| `GOOS=darwin go build ./...` | 0 |
+| `GOOS=windows go vet ./internal/task/ ./internal/job/...` | 0 |
+| acceptance on the head: `go test -count=1 ./internal/golden/... ./internal/job/...` | 0 |
+| the same on 22017808 and on 2792be12; on main 9764ce4e | 1, 1; 0 |
+| new rows on 22017808 (above) | 1, as intended |
+| hygiene: `git log -i -G '<paths, emails, IPs, remote shells, local names, attribution>' 22017808..lane-FP1R4`; commit metadata | no hits. Every commit's author and committer is `grid <grid@localhost>`, with no trailers |
+
+## Open items
+
+- A rename makes a new inode. It keeps the permission bits but not the owner, the group, ACLs, extended attributes or setuid/setgid/sticky bits; main's in-place append kept them all. A history.md owned by another user in a shared group becomes owned by whoever runs the hook. The decision asks for the mode only, so this was not changed.
+- `job lint` keeps its `job.plan-approval` fix text ("Review and approve the current plan") for a linked task. The finding's message says to remove the other links.
+- The other history-log golden cases are listed in known-differences.txt for older reasons and skip as known. Those that append to an existing history.md may now also gain `.task.lock`; the existing entries would hide that. They were not inspected or re-recorded.
+- The FP1R3 open items still stand: project registration before `taskFront`, and the D5 follow-ups (internal/plan writers, routine/workflow.go).
+
+## NOT VERIFIED
+
+- Rule 18 was not run; the operator runs it. FP1R4 changes CLI output in one case: on a task with a linked protected file, `grid job render` and `job lint` now say `linked_file: a file of this task has more than one hard link; ...` where 22017808 said `plan needs approval: ...`. The exit code (2) and the lint rule are unchanged. File modes after task writes change too (kept instead of 0600), which an app reader running as another user may notice.
+- The checks ran as the builder user in fresh local clones, not as user grid. Nothing was pushed; the lane is delivered as a bundle.
+- Windows and darwin were compiled, and Windows was vetted for task and job; nothing was run there. On Windows a mode is only the read-only bit, and the mode rows skip. A read-only history.md fails the rename as before, and the read-only temporary file may then be left behind.
+- The app readers were checked by reading app main a1158a8c; no app test was run and no app row was added. The L161 folder-move guard was read on lane-L161 8981cec0, which is not on main.
