@@ -2,6 +2,7 @@ package jobcmd
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,5 +93,67 @@ func TestExplicitOwnerContext(t *testing.T) {
 	}
 	if _, err := os.Stat(r.Path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTaskPathMembership(t *testing.T) {
+	for _, state := range []string{"uninvited", "no-roles", "unknown", "invited", "member", "owner"} {
+		t.Run(state, func(t *testing.T) {
+			env, _, _ := fixture(t)
+			taskPath := filepath.Join(env.Cwd, "T-01")
+			projectPath := filepath.Dir(env.Cwd)
+			env.Resolver.Caller = where.Caller{Role: "guest", Member: "gus"}
+			switch state {
+			case "unknown":
+				if err := os.RemoveAll(projectPath); err != nil {
+					t.Fatal(err)
+				}
+			case "uninvited", "invited":
+				member := "someone-else"
+				if state == "invited" {
+					member = "gus"
+				}
+				if err := os.WriteFile(filepath.Join(projectPath, "project-roles.json"), []byte(`{"people":[{"id":"`+member+`"}]}`), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			case "member", "owner":
+				env.Resolver.Caller.Role = state
+			}
+			for _, selector := range []string{taskPath, "./T-01", "T-01"} {
+				got, err := resolveTask(selector, env)
+				if state == "uninvited" || state == "no-roles" || state == "unknown" {
+					if got != "" || err == nil || err.Error() != "task not found" {
+						t.Fatalf("%q: got %q, %v; want task not found", selector, got, err)
+					}
+				} else if err != nil || got != taskPath {
+					t.Fatalf("%q: got %q, %v; want %q", selector, got, err, taskPath)
+				}
+			}
+		})
+	}
+}
+
+func TestTaskPathResolverRefusal(t *testing.T) {
+	env, _, _ := fixture(t)
+	taskPath := filepath.Join(env.Cwd, "T-01")
+	refused := errors.New("task not found")
+	calls := 0
+	env.ResolveTask = func(selector string) (string, error) {
+		calls++
+		if selector != taskPath {
+			t.Fatalf("resolver got %q, want %q", selector, taskPath)
+		}
+		return "", refused
+	}
+	for _, selector := range []string{taskPath, "./T-01", "T-01", ""} {
+		if selector == "" {
+			env.Cwd = filepath.Join(taskPath, "nested")
+		}
+		if got, err := resolveTask(selector, env); got != "" || !errors.Is(err, refused) {
+			t.Fatalf("%q: got %q, %v; want resolver refusal", selector, got, err)
+		}
+	}
+	if calls != 4 {
+		t.Fatalf("resolver called %d times, want 4", calls)
 	}
 }

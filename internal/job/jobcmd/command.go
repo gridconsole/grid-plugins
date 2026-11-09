@@ -298,23 +298,32 @@ func absolute(cwd, p string) string {
 }
 func display(p string, e Env) string { return gridhome.Tilde(p, e.Home) }
 func resolveTask(s string, e Env) (string, error) {
+	// Local folders and inferred tasks are selectors, not authorization. Send
+	// them through the same project-membership resolver as task IDs.
 	p := absolute(e.Cwd, s)
 	if stat, err := os.Stat(filepath.Join(p, "plan.md")); err == nil && !stat.IsDir() {
-		return filepath.Abs(p)
-	}
-	if s == "" {
-		if p := findTask(e.Cwd); p != "" {
-			return p, nil
-		}
-	}
-	if e.ResolveTask != nil {
-		p, err := e.ResolveTask(s)
+		var err error
+		s, err = filepath.Abs(p)
 		if err != nil {
 			return "", err
 		}
-		if p != "" {
-			return p, nil
-		}
+	}
+	if s == "" {
+		s = findTask(e.Cwd)
+	}
+	var err error
+	if e.ResolveTask != nil {
+		p, err = e.ResolveTask(s)
+	} else {
+		var result where.Result
+		result, err = e.Resolver.Resolve(where.Query{Cwd: e.Cwd, Task: s})
+		p = result.TaskPath
+	}
+	if err != nil {
+		return "", err
+	}
+	if p != "" {
+		return p, nil
 	}
 	return "", fmt.Errorf("cannot find task %q; pass a task folder with plan.md", s)
 }
