@@ -141,8 +141,21 @@ after the task is sent back.
 A task whose `task.md` has `gate: preview` records the same way in
 `approval-preview.json` (`gate: preview`) and also gets the history line
 `- <time> · preview approved · <plan_hash> · by <who>`. `approval.json` and
-`approval-ship.json` are not touched. Nothing in the plugin sets `gate: preview`
-yet; the writer that raises it owns that step.
+`approval-ship.json` are not touched.
+
+`grid preview [--task <task>] [--spec spec.md] [--by agent] [--dry-run] [--json]`
+raises that gate. It is agent-callable like `deliver`; approving the preview stays
+person-only. Under `.task.lock`, then `.plan.lock`, it sets `state: waiting` (the
+legacy `status` only where present), `step: preview`, `gate: preview`, `next` and
+`updated`, and appends one `what: preview` event whose note is the spec's first
+heading. It writes no approval. The task's steps come from the inline `workflow:`
+list in `task.md`, else the named template in the project's (then the workspace's)
+`workflows.md`, filtered by the task's size; a workflow that cannot be resolved is
+refused. It also refuses (exit 1, `Preview blocked: ...`) when the steps have no
+`preview` approve step or no plan approval before it, when the plan receipt does
+not match `plan.md`, when the spec (a regular file inside the task folder, no
+symlink) is missing or blank, and from paused, closed or already waiting tasks.
+Usage errors exit 2. `--dry-run` lists the actions and writes nothing.
 
 ### History
 

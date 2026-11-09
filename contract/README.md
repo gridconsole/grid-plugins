@@ -890,6 +890,12 @@ guard fences `approval-preview.json` like the other receipts. A preview approval
 touches `approval.json`, so the plan approval stays valid, and it cannot release the
 plan or ship gate. Reopening a task invalidates all three receipt files, and
 `grid plan migrate` treats a matching preview receipt like a matching plan or ship one.
+`grid preview` raises the preview gate (agent-callable, like `deliver`): it sets
+`state: waiting`, `step: preview`, `gate: preview` and appends one `what: preview`
+event, after checking that the task's steps (the inline `workflow:` list, else the
+named template, filtered by size; unresolvable steps fail closed) hold a plan
+approval before a `preview` approve step, that the plan receipt matches, and that
+the spec is a nonblank regular file inside the task folder.
 
 Rust's existing history receipt remains readable by the legacy guard path:
 `- <time> · plan accepted · rev <n> · <hash> · by <person>`.
