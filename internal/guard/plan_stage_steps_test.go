@@ -1,11 +1,14 @@
 package guard
 
 import (
+	"errors"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 const namedInline = "workflow: [{step: plan, kind: approve}, {step: preview, kind: approve}, {step: build, kind: run}]"
@@ -91,32 +94,45 @@ func TestNamedWorkflowProposedEdit(t *testing.T) {
 	}
 }
 
+// namedRole is a caller of the named-workflow tests; filtered is a guest the
+// project's invitations do not cover, whom the resolver cannot read it for.
+type namedRole struct {
+	name, role, member string
+	invited, filtered  bool
+}
+
+var namedRoles = []namedRole{
+	{name: "owner", role: "owner"},
+	{name: "member", role: "member"},
+	{name: "guest", role: "guest", member: "gus", invited: true},
+	{name: "signed out"},
+	{name: "guest filtered", role: "guest", member: "gus", filtered: true},
+}
+
+// as makes the guard's environment and the store's resolver the role's.
+func (n *namedTask) as(tc namedRole) {
+	delete(n.f.env, "GRID_ROLE")
+	delete(n.f.env, "GRID_MEMBER")
+	if tc.role != "" {
+		n.f.env["GRID_ROLE"] = tc.role
+	}
+	if tc.member != "" {
+		n.f.env["GRID_MEMBER"] = tc.member
+	}
+	if tc.invited {
+		n.f.write(filepath.Join(n.f.projects, "alpha", "project-roles.json"), `{"people":[{"id":"gus","perm":"Client"}]}`)
+	}
+	// The caller is read once, so the store takes the role as the hook does.
+	n.store.Resolver.Caller = where.CallerFrom(func(k string) string { return n.f.env[k] })
+}
+
 // Every caller is held at the plan gate of a named workflow exactly as at an
 // inline one; a guest the resolver does not let read the project stays held.
 func TestNamedWorkflowRoles(t *testing.T) {
-	for _, tc := range []struct {
-		name, role, member string
-		invited, filtered  bool
-	}{
-		{name: "owner", role: "owner"},
-		{name: "member", role: "member"},
-		{name: "guest", role: "guest", member: "gus", invited: true},
-		{name: "signed out"},
-		{name: "guest filtered", role: "guest", member: "gus", filtered: true},
-	} {
+	for _, tc := range namedRoles {
 		t.Run(tc.name, func(t *testing.T) {
 			n := newNamed(t, "large", "Large", "", namedWorkflows(namedLarge))
-			delete(n.f.env, "GRID_ROLE")
-			delete(n.f.env, "GRID_MEMBER")
-			if tc.role != "" {
-				n.f.env["GRID_ROLE"] = tc.role
-			}
-			if tc.member != "" {
-				n.f.env["GRID_MEMBER"] = tc.member
-			}
-			if tc.invited {
-				n.f.write(filepath.Join(n.f.projects, "alpha", "project-roles.json"), `{"people":[{"id":"gus","perm":"Client"}]}`)
-			}
+			n.as(tc)
 			n.put(n.inline(n.at("waiting", "plan")))
 			inline := n.repoWrite()
 			expect(t, inline, "deny")
@@ -134,5 +150,60 @@ func TestNamedWorkflowRoles(t *testing.T) {
 			n.put(n.at("waiting", "build"))
 			expect(t, n.repoWrite(), want)
 		})
+	}
+}
+
+// Deliver asks the same plan hold with the caller's resolver, so each role
+// gets the guard's answer from it: refused at the plan gate, delivered past it.
+// A guest the resolver filters out is refused at both steps, as the guard
+// denies; Deliver refuses it at the task lookup, before its hold lookup, so
+// the hold lookup never sees a caller the resolver filters out.
+func TestNamedWorkflowDeliverRoles(t *testing.T) {
+	for _, tc := range namedRoles {
+		for _, step := range []string{"plan", "build"} {
+			t.Run(tc.name+"/"+step, func(t *testing.T) {
+				n := newNamed(t, "large", "Large", "", namedWorkflows(namedLarge))
+				n.as(tc)
+				n.deliverable(n.at("running", step), "")
+				denied := n.repoWrite().Behavior == "deny"
+				before := files(t, n.dir)
+				_, err := n.store.Deliver(taskstore.DeliverOptions{Cwd: n.dir, Task: n.id, Outcome: "Ready", By: "grid"})
+				switch {
+				case tc.filtered:
+					if !errors.Is(err, where.ErrTaskNotFound) {
+						t.Errorf("Deliver err=%v; want the task lookup to refuse a filtered guest", err)
+					}
+				case step == "plan":
+					if !errors.Is(err, taskstore.ErrPlanNotApproved) {
+						t.Errorf("Deliver err=%v; want a refusal naming the plan", err)
+					}
+				case err != nil:
+					t.Errorf("Deliver: %v; the guard released the plan", err)
+				}
+				if denied != (err != nil) {
+					t.Errorf("guard denied %v, Deliver err=%v", denied, err)
+				}
+				if err != nil && !reflect.DeepEqual(files(t, n.dir), before) {
+					t.Error("a refused Deliver changed the task")
+				}
+			})
+		}
+	}
+}
+
+// The premise of the test above: for a filtered guest only the task lookup
+// stands between Deliver and a different hold, since the plan hold itself
+// reads the task unreadable with the caller and past its gate without.
+func TestNamedWorkflowFilteredGuestHoldLookup(t *testing.T) {
+	n := newNamed(t, "large", "Large", "", namedWorkflows(namedLarge))
+	n.as(namedRoles[len(namedRoles)-1])
+	text := n.at("running", "build")
+	if got := taskstore.PlanStageWith(taskstore.StepsFor(n.store.Resolver, n.dir), text, ""); got != "unreadable" {
+		t.Fatalf("filtered guest: stage %q, want unreadable", got)
+	}
+	open := n.store.Resolver
+	open.Caller = where.Caller{}
+	if got := taskstore.PlanStageWith(taskstore.StepsFor(open, n.dir), text, ""); got != "past" {
+		t.Fatalf("no caller: stage %q, want past", got)
 	}
 }

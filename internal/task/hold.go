@@ -1,9 +1,11 @@
 package task
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -20,13 +22,39 @@ type StepLookup func(text string) ([]taskfile.WorkflowStep, error)
 
 // StepsFor resolves the steps of the task in dir through its workflow: the
 // inline list, the named template (the project's copy first) or the workspace
-// default. The project is the folder above tasks/, as the guard places a task.
-// The guard and Deliver both build their lookup here, so they resolve alike.
+// default. The project is the folder above tasks/, as the guard places a task,
+// and task.md must name that same project: a folder moved under another
+// project would otherwise read that project's same-name template, one that may
+// have no plan gate. A mismatch is an error, which holds. An inline list needs
+// no project, so it reads as it is. The guard and Deliver both build their
+// lookup here, so they resolve alike.
 func StepsFor(r where.Resolver, dir string) StepLookup {
 	project := filepath.Base(filepath.Dir(filepath.Dir(dir)))
 	return func(text string) ([]taskfile.WorkflowStep, error) {
+		if err := inFolderProject(text, project); err != nil {
+			return nil, err
+		}
 		return workflow.TaskSteps(r, project, text)
 	}
+}
+
+// inFolderProject checks that a task whose workflow is told through its project
+// names the project its folder sits in. A task of Personal may leave its
+// project out, as it did before the check.
+func inFolderProject(text, folder string) error {
+	fm := taskfile.ParseFrontmatter(text)
+	if fm == nil || fm.Odd {
+		return nil // TaskSteps names this fault
+	}
+	if _, inline := fm.Data["workflow"].([]any); inline {
+		return nil
+	}
+	declared, _ := fm.Data["project"].(string)
+	declared = strings.TrimSpace(declared)
+	if declared == folder || (declared == "" && folder == where.Personal) {
+		return nil
+	}
+	return fmt.Errorf("task.md has project %q but its folder is in project %q", declared, folder)
 }
 
 // InlineSteps reads only an inline workflow list. It is the lookup for callers

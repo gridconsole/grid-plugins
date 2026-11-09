@@ -75,7 +75,7 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 	case "status":
 		return hookio.Deny("This task's plan is not accepted yet, so " + given + " is not changed to close or pause the task: the person does that in Grid." + off)
 	case "unreadable":
-		return hookio.Deny("This task's plan is not accepted yet, so " + given + " is not changed to a task.md whose step or workflow cannot be read for sure: give it a step and a workflow of {step, kind} items with plain lower-case names, each named once." + off)
+		return hookio.Deny("This task's plan is not accepted yet, so " + given + " is not changed to a task.md whose step or workflow cannot be read for sure: give it a step and a workflow that Grid can resolve, either the name of a workflow that workflows.md defines for the task's own project (the project in task.md is the one its folder sits in) or a list of {step, kind} items with plain lower-case names, each named once." + off)
 	case "unclear":
 		return hookio.Deny("This task's plan is not accepted yet: Grid records the acceptance, and what " + given + " would hold after this edit cannot be told (an old_string not in the file, or input that is not text), so it is not changed. Read it and edit it again." + off)
 	case "":

@@ -2,6 +2,7 @@ package guard
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -33,7 +34,14 @@ const namedStandard = "## Standard\napplies when: nothing else matches\nreview r
 const namedStandardCopy = "## Standard\napplies when: as in the workspace Standard\nreview rounds: 2\n\n" + namedTable +
 	"| 1 | build | run | grid-builder | all | |\n| 2 | ship | approve | owner | all | |\n\n"
 
+// namedLargeOpen is another project's Large: the same name with no plan gate.
+const namedLargeOpen = "## Large\napplies when: label large\nreview rounds: 2\n\n" + namedTable +
+	"| 1 | build | run | grid-builder | all | |\n| 2 | ship | approve | owner | all | |\n\n"
+
 func namedWorkflows(sections ...string) string { return "# Workflows\n\n" + strings.Join(sections, "") }
+
+// movedTo is the project a held task's folder is moved into by a row.
+const movedTo = "beta"
 
 type namedTask struct {
 	t     *testing.T
@@ -67,6 +75,22 @@ func newNamed(t *testing.T, size, name, workspace, project string) *namedTask {
 		t.Fatalf("task.md from Store.New: %q", n.made)
 	}
 	return n
+}
+
+// moveTo moves the task folder under another project, as an agent's mv would,
+// and gives that project its own workflows.md. task.md still names alpha.
+func (n *namedTask) moveTo(project, workflows string) {
+	n.t.Helper()
+	n.f.write(filepath.Join(n.f.projects, project, "project.md"), "---\nid: id-"+project+"\n---\n")
+	n.f.write(filepath.Join(n.f.projects, project, "workflows.md"), workflows)
+	to := filepath.Join(n.f.projects, project, "tasks", filepath.Base(n.dir))
+	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+		n.t.Fatal(err)
+	}
+	if err := os.Rename(n.dir, to); err != nil {
+		n.t.Fatal(err)
+	}
+	n.dir = to
 }
 
 // at is task.md in a state at a step; an empty step leaves the key out.
@@ -121,10 +145,10 @@ func (n *namedTask) deliverable(text, receipt string) {
 // one verdict the guard and Deliver must both give; stage is the guard's
 // reading (plan_stage_steps_test.go).
 var namedRows = []struct {
-	name, size, workflow, workspace, project, step, receipt string
-	symlink                                                 bool
-	stage                                                   string
-	held                                                    bool
+	name, size, workflow, workspace, project, step, receipt, moved string
+	symlink                                                        bool
+	stage                                                          string
+	held                                                           bool
 }{
 	{name: "before plan", size: "large", workflow: "Researched", project: namedWorkflows(namedResearched), step: "research", stage: "before", held: true},
 	{name: "at plan", size: "large", workflow: "Large", project: namedWorkflows(namedLarge), step: "plan", stage: "gate", held: true},
@@ -147,6 +171,11 @@ var namedRows = []struct {
 	{name: "no plan gate, stale receipt", size: "large", workflow: "Quick", project: namedWorkflows(namedQuick), step: "build", receipt: "stale", stage: "", held: false},
 	{name: "name not in workflows.md, fresh receipt", size: "large", workflow: "Missing", project: namedWorkflows(namedQuick), step: "build", receipt: "fresh", stage: "unreadable", held: false},
 	{name: "name not in workflows.md, stale receipt", size: "large", workflow: "Missing", project: namedWorkflows(namedQuick), step: "build", receipt: "stale", stage: "unreadable", held: true},
+	// A folder moved into another project: task.md still names its own, so the
+	// steps are not told from the new project's template. Held, unreadable.
+	{name: "moved to a project whose same-name workflow has no plan gate", size: "large", workflow: "Large", project: namedWorkflows(namedLarge), moved: namedWorkflows(namedLargeOpen), step: "plan", stage: "unreadable", held: true},
+	{name: "moved to a project whose copy of the default has no plan gate", workspace: namedWorkflows(namedStandard), moved: namedWorkflows(namedStandardCopy), size: "large", step: "plan", stage: "unreadable", held: true},
+	{name: "moved past plan to a project with the same workflow", size: "large", workflow: "Large", project: namedWorkflows(namedLarge), moved: namedWorkflows(namedLarge), step: "build", stage: "unreadable", held: true},
 }
 
 // newNamedRow makes the row's task, running at its step and ready to deliver.
@@ -160,6 +189,9 @@ func newNamedRow(t *testing.T, i int) *namedTask {
 		n.f.link(filepath.Join(n.f.projects, "alpha", "workflows.md"), other)
 	}
 	n.deliverable(n.at("running", row.step), row.receipt)
+	if row.moved != "" {
+		n.moveTo(movedTo, row.moved)
+	}
 	return n
 }
 
@@ -179,6 +211,13 @@ func TestNamedWorkflowHoldGuardAndDeliver(t *testing.T) {
 			before := files(t, n.dir)
 			_, err := n.store.Deliver(taskstore.DeliverOptions{Cwd: n.dir, Task: n.id, Outcome: "Ready", By: "grid"})
 			switch {
+			case row.moved != "":
+				// Deliver refuses a moved task at its task lookup (task.md names
+				// another project than the folder's), before it asks the plan
+				// hold; the stage table asks that hold directly.
+				if err == nil || !reflect.DeepEqual(files(t, n.dir), before) {
+					t.Errorf("Deliver err=%v; want a refusal that leaves the moved task untouched", err)
+				}
 			case row.held && !errors.Is(err, taskstore.ErrPlanNotApproved):
 				t.Errorf("Deliver err=%v; want a refusal naming the plan", err)
 			case row.held && !reflect.DeepEqual(files(t, n.dir), before):
