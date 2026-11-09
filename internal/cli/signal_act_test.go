@@ -21,6 +21,74 @@ const actID = "S-01ARZ3NDEKTSV4RRFFQ69G5FAV"
 const actBody = "BODY-MUST-NEVER-ENTER-INTENT\n---\nstatus: new\n"
 const actUntil = "2030-04-05T06:07"
 
+func assertSignalErrorJSON(t *testing.T, output, kind, message string) {
+	t.Helper()
+	want, err := json.Marshal(struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}{kind, message})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output != string(want)+"\n" {
+		t.Fatalf("stdout %q, want %s", output, want)
+	}
+}
+
+func TestSignalActErrorOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name, status, act, role, kind, message string
+		code                                   int
+		turnFirst                              bool
+	}{
+		{name: "guest", status: "new", act: "note", role: "guest", code: 3, kind: "refused", message: "guests cannot act on signals"},
+		{name: "state refusal", status: "done", act: "note", code: 3, kind: "refused", message: "this note is already decided (done)"},
+		{name: "lock loser", status: "new", act: "turn", turnFirst: true, code: 3, kind: "refused", message: "this note is already decided (done)"},
+		{name: "bad input", status: "new", act: "unknown", code: 2, kind: "invalid", message: `unknown signal act "unknown"`},
+		{name: "path input", status: "new", code: 2, kind: "invalid", message: "unknown signal act"},
+	} {
+		for _, asJSON := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/json=%t", tc.name, asJSON), func(t *testing.T) {
+				h, path, _ := actFixture(t, tc.status)
+				act := tc.act
+				if tc.name == "path input" {
+					act = path
+				}
+				if tc.turnFirst && h.run(h.root, actArgs("turn")...) != 0 {
+					t.Fatal(h.errb)
+				}
+				before, _ := actRead(t, path)
+				h.env.Getenv = func(key string) string {
+					if key == "GRID_ROLE" {
+						return tc.role
+					}
+					return ""
+				}
+				args := actArgs(act)
+				if !asJSON {
+					args = args[:len(args)-1]
+				}
+				stderrMessage := tc.message
+				if tc.name == "path input" {
+					stderrMessage = fmt.Sprintf("unknown signal act %q", act)
+				}
+				if code := h.run(h.root, args...); code != tc.code || h.errb.String() != "grid: "+stderrMessage+"\n" {
+					t.Fatalf("exit %d, stderr %q; want %d, %q", code, h.errb.String(), tc.code, "grid: "+stderrMessage+"\n")
+				}
+				if asJSON {
+					assertSignalErrorJSON(t, h.out.String(), tc.kind, tc.message)
+				} else if h.out.Len() != 0 {
+					t.Fatalf("non-JSON stdout %q", h.out.String())
+				}
+				after, _ := actRead(t, path)
+				if !bytes.Equal(before, after) {
+					t.Fatal("failed act wrote note")
+				}
+			})
+		}
+	}
+}
+
 func actFixture(t *testing.T, status string) (*harness, string, []byte) {
 	t.Helper()
 	h := newHarness(t)
@@ -92,9 +160,7 @@ func TestSignalActMatrix(t *testing.T) {
 					}
 				}
 				if message != "" {
-					if h.out.Len() != 0 {
-						t.Fatal("refusal printed result")
-					}
+					assertSignalErrorJSON(t, h.out.String(), "refused", strings.TrimSuffix(strings.TrimPrefix(message, "grid: "), "\n"))
 					return
 				}
 				wantStatus, wantBecame, wantUntil := effective, "T-09", ""
@@ -394,6 +460,7 @@ func TestSignalConcurrentTurnProcesses(t *testing.T) {
 		if c.ProcessState.ExitCode() != 3 || errs[i].String() != "grid: this note is already decided (done)\n" {
 			t.Fatalf("loser: %v, %s", err, &errs[i])
 		}
+		assertSignalErrorJSON(t, outs[i].String(), "refused", "this note is already decided (done)")
 	}
 	if wins != 1 {
 		t.Fatalf("winners %d", wins)
