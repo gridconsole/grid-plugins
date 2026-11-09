@@ -148,7 +148,7 @@ func TestRoutineLimitBoundariesAndTypes(t *testing.T) {
 		{"routine_max_turns", "1", true}, {"routine_max_turns", "100", true}, {"routine_max_turns", "1.0", false},
 		{"routine_max_turns", "99999999999999999999999999", false}, {"routine_max_turns", "{}", false},
 		{"routine_budget", "0.000001", true}, {"routine_budget", "50", true}, {"routine_budget", "50.0001", false}, {"routine_budget", "50.000000000000000001", false},
-		{"routine_budget", "0x10", false}, {"routine_budget", "false", false}, {"routine_budget", "[]", false},
+		{"routine_budget", "049", true}, {"routine_budget", "060", false}, {"routine_budget", "0x10", false}, {"routine_budget", "false", false}, {"routine_budget", "[]", false},
 	} {
 		t.Run(tc.key+"_"+tc.value, func(t *testing.T) {
 			data := []byte("---\nname: daily\nevery: 1h\nrun: signals\nmachine: 01ARZ3NDEKTSV4RRFFQ69G5FAV\n" + tc.key + ": " + tc.value + "\n---\n")

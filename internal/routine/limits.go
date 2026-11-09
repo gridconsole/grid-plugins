@@ -61,11 +61,15 @@ var limitDefinitions = []limitDefinition{
 	}},
 	{"routine_budget", "1", "decimal greater than 0 and at most 50", func(p *LimitPolicy) *yaml.Node { return &p.RoutineBudget }, func(l *Limits, n yaml.Node) bool {
 		v, err := strconv.ParseFloat(n.Value, 64)
-		if (n.Tag != "!!int" && n.Tag != "!!float") || !decimal.MatchString(n.Value) || err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v <= 0 {
+		if (n.Tag != "!!int" && n.Tag != "!!float") || !decimal.MatchString(n.Value) || err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v <= 0 || v > 50 {
 			return false
 		}
 		// Check the cap before float rounding can hide a value just above it.
-		amount, exact := new(big.Rat).SetString(n.Value)
+		exactText := n.Value
+		if !strings.Contains(exactText, ".") {
+			exactText += ".0"
+		}
+		amount, exact := new(big.Rat).SetString(exactText)
 		if !exact || amount.Sign() <= 0 || amount.Cmp(big.NewRat(50, 1)) > 0 {
 			return false
 		}
