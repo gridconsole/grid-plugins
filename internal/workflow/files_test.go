@@ -135,8 +135,8 @@ func TestWorkflowFilesEmptyPresentFile(t *testing.T) {
 
 func TestWorkflowFilesAmbiguousProject(t *testing.T) {
 	home := workflowHome(t)
-	putWorkflowFixture(t, filepath.Join(home, "projects", "beta", "project.md"), "---\nid: alpha\n---\n")
-	if _, _, err := readFiles(where.Resolver{GridHome: home}, "alpha"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+	putWorkflowFixture(t, filepath.Join(home, "projects", "beta", "project.md"), "---\nid: id-alpha\n---\n")
+	if _, _, err := readFiles(where.Resolver{GridHome: home}, "id-alpha"); err == nil || err.Error() != `project "id-alpha" is missing or ambiguous` {
 		t.Fatalf("ambiguous selection: %v", err)
 	}
 }

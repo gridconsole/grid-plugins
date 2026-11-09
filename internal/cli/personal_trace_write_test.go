@@ -74,6 +74,8 @@ func TestWorkflowWritePersonalCallerPolicy(t *testing.T) {
 				missingCode, missingOut, missingErr := run("unknown")
 				code, out, stderr := run(selector)
 				if role == "member" {
+					// Only the caller-supplied selector may differ from an unknown project.
+					missingErr = strings.ReplaceAll(missingErr, `"unknown"`, fmt.Sprintf("%q", selector))
 					if code != 1 || code != missingCode || out != missingOut || stderr != missingErr {
 						t.Errorf("member Personal write differs from unknown: exit=%d want=%d out=%q err=%q", code, missingCode, out, stderr)
 					}
