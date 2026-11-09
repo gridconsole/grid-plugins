@@ -273,3 +273,16 @@ func TestWorkspaceBudgetGatedRunsThePersonGate(t *testing.T) {
 		})
 	}
 }
+
+// A caller that supplies no person func must not reach the store: the write is refused.
+func TestWorkspaceBudgetGatedRefusesWithoutAPersonGate(t *testing.T) {
+	h := workspaceGateHarness(t, map[string]string{"GRID_ROLE": "owner"})
+	v := uint64(200)
+	code := runWorkspaceBudgetGated("set", &v, true, h.env, nil)
+	if code != 3 {
+		t.Fatalf("exit %d, want 3: %s %s", code, h.out, h.errb)
+	}
+	if got := workspaceBudget(t, h); strings.Contains(got, "200") {
+		t.Fatalf("budget %s was written without a person gate", got)
+	}
+}

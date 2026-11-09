@@ -351,7 +351,8 @@ func parseBudgetWrite(fs *flag.FlagSet, op string, args []string, workspace *boo
 }
 
 // runWorkspaceBudgetGated checks the caller role, then runs person (exit 3 refuses) before a
-// write, then reads or writes the workspace budget. A show never runs person.
+// write, then reads or writes the workspace budget. A show never runs person; a write with a
+// nil person is refused with exit 3.
 func runWorkspaceBudgetGated(op string, value *uint64, asJSON bool, env Env, person func() int) int {
 	allowed := usage.WorkspaceBudgetReadAllowed
 	if op != "show" {
@@ -361,7 +362,11 @@ func runWorkspaceBudgetGated(op string, value *uint64, asJSON bool, env Env, per
 		fmt.Fprintln(env.Stderr, "usage budget: caller role is not allowed to access the workspace budget")
 		return 3
 	}
-	if op != "show" && person != nil {
+	if op != "show" {
+		if person == nil {
+			fmt.Fprintln(env.Stderr, "usage budget: a workspace write needs a person gate")
+			return 3
+		}
 		if code := person(); code != 0 {
 			return code
 		}
