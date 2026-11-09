@@ -15,6 +15,11 @@ var ErrInboxWorkspace = errors.New("invalid inbox_workspace in workspace workflo
 // symlink-refusing workflow reader. Missing files and unset keys use Personal.
 func InboxWorkspace(home string) (string, error) {
 	text, _, err := readFile(gridhome.Real(home), "workflows.md")
+	if errors.Is(err, ErrLinkedFile) {
+		// A linked file is not an invalid value: name the link so the person
+		// knows to remove it. The error carries no machine path.
+		return "", err
+	}
 	if err != nil {
 		return "", ErrInboxWorkspace
 	}

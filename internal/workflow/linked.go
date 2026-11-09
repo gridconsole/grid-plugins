@@ -25,3 +25,10 @@ func refuseLinked(f *os.File, relative string) error {
 	}
 	return nil
 }
+
+// RefuseLinked counts the links of another package's protected file through
+// its open descriptor, with the same refusal and message as a workflow file.
+// The feed package checks task.md with it before EnsureTaskID replaces it.
+func RefuseLinked(f *os.File, name string) error {
+	return refuseLinked(f, name)
+}
