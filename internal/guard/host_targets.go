@@ -757,7 +757,7 @@ func hostProvenReads(command string, depth int) bool {
 
 // hostProtectedNames are the entries a write must not reach: matched as a
 // basename pattern when the target is a glob or holds an expansion.
-var hostProtectedNames = []string{"workflows.md", "workflow.md", "task.md", "settings.json", ".settings.lock", "approval.json", "approval-ship.json", ".task-write.json", ".task.lock", "questions", "plan-revisions"}
+var hostProtectedNames = []string{"workflows.md", "workflow.md", "task.md", "history.md", "settings.json", ".settings.lock", "approval.json", "approval-ship.json", ".task-write.json", ".task.lock", "questions", "plan-revisions"}
 
 func hostProtectedPattern(pattern string) bool {
 	for _, name := range hostProtectedNames {
@@ -905,6 +905,9 @@ func (s *writeScan) protected(path string) string {
 			if filepath.Base(path) == "workflow.md" {
 				return workflowReason
 			}
+			return gateReason
+		}
+		if historyAt(root, path) {
 			return gateReason
 		}
 	}

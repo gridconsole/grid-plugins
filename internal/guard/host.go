@@ -29,8 +29,9 @@ var feedAnswer = regexp.MustCompile(`(?i)` + feedPostCommand +
 
 // gateName is a task entry that holds a gate: the questions folder with its
 // answers, the plan, preview and ship approvals, a refusal decision, the write journal and its lock, or a
-// plan revision archive. task.md is protected too: its workflow selects the gates.
-var gateName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:task\.md|approval(?:-ship|-preview)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock|plan-revisions|questions)(?:$|[^\w.-])`)
+// plan revision archive. task.md is protected too: its workflow selects the gates. So is
+// history.md, whose dated prose "plan accepted" line releases a task that has no approval.json.
+var gateName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:task\.md|history\.md|approval(?:-ship|-preview)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock|plan-revisions|questions)(?:$|[^\w.-])`)
 
 // Workspace and project workflows govern inherited person-only verbs.
 var projectWorkflowName = regexp.MustCompile(`(?i)(?:^|[^\w.-])workflows\.md(?:$|[^\w.-])`)
@@ -67,7 +68,7 @@ func readerRuns(name, arg string) bool {
 // shellPathWord is a literal shell word: metacharacters split it, quotes keep it whole.
 var shellPathWord = regexp.MustCompile(`(?:[^\s\x27"<>|;&()]+|'[^']*'|"[^"]*")+`)
 
-const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, workflow.md, workflows.md, approval.json, approval-preview.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide, grid decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
+const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, history.md, workflow.md, workflows.md, approval.json, approval-preview.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide, grid decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
 
 const workflowReason = "The task's workflow.md policy is written only by Grid; an agent cannot change its own person-only verbs or gate posting roles. Reading is allowed: cat, grep, ls, head or tail of workflow.md work."
 
@@ -203,6 +204,14 @@ func gateAt(root, target string) bool {
 	}
 	first, _, _ := strings.Cut(t.rel, "/")
 	return first == "questions" || first == "plan-revisions" || (t.rel == first && gateFile.MatchString(first))
+}
+
+// historyAt reports whether target (lower-case) is a task's history.md. Only Bash
+// writes are fenced through it: the plan guard and the only-writer guard already
+// refuse the file tools on that file, each with its own reason.
+func historyAt(root, target string) bool {
+	t := taskAtFold(target, root)
+	return t != nil && t.rel == "history.md"
 }
 
 // projectWorkflowAt recognizes workspace and project policy files, including
