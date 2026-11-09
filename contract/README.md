@@ -266,8 +266,13 @@ Disagreements and defaults chosen:
   payload names were unspecified. The fold exposes unanswered questions and
   applies selected answers, but scheduling gate readiness needs external facts.
 - Usage thresholds are numeric percentages from 0 through 100, defaulting to
-  50, 80 and 100. Dollars and minutes are nonnegative numbers; tokens are
-  nonnegative integers. Exactly one unit is present in a usage-notice, and its
+  80 and 100 for tokens, and 50, 80 and 100 for dollars and minutes. Task
+  `thresholds.json` values override per-unit `usage_notice_thresholds` workflow
+  defaults, which override the built-in defaults; the configuration seam does
+  not read workflow files yet. Existing explicit token thresholds, including
+  50, and previously written notices are preserved. Dollars and minutes are
+  nonnegative numbers; tokens are nonnegative integers. Exactly one unit is
+  present in a usage-notice, and its
   body task must equal the envelope task. `grid usage post --tokens N` adds a
   delta; `usage show` includes token totals. `usage budget set --tokens N` sets
   a positive task budget, overriding the replaceable `tokens_per_task` default

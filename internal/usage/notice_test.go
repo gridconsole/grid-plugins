@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -589,6 +590,121 @@ func TestTokenNoticeExistingFilesUnchanged(t *testing.T) {
 		data, err := os.ReadFile(path)
 		if err != nil || string(data) != want {
 			t.Fatal("existing notice file changed")
+		}
+	}
+}
+
+func TestWorkflowNoticeThresholdPrecedence(t *testing.T) {
+	for _, source := range []string{"workflow", "task-file", "task-configure", "legacy-file", "task-clear"} {
+		t.Run(source, func(t *testing.T) {
+			s := noticeStore(t)
+			setNoticeWorkspaceBudget(t, &s)
+			if source == "task-file" || source == "task-clear" {
+				values := []float64{50, 80, 100}
+				if source == "task-clear" {
+					values = []float64{}
+				}
+				configure(t, s, Change{Tokens: values})
+			}
+			if source == "legacy-file" {
+				dir := filepath.Join(s.TaskPath, "usage")
+				if err := os.Mkdir(dir, 0700); err != nil {
+					t.Fatal(err)
+				}
+				const old = `{"v":1,"dollars":[50,80,100],"minutes":[50,80,100],"budget":{},"baseline":{"dollars":0,"minutes":0},"fired":{}}`
+				if err := os.WriteFile(filepath.Join(dir, "thresholds.json"), []byte(old), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s.UsageNoticeThresholds = &NoticeThresholds{Tokens: []float64{90, 100}}
+			if source == "task-configure" {
+				configure(t, s, Change{Tokens: []float64{50, 80, 100}})
+			}
+			want := []float64{90, 100}
+			if source == "task-file" || source == "task-configure" {
+				want = []float64{50, 80, 100}
+			} else if source == "task-clear" {
+				want = []float64{}
+			}
+			c, err := s.Config()
+			if err != nil || !reflect.DeepEqual(c.Tokens, want) {
+				t.Fatalf("effective tokens = %v, want %v: %v", c.Tokens, want, err)
+			}
+			var got []float64
+			for _, delta := range []uint64{50, 35, 5, 10, 0} {
+				out := postNoticeTokens(t, s, delta)
+				got = append(got, noticePercentages(out)...)
+				for _, notice := range out.Notices {
+					if notice.Body["tokens"] != json.Number(strconv.FormatUint(out.Totals.Tokens, 10)) || notice.Body["threshold"].(float64) > float64(out.Totals.Tokens) {
+						t.Fatalf("invalid crossing: %+v", notice)
+					}
+				}
+			}
+			if len(got) != len(want) || len(got) > 0 && !reflect.DeepEqual(got, want) {
+				t.Fatalf("posted thresholds = %v, want %v", got, want)
+			}
+			if len(notices(t, s)) != len(want) {
+				t.Fatal("lost or repeated workflow notice")
+			}
+		})
+	}
+}
+
+func TestWorkflowNoticeThresholdUnits(t *testing.T) {
+	s := noticeStore(t)
+	s.UsageNoticeThresholds = &NoticeThresholds{
+		Dollars: []float64{100, 90, 90}, Minutes: []float64{},
+	}
+	c, err := s.Config()
+	if err != nil || !reflect.DeepEqual(c.Dollars, []float64{90, 100}) || c.Minutes == nil || len(c.Minutes) != 0 || !reflect.DeepEqual(c.Tokens, []float64{80, 100}) {
+		t.Fatalf("per-unit defaults: %+v %v", c, err)
+	}
+	if _, err := os.Stat(filepath.Join(s.TaskPath, "usage")); !os.IsNotExist(err) {
+		t.Fatal("Config created usage data")
+	}
+	// Neither normalization nor callers may mutate the supplied policy or defaults.
+	c.Dollars[0], c.Tokens[0] = 1, 1
+	if !reflect.DeepEqual(s.UsageNoticeThresholds.Dollars, []float64{100, 90, 90}) {
+		t.Fatal("mutated workflow policy")
+	}
+	c = configure(t, s, Change{Budget: true, Dollars: []float64{100}, Minutes: []float64{100}, BudgetTokens: []uint64{100}})
+	if !reflect.DeepEqual(c.Dollars, []float64{90, 100}) || !reflect.DeepEqual(c.Tokens, []float64{80, 100}) {
+		t.Fatal("caller mutated later defaults")
+	}
+	if out := post(t, s, 50, 50); len(out.Notices) != 0 {
+		t.Fatal("ignored per-unit workflow thresholds")
+	}
+	out := post(t, s, 40, 50)
+	if !reflect.DeepEqual(noticePercentages(out), []float64{90}) || out.Notices[0].Body["dollars"] != float64(90) {
+		t.Fatalf("workflow dollars/minutes: %+v", out)
+	}
+}
+
+func TestWorkflowNoticeThresholdInvalid(t *testing.T) {
+	for _, values := range [][]float64{{-1}, {101}, {math.NaN()}, {math.Inf(1)}, {1, 2, 3, 4, 5, 6, 7, 8, 9}} {
+		for _, unit := range []string{"dollars", "minutes", "tokens"} {
+			s := noticeStore(t)
+			policy := &NoticeThresholds{}
+			switch unit {
+			case "dollars":
+				policy.Dollars = values
+			case "minutes":
+				policy.Minutes = values
+			case "tokens":
+				policy.Tokens = values
+			}
+			s.UsageNoticeThresholds = policy
+			if _, err := s.Config(); err == nil || !strings.Contains(err.Error(), "usage_notice_thresholds "+unit) {
+				t.Fatalf("accepted invalid %s workflow policy: %v", unit, err)
+			}
+			if _, err := s.Configure(Change{Budget: true, BudgetTokens: []uint64{100}}); err == nil {
+				t.Fatal("Configure accepted invalid workflow policy")
+			}
+			n := uint64(85)
+			out, err := s.Post(Input{Job: "lead", Tokens: &n})
+			if err != nil || len(out.Warnings) != 1 || len(out.Notices) != 0 || out.Totals.Tokens != 85 {
+				t.Fatalf("invalid workflow policy lost usage: %+v %v", out, err)
+			}
 		}
 	}
 }

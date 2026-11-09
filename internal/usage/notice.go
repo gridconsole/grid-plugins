@@ -77,8 +77,17 @@ type Change struct {
 	BudgetTokens []uint64
 }
 
+// NoticeThresholds supplies per-unit defaults for the workflow key
+// usage_notice_thresholds. Nil leaves the built-in default; empty disables notices.
+// Task thresholds.json values take precedence over these defaults.
+type NoticeThresholds struct {
+	Dollars, Minutes, Tokens []float64
+}
+
+func defaultTokenThresholds() []float64 { return []float64{80, 100} }
+
 func defaults() Configuration {
-	return Configuration{V: 1, Dollars: []float64{50, 80, 100}, Minutes: []float64{50, 80, 100}, Tokens: []float64{50, 80, 100},
+	return Configuration{V: 1, Dollars: []float64{50, 80, 100}, Minutes: []float64{50, 80, 100}, Tokens: defaultTokenThresholds(),
 		Budget: Amounts{}, Baseline: Amounts{"dollars": "0", "minutes": "0", "tokens": "0"}, Fired: map[string]string{}}
 }
 
@@ -87,7 +96,7 @@ func (s Store) Config() (Configuration, error) {
 	c := defaults()
 	err := s.readData(func(dir string) error {
 		var err error
-		c, err = readConfig(dir)
+		c, err = s.readConfig(dir)
 		return err
 	})
 	if err == nil {
@@ -150,7 +159,7 @@ func (s Store) Configure(change Change) (Configuration, error) {
 	var c Configuration
 	err = s.withData(func(dir string) error {
 		var err error
-		c, err = readConfig(dir)
+		c, err = s.readConfig(dir)
 		if err != nil {
 			return err
 		}
@@ -198,18 +207,45 @@ func (s Store) Configure(change Change) (Configuration, error) {
 }
 
 func readConfig(dir string) (Configuration, error) {
+	return (Store{}).readConfig(dir)
+}
+
+func (s Store) readConfig(dir string) (Configuration, error) {
+	c := defaults()
+	if workflow := s.UsageNoticeThresholds; workflow != nil {
+		for _, unit := range []struct {
+			name   string
+			values []float64
+			target *[]float64
+		}{
+			{"dollars", workflow.Dollars, &c.Dollars},
+			{"minutes", workflow.Minutes, &c.Minutes},
+			{"tokens", workflow.Tokens, &c.Tokens},
+		} {
+			if unit.values == nil {
+				continue
+			}
+			values, err := normalize(unit.values, false)
+			if err != nil {
+				return Configuration{}, fmt.Errorf("usage_notice_thresholds %s: %w", unit.name, err)
+			}
+			*unit.target = values
+		}
+	}
 	if dir == "" {
-		return defaults(), nil
+		return c, nil
 	}
 	f, err := fslock.OpenNoFollow(filepath.Join(dir, "thresholds.json"), os.O_RDONLY, 0)
 	if errors.Is(err, os.ErrNotExist) {
-		return defaults(), nil
+		return c, nil
 	}
 	if err != nil {
 		return Configuration{}, err
 	}
 	defer f.Close()
-	c := Configuration{Tokens: []float64{50, 80, 100}}
+	// Only tokens may be absent in old version-1 files. All other fields
+	// retain their existing required-field checks, including explicit nulls.
+	c = Configuration{Tokens: c.Tokens}
 	dec := json.NewDecoder(f)
 	// New optional fields must remain readable by older version-1 readers.
 	// Known fields are still type-checked here and validated below.
@@ -285,7 +321,7 @@ func (s Store) notices(dir string, out *PostResult) {
 }
 
 func (s Store) postNotices(dir string, out *PostResult) error {
-	c, err := readConfig(dir)
+	c, err := s.readConfig(dir)
 	if err != nil {
 		return err
 	}

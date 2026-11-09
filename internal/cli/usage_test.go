@@ -222,7 +222,7 @@ func TestTokenBudgetCLI(t *testing.T) {
 		if code := h.run(task, append(append([]string{"usage", "budget"}, args...), "--json")...); code != 0 {
 			t.Fatalf("token budget: exit %d: %s", code, h.errb)
 		}
-		want := `{"v":1,"dollars":[50,80,100],"minutes":[50,80,100],"tokens":[50,80,100],"budget":{"tokens":` + budget + `},"baseline":{"dollars":0,"minutes":0,"tokens":0},"fired":{},"token_budget_source":"` + source + `"}` + "\n"
+		want := `{"v":1,"dollars":[50,80,100],"minutes":[50,80,100],"tokens":[80,100],"budget":{"tokens":` + budget + `},"baseline":{"dollars":0,"minutes":0,"tokens":0},"fired":{},"token_budget_source":"` + source + `"}` + "\n"
 		if h.out.String() != want {
 			t.Fatalf("token budget JSON: %s", h.out)
 		}
