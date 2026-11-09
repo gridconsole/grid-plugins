@@ -355,6 +355,16 @@ func hostGroupBody(text string, start, end int, closed bool, close byte) string 
 	return b.String()
 }
 
+// hostHasComment reports whether a # starts a word anywhere in text, even in quotes.
+func hostHasComment(text string) bool {
+	for i := 0; i < len(text); i++ {
+		if text[i] == '#' && (i == 0 || strings.IndexByte(hostWordEnds, text[i-1]) >= 0) {
+			return true
+		}
+	}
+	return false
+}
+
 func hostDigits(text string) bool {
 	return text != "" && strings.Trim(text, "0123456789") == ""
 }
@@ -365,11 +375,12 @@ func hostDigits(text string) bool {
 // &>, &>>, &>|, &>!, <>, <, <<, <<<, <&, each with an optional leading fd number,
 // which is dropped. Only >& followed by a word is a dup (a file unless an fd).
 // Backslash-newline pairs go first, before any word is matched. A # that starts a
-// word, outside quotes, begins a comment that ends at the newline; a substitution
-// in it is still scanned. A heredoc body is skipped up to its delimiter line; an
+// word, outside quotes, begins a comment that ends at the newline; nothing in it is
+// special, not a quote nor a substitution. A heredoc body is skipped up to its delimiter line; an
 // unquoted body's substitutions are scanned. A hostRefuse token ends the list when
 // the tokenizer cannot tell what the shell runs: a carriage return outside quotes,
-// $$ before a quote, ( or {, or a heredoc without its delimiter line.
+// $$ before a quote, ( or {, a heredoc without its delimiter line, or in the zsh
+// reading a # that starts a word in a backtick group (that reading does not skip comments).
 func hostShellTokens(command string) []hostShellToken {
 	return hostShellTokensAs(command, false)
 }
@@ -384,7 +395,7 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 	started, comment, ansi := false, false, false // a word has begun, even an empty one; inside a comment; $'..' or $".." in the word
 	flush := func() {
 		started = false
-		if word.Len() > 0 || len(groups) > 0 { // groups alone: substitutions in a comment or heredoc body
+		if word.Len() > 0 || len(groups) > 0 { // groups alone: substitutions in a heredoc body
 			out = append(out, hostShellToken{text: word.String(), groups: groups, ansi: ansi})
 		}
 		word.Reset()
@@ -413,8 +424,9 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 			i++
 			continue
 		}
-		// In '..' and $'..' only the closing ' is special: no $(, ${ or backtick opens a group.
-		subst := quote != '\'' && quote != '$' && (ch == '`' || (ch == '$' && (at(i+1) == '(' || at(i+1) == '{'))) || ((ch == '<' || ch == '>') && quote == 0 && !comment && at(i+1) == '(')
+		// In '..' and $'..' only the closing ' is special, and in a comment nothing is: no $(,
+		// ${ or backtick opens a group there.
+		subst := !comment && quote != '\'' && quote != '$' && (ch == '`' || (ch == '$' && (at(i+1) == '(' || at(i+1) == '{'))) || ((ch == '<' || ch == '>') && quote == 0 && !comment && at(i+1) == '(')
 		if subst {
 			start, close := i+1, byte('`')
 			if ch != '`' {
@@ -431,6 +443,7 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 				refuse = refuse || !ok
 			} else {
 				groups = append(groups, body)
+				refuse = refuse || zsh && close == '`' && hostHasComment(body)
 			}
 			word.WriteString(command[i:end])
 			started = true
@@ -574,7 +587,7 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 // separator that ended it.
 type hostSegment struct {
 	assigns, args, writes, reads []hostShellToken
-	comments                     []hostShellToken // substitutions in a comment: scanned, never words
+	comments                     []hostShellToken // substitutions in a heredoc body: scanned, never words
 	separator                    string
 	refuse                       bool // the tokenizer could not tell what the shell runs
 	restart                      bool // the zsh reading of the command starts here
