@@ -58,6 +58,11 @@ func TaskWorkflow(r where.Resolver, project, taskText string) (*Template, []task
 	if err != nil {
 		return nil, nil, err
 	}
+	// A link outranks every other problem in scope. Otherwise an earlier problem
+	// in the workspace file would hide a linked project file from task creation.
+	if p, ok := linkedProblem(scope); ok {
+		return nil, nil, problemError(p)
+	}
 	var t *Template
 	if name == "" {
 		t, err = defaultTemplate(scope)
@@ -94,7 +99,7 @@ func scopeTemplates(r where.Resolver, project string) (Answer, error) {
 	out := Answer{Templates: []Template{}, Errors: []Problem{}}
 	text, rev, err := readFile(gridhome.Real(r.GridHome), "workflows.md")
 	if err != nil {
-		out.Errors = append(out.Errors, Problem{File: labelOf(""), Message: fileReason(err)})
+		out.Errors = append(out.Errors, readProblem("", err))
 	} else if rev != nil {
 		parsed := Parse(text, "")
 		out.Templates, out.Errors = parsed.Templates, parsed.Errors
@@ -102,8 +107,35 @@ func scopeTemplates(r where.Resolver, project string) (Answer, error) {
 	return out, nil
 }
 
+// problemError reads as the problem. A link behind it stays in the chain, so
+// errors.Is(err, ErrLinkedFile) holds for every TaskWorkflow, TaskSteps and
+// StepsFor caller, and task creation refuses the link instead of leaving the
+// workflow binding out.
 func problemError(p Problem) error {
+	if p.cause != nil {
+		return &resolveError{problem: p}
+	}
 	return fmt.Errorf("the workflow cannot be resolved: %s", p)
+}
+
+// resolveError is a problem with a cause. Its text is the same as a problem's
+// without one.
+type resolveError struct{ problem Problem }
+
+func (e *resolveError) Error() string {
+	return fmt.Sprintf("the workflow cannot be resolved: %s", e.problem)
+}
+
+func (e *resolveError) Unwrap() error { return e.problem.cause }
+
+// linkedProblem is the first problem in scope that a link caused.
+func linkedProblem(scope Answer) (Problem, bool) {
+	for _, p := range scope.Errors {
+		if p.cause != nil {
+			return p, true
+		}
+	}
+	return Problem{}, false
 }
 
 func namedTemplate(scope Answer, name string) (*Template, error) {

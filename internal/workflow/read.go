@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -52,7 +53,7 @@ func read(r where.Resolver, project string, withPolicy bool) (Answer, error) {
 			project = *file.Project
 		}
 		if err := failed[i]; err != nil {
-			out.Errors = append(out.Errors, Problem{File: labelOf(project), Message: fileReason(err)})
+			out.Errors = append(out.Errors, readProblem(project, err))
 			continue
 		}
 		if file.Rev == nil {
@@ -63,6 +64,18 @@ func read(r where.Resolver, project string, withPolicy bool) (Answer, error) {
 		out.Errors = append(out.Errors, parsed.Errors...)
 	}
 	return out, nil
+}
+
+// readProblem is the public problem for a file that could not be read. Only
+// fileReason's text is shown. A link is also kept as the cause, so the error
+// problemError makes from it still satisfies errors.Is(err, ErrLinkedFile) and
+// task creation can refuse it. Other file errors keep no cause.
+func readProblem(project string, err error) Problem {
+	p := Problem{File: labelOf(project), Message: fileReason(err)}
+	if errors.Is(err, ErrLinkedFile) {
+		p.cause = err
+	}
+	return p
 }
 
 // parseFrontmatter reads task-local workflow policy using the shared YAML dialect.
