@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -53,6 +54,10 @@ func TestHostWriteTargetsRework(t *testing.T) {
 		{"subst_process_write", project, "echo x | tee >(tee alias >/dev/null)", true},
 		{"subst_parameter_default", project, "echo ${E:-$(tee alias </dev/null)}", true},
 		{"subst_after_cd", f.repo, "cd " + project + " && echo $(tee alias </dev/null)", true},
+		{"parse_quote", project, `echo x > "alias`, true},
+		{"parse_backticks", project, "echo `tee alias", true},
+		{"parse_parameter", project, "echo ${E:-$(tee alias", true},
+		{"parse_too_deep", project, strings.Repeat("echo $(", 20) + "date" + strings.Repeat(")", 20), true},
 		{"subst_read", project, "echo $(cat alias)", false},
 		{"subst_assignment_read", project, "x=$(cat workflows.md)", false},
 		{"subst_date", project, "echo $(date)", false},
