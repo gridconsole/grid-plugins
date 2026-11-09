@@ -46,7 +46,10 @@ Each failing check includes a fix hint. For the allow block: run `grid setup` to
 
 `grid routine add` creates a home routine; `--project <name>` selects a registered
 project. Routine front matter in the brain's `routines` config topic controls its
-limits. An omitted key uses its default; the owner may change each value:
+limits. An omitted key inherits the same-named front matter key from `workflow.md`
+in the Grid home for home routines, or `projects/<name>/workflow.md` for project
+routines, then the built-in default below. Projects do not inherit home policy;
+the owner may change each value:
 
 | Key | Default | Allowed values |
 | --- | --- | --- |
@@ -69,13 +72,22 @@ routine_max_turns: 3
 routine_budget: 0.25
 ```
 
-`grid routine run daily` resolves policy from that entry on each run. Skill
+`grid routine run daily` resolves entry and workflow policy on each run. Skill
 routines pass the budget and turn limits to the agent; commands starting with
 `grid` use only the timeout. Invalid policy refuses add or run with exit 2 and a
 message naming the key, without executing work or changing `last_run`.
 `grid routine list --json` and `grid routine run daily --json` include a `limits`
 object with all three effective values, including defaults. The entry lock,
 interval guard for timer invocations, and existing caller gates still apply.
+
+The timer guard records `run`, `every`, and the resolved timeout, maximum turns,
+and budget whenever an entry supplies any limit key or workflow policy sets a
+non-default limit. Entries without limit keys and with default workflow policy
+retain their original schedule hash. Changing guarded values makes timer runs
+refuse until `grid routine schedule` approves them again; manual runs remain
+explicit requests. Limits use a fixed order (timeout, turns, budget) and canonical
+numeric values, so equivalent spellings such as `10m` and `600s` agree. Run state,
+notes, and unrelated workflow fields do not affect the guard.
 
 ## Layout
 
