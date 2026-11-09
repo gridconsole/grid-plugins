@@ -23,12 +23,14 @@ type Env struct {
 	Stdout, Stderr      io.Writer
 	Cwd, Home, GridHome string
 	TempRoots           []string
+	// Role is the caller's GRID_ROLE, read from the CLI's environment.
+	Role string
 	// The CLI supplies its shared folder resolver and refusal contract.
 	ResolveTask      func(string) (task.Task, error)
 	TaskOperandError func(string, error) int
 }
 
-const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check> [flags]
+const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert> [flags]
   show <id> [--task <task>]  Show an accepted note and its links.
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
@@ -40,6 +42,9 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
   accept <id> --reject <why>  Record a rejection.
   check [<proposal-id>]      Read-only gate: flag proposals, skills and agents that change what runs.
                              Exit 0 clean, 3 findings, 1 unreadable brain.
+  changes [--since <RFC3339>] [--limit <n>]  List what changed in the brain, newest first.
+  revert <topic>/<name> --to <n>  Publish version n of an entry again as a new version.
+                             Exit 0 done, 1 store error or no such version, 3 role refused.
 
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 
@@ -73,7 +78,7 @@ func (l *linkFlags) Set(raw string) error {
 }
 
 // Run returns 0 on success, 1 for a store/gate error, 2 for usage errors and 3
-// when check finds something.
+// when check finds something or changes and revert refuse the caller's role.
 func Run(args []string, env Env) int {
 	if env.Resolver.GridHome == "" {
 		env.Resolver.GridHome = env.GridHome
@@ -98,6 +103,12 @@ func Run(args []string, env Env) int {
 	verb := args[0]
 	if verb == "decide" {
 		return runDecide(args[1:], env)
+	}
+	if verb == "changes" {
+		return runChanges(args[1:], env)
+	}
+	if verb == "revert" {
+		return runRevert(args[1:], env)
 	}
 	switch verb {
 	case "show", "search", "topics", "index", "propose", "accept", "keep", "check":

@@ -1,0 +1,261 @@
+package braincmd
+
+import (
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"strings"
+	"time"
+	"unicode"
+
+	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/where"
+)
+
+const (
+	changesUsage = "Usage: grid brain changes [--level home|project] [--project <p>] [--since <RFC3339>] [--limit <n>] [--json]"
+	revertUsage  = "Usage: grid brain revert <topic>/<name> --to <n> [--level home|project] [--project <p>] [--json]"
+)
+
+// failWith prints a store error the way every brain verb does.
+func failWith(env Env, asJSON bool, err error) int {
+	if asJSON {
+		_ = json.NewEncoder(env.Stderr).Encode(map[string]string{"error": err.Error()})
+	} else {
+		fmt.Fprintf(env.Stderr, "brain: %v\n", err)
+	}
+	return 1
+}
+
+// levelStore resolves the store and the level a verb acts on, the way Run does
+// for propose and accept: an explicit --level, else the resolved project, else
+// home. A write into a project needs its Grid record.
+func levelStore(env Env, level, project string, writes bool) (brain.Store, string, error) {
+	store := brain.Store{GridHome: env.GridHome, ReadLevel: level}
+	if env.GridHome == "" {
+		return store, "", fmt.Errorf("cannot find the Grid home; set GRID_HOME")
+	}
+	if level != "home" {
+		res, err := env.Resolver.Resolve(where.Query{Cwd: env.Cwd, Project: project})
+		if err != nil {
+			return store, "", err
+		}
+		if res.Rule != where.RulePersonal && res.Project != where.Personal {
+			store.Project = res.Project
+			if writes && !res.Record && res.Rule != where.RuleTask {
+				return store, "", fmt.Errorf("project %q has no Grid record; create its first task or use --level home", res.Project)
+			}
+		}
+	}
+	if level == "" {
+		level = "home"
+		if store.Project != "" {
+			level = "project"
+		}
+	}
+	if level == "project" && store.Project == "" {
+		return store, "", fmt.Errorf("project level needs a project; select --project or use --level home")
+	}
+	return store, level, nil
+}
+
+// leveled parses the flags both verbs share. A non-zero code ends the command:
+// 0 after help, 2 after a usage mistake.
+type leveled struct {
+	asJSON         bool
+	project, level string
+}
+
+func (l *leveled) add(f *flag.FlagSet) {
+	f.BoolVar(&l.asJSON, "json", false, "print JSON")
+	f.StringVar(&l.project, "project", "", "project name or id")
+	f.StringVar(&l.level, "level", "", "home or project")
+}
+
+func parseVerb(f *flag.FlagSet, args []string, env Env) (int, bool) {
+	ordered, err := interspersed(f, args)
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "brain: %v\n", err)
+		return 2, true
+	}
+	if err := f.Parse(ordered); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0, true
+		}
+		return 2, true
+	}
+	return 0, false
+}
+
+func (l *leveled) check(verb string, env Env) (int, bool) {
+	msg := ""
+	switch {
+	case l.level != "" && l.level != "home" && l.level != "project":
+		msg = "level must be home or project"
+	case l.level == "home" && l.project != "":
+		msg = "--level home cannot be combined with --project"
+	}
+	if msg == "" {
+		return 0, false
+	}
+	fmt.Fprintf(env.Stderr, "brain %s: %s. Run: grid brain help\n", verb, msg)
+	return 2, true
+}
+
+func runChanges(args []string, env Env) int {
+	f := flag.NewFlagSet("grid brain changes", flag.ContinueOnError)
+	f.SetOutput(env.Stderr)
+	f.Usage = func() {
+		fmt.Fprintln(env.Stdout, changesUsage)
+		f.PrintDefaults()
+	}
+	var l leveled
+	l.add(f)
+	since := f.String("since", "", "only changes at or after this RFC 3339 time")
+	limit := f.Int("limit", 0, "show at most n changes, newest first (0 or less: all)")
+	if code, done := parseVerb(f, args, env); done {
+		return code
+	}
+	usageError := func(msg string) int {
+		fmt.Fprintf(env.Stderr, "brain changes: %s. Run: grid brain help\n", msg)
+		return 2
+	}
+	if code, done := l.check("changes", env); done {
+		return code
+	}
+	if f.NArg() != 0 {
+		return usageError("unexpected positional argument")
+	}
+	var from time.Time
+	if *since != "" {
+		var err error
+		if from, err = time.Parse(time.RFC3339, *since); err != nil {
+			return usageError("--since must be an RFC 3339 time")
+		}
+	}
+	if !brain.ChangesReadAllowed(env.Role) {
+		fmt.Fprintln(env.Stderr, "grid brain changes: caller role is not allowed to read brain changes")
+		return 3
+	}
+	store, level, err := levelStore(env, l.level, l.project, false)
+	if err != nil {
+		return failWith(env, l.asJSON, err)
+	}
+	changes, err := store.Changes(level, from, *limit)
+	if err != nil {
+		return failWith(env, l.asJSON, err)
+	}
+	if l.asJSON {
+		enc := json.NewEncoder(env.Stdout)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(struct {
+			Changes []brain.Change `json:"changes"`
+		}{changes}); err != nil {
+			return failWith(env, l.asJSON, err)
+		}
+		return 0
+	}
+	for _, c := range changes {
+		if _, err := fmt.Fprintln(env.Stdout, changeLine(c)); err != nil {
+			return failWith(env, l.asJSON, err)
+		}
+	}
+	return 0
+}
+
+// changeLine is at, status, topic/name, v<n>, hash, reason. The log can be
+// edited by hand, so control characters never reach the terminal.
+func changeLine(c brain.Change) string {
+	id := c.Name
+	if c.Topic != "" {
+		id = c.Topic + "/" + c.Name
+	}
+	hash := c.Hash
+	if hash == "" {
+		hash = "-"
+	}
+	fields := []string{c.At, c.Status, id, fmt.Sprintf("v%d", c.Version), hash}
+	if c.Reason != "" {
+		fields = append(fields, c.Reason)
+	}
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '?'
+		}
+		return r
+	}, strings.Join(fields, " "))
+}
+
+func runRevert(args []string, env Env) int {
+	f := flag.NewFlagSet("grid brain revert", flag.ContinueOnError)
+	f.SetOutput(env.Stderr)
+	f.Usage = func() {
+		fmt.Fprintln(env.Stdout, revertUsage)
+		f.PrintDefaults()
+	}
+	var l leveled
+	l.add(f)
+	to := f.Int("to", 0, "version to publish again (1 or more)")
+	if code, done := parseVerb(f, args, env); done {
+		return code
+	}
+	usageError := func(msg string) int {
+		fmt.Fprintf(env.Stderr, "brain revert: %s. Run: grid brain help\n", msg)
+		return 2
+	}
+	if code, done := l.check("revert", env); done {
+		return code
+	}
+	if f.NArg() != 1 {
+		return usageError("expected <topic>/<name>")
+	}
+	topic, name, ok := strings.Cut(f.Arg(0), "/")
+	if !ok || !brain.ValidName(topic) || !brain.ValidName(name) {
+		return usageError("expected <topic>/<name>")
+	}
+	if *to < 1 {
+		return usageError("--to must be a version number, 1 or more")
+	}
+	if !brain.RevertAllowed(env.Role) {
+		fmt.Fprintln(env.Stderr, "grid brain revert: caller role is not allowed to revert brain entries")
+		return 3
+	}
+	store, level, err := levelStore(env, l.level, l.project, true)
+	if err != nil {
+		return failWith(env, l.asJSON, err)
+	}
+	origin, err := brain.SessionOrigin()
+	if err != nil {
+		return failWith(env, l.asJSON, err)
+	}
+	// Revert reports the version that holds the entry; one beyond the newest
+	// stored copy is a new version, anything else found it already there.
+	stored, err := store.Versions(level, topic, name)
+	if err != nil {
+		return failWith(env, l.asJSON, err)
+	}
+	_, version, err := store.Revert(level, topic, name, *to, origin)
+	if err != nil {
+		return failWith(env, l.asJSON, err)
+	}
+	noop := len(stored) > 0 && version <= stored[len(stored)-1].N
+	if l.asJSON {
+		enc := json.NewEncoder(env.Stdout)
+		if err := enc.Encode(struct {
+			Version int  `json:"version"`
+			Noop    bool `json:"noop"`
+		}{version, noop}); err != nil {
+			return failWith(env, l.asJSON, err)
+		}
+		return 0
+	}
+	text := fmt.Sprintf("v%d", version)
+	if noop {
+		text = fmt.Sprintf("already at v%d", version)
+	}
+	if _, err := fmt.Fprintln(env.Stdout, text); err != nil {
+		return failWith(env, l.asJSON, err)
+	}
+	return 0
+}
