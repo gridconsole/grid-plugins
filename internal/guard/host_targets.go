@@ -27,14 +27,37 @@ type hostShellToken struct {
 // hostMaxGroupDepth bounds nested substitutions; deeper text fails closed.
 const hostMaxGroupDepth = 16
 
+// hostWordAt reports whether word stands at text[i] as a whole shell word that
+// begins at or after start: a command separator, blank or bracket before it and
+// one of after behind it.
+func hostWordAt(text string, i, start int, word, after string) bool {
+	if !strings.HasPrefix(text[i:], word) {
+		return false
+	}
+	if i > start && !strings.ContainsRune(" \t\r\n;&|(){}", rune(text[i-1])) {
+		return false
+	}
+	end := i + len(word)
+	return end == len(text) || strings.ContainsRune(after, rune(text[end]))
+}
+
 // hostShellGroup finds the end of a quote, substitution or brace group that
-// starts at start. An unfinished group consumes the remaining text.
+// starts at start. An unfinished group consumes the remaining text. In a ( ) group
+// the ) of a case pattern does not end it: case and esac are counted, and every
+// word named case counts, so a mistake can only keep a group open and scanned.
 func hostShellGroup(text string, start int, close byte) (int, bool) {
+	cases := 0
 	for i := start; i < len(text); i++ {
 		switch {
 		case text[i] == '\\':
 			i++
-		case text[i] == close:
+		case close == ')' && hostWordAt(text, i, start, "case", " \t\r\n"):
+			cases++
+			i += len("case") - 1
+		case close == ')' && cases > 0 && hostWordAt(text, i, start, "esac", " \t\r\n;&|()"):
+			cases--
+			i += len("esac") - 1
+		case text[i] == close && cases == 0:
 			return i + 1, true
 		case close == '\'':
 		case text[i] == '\'' || text[i] == '"' || text[i] == '`':
@@ -76,8 +99,9 @@ func hostDigits(text string) bool {
 
 // hostShellTokens removes quoting but preserves glob and expansion markers.
 // This is deliberately conservative even for quoted markers, not a shell parser.
-// Redirect operators come out whole: >, >>, >|, >&, &>, &>>, <>, <, <<, <<<, <&,
-// each with an optional leading fd number, which is dropped.
+// Redirect operators come out whole: >, >>, >|, >!, >>|, >>!, >&, >&|, >&!, >>&,
+// &>, &>>, &>|, &>!, <>, <, <<, <<<, <&, each with an optional leading fd number,
+// which is dropped. Only >& followed by a word is a dup (a file unless an fd).
 func hostShellTokens(command string) []hostShellToken {
 	var out []hostShellToken
 	var word strings.Builder
@@ -162,6 +186,10 @@ func hostShellTokens(command string) []hostShellToken {
 					text += ">"
 					i++
 				}
+				if clobber := at(i + 1); clobber == '|' || clobber == '!' {
+					text += string(clobber)
+					i++
+				}
 				emit(hostWriteRedirect, text)
 			case '&':
 				i++
@@ -190,13 +218,23 @@ func hostShellTokens(command string) []hostShellToken {
 				i++
 			case ch == '>':
 				kind = hostWriteRedirect
-				switch next {
-				case '>', '|':
-					text += string(next)
+				if next == '>' {
+					text += ">"
+					i++
+				}
+				switch after := at(i + 1); after {
+				case '|', '!': // clobber forms of bash and zsh
+					text += string(after)
 					i++
 				case '&':
-					kind, text = hostDupRedirect, ">&"
+					text += "&"
 					i++
+					if clobber := at(i + 1); clobber == '|' || clobber == '!' {
+						text += string(clobber)
+						i++
+					} else if text == ">&" {
+						kind = hostDupRedirect
+					}
 				}
 			}
 			emit(kind, text)
