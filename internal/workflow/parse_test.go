@@ -176,6 +176,7 @@ func TestWorkflowSampleTemplates(t *testing.T) {
 			}
 			got := Parse(string(data), tc.project)
 			assertParsed(t, got, want)
+			assertParsed(t, Parse("---\nperson_verbs: []\n---\n"+string(data), tc.project), want)
 			wire, err := json.Marshal(got)
 			if err != nil {
 				t.Fatal(err)
