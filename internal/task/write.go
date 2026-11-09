@@ -170,13 +170,25 @@ func rewriteTask(data []byte, edit func(mapping *yaml.Node) error, body func(str
 		text = body(text)
 	}
 	out := append(append([]byte("---\n"), front...), []byte("---\n"+text)...)
-	if before, ok := fm.Data["workflow"].([]any); ok {
-		after := taskfile.ParseFrontmatter(string(out))
-		if after == nil || !reflect.DeepEqual(before, after.Data["workflow"]) {
-			return nil, errors.New("task.md workflow list would not read back the same; nothing was written")
-		}
+	// The reader's view of the workflow must not change, whatever it was: a list
+	// it could not see (items at column 0, a flow list on the next line) would
+	// otherwise be dumped into one it can, and a held task would gain steps.
+	after := taskfile.ParseFrontmatter(string(out))
+	if after == nil || !sameWorkflow(fm, after) {
+		return nil, errors.New("task.md workflow list is not readable as written; indent each item under workflow: (for example \"  - {step: build, kind: run}\") or remove the list, then retry; nothing was written")
+	}
+	if fm.Odd != after.Odd {
+		return nil, errors.New("task.md has a __proto__, constructor or prototype key the plugin's reader refuses, and this write would change that; remove the key, then retry; nothing was written")
 	}
 	return out, nil
+}
+
+// sameWorkflow reports whether the plugin's reader sees the same workflow in
+// both headers: the same value of any type, present in both or absent in both.
+func sameWorkflow(before, after *taskfile.Frontmatter) bool {
+	was, hadBefore := before.Data["workflow"]
+	now, hasAfter := after.Data["workflow"]
+	return hadBefore == hasAfter && reflect.DeepEqual(was, now)
 }
 
 // setScalar sets a string key of the header mapping, adding it at the end when
