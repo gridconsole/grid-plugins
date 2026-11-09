@@ -73,6 +73,31 @@ func ParseBrain(id string) (level, name string, ok bool) {
 // ErrPlanNeedsApproval refuses worker text from an unapproved or changed plan.
 var ErrPlanNeedsApproval = errors.New("plan needs approval: review and approve the current plan before rendering a Job")
 
+// linkedPlanError refuses a plan whose task has a protected file with a second
+// hard link, before the receipt is read: no approval can be recorded for that
+// task until the other links are removed. errors.Is matches task.ErrLinkedFile
+// and ErrPlanNeedsApproval, so every caller that holds an unapproved plan holds
+// this one too. The text names no machine path.
+type linkedPlanError struct{ cause error }
+
+func (e linkedPlanError) Error() string {
+	return "linked_file: a file of this task has more than one hard link; remove the other links before rendering a Job"
+}
+
+func (e linkedPlanError) Unwrap() []error { return []error{e.cause, ErrPlanNeedsApproval} }
+
+// planApproved returns nil when the task's plan receipt covers these plan bytes.
+func planApproved(dir string, b []byte) error {
+	if err := task.Linked(dir); errors.Is(err, task.ErrLinkedFile) {
+		return linkedPlanError{err}
+	}
+	// Any other Linked error also fails task.Read inside ApprovedDigest.
+	if !task.ApprovedDigest(dir, plan.Hash(string(b)), plan.Digest(string(b))) {
+		return ErrPlanNeedsApproval
+	}
+	return nil
+}
+
 func (f *Files) Resolve(pointer string) (Source, error) {
 	rel, anchor := pointer, ""
 	if at := strings.IndexByte(rel, '#'); at >= 0 {
@@ -233,8 +258,8 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 	text := strings.ReplaceAll(string(b), "\r\n", "\n")
 	if isPlan && anchor != "" {
 		// Validate the bytes we will select from, not a second read of plan.md.
-		if !task.ApprovedDigest(f.Task, plan.Hash(string(b)), plan.Digest(string(b))) {
-			return s, fmt.Errorf("%s: %w", pointer, ErrPlanNeedsApproval)
+		if err := planApproved(f.Task, b); err != nil {
+			return s, fmt.Errorf("%s: %w", pointer, err)
 		}
 	}
 	// Only the task folder's own Markdown carries front matter worth reading; a repo
@@ -423,8 +448,8 @@ func LoadPlan(dir, selector string) (Job, error) {
 		return Job{}, err
 	}
 	text := string(b)
-	if !task.ApprovedDigest(dir, plan.Hash(text), plan.Digest(text)) {
-		return Job{}, ErrPlanNeedsApproval
+	if err := planApproved(dir, b); err != nil {
+		return Job{}, err
 	}
 	items, err := plan.Items(text)
 	if err != nil {
