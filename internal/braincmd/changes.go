@@ -247,7 +247,7 @@ func runRevert(args []string, env Env) int {
 			out.Error = err.Error()
 		}
 		if encErr := json.NewEncoder(env.Stdout).Encode(out); encErr != nil {
-			return failWith(env, l.asJSON, encErr)
+			return failWith(env, l.asJSON, errors.Join(encErr, err))
 		}
 		if err != nil {
 			_ = json.NewEncoder(env.Stderr).Encode(map[string]string{"error": err.Error()})

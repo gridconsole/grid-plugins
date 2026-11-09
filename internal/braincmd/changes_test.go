@@ -529,3 +529,26 @@ func TestRevertKeepsTheRebuildErrorWhenStdoutFails(t *testing.T) {
 		}
 	}
 }
+
+// The same in --json mode: the failed stdout write must not drop the rebuild error.
+func TestRevertKeepsTheRebuildErrorWhenStdoutFailsJSON(t *testing.T) {
+	h := newHarness(t)
+	h.threeVersions(t)
+	idx := filepath.Join(h.env.GridHome, "knowledge", "index.md")
+	if err := os.RemoveAll(idx); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(idx, "keep"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	h.env.Stdout = failingWriter{}
+	h.err.Reset()
+	if code := h.run("revert", "decisions/checks", "--to", "1", "--level", "home", "--json"); code != 1 {
+		t.Fatalf("exit %d, want 1: %q", code, &h.err)
+	}
+	for _, want := range []string{"stdout closed", "rebuilding the index failed"} {
+		if !strings.Contains(h.err.String(), want) {
+			t.Fatalf("stderr %q lacks %q", &h.err, want)
+		}
+	}
+}
