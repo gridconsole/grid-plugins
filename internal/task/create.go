@@ -160,11 +160,11 @@ func (s Store) taskFront(t *Task, project, stableID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	tmpl, steps, err := workflow.TaskWorkflow(s.Resolver, project, "---\n"+string(front)+"---\n")
-	if tmpl == nil && err != nil {
+	tmpl, _, _ := workflow.TaskWorkflow(s.Resolver, project, "---\n"+string(front)+"---\n")
+	if tmpl == nil {
 		return front, nil
 	}
-	t.WorkflowDigest = DefinitionDigest(definition(tmpl, steps))
+	t.WorkflowDigest = DefinitionDigest(tmpl.Steps)
 	return dump()
 }
 

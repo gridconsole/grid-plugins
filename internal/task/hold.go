@@ -48,7 +48,7 @@ func WorkflowDigest(steps []taskfile.WorkflowStep) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// DefinitionDigest is the hex sha256 of a workflow's whole step list, whatever
+// DefinitionDigest is the hex sha256 of a template's whole step list, whatever
 // the task's size: each step's name (as a task runs it), kind, whether it is
 // the plan gate of the full list, and the sizes it runs for, one quoted line
 // per step, in order. task.md's workflow_digest holds it.
@@ -66,19 +66,6 @@ func DefinitionDigest(rows []workflow.TemplateStep) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// definition is what a task's workflow digests: the template's full step list,
-// or an inline list, whose steps run at every size.
-func definition(t *workflow.Template, steps []taskfile.WorkflowStep) []workflow.TemplateStep {
-	if t != nil {
-		return t.Steps
-	}
-	rows := make([]workflow.TemplateStep, len(steps))
-	for i, step := range steps {
-		rows[i] = workflow.TemplateStep{Name: step.Step, Kind: step.Kind, Sizes: "SNL"}
-	}
-	return rows
-}
-
 // StepsFor resolves the steps of the task in dir through its workflow: the
 // inline list, the named template (the project's copy first) or the workspace
 // default. The project is the folder above tasks/, as the guard places a task,
@@ -89,7 +76,9 @@ func definition(t *workflow.Template, steps []taskfile.WorkflowStep) []workflow.
 // are renamed, so the workflow's definition must also match the workflow_digest
 // the task was created with (ErrWorkflowChanged), checked as soon as the
 // template is found, before its steps resolve for the task's size; a task made
-// before that field keeps the folder check alone. The guard and Deliver both build their lookup here, so
+// before that field keeps the folder check alone. An inline list is not
+// compared: its steps live in task.md, which agents cannot write, so nothing
+// outside the task can change them. The guard and Deliver both build their lookup here, so
 // they resolve alike.
 func StepsFor(r where.Resolver, dir string) StepLookup {
 	project := filepath.Base(filepath.Dir(filepath.Dir(dir)))
@@ -101,8 +90,10 @@ func StepsFor(r where.Resolver, dir string) StepLookup {
 		if t == nil && err != nil {
 			return nil, err
 		}
-		if err := sameDigest(text, definition(t, steps)); err != nil {
-			return nil, err
+		if t != nil {
+			if err := sameDigest(text, t.Steps); err != nil {
+				return nil, err
+			}
 		}
 		if err != nil {
 			return nil, err

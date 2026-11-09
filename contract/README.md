@@ -939,7 +939,10 @@ stderr and, with `--json`, the envelope
 stdout. Any change to the template's steps, or another template under the same
 name, is a change; a project folder renamed away and back, or rebuilt with
 identical files, keeps the digest and changes nothing. An inline `workflow:`
-list is digested as its own steps, each for every size. A workflow with no
+list is not compared: its steps live in `task.md`, which agents cannot write,
+so nothing outside the task can change them. A person who rewrites `task.md`'s
+`workflow:` line as an inline list acts outside the digest: the task runs those
+steps and is not held for the rewrite. A workflow with no
 template to find at creation (a name no `workflows.md` holds, an unreadable
 `workflows.md`, or no default for a task that names none) leaves the field out.
 Tasks without the field (made before it, or migrated) stay on the folder-name

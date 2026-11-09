@@ -239,3 +239,21 @@ func TestSizedLaterKeepsWorkflowDigest(t *testing.T) {
 		})
 	}
 }
+
+// A person who rewrites the workflow line of a task stamped from Large as the
+// same steps inline acts outside the digest: the inline list is not compared,
+// so the task past its plan is released as before.
+func TestInlineRewriteOfStampedTaskNotHeld(t *testing.T) {
+	w := newWCTask(t, "large", "build")
+	text := w.read("task.md")
+	if w.digest() == "" || !strings.Contains(text, "\nworkflow: Large\n") {
+		t.Fatalf("task.md from grid task new: %q", text)
+	}
+	w.h.write(filepath.Join(w.dir, "task.md"), strings.Replace(text, "\nworkflow: Large\n", "\n"+previewInline, 1))
+	if got := w.hook(); got != "" {
+		t.Errorf("inline past plan: guard %q, want allow", got)
+	}
+	if code, out := w.deliver(); code != 0 {
+		t.Errorf("inline past plan: deliver --json exit %d %s %s", code, out, w.h.errb)
+	}
+}
