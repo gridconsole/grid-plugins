@@ -99,7 +99,7 @@ func TestApproveDigestOnlyUsageExit(t *testing.T) {
 	}
 	h.write(filepath.Join(fixture.Path, "plan.md"), approvedPlan)
 	o := writeOptions(h.env, fixture.ID, "approve", "")
-	// Workflow loading is deferred; exercise the option and the CLI result mapper.
+	// Exercise the option and the CLI result mapper directly.
 	o.PlanHashToken = "digest"
 	before := taskTestSnapshot(t, fixture.Path)
 	event, err := taskWriter(h.env).Approve(o, plan.Hash(approvedPlan))

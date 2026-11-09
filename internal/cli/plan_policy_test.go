@@ -9,6 +9,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/plan"
+	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
@@ -58,7 +59,8 @@ func TestApproveWorkflowGuestGateFirst(t *testing.T) {
 	for _, policy := range []string{"digest", "nonsense"} {
 		t.Run(policy, func(t *testing.T) {
 			h := newHarness(t)
-			fixture := taskFixture(t, h)
+			h.record(project.Record{Name: "example", ID: "01EXAMPLE"})
+			fixture := taskFixtureProject(t, h, "example")
 			h.write(filepath.Join(fixture.Path, "workflow.md"), "---\nplan_hash_token: "+policy+"\n---\n")
 			h.env.Getenv = func(key string) string {
 				if key == "GRID_ROLE" {
