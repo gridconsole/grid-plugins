@@ -485,6 +485,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"brain propose":         {},
 		"brain accept":          {args: []string{"<id>"}},
 		"brain keep":            {},
+		"brain check":           {args: []string{"[proposal-id]"}},
 		"brain decide":          {args: []string{"<task>", "<proposal-id>", "<accept|reject|merge-into>", "[note-id]"}},
 		"env up":                {args: []string{"<J>"}},
 		"env down":              {args: []string{"<J>"}},
