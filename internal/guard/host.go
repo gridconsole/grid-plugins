@@ -207,7 +207,7 @@ func projectWorkflowAt(root, target string) bool {
 // that only read are skipped, so cat alias; echo x > notes.md stays allowed; the
 // inside of every substitution is scanned as a command of its own.
 func (c context) writesProjectWorkflow(command string) bool {
-	roots := c.gridRoots()
+	var roots []string
 	for _, seg := range hostSegments(command) {
 		for _, tok := range seg.tokens() {
 			for _, body := range tok.groups {
@@ -218,6 +218,9 @@ func (c context) writesProjectWorkflow(command string) bool {
 		}
 		if seg.readsOnly() {
 			continue
+		}
+		if roots == nil {
+			roots = c.gridRoots()
 		}
 		for _, tok := range seg.tokens() {
 			target := strings.ToLower(c.path(tok.text))

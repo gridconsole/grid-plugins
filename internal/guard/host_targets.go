@@ -374,7 +374,14 @@ func hostStarExpansions(word string) string {
 // variables.
 type writeScan struct {
 	c     context
-	roots []string
+	roots []string // loaded on first use: resolving them reads the file system
+}
+
+func (s *writeScan) gridRoots() []string {
+	if s.roots == nil {
+		s.roots = s.c.gridRoots()
+	}
+	return s.roots
 }
 
 var hostKnownVar = regexp.MustCompile(`\$(?:\{(HOME|GRID_HOME|GRID_PROJECTS|PWD)\}|(HOME|GRID_HOME|GRID_PROJECTS|PWD)\b)`)
@@ -384,12 +391,12 @@ var hostKnownVar = regexp.MustCompile(`\$(?:\{(HOME|GRID_HOME|GRID_PROJECTS|PWD)
 // reads and echo/printf data are never treated as write targets. The inside of
 // every substitution is a command of its own.
 func (c context) protectedWriteReason(command string) string {
-	return writeScan{c: c, roots: c.gridRoots()}.run(command, c.in.Cwd, false, 0)
+	return (&writeScan{c: c}).run(command, c.in.Cwd, false, 0)
 }
 
-func (s writeScan) under(path string) bool {
+func (s *writeScan) under(path string) bool {
 	path = strings.ToLower(realNative(path, 0))
-	for _, root := range s.roots {
+	for _, root := range s.gridRoots() {
 		if inside(root, path) {
 			return true
 		}
@@ -399,9 +406,9 @@ func (s writeScan) under(path string) bool {
 
 // mayReach also counts a path that stops inside the name of a Grid root, since
 // a glob can finish it.
-func (s writeScan) mayReach(path string) bool {
+func (s *writeScan) mayReach(path string) bool {
 	path = strings.ToLower(realNative(path, 0))
-	for _, root := range s.roots {
+	for _, root := range s.gridRoots() {
 		if inside(root, path) || strings.HasPrefix(root, path) {
 			return true
 		}
@@ -409,9 +416,9 @@ func (s writeScan) mayReach(path string) bool {
 	return false
 }
 
-func (s writeScan) protected(path string) string {
+func (s *writeScan) protected(path string) string {
 	path = strings.ToLower(realNative(path, 0))
-	for _, root := range s.roots {
+	for _, root := range s.gridRoots() {
 		if settingsAt(root, path) {
 			return switchReason
 		}
@@ -427,7 +434,7 @@ func (s writeScan) protected(path string) string {
 
 // fill puts the values the guard holds into a word: ~, ~+ and HOME, GRID_HOME,
 // GRID_PROJECTS and PWD. Any other variable stays as written.
-func (s writeScan) fill(word, base string, uncertain bool) string {
+func (s *writeScan) fill(word, base string, uncertain bool) string {
 	word = s.c.expand(word)
 	if !uncertain && (word == "~+" || strings.HasPrefix(word, "~+/")) {
 		word = base + word[2:]
@@ -445,7 +452,7 @@ func (s writeScan) fill(word, base string, uncertain bool) string {
 	})
 }
 
-func (s writeScan) run(command, base string, uncertain bool, depth int) string {
+func (s *writeScan) run(command, base string, uncertain bool, depth int) string {
 	if depth > hostMaxGroupDepth {
 		return gateReason
 	}
@@ -484,7 +491,7 @@ func (s writeScan) run(command, base string, uncertain bool, depth int) string {
 
 // cd follows a directory change. Options are skipped; anything but one literal
 // directory after them makes the base uncertain.
-func (s writeScan) cd(args []hostShellToken, base string, uncertain bool) (string, bool) {
+func (s *writeScan) cd(args []hostShellToken, base string, uncertain bool) (string, bool) {
 	for len(args) > 0 && len(args[0].text) > 1 && strings.HasPrefix(args[0].text, "-") {
 		option := args[0].text
 		args = args[1:]
@@ -508,7 +515,7 @@ func (s writeScan) cd(args []hostShellToken, base string, uncertain bool) (strin
 // check judges one word. A target (a redirect operand) is certainly written; any
 // other operand of a non-read command might be. A key=value operand is checked
 // whole and by its value, as in dd of=file and --output=file.
-func (s writeScan) check(word, base string, uncertain, target bool) string {
+func (s *writeScan) check(word, base string, uncertain, target bool) string {
 	if !target {
 		if key, value, ok := strings.Cut(word, "="); ok && key != "" {
 			if reason := s.one(word, base, false, false); reason != "" {
@@ -520,7 +527,7 @@ func (s writeScan) check(word, base string, uncertain, target bool) string {
 	return s.one(word, base, uncertain, target)
 }
 
-func (s writeScan) one(word, base string, uncertain, target bool) string {
+func (s *writeScan) one(word, base string, uncertain, target bool) string {
 	word = s.fill(word, base, uncertain)
 	if word == "" {
 		return ""
