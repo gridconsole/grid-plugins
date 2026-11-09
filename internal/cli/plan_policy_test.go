@@ -69,7 +69,7 @@ func TestApproveWorkflowGuestGateFirst(t *testing.T) {
 				return ""
 			}
 			before := taskTestSnapshot(t, fixture.Path)
-			if code := h.run(h.home, "approve", fixture.ID, "--plan-hash", plan.Hash(approvedPlan)); code != 1 || h.errb.String() != "Approval and refusal decisions require a person or the app; run this command in your own shell.\n" {
+			if code := h.run(h.home, "approve", fixture.ID, "--plan-hash", plan.Hash(approvedPlan)); code != 3 || h.errb.String() != "grid approve: "+personHint+" (reason: agent_env).\n" {
 				t.Fatalf("person gate must run first: exit %d, stderr %q", code, h.errb.String())
 			}
 			if !reflect.DeepEqual(before, taskTestSnapshot(t, fixture.Path)) {
