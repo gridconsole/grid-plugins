@@ -155,7 +155,7 @@ func TestChecksRunOnFreshFixture(t *testing.T) {
 				if c.Type != "command_passes" {
 					continue
 				}
-				r := evaluate(context.Background(), task, c, workspace, env, nil)
+				r := evaluate(context.Background(), task, c, workspace, env, nil, traceInput{})
 				if r.Process == nil || r.Process.ExitCode < 0 || r.Process.ExitCode > 1 {
 					t.Errorf("%s: exit %+v", c.ID, r.Process)
 				}
@@ -203,7 +203,7 @@ func TestGoodOutcomesPass(t *testing.T) {
 				}
 			}
 			for _, c := range task.Checks {
-				if r := evaluate(context.Background(), task, c, workspace, env, nil); r.Status != "passed" {
+				if r := evaluate(context.Background(), task, c, workspace, env, nil, traceInput{}); r.Status != "passed" {
 					t.Errorf("%s: %s %s", c.ID, r.Status, fmt.Sprint(r.Process))
 				}
 			}
