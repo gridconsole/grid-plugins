@@ -89,6 +89,41 @@ func TestSignalActErrorOutput(t *testing.T) {
 	}
 }
 
+func TestSignalActArgumentErrorJSON(t *testing.T) {
+	for _, tc := range []struct {
+		name, message string
+		args          []string
+	}{
+		{"unknown flag before JSON", "invalid signal arguments", []string{actID, "--unknown", "--json"}},
+		{"unknown flag after JSON", "invalid signal arguments", []string{actID, "--json", "--unknown"}},
+		{"missing flag value", "invalid signal arguments", []string{actID, "--json", "--act"}},
+		{"missing id", "wrong number of arguments", []string{"--json"}},
+		{"extra id", "wrong number of arguments", []string{actID, actID, "--json"}},
+		{"JSON disabled", "", []string{actID, "--unknown", "--json", "--json=false"}},
+		{"JSON as option value", "", []string{actID, "--unknown", "--act", "--json"}},
+		{"JSON after delimiter", "", []string{actID, "--unknown", "--", "--json"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, path, before := actFixture(t, "new")
+			if code := h.run(h.root, append([]string{"signal", "act"}, tc.args...)...); code != 2 {
+				t.Fatalf("exit %d: %s", code, h.errb)
+			}
+			if h.errb.Len() == 0 {
+				t.Fatal("missing stderr diagnostic")
+			}
+			if tc.message != "" {
+				assertSignalErrorJSON(t, h.out.String(), "invalid", tc.message)
+			} else if h.out.Len() != 0 {
+				t.Fatalf("non-JSON stdout %q", h.out.String())
+			}
+			after, _ := actRead(t, path)
+			if !bytes.Equal(before, after) {
+				t.Fatal("bad arguments wrote note")
+			}
+		})
+	}
+}
+
 func actFixture(t *testing.T, status string) (*harness, string, []byte) {
 	t.Helper()
 	h := newHarness(t)

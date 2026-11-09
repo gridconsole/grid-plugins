@@ -698,6 +698,15 @@ JSON retains `result`, `id`, `project`, `note`, and `status`, adding optional
 `became` and `until`. Successful changes use `result: updated`; idempotent
 repeats use `result: unchanged`.
 
+With `--json`, exit 2 also writes exactly one JSON object line to stdout:
+`{"error":"invalid","message":"<msg>"}`. Exit 3 writes
+`{"error":"refused","message":"<msg>"}`. The message contains no absolute path;
+unknown act values containing path separators are omitted from the JSON message,
+and flag parsing errors use `invalid signal arguments`. Existing stderr
+diagnostics remain unchanged, including `grid: <msg>` for typed input errors
+and refusals. These errors never use `person_required`. Without `--json`,
+errors leave stdout empty.
+
 | Exit | Meaning |
 | --- | --- |
 | 0 | Applied or unchanged |
@@ -720,3 +729,7 @@ The replaceable policy defaults are `inbox_act_roles` (existing owner/member,
 local and agent roles, guests refused), `inbox_acts` (the seven acts), and
 `inbox_turn_body` (`link`; a future `copy` policy may replace it). This CLI does
 not read workflow configuration for these keys yet.
+
+`signal act` is not in the person-gate floor because its default roles (brief
+Goal 8) admit agent and local roles, like `task new`; a workflow can restrict it
+through `person_verbs` once L105 lands.

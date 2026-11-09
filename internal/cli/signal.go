@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/signal"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -41,17 +43,23 @@ func runSignal(args []string, env Env) int {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
+		if verb != "add" {
+			signalErrorJSON(env, signalJSONRequested(fs, args[1:]), "invalid", "invalid signal arguments")
+		}
 		return 2
 	}
 	if (verb == "add" && fs.NArg() != 0) || (verb != "add" && fs.NArg() != 1) {
 		fmt.Fprintf(env.Stderr, "grid signal %s: wrong number of arguments\n", verb)
+		if verb != "add" {
+			signalErrorJSON(env, *asJSON, "invalid", "wrong number of arguments")
+		}
 		return 2
 	}
 	if resolver(env).Caller.IsGuest() {
 		if verb == "add" {
 			return failure(env, fmt.Errorf("guests cannot change project settings"))
 		}
-		return signalFailure(env, &signal.RefusedError{Message: "guests cannot act on signals"})
+		return signalFailure(env, &signal.RefusedError{Message: "guests cannot act on signals"}, *asJSON)
 	}
 	if verb != "add" {
 		if verb == "dismiss" {
@@ -68,7 +76,7 @@ func runSignal(args []string, env Env) int {
 			}
 		})
 		if err := act.Validate(fs.Arg(0)); err != nil {
-			return signalFailure(env, err)
+			return signalFailure(env, err, *asJSON)
 		}
 		act.Cwd, act.Who, act.Role = env.Cwd, env.getenv("GRID_WHO"), env.getenv("GRID_ROLE")
 		if act.Who == "" {
@@ -128,7 +136,7 @@ func runSignal(args []string, env Env) int {
 		got, err = s.Apply(fs.Arg(0), act)
 	}
 	if err != nil {
-		return signalFailure(env, err)
+		return signalFailure(env, err, *asJSON)
 	}
 	if *asJSON {
 		return writeJSON(env.Stdout, got)
@@ -138,16 +146,64 @@ func runSignal(args []string, env Env) int {
 }
 
 // signalFailure preserves the existing stderr prefix while classifying act errors.
-func signalFailure(env Env, err error) int {
+func signalFailure(env Env, err error, asJSON bool) int {
 	code := failure(env, err)
 	var bad *signal.BadInputError
 	var refused *signal.RefusedError
 	switch {
 	case errors.As(err, &bad):
+		message := bad.Message
+		// An unknown act can contain caller-supplied paths; keep those on stderr.
+		if strings.HasPrefix(message, "unknown signal act ") && strings.ContainsAny(message, `/\`) {
+			message = "unknown signal act"
+		}
+		signalErrorJSON(env, asJSON, "invalid", message)
 		return 2
 	case errors.As(err, &refused):
+		signalErrorJSON(env, asJSON, "refused", refused.Message)
 		return 3
 	default:
 		return code
 	}
+}
+
+func signalErrorJSON(env Env, asJSON bool, kind, message string) {
+	if asJSON {
+		writeJSON(env.Stdout, struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}{kind, message})
+	}
+}
+
+// Parsing can stop before --json; inspect flags without treating option values
+// or arguments after -- as flags, and retain the last valid JSON setting.
+func signalJSONRequested(fs *flag.FlagSet, args []string) bool {
+	asJSON := false
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			break
+		}
+		if !strings.HasPrefix(arg, "-") {
+			continue
+		}
+		name, value, equal := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		f := fs.Lookup(name)
+		if f == nil {
+			continue
+		}
+		if name == "json" {
+			if !equal {
+				value = "true"
+			}
+			if enabled, err := strconv.ParseBool(value); err == nil {
+				asJSON = enabled
+			}
+		}
+		if b, ok := f.Value.(interface{ IsBoolFlag() bool }); (!ok || !b.IsBoolFlag()) && !equal {
+			i++
+		}
+	}
+	return asJSON
 }
