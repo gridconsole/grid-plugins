@@ -322,12 +322,13 @@ Disagreements and defaults chosen:
   in `<GRID_HOME>/workspace.md` front matter (digits only, at least 1; missing,
   linked, unreadable, invalid or oversized files give no default). Budget show
   reports the effective token budget and source: task, workspace or none.
-  `usage budget clear --tokens` restores that default. Task-level `usage budget set`
-  and `usage budget clear` are person-only writes on the person-gate floor: an agent
-  context exits 3 with the usual `person_required` refusal and nothing changes, so a
-  held session cannot lift its own hold. The gate runs after the flags parse (a
-  syntax error still exits 2) and `--workspace` keeps the role gate below; `usage
-  budget show` stays open to every caller.
+  `usage budget clear --tokens` restores that default. `usage budget set` and `usage
+  budget clear` are person-only writes on the person-gate floor, with `--workspace`
+  or without: an agent context exits 3 with the usual `person_required` refusal and
+  nothing changes, so a held session cannot lift its own hold or the workspace
+  default. The gate runs after the flags parse (a syntax error still exits 2); a
+  `--workspace` write also checks the caller role below first, which keeps its own
+  exit 3. `usage budget show` stays open to every caller.
 
   Task `workflow.md` front matter may set `usage_notice_thresholds` to a map of
   `tokens`, `dollars`, and/or `minutes` to percentage lists, for example
@@ -354,7 +355,9 @@ Disagreements and defaults chosen:
   Replaceable `WorkspaceBudgetReadAllowed` and
   `WorkspaceBudgetWriteAllowed` policies use `GRID_ROLE`: reads default to the
   empty local role, owner and member; writes default to the empty role and owner.
-  Other roles are refused with exit 3 before workspace access. Workflow keys are
+  Other roles are refused with exit 3 before workspace access, and a write that passes
+  the role check still needs a person: an agent ancestor or agent environment marker is
+  refused with `person_required`, even with an empty role. Workflow keys are
   `token_limit_read_roles` and `token_limit_write_roles`; the CLI does not read a
   workflow file to configure these policies. Notices are chatter;
   the hold at the limit is not enforced yet and requires worker/session hooks.
