@@ -668,6 +668,15 @@ plan gate, as in Rust; an `approve` step before the first `run` or `work` also
 requires plan approval, regardless of its name (for example, `sign-off`). A later
 approval without `plan` in its name remains a delivery gate.
 
+The task's `workflow.md` snapshot is also protected by the host guard against
+Write/Edit tools and literal Bash writes, even with the plan guard disabled:
+it carries `person_verbs` and gate posting roles. Reads remain allowed. The
+generated Claude permission rules already protect every file in task folders.
+`person_verbs` is read only from this task snapshot, not project `workflows.md`.
+Invalid `person_verbs` is ignored with one warning that omits paths and values;
+the person-only floor still applies. Hook commands bypass this policy so their
+handlers can return normal decisions, except the floor verb `hook level`.
+
 ## Signal acts
 
 `grid signal act <id> [--project <p>] [--act turn|add|note|snooze|dismiss|wake|reopen]
