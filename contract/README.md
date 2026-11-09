@@ -363,7 +363,9 @@ Disagreements and defaults chosen:
   (`internal/persongate/gate.go:132`), so any other role still exits 3 with
   `agent_env`. A `person_verbs` entry for `usage budget set|clear` in a task
   `workflow.md`, or, with no task, in the project's `workflows.md`, applies to the
-  `--workspace` form as to the task form. Workflow keys are
+  `--workspace` form as to the task form; a project with no policy of its own falls
+  back to `$GRID_HOME/workflows.md` (`internal/workflow/project_person.go:19`).
+  Workflow keys are
   `token_limit_read_roles` and `token_limit_write_roles`; the CLI does not read a
   workflow file to configure these policies. Notices are chatter;
   the hold at the limit is not enforced yet and requires worker/session hooks.

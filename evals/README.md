@@ -165,6 +165,9 @@ real model runs. The temporary folder is deleted before the result is saved; if
 that fails, the result's `cleanup_error` names the folder and `run` exits with 1.
 Directories the agent made read-only are made writable again first. Readers ignore
 unknown fields, so a result written by a newer build stays readable.
+The runner no longer writes a `trace.jsonl`: trace checks read the agent's stdout from
+memory (capped at `eval_trace_stdout_limit`), so nothing the agent writes in its
+workspace or `$HOME` changes the trace.
 Full workspaces and transcripts are not retained; result files can contain
 command output and should be reviewed before sharing. A results folder at
 `evals/runs` in this repository is ignored by Git.
