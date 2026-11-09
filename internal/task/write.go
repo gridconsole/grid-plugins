@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -158,7 +159,9 @@ func rewriteTask(data []byte, edit func(mapping *yaml.Node) error, body func(str
 	if err := edit(doc.Content[0]); err != nil {
 		return nil, err
 	}
-	front, err := yaml.Dump(&doc, yaml.WithIndent(2), yaml.WithLineWidth(-1))
+	// Sequences stay indented under their key: the plugin's reader only takes
+	// list items that are indented.
+	front, err := yaml.Dump(&doc, yaml.WithIndent(2), yaml.WithLineWidth(-1), yaml.WithCompactSeqIndent(false))
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +169,14 @@ func rewriteTask(data []byte, edit func(mapping *yaml.Node) error, body func(str
 	if body != nil {
 		text = body(text)
 	}
-	return append(append([]byte("---\n"), front...), []byte("---\n"+text)...), nil
+	out := append(append([]byte("---\n"), front...), []byte("---\n"+text)...)
+	if before, ok := fm.Data["workflow"].([]any); ok {
+		after := taskfile.ParseFrontmatter(string(out))
+		if after == nil || !reflect.DeepEqual(before, after.Data["workflow"]) {
+			return nil, errors.New("task.md workflow list would not read back the same; nothing was written")
+		}
+	}
+	return out, nil
 }
 
 // setScalar sets a string key of the header mapping, adding it at the end when
