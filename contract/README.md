@@ -280,6 +280,17 @@ Disagreements and defaults chosen:
   linked, unreadable, invalid or oversized files give no default). Budget show
   reports the effective token budget and source: task, workspace or none.
   `usage budget clear --tokens` restores that default.
+
+  Task `workflow.md` front matter may set `usage_notice_thresholds` to a map of
+  `tokens`, `dollars`, and/or `minutes` to percentage lists, for example
+  `usage_notice_thresholds: {tokens: [90, 100]}`. Each supplied list must contain
+  positive finite numbers in strictly increasing order and end at 100. Per unit,
+  explicit task `thresholds.json` settings win, then this workflow key, then the
+  default (tokens 80/100; dollars and minutes 50/80/100); omitted units retain
+  their own settings or defaults. Invalid units fall back while valid units
+  still apply, with a diagnostic reported by the command; usage recording and
+  notices continue, and existing fired notice files are never rewritten.
+
   `grid usage budget show|set|clear --workspace` accesses the workspace default
   without resolving a task: show returns `{"tokens_per_task":100}` or
   `{"tokens_per_task":null}` with `--json`, and `tokens_per_task 100` or
