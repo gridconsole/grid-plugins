@@ -131,6 +131,12 @@ func defaultTemplate(scope Answer) (*Template, error) {
 	}
 	for i, t := range scope.Templates {
 		if t.Default && t.File == labelOf("") {
+			// The project's copy of the default wins, as it does for a named workflow.
+			for j, c := range scope.Templates {
+				if c.File != labelOf("") && c.Overrides != nil && strings.EqualFold(*c.Overrides, t.Name) {
+					return &scope.Templates[j], nil
+				}
+			}
 			return &scope.Templates[i], nil
 		}
 	}

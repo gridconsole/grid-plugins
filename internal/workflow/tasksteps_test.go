@@ -23,6 +23,12 @@ const stepsSpaced = "## Spaced\napplies when: label spaced\nreview rounds: 2\n\n
 const stepsReviewCopy = "## Review\napplies when: as in the workspace Review\nreview rounds: 2\n\n" + stepsTable +
 	"| 1 | ship | run | grid-builder | all | |\n\n"
 
+const stepsBuildDefault = "## Standard\napplies when: nothing else matches\nreview rounds: 2\n\n" + stepsTable +
+	"| 1 | build | run | grid-builder | all | |\n\n"
+
+const stepsDefaultCopy = "## Standard\napplies when: as in the workspace Standard\nreview rounds: 2\n\n" + stepsTable +
+	"| 1 | plan | approve | owner | all | |\n| 2 | build | run | grid-builder | all | |\n\n"
+
 const stepsRates = "## Rates\napplies when: the title has rates\nreview rounds: 2\n\n" + stepsTable +
 	"| 1 | rate | run | grid-builder | all | |\n\n"
 
@@ -84,6 +90,8 @@ func TestTaskSteps(t *testing.T) {
 		{name: "empty name with a rule template", workspace: stepsWorkspace(stepsStandard), alpha: stepsWorkspace(stepsRates), task: stepsTask("normal", "''"), wantErr: "task.md names no workflow and the rules need a choice"},
 		{name: "empty name with a broken section", workspace: stepsWorkspace(stepsStandard, stepsBroken), task: stepsTask("normal", "''"), wantErr: "task.md names no workflow and the rules need a choice"},
 		{name: "empty name with no workspace file", task: stepsTask("normal", "''"), wantErr: "the workspace has no default workflow"},
+		{name: "empty name takes the project copy of the default", workspace: stepsWorkspace(stepsBuildDefault), alpha: stepsWorkspace(stepsDefaultCopy), task: stepsTask("normal", "''"), want: "plan:approve,build:run"},
+		{name: "absent name takes the project copy of the default", workspace: stepsWorkspace(stepsBuildDefault), alpha: stepsWorkspace(stepsDefaultCopy), task: stepsTask("normal", "-"), want: "plan:approve,build:run"},
 		{name: "size large keeps the L step", workspace: std, task: stepsTask("large", "Standard"), want: "plan:approve,preview:approve,build:run"},
 		{name: "size normal drops the L step", workspace: std, task: stepsTask("normal", "Standard"), want: "plan:approve,build:run"},
 		{name: "size auto with an L step", workspace: std, task: stepsTask("auto", "Standard"), wantErr: "task size is not set; the workflow's steps depend on it"},
