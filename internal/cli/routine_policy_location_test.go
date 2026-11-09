@@ -114,3 +114,20 @@ func TestRoutineOldWorkflowIgnoredAndWarned(t *testing.T) {
 		})
 	}
 }
+
+func TestRoutineRunDoesNotWarnForTaskPolicyOrProse(t *testing.T) {
+	h := newHarness(t)
+	s := routine.Store{GridHome: h.gridHome}
+	if _, err := s.Add("daily", "1h", "grid version"); err != nil {
+		t.Fatal(err)
+	}
+	h.write(filepath.Join(h.gridHome, "workflow.md"), "---\nunrelated: true\n---\nroutine_budget: 50\n")
+	h.write(filepath.Join(h.gridHome, "projects", "example", "tasks", "T-1", "workflow.md"), "---\nroutine_budget: 50\n---\n")
+	h.env.Executable = func() (string, error) { return filepath.Join(h.root, "missing-grid"), nil }
+	if code := h.run(h.root, "routine", "run", "daily"); code != 1 {
+		t.Fatalf("exit %d: %s", code, h.errb)
+	}
+	if strings.Contains(h.errb.String(), "warning:") {
+		t.Fatalf("unexpected warning: %s", h.errb)
+	}
+}

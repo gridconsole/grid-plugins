@@ -157,6 +157,10 @@ func (s Store) List() ([]Entry, error) {
 	for _, name := range names {
 		e, err := s.Get(name)
 		if err != nil {
+			var policyErr *WorkflowPolicyError
+			if errors.As(err, &policyErr) {
+				return nil, err
+			}
 			var invalid *LimitError
 			if errors.As(err, &invalid) {
 				return nil, &LimitError{Key: invalid.Key, Routine: name}

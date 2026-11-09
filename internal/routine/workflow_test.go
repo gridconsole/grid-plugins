@@ -18,11 +18,11 @@ func TestRoutineWorkflowResolutionAndSnapshot(t *testing.T) {
 	s := Store{GridHome: home, Project: "example"}
 	writeRoutineWorkflow(t, Store{GridHome: home}, "routine_budget: 50")
 	e, err := s.Add("daily", "1h", "signals", policyForTest(t, map[string]string{"routine_max_turns": "3"}))
-	if err != nil || e.Limits.Budget != 1 {
-		t.Fatalf("project inherited home policy: %+v %v", e.Limits, err)
+	if err != nil || e.Limits.Budget != 50 {
+		t.Fatalf("project did not inherit workspace policy: %+v %v", e.Limits, err)
 	}
 	writeRoutineWorkflow(t, s, "routine_timeout: 20m\nroutine_max_turns: 20\nroutine_budget: 2\nunrelated: retained")
-	path := filepath.Join(home, "projects", "example", "workflow.md")
+	path := filepath.Join(home, "projects", "example", "workflows.md")
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +112,7 @@ func TestRoutineWorkflowUnsafeFileRefused(t *testing.T) {
 			if _, err := s.Add("daily", "1h", "signals"); err != nil {
 				t.Fatal(err)
 			}
-			path := filepath.Join(s.GridHome, "workflow.md")
+			path := filepath.Join(s.GridHome, "workflows.md")
 			if kind == "directory" {
 				if err := os.Mkdir(path, 0700); err != nil {
 					t.Fatal(err)
@@ -122,7 +122,7 @@ func TestRoutineWorkflowUnsafeFileRefused(t *testing.T) {
 					t.Skip("symlinks unavailable")
 				}
 			}
-			if _, err := s.Get("daily"); err == nil || err.Error() != "cannot read routine workflow policy" {
+			if _, err := s.Get("daily"); err == nil || err.Error() != "workspace workflows.md: cannot read routine workflow policy" {
 				t.Fatalf("unsafe file refusal: %v", err)
 			}
 		})

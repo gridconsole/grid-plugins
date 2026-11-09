@@ -46,10 +46,10 @@ Each failing check includes a fix hint. For the allow block: run `grid setup` to
 
 `grid routine add` creates a home routine; `--project <name>` selects a registered
 project. Routine front matter in the brain's `routines` config topic controls its
-limits. An omitted key inherits the same-named front matter key from `workflow.md`
-in the Grid home for home routines, or `projects/<name>/workflow.md` for project
-routines, then the built-in default below. Projects do not inherit home policy;
-the owner may change each value:
+limits. Omitted keys inherit front matter policy from `workflows.md`: entry
+keys take precedence over `projects/<name>/workflows.md`, then the workspace
+`workflows.md` in the Grid home, then the built-in defaults below. Home routines
+use workspace policy directly. The owner may change each value:
 
 | Key | Default | Allowed values |
 | --- | --- | --- |
@@ -75,7 +75,13 @@ routine_budget: 0.25
 `grid routine run daily` resolves entry and workflow policy on each run. Skill
 routines pass the budget and turn limits to the agent; commands starting with
 `grid` use only the timeout. Invalid policy refuses add or run with exit 2 and a
-message naming the key, without executing work or changing `last_run`.
+message naming the key, without executing work or changing `last_run`. Invalid
+inherited values name the workspace or project level, never a routine, supplied
+value, or filesystem path; each level is validated even if an override masks it.
+Task-level `workflow.md` never supplies routine limits. Root and project
+`workflow.md` files are also ignored; `grid routine run` prints one warning per
+old file containing `routine_*` front matter keys, naming its relative location
+and the corresponding `workflows.md` destination.
 `grid routine list --json` and `grid routine run daily --json` include a `limits`
 object with all three effective values, including defaults. The entry lock,
 interval guard for timer invocations, and existing caller gates still apply.

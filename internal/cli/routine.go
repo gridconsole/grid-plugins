@@ -130,6 +130,9 @@ func runRoutine(args []string, env Env) int {
 		printRoutine(env, entry)
 		return 0
 	case "run":
+		for _, warning := range store.LegacyLimitWarnings() {
+			fmt.Fprintf(env.Stderr, "grid: warning: %s\n", warning)
+		}
 		binary, err := env.executable()
 		if err != nil {
 			return routineError(env, err)
@@ -247,6 +250,11 @@ func routineFailureSignal(env Env, project string) routine.FailureSignal {
 }
 
 func routineError(env Env, err error) int {
+	var policyErr *routine.WorkflowPolicyError
+	if errors.As(err, &policyErr) {
+		fmt.Fprintf(env.Stderr, "grid: %s\n", policyErr)
+		return 2
+	}
 	var limitErr *routine.LimitError
 	if errors.As(err, &limitErr) {
 		fmt.Fprintf(env.Stderr, "grid: %s\n", limitErr)
