@@ -148,6 +148,10 @@ func TestPersonVerbTerminal(t *testing.T) {
 				args = append(strings.Fields(verb), "research")
 			case "setup":
 				args = []string{"setup", "--yes"}
+			case "usage budget set":
+				args = []string{"usage", "budget", "set", "--tokens", "100"}
+			case "usage budget clear":
+				args = []string{"usage", "budget", "clear", "--tokens"}
 			case "answer", "question answer", "question withdraw":
 				h, cwd = feedHarness(t)
 				q := questionAdd(t, h, cwd, "member")
@@ -280,7 +284,7 @@ func TestPersonWorkflowSingleWordAndRoles(t *testing.T) {
 }
 
 func TestPersonFloorInventory(t *testing.T) {
-	want := []string{"approve", "refusal decide", "decide", "answer", "question answer", "question withdraw", "task status", "task stop", "task close", "task reopen", "task delete", "task restore", "task rename", "task decline", "hook level", "agent set", "skill enable", "skill disable", "setup"}
+	want := []string{"approve", "refusal decide", "decide", "answer", "question answer", "question withdraw", "task status", "task stop", "task close", "task reopen", "task delete", "task restore", "task rename", "task decline", "hook level", "agent set", "skill enable", "skill disable", "setup", "usage budget set", "usage budget clear"}
 	if !reflect.DeepEqual(want, persongate.Floor()) {
 		t.Fatalf("person floor changed: %v", persongate.Floor())
 	}

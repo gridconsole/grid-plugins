@@ -426,6 +426,7 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 		"task rename": true, "task reopen": true, "task restore": true, "task status": true, "task stop": true,
 		"question withdraw": true, "approve": true, "refusal decide": true, "decide": true,
 		"agent set": true, "skill disable": true, "skill enable": true, "setup": true,
+		"usage budget set": true, "usage budget clear": true,
 	}
 	want := guestParityOutput{}
 	if floor[command] {

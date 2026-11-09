@@ -322,7 +322,12 @@ Disagreements and defaults chosen:
   in `<GRID_HOME>/workspace.md` front matter (digits only, at least 1; missing,
   linked, unreadable, invalid or oversized files give no default). Budget show
   reports the effective token budget and source: task, workspace or none.
-  `usage budget clear --tokens` restores that default.
+  `usage budget clear --tokens` restores that default. Task-level `usage budget set`
+  and `usage budget clear` are person-only writes on the person-gate floor: an agent
+  context exits 3 with the usual `person_required` refusal and nothing changes, so a
+  held session cannot lift its own hold. The gate runs after the flags parse (a
+  syntax error still exits 2) and `--workspace` keeps the role gate below; `usage
+  budget show` stays open to every caller.
 
   Task `workflow.md` front matter may set `usage_notice_thresholds` to a map of
   `tokens`, `dollars`, and/or `minutes` to percentage lists, for example
