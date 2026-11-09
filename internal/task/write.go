@@ -121,9 +121,9 @@ func (s Store) Change(o WriteOptions) (Event, error) {
 		}
 		files := map[string][]byte{"task.md": updated}
 		if o.Action == "reopen" {
-			// A reopened task needs both gates approved again: the receipt below
-			// is not an approve event, so neither file stays valid.
-			for _, name := range []string{approvalFile, shipApprovalFile} {
+			// A reopened task needs every gate approved again: the receipt below
+			// is not an approve event, so no receipt file stays valid.
+			for _, name := range []string{approvalFile, previewApprovalFile, shipApprovalFile} {
 				previous, err := readOptional(filepath.Join(t.Path, name))
 				if err != nil {
 					return err
@@ -280,9 +280,10 @@ func (s Store) withWrite(cwd, id string, fn func(Task) error) error {
 }
 
 const (
-	journalName      = ".task-write.json"
-	approvalFile     = "approval.json"
-	shipApprovalFile = "approval-ship.json"
+	journalName         = ".task-write.json"
+	approvalFile        = "approval.json"
+	shipApprovalFile    = "approval-ship.json"
+	previewApprovalFile = "approval-preview.json"
 )
 
 var decisionFile = regexp.MustCompile(`^refusal-R-[1-9][0-9]*\.json$`)
@@ -291,6 +292,12 @@ var decisionFile = regexp.MustCompile(`^refusal-R-[1-9][0-9]*\.json$`)
 // commit point. Recovery is idempotent (full file images, including the appended
 // history line), so a crash between renames never loses or duplicates a receipt.
 func commitWrite(dir string, event Event, files map[string][]byte) error {
+	return commitWriteLines(dir, event, files)
+}
+
+// commitWriteLines also appends the given prose history lines after the event,
+// in the same journal, so a receipt and its readable line land together.
+func commitWriteLines(dir string, event Event, files map[string][]byte, lines ...string) error {
 	history, err := readOptional(filepath.Join(dir, "history.md"))
 	if err != nil {
 		return err
@@ -304,7 +311,11 @@ func commitWrite(dir string, event Event, files map[string][]byte) error {
 	}
 	// A JSON object on each Markdown bullet is readable and unambiguous, including
 	// embedded newlines and delimiter characters in notes. Old prose stays intact.
-	files["history.md"] = append(history, []byte("- "+string(encoded)+"\n")...)
+	history = append(history, []byte("- "+string(encoded)+"\n")...)
+	for _, line := range lines {
+		history = append(history, []byte(line+"\n")...)
+	}
+	files["history.md"] = history
 	for name := range files {
 		if err := writableFile(dir, name); err != nil {
 			return err
@@ -337,7 +348,7 @@ func recoverWrite(dir string) error {
 		return errors.New("incomplete task write journal")
 	}
 	for name := range files {
-		if name != "task.md" && name != "history.md" && name != approvalFile && name != shipApprovalFile && !decisionFile.MatchString(name) {
+		if name != "task.md" && name != "history.md" && name != approvalFile && name != shipApprovalFile && name != previewApprovalFile && !decisionFile.MatchString(name) {
 			return fmt.Errorf("invalid journal file %q", name)
 		}
 		if err := writableFile(dir, name); err != nil {

@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/plan"
+	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
 var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
@@ -20,8 +22,10 @@ var planHashToken = regexp.MustCompile(`^([0-9a-f]{6}|[0-9a-f]{64})$`)
 // stale approval must be explicitly replaced using --plan-hash after reviewing the new plan.
 //
 // The gate the task raised decides what is recorded: a task at gate ship (set
-// by deliver) gets a ship approval in approval-ship.json, and any other waiting
-// task a plan approval in approval.json. The two never overwrite each other.
+// by deliver) gets a ship approval in approval-ship.json, a task at gate preview
+// a preview approval in approval-preview.json plus a "preview approved" history
+// line, and any other waiting task a plan approval in approval.json. The three
+// never overwrite each other.
 //
 // The hash comes from plan.md through internal/plan, never from a stored copy.
 // Locks are taken in one order: .task.lock (withWrite), then .plan.lock (WithDigest),
@@ -50,8 +54,11 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 			return fmt.Errorf("cannot approve task in current state %q: expected waiting", t.State)
 		}
 		name, gate := approvalFile, ""
-		if t.Gate == "ship" {
+		switch t.Gate {
+		case "ship":
 			name, gate = shipApprovalFile, "ship"
+		case "preview":
+			name, gate = previewApprovalFile, "preview"
 		}
 		previous, err := readOptional(filepath.Join(t.Path, name))
 		if err != nil {
@@ -85,7 +92,11 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 			if err != nil {
 				return err
 			}
-			return commitWrite(t.Path, event, map[string][]byte{name: append(data, '\n')})
+			var lines []string
+			if gate == "preview" {
+				lines = append(lines, previewApprovedLine(event, s.clock()))
+			}
+			return commitWriteLines(t.Path, event, map[string][]byte{name: append(data, '\n')}, lines...)
 		})
 		if errors.Is(err, plan.ErrNoPlan) {
 			return errors.New("plan.md is missing; write the plan before approving it")
@@ -95,6 +106,12 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 	return event, err
 }
 
+// previewApprovedLine is the prose line the plan guard watches for: only Grid
+// writes it, here, with the receipt.
+func previewApprovedLine(e Event, now time.Time) string {
+	return taskfile.HistoryLine(now.UTC().Format("2006-01-02T15:04"), "preview approved", e.PlanHash, CleanHistory(e.Who.ID), CleanHistory(e.Via))
+}
+
 // Approval reads a gate only while its approved hash and optional digest match plan.md.
 // Consumers must use this check (or Approved) instead of treating approval.json's
 // existence as permission. Plan writers hold .plan.lock, not .task.lock.
@@ -102,11 +119,13 @@ func (s Store) Approval(cwd, id string) (Event, error) {
 	return s.ApprovalForGate(cwd, id, "plan")
 }
 
-// ApprovalForGate validates the selected plan or ship receipt under the task and plan locks.
+// ApprovalForGate validates the selected plan, preview or ship receipt under the task and plan locks.
 func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 	name, eventGate := approvalFile, ""
 	switch gate {
 	case "plan":
+	case "preview":
+		name, eventGate = previewApprovalFile, "preview"
 	case "ship":
 		name, eventGate = shipApprovalFile, "ship"
 	default:
