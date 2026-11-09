@@ -51,6 +51,7 @@ func runDeliver(args []string, env Env) int {
 			fmt.Fprintf(env.Stderr, "deliver: %v\n", err)
 			return 2
 		}
+		env.recordError(err)
 		line := strings.Join(strings.Fields(err.Error()), " ")
 		if !strings.HasPrefix(line, "Deliver blocked:") {
 			line = "Deliver blocked: " + line
