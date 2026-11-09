@@ -106,3 +106,7 @@ FAIL	github.com/gridconsole/grid-plugins/internal/cli [build failed]
 - `hook/brain.go` and `hook/events.go` call `PlanStage` on text they read themselves, not `PlanHeld`, so a linked file does not change the stage they report.
 - `TestAppendHistoryKeepsEveryConcurrentLine` passes on base (it pins the `.task.lock` choice, not a base defect); the reviewer decides whether it stays.
 - The host guard now refuses shell writes to history.md, including an agent's own appended line (agent instructions still ask for a `brain proposed` line through the shell).
+
+## Rebase note for the lander
+
+Plugin ref main moved from 68e6020e to 5cf3215f during this lane. Its 8ea3160 already fences Bash writes to history.md: `gateName` there is the same regex as this lane's, and `hostProtectedNames` there holds history.md but not approval-preview.json. `git merge-tree` of main and this lane conflicts in internal/guard/host.go and internal/guard/host_targets.go only. Resolution: take main's `gateName` line, and main's `hostProtectedNames` plus `"approval-preview.json"`. The checks above ran on 68e6020e; the lander reruns them on the rebased head.
