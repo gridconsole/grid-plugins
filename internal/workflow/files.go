@@ -54,6 +54,8 @@ func fileReason(err error) string {
 		return "cannot read"
 	case errors.Is(err, fs.ErrNotExist):
 		return errChanged.Error()
+	case errors.Is(err, ErrLinkedFile):
+		return "has more than one hard link (linked_file)"
 	}
 	for _, reason := range []error{errNotRegular, errSymlink, errChanged, errTooLarge, errNotUTF8} {
 		if errors.Is(err, reason) {
@@ -297,6 +299,10 @@ func readFile(home, relative string) (string, *string, error) {
 		return "", nil, err
 	}
 	defer f.Close()
+	// A linked workflows.md is unreadable: task steps hold and person verbs refuse.
+	if err := refuseLinked(f, relative); err != nil {
+		return "", nil, err
+	}
 	const maxFileBytes = 32 * 1024
 	data, err := io.ReadAll(io.LimitReader(f, maxFileBytes+1))
 	if err != nil {

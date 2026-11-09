@@ -5,15 +5,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
 // ErrLinkedFile marks a protected task file with more than one hard link. A link
 // planted outside the task folder could still write that file, so readers refuse
-// the task and hold its gates until the other links are removed.
-var ErrLinkedFile = errors.New("linked_file")
+// the task and hold its gates, and writers refuse it and write nothing, until the
+// other links are removed. It is the workflow package's error, so a linked
+// workflows.md maps to the same CLI code.
+var ErrLinkedFile = workflow.ErrLinkedFile
 
-// protectedNames are the task files whose bytes decide a gate.
-var protectedNames = []string{"task.md", "history.md", approvalFile, shipApprovalFile, previewApprovalFile, "plan.md", "workflows.md"}
+// protectedNames are the task files whose bytes decide a gate. The workflows.md
+// files live in the Grid home and projects; workflow.readFile checks them.
+var protectedNames = []string{"task.md", "history.md", approvalFile, shipApprovalFile, previewApprovalFile, "plan.md"}
 
 // Linked returns an ErrLinkedFile error naming the first protected file in dir
 // that has more than one hard link, or the error that kept it from counting.

@@ -18,6 +18,11 @@ func ProjectPersonVerbs(home, project string) (map[string][]string, error) {
 	home = gridhome.Real(home)
 	for _, path := range []string{filepath.Join("projects", project, "workflows.md"), "workflows.md"} {
 		text, _, err := readFile(home, path)
+		if errors.Is(err, ErrLinkedFile) {
+			// Keep the link in the chain: the person gate refuses instead of
+			// falling back to the floor.
+			return nil, fmt.Errorf("%w: %w", ErrPersonVerbs, err)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s", ErrPersonVerbs, fileReason(err))
 		}
@@ -32,5 +37,11 @@ func ProjectPersonVerbs(home, project string) (map[string][]string, error) {
 			return policy, nil
 		}
 	}
-	return map[string][]string{"signal act turn": nil, "signal act dismiss": nil, "signal act snooze": nil}, nil
+	return DefaultPersonVerbs(), nil
+}
+
+// DefaultPersonVerbs is the replaceable policy that applies when no workflow
+// file sets person_verbs.
+func DefaultPersonVerbs() map[string][]string {
+	return map[string][]string{"signal act turn": nil, "signal act dismiss": nil, "signal act snooze": nil}
 }
