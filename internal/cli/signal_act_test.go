@@ -430,6 +430,8 @@ func TestSignalTurnProcess(t *testing.T) {
 }
 func TestSignalConcurrentTurnProcesses(t *testing.T) {
 	h, path, _ := actFixture(t, "new")
+	// Exercise store locking with the owner-configurable person policy disabled.
+	h.write(filepath.Join(h.gridHome, "projects", "example", "workflows.md"), "---\nperson_verbs: []\n---\n")
 	envJSON, err := json.Marshal([]string{h.home, h.gridHome, h.root, h.env.Machine, h.tmp})
 	if err != nil {
 		t.Fatal(err)
@@ -517,6 +519,8 @@ func TestSignalActRolesAndTaskAuthor(t *testing.T) {
 	for _, role := range []string{"", "owner", "member", "agent", "cli", "guest", "external", "unknown"} {
 		t.Run(role, func(t *testing.T) {
 			h, path, before := actFixture(t, "new")
+			// This matrix covers the store role policy after the person gate.
+			h.write(filepath.Join(h.gridHome, "projects", "example", "workflows.md"), "---\nperson_verbs: []\n---\n")
 			h.env.Getenv = func(key string) string {
 				switch key {
 				case "GRID_ROLE":

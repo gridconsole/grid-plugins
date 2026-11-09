@@ -64,6 +64,7 @@ func TestProjectPersonPolicy(t *testing.T) {
 		{name: "workspace_replaces_default", workspace: "[signal act note]", act: "turn"},
 		{name: "project_replaces_workspace", workspace: "[signal act note]", project: "[]", act: "note"},
 		{name: "all_acts", project: "[signal act]", act: "note", want: 3},
+		{name: "implicit_note", workspace: "[signal act note]", act: "", want: 3},
 		{name: "member", project: "{signal act turn: [owner]}", act: "turn", person: true, want: 3},
 		{name: "owner", project: "{signal act turn: [owner]}", act: "turn", role: "owner", person: true},
 		{name: "invalid_warns", project: "false", act: "turn"},
@@ -90,7 +91,10 @@ func TestProjectPersonPolicy(t *testing.T) {
 			h.mkdir(cwd)
 			h.record(project.Record{Name: "example", ID: "01ARZ3NDEKTSV4RRFFQ69G5FAV", Folders: []project.Folder{{Machine: h.env.Machine, Path: cwd}}})
 			// Resolve from cwd as well as the explicit selector tested above.
-			args := []string{"signal", "act", actID, "--act", tc.act, "--json"}
+			args := []string{"signal", "act", actID, "--json"}
+			if tc.act != "" {
+				args = append(args, "--act", tc.act)
+			}
 			if code := h.run(cwd, args...); code != tc.want {
 				t.Fatalf("exit %d; want %d: %s %s", code, tc.want, h.out, h.errb)
 			}
@@ -112,6 +116,14 @@ func TestProjectPersonTaskIsolationAndFloor(t *testing.T) {
 	h.write(filepath.Join(h.gridHome, "workflows.md"), "---\nperson_verbs: [task show]\n---\n")
 	if code := h.run(fixture.Path, "task", "show", "T-01", "--json"); code != 0 {
 		t.Fatalf("project policy leaked into task: %d", code)
+	}
+	h.env.Cwd = fixture.Path
+	if code := gateCommand([]string{"signal", "act", actID, "--act", "turn"}, &h.env); code != 0 {
+		t.Fatalf("project default leaked into task: %d", code)
+	}
+	h.write(filepath.Join(fixture.Path, "workflow.md"), "---\nperson_verbs: [signal act]\n---\n")
+	if code := gateCommand([]string{"signal", "act", actID, "--act", "note"}, &h.env); code != 3 {
+		t.Fatalf("task policy ignored: %d", code)
 	}
 	for _, policy := range []string{"[]", "false"} {
 		h.write(filepath.Join(h.gridHome, "workflows.md"), "---\nperson_verbs: "+policy+"\n---\n")
@@ -135,5 +147,45 @@ func TestProjectPersonHookBypass(t *testing.T) {
 		if code := gateCommand([]string{"hook", "PreToolUse"}, &h.env); code != 0 || h.errb.Len() != 0 {
 			t.Fatalf("hook gated: %d %s", code, h.errb)
 		}
+	}
+}
+
+func TestProjectPersonSignalFlagSemantics(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		flags []string
+		want  int
+	}{
+		{"single_dash", []string{"-project", "example", "-act", "turn"}, 3},
+		{"last_act_gated", []string{"--act", "note", "--act=turn", "--project", "example"}, 3},
+		{"last_act_open", []string{"--act=turn", "--act", "note", "--project", "example"}, 0},
+		{"last_project", []string{"--project", "absent", "--project=example", "--act", "turn"}, 3},
+		{"option_value", []string{"--until", "--act=note", "--act", "turn", "--project", "example"}, 3},
+		{"fence", []string{"--project", "example", "--", "--act=turn"}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _, _ := actFixture(t, "new")
+			h.env.Getenv = func(string) string { return "" }
+			h.env.Procs = testProcs("codex")
+			h.env.Cwd = h.root
+			args := append([]string{"signal", "act", actID}, tc.flags...)
+			if code := gateCommand(args, &h.env); code != tc.want {
+				t.Fatalf("gate exit %d; want %d", code, tc.want)
+			}
+		})
+	}
+}
+
+func TestProjectPersonUnreadableKeepsFloor(t *testing.T) {
+	h, _, _ := actFixture(t, "new")
+	h.env.Getenv = func(string) string { return "" }
+	h.env.Procs = testProcs("codex")
+	h.mkdir(filepath.Join(h.gridHome, "projects", "example", "workflows.md"))
+	before := fileBytes(t, h.gridHome)
+	if code := h.run(h.root, "approve", "--project", "example", "--json"); code != 3 || !strings.Contains(h.errb.String(), "keeping the person-gate floor") || strings.Contains(h.errb.String(), h.root) {
+		t.Fatalf("exit %d: %s %s", code, h.out, h.errb)
+	}
+	if !reflect.DeepEqual(before, fileBytes(t, h.gridHome)) {
+		t.Fatal("refusal changed files")
 	}
 }

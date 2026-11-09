@@ -46,6 +46,11 @@ func jsonRequested(args []string) bool {
 // gateCommand is called before dispatch, so aliases and settings writes share
 // the same floor. Store callers (deliver and the orchestrator) remain independent.
 func gateCommand(args []string, env *Env) int {
+	// Hook execution must remain available even with broken policy. The
+	// explicit settings mutation still belongs to the person-only floor.
+	if len(args) == 0 || (args[0] == "hook" && (len(args) < 2 || args[1] != "level")) {
+		return 0
+	}
 	verb := args[0]
 	if len(args) > 1 && !strings.HasPrefix(args[1], "-") {
 		verb += " " + args[1]
@@ -56,11 +61,6 @@ func gateCommand(args []string, env *Env) int {
 			verb = v
 			break
 		}
-	}
-	// Hook handlers must reach their decision protocol even when task policy is
-	// invalid or tries to gate hooks. Only hook level is in the person-only floor.
-	if args[0] == "hook" && !persongate.Required(verb, nil) {
-		return 0
 	}
 	// Only standalone help forms bypass the gate; a --help used as a flag value
 	// must not exempt an otherwise valid write.
@@ -91,22 +91,42 @@ func gateCommand(args []string, env *Env) int {
 			break
 		}
 	}
-	if res, err := resolver(*env).Resolve(query); err == nil && res.TaskPath != "" {
-		taskID = res.Task
-		policy, err := workflow.PersonVerbs(res.TaskPath)
-		if errors.Is(err, workflow.ErrPersonVerbs) {
-			fmt.Fprintln(env.Stderr, "grid: warning: invalid person_verbs; ignoring the key and keeping the person-only floor")
+	// Signal operands are signal IDs; only --task can select a task. Other
+	// option values must not accidentally turn into task selectors.
+	if args[0] == "signal" {
+		query.Task = personFlag(args, "task", "")
+	}
+	// Selectors use the same last-value semantics as command flags.
+	query.Project = personFlag(args, "project", "")
+	r := projectStore(*env).Resolver
+	if res, err := r.Resolve(query); err == nil {
+		var policy map[string][]string
+		var policyErr error
+		matchArgs := args
+		if res.TaskPath != "" {
+			taskID = res.Task
+			policy, policyErr = workflow.PersonVerbs(res.TaskPath)
+		} else if res.Project != "" {
+			policy, policyErr = workflow.ProjectPersonVerbs(r.GridHome, res.Project)
+			if verb == "signal act" {
+				matchArgs = []string{"signal", "act", personFlag(args, "act", "note")}
+			} else if verb == "signal dismiss" {
+				matchArgs = []string{"signal", "act", "dismiss"}
+			}
 		}
-		if err != nil {
-			// Existing workflow readers retain their diagnostics and read-only behavior.
-			// No workflow failure can remove a floor verb.
+		if policyErr != nil {
+			// L129: warn and retain the floor; policy failures must not break hooks
+			// or turn every command into an exit-1 failure.
+			if errors.Is(policyErr, workflow.ErrPersonVerbs) {
+				fmt.Fprintln(env.Stderr, "grid: warning: invalid person_verbs; ignoring the key and keeping the person-only floor")
+			}
 			policy = nil
 		}
 		match := ""
 		for v := range policy {
 			extra = append(extra, v)
 			words := strings.Fields(v)
-			if len(words) > 0 && len(args) >= len(words) && slices.Equal(args[:len(words)], words) && len(v) > len(match) {
+			if len(words) > 0 && len(matchArgs) >= len(words) && slices.Equal(matchArgs[:len(words)], words) && len(v) > len(match) {
 				match = v
 			}
 		}
@@ -115,6 +135,7 @@ func gateCommand(args []string, env *Env) int {
 			roles = policy[match]
 		}
 	}
+
 	if !persongate.Required(verb, extra) {
 		return 0
 	}
@@ -125,7 +146,7 @@ func gateCommand(args []string, env *Env) int {
 	}
 	d, _ := persongate.Check(request)
 	if !d.Allow {
-		return personRefusal(*env, verb, d.Reason, jsonRequested(args))
+		return personRefusal(*env, personDisplayVerb(verb), d.Reason, jsonRequested(args))
 	}
 	if roles != nil {
 		role := strings.ToLower(strings.TrimSpace(env.getenv("GRID_ROLE")))
@@ -133,12 +154,47 @@ func gateCommand(args []string, env *Env) int {
 			role = "member"
 		}
 		if !slices.Contains(roles, role) {
-			return personRefusal(*env, verb, "agent_env", jsonRequested(args))
+			return personRefusal(*env, personDisplayVerb(verb), "agent_env", jsonRequested(args))
 		}
 	}
 	env.personVia = d.Via
 	return 0
 }
+
+// Keep the A60 command label even when policy/receipts name a specific act.
+func personDisplayVerb(verb string) string {
+	if strings.HasPrefix(verb, "signal act ") {
+		return "signal act"
+	}
+	return verb
+}
+
+// personFlag recognizes both Go flag spellings and stops at the option fence.
+// Skip values of other signal options so text cannot masquerade as a selector.
+func personFlag(args []string, key, fallback string) string {
+	value := fallback
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--" {
+			break
+		}
+		if !strings.HasPrefix(args[i], "-") {
+			continue
+		}
+		name, v, equal := strings.Cut(strings.TrimLeft(args[i], "-"), "=")
+		if name == key {
+			if equal {
+				value = v
+			} else if i+1 < len(args) {
+				i++
+				value = args[i]
+			}
+		} else if !equal && slices.Contains([]string{"project", "act", "task", "until", "source", "source-id", "title", "body"}, name) {
+			i++
+		}
+	}
+	return value
+}
+
 func runPersonCheck(args []string, env Env) int {
 	fs := newFlags("person check", env)
 	asJSON := fs.Bool("json", false, "print JSON")
