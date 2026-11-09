@@ -95,6 +95,19 @@ func root(p Process) bool {
 	return p.PID == 1 || slices.Contains([]string{"cron", "crond", "atd", "atrun", "services", "taskeng", "taskhostw"}, name(p.Exe)) || (name(p.Exe) == "systemd" && slices.Contains(p.Args, "--user")) || (name(p.Exe) == "svchost" && slices.Contains(p.Args, "Schedule"))
 }
 
+// EnvironmentKeys returns the environment keys read by Check, including role
+// policy and wildcard markers present in environ. The caller owns the result.
+func EnvironmentKeys(environ []string) []string {
+	keys := []string{"GRID_AGENT", "GRID_WORKER", "GRID_WORKER_ID", "GRID_LEASE", "GRID_LEASE_EPOCH", "GRID_JOB", "CLAUDE_CODE_CHILD_SESSION", "GRID_ROLE"}
+	for _, v := range environ {
+		k, _, _ := strings.Cut(v, "=")
+		if strings.HasPrefix(k, "GRID_WORKER") || strings.HasPrefix(k, "GRID_LEASE") {
+			keys = append(keys, k)
+		}
+	}
+	return keys
+}
+
 func Check(r Request) (Decision, error) {
 	refuse := func(reason string, err error) (Decision, error) { return Decision{Reason: reason}, err }
 	getenv := r.Getenv
@@ -105,14 +118,10 @@ func Check(r Request) (Decision, error) {
 	if environ == nil {
 		environ = os.Environ
 	}
-	keys := []string{"GRID_AGENT", "GRID_WORKER", "GRID_WORKER_ID", "GRID_LEASE", "GRID_LEASE_EPOCH", "GRID_JOB", "CLAUDE_CODE_CHILD_SESSION"}
-	for _, v := range environ() {
-		k, _, _ := strings.Cut(v, "=")
-		if strings.HasPrefix(k, "GRID_WORKER") || strings.HasPrefix(k, "GRID_LEASE") {
-			keys = append(keys, k)
+	for _, k := range EnvironmentKeys(environ()) {
+		if k == "GRID_ROLE" {
+			continue // Role policy depends on the verb and is checked below.
 		}
-	}
-	for _, k := range keys {
 		if getenv(k) != "" {
 			return refuse("agent_env", nil)
 		}

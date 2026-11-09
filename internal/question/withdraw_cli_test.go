@@ -11,6 +11,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/persongate"
 	"github.com/gridconsole/grid-plugins/internal/question"
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 	"strings"
 )
 
@@ -34,6 +35,7 @@ func TestPersonWithdrawCLI(t *testing.T) {
 		{name: "answered", role: "owner", prior: "answer", code: 3, stderr: "question: Q-1 is answered\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			testenv.Person(t)
 			root := t.TempDir()
 			home := filepath.Join(root, "grid")
 			task := filepath.Join(home, "projects", "example", "tasks", "T-01-example")
@@ -49,7 +51,7 @@ func TestPersonWithdrawCLI(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			for _, key := range []string{"GRID_LEASE", "GRID_LEASE_EPOCH", "GRID_AGENT", "GRID_WORKER_ID", "GRID_WORKER", "GRID_FEED_TASK", "GRID_JOB", "GRID_ATTEMPT"} {
+			for _, key := range []string{"GRID_FEED_TASK", "GRID_ATTEMPT"} {
 				t.Setenv(key, "")
 			}
 			t.Setenv("GRID_MEMBER", "person")

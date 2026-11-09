@@ -13,6 +13,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/persongate"
 	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
 
 type testProcs string
@@ -23,6 +24,7 @@ func (p testProcs) Snapshot() (map[int]persongate.Process, error) {
 }
 func personTestEnv(t *testing.T, e *Env) {
 	t.Helper()
+	testenv.Person(t)
 	home := t.TempDir()
 	e.Procs = testProcs("Terminal")
 	e.PersonDir = func() (string, error) { return filepath.Join(home, ".grid-person"), nil }
@@ -78,6 +80,33 @@ func TestPersonVerbRefusals(t *testing.T) {
 		})
 	}
 }
+
+func TestPersonEnvironmentRefusals(t *testing.T) {
+	keys := persongate.EnvironmentKeys([]string{"GRID_WORKER_FUTURE=agent", "GRID_LEASE_FUTURE=agent"})
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			// Simulate an inherited agent session before building the harness.
+			t.Setenv(key, "agent")
+			h := newHarness(t)
+			fixture := taskFixture(t, h)
+			if code := h.run(fixture.Path, "person", "check", "--json"); code != 0 {
+				t.Fatalf("inherited marker was not isolated: %d %s", code, h.errb)
+			}
+			// Setting the same marker after setup must still reach the real gate.
+			t.Setenv(key, "agent")
+			before := fileBytes(t, h.gridHome)
+			for _, args := range [][]string{{"task", "close", "T-01", "--json"}, {"person", "check", "--json"}} {
+				if code := h.run(fixture.Path, args...); code != 3 || !strings.Contains(h.out.String(), `"reason":"agent_env"`) {
+					t.Fatalf("%v exit %d: %s %s", args, code, h.out, h.errb)
+				}
+			}
+			if !reflect.DeepEqual(before, fileBytes(t, h.gridHome)) {
+				t.Fatal("refused command changed files")
+			}
+		})
+	}
+}
+
 func TestPersonVerbTerminal(t *testing.T) {
 	for _, verb := range persongate.Floor() {
 		t.Run(strings.ReplaceAll(verb, " ", "_"), func(t *testing.T) {
