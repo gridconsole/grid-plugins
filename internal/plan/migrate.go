@@ -41,7 +41,7 @@ func (s Store) Migrate(yes bool) (Written, string, error) {
 		if !HasRecall(converted) {
 			return errors.New("plan write requires Used: <note> or Recall: nothing found")
 		}
-		for _, name := range []string{"approval.json", "approval-ship.json"} {
+		for _, name := range []string{"approval.json", "approval-preview.json", "approval-ship.json"} {
 			data, err := readRegular(filepath.Join(dir, name))
 			if errors.Is(err, os.ErrNotExist) {
 				continue

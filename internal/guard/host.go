@@ -28,9 +28,9 @@ var feedAnswer = regexp.MustCompile(`(?i)` + feedPostCommand +
 	feedPostCommand + `\s.*?` + withdrawnEvent + `.*?\s-{1,2}type(?:=|\s+)control(?:\s|$)`)
 
 // gateName is a task entry that holds a gate: the questions folder with its
-// answers, the plan and ship approvals, a refusal decision, the write journal and its lock, or a
+// answers, the plan, preview and ship approvals, a refusal decision, the write journal and its lock, or a
 // plan revision archive. task.md is protected too: its workflow selects the gates.
-var gateName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:task\.md|approval(?:-ship)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock|plan-revisions|questions)(?:$|[^\w.-])`)
+var gateName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:task\.md|approval(?:-ship|-preview)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock|plan-revisions|questions)(?:$|[^\w.-])`)
 
 // Workspace and project workflows govern inherited person-only verbs.
 var projectWorkflowName = regexp.MustCompile(`(?i)(?:^|[^\w.-])workflows\.md(?:$|[^\w.-])`)
@@ -44,7 +44,7 @@ var workflowName = regexp.MustCompile(`(?i)(?:^|[^\w.-])workflow\.md(?:$|[^\w.-]
 var switchVerb = regexp.MustCompile(`(?i)(?:^|\s)(?:\S*/)?grid(?:\.exe)?\s+(?:hook\s+level|agent\s+set|skill\s+(?:enable|disable)|setup)(?:\s|$)`)
 var settingsName = regexp.MustCompile(`(?i)(?:^|[^\w.-])(?:settings\.json|\.settings\.lock)(?:$|[^\w.-])`)
 var settingsFile = regexp.MustCompile(`(?i)^(?:settings\.json|\.settings\.lock)$`)
-var gateFile = regexp.MustCompile(`(?i)^(?:task\.md|workflows?\.md|approval(?:-ship)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock)$`)
+var gateFile = regexp.MustCompile(`(?i)^(?:task\.md|workflows?\.md|approval(?:-ship|-preview)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock)$`)
 
 // readOnly are the commands that may name a gate path: none of them writes a file
 // when the command has no redirect and, for find, no action flag.
@@ -53,7 +53,7 @@ var readOnly = map[string]bool{"cat": true, "head": true, "tail": true, "grep": 
 	"cut": true, "echo": true, "printf": true, "cd": true, "pwd": true, "test": true, "[": true, "true": true}
 var findWrites = map[string]bool{"-delete": true, "-exec": true, "-execdir": true, "-ok": true, "-okdir": true, "-fprint": true, "-fprintf": true, "-fls": true}
 
-const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, workflow.md, workflows.md, approval.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide, grid decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
+const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, workflow.md, workflows.md, approval.json, approval-preview.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide, grid decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
 
 const switchReason = "The guards and agent settings are the person's: <home>/settings.json, projects/<name>/settings.json and .settings.lock are written only by Grid, and grid hook level, grid agent set, grid skill enable|disable and grid setup are the person's verbs; an agent cannot turn a guard off. Reading is allowed: cat, grep, ls, head or tail of a settings file works. Use the Write or Edit tool for any other settings.json."
 
@@ -177,7 +177,7 @@ func settingsAt(root, target string) bool {
 }
 
 // gateAt reports whether target (lower-case) is a gate entry of a task under one
-// grid root: its questions folder, its plan and ship approvals, a refusal decision or its plan
+// grid root: its questions folder, its plan, preview and ship approvals, a refusal decision or its plan
 // revisions. The home root finds personal tasks, which sit beside projects.
 func gateAt(root, target string) bool {
 	if projectWorkflowAt(root, target) {
