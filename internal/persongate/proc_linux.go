@@ -47,10 +47,15 @@ func linuxSnapshot(procRoot string) (map[int]Process, error) {
 		args := strings.Split(strings.TrimRight(string(cmd), "\x00"), "\x00")
 		exe, err := os.Readlink(filepath.Join(dir, "exe"))
 		if err != nil {
-			if len(args) == 0 || args[0] == "" {
-				return nil, err
+			comm, commErr := os.ReadFile(filepath.Join(dir, "comm"))
+			if commErr == nil {
+				exe = strings.TrimSuffix(string(comm), "\n")
+			} else {
+				if len(args) == 0 || args[0] == "" {
+					return nil, err
+				}
+				exe = args[0]
 			}
-			exe = args[0]
 		}
 		tree[pid] = Process{pid, parent, exe, args}
 		pid = parent

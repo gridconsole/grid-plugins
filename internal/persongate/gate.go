@@ -89,7 +89,7 @@ func agent(p Process) bool {
 	return false
 }
 
-var entries = strings.Split("login,sshd,tmux,screen,zellij,terminal,iterm2,ghostty,kitty,wezterm,alacritty,warp,gnome-terminal-server,konsole,xterm,windowsterminal,openconsole,explorer,code helper,cursor,jetbrains,idea,goland,pycharm,webstorm,clion,rider,rubymine,phpstorm,datagrip,rustrover,grid-desktop,grid-server", ",")
+var entries = strings.Split("login,sshd,sshd-session,tmux,screen,zellij,terminal,iterm2,ghostty,kitty,wezterm,alacritty,warp,gnome-terminal-server,konsole,xterm,windowsterminal,openconsole,explorer,code helper,cursor,jetbrains,idea,goland,pycharm,webstorm,clion,rider,rubymine,phpstorm,datagrip,rustrover,grid-desktop,grid-server", ",")
 
 func root(p Process) bool {
 	return p.PID == 1 || slices.Contains([]string{"cron", "crond", "atd", "atrun", "services", "taskeng", "taskhostw"}, name(p.Exe)) || (name(p.Exe) == "systemd" && slices.Contains(p.Args, "--user")) || (name(p.Exe) == "svchost" && slices.Contains(p.Args, "Schedule"))
