@@ -11,8 +11,19 @@ func TestSampleSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tasks) != 3 || tasks[0].ID != "clean-csv" || tasks[1].ID != "fix-total" || tasks[2].ID != "release-notes" {
+	want := []string{"clean-csv", "fix-total", "release-notes", "agent-reviewer-verdict", "deliver-refuses-rejected", "deliver-skill",
+		"execute-approve-waits", "memory-skill", "questions-skill", "routing-skill", "views-skill"}
+	got := map[string]bool{}
+	for _, task := range tasks {
+		got[task.ID] = true
+	}
+	if len(tasks) != len(want) {
 		t.Fatalf("unexpected tasks: %+v", tasks)
+	}
+	for _, id := range want {
+		if !got[id] {
+			t.Fatalf("missing task %s in %+v", id, tasks)
+		}
 	}
 }
 
@@ -22,7 +33,13 @@ func sampleTask(t *testing.T) Task {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return tasks[0]
+	for _, task := range tasks {
+		if task.ID == "clean-csv" {
+			return task
+		}
+	}
+	t.Fatal("clean-csv sample missing")
+	return Task{}
 }
 
 func TestInvalidTask(t *testing.T) {

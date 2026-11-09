@@ -80,7 +80,14 @@ func TestEnvFlagPassesNamedVariablesOnly(t *testing.T) {
 
 func TestSuiteContinuesAfterFailure(t *testing.T) {
 	results := t.TempDir()
-	code, out, stderr := command(t, "run", "--results", results, "--agent", `["sh","-c","exit 7"]`, "--json")
+	// Only the three samples, so the count stays fixed as ported cases are added.
+	suite := t.TempDir()
+	for _, id := range []string{"clean-csv", "fix-total", "release-notes"} {
+		if err := os.CopyFS(filepath.Join(suite, id), os.DirFS(filepath.Join("..", "..", "evals", "tasks", id))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code, out, stderr := command(t, "run", "--suite", suite, "--results", results, "--agent", `["sh","-c","exit 7"]`, "--json")
 	var runs []eval.Result
 	if code != 1 || json.Unmarshal([]byte(out), &runs) != nil || len(runs) != 3 {
 		t.Fatalf("failure: %d %s %s", code, out, stderr)

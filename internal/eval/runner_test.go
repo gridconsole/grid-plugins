@@ -46,6 +46,10 @@ func TestFakeAgentSamples(t *testing.T) {
 	runner := testRunner(t)
 	var results []Result
 	for _, task := range tasks {
+		// The fake agent only knows the three samples.
+		if task.ID != "clean-csv" && task.ID != "fix-total" && task.ID != "release-notes" {
+			continue
+		}
 		t.Run(task.ID, func(t *testing.T) {
 			r := runTask(t, runner, task)
 			if r.Status != "passed" || !r.Fake || r.Summary.Passed != len(task.Checks) || r.Summary.CheckScore == nil || *r.Summary.CheckScore != 5 {
