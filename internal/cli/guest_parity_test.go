@@ -385,11 +385,6 @@ func TestGuestProjectParity(t *testing.T) {
 					if outputs["uninvited"] == unknown && outputs["no-roles"] == unknown {
 						return
 					}
-					// Known leaks stay executable: verify their exact baseline before skipping,
-					// so a different leak cannot hide behind an existing exception.
-					if guestParityKnownLeak(row, mode, h, outputs) {
-						t.Skip("L134 leak: " + row.command)
-					}
 					t.Fatalf("visibility leak: unknown=%+v uninvited=%+v no-roles=%+v", unknown, outputs["uninvited"], outputs["no-roles"])
 				})
 			})
@@ -433,47 +428,4 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 		}
 	}
 	return out == want
-}
-
-// Baselines for the path shortcut in jobcmd.resolveTask. See docs/lanes/L134.md.
-// IDs use the guarded resolver; only these five path forms are exceptions.
-func guestParityKnownLeak(row guestParityRow, mode string, h *harness, outputs map[string]guestParityOutput) bool {
-	forms := map[string]bool{
-		"job lint/task-task-path":      true,
-		"job render/operand-task-path": true,
-		"job show/task-task-path":      true,
-		"job show/operand-task-path":   true,
-		"job verify/task-task-path":    true,
-	}
-	if !forms[row.command+"/"+row.form] {
-		return false
-	}
-	unknown := guestParityOutput{1, "", "job: task not found\n"}
-	hidden := guestParityOutput{Code: 1}
-	message := "plan needs approval: review and approve the current plan before rendering a Job"
-	switch row.command {
-	case "job lint":
-		path := filepath.Join(h.root, "input.md")
-		hidden.Stdout = fmt.Sprintf("path: %s\nok: false\n%s:1: error [brief.frontmatter]: line 1: missing frontmatter block; fix: Add a closed --- frontmatter block using supported YAML or JSON values.\n", path, path)
-		if mode == "json" {
-			quoted, _ := json.Marshal(path)
-			hidden.Stdout = fmt.Sprintf("{\"ok\":false,\"path\":%s,\"findings\":[{\"rule\":\"brief.frontmatter\",\"line\":1,\"severity\":\"error\",\"message\":\"line 1: missing frontmatter block\",\"fix\":\"Add a closed --- frontmatter block using supported YAML or JSON values.\"}]}\n", quoted)
-		}
-	case "job render":
-		hidden.Code = 2
-	case "job show":
-		message = "lstat " + filepath.Join(h.gridHome, "projects", "alpha", "tasks", "T-01-parity", "jobs") + ": no such file or directory"
-	}
-	if row.command != "job lint" {
-		hidden.Stderr = "job: " + message + "\n"
-		if mode == "json" {
-			quoted, _ := json.Marshal(message)
-			hidden.Stderr = ""
-			hidden.Stdout = fmt.Sprintf("{\"ok\":false,\"findings\":[],\"error\":%s}\n", quoted)
-		}
-	}
-	if mode == "json" {
-		unknown = guestParityOutput{1, "{\"ok\":false,\"findings\":[],\"error\":\"task not found\"}\n", ""}
-	}
-	return outputs["unknown"] == unknown && outputs["uninvited"] == hidden && outputs["no-roles"] == hidden
 }
