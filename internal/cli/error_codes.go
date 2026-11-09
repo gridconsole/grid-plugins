@@ -30,7 +30,7 @@ const (
 	// CodeWorkflowChanged means the task's workflow now resolves to other steps
 	// than the ones it was created with, so it is held.
 	CodeWorkflowChanged = "workflow_changed"
-	// CodeLinkedFile means a protected task file has more than one hard link.
+	// CodeLinkedFile means a protected task or workflow file has more than one hard link.
 	CodeLinkedFile = "linked_file"
 )
 

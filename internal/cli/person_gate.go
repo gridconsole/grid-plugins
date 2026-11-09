@@ -77,6 +77,7 @@ func gateCommand(args []string, env *Env) int {
 	}
 	var extra []string
 	var rolePolicies [][]string
+	var linkedErr error
 	taskID := ""
 	// Task-local workflows may extend the floor. Resolve through the existing
 	// caller-aware source, including --task and an explicit task operand.
@@ -116,6 +117,15 @@ func gateCommand(args []string, env *Env) int {
 		warned := false
 		match := ""
 		apply := func(policy map[string][]string, policyErr error) {
+			if errors.Is(policyErr, workflow.ErrLinkedFile) {
+				// A linked workflows.md may be forged, so neither it nor the
+				// floor alone decides: the default policy applies and every
+				// person verb refuses below until the link is removed.
+				if linkedErr == nil {
+					linkedErr = policyErr
+				}
+				policy, policyErr = workflow.DefaultPersonVerbs(), nil
+			}
 			if policyErr != nil {
 				// A broken extension cannot remove the floor or another scope's policy.
 				if errors.Is(policyErr, workflow.ErrPersonVerbs) && !warned {
@@ -157,6 +167,11 @@ func gateCommand(args []string, env *Env) int {
 
 	if !persongate.Required(verb, extra) {
 		return 0
+	}
+	if linkedErr != nil {
+		fmt.Fprintf(env.Stderr, "grid %s: %v\n", personDisplayVerb(verb), linkedErr)
+		env.recordError(linkedErr)
+		return 1
 	}
 	request := gateRequest(*env, verb, args)
 	request.ExtraVerbs = extra
