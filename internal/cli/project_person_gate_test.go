@@ -200,6 +200,7 @@ func TestProjectPersonSignalTaskUnion(t *testing.T) {
 		{name: "task_cwd_without_policy", act: "turn"},
 		{name: "task_cwd_project", project: "[signal act note]", task: "[]", act: "note"},
 		{name: "task_cwd_workspace", workspace: "[signal act note]", task: "[task show]", act: "note"},
+		{name: "missing_task_selector", project: "[signal act add]", act: "add", explicit: true},
 		{name: "add_task_selector", project: "[signal act add]", task: "[task show]", act: "add", explicit: true},
 		{name: "task_act_specific", project: "[]", task: "[signal act note]", act: "note"},
 		{name: "task_dismiss_alias", project: "[]", task: "[signal act dismiss]", act: "dismiss"},
@@ -225,7 +226,11 @@ func TestProjectPersonSignalTaskUnion(t *testing.T) {
 			}
 			if tc.explicit {
 				cwd = h.root
-				args = append(args, "--project", "example", "--task", fixture.ID)
+				taskID := fixture.ID
+				if tc.name == "missing_task_selector" {
+					taskID = "T-999"
+				}
+				args = append(args, "--project", "example", "--task", taskID)
 			}
 			before := fileBytes(t, h.gridHome)
 			if code := h.run(cwd, args...); code != 3 {
@@ -248,5 +253,26 @@ func TestProjectPersonBadTaskWarning(t *testing.T) {
 		if code := h.run(fixture.Path, "task", "show", fixture.ID); code != 0 || h.errb.String() != invalidPersonWarning {
 			t.Errorf("exit %d; want successful read with exact invalid policy warning", code)
 		}
+	}
+}
+
+func TestProjectPersonTaskCannotRelaxRoles(t *testing.T) {
+	h, _, _ := actFixture(t, "new")
+	fixture := taskFixtureProject(t, h, "example")
+	h.env.Getenv = func(string) string { return "" }
+	h.write(filepath.Join(h.gridHome, "projects", "example", "workflows.md"), "---\nperson_verbs: {signal act: [owner]}\n---\n")
+	h.write(filepath.Join(fixture.Path, "workflow.md"), "---\nperson_verbs: [signal act note]\n---\n")
+	h.env.Cwd = fixture.Path
+	if code := gateCommand([]string{"signal", "act", actID, "--act", "note"}, &h.env); code != 3 {
+		t.Fatalf("gate exit %d; task relaxed project roles", code)
+	}
+	h.env.Getenv = func(key string) string {
+		if key == "GRID_ROLE" {
+			return "owner"
+		}
+		return ""
+	}
+	if code := gateCommand([]string{"signal", "act", actID, "--act", "note"}, &h.env); code != 0 {
+		t.Fatalf("gate exit %d; owner should satisfy both policies", code)
 	}
 }

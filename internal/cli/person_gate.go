@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -76,7 +75,7 @@ func gateCommand(args []string, env *Env) int {
 		return 0
 	}
 	var extra []string
-	var roles []string
+	var rolePolicies [][]string
 	taskID := ""
 	// Task-local workflows may extend the floor. Resolve through the existing
 	// caller-aware source, including --task and an explicit task operand.
@@ -99,40 +98,59 @@ func gateCommand(args []string, env *Env) int {
 	// Selectors use the same last-value semantics as command flags.
 	query.Project = personFlag(args, "project", "")
 	r := projectStore(*env).Resolver
-	if res, err := r.Resolve(query); err == nil {
-		var policy map[string][]string
-		var policyErr error
+	res, err := r.Resolve(query)
+	if err != nil && args[0] == "signal" && query.Task != "" {
+		// A missing task cannot bypass the signal project's policy. The
+		// signal handler retains its own validation of the task operand.
+		query.Task = ""
+		res, err = r.Resolve(query)
+	}
+	if err == nil {
 		matchArgs := args
+		if verb == "signal act" {
+			matchArgs = []string{"signal", "act", personFlag(args, "act", "note")}
+		} else if verb == "signal dismiss" {
+			matchArgs = []string{"signal", "act", "dismiss"}
+		}
+		warned := false
+		match := ""
+		apply := func(policy map[string][]string, policyErr error) {
+			if policyErr != nil {
+				// A broken extension cannot remove the floor or another scope's policy.
+				if !warned {
+					fmt.Fprintln(env.Stderr, "grid: warning: invalid person_verbs; ignoring the key and keeping the person-only floor")
+					warned = true
+				}
+				return
+			}
+			localMatch := ""
+			for v := range policy {
+				extra = append(extra, v)
+				words := strings.Fields(v)
+				if len(words) > 0 && len(matchArgs) >= len(words) && slices.Equal(matchArgs[:len(words)], words) && len(v) > len(localMatch) {
+					localMatch = v
+				}
+			}
+			if localMatch != "" {
+				if policy[localMatch] != nil {
+					rolePolicies = append(rolePolicies, policy[localMatch])
+				}
+				if len(localMatch) > len(match) {
+					match = localMatch
+				}
+			}
+		}
+		// Signal policy follows project -> workspace -> defaults even when a
+		// task is selected; the task can add requirements, never replace them.
+		if res.Project != "" && (args[0] == "signal" || res.TaskPath == "") {
+			apply(workflow.ProjectPersonVerbs(r.GridHome, res.Project))
+		}
 		if res.TaskPath != "" {
 			taskID = res.Task
-			policy, policyErr = workflow.PersonVerbs(res.TaskPath)
-		} else if res.Project != "" {
-			policy, policyErr = workflow.ProjectPersonVerbs(r.GridHome, res.Project)
-			if verb == "signal act" {
-				matchArgs = []string{"signal", "act", personFlag(args, "act", "note")}
-			} else if verb == "signal dismiss" {
-				matchArgs = []string{"signal", "act", "dismiss"}
-			}
-		}
-		if policyErr != nil {
-			// L129: warn and retain the floor; policy failures must not break hooks
-			// or turn every command into an exit-1 failure.
-			if errors.Is(policyErr, workflow.ErrPersonVerbs) {
-				fmt.Fprintln(env.Stderr, "grid: warning: invalid person_verbs; ignoring the key and keeping the person-only floor")
-			}
-			policy = nil
-		}
-		match := ""
-		for v := range policy {
-			extra = append(extra, v)
-			words := strings.Fields(v)
-			if len(words) > 0 && len(matchArgs) >= len(words) && slices.Equal(matchArgs[:len(words)], words) && len(v) > len(match) {
-				match = v
-			}
+			apply(workflow.PersonVerbs(res.TaskPath))
 		}
 		if match != "" {
 			verb = match
-			roles = policy[match]
 		}
 	}
 
@@ -148,7 +166,7 @@ func gateCommand(args []string, env *Env) int {
 	if !d.Allow {
 		return personRefusal(*env, personDisplayVerb(verb), d.Reason, jsonRequested(args))
 	}
-	if roles != nil {
+	for _, roles := range rolePolicies {
 		role := strings.ToLower(strings.TrimSpace(env.getenv("GRID_ROLE")))
 		if role == "" {
 			role = "member"
@@ -188,7 +206,7 @@ func personFlag(args []string, key, fallback string) string {
 				i++
 				value = args[i]
 			}
-		} else if !equal && slices.Contains([]string{"project", "act", "task", "until", "source", "source-id", "title", "body"}, name) {
+		} else if !equal && slices.Contains([]string{"project", "act", "task", "until", "source", "source-id", "title", "body", "to"}, name) {
 			i++
 		}
 	}

@@ -668,12 +668,15 @@ plan gate, as in Rust; an `approve` step before the first `run` or `work` also
 requires plan approval, regardless of its name (for example, `sign-off`). A later
 approval without `plan` in its name remains a delivery gate.
 
-The task's `workflow.md` snapshot is also protected by the host guard against
-Write/Edit tools and literal Bash writes, even with the plan guard disabled:
-it carries `person_verbs` and gate posting roles. Reads remain allowed. The
-generated Claude permission rules already protect every file in task folders.
-`person_verbs` is read only from this task snapshot, not project `workflows.md`.
-Invalid `person_verbs` is ignored with one warning that omits paths and values;
+The task's `workflow.md` snapshot and workspace/project `workflows.md` files
+are protected by the host guard against Write, Edit, MultiEdit and literal
+Bash writes, including symlink aliases for workspace/project policy, even with
+the plan guard disabled. Reads remain allowed. The generated Claude permission
+rules already protect every file in task folders. Task snapshots supply
+additional `person_verbs` and gate posting roles; signal verbs also apply the
+project/workspace person policy described below.
+Invalid person policy is ignored with one warning that omits paths and values:
+`grid: warning: invalid person_verbs; ignoring the key and keeping the person-only floor`;
 the person-only floor still applies. Hook commands bypass this policy so their
 handlers can return normal decisions, except the floor verb `hook level`.
 
@@ -781,7 +784,11 @@ A list holds verb names; a map such as `{signal act turn: [owner]}` additionally
 restricts person roles, using the same role names as task policy. `signal act`
 covers every act, omitted `--act` means `note`, and `signal dismiss` maps to
 `signal act dismiss`. Both `--act turn` and `--act=turn` are recognized.
-Task-scoped calls continue to use only task-local `workflow.md` policy.
+Signal verbs always apply the project policy (falling back to workspace policy,
+then defaults), including from a task folder or with `--task`. Any task-local
+`workflow.md` policy adds person verbs to that policy; it cannot remove project
+requirements. Both policies' matching role restrictions must be satisfied.
+Other task-scoped commands continue to use task-local policy.
 
 Policy cannot remove the person-gate floor. Invalid project policy or unreadable
 project/workspace files emit a path-free warning and retain the floor, rather
