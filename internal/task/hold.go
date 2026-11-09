@@ -215,6 +215,12 @@ func PlanHeldWith(lookup StepLookup, dir, text, history string) bool {
 	return HeldStage(PlanStageWith(lookup, text, history))
 }
 
+// PlanHeld is PlanHeldWith on the inline list alone, for the hook helpers and
+// callers with no Grid home; the guard and Deliver ask PlanHeldWith with StepsFor.
+func PlanHeld(dir, text, history string) bool {
+	return PlanHeldWith(InlineSteps, dir, text, history)
+}
+
 // approvalRequired is taskfile.PlanApprovalRequired on resolved steps: steps
 // that cannot be resolved, a plan gate, or a kind other than run, work or
 // approve need a person's approval.
