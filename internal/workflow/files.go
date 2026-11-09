@@ -299,8 +299,10 @@ func readFile(home, relative string) (string, *string, error) {
 		return "", nil, err
 	}
 	defer f.Close()
-	// A linked workflows.md is unreadable: TaskSteps fails, so no preview can be
-	// raised, and every verb whose person gate read it refuses.
+	// A linked workflows.md is unreadable: TaskWorkflow fails with ErrLinkedFile,
+	// so the guard and Deliver hold the scope's named-workflow tasks, no preview
+	// can be raised, task creation refuses, and every verb whose person gate read
+	// it refuses.
 	if err := refuseLinked(f, relative); err != nil {
 		return "", nil, err
 	}
