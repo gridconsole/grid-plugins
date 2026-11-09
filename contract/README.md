@@ -772,7 +772,23 @@ local and agent roles, guests refused), `inbox_acts` (the seven acts), and
 `inbox_turn_body` (`link`; a future `copy` policy may replace it). This CLI does
 not read workflow configuration for these keys yet.
 
-`signal act` is not in the person-gate floor because its default roles (brief
-Goal 8) admit agent and local roles, like `task new`; a task's workflow can add it
-through `person_verbs` once L105 lands, which gates only calls that resolve to
-that task.
+Project-level `person_verbs` defaults to `[signal act turn, signal act dismiss,
+signal act snooze]`: default, owner may change. Set it in leading YAML front
+matter in `projects/<name>/workflows.md`, or in workspace `workflows.md` for
+inheritance. A project's set value wholly replaces the workspace value, and a
+set value replaces the default; `[]` requires no additional person verbs.
+A list holds verb names; a map such as `{signal act turn: [owner]}` additionally
+restricts person roles, using the same role names as task policy. `signal act`
+covers every act, omitted `--act` means `note`, and `signal dismiss` maps to
+`signal act dismiss`. Both `--act turn` and `--act=turn` are recognized.
+Task-scoped calls continue to use only task-local `workflow.md` policy.
+
+Policy cannot remove the person-gate floor. Invalid project policy or unreadable
+project/workspace files emit a path-free warning and retain the floor, rather
+than making every command exit 1. Hook event execution bypasses the gate;
+`hook level` remains a person-only settings mutation. The gate runs before
+signal dispatch: a person refusal exits 3 and `--json` emits exactly one
+`person_required` object; callers passing the gate still face signal role,
+guest, input, and state checks. Project policy files retain the workflow reader's
+32 KiB limit and symlink refusal. Task person and plan-token policy reads use
+the bounded 1 MiB reader and refuse symlinked `workflow.md` files.
