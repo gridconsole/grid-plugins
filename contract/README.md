@@ -4,6 +4,49 @@ Shared file formats use the `fmt-` schema prefix; see [formats.md](formats.md).
 
 The Feed contract: schemas, fixtures and the conformance suite.
 
+## CLI JSON failures
+
+With `--json`, classified failures are written to **stdout**; the existing human
+diagnostic remains byte-for-byte identical on stderr. Exit statuses are unchanged.
+Failures that previously had no JSON output use this envelope (the message is
+stderr without its final newline, including any command prefix):
+
+```json
+{"error":{"code":"no_such_task","message":"grid task show: task T-99 not found in the Grid home"}}
+```
+
+Existing failure objects gain a top-level `code` without replacing their fields.
+In particular, signal act/dismiss/move retain their string `error` category and
+their existing unprefixed, sometimes redacted `message`:
+
+```json
+{"error":"refused","message":"no such project","code":"no_such_project"}
+```
+
+Person-gate refusals and `person check` retain `error: "person_required"`, `reason`,
+`hint`, and any decision fields. They gain `code: "person_required"` and a
+`message` matching stderr without its final newline. The reason remains the
+specific gate refusal reason; it is not replaced by the general code.
+
+| Stable code | Meaning |
+| --- | --- |
+| `no_such_project` | A requested project is missing or inaccessible. |
+| `no_such_task` | A requested task is missing or inaccessible. |
+| `no_such_note` | A signal/inbox note does not exist. |
+| `person_required` | The existing person gate refused the request. |
+| `invalid_argument` | Invalid arguments or a usage/validation failure. |
+
+The constants live in `internal/cli/error_codes.go`. Read `code` on existing
+failure objects, or `error.code` on new envelopes; never classify by message
+wording. Lookup identities travel through the existing resolver and stores.
+Unclassified failures retain their previous output and may have no code; state
+conflicts are not mislabeled as missing records. Plain output, successful JSON,
+and existing streaming output are unchanged. A code does not imply a new exit
+status: for example, a missing project during signal move still exits 3, while
+a missing task during task show still exits 1.
+
+## Command inventory
+
 [commands.json](commands.json) publishes the command table, summaries, build status,
 positional arguments, parsed flags and JSON support under the version returned
 by `grid version --json`. An empty subcommand name means the command itself;
