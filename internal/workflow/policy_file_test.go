@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +41,11 @@ func TestTaskPolicyFileLimits(t *testing.T) {
 				}
 			} else if usageErr == nil || gateErr == nil || thresholds != nil || roles != nil {
 				t.Fatalf("unsafe policy accepted: thresholds=%v err=%v roles=%v err=%v", thresholds, usageErr, roles, gateErr)
+			} else {
+				var pathErr *os.PathError
+				if !errors.As(gateErr, &pathErr) {
+					t.Fatalf("gate refusal lost filesystem error classification: %T", gateErr)
+				}
 			}
 		})
 	}

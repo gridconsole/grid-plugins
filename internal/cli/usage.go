@@ -25,6 +25,7 @@ Flags alone fold the token totals observed by the session hooks; they are not Jo
 Posts are deltas; at least one amount is required. Thresholds are percentages (0-100).
 Units are dollars, minutes and tokens; token amounts are non-negative integers.
 Default thresholds: tokens 80%, 100%; dollars and minutes 50%, 80%, 100%.
+Per unit: a threshold set on the task wins, then the workflow's usage thresholds, then the default.
 A task token budget overrides the workspace
 default tokens_per_task in <GRID_HOME>/workspace.md front matter (positive digits).
 Without a budget no notice fires. The hold at the limit is not enforced yet;

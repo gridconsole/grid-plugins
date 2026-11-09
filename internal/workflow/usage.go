@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -16,7 +15,7 @@ import (
 // Missing files or keys return nil. Invalid units are omitted from the returned
 // map, with errors joined so callers can retain valid units and report once.
 func UsageNoticeThresholds(taskDir string) (map[string][]float64, error) {
-	raw, err := os.ReadFile(filepath.Join(taskDir, "workflow.md"))
+	raw, err := readTaskPolicy(taskDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -24,7 +23,7 @@ func GatePostRoles(taskDir string) (map[string][]string, error) {
 		"job":      {"cli", "owner", "member", "lead", "agent", "worker"},
 		"withdraw": DefaultQuestionWithdrawRoles(),
 	}
-	raw, err := os.ReadFile(filepath.Join(taskDir, "workflow.md"))
+	raw, err := readTaskPolicy(taskDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return roles, nil
 	}
