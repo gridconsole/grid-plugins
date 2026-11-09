@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/signal"
@@ -49,14 +48,14 @@ func runSignal(args []string, env Env) int {
 			return 0
 		}
 		if verb != "add" {
-			signalErrorJSON(env, signalJSONRequested(fs, args[1:]), "invalid", "invalid signal arguments")
+			signalErrorJSON(env, errorJSONRequested(fs, args[1:]), "invalid", "invalid signal arguments", CodeInvalidArgument)
 		}
 		return 2
 	}
 	if (verb == "add" && fs.NArg() != 0) || (verb != "add" && fs.NArg() != 1) {
 		fmt.Fprintf(env.Stderr, "grid signal %s: wrong number of arguments\n", verb)
 		if verb != "add" {
-			signalErrorJSON(env, *asJSON, "invalid", "wrong number of arguments")
+			signalErrorJSON(env, *asJSON, "invalid", "wrong number of arguments", CodeInvalidArgument)
 		}
 		return 2
 	}
@@ -92,7 +91,7 @@ func runSignal(args []string, env Env) int {
 				return 1
 			}
 		}
-		if code := gateCommand(append([]string{"signal"}, args...), &env); code != 0 {
+		if code := withPersonErrorCode(&env, func(e *Env) int { return gateCommand(append([]string{"signal"}, args...), e) }); code != 0 {
 			return code
 		}
 	}
@@ -137,7 +136,7 @@ func runSignal(args []string, env Env) int {
 	res, err := ps.Resolver.Resolve(where.Query{Cwd: env.Cwd, Project: *proj})
 	if err != nil {
 		if verb == "move" && (errors.Is(err, where.ErrProjectUnregistered) || errors.Is(err, where.ErrPersonalRefused)) {
-			return signalFailure(env, &signal.RefusedError{Message: "no such project"}, *asJSON)
+			return signalFailure(env, &signal.RefusedError{Message: "no such project", Cause: where.ErrProjectUnregistered}, *asJSON)
 		}
 		return failure(env, err)
 	}
@@ -155,7 +154,7 @@ func runSignal(args []string, env Env) int {
 
 	if !res.Record {
 		if verb == "move" {
-			return signalFailure(env, &signal.RefusedError{Message: "no such project"}, *asJSON)
+			return signalFailure(env, &signal.RefusedError{Message: "no such project", Cause: where.ErrProjectUnregistered}, *asJSON)
 		}
 		if res.Rule != where.RulePersonal {
 			return failure(env, fmt.Errorf("project is not registered; run grid project add"))
@@ -201,53 +200,22 @@ func signalFailure(env Env, err error, asJSON bool) int {
 		if strings.HasPrefix(message, "unknown signal act ") && strings.ContainsAny(message, `/\`) {
 			message = "unknown signal act"
 		}
-		signalErrorJSON(env, asJSON, "invalid", message)
+		signalErrorJSON(env, asJSON, "invalid", message, CodeInvalidArgument)
 		return 2
 	case errors.As(err, &refused):
-		signalErrorJSON(env, asJSON, "refused", refused.Message)
+		signalErrorJSON(env, asJSON, "refused", refused.Message, errorCode(err))
 		return 3
 	default:
 		return code
 	}
 }
 
-func signalErrorJSON(env Env, asJSON bool, kind, message string) {
+func signalErrorJSON(env Env, asJSON bool, kind, message, code string) {
 	if asJSON {
 		writeJSON(env.Stdout, struct {
 			Error   string `json:"error"`
 			Message string `json:"message"`
-		}{kind, message})
+			Code    string `json:"code,omitempty"`
+		}{kind, message, code})
 	}
-}
-
-// Parsing can stop before --json; inspect flags without treating option values
-// or arguments after -- as flags, and retain the last valid JSON setting.
-func signalJSONRequested(fs *flag.FlagSet, args []string) bool {
-	asJSON := false
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--" {
-			break
-		}
-		if !strings.HasPrefix(arg, "-") {
-			continue
-		}
-		name, value, equal := strings.Cut(strings.TrimLeft(arg, "-"), "=")
-		f := fs.Lookup(name)
-		if f == nil {
-			continue
-		}
-		if name == "json" {
-			if !equal {
-				value = "true"
-			}
-			if enabled, err := strconv.ParseBool(value); err == nil {
-				asJSON = enabled
-			}
-		}
-		if b, ok := f.Value.(interface{ IsBoolFlag() bool }); (!ok || !b.IsBoolFlag()) && !equal {
-			i++
-		}
-	}
-	return asJSON
 }

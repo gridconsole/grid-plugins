@@ -92,6 +92,7 @@ func runTask(args []string, env Env) int {
 	}
 	store := task.Store{Resolver: resolver(env)}
 	fail := func(err error) int {
+		env.recordError(err)
 		fmt.Fprintf(env.Stderr, "grid task %s: %v\n", sub, err)
 		return 1
 	}

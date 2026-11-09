@@ -45,9 +45,14 @@ func TestPersonalGuardRefusesHostCallers(t *testing.T) {
 				if code := h.run(cwd, args...); code != 1 {
 					t.Errorf("exit = %d, want 1", code)
 				}
-				if got := h.out.String(); got != "" {
-					t.Errorf("stdout = %q, want no output or paths", got)
+				errorCode := ""
+				switch route {
+				case "personal", "PERSONAL":
+					errorCode = CodeNoSuchProject
+				case "task-path":
+					errorCode = CodeNoSuchTask
 				}
+				assertErrorOutput(t, h.out.String(), h.errb.String(), errorCode)
 				want := "grid: this caller cannot use the Personal project\n"
 				switch route {
 				case "personal", "PERSONAL":
@@ -109,9 +114,10 @@ func TestPersonalGuardPreservesExplicitProjectMatching(t *testing.T) {
 				}
 			}
 			for _, name := range []string{"ALPHA", "01alpha", "unregistered"} {
-				if code := h.run(h.home, "where", "--project", name, "--json"); code != 1 || h.out.Len() != 0 {
+				if code := h.run(h.home, "where", "--project", name, "--json"); code != 1 {
 					t.Errorf("project %s: exit %d, stdout %q; want failure without result", name, code, h.out)
 				}
+				assertErrorOutput(t, h.out.String(), h.errb.String(), CodeNoSuchProject)
 			}
 		})
 	}
@@ -137,7 +143,12 @@ func TestPersonalGuardRefusesMissingMember(t *testing.T) {
 				if code := h.run(h.home, args...); code != 1 {
 					t.Fatalf("exit=%d, want 1 for caller without identity", code)
 				}
-				if h.out.Len() != 0 || h.errb.String() != want {
+				errorCode := ""
+				if explicit {
+					errorCode = CodeNoSuchProject
+				}
+				assertErrorOutput(t, h.out.String(), h.errb.String(), errorCode)
+				if h.errb.String() != want {
 					t.Fatalf("expected Personal refusal without a result")
 				}
 			})

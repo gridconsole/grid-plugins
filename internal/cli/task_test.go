@@ -258,9 +258,14 @@ func TestTaskUsageAndFailures(t *testing.T) {
 	} {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
 			h := newHarness(t)
-			if code := h.run(h.home, tc.args...); code != tc.code || h.out.Len() != 0 || h.errb.Len() == 0 {
+			if code := h.run(h.home, tc.args...); code != tc.code || h.errb.Len() == 0 {
 				t.Fatalf("exit %d; stdout %q; stderr %q", code, h.out, h.errb)
 			}
+			errorCode := ""
+			if jsonRequested(tc.args) {
+				errorCode = CodeNoSuchTask
+			}
+			assertErrorOutput(t, h.out.String(), h.errb.String(), errorCode)
 		})
 	}
 }

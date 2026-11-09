@@ -23,16 +23,19 @@ const actUntil = "2030-04-05T06:07"
 
 func assertSignalErrorJSON(t *testing.T, output, kind, message string) {
 	t.Helper()
-	want, err := json.Marshal(struct {
-		Error   string `json:"error"`
-		Message string `json:"message"`
-	}{kind, message})
-	if err != nil {
+	var got map[string]string
+	if err := json.Unmarshal([]byte(output), &got); err != nil {
 		t.Fatal(err)
 	}
-	if output != string(want)+"\n" {
-		t.Fatalf("stdout %q, want %s", output, want)
+	code := got["code"]
+	delete(got, "code")
+	if len(got) != 2 || got["error"] != kind || got["message"] != message {
+		t.Fatalf("stdout %q, want error %q and message %q", output, kind, message)
 	}
+	if kind == "invalid" && code != CodeInvalidArgument {
+		t.Fatalf("invalid argument code = %q", code)
+	}
+
 }
 
 func TestSignalActErrorOutput(t *testing.T) {

@@ -65,7 +65,7 @@ func resolveTaskOperand(env Env, operand string) (task.Task, error) {
 			path = candidate
 		}
 		if path == "" {
-			return task.Task{}, errors.New("task not found")
+			return task.Task{}, where.ErrTaskNotFound
 		}
 	case !strings.ContainsAny(operand, `/\`) && !strings.HasPrefix(operand, "."):
 		return taskWriter(env).Show(env.Cwd, operand)
@@ -102,12 +102,15 @@ func resolveTaskOperand(env Env, operand string) (task.Task, error) {
 		// refusal as hidden IDs; do not inspect their contents.
 		personal := gridhome.TasksDir(r.GridHome, where.Personal)
 		if !r.PersonalOK() && (filepath.Dir(path) == personal || filepath.Dir(path) == gridhome.Real(personal)) {
-			return task.Task{}, errors.New("task not found")
+			return task.Task{}, where.ErrTaskNotFound
 		}
 		return task.Task{}, fmt.Errorf("%w: folder must be directly inside an accessible project's tasks directory", errTaskOperand)
 	}
 	real, err := filepath.EvalSymlinks(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return task.Task{}, &where.LookupError{Kind: where.ErrTaskNotFound, Message: err.Error()}
+		}
 		return task.Task{}, err
 	}
 	if filepath.Dir(real) != expectedRoot || !taskOperandName.MatchString(filepath.Base(real)) {
@@ -131,6 +134,7 @@ func resolveTaskOperand(env Env, operand string) (task.Task, error) {
 }
 
 func taskOperandError(env Env, command string, err error) int {
+	env.recordError(err)
 	fmt.Fprintf(env.Stderr, "%s: %v\n", command, err)
 	if errors.Is(err, errTaskOperand) {
 		return 2

@@ -44,7 +44,11 @@ func parsePositionals(fs *flag.FlagSet, args []string) error {
 	}
 	return fs.Parse(append(append(flags, "--"), positional...))
 }
-func failure(env Env, err error) int { fmt.Fprintf(env.Stderr, "grid: %v\n", err); return 1 }
+func failure(env Env, err error) int {
+	env.recordError(err)
+	fmt.Fprintf(env.Stderr, "grid: %v\n", err)
+	return 1
+}
 func pathFrom(env Env, path string) string {
 	if path == "" {
 		return env.Cwd

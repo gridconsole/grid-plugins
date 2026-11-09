@@ -236,7 +236,8 @@ func TestTaskOperandEscapes(t *testing.T) {
 				if err != nil || string(after) != string(before) {
 					t.Fatal("rejected operand changed task.md")
 				}
-				if h.out.Len() != 0 || strings.TrimSpace(h.errb.String()) == "" {
+				assertErrorOutput(t, h.out.String(), h.errb.String(), CodeInvalidArgument)
+				if strings.TrimSpace(h.errb.String()) == "" {
 					t.Fatal("expected only a refusal diagnostic")
 				}
 			})

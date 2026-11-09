@@ -111,8 +111,9 @@ func TestTaskRenameDecline(t *testing.T) {
 						want = "invalid task edit: a decline needs a reason without control, bidi override/isolate, or noncharacter code points\n"
 					}
 					want = "grid task " + tc.verb + ": " + want
-					if h.errb.String() != want || h.out.Len() != 0 {
-						t.Fatalf("refusal stdout = %q, stderr = %q; want empty stdout and %q", h.out.String(), h.errb.String(), want)
+					assertErrorOutput(t, h.out.String(), h.errb.String(), CodeInvalidArgument)
+					if h.errb.String() != want {
+						t.Fatalf("refusal stdout = %q, stderr = %q; want error JSON and %q", h.out.String(), h.errb.String(), want)
 					}
 				}
 				if !strings.Contains(h.errb.String(), tc.diagnostic) || strings.Count(h.errb.String(), "\n") != 1 {

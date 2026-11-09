@@ -97,7 +97,12 @@ func TestSetupClaudeInvalidCLI(t *testing.T) {
 			t.Fatalf("%d %s", code, h.errb)
 		}
 		want := "Settings file " + file + " is not valid JSON; fix it or remove it. Nothing written.\n"
-		if h.errb.String() != want || h.out.Len() != 0 {
+		errorCode := ""
+		if jsonRequested(args) {
+			errorCode = CodeInvalidArgument
+		}
+		assertErrorOutput(t, h.out.String(), h.errb.String(), errorCode)
+		if h.errb.String() != want {
 			t.Fatalf("stdout=%s stderr=%s", h.out, h.errb)
 		}
 		b, err := os.ReadFile(file)

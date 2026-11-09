@@ -101,6 +101,7 @@ func runTaskWrite(args []string, env Env) int {
 			event, err = store.Decline(task.DeclineOptions{WriteOptions: o, Reason: reason, Project: project, Role: role})
 		}
 		if err != nil {
+			env.recordError(err)
 			fmt.Fprintf(env.Stderr, "grid task %s: %v\n", sub, err)
 			switch {
 			case errors.Is(err, task.ErrEditUsage):
@@ -272,6 +273,7 @@ func runTaskTrash(args []string, env Env) int {
 		result, err = taskWriter(env).Restore(o)
 	}
 	if err != nil {
+		env.recordError(err)
 		fmt.Fprintf(env.Stderr, "grid task %s: %v\n", sub, err)
 		switch {
 		case errors.Is(err, task.ErrEditUsage):

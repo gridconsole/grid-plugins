@@ -87,9 +87,15 @@ func TestAgentCheckDispatch(t *testing.T) {
 	for _, args := range [][]string{{"agent", "check", "--bad"}, {"agent", "check", "extra"}, {"agent", "check", "--json=true", "extra"}} {
 		out.Reset()
 		errs.Reset()
-		if code := Run(args, env); code != 2 || out.Len() != 0 || errs.Len() == 0 {
+		if code := Run(args, env); code != 2 || errs.Len() == 0 {
 			t.Fatalf("%v: %d out=%s err=%s", args, code, &out, &errs)
 		}
+
+		code := ""
+		if jsonRequested(args) {
+			code = CodeInvalidArgument
+		}
+		assertErrorOutput(t, out.String(), errs.String(), code)
 	}
 	out.Reset()
 	errs.Reset()

@@ -127,7 +127,12 @@ func TestRemainingTaskOperands(t *testing.T) {
 					}
 					// All commands use the same refusal body and exit code as L85 task show.
 					got := h.errb.String()
-					if h.out.Len() != 0 || !strings.HasSuffix(got, ": "+wantMessage+"\n") {
+					errorCode := CodeNoSuchTask
+					if wantCode == 2 {
+						errorCode = CodeInvalidArgument
+					}
+					assertErrorOutput(t, h.out.String(), h.errb.String(), errorCode)
+					if !strings.HasSuffix(got, ": "+wantMessage+"\n") {
 						t.Errorf("expected refusal %q, got %s", wantMessage, h.norm(got))
 					}
 					baselineCode := h.run(h.home, "task", "show", operand)

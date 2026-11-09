@@ -2,11 +2,15 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"path/filepath"
-
-	"github.com/gridconsole/grid-plugins/internal/project"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/signal"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 func TestStableErrorCodes(t *testing.T) {
@@ -71,9 +75,81 @@ func TestStableErrorCodes(t *testing.T) {
 			if code != tc.code {
 				t.Fatalf("code = %q, want %q: %s", code, tc.code, h.out)
 			}
+			if tc.person {
+				_ = json.Unmarshal(got["message"], &message)
+				if message != strings.TrimSuffix(stderr, "\n") {
+					t.Fatalf("person message = %q, stderr = %q", message, stderr)
+				}
+			}
 			if tc.person && (string(got["reason"]) != `"agent_ancestor"` || string(got["error"]) != `"person_required"`) {
 				t.Fatalf("person refusal fields changed: %s", h.out)
 			}
+		})
+	}
+}
+
+// assertErrorOutput checks new envelopes; an empty code retains empty stdout.
+func assertErrorOutput(t *testing.T, output, stderr, code string) {
+	t.Helper()
+	if code == "" {
+		if output != "" {
+			t.Fatalf("unexpected stdout: %s", output)
+		}
+		return
+	}
+	var got map[string]map[string]string
+	if err := json.Unmarshal([]byte(output), &got); err != nil {
+		t.Fatalf("error JSON: %v: %s", err, output)
+	}
+	if len(got) != 1 || len(got["error"]) != 2 || got["error"]["code"] != code || got["error"]["message"] != strings.TrimSuffix(stderr, "\n") {
+		t.Fatalf("error JSON = %s, want code %q and stderr message %q", output, code, stderr)
+	}
+}
+
+func TestErrorCodeIgnoresWording(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		code string
+	}{
+		{&where.LookupError{Kind: where.ErrProjectUnregistered, Message: "changed project wording"}, CodeNoSuchProject},
+		{&where.LookupError{Kind: where.ErrTaskNotFound, Message: "changed task wording"}, CodeNoSuchTask},
+		{&signal.RefusedError{Cause: signal.ErrNoNote, Message: "changed note wording"}, CodeNoSuchNote},
+		{&signal.BadInputError{Message: "changed argument wording"}, CodeInvalidArgument},
+		{errors.New("no such project"), ""},
+		{errors.New("no such note"), ""},
+	} {
+		if got := errorCode(fmt.Errorf("context: %w", tc.err)); got != tc.code {
+			t.Fatalf("code = %q, want %q", got, tc.code)
+		}
+	}
+}
+
+func TestErrorJSONFlagSemantics(t *testing.T) {
+	for _, args := range [][]string{
+		{"task", "show", "T-99", "--json=false"},
+		{"task", "show", "T-99", "--json", "--json=false"},
+		{"task", "show", "--", "--json"},
+		{"task", "new", "Example", "--workflow", "--json", "--size", "huge"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			h := newHarness(t)
+			if code := h.run(h.home, args...); code == 0 || h.errb.Len() == 0 {
+				t.Fatalf("expected failure: %d %s", code, h.errb)
+			}
+			assertErrorOutput(t, h.out.String(), h.errb.String(), "")
+		})
+	}
+	for _, args := range [][]string{
+		{"task", "show", "T-99", "-json"},
+		{"task", "show", "T-99", "--json=true"},
+		{"task", "show", "T-99", "--json=false", "--json"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			h := newHarness(t)
+			if code := h.run(h.home, args...); code != 1 {
+				t.Fatalf("exit %d: %s", code, h.errb)
+			}
+			assertErrorOutput(t, h.out.String(), h.errb.String(), CodeNoSuchTask)
 		})
 	}
 }

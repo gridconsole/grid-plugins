@@ -32,6 +32,7 @@ type Env struct {
 	GitVersion       func() (string, error) // nil runs git --version
 	Procs            persongate.Procs       // nil snapshots the real process ancestry
 	PersonDir        func() (string, error) // nil resolves the account home
+	failure          *commandFailure
 	personVia        string
 	personSetupWrite bool
 	Getenv           func(string) string    // nil reads the process environment
@@ -146,7 +147,14 @@ var anyFormat = map[string]bool{"version": true, "doctor": true, "migrate": true
 
 // Run executes one grid call and returns the exit code: 0 done, 1 failed,
 // 2 usage, 3 rejected (stale lease or invalid record; do not retry), 4 disk full.
-func Run(args []string, env Env) int {
+func Run(args []string, env Env) (exit int) {
+	if jsonRequested(args) {
+		f := &commandFailure{stdout: outputCount{Writer: env.Stdout}}
+		env.failure = f
+		env.Stdout = &f.stdout
+		env.Stderr = io.MultiWriter(env.Stderr, &f.stderr)
+		defer func() { f.finish(args, exit) }()
+	}
 	if len(args) == 0 {
 		printHelp(env.Stdout)
 		return 0
@@ -177,7 +185,7 @@ func Run(args []string, env Env) int {
 		// front matter, so a failed inbox policy has one exact diagnostic.
 		// Its handler still applies the same person gate before any move.
 		if name != "signal" || len(rest) == 0 || rest[0] != "move" {
-			if code := gateWorkflowPolicy(args, &env); code != 0 {
+			if code := withPersonErrorCode(&env, func(e *Env) int { return gateWorkflowPolicy(args, e) }); code != 0 {
 				return code
 			}
 		}
@@ -223,6 +231,9 @@ func printHelp(w io.Writer) {
 func newFlags(name string, env Env) *flag.FlagSet {
 	fs := flag.NewFlagSet("grid "+name, flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
+	if env.failure != nil {
+		env.failure.flags = fs
+	}
 	return fs
 }
 
@@ -269,6 +280,7 @@ func runWhere(args []string, env Env) int {
 	}
 	res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: *task, Project: *proj})
 	if err != nil {
+		env.recordError(err)
 		fmt.Fprintf(env.Stderr, "grid: %v\n", err)
 		return 1
 	}

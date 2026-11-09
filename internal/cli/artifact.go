@@ -57,6 +57,7 @@ func taskFor(env Env, task string) (where.Result, error) {
 }
 
 func commandError(env Env, name string, err error) int {
+	env.recordError(err)
 	fmt.Fprintf(env.Stderr, "%s: %v\n", name, err)
 	return 1
 }

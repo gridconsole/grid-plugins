@@ -62,8 +62,9 @@ func TestTaskNoncharactersWriteNothing(t *testing.T) {
 				if code != 2 {
 					t.Errorf("exit = %d, want 2", code)
 				}
-				if h.out.Len() != 0 || strings.Count(h.errb.String(), "\n") != 1 {
-					t.Error("expected empty stdout and one diagnostic line")
+				assertErrorOutput(t, h.out.String(), h.errb.String(), CodeInvalidArgument)
+				if strings.Count(h.errb.String(), "\n") != 1 {
+					t.Error("expected one diagnostic line")
 				}
 				if !reflect.DeepEqual(before, taskTestSnapshot(t, h.gridHome)) {
 					t.Error("invalid text changed files")

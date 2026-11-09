@@ -93,8 +93,12 @@ func TestPersonGoldenAndReadOnly(t *testing.T) {
 		if code := h.run(h.home, append([]string{"person"}, tc.args...)...); code != tc.code {
 			t.Fatalf("%v: exit %d, want %d: %s", tc.args, code, tc.code, h.errb)
 		}
-		if tc.code != 0 && h.out.Len() != 0 {
-			t.Fatalf("failed command wrote stdout: %s", h.out)
+		if tc.code != 0 {
+			code := ""
+			if tc.code == 2 && jsonRequested(tc.args) {
+				code = CodeInvalidArgument
+			}
+			assertErrorOutput(t, h.out.String(), h.errb.String(), code)
 		}
 	}
 	if after := personSnapshot(t, h.gridHome); !reflect.DeepEqual(before, after) {

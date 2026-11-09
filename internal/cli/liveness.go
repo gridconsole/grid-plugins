@@ -186,6 +186,7 @@ func livenessScope(env Env, project, task string) (where.Result, error) {
 	return resolver(env).Resolve(where.Query{Cwd: env.Cwd, Project: project, Task: task})
 }
 func livenessError(env Env, err error) int {
+	env.recordError(err)
 	fmt.Fprintf(env.Stderr, "grid: %v\n", err)
 	return 1
 }

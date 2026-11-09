@@ -92,6 +92,7 @@ func runFeed(args []string, env Env) int {
 		}{contract.PostTypes()})
 	}
 	fail := func(err error) int {
+		env.recordError(err)
 		fmt.Fprintf(env.Stderr, "grid feed: %v\n", err)
 		return exitCode(err)
 	}

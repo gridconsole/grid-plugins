@@ -85,9 +85,14 @@ func TestWorkflowWriteRefusals(t *testing.T) {
 			h.env.Getenv = func(string) string { return "" }
 			h.write(filepath.Join(h.gridHome, "workflows.md"), cliWorkflow)
 			h.env.Stdin = strings.NewReader(tc.text)
-			if code := h.run(h.root, workflowWriteArgs(tc.rev)...); code != tc.code || h.out.Len() != 0 || !strings.Contains(h.errb.String(), tc.message) || strings.Contains(h.errb.String(), h.root) {
+			if code := h.run(h.root, workflowWriteArgs(tc.rev)...); code != tc.code || !strings.Contains(h.errb.String(), tc.message) || strings.Contains(h.errb.String(), h.root) {
 				t.Fatalf("exit %d: out=%s err=%s", code, h.out, h.errb)
 			}
+			errorCode := ""
+			if tc.code == 2 {
+				errorCode = CodeInvalidArgument
+			}
+			assertErrorOutput(t, h.out.String(), h.errb.String(), errorCode)
 			data, err := os.ReadFile(filepath.Join(h.gridHome, "workflows.md"))
 			if err != nil || string(data) != cliWorkflow {
 				t.Fatalf("changed on refusal: %q, %v", data, err)
@@ -186,9 +191,10 @@ func TestWorkflowWriteInvalidTargets(t *testing.T) {
 				}
 			}
 			h.env.Stdin = strings.NewReader(text)
-			if code := h.run(h.root, args...); code != 2 || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "workflow path is unsafe or inaccessible") && !strings.Contains(h.errb.String(), "workflow target is not a regular file") || strings.Contains(h.errb.String(), h.root) {
+			if code := h.run(h.root, args...); code != 2 || !strings.Contains(h.errb.String(), "workflow path is unsafe or inaccessible") && !strings.Contains(h.errb.String(), "workflow target is not a regular file") || strings.Contains(h.errb.String(), h.root) {
 				t.Fatalf("invalid target: exit %d: %s", code, h.errb)
 			}
+			assertErrorOutput(t, h.out.String(), h.errb.String(), CodeInvalidArgument)
 			data, err := os.ReadFile(untouched)
 			if err != nil || string(data) != "unchanged" {
 				t.Fatalf("target changed: %q, %v", data, err)
