@@ -40,6 +40,14 @@ type Check struct {
 	Rubric  string   `json:"rubric,omitempty"`
 	Weight  float64  `json:"weight,omitempty"` // zero defaults to one
 	Gate    bool     `json:"gate,omitempty"`
+
+	// Trace checks (tool_used, tool_order) read the agent's tool calls.
+	Tool          string         `json:"tool,omitempty"`
+	InputContains map[string]any `json:"input_contains,omitempty"`
+	CountMin      int            `json:"count_min,omitempty"` // zero defaults to one
+	Absent        bool           `json:"absent,omitempty"`
+	Before        *ToolMatch     `json:"before,omitempty"`
+	After         *ToolMatch     `json:"after,omitempty"`
 }
 
 // LoadSuite reads immediate task directories in lexical order. Non-directories
@@ -136,6 +144,25 @@ func (t Task) Validate() error {
 			if strings.TrimSpace(c.Rubric) == "" {
 				return fmt.Errorf("check %s: judge needs a rubric", c.ID)
 			}
+		case "tool_used":
+			if err := (ToolMatch{Tool: c.Tool, InputContains: c.InputContains}).validate(); err != nil {
+				return fmt.Errorf("check %s: %w", c.ID, err)
+			}
+			if c.CountMin < 0 || (c.Absent && c.CountMin != 0) || c.Before != nil || c.After != nil || hasFileFields(c) {
+				return fmt.Errorf("check %s: tool_used takes tool, input_contains, a count_min of 1 or more, or absent", c.ID)
+			}
+		case "tool_order":
+			if c.Before == nil || c.After == nil {
+				return fmt.Errorf("check %s: tool_order needs before and after", c.ID)
+			}
+			for name, m := range map[string]*ToolMatch{"before": c.Before, "after": c.After} {
+				if err := m.validate(); err != nil {
+					return fmt.Errorf("check %s: %s: %w", c.ID, name, err)
+				}
+			}
+			if c.Tool != "" || c.InputContains != nil || c.CountMin != 0 || c.Absent || hasFileFields(c) {
+				return fmt.Errorf("check %s: tool_order takes only before and after", c.ID)
+			}
 		default:
 			return fmt.Errorf("check %s: unknown type %q", c.ID, c.Type)
 		}
@@ -162,4 +189,8 @@ func readJSON(path string, v any, strict bool) error {
 		return fmt.Errorf("%s: expected exactly one JSON value", filepath.Base(path))
 	}
 	return nil
+}
+
+func hasFileFields(c Check) bool {
+	return c.Path != "" || c.Text != "" || len(c.Command) > 0 || c.Rubric != ""
 }

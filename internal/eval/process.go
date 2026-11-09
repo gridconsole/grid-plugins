@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"time"
@@ -40,6 +41,12 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 
 // RunProcess executes a bounded command with process-group cancellation on macOS and Linux.
 func RunProcess(ctx context.Context, argv []string, dir string, env []string, stdin string) ProcessResult {
+	return runProcess(ctx, argv, dir, env, stdin, nil)
+}
+
+// runProcess also copies the full stdout to tee when it is set; the stored
+// ProcessResult.Stdout keeps its outputLimit cap either way.
+func runProcess(ctx context.Context, argv []string, dir string, env []string, stdin string, tee io.Writer) ProcessResult {
 	started := time.Now()
 	result := ProcessResult{Status: "error", ExitCode: -1}
 	if err := ctx.Err(); err != nil {
@@ -52,6 +59,9 @@ func RunProcess(ctx context.Context, argv []string, dir string, env []string, st
 	configureProcess(cmd)
 	var stdout, stderr boundedBuffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if tee != nil {
+		cmd.Stdout = io.MultiWriter(&stdout, tee)
+	}
 	err := cmd.Run()
 	cleanupProcess(cmd)
 	result.DurationMS = time.Since(started).Milliseconds()

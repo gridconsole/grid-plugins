@@ -39,7 +39,7 @@ type CheckResult struct {
 	Process  *ProcessResult `json:"process,omitempty"`
 }
 
-func evaluate(ctx context.Context, task Task, c Check, dir string, env []string, judge Judge) CheckResult {
+func evaluate(ctx context.Context, task Task, c Check, dir string, env []string, judge Judge, trace traceInput) CheckResult {
 	r := CheckResult{Check: c, Scorer: "code", Status: "error"}
 	if c.Type == "llm_judge" {
 		r.Scorer = "judge"
@@ -103,6 +103,8 @@ func evaluate(ctx context.Context, task Task, c Check, dir string, env []string,
 		if p.Status == "passed" {
 			r.Reason = "command exited zero"
 		}
+	case "tool_used", "tool_order":
+		return evaluateTrace(r, c, trace)
 	case "llm_judge":
 		if judge == nil {
 			r.Reason = "LLM judge is not configured"

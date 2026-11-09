@@ -30,6 +30,10 @@ type Runner struct {
 	TempDir    string        // empty uses the OS temporary directory
 	Timeout    time.Duration // whole task, including setup and checks; default 5m
 	Judge      Judge
+	// TraceParser reads the agent's stdout for trace checks; nil is DefaultTraceParser.
+	TraceParser TraceParser
+	// TraceLimit is eval_trace_stdout_limit in bytes; zero is DefaultTraceLimit.
+	TraceLimit int64
 	// AllowEnv names parent variables (login keys such as ANTHROPIC_API_KEY) copied
 	// into the task environment when set. Nothing else is inherited; see taskEnvironment.
 	AllowEnv []string
@@ -177,9 +181,14 @@ func (r Runner) attempt(ctx context.Context, task Task, tempRoot string) (Result
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
 	result.Setup = RunProcess(ctx, []string{"sh", "-eu", "-c", task.Setup}, workspace, env, "")
+	var trace traceInput
 	if result.Setup.Status == "passed" {
-		result.AgentResult = RunProcess(ctx, agent, workspace, env, task.Prompt)
+		var err error
+		if result.AgentResult, trace, err = r.runAgent(ctx, agent, root, workspace, env, task.Prompt); err != nil {
+			return result, err
+		}
 	}
+	trace.parser = r.TraceParser
 	for _, check := range task.Checks {
 		if result.Setup.Status != "passed" || result.AgentResult.Status != "passed" {
 			scorer := "code"
@@ -189,7 +198,7 @@ func (r Runner) attempt(ctx context.Context, task Task, tempRoot string) (Result
 			result.Checks = append(result.Checks, CheckResult{Check: check, Status: "skipped", Scorer: scorer, Reason: "setup or agent did not succeed"})
 			continue
 		}
-		result.Checks = append(result.Checks, evaluate(ctx, task, check, workspace, env, r.Judge))
+		result.Checks = append(result.Checks, evaluate(ctx, task, check, workspace, env, r.Judge, trace))
 	}
 	result.Summary = summarize(result.Checks)
 	if result.Setup.Status == "failed" || result.AgentResult.Status == "failed" || result.Summary.Failed > 0 {
@@ -201,6 +210,30 @@ func (r Runner) attempt(ctx context.Context, task Task, tempRoot string) (Result
 	result.FinishedAt = time.Now().UTC()
 	result.DurationMS = result.FinishedAt.Sub(started).Milliseconds()
 	return result, nil
+}
+
+// runAgent runs the agent and keeps its full stdout, up to the trace limit, in
+// root/trace.jsonl beside the workspace, so the agent's own checks do not see it.
+func (r Runner) runAgent(ctx context.Context, agent []string, root, workspace string, env []string, prompt string) (ProcessResult, traceInput, error) {
+	limit := r.TraceLimit
+	if limit <= 0 {
+		limit = DefaultTraceLimit
+	}
+	path := filepath.Join(root, traceFile)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return ProcessResult{}, traceInput{}, err
+	}
+	sink := &cappedFile{file: f, limit: limit}
+	process := runProcess(ctx, agent, workspace, env, prompt, sink)
+	if err := f.Close(); err != nil {
+		return process, traceInput{}, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return process, traceInput{}, err
+	}
+	return process, traceInput{data: data, truncated: sink.truncated}, nil
 }
 
 // removeTree deletes root, first making directories the agent left read-only
