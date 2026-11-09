@@ -606,6 +606,29 @@ Reads the event JSON on stdin and always exits 0. `sessionstart` prints
 
 where `additionalContext` names the project or task `grid where` resolved for the event's `cwd`. Other events print nothing yet.
 
+### `grid brain check [<proposal-id>] [--level home|project] [--project <p>] [--json]`
+
+Read-only gate for what changes what runs. With an id it checks that proposal
+(any status); without one it checks every proposal with status `proposed` plus
+every entry under `knowledge/skills/` and the `agents` config topic at the
+selected levels. It writes nothing. Findings carry `code`, `file`, `line` (when
+there is one), `message` and `text`, the quoted source, which is data:
+
+- `config_topic`: a proposal aimed at workflows, environments, machines, deploy,
+  people, routines or agents (`config: run grid <topic>`).
+- `skill_field`: skill front matter key outside `name, description, when_to_use,
+  metadata` (`allowed-tools`, `hooks`, `shell`, `context`, `agent`, `model`).
+- `skill_shell`: a line starting with `` !` `` or a fence opening with ```` ```! ````.
+- `skill_file`: a file other than `SKILL.md` and `reference/*.md`, a symlink, an
+  executable bit, `agents/openai.yaml`, `hooks/`, `.mcp.json` or `bin/`.
+- `agent_field`: agent front matter key outside `name, description, tools, model,
+  effort, maxTurns, metadata`.
+
+`--json` prints `{"checked": n, "findings": [...]}`; plain output fences each
+quoted text. Exit 0 with no findings, 3 with findings, 1 when the brain cannot
+be read, 2 on usage. Prose never changes the result: a knowledge proposal that
+asks to become a skill has no finding.
+
 ## Task intent files
 
 Sources: go-architecture.md:178-199,273,372-384,596. Session actions and moves
