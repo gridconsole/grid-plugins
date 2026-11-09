@@ -123,7 +123,7 @@ func TestNamedWorkflowSwappedProjectFolder(t *testing.T) {
 				t.Errorf("stage %q, want %q", got, row.stage)
 			}
 			_, err := lookup(text)
-			if coded := err != nil && strings.Contains(err.Error(), "workflow_changed"); coded != row.changed {
+			if coded := errors.Is(err, taskstore.ErrWorkflowChanged); coded != row.changed {
 				t.Errorf("StepsFor err=%v; want workflow_changed %v", err, row.changed)
 			}
 			before := files(t, n.dir)
@@ -131,7 +131,7 @@ func TestNamedWorkflowSwappedProjectFolder(t *testing.T) {
 			switch {
 			case row.held && !errors.Is(err, taskstore.ErrPlanNotApproved):
 				t.Errorf("Deliver err=%v; want a refusal naming the plan", err)
-			case row.changed && !strings.Contains(err.Error(), "workflow_changed"):
+			case row.changed && !errors.Is(err, taskstore.ErrWorkflowChanged):
 				t.Errorf("Deliver err=%v; want it to name workflow_changed", err)
 			case row.held && !reflect.DeepEqual(files(t, n.dir), before):
 				t.Error("a refused Deliver changed the task")
