@@ -17,6 +17,8 @@ const DefaultTraceLimit int64 = 64 << 20
 // never an empty trace, which would let a negative check pass.
 var ErrNoTrace = errors.New("no trace")
 
+var errNoParentKey = errors.New("top_level needs parent_tool_use_id, but no assistant event in the trace carries it")
+
 // ToolCall is one tool use by the agent, numbered from zero in call order.
 type ToolCall struct {
 	Index int            `json:"index"`
@@ -25,6 +27,8 @@ type ToolCall struct {
 	// Parent is the tool-use id of the call that started the subagent making
 	// this call; empty for the run's own calls.
 	Parent string `json:"parent,omitempty"`
+	// HasParentKey is set when the event carried parent_tool_use_id, null or not.
+	HasParentKey bool `json:"-"`
 }
 
 // TraceParser turns the agent's stdout into its tool calls. An agent that does
@@ -44,8 +48,8 @@ func parseStreamJSON(data []byte) ([]ToolCall, error) {
 			continue
 		}
 		var event struct {
-			Type            string  `json:"type"`
-			ParentToolUseID *string `json:"parent_tool_use_id"`
+			Type            string          `json:"type"`
+			ParentToolUseID json.RawMessage `json:"parent_tool_use_id"`
 			Message         struct {
 				Content json.RawMessage `json:"content"`
 			} `json:"message"`
@@ -67,12 +71,13 @@ func parseStreamJSON(data []byte) ([]ToolCall, error) {
 			continue
 		}
 		parent := ""
-		if event.ParentToolUseID != nil {
-			parent = *event.ParentToolUseID
+		hasKey := len(event.ParentToolUseID) > 0
+		if hasKey {
+			_ = json.Unmarshal(event.ParentToolUseID, &parent) // null leaves it empty
 		}
 		for _, item := range items {
 			if item.Type == "tool_use" {
-				calls = append(calls, ToolCall{Index: len(calls), Name: item.Name, Input: item.Input, Parent: parent})
+				calls = append(calls, ToolCall{Index: len(calls), Name: item.Name, Input: item.Input, Parent: parent, HasParentKey: hasKey})
 			}
 		}
 	}
@@ -116,7 +121,15 @@ func (m ToolMatch) validate() error {
 }
 
 // topLevel keeps the run's own calls and numbers them again from zero.
-func topLevel(calls []ToolCall) []ToolCall {
+func topLevel(calls []ToolCall) ([]ToolCall, error) {
+	// Without the key anywhere, every call would look top level and the filter would pass silently.
+	keyed := len(calls) == 0
+	for _, call := range calls {
+		keyed = keyed || call.HasParentKey
+	}
+	if !keyed {
+		return nil, errNoParentKey
+	}
 	out := make([]ToolCall, 0, len(calls))
 	for _, call := range calls {
 		if call.Parent == "" {
@@ -124,7 +137,7 @@ func topLevel(calls []ToolCall) []ToolCall {
 			out = append(out, call)
 		}
 	}
-	return out
+	return out, nil
 }
 
 func (m ToolMatch) first(calls []ToolCall) int {
@@ -159,7 +172,10 @@ func evaluateTrace(r CheckResult, c Check, t traceInput) CheckResult {
 		return r
 	}
 	if c.TopLevel {
-		calls = topLevel(calls)
+		if calls, err = topLevel(calls); err != nil {
+			r.Reason = err.Error()
+			return r
+		}
 	}
 	switch c.Type {
 	case "tool_used":

@@ -2,6 +2,7 @@ package eval
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -17,9 +18,11 @@ func TestAgentCannotForgeTheTrace(t *testing.T) {
 	}
 }
 
+// The agent waits, bounded to about 2s, until the runner's copy of its stdout
+// holds the printed line, so the overwrite always lands after the copy.
 func TestOverwrittenTraceFileIsNotRead(t *testing.T) {
 	runner := testRunner(t)
-	runner.Agent = []string{"sh", "-c", `printf '%s\n' "$1"; printf '%s\n' "$2" > "$HOME/../trace.jsonl"`, "agent", toolLine, forgedLine}
+	runner.Agent = []string{"sh", "-c", `printf '%s\n' "$1"; n=0; until grep -q Skill "$HOME/../trace.jsonl" 2>/dev/null || [ $n -ge 40 ]; do n=$((n+1)); sleep 0.05; done; printf '%s\n' "$2" > "$HOME/../trace.jsonl"`, "agent", toolLine, forgedLine}
 	r := runTask(t, runner, traceTask(
 		Check{ID: "absent", Type: "tool_used", Tool: "Forged", Absent: true},
 		Check{ID: "real", Type: "tool_used", Tool: "Skill"},
@@ -65,4 +68,20 @@ func TestParserKeepsParentID(t *testing.T) {
 	if err != nil || len(calls) != 4 || calls[0].Parent != "" || calls[1].Parent != "toolu_a" || calls[3].Parent != "" {
 		t.Fatalf("calls: %+v, %v", calls, err)
 	}
+}
+
+func TestTopLevelErrorsWhenTraceHasNoParentKey(t *testing.T) {
+	in := traceInput{data: []byte(toolLine + "\n" + toolLine + "\n")}
+	r := traceCheck(t, `[{"id":"c","type":"tool_used","tool":"Skill","absent":true,"top_level":true}]`, in)
+	if r.Status != "error" || !strings.Contains(r.Reason, "parent_tool_use_id") {
+		t.Fatalf("top_level passed without the key: %+v", r)
+	}
+	// Without top_level the same trace is still read.
+	want(t, traceCheck(t, `[{"id":"c","type":"tool_used","tool":"Skill","count_min":2}]`, in), "passed", "called 2 times")
+}
+
+func TestTopLevelStillPassesWithNullParentKey(t *testing.T) {
+	line := `{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"tool_use","name":"Skill","input":{}}]}}`
+	in := traceInput{data: []byte(line + "\n")}
+	want(t, traceCheck(t, `[{"id":"c","type":"tool_used","tool":"Skill","top_level":true}]`, in), "passed", "called 1 times")
 }
