@@ -357,7 +357,13 @@ Disagreements and defaults chosen:
   empty local role, owner and member; writes default to the empty role and owner.
   Other roles are refused with exit 3 before workspace access, and a write that passes
   the role check still needs a person: an agent ancestor or agent environment marker is
-  refused with `person_required`, even with an empty role. Workflow keys are
+  refused with `person_required`, even with an empty role. A replaced
+  `WorkspaceBudgetWriteAllowed` cannot admit a role the person gate refuses: the
+  gate allows only the empty role, `owner`, `member` and `cli`
+  (`internal/persongate/gate.go:132`), so any other role still exits 3 with
+  `agent_env`. A `person_verbs` entry for `usage budget set|clear` in a task
+  `workflow.md`, or, with no task, in the project's `workflows.md`, applies to the
+  `--workspace` form as to the task form. Workflow keys are
   `token_limit_read_roles` and `token_limit_write_roles`; the CLI does not read a
   workflow file to configure these policies. Notices are chatter;
   the hold at the limit is not enforced yet and requires worker/session hooks.
