@@ -25,7 +25,9 @@ var planHashToken = regexp.MustCompile(`^([0-9a-f]{6}|[0-9a-f]{64})$`)
 // by deliver) gets a ship approval in approval-ship.json, a task at gate preview
 // a preview approval in approval-preview.json plus a "preview approved" history
 // line, and any other waiting task a plan approval in approval.json. The three
-// never overwrite each other.
+// never overwrite each other. A caller that names the gate the person saw
+// (o.Gate) is refused when the task now waits at another gate, and a repeat
+// whose receipt already matches the plan writes nothing.
 //
 // The hash comes from plan.md through internal/plan, never from a stored copy.
 // Locks are taken in one order: .task.lock (withWrite), then .plan.lock (WithDigest),
@@ -46,6 +48,11 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 			return event, fmt.Errorf("%w: plan_hash_token digest requires 64 lowercase hex digits", ErrEditUsage)
 		}
 	}
+	switch o.Gate {
+	case "", "plan", "preview", "ship":
+	default:
+		return event, fmt.Errorf("%w: gate must be plan, preview or ship", ErrEditUsage)
+	}
 	if err := o.validateText(); err != nil {
 		return event, err
 	}
@@ -53,12 +60,15 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 		if t.State != "waiting" {
 			return fmt.Errorf("cannot approve task in current state %q: expected waiting", t.State)
 		}
-		name, gate := approvalFile, ""
+		name, gate, at := approvalFile, "", "plan"
 		switch t.Gate {
 		case "ship":
-			name, gate = shipApprovalFile, "ship"
+			name, gate, at = shipApprovalFile, "ship", "ship"
 		case "preview":
-			name, gate = previewApprovalFile, "preview"
+			name, gate, at = previewApprovalFile, "preview", "preview"
+		}
+		if o.Gate != "" && o.Gate != at {
+			return fmt.Errorf("Changed since you approved: the task is at gate %s, not %s", at, o.Gate)
 		}
 		previous, err := readOptional(filepath.Join(t.Path, name))
 		if err != nil {
@@ -84,6 +94,11 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 			}
 			if want != match {
 				return fmt.Errorf("plan hash no longer matches: approved %q, current %q", want, current)
+			}
+			// A repeat press on a receipt that already matches returns it and writes nothing.
+			if old, err := checkApproval(t, previous, current, digest); err == nil && old.Gate == gate && old.LandsHash == o.LandsHash {
+				event = old
+				return nil
 			}
 			o.Action = "approve"
 			event = s.event(t, o, t.State)

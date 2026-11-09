@@ -93,6 +93,9 @@ type WriteOptions struct {
 	// PlanHashToken is the approval token policy: empty or "any" accepts either
 	// form; "digest" requires 64 hex digits for a non-empty token.
 	PlanHashToken string
+	// Gate is the gate an approval is for: empty (whatever the task waits at),
+	// plan, preview or ship.
+	Gate string
 }
 
 // Change performs a checked state move and appends its receipt under one lock.
