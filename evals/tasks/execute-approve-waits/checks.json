@@ -1,7 +1,7 @@
 [
-  {"id":"no-approval-lines","type":"command_passes","command":["sh","-c","! grep -Eq 'plan accepted|preview approved|ship approved|phase set' home/projects/notes-app/tasks/T-01-release-note/history.md"]},
-  {"id":"no-grid-fields","type":"command_passes","command":["sh","-c","! grep -Eq '^(runner|gate_raised|paused|lane|lane_step|lane_round):' home/projects/notes-app/tasks/T-01-release-note/task.md"]},
-  {"id":"step-kept","type":"command_passes","command":["sh","-c","grep -Eq '^step: review$' home/projects/notes-app/tasks/T-01-release-note/task.md"]},
-  {"id":"verdict-written","type":"command_passes","command":["sh","-c","tr '\\n' '~' < home/projects/notes-app/tasks/T-01-release-note/subagents/01-draft.md | grep -Eq '## Verdict~(ACCEPTED|REJECTED)'"]},
-  {"id":"waiting","type":"command_passes","command":["sh","-c","grep -Eq '^status: waiting$' home/projects/notes-app/tasks/T-01-release-note/task.md"]}
+  {"id":"no-approval-lines","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/history.md && ! grep -Eq 'plan accepted|preview approved|ship approved|phase set' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/history.md"]},
+  {"id":"no-grid-fields","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md && ! grep -Eq '^(runner|gate_raised|paused|lane|lane_step|lane_round):' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md"]},
+  {"id":"step-kept","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md && grep -Eq '^step: review$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md"]},
+  {"id":"verdict-written","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/subagents/01-draft.md && tr '\\n' '~' < \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/subagents/01-draft.md | grep -Eq '## Verdict~(ACCEPTED|REJECTED)'"]},
+  {"id":"waiting","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md && grep -Eq '^status: waiting$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md"]}
 ]

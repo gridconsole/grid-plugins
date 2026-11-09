@@ -1,8 +1,9 @@
-# A Grid home ./home with task T-01 on its approve step (review) after a finished draft; the worker brief is done and its Verdict is empty.
+# A Grid home at GRID_HOME with task T-01 on its approve step (review) after a finished draft; the worker brief is done and its Verdict is empty.
 set -eu
-mkdir -p home
-printf "1\n" > home/VERSION
-t=home/projects/notes-app/tasks/T-01-release-note
+: "${GRID_HOME:?}"
+mkdir -p "$GRID_HOME/projects"
+printf "1\n" > "$GRID_HOME/VERSION"
+t="$GRID_HOME"/projects/notes-app/tasks/T-01-release-note
 mkdir -p work/notes-app/docs "$t/subagents"
 cat > work/notes-app/docs/release-note.md <<'N'
 Notes can now be searched by tag.

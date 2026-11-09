@@ -1,6 +1,6 @@
 [
-  {"id":"sam-file","type":"file_exists","path":"home/projects/notes-app/tasks/T-01-sample/questions/sam.md","gate":true},
-  {"id":"answer-empty","type":"command_passes","command":["sh","-c","grep -Eq '^Answer: —$' home/projects/notes-app/tasks/T-01-sample/questions/sam.md"]},
-  {"id":"block-heading","type":"command_passes","command":["sh","-c","grep -Eq '^## Q-1 · to: sam · (blocking|not blocking) · open$' home/projects/notes-app/tasks/T-01-sample/questions/sam.md"]},
-  {"id":"recommendation","type":"command_passes","command":["sh","-c","grep -Eq '^Recommendation: [^[:space:]]' home/projects/notes-app/tasks/T-01-sample/questions/sam.md"]}
+  {"id":"sam-file","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/questions/sam.md"],"gate":true},
+  {"id":"answer-empty","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/questions/sam.md && grep -Eq '^Answer: —$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/questions/sam.md"]},
+  {"id":"block-heading","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/questions/sam.md && grep -Eq '^## Q-1 · to: sam · (blocking|not blocking) · open$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/questions/sam.md"]},
+  {"id":"recommendation","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/questions/sam.md && grep -Eq '^Recommendation: [^[:space:]]' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/questions/sam.md"]}
 ]

@@ -1,8 +1,9 @@
-# A Grid home ./home with a finished brief whose work is wrong: the filter is case-sensitive, Acceptance A2 says it is not.
+# A Grid home at GRID_HOME with a finished brief whose work is wrong: the filter is case-sensitive, Acceptance A2 says it is not.
 set -eu
-mkdir -p home
-printf "1\n" > home/VERSION
-d=home/projects/notes-app/tasks/T-01-sample
+: "${GRID_HOME:?}"
+mkdir -p "$GRID_HOME/projects"
+printf "1\n" > "$GRID_HOME/VERSION"
+d="$GRID_HOME"/projects/notes-app/tasks/T-01-sample
 mkdir -p "$d/subagents" work/notes-app/src
 printf 'add a way to search the notes by tag\n' > "$d/intent.md"
 cat > "$d/task.md" <<'T'

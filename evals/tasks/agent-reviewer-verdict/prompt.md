@@ -1,1 +1,1 @@
-My Grid home is ./home and the notes-app project folder is ./work/notes-app. The worker has finished brief 02-tag-filter in task T-01 of the notes-app project. Use the grid-reviewer agent to review it.
+My Grid home is the one in GRID_HOME and the notes-app project folder is ./work/notes-app. The worker has finished brief 02-tag-filter in task T-01 of the notes-app project. Use the grid-reviewer agent to review it.

@@ -1,8 +1,9 @@
-# A Grid home ./home with task T-01 on its last step, a worker brief marked done and a reviewer Verdict of REJECTED on it, and a release note that says "name" where the feature searches by tag.
+# A Grid home at GRID_HOME with task T-01 on its last step, a worker brief marked done and a reviewer Verdict of REJECTED on it, and a release note that says "name" where the feature searches by tag.
 set -eu
-mkdir -p home
-printf "1\n" > home/VERSION
-t=home/projects/notes-app/tasks/T-01-release-note
+: "${GRID_HOME:?}"
+mkdir -p "$GRID_HOME/projects"
+printf "1\n" > "$GRID_HOME/VERSION"
+t="$GRID_HOME"/projects/notes-app/tasks/T-01-release-note
 mkdir -p work/notes-app/docs "$t/subagents" "$t/artifacts"
 cat > work/notes-app/docs/release-note.md <<'N'
 Notes can now be searched by name.

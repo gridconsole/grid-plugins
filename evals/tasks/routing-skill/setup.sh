@@ -1,9 +1,10 @@
-# A Grid home ./home whose notes-app project has a routing.md with a topic table, Members and an Agents table.
+# A Grid home at GRID_HOME whose notes-app project has a routing.md with a topic table, Members and an Agents table.
 set -eu
-mkdir -p home
-printf "1\n" > home/VERSION
-mkdir -p home/projects/notes-app
-cat > home/projects/notes-app/routing.md <<'R'
+: "${GRID_HOME:?}"
+mkdir -p "$GRID_HOME/projects"
+printf "1\n" > "$GRID_HOME/VERSION"
+mkdir -p "$GRID_HOME"/projects/notes-app
+cat > "$GRID_HOME"/projects/notes-app/routing.md <<'R'
 # Routing · project notes-app
 
 | Topic | Goes to | Rule | Why |

@@ -1,7 +1,8 @@
-# A Grid home ./home with task T-01 on its last step, a done worker brief and the deliverable in the project's docs folder.
+# A Grid home at GRID_HOME with task T-01 on its last step, a done worker brief and the deliverable in the project's docs folder.
 set -eu
-mkdir -p home
-printf "1\n" > home/VERSION
+: "${GRID_HOME:?}"
+mkdir -p "$GRID_HOME/projects"
+printf "1\n" > "$GRID_HOME/VERSION"
 mkdir -p work/notes-app/src
 cat > work/notes-app/src/store.js <<'S'
 const notes = [
@@ -12,15 +13,15 @@ export function listNotes() {
   return [...notes];
 }
 S
-mkdir -p home/projects/notes-app/tasks/T-01-release-note/subagents home/projects/notes-app/tasks/T-01-release-note/artifacts work/notes-app/docs
+mkdir -p "$GRID_HOME"/projects/notes-app/tasks/T-01-release-note/subagents "$GRID_HOME"/projects/notes-app/tasks/T-01-release-note/artifacts work/notes-app/docs
 cat > work/notes-app/docs/release-note.md <<'N'
 Notes can now be searched by tag.
 Type a tag in the search box to filter the list.
 N
-cat > home/projects/notes-app/tasks/T-01-release-note/intent.md <<'I'
+cat > "$GRID_HOME"/projects/notes-app/tasks/T-01-release-note/intent.md <<'I'
 write a two-line release note for the new tag search
 I
-cat > home/projects/notes-app/tasks/T-01-release-note/task.md <<'T'
+cat > "$GRID_HOME"/projects/notes-app/tasks/T-01-release-note/task.md <<'T'
 ---
 id: T-01
 title: Release note for tag search
@@ -41,7 +42,7 @@ outcome: —
 
 - 4 Mar · verify · started
 T
-cat > home/projects/notes-app/tasks/T-01-release-note/subagents/01-draft.md <<'B'
+cat > "$GRID_HOME"/projects/notes-app/tasks/T-01-release-note/subagents/01-draft.md <<'B'
 ---
 id: 01-draft
 role: worker
@@ -76,4 +77,4 @@ docs/release-note.md written, two lines. It says notes can be searched by tag.
 ## Follow-up
 None.
 B
-printf -- '- 2026-03-04T10:00 · created · by alex\n' > home/projects/notes-app/tasks/T-01-release-note/history.md
+printf -- '- 2026-03-04T10:00 · created · by alex\n' > "$GRID_HOME"/projects/notes-app/tasks/T-01-release-note/history.md
