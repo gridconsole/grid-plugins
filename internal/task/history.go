@@ -97,8 +97,11 @@ func CleanHistory(s string) string {
 
 // AppendHistory serializes append and consecutive duplicate suppression. It
 // never follows a symlink or creates a history file for an uninitialized task.
+// The line lands by renaming a new file into place under .task.lock, so a hard
+// link planted beside history.md keeps the old inode and never aliases it.
 func AppendHistory(dir, event, detail, who, via string) error {
-	info, err := os.Lstat(filepath.Join(dir, "history.md"))
+	path := filepath.Join(dir, "history.md")
+	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -109,19 +112,26 @@ func AppendHistory(dir, event, detail, who, via string) error {
 		return errors.New("history must be a regular file")
 	}
 
-	f, err := fslock.OpenNoFollow(filepath.Join(dir, "history.md"), os.O_RDWR|os.O_APPEND, 0)
+	lock, err := fslock.OpenNoFollow(filepath.Join(dir, ".task.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err = fslock.LockExclusive(lock); err != nil {
+		return err
+	}
+	defer fslock.Unlock(lock)
+	f, err := fslock.OpenNoFollow(path, os.O_RDWR, 0)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	if err = fslock.LockExclusive(f); err != nil {
-		return err
-	}
-	defer fslock.Unlock(f)
 	b, err := io.ReadAll(f)
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return err
 	}
@@ -144,6 +154,5 @@ func AppendHistory(dir, event, detail, who, via string) error {
 	if len(b) > 0 && b[len(b)-1] != '\n' {
 		prefix = "\n"
 	}
-	_, err = f.WriteString(prefix + line + "\n")
-	return err
+	return atomicWrite(path, append(b, prefix+line+"\n"...))
 }

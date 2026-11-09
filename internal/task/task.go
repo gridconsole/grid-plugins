@@ -192,6 +192,9 @@ func dropWorkflowList(doc *yaml.Node) {
 
 // Read folds both files of a published task folder.
 func Read(path string) (Task, error) {
+	if err := Linked(path); err != nil {
+		return Task{}, err
+	}
 	text, err := os.ReadFile(filepath.Join(path, "task.md"))
 	if err != nil {
 		return Task{}, err

@@ -30,6 +30,8 @@ const (
 	// CodeWorkflowChanged means the task's workflow now resolves to other steps
 	// than the ones it was created with, so it is held.
 	CodeWorkflowChanged = "workflow_changed"
+	// CodeLinkedFile means a protected task file has more than one hard link.
+	CodeLinkedFile = "linked_file"
 )
 
 func errorCode(err error) string {
@@ -45,6 +47,8 @@ func errorCode(err error) string {
 		return CodeWorkflowChanged
 	case errors.As(err, &bad), errors.Is(err, errTaskOperand):
 		return CodeInvalidArgument
+	case errors.Is(err, task.ErrLinkedFile):
+		return CodeLinkedFile
 	default:
 		return ""
 	}
