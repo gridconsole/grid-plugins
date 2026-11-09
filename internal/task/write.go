@@ -184,11 +184,10 @@ func rewriteTask(data []byte, edit func(mapping *yaml.Node) error, body func(str
 }
 
 // sameWorkflow reports whether the plugin's reader sees the same workflow in
-// both headers: the same value of any type, present in both or absent in both.
+// both headers: the same value of any type, or none in both (a present key is
+// never nil to the reader, so an absent key differs from every present one).
 func sameWorkflow(before, after *taskfile.Frontmatter) bool {
-	was, hadBefore := before.Data["workflow"]
-	now, hasAfter := after.Data["workflow"]
-	return hadBefore == hasAfter && reflect.DeepEqual(was, now)
+	return reflect.DeepEqual(before.Data["workflow"], after.Data["workflow"])
 }
 
 // setScalar sets a string key of the header mapping, adding it at the end when
