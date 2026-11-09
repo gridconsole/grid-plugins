@@ -72,6 +72,33 @@ func TestRewriteKeepsTheFileMode(t *testing.T) {
 	}
 }
 
+// Only a regular file's mode is kept. A symlink swapped in after a caller's
+// check reports 0777 on Linux; the file renamed over it must stay 0600.
+func TestRewriteOverASymlinkKeepsNoMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file modes carry only a read-only bit")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("outside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "history.md")
+	if err := os.Symlink(target, path); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := atomicWrite(path, []byte("- line\n")); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+		t.Fatalf("history.md after a rewrite over a symlink: %v, %v; want a regular 0600 file", info.Mode(), err)
+	}
+	if b, _ := os.ReadFile(target); string(b) != "outside\n" {
+		t.Errorf("the rewrite wrote through the symlink: %q", b)
+	}
+}
+
 // Control: a file Grid creates keeps the mode main gave it. A journal write
 // creates history.md and a receipt 0600, AppendHistory keeps that, and the task
 // lock it takes is 0600.
