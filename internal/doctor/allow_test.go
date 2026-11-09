@@ -52,7 +52,7 @@ func TestAllowBlockWithInjectedSettingsPath(t *testing.T) {
 		if strings.Contains(check.Detail, o.SettingsPath) {
 			t.Fatal("settings path leaked into report")
 		}
-		if check.Name == "allow block" && check.Fix != "Run grid setup to add the allow block; grid setup --remove takes it out." {
+		if check.Name == "allow block" && check.Fix != "Run grid setup" {
 			t.Fatalf("unexpected hint: %+v", check)
 		}
 	}

@@ -36,7 +36,7 @@ func TestDoctorAllowBlockCLI(t *testing.T) {
 		{"missing rule", `{"permissions":{"allow":["Bash(grid *)","Read(~/.grid/**)"]}}`, "missing rules: Edit(~/.grid/**)"},
 		{"missing file", "", "Claude settings file is missing"},
 		{"invalid JSON", "{broken", "Claude settings file is not valid JSON or has an invalid structure"},
-		{"symlink", `{}`, "Claude settings file is a symlink"},
+		{"symlink", `{"permissions":{"allow":["Bash(grid *)","Read(~/.grid/**)","Edit(~/.grid/**)"]}}`, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := claudeHarness(t)
@@ -61,7 +61,11 @@ func TestDoctorAllowBlockCLI(t *testing.T) {
 			if check.OK != (tc.detail == "") || (tc.detail != "" && check.Detail != tc.detail) {
 				t.Fatalf("unexpected allow block check: %+v", check)
 			}
-			if !check.OK && check.Fix != "Run grid setup to add the allow block; grid setup --remove takes it out." {
+			wantFix := "Run grid setup"
+			if tc.name == "invalid JSON" {
+				wantFix = "Fix or move the Claude settings file, then run grid setup."
+			}
+			if !check.OK && check.Fix != wantFix {
 				t.Fatalf("missing fix hint: %+v", check)
 			}
 			if strings.Contains(h.out.String(), h.root) {

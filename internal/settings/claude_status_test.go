@@ -79,16 +79,18 @@ func TestClaudeAllowStatusInvalidStructure(t *testing.T) {
 }
 
 func TestClaudeAllowStatusFileFailures(t *testing.T) {
-	for _, kind := range []string{"missing", "symlink", "dangling symlink", "directory", "unreadable"} {
+	for _, kind := range []string{"missing", "directory symlink", "dangling symlink", "directory", "unreadable"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newClaudeFixture(t)
 			want := "Claude settings file is missing"
 			switch kind {
-			case "symlink", "dangling symlink":
+			case "directory symlink", "dangling symlink":
 				f.write(f.path, `{}`)
 				target := filepath.Join(f.o.Home, "target.json")
-				if kind == "symlink" {
-					f.write(target, `{}`)
+				if kind == "directory symlink" {
+					if err := os.Mkdir(target, 0700); err != nil {
+						t.Fatal(err)
+					}
 				}
 				if err := os.Remove(f.path); err != nil {
 					t.Fatal(err)
@@ -96,7 +98,10 @@ func TestClaudeAllowStatusFileFailures(t *testing.T) {
 				if err := os.Symlink(target, f.path); err != nil {
 					t.Fatal(err)
 				}
-				want = "Claude settings file is a symlink"
+				want = "Claude settings file is a dangling symlink"
+				if kind == "directory symlink" {
+					want = "Claude settings file is not a regular file"
+				}
 			case "directory":
 				if err := os.MkdirAll(f.path, 0700); err != nil {
 					t.Fatal(err)
@@ -122,5 +127,35 @@ func TestClaudeAllowStatusFileFailures(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestClaudeAllowStatusSymlinkReadOnly(t *testing.T) {
+	f := newClaudeFixture(t)
+	target := filepath.Join(f.o.Home, "dotfiles", "settings.json")
+	f.write(target, `{}`)
+	if err := os.MkdirAll(filepath.Dir(f.path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, f.path); err != nil {
+		t.Fatal(err)
+	}
+	f.o.Yes = true
+	f.wantCode(0)
+	before, record := f.read(target), f.read(f.record)
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := ReadClaudeAllowStatus(f.path, f.o.Home, f.o.GridHome)
+	if status.Reason != "" || len(status.Missing) != 0 || len(status.Present) != 3 {
+		t.Fatalf("setup symlink rules not recognized: %+v", status)
+	}
+	after, err := os.Stat(target)
+	if err != nil || !os.SameFile(info, after) || !info.ModTime().Equal(after.ModTime()) || info.Mode() != after.Mode() || !bytes.Equal(before, f.read(target)) || !bytes.Equal(record, f.read(f.record)) {
+		t.Fatal("status changed settings or ownership")
+	}
+	if link, err := os.Readlink(f.path); err != nil || link != target {
+		t.Fatal("status changed symlink")
 	}
 }
