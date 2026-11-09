@@ -93,7 +93,12 @@ func bashHistory(o Options, in hookio.Input) {
 		return
 	}
 	store := session.Store{TaskDir: dir}
-	o.log("history snapshot", store.UpdateActivity(in.SessionID, func(a *session.Activity) error {
+	// The lines are decided under the session lock and appended after it is
+	// released: .task.lock is never taken while the session lock is held.
+	type historyLine struct{ event, detail string }
+	var lines []historyLine
+	err = store.UpdateActivity(in.SessionID, func(a *session.Activity) error {
+		lines = nil
 		if in.HookEventName == "PreToolUse" {
 			snap, err := snapshot(dir)
 			if err == nil {
@@ -133,18 +138,24 @@ func bashHistory(o Options, in hookio.Input) {
 			if _, ok := after[name]; !ok {
 				event = "file removed"
 			}
-			if err := task.AppendHistory(dir, event, name, writer(in), "Bash"); err != nil {
-				return err
-			}
+			lines = append(lines, historyLine{event, name})
 		}
 		if changed > 10 {
-			if err := task.AppendHistory(dir, "files changed", fmtCount(changed-10)+" more in this command", writer(in), "Bash"); err != nil {
-				return err
-			}
+			lines = append(lines, historyLine{"files changed", fmtCount(changed-10) + " more in this command"})
 		}
 		delete(a.Snapshots, in.ToolUseID)
 		return nil
-	}))
+	})
+	if err != nil {
+		o.log("history snapshot", err)
+		return
+	}
+	for _, l := range lines {
+		if err := task.AppendHistory(dir, l.event, l.detail, writer(in), "Bash"); err != nil {
+			o.log("history snapshot", err)
+			return
+		}
+	}
 }
 
 func snapshot(dir string) (map[string]string, error) {

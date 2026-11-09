@@ -63,18 +63,20 @@ func brainRead(o Options, in hookio.Input) {
 		if actual != gridhome.Real(filepath.Join(o.Resolver.GridHome, filepath.FromSlash(e.Path))) {
 			continue
 		}
+		// Decide and mark under the session lock, then append once it is
+		// released: .task.lock is never taken while the session lock is held.
 		s := session.Store{TaskDir: dir}
-		o.log("brain read", s.UpdateActivity(in.SessionID, func(a *session.Activity) error {
-			key := "read:" + e.ID
-			if a.Seen[key] {
-				return nil
-			}
-			if err := task.AppendHistory(dir, "brain read", e.ID, writer(in), ""); err != nil {
-				return err
-			}
+		key := "read:" + e.ID
+		first := false
+		err = s.UpdateActivity(in.SessionID, func(a *session.Activity) error {
+			first = !a.Seen[key]
 			a.Seen[key] = true
 			return nil
-		}))
+		})
+		if err == nil && first {
+			err = task.AppendHistory(dir, "brain read", e.ID, writer(in), "")
+		}
+		o.log("brain read", err)
 		return
 	}
 }
@@ -232,22 +234,21 @@ func recall(o Options, in hookio.Input) {
 	if in.SessionID != "" {
 		// Content identity also recalls after a plan edit without a numeric revision.
 		key := fmt.Sprintf("recall:%s:%x", in.AgentID, sha256.Sum256([]byte(plan)))
+		// The history line is appended after the session lock is released, so
+		// .task.lock is never taken inside it (attach takes them the other way).
+		appendLine := false
 		err = (session.Store{TaskDir: dir}).UpdateActivity(in.SessionID, func(a *session.Activity) error {
-			if a.Seen[key] {
-				emit = false
-				return nil
-			}
-			if logHistory {
-				if err := task.AppendHistory(dir, "brain recall", fmt.Sprintf("%d pointers", len(hits)), writer(in), ""); err != nil {
-					return err
-				}
-			}
+			emit = !a.Seen[key]
+			appendLine = emit && logHistory
 			a.Seen[key] = true
 			return nil
 		})
 		if err != nil {
 			o.log("recall", err)
 			return
+		}
+		if appendLine {
+			o.log("recall", task.AppendHistory(dir, "brain recall", fmt.Sprintf("%d pointers", len(hits)), writer(in), ""))
 		}
 	}
 	if emit && o.Stdout != nil {
