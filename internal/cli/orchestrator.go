@@ -66,8 +66,16 @@ func runOrchestrator(args []string, env Env) int {
 	owner := fs.String("owner", env.getenv("GRID_OWNER"), "task owner's member id for crash-loop questions")
 	afterWake := fs.Bool("after-wake", false, "suppress clock expiry until process identities and heartbeats are checked after sleep")
 	usageReady := fs.Bool("usage-ready", false, "capacity has been restored for the selected assignee")
+	person := fs.String("person", "", "post a Job for this person (role Person); other Jobs depend on it with after")
 	if code, stop := parse(fs, rest, env); stop {
 		return code
+	}
+	if *person != "" {
+		if verb != "post" {
+			fmt.Fprintln(env.Stderr, "--person applies to job post")
+			return exitCode(&feed.InvalidRecordError{Err: errors.New("--person applies to job post")})
+		}
+		*kind = "job"
 	}
 	fail := func(err error) int {
 		fmt.Fprintln(env.Stderr, err)
@@ -91,6 +99,18 @@ func runOrchestrator(args []string, env Env) int {
 		}
 		if err := json.Unmarshal([]byte(*body), &obj); err != nil || obj == nil {
 			return fail(errors.New("--body must be a JSON object"))
+		}
+		if *person != "" {
+			obj["role"] = "Person"
+			intent, _ := obj["intent"].(map[string]any)
+			if intent == nil {
+				intent = map[string]any{}
+			}
+			intent["owner"] = *person
+			obj["intent"] = intent
+			if id, _ := obj["id"].(string); id != "" && *job == "" {
+				*job = id
+			}
 		}
 	}
 	scope, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: *task, Project: *project})
@@ -172,6 +192,17 @@ func runOrchestrator(args []string, env Env) int {
 		}
 		return orchestratorRows(env, rows, *asJSON)
 	}
+	// A person's Job is never assigned, so its result is written under the task lease.
+	personResult := false
+	if verb == "result" && *job != "" {
+		snap, err := orchestrator.Load(store)
+		if err != nil {
+			return fail(err)
+		}
+		for _, it := range snap.Items {
+			personResult = personResult || it.ID == *job && it.IsPerson()
+		}
+	}
 	leaseName := "task"
 	if verb == "ack" || verb == "result" || verb == "post" {
 		leaseName = *job
@@ -179,7 +210,7 @@ func runOrchestrator(args []string, env Env) int {
 			leaseName = env.getenv("GRID_LEASE")
 		}
 	}
-	if verb == "post" && (*kind == "job" || *kind == "control") {
+	if verb == "post" && (*kind == "job" || *kind == "control") || personResult {
 		leaseName = "task"
 	}
 	if *leaseFlag != "" {
@@ -250,6 +281,18 @@ func runOrchestrator(args []string, env Env) int {
 		}
 	}
 
+	if personResult {
+		answer, _ := obj["answer"].(string)
+		record, err := orchestrator.AnswerPerson(store, writer, *job, answer, time.Now())
+		if err != nil {
+			return fail(err)
+		}
+		if *asJSON {
+			return writeJSON(env.Stdout, record)
+		}
+		fmt.Fprintln(env.Stdout, record.ID)
+		return 0
+	}
 	typ := verb
 	if verb == "post" {
 		typ = *kind

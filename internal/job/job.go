@@ -165,5 +165,14 @@ func (j *Job) Defaults() {
 	}
 }
 
+// RolePerson is the role of a Job that a person answers; no worker is assigned.
+const RolePerson = "Person"
+
+// IsPerson reports whether the Job is a person's step.
+func (j Job) IsPerson() bool { return strings.EqualFold(strings.TrimSpace(j.Role), RolePerson) }
+
+// PersonName is the person the step waits for. It is kept in intent.owner.
+func (j Job) PersonName() string { return j.Intent.Owner }
+
 // PlannedFields are present even when their value is an empty list.
 var PlannedFields = []string{"id", "item", "title", "role", "skills", "review", "risk", "max_rounds", "intent", "links", "keep", "decisions", "read", "write", "out_of_scope", "acceptance", "verify", "budget", "on_blocked", "after"}

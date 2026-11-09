@@ -170,6 +170,24 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 	if err != nil {
 		return out, err
 	}
+	// A person's step is never offered to a worker; it waits for the person.
+	people := map[string]job.Job{}
+	for _, item := range s.Items {
+		if item.IsPerson() {
+			people[item.ID] = item
+		}
+	}
+	if len(people) > 0 {
+		keep := []string{}
+		for _, id := range out.Ready {
+			if p, ok := people[id]; ok {
+				out.Waiting = append(out.Waiting, jobgraph.Wait{Job: id, Reason: "waiting for " + p.PersonName()})
+				continue
+			}
+			keep = append(keep, id)
+		}
+		out.Ready = keep
+	}
 	if s.Assignee != "" {
 		for _, j := range s.State.Jobs {
 			if j.Status == contract.Parked && j.Reason == "usage_limit" && j.Assign != nil && host(j.Assign.To) == host(s.Assignee) {
