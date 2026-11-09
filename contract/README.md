@@ -674,6 +674,30 @@ Omitting `--act` means `note`. `grid signal dismiss <id> [--project <p>] [--json
 is an alias for `--act dismiss`. The project must be registered. Guests are
 refused before opening a note, including guests invited to that project.
 
+`grid signal move <id> [--project <from>] --to <project|-> [--json]` moves
+an open note between registered projects. The source resolves like the other
+signal verbs. `--to -` means the workspace inbox: workflow key `inbox_workspace`
+defaults to `personal`, the only supported value in this lane. Both projects
+must pass registration and Personal access checks; guests receive the same
+`guests cannot act on signals` refusal, even in an invited project. Moving
+`new` into a named project changes it to `placed`; moving `placed` into Personal
+changes it to `new`. Snoozed notes retain their status and `until`. Other note
+content, including timestamps, is preserved. JSON adds optional `from`, sets
+`project` to the destination and `became` to the resulting status, and uses
+`result: updated`.
+
+Move returns exit 0 on success, 2 for invalid operands or a missing/empty
+`--to`, 1 for I/O or lock errors, and 3 for these refusals: `no such project`,
+`no such note`, `this note is already decided (<status>)`,
+`the note is already there`, `a note with this id is already there`,
+`notes already holds 4000 files`, or the guest refusal above. Its typed errors
+use the JSON envelopes described below. Move holds Add's workspace signal lock
+through checks, the atomic source update and the rename, never overwrites an
+existing target, and restores the source content if rename fails. Both folders
+are under one home on the same filesystem; there is no copy-and-delete fallback.
+The person-gate floor does not yet include `signal move`; local signed-out
+callers resolve as they do for the existing signal verbs.
+
 Readable statuses are `new`, `placed`, `snoozed`, `kept`, `dismissed`, and `done`.
 Legacy `acted` reads as `done`; writers never emit `acted`. Open notes are
 `new`, `placed`, and `snoozed`; the other statuses are decided.
