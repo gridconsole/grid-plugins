@@ -173,3 +173,27 @@ func TestRoutineLimitErrorsDoNotEchoValues(t *testing.T) {
 		}
 	}
 }
+
+func TestRoutineListBadLimitNamesRoutine(t *testing.T) {
+	for _, key := range []string{"routine_timeout", "routine_max_turns", "routine_budget"} {
+		h := newHarness(t)
+		store := routine.Store{GridHome: h.gridHome}
+		if _, err := store.Add("daily", "1h", "signals"); err != nil {
+			t.Fatal(err)
+		}
+		privateValue := filepath.Join(h.root, "private-value")
+		config := brain.Store{GridHome: h.gridHome}
+		if err := config.EditConfig("home", "routines", "daily", func(old []byte) ([]byte, error) {
+			return bytes.Replace(old, []byte("---\n"), []byte("---\n"+key+": "+strconv.Quote(privateValue)+"\n"), 1), nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{{"routine", "list"}, {"routine", "list", "--json"}} {
+			code := h.run(h.root, args...)
+			want := "grid: routine daily: invalid " + key
+			if code != 2 || strings.TrimSpace(h.errb.String()) != want {
+				t.Fatalf("list: exit %d, stderr %q; want exit 2 and %q", code, h.errb.String(), want)
+			}
+		}
+	}
+}
