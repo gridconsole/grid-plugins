@@ -8,11 +8,11 @@ import (
 
 // ordinaryReadRows are plain reads of a protected file that main allows and L135R9 refused:
 // a comment after the read, a variable as the pattern or the folder, an option-like pattern in
-// '..', and an assignment to a numbered array element. FILE is the protected file.
+// '..', and an assignment to a numbered array element. FILE is the protected file. o04, rg -n "$PAT" FILE,
+// is not among them: see readsBackRefusedRows in host_reads_back_test.go.
 var ordinaryReadRows = []struct{ name, command string }{
 	{"o01_cat_comment", "cat FILE # read the policy"},
 	{"o03_grep_comment", "grep -n verb FILE  # find verbs"},
-	{"o04_rg_var_pattern", `rg -n "$PAT" FILE`},
 	{"o05_find_var_dir", `find "$PWD" -maxdepth 1 -name FILE`},
 	{"o18_array_then_cat", "x[0]=1; cat FILE"},
 	{"o22_rg_e_dash_dollar", `rg -e '-x$' FILE`},

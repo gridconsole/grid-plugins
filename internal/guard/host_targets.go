@@ -647,7 +647,31 @@ type hostWhole struct {
 	relaxed bool
 }
 
-func hostWholeOf(text string) hostWhole { return hostWhole{text, hostMainReads(text)} }
+func hostWholeOf(text string) hostWhole {
+	return hostWhole{text, !hostHoldsANSI(text, 0) && hostMainReads(text)}
+}
+
+// hostHoldsANSI reports a $'..' or $".." anywhere in command, substitutions included. The shells decode it
+// into text flatten never sees, so main's onlyReads is no evidence for a command that holds one. A
+// $ before the closing ' of '-x$' is not one.
+func hostHoldsANSI(command string, depth int) bool {
+	if depth > hostMaxGroupDepth {
+		return true
+	}
+	for _, seg := range hostSegments(command, hostWhole{text: command}) {
+		for _, tok := range seg.tokens() {
+			if tok.ansi {
+				return true
+			}
+			for _, body := range tok.groups {
+				if hostHoldsANSI(body, depth+1) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
 
 // hostMainReads is main's check: onlyReads holds for both readings of the flattened command.
 func hostMainReads(command string) bool {
@@ -678,7 +702,7 @@ func hostSegmentsOf(tokens []hostShellToken, whole hostWhole) []hostSegment {
 			} else if len(seg.args) == 0 && strings.Contains(tok.text, "=") {
 				seg.assigns = append(seg.assigns, tok)
 			} else {
-				tok.calm = whole.relaxed && (!tok.live || tok.dq && hostPlainVar(tok.text, whole.text))
+				tok.calm = whole.relaxed && (!tok.live || tok.dq && hostOwnVar(tok.text) && hostPlainVar(tok.text, whole.text))
 				seg.args = append(seg.args, tok)
 			}
 		default:
@@ -724,8 +748,9 @@ func (g hostSegment) readCommand() bool {
 // hostOpaqueOption reports a find or rg argument that may expand to an option the
 // guard cannot read: $'..' and $"..", or a word that starts with - or an expansion
 // and holds one ($x, $(..), a backtick, {a,b}). It counts as a runner, never a read,
-// unless it is calm: no expansion runs in it ('-x$'), or it is a lone "$NAME" for a
-// name the command never sets, which holds what the shell inherited and no command chooses.
+// unless it is calm: no expansion runs in it ('-x$'), or it is a lone "$PWD" the command
+// never sets. Any other "$NAME" stays a runner: the environment or a startup file may
+// hold an option there (PAT=--pre=tee) that the command does not set.
 func hostOpaqueOption(name string, arg hostShellToken) bool {
 	if name != "find" && name != "rg" {
 		return false
@@ -738,20 +763,43 @@ func hostOpaqueOption(name string, arg hostShellToken) bool {
 var hostPlainName = regexp.MustCompile(`^\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))$`)
 var hostPrintf = regexp.MustCompile(`(?:^|[^A-Za-z0-9_])printf(?:[^A-Za-z0-9_]|$)`)
 
+// hostOwnVar reports the word $PWD or ${PWD}: a variable the shell sets and keeps itself, which the
+// environment cannot hand it a different value for. Any other name may arrive from the environment
+// or a startup file with an option in it, and the line does not set it, so it is never calm.
+func hostOwnVar(word string) bool {
+	m := hostPlainName.FindStringSubmatch(word)
+	return m != nil && m[1]+m[2] == "PWD"
+}
+
+// hostLower folds ASCII upper case and nothing else, so an index in the result is an index in s.
+func hostLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if c >= 'A' && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return string(b)
+}
+
 // hostPlainVar reports the word $NAME or ${NAME} for a variable that whole only ever
 // reads: each use of the name is $NAME or ${NAME}, and no printf runs, since printf -v
-// sets a variable by its name. $_ is the last argument of the command before it.
+// sets a variable by its name. $_ is the last argument of the command before it. Names
+// compare without case: zsh ties cdpath to CDPATH, fignore to FIGNORE, psvar to PSVAR. A
+// ${! or ${( in whole (bash ${!n:=w}, zsh ${(P)n::=w}) assigns to the variable whose name
+// another variable holds, so no name is known to be only read.
 func hostPlainVar(word, whole string) bool {
 	m := hostPlainName.FindStringSubmatch(word)
-	if m == nil || hostPrintf.MatchString(whole) {
+	if m == nil || hostPrintf.MatchString(whole) || strings.Contains(whole, "${!") || strings.Contains(whole, "${(") {
 		return false
 	}
 	name := m[1] + m[2]
 	if name == "_" {
 		return false
 	}
+	folded, lname := hostLower(whole), hostLower(name)
 	for from := 0; ; {
-		i := strings.Index(whole[from:], name)
+		i := strings.Index(folded[from:], lname)
 		if i < 0 {
 			return true
 		}
@@ -794,6 +842,29 @@ func hostInSubscript(text string, i int) bool {
 	return strings.Count(line, "[") > strings.Count(line, "]")
 }
 
+// hostIntegerVars hold a number in bash 5 or zsh 5: assigning a word to one evaluates it as arithmetic,
+// and a word that names a variable holding a[$(cmd)] runs cmd (a='x[$(cmd)]'; RANDOM=a). Only a number may be assigned.
+var hostIntegerVars = map[string]bool{
+	"BASHPID": true, "EUID": true, "HISTCMD": true, "OPTIND": true, "PPID": true, "RANDOM": true, "SRANDOM": true, "UID": true,
+	"ARGC": true, "COLUMNS": true, "EGID": true, "FUNCNEST": true, "GID": true, "HISTSIZE": true, "KEYTIMEOUT": true,
+	"LINENO": true, "LINES": true, "LISTMAX": true, "MAILCHECK": true, "SAVEHIST": true, "SECONDS": true, "SHLVL": true,
+	"TRY_BLOCK_ERROR": true, "TRY_BLOCK_INTERRUPT": true, "TTYIDLE": true, "ZSH_SUBSHELL": true, "status": true,
+}
+
+var hostNumber = regexp.MustCompile(`^[0-9]+$`)
+
+// integerAssigned reports an assignment of anything but a number to an integer variable, x= or x[..]= or x+=.
+func (g hostSegment) integerAssigned() bool {
+	for _, assign := range g.assigns {
+		name, value, _ := strings.Cut(assign.text, "=")
+		name, _, _ = strings.Cut(strings.TrimSuffix(name, "+"), "[")
+		if hostIntegerVars[name] && !hostNumber.MatchString(value) {
+			return true
+		}
+	}
+	return false
+}
+
 func (g hostSegment) readsOnly() bool { return len(g.writes) == 0 && g.readCommand() }
 
 // hostProvenReads reports a command the tokenizer shows to only read, in both shell
@@ -830,7 +901,7 @@ func hostReadsIn(command string, whole hostWhole, depth int) bool {
 		}
 	}
 	for _, seg := range hostSegments(command, whole) {
-		if seg.refuse || seg.skipped && !whole.relaxed || seg.subscripted(whole.relaxed) || !seg.readsOnly() {
+		if seg.refuse || seg.skipped && !whole.relaxed || seg.subscripted(whole.relaxed) || seg.integerAssigned() || !seg.readsOnly() {
 			return false
 		}
 		for _, tok := range seg.tokens() {
