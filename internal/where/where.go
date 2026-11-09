@@ -169,7 +169,16 @@ func (r Resolver) explicit(gridHome, cwd string, q Query, records []project.Reco
 		name = Personal // Personal has no project record
 	case q.Project != "":
 		found, ok := findProject(records, q.Project)
-		if !ok || found.Name == Personal && !personalOK {
+		if !ok {
+			// A failed lookup with an ID match means that ID was ambiguous.
+			for _, candidate := range records {
+				if candidate.ID == q.Project {
+					return Result{}, fmt.Errorf("%w: ambiguous project id", unregisteredProject(q.Project))
+				}
+			}
+			return Result{}, unregisteredProject(q.Project)
+		}
+		if found.Name == Personal && !personalOK {
 			return Result{}, unregisteredProject(q.Project)
 		}
 		rec, name = &found, found.Name
@@ -295,12 +304,20 @@ func (r Resolver) nearestRecord(records []project.Record, cwd string) (project.R
 }
 
 func findProject(records []project.Record, nameOrID string) (project.Record, bool) {
+	if rec, ok := byName(records, nameOrID); ok {
+		return rec, true
+	}
+	var found project.Record
+	ok := false
 	for _, rec := range records {
-		if rec.Name == nameOrID || (rec.ID != "" && rec.ID == nameOrID) {
-			return rec, true
+		if rec.ID != "" && rec.ID == nameOrID {
+			if ok {
+				return project.Record{}, false
+			}
+			found, ok = rec, true
 		}
 	}
-	return project.Record{}, false
+	return found, ok
 }
 
 func byName(records []project.Record, name string) (project.Record, bool) {

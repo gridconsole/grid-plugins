@@ -365,6 +365,8 @@ Every command except `help`, `version`, `doctor` and `migrate` first checks the 
 
 ### `grid where --json [--task <path or id>] [--project <name or id>]`
 
+For an explicit `--project`, an exact project folder name match wins over an ID match; without a name match, duplicate IDs are refused as ambiguous.
+
     {
       "project":   string,    // project folder name under <GRID_HOME>/projects, or "personal" (tasks in <GRID_HOME>/personal/tasks)
       "id":        string,    // the record's id; "" without a record
