@@ -143,8 +143,10 @@ func (s Store) Change(o WriteOptions) (Event, error) {
 	return event, err
 }
 
-// rewriteTask edits the task.md header as a YAML document, so key order,
-// comments and unknown keys survive, and optionally rewrites the body.
+// rewriteTask edits the task.md header as a YAML document and writes back only
+// the lines of the keys the edit set, added or removed: every other header line
+// keeps its bytes (comments, spelling, unknown keys), and optionally rewrites
+// the body.
 func rewriteTask(data []byte, edit func(mapping *yaml.Node) error, body func(string) string) ([]byte, error) {
 	fm := taskfile.ParseFrontmatter(string(data))
 	if fm == nil {
@@ -157,50 +159,182 @@ func rewriteTask(data []byte, edit func(mapping *yaml.Node) error, body func(str
 	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
 		return nil, errors.New("task.md front matter is not a mapping")
 	}
-	was := map[*yaml.Node]bool{}
-	for i := 1; i < len(doc.Content[0].Content); i += 2 {
-		was[doc.Content[0].Content[i]] = true
+	mapping := doc.Content[0]
+	if mapping.Style&yaml.FlowStyle != 0 {
+		return nil, errors.New("task.md front matter needs a block mapping")
 	}
-	if err := edit(doc.Content[0]); err != nil {
+	// Snapshot the header as read: setScalar swaps a value node for a new one,
+	// so the old nodes keep their source lines and show an edit made in place.
+	type entry struct {
+		key, value *yaml.Node
+		was        yaml.Node
+	}
+	var entries []entry
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		entries = append(entries, entry{mapping.Content[i], mapping.Content[i+1], *mapping.Content[i+1]})
+	}
+	if err := edit(mapping); err != nil {
 		return nil, err
+	}
+	lines := strings.SplitAfter(string(data), "\n")
+	end := 1
+	for end < len(lines) && strings.TrimRight(lines[end], "\r\n") != "---" {
+		end++
+	}
+	if end == len(lines) || strings.Join(lines[end+1:], "") != fm.Body {
+		return nil, errors.New("task.md front matter is not closed by a plain --- line")
+	}
+	newline := "\n"
+	if strings.HasSuffix(lines[0], "\r\n") {
+		newline = "\r\n"
+	}
+	// Each original key owns its lines up to the next key's, less the comments
+	// and blank lines at the end, which belong to the text around it.
+	type span struct{ start, stop int }
+	spans := map[*yaml.Node]span{}
+	for n, e := range entries {
+		start, stop := e.key.Line-1, end
+		if n+1 < len(entries) {
+			stop = entries[n+1].key.Line - 1
+		}
+		if start < 1 || start >= stop || stop > end {
+			return nil, fmt.Errorf("task.md key %q has no lines of its own to rewrite", e.key.Value)
+		}
+		for stop > start+1 {
+			line := strings.TrimSpace(lines[stop-1])
+			if line != "" && !strings.HasPrefix(line, "#") {
+				break
+			}
+			stop--
+		}
+		spans[e.key] = span{start, stop}
 	}
 	// A key whose value node is new was set by the edit; every other key must
-	// read the same afterwards. An edit that changes a node in place counts as
-	// untouched, so the write is refused rather than trusted.
+	// read the same afterwards. A value changed in place counts as untouched and
+	// would be lost with its lines kept, so the write is refused instead.
 	set := map[string]bool{}
-	for i := 0; i+1 < len(doc.Content[0].Content); i += 2 {
-		if !was[doc.Content[0].Content[i+1]] {
-			set[doc.Content[0].Content[i].Value] = true
+	replace := map[int]string{}
+	drop := map[int]int{}
+	oneLine := map[string]bool{}
+	kept := map[*yaml.Node]bool{}
+	added := ""
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		key, value := mapping.Content[i], mapping.Content[i+1]
+		sp, old := spans[key]
+		if !old {
+			text, err := dumpEntry(key.Value, value, newline)
+			if err != nil {
+				return nil, err
+			}
+			set[key.Value] = true
+			added += text
+			continue
+		}
+		kept[key] = true
+		var e entry
+		for _, e = range entries {
+			if e.key == key {
+				break
+			}
+		}
+		if value != e.value {
+			if key.Kind != yaml.ScalarNode || key.Column != 1 || e.value.Anchor != "" {
+				return nil, fmt.Errorf("task.md key %q must be an unanchored key at the start of its line to be set", key.Value)
+			}
+			text, err := dumpEntry(key.Value, value, newline)
+			if err != nil {
+				return nil, err
+			}
+			set[key.Value] = true
+			replace[sp.start], drop[sp.start] = text, sp.stop
+			continue
+		}
+		if value.Kind != e.was.Kind || value.Tag != e.was.Tag || value.Value != e.was.Value || value.Style != e.was.Style || len(value.Content) != len(e.was.Content) {
+			return nil, fmt.Errorf("task.md key %q would read differently after this write; the edit changed it in place; nothing was written", key.Value)
+		}
+		// One line is kept byte for byte, so the reader sees it as it did.
+		oneLine[key.Value] = oneLine[key.Value] || sp.stop-sp.start == 1
+	}
+	for _, e := range entries {
+		if sp := spans[e.key]; !kept[e.key] {
+			replace[sp.start], drop[sp.start] = "", sp.stop
 		}
 	}
-	// Sequences stay indented under their key: the plugin's reader only takes
-	// list items that are indented.
-	front, err := yaml.Dump(&doc, yaml.WithIndent(2), yaml.WithLineWidth(-1), yaml.WithCompactSeqIndent(false))
-	if err != nil {
-		return nil, err
+	var out strings.Builder
+	for i := 0; i < end; {
+		if text, ok := replace[i]; ok {
+			out.WriteString(text)
+			i = drop[i]
+		} else {
+			out.WriteString(lines[i])
+			i++
+		}
 	}
 	text := fm.Body
 	if body != nil {
 		text = body(text)
 	}
-	out := append(append([]byte("---\n"), front...), []byte("---\n"+text)...)
-	// The reader's view of the workflow must not change, whatever it was: a list
-	// it could not see (items at column 0, a flow list on the next line) would
-	// otherwise be dumped into one it can, and a held task would gain steps.
-	after := taskfile.ParseFrontmatter(string(out))
+	result := []byte(out.String() + added + lines[end] + text)
+	// The reader's view of the workflow must not change, whatever it was.
+	after := taskfile.ParseFrontmatter(string(result))
 	if after == nil || !sameWorkflow(fm, after) {
-		return nil, errors.New("task.md workflow list is not readable as written; indent each item under workflow: (for example \"  - {step: build, kind: run}\") or remove the list, then retry; nothing was written")
+		return nil, errors.New(workflowRefusal)
 	}
-	// The reader takes a value from its key's own line, so a continuation line
-	// it cannot see (step: plan, then an indented build) would be joined by the
-	// dump and move a held task past its plan gate.
 	if key := changedKey(fm, after, set); key != "" {
-		return nil, fmt.Errorf("task.md key %q would read differently after this write; put its whole value on the key's own line (no indented continuation lines) or remove the key, then retry; nothing was written", key)
+		return nil, fmt.Errorf(keyRefusal, key)
 	}
 	if fm.Odd != after.Odd {
 		return nil, errors.New("task.md has a __proto__, constructor or prototype key the plugin's reader refuses, and this write would change that; remove the key, then retry; nothing was written")
 	}
-	return out, nil
+	// A value the reader cannot see whole (a list with items at column 0, a
+	// continuation line) is read by YAML as more than the reader sees. Such a
+	// header was never written by Grid, so it is refused until it is fixed by
+	// hand, as a whole-header dump would have rewritten it into something the
+	// reader reads differently, and moved a held task past its plan gate.
+	// A one-line value is kept byte for byte, so there is nothing to refuse.
+	front, err := yaml.Dump(&doc, yaml.WithIndent(2), yaml.WithLineWidth(-1), yaml.WithCompactSeqIndent(false))
+	if err != nil {
+		return nil, err
+	}
+	dumped := taskfile.ParseFrontmatter("---\n" + string(front) + "---\n" + fm.Body)
+	if dumped == nil {
+		return nil, errors.New(workflowRefusal)
+	}
+	skip := map[string]bool{}
+	for key := range set {
+		skip[key] = true
+	}
+	for key, one := range oneLine {
+		if one {
+			skip[key] = true
+		}
+	}
+	if !skip["workflow"] && !sameWorkflow(fm, dumped) {
+		return nil, errors.New(workflowRefusal)
+	}
+	if key := changedKey(fm, dumped, skip); key != "" {
+		return nil, fmt.Errorf(keyRefusal, key)
+	}
+	return result, nil
+}
+
+const (
+	workflowRefusal = "task.md workflow list is not readable as written; indent each item under workflow: (for example \"  - {step: build, kind: run}\") or remove the list, then retry; nothing was written"
+	keyRefusal      = "task.md key %q would read differently after this write; put its whole value on the key's own line (no indented continuation lines) or remove the key, then retry; nothing was written"
+)
+
+// dumpEntry spells one key and its value as the whole-header dump does.
+// Sequences stay indented under their key: the plugin's reader only takes list
+// items that are indented.
+func dumpEntry(key string, value *yaml.Node, newline string) (string, error) {
+	own := *value
+	own.HeadComment, own.FootComment = "", ""
+	pair := &yaml.Node{Kind: yaml.MappingNode, Content: []*yaml.Node{{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, &own}}
+	front, err := yaml.Dump(&yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{pair}}, yaml.WithIndent(2), yaml.WithLineWidth(-1), yaml.WithCompactSeqIndent(false))
+	if err != nil {
+		return "", err
+	}
+	return strings.ReplaceAll(string(front), "\n", newline), nil
 }
 
 // sameWorkflow reports whether the plugin's reader sees the same workflow in
