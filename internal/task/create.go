@@ -391,13 +391,28 @@ func addKey(rec *project.Record, key project.Key) {
 
 // atomicWrite replaces path with data. The data is synced before the rename and
 // the folder after it, so a power loss leaves the old file or the new one, never
-// an empty file under the published name.
+// an empty file under the published name. A rewrite keeps the permission bits of
+// the regular file it replaces, so Grid never changes who may read or write a
+// person's file; a new file keeps CreateTemp's 0600.
 func atomicWrite(path string, data []byte) error {
+	keep := fs.FileMode(0)
+	if info, err := os.Lstat(path); err == nil && info.Mode().IsRegular() {
+		keep = info.Mode().Perm()
+	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".write-")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(f.Name())
+	if keep != 0 {
+		// Through the handle, so no path swap can redirect the change.
+		if err := f.Chmod(keep); err != nil {
+			f.Close()
+			return err
+		}
+	}
 	if err := writeAndSync(f, data); err != nil {
 		return err
 	}
