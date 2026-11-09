@@ -413,7 +413,8 @@ func hostShellTokensAs(command string, zsh bool) []hostShellToken {
 			i++
 			continue
 		}
-		subst := ch == '`' || (ch == '$' && (at(i+1) == '(' || at(i+1) == '{')) || ((ch == '<' || ch == '>') && quote == 0 && !comment && at(i+1) == '(')
+		// In '..' and $'..' only the closing ' is special: no $(, ${ or backtick opens a group.
+		subst := quote != '\'' && quote != '$' && (ch == '`' || (ch == '$' && (at(i+1) == '(' || at(i+1) == '{'))) || ((ch == '<' || ch == '>') && quote == 0 && !comment && at(i+1) == '(')
 		if subst {
 			start, close := i+1, byte('`')
 			if ch != '`' {
