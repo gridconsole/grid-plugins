@@ -901,6 +901,7 @@ gets exit 3 with or without `--gate`. A repeat approve whose receipt for that ga
 already matches the current hash, digest and deploy rule (and the `--plan-hash`
 token, when one is given) writes nothing: no receipt rewrite and no second history
 line. It exits 0 and prints the stored receipt.
+
 `grid preview` raises the preview gate (agent-callable, like `deliver`): it sets
 `state: waiting`, `step: preview`, `gate: preview` and appends one `what: preview`
 event, after checking that the task's steps (the inline `workflow:` list, else the
