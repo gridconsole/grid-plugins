@@ -133,8 +133,13 @@ func Fold(path, text, intent string) (Task, error) {
 	if end == len(lines) {
 		return Task{}, errors.New("task.md front matter is not closed")
 	}
+	var doc yaml.Node
+	if err := yaml.Load([]byte(strings.Join(lines[1:end], "\n")), &doc); err != nil {
+		return Task{}, fmt.Errorf("task.md front matter: %w", err)
+	}
+	dropWorkflowList(&doc)
 	var rec Record
-	if err := yaml.Load([]byte(strings.Join(lines[1:end], "\n")), &rec); err != nil {
+	if err := doc.Load(&rec); err != nil {
 		return Task{}, fmt.Errorf("task.md front matter: %w", err)
 	}
 	n, err := number(filepath.Base(path))
@@ -159,6 +164,27 @@ func Fold(path, text, intent string) (Task, error) {
 	}
 	// Intent is the person's words, without the heading New puts before them.
 	return Task{Record: rec, Path: path, Intent: strings.TrimPrefix(intent, IntentHead)}, nil
+}
+
+// dropWorkflowList removes the old plugin's inline step list, so Record.Workflow
+// (a template name) stays empty. A duplicate workflow key keeps its decode error.
+func dropWorkflowList(doc *yaml.Node) {
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return
+	}
+	m := doc.Content[0]
+	at := -1
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Kind == yaml.ScalarNode && m.Content[i].Value == "workflow" {
+			if at >= 0 {
+				return
+			}
+			at = i
+		}
+	}
+	if at >= 0 && m.Content[at+1].Kind == yaml.SequenceNode {
+		m.Content = append(m.Content[:at], m.Content[at+2:]...)
+	}
 }
 
 // Read folds both files of a published task folder.
