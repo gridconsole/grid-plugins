@@ -2503,7 +2503,7 @@
     },
     {
       "name": "brain",
-      "summary": "show, search, topics, index, propose, accept, keep, decide, check",
+      "summary": "show, search, topics, index, propose, accept, keep, decide, check, changes, revert",
       "built": true,
       "subcommands": [
         {
@@ -2529,6 +2529,39 @@
             },
             {
               "name": "--reject",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "changes",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--limit",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--since",
               "takes": "value",
               "required": false
             }
@@ -2703,6 +2736,36 @@
               "name": "--topic",
               "takes": "value",
               "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "revert",
+          "args": [
+            "\u003ctopic\u003e/\u003cname\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--to",
+              "takes": "value",
+              "required": true
             }
           ],
           "json": true,

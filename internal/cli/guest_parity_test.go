@@ -26,10 +26,12 @@ var guestParityCommands = map[string][]string{
 	"artifact list":    {},
 	"artifact publish": {"A-01"},
 	"brain accept":     {"parity"},
+	"brain changes":    {},
 	"brain check":      {},
 	"brain decide":     {"{task}", "parity", "accept"},
 	"brain index":      {"--read-only"},
 	"brain keep":       {},
+	"brain revert":     {"parity/parity", "--to", "1"},
 	"brain propose":    {"--name", "parity", "--topic", "general", "--description", "parity", "--summary", "parity", "--body", "parity", "--external"},
 	"brain search":     {"parity"},
 	"brain show":       {"parity"},
@@ -447,6 +449,10 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 			if mode == "json" {
 				want = guestParityOutput{1, "{\"ok\":false,\"findings\":[],\"error\":\"task not found\"}\n", ""}
 			}
+		case "brain changes":
+			want = guestParityOutput{3, "", "grid brain changes: caller role is not allowed to read brain changes\n"}
+		case "brain revert":
+			want = guestParityOutput{3, "", "grid brain revert: caller role is not allowed to revert brain entries\n"}
 		case "feed types":
 			// This command returns the public schema without resolving any scope.
 			return out.Code == 0 && out.Stderr == "" && strings.Contains(out.Stdout, "knowledge")
