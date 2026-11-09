@@ -26,6 +26,7 @@ var guestParityCommands = map[string][]string{
 	"artifact list":    {},
 	"artifact publish": {"A-01"},
 	"brain accept":     {"parity"},
+	"brain check":      {},
 	"brain decide":     {"{task}", "parity", "accept"},
 	"brain index":      {"--read-only"},
 	"brain keep":       {},
