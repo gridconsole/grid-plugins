@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/projects"
@@ -45,6 +45,8 @@ type Note struct {
 	Updated  string `yaml:"updated"`
 	Tier     string `yaml:"tier"`
 	BodyKind string `yaml:"body_kind"`
+	Became   string `yaml:"became,omitempty"`
+	Until    string `yaml:"until,omitempty"`
 	Body     string `yaml:"-"`
 }
 type Result struct {
@@ -53,6 +55,8 @@ type Result struct {
 	Project string `json:"project"`
 	Note    string `json:"note"`
 	Status  string `json:"status"`
+	Became  string `json:"became,omitempty"`
+	Until   string `json:"until,omitempty"`
 }
 
 // Store limits signal reads and writes to one registered project's notes folder.
@@ -146,7 +150,7 @@ func (s Store) path(id string) (string, error) {
 	return localdata.Safe(s.GridHome, filepath.Join("projects", s.Project, "notes", id+".md"))
 }
 func result(s Store, n Note, action string) Result {
-	return Result{Result: action, ID: n.ID, Project: s.Project, Note: n.ID + ".md", Status: n.Status}
+	return Result{Result: action, ID: n.ID, Project: s.Project, Note: n.ID + ".md", Status: n.Status, Became: n.Became, Until: n.Until}
 }
 func encode(n Note) ([]byte, error) {
 	head, err := yaml.Dump(n, yaml.WithIndent(2), yaml.WithLineWidth(-1))
@@ -187,7 +191,9 @@ func read(path string) (Note, error) {
 		return n, fmt.Errorf("signal metadata is invalid")
 	}
 	switch n.Status {
-	case "new", "acted", "dismissed":
+	case "acted":
+		n.Status = "done"
+	case "new", "placed", "snoozed", "kept", "dismissed", "done":
 	default:
 		return n, fmt.Errorf("signal status is invalid")
 	}
@@ -257,48 +263,4 @@ func (s Store) Add(in Input) (Result, error) {
 		return Result{}, err
 	}
 	return result(s, note, "written"), nil
-}
-
-// Act marks a signal acted on. It never executes its body or creates a task.
-func (s Store) Act(id string) (Result, error) { return s.change(id, "acted") }
-
-// Dismiss keeps the note and its deduplication identity, marking it dismissed.
-func (s Store) Dismiss(id string) (Result, error) { return s.change(id, "dismissed") }
-func (s Store) change(id, status string) (Result, error) {
-	_, err := s.notes()
-	if err != nil {
-		return Result{}, err
-	}
-	path, err := s.path(id)
-	if err != nil {
-		return Result{}, err
-	}
-	unlock, err := localdata.Lock(s.GridHome, ".signals.lock")
-	if err != nil {
-		return Result{}, err
-	}
-	defer unlock()
-	if _, err := localdata.Machine(s.GridHome); err != nil {
-		return Result{}, err
-	}
-	n, err := read(path)
-	if err != nil {
-		return Result{}, err
-	}
-	if n.Status == status {
-		return result(s, n, "unchanged"), nil
-	}
-	if n.Status != "new" {
-		return Result{}, fmt.Errorf("signal is already %s", n.Status)
-	}
-	n.Status = status
-	n.Updated = contract.FormatTime(time.Now())
-	data, err := encode(n)
-	if err != nil {
-		return Result{}, err
-	}
-	if err := atomicfile.Write(path, data, 0o600); err != nil {
-		return Result{}, err
-	}
-	return result(s, n, "updated"), nil
 }

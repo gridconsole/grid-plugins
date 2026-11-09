@@ -658,3 +658,65 @@ gates. Reads remain allowed. An `approve` step whose name contains `plan` is a
 plan gate, as in Rust; an `approve` step before the first `run` or `work` also
 requires plan approval, regardless of its name (for example, `sign-off`). A later
 approval without `plan` in its name remains a delivery gate.
+
+## Signal acts
+
+`grid signal act <id> [--project <p>] [--act turn|add|note|snooze|dismiss|wake|reopen]
+[--task T-<n>] [--until <time>] [--later] [--json]` decides an inbox note.
+Omitting `--act` means `note`. `grid signal dismiss <id> [--project <p>] [--json]`
+is an alias for `--act dismiss`. The project must be registered. Guests are
+refused before opening a note, including guests invited to that project.
+
+Readable statuses are `new`, `placed`, `snoozed`, `kept`, `dismissed`, and `done`.
+Legacy `acted` reads as `done`; writers never emit `acted`. Open notes are
+`new`, `placed`, and `snoozed`; the other statuses are decided.
+
+| Act | Effect | Required option |
+| --- | --- | --- |
+| `turn` | Create a task in the note's project, set `done` and `became` to its id | None |
+| `add` | Set `done` and `became` without creating a task | `--task` matching `^T-[0-9]+$` |
+| `note` | Set `kept` | None |
+| `snooze` | Set `snoozed` and `until` | `--until` in RFC3339 or local `YYYY-MM-DDTHH:MM` |
+| `dismiss` | Set `dismissed` | None |
+| `wake` | Set `new`, only from `snoozed` | None |
+| `reopen` | Set `new` and clear `became`, only from a decided status | None |
+
+Every applied act updates `updated`. Every applied act except snooze clears
+`until`; snooze stores it in local `YYYY-MM-DDTHH:MM`, converting RFC3339 offsets
+to local time. Other than turn, add and reopen, acts preserve `became`.
+Repeating note on kept or dismiss on dismissed succeeds with `unchanged` and
+leaves the file byte-identical. Other state refusals also leave it untouched.
+
+Turn checks state and calls the same task creation API as `grid task new`, all
+under the signal lock. The task intent is the note title, a blank line, then
+`Signal: projects/<p>/notes/<id>.md`. No note body is copied. Task creation
+failure leaves the note byte-identical. Concurrent turns create one task and
+refuse the losing caller. Task and note publication are separate atomic writes;
+a crash or note-write failure after task publication can leave an unlinked task.
+
+JSON retains `result`, `id`, `project`, `note`, and `status`, adding optional
+`became` and `until`. Successful changes use `result: updated`; idempotent
+repeats use `result: unchanged`.
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | Applied or unchanged |
+| 1 | I/O, lock, task creation, or unregistered project failure |
+| 2 | Invalid signal id, unknown act, missing/invalid required option, `--task` or `--until` on another act, or any `--later` flag |
+| 3 | State refusal or guest caller |
+
+State refusals print exactly one of these single stderr lines:
+
+```text
+grid: no such note
+grid: this note is not snoozed
+grid: this note is not decided
+grid: this note is already decided (<status>)
+```
+
+Guest refusal prints `grid: guests cannot act on signals`. `--later` is reserved
+until task creation supports `start: later`; even `--later=false` is rejected.
+The replaceable policy defaults are `inbox_act_roles` (existing owner/member,
+local and agent roles, guests refused), `inbox_acts` (the seven acts), and
+`inbox_turn_body` (`link`; a future `copy` policy may replace it). This CLI does
+not read workflow configuration for these keys yet.

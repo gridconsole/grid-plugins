@@ -4201,12 +4201,32 @@
           ],
           "flags": [
             {
+              "name": "--act",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--json",
               "takes": "none",
               "required": false
             },
             {
+              "name": "--later",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--until",
               "takes": "value",
               "required": false
             }

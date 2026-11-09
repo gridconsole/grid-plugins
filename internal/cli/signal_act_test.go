@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"go.yaml.in/yaml/v4"
@@ -152,7 +154,7 @@ func TestSignalActMatrix(t *testing.T) {
 					}
 					want := "A signal title\n\nSignal: projects/example/notes/" + actID + ".md"
 					if made.Intent != want || made.Project != "example" || made.ID != r["became"] {
-						t.Fatalf("unexpected task: %+v", made)
+						t.Fatalf("unexpected task intent %q, project %q, id %q", made.Intent, made.Project, made.ID)
 					}
 				}
 			})
@@ -161,7 +163,7 @@ func TestSignalActMatrix(t *testing.T) {
 }
 
 func TestSignalActBadInput(t *testing.T) {
-	cases := [][]string{{"--act", "unknown"}, {"--act", "add"}, {"--act", "add", "--task", "12"}, {"--act", "snooze"}, {"--act", "snooze", "--until", "tomorrow"}, {"--act", "note", "--until", actUntil}, {"--act", "dismiss", "--task", "T-12"}, {"--act", "turn", "--later"}, {"--act", "note", "--until="}, {"--act", "note", "--task="}, {"--act", "note", "--later=false"}}
+	cases := [][]string{{"--act", ""}, {"--act", "unknown"}, {"--act", "add"}, {"--act", "add", "--task", "12"}, {"--act", "snooze"}, {"--act", "snooze", "--until", "tomorrow"}, {"--act", "note", "--until", actUntil}, {"--act", "dismiss", "--task", "T-12"}, {"--act", "turn", "--later"}, {"--act", "note", "--until="}, {"--act", "note", "--task="}, {"--act", "note", "--later=false"}}
 	for _, a := range []string{"turn", "add", "note", "snooze", "dismiss", "wake", "reopen"} {
 		cases = append(cases, []string{"--act", a, "--later"})
 	}
@@ -320,6 +322,9 @@ func TestSignalTurnProcess(t *testing.T) {
 	}
 	env := Env{Home: paths[0], GridHome: paths[1], Cwd: paths[2], Ceiling: paths[2], Machine: paths[3], TempRoots: []string{paths[4]}}
 	env.Stdout, env.Stderr = os.Stdout, os.Stderr
+	if err := os.WriteFile(os.Getenv("GRID_SIGNAL_TEST_READY"), nil, 0o600); err != nil {
+		panic(err)
+	}
 	os.Exit(Run(actArgs("turn"), env))
 }
 func TestSignalConcurrentTurnProcesses(t *testing.T) {
@@ -332,17 +337,53 @@ func TestSignalConcurrentTurnProcesses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	unlock, err := localdata.Lock(h.gridHome, ".signals.lock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked := true
+	defer func() {
+		if locked {
+			unlock()
+		}
+	}()
 	var cmds [2]*exec.Cmd
 	var outs, errs [2]bytes.Buffer
 	for i := range cmds {
 		cmds[i] = exec.Command(exe, "-test.run=^TestSignalTurnProcess$")
-		cmds[i].Env = append(os.Environ(), "GRID_SIGNAL_TEST_PROCESS=1", "GRID_SIGNAL_TEST_ENV="+string(envJSON))
+		cmds[i].Env = append(os.Environ(), "GRID_SIGNAL_TEST_PROCESS=1", "GRID_SIGNAL_TEST_ENV="+string(envJSON), "GRID_SIGNAL_TEST_READY="+filepath.Join(h.root, fmt.Sprintf("ready-%d", i)))
 		cmds[i].Stdout = &outs[i]
 		cmds[i].Stderr = &errs[i]
 		if err := cmds[i].Start(); err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() { _ = cmds[i].Process.Kill(); _ = cmds[i].Wait() })
 	}
+	// Both processes have reached Run, but neither may read state or create a
+	// task until the parent releases the same persistent signal lock.
+	for i := range cmds {
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			if _, err := os.Stat(filepath.Join(h.root, fmt.Sprintf("ready-%d", i))); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("child did not start")
+			}
+			time.Sleep(time.Millisecond * 10)
+		}
+	}
+	time.Sleep(100 * time.Millisecond)
+	before, n := actRead(t, path)
+	if n["status"] != "new" {
+		t.Fatal("act bypassed the signal lock")
+	}
+	tasks, _ := filepath.Glob(filepath.Join(h.gridHome, "projects", "example", "tasks", "T-*"))
+	if len(tasks) != 0 {
+		t.Fatal("task created outside the signal lock")
+	}
+	unlock()
+	locked = false
 	wins := 0
 	for i, c := range cmds {
 		err := c.Wait()
@@ -361,8 +402,58 @@ func TestSignalConcurrentTurnProcesses(t *testing.T) {
 	if err != nil || len(paths) != 1 {
 		t.Fatalf("tasks %d: %v", len(paths), err)
 	}
-	_, n := actRead(t, path)
+	after, n := actRead(t, path)
+	if bytes.Equal(before, after) {
+		t.Fatal("turn did not write note")
+	}
 	if n["status"] != "done" || n["became"] != "T-01" {
 		t.Fatalf("note %+v", n)
+	}
+}
+
+func TestSignalActRolesAndTaskAuthor(t *testing.T) {
+	for _, role := range []string{"", "owner", "member", "agent", "cli", "guest", "external", "unknown"} {
+		t.Run(role, func(t *testing.T) {
+			h, path, before := actFixture(t, "new")
+			h.env.Getenv = func(key string) string {
+				switch key {
+				case "GRID_ROLE":
+					return role
+				case "GRID_ACTOR":
+					return "signal-author"
+				}
+				return ""
+			}
+			refused := role == "guest" || role == "external" || role == "unknown"
+			code := h.run(h.root, actArgs("turn")...)
+			if refused {
+				if code != 3 || h.errb.String() != "grid: guests cannot act on signals\n" {
+					t.Fatalf("exit %d: %s", code, h.errb)
+				}
+				after, _ := actRead(t, path)
+				if !bytes.Equal(before, after) {
+					t.Fatal("refused caller wrote note")
+				}
+				return
+			}
+			if code != 0 {
+				t.Fatalf("exit %d: %s", code, h.errb)
+			}
+			paths, err := filepath.Glob(filepath.Join(h.gridHome, "projects", "example", "tasks", "T-*"))
+			if err != nil || len(paths) != 1 {
+				t.Fatalf("tasks %d: %v", len(paths), err)
+			}
+			made, err := task.Read(paths[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantRole := role
+			if wantRole == "" {
+				wantRole = "member"
+			}
+			if made.Owner != "signal-author" || made.OwnerRole != wantRole {
+				t.Fatalf("task author %q role %q", made.Owner, made.OwnerRole)
+			}
+		})
 	}
 }

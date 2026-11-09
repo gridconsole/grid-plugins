@@ -200,3 +200,55 @@ func TestRefuseSymlinksAndTraversal(t *testing.T) {
 		})
 	}
 }
+
+func TestReadStatusesAndLegacyDedup(t *testing.T) {
+	for _, status := range []string{"new", "placed", "snoozed", "kept", "dismissed", "done", "acted", "unknown"} {
+		t.Run(status, func(t *testing.T) {
+			s := fixture(t)
+			in := Input{Source: "typed", SourceID: "legacy", Title: "Title", Body: "Body"}
+			added, err := s.Add(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path, _ := s.path(added.ID)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data = []byte(strings.Replace(string(data), "status: new", "status: "+status, 1))
+			if err := os.WriteFile(path, data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			n, err := read(path)
+			if status == "unknown" {
+				if err == nil {
+					t.Fatal("unknown status accepted")
+				}
+				return
+			}
+			want := status
+			if want == "acted" {
+				want = "done"
+			}
+			if err != nil || n.Status != want {
+				t.Fatalf("status %q: %v", n.Status, err)
+			}
+			encoded, err := encode(n)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := strings.Replace(string(data), "status: acted", "status: done", 1)
+			if string(encoded) != expected {
+				t.Fatal("optional fields changed legacy encoding")
+			}
+			duplicate, err := s.Add(in)
+			if err != nil || duplicate.Status != want {
+				t.Fatalf("duplicate %+v: %v", duplicate, err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || string(after) != string(data) {
+				t.Fatal("reading a legacy duplicate rewrote it")
+			}
+		})
+	}
+}

@@ -24,6 +24,13 @@ func runSignal(args []string, env Env) int {
 	asJSON := fs.Bool("json", false, "print JSON")
 	proj := fs.String("project", "", "project name or id; defaults to this folder's project")
 	var in signal.Input
+	var act signal.ActOptions
+	if verb == "act" {
+		fs.StringVar(&act.Act, "act", "note", "turn|add|note|snooze|dismiss|wake|reopen")
+		fs.StringVar(&act.Task, "task", "", "task id for add (T-<n>)")
+		fs.StringVar(&act.Until, "until", "", "snooze until RFC3339 or YYYY-MM-DDTHH:MM")
+		fs.BoolVar(&act.Later, "later", false, "reserved; currently refused")
+	}
 	if verb == "add" {
 		fs.StringVar(&in.Source, "source", "typed", "source name")
 		fs.StringVar(&in.SourceID, "source-id", "", "stable id in this source for deduplication")
@@ -40,8 +47,33 @@ func runSignal(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "grid signal %s: wrong number of arguments\n", verb)
 		return 2
 	}
-	if verb == "add" && resolver(env).Caller.IsGuest() {
-		return failure(env, fmt.Errorf("guests cannot change project settings"))
+	if resolver(env).Caller.IsGuest() {
+		if verb == "add" {
+			return failure(env, fmt.Errorf("guests cannot change project settings"))
+		}
+		return signalFailure(env, &signal.RefusedError{Message: "guests cannot act on signals"})
+	}
+	if verb != "add" {
+		if verb == "dismiss" {
+			act.Act = "dismiss"
+		}
+		fs.Visit(func(f *flag.Flag) {
+			switch f.Name {
+			case "task":
+				act.TaskSet = true
+			case "until":
+				act.UntilSet = true
+			case "later":
+				act.Later = true
+			}
+		})
+		if err := act.Validate(fs.Arg(0)); err != nil {
+			return signalFailure(env, err)
+		}
+		act.Cwd, act.Who, act.Role = env.Cwd, env.getenv("GRID_WHO"), env.getenv("GRID_ROLE")
+		if act.Who == "" {
+			act.Who = env.getenv("GRID_ACTOR")
+		}
 	}
 	if in.Body == "-" {
 		data, err := io.ReadAll(io.LimitReader(env.Stdin, signal.MaxBytes+1))
@@ -92,17 +124,30 @@ func runSignal(args []string, env Env) int {
 	switch verb {
 	case "add":
 		got, err = s.Add(in)
-	case "act":
-		got, err = s.Act(fs.Arg(0))
-	case "dismiss":
-		got, err = s.Dismiss(fs.Arg(0))
+	case "act", "dismiss":
+		got, err = s.Apply(fs.Arg(0), act)
 	}
 	if err != nil {
-		return failure(env, err)
+		return signalFailure(env, err)
 	}
 	if *asJSON {
 		return writeJSON(env.Stdout, got)
 	}
 	fmt.Fprintf(env.Stdout, "result: %s\nid: %s\nproject: %s\nnote: %s\nstatus: %s\n", got.Result, got.ID, got.Project, got.Note, got.Status)
 	return 0
+}
+
+// signalFailure preserves the existing stderr prefix while classifying act errors.
+func signalFailure(env Env, err error) int {
+	code := failure(env, err)
+	var bad *signal.BadInputError
+	var refused *signal.RefusedError
+	switch {
+	case errors.As(err, &bad):
+		return 2
+	case errors.As(err, &refused):
+		return 3
+	default:
+		return code
+	}
 }
