@@ -12,11 +12,13 @@ dist/
     hooks/hooks.json
     .mcp.json
     bin/grid
+    bin/grid.cmd
     bin/grid-darwin-arm64
     bin/grid-darwin-amd64
     bin/grid-linux-amd64
     bin/grid-linux-arm64
-    skills/  agents/  LICENSE
+    bin/grid-windows-amd64.exe
+    skills/  agents/  agent-templates/  LICENSE
 ```
 
 Install `dist/plugin` as the plugin directory; keep its relative paths intact.
@@ -27,20 +29,25 @@ Codex supplies `CLAUDE_PLUGIN_ROOT` for compatibility with the shared hook comma
 ([OpenAI plugin packaging](https://developers.openai.com/plugins/build/plugins)).
 `bin/grid` follows shell symlinks, maps uname to a shipped binary, and uses exec
 so arguments, stdin, output and exit status pass through unchanged.
+Under Git Bash, MSYS2 or Cygwin (uname MINGW*, MSYS*, CYGWIN*) it runs `bin/grid-windows-amd64.exe`
+when the tree has it. `bin/grid.cmd` is the entry for cmd.exe: it runs the `.exe` beside it, with CRLF
+line endings, and builds or downloads nothing.
 Unsupported OS/architecture and missing executables produce an error on stderr.
 In a source checkout (go.mod beside it) it uses a `dist/plugin/bin/` binary or `dist/grid` when
 no `.go` file is newer, and otherwise builds `dist/grid` first; a hook stays silent and exits 0 when
 that build is impossible. Releases never build and never touch the network.
 `make build` creates only the native development CLI at `dist/grid`.
 
-The release version is `git describe --tags --always --dirty` mapped to semver by
-`version.FromDescribe` (no tag: `0.0.0-dev+<sha>`; after tag v0.2.0: `v0.2.1-dev.N+<sha>`), stamped into
-`internal/version.Version` through `-ldflags` and into both release manifests.
-`make dist VERSION=<version>` is available for source archives without Git.
+The release version is `0.1.<commit count>`, from `git rev-list --count HEAD` (`go run ./internal/packaging/cmd -release`),
+stamped by `make dist` into `internal/version.Version` through `-ldflags` and into both manifests and the
+marketplace entry; `packaging.Build` takes it as its one argument. A shallow clone counts too few commits.
+`make dist RELEASE=<version>` is available for source archives without Git. `make build` still uses
+`git describe --tags --always --dirty` mapped to semver by `version.FromDescribe` (no tag: `0.0.0-dev+<sha>`;
+after tag v0.2.0: `v0.2.1-dev.N+<sha>`). The publish steps are in [release](release.md).
 Builds disable cgo and VCS metadata, use `-trimpath` and `-buildid=`, and pin
 architecture baselines. Identical source, version and Go toolchain produce
 identical bytes; use a clean tagged checkout for a release.
-Windows/amd64 is compiled and discarded as a build-only check, not shipped.
+Windows/amd64 is shipped as `bin/grid-windows-amd64.exe`, and every package is also compiled for Windows as a build check.
 
 SHA256SUMS covers every regular file under plugin, sorted by relative path.
 Verify from dist with `sha256sum -c SHA256SUMS` on Linux or

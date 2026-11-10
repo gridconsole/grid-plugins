@@ -89,9 +89,13 @@ func homeHostFolder(projects string) string {
 // EvaluateHost protects legacy .host and the new task Feed, which contains the
 // answer and gate records (feed-contract.md:17-29), from the file tools. It
 // does not read shell text: a Bash command is never refused here, and Claude
-// Code's own permission rules cover what a shell may write. It cannot be
-// disabled by the plan guard switch.
+// Code's own permission rules cover what a shell may write. The plan guard
+// switch does not reach it; its level is the host-guard setting, block by default.
 func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.Decision {
+	return configuredLevel("host-guard", in, root, env, evaluateHost(in, root, env))
+}
+
+func evaluateHost(in hookio.Input, root string, env map[string]string) hookio.Decision {
 	c := newContext(in, root, env)
 	if c.projects == "" || !fileTool(in.ToolName) {
 		return hookio.Decision{}

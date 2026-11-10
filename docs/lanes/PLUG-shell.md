@@ -23,7 +23,7 @@ Env checks that are not agentShell, listed because the brief names the first:
 
 ## Row 2: task attach is not removed
 
-I did not remove it. `docs/simplify.md` (read at /srv/gridwork/briefs/simplify.md; the clone has no docs/simplify.md or docs/needed.md) does not list it:
+I did not remove it. `docs/simplify.md` (read from the simplify brief; the clone has no docs/simplify.md or docs/needed.md) does not list it:
 - row "The shell text guard ... Remove it" is the code that read shell command lines (S6a deleted it). agentShell reads environment variables, not shell text.
 - row "Hard enforcement around those gates" covers approve and refusal decide (S6b removed their agent refusals). The attach rule is a task-scope rule, not a gate.
 - docs/needed.md has no entry for it.

@@ -1,0 +1,1 @@
+I'm Alex. My Grid home is the one in GRID_HOME and the notes-app repo is ./work/notes-app. Start a task for this, in my personal project: add a tag filter to the notes list so I can find Groceries quikly

@@ -171,11 +171,9 @@ func ReadHookLevels(home, project string) (map[string]string, error) {
 // ResolveHookLevel is the runtime level reader for both event hooks and guards.
 // It shares project selection with grid where. On errors the returned block
 // level keeps guards enforced and informational hooks enabled; callers report
-// the error without replacing an existing denial. Fixed guards read no files.
+// the error without replacing an existing denial. No hook has a fixed level: a
+// guard's default is block, and a setting may lower it.
 func ResolveHookLevel(name string, resolver where.Resolver, query where.Query) (string, error) {
-	if AlwaysBlock(name) {
-		return "block", nil
-	}
 	if resolver.GridHome == "" {
 		return defaultLevel(name), nil
 	}

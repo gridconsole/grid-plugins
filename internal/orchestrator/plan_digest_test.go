@@ -103,17 +103,33 @@ func TestForgedPlanDigest(t *testing.T) {
 	if got := guard.EvaluatePlan(in, root, env); got.Behavior != "" {
 		t.Fatalf("original approved plan refused: %+v", got)
 	}
+	taskText, err := os.ReadFile(filepath.Join(dir, "task.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookup := task.StepsFor(store.Resolver, dir)
+	if !task.Approved(dir) || task.PlanHeldWith(lookup, dir, string(taskText), "") {
+		t.Fatal("the original approved plan does not read as approved")
+	}
 	writePlan(t, f, forged)
 	if _, err := store.Approval("", "T-01"); err == nil {
 		t.Error("locked approval accepted a forged plan with a matching short hash")
 	}
-	if got := guard.EvaluatePlan(in, root, env); got.Behavior != "deny" {
-		t.Error("guard accepted a forged plan with a matching short hash")
+	// The plan hold is gone: no guard refuses the write. Whether the plan is
+	// approved is task-level, and a forged plan must still read as not approved.
+	if task.Approved(dir) {
+		t.Error("Approved accepted a forged plan with a matching short hash")
+	}
+	if !task.PlanHeldWith(lookup, dir, string(taskText), "") {
+		t.Error("PlanHeldWith released a forged plan with a matching short hash")
+	}
+	if got := guard.EvaluatePlan(in, root, env); got.Behavior != "" {
+		t.Errorf("a plan that is not approved must not block a repo write: %+v", got)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "history.md"), []byte("- 2026-01-02T03:04 · plan accepted · rev 1 · "+plan.Hash(original)+" · by person\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if got := guard.EvaluatePlan(in, root, env); got.Behavior != "deny" {
+	if task.Approved(dir) || !task.PlanHeldWith(lookup, dir, string(taskText), "- 2026-01-02T03:04 · plan accepted · rev 1 · "+plan.Hash(original)+" · by person\n") {
 		t.Error("legacy history bypassed a mismatching full digest")
 	}
 	if _, err := store.Approve(task.WriteOptions{ID: "T-01"}, ""); err == nil {

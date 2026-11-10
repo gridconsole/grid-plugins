@@ -15,7 +15,9 @@ func TestSampleSuite(t *testing.T) {
 		"execute-approve-waits", "memory-skill", "questions-skill", "routing-skill", "views-skill",
 		"execute-check-after-make-together", "execute-check-fails", "execute-check-fails-out-of-scope", "execute-review-changes-rework",
 		"execute-review-changes-past-limit", "deliver-refuses-closed", "preview-skill", "agent-reviewer-read-only",
-		"agent-checker-read-only", "agent-designer-spec", "agent-operator-no-browser", "agent-library-answers", "agent-explore-finds"}
+		"agent-checker-read-only", "agent-designer-spec", "agent-operator-no-browser", "agent-library-answers", "agent-explore-finds",
+		"task-skill", "setup-skill", "signals-skill",
+		"skill-brain-keeper", "skill-browser", "skill-visual-design-review"}
 	got := map[string]bool{}
 	for _, task := range tasks {
 		got[task.ID] = true

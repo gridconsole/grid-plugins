@@ -16,12 +16,20 @@ func main() {
 	dist := flag.Bool("dist", false, "build all release platforms and the installable plugin")
 	release := flag.String("version", version.Version, "release version")
 	describe := flag.Bool("describe", false, "print the semver version for this checkout from git describe and exit")
+	releaseVersion := flag.Bool("release", false, "print the publish version 0.1.<commit count> for this checkout and exit")
 	flag.Parse()
 	if *describe {
 		fmt.Println(checkoutVersion())
 		return
 	}
 	root, err := os.Getwd()
+	if err == nil && *releaseVersion {
+		var v string
+		if v, err = packaging.ReleaseVersion(root); err == nil {
+			fmt.Println(v)
+			return
+		}
+	}
 	if err == nil {
 		if *dist {
 			err = packaging.Build(root, *release, os.Stdout)

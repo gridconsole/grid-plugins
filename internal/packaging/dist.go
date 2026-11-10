@@ -13,8 +13,17 @@ import (
 	"strings"
 )
 
-// Targets are release platforms. Windows is compiled separately, never shipped.
-var targets = [][2]string{{"darwin", "arm64"}, {"darwin", "amd64"}, {"linux", "amd64"}, {"linux", "arm64"}}
+// Targets are the release platforms; every one ships a prebuilt binary under bin/.
+var targets = [][2]string{{"darwin", "arm64"}, {"darwin", "amd64"}, {"linux", "amd64"}, {"linux", "arm64"}, {"windows", "amd64"}}
+
+// binaryName is the file the launchers look for in bin/: grid-<os>-<arch>, with .exe on Windows.
+func binaryName(goos, goarch string) string {
+	name := "grid-" + goos + "-" + goarch
+	if goos == "windows" {
+		name += ".exe"
+	}
+	return name
+}
 
 var releaseVersion = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]*$`)
 
@@ -35,10 +44,32 @@ func Build(root, version string, log io.Writer) error {
 	if err := os.RemoveAll(plugin); err != nil {
 		return err
 	}
+	if err := stage(root, plugin, version); err != nil {
+		return err
+	}
+	for _, target := range targets {
+		if err := buildBinary(root, filepath.Join(plugin, "bin", binaryName(target[0], target[1])), version, target[0], target[1], log); err != nil {
+			return err
+		}
+	}
+	// The Windows binary above covers cmd/grid; this compiles every other package for Windows too.
+	if err := buildCheck(root, "windows", log); err != nil {
+		return err
+	}
+	return writeChecksums(dist, plugin)
+}
+
+// shippedDirs are the only source folders copied into the public plugin. Evals,
+// the legacy corpus, recordings, fixtures and golden cases stay in the source
+// repo and are never listed here.
+var shippedDirs = []string{"skills", "agents", "agent-templates"}
+
+// stage writes everything in the plugin except the binaries.
+func stage(root, plugin, version string) error {
 	if err := Write(plugin, version); err != nil {
 		return err
 	}
-	for _, dir := range []string{"skills", "agents", "agent-templates"} {
+	for _, dir := range shippedDirs {
 		if err := copyTree(filepath.Join(root, dir), filepath.Join(plugin, dir)); err != nil {
 			return err
 		}
@@ -47,28 +78,7 @@ func Build(root, version string, log io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(plugin, "LICENSE"), license, 0o644); err != nil {
-		return err
-	}
-	for _, target := range targets {
-		name := "grid-" + target[0] + "-" + target[1]
-		if err := buildBinary(root, filepath.Join(plugin, "bin", name), version, target[0], target[1], log); err != nil {
-			return err
-		}
-	}
-	// Compile every package on Windows, but do not advertise runtime support.
-	if err := buildCheck(root, "windows", log); err != nil {
-		return err
-	}
-	checkDir, err := os.MkdirTemp(dist, ".windows-check-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(checkDir)
-	if err := buildBinary(root, filepath.Join(checkDir, "grid.exe"), version, "windows", "amd64", log); err != nil {
-		return err
-	}
-	return writeChecksums(dist, plugin)
+	return os.WriteFile(filepath.Join(plugin, "LICENSE"), license, 0o644)
 }
 
 func buildBinary(root, output, version, goos, goarch string, log io.Writer) error {
