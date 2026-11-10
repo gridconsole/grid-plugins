@@ -38,7 +38,7 @@ func Build(root, version string, log io.Writer) error {
 	if err := Write(plugin, version); err != nil {
 		return err
 	}
-	for _, dir := range []string{"skills", "agents"} {
+	for _, dir := range []string{"skills", "agents", "agent-templates"} {
 		if err := copyTree(filepath.Join(root, dir), filepath.Join(plugin, dir)); err != nil {
 			return err
 		}

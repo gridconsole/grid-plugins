@@ -70,19 +70,9 @@ func runDoctor(args []string, env Env) int {
 // defaultHooksFile finds the plugin's hooks.json from the plugin root, never from
 // the current folder: CLAUDE_PLUGIN_ROOT, else the root above the running binary.
 func defaultHooksFile(env Env) string {
-	root := env.getenv("CLAUDE_PLUGIN_ROOT")
+	root := pluginRoot(env)
 	if root == "" {
-		exe, err := env.executable()
-		if err != nil {
-			return ""
-		}
-		if real, err := filepath.EvalSymlinks(exe); err == nil {
-			exe = real
-		}
-		root = filepath.Dir(exe)
-		if base := filepath.Base(root); base == "bin" || base == "dist" {
-			root = filepath.Dir(root)
-		}
+		return ""
 	}
 	return filepath.Join(root, "hooks", "hooks.json")
 }

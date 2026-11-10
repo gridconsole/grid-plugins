@@ -14,6 +14,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/usage"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -99,6 +100,9 @@ func sessionStart(o Options) {
 		// Unreadable settings keep the default levels and say so, instead of hiding the context.
 		note += " Hook settings cannot be read: " + err.Error() + "."
 	}
+	if level != "off" {
+		syncAgents(o)
+	}
 	context := sessionContext(res, o.Resolver, note)
 	brainProject := res.Project
 	if brainProject == where.Personal {
@@ -128,6 +132,25 @@ func sessionStart(o Options) {
 	}
 }
 
+// syncAgents renders the plugin's agent templates into the person's agents folder.
+// It writes a file only when the template or the person's model and effort changed,
+// and a failure is logged and never reaches the session.
+func syncAgents(o Options) {
+	root := o.Getenv("CLAUDE_PLUGIN_ROOT")
+	if root == "" {
+		return
+	}
+	dir, err := settings.ClaudeAgentsDir(o.Resolver.Home, o.Getenv("CLAUDE_CONFIG_DIR"))
+	if err == nil {
+		_, err = settings.SyncAgents(settings.SyncOptions{
+			Home:         o.Resolver.GridHome,
+			TemplatesDir: settings.AgentTemplatesPath(root),
+			AgentsDir:    dir,
+		})
+	}
+	o.log("agent sync", err)
+}
+
 func writeEnv(path, home, task string) error {
 	q := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
 	text := "\nexport GRID_HOME=" + q(home) + "\nexport GRID_PROJECTS=" + q(filepath.Join(home, "projects")) + "\n"
@@ -155,7 +178,7 @@ func sessionContext(r where.Result, resolver where.Resolver, note string) string
 		"GRID_HOME is the Grid data folder " + home + "; GRID_PROJECTS is " + gridhome.Tilde(filepath.Join(resolver.GridHome, "projects"), resolver.Home) + ".",
 		ProjectLine(r, resolver.Home) + note,
 		"Task files are written by grid under the Grid home. Project records and task files live outside repositories.",
-		"Grid agents cover delegated work in any folder: grid:grid-scout maps code; grid:grid-researcher researches facts; grid:grid-builder changes files; grid:grid-runner runs checks; grid:grid-reviewer reviews work; grid:grid-designer designs interfaces; grid:grid-checker checks pages; grid:grid-operator changes browser state; grid:grid-planner plans tasks; grid:grid-curator curates knowledge; grid:grid-library answers questions from the brain. Job briefs are rendered by grid job.",
+		"Grid agents cover delegated work in any folder: grid-scout maps code; grid-researcher researches facts; grid-builder changes files; grid-runner runs checks; grid-reviewer reviews work; grid-designer designs interfaces; grid-checker checks pages; grid-operator changes browser state; grid-planner plans tasks; grid-curator curates knowledge; grid-library answers questions from the brain. Job briefs are rendered by grid job.",
 		"The Grid brain holds shared topics, knowledge and decisions at home and project level.",
 		"Approvals come from a person through the Grid app or grid approve in a terminal outside Claude Code or Codex.",
 	}, "\n")
