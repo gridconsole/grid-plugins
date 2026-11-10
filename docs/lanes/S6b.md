@@ -136,3 +136,19 @@ Changed expectations:
 - TestAgentWithdrawUnreadablePolicy/question: "cannot read task withdrawal policy (workflow.md): is a directory" exit 1; not examined (withdraw policy code is in internal/question, S6b6's area).
 - gofmt -l lists internal/cli/signal_inbox_test.go (not touched by this lane).
 - Importer packages: only internal/cli and cmd importers by go list; their tests were not run.
+## S6b6 test changes (outside internal/cli)
+- internal/question/withdraw_cli_test.go TestPersonWithdrawCLI: kept, rewritten. Dropped terminalProcs, Env.Procs, PersonDir, testenv.Person and the agent_env override of the expected stderr; rows now expect the question package's own refusals (kept behaviour).
+- internal/settings/claude_cli_rework_test.go: kept; removed terminalProcs, personEnv and the persongate import (behaviour removed: simplify.md row Hard enforcement around those gates).
+- internal/guard/plan_hold_swap_test.go (TestNamedWorkflowSwappedProjectFolder, swapRows and helpers mustRename/copyInto/rebuild, used nowhere else): deleted; behaviour removed: simplify.md row Hard enforcement around those gates (workflow_digest hold, ErrWorkflowChanged).
+- internal/guard/linked_test.go TestALinkedTaskFileHoldsTheGuard: deleted; behaviour removed: simplify.md row Hard enforcement around those gates (hard-link refusal). TestHostBashHistoryAndPreviewApprovalAreGateFiles stays.
+- internal/guard/plan_stage_steps_test.go TestNamedWorkflowProposedEdit row "names a template with no plan gate": expected stage changed from "unreadable" to "" (no digest mismatch to make it unreadable); the guard still denies the edit, so want stays "deny".
+- internal/orchestrator tests re-run: pass (17s).
+
+## S6b6 checks
+- go vet ./...: exit 0 (clean, including internal/cli).
+- go test -count=1 ./internal/... ./cmd/...: only FAIL is internal/cli (13.0s); every other package ok. Importers of the changed packages (guard, settings, question, orchestrator) pass.
+- GOOS=windows go build ./...: exit 0. GOOS=darwin go build ./...: exit 0.
+- make lint: not run (not on the allow list).
+
+## S6b6 internal/cli failures left for S6b5 (not touched)
+TestApproveGateAgentRefused, TestContractCommandsParserInventory, TestDeliverWorkflowChangedThroughCLI, TestSizedLaterKeepsWorkflowDigest, TestInlineRewriteOfStampedTaskNotHeld, TestGuestProjectSettingsWrites, TestGuestProjectParity, TestBlockedPublicationNoticeUsesCLIStderrOnce, TestPersonalBypassTaskCommands, TestPlanDigestRoundTrip, TestAnswerFeedAndRecovery, TestSettingsPersonalAllowedCallers, TestSettingsRefusalCreatesNothing, TestTaskRenameDecline, TestTaskWriteGolden, TestTaskPersonGates, TestAgentWithdrawUnreadablePolicy.
