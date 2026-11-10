@@ -21,7 +21,8 @@ func setNeedsApprove(t *testing.T, s Store, needs bool) {
 }
 
 func TestStricterApprovalPolicyWins(t *testing.T) {
-	for _, gate := range []string{"none", "plan", "ship"} {
+	// No ship approval exists any more (S6c3), so the ship gate has no row.
+	for _, gate := range []string{"none", "plan"} {
 		for _, needs := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/needs-approve=%t", gate, needs), func(t *testing.T) {
 				s, dir, repo := fixture(t)
@@ -46,13 +47,6 @@ func TestStricterApprovalPolicyWins(t *testing.T) {
 					}
 					if _, err := os.Stat(filepath.Join(repo, "outcome")); !os.IsNotExist(err) {
 						t.Fatalf("command ran without approval: %v", err)
-					}
-					if wantGate == "ship" {
-						b, err := os.ReadFile(filepath.Join(dir, "task.md"))
-						if err != nil {
-							t.Fatal(err)
-						}
-						write(t, filepath.Join(dir, "task.md"), strings.Replace(string(b), "state: waiting", "gate: ship\nstate: waiting", 1))
 					}
 					approve(t, s)
 					if _, err := s.Run(context.Background(), repo, "T-01", false); err != nil {

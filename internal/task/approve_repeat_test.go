@@ -81,4 +81,3 @@ func TestApproveRepeatWithNewLandsHashRewrites(t *testing.T) {
 		t.Fatalf("receipt not rebound: %+v %v", stored, err)
 	}
 }
-

@@ -264,8 +264,10 @@ func TestWorkflowApproval(t *testing.T) {
 		gate, approval string
 		allow          bool
 	}{
-		{"plan", "plan", true}, {"plan", "ship", false},
-		{"ship", "ship", true}, {"ship", "plan", false},
+		// No ship receipt exists any more (S6c3): a plan approval never releases a
+		// ship land, and a ship land with no plan Job has nothing that releases it.
+		{"plan", "plan", true},
+		{"ship", "plan", false},
 		{"none", "", true}, {"ship", "", false}, {"typo", "plan", false},
 	} {
 		t.Run(tc.gate+"/"+tc.approval, func(t *testing.T) {
@@ -273,10 +275,6 @@ func TestWorkflowApproval(t *testing.T) {
 			setWorkflow(t, s, dir, tc.gate)
 			if tc.gate == "none" {
 				setNeedsApprove(t, s, false)
-			}
-			if tc.approval == "ship" {
-				b, _ := os.ReadFile(filepath.Join(dir, "task.md"))
-				write(t, filepath.Join(dir, "task.md"), strings.Replace(string(b), "state: waiting", "gate: ship\nstate: waiting", 1))
 			}
 			if tc.approval != "" {
 				approve(t, s)
