@@ -16,19 +16,10 @@ import (
 )
 
 func TestApproveDigestReceipt(t *testing.T) {
-	for _, gate := range []string{"plan", "ship"} {
+	for _, gate := range []string{"plan"} {
 		t.Run(gate, func(t *testing.T) {
 			s, task := waitingFixture(t)
 			name := approvalFile
-			if gate == "ship" {
-				path := filepath.Join(task.Path, "task.md")
-				data, err := os.ReadFile(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				write(t, path, strings.Replace(string(data), "state: waiting", "state: waiting\ngate: ship", 1))
-				name = shipApprovalFile
-			}
 			hash := setPlan(t, task, planV1)
 			digest := plan.Digest(planV1)
 			event, err := s.Approve(WriteOptions{ID: task.ID}, digest)

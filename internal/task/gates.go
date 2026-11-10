@@ -24,13 +24,10 @@ var planHashToken = regexp.MustCompile(`^([0-9a-f]{6}|[0-9a-f]{64})$`)
 // short hash or full digest is a compare-and-set token. With no token, an existing
 // stale approval must be explicitly replaced using --plan-hash after reviewing the new plan.
 //
-// The gate the task raised decides what is recorded: a task at gate ship (set
-// by deliver) gets a ship approval in approval-ship.json, a task at gate preview
-// a preview approval in approval-preview.json plus a "preview approved" history
-// line, and any other waiting task a plan approval in approval.json. The three
-// never overwrite each other. A caller that names the gate the person saw
-// (o.Gate) is refused when the task now waits at another gate, and a repeat
-// whose receipt already matches the plan writes nothing.
+// A task raises no ship or preview gate any more (an old gate: line in task.md
+// is ignored), so a waiting task always gets its plan approval in approval.json.
+// A caller that names another gate (o.Gate) is refused, and a repeat whose
+// receipt already matches the plan writes nothing.
 //
 // The hash comes from plan.md through internal/plan, never from a stored copy.
 // Locks are taken in one order: .task.lock (withWrite), then .plan.lock (WithDigest),
@@ -134,7 +131,7 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 		found, jobErr := planJobResult(t.Path)
 		if errors.Is(jobErr, ErrNoPlanJob) {
 			var err error
-			event, err = receiptForGate(t)
+			event, err = receiptForGate(t, gate)
 			return err
 		}
 		if t.State == "closed" {
@@ -162,17 +159,24 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 }
 
 // receiptForGate is the Q10 fallback of ApprovalForGate: the approval.json
-// receipt of a task that has no approve person Job. The gate name is ignored,
-// as it is on the Job path; no preview or ship receipt is written any more. It
-// runs under the task lock.
-func receiptForGate(t Task) (Event, error) {
+// receipt of a task that has no approve person Job. No preview or ship receipt
+// is written or read any more, so a task with no plan Job has no approval for
+// those gates; a receipt that names a gate cannot authorize the plan either,
+// even if misfiled. It runs under the task lock.
+func receiptForGate(t Task, gate string) (Event, error) {
 	var event Event
+	if gate != "plan" {
+		return event, fmt.Errorf("no approval for gate %q: only the plan is approved", gate)
+	}
 	data, err := readOptional(filepath.Join(t.Path, approvalFile))
 	if err != nil {
 		return event, err
 	}
 	err = plan.Store{TaskDir: t.Path}.WithDigest(func(hash, digest string) (err error) {
 		event, err = checkApproval(t, data, hash, digest)
+		if err == nil && event.Gate != "" {
+			return errors.New("approval is for another gate")
+		}
 		return err
 	})
 	if errors.Is(err, plan.ErrNoPlan) {
@@ -210,8 +214,10 @@ func ApprovedDigest(dir, hash, digest string) bool {
 		if err != nil {
 			return false
 		}
-		_, err = checkApproval(t, data, hash, digest)
-		return err == nil
+		event, err := checkApproval(t, data, hash, digest)
+		// The plan receipt has no gate field. A receipt for ship or an unknown
+		// gate cannot authorize plan work, even if misfiled.
+		return err == nil && event.Gate == ""
 	}
 	return err == nil && digest != "" && found.PlanHash == hash && found.PlanDigest == digest
 }

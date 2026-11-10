@@ -153,11 +153,10 @@ func TestNamedWorkflowRoles(t *testing.T) {
 	}
 }
 
-// Deliver asks the same plan hold with the caller's resolver, so each role
-// gets the guard's answer from it: refused at the plan gate, delivered past it.
-// A guest the resolver filters out is refused at both steps, as the guard
-// denies; Deliver refuses it at the task lookup, before its hold lookup, so
-// the hold lookup never sees a caller the resolver filters out.
+// Deliver no longer asks the plan hold (S6c3), so it delivers at the plan gate
+// as well as past it; the guard still denies a repo write at the plan gate.
+// A guest the resolver filters out is refused by Deliver at the task lookup and
+// is denied by the guard at both steps. A refused Deliver changes nothing.
 func TestNamedWorkflowDeliverRoles(t *testing.T) {
 	for _, tc := range namedRoles {
 		for _, step := range []string{"plan", "build"} {
@@ -165,7 +164,6 @@ func TestNamedWorkflowDeliverRoles(t *testing.T) {
 				n := newNamed(t, "large", "Large", "", namedWorkflows(namedLarge))
 				n.as(tc)
 				n.deliverable(n.at("running", step), "")
-				denied := n.repoWrite().Behavior == "deny"
 				before := files(t, n.dir)
 				_, err := n.store.Deliver(taskstore.DeliverOptions{Cwd: n.dir, Task: n.id, Outcome: "Ready", By: "grid"})
 				switch {
@@ -173,17 +171,11 @@ func TestNamedWorkflowDeliverRoles(t *testing.T) {
 					if !errors.Is(err, where.ErrTaskNotFound) {
 						t.Errorf("Deliver err=%v; want the task lookup to refuse a filtered guest", err)
 					}
-				case step == "plan":
-					// S6c3: Deliver no longer asks the plan hold, so it does not refuse here.
-					_ = taskstore.DeliverOptions{}
+					if !reflect.DeepEqual(files(t, n.dir), before) {
+						t.Error("a refused Deliver changed the task")
+					}
 				case err != nil:
-					t.Errorf("Deliver: %v; the guard released the plan", err)
-				}
-				if denied != (err != nil) {
-					t.Errorf("guard denied %v, Deliver err=%v", denied, err)
-				}
-				if err != nil && !reflect.DeepEqual(files(t, n.dir), before) {
-					t.Error("a refused Deliver changed the task")
+					t.Errorf("Deliver: %v; Deliver no longer asks the plan hold", err)
 				}
 			})
 		}

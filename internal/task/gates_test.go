@@ -287,48 +287,33 @@ func TestGateWithSymlinkedHome(t *testing.T) {
 	}
 }
 
-// A task that deliver sent to the ship gate gets a ship approval; the plan
-// approval stays valid and is never replaced by it.
-func TestApproveAtShipGateRecordsShipApproval(t *testing.T) {
+// The plan receipt is the only receipt (S6c3). Reopening a task overwrites it
+// with the reopen event, so the plan is approved again.
+func TestReopenOverwritesPlanReceipt(t *testing.T) {
 	s, task := waitingFixture(t)
-	h1 := setPlan(t, task, planV1)
+	setPlan(t, task, planV1)
 	planEvent, err := s.Approve(WriteOptions{ID: task.ID, Note: "Plan ok"}, "")
 	if err != nil || planEvent.Gate != "" {
 		t.Fatalf("%+v: %v", planEvent, err)
 	}
-	path := filepath.Join(task.Path, "task.md")
-	data, _ := os.ReadFile(path)
-	write(t, path, strings.Replace(string(data), "state: waiting", "state: waiting\ngate: ship", 1))
-	shipEvent, err := s.Approve(WriteOptions{ID: task.ID, Note: "Ship ok"}, "")
-	if err != nil || shipEvent.Gate != "ship" || shipEvent.PlanHash != h1 || shipEvent.PlanDigest != plan.Digest(planV1) || shipEvent.What != "approve" {
-		t.Fatalf("%+v: %v", shipEvent, err)
-	}
+	b, _ := os.ReadFile(filepath.Join(task.Path, "approval.json"))
 	var stored Event
-	b, _ := os.ReadFile(filepath.Join(task.Path, "approval-ship.json"))
-	if err := json.Unmarshal(b, &stored); err != nil || stored != shipEvent {
+	if err := json.Unmarshal(b, &stored); err != nil || stored != planEvent {
 		t.Fatalf("%+v: %v", stored, err)
 	}
-	b, _ = os.ReadFile(filepath.Join(task.Path, "approval.json"))
-	var planStored Event
-	if err := json.Unmarshal(b, &planStored); err != nil || planStored != planEvent {
-		t.Fatalf("ship approval replaced the plan approval: %+v: %v", planStored, err)
-	}
 	if !Approved(task.Path) {
-		t.Fatal("plan approval no longer valid")
+		t.Fatal("plan approval not valid")
 	}
-	// Reopening a task invalidates both approvals.
 	if _, err := s.Change(WriteOptions{ID: task.ID, Action: "close"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Change(WriteOptions{ID: task.ID, Action: "reopen"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"approval.json", "approval-ship.json"} {
-		b, _ := os.ReadFile(filepath.Join(task.Path, name))
-		var e Event
-		if err := json.Unmarshal(b, &e); err != nil || e.What != "reopen" {
-			t.Fatalf("%s survived reopen: %+v %v", name, e, err)
-		}
+	b, _ = os.ReadFile(filepath.Join(task.Path, "approval.json"))
+	var e Event
+	if err := json.Unmarshal(b, &e); err != nil || e.What != "reopen" {
+		t.Fatalf("approval.json survived reopen: %+v %v", e, err)
 	}
 }
 

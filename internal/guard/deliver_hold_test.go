@@ -3,7 +3,6 @@ package guard
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -57,40 +56,8 @@ func files(t *testing.T, dir string) map[string]string {
 	return out
 }
 
-func TestDeliverCannotReleaseAHeldPlan(t *testing.T) {
-	for _, c := range heldDeliveries {
-		for _, state := range []string{"queued", "running", "stuck", "reworking"} {
-			t.Run(c.name+"/"+state, func(t *testing.T) {
-				f, store, path := deliverableTask(t, c.workflow, state)
-				text, _ := os.ReadFile(path)
-				stage := planStage(string(text), "")
-				if !heldStage(stage) || !held(stepsFor(f.env, f.task), f.task, string(text), "") {
-					t.Fatalf("fixture stage %q is not held", stage)
-				}
-				if got := writesRepo(f); got != "deny" {
-					t.Fatalf("before: %q", got)
-				}
-				before := files(t, f.task)
-				err := deliver(store, f)
-				if err == nil || !strings.Contains(err.Error(), "waits for a person to approve its plan") {
-					t.Fatalf("Deliver err=%v; want a refusal naming the plan", err)
-				}
-				if after := files(t, f.task); !reflect.DeepEqual(after, before) {
-					t.Fatalf("a refused Deliver changed the task:\n%v\nwas:\n%v", after, before)
-				}
-				after, _ := os.ReadFile(path)
-				if got := planStage(string(after), ""); got != stage || !held(stepsFor(f.env, f.task), f.task, string(after), "") {
-					t.Fatalf("stage %q, want %q still held", got, stage)
-				}
-				if got := writesRepo(f); got != "deny" {
-					t.Fatalf("after: %q", got)
-				}
-			})
-		}
-	}
-}
-
-// A plan the person approved is not held, and delivers.
+// A plan the person approved is not held, and delivers. (Deliver no longer
+// refuses a held plan, S6c3; TestDeliverCannotReleaseAHeldPlan is gone.)
 func TestDeliverStillReleasesAnApprovedPlan(t *testing.T) {
 	for _, c := range heldDeliveries {
 		t.Run(c.name, func(t *testing.T) {

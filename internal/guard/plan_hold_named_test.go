@@ -1,7 +1,6 @@
 package guard
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"

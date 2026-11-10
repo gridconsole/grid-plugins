@@ -183,7 +183,7 @@ func TestDeliverDryRunWritesNothing(t *testing.T) {
 	s, task := deliverFixture(t, "")
 	before := treeSnapshot(t, task.Path)
 	d, err := s.Deliver(DeliverOptions{Cwd: task.Path, Task: task.ID, Outcome: "Ready", By: "grid", DryRun: true})
-	if err != nil || !d.DryRun || len(d.Actions) != 4 {
+	if err != nil || !d.DryRun || len(d.Actions) != 3 {
 		t.Fatalf("%+v %v", d, err)
 	}
 	if after := treeSnapshot(t, task.Path); len(before) != len(after) {
