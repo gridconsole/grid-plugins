@@ -78,6 +78,7 @@ type Result struct {
 }
 
 var taskName = regexp.MustCompile(`^T-\d+(-.*)?$`)
+var taskULID = regexp.MustCompile(`^[0-7][0-9A-HJKMNP-TV-Z]{25}$`)
 
 // Resolve applies the six rules.
 func (r Resolver) Resolve(q Query) (Result, error) {
@@ -243,6 +244,24 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 			name = res.Project
 		}
 	}
+	if name == "" && taskULID.MatchString(arg) {
+		// A task ULID is unique in the home, so it needs no project.
+		names := []string{}
+		for _, rec := range records {
+			names = append(names, rec.Name)
+		}
+		if personalOK {
+			names = append(names, Personal)
+		}
+		for _, n := range names {
+			if !r.GuestProjectAllowed(n) || !r.guestTaskPathAllowed(gridhome.TasksDir(gridHome, n)) {
+				continue
+			}
+			if task := taskWithID(gridhome.TasksDir(gridHome, n), arg); task != "" {
+				return n, task, nil
+			}
+		}
+	}
 	if name == "" {
 		if !personalOK {
 			return "", "", ErrTaskNotFound
@@ -268,10 +287,51 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 			return name, e.Name(), nil
 		}
 	}
+	// Task IDs are ULIDs (contract/README.md): the worker's spawn names the task by
+	// the id in its task.md, so that id selects the task as its folder name does.
+	if taskULID.MatchString(arg) {
+		if task := taskWithID(gridhome.TasksDir(gridHome, name), arg); task != "" {
+			return name, task, nil
+		}
+	}
 	if !personalOK {
 		return "", "", ErrTaskNotFound
 	}
 	return "", "", &LookupError{Kind: ErrTaskNotFound, Message: fmt.Sprintf("task %s not found in project %s", arg, name)}
+}
+
+// taskWithID is the folder name of the task in tasksDir whose task.md gives id, or "".
+func taskWithID(tasksDir, id string) string {
+	entries, _ := os.ReadDir(tasksDir)
+	for _, e := range entries {
+		if e.IsDir() && hasTaskID(filepath.Join(tasksDir, e.Name(), "task.md"), id) {
+			return e.Name()
+		}
+	}
+	return ""
+}
+
+// hasTaskID reports whether task.md's frontmatter gives id (as id: or ulid:, the
+// keys feed.TaskID reads; feed cannot be imported here).
+func hasTaskID(taskMD, id string) bool {
+	data, err := os.ReadFile(taskMD)
+	if err != nil {
+		return false
+	}
+	lines := strings.Split(string(data), "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return false
+	}
+	for _, line := range lines[1:] {
+		if strings.TrimSpace(line) == "---" {
+			return false
+		}
+		key, v, ok := strings.Cut(line, ":")
+		if ok && (key == "id" || key == "ulid") && strings.Trim(strings.TrimSpace(v), "\"'") == id {
+			return true
+		}
+	}
+	return false
 }
 
 // taskParts splits <grid home>/projects/<project>/tasks/<task>[/...], or

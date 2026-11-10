@@ -284,6 +284,52 @@ func TestLiveness(t *testing.T) {
 		}
 	})
 }
+// TestDeadAgentWaitsForItsLiveWorkerExit: the worker holds the task and supervises J-1. Its
+// agent's process (the .live pid) has ended, but the worker (the task lease pid) is alive and
+// will post the worker-exit. The tick must not retry the attempt first, or that exit is stale.
+func TestDeadAgentWaitsForItsLiveWorkerExit(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		supervisorAlive bool
+		want            int
+	}{{"worker alive", true, 1}, {"worker gone", false, 2}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := setup(t)
+			f.s.Assignee = "" // the task holder assigns to itself, as worker next does
+			f.worker.Worker, f.worker.Author = f.s.Writer.Worker, feed.Author{ID: f.s.Writer.Author.ID, Role: "worker"}
+			f.job(t, "J-1", nil)
+			f.tick(t)
+			f.ack(t)
+			j := f.state(t)
+			live := session.Live{Lease: j.ID, Holder: f.worker.Worker, Fence: uint64(f.worker.Fence), Attempt: j.Attempt, PID: 123, PIDStart: "example", Until: f.now.Add(time.Minute)}
+			dir := filepath.Join(f.s.Feed.Dir(), ".live")
+			if err := os.Mkdir(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := writeJSON(filepath.Join(dir, fmt.Sprintf("%s.%d.json", live.Holder, live.Fence)), live); err != nil {
+				t.Fatal(err)
+			}
+			f.s.Probe = func(l session.Live) session.ProcessState {
+				if l.PID == os.Getpid() && tc.supervisorAlive {
+					return session.Alive
+				}
+				return session.Dead
+			}
+			f.tick(t)
+			if got := f.state(t); got.Attempt != tc.want {
+				t.Fatalf("attempt %d (status %s), want %d", got.Attempt, got.Status, tc.want)
+			}
+			if !tc.supervisorAlive {
+				return
+			}
+			f.exit(t, "done") // the worker's exit is not stale
+			f.tick(t)
+			if got := f.state(t); got.Status != contract.Submitted || got.Attempt != 1 {
+				t.Fatalf("after the worker-exit: %s attempt %d, want submitted attempt 1", got.Status, got.Attempt)
+			}
+		})
+	}
+}
 func TestReadySpawnAgree(t *testing.T) {
 	f := setup(t)
 	f.job(t, "J-1", nil)
