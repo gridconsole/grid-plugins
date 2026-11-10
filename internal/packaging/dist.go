@@ -35,19 +35,7 @@ func Build(root, version string, log io.Writer) error {
 	if err := os.RemoveAll(plugin); err != nil {
 		return err
 	}
-	if err := Write(plugin, version); err != nil {
-		return err
-	}
-	for _, dir := range []string{"skills", "agents", "agent-templates"} {
-		if err := copyTree(filepath.Join(root, dir), filepath.Join(plugin, dir)); err != nil {
-			return err
-		}
-	}
-	license, err := os.ReadFile(filepath.Join(root, "LICENSE"))
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(plugin, "LICENSE"), license, 0o644); err != nil {
+	if err := stage(root, plugin, version); err != nil {
 		return err
 	}
 	for _, target := range targets {
@@ -69,6 +57,28 @@ func Build(root, version string, log io.Writer) error {
 		return err
 	}
 	return writeChecksums(dist, plugin)
+}
+
+// shippedDirs are the only source folders copied into the public plugin. Evals,
+// the legacy corpus, recordings, fixtures and golden cases stay in the source
+// repo and are never listed here.
+var shippedDirs = []string{"skills", "agents", "agent-templates"}
+
+// stage writes everything in the plugin except the binaries.
+func stage(root, plugin, version string) error {
+	if err := Write(plugin, version); err != nil {
+		return err
+	}
+	for _, dir := range shippedDirs {
+		if err := copyTree(filepath.Join(root, dir), filepath.Join(plugin, dir)); err != nil {
+			return err
+		}
+	}
+	license, err := os.ReadFile(filepath.Join(root, "LICENSE"))
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(plugin, "LICENSE"), license, 0o644)
 }
 
 func buildBinary(root, output, version, goos, goarch string, log io.Writer) error {
