@@ -18,6 +18,14 @@ var ErrDuplicateWake = errors.New("wake write already exists")
 // actual append, fence check and wake deduplication to Feed. The returned record
 // on ErrDuplicateWake is the first write, which the CLI prints before refusing.
 func Write(store feed.Store, w feed.Writer, in feed.Input) (record feed.Record, err error) {
+	return WriteUnless(store, w, in, nil)
+}
+
+// WriteUnless is Write with a check made under .orchestrator.lock, in the same
+// pass as the write: when done returns true nothing is written and the record is
+// empty. A check made before the lock could be overtaken by a write from another
+// process, so a caller that must not write twice asks here.
+func WriteUnless(store feed.Store, w feed.Writer, in feed.Input, done func() bool) (record feed.Record, err error) {
 	if err := store.CheckWithdrawalPolicy(in); err != nil {
 		return record, err
 	}
@@ -36,6 +44,9 @@ func Write(store feed.Store, w feed.Writer, in feed.Input) (record feed.Record, 
 		guard.Lease, guard.Worker, guard.Gen, guard.Fence = "task", *task.Holder, task.Gen, task.Fence
 	}
 	err = (Store{Feed: store, Writer: guard}).locked(func() error {
+		if done != nil && done() {
+			return nil
+		}
 		var e error
 		record, e = writeLocked(store, w, in)
 		return e

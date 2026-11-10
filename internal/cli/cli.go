@@ -33,6 +33,15 @@ type Env struct {
 	failure    *commandFailure
 	Getenv     func(string) string    // nil reads the process environment
 	Executable func() (string, error) // nil asks os.Executable
+	// afterApprove is a test seam: it runs once Approve has returned and before
+	// the person Job result is posted, so a test can look at the locks there.
+	afterApprove func()
+}
+
+func (e Env) afterApproveHook() {
+	if e.afterApprove != nil {
+		e.afterApprove()
+	}
 }
 
 func (e Env) getenv(key string) string {

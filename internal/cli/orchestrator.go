@@ -363,18 +363,22 @@ func runOrchestrator(args []string, env Env) int {
 // writes approval.json as before, and then posts the Job result once Approve
 // has released .task.lock and .plan.lock; a stale hash writes neither.
 func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string, body map[string]any, hash string, asJSON bool) int {
+	answer, _ := body["answer"].(string)
+	note, _ := body["note"].(string)
+	// The same refusals AnswerPerson gives, before anything is written: an answer
+	// over the cap, and a Job that is not a person's or is already closed.
+	if answer = strings.TrimSpace(answer); answer == "" {
+		answer = "approved"
+	}
+	if err := orchestrator.CheckPersonAnswer(answer); err != nil {
+		fmt.Fprintln(env.Stderr, err)
+		return exitCode(err)
+	}
 	snap, err := orchestrator.Load(store)
+	if err == nil {
+		err = orchestrator.PersonOpen(snap, job, time.Now())
+	}
 	if err != nil {
-		fmt.Fprintln(env.Stderr, err)
-		return exitCode(err)
-	}
-	// The same answer to a closed Job that AnswerPerson gives, before anything is written.
-	if j := snap.State.Jobs[job]; j != nil && (j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected) {
-		err := &feed.InvalidRecordError{Err: fmt.Errorf("%s is already %s", job, j.Status)}
-		fmt.Fprintln(env.Stderr, err)
-		return exitCode(err)
-	}
-	if err := orchestrator.PersonReady(snap, job, time.Now()); err != nil {
 		fmt.Fprintln(env.Stderr, err)
 		return exitCode(err)
 	}
@@ -382,8 +386,6 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	if err != nil {
 		return taskOperandError(env, "grid job result", err)
 	}
-	answer, _ := body["answer"].(string)
-	note, _ := body["note"].(string)
 	o := writeOptions(env, resolved.ID, "approve", note)
 	o.PlanHashToken, err = workflow.PlanHashToken(resolved.Path)
 	if err != nil {
@@ -394,6 +396,7 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	// Approve has returned, so no task or plan lock is held while the post
 	// waits for .orchestrator.lock, which a tick holds before .task.lock.
 	if err == nil {
+		env.afterApproveHook()
 		err = personApproval(store, w, job, answer, event)
 	}
 	return taskWriteResult(env, event, err, asJSON, resolved.Path)
@@ -433,22 +436,14 @@ func planPersonJob(dir string) (feed.Store, string) {
 // accepting control with answer, plan_hash, plan_digest, lands_hash and note,
 // written by one orchestrator.Write, so a failure leaves no half-written answer
 // and a repeat press finds the Job accepted. The Feed record carries who and
-// when. A Job already accepted with this digest gets nothing new. The caller
-// holds no task or plan lock: Write takes .orchestrator.lock, and a tick takes
-// that lock before .task.lock.
+// when. A Job already accepted with this digest gets nothing new: that check is
+// made under .orchestrator.lock, in the same pass as the write, so two presses at
+// once post one control. The caller holds no task or plan lock: the post takes
+// .orchestrator.lock, and a tick takes that lock before .task.lock.
 func personApproval(store feed.Store, w feed.Writer, job, answer string, e taskstore.Event) error {
 	answer = strings.TrimSpace(answer)
 	if answer == "" {
 		answer = "approved"
-	}
-	snap, err := orchestrator.Load(store)
-	if err != nil {
-		return err
-	}
-	if j := snap.State.Jobs[job]; j != nil && j.Status == contract.Accepted {
-		if a, err := taskstore.ApprovalFromJob(store.TaskDir); err == nil && a.Job == job && a.PlanDigest == e.PlanDigest {
-			return nil
-		}
 	}
 	body := map[string]any{"target": job, "status": "accepted", "reason": "answered by " + w.Author.ID, "answer": answer, "plan_hash": e.PlanHash, "plan_digest": e.PlanDigest}
 	if e.LandsHash != "" {
@@ -457,7 +452,11 @@ func personApproval(store feed.Store, w feed.Writer, job, answer string, e tasks
 	if e.Note != "" {
 		body["note"] = e.Note
 	}
-	_, err = orchestrator.Write(store, w, feed.Input{Type: "control", Body: body})
+	approved := func() bool {
+		a, err := taskstore.ApprovalFromJob(store.TaskDir)
+		return err == nil && a.Job == job && a.PlanDigest == e.PlanDigest
+	}
+	_, err := orchestrator.WriteUnless(store, w, feed.Input{Type: "control", Body: body}, approved)
 	return err
 }
 
