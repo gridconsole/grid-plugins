@@ -59,6 +59,7 @@ var guestParityCommands = map[string][]string{
 	"job blocked":           {},
 	"job cancel":            {},
 	"job lint":              {"{file}"},
+	"job order":             {},
 	"job next":              {},
 	"job post":              {},
 	"job render":            {"{task}", "I-01"},

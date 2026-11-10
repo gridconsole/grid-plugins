@@ -51,7 +51,7 @@ type report struct {
 	Job      *job.Job       `json:"job,omitempty"`
 	State    string         `json:"state,omitempty"`
 	Reason   string         `json:"state_reason,omitempty"`
-	Brief   string         `json:"brief,omitempty"`
+	Brief    string         `json:"brief,omitempty"`
 	Findings []lint.Finding `json:"findings"`
 	Error    string         `json:"error,omitempty"`
 }
