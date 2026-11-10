@@ -1,5 +1,6 @@
 ---
-id: T-01
+id: <ULID>
+display: T-01
 title: 'Fix: the "quoted" label'
 project: personal
 owner: alex
@@ -8,5 +9,4 @@ size: auto
 workflow: Check and ship
 state: queued
 created: '2026-01-02T03:04:05.000Z'
-ulid: <ULID>
 ---

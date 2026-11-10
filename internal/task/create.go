@@ -120,8 +120,9 @@ func (s Store) New(o NewOptions) (Task, error) {
 			return Task{}, err
 		}
 	}
-	// Keep the human id in Record; Feed reads the existing ulid field. Both
-	// identities are allocated under the lock and published in the same rename.
+	// Record keeps the display id in memory; task.md gets the migrated shape,
+	// id: <ULID> with display: T-NN. Both identities are allocated under the
+	// lock and published in the same rename.
 	front, err := s.taskFront(&t, r.Project, stableID)
 	if err != nil {
 		return Task{}, err
@@ -143,23 +144,22 @@ func (s Store) New(o NewOptions) (Task, error) {
 	return t, nil
 }
 
-// taskFront is task.md's header. Once the project is registered it binds the
-// task to its workflow's definition (workflow_digest), whether or not its size
-// is known yet, so a later definition that differs holds the task; a workflow
-// with no template to find leaves the field out, and the task keeps the folder
-// check alone.
+// taskFront is task.md's header in the migrated shape the contract names
+// (contract/README.md, Task IDs): id is the stable ULID and display the T-NN
+// folder number, the shape grid migrate --apply writes. New always writes
+// VERSION 1 first, so it never writes the legacy id: T-NN shape.
 func (s Store) taskFront(t *Task, project, stableID string) ([]byte, error) {
-	dump := func() ([]byte, error) {
-		return yaml.Dump(struct {
-			Record `yaml:",inline"`
-			ULID   string `yaml:"ulid"`
-		}{t.Record, stableID}, yaml.WithIndent(2), yaml.WithLineWidth(-1))
-	}
-	front, err := dump()
+	rec := t.Record
+	rec.ID = stableID
+	body, err := yaml.Dump(rec, yaml.WithIndent(2), yaml.WithLineWidth(-1))
 	if err != nil {
 		return nil, err
 	}
-	return front, nil
+	first := "id: " + stableID + "\n"
+	if !strings.HasPrefix(string(body), first) {
+		return nil, fmt.Errorf("task.md header must start with its id")
+	}
+	return []byte(first + "display: " + t.ID + "\n" + string(body[len(first):])), nil
 }
 
 // owner names who made the task and the role their words carry. Without Who the

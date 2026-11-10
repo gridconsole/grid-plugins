@@ -406,7 +406,7 @@ func TestAttachCountsQuestionsWithoutFeedID(t *testing.T) {
 }
 
 // legacyTask drops the stable Feed id that task.New now writes, leaving the
-// record a task made before it would have.
+// record a task made before it would have: id: T-NN, no display and no ulid.
 func legacyTask(t *testing.T, dir string) {
 	t.Helper()
 	path := filepath.Join(dir, "task.md")
@@ -416,7 +416,11 @@ func legacyTask(t *testing.T, dir string) {
 	}
 	var keep []string
 	for _, line := range strings.Split(string(b), "\n") {
-		if !strings.HasPrefix(line, "ulid:") {
+		switch {
+		case strings.HasPrefix(line, "ulid:"), strings.HasPrefix(line, "id:"):
+		case strings.HasPrefix(line, "display:"):
+			keep = append(keep, "id:"+strings.TrimPrefix(line, "display:"))
+		default:
 			keep = append(keep, line)
 		}
 	}
