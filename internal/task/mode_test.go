@@ -27,6 +27,13 @@ func chmodFile(t *testing.T, path string, perm os.FileMode) {
 	}
 }
 
+func seedHistory(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "history.md"), []byte("- 2026-01-02T03:04 · task created · by grid\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A rewrite keeps the mode of the file it replaces. AppendHistory renames
 // history.md into place since FP1 (2792be12), and the journal writers rename
 // task.md and history.md; neither may change who can read a person's file.

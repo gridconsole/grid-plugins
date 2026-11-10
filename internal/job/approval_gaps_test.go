@@ -2,7 +2,6 @@ package job
 
 import (
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,8 +12,7 @@ import (
 )
 
 // A symlink alias to plan.md resolves the current plan text, edited or not; no
-// approval is involved. (The hardlink alias is held by
-// TestLinkedPlanIsHeldWithLinkedFile.)
+// approval is involved.
 func TestProjectPlanSymlinkAliasReadsCurrentPlan(t *testing.T) {
 	for _, kind := range []string{"repo", "prototype"} {
 		t.Run(kind, func(t *testing.T) {
@@ -84,10 +82,7 @@ func TestSourceSwapUsesIdentifiedHandle(t *testing.T) {
 			j := Job{Intent: Intent{Owner: pointer, Item: pointer, Goal: pointer}}
 			rendered, err := Render(j, RenderOptions{Resolver: f})
 			if err != nil {
-				if !errors.Is(err, ErrPlanNeedsApproval) {
-					t.Fatal(err)
-				}
-				return // Refusal is also safe; replacement text must never escape.
+				t.Fatal(err)
 			}
 			if len(rendered.Inputs.Sources) != 1 {
 				t.Fatalf("rendered %d sources, want one", len(rendered.Inputs.Sources))
