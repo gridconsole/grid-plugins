@@ -138,7 +138,9 @@ func HeldStage(stage string) bool {
 // guard and Deliver both ask it with StepsFor, so neither can release a plan
 // the other holds.
 func PlanHeldWith(lookup StepLookup, dir, text, history string) bool {
-	// A JSON receipt takes precedence over legacy history/step advancement:
+	// approval.json is read here only for its existence, to choose between this
+	// branch and the history branch; the answer is Approved, the plan Job result.
+	// S6c5 deletes the plan hold. A JSON receipt takes precedence over legacy history/step advancement:
 	// stale full digests must not be released by an old prose acceptance.
 	if _, err := os.Lstat(filepath.Join(dir, approvalFile)); !os.IsNotExist(err) {
 		steps, err := lookup(text)

@@ -137,3 +137,69 @@ ok  	github.com/gridconsole/grid-plugins/internal/workflow	0.738s
 5. `personApproval`'s "already accepted with this digest" check runs before the Write, outside `.orchestrator.lock`. Two presses at the same moment could each post an accepting control.
 6. `make lint` and the cross-repo set are run by the orchestrator at landing.
 7. The approve path writes no separate "answered" message. If the owner wants that message beside the control, internal/orchestrator needs an exported way to post both under one `.orchestrator.lock` (as AnswerPerson does).
+
+# S6c2: the approval readers move to the person Job result
+
+Base lane-S6c1R a8f6dfcd. Head: see `docs/lanes/S6c2.md`.
+
+## Definitions chosen (S6c1 open item 3, review note 2)
+
+- **The plan Job** is a Feed `job` record with `role: Person` and `kind: approve`, the person Job of the workflow's approve step. A task may have several; the plan is approved by the newest accepted result, of any of them, that carries `plan_digest` (greatest control ULID). A person Job of another kind, or an accepted result without `plan_digest`, is not a plan approval. Why: `kind: approve` is the one field a Job record already has for "a person approves here", so no new field or name match is needed; "newest wins" is what the single approval.json did when it was overwritten.
+- **`ApprovalFromJob`** (and the readers) reads the Feed once, read-only (no cache or `state.json` write, which also closes the S6c1 NOT VERIFIED item on `State()`), takes the verdict set the fold uses (counted, stale, unknown) and then compares `plan_hash` and `plan_digest` to plan.md.
+- **No plan Job** (`ErrNoPlanJob`): the task has no stable ULID (so no Feed) or no `kind: approve` person Job in it. This is an old task (Q10). `Approved`, `ApprovedDigest` and `ApprovalForGate` read approval.json for that task only, as before, including `approval-preview.json` and `approval-ship.json` by gate name (S6c3/S6c4 remove those). Why: tasks in flight keep working, and the gate-by-file tests keep covering the code S6c3/S6c4 delete.
+- **Plan Job with no result** (review note 2): readers say `plan has not been approved: the plan Job J-2 has no result yet; run grid approve to post it`. approval.json is not consulted. This is a message on an existing "not approved" answer; no refusal was added. A repeat `grid approve` posts the result, because the Job is still open (`TestApprovalJSONWithoutJobResultIsRecoverable`).
+- **Re-approval after a plan edit** (found while moving the readers): once the plan Job is accepted, `planPersonJob` found no open Job, so `grid approve --plan-hash <new>` wrote approval.json but posted nothing, and the new readers would have said "Changed since you approved" for ever. `planPersonJob` now falls back to the last accepted approve Job and `personApproval` posts a new accepting control on it; the readers take the newest result (`TestReapprovalAfterPlanChangePostsANewResult`). This adds no refusal.
+- **Closed task**: readers say not approved, as `checkApproval` did.
+- **`ApprovalForGate` ignores the gate name** when the task has a plan Job. `land-approval: plan|ship` is still parsed and still printed as `approval_gate` in the land dry-run (S6c7 removes the field), so both land-dry-run goldens are unchanged by this lane.
+
+## Production changes
+
+- `internal/task/gates.go`: `planJobResult` (new), `ErrNoPlanJob`, `JobApproval.Who/When` and `event()`; `Approval`, `ApprovalForGate`, `Approved`, `ApprovedDigest` and `ApprovalFromJob` answer from it; `receiptForGate` is the old per-gate receipt code, used only for the Q10 fallback. attach.go calls `Approved`, so its `approved` field follows with no edit. land.go calls `ApprovalForGate`, so land follows with no edit. `Approve` still writes approval.json and reads it to recognise a repeat press (writing it).
+- `internal/cli/orchestrator.go`: `planPersonJob` falls back to the last accepted approve Job.
+- `internal/task/hold.go`: one comment line (see row 1).
+
+## Remaining reads of approval.json in non-test code (acceptance row 1)
+
+Command: `grep -rnE "readApproval|approval\.json|ApprovalForGate|approvalFile|checkApproval" internal cmd --include=*.go --exclude=*_test.go`.
+
+- `internal/task/gates.go` `Approve`: reads the existing receipt to recognise a repeat press and to refuse an unreviewed re-approve (writing it).
+- `internal/task/gates.go` `receiptForGate`, `ApprovedDigest`: the Q10 fallback for a task with no plan Job.
+- `internal/task/gates.go` `checkApproval`, `readApproval`: used only by the two lines above and `Approve`.
+- `internal/task/hold.go:143`: existence only, to choose the plan-hold branch; the answer is `Approved`. S6c5 deletes it.
+- `internal/task/write.go:131, 488, 555`: reopen deletes it, its name, the write allowlist (writing it).
+- `internal/plan/migrate.go:44`: migration deletes it.
+- `internal/land/land.go:217`: calls `ApprovalForGate`, which is the Job path.
+- `internal/guard/host.go`, `host_targets.go`: names in the protected list and a message; they read nothing.
+
+## Changed expectations
+
+None. No existing test was edited or deleted. `land/approval_fence_test`, `approval_policy_test`, `land_test`, `task/gates_digest_test`, `fixture_approval_test` and every other test seed a task with no ULID or no approve Job, so they run the Q10 fallback and pass unchanged. The Job path is covered by the new tests below.
+
+## New tests
+
+- `internal/cli/approve_reader_test.go`:
+  - `TestLandReadsThePlanJobResult` (row 2): land exits 3 with `plan has not been approved` and no outcome before the result; exit 0 and `outcome` written after `grid approve`.
+  - `TestJobResultAnswersWithoutApprovalJSONAndForAnyGateName`: with approval.json deleted, `Approved` is true and `ApprovalForGate` returns the same event for `plan`, `ship` and `preview`, with who and when from the Feed record.
+  - `TestPlanChangeAfterJobResultIsNotApproved` (row 3): `Approved`, attach `approved` and land after plan.md changes. This one also passes on the base, because the base's approval.json goes stale the same way; it pins behaviour that must not change.
+  - `TestApprovalJSONWithoutJobResultIsRecoverable` (row 4): approve without `GRID_MEMBER` leaves approval.json and an open Job; `Approved`, attach and land say not approved and name `plan Job J-2 has no result yet`; the repeat `grid approve` posts the result and they say approved.
+  - `TestReapprovalAfterPlanChangePostsANewResult`: approval.json at the new hash alone does not approve; the repeat posts a new result on the accepted Job.
+- `internal/task/plan_job_fallback_test.go`: `TestTaskWithoutPlanJobFallsBackToApprovalJSON` (row 5).
+
+On the base (a8f6dfcd `internal/task/gates.go` checked out over the lane, restored afterwards), the first run printed:
+
+```
+--- FAIL: TestLandReadsThePlanJobResult (0.01s)
+    approve_reader_test.go:56: land before approval: 3 land: land refused: plan has not been approved
+--- FAIL: TestJobResultAnswersWithoutApprovalJSONAndForAnyGateName (0.01s)
+    approve_reader_test.go:82: Approved ignored the Job result
+--- FAIL: TestApprovalJSONWithoutJobResultIsRecoverable (0.01s)
+    approve_reader_test.go:130: approved from approval.json alone, with a plan Job that has no result
+```
+
+`TestTaskWithoutPlanJobFallsBackToApprovalJSON` does not compile on the base (`undefined: ErrNoPlanJob`); it passes in behaviour on both. `TestReapprovalAfterPlanChangePostsANewResult` was added after that run; before the `planPersonJob` change it failed on the lane with `Changed since you approved: plan hash no longer matches`.
+
+## NOT VERIFIED
+
+- Reopen (Q8): a reopen deletes approval.json (write.go:131) but leaves the accepted Job result in the Feed, so for a task with a plan Job, `Approved` stays true after a reopen while plan.md is unchanged. Today a reopen clears approval. No S6c step in the map covers it; it needs the Q8 "reopen posts a new plan Job" step, probably in S6c3 with write.go.
+- Land's `Run` was tested through `grid land`; the `internal/land` package tests do not seed a Feed.
+- `make lint` and the cross-repo set are the orchestrator's.
