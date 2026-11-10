@@ -158,6 +158,16 @@ func runApprove(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
 		return 3
 	}
+	// The approval is also the result of the open person Job of the approve
+	// step, when the task has one. Without a Feed writer it stays open and
+	// approval.json is written as before.
+	if store, job := planPersonJob(resolved.Path); job != "" {
+		if w, err := orchestratorWriter(env, "task", env.getenv("GRID_LEASE_EPOCH")); err != nil {
+			fmt.Fprintf(env.Stderr, "grid approve: %s stays open: %v\n", job, err)
+		} else {
+			o.JobResult = personApproval(store, w, job, "approved")
+		}
+	}
 	event, err := (land.Store{Resolver: resolver(env)}).Approve(o, *hash)
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }

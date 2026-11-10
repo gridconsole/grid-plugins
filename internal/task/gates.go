@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/plan"
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
@@ -116,6 +119,11 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 		if errors.Is(err, plan.ErrNoPlan) {
 			return errors.New("plan.md is missing; write the plan before approving it")
 		}
+		// A stale hash has already returned, so neither the receipt nor the
+		// Job result is written. A repeat press posts a result still missing.
+		if err == nil && o.JobResult != nil {
+			err = o.JobResult(event)
+		}
 		return err
 	})
 	return event, err
@@ -197,6 +205,61 @@ func ApprovedDigest(dir, hash, digest string) bool {
 	// Match ApprovalForGate: the plan receipt has no gate field. A receipt for
 	// ship or an unknown gate cannot authorize plan work, even if misfiled.
 	return err == nil && event.Gate == ""
+}
+
+// JobApproval is what a person approved, as the result of the person Job for
+// the plan carries it. The Feed record carries who and when.
+type JobApproval struct {
+	Job        string `json:"job"`
+	Record     string `json:"record"`
+	Answer     string `json:"answer,omitempty"`
+	PlanHash   string `json:"plan_hash"`
+	PlanDigest string `json:"plan_digest"`
+	LandsHash  string `json:"lands_hash,omitempty"`
+	Note       string `json:"note,omitempty"`
+}
+
+// ApprovalFromJob reads the latest done result of the task's plan Job, the
+// newest accepted result of a person Job that carries a plan_digest, and
+// reports whether its plan_hash and plan_digest match plan.md now. A nil error
+// means they match. Like Approved, it takes no lock and replays no journal.
+func ApprovalFromJob(dir string) (JobApproval, error) {
+	var found JobApproval
+	id, _, err := FeedIdentity(dir)
+	if err != nil {
+		return found, err
+	}
+	store := feed.Store{TaskDir: dir, TaskID: id}
+	state, err := store.State()
+	if err != nil {
+		return found, err
+	}
+	read, err := store.ReadOnly(feed.Filter{Type: "control"})
+	if err != nil {
+		return found, err
+	}
+	for _, r := range read.Records {
+		text := func(key string) string { s, _ := r.Body[key].(string); return s }
+		j := state.Jobs[text("target")]
+		if r.Type != "control" || text("status") != string(contract.Accepted) || text("plan_digest") == "" || j == nil || !strings.EqualFold(strings.TrimSpace(j.Role), "Person") || j.Status != contract.Accepted {
+			continue
+		}
+		// Record ids are ULIDs, so the greatest is the latest.
+		if r.ID > found.Record {
+			found = JobApproval{Job: j.ID, Record: r.ID, Answer: text("answer"), PlanHash: text("plan_hash"), PlanDigest: text("plan_digest"), LandsHash: text("lands_hash"), Note: text("note")}
+		}
+	}
+	if found.Record == "" {
+		return found, errors.New("plan has not been approved")
+	}
+	current, err := plan.Store{TaskDir: dir}.Read()
+	if err != nil {
+		return found, err
+	}
+	if found.PlanHash != plan.Hash(current) || found.PlanDigest != plan.Digest(current) {
+		return found, errors.New("Changed since you approved: plan hash no longer matches")
+	}
+	return found, nil
 }
 
 func checkApproval(t Task, data []byte, hash, digest string) (Event, error) {

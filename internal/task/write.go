@@ -96,6 +96,11 @@ type WriteOptions struct {
 	// Gate is the gate an approval is for: empty (whatever the task waits at),
 	// plan, preview or ship.
 	Gate string
+	// JobResult, when set, posts an approval as the result of the person Job
+	// for the plan. Approve calls it after the compare-and-set and the receipt,
+	// still under .task.lock but after .plan.lock is released, because the
+	// orchestrator takes its own lock before .plan.lock.
+	JobResult func(Event) error
 }
 
 // Change performs a checked state move and appends its receipt under one lock.
