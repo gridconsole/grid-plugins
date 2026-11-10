@@ -362,4 +362,3 @@ func TestPersonalNoteStaysOutOfSavedFiles(t *testing.T) {
 		}
 	}
 }
-
