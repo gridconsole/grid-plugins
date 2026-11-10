@@ -13,13 +13,16 @@ import (
 const off = " To turn this guard off, start Claude Code with GRID_PLAN_GUARD=off."
 
 var oddName = regexp.MustCompile(`[^\x20-\x7e]|:|[. ](?:/|$)`)
-var oddPart = regexp.MustCompile(`:|[. ](?:/|$)`)
-var notASCII = regexp.MustCompile(`[^\x20-\x7e]`)
 var historyAlias = regexp.MustCompile(`(?i)^history\.md(?::.*|[. ]*)$`)
 
 // EvaluatePlan ports the legacy plan rules. root is the filesystem base used
 // when cwd is omitted; all environment reads come from env. It performs no writes.
+// Its level is the plan-guard setting, block by default.
 func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.Decision {
+	return configuredLevel("plan-guard", in, root, env, evaluatePlan(in, root, env))
+}
+
+func evaluatePlan(in hookio.Input, root string, env map[string]string) hookio.Decision {
 	c := newContext(in, root, env)
 	in = c.in
 	if c.projects == "" || strings.EqualFold(strings.TrimSpace(env["GRID_PLAN_GUARD"]), "off") {
@@ -44,7 +47,9 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 		history = read(filepath.Join(owner.dir, "history.md"))
 		top = strings.Split(owner.rel, "/")[0]
 	}
-	unaccepted := owner != nil && held(stepsFor(c.env, owner.dir), owner.dir, text, history)
+	// planning only widens what a grid-planner may write (the planner fence below);
+	// it never blocks a write.
+	planning := owner != nil && held(stepsFor(c.env, owner.dir), owner.dir, text, history)
 	slot := strings.Split(relative(projects, target), "/")
 	if owner == nil && inside(projects, target) && len(slot) > 2 && slot[1] != "tasks" && (oddName.MatchString(slot[1]) || strings.EqualFold(slot[1], "tasks")) {
 		return hookio.Deny("A folder beside a project's tasks folder keeps a plain name (printable ASCII, no colon, no dot or space at the end, not tasks in other letters): on macOS or Windows it can be the tasks folder under another spelling, so " + given + " is not written." + off)
@@ -63,24 +68,6 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 				return hookio.Deny(given + " is not changed to add a plan ready line: plan.md has no brain recall line. Add it under ## How we approach it: one `Used: <path>` line for each note of the recall you used, or `Recall: nothing found` when no note bears on the task (the recall hits are in your context, or run `grid-brain recall --task <id>`). Then run plan-hash.mjs again and add the plan ready line." + off)
 			}
 		}
-	}
-	if unaccepted && (notASCII.MatchString(top) || oddPart.MatchString(owner.rel)) {
-		return hookio.Deny("This task's plan is not accepted yet, so " + given + " is not written: until then its files keep plain names (printable ASCII at the top of the task folder, no colon, no dot or space at the end)." + off)
-	}
-	forged := ""
-	if unaccepted {
-		forged = leavesPlan(stepsFor(c.env, owner.dir), in.ToolName, in.ToolInput, strings.ToLower(owner.rel), text, history)
-	}
-	switch forged {
-	case "status":
-		return hookio.Deny("This task's plan is not accepted yet, so " + given + " is not changed to close or pause the task: the person does that in Grid." + off)
-	case "unreadable":
-		return hookio.Deny("This task's plan is not accepted yet, so " + given + " is not changed to a task.md whose step or workflow cannot be read for sure: give it a step and a workflow that Grid can resolve, either the name of a workflow that workflows.md defines for the task's own project (the project in task.md is the one its folder sits in) or a list of {step, kind} items with plain lower-case names, each named once." + off)
-	case "unclear":
-		return hookio.Deny("This task's plan is not accepted yet: Grid records the acceptance, and what " + given + " would hold after this edit cannot be told (an old_string not in the file, or input that is not text), so it is not changed. Read it and edit it again." + off)
-	case "":
-	default:
-		return hookio.Deny("This task's plan is not accepted yet: Grid records the acceptance, so " + given + " is not changed to say so or to move the task past its plan step." + off)
 	}
 	agent := agentName(in.AgentType)
 	if c.set && (contract.NormalizeRole(agent) == "reviewer" || contract.NormalizeRole(agent) == "checker") && !inside(projects, target) {
@@ -117,25 +104,15 @@ func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 		return hookio.Deny("A curator writes only the brain (a project's knowledge/ folder or the Grid home's) and its task folder. Write inside " + where + ", not " + given + "." + off)
 	}
 	if c.set && role == "planner" {
-		if unaccepted || (owner == nil && len(tasks) == 0 && inside(projects, target)) || artifact(projects, target, owner) || c.brain(target) {
+		if planning || (owner == nil && len(tasks) == 0 && inside(projects, target)) || artifact(projects, target, owner) || c.brain(target) {
 			return hookio.Decision{}
 		}
 		return hookio.Deny("A planner writes only inside a task folder (its own, or one whose plan is not accepted yet), an artifacts folder or a brain folder. Write inside " + where + ", not " + given + "." + off)
 	}
-	all := append([]string{}, tasks...)
-	if pointerKey(in.AgentID) != "" {
-		all = append(all, c.mainTasks()...)
-	}
-	held := []string{}
-	for _, d := range unique(all) {
-		if c.isHeld(d) {
-			held = append(held, d)
-		}
-	}
-	if len(held) == 0 || inside(projects, target) {
-		return hookio.Decision{}
-	}
-	return hookio.Deny("A task whose plan is not accepted yet writes only inside its task folder or the Grid projects folder. Write inside " + strings.Join(held, " or ") + ", not " + given + ". Writes elsewhere start once the person accepts the plan in Grid." + off)
+	// A task whose plan is not accepted yet does not limit where its agents write:
+	// whether a plan needs a person's approval is a step of the task's workflow
+	// (an approve step), and the workflow's default says who answers and when.
+	return hookio.Decision{}
 }
 func artifact(root, target string, owner *task) bool {
 	base := strings.ToLower(filepath.Base(target))
@@ -172,41 +149,4 @@ func addsMark(text, next string, markers ...string) bool {
 		}
 	}
 	return false
-}
-func leavesPlan(lookup stepLookup, tool string, input map[string]any, file, text, history string) string {
-	if file != "task.md" && file != "history.md" {
-		return ""
-	}
-	if tool == "NotebookEdit" {
-		return "unclear"
-	}
-	isTask := file == "task.md"
-	before := history
-	if isTask {
-		before = text
-	}
-	nexts := after(tool, input, before)
-	if len(nexts) == 0 {
-		return "unclear"
-	}
-	unreadable := planStageWith(lookup, text, history) == "unreadable"
-	for _, next := range nexts {
-		if !isTask && addsMark(history, next, planAcceptedMark, previewApproved) {
-			return "accepted"
-		}
-		stage := planStageWith(lookup, text, next)
-		if isTask {
-			stage = planStageWith(lookup, next, history)
-		}
-		if !heldStage(stage) && !(isTask && text == "" && stage == "") {
-			return "accepted"
-		}
-		if isTask && stage == "unreadable" && !unreadable {
-			return "unreadable"
-		}
-		if isTask && inactive(next) && !inactive(text) {
-			return "status"
-		}
-	}
-	return ""
 }
