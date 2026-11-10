@@ -14,7 +14,7 @@ Status: INCOMPLETE. The branch does not build and no check was run. The budget r
 - The `feedjob.go` `loadJob` fallback rule.
 - The publication notice text "workflow requires approval ... run grid approve".
 - Compile fixes, removal of unused imports and the `linked_file` and `person_required` constants.
-- Tests: every test that used persongate, `testenv.Person` or the linked and digest errors still has to be deleted or rewritten. Candidates: `internal/cli/{person_gate,person_gate_invalid,project_person_gate,linked_code,linked_policy_closed,linked_workflow_gate,task_new_linked}_test.go`, `internal/orchestrator/plan_linked_test.go`, and the usage and signal gate tests. Each deletion needs a reason in this file: behaviour removed by the owner's direction in /srv/gridwork/briefs/simplify.md, row "Hard enforcement around those gates".
+- Tests: every test that used persongate, `testenv.Person` or the linked and digest errors still has to be deleted or rewritten. Candidates: `internal/cli/{person_gate,person_gate_invalid,project_person_gate,linked_code,linked_policy_closed,linked_workflow_gate,task_new_linked}_test.go`, `internal/orchestrator/plan_linked_test.go`, and the usage and signal gate tests. Each deletion needs a reason in this file: behaviour removed by the owner's direction in the simplify brief, row "Hard enforcement around those gates".
 - New tests for rows 1 to 3: an agent environment running `grid task new`, `grid approve` and `grid job render`; a hard-linked plan.md rendering its Jobs; an approval naming the plan digest.
 - `internal/task/create.go` `taskFront` is now a trivial wrapper and can be inlined.
 
