@@ -150,15 +150,6 @@ func runOrchestrator(args []string, env Env) int {
 		*owner = taskOwner
 	}
 	store := feed.Store{TaskDir: scope.TaskPath, TaskID: taskID}
-	if verb == "post" {
-		postLease := *leaseFlag
-		if postLease == "" && *kind == "control" {
-			postLease = "task"
-		}
-		if err := refuseWithdrawalPost(env, *kind, obj, postLease, *epoch); err != nil {
-			return fail(err)
-		}
-	}
 	if verb == "tree" || verb == "blocked" {
 		snap, err := orchestrator.Load(store)
 		if err != nil {

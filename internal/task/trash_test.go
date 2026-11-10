@@ -15,7 +15,7 @@ import (
 )
 
 func trashOptions(t Task) TrashOptions {
-	return TrashOptions{WriteOptions: WriteOptions{Cwd: filepath.Dir(t.Path), ID: t.ID, Who: contract.Author{ID: "alex", Role: "owner"}}, Project: t.Project, Role: "owner", PersonalAllowed: true}
+	return TrashOptions{WriteOptions: WriteOptions{Cwd: filepath.Dir(t.Path), ID: t.ID, Who: contract.Author{ID: "alex", Role: "owner"}}, Project: t.Project, Role: "owner"}
 }
 
 func TestTrashPolicies(t *testing.T) {
@@ -48,19 +48,15 @@ func TestTrashPolicies(t *testing.T) {
 	}
 }
 
-func TestTrashPersonalAndPersonGuards(t *testing.T) {
-	for _, which := range []string{"personal", "person", "agent"} {
+// A move names who made it, because the history line records them. The
+// Personal and agent refusals that sat beside this row were removed with the
+// person gate (S6b8); the role policy in TestTrashPolicies still refuses roles.
+func TestTrashRequiresAWho(t *testing.T) {
+	for _, which := range []string{"person"} {
 		t.Run(which, func(t *testing.T) {
 			s, task := writeFixture(t)
 			o := trashOptions(task)
-			switch which {
-			case "personal":
-				o.PersonalAllowed = false
-			case "person":
-				o.Who.ID = ""
-			case "agent":
-				o.Agent = true
-			}
+			o.Who.ID = ""
 			if _, err := s.Delete(o); !errors.Is(err, ErrEditRejected) {
 				t.Fatal(err)
 			}

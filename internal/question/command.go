@@ -14,7 +14,6 @@ import (
 )
 
 type Env struct {
-	AgentShell      func() bool
 	WithdrawAllowed func(role string) bool
 	Cwd             string
 	Resolver        where.Resolver
@@ -189,9 +188,6 @@ func run(args []string, env Env) int {
 		return 1
 	}
 	store := Store{TaskDir: scope.TaskPath, Now: env.Now, Warn: env.Stderr, WithdrawAllowed: env.WithdrawAllowed}
-	if env.AgentShell != nil {
-		store.AgentShell = env.AgentShell()
-	}
 
 	// Fail before writer identity setup, which may create local machine state.
 	if action != "list" {

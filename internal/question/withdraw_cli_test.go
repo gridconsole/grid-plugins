@@ -22,9 +22,10 @@ func TestPersonWithdrawCLI(t *testing.T) {
 		{name: "owner", role: "owner", reason: "Resolved elsewhere"},
 		{name: "member", role: "member"},
 		{name: "guest", role: "guest", code: 3, stderr: "question: Q-1 role \"guest\" may not withdraw\n"},
-		{name: "agent shell", role: "member", agent: "builder", code: 3, stderr: "question: Q-1 agent shell requires a task lease to withdraw\n"},
-		{name: "worker id", role: "owner", marker: "GRID_WORKER_ID", agent: "builder", code: 3, stderr: "question: Q-1 agent shell requires a task lease to withdraw\n"},
-		{name: "worker", role: "owner", marker: "GRID_WORKER", agent: "builder", code: 3, stderr: "question: Q-1 agent shell requires a task lease to withdraw\n"},
+		// S6b8: an agent environment is not a reason to refuse; the role decides.
+		{name: "agent env member withdraws", role: "member", agent: "builder"},
+		{name: "worker id owner withdraws", role: "owner", marker: "GRID_WORKER_ID", agent: "builder"},
+		{name: "worker mismatch", role: "owner", marker: "GRID_WORKER", agent: "builder", code: 1, stderr: "question: GRID_WORKER must match GRID_MEMBER and the local machine id\n"},
 		{name: "agent role", role: "agent", code: 3, stderr: "question: Q-1 role \"agent\" may not withdraw\n"},
 		{name: "cli role", role: "cli", code: 3, stderr: "question: Q-1 role \"cli\" may not withdraw\n"},
 		{name: "workflow member refused", role: "member", workflow: "owner", code: 3, stderr: "question: Q-1 role \"member\" may not withdraw\n"},

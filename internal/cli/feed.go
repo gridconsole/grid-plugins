@@ -137,9 +137,6 @@ func runFeed(args []string, env Env) int {
 		if err := store.CheckWithdrawalPolicy(feed.Input{Type: kind, Body: obj}); err != nil {
 			return fail(err)
 		}
-		if err := refuseWithdrawalPost(env, kind, obj, lease, epoch); err != nil {
-			return fail(err)
-		}
 		if err := refuseJobSide(kind, lease); err != nil {
 			return fail(err)
 		}
@@ -186,33 +183,6 @@ func refuseAnswerPost(typ string) error {
 	}
 	return nil
 }
-
-// refuseWithdrawalPost uses the same agent-shell identity test as the person's
-// question verb. A lease name alone is not a fence; the writer still validates
-// a supplied positive task fence against the live lease before appending.
-func refuseWithdrawalPost(env Env, typ string, body map[string]any, lease, epoch string) error {
-	if typ != "control" || body["question_event"] != "withdrawn" || !agentShell(env) {
-		return nil
-	}
-	parts := strings.Split(epoch, ".")
-	if lease == "task" && len(parts) == 2 {
-		gen, genErr := strconv.ParseInt(parts[0], 10, 64)
-		fence, fenceErr := strconv.ParseInt(parts[1], 10, 64)
-		if genErr == nil && fenceErr == nil && gen >= 0 && fence > 0 {
-			return nil
-		}
-	}
-	return withdrawalPostRefusal{}
-}
-
-// A refusal carries the CLI exit status into the MCP tool error as well.
-type withdrawalPostRefusal struct{}
-
-func (withdrawalPostRefusal) Error() string {
-	return "agent shell requires a task lease fence to withdraw"
-}
-func (withdrawalPostRefusal) Unwrap() error { return feed.ErrInvalidRecord }
-func (withdrawalPostRefusal) ExitCode() int { return 3 }
 
 // feedStore is shared by the CLI and MCP front ends. It leaves missing legacy
 // identities unresolved: Post initializes them only after session validation,

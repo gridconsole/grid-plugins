@@ -196,6 +196,9 @@ func Run(args []string, env Env) (exit int) {
 			fmt.Fprintln(env.Stderr, "grid: guests cannot change project settings")
 			return 1
 		}
+		if code := workflowRoleRefusal(args, env); code != 0 {
+			return code
+		}
 		return c.run(rest, env)
 	}
 	fmt.Fprintf(env.Stderr, "grid: unknown command %q. Run: grid help\n", name)

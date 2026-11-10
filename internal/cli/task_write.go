@@ -202,7 +202,9 @@ func runDecide(args []string, env Env) int {
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 
-// agentShell reports whether the environment says a worker or a non-person role runs this command.
+// agentShell reports whether the environment says a worker or a non-person role
+// runs this command. Only task attach uses it, to bind an agent to its assigned
+// task (a scope rule); no command refuses a caller because of it.
 func agentShell(env Env) bool {
 	for _, key := range []string{"GRID_AGENT", "GRID_WORKER_ID", "GRID_WORKER"} {
 		if strings.TrimSpace(env.getenv(key)) != "" {
@@ -251,7 +253,7 @@ func runTaskTrash(args []string, env Env) int {
 	if role == "" || role == "cli" {
 		role = "owner"
 	}
-	o := task.TrashOptions{WriteOptions: writeOptions(env, pos[0], sub, ""), Project: *project, Role: role, Agent: agentShell(env), PersonalAllowed: !agentShell(env)}
+	o := task.TrashOptions{WriteOptions: writeOptions(env, pos[0], sub, ""), Project: *project, Role: role}
 	o.Who.Role = role
 	var result task.TrashResult
 	if sub == "delete" {

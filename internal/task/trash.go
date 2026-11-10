@@ -26,12 +26,11 @@ var DeleteAllowed = func(role string) bool { return role == "owner" }
 // during initialization, before concurrent writes begin (task_restore_roles).
 var RestoreAllowed = func(role string) bool { return role == "owner" }
 
-// TrashOptions carries host identity and the caller's person guard, never flags
-// claiming a role. PersonalAllowed must be set by a trusted person adapter.
+// TrashOptions carries host identity, never flags claiming a role. The role
+// policy (DeleteAllowed, RestoreAllowed) decides who may move a task.
 type TrashOptions struct {
 	WriteOptions
-	Project, Role          string
-	Agent, PersonalAllowed bool
+	Project, Role string
 }
 
 // TrashResult names the moved folder, without exposing a machine-local path.
@@ -46,7 +45,7 @@ func (o TrashOptions) validate(restore bool) error {
 	if restore {
 		policy = RestoreAllowed
 	}
-	if o.Agent || strings.TrimSpace(o.Who.ID) == "" || !policy(o.Role) {
+	if strings.TrimSpace(o.Who.ID) == "" || !policy(o.Role) {
 		return fmt.Errorf("%w: a person with an allowed role must perform this task move", ErrEditRejected)
 	}
 	if !validTaskText(o.Who.ID, false) || !idPattern.MatchString(o.ID) || (restore && o.Project == "") {
@@ -155,13 +154,6 @@ func (s Store) trashProject(o TrashOptions) (string, error) {
 		return "", err
 	}
 	return r.Project, nil
-}
-
-func trashPersonal(o TrashOptions, project string) error {
-	if project == gridhome.Personal && !o.PersonalAllowed {
-		return fmt.Errorf("%w: Personal tasks require the person guard", ErrEditRejected)
-	}
-	return nil
 }
 
 func trashHistoryReady(path string) error {
@@ -296,9 +288,6 @@ func (s Store) Delete(o TrashOptions) (result TrashResult, err error) {
 		if path == "" {
 			return &where.LookupError{Kind: where.ErrTaskNotFound, Message: fmt.Sprintf("task %s not found in the Grid home", o.ID)}
 		}
-		if err := trashPersonal(o, proj); err != nil {
-			return err
-		}
 		if err := trashPath(s.Resolver.GridHome, path); err != nil {
 			return err
 		}
@@ -377,9 +366,6 @@ func (s Store) Restore(o TrashOptions) (result TrashResult, err error) {
 	err = s.withTrashAllocation(func() error {
 		project, err := s.trashProject(o)
 		if err != nil {
-			return err
-		}
-		if err := trashPersonal(o, project); err != nil {
 			return err
 		}
 		tasks := gridhome.TasksDir(s.Resolver.GridHome, project)

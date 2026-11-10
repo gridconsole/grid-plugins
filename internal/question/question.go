@@ -84,7 +84,6 @@ type Store struct {
 	// WithdrawAllowed may be replaced by a host; nil reads the workflow policy
 	// or uses the owner/member default when no policy is specified.
 	WithdrawAllowed func(role string) bool
-	AgentShell      bool
 	TaskDir         string
 	TaskID          string
 	Writer          feed.Writer
@@ -211,9 +210,6 @@ func (s Store) Withdraw(id, reason string) (Record, error) {
 	if s.ControlWriter.Lease != "task" {
 		if !s.WithdrawAllowed(s.Writer.Author.Role) {
 			return Record{}, &withdrawRefusal{fmt.Sprintf("%s role %q may not withdraw", id, s.Writer.Author.Role)}
-		}
-		if s.AgentShell || s.Writer.Author.Role == "agent" || s.Writer.Author.Role == "cli" {
-			return Record{}, &withdrawRefusal{fmt.Sprintf("%s agent shell requires a task lease to withdraw", id)}
 		}
 	}
 	return s.change(id, func(r *Record) error {
