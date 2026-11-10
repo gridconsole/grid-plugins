@@ -61,7 +61,7 @@ func runSignal(args []string, env Env) int {
 	}
 	if resolver(env).Caller.IsGuest() {
 		if verb == "add" {
-			return failure(env, fmt.Errorf("guests cannot change project settings"))
+			return failure(env, errors.New(guestSettingsRefusal))
 		}
 		return signalFailure(env, &signal.RefusedError{Message: "guests cannot act on signals"}, *asJSON)
 	}

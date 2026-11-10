@@ -98,7 +98,7 @@ func runProject(args []string, env Env) int {
 		return 2
 	}
 	if (verb == "add" || verb == "remove" || verb == "relink" || verb == "scan" && apply) && resolver(env).Caller.IsGuest() {
-		return failure(env, fmt.Errorf("guests cannot change project settings"))
+		return failure(env, errors.New(guestSettingsRefusal))
 	}
 	s := projectStore(env)
 	if verb == "list" {

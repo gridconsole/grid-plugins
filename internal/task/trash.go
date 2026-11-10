@@ -40,13 +40,17 @@ type TrashResult struct {
 	Folder  string `json:"folder"`
 }
 
+// MoveRefusal is the reason a delete or restore gives when the role is not allowed;
+// the CLI's early guest refusal prints the same words.
+const MoveRefusal = "a person with an allowed role must perform this task move"
+
 func (o TrashOptions) validate(restore bool) error {
 	policy := DeleteAllowed
 	if restore {
 		policy = RestoreAllowed
 	}
 	if strings.TrimSpace(o.Who.ID) == "" || !policy(o.Role) {
-		return fmt.Errorf("%w: a person with an allowed role must perform this task move", ErrEditRejected)
+		return fmt.Errorf("%w: %s", ErrEditRejected, MoveRefusal)
 	}
 	if !validTaskText(o.Who.ID, false) || !idPattern.MatchString(o.ID) || (restore && o.Project == "") {
 		return fmt.Errorf("%w: give a task id and, for restore, --project", ErrEditUsage)

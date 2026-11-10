@@ -363,7 +363,7 @@ Disagreements and defaults chosen:
   `WorkspaceBudgetWriteAllowed` cannot admit a role the person gate refuses: the
   gate allows only the empty role, `owner`, `member` and `cli`
   (`internal/persongate/gate.go:132`), so any other role still exits 3 with
-  `agent_env`. A `person_verbs` entry for `usage budget set|clear` in a task
+  `role_not_allowed`. A `person_verbs` entry for `usage budget set|clear` in a task
   `workflow.md`, or, with no task, in the project's `workflows.md`, applies to the
   `--workspace` form as to the task form; a project with no policy of its own falls
   back to `$GRID_HOME/workflows.md` (`internal/workflow/project_person.go:19`).
