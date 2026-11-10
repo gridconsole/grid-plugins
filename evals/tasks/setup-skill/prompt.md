@@ -1,0 +1,1 @@
+I'm Alex. My Grid home is the one in GRID_HOME. Set up Grid for my notes-app project, whose repo is ./work/notes-app. Read the repo and my Claude Code sessions for it, record in Grid what the sources settle, and propose the facts the brain should hold.
