@@ -414,7 +414,6 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"hook levels":           {},
 		"agent list":            {},
 		"agent set":             {args: []string{"<agent>"}},
-		"person check":          {args: []string{}},
 		"person list":           {},
 		"person show":           {args: []string{"<handle>"}},
 		"person approvers":      {required: map[string]bool{"--area": true}},

@@ -126,19 +126,18 @@ func TestApproveUnknownGate(t *testing.T) {
 	}
 }
 
-// The person gate comes first: an agent is refused with exit 3 whatever gate it names.
-func TestApproveGateAgentRefused(t *testing.T) {
+// Agents and people run the same verbs: an agent environment approves, and the
+// approval names the plan digest (simplify.md row Hard enforcement around those gates).
+func TestApproveGateAgentApproves(t *testing.T) {
 	h, dir, id := approveGateFixture(t)
 	agent := map[string]string{"GRID_AGENT": "builder", "GRID_LEASE": "J-1", "GRID_ROLE": "worker"}
 	h.env.Getenv = func(key string) string { return agent[key] }
-	before := previewFiles(t, dir)
-	for _, extra := range [][]string{nil, {"--gate", "plan"}, {"--gate", "bogus"}} {
-		if code := h.run(dir, append([]string{"approve", id}, extra...)...); code != 3 || !strings.Contains(h.errb.String(), "a person must run this") {
-			t.Fatalf("agent approve %v: exit %d, want 3: %s", extra, code, h.errb)
-		}
+	if code := h.run(dir, "approve", id, "--gate", "plan", "--json"); code != 0 {
+		t.Fatalf("agent approve: exit %d: %s", code, h.errb)
 	}
-	if after := previewFiles(t, dir); !maps.Equal(after, before) {
-		t.Fatal("an agent approve wrote")
+	event := approveEvent(t, h)
+	if event.PlanHash == "" || !task.Approved(dir) {
+		t.Fatalf("approval does not name the plan digest: %+v", event)
 	}
 }
 

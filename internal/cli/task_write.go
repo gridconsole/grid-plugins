@@ -146,9 +146,6 @@ func runApprove(args []string, env Env) int {
 		fmt.Fprint(env.Stderr, approveUsage)
 		return 2
 	}
-	if !personWrite(env) {
-		return 3
-	}
 	resolved, err := resolveTaskOperand(env, pos[0])
 	if err != nil {
 		return taskOperandError(env, "grid approve", err)
@@ -196,9 +193,6 @@ func runDecide(args []string, env Env) int {
 		fmt.Fprint(env.Stderr, refusalUsage)
 		return 2
 	}
-	if !personWrite(env) {
-		return 3
-	}
 	resolved, err := resolveTaskOperand(env, pos[0])
 	if err != nil {
 		return taskOperandError(env, "grid refusal decide", err)
@@ -206,16 +200,6 @@ func runDecide(args []string, env Env) int {
 	pos[0] = resolved.ID
 	event, err := taskWriter(env).Decide(writeOptions(env, pos[0], "refusal decide", *note), pos[1], pos[2])
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
-}
-
-func personWrite(env Env) bool {
-	// This is a cooperative guard, not authentication. Host tool guards and
-	// worker deny settings enforce the boundary; a person's shell is supported.
-	if agentShell(env) {
-		fmt.Fprintln(env.Stderr, "Approval and refusal decisions require a person or the app; run this command in your own shell.")
-		return false
-	}
-	return true
 }
 
 // agentShell reports whether the environment says a worker or a non-person role runs this command.
