@@ -58,6 +58,9 @@ func reopenPlanJob(env Env, dir string) (func() error, error) {
 	next.Title = "Approve the plan again after the reopen"
 	next.Continues = &previous
 	next.Order, next.Attempt, next.Status = nil, 1, ""
+	// A person answers this Job; no worktree is used. The copied one would not
+	// encode back to the Feed's string form either.
+	next.Worktree = nil
 	return func() error {
 		next.Defaults()
 		data, err := next.Record()

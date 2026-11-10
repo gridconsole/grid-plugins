@@ -184,7 +184,7 @@ func TestDeliverSuccessAndDryRun(t *testing.T) {
 	if err = json.Unmarshal(h.out.Bytes(), &preview); err != nil {
 		t.Fatal(err)
 	}
-	if !preview.DryRun || len(preview.Actions) != 5 {
+	if !preview.DryRun || len(preview.Actions) != 4 {
 		t.Fatal(preview)
 	}
 	if !reflect.DeepEqual(before, treeBytes(t, h.gridHome)) {
@@ -208,7 +208,7 @@ func TestDeliverSuccessAndDryRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc.Data["state"] != "waiting" || doc.Data["gate"] != "ship" || doc.Data["step"] != "ship" || doc.Data["outcome"] != "The report is ready." {
+	if doc.Data["state"] != "waiting" || doc.Data["gate"] != nil || doc.Data["step"] != "ship" || doc.Data["outcome"] != "The report is ready." {
 		t.Fatal(doc.Data)
 	}
 	for _, text := range []string{"Keep these.", "Keep this too.", "### Deliverables", "### Proof", result.Artifacts[0].File} {
@@ -445,9 +445,9 @@ func TestUnrelatedHomeProposalDoesNotBlockDelivery(t *testing.T) {
 	}
 }
 
-// After delivery raises the ship gate, approve records a ship approval and
-// leaves the plan approval alone.
-func TestApproveAfterDeliveryRecordsShipApproval(t *testing.T) {
+// Delivery raises no ship gate (S6c3), so approve after it records the plan
+// approval in approval.json, with no gate, and writes no ship receipt.
+func TestApproveAfterDeliveryRecordsPlanApproval(t *testing.T) {
 	h, dir := deliveryFixture(t)
 	acceptPlanInHistory(t, h, dir)
 	addDeliveryProof(t, h, dir)
@@ -458,16 +458,16 @@ func TestApproveAfterDeliveryRecordsShipApproval(t *testing.T) {
 		t.Fatal(h.errb)
 	}
 	var event task.Event
-	if err := json.Unmarshal(h.out.Bytes(), &event); err != nil || event.What != "approve" || event.Gate != "ship" || event.PlanHash == "" {
+	if err := json.Unmarshal(h.out.Bytes(), &event); err != nil || event.What != "approve" || event.Gate != "" || event.PlanHash == "" {
 		t.Fatalf("%+v %v", event, err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "approval-ship.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "approval.json")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "approval.json")); !os.IsNotExist(err) {
-		t.Fatal("ship approval wrote a plan approval", err)
+	if _, err := os.Stat(filepath.Join(dir, "approval-ship.json")); !os.IsNotExist(err) {
+		t.Fatal("approve wrote a ship receipt", err)
 	}
-	if task.Approved(dir) {
-		t.Fatal("a ship approval must not count as the plan approval")
+	if !task.Approved(dir) {
+		t.Fatal("the plan approval must count")
 	}
 }
