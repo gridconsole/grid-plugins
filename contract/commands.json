@@ -77,6 +77,28 @@
       ]
     },
     {
+      "name": "open",
+      "summary": "open the task page in the browser",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [
+            "[task]"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
       "name": "doctor",
       "summary": "check machine health and collect a support bundle",
       "built": true,

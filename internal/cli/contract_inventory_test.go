@@ -408,6 +408,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 	return map[string]contractCommandAnnotation{
 		"version":               {output: "cmd-version.json"},
 		"where":                 {},
+		"open":                  {args: []string{"[task]"}},
 		"doctor":                {},
 		"hook":                  {args: []string{"<event>"}},
 		"hook level":            {args: []string{"<hook>", "<off|warn|block>"}},

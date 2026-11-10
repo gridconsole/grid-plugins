@@ -134,8 +134,9 @@ var guestParityCommands = map[string][]string{
 	"usage threshold clear": {},
 	"usage threshold set":   {"--tokens", "1"},
 	"usage threshold show":  {},
+	"open":                  {},
 	"where":                 {},
-	"workflow show":         {},
+	"workflow show":        {},
 	"workflow write":        {"--file", "{file}", "--rev", "none"},
 }
 

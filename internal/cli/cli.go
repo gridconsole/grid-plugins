@@ -38,6 +38,7 @@ type Env struct {
 	failure    *commandFailure
 	Getenv     func(string) string    // nil reads the process environment
 	Executable func() (string, error) // nil asks os.Executable
+	OpenURL    func(string) error     // nil opens the system browser; tests set it
 	// afterApprove is a test seam: it runs once Approve has returned and before
 	// the person Job result is posted, so a test can look at the locks there.
 	afterApprove func()
@@ -99,6 +100,7 @@ func commands() []command {
 	return []command{
 		{"version", "print the CLI, contract and app_min versions", runVersion},
 		{"where", "show which project and task a folder belongs to", runWhere},
+		{"open", "open the task page in the browser", runOpen},
 		{"doctor", "check machine health and collect a support bundle", runDoctor},
 		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels", runHook},
 		{"task", "new, show, list, status, stop, close, reopen, history, attach, move", runTask},
