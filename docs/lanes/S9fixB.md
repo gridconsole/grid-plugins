@@ -11,3 +11,9 @@ Over the call budget (about 65 of 60); stopped building after the tests.
 - Not run: make lint, the whole-module test, the cross-repo set (orchestrator's).
 - NOT DONE: D12's second half (a positional id that differs from a control's `target` is still accepted); `grid approve` still answers its plan Job without `PersonReady`; no test for `job result --plan-hash` with an unaccepted `after` (the call is made, untested).
 - NOT VERIFIED: a real worker or orchestrator run; only the Go tests above.
+
+## S9fixB2 (rework, on lane-S6c4R)
+- Fix: `grid approve` (task_write.go) loads the Feed snapshot and calls `orchestrator.PersonReady` for the plan's person Job before `land.Store.Approve`; on error it prints it and exits 3, so neither approval.json nor the result is written. This closes the NOT DONE item "`grid approve` still answers its plan Job without `PersonReady`".
+- New test: cli TestApproveWaitsForTheAfterJob (J-1 posted, J-2 person approve with after J-1): fails without the fix (`approve_job_test.go:164: 0 `), passes with it; checks exit 3, stderr names J-1, J-1 and J-2 stay posted, no approval.json.
+- Checks: `go test ./internal/... ./cmd/...` exit 0 (all packages ok, the three commands.json tests pass on S6c4R); GOOS=windows and GOOS=darwin `go build ./...` exit 0; gofmt -l clean. make lint not run (per brief). Importers of cli are covered by the whole `./internal/... ./cmd/...` run.
+- Still not done: D12 second half; `job result --plan-hash` with an unaccepted `after` has no test. NOT VERIFIED: a real worker or orchestrator run.
