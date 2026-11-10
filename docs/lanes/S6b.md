@@ -52,3 +52,34 @@ Status: builds. Production code only; no test was touched.
 - internal/task/create_linked_test.go: ErrLinkedFile removed.
 - internal/workflow/linked_resolve_test.go, linked_task_test.go: ErrLinkedFile removed.
 (vet stops at the first error per package, so more may surface once these are fixed.)
+
+## S6b3 test changes
+Reason for every row unless noted: behaviour removed: simplify.md row Hard enforcement around those gates.
+- internal/workflow/linked_resolve_test.go: whole file (TestTaskWorkflowKeepsTheLinkSentinel).
+- internal/workflow/linked_task_test.go: whole file (TestLinkedTaskWorkflowFileIsUnreadable, TestInboxWorkspaceLinkedFile).
+- internal/feed/linked_task_test.go: whole file (TestEnsureTaskIDRefusesALinkedTaskMD, TestQuestionWithdrawPolicyRefusesALinkedWorkflowFile).
+- internal/task/create_linked_test.go: whole file (TestNewRefusesALinkedWorkflowsFile; it also asserted workflow_digest, which New no longer writes).
+- internal/task/linked_writers_test.go: whole file (TestP1/TestP2 AppendHistory linked, TestTaskWritersRefuseALinkedFile, TestPostToolUseHookThroughTheBinaryKeepsALinkedTaskHeld).
+- internal/job/linked_plan_test.go: whole file (TestLinkedPlanIsHeldWithLinkedFile).
+- internal/job/approval_workflow_test.go: TestPlanOmittedAnchorsRefused keeps the omitted/covered anchor rows; the hard-link tail (linked_file rows, refused approve) removed.
+- internal/job/approval_gaps_test.go: TestSourceSwapUsesIdentifiedHandle no longer accepts ErrPlanNeedsApproval as a safe outcome; Render must succeed and return the identified snapshot.
+- internal/signal/turn_linked_test.go: rewritten as TestTurnMakesATask (unlinked turn makes a task and marks the note done); linked rows and the workflow_digest assertion removed.
+- internal/cli/linked_workflow_gate_test.go, linked_policy_closed_test.go: whole files.
+- internal/cli/project_person_gate_test.go: whole file (person_verbs policy, persongate).
+- internal/cli/signal_policy_code_test.go: TestSignalMovePersonGateCode removed; TestSignalMoveInvalidPolicyCode kept.
+- internal/cli/person_gate_invalid_test.go: TestInvalidPersonVerbsHookProbe and TestInvalidPersonVerbsCommands removed; TestHookCommandsBypassPersonPolicy kept.
+- internal/cli/person_gate_test.go: all person-gate tests removed (TestPersonVerbRefusals ... TestPersonAnswerScopeAndWorkflowRoles); fileBytes and TestPersonAnswerAuthorship kept; testProcs and personTestEnv removed with Env.Procs/PersonDir.
+- internal/task/mode_test.go: seedHistory helper restored (it was in the deleted linked_test.go; TestRewriteKeepsTheFileMode still uses it).
+
+## S6b3 not finished (budget)
+internal/cli tests still do not vet: they use Env.Procs, Env.PersonDir, testProcs, personTestEnv, personHint, CodePersonRequired, CodeLinkedFile. Files: signal_inbox_test, delivery_test, usage_workspace_gate_test, usage_budget_gate_test, plan_policy_test, task_new_linked_test, withdraw_post_test, error_codes_test, land_test, agent_test, workflow_policy_test, cli_test, settings_access_test. Outside the allowed packages and also broken: internal/settings/claude_cli_rework_test.go and internal/question/withdraw_cli_test.go (persongate, Env.Procs), and testenv.Person is gone (non-test file in internal/testenv). Not run: go test of any package, lint, Windows/macOS builds. Acceptance rows 1, 2 and 4 are NOT met; the workspace-budget caller-role test is in usage_workspace_gate_test.go and was not touched.
+
+## S6b3 additional deletions (found by running tests)
+- internal/task/workflow_digest_test.go: whole file (TestWorkflowDigestReadsNameKindGateAndOrder); WorkflowDigest removed, behaviour removed: simplify.md row Hard enforcement around those gates.
+- internal/orchestrator/plan_linked_test.go: whole file (TestLinkedTaskPostsNoJobs); hard-link hold removed, same reason.
+- internal/orchestrator/plan_approval_test.go: TestPlanPublicationNoticeRepeatsOnlyAfterUnblocked removed (its only hold was a hard-linked plan.md), same reason.
+
+## S6b3 checks
+- go vet ./internal/feed ./internal/job/... ./internal/signal ./internal/task/... ./internal/workflow ./internal/orchestrator: exit 0.
+- go test -count=1 of the same packages: ok for feed, job, job/frontmatter, job/jobcmd, job/lint, signal, task, workflow; orchestrator re-run after the deletions was not repeated (vet only).
+- internal/cli, internal/settings, internal/question: do not vet (see above). NOT run: lint, Windows/macOS builds, importer-package tests.

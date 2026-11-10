@@ -1,7 +1,6 @@
 package orchestrator
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,58 +69,6 @@ func rewritePlanFile(t *testing.T, dir, name, old, next string) {
 	}
 	if err := os.WriteFile(path, []byte(strings.Replace(string(b), old, next, 1)), 0600); err != nil {
 		t.Fatal(err)
-	}
-}
-
-// The one remaining hold is a hard-linked plan.md. The notice is written once per
-// blocked stretch and again only after publication was unblocked in between.
-func TestPlanPublicationNoticeRepeatsOnlyAfterUnblocked(t *testing.T) {
-	t.Parallel()
-	f := setupPlan(t)
-	text := plannedText(t)
-	writePlan(t, f, text)
-	planPath := filepath.Join(f.s.Feed.TaskDir, "plan.md")
-	linkPath := filepath.Join(f.s.Feed.TaskDir, "plan-link.md")
-	if err := os.Link(planPath, linkPath); err != nil {
-		t.Skip("hard links unavailable:", err)
-	}
-	var logs bytes.Buffer
-	f.s.Diagnostics = &logs
-	const notice = "plan publication skipped: workflow requires approval of the current plan; run grid approve before Jobs can post\n"
-	check := func(lines int) {
-		t.Helper()
-		if got, want := logs.String(), strings.Repeat(notice, lines); got != want {
-			t.Fatalf("diagnostics = %q, want %q", got, want)
-		}
-	}
-	before, err := f.s.Feed.Read(feed.Filter{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 3 {
-		if out := f.tick(t); out.Assigned != 0 {
-			t.Fatalf("blocked task assigned Jobs: %+v", out)
-		}
-		check(1)
-	}
-	after, err := f.s.Feed.Read(feed.Filter{})
-	if err != nil || len(after.Records) != len(before.Records) {
-		t.Fatalf("blocked ticks changed Feed: %+v %v", after, err)
-	}
-	if err := os.Remove(linkPath); err != nil {
-		t.Fatal(err)
-	}
-	if out := f.tick(t); out.Assigned != 1 {
-		t.Fatalf("unblocked assignments = %d, want 1", out.Assigned)
-	}
-	check(1)
-	// Blocking again after an unblocked pass writes the notice a second time.
-	if err := os.Link(planPath, linkPath); err != nil {
-		t.Fatal(err)
-	}
-	for range 3 {
-		f.tick(t)
-		check(2)
 	}
 }
 
