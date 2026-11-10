@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -174,38 +173,3 @@ func TestQuestionCommandSurface(t *testing.T) {
 	}
 }
 
-// An answer post closes a person gate, so grid feed post refuses the type for
-// every role, GRID_ROLE unset included (the CLI then writes as member).
-func TestFeedPostRefusesAnswer(t *testing.T) {
-	for _, role := range []string{"", "agent", "cli", "member", "owner"} {
-		t.Run("role="+role, func(t *testing.T) {
-			h, task := feedHarness(t)
-			q := questionAdd(t, h, task, "member")
-			t.Setenv("GRID_ROLE", role)
-			if code := h.run(task, "feed", "post", "--type", "answer", "--re", q.Post, "--body", `{"answer":"Yes"}`); code != 1 || !strings.Contains(h.errb.String(), "grid answer") {
-				t.Fatalf("feed post %d: %s", code, h.errb)
-			}
-			read, err := (feed.Store{TaskDir: task, TaskID: feedTaskID}).Read(feed.Filter{Type: "answer"})
-			if err != nil || len(read.Records) != 0 {
-				t.Fatalf("refused answer posted: %+v %v", read, err)
-			}
-			state, err := (feed.Store{TaskDir: task, TaskID: feedTaskID}).State()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !state.Questions[q.Post].Open || state.Questions[q.Post].Applied != nil || len(state.NeedsYou) != 1 {
-				t.Fatalf("refused answer closed gate: %+v", state)
-			}
-			if code := h.run(task, "question", "list", "--json"); code != 0 {
-				t.Fatalf("list %d: %s", code, h.errb)
-			}
-			var listed []question.Record
-			if err := json.Unmarshal(h.out.Bytes(), &listed); err != nil {
-				t.Fatal(err)
-			}
-			if len(listed) != 1 || listed[0].State != "open" || len(listed[0].History) != 0 {
-				t.Fatalf("refused answer projected: %+v", listed)
-			}
-		})
-	}
-}

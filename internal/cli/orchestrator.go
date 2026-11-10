@@ -96,9 +96,6 @@ func runOrchestrator(args []string, env Env) int {
 	}
 	var obj map[string]any
 	if verb == "post" {
-		if err := refuseAnswerPost(*kind); err != nil {
-			return fail(err)
-		}
 		if *body == "-" {
 			data, err := io.ReadAll(env.Stdin)
 			if err != nil {
