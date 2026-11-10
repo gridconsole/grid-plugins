@@ -33,6 +33,9 @@ type Env struct {
 	failure    *commandFailure
 	Getenv     func(string) string    // nil reads the process environment
 	Executable func() (string, error) // nil asks os.Executable
+	// typedGlobal names the variables a global flag was typed for (GRID_LEASE_EPOCH for --lease-epoch):
+	// getenv shows the flag's value either way, and this tells a typed flag from an inherited variable.
+	typedGlobal map[string]bool
 }
 
 func (e Env) getenv(key string) string {

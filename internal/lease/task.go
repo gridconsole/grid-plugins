@@ -235,6 +235,10 @@ type Acquisition struct {
 // w.Gen is replaced by the generation already on the lease file, as grant
 // refuses a regression.
 func (s TaskStore) AcquireTask(w feed.Writer, pid int, start string, probe func(session.Live) session.ProcessState) (Acquisition, error) {
+	// The machine is read off the worker id below; refuse an id without one before any read or write.
+	if !strings.Contains(w.Worker, "@") {
+		return Acquisition{}, fmt.Errorf("worker id %q must be member@machine", w.Worker)
+	}
 	cur, err := s.Read("task")
 	if errors.Is(err, os.ErrNotExist) {
 		cur, err = Tenure{}, nil

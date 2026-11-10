@@ -189,7 +189,10 @@ func (s *Stream) task(dir string) error {
 	if err := s.handover(fs, w, got); err != nil {
 		return s.skip(dir, taskID, SkipLeaseFailed, err)
 	}
-	st := Store{Feed: fs, Writer: w, Assignee: s.Holder(), Now: s.Now, Diagnostics: s.Diag}
+	// Capacity is confirmed for the holder, as job next --usage-ready does for its assignee, so a Job
+	// parked on usage_limit is offered again.
+	st := Store{Feed: fs, Writer: w, Assignee: s.Holder(), Now: s.Now, Diagnostics: s.Diag,
+		UsageReady: func(worker string) bool { return worker == w.Worker }}
 	if s.Configure != nil {
 		s.Configure(&st, taskID)
 	}
