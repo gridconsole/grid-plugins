@@ -257,6 +257,35 @@ func (s Store) wake(snap Snapshot, m *memory) *Wake {
 		m.WakeVersion = 1
 	}
 	key := func(w Wake) string { return fmt.Sprintf("%s/%d", w.Event, w.N) }
+	// A result wake asks the Orchestrator to judge the result. Once the Job is
+	// accepted there is nothing left to judge, whether or not the accepting control
+	// carried --wake, so the wake is consumed rather than left standing.
+	settled := map[string]bool{}
+	for _, id := range ids(snap) {
+		if j := snap.State.Jobs[id]; j.Status == contract.Accepted {
+			for _, r := range j.Results {
+				settled[r] = true
+			}
+		}
+	}
+	pending := m.Pending[:0]
+	for _, w := range m.Pending {
+		if settled[w.Event] {
+			m.Delivered[w.Event] = true
+		} else {
+			pending = append(pending, w)
+		}
+	}
+	m.Pending = pending
+	if m.Active != nil {
+		all := settled[m.Active.Event]
+		for _, event := range m.Active.Events {
+			all = all && settled[event]
+		}
+		if all {
+			m.Active = nil
+		}
+	}
 	if m.Active != nil {
 		if !acknowledged[key(*m.Active)] {
 			return m.Active
@@ -281,6 +310,10 @@ func (s Store) wake(snap Snapshot, m *memory) *Wake {
 		queued[w.Event] = true
 	}
 	for _, event := range keys {
+		if settled[event] {
+			m.Delivered[event] = true
+			continue
+		}
 		if !m.Delivered[event] && !queued[event] {
 			job := candidates[event]
 			m.WakeCounts[job]++

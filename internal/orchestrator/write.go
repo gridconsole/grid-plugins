@@ -1,12 +1,14 @@
 package orchestrator
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 )
 
@@ -52,6 +54,11 @@ func writeLocked(store feed.Store, w feed.Writer, in feed.Input) (record feed.Re
 			return record, &feed.InvalidRecordError{Err: fmt.Errorf("unknown Job %s", target)}
 		}
 	}
+	if in.Type == "job" {
+		if err := checkAfterTargets(snap, in); err != nil {
+			return record, err
+		}
+	}
 	if w.Lease != "task" {
 		j := snap.State.Jobs[in.Job]
 		if j == nil || j.Assign == nil || j.Attempt != in.Attempt || j.Assign.Fence != w.Fence || j.Assign.To != w.Worker || j.Generation != w.Gen || j.Status == contract.Cancelled || j.Status == contract.Rejected || j.Status == contract.Accepted {
@@ -77,6 +84,26 @@ func writeLocked(store feed.Store, w feed.Writer, in feed.Input) (record feed.Re
 		err = ErrDuplicateWake
 	}
 	return
+}
+
+// checkAfterTargets refuses a Job that waits on a Job the task does not have, so
+// the typo is found when the Job is posted. A gate is checked by its own path.
+func checkAfterTargets(snap Snapshot, in feed.Input) error {
+	data, err := json.Marshal(in.Body)
+	if err != nil {
+		return nil
+	}
+	var item job.Job
+	if json.Unmarshal(data, &item) != nil {
+		return nil // the schema reports a malformed body
+	}
+	for _, e := range item.After {
+		if strings.HasPrefix(e.Job, "gate:") || snap.State.Jobs[e.Job] != nil {
+			continue
+		}
+		return &feed.InvalidRecordError{Err: fmt.Errorf("%s: after target %q does not exist; post %s first", item.ID, e.Job, e.Job)}
+	}
+	return nil
 }
 
 type Attempt struct {

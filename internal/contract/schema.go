@@ -186,7 +186,7 @@ func validate(s map[string]any, v any, path string, depth int) error {
 	if depth > 100 {
 		return fmt.Errorf("%s: schema nesting limit", path)
 	}
-	fail := func(rule string) error { return fmt.Errorf("%s: %s", path, rule) }
+	fail := func(rule string) error { return &ruleError{msg: path + ": " + rule, depth: pathDepth(path)} }
 	check := func(child any) error { return validate(child.(map[string]any), v, path, depth+1) }
 	if name, ok := s["$ref"].(string); ok {
 		target, ok := schemas.byName[name]
@@ -215,19 +215,24 @@ func validate(s map[string]any, v any, path string, depth int) error {
 	for _, key := range []string{"allOf", "anyOf", "oneOf"} {
 		if children, ok := s[key].([]any); ok {
 			count := 0
-			var last error
+			var last, best error
 			for _, child := range children {
 				if err := check(child); err == nil {
 					count++
 				} else {
 					last = err
+					// The branch that got furthest into the value is the one the
+					// writer meant; on a tie the later branch is kept.
+					if best == nil || errDepth(err) >= errDepth(best) {
+						best = err
+					}
 				}
 			}
 			if key == "allOf" && count != len(children) {
 				return last
 			}
 			if key == "anyOf" && count == 0 || key == "oneOf" && count != 1 {
-				return fail(fmt.Sprintf("%s matched %d branches: %v", key, count, last))
+				return &ruleError{msg: fmt.Sprintf("%s: %s matched %d branches: %v", path, key, count, best), depth: max(pathDepth(path), errDepth(best))}
 			}
 		}
 	}
@@ -320,6 +325,24 @@ func validate(s map[string]any, v any, path string, depth int) error {
 		}
 	}
 	return nil
+}
+
+// ruleError is a schema failure that remembers how deep in the value it was found,
+// so a oneOf or anyOf can report the branch that got furthest instead of the last.
+type ruleError struct {
+	msg   string
+	depth int
+}
+
+func (e *ruleError) Error() string { return e.msg }
+
+func pathDepth(path string) int { return strings.Count(path, ".") + strings.Count(path, "[") }
+
+func errDepth(err error) int {
+	if r, ok := err.(*ruleError); ok {
+		return r.depth
+	}
+	return 0
 }
 
 func matchesType(typ string, v any) bool {

@@ -79,11 +79,44 @@ func Load(store feed.Store) (Snapshot, error) {
 	return s, nil
 }
 
+// splitMissingTargets returns the Jobs the graph can take and the Jobs held out
+// of it: those with an after target that is not posted and, repeatedly, those
+// behind a held Job.
+func splitMissingTargets(items []job.Job) (keep, held []job.Job) {
+	keep = items
+	for {
+		known := map[string]bool{}
+		for _, it := range keep {
+			known[it.ID] = true
+		}
+		next := make([]job.Job, 0, len(keep))
+		for _, it := range keep {
+			missing := false
+			for _, e := range it.After {
+				missing = missing || !strings.HasPrefix(e.Job, "gate:") && !known[e.Job]
+			}
+			if missing {
+				held = append(held, it)
+			} else {
+				next = append(next, it)
+			}
+		}
+		moved := len(next) != len(keep)
+		keep = next
+		if !moved {
+			return keep, held
+		}
+	}
+}
+
 // Ready is the only Orchestrator ready predicate, shared with spawn sizing.
 // The graph owns dependency semantics and canonical ordering. Readiness times
 // are metadata from the authority's controls, never authority for a transition.
 func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
-	g, err := jobgraph.New(s.Items)
+	// A Job whose after target was never posted (an old Feed, or a hand-written
+	// record) waits alone; it must not fail the queue of every other Job.
+	items, held := splitMissingTargets(s.Items)
+	g, err := jobgraph.New(items)
 	if err != nil {
 		return jobgraph.Readiness{}, err
 	}
@@ -170,6 +203,28 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 	if err != nil {
 		return out, err
 	}
+	for _, item := range held {
+		if status := input.Jobs[item.ID].Status; status != "" && status != contract.Posted && status != contract.Ready {
+			continue
+		}
+		for _, e := range item.After {
+			if strings.HasPrefix(e.Job, "gate:") {
+				continue
+			}
+			if _, posted := s.State.Jobs[e.Job]; !posted {
+				out.Waiting = append(out.Waiting, jobgraph.Wait{Job: item.ID, Target: e.Job, Kind: jobgraph.Done, Reason: "waiting for " + e.Job + ", which is not posted"})
+			} else if input.Jobs[e.Job].Status != contract.Accepted {
+				out.Waiting = append(out.Waiting, jobgraph.Wait{Job: item.ID, Target: e.Job, Kind: jobgraph.Done, Reason: "waiting for " + e.Job + " to be accepted"})
+			}
+		}
+	}
+	sort.SliceStable(out.Waiting, func(i, j int) bool {
+		a, b := out.Waiting[i], out.Waiting[j]
+		if a.Job != b.Job {
+			return a.Job < b.Job
+		}
+		return a.Target < b.Target
+	})
 	// Lowest order first; Jobs with no order follow in the canonical posting order.
 	// The sort is stable, so ties keep that order.
 	sort.SliceStable(out.Ready, func(i, j int) bool {

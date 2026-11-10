@@ -56,6 +56,7 @@ func runOrchestrator(args []string, env Env) int {
 	project := fs.String("project", "", "project name or id")
 	asJSON := fs.Bool("json", false, "print JSON")
 	wait := fs.Bool("wait", false, "wait for an assignment or judgement event")
+	named := id // the Job id the writer typed, before the GRID_JOB fallback
 	if id == "" {
 		id = env.getenv("GRID_JOB")
 	}
@@ -122,8 +123,18 @@ func runOrchestrator(args []string, env Env) int {
 			}
 			intent["owner"] = *person
 			obj["intent"] = intent
-			if id, _ := obj["id"].(string); id != "" && *job == "" {
-				*job = id
+		}
+		// A Job post takes its id from the body; a Job id typed on the command line
+		// (positional or --job) must be the same one.
+		if *kind == "job" {
+			if bodyID, _ := obj["id"].(string); bodyID != "" {
+				if *job != id {
+					named = *job
+				}
+				if named != "" && named != bodyID {
+					return fail(&feed.InvalidRecordError{Err: fmt.Errorf("Job id %s on the command line differs from the body id %s", named, bodyID)})
+				}
+				*job = bodyID
 			}
 		}
 	}
@@ -363,6 +374,10 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	// The same answer to a closed Job that AnswerPerson gives, before anything is written.
 	if j := snap.State.Jobs[job]; j != nil && (j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected) {
 		err := &feed.InvalidRecordError{Err: fmt.Errorf("%s is already %s", job, j.Status)}
+		fmt.Fprintln(env.Stderr, err)
+		return exitCode(err)
+	}
+	if err := orchestrator.PersonReady(snap, job, time.Now()); err != nil {
 		fmt.Fprintln(env.Stderr, err)
 		return exitCode(err)
 	}

@@ -12,6 +12,22 @@ import (
 
 const maxPersonAnswer = 3500
 
+// PersonReady refuses to answer a person Job while a Job it waits for is not
+// accepted: job next holds any other Job the same way, and an early answer would
+// release the Jobs behind it before the work they depend on exists.
+func PersonReady(snap Snapshot, id string, now time.Time) error {
+	ready, err := Ready(snap, now)
+	if err != nil {
+		return err
+	}
+	for _, w := range ready.Waiting {
+		if w.Job == id && w.Target != "" {
+			return &feed.InvalidRecordError{Err: fmt.Errorf("%s cannot be answered yet: %s", id, w.Reason)}
+		}
+	}
+	return nil
+}
+
 // AnswerPerson records who answered a role Person Job, when, and the answer,
 // then marks the Job accepted so the Jobs behind it are released. It is a plain
 // record: it does not check who the caller is. The task lease writes it, since a
@@ -45,6 +61,9 @@ func AnswerPerson(store feed.Store, w feed.Writer, id, answer string, now time.T
 		}
 		if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected {
 			return bad("%s is already %s", id, j.Status)
+		}
+		if e := PersonReady(snap, id, now); e != nil {
+			return e
 		}
 		text := fmt.Sprintf("%s answered %s at %s: %s", w.Author.ID, id, contract.FormatTime(now), answer)
 		said, e := store.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, w)
