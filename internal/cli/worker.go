@@ -62,14 +62,6 @@ func runWorker(args []string, env Env) int {
 	return 0
 }
 
-// workerNextContext is how long the stream runs: until SIGINT. A test replaces it.
-var workerNextContext = func() (context.Context, context.CancelFunc) {
-	return signal.NotifyContext(context.Background(), os.Interrupt)
-}
-
-// workerNextEvery is the pause between passes; zero is the stream's one second.
-var workerNextEvery time.Duration
-
 var taskFolderPattern = regexp.MustCompile(`^T-[0-9]+(?:-.+)?$`)
 
 // runWorkerNext is the stream a grid-worker supervises: it keeps the task
@@ -151,7 +143,7 @@ func runWorkerNext(args []string, env Env) int {
 	s := &orchestrator.Stream{
 		Member: member, Machine: machine, Role: role,
 		PID: *pid, PIDStart: *start,
-		Out: env.Stdout, Diag: diag, Every: workerNextEvery,
+		Out: env.Stdout, Diag: diag,
 		Tasks: func() ([]string, error) { return workerTaskDirs(env) },
 	}
 	s.Configure = func(st *orchestrator.Store, taskID string) {
@@ -163,7 +155,9 @@ func runWorkerNext(args []string, env Env) int {
 			st.Owner = owner
 		}
 	}
-	ctx, cancel := workerNextContext()
+	// The stream runs until SIGINT. It does not release the task leases then: the
+	// tenure names the worker's process, and the worker's next stream reuses it.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	err = s.Run(ctx)
 	if errors.Is(err, context.Canceled) {
