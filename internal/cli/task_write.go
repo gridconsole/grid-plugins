@@ -176,12 +176,12 @@ func runApprove(args []string, env Env) int {
 	var post func(task.Event) error
 	if store, job := planPersonJob(resolved.Path); job != "" {
 		// The person Job waits for its after list like any other answer.
-		snap, err := orchestrator.Load(store)
+		snap, err := loadFeedSnapshot(store)
 		if err == nil {
 			err = orchestrator.PersonReady(snap, job, time.Now())
 		}
 		if err != nil {
-			fmt.Fprintln(env.Stderr, err)
+			fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
 			return 3
 		}
 		if w, err := orchestratorWriter(env, "task", env.getenv("GRID_LEASE_EPOCH")); err != nil {

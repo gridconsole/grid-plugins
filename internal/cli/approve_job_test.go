@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/plan"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 )
@@ -172,6 +173,26 @@ func TestApproveWaitsForTheAfterJob(t *testing.T) {
 	}
 	if s := string(st.Jobs["J-2"].Status); s != "posted" {
 		t.Fatalf("J-2 is %s", s)
+	}
+	if _, err := os.Stat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("approval.json: %v", err)
+	}
+}
+
+// A Feed snapshot that cannot be loaded makes grid approve exit 3 with the
+// "grid approve: " prefix its other errors use, and writes no approval.json.
+func TestApproveLoadFailureExits3WithPrefix(t *testing.T) {
+	h, path, _, text := approveJobHarness(t)
+	old := loadFeedSnapshot
+	t.Cleanup(func() { loadFeedSnapshot = old })
+	loadFeedSnapshot = func(feed.Store) (orchestrator.Snapshot, error) {
+		return orchestrator.Snapshot{}, errors.New("feed unreadable")
+	}
+	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(text)); code != 3 {
+		t.Fatalf("exit %d %s", code, h.errb.String())
+	}
+	if got := h.errb.String(); got != "grid approve: feed unreadable\n" {
+		t.Fatalf("stderr %q", got)
 	}
 	if _, err := os.Stat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("approval.json: %v", err)
