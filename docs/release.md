@@ -97,14 +97,27 @@ with go.mod's Go version installed.
    to the public history. The version comes from the source repo's commit count, not from the public
    repo's, so the public history may be squashed to one commit at any time without lowering it.
 
-5. Check the install from a machine, or a scratch HOME, that has no Go:
+5. Check the install from a machine, or a scratch HOME, that has no Go. `H` is set once and used on
+   both `claude` lines, so the marketplace and the install land in the same scratch HOME and your
+   real `~/.claude` is not touched:
 
    ```sh
-   HOME=$(mktemp -d) claude plugin marketplace add gridconsole/grid-plugins
-   HOME=$HOME claude plugin install grid@grid
+   H=$(mktemp -d)
+   HOME=$H claude plugin marketplace add gridconsole/grid-plugins
+   HOME=$H claude plugin install grid@grid
    ```
 
-   Then run the installed `bin/grid version`; it prints `grid 0.1.N`. On an existing install,
+   Claude Code copies an installed plugin to `<HOME>/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`,
+   so the installed entry is:
+
+   ```sh
+   G="$H/.claude/plugins/cache/grid/grid/0.1.$N/bin/grid"      # N from step 1
+   PATH=/usr/bin:/bin "$G" version                              # prints: grid 0.1.N
+   ```
+
+   `PATH=/usr/bin:/bin` leaves out Go, so a pass shows the entry ran the shipped binary. If the path
+   above does not exist (the cache layout is Claude Code's, not this repo's), find the entry with
+   `find "$H/.claude/plugins" -path '*/bin/grid' -type f`. On an existing install,
    `claude plugin update grid@grid` moves it to 0.1.N.
 
 `make dist RELEASE=0.1.N` overrides the stamp for a source archive that has no git history.
