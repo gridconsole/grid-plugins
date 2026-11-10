@@ -100,7 +100,23 @@ func (s Store) locked(fn func() error) error {
 
 // exclusive serializes fn with a holder pass without asking for a lease: a
 // person's unleased write takes the same lock a tick takes, and nothing more.
+// The lock file lives in the Feed folder, which a task has only once something
+// was posted, so a person's first Job on a fresh task finds it made (mode 0700)
+// before the lock is opened. The task folder itself must already exist.
 func (s Store) exclusive(fn func() error) error {
+	info, err := os.Stat(s.Feed.TaskDir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return errors.New("task is not a folder")
+	}
+	if err := feed.CheckFilesystem(s.Feed.Dir()); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.Feed.Dir(), 0o700); err != nil {
+		return err
+	}
 	f, err := fslock.OpenNoFollow(filepath.Join(s.Feed.Dir(), ".orchestrator.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return err

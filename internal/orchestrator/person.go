@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -11,6 +12,9 @@ import (
 )
 
 const maxPersonAnswer = 3500
+
+// maxUnusedQuote is how much of an unused answer its notice quotes.
+const maxUnusedQuote = 3000
 
 // PersonReady refuses to answer a person Job while a Job it waits for is not
 // accepted: job next holds any other Job the same way, and an early answer would
@@ -32,15 +36,17 @@ func PersonReady(snap Snapshot, id string, now time.Time) error {
 // person of the team answers with an `answer` that follows the Job's record and
 // has no lease, and this pass writes the message and the accepting control under
 // the task lease, as AnswerPerson does for a leased writer. The earliest such
-// answer of an open person Job wins. A Job still waiting for another Job keeps
-// its answer for a later pass.
+// answer of an open person Job wins. Every other answer that reached the Job
+// before this pass is named in a message on the Feed that says it was not used,
+// so the person who wrote it can read that in feed read. A Job still waiting for
+// another Job keeps its answers for a later pass.
 func (s Store) personAnswers(snap Snapshot) error {
 	for _, item := range snap.Items {
 		j := snap.State.Jobs[item.ID]
 		if !item.IsPerson() || j == nil || len(j.History) == 0 || j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected {
 			continue
 		}
-		var first *feed.Record
+		var answers []feed.Record
 		for _, r := range snap.Records {
 			if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] || r.Lease != nil || r.Fence != 0 || contract.TierFor(r.Author.Role) != contract.PersonTeam {
 				continue
@@ -48,19 +54,37 @@ func (s Store) personAnswers(snap Snapshot) error {
 			if text, _ := r.Body["answer"].(string); strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > maxPersonAnswer {
 				continue
 			}
-			if first == nil || r.At < first.At || r.At == first.At && r.ID < first.ID {
-				r := r
-				first = &r
-			}
+			answers = append(answers, r)
 		}
-		if first == nil || PersonReady(snap, item.ID, s.now()) != nil {
+		if len(answers) == 0 || PersonReady(snap, item.ID, s.now()) != nil {
 			continue
 		}
+		sort.Slice(answers, func(a, b int) bool {
+			if answers[a].At != answers[b].At {
+				return answers[a].At < answers[b].At
+			}
+			return answers[a].ID < answers[b].ID
+		})
+		first := answers[0]
 		answer, _ := first.Body["answer"].(string)
 		text := fmt.Sprintf("%s answered %s at %s: %s", first.Author.ID, item.ID, first.At, strings.TrimSpace(answer))
 		said, err := s.Feed.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, s.Writer)
 		if err != nil {
 			return err
+		}
+		// The notices go before the accepting control, so a pass that stops between
+		// the two writes repeats them rather than dropping them.
+		for _, late := range answers[1:] {
+			unused, _ := late.Body["answer"].(string)
+			unused = strings.TrimSpace(unused)
+			// A message holds 4000 characters; the answer record keeps the full text.
+			if r := []rune(unused); len(r) > maxUnusedQuote {
+				unused = string(r[:maxUnusedQuote]) + "…"
+			}
+			note := fmt.Sprintf("The answer of %s to %s at %s (record %s) was not used: %s answered first, at %s. It said: %s", late.Author.ID, item.ID, late.At, late.ID, first.Author.ID, first.At, unused)
+			if _, err := s.Feed.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": note}}, s.Writer); err != nil {
+				return err
+			}
 		}
 		if _, err := s.Feed.Post(feed.Input{Type: "control", Re: said.ID, Body: map[string]any{"target": item.ID, "status": "accepted", "reason": "answered by " + first.Author.ID}}, s.Writer); err != nil {
 			return err
