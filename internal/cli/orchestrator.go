@@ -415,6 +415,10 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	return taskWriteResult(env, event, err, asJSON, resolved.Path)
 }
 
+// loadFeedSnapshot reads the Feed snapshot for grid approve; a test replaces it
+// to make the second read fail after planPersonJob's read succeeded.
+var loadFeedSnapshot = orchestrator.Load
+
 // planPersonJob is the plan Job a grid approve answers: the open person Job of
 // the task's approve step, the first in Feed order. When every such Job is
 // already accepted (the plan changed since and is approved again), it is the
