@@ -178,6 +178,12 @@
               "id": {
                 "type": "string"
               },
+              "kind": {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^[a-z][a-z-]*$",
+                "type": "string"
+              },
               "lease_expires": {
                 "type": "string"
               },
