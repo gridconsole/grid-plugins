@@ -18,11 +18,6 @@ func ProjectPersonVerbs(home, project string) (map[string][]string, error) {
 	home = gridhome.Real(home)
 	for _, path := range []string{filepath.Join("projects", project, "workflows.md"), "workflows.md"} {
 		text, _, err := readFile(home, path)
-		if errors.Is(err, ErrLinkedFile) {
-			// Keep the link in the chain: the person gate refuses instead of
-			// falling back to the floor.
-			return nil, fmt.Errorf("%w: %w", ErrPersonVerbs, err)
-		}
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s", ErrPersonVerbs, fileReason(err))
 		}

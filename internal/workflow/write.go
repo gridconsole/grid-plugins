@@ -201,10 +201,6 @@ func Write(resolver where.Resolver, selector, expected string, input io.Reader) 
 		if err != nil || !after.Mode().IsRegular() || !os.SameFile(before, opened) || !os.SameFile(after, opened) {
 			return result, errors.New("workflow file changed while opening")
 		}
-		// Replacing a linked file would hide the link; refuse and write nothing.
-		if err := refuseLinked(f, "workflows.md"); err != nil {
-			return result, err
-		}
 		// Hash all current bytes, even if the old file exceeds the input limit
 		// or has invalid UTF-8, so a known revision can repair such a file.
 		hash := sha256.New()

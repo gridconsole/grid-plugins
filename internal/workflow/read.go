@@ -72,9 +72,6 @@ func read(r where.Resolver, project string, withPolicy bool) (Answer, error) {
 // task creation can refuse it. Other file errors keep no cause.
 func readProblem(project string, err error) Problem {
 	p := Problem{File: labelOf(project), Message: fileReason(err)}
-	if errors.Is(err, ErrLinkedFile) {
-		p.cause = err
-	}
 	return p
 }
 

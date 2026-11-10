@@ -54,8 +54,6 @@ func fileReason(err error) string {
 		return "cannot read"
 	case errors.Is(err, fs.ErrNotExist):
 		return errChanged.Error()
-	case errors.Is(err, ErrLinkedFile):
-		return "has more than one hard link (linked_file)"
 	}
 	for _, reason := range []error{errNotRegular, errSymlink, errChanged, errTooLarge, errNotUTF8} {
 		if errors.Is(err, reason) {
@@ -299,13 +297,6 @@ func readFile(home, relative string) (string, *string, error) {
 		return "", nil, err
 	}
 	defer f.Close()
-	// A linked workflows.md is unreadable: TaskWorkflow fails with ErrLinkedFile,
-	// so the guard and Deliver hold the scope's named-workflow tasks, no preview
-	// can be raised, task creation refuses, and every verb whose person gate read
-	// it refuses.
-	if err := refuseLinked(f, relative); err != nil {
-		return "", nil, err
-	}
 	const maxFileBytes = 32 * 1024
 	data, err := io.ReadAll(io.LimitReader(f, maxFileBytes+1))
 	if err != nil {

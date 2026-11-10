@@ -141,12 +141,6 @@ func EnsureTaskID(taskDir string) (string, error) {
 	if !info.Mode().IsRegular() {
 		return "", fmt.Errorf("task.md must be a regular file")
 	}
-	// A linked task.md may have been written through the other link, and the
-	// replacement below would erase that link. Refuse it under the lock, before
-	// anything is read or written, like the task journal writers do.
-	if err := workflow.RefuseLinked(f, "task.md"); err != nil {
-		return "", err
-	}
 	data, err := io.ReadAll(f)
 	if err != nil {
 		return "", err

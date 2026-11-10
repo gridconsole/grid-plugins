@@ -36,11 +36,6 @@ func readTaskPolicy(taskDir string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if opened.Mode().IsRegular() {
-		if err := refuseLinked(f, "workflow.md"); err != nil {
-			return nil, &os.PathError{Op: "open", Path: path, Err: err}
-		}
-	}
 	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
 	if err != nil {
 		return nil, err

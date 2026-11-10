@@ -16,12 +16,6 @@ func PersonVerbs(dir string) (map[string][]string, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
-	var linked *os.PathError
-	if errors.Is(err, ErrLinkedFile) && errors.As(err, &linked) {
-		// Keep the link in the chain, without the task's path: the person gate
-		// refuses instead of dropping the verbs this file adds.
-		return nil, fmt.Errorf("%w: %w", ErrPersonVerbs, linked.Err)
-	}
 	if err != nil {
 		return nil, errors.New("cannot read workflow.md")
 	}
