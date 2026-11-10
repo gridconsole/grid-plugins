@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/where"
 	"go.yaml.in/yaml/v4"
@@ -137,17 +138,22 @@ func Fold(path, text, intent string) (Task, error) {
 		return Task{}, fmt.Errorf("task.md front matter: %w", err)
 	}
 	dropWorkflowList(&doc)
-	var rec Record
-	if err := doc.Load(&rec); err != nil {
+	var front struct {
+		Record  `yaml:",inline"`
+		Display string `yaml:"display"`
+		ULID    string `yaml:"ulid"`
+	}
+	if err := doc.Load(&front); err != nil {
 		return Task{}, fmt.Errorf("task.md front matter: %w", err)
 	}
+	rec := front.Record
 	n, err := number(filepath.Base(path))
 	if err != nil {
 		return Task{}, err
 	}
 	id := fmt.Sprintf("T-%02d", n)
-	if rec.ID == "" {
-		rec.ID = id
+	if err := foldID(&rec, front.Display, front.ULID, id); err != nil {
+		return Task{}, err
 	}
 	if rec.ID != id || strings.TrimSpace(rec.Title) == "" || rec.Project == "" || rec.State == "" {
 		return Task{}, errors.New("task.md needs a matching id, title, project and state")
@@ -163,6 +169,30 @@ func Fold(path, text, intent string) (Task, error) {
 	}
 	// Intent is the person's words, without the heading New puts before them.
 	return Task{Record: rec, Path: path, Intent: strings.TrimPrefix(intent, IntentHead)}, nil
+}
+
+// foldID sets rec.ID to the folder's display id (T-NN). The migrated shape
+// (contract/README.md, Task IDs) has id: <ULID> with display: T-NN; the legacy
+// shape has id: T-NN, or no id, with an optional ulid:. A display or ulid that
+// disagrees with the folder or the id is refused.
+func foldID(rec *Record, display, stable, folder string) error {
+	if feed.IsID(rec.ID) {
+		if stable != "" && stable != rec.ID {
+			return errors.New("task.md has conflicting stable task ids")
+		}
+		if display != folder {
+			return errors.New("task.md needs a display matching its folder")
+		}
+		rec.ID = display
+		return nil
+	}
+	if rec.ID == "" {
+		rec.ID = folder
+	}
+	if display != "" && display != rec.ID {
+		return errors.New("task.md needs a display matching its folder")
+	}
+	return nil
 }
 
 // dropWorkflowList removes the old plugin's inline step list, so Record.Workflow
