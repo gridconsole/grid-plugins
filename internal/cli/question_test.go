@@ -172,4 +172,3 @@ func TestQuestionCommandSurface(t *testing.T) {
 		t.Fatalf("help: %d %s", code, h.out)
 	}
 }
-
