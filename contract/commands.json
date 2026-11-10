@@ -695,6 +695,11 @@
               "required": false
             },
             {
+              "name": "--plan-hash",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
@@ -805,6 +810,11 @@
               "required": false
             },
             {
+              "name": "--plan-hash",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
@@ -911,6 +921,11 @@
             },
             {
               "name": "--person",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--plan-hash",
               "takes": "value",
               "required": false
             },
@@ -1090,6 +1105,11 @@
               "required": false
             },
             {
+              "name": "--plan-hash",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
@@ -1202,6 +1222,11 @@
               "required": false
             },
             {
+              "name": "--plan-hash",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
@@ -1308,6 +1333,11 @@
             },
             {
               "name": "--person",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--plan-hash",
               "takes": "value",
               "required": false
             },
@@ -1449,6 +1479,11 @@
             },
             {
               "name": "--person",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--plan-hash",
               "takes": "value",
               "required": false
             },
@@ -1614,6 +1649,11 @@
             },
             {
               "name": "--person",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--plan-hash",
               "takes": "value",
               "required": false
             },
@@ -2148,6 +2188,11 @@
             },
             {
               "name": "--person",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--plan-hash",
               "takes": "value",
               "required": false
             },
