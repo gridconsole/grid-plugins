@@ -135,7 +135,7 @@ func TestWindowsEntryIsCmd(t *testing.T) {
 		t.Errorf("grid.cmd must use CRLF line endings throughout: %q", cmd)
 	}
 	text := string(cmd)
-	for _, want := range []string{`"grid_exe=%~dp0grid-windows-amd64.exe"`,`"%grid_exe%" %*`, `exit /b %ERRORLEVEL%`, `if not exist "%grid_exe%"`} {
+	for _, want := range []string{`"grid_exe=%~dp0grid-windows-amd64.exe"`, `"%grid_exe%" %*`, `exit /b %ERRORLEVEL%`, `if not exist "%grid_exe%"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("grid.cmd lacks %s", want)
 		}
