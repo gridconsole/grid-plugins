@@ -1,0 +1,1 @@
+{"schema_version":1,"id":"setup-skill","title":"The setup skill reads the repo and a Claude session and records settings with grid setup","tier":"b","size":"normal"}
