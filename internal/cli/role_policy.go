@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -89,14 +88,10 @@ func workflowRoleRefusal(args []string, env Env) int {
 	}
 	var roleLists [][]string
 	match := ""
-	warned := false
 	apply := func(policy map[string][]string, policyErr error) {
 		if policyErr != nil {
-			// A broken extension adds no role rule and removes no other scope's.
-			if errors.Is(policyErr, workflow.ErrPersonVerbs) && !warned {
-				fmt.Fprintln(env.Stderr, "grid: warning: invalid person_verbs; ignoring the key")
-				warned = true
-			}
+			// A policy that cannot be read adds no role rule and removes no other
+			// scope's; grid workflow show reports the problem itself.
 			return
 		}
 		local := ""

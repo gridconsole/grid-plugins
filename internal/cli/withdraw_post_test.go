@@ -24,83 +24,29 @@ func withdrawalProbe(t *testing.T) (*harness, string, feed.Store, feed.Record, s
 	return h, task, store, q, string(body)
 }
 
-func assertWithdrawalUnchanged(t *testing.T, store feed.Store, q feed.Record) {
-	t.Helper()
-	read, err := store.Read(feed.Filter{})
-	if err != nil || len(read.Records) != 1 {
-		t.Fatalf("refusal wrote a record: %+v %v", read, err)
-	}
-	state, err := store.State()
-	if err != nil || !state.Questions[q.ID].Open || len(state.NeedsYou) != 1 {
-		t.Fatalf("refusal closed gate: %+v %v", state, err)
-	}
-}
-
-func TestFeedPostAgentWithdrawalRefused(t *testing.T) {
-	h, task, store, q, body := withdrawalProbe(t)
-	code := h.run(task, "feed", "post", "--type", "control", "--re", q.ID, "--body", body)
-	if code != 3 || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "agent shell requires a task lease fence to withdraw") {
-		t.Fatalf("withdrawal: exit=%d stdout=%s stderr=%s", code, h.out, h.errb)
-	}
-	assertWithdrawalUnchanged(t, store, q)
-}
-
-func TestJobPostAgentWithdrawalRefused(t *testing.T) {
-	h, task, store, q, body := withdrawalProbe(t)
-	code := h.run(task, "job", "post", "--type", "control", "--re", q.ID, "--body", body)
-	if code != 3 || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "agent shell requires a task lease fence to withdraw") {
-		t.Fatalf("withdrawal: exit=%d stdout=%s stderr=%s", code, h.out, h.errb)
-	}
-	assertWithdrawalUnchanged(t, store, q)
-}
-
-func TestMCPFeedPostAgentWithdrawalRefused(t *testing.T) {
-	h, _, store, q, body := withdrawalProbe(t)
-	line := mcpCall(t, h, "feed_post", `{"type":"control","re":"`+q.ID+`","body":`+body+`}`)
-	if !strings.Contains(line, `"isError":true`) || !strings.Contains(line, `\"code\":3`) || !strings.Contains(line, "agent shell requires a task lease fence to withdraw") {
-		t.Fatalf("withdrawal: %s", line)
-	}
-	assertWithdrawalUnchanged(t, store, q)
-}
-
-func TestAgentWithdrawalPostVariants(t *testing.T) {
-	for _, path := range []string{"feed", "job", "mcp"} {
-		for _, tc := range []struct {
-			name, key, value, lease, epoch string
-			stdin                          bool
-		}{
-			{name: "worker marker", key: "GRID_WORKER", value: "unrelated-worker"},
-			{name: "worker id", key: "GRID_WORKER_ID", value: "builder"},
-			{name: "agent role", key: "GRID_ROLE", value: "agent"},
-			{name: "lease without epoch", key: "GRID_AGENT", value: "builder", lease: "task"},
-			{name: "zero fence", key: "GRID_AGENT", value: "builder", lease: "task", epoch: "0.0"},
-			{name: "epoch without lease", key: "GRID_AGENT", value: "builder", epoch: "0.1"},
-			{name: "stdin body", key: "GRID_AGENT", value: "builder", stdin: true},
-		} {
-			if path == "job" && tc.name == "epoch without lease" {
-				continue
-			} // Job controls infer the task lease.
-			t.Run(path+"/"+tc.name, func(t *testing.T) {
+// S6b8: a withdrawal post is not refused because GRID_AGENT or GRID_WORKER_ID is
+// set. The role (member here) and the lease rules still decide. These replace
+// TestFeedPostAgentWithdrawalRefused, TestJobPostAgentWithdrawalRefused,
+// TestMCPFeedPostAgentWithdrawalRefused and TestAgentWithdrawalPostVariants.
+func TestAgentEnvWithdrawalPostSucceeds(t *testing.T) {
+	for _, path := range []string{"feed", "mcp"} {
+		for _, marker := range []string{"GRID_AGENT", "GRID_WORKER_ID"} {
+			t.Run(path+"/"+marker, func(t *testing.T) {
 				h, task, store, q, body := withdrawalProbe(t)
 				t.Setenv("GRID_AGENT", "")
-				t.Setenv(tc.key, tc.value)
-				t.Setenv("GRID_LEASE", tc.lease)
-				t.Setenv("GRID_LEASE_EPOCH", tc.epoch)
+				t.Setenv(marker, "builder")
 				if path == "mcp" {
 					line := mcpCall(t, h, "feed_post", `{"type":"control","re":"`+q.ID+`","body":`+body+`}`)
-					if !strings.Contains(line, `"isError":true`) || !strings.Contains(line, `\"code\":3`) {
-						t.Fatalf("MCP refusal: %s", line)
+					if strings.Contains(line, `"isError":true`) {
+						t.Fatalf("MCP withdrawal under %s: %s", marker, line)
 					}
-				} else {
-					if tc.stdin {
-						h.env.Stdin = strings.NewReader(body)
-						body = "-"
-					}
-					if code := h.run(task, path, "post", "--type", "control", "--re", q.ID, "--body", body); code != 3 || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "agent shell requires a task lease fence") {
-						t.Fatalf("refusal: %d %s %s", code, h.out, h.errb)
-					}
+				} else if code := h.run(task, "feed", "post", "--type", "control", "--re", q.ID, "--body", body); code != 0 {
+					t.Fatalf("withdrawal under %s: exit=%d stdout=%s stderr=%s", marker, code, h.out, h.errb)
 				}
-				assertWithdrawalUnchanged(t, store, q)
+				state, err := store.State()
+				if err != nil || state.Questions[q.ID].Open || len(state.NeedsYou) != 0 {
+					t.Fatalf("withdrawal did not close the question: %+v %v", state, err)
+				}
 			})
 		}
 	}

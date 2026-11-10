@@ -22,10 +22,10 @@ func TestTaskTrashRefusals(t *testing.T) {
 		code                    int
 	}{
 		{"member", "member", "", "delete", 3}, {"guest", "guest", "", "delete", 3},
-		{"agent", "owner", "worker", "delete", 3}, {"planner", "owner", "", "delete", 3},
+		{"planner", "owner", "", "delete", 3},
 		{"live_lease", "owner", "", "delete", 3}, {"unknown", "owner", "", "delete", 1},
 		{"no_copy", "owner", "", "restore", 3}, {"restore_member", "member", "", "restore", 3},
-		{"restore_guest", "guest", "", "restore", 3}, {"restore_agent", "owner", "worker", "restore", 3},
+		{"restore_guest", "guest", "", "restore", 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
@@ -63,6 +63,42 @@ func TestTaskTrashRefusals(t *testing.T) {
 			}
 			if _, err := os.Stat(filepath.Join(h.gridHome, "trash")); !os.IsNotExist(err) {
 				t.Fatalf("refusal created trash: %v", err)
+			}
+		})
+	}
+}
+
+// S6b8: GRID_AGENT, GRID_WORKER_ID and GRID_WORKER are not a reason to refuse a
+// task move; the role policy decides. Delete and restore both exit 0 for an
+// owner whose environment names an agent. This failed on f3d3ee08 with exit 3
+// "a person with an allowed role must perform this task move".
+func TestTaskTrashAgentEnvironmentAllowed(t *testing.T) {
+	for _, marker := range []string{"GRID_AGENT", "GRID_WORKER_ID"} {
+		t.Run(marker, func(t *testing.T) {
+			h := newHarness(t)
+			fixture := taskFixture(t, h)
+			h.env.Getenv = func(k string) string {
+				switch k {
+				case "GRID_ROLE":
+					return "owner"
+				case marker:
+					return "builder"
+				case "GRID_ACTOR":
+					return "alex"
+				}
+				return ""
+			}
+			if code := h.run(h.home, "task", "delete", fixture.ID, "--project", "personal"); code != 0 {
+				t.Fatalf("delete exit = %d: %s", code, h.errb)
+			}
+			if _, err := os.Stat(fixture.Path); !os.IsNotExist(err) {
+				t.Fatalf("source remains: %v", err)
+			}
+			if code := h.run(h.home, "task", "restore", fixture.ID, "--project", "personal"); code != 0 {
+				t.Fatalf("restore exit = %d: %s", code, h.errb)
+			}
+			if _, err := os.Stat(fixture.Path); err != nil {
+				t.Fatalf("task not restored: %v", err)
 			}
 		})
 	}
