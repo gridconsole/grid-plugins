@@ -147,9 +147,7 @@ func (s Store) New(o NewOptions) (Task, error) {
 // task to its workflow's definition (workflow_digest), whether or not its size
 // is known yet, so a later definition that differs holds the task; a workflow
 // with no template to find leaves the field out, and the task keeps the folder
-// check alone. A linked workflows.md is not "no template": it fails with
-// ErrLinkedFile, and New makes no task, because a task without the binding is
-// released by a later folder swap.
+// check alone.
 func (s Store) taskFront(t *Task, project, stableID string) ([]byte, error) {
 	dump := func() ([]byte, error) {
 		return yaml.Dump(struct {

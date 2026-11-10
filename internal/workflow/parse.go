@@ -51,8 +51,7 @@ type Problem struct {
 	Section *string `json:"section"`
 	Line    *int    `json:"line"`
 	Message string  `json:"message"`
-	// cause is the link error behind a file problem (see readProblem). It is
-	// never printed; problemError keeps it so errors.Is sees ErrLinkedFile.
+	// cause is the error behind a file problem. It is never printed.
 	cause error
 }
 

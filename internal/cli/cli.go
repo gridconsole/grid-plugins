@@ -19,19 +19,19 @@ import (
 // Env is everything a command reads from the machine, so tests can set it.
 // Paths are expected to be symlink-resolved (see gridhome.Real).
 type Env struct {
-	Stdin            io.Reader
-	Stdout           io.Writer
-	Stderr           io.Writer
-	Cwd              string
-	Home             string
-	GridHome         string // "" when neither GRID_HOME nor a home folder is known
-	TempRoots        []string
-	Machine          string                 // this machine's id, "" before it is made
-	Ceiling          string                 // "" walks to the root; tests set their fixture root
-	GitVersion       func() (string, error) // nil runs git --version
-	failure          *commandFailure
-	Getenv           func(string) string    // nil reads the process environment
-	Executable       func() (string, error) // nil asks os.Executable
+	Stdin      io.Reader
+	Stdout     io.Writer
+	Stderr     io.Writer
+	Cwd        string
+	Home       string
+	GridHome   string // "" when neither GRID_HOME nor a home folder is known
+	TempRoots  []string
+	Machine    string                 // this machine's id, "" before it is made
+	Ceiling    string                 // "" walks to the root; tests set their fixture root
+	GitVersion func() (string, error) // nil runs git --version
+	failure    *commandFailure
+	Getenv     func(string) string    // nil reads the process environment
+	Executable func() (string, error) // nil asks os.Executable
 }
 
 func (e Env) getenv(key string) string {

@@ -107,10 +107,7 @@ func scopeTemplates(r where.Resolver, project string) (Answer, error) {
 	return out, nil
 }
 
-// problemError reads as the problem. A link behind it stays in the chain, so
-// errors.Is(err, ErrLinkedFile) holds for every TaskWorkflow, TaskSteps and
-// StepsFor caller, and task creation refuses the link instead of leaving the
-// workflow binding out.
+// problemError reads as the problem; its cause stays in the chain.
 func problemError(p Problem) error {
 	if p.cause != nil {
 		return &resolveError{problem: p}

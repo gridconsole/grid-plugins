@@ -23,3 +23,32 @@ None run. Exit codes: n/a. The per-package test list, lint, and the Windows and 
 
 ## Split suggestion
 Continue on this branch: (1) job, orchestrator and jobcmd cleanup, (2) `go build ./...` and `go vet` fixes, (3) delete or rewrite the tests listed above with reasons, (4) add the three new tests.
+
+# S6b2 (continuation, branch lane-S6b2)
+
+Status: builds. Production code only; no test was touched.
+
+## Done
+- `internal/job/source.go`: removed `linkedPlanError`, the `task.Linked` call and `ErrPlanNeedsApproval`; `planReadable` now returns nil. Added `ErrJobNotInPlan`, wrapped by `LoadPlan` when plan.md names no such Job.
+- `jobcmd/command.go` and `job/lint/lint.go`: removed the `ErrPlanNeedsApproval` mappings.
+- `orchestrator/plan.go`: removed the Linked block and the "workflow requires approval ... run grid approve" notice.
+- `jobcmd/feedjob.go` `loadJob`: falls back to the Feed only when plan.md is missing (`os.IsNotExist`) or does not name the Job (`ErrJobNotInPlan`); any other plan error is returned.
+- Compile fixes: unused imports (workflow, feed, task, cli, job, orchestrator); `ErrWorkflowChanged` reference in task/hold.go; removed the `person_required`, `linked_file` and `workflow_changed` code constants; restored `jsonRequested` in cli/error_codes.go (it was in the deleted person_gate.go and `Run` still uses it); dropped stale ErrLinkedFile comments. `taskFront` left as is (optional).
+- Approval record still carries `plan_digest` (task/gates.go:85,105,213).
+
+## Checks
+- `go build ./...`, `GOOS=windows go build ./...`, `GOOS=darwin go build ./...`: exit 0.
+- grep for Linked|RefuseLinked|persongate|WorkflowDigest|ErrPlanNeedsApproval in non-test .go files: 0 matches.
+- `go vet ./...`: fails only in test files (below). Tests, lint: NOT RUN (test files do not compile).
+
+## For S6b3 (test files that no longer compile)
+- internal/cli/person_gate_invalid_test.go: imports deleted internal/persongate. Also reference removed `CodePersonRequired`/`CodeLinkedFile`: signal_policy_code_test.go, linked_policy_closed_test.go, project_person_gate_test.go, linked_workflow_gate_test.go.
+- internal/feed/linked_task_test.go: workflow.ErrLinkedFile removed.
+- internal/guard/plan_hold_swap_test.go: taskstore.ErrWorkflowChanged removed.
+- internal/job/approval_gaps_test.go: ErrPlanNeedsApproval removed.
+- internal/job/approval_workflow_test.go: task.ErrLinkedFile removed.
+- internal/job/linked_plan_test.go: task.ErrLinkedFile and ErrPlanNeedsApproval removed.
+- internal/signal/turn_linked_test.go: task.ErrLinkedFile removed.
+- internal/task/create_linked_test.go: ErrLinkedFile removed.
+- internal/workflow/linked_resolve_test.go, linked_task_test.go: ErrLinkedFile removed.
+(vet stops at the first error per package, so more may surface once these are fixed.)

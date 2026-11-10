@@ -66,9 +66,7 @@ func read(r where.Resolver, project string, withPolicy bool) (Answer, error) {
 }
 
 // readProblem is the public problem for a file that could not be read. Only
-// fileReason's text is shown. A link is also kept as the cause, so the error
-// problemError makes from it still satisfies errors.Is(err, ErrLinkedFile) and
-// task creation can refuse it. Other file errors keep no cause.
+// fileReason's text is shown.
 func readProblem(project string, err error) Problem {
 	p := Problem{File: labelOf(project), Message: fileReason(err)}
 	return p

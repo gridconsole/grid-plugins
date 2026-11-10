@@ -31,9 +31,9 @@ type Record struct {
 	OwnerRole string `yaml:"owner_role,omitempty" json:"owner_role,omitempty"`
 	Size      string `yaml:"size" json:"size"`
 	Workflow  string `yaml:"workflow" json:"workflow"`
-	State          string `yaml:"state" json:"state"`
-	Gate           string `yaml:"gate,omitempty" json:"gate,omitempty"`
-	Created        string `yaml:"created" json:"created"`
+	State     string `yaml:"state" json:"state"`
+	Gate      string `yaml:"gate,omitempty" json:"gate,omitempty"`
+	Created   string `yaml:"created" json:"created"`
 }
 
 // Task folds the task record and the person's unmodified words into one view.

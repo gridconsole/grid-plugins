@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -413,6 +414,9 @@ var jobID = regexp.MustCompile(`^J-[0-9]+(?:\.[0-9]+)*$`)
 func ValidID(id string) bool { return jobID.MatchString(id) }
 
 // LoadPlan selects exactly one planned Job by item number or Job id.
+// ErrJobNotInPlan is wrapped by LoadPlan when plan.md names no such Job.
+var ErrJobNotInPlan = errors.New("plan.md names no such Job")
+
 func LoadPlan(dir, selector string) (Job, error) {
 	path, err := Within(dir, "plan.md")
 	if err != nil {
@@ -442,6 +446,9 @@ func LoadPlan(dir, selector string) (Job, error) {
 			}
 			matches = append(matches, j)
 		}
+	}
+	if len(matches) == 0 {
+		return Job{}, fmt.Errorf("plan.md: expected one item %q, found 0: %w", selector, ErrJobNotInPlan)
 	}
 	if len(matches) != 1 {
 		return Job{}, fmt.Errorf("plan.md: expected one item %q, found %d", selector, len(matches))

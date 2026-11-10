@@ -19,6 +19,9 @@ func loadJob(task, selector string) (job.Job, error) {
 	if planErr == nil {
 		return j, nil
 	}
+	if !os.IsNotExist(planErr) && !errors.Is(planErr, job.ErrJobNotInPlan) {
+		return job.Job{}, planErr
+	}
 	posted, err := feedJob(task, selector)
 	if err != nil {
 		return job.Job{}, errors.Join(planErr, err)
