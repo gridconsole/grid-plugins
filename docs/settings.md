@@ -66,6 +66,13 @@ explicit overrides:
 }
 ```
 
+One more top-level key is accepted: `accounts`, the array of account records the
+app's account reads write into the same file. The plugin does not interpret it
+(it must be a JSON array); it is carried through every rewrite (`agent set`,
+`skill enable|disable`, `hook level`, `grid agent budget apply|undo`) so the
+records are not dropped, and it never appears in the effective values or the
+budget read.
+
 Unknown keys at every level are rejected with the allowed list. Null values,
 wrong types, duplicate keys and additional JSON documents are rejected. Invalid
 input leaves the previous file byte-identical. Settings files and lock files
