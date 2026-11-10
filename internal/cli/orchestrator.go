@@ -322,6 +322,18 @@ func runOrchestrator(args []string, env Env) int {
 		if err != nil {
 			return fail(err)
 		}
+		// An unleased answer closes nothing by itself: the Job stays open until the
+		// next pass of whoever holds the task lease, and with nobody holding it that
+		// pass waits for the next tick. Say so, so the answer is not mistaken for done.
+		if unleased {
+			fmt.Fprintln(env.Stderr, "Saved. The answer will be taken up on the next pass of the task's orchestrator.")
+			if *asJSON {
+				return writeJSON(env.Stdout, struct {
+					feed.Record
+					Pending bool `json:"pending"`
+				}{record, true})
+			}
+		}
 		if *asJSON {
 			return writeJSON(env.Stdout, record)
 		}
