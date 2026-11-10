@@ -117,7 +117,20 @@ func runTaskWrite(args []string, env Env) int {
 	if sub == "status" {
 		o.State = pos[1]
 	}
+	// A reopen posts a new plan Job for a person (Q8). The writer is built first,
+	// so a reopen never leaves the old result approving the plan.
+	var postPlanJob func() error
+	if sub == "reopen" {
+		var perr error
+		if postPlanJob, perr = reopenPlanJob(env, resolved.Path); perr != nil {
+			fmt.Fprintf(env.Stderr, "grid task reopen: %v\n", perr)
+			return 1
+		}
+	}
 	event, err := store.Change(o)
+	if err == nil && postPlanJob != nil {
+		err = postPlanJob()
+	}
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 

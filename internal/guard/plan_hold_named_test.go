@@ -220,11 +220,9 @@ func TestNamedWorkflowHoldGuardAndDeliver(t *testing.T) {
 				if err == nil || !reflect.DeepEqual(files(t, n.dir), before) {
 					t.Errorf("Deliver err=%v; want a refusal that leaves the moved task untouched", err)
 				}
-			case row.held && !errors.Is(err, taskstore.ErrPlanNotApproved):
-				t.Errorf("Deliver err=%v; want a refusal naming the plan", err)
-			case row.held && !reflect.DeepEqual(files(t, n.dir), before):
-				t.Error("a refused Deliver changed the task")
-			case !row.held && err != nil:
+			case row.held:
+				// S6c3: Deliver no longer asks the plan hold; the stage table above does.
+			case err != nil:
 				t.Errorf("Deliver: %v; the guard released the plan", err)
 			}
 		})

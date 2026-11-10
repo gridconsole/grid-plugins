@@ -19,10 +19,6 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
-// ErrPlanNotApproved identifies a delivery refused because the task's plan has
-// no valid approval yet.
-var ErrPlanNotApproved = errors.New("plan not approved")
-
 // DeliverOptions supplies the person's outcome and the files to copy. It is
 // command input; existing task records remain owned by task.Read and Fold.
 type DeliverOptions struct {
@@ -39,8 +35,8 @@ type Delivery struct {
 	Artifacts []artifact.Record `json:"artifacts"`
 }
 
-// Deliver checks the keeper and proof gates, then writes the Outcome and raises
-// the ship gate. The task record is written only through the task writer: one
+// Deliver checks the keeper and proof, then writes the Outcome and moves the task
+// to waiting at step ship. It raises no gate: the person's answer is a Job. The task record is written only through the task writer: one
 // commitWrite carries task.md and the delivery receipt, under .task.lock. The
 // lock order is .task.lock, .plan.lock, the brain levels' locks, .proof.lock;
 // no writer takes them the other way round.
@@ -96,12 +92,12 @@ func (s Store) Deliver(o DeliverOptions) (Delivery, error) {
 	for _, file := range d.files {
 		out.Actions = append(out.Actions, "Copy "+filepath.Base(file)+" into artifacts/")
 	}
-	out.Actions = append(out.Actions, "Rebuild proof/index.json", "Append delivery history", "Raise ship gate")
+	out.Actions = append(out.Actions, "Rebuild proof/index.json", "Append delivery history")
 	if o.DryRun {
 		return out, nil
 	}
 	err = s.withWrite(o.Cwd, t.ID, func(t Task) error {
-		// A plan revision cannot overtake the proof check and the raised gate.
+		// A plan revision cannot overtake the proof check.
 		err := plan.Store{TaskDir: t.Path}.WithHash(func(string) error {
 			return d.brain.WithKeeperGate(dir, func() error {
 				var err error
@@ -181,17 +177,6 @@ func (d delivery) check(t Task) error {
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	// Delivery writes step: ship, which would move a task whose plan still waits
-	// for a person past the plan gate. It asks the guard's own question, last,
-	// after the faults the agent can mend itself.
-	history, err := readOptional(filepath.Join(d.dir, "history.md"))
-	if err != nil {
-		return err
-	}
-	lookup := StepsFor(d.s.Resolver, d.dir)
-	if PlanHeldWith(lookup, d.dir, string(data), string(history)) {
-		return fmt.Errorf("%w: %s waits for a person to approve its plan, and delivery would move it past that gate", ErrPlanNotApproved, t.ID)
-	}
 	return nil
 }
 
@@ -245,8 +230,7 @@ func (d delivery) write(t Task) ([]artifact.Record, error) {
 		// A legacy status field mirrors state only where the task already has one.
 		setScalar(mapping, "status", next, false)
 		setScalar(mapping, "step", "ship", true)
-		setScalar(mapping, "gate", "ship", true)
-		setScalar(mapping, "next", "Review the Outcome and approve ship", true)
+		setScalar(mapping, "next", "Review the Outcome", true)
 		setScalar(mapping, "outcome", summary, true)
 		setScalar(mapping, "updated", d.s.clock().UTC().Format(time.RFC3339), true)
 		return nil

@@ -174,9 +174,8 @@ func TestNamedWorkflowDeliverRoles(t *testing.T) {
 						t.Errorf("Deliver err=%v; want the task lookup to refuse a filtered guest", err)
 					}
 				case step == "plan":
-					if !errors.Is(err, taskstore.ErrPlanNotApproved) {
-						t.Errorf("Deliver err=%v; want a refusal naming the plan", err)
-					}
+					// S6c3: Deliver no longer asks the plan hold, so it does not refuse here.
+					_ = taskstore.DeliverOptions{}
 				case err != nil:
 					t.Errorf("Deliver: %v; the guard released the plan", err)
 				}

@@ -82,11 +82,11 @@ func TestDeliverKeepsHeaderAndCommitsOnce(t *testing.T) {
 	if err := yaml.Load([]byte(strings.SplitN(strings.TrimPrefix(text, "---\n"), "\n---\n", 2)[0]), &fm); err != nil {
 		t.Fatal(err)
 	}
-	if fm["state"] != "waiting" || fm["status"] != "waiting" || fm["gate"] != "ship" || fm["step"] != "ship" || fm["outcome"] != summary || fm["updated"] != "2026-01-02T03:04:05Z" {
+	if fm["state"] != "waiting" || fm["status"] != "waiting" || fm["gate"] != nil || fm["step"] != "ship" || fm["outcome"] != summary || fm["updated"] != "2026-01-02T03:04:05Z" {
 		t.Fatalf("%v", fm)
 	}
 	got, err := Read(task.Path)
-	if err != nil || got.State != "waiting" || got.Gate != "ship" {
+	if err != nil || got.State != "waiting" {
 		t.Fatalf("%+v %v", got, err)
 	}
 	lines := historyLines(t, task.Path)
@@ -161,7 +161,7 @@ func TestDeliverReplaysPendingJournalFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := Read(task.Path)
-	if err != nil || got.State != "waiting" || got.Gate != "ship" {
+	if err != nil || got.State != "waiting" {
 		t.Fatalf("%+v %v", got, err)
 	}
 	lines := historyLines(t, task.Path)

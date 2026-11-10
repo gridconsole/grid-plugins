@@ -16,7 +16,7 @@ import (
 func approvalSnapshot(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
-	for _, name := range []string{"task.md", "history.md", approvalFile, previewApprovalFile, shipApprovalFile} {
+	for _, name := range []string{"task.md", "history.md", approvalFile} {
 		data, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)
@@ -31,15 +31,10 @@ func approvalSnapshot(t *testing.T, dir string) map[string]string {
 func TestApproveRepeatWritesNothing(t *testing.T) {
 	for _, tc := range []struct{ at, file string }{
 		{"plan", approvalFile},
-		{"preview", previewApprovalFile},
-		{"ship", shipApprovalFile},
 	} {
 		t.Run(tc.at, func(t *testing.T) {
 			s, task := waitingFixture(t)
 			h := setPlan(t, task, planV1)
-			if tc.at != "plan" {
-				setGate(t, task, tc.at)
-			}
 			first, err := s.Approve(WriteOptions{ID: task.ID, Note: "Looks right"}, "")
 			if err != nil {
 				t.Fatal(err)
@@ -67,9 +62,6 @@ func TestApproveRepeatWritesNothing(t *testing.T) {
 			} else if !info.ModTime().Equal(old) {
 				t.Fatalf("receipt rewritten at %v", info.ModTime())
 			}
-			if n := strings.Count(before["history.md"], " · preview approved · "); tc.at == "preview" && n != 1 {
-				t.Fatalf("want one preview approved line, got %d", n)
-			}
 		})
 	}
 }
@@ -91,22 +83,3 @@ func TestApproveRepeatWithNewLandsHashRewrites(t *testing.T) {
 	}
 }
 
-// A receipt filed under the wrong gate is not a repeat: approving again writes
-// the gate's own receipt.
-func TestApproveRepeatOverMisfiledReceiptRewrites(t *testing.T) {
-	s, task := waitingFixture(t)
-	h := setPlan(t, task, planV1)
-	if _, err := s.Approve(WriteOptions{ID: task.ID}, ""); err != nil {
-		t.Fatal(err)
-	}
-	write(t, filepath.Join(task.Path, shipApprovalFile), readFile(t, filepath.Join(task.Path, approvalFile)))
-	setGate(t, task, "ship")
-	event, err := s.Approve(WriteOptions{ID: task.ID}, h)
-	if err != nil || event.Gate != "ship" {
-		t.Fatalf("%+v: %v", event, err)
-	}
-	var stored Event
-	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(task.Path, shipApprovalFile))), &stored); err != nil || stored.Gate != "ship" {
-		t.Fatalf("misfiled receipt kept: %+v %v", stored, err)
-	}
-}

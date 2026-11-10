@@ -14,7 +14,6 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/plan"
-	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
 var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
@@ -64,16 +63,12 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 		if t.State != "waiting" {
 			return fmt.Errorf("cannot approve task in current state %q: expected waiting", t.State)
 		}
-		name, gate, at := approvalFile, "", "plan"
-		switch t.Gate {
-		case "ship":
-			name, gate, at = shipApprovalFile, "ship", "ship"
-		case "preview":
-			name, gate, at = previewApprovalFile, "preview", "preview"
+		// The task raises no gate any more, so a task waits only at its plan.
+		// An old gate: line in task.md is ignored (Q10).
+		if o.Gate != "" && o.Gate != "plan" {
+			return fmt.Errorf("Changed since you approved: the task is at gate plan, not %s", o.Gate)
 		}
-		if o.Gate != "" && o.Gate != at {
-			return fmt.Errorf("Changed since you approved: the task is at gate %s, not %s", at, o.Gate)
-		}
+		name, gate := approvalFile, ""
 		previous, err := readOptional(filepath.Join(t.Path, name))
 		if err != nil {
 			return err
@@ -111,11 +106,7 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 			if err != nil {
 				return err
 			}
-			var lines []string
-			if gate == "preview" {
-				lines = append(lines, previewApprovedLine(event, s.clock()))
-			}
-			return commitWriteLines(t.Path, event, map[string][]byte{name: append(data, '\n')}, lines...)
+			return commitWrite(t.Path, event, map[string][]byte{name: append(data, '\n')})
 		})
 		if errors.Is(err, plan.ErrNoPlan) {
 			return errors.New("plan.md is missing; write the plan before approving it")
@@ -123,12 +114,6 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 		return err
 	})
 	return event, err
-}
-
-// previewApprovedLine is the prose line the plan guard watches for: only Grid
-// writes it, here, with the receipt.
-func previewApprovedLine(e Event, now time.Time) string {
-	return taskfile.HistoryLine(now.UTC().Format("2006-01-02T15:04"), "preview approved", e.PlanHash, CleanHistory(e.Who.ID), CleanHistory(e.Via))
 }
 
 // Approval answers whether the plan is approved, from the result of the plan
@@ -149,7 +134,7 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 		found, jobErr := planJobResult(t.Path)
 		if errors.Is(jobErr, ErrNoPlanJob) {
 			var err error
-			event, err = receiptForGate(t, gate)
+			event, err = receiptForGate(t)
 			return err
 		}
 		if t.State == "closed" {
@@ -177,29 +162,17 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 }
 
 // receiptForGate is the Q10 fallback of ApprovalForGate: the approval.json
-// (or approval-preview.json, approval-ship.json) receipt of a task that has no
-// approve person Job. It runs under the task lock.
-func receiptForGate(t Task, gate string) (Event, error) {
-	name, eventGate := approvalFile, ""
-	switch gate {
-	case "plan":
-	case "preview":
-		name, eventGate = previewApprovalFile, "preview"
-	case "ship":
-		name, eventGate = shipApprovalFile, "ship"
-	default:
-		return Event{}, fmt.Errorf("unknown approval gate %q", gate)
-	}
+// receipt of a task that has no approve person Job. The gate name is ignored,
+// as it is on the Job path; no preview or ship receipt is written any more. It
+// runs under the task lock.
+func receiptForGate(t Task) (Event, error) {
 	var event Event
-	data, err := readOptional(filepath.Join(t.Path, name))
+	data, err := readOptional(filepath.Join(t.Path, approvalFile))
 	if err != nil {
 		return event, err
 	}
 	err = plan.Store{TaskDir: t.Path}.WithDigest(func(hash, digest string) (err error) {
 		event, err = checkApproval(t, data, hash, digest)
-		if err == nil && event.Gate != eventGate {
-			return fmt.Errorf("approval is for another gate")
-		}
 		return err
 	})
 	if errors.Is(err, plan.ErrNoPlan) {
@@ -237,10 +210,8 @@ func ApprovedDigest(dir, hash, digest string) bool {
 		if err != nil {
 			return false
 		}
-		event, err := checkApproval(t, data, hash, digest)
-		// The plan receipt has no gate field. A receipt for ship or an unknown
-		// gate cannot authorize plan work, even if misfiled.
-		return err == nil && event.Gate == ""
+		_, err = checkApproval(t, data, hash, digest)
+		return err == nil
 	}
 	return err == nil && digest != "" && found.PlanHash == hash && found.PlanDigest == digest
 }
@@ -306,11 +277,18 @@ func planJobResult(dir string) (JobApproval, error) {
 	text := func(r feed.Entry, key string) string { s, _ := r.Body[key].(string); return s }
 	var planJobs []string
 	isPlanJob := map[string]bool{}
+	// A reopen posts a new plan Job that continues the old one (Q8). Results
+	// recorded before the newest such Job stay in the Feed as history but no
+	// longer approve the plan.
+	reopenAt, reopenJob := "", ""
 	for _, r := range read.Records {
 		jobID := text(r, "id")
 		if r.Type == "job" && admitted(r.Verdict) && jobID != "" && !isPlanJob[jobID] && text(r, "kind") == "approve" && strings.EqualFold(strings.TrimSpace(text(r, "role")), "Person") {
 			isPlanJob[jobID] = true
 			planJobs = append(planJobs, jobID)
+			if text(r, "continues") != "" && r.ID > reopenAt {
+				reopenAt, reopenJob = r.ID, jobID
+			}
 		}
 	}
 	if len(planJobs) == 0 {
@@ -320,7 +298,7 @@ func planJobResult(dir string) (JobApproval, error) {
 	for _, r := range read.Records {
 		target := text(r, "target")
 		j := state.Jobs[target]
-		if r.Type != "control" || !admitted(r.Verdict) || !isPlanJob[target] || text(r, "status") != string(contract.Accepted) || text(r, "plan_digest") == "" || j == nil || j.Status != contract.Accepted {
+		if r.Type != "control" || !admitted(r.Verdict) || !isPlanJob[target] || text(r, "status") != string(contract.Accepted) || text(r, "plan_digest") == "" || j == nil || j.Status != contract.Accepted || r.ID <= reopenAt {
 			continue
 		}
 		// Record ids are ULIDs, so the greatest is the latest.
@@ -329,6 +307,9 @@ func planJobResult(dir string) (JobApproval, error) {
 		}
 	}
 	if found.Record == "" {
+		if reopenJob != "" {
+			planJobs[0] = reopenJob
+		}
 		return found, fmt.Errorf("plan has not been approved: the plan Job %s has no result yet; run grid approve to post it", planJobs[0])
 	}
 	return found, nil

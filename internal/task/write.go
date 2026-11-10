@@ -126,18 +126,18 @@ func (s Store) Change(o WriteOptions) (Event, error) {
 		}
 		files := map[string][]byte{"task.md": updated}
 		if o.Action == "reopen" {
-			// A reopened task needs every gate approved again: the receipt below
-			// is not an approve event, so no receipt file stays valid.
-			for _, name := range []string{approvalFile, previewApprovalFile, shipApprovalFile} {
-				previous, err := readOptional(filepath.Join(t.Path, name))
+			// A reopened task needs its plan approved again: the receipt below is
+			// not an approve event, so approval.json no longer matches. The plan
+			// Job's old result is superseded by the new plan Job that grid task
+			// reopen posts (see planJobResult).
+			previous, err := readOptional(filepath.Join(t.Path, approvalFile))
+			if err != nil {
+				return err
+			}
+			if previous != nil {
+				files[approvalFile], err = json.Marshal(event)
 				if err != nil {
 					return err
-				}
-				if previous != nil {
-					files[name], err = json.Marshal(event)
-					if err != nil {
-						return err
-					}
 				}
 			}
 		}
@@ -484,10 +484,8 @@ func (s Store) withWrite(cwd, id string, fn func(Task) error) error {
 }
 
 const (
-	journalName         = ".task-write.json"
-	approvalFile        = "approval.json"
-	shipApprovalFile    = "approval-ship.json"
-	previewApprovalFile = "approval-preview.json"
+	journalName  = ".task-write.json"
+	approvalFile = "approval.json"
 )
 
 var decisionFile = regexp.MustCompile(`^refusal-R-[1-9][0-9]*\.json$`)
@@ -552,7 +550,7 @@ func recoverWrite(dir string) error {
 		return errors.New("incomplete task write journal")
 	}
 	for name := range files {
-		if name != "task.md" && name != "history.md" && name != approvalFile && name != shipApprovalFile && name != previewApprovalFile && !decisionFile.MatchString(name) {
+		if name != "task.md" && name != "history.md" && name != approvalFile && !decisionFile.MatchString(name) {
 			return fmt.Errorf("invalid journal file %q", name)
 		}
 		if err := writableFile(dir, name); err != nil {

@@ -68,6 +68,6 @@ func runDeliver(args []string, env Env) int {
 		}
 		return 0
 	}
-	fmt.Fprintf(env.Stdout, "%s delivered; ship gate waiting\n", result.Task)
+	fmt.Fprintf(env.Stdout, "%s delivered; waiting for the person\n", result.Task)
 	return 0
 }
