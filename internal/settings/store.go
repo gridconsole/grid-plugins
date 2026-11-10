@@ -22,6 +22,10 @@ type Document struct {
 	Hooks  map[string]string `json:"hooks"`
 	// Budget names the preset Apply last wrote; empty when none was applied.
 	Budget string `json:"budget,omitempty"`
+	// Accounts holds the account records the app's account reads keep in the same
+	// settings.json. The plugin owns no part of them: the array is carried through
+	// every rewrite as it was read, never merged into Effective and never shown.
+	Accounts json.RawMessage `json:"accounts,omitempty"`
 }
 
 func empty() Document {
