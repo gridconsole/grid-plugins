@@ -1,6 +1,6 @@
 # D-privacy-audit: public audit and the publish-set deny list
 
-Base: main eb833a2d. Branch lane-D-privacy-audit. Two commits.
+Base: main eb833a2d. Branch lane-D-privacy-audit. Four commits. All checks below were rerun on the final head.
 
 ## Proof table
 
@@ -23,7 +23,7 @@ Base: main eb833a2d. Branch lane-D-privacy-audit. Two commits.
 
 - `internal/packaging/dist.go`: `Build` now calls a new `stage` function (Write, copy of `shippedDirs`, LICENSE). Same output as before; `shippedDirs` names the only source folders that ship: skills, agents, agent-templates.
 - `internal/packaging/publish_set_test.go` (new): the deny list test on the real repo root, a test on a synthetic root that holds every denied folder, a test that the walker finds a planted folder, and a test that `shippedDirs` avoids the list.
-- `docs/public-audit.md` (new): patterns, hit table, NOT DONE.
+- `docs/public-audit.md` (new): patterns, hit table, NOT DONE. Rows 11 and 12 (L37.md:99, L56.md:150) were added after the reviewer's note that these two pattern hits had no row.
 - `docs/lanes/L160.md`, `L135R.md`, `S6b.md`, `PLUG-shell.md`: a name, a temp path and two VM paths replaced.
 
 ## NOT DONE
