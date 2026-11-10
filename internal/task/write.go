@@ -77,9 +77,9 @@ type Event struct {
 	LandsHash  string          `json:"lands_hash,omitempty"`
 	PlanHash   string          `json:"plan_hash,omitempty"`
 	PlanDigest string          `json:"plan_digest,omitempty"`
-	Gate       string          `json:"gate,omitempty"`
-	RefusalID  string          `json:"refusal_id,omitempty"`
-	Decision   string          `json:"decision,omitempty"`
+	// Gate is read from old receipts only: Grid writes none (an approval.json
+	// that names a gate is not the plan approval).
+	Gate string `json:"gate,omitempty"`
 }
 
 // WriteOptions names the task, the requested move and the caller's explanation.
@@ -93,9 +93,6 @@ type WriteOptions struct {
 	// PlanHashToken is the approval token policy: empty or "any" accepts either
 	// form; "digest" requires 64 hex digits for a non-empty token.
 	PlanHashToken string
-	// Gate is the gate an approval is for: empty (whatever the task waits at),
-	// plan, preview or ship.
-	Gate string
 }
 
 // Change performs a checked state move and appends its receipt under one lock.

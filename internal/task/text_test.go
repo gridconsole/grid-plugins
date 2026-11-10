@@ -41,7 +41,6 @@ func TestTaskTextRefusalSet(t *testing.T) {
 				"history":       func() error { _, err := s.Note(WriteOptions{Note: value}); return err },
 				"reason":        func() error { _, err := s.Change(WriteOptions{Note: value}); return err },
 				"approval":      func() error { _, err := s.Approve(WriteOptions{Note: value}, ""); return err },
-				"decision":      func() error { _, err := s.Decide(WriteOptions{Note: value}, "R-1", "deny"); return err },
 				"actor": func() error {
 					_, err := s.Decline(DeclineOptions{Reason: "Later", WriteOptions: WriteOptions{Who: contract.Author{ID: value}}})
 					return err

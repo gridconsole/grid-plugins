@@ -12,11 +12,8 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
-	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/plan"
 )
-
-var refusalID = regexp.MustCompile(`^R-[1-9][0-9]*$`)
 
 var planHashToken = regexp.MustCompile(`^([0-9a-f]{6}|[0-9a-f]{64})$`)
 
@@ -24,10 +21,9 @@ var planHashToken = regexp.MustCompile(`^([0-9a-f]{6}|[0-9a-f]{64})$`)
 // short hash or full digest is a compare-and-set token. With no token, an existing
 // stale approval must be explicitly replaced using --plan-hash after reviewing the new plan.
 //
-// A task raises no ship or preview gate any more (an old gate: line in task.md
-// is ignored), so a waiting task always gets its plan approval in approval.json.
-// A caller that names another gate (o.Gate) is refused, and a repeat whose
-// receipt already matches the plan writes nothing.
+// A waiting task always gets its plan approval in approval.json (an old gate:
+// line in task.md is ignored). A repeat whose receipt already matches the plan
+// writes nothing.
 //
 // The hash comes from plan.md through internal/plan, never from a stored copy.
 // Locks are taken in one order: .task.lock (withWrite), then .plan.lock (WithDigest),
@@ -48,11 +44,6 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 			return event, fmt.Errorf("%w: plan_hash_token digest requires 64 lowercase hex digits", ErrEditUsage)
 		}
 	}
-	switch o.Gate {
-	case "", "plan", "preview", "ship":
-	default:
-		return event, fmt.Errorf("%w: gate must be plan, preview or ship", ErrEditUsage)
-	}
 	if err := o.validateText(); err != nil {
 		return event, err
 	}
@@ -60,12 +51,7 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 		if t.State != "waiting" {
 			return fmt.Errorf("cannot approve task in current state %q: expected waiting", t.State)
 		}
-		// The task raises no gate any more, so a task waits only at its plan.
-		// An old gate: line in task.md is ignored (Q10).
-		if o.Gate != "" && o.Gate != "plan" {
-			return fmt.Errorf("Changed since you approved: the task is at gate plan, not %s", o.Gate)
-		}
-		name, gate := approvalFile, ""
+		name := approvalFile
 		previous, err := readOptional(filepath.Join(t.Path, name))
 		if err != nil {
 			return err
@@ -92,13 +78,13 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 				return fmt.Errorf("plan hash no longer matches: approved %q, current %q", want, current)
 			}
 			// A repeat press on a receipt that already matches returns it and writes nothing.
-			if old, err := checkApproval(t, previous, current, digest); err == nil && old.Gate == gate && old.LandsHash == o.LandsHash {
+			if old, err := checkApproval(t, previous, current, digest); err == nil && old.Gate == "" && old.LandsHash == o.LandsHash {
 				event = old
 				return nil
 			}
 			o.Action = "approve"
 			event = s.event(t, o, t.State)
-			event.PlanHash, event.PlanDigest, event.Gate, event.LandsHash = current, digest, gate, o.LandsHash
+			event.PlanHash, event.PlanDigest, event.LandsHash = current, digest, o.LandsHash
 			data, err := json.Marshal(event)
 			if err != nil {
 				return err
@@ -377,53 +363,4 @@ func readApproval(data []byte, event *Event) error {
 		}
 	}
 	return nil
-}
-
-// Decide records a task-scoped allow or deny for a known refusal. It never runs
-// the command, changes agent settings or grants a project-wide permission.
-// Refusal producers own refusals/R-n.json; this writer only checks its existence.
-func (s Store) Decide(o WriteOptions, id, decision string) (Event, error) {
-	var event Event
-	if err := o.validateText(); err != nil {
-		return event, err
-	}
-	if !refusalID.MatchString(id) {
-		return event, errors.New("invalid refusal id: use R-N")
-	}
-	if decision != "allow" && decision != "deny" {
-		return event, errors.New("refusal decision must be allow or deny")
-	}
-	err := s.withWrite(o.Cwd, o.ID, func(t Task) error {
-		if _, ok := StateMoves()[t.State]; !ok || t.State == "closed" {
-			return fmt.Errorf("cannot decide refusal in current state %q", t.State)
-		}
-		dir := filepath.Join(t.Path, "refusals")
-		if err := safeDir(gridhome.Real(s.Resolver.GridHome), dir); err != nil {
-			return err
-		}
-		refusal, err := readOptional(filepath.Join(dir, id+".json"))
-		if err != nil {
-			return err
-		}
-		if refusal == nil {
-			return fmt.Errorf("refusal %s not found", id)
-		}
-		name := "refusal-" + id + ".json"
-		previous, err := readOptional(filepath.Join(t.Path, name))
-		if err != nil {
-			return err
-		}
-		if previous != nil {
-			return fmt.Errorf("refusal %s already decided", id)
-		}
-		o.Action = "refusal decide"
-		event = s.event(t, o, t.State)
-		event.RefusalID, event.Decision = id, decision
-		data, err := json.Marshal(event)
-		if err != nil {
-			return err
-		}
-		return commitWrite(t.Path, event, map[string][]byte{name: append(data, '\n')})
-	})
-	return event, err
 }

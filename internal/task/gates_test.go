@@ -227,63 +227,21 @@ func TestApproveStateAndFiles(t *testing.T) {
 	}
 }
 
-func TestRefusalDecisions(t *testing.T) {
-	for _, decision := range []string{"allow", "deny"} {
-		t.Run(decision, func(t *testing.T) {
-			s, task := writeFixture(t)
-			o := WriteOptions{ID: task.ID, Note: "One command only"}
-			if _, err := s.Decide(o, "R-1", decision); err == nil {
-				t.Fatal("decided a missing refusal")
-			}
-			write(t, filepath.Join(task.Path, "refusals", "R-1.json"), `{"id":"R-1","command":"echo example","rule":"Bash"}`)
-			for _, id := range []string{"../R-1", "R-0", "R-1/other"} {
-				if _, err := s.Decide(o, id, decision); err == nil {
-					t.Fatal("accepted invalid id")
-				}
-			}
-			if _, err := s.Decide(o, "R-1", "yes"); err == nil {
-				t.Fatal("accepted invalid decision")
-			}
-			event, err := s.Decide(o, "R-1", decision)
-			if err != nil {
-				t.Fatal(err)
-			}
-			data, _ := os.ReadFile(filepath.Join(task.Path, "refusal-R-1.json"))
-			var got Event
-			if err := json.Unmarshal(data, &got); err != nil || got != event || got.Decision != decision || got.FromState != got.ToState {
-				t.Fatalf("%+v: %v", got, err)
-			}
-			if _, err := s.Decide(o, "R-1", decision); err == nil {
-				t.Fatal("overwrote decision")
-			}
-			lines, err := s.History("", task.ID)
-			if err != nil || len(lines) != 1 {
-				t.Fatalf("%v: %v", lines, err)
-			}
-			if _, err := s.Change(WriteOptions{ID: task.ID, Action: "close"}); err != nil {
-				t.Fatal(err)
-			}
-			write(t, filepath.Join(task.Path, "refusals", "R-2.json"), `{}`)
-			if _, err := s.Decide(o, "R-2", decision); err == nil {
-				t.Fatal("decided a closed task")
-			}
-		})
-	}
-}
-
-func TestGateWithSymlinkedHome(t *testing.T) {
+// Approve works through a symlinked Grid home and records the plan digest.
+func TestApproveWithSymlinkedHome(t *testing.T) {
 	s, task := waitingFixture(t)
 	alias := filepath.Join(filepath.Dir(s.Resolver.GridHome), "grid-alias")
 	if err := os.Symlink(s.Resolver.GridHome, alias); err != nil {
 		t.Fatal(err)
 	}
 	s.Resolver.GridHome = alias
-	if _, err := s.Approve(WriteOptions{ID: task.ID}, setPlan(t, task, planV1)); err != nil {
-		t.Fatal(err)
+	hash := setPlan(t, task, planV1)
+	event, err := s.Approve(WriteOptions{ID: task.ID}, hash)
+	if err != nil || event.Gate != "" || event.PlanHash != hash || event.PlanDigest != plan.Digest(planV1) {
+		t.Fatalf("%+v: %v", event, err)
 	}
-	write(t, filepath.Join(task.Path, "refusals", "R-1.json"), `{}`)
-	if _, err := s.Decide(WriteOptions{ID: task.ID}, "R-1", "deny"); err != nil {
-		t.Fatal(err)
+	if !Approved(task.Path) {
+		t.Fatal("approval through a symlinked home not valid")
 	}
 }
 

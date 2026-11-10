@@ -11,9 +11,6 @@
     "from_state": {
       "type": "string"
     },
-    "gate": {
-      "type": "string"
-    },
     "note": {
       "type": "string"
     },

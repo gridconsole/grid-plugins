@@ -134,18 +134,16 @@ func runTaskWrite(args []string, env Env) int {
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 
-const approveUsage = `Usage: grid approve <task> [--plan-hash <hash>] [--gate plan|preview|ship] [--note <text>] [--json]
+const approveUsage = `Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--json]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 --plan-hash accepts the 6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json.
 workflow.md with plan_hash_token: digest requires the 64-hex digest.
---gate names the gate the person approved; a task now waiting at another gate is refused (exit 1) and nothing is written.
 `
 
 func runApprove(args []string, env Env) int {
 	fs := newFlags("approve", env)
 	fs.Usage = func() { fmt.Fprint(env.Stderr, approveUsage); fs.PrintDefaults() }
 	hash := fs.String("plan-hash", "", "6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json; workflow.md plan_hash_token: digest requires the digest")
-	gate := fs.String("gate", "", "the gate the person approved: plan, preview or ship; refused when the task waits at another gate")
 	note := fs.String("note", "", "approval note")
 	asJSON := fs.Bool("json", false, "print JSON")
 	pos, err := taskArgs(fs, args)
@@ -165,7 +163,6 @@ func runApprove(args []string, env Env) int {
 	}
 	pos[0] = resolved.ID
 	o := writeOptions(env, pos[0], "approve", *note)
-	o.Gate = *gate
 	o.PlanHashToken, err = workflow.PlanHashToken(resolved.Path)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
@@ -188,46 +185,6 @@ func runApprove(args []string, env Env) int {
 	if err == nil && post != nil {
 		err = post(event)
 	}
-	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
-}
-
-const refusalUsage = "Usage: grid refusal decide <task> <R-N> allow|deny [--note <text>] [--json]\n       grid decide <task> <R-N> allow|deny [--note <text>] [--json]\n<task> is an id, exact folder name, or folder path inside a project tasks directory.\n"
-
-func runRefusal(args []string, env Env) int {
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "help" || args[0] == "-h") {
-		fmt.Fprint(env.Stdout, refusalUsage)
-		return 0
-	}
-	if len(args) == 0 || args[0] != "decide" {
-		fmt.Fprint(env.Stderr, refusalUsage)
-		return 2
-	}
-	return runDecide(args[1:], env)
-}
-
-// runDecide also serves the top-level short spelling.
-func runDecide(args []string, env Env) int {
-	fs := newFlags("refusal decide", env)
-	fs.Usage = func() { fmt.Fprint(env.Stderr, refusalUsage); fs.PrintDefaults() }
-	note := fs.String("note", "", "decision note")
-	asJSON := fs.Bool("json", false, "print JSON")
-	pos, err := taskArgs(fs, args)
-	if errors.Is(err, flag.ErrHelp) {
-		return 0
-	}
-	if err != nil {
-		return 2
-	}
-	if len(pos) != 3 || (pos[2] != "allow" && pos[2] != "deny") {
-		fmt.Fprint(env.Stderr, refusalUsage)
-		return 2
-	}
-	resolved, err := resolveTaskOperand(env, pos[0])
-	if err != nil {
-		return taskOperandError(env, "grid refusal decide", err)
-	}
-	pos[0] = resolved.ID
-	event, err := taskWriter(env).Decide(writeOptions(env, pos[0], "refusal decide", *note), pos[1], pos[2])
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 

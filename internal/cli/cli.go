@@ -95,8 +95,6 @@ func commands() []command {
 		{"ask", "ask a person a question", nil},
 		{"answer", "record a person's answer", runAnswer},
 		{"approve", "approve a gate (a person or the app only)", runApprove},
-		{"refusal", "decide a refused command (a person or the app only)", runRefusal},
-		{"decide", "alias for refusal decide", runDecide},
 		{"deliver", "write the outcome and wait for the person", runDeliver},
 		{"proof", "add evidence and rebuild the task proof index", runProof},
 		{"history", "append a dated task history line", runHistory},
