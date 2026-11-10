@@ -202,6 +202,67 @@ func (s TaskStore) AdoptTask(w feed.Writer, pid int, start string, probe func(se
 	return next, old, err
 }
 
+// Acquired says how AcquireTask got the task lease.
+type Acquired string
+
+const (
+	// AcquiredTaken: the lease was free and has a new fence.
+	AcquiredTaken Acquired = "taken"
+	// AcquiredReused: the tenure already named this holder, pid and pid start; nothing was written.
+	AcquiredReused Acquired = "reused"
+	// AcquiredAdopted: a holder provably gone on this host was replaced, with a new, higher fence.
+	AcquiredAdopted Acquired = "adopted"
+)
+
+// Acquisition is what AcquireTask did: the tenure now in force, how it came to
+// be, and the tenure it replaced when adopted.
+type Acquisition struct {
+	Tenure Tenure
+	How    Acquired
+	From   Tenure
+}
+
+// AcquireTask gives the writer the task lease for the process pid/start, for a
+// supervisor that keeps one tenure across restarts of its own streams:
+//   - a free lease is taken;
+//   - a tenure that already names this holder, pid and pid start is reused, and
+//     no fence is granted;
+//   - a holder on this host whose process is provably gone is adopted, with a
+//     new, higher fence from the per-task counter (not the old fence plus one);
+//   - any other holder keeps the lease, and the error wraps ErrTaskHeld without
+//     a write.
+//
+// w.Gen is replaced by the generation already on the lease file, as grant
+// refuses a regression.
+func (s TaskStore) AcquireTask(w feed.Writer, pid int, start string, probe func(session.Live) session.ProcessState) (Acquisition, error) {
+	cur, err := s.Read("task")
+	if errors.Is(err, os.ErrNotExist) {
+		cur, err = Tenure{}, nil
+	}
+	if err != nil {
+		return Acquisition{}, err
+	}
+	if cur.Fence > 0 {
+		w.Gen = cur.Gen
+	}
+	if cur.Holder == nil {
+		t, err := s.TakeTask(w, pid, start)
+		return Acquisition{Tenure: t, How: AcquiredTaken}, err
+	}
+	if *cur.Holder == w.Worker && cur.PID != nil && *cur.PID == pid && cur.PIDStart != nil && *cur.PIDStart == start {
+		return Acquisition{Tenure: cur, How: AcquiredReused}, nil
+	}
+	// Probe before taking the exclusive lock, so a live holder is never locked out
+	// of its own file once a second.
+	machine := w.Worker[strings.LastIndexByte(w.Worker, '@'):]
+	if !strings.HasSuffix(*cur.Holder, machine) || cur.PID == nil || cur.PIDStart == nil || probe == nil ||
+		probe(session.Live{Lease: "task", Holder: *cur.Holder, Fence: uint64(cur.Fence), PID: *cur.PID, PIDStart: *cur.PIDStart}) != session.Dead {
+		return Acquisition{}, taskHeld(cur)
+	}
+	next, old, err := s.AdoptTask(w, pid, start, probe)
+	return Acquisition{Tenure: next, How: AcquiredAdopted, From: old}, err
+}
+
 // ReleaseTask ends a tenure only for its exact holder, generation and fence.
 // A free task lease is ErrTaskFree and nothing is created.
 func (s TaskStore) ReleaseTask(w feed.Writer) error {

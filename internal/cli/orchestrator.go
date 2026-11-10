@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -226,6 +227,20 @@ func runOrchestrator(args []string, env Env) int {
 	if verb == "post" && (*kind == "job" || *kind == "control") || personResult {
 		leaseName = "task"
 	}
+	// A Job agent's GRID_LEASE names its own Job, but posting a Job is a task
+	// write. The worker gives every agent the task epoch it is holding as
+	// GRID_TASK_EPOCH, so a Job post uses that, unless --lease or --lease-epoch
+	// was typed.
+	if verb == "post" && *kind == "job" && env.getenv("GRID_TASK_EPOCH") != "" {
+		typed := map[string]bool{}
+		fs.Visit(func(f *flag.Flag) { typed[f.Name] = true })
+		if !typed["lease"] {
+			*leaseFlag = ""
+			if !typed["lease-epoch"] {
+				*epoch = env.getenv("GRID_TASK_EPOCH")
+			}
+		}
+	}
 	if *leaseFlag != "" {
 		leaseName = *leaseFlag
 	}
@@ -234,26 +249,10 @@ func runOrchestrator(args []string, env Env) int {
 		return fail(err)
 	}
 	if verb == "next" || verb == "tick" {
-		s := orchestrator.Store{AfterWake: *afterWake, Feed: store, Writer: writer, Assignee: *to, Owner: *owner, WorktreesDir: filepath.Join(env.GridHome, "projects", scope.Project, "worktrees")}
-		s.Diagnostics = env.Stderr
-		s.Probe = func(live session.Live) session.ProcessState {
-			local := writer.Worker[strings.LastIndexByte(writer.Worker, '@'):]
-			if !strings.HasSuffix(live.Holder, local) {
-				return session.Unknown
-			}
-			return session.ProbeLocal(live)
-		}
+		s := orchestrator.Store{AfterWake: *afterWake, Feed: store, Writer: writer, Assignee: *to, Owner: *owner}
+		configureTickStore(env, &s, scope.Project, taskID)
 		if *usageReady {
 			s.UsageReady = func(worker string) bool { return worker == *to || *to == "" && worker == writer.Worker }
-		}
-		s.Incident = func(job string, exits []string) error {
-			name := "crash-" + strings.ToLower(job) + "-" + strings.ToLower(exits[len(exits)-1])
-			bs := brain.Store{GridHome: env.GridHome, Project: scope.Project}
-			if _, err := bs.Proposal("project", name); err == nil {
-				return nil
-			}
-			_, err := bs.Propose(brain.Note{Name: name, Topic: "incidents", Type: "incident", Level: "project", Description: "Three attempts made no progress", Summary: "Inspect the failed attempts before retrying this Job.", Source: taskID + "/" + job, Body: strings.Join(exits, "\n")}, brain.Origin{Kind: "job", ID: job, Tier: contract.Agent})
-			return err
 		}
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer cancel()
@@ -459,6 +458,30 @@ func personApproval(store feed.Store, w feed.Writer, job, answer string, e tasks
 	}
 	_, err = orchestrator.Write(store, w, feed.Input{Type: "control", Body: body})
 	return err
+}
+
+// configureTickStore sets what a pass of the scheduler needs beyond the Feed and
+// the writer: where Job worktrees live, how to judge a local process, and where
+// a crash loop is recorded. job next and worker next build a task's Store here.
+func configureTickStore(env Env, s *orchestrator.Store, project, taskID string) {
+	s.WorktreesDir = filepath.Join(env.GridHome, "projects", project, "worktrees")
+	s.Diagnostics = env.Stderr
+	s.Probe = func(live session.Live) session.ProcessState {
+		local := s.Writer.Worker[strings.LastIndexByte(s.Writer.Worker, '@'):]
+		if !strings.HasSuffix(live.Holder, local) {
+			return session.Unknown
+		}
+		return session.ProbeLocal(live)
+	}
+	s.Incident = func(job string, exits []string) error {
+		name := "crash-" + strings.ToLower(job) + "-" + strings.ToLower(exits[len(exits)-1])
+		bs := brain.Store{GridHome: env.GridHome, Project: project}
+		if _, err := bs.Proposal("project", name); err == nil {
+			return nil
+		}
+		_, err := bs.Propose(brain.Note{Name: name, Topic: "incidents", Type: "incident", Level: "project", Description: "Three attempts made no progress", Summary: "Inspect the failed attempts before retrying this Job.", Source: taskID + "/" + job, Body: strings.Join(exits, "\n")}, brain.Origin{Kind: "job", ID: job, Tier: contract.Agent})
+		return err
+	}
 }
 
 func orchestratorRows(env Env, rows []orchestrator.Row, asJSON bool) int {

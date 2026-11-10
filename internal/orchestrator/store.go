@@ -29,10 +29,22 @@ type Wake struct {
 	N      int      `json:"n"`
 	Events []string `json:"events,omitempty"`
 }
+// Spawn is one Job in Assigned at the end of a pass, with the facts a worker
+// needs to start it: the Job lease it was granted and the assign control that
+// granted it (the id that spawned/<J>.json keeps as "after").
+type Spawn struct {
+	Job     string
+	Attempt int
+	To      string
+	Fence   int64
+	Gen     int64
+	Assign  string
+}
 type Output struct {
-	Rows     []Row `json:"jobs"`
-	Wake     *Wake `json:"wake,omitempty"`
-	Assigned int   `json:"-"`
+	Rows     []Row   `json:"jobs"`
+	Wake     *Wake   `json:"wake,omitempty"`
+	Assigned int     `json:"-"`
+	Spawns   []Spawn `json:"-"`
 }
 
 // Store acts only as Writer, the current task lease holder. Probe must compare

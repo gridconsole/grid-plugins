@@ -137,6 +137,9 @@ func (s Store) Tick() (out Output, err error) {
 				if e := s.spawn(j); e != nil {
 					return e
 				}
+				if j.Assign != nil {
+					out.Spawns = append(out.Spawns, Spawn{j.ID, j.Assign.Attempt, j.Assign.To, j.Assign.Fence, j.Generation, j.AssignPost})
+				}
 			} else if e := os.Remove(filepath.Join(s.Feed.TaskDir, "spawned", j.ID+".json")); e != nil && !errors.Is(e, os.ErrNotExist) {
 				return e
 			}
