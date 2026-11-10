@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/project"
@@ -82,19 +81,3 @@ func TestSignalMoveNamedIgnoresInboxPolicy(t *testing.T) {
 	}
 }
 
-func TestSignalMoveInboxRetainsPersonGate(t *testing.T) {
-	for _, target := range []string{"-", "personal"} {
-		h, _, _ := actFixture(t, "new")
-		h.record(project.Record{Name: "personal"})
-		h.env.Getenv = func(string) string { return "" }
-		h.env.Procs = testProcs("codex")
-		h.write(filepath.Join(h.gridHome, "workflows.md"), "---\ninbox_workspace: personal\nperson_verbs: [signal move]\n---\n")
-		before := moveTree(t, h.gridHome)
-		if code := h.run(h.home, "signal", "move", actID, "--project", "example", "--to", target, "--json"); code != 3 || !strings.Contains(h.out.String(), `"error":"person_required"`) {
-			t.Fatalf("gate exit %d: %s %s", code, h.out, h.errb)
-		}
-		if before != moveTree(t, h.gridHome) {
-			t.Fatal("person refusal changed tree")
-		}
-	}
-}

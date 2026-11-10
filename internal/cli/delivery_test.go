@@ -165,7 +165,6 @@ func TestDeliveryCommandRefusals(t *testing.T) {
 
 func TestDeliverSuccessAndDryRun(t *testing.T) {
 	h, dir := deliveryFixture(t)
-	h.env.Procs = testProcs("codex")
 	addDeliveryProof(t, h, dir)
 	taskPath := filepath.Join(dir, "task.md")
 	b, err := os.ReadFile(taskPath)
@@ -252,11 +251,9 @@ func TestDeliverSuccessAndDryRun(t *testing.T) {
 	if code := h.run(dir, "deliver", "Updated outcome"); code != 1 || !strings.Contains(h.errb.String(), `current state "waiting"`) {
 		t.Fatal(code, h.errb)
 	}
-	h.env.Procs = testProcs("Terminal")
 	if code := h.run(dir, "task", "status", "T-01", "running"); code != 0 {
 		t.Fatal(h.errb)
 	}
-	h.env.Procs = testProcs("codex")
 	if code := h.run(dir, "deliver", "Updated outcome"); code != 0 {
 		t.Fatal(h.errb)
 	}
@@ -363,7 +360,6 @@ func TestHistoryCommandProcess(t *testing.T) {
 	}
 	var out, errout bytes.Buffer
 	env := Env{Cwd: os.Getenv("GRID_HISTORY_CLI_TASK"), GridHome: os.Getenv("GRID_HISTORY_CLI_HOME"), Stdout: &out, Stderr: &errout}
-	personTestEnv(t, &env)
 	writer := os.Getenv("GRID_HISTORY_CLI_WRITER")
 	if writer == "status" {
 		for i := 0; i < 30; i++ {

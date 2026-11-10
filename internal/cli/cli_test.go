@@ -41,7 +41,6 @@ func newHarness(t *testing.T) *harness {
 		Machine: "01LAPTOP", Ceiling: root,
 		GitVersion: func() (string, error) { return "git version 2.0.0-test", nil },
 	}
-	personTestEnv(t, &h.env)
 	return h
 }
 

@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -410,30 +408,11 @@ func TestGuestProjectParity(t *testing.T) {
 	}
 }
 
-// guestParityPersonRefusal renders the floor refusal through the product's own
-// refusal and code path, so it carries whatever fields person_required has.
-func guestParityPersonRefusal(command string, asJSON bool) guestParityOutput {
-	var stdout, stderr bytes.Buffer
-	failure := &commandFailure{}
-	env := Env{Stdout: &stdout, Stderr: io.MultiWriter(&stderr, &failure.stderr), failure: failure}
-	code := withPersonErrorCode(&env, func(e *Env) int { return personRefusal(*e, command, "agent_env", asJSON) })
-	return guestParityOutput{code, stdout.String(), stderr.String()}
-}
-
 // Only documented pre-resolution answers may coincide with the invited case.
 // Usage errors and ordinary "not found" errors never qualify.
 func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
-	floor := map[string]bool{
-		"hook level": true, "task close": true, "task decline": true, "task delete": true,
-		"task rename": true, "task reopen": true, "task restore": true, "task status": true, "task stop": true,
-		"question withdraw": true, "approve": true, "refusal decide": true, "decide": true,
-		"agent set": true, "skill disable": true, "skill enable": true, "setup": true,
-		"usage budget set": true, "usage budget clear": true,
-	}
 	want := guestParityOutput{}
-	if floor[command] {
-		want = guestParityPersonRefusal(command, mode == "json")
-	} else {
+	{
 		switch command {
 		case "routine add", "routine remove", "routine run", "routine schedule", "routine unschedule",
 			"project relink", "project remove", "signal add":

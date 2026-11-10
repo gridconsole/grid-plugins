@@ -32,7 +32,6 @@ func landFixture(t *testing.T) (Env, string) {
 		}
 	}
 	env := Env{GridHome: home, Machine: "machine-example", Cwd: gridhome.Real(home)}
-	personTestEnv(t, &env)
 	return env, dir
 }
 

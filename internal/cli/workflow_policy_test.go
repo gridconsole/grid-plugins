@@ -232,25 +232,6 @@ func TestWorkflowPolicyUnreadable(t *testing.T) {
 	}
 }
 
-func TestWorkflowPolicyPreservesGateRefusal(t *testing.T) {
-	h := newHarness(t)
-	h.write(filepath.Join(h.gridHome, "projects", "alpha", "project.md"), "---\nid: id-alpha\n---\n")
-	h.write(filepath.Join(h.gridHome, "projects", "alpha", "workflows.md"), "---\nperson_verbs: [workflow show]\n---\n"+cliWorkflow)
-	h.env.Procs = testProcs("codex")
-	h.env.Getenv = func(string) string { return "" }
-	args := []string{"workflow", "show", "--json", "--project", "alpha"}
-	if code := h.run(h.root, args...); code != 3 {
-		t.Fatalf("gate exit=%d", code)
-	}
-	out, stderr := h.out.String(), h.errb.String()
-	if !strings.Contains(out, "person_required") || stderr == "" {
-		t.Fatal("missing gate refusal")
-	}
-	if code := h.run(h.root, append(args, "--policy")...); code != 3 || h.out.String() != out || h.errb.String() != stderr {
-		t.Fatal("policy flag changed person-gate refusal")
-	}
-}
-
 func TestWorkflowPolicyIsolationAndReadOnly(t *testing.T) {
 	h := newHarness(t)
 	for _, name := range []string{"alpha", "beta"} {

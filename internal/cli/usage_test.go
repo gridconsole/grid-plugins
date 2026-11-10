@@ -599,7 +599,7 @@ func TestWorkspaceBudgetStoreErrorsCLI(t *testing.T) {
 			h := newHarness(t)
 			t.Setenv("GRID_ROLE", tc.role)
 			h.env.GridHome = ""
-			if code := runWorkspaceBudgetGated("set", &tc.value, true, h.env, func() int { return 0 }); code != tc.code {
+			if code := runWorkspaceBudgetGated("set", &tc.value, true, h.env); code != tc.code {
 				t.Errorf("store error: exit %d, want %d", code, tc.code)
 			}
 			if want := "usage budget: " + tc.message + "\n"; h.errb.String() != want || h.out.Len() != 0 {

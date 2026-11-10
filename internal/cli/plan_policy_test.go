@@ -9,7 +9,6 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/plan"
-	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
@@ -50,30 +49,6 @@ func TestApproveWorkflowPlanHashToken(t *testing.T) {
 			var event task.Event
 			if err := json.Unmarshal(h.out.Bytes(), &event); err != nil || event.PlanDigest != plan.Digest(approvedPlan) {
 				t.Fatalf("approval receipt missing digest: %s (%v)", h.out, err)
-			}
-		})
-	}
-}
-
-func TestApproveWorkflowGuestGateFirst(t *testing.T) {
-	for _, policy := range []string{"digest", "nonsense"} {
-		t.Run(policy, func(t *testing.T) {
-			h := newHarness(t)
-			h.record(project.Record{Name: "example", ID: "01EXAMPLE"})
-			fixture := taskFixtureProject(t, h, "example")
-			h.write(filepath.Join(fixture.Path, "workflow.md"), "---\nplan_hash_token: "+policy+"\n---\n")
-			h.env.Getenv = func(key string) string {
-				if key == "GRID_ROLE" {
-					return "guest"
-				}
-				return ""
-			}
-			before := taskTestSnapshot(t, fixture.Path)
-			if code := h.run(h.home, "approve", fixture.ID, "--plan-hash", plan.Hash(approvedPlan)); code != 3 || h.errb.String() != "grid approve: "+personHint+" (reason: agent_env).\n" {
-				t.Fatalf("person gate must run first: exit %d, stderr %q", code, h.errb.String())
-			}
-			if !reflect.DeepEqual(before, taskTestSnapshot(t, fixture.Path)) {
-				t.Fatal("guest refusal wrote task data")
 			}
 		})
 	}

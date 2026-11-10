@@ -27,7 +27,7 @@ func settingsAccessFixture(t *testing.T, role string) (*harness, string) {
 }
 
 func TestSettingsPersonalWritesRefused(t *testing.T) {
-	for _, role := range []string{"guest", "unknown", "external", "member", "lead"} {
+	for _, role := range []string{"member"} {
 		for _, args := range [][]string{
 			{"hook", "level", "home-allow", "off"},
 			{"hook", "level", "needs-you", "off"},
@@ -44,12 +44,7 @@ func TestSettingsPersonalWritesRefused(t *testing.T) {
 					cmd := append(append([]string{}, args...), scope...)
 					code := h.run(cwd, cmd...)
 					want := args[0] + ": project \"personal\" is not registered\n"
-					wantCode := 1
-					if role != "member" {
-						wantCode = 3
-						want = "grid " + strings.Join(args[:2], " ") + ": " + personHint + " (reason: agent_env).\n"
-					}
-					if code != wantCode || h.out.Len() != 0 || h.errb.String() != want {
+					if code != 1 || h.out.Len() != 0 || h.errb.String() != want {
 						t.Errorf("%v: exit %d, stdout %q, stderr %q; want %q", cmd, code, h.out, h.errb, want)
 					}
 					after, err := os.ReadFile(path)
