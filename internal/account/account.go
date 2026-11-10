@@ -245,7 +245,7 @@ func claudeDetails(path string) string {
 
 // readCodex takes the email from auth.json: the email claim in the payload of
 // tokens.id_token. Only the email and plan claims are kept; the token is not.
-// With no auth.json (the login is in the OS keyring), the email is '' and
+// With no auth.json (the login is in the OS keyring), the email is ” and
 // signedIn comes from `codex login status`.
 func readCodex(r folderRef) (email, plan string, signedIn *bool) {
 	if data, err := os.ReadFile(filepath.Join(r.dir, "auth.json")); err == nil {
