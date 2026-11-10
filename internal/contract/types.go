@@ -126,6 +126,7 @@ type Job struct {
 	Task            string          `json:"task"`
 	Title           string          `json:"title"`
 	Role            string          `json:"role"`
+	Kind            string          `json:"kind,omitempty"`
 	Status          Status          `json:"status"`
 	Attempt         int             `json:"attempt"`
 	Assign          *Assignment     `json:"assign"`

@@ -125,18 +125,18 @@ func Fold(posts []Post) State {
 		switch p.Type {
 		case "job":
 			var b struct {
-				ID, Title, Role, Review string
-				MaxRounds               int     `json:"max_rounds"`
-				Continues               *string `json:"continues"`
-				DiscoveredFrom          *string `json:"discovered_from"`
-				Order                   *int    `json:"order"`
+				ID, Title, Role, Kind, Review string
+				MaxRounds                     int     `json:"max_rounds"`
+				Continues                     *string `json:"continues"`
+				DiscoveredFrom                *string `json:"discovered_from"`
+				Order                         *int    `json:"order"`
 			}
 			_ = json.Unmarshal(p.Body, &b)
 			if _, exists := out.Jobs[b.ID]; exists {
 				set(p, "ignored", "Job already exists; revisions need a new Job")
 				continue
 			}
-			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Status: Posted, Review: b.Review, MaxRounds: b.MaxRounds, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
+			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Status: Posted, Review: b.Review, MaxRounds: b.MaxRounds, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
 		case "question":
 			var b struct{ Who string }
 			_ = json.Unmarshal(p.Body, &b)
