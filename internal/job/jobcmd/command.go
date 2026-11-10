@@ -17,6 +17,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
@@ -54,6 +55,7 @@ type report struct {
 	Brief    string         `json:"brief,omitempty"`
 	Findings []lint.Finding `json:"findings"`
 	Error    string         `json:"error,omitempty"`
+	fromFeed bool           // show resolved a task, so the text output names the state
 }
 
 const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip).\n"
@@ -209,7 +211,7 @@ func Run(args []string, e Env) int {
 		if len(args) > 2 || f.budget != 0 {
 			return fail(errors.New("show accepts a saved brief file or a task and Job id"), 2)
 		}
-		path, err := showPath(args, f, e)
+		path, taskDir, err := showPath(args, f, e)
 		if err != nil {
 			return fail(err, 1)
 		}
@@ -221,9 +223,21 @@ func Run(args []string, e Env) int {
 		if err != nil {
 			return fail(err, 1)
 		}
-		// A saved brief carries no run record, so a brief with no stored status reads Not started.
+		// A saved brief carries no run record; the task's Feed does. A Job that was
+		// never posted falls back to the brief, which reads Not started.
 		state, why := contract.StateOf(contract.Status(j.Status))
-		return output(e, f, report{OK: true, ID: j.ID, Path: display(path, e), Job: &j, State: state, Reason: why, Brief: string(b), Findings: []lint.Finding{}}, 0)
+		if taskDir != "" {
+			read, err := feed.Store{TaskDir: taskDir}.ReadOnly(feed.Filter{})
+			if err != nil && !os.IsNotExist(err) {
+				return fail(err, 1)
+			}
+			if err == nil {
+				if posted := feed.FoldRead(read).Jobs[j.ID]; posted != nil {
+					state, why = posted.State, posted.StateReason
+				}
+			}
+		}
+		return output(e, f, report{OK: true, ID: j.ID, Path: display(path, e), Job: &j, State: state, Reason: why, fromFeed: taskDir != "", Brief: string(b), Findings: []lint.Finding{}}, 0)
 	default:
 		return fail(fmt.Errorf("unknown job command %q; use render, lint or show", action), 2)
 	}
@@ -294,6 +308,16 @@ func output(e Env, f flags, r report, code int) int {
 	}
 	if r.Brief != "" {
 		b.WriteString(r.Brief)
+		if r.State != "" && r.Path != "" && r.fromFeed {
+			if !strings.HasSuffix(r.Brief, "\n") {
+				b.WriteString("\n")
+			}
+			if r.Reason != "" {
+				fmt.Fprintf(&b, "state: %s (%s)\n", r.State, r.Reason)
+			} else {
+				fmt.Fprintf(&b, "state: %s\n", r.State)
+			}
+		}
 	} else {
 		if r.ID != "" {
 			fmt.Fprintf(&b, "id: %s\n", r.ID)
@@ -389,22 +413,24 @@ func guestFile(path string, e Env) (string, error) {
 	}
 	return task, nil
 }
-func showPath(args []string, f flags, e Env) (string, error) {
+
+// showPath returns the brief file and, when a task was resolved, the task folder.
+func showPath(args []string, f flags, e Env) (string, string, error) {
 	if len(args) == 1 && !job.ValidID(args[0]) {
 		p := absolute(e.Cwd, args[0])
 		if e.Resolver.Caller.IsGuest() {
 			if _, err := guestFile(p, e); err != nil {
-				return "", err
+				return "", "", err
 			}
 		}
 		if s, err := os.Stat(p); err == nil && !s.IsDir() {
-			return p, nil
+			return p, "", nil
 		}
 	}
 	taskArg, id := f.task, ""
 	if len(args) == 2 {
 		if taskArg != "" {
-			return "", errors.New("give the task once")
+			return "", "", errors.New("give the task once")
 		}
 		taskArg, id = args[0], args[1]
 	} else if len(args) == 1 {
@@ -412,22 +438,24 @@ func showPath(args []string, f flags, e Env) (string, error) {
 	}
 	task, err := resolveTask(taskArg, e)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if id == "" {
 		paths, err := filepath.Glob(filepath.Join(task, "jobs", "J-*", "brief.md"))
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		if len(paths) != 1 {
-			return "", fmt.Errorf("task has %d saved Jobs; specify a Job id", len(paths))
+			return "", "", fmt.Errorf("task has %d saved Jobs; specify a Job id", len(paths))
 		}
-		return job.Within(task, strings.TrimPrefix(paths[0], task+string(filepath.Separator)))
+		p, err := job.Within(task, strings.TrimPrefix(paths[0], task+string(filepath.Separator)))
+		return p, task, err
 	}
 	if !job.ValidID(id) {
-		return "", errors.New("invalid Job id")
+		return "", "", errors.New("invalid Job id")
 	}
-	return job.Within(task, filepath.Join("jobs", id, "brief.md"))
+	p, err := job.Within(task, filepath.Join("jobs", id, "brief.md"))
+	return p, task, err
 }
 
 // world is what a Job reads from: the task folder, the brain store and the
