@@ -40,6 +40,37 @@ func stateOf(results []SyncResult, agent string) string {
 	return ""
 }
 
+// The twelve shipped templates all render, with the names the catalog and the hook use.
+func TestShippedTemplatesRender(t *testing.T) {
+	o := syncFixture(t)
+	o.TemplatesDir = AgentTemplatesPath(filepath.Join("..", ".."))
+	results, err := SyncAgents(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := append(AgentNames(), "Explore")
+	if len(results) != len(want) {
+		t.Fatalf("rendered %d templates, want %d: %v", len(results), len(want), results)
+	}
+	for _, name := range want {
+		if stateOf(results, name) != syncWritten {
+			t.Errorf("%s was not rendered", name)
+		}
+		b, err := os.ReadFile(filepath.Join(o.AgentsDir, name+".md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ownedByGrid(b) {
+			t.Errorf("%s has no Grid marker:\n%s", name, b)
+		}
+		for _, bad := range []string{"permissionMode", "mcpServers", "hooks:", "Co-Authored", "$CLAUDE_PLUGIN_ROOT", ".mjs"} {
+			if strings.Contains(string(b), bad) {
+				t.Errorf("%s contains %q", name, bad)
+			}
+		}
+	}
+}
+
 func TestAgentSyncLeavesPersonsOwnFile(t *testing.T) {
 	o := syncFixture(t)
 	own := []byte("---\nname: grid-builder\ndescription: mine\nmodel: opus\n---\n\nMy own builder.\n")
@@ -61,11 +92,11 @@ func TestAgentSyncLeavesPersonsOwnFile(t *testing.T) {
 	if string(got) != string(own) {
 		t.Fatalf("the person's file changed:\n%s", got)
 	}
-	if s := stateOf(results, "grid-builder"); s != SyncYours {
-		t.Fatalf("grid-builder state = %q, want %q", s, SyncYours)
+	if s := stateOf(results, "grid-builder"); s != syncYours {
+		t.Fatalf("grid-builder state = %q, want %q", s, syncYours)
 	}
-	if s := stateOf(results, "Explore"); s != SyncWritten {
-		t.Fatalf("Explore state = %q, want %q", s, SyncWritten)
+	if s := stateOf(results, "Explore"); s != syncWritten {
+		t.Fatalf("Explore state = %q, want %q", s, syncWritten)
 	}
 }
 
@@ -93,8 +124,8 @@ func TestAgentSyncNewTemplateKeepsOverlay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := stateOf(results, "grid-builder"); s != SyncWritten {
-		t.Fatalf("grid-builder state = %q, want %q", s, SyncWritten)
+	if s := stateOf(results, "grid-builder"); s != syncWritten {
+		t.Fatalf("grid-builder state = %q, want %q", s, syncWritten)
 	}
 	second, err := os.ReadFile(path)
 	if err != nil {

@@ -144,7 +144,7 @@ func syncAgents(o Options) {
 	if err == nil {
 		_, err = settings.SyncAgents(settings.SyncOptions{
 			Home:         o.Resolver.GridHome,
-			TemplatesDir: filepath.Join(root, settings.AgentTemplatesDir),
+			TemplatesDir: settings.AgentTemplatesPath(root),
 			AgentsDir:    dir,
 		})
 	}

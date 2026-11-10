@@ -14,16 +14,19 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 )
 
-// AgentTemplatesDir is the plugin folder that holds the agent templates. Claude
+// agentTemplatesDir is the plugin folder that holds the agent templates. Claude
 // does not load it as agents; sync renders each template into the person's own
 // agents folder, so a plugin update never replaces a rendered file.
-const AgentTemplatesDir = "agent-templates"
+const agentTemplatesDir = "agent-templates"
+
+// AgentTemplatesPath is the template folder of the plugin at root.
+func AgentTemplatesPath(root string) string { return filepath.Join(root, agentTemplatesDir) }
 
 // The states of one agent file after a sync.
 const (
-	SyncWritten   = "written"   // the file was missing or out of date and was rewritten
-	SyncUnchanged = "unchanged" // the file already holds this template and these values
-	SyncYours     = "yours"     // a file of that name without the Grid marker is the person's; it is never touched
+	syncWritten   = "written"   // the file was missing or out of date and was rewritten
+	syncUnchanged = "unchanged" // the file already holds this template and these values
+	syncYours     = "yours"     // a file of that name without the Grid marker is the person's; it is never touched
 )
 
 // SyncOptions names the three places a sync reads and writes.
@@ -104,23 +107,23 @@ func writeRendered(path string, rendered []byte) (string, error) {
 	case err != nil:
 		return "", err
 	case !info.Mode().IsRegular():
-		return SyncYours, nil
+		return syncYours, nil
 	default:
 		have, err := os.ReadFile(path)
 		if err != nil {
 			return "", err
 		}
 		if string(have) == string(rendered) {
-			return SyncUnchanged, nil
+			return syncUnchanged, nil
 		}
 		if !ownedByGrid(have) {
-			return SyncYours, nil
+			return syncYours, nil
 		}
 	}
 	if err := atomicfile.Write(path, rendered, 0o644); err != nil {
 		return "", err
 	}
-	return SyncWritten, nil
+	return syncWritten, nil
 }
 
 // splitFront returns the front matter lines and the body (with its leading newline) of an agent file.

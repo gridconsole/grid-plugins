@@ -48,7 +48,7 @@ func runAgentSync(args []string, env Env) int {
 		if root == "" {
 			return commandError(env, "agent sync", errors.New("cannot find the plugin folder; set CLAUDE_PLUGIN_ROOT or use --templates"))
 		}
-		*templates = filepath.Join(root, settings.AgentTemplatesDir)
+		*templates = settings.AgentTemplatesPath(root)
 	}
 	if *dir == "" {
 		d, err := settings.ClaudeAgentsDir(env.Home, env.getenv("CLAUDE_CONFIG_DIR"))

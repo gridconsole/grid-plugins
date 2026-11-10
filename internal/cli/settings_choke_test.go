@@ -102,6 +102,7 @@ func settingsPackageBypasses(file string, f *ast.File) []string {
 		"ParseAnswers": "setup.go", "ReadHookLevels": "store.go", "ResolveHookLevel": "store.go",
 		"ClaudeBlock": "claude.go", "ClaudeSetupCommand": "claude.go", "RunClaudeSetup": "claude.go", "claudeInvalid.Error": "claude.go",
 		"ClaudeSettingsPath": "claude.go", "ReadClaudeAllowStatus": "claude_status.go", // Read-only setup diagnostics; no Store access.
+		"AgentTemplatesPath": "agentsync.go", "ClaudeAgentsDir": "agentsync.go", "SyncAgents": "agentsync.go", // Agent files: SyncAgents reads the personal overlay and writes only ~/.claude/agents.
 		"claudeReadError.Error": "claude.go", "claudeReadError.Unwrap": "claude.go", // Private read errors; no Store access.
 		"Store.Effective": "store.go", "Store.SetAgent": "store.go", "Store.SetSkill": "store.go", "Store.SetHook": "store.go", "Store.RecordSetup": "setup.go",
 	}
@@ -124,7 +125,7 @@ func settingsPackageBypasses(file string, f *ast.File) []string {
 			// Inspect the signature without its receiver, and the body. A method may
 			// use its supplied receiver, but cannot construct or return another Store.
 			inspect = &ast.FuncLit{Type: fn.Type, Body: fn.Body}
-			if file == "store.go" && fn.Recv == nil && name == "ReadHookLevels" {
+			if (file == "store.go" && name == "ReadHookLevels" || file == "agentsync.go" && name == "SyncAgents") && fn.Recv == nil {
 				// Allow only Store{...}.Effective(), never a local store that could write.
 				ast.Inspect(fn.Body, func(n ast.Node) bool {
 					call, ok := n.(*ast.CallExpr)
