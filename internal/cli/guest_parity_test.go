@@ -34,7 +34,6 @@ var guestParityCommands = map[string][]string{
 	"brain search":     {"parity"},
 	"brain show":       {"parity"},
 	"brain topics":     {},
-	"decide":           {"{task}", "R-01", "allow"},
 	"deliver":          {"--outcome", "parity"},
 
 	"feed fold":     {},
@@ -90,7 +89,6 @@ var guestParityCommands = map[string][]string{
 	"question sync":         {},
 	"question tick":         {},
 	"question withdraw":     {"Q-01", "--reason", "parity"},
-	"refusal decide":        {"{task}", "R-01", "allow"},
 	"routine add":           {"parity", "--every", "1h", "--run", "grid version"},
 	"routine list":          {},
 	"routine remove":        {"parity"},
@@ -145,7 +143,7 @@ var guestParityCommands = map[string][]string{
 // separate row with the task selector, so their project resolution is exercised.
 // Any future --note flag needs an explicit classification here.
 var guestParityNoteText = map[string]bool{
-	"approve": true, "decide": true, "refusal decide": true,
+	"approve":      true,
 	"brain decide": true, "proof add": true,
 }
 

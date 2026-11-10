@@ -133,7 +133,7 @@ func TestContractCommandsInventory(t *testing.T) {
 }
 
 func TestContractCommandsApp(t *testing.T) {
-	names := []string{"version", "task-show", "task-list", "task-move", "plan-hash", "feed-state", "feed-post", "job-next", "approve", "refusal-decide", "session-list", "session-show", "session-start", "session-stop", "session-send", "session-pause", "session-resume", "session-handback", "session-switch", "intent-list", "worker-list"}
+	names := []string{"version", "task-show", "task-list", "task-move", "plan-hash", "feed-state", "feed-post", "job-next", "approve", "session-list", "session-show", "session-start", "session-stop", "session-send", "session-pause", "session-resume", "session-handback", "session-switch", "intent-list", "worker-list"}
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
 			for _, variant := range []string{"basic", "populated"} {
@@ -236,14 +236,6 @@ func TestContractCommandsApp(t *testing.T) {
 								args = append(args, "--note", "Reviewed")
 							}
 							out = run(cwd, args...)
-						case "refusal-decide":
-							// Refusal producers own this input; there is no CLI creation command.
-							h.write(filepath.Join(cwd, "refusals", "R-1.json"), `{"id":"R-1","command":"echo example"}`)
-							decision := "allow"
-							if populated {
-								decision = "deny"
-							}
-							out = run(cwd, "refusal", "decide", made.ID, "R-1", decision, "--json")
 						case "session-list", "session-show":
 							if populated || name == "session-show" {
 								run(cwd, "task", "attach", made.ID, "--session", "session-example", "--json")

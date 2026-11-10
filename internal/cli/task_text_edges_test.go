@@ -18,7 +18,7 @@ func TestTaskNoncharactersWriteNothing(t *testing.T) {
 		forbidden = append(forbidden, plane<<16|0xfffe, plane<<16|0xffff)
 	}
 	for _, r := range forbidden {
-		for _, field := range []string{"rename", "decline", "words", "workflow", "owner", "actor", "reason", "history", "approval", "decision", "outcome", "by"} {
+		for _, field := range []string{"rename", "decline", "words", "workflow", "owner", "actor", "reason", "history", "approval", "outcome", "by"} {
 			t.Run(fmt.Sprintf("U+%04X/%s", r, field), func(t *testing.T) {
 				h := newHarness(t)
 				fixture := taskFixture(t, h)
@@ -50,8 +50,6 @@ func TestTaskNoncharactersWriteNothing(t *testing.T) {
 					args = []string{"history", "add", value, "--task", fixture.ID}
 				case "approval":
 					args = []string{"approve", fixture.ID, "--note", value}
-				case "decision":
-					args = []string{"refusal", "decide", fixture.ID, "R-1", "deny", "--note", value}
 				case "outcome":
 					args = []string{"deliver", "--task", fixture.ID, "--outcome", value}
 				case "by":

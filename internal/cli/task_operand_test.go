@@ -34,12 +34,11 @@ func operandFixture(t *testing.T, verb string) (*harness, task.Task) {
 		}
 	}
 	h.write(filepath.Join(f.Path, "plan.md"), approvedPlan)
-	h.write(filepath.Join(f.Path, "refusals", "R-1.json"), `{"id":"R-1","command":"echo example"}`)
 	return h, f
 }
 
 func TestTaskOperandPlainOutput(t *testing.T) {
-	for _, verb := range []string{"show", "approve", "refusal", "decide", "close", "stop", "reopen"} {
+	for _, verb := range []string{"show", "approve", "close", "stop", "reopen"} {
 		t.Run(verb, func(t *testing.T) {
 			var want string
 			for _, folder := range []bool{false, true} {
@@ -113,7 +112,7 @@ func TestTaskOperandPolicyAndExactFolder(t *testing.T) {
 }
 
 func TestTaskOperandHelp(t *testing.T) {
-	for _, command := range []string{"approve", "refusal", "decide"} {
+	for _, command := range []string{"approve"} {
 		t.Run(command, func(t *testing.T) {
 			h := newHarness(t)
 			if code := h.run(h.home, command, "--help"); code != 0 {
@@ -149,17 +148,13 @@ func operandArgs(verb, operand string) []string {
 	switch verb {
 	case "approve":
 		return []string{"approve", operand, "--plan-hash", plan.Hash(approvedPlan), "--json"}
-	case "refusal":
-		return []string{"refusal", "decide", operand, "R-1", "allow", "--json"}
-	case "decide":
-		return []string{"decide", operand, "R-1", "allow", "--json"}
 	default:
 		return []string{"task", verb, operand, "--json"}
 	}
 }
 
 func TestTaskOperandForms(t *testing.T) {
-	for _, verb := range []string{"show", "approve", "refusal", "decide", "close", "stop", "reopen"} {
+	for _, verb := range []string{"show", "approve", "close", "stop", "reopen"} {
 		t.Run(verb, func(t *testing.T) {
 			var want string
 			for _, form := range []string{"folder", "id", "absolute", "relative"} {
@@ -205,7 +200,7 @@ func TestTaskOperandForms(t *testing.T) {
 }
 
 func TestTaskOperandEscapes(t *testing.T) {
-	for _, verb := range []string{"show", "approve", "refusal", "decide", "close", "stop", "reopen"} {
+	for _, verb := range []string{"show", "approve", "close", "stop", "reopen"} {
 		for _, form := range []string{"outside", "symlink", "parent", "embedded-parent"} {
 			t.Run(verb+"/"+form, func(t *testing.T) {
 				h, f := operandFixture(t, verb)
