@@ -1,0 +1,157 @@
+package account
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
+)
+
+// Reading is one rate-limit window as Claude Code's status line reports it:
+// used_percentage 0-100 and resets_at in Unix seconds.
+type Reading struct {
+	Used     float64 `json:"used_percentage"`
+	ResetsAt int64   `json:"resets_at,omitempty"`
+}
+
+// Snapshot is what `grid account note` keeps for one config folder. It holds
+// use numbers only: nothing else of the status line JSON is kept.
+type Snapshot struct {
+	ConfigDir string   `json:"configDir"`
+	FiveHour  *Reading `json:"five_hour,omitempty"`
+	SevenDay  *Reading `json:"seven_day,omitempty"`
+	At        string   `json:"at"`
+}
+
+// Window is one row of the account_windows shape.
+type Window struct {
+	Label    string  `json:"label"` // "5h" or "7d"
+	Used     float64 `json:"used"`
+	ResetsAt int64   `json:"resetsAt,omitempty"`
+}
+
+// AccountWindows is one account's entry of the account_windows shape. A source
+// that is missing gives source "none" and no windows, which the app shows as
+// "No data", never as 0.
+type AccountWindows struct {
+	ID      string   `json:"id"`
+	Kind    string   `json:"kind"`
+	Windows []Window `json:"windows"`
+	AsOf    string   `json:"asOf,omitempty"`
+	Source  string   `json:"source"` // statusline | stream | codex | none
+	Note    string   `json:"note,omitempty"`
+}
+
+func snapshotPath(env Env, dir string) string {
+	sum := sha256.Sum256([]byte(gridhome.Real(dir)))
+	return filepath.Join(env.GridHome, "accounts", "windows", hex.EncodeToString(sum[:4])+".json")
+}
+
+// ConfigDir is the folder a Claude Code session runs on: CLAUDE_CONFIG_DIR, or ~/.claude.
+func ConfigDir(env Env) string {
+	if d := env.getenv(dirVars[Claude]); d != "" {
+		return filepath.Clean(d)
+	}
+	return filepath.Join(env.Home, ".claude")
+}
+
+// Note reads status line JSON and keeps its rate_limits for the folder dir. A
+// payload with no window (an API-key sign-in, or before the first reply) writes
+// nothing, so an earlier snapshot is not overwritten by silence.
+func Note(env Env, in io.Reader, dir string) error {
+	if env.GridHome == "" {
+		return errors.New("cannot find the Grid home; set GRID_HOME")
+	}
+	data, err := io.ReadAll(in)
+	if err != nil {
+		return err
+	}
+	var payload struct {
+		RateLimits struct {
+			FiveHour *struct {
+				Used     float64 `json:"used_percentage"`
+				ResetsAt float64 `json:"resets_at"`
+			} `json:"five_hour"`
+			SevenDay *struct {
+				Used     float64 `json:"used_percentage"`
+				ResetsAt float64 `json:"resets_at"`
+			} `json:"seven_day"`
+		} `json:"rate_limits"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+	snap := Snapshot{ConfigDir: gridhome.Real(dir), At: env.now().UTC().Format(time.RFC3339)}
+	if w := payload.RateLimits.FiveHour; w != nil {
+		snap.FiveHour = &Reading{w.Used, int64(w.ResetsAt)}
+	}
+	if w := payload.RateLimits.SevenDay; w != nil {
+		snap.SevenDay = &Reading{w.Used, int64(w.ResetsAt)}
+	}
+	if snap.FiveHour == nil && snap.SevenDay == nil {
+		return nil
+	}
+	path := snapshotPath(env, dir)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	out, err := json.Marshal(snap)
+	if err != nil {
+		return err
+	}
+	return atomicfile.Write(path, append(out, '\n'), 0o600)
+}
+
+func readSnapshot(env Env, dir string) (Snapshot, bool) {
+	if env.GridHome == "" {
+		return Snapshot{}, false
+	}
+	data, err := os.ReadFile(snapshotPath(env, dir))
+	if err != nil {
+		return Snapshot{}, false
+	}
+	var s Snapshot
+	if json.Unmarshal(data, &s) != nil || (s.FiveHour == nil && s.SevenDay == nil) {
+		return Snapshot{}, false
+	}
+	return s, true
+}
+
+// windowsFor answers the account_windows entry for dirs, the folders that may
+// hold this account's numbers, in order. The first with a snapshot wins.
+func windowsFor(env Env, id, kind string, dirs []string) AccountWindows {
+	res := AccountWindows{ID: id, Kind: kind, Windows: []Window{}, Source: "none"}
+	if kind != Claude {
+		res.Note = "Codex use is not read yet"
+		return res
+	}
+	for _, d := range dirs {
+		s, ok := readSnapshot(env, d)
+		if !ok {
+			continue
+		}
+		add := func(label string, r *Reading) {
+			if r == nil {
+				return
+			}
+			w := Window{Label: label, Used: r.Used, ResetsAt: r.ResetsAt}
+			if r.ResetsAt != 0 && env.now().Unix() >= r.ResetsAt {
+				w.Used = 0 // the window started over after the reading
+			}
+			res.Windows = append(res.Windows, w)
+		}
+		add("5h", s.FiveHour)
+		add("7d", s.SevenDay)
+		res.AsOf, res.Source = s.At, "statusline"
+		return res
+	}
+	res.Note = "No use reported for this folder yet"
+	return res
+}
