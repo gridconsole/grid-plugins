@@ -69,11 +69,22 @@ func textValue(raw json.RawMessage) (string, error) {
 }
 func decode(data []byte) (Document, error) {
 	doc := empty()
-	raw, err := object(data, []string{"agents", "skills", "hooks"})
+	raw, err := object(data, []string{"agents", "skills", "hooks", "budget"})
 	if err != nil {
 		return doc, err
 	}
 	for _, group := range keysOf(raw) {
+		if group == "budget" {
+			s, err := textValue(raw[group])
+			if err == nil {
+				err = allowed("budget preset", s, budgetPresetNames)
+			}
+			if err != nil {
+				return doc, fmt.Errorf("budget: %w", err)
+			}
+			doc.Budget = s
+			continue
+		}
 		var names []string
 		switch group {
 		case "agents":

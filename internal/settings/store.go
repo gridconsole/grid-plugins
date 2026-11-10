@@ -20,9 +20,13 @@ type Document struct {
 	Agents map[string]Agent  `json:"agents"`
 	Skills map[string]bool   `json:"skills"`
 	Hooks  map[string]string `json:"hooks"`
+	// Budget names the preset Apply last wrote; empty when none was applied.
+	Budget string `json:"budget,omitempty"`
 }
 
-func empty() Document { return Document{map[string]Agent{}, map[string]bool{}, map[string]string{}} }
+func empty() Document {
+	return Document{Agents: map[string]Agent{}, Skills: map[string]bool{}, Hooks: map[string]string{}}
+}
 
 // Store uses <home>/settings.json for personal values and
 // <home>/projects/<name>/settings.json for project overrides. Project can be a
@@ -124,6 +128,30 @@ func merge(dst *Document, src Document) {
 	for name, v := range src.Hooks {
 		dst.Hooks[name] = v
 	}
+	if src.Budget != "" {
+		dst.Budget = src.Budget
+	}
+}
+
+// SetAgents changes several agents, and optionally the applied preset name, in one
+// locked write. An empty budget leaves the recorded preset as it is.
+func (s Store) SetAgents(set map[string]Agent, budget string) error {
+	for name, a := range set {
+		if err := allowed("agent", name, AgentNames()); err != nil {
+			return err
+		}
+		a.Model = strings.ToLower(a.Model)
+		if err := validateAgent(a); err != nil {
+			return err
+		}
+		set[name] = a
+	}
+	if budget != "" {
+		if err := allowed("budget preset", budget, budgetPresetNames); err != nil {
+			return err
+		}
+	}
+	return s.update(func(d *Document) { merge(d, Document{Agents: set, Budget: budget}) })
 }
 
 // ReadHookLevels is the single settings reader used by guards and the CLI.
