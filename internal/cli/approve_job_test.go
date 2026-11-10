@@ -129,3 +129,51 @@ func TestJobResultPlanHashAndApprovalFromJob(t *testing.T) {
 		t.Fatalf("after plan.md changed: %v", err)
 	}
 }
+
+// D11: grid approve answers the plan's person Job only when the Jobs it waits for
+// are accepted; it exits 3, names the waiting Job and writes neither the result
+// nor approval.json.
+func TestApproveWaitsForTheAfterJob(t *testing.T) {
+	h, path, store := orchestratorHarness(t)
+	t.Setenv("GRID_ROLE", "member")
+	text := "# Plan\n\nShip the parser.\n"
+	if err := os.WriteFile(filepath.Join(path, "plan.md"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "intent.md"), []byte("# Intent\n\nShip the parser.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	md := "---\nid: T-07\nulid: " + feedTaskID + "\ntitle: Example\nproject: example\nstate: waiting\ncreated: 2026-11-10T08:00:00Z\nupdated: 2026-11-10T08:00:00Z\n---\n"
+	if err := os.WriteFile(filepath.Join(path, "task.md"), []byte(md), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run(path, "job", "post", "--type", "job", "--job", "J-1", "--body", personBody(t, "J-1", nil)); code != 0 {
+		t.Fatalf("%d %s", code, h.errb.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(personBody(t, "J-2", []any{"J-1"})), &body); err != nil {
+		t.Fatal(err)
+	}
+	body["kind"] = "approve"
+	out, _ := json.Marshal(body)
+	if code := h.run(path, "job", "post", "--person", "dana", "--job", "J-2", "--body", string(out)); code != 0 {
+		t.Fatalf("%d %s", code, h.errb.String())
+	}
+	h.errb.Reset()
+	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(text)); code != 3 || !strings.Contains(h.errb.String(), "J-1") {
+		t.Fatalf("%d %s", code, h.errb.String())
+	}
+	st, err := store.State()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := string(st.Jobs["J-1"].Status); s != "posted" {
+		t.Fatalf("J-1 is %s", s)
+	}
+	if s := string(st.Jobs["J-2"].Status); s != "posted" {
+		t.Fatalf("J-2 is %s", s)
+	}
+	if _, err := os.Stat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("approval.json: %v", err)
+	}
+}

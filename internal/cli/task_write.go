@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/land"
+	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
@@ -173,6 +175,15 @@ func runApprove(args []string, env Env) int {
 	// approval.json is written as before.
 	var post func(task.Event) error
 	if store, job := planPersonJob(resolved.Path); job != "" {
+		// The person Job waits for its after list like any other answer.
+		snap, err := orchestrator.Load(store)
+		if err == nil {
+			err = orchestrator.PersonReady(snap, job, time.Now())
+		}
+		if err != nil {
+			fmt.Fprintln(env.Stderr, err)
+			return 3
+		}
 		if w, err := orchestratorWriter(env, "task", env.getenv("GRID_LEASE_EPOCH")); err != nil {
 			fmt.Fprintf(env.Stderr, "grid approve: %s stays open: %v\n", job, err)
 		} else {
