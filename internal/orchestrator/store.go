@@ -114,6 +114,10 @@ func (s Store) locked(fn func() error) error {
 // exclusive serializes fn with a holder pass without asking for a lease: a
 // person's unleased write takes the same lock a tick takes, and nothing more.
 func (s Store) exclusive(fn func() error) error {
+	// A person may post the first Job of a new task, before any feed folder exists.
+	if err := os.MkdirAll(s.Feed.Dir(), 0o700); err != nil {
+		return err
+	}
 	f, err := fslock.OpenNoFollow(filepath.Join(s.Feed.Dir(), ".orchestrator.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return err
