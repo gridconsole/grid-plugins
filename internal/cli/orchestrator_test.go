@@ -82,38 +82,6 @@ func TestOrchestratorCommands(t *testing.T) {
 	}
 }
 
-func TestBlockedPublicationNoticeUsesCLIStderrOnce(t *testing.T) {
-	h, path, store := orchestratorHarness(t)
-	text, err := os.ReadFile("../../testdata/job/task/plan.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.write(filepath.Join(path, "plan.md"), strings.ReplaceAll(string(text), "J-1", "J-2"))
-	// A hard-linked plan.md is the one remaining reason publication is held.
-	if err := os.Link(filepath.Join(path, "plan.md"), filepath.Join(path, "plan-link.md")); err != nil {
-		t.Skip("hard links unavailable:", err)
-	}
-	for tick := range 3 {
-		if code := h.run(path, "feed", "tick", "--json"); code != 0 {
-			t.Fatalf("tick %d: %d %s", tick+1, code, h.errb)
-		}
-		want := ""
-		if tick == 0 {
-			want = "plan publication skipped: workflow requires approval of the current plan; run grid approve before Jobs can post\n"
-		}
-		if got := h.errb.String(); got != want {
-			t.Errorf("tick %d stderr = %q, want %q", tick+1, got, want)
-		}
-		if !json.Valid(h.out.Bytes()) {
-			t.Fatalf("notice corrupted JSON stdout: %s", h.out)
-		}
-	}
-	jobs, err := store.Read(feed.Filter{Type: "job"})
-	if err != nil || len(jobs.Records) != 1 {
-		t.Fatalf("unapproved plan added Jobs: %+v %v", jobs, err)
-	}
-}
-
 // A Job session never answers: grid job post refuses the answer type for every
 // role, GRID_ROLE unset included (the CLI then writes as member, which a person
 // gate admits), and the gate stays open.

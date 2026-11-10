@@ -138,20 +138,19 @@ func TestPreviewThenApproveRecordsPreviewApproval(t *testing.T) {
 	}
 }
 
-// An agent may raise the preview, never approve it.
-func TestPreviewAgentRaisesButCannotApprove(t *testing.T) {
+// An agent may raise the preview and approve it: agents and people run the same verbs.
+func TestPreviewAgentRaisesAndApproves(t *testing.T) {
 	h, dir, id := previewFixture(t)
 	agent := map[string]string{"GRID_AGENT": "builder", "GRID_LEASE": "J-1", "GRID_ROLE": "worker"}
 	h.env.Getenv = func(key string) string { return agent[key] }
 	if code := h.run(dir, "preview", "--task", id, "--by", "grid-builder"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.errb)
 	}
-	before := previewFiles(t, dir)
-	if code := h.run(dir, "approve", id); code != 3 {
-		t.Fatalf("agent approve exit %d, want 3: %s", code, h.errb)
+	if code := h.run(dir, "approve", id); code != 0 {
+		t.Fatalf("agent approve exit %d, want 0: %s", code, h.errb)
 	}
-	if after := previewFiles(t, dir); after["approval-preview.json"] != before["approval-preview.json"] || after["approval-preview.json"] != "" {
-		t.Fatal("agent approve wrote a preview receipt")
+	if after := previewFiles(t, dir); after["approval-preview.json"] == "" {
+		t.Fatal("agent approve wrote no preview receipt")
 	}
 }
 

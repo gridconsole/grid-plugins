@@ -3229,19 +3229,6 @@
           "output": ""
         },
         {
-          "name": "check",
-          "args": [],
-          "flags": [
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
-        {
           "name": "list",
           "args": [],
           "flags": [

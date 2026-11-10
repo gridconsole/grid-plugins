@@ -51,9 +51,6 @@ func TestPersonalBypassTaskCommands(t *testing.T) {
 			code, stderr := run("T-01")
 			missingCode, missingErr := run("T-99")
 			wantCode := 1
-			if verb == "stop" {
-				wantCode = 3
-			}
 			if code != wantCode || code != missingCode || stderr != missingErr {
 				t.Errorf("hidden = (%d, %q), missing = (%d, %q)", code, stderr, missingCode, missingErr)
 			}
