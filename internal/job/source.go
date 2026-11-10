@@ -86,14 +86,11 @@ func (e linkedPlanError) Error() string {
 
 func (e linkedPlanError) Unwrap() []error { return []error{e.cause, ErrPlanNeedsApproval} }
 
-// planApproved returns nil when the task's plan receipt covers these plan bytes.
-func planApproved(dir string, b []byte) error {
+// planReadable keeps the hard-link refusal where it was (lane S6 removes it).
+// There is no plan rule: an unapproved, edited or missing-receipt plan renders.
+func planReadable(dir string) error {
 	if err := task.Linked(dir); errors.Is(err, task.ErrLinkedFile) {
 		return linkedPlanError{err}
-	}
-	// Any other Linked error also fails task.Read inside ApprovedDigest.
-	if !task.ApprovedDigest(dir, plan.Hash(string(b)), plan.Digest(string(b))) {
-		return ErrPlanNeedsApproval
 	}
 	return nil
 }
@@ -258,7 +255,7 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 	text := strings.ReplaceAll(string(b), "\r\n", "\n")
 	if isPlan && anchor != "" {
 		// Validate the bytes we will select from, not a second read of plan.md.
-		if err := planApproved(f.Task, b); err != nil {
+		if err := planReadable(f.Task); err != nil {
 			return s, fmt.Errorf("%s: %w", pointer, err)
 		}
 	}
@@ -448,7 +445,7 @@ func LoadPlan(dir, selector string) (Job, error) {
 		return Job{}, err
 	}
 	text := string(b)
-	if err := planApproved(dir, b); err != nil {
+	if err := planReadable(dir); err != nil {
 		return Job{}, err
 	}
 	items, err := plan.Items(text)
