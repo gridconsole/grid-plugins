@@ -83,3 +83,32 @@ internal/cli tests still do not vet: they use Env.Procs, Env.PersonDir, testProc
 - go vet ./internal/feed ./internal/job/... ./internal/signal ./internal/task/... ./internal/workflow ./internal/orchestrator: exit 0.
 - go test -count=1 of the same packages: ok for feed, job, job/frontmatter, job/jobcmd, job/lint, signal, task, workflow; orchestrator re-run after the deletions was not repeated (vet only).
 - internal/cli, internal/settings, internal/question: do not vet (see above). NOT run: lint, Windows/macOS builds, importer-package tests.
+
+## S6b4 test changes
+Reason for every deletion unless noted: behaviour removed: simplify.md row Hard enforcement around those gates.
+- internal/cli/task_new_linked_test.go: whole file (TestTaskNewFromTaskFolderRefusesLinkedWorkflows; hard-link refusal and workflow_digest).
+- internal/cli/linked_code_test.go: whole file (TestLinkedFileHasAStableCode; task.ErrLinkedFile removed).
+- internal/cli/person_gate_invalid_test.go: whole file (TestHookCommandsBypassPersonPolicy; person_verbs policy removed).
+- internal/cli/signal_inbox_test.go: TestSignalMoveInboxRetainsPersonGate removed; TestSignalMoveNamedIgnoresInboxPolicy stays.
+- internal/cli/plan_policy_test.go: TestApproveWorkflowGuestGateFirst removed (person gate first); digest-table test stays.
+- internal/cli/workflow_policy_test.go: TestWorkflowPolicyPreservesGateRefusal removed (person_required on workflow show).
+- internal/cli/error_codes_test.go: rows person-gate and person-check removed; the other rows stay.
+- internal/cli/settings_access_test.go: TestSettingsPersonalWritesRefused now runs role member only; the guest/unknown/external/lead rows asserted the person refusal.
+- internal/cli/guest_parity_test.go: guestParityPersonRefusal and the "floor" branch of guestParityEarlyAnswer removed (see failures below).
+- internal/cli/usage_budget_gate_test.go: TestUsageBudgetPersonGate and TestUsageBudgetGateKeepsSyntaxAndWorkspaceAnswers replaced by TestUsageBudgetSetAndClear and TestUsageBudgetSyntaxError.
+- internal/cli/usage_workspace_gate_test.go: person-gate, workflow-policy and runWorkspaceBudgetGated-person tests removed; TestUsageWorkspaceBudgetCallerRole (worker/builder refused with exit 3, ""/owner allowed, syntax exit 2) and TestUsageWorkspaceBudgetShowStaysOpen kept. usage_test.go: runWorkspaceBudgetGated call lost its person func argument.
+- personTestEnv/testProcs lines dropped from agent_test, cli_test, land_test, delivery_test, withdraw_post_test, error_codes_test.
+
+## S6b4 checks
+- go vet ./internal/cli/: exit 0.
+- go test -run 'TestUsageWorkspaceBudgetCallerRole|TestUsageWorkspaceBudgetShowStaysOpen|TestUsageBudget' ./internal/cli/: ok (all PASS).
+- go test -count=1 ./internal/cli/: exit 1, 11.2s. NOT met.
+
+## S6b4 not finished (budget ran out)
+Failing, all unexamined; most look like leftovers of removed person gate / workflow_digest / hard-link, but the first two lines may show a production difference:
+- TestApproveGateAgentRefused: exit 3 as wanted but message is now "Approval and refusal decisions require a person or the app..." (a different gate that still exists; check expected text).
+- TestContractCommandsParserInventory: annotation for removed route "person check" still in the inventory file.
+- TestDeliverWorkflowChangedThroughCLI, TestSizedLaterKeepsWorkflowDigest, TestInlineRewriteOfStampedTaskNotHeld, TestPlanDigestRoundTrip, TestBlockedPublicationNoticeUsesCLIStderrOnce: workflow_digest / workflow_changed hold, likely delete.
+- TestGuestProjectParity (many rows: task restore, question withdraw, approve...), TestGuestProjectSettingsWrites: my removal of the "floor" branch left the guest rows that used to expect person_required; they need the new expected answer from the product.
+- TestPersonalBypassTaskCommands, TestTaskPersonGates, TestSettingsPersonalAllowedCallers, TestSettingsRefusalCreatesNothing, TestAnswerFeedAndRecovery, TestTaskRenameDecline, TestTaskWriteGolden, TestAgentWithdrawUnreadablePolicy: not looked at.
+Not run: lint, Windows/macOS builds, importer-package tests.
