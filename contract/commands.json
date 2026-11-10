@@ -2576,7 +2576,7 @@
     },
     {
       "name": "deliver",
-      "summary": "write the outcome and raise the ship gate",
+      "summary": "write the outcome and wait for the person",
       "built": true,
       "subcommands": [
         {
@@ -2608,46 +2608,6 @@
             },
             {
               "name": "--outcome",
-              "takes": "value",
-              "required": false
-            },
-            {
-              "name": "--task",
-              "takes": "value",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        }
-      ]
-    },
-    {
-      "name": "preview",
-      "summary": "check the spec and raise the preview gate",
-      "built": true,
-      "subcommands": [
-        {
-          "name": "",
-          "args": [],
-          "flags": [
-            {
-              "name": "--by",
-              "takes": "value",
-              "required": false
-            },
-            {
-              "name": "--dry-run",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--spec",
               "takes": "value",
               "required": false
             },
