@@ -89,23 +89,6 @@ func TestTaskWriteCLIValidation(t *testing.T) {
 	}
 }
 
-func TestTaskPersonGates(t *testing.T) {
-	for _, key := range []string{"GRID_AGENT", "GRID_WORKER_ID", "GRID_WORKER", "GRID_ROLE"} {
-		for _, args := range [][]string{{"approve", "T-01"}, {"refusal", "decide", "T-01", "R-1", "allow"}} {
-			h := newHarness(t)
-			h.env.Getenv = func(name string) string {
-				if name == key {
-					return "example-agent"
-				}
-				return ""
-			}
-			if code := h.run(h.home, args...); code != 3 || !strings.Contains(h.errb.String(), "a person must run this") {
-				t.Fatalf("exit %d: %s", code, h.errb)
-			}
-		}
-	}
-}
-
 func TestTaskWriteRecordsRole(t *testing.T) {
 	for _, tc := range []struct{ role, actor, wantRole, wantID string }{
 		{"", "", "owner", "local"},

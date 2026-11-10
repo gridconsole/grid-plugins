@@ -56,11 +56,6 @@ func TestGuestProjectSettingsWrites(t *testing.T) {
 					return
 				}
 				wantCode, wantReason := 1, "guests cannot"
-				switch tc.name {
-				case "hook_level", "agent_set", "skill_disable", "setup":
-					// Floor writes are refused by the origin gate before dispatch.
-					wantCode, wantReason = 3, "agent_env"
-				}
 				if code != wantCode || h.out.Len() != 0 || !strings.Contains(h.errb.String(), wantReason) {
 					t.Errorf("exit=%d, refusal=%q; want exit %d, empty stdout and %q", code, h.errb.String(), wantCode, wantReason)
 				}

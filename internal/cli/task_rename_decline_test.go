@@ -56,7 +56,7 @@ func TestTaskRenameDecline(t *testing.T) {
 		{name: "rename_too_long", verb: "rename", value: strings.Repeat("a", 201), code: 2, diagnostic: "title"},
 		{name: "rename_unicode_limit", verb: "rename", value: strings.Repeat("界", 200)},
 		{name: "rename_yaml", verb: "rename", value: `A: "quoted" # title`},
-		{name: "rename_guest", verb: "rename", value: "Guest title", role: "guest", code: 3, diagnostic: "agent_env"},
+		{name: "rename_guest", verb: "rename", value: "Guest title", role: "guest", code: 1, diagnostic: "task not found"},
 		{name: "decline_reason", verb: "decline", value: "  Out\u2003 of  scope  ", actor: "alex"},
 		{name: "decline_member", verb: "decline", value: "Later", role: "member"},
 		{name: "decline_owner", verb: "decline", value: "Later", role: "owner"},
@@ -64,7 +64,7 @@ func TestTaskRenameDecline(t *testing.T) {
 		{name: "decline_whitespace", verb: "decline", value: " \t\n ", code: 2, diagnostic: "reason"},
 		{name: "decline_closed", verb: "decline", value: "Later", state: "closed", code: 3, diagnostic: "already closed"},
 		{name: "decline_planner", verb: "decline", value: "Later", kind: "planner", code: 3, diagnostic: "Planner"},
-		{name: "decline_guest", verb: "decline", value: "Later", role: "guest", code: 3, diagnostic: "agent_env"},
+		{name: "decline_guest", verb: "decline", value: "Later", role: "guest", code: 1, diagnostic: "task not found"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)

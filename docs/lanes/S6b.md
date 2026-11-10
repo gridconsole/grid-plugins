@@ -112,3 +112,27 @@ Failing, all unexamined; most look like leftovers of removed person gate / workf
 - TestGuestProjectParity (many rows: task restore, question withdraw, approve...), TestGuestProjectSettingsWrites: my removal of the "floor" branch left the guest rows that used to expect person_required; they need the new expected answer from the product.
 - TestPersonalBypassTaskCommands, TestTaskPersonGates, TestSettingsPersonalAllowedCallers, TestSettingsRefusalCreatesNothing, TestAnswerFeedAndRecovery, TestTaskRenameDecline, TestTaskWriteGolden, TestAgentWithdrawUnreadablePolicy: not looked at.
 Not run: lint, Windows/macOS builds, importer-package tests.
+
+## S6b5 test changes
+Production: internal/cli/task_write.go `personWrite` removed; `grid approve` and `grid refusal decide` no longer refuse when GRID_AGENT, GRID_WORKER_ID or GRID_WORKER is set (behaviour removed: simplify.md row Hard enforcement around those gates). `agentShell` stays: trash, question, feed and task.go still pass it to the task/question packages (not looked at further; those packages are S6b6's).
+
+Deleted:
+- deliver_workflow_changed_test.go (TestDeliverWorkflowChangedThroughCLI, TestSizedLaterKeepsWorkflowDigest, TestInlineRewriteOfStampedTaskNotHeld): workflow_digest / workflow_changed hold; behaviour removed: simplify.md row Hard enforcement around those gates.
+- TestBlockedPublicationNoticeUsesCLIStderrOnce: its only hold was a hard-linked plan.md; behaviour removed by S6b (hard-link).
+- TestTaskPersonGates: checked the agent-env refusal of approve/refusal decide; replaced by TestApproveGateAgentApproves.
+- "person check" row in the inventory test and contract/commands.json (route removed).
+- question_test.go: the "lease-marked answer exits 3" step in TestAnswerFeedAndRecovery (removed refusal; the answer step after it still covers answering).
+Changed expectations:
+- TestApproveGateAgentRefused -> TestApproveGateAgentApproves: agent env approves, event names plan_hash. Failed on base with exit 3.
+- TestPreviewAgentRaisesButCannotApprove -> TestPreviewAgentRaisesAndApproves: agent approve exits 0 and writes the preview receipt.
+- TestPersonalBypassTaskCommands/stop: hidden and missing task both exit 1 (was 3, the person gate).
+- TestSettingsPersonalAllowedCallers: every caller role may write Personal settings (no exit 3).
+- TestSettingsRefusalCreatesNothing, TestTaskRenameDecline guest rows, TestGuestProjectSettingsWrites: guest refusal is exit 1 with the ordinary message ("task not found" / "guests cannot change project settings"), not exit 3 agent_env; nothing is written.
+- Receipt/stdout key "via" dropped from testdata/contract/plan-digest/transcript.json and the six task-*-json goldens (no code writes it; removed with the gate).
+- contract/commands.json is outside the may-touch list but is the inventory file the test compares; edited by hand.
+
+## S6b5 not finished
+- TestGuestProjectParity (task delete/restore, question withdraw, setup rows, invited guest): the invited guest now gets different answers than the unknown-project answer (exit 3 "a person with an allowed role must perform this task move", exit 2 usage / bad question id, exit 1 "guests cannot change project settings"). That may leak project existence; it is a product question, so the test is left failing.
+- TestAgentWithdrawUnreadablePolicy/question: "cannot read task withdrawal policy (workflow.md): is a directory" exit 1; not examined (withdraw policy code is in internal/question, S6b6's area).
+- gofmt -l lists internal/cli/signal_inbox_test.go (not touched by this lane).
+- Importer packages: only internal/cli and cmd importers by go list; their tests were not run.

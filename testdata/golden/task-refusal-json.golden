@@ -1,1 +1,1 @@
-{"via":"terminal","task":"T-01","who":{"id":"local","role":"owner"},"when":"<TIME>","what":"refusal decide","from_state":"queued","to_state":"queued","note":"This task only","refusal_id":"R-1","decision":"allow","folder":"T-01-fix-the-label"}
+{"task":"T-01","who":{"id":"local","role":"owner"},"when":"<TIME>","what":"refusal decide","from_state":"queued","to_state":"queued","note":"This task only","refusal_id":"R-1","decision":"allow","folder":"T-01-fix-the-label"}
