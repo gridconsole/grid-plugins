@@ -15,8 +15,11 @@ func runAgentCommand(args []string, env Env) int {
 	if len(args) > 0 && args[0] == "check" {
 		return runAgentCheck(args[1:], env, agent.Env{PATH: env.getenv("PATH"), Home: env.Home})
 	}
+	if len(args) > 0 && args[0] == "sync" {
+		return runAgentSync(args[1:], env)
+	}
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid agent check [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid agent check [--json]\n       grid agent sync [--json]")
 	}
 	return runAgent(args, env)
 }
