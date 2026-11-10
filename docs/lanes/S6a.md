@@ -43,7 +43,7 @@ Both failures follow from this change. Row 5 of the brief is not fully met until
 
 ## S6aB (S6a re-applied on lane-S6b8, head b8378c46)
 - `git cherry-pick 6ac08ed9..lane-S6aR` applied the three S6a commits; the only conflict was `internal/guard/linked_test.go`, in the first commit.
-- Resolution: S6a deleted its only remaining test, `TestHostBashHistoryAndPreviewApprovalAreGateFiles` (the Bash case). S6b had already replaced the file's content with the hard-link test `TestALinkedTaskFileHoldsTheGuard`, and then removed that too. Kept: nothing, because the file held no file-tool cases on either side. Dropped: both tests, so the file is deleted.
+- Resolution: the base file held two tests. S6b removed the hard-link test `TestALinkedTaskFileHoldsTheGuard` and kept the Bash test `TestHostBashHistoryAndPreviewApprovalAreGateFiles`; S6a removed that Bash test and kept the hard-link one. Kept: nothing, because neither test is a file-tool case. Dropped: both tests, so the file is deleted.
 - No other conflicts. `TestInvalidPersonVerbsHookProbe` is absent (S6b deleted it); S6a does not bring it back.
 - `go vet ./...`: exit 0. `gofmt -l internal cmd`: exit 0, no output. `GOOS=windows go build ./...` and `GOOS=darwin go build ./...`: exit 0.
 - `go test -count=1 ./internal/guard/ ./internal/cli/ ./internal/hook/`: exit 0 (`ok guard 1.231s`, `ok cli 13.252s`, `ok hook 2.057s`). `./internal/packaging/` (imports hook): exit 0.
