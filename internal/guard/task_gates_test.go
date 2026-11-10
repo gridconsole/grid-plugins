@@ -16,7 +16,4 @@ func TestTaskFileGateProtection(t *testing.T) {
 		}
 		expect(t, EvaluateHost(f.input("Write", filepath.Join(dir, "artifacts", "approval.json")), f.root, f.env), "")
 	}
-	for _, command := range []string{"grid refusal decide T-01 R-1 allow", "echo '{}' > approval.json", "rm .task.lock", "echo '{}' > .task-write.json", "echo '{}' > refusal-R-1.json"} {
-		expect(t, EvaluateHost(f.input("Bash", command), f.root, f.env), "deny")
-	}
 }

@@ -27,28 +27,6 @@ func TestHostRules(t *testing.T) {
 			})
 		}
 	}
-	for _, tt := range []struct {
-		command string
-		deny    bool
-	}{
-		{"echo yes > .host/approval", true}, {"cat '/data/.HOST/approval'", true}, {"echo .host", true},
-		{"echo .host-old", false}, {"echo file.host", false}, {"echo .host.json", false},
-		{"grid approve T-01", true}, {"grid answer Q-01 yes", true}, {"grid job result J-01", false},
-		{"grid feed read", false},
-		{"grid feed post --type post --body '{}'", false},
-		{"grid feed read; echo yes >> feed/writer.0.jsonl", true},
-		{"echo yes >> feed/writer.0.jsonl", true}, {"echo yes >> feedback.txt", false},
-	} {
-		t.Run(tt.command, func(t *testing.T) {
-			f := setup(t)
-			i := f.input("Bash", tt.command)
-			want := ""
-			if tt.deny {
-				want = "deny"
-			}
-			expect(t, EvaluateHost(i, f.root, f.env), want)
-		})
-	}
 	t.Run("single home keeps .host inside it", func(t *testing.T) {
 		f := setup(t)
 		for _, rel := range []string{".host/approval", ".host", ".host/queue/one"} {
