@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/plan"
@@ -13,6 +12,12 @@ import (
 // An approval waits for .orchestrator.lock to post the person Job result
 // without holding .task.lock. A tick takes .orchestrator.lock and then
 // .task.lock (publishPlan), so the opposite order could hang both for good.
+//
+// The test holds .orchestrator.lock and parks the command at the seam between
+// Approve and the post, where it checks that approval.json is written and
+// .task.lock is free. No time window is involved: the command and the test hand
+// over through channels. A command that holds .task.lock across the post, or
+// that never gets there, fails the check or stops the test at its go test timeout.
 func TestApprovalPostDoesNotHoldTaskLockWhileWaitingForOrchestratorLock(t *testing.T) {
 	for _, name := range []string{"approve", "job result"} {
 		t.Run(name, func(t *testing.T) {
@@ -43,31 +48,33 @@ func TestApprovalPostDoesNotHoldTaskLockWhileWaitingForOrchestratorLock(t *testi
 			}
 			defer taskLock.Close()
 
+			reached, proceed := make(chan struct{}), make(chan struct{})
+			h.env.afterApprove = func() {
+				close(reached)
+				<-proceed
+			}
 			done := make(chan int, 1)
 			go func() { done <- h.run(path, args...) }()
-			// approval.json is written under .task.lock; after that the command
-			// must let go of .task.lock while .orchestrator.lock is still taken.
-			free := false
-			for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline) && !free; time.Sleep(10 * time.Millisecond) {
-				select {
-				case code := <-done:
-					release()
-					t.Fatalf("finished while .orchestrator.lock was held: %d %s", code, h.errb.String())
-				default:
-				}
-				if _, err := os.Stat(filepath.Join(path, "approval.json")); err == nil && fslock.TryLockExclusive(taskLock) == nil {
-					fslock.Unlock(taskLock)
-					free = true
-				}
+			select {
+			case <-reached:
+			case code := <-done:
+				release()
+				t.Fatalf("finished without reaching the post, or while .orchestrator.lock was held: %d %s", code, h.errb.String())
+			}
+			// Approve has returned and the post has not started: the command is
+			// parked, and .orchestrator.lock is still held by this test.
+			_, statErr := os.Stat(filepath.Join(path, "approval.json"))
+			free := fslock.TryLockExclusive(taskLock) == nil
+			if free {
+				fslock.Unlock(taskLock)
 			}
 			release()
-			select {
-			case code := <-done:
-				if code != 0 {
-					t.Fatalf("%d %s", code, h.errb.String())
-				}
-			case <-time.After(10 * time.Second):
-				t.Fatal("did not finish after .orchestrator.lock was released")
+			close(proceed)
+			if code := <-done; code != 0 {
+				t.Fatalf("%d %s", code, h.errb.String())
+			}
+			if statErr != nil {
+				t.Fatalf("approval.json was not written before the post: %v", statErr)
 			}
 			if !free {
 				t.Fatal(".task.lock was held while waiting for .orchestrator.lock")

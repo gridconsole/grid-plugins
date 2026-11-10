@@ -194,6 +194,7 @@ func runApprove(args []string, env Env) int {
 	// Approve has returned, so .task.lock and .plan.lock are released before
 	// the post takes .orchestrator.lock. A stale hash posts nothing.
 	if err == nil && post != nil {
+		env.afterApproveHook()
 		err = post(event)
 	}
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
