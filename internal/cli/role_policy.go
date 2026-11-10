@@ -9,13 +9,12 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
-// roleRefusalHint and the "agent_env" reason are the wording the role-list
-// refusal has always had. They are kept as they were so callers see the same
-// message, JSON error code (person_required) and exit status (3).
-const roleRefusalHint = "a person must run this, from the Grid app or your own terminal outside Claude Code or Codex"
+// roleRefusalHint and the "role_not_allowed" reason word the role-list refusal.
+// The JSON error code (person_required) and exit status (3) are unchanged.
+const roleRefusalHint = "your role is not in this workflow's list for this command"
 
 func roleRefusal(env Env, verb string, asJSON bool) int {
-	const reason = "agent_env"
+	const reason = "role_not_allowed"
 	fmt.Fprintf(env.Stderr, "grid %s: %s (reason: %s).\n", verb, roleRefusalHint, reason)
 	if asJSON {
 		_ = writeJSON(env.Stdout, struct {

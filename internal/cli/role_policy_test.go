@@ -19,8 +19,8 @@ func TestPersonAnswerScopeAndWorkflowRoles(t *testing.T) {
 			code                            int
 		}{
 			{"guest_other_question", "guest", "other", "", "addressed to that guest", 1},
-			{"guest_workflow_denied", "guest", "visitor", "member", "agent_env", 3},
-			{"lead_workflow_denied", "lead", "visitor", "member", "agent_env", 3},
+			{"guest_workflow_denied", "guest", "visitor", "member", "role_not_allowed", 3},
+			{"lead_workflow_denied", "lead", "visitor", "member", "role_not_allowed", 3},
 			{"guest_workflow_allowed", "guest", "visitor", "guest", "", 0},
 			{"lead_workflow_allowed", "lead", "visitor", "lead", "", 0},
 			{"member_workflow_allowed", "member", "visitor", "member", "", 0},

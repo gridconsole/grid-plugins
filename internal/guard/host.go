@@ -11,9 +11,9 @@ import (
 var settingsFile = regexp.MustCompile(`(?i)^(?:settings\.json|\.settings\.lock)$`)
 var gateFile = regexp.MustCompile(`(?i)^(?:task\.md|workflows?\.md|approval(?:-ship|-preview)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock)$`)
 
-const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, history.md, workflow.md, workflows.md, approval.json, approval-preview.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid, and grid approve, grid answer, grid feed post --type answer, grid job post --type answer, grid question withdraw, grid refusal decide, grid decide and grid task status|close|reopen|stop are the person's verbs; an agent cannot approve or answer its own gate. Reading is allowed: cat, grep, ls, head or tail of questions/ and the gate files work."
+const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, history.md, workflow.md, workflows.md, approval.json, approval-preview.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid; an agent cannot approve or answer its own gate with the Write or Edit tool. Reading is allowed."
 
-const switchReason = "The guards and agent settings are the person's: <home>/settings.json, projects/<name>/settings.json and .settings.lock are written only by Grid, and grid hook level, grid agent set, grid skill enable|disable and grid setup are the person's verbs; an agent cannot turn a guard off. Reading is allowed: cat, grep, ls, head or tail of a settings file works. Use the Write or Edit tool for any other settings.json."
+const switchReason = "The guards and agent settings are the person's: <home>/settings.json, projects/<name>/settings.json and .settings.lock are written only by Grid; an agent cannot turn a guard off with the Write or Edit tool. Reading is allowed."
 
 // gridRoots are the roots a task or a settings file can sit under, resolved and
 // lower-case: the projects folder, and the Grid home beside it that also holds
