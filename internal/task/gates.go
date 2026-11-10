@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -130,15 +131,55 @@ func previewApprovedLine(e Event, now time.Time) string {
 	return taskfile.HistoryLine(now.UTC().Format("2006-01-02T15:04"), "preview approved", e.PlanHash, CleanHistory(e.Who.ID), CleanHistory(e.Via))
 }
 
-// Approval reads a gate only while its approved hash and optional digest match plan.md.
-// Consumers must use this check (or Approved) instead of treating approval.json's
-// existence as permission. Plan writers hold .plan.lock, not .task.lock.
+// Approval answers whether the plan is approved, from the result of the plan
+// Job, and only while its approved hash and digest match plan.md. Consumers
+// must use this check (or Approved) and never treat a file's existence as
+// permission. Plan writers hold .plan.lock, not .task.lock.
 func (s Store) Approval(cwd, id string) (Event, error) {
 	return s.ApprovalForGate(cwd, id, "plan")
 }
 
-// ApprovalForGate validates the selected plan, preview or ship receipt under the task and plan locks.
+// ApprovalForGate is Approval under the task and plan locks. The gate name is
+// ignored: the plan Job is the only approval. The one exception is Q10, a task
+// with no approve person Job at all (an old task in flight): it reads its
+// receipt file for the named gate, as before, until its Job exists.
 func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
+	var event Event
+	err := s.withWrite(cwd, id, func(t Task) error {
+		found, jobErr := planJobResult(t.Path)
+		if errors.Is(jobErr, ErrNoPlanJob) {
+			var err error
+			event, err = receiptForGate(t, gate)
+			return err
+		}
+		if t.State == "closed" {
+			return errors.New("cannot use approval in current state closed")
+		}
+		err := plan.Store{TaskDir: t.Path}.WithDigest(func(hash, digest string) error {
+			if jobErr != nil {
+				return jobErr
+			}
+			if found.PlanHash != hash || found.PlanDigest != digest {
+				return errChangedSinceApproved
+			}
+			event = found.event(t)
+			return nil
+		})
+		if errors.Is(err, plan.ErrNoPlan) {
+			// A missing plan matches no approval; a Job with no result still comes first.
+			if err = jobErr; err == nil {
+				err = plan.ErrNoPlan
+			}
+		}
+		return err
+	})
+	return event, err
+}
+
+// receiptForGate is the Q10 fallback of ApprovalForGate: the approval.json
+// (or approval-preview.json, approval-ship.json) receipt of a task that has no
+// approve person Job. It runs under the task lock.
+func receiptForGate(t Task, gate string) (Event, error) {
 	name, eventGate := approvalFile, ""
 	switch gate {
 	case "plan":
@@ -150,32 +191,29 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 		return Event{}, fmt.Errorf("unknown approval gate %q", gate)
 	}
 	var event Event
-	err := s.withWrite(cwd, id, func(t Task) error {
-		data, err := readOptional(filepath.Join(t.Path, name))
-		if err != nil {
-			return err
-		}
-		err = plan.Store{TaskDir: t.Path}.WithDigest(func(hash, digest string) (err error) {
-			event, err = checkApproval(t, data, hash, digest)
-			if err == nil && event.Gate != eventGate {
-				return fmt.Errorf("approval is for another gate")
-			}
-			return err
-		})
-		if errors.Is(err, plan.ErrNoPlan) {
-			// A missing plan matches no approval; closed and never approved still come first.
-			if _, err = checkApproval(t, data, "", ""); err == nil {
-				err = plan.ErrNoPlan
-			}
+	data, err := readOptional(filepath.Join(t.Path, name))
+	if err != nil {
+		return event, err
+	}
+	err = plan.Store{TaskDir: t.Path}.WithDigest(func(hash, digest string) (err error) {
+		event, err = checkApproval(t, data, hash, digest)
+		if err == nil && event.Gate != eventGate {
+			return fmt.Errorf("approval is for another gate")
 		}
 		return err
 	})
+	if errors.Is(err, plan.ErrNoPlan) {
+		// A missing plan matches no approval; closed and never approved still come first.
+		if _, err = checkApproval(t, data, "", ""); err == nil {
+			err = plan.ErrNoPlan
+		}
+	}
 	return event, err
 }
 
-// Approved is the lock-free form of Approval for a hook: it answers whether dir
-// holds an approval whose hash and full digest still match plan.md now. It takes no lock and
-// replays no journal, so a write in flight or any read failure is false.
+// Approved is the lock-free form of Approval for a hook: it answers whether the
+// plan Job's result still matches plan.md now (hash and full digest). It takes
+// no lock and replays no journal, so a write in flight or any read failure is false.
 func Approved(dir string) bool {
 	text, err := plan.Store{TaskDir: dir}.Read()
 	if err != nil {
@@ -184,75 +222,133 @@ func Approved(dir string) bool {
 	return ApprovedDigest(dir, plan.Hash(text), plan.Digest(text))
 }
 
-// ApprovedDigest checks the plan receipt against a caller's snapshot without
-// rereading plan.md. Callers must compute both values from the text they use.
-// Like Approved, it takes no locks and replays no journal.
+// ApprovedDigest checks the plan Job's result against a caller's snapshot
+// without rereading plan.md. Callers must compute both values from the text they
+// use. Like Approved, it takes no locks and replays no journal. Only a task
+// with no approve person Job (Q10, an old task) is answered from approval.json.
 func ApprovedDigest(dir, hash, digest string) bool {
 	t, err := Read(dir)
-	if err != nil {
+	if err != nil || t.State == "closed" {
 		return false
 	}
-	data, err := readOptional(filepath.Join(dir, approvalFile))
-	if err != nil {
-		return false
+	found, err := planJobResult(dir)
+	if errors.Is(err, ErrNoPlanJob) {
+		data, err := readOptional(filepath.Join(dir, approvalFile))
+		if err != nil {
+			return false
+		}
+		event, err := checkApproval(t, data, hash, digest)
+		// The plan receipt has no gate field. A receipt for ship or an unknown
+		// gate cannot authorize plan work, even if misfiled.
+		return err == nil && event.Gate == ""
 	}
-	event, err := checkApproval(t, data, hash, digest)
-	// Match ApprovalForGate: the plan receipt has no gate field. A receipt for
-	// ship or an unknown gate cannot authorize plan work, even if misfiled.
-	return err == nil && event.Gate == ""
+	return err == nil && digest != "" && found.PlanHash == hash && found.PlanDigest == digest
 }
 
 // JobApproval is what a person approved, as the result of the person Job for
-// the plan carries it. The Feed record carries who and when.
+// the plan carries it. Who and When come from the Feed record of the result.
 type JobApproval struct {
-	Job        string `json:"job"`
-	Record     string `json:"record"`
-	Answer     string `json:"answer,omitempty"`
-	PlanHash   string `json:"plan_hash"`
-	PlanDigest string `json:"plan_digest"`
-	LandsHash  string `json:"lands_hash,omitempty"`
-	Note       string `json:"note,omitempty"`
+	Job        string          `json:"job"`
+	Record     string          `json:"record"`
+	Who        contract.Author `json:"who"`
+	When       string          `json:"when"`
+	Answer     string          `json:"answer,omitempty"`
+	PlanHash   string          `json:"plan_hash"`
+	PlanDigest string          `json:"plan_digest"`
+	LandsHash  string          `json:"lands_hash,omitempty"`
+	Note       string          `json:"note,omitempty"`
 }
 
-// ApprovalFromJob reads the latest done result of the task's plan Job, the
-// newest accepted result of a person Job that carries a plan_digest, and
-// reports whether its plan_hash and plan_digest match plan.md now. A nil error
-// means they match. Like Approved, it takes no lock and replays no journal.
-func ApprovalFromJob(dir string) (JobApproval, error) {
+// event is the approval as the receipt Event that the readers return.
+func (a JobApproval) event(t Task) Event {
+	return Event{Task: t.ID, Who: a.Who, When: a.When, What: "approve", Note: a.Note, LandsHash: a.LandsHash, PlanHash: a.PlanHash, PlanDigest: a.PlanDigest}
+}
+
+// ErrNoPlanJob means the task has no person Job of an approve step in its Feed:
+// an old task made before the plan became a Job. Readers fall back to the
+// approval.json receipt for that task only (decision Q10).
+var ErrNoPlanJob = errors.New("plan has not been approved: the task has no plan Job")
+
+var errChangedSinceApproved = errors.New("Changed since you approved: plan hash no longer matches")
+
+// The plan Job is the person Job of the workflow's approve step: a Feed job
+// record with role Person and kind approve. A task can have several such Jobs;
+// the plan is approved by the newest accepted one whose result carries a
+// plan_digest. A Job of another kind, or an accepted result without a
+// plan_digest, is not a plan approval.
+//
+// planJobResult returns that newest result without comparing it to plan.md. It
+// returns ErrNoPlanJob when the task has no such Job, and the error "the plan
+// Job J-N has no result yet" when it has one that nobody has answered, which is
+// what is left when approval.json was written and the post of the result failed.
+// It reads the Feed read-only: no lock, no cache, no journal.
+func planJobResult(dir string) (JobApproval, error) {
 	var found JobApproval
 	id, _, err := FeedIdentity(dir)
+	if errors.Is(err, feed.ErrNoTaskID) {
+		// No stable id means no Feed, so no Job: an old task (Q10).
+		return found, ErrNoPlanJob
+	}
 	if err != nil {
 		return found, err
 	}
 	store := feed.Store{TaskDir: dir, TaskID: id}
-	state, err := store.State()
+	read, err := store.ReadOnly(feed.Filter{})
 	if err != nil {
 		return found, err
 	}
-	read, err := store.ReadOnly(feed.Filter{Type: "control"})
-	if err != nil {
-		return found, err
+	allowed := store.WithdrawAllowed
+	if allowed == nil {
+		allowed = feed.QuestionWithdrawReadPolicy(dir)
 	}
+	state, _ := feed.FoldReadAt(read, time.Now(), allowed)
+	admitted := func(verdict string) bool { return verdict == "counted" || verdict == "stale" || verdict == "unknown" }
+	text := func(r feed.Entry, key string) string { s, _ := r.Body[key].(string); return s }
+	var planJobs []string
+	isPlanJob := map[string]bool{}
 	for _, r := range read.Records {
-		text := func(key string) string { s, _ := r.Body[key].(string); return s }
-		j := state.Jobs[text("target")]
-		if r.Type != "control" || text("status") != string(contract.Accepted) || text("plan_digest") == "" || j == nil || !strings.EqualFold(strings.TrimSpace(j.Role), "Person") || j.Status != contract.Accepted {
+		jobID := text(r, "id")
+		if r.Type == "job" && admitted(r.Verdict) && jobID != "" && !isPlanJob[jobID] && text(r, "kind") == "approve" && strings.EqualFold(strings.TrimSpace(text(r, "role")), "Person") {
+			isPlanJob[jobID] = true
+			planJobs = append(planJobs, jobID)
+		}
+	}
+	if len(planJobs) == 0 {
+		return found, ErrNoPlanJob
+	}
+	sort.Strings(planJobs)
+	for _, r := range read.Records {
+		target := text(r, "target")
+		j := state.Jobs[target]
+		if r.Type != "control" || !admitted(r.Verdict) || !isPlanJob[target] || text(r, "status") != string(contract.Accepted) || text(r, "plan_digest") == "" || j == nil || j.Status != contract.Accepted {
 			continue
 		}
 		// Record ids are ULIDs, so the greatest is the latest.
 		if r.ID > found.Record {
-			found = JobApproval{Job: j.ID, Record: r.ID, Answer: text("answer"), PlanHash: text("plan_hash"), PlanDigest: text("plan_digest"), LandsHash: text("lands_hash"), Note: text("note")}
+			found = JobApproval{Job: target, Record: r.ID, Who: r.Author, When: r.At, Answer: text(r, "answer"), PlanHash: text(r, "plan_hash"), PlanDigest: text(r, "plan_digest"), LandsHash: text(r, "lands_hash"), Note: text(r, "note")}
 		}
 	}
 	if found.Record == "" {
-		return found, errors.New("plan has not been approved")
+		return found, fmt.Errorf("plan has not been approved: the plan Job %s has no result yet; run grid approve to post it", planJobs[0])
+	}
+	return found, nil
+}
+
+// ApprovalFromJob reads the latest done result of the task's plan Job (see
+// planJobResult) and reports whether its plan_hash and plan_digest match
+// plan.md now. A nil error means they match. Like Approved, it takes no lock
+// and replays no journal.
+func ApprovalFromJob(dir string) (JobApproval, error) {
+	found, err := planJobResult(dir)
+	if err != nil {
+		return found, err
 	}
 	current, err := plan.Store{TaskDir: dir}.Read()
 	if err != nil {
 		return found, err
 	}
 	if found.PlanHash != plan.Hash(current) || found.PlanDigest != plan.Digest(current) {
-		return found, errors.New("Changed since you approved: plan hash no longer matches")
+		return found, errChangedSinceApproved
 	}
 	return found, nil
 }
