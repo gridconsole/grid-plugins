@@ -1,11 +1,11 @@
 [
   {"id":"review-written","type":"file_exists","path":"review.md","gate":true},
-  {"id":"format","type":"command_passes","command":["sh","-c","grep -q 'Severity' review.md && grep -q 'Where' review.md && grep -q 'Fix' review.md"]},
-  {"id":"at-most-ten","type":"command_passes","command":["sh","-c","test $(grep -c 'Severity' review.md) -le 10"]},
-  {"id":"three-widths","type":"command_passes","command":["sh","-c","grep -q 390 review.md && grep -q 1440 review.md && grep -q 3840 review.md"]},
+  {"id":"format","type":"command_passes","command":["sh","-c","test -f review.md && grep -q 'Severity' review.md && grep -q 'Where' review.md && grep -q 'Fix' review.md"]},
+  {"id":"at-most-ten","type":"command_passes","command":["sh","-c","test -f review.md && grep -q 'Severity' review.md && test $(grep -c 'Severity' review.md) -le 10"]},
+  {"id":"three-widths","type":"command_passes","command":["sh","-c","test -f review.md && grep -q 390 review.md && grep -q 1440 review.md && grep -q 3840 review.md"]},
   {"id":"screenshots-not-verified","type":"text_contains","path":"review.md","text":"NOT VERIFIED"},
-  {"id":"found-contrast","type":"command_passes","command":["sh","-c","grep -Eiq 'contrast' review.md"]},
-  {"id":"found-monospace","type":"command_passes","command":["sh","-c","grep -Eiq 'monospace' review.md"]},
-  {"id":"found-small-text","type":"command_passes","command":["sh","-c","grep -Eiq '(9|10)px|small text|font size' review.md"]},
-  {"id":"found-tap-target","type":"command_passes","command":["sh","-c","grep -Eiq '(tap|touch)[ -]target|44' review.md"]}
+  {"id":"found-contrast","type":"command_passes","command":["sh","-c","test -f review.md && grep -Eiq 'contrast' review.md"]},
+  {"id":"found-monospace","type":"command_passes","command":["sh","-c","test -f review.md && grep -Eiq 'monospace' review.md"]},
+  {"id":"found-small-text","type":"command_passes","command":["sh","-c","test -f review.md && grep -Eiq '(9|10)px|small text|font size' review.md"]},
+  {"id":"found-tap-target","type":"command_passes","command":["sh","-c","test -f review.md && grep -Eiq '(tap|touch)[ -]target|44' review.md"]}
 ]

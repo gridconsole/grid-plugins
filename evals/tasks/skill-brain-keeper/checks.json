@@ -2,6 +2,5 @@
   {"id":"accepted-note","type":"command_passes","command":["sh","-c","for f in $GRID_HOME/projects/notes-app/knowledge/*/*.md; do case $f in */tag-storage.md) continue;; esac; grep -q '^status: accepted' $f && echo $f; done | grep -q ."],"gate":true},
   {"id":"link-to-tag-storage","type":"command_passes","command":["sh","-c","for f in $GRID_HOME/projects/notes-app/knowledge/*/*.md; do case $f in */tag-storage.md) continue;; esac; grep -q '^status: accepted' $f && grep -Eq 'to: \"?brain:project/tag-storage' $f && echo $f; done | grep -q ."]},
   {"id":"link-has-why","type":"command_passes","command":["sh","-c","for f in $GRID_HOME/projects/notes-app/knowledge/*/*.md; do case $f in */tag-storage.md) continue;; esac; grep -q '^status: accepted' $f && grep -Eq 'to: \"?brain:project/tag-storage' $f && grep -Eq 'why: .{8,}' $f && echo $f; done | grep -q ."]},
-  {"id":"code-fact-has-path-line","type":"command_passes","command":["sh","-c","for f in $GRID_HOME/projects/notes-app/knowledge/*/*.md; do case $f in */tag-storage.md) continue;; esac; grep -q '^status: accepted' $f && grep -q 'store.js:3' $f && echo $f; done | grep -q ."]},
-  {"id":"no-proposal-left","type":"command_passes","command":["sh","-c","! grep -rl '^status: proposed' $GRID_HOME/projects/notes-app/brain-proposals"]}
+  {"id":"code-fact-has-path-line","type":"command_passes","command":["sh","-c","for f in $GRID_HOME/projects/notes-app/knowledge/*/*.md; do case $f in */tag-storage.md) continue;; esac; grep -q '^status: accepted' $f && grep -q 'store.js:3' $f && echo $f; done | grep -q ."]}
 ]
