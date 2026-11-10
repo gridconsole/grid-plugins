@@ -229,7 +229,20 @@ func runOrchestrator(args []string, env Env) int {
 	if *leaseFlag != "" {
 		leaseName = *leaseFlag
 	}
-	writer, err := orchestratorWriter(env, leaseName, *epoch)
+	// A person of the team with no lease epoch posts a Job or answers a person Job
+	// as an unleased record, so the worker holding the task lease does not stop it.
+	// A plan-hash approval keeps the lease path, and so does every other role.
+	personRole := contract.NormalizeRole(env.getenv("GRID_ROLE"))
+	if personRole == "" {
+		personRole = "member"
+	}
+	unleased := *epoch == "" && contract.TierFor(personRole) == contract.PersonTeam && (verb == "post" && *kind == "job" || personResult && *planHash == "")
+	var writer feed.Writer
+	if unleased {
+		writer, err = feedWriter(env, "", "")
+	} else {
+		writer, err = orchestratorWriter(env, leaseName, *epoch)
+	}
 	if err != nil {
 		return fail(err)
 	}
@@ -343,7 +356,11 @@ func runOrchestrator(args []string, env Env) int {
 		typ = "control"
 		obj = map[string]any{"target": *job, "status": "cancelled", "reason": *reason, "close_reason": *reason}
 	}
-	record, err := orchestrator.Write(store, writer, feed.Input{ID: *recordID, Type: typ, Body: obj, Job: *job, Attempt: *attempt, Wake: *wake, Re: *re})
+	write := orchestrator.Write
+	if unleased {
+		write = orchestrator.PostPerson
+	}
+	record, err := write(store, writer, feed.Input{ID: *recordID, Type: typ, Body: obj, Job: *job, Attempt: *attempt, Wake: *wake, Re: *re})
 	if errors.Is(err, orchestrator.ErrDuplicateWake) {
 		fmt.Fprintln(env.Stdout, record.ID)
 		return fail(err)

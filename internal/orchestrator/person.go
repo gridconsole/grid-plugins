@@ -28,13 +28,62 @@ func PersonReady(snap Snapshot, id string, now time.Time) error {
 	return nil
 }
 
+// personAnswers is the holder's half of an unleased answer to a person Job: a
+// person of the team answers with an `answer` that follows the Job's record and
+// has no lease, and this pass writes the message and the accepting control under
+// the task lease, as AnswerPerson does for a leased writer. The earliest such
+// answer of an open person Job wins. A Job still waiting for another Job keeps
+// its answer for a later pass.
+func (s Store) personAnswers(snap Snapshot) error {
+	for _, item := range snap.Items {
+		j := snap.State.Jobs[item.ID]
+		if !item.IsPerson() || j == nil || len(j.History) == 0 || j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected {
+			continue
+		}
+		var first *feed.Record
+		for _, r := range snap.Records {
+			if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] || r.Lease != nil || r.Fence != 0 || contract.TierFor(r.Author.Role) != contract.PersonTeam {
+				continue
+			}
+			if text, _ := r.Body["answer"].(string); strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > maxPersonAnswer {
+				continue
+			}
+			if first == nil || r.At < first.At || r.At == first.At && r.ID < first.ID {
+				r := r
+				first = &r
+			}
+		}
+		if first == nil || PersonReady(snap, item.ID, s.now()) != nil {
+			continue
+		}
+		answer, _ := first.Body["answer"].(string)
+		text := fmt.Sprintf("%s answered %s at %s: %s", first.Author.ID, item.ID, first.At, strings.TrimSpace(answer))
+		said, err := s.Feed.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, s.Writer)
+		if err != nil {
+			return err
+		}
+		if _, err := s.Feed.Post(feed.Input{Type: "control", Re: said.ID, Body: map[string]any{"target": item.ID, "status": "accepted", "reason": "answered by " + first.Author.ID}}, s.Writer); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // AnswerPerson records who answered a role Person Job, when, and the answer,
 // then marks the Job accepted so the Jobs behind it are released. It is a plain
 // record: it does not check who the caller is. The task lease writes it, since a
-// person's Job is never assigned to a worker.
+// person's Job is never assigned to a worker. A person of the team with no lease
+// writes it unleased (fence zero, like an answer to a question), so a held task
+// lease does not stop the answer; the next pass of the holder finds the Job
+// accepted and releases the Jobs behind it.
 func AnswerPerson(store feed.Store, w feed.Writer, id, answer string, now time.Time) (record feed.Record, err error) {
-	if w.Lease != "task" {
+	unleased := PersonWriter(w)
+	if w.Lease != "task" && !unleased {
 		return record, feed.ErrStaleLease
+	}
+	lock := (Store{Feed: store, Writer: w}).locked
+	if unleased {
+		lock = (Store{Feed: store, Writer: w}).exclusive
 	}
 	bad := func(format string, a ...any) error { return &feed.InvalidRecordError{Err: fmt.Errorf(format, a...)} }
 	answer = strings.TrimSpace(answer)
@@ -44,7 +93,7 @@ func AnswerPerson(store feed.Store, w feed.Writer, id, answer string, now time.T
 	if utf8.RuneCountInString(answer) > maxPersonAnswer {
 		return record, bad("the answer is longer than %d characters", maxPersonAnswer)
 	}
-	err = (Store{Feed: store, Writer: w}).locked(func() error {
+	err = lock(func() error {
 		snap, e := Load(store)
 		if e != nil {
 			return e
@@ -63,6 +112,12 @@ func AnswerPerson(store feed.Store, w feed.Writer, id, answer string, now time.T
 			return bad("%s is already %s", id, j.Status)
 		}
 		if e := PersonReady(snap, id, now); e != nil {
+			return e
+		}
+		if unleased {
+			// A person writes no closing control without the lease; the answer waits
+			// for the holder's next pass, which accepts the Job (personAnswers).
+			record, e = store.Post(feed.Input{Type: "answer", Re: j.History[0], Body: map[string]any{"answer": answer}}, w)
 			return e
 		}
 		text := fmt.Sprintf("%s answered %s at %s: %s", w.Author.ID, id, contract.FormatTime(now), answer)

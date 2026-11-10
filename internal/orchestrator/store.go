@@ -95,18 +95,22 @@ type memory struct {
 
 func (s Store) locked(fn func() error) error {
 	// Check before creating the lock, and again while the pass is serialized.
-	return s.Feed.WithLease(s.Writer, nil, func() error {
-		f, err := fslock.OpenNoFollow(filepath.Join(s.Feed.Dir(), ".orchestrator.lock"), os.O_CREATE|os.O_RDWR, 0o600)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		if err := fslock.LockExclusive(f); err != nil {
-			return err
-		}
-		defer fslock.Unlock(f)
-		return fn()
-	})
+	return s.Feed.WithLease(s.Writer, nil, func() error { return s.exclusive(fn) })
+}
+
+// exclusive serializes fn with a holder pass without asking for a lease: a
+// person's unleased write takes the same lock a tick takes, and nothing more.
+func (s Store) exclusive(fn func() error) error {
+	f, err := fslock.OpenNoFollow(filepath.Join(s.Feed.Dir(), ".orchestrator.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := fslock.LockExclusive(f); err != nil {
+		return err
+	}
+	defer fslock.Unlock(f)
+	return fn()
 }
 func (s Store) readMemory() (memory, error) {
 	m := memory{Jobs: map[string]*jobMemory{}, Delivered: map[string]bool{}, Wakes: []time.Time{}, Pending: []Wake{}}

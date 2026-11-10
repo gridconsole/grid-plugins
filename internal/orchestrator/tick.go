@@ -59,6 +59,9 @@ func (s Store) Tick() (out Output, err error) {
 		if e := s.answers(snap); e != nil {
 			return e
 		}
+		if e := s.personAnswers(snap); e != nil {
+			return e
+		}
 		snap, e = Load(s.Feed)
 		if e != nil {
 			return e
