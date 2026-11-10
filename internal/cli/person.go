@@ -14,10 +14,13 @@ import (
 
 func runPerson(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid person list [--project P] [--json]\n       grid person show <handle> [--project P] [--json]\n       grid person approvers --area <area> [--task <folder or id>] [--project P] [--json]\n\nReads the synced people cache. Without --project, reads home, or the supplied task's project then home.\nNo match requires --task with an owner in task.md.\nExit codes: 0 success, 1 read failure or unknown handle, 2 usage error.")
+		fmt.Fprintln(env.Stdout, "Usage: grid person list [--project P] [--json]\n       grid person show <handle> [--project P] [--json]\n       grid person approvers --area <area> [--task <folder or id>] [--project P] [--json]\n       grid person check [--json]\n\nReads the synced people cache. Without --project, reads home, or the supplied task's project then home.\nNo match requires --task with an owner in task.md.\ncheck answers whether the caller is a person: {\"ok\":true}, or exit 3 with person_required and a reason.\nExit codes: 0 success, 1 read failure or unknown handle, 2 usage error, 3 check: not a person.")
 		return 0
 	}
 	verb := args[0]
+	if verb == "check" {
+		return runPersonCheck(args[1:], env)
+	}
 	fs := newFlags("person "+verb, env)
 	project := fs.String("project", "", "project name or id; reads project then home")
 	asJSON := fs.Bool("json", false, "print JSON")

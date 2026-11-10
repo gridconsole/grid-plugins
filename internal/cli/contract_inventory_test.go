@@ -418,6 +418,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"person list":           {},
 		"person show":           {args: []string{"<handle>"}},
 		"person approvers":      {required: map[string]bool{"--area": true}},
+		"person check":          {},
 		"skill list":            {},
 		"skill enable":          {args: []string{"<skill>"}},
 		"skill disable":         {args: []string{"<skill>"}},

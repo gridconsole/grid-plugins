@@ -200,14 +200,22 @@ func runApprove(args []string, env Env) int {
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 
-// agentShell reports whether the environment says a worker or a non-person role
-// runs this command. Only task attach uses it, to bind an agent to its assigned
-// task (a scope rule); no command refuses a caller because of it.
-func agentShell(env Env) bool {
+// workerMarked reports whether the environment names a worker.
+func workerMarked(env Env) bool {
 	for _, key := range []string{"GRID_AGENT", "GRID_WORKER_ID", "GRID_WORKER"} {
 		if strings.TrimSpace(env.getenv(key)) != "" {
 			return true
 		}
+	}
+	return false
+}
+
+// agentShell reports whether the environment says a worker or a non-person role
+// runs this command. Only task attach uses it, to bind an agent to its assigned
+// task (a scope rule); no command refuses a caller because of it.
+func agentShell(env Env) bool {
+	if workerMarked(env) {
+		return true
 	}
 	role := contract.NormalizeRole(env.getenv("GRID_ROLE"))
 	return role != "" && role != "owner" && role != "member" && role != "cli"
