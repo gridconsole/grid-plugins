@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -177,10 +178,33 @@ func Run(args []string, env Env) (exit int) {
 			fmt.Fprintf(env.Stderr, "%s: not built yet\n", name)
 			return 2
 		}
+		if guestWriteVerb(name, rest) && strings.ToLower(strings.TrimSpace(env.getenv("GRID_ROLE"))) == "guest" && env.getenv("GRID_LEASE") != "task" {
+			// A guest's role is refused before any project is resolved, so the
+			// answer is the same for an unknown project and an invited one.
+			fmt.Fprintln(env.Stderr, "grid: guests cannot change project settings")
+			return 1
+		}
 		return c.run(rest, env)
 	}
 	fmt.Fprintf(env.Stderr, "grid: unknown command %q. Run: grid help\n", name)
 	return 2
+}
+
+// guestWriteVerb names the writes a guest role may not make: the answer must not
+// depend on whether the project exists. Standalone help is not a write.
+func guestWriteVerb(name string, rest []string) bool {
+	if len(rest) == 1 && (rest[0] == "--help" || rest[0] == "-h") {
+		return false
+	}
+	switch name {
+	case "setup":
+		return true
+	case "task":
+		return len(rest) > 0 && (rest[0] == "delete" || rest[0] == "restore")
+	case "question":
+		return len(rest) > 0 && rest[0] == "withdraw"
+	}
+	return false
 }
 
 // formatRefusal says why this grid must not read the Grid home, or "" when it may.

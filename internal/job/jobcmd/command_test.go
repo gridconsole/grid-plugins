@@ -39,6 +39,18 @@ func call(t *testing.T, e Env, out, errs *bytes.Buffer, want int, args ...string
 	}
 	return r
 }
+// A plan.md with another hard link still renders its Jobs: the hard-link refusal was removed.
+func TestRenderHardLinkedPlan(t *testing.T) {
+	e, out, errs := fixture(t)
+	if err := os.Link(filepath.Join(e.Cwd, "T-01", "plan.md"), filepath.Join(e.Cwd, "T-01", "plan-link.md")); err != nil {
+		t.Fatal(err)
+	}
+	r := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
+	if !r.OK || r.ID != "J-1" {
+		t.Fatalf("%+v", r)
+	}
+}
+
 func TestRenderLintShow(t *testing.T) {
 	e, out, errs := fixture(t)
 	r := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")

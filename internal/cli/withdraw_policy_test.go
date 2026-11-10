@@ -198,9 +198,6 @@ func TestAgentWithdrawUnreadablePolicy(t *testing.T) {
 				}
 				code := h.run(task, args...)
 				wantCode, wantText := 1, "cannot read task withdrawal policy"
-				if path == "question" {
-					wantCode, wantText = 3, "agent_env"
-				}
 				if code != wantCode || h.out.Len() != 0 || strings.Count(h.errb.String(), "\n") != 1 || !strings.Contains(h.errb.String(), wantText) {
 					t.Errorf("refusal: exit=%d stdout=%s stderr=%s", code, h.out, h.errb)
 				}

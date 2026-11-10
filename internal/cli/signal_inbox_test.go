@@ -80,4 +80,3 @@ func TestSignalMoveNamedIgnoresInboxPolicy(t *testing.T) {
 		}
 	}
 }
-
