@@ -136,6 +136,11 @@ func runOrchestrator(args []string, env Env) int {
 			}
 		}
 	}
+	// An agent works in a git worktree outside the task folder, so its folder names no task; the
+	// worker gives it the session's task as GRID_FEED_TASK, which grid feed reads the same way.
+	if *task == "" {
+		*task = env.getenv("GRID_FEED_TASK")
+	}
 	scope, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: *task, Project: *project})
 	if err != nil {
 		return fail(err)
@@ -230,10 +235,12 @@ func runOrchestrator(args []string, env Env) int {
 	// A Job agent's GRID_LEASE names its own Job, but posting a Job is a task
 	// write. The worker gives every agent the task epoch it is holding as
 	// GRID_TASK_EPOCH, so a Job post uses that, unless --lease or --lease-epoch
-	// was typed.
+	// was typed. The global --lease-epoch, which goes before the command, counts as typed:
+	// env.getenv shows it as GRID_LEASE_EPOCH, so the flag set alone cannot tell.
 	if verb == "post" && *kind == "job" && env.getenv("GRID_TASK_EPOCH") != "" {
 		typed := map[string]bool{}
 		fs.Visit(func(f *flag.Flag) { typed[f.Name] = true })
+		typed["lease-epoch"] = typed["lease-epoch"] || env.typedGlobal["GRID_LEASE_EPOCH"]
 		if !typed["lease"] {
 			*leaseFlag = ""
 			if !typed["lease-epoch"] {

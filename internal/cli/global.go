@@ -57,6 +57,10 @@ func applyGlobalFlags(args []string, env Env) ([]string, Env, int) {
 		env.GridHome = gh
 		env.Machine = gridhome.Machine(gh)
 	}
+	env.typedGlobal = map[string]bool{}
+	for key := range over {
+		env.typedGlobal[key] = true
+	}
 	base := env.getenv
 	env.Getenv = func(key string) string {
 		if v, ok := over[key]; ok {
