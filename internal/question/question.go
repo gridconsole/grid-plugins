@@ -209,7 +209,7 @@ func (s Store) Withdraw(id, reason string) (Record, error) {
 	}
 	if s.ControlWriter.Lease != "task" {
 		if !s.WithdrawAllowed(s.Writer.Author.Role) {
-			return Record{}, &withdrawRefusal{fmt.Sprintf("%s role %q may not withdraw", id, s.Writer.Author.Role)}
+			return Record{}, &withdrawRefusal{WithdrawRefusalText(id, s.Writer.Author.Role)}
 		}
 	}
 	return s.change(id, func(r *Record) error {
@@ -223,6 +223,12 @@ func (s Store) Withdraw(id, reason string) (Record, error) {
 		r.History = append(r.History, Event{Kind: "withdrawn", At: Stamp{s.now()}, Text: reason})
 		return nil
 	})
+}
+
+// WithdrawRefusalText is the refusal for a role that may not withdraw; the CLI's
+// early guest refusal uses it so both print the same words.
+func WithdrawRefusalText(id, role string) string {
+	return fmt.Sprintf("%s role %q may not withdraw", id, role)
 }
 
 type withdrawRefusal struct{ message string }

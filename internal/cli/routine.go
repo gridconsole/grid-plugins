@@ -63,7 +63,7 @@ func runRoutine(args []string, env Env) int {
 		return 2
 	}
 	if verb != "list" && resolver(env).Caller.IsGuest() {
-		return failure(env, fmt.Errorf("guests cannot change project settings"))
+		return failure(env, errors.New(guestSettingsRefusal))
 	}
 	if homeOverride != "" {
 		if !filepath.IsAbs(homeOverride) {

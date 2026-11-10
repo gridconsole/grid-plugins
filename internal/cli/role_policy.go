@@ -13,8 +13,12 @@ import (
 // The JSON error code (person_required) and exit status (3) are unchanged.
 const roleRefusalHint = "your role is not in this workflow's list for this command"
 
-func roleRefusal(env Env, verb string, asJSON bool) int {
+func roleRefusal(env Env, verb string, allowed []string, asJSON bool) int {
 	const reason = "role_not_allowed"
+	roleRefusalHint := roleRefusalHint
+	if len(allowed) > 0 {
+		roleRefusalHint += "; allowed: " + strings.Join(allowed, ", ")
+	}
 	fmt.Fprintf(env.Stderr, "grid %s: %s (reason: %s).\n", verb, roleRefusalHint, reason)
 	if asJSON {
 		_ = writeJSON(env.Stdout, struct {
@@ -124,7 +128,7 @@ func workflowRoleRefusal(args []string, env Env) int {
 	}
 	for _, roles := range roleLists {
 		if !slices.Contains(roles, role) {
-			return roleRefusal(env, roleDisplayVerb(match), jsonRequested(args))
+			return roleRefusal(env, roleDisplayVerb(match), roles, jsonRequested(args))
 		}
 	}
 	return 0

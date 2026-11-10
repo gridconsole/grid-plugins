@@ -14,8 +14,13 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/question"
+	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
+
+// guestSettingsRefusal is the one text every settings write gives a guest.
+const guestSettingsRefusal = "guests cannot change project settings"
 
 // Env is everything a command reads from the machine, so tests can set it.
 // Paths are expected to be symlink-resolved (see gridhome.Real).
@@ -187,14 +192,14 @@ func Run(args []string, env Env) (exit int) {
 				if len(rest) > 1 {
 					id = rest[1]
 				}
-				fmt.Fprintf(env.Stderr, "question: %s role \"guest\" may not withdraw\n", id)
+				fmt.Fprintf(env.Stderr, "question: %s\n", question.WithdrawRefusalText(id, "guest"))
 				return 3
 			}
 			if name == "task" {
-				fmt.Fprintf(env.Stderr, "grid task %s: task edit rejected: a person with an allowed role must perform this task move\n", rest[0])
+				fmt.Fprintf(env.Stderr, "grid task %s: %v\n", rest[0], fmt.Errorf("%w: %s", task.ErrEditRejected, task.MoveRefusal))
 				return 3
 			}
-			fmt.Fprintln(env.Stderr, "grid: guests cannot change project settings")
+			fmt.Fprintln(env.Stderr, "grid: "+guestSettingsRefusal)
 			return 1
 		}
 		if code := workflowRoleRefusal(args, env); code != 0 {

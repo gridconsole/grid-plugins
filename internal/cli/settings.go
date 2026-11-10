@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -44,7 +45,7 @@ func settingsStore(env Env, project string, listing bool) (settings.Store, error
 		}
 	}
 	if !listing && resolver(env).Caller.IsGuest() {
-		return settings.Store{}, fmt.Errorf("guests cannot change project settings")
+		return settings.Store{}, errors.New(guestSettingsRefusal)
 	}
 	return settings.Store{Home: env.GridHome, Project: r.Project}, nil
 }
@@ -168,7 +169,7 @@ func runSettings(kind string, args []string, env Env) int {
 
 func runSetup(args []string, env Env) int {
 	if resolver(env).Caller.IsGuest() {
-		return commandError(env, "setup", fmt.Errorf("guests cannot change project settings"))
+		return commandError(env, "setup", errors.New(guestSettingsRefusal))
 	}
 	if settings.ClaudeSetupCommand(args) {
 		fs := newFlags("setup", env)
