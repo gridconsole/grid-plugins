@@ -89,8 +89,10 @@ func TestBlockedPublicationNoticeUsesCLIStderrOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.write(filepath.Join(path, "plan.md"), strings.ReplaceAll(string(text), "J-1", "J-2"))
-	// Migrated history is not a revision-bound approval receipt.
-	h.write(filepath.Join(path, "history.md"), "- plan accepted\n")
+	// A hard-linked plan.md is the one remaining reason publication is held.
+	if err := os.Link(filepath.Join(path, "plan.md"), filepath.Join(path, "plan-link.md")); err != nil {
+		t.Skip("hard links unavailable:", err)
+	}
 	for tick := range 3 {
 		if code := h.run(path, "feed", "tick", "--json"); code != 0 {
 			t.Fatalf("tick %d: %d %s", tick+1, code, h.errb)
