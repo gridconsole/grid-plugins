@@ -7,7 +7,7 @@ This repo replaces the earlier JavaScript plugin. It is public and MIT licensed.
 ## Build and test
 
     make build    # ./dist/grid
-    make dist     # four platform binaries, installable dist/plugin, SHA256SUMS
+    make dist     # five platform binaries (macOS, Linux, Windows), installable dist/plugin stamped 0.1.<commit count>, SHA256SUMS
     make generate # refresh committed plugin metadata and launcher
     make test
     make test-clean # same suite with the temp leak guard, also included in make test
@@ -21,7 +21,7 @@ entries are left alone. Run it without other tests using the same prefixes in th
 same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` through
 `internal/testenv`; in-process CLI tests temporarily set TMPDIR with `t.Setenv`.
 
-`bin/grid` selects the packaged binary for macOS or Linux on arm64 or amd64. In a source checkout the launcher builds `dist/grid` itself when it is missing or older than the sources (needs Go), or uses `dist/plugin/bin/` after `make dist`. It follows shell symlinks and needs no Go or Node runtime. See [packaging](docs/packaging.md) for the generated layout and checksums.
+`bin/grid` selects the packaged binary for macOS or Linux on arm64 or amd64, or the Windows binary under Git Bash; `bin/grid.cmd` runs the Windows binary from cmd. To publish, see [release](docs/release.md). In a source checkout the launcher builds `dist/grid` itself when it is missing or older than the sources (needs Go), or uses `dist/plugin/bin/` after `make dist`. It follows shell symlinks and needs no Go or Node runtime. See [packaging](docs/packaging.md) for the generated layout and checksums.
 
 ## Commands working today
 
