@@ -4,6 +4,10 @@ set -eu
 : "${GRID_HOME:?}"
 mkdir -p .claude/agents "$GRID_HOME/knowledge/decisions"
 printf "1\n" > "$GRID_HOME/VERSION"
+# claude -p cannot ask for approval, so it refuses every Bash call. Allow only the read-only brain verbs the template names.
+cat > .claude/settings.json <<'T'
+{"permissions":{"allow":["Bash(grid brain index --read-only:*)","Bash(grid brain topics:*)","Bash(grid brain search:*)","Bash(grid brain show:*)"]}}
+T
 cat > "$GRID_HOME/knowledge/decisions/tag-storage.md" <<'T'
 ---
 name: tag-storage

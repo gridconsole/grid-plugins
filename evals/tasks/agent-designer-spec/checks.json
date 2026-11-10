@@ -5,5 +5,5 @@
   {"id":"widths","type":"command_passes","command":["sh","-c","grep -q 390 task/spec.md && grep -q 1440 task/spec.md && grep -q 3840 task/spec.md"],"weight":2},
   {"id":"themes","type":"command_passes","command":["sh","-c","grep -qi dark task/spec.md && grep -qi light task/spec.md"]},
   {"id":"real-fields-only","type":"command_passes","command":["sh","-c","! grep -qi 'author' task/spec.md || grep -i 'author' task/spec.md | grep -Eqi 'no author|not available|open|question|absent'"],"weight":2},
-  {"id":"no-code","type":"command_passes","command":["sh","-c","[ \"$(find . -type f ! -path './.claude/*' | sort | tr '\\n' ' ')\" = './design/README.md ./design/model.md ./job.md ./task/intent.md ./task/spec.md ' ]"],"weight":2}
+  {"id":"no-code","type":"command_passes","command":["sh","-c","[ \"$(find . -type f ! -path './.claude/*' | LC_ALL=C sort | tr '\\n' ' ')\" = './design/README.md ./design/model.md ./job.md ./task/intent.md ./task/spec.md ' ]"],"weight":2}
 ]
