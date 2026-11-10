@@ -500,6 +500,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"routine schedule":      {},
 		"routine unschedule":    {},
 		"worker list":           {output: "cmd-worker-list.json"},
+		"worker next":           {required: map[string]bool{"--pid": true, "--pid-start": true}, stream: true},
 		"session list":          {output: "cmd-session-list.json"},
 		"session show":          {args: []string{"<session-id>"}, output: "cmd-session-show.json"},
 		"session start":         {output: "cmd-session-start.json"},

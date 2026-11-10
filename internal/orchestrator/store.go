@@ -29,6 +29,7 @@ type Wake struct {
 	N      int      `json:"n"`
 	Events []string `json:"events,omitempty"`
 }
+
 // Spawn is one Job in Assigned at the end of a pass, with the facts a worker
 // needs to start it: the Job lease it was granted and the assign control that
 // granted it (the id that spawned/<J>.json keeps as "after").
