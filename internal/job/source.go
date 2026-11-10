@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -195,8 +196,15 @@ func (f *Files) brain(pointer, rel, anchor string) (Source, error) {
 // inside the project's folders; the tier of such a file is external.
 func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, error) {
 	s := Source{Pointer: pointer, Tier: contract.External}
+	// A task with no plan.md says so, rather than showing the failed lstat or open.
+	noPlan := func(err error) bool {
+		return root == f.Task && errors.Is(err, fs.ErrNotExist) && filepath.ToSlash(filepath.Clean(rel)) == "plan.md"
+	}
 	path, err := Within(root, rel)
 	if err != nil {
+		if noPlan(err) {
+			return s, fmt.Errorf("%s: plan.md is missing: this task has no plan.md: %w", pointer, fs.ErrNotExist)
+		}
 		return s, fmt.Errorf("%s: %w", pointer, err)
 	}
 	if project && !inside(f.Folders, path) {
@@ -204,6 +212,9 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 	}
 	file, err := openSource(path)
 	if err != nil {
+		if noPlan(err) {
+			return s, fmt.Errorf("%s: plan.md is missing: this task has no plan.md: %w", pointer, fs.ErrNotExist)
+		}
 		return s, fmt.Errorf("%s: cannot read source: %w", pointer, err)
 	}
 	defer file.Close()
