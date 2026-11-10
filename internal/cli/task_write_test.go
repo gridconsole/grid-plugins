@@ -27,7 +27,6 @@ func TestTaskWriteGolden(t *testing.T) {
 		{"task-reopen-json", []string{"task", "reopen", "T-01", "--reason", "Another round", "--json"}},
 		{"task-status-json", []string{"task", "status", "T-01", "waiting", "--json"}},
 		{"task-approve-json", nil}, // --plan-hash is filled in from plan.md below
-		{"task-refusal-json", []string{"refusal", "decide", "T-01", "R-1", "allow", "--note", "This task only", "--json"}},
 		{"task-history-json", []string{"task", "history", "T-01", "--json"}},
 		{"task-history-empty-json", []string{"task", "history", "T-01", "--json"}},
 	} {
@@ -47,8 +46,6 @@ func TestTaskWriteGolden(t *testing.T) {
 				}
 				h.write(filepath.Join(fixture.Path, "plan.md"), approvedPlan)
 				tc.args = []string{"approve", "T-01", "--plan-hash", plan.Hash(approvedPlan), "--note", "Reviewed", "--json"}
-			case "task-refusal-json":
-				h.write(filepath.Join(fixture.Path, "refusals", "R-1.json"), `{"id":"R-1","command":"echo example"}`)
 			case "task-history-json":
 				h.write(filepath.Join(fixture.Path, "history.md"), "- legacy history\n")
 				if _, err := s.Change(task.WriteOptions{ID: fixture.ID, Action: "close", Note: "Delivered"}); err != nil {
@@ -69,8 +66,8 @@ func TestTaskWriteGolden(t *testing.T) {
 func TestTaskWriteCLIValidation(t *testing.T) {
 	for _, args := range [][]string{
 		{"task", "close"}, {"task", "status", "T-01"}, {"task", "history"},
-		{"approve"}, {"approve", "T-01", "--unknown"}, {"refusal"},
-		{"refusal", "decide", "T-01", "R-1", "maybe"}, {"task", "stop", "T-01", "--reason"},
+		{"approve"}, {"approve", "T-01", "--unknown"},
+		{"task", "stop", "T-01", "--reason"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			h := newHarness(t)
