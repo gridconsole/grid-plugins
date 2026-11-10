@@ -16,7 +16,6 @@ Every case has input.json, setup.json, env.txt, stdout, stderr, exit and files.d
 - `grid-env/discovered`: Desktop config selects a project and writes shell exports.
 - `grid-env/no-config`: No desktop configuration gives no output.
 - `plan-guard/task-write`: A held task may write its own plan.
-- `plan-guard/held-repo`: A held task cannot write into the repository.
 - `plan-guard/accepted-repo`: Plan acceptance releases repository writes.
 - `plan-guard/guard-off`: The explicit off switch releases repository writes.
 - `plan-guard/forged-acceptance`: An agent cannot insert a plan acceptance.
