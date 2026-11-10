@@ -1,10 +1,7 @@
-Usage: grid approve <task> [--plan-hash <hash>] [--gate plan|preview|ship] [--note <text>] [--json]
+Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--json]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 --plan-hash accepts the 6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json.
 workflow.md with plan_hash_token: digest requires the 64-hex digest.
---gate names the gate the person approved; a task now waiting at another gate is refused (exit 1) and nothing is written.
-  -gate string
-    	the gate the person approved: plan, preview or ship; refused when the task waits at another gate
   -json
     	print JSON
   -note string

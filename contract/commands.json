@@ -2491,11 +2491,6 @@
           ],
           "flags": [
             {
-              "name": "--gate",
-              "takes": "value",
-              "required": false
-            },
-            {
               "name": "--json",
               "takes": "none",
               "required": false
@@ -2513,64 +2508,6 @@
           ],
           "json": true,
           "output": "cmd-approve.json"
-        }
-      ]
-    },
-    {
-      "name": "refusal",
-      "summary": "decide a refused command (a person or the app only)",
-      "built": true,
-      "subcommands": [
-        {
-          "name": "decide",
-          "args": [
-            "\u003ctask\u003e",
-            "\u003cR-N\u003e",
-            "\u003callow|deny\u003e"
-          ],
-          "flags": [
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--note",
-              "takes": "value",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": "cmd-refusal-decide.json"
-        }
-      ]
-    },
-    {
-      "name": "decide",
-      "summary": "alias for refusal decide",
-      "built": true,
-      "subcommands": [
-        {
-          "name": "",
-          "args": [
-            "\u003ctask\u003e",
-            "\u003cR-N\u003e",
-            "\u003callow|deny\u003e"
-          ],
-          "flags": [
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--note",
-              "takes": "value",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": "cmd-refusal-decide.json"
         }
       ]
     },
