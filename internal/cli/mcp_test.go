@@ -2,12 +2,15 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
@@ -77,6 +80,40 @@ func TestMCPAndCLIShareFeed(t *testing.T) {
 	h.env.Stdin = strings.NewReader(mcpHello + `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"feed_read","arguments":{}}}` + "\n")
 	if code := h.run(h.home, "mcp"); code != 0 || !strings.Contains(h.out.String(), "from CLI") || !strings.Contains(h.out.String(), r.ID) {
 		t.Fatalf("MCP read: %d %s %s", code, h.out, h.errb)
+	}
+}
+
+// The MCP server reads the lease epoch through the flag overlay: --lease-epoch wins
+// over a stale GRID_LEASE_EPOCH.
+func TestMCPLeaseEpochFlagBeatsEnv(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the task lease needs a Unix host")
+	}
+	h, task := feedHarness(t)
+	t.Setenv("GRID_FEED_TASK", task)
+	who := []string{"--member", "member", "--role", "member"}
+	if code := h.run(task, append(append([]string{}, who...), "lease", "take", "task", "--hold", "--json")...); code != 0 {
+		t.Fatalf("lease take: %d %s", code, h.errb)
+	}
+	var tenure lease.Tenure
+	if err := json.Unmarshal(h.out.Bytes(), &tenure); err != nil {
+		t.Fatal(err)
+	}
+	epoch := fmt.Sprintf("%d.%d", tenure.Gen, tenure.Fence)
+	t.Setenv("GRID_LEASE", "task")
+	t.Setenv("GRID_LEASE_EPOCH", "0.99") // stale; the flag must win
+	call := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"feed_handover","arguments":{"reason":"flag wins"}}}` + "\n"
+
+	h.out.Reset()
+	h.errb.Reset()
+	h.env.Stdin = strings.NewReader(mcpHello + call)
+	if code := h.run(task, append(append([]string{}, who...), "--lease-epoch", epoch, "mcp")...); code != 0 || strings.Contains(h.out.String(), `"isError":true`) {
+		t.Fatalf("--lease-epoch did not win over GRID_LEASE_EPOCH: %d %s %s", code, h.out, h.errb)
+	}
+	h.out.Reset()
+	h.env.Stdin = strings.NewReader(mcpHello + call)
+	if code := h.run(task, append(append([]string{}, who...), "mcp")...); code != 0 || !strings.Contains(h.out.String(), `"isError":true`) {
+		t.Fatalf("the stale env epoch alone should be refused: %d %s %s", code, h.out, h.errb)
 	}
 }
 

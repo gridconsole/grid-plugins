@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/mcp"
@@ -21,17 +20,17 @@ func runMCP(args []string, env Env) int {
 			if err := refuseAnswerPost(in.Type); err != nil {
 				return in, feed.Writer{}, err
 			}
-			in, err := sessionDefaults(in)
+			in, err := sessionDefaults(env, in)
 			if err != nil {
 				return in, feed.Writer{}, err
 			}
-			lease := os.Getenv("GRID_LEASE")
+			lease := env.getenv("GRID_LEASE")
 			if in.Type != "" { // feed_handover posts no type
 				if err := refuseJobSide(in.Type, lease); err != nil {
 					return in, feed.Writer{}, err
 				}
 			}
-			writer, err := feedWriter(env, lease, os.Getenv("GRID_LEASE_EPOCH"))
+			writer, err := feedWriter(env, lease, env.getenv("GRID_LEASE_EPOCH"))
 			return in, writer, err
 		},
 	}

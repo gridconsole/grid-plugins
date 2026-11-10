@@ -114,6 +114,41 @@ func TestLeaseHoldThenJobNext(t *testing.T) {
 	}
 }
 
+// --role and --lease-epoch beat GRID_ROLE and GRID_LEASE_EPOCH on feed post.
+func TestRoleAndEpochFlagsBeatEnv(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the task lease needs a Unix host")
+	}
+	h, task := feedHarness(t)
+	t.Setenv("GRID_ROLE", "guest")
+	t.Setenv("GRID_LEASE_EPOCH", "0.99") // stale
+	t.Setenv("GRID_MEMBER", "other")
+	who := []string{"--member", "member", "--role", "member"}
+	if code := h.run(task, append(append([]string{}, who...), "lease", "take", "task", "--hold", "--json")...); code != 0 {
+		t.Fatalf("lease take: %d %s", code, h.errb)
+	}
+	var tenure lease.Tenure
+	if err := json.Unmarshal(h.out.Bytes(), &tenure); err != nil {
+		t.Fatal(err)
+	}
+	epoch := fmt.Sprintf("%d.%d", tenure.Gen, tenure.Fence)
+	post := []string{"feed", "post", "--type", "post", "--lease", "task", "--body", `{"ref":"task","kind":"message","text":"x"}`, "--json"}
+
+	h.out.Reset()
+	h.errb.Reset()
+	if code := h.run(task, append([]string{"--role", "member", "--member", "member", "--lease-epoch", epoch}, post...)...); code != 0 {
+		t.Fatalf("flags did not win over env: %d %s", code, h.errb)
+	}
+	posts, err := feed.Store{TaskDir: task, TaskID: feedTaskID}.Read(feed.Filter{Type: "post"})
+	if err != nil || len(posts.Records) != 1 || posts.Records[0].Author.Role != "member" || posts.Records[0].Author.ID != "member" {
+		t.Fatalf("--role/--member lost to the environment: %+v %v", posts, err)
+	}
+	// Without the epoch flag the stale env epoch is used and refused.
+	if code := h.run(task, append([]string{"--role", "member", "--member", "member"}, post...)...); code == 0 {
+		t.Fatalf("stale GRID_LEASE_EPOCH was accepted: %s", h.out)
+	}
+}
+
 func readJobFixture(t *testing.T) map[string]any {
 	t.Helper()
 	b, err := os.ReadFile("../../contract/fixtures/job-record/valid/basic.json")

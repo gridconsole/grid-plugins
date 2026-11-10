@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"os/user"
 	"sort"
@@ -148,7 +147,7 @@ func runFeed(args []string, env Env) int {
 	if err != nil {
 		return fail(err)
 	}
-	in, err := feedDefaults(feed.Input{ID: id, Type: kind, Body: obj, Re: re, Job: job, Attempt: attempt, Wake: wake})
+	in, err := feedDefaults(env, feed.Input{ID: id, Type: kind, Body: obj, Re: re, Job: job, Attempt: attempt, Wake: wake})
 	if err != nil {
 		return fail(err)
 	}
@@ -202,7 +201,7 @@ func feedStore(env Env, task, project string) (feed.Store, error) {
 		return feed.Store{}, fmt.Errorf("This data is format %d; this grid reads %d. Run: grid migrate", format, gridhome.FormatVersion)
 	}
 	if task == "" {
-		task = os.Getenv("GRID_FEED_TASK")
+		task = env.getenv("GRID_FEED_TASK")
 	}
 	res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: task, Project: project})
 	if err != nil {
@@ -219,15 +218,15 @@ func feedStore(env Env, task, project string) (feed.Store, error) {
 }
 
 // feedDefaults supplies the supervised session's Job context for either front end.
-func feedDefaults(in feed.Input) (feed.Input, error) {
+func feedDefaults(env Env, in feed.Input) (feed.Input, error) {
 	if in.Job == "" {
-		in.Job = os.Getenv("GRID_JOB")
+		in.Job = env.getenv("GRID_JOB")
 	}
 	if in.Wake == "" {
-		in.Wake = os.Getenv("GRID_WAKE")
+		in.Wake = env.getenv("GRID_WAKE")
 	}
-	if in.Attempt == 0 && os.Getenv("GRID_ATTEMPT") != "" {
-		n, err := strconv.Atoi(os.Getenv("GRID_ATTEMPT"))
+	if in.Attempt == 0 && env.getenv("GRID_ATTEMPT") != "" {
+		n, err := strconv.Atoi(env.getenv("GRID_ATTEMPT"))
 		if err != nil || n < 1 {
 			return in, fmt.Errorf("GRID_ATTEMPT must be a positive integer")
 		}
@@ -239,7 +238,7 @@ func feedDefaults(in feed.Input) (feed.Input, error) {
 // sessionStore is the MCP resolver. The trusted launch's GRID_FEED_TASK wins over
 // the model-supplied task and project; an argument that points elsewhere is refused.
 func sessionStore(env Env, task, project string) (feed.Store, error) {
-	session := os.Getenv("GRID_FEED_TASK")
+	session := env.getenv("GRID_FEED_TASK")
 	if session == "" || (task == session || task == "") && project == "" {
 		return feedStore(env, task, project)
 	}
@@ -275,11 +274,11 @@ func refuseJobSide(kind, lease string) error {
 	return nil
 }
 
-func sessionDefaults(in feed.Input) (feed.Input, error) {
-	if job := os.Getenv("GRID_JOB"); job != "" && in.Job != "" && in.Job != job {
+func sessionDefaults(env Env, in feed.Input) (feed.Input, error) {
+	if job := env.getenv("GRID_JOB"); job != "" && in.Job != "" && in.Job != job {
 		return in, fmt.Errorf("job %q conflicts with the session job GRID_JOB=%q; the session wins, so omit it or name the same job", in.Job, job)
 	}
-	if raw := os.Getenv("GRID_ATTEMPT"); raw != "" {
+	if raw := env.getenv("GRID_ATTEMPT"); raw != "" {
 		n, err := strconv.Atoi(raw)
 		if err != nil || n < 1 {
 			return in, fmt.Errorf("GRID_ATTEMPT must be a positive integer")
@@ -288,7 +287,7 @@ func sessionDefaults(in feed.Input) (feed.Input, error) {
 			return in, fmt.Errorf("attempt %d conflicts with the session attempt GRID_ATTEMPT=%d; the session wins, so omit it or name the same attempt", in.Attempt, n)
 		}
 	}
-	return feedDefaults(in)
+	return feedDefaults(env, in)
 }
 
 func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
