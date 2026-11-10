@@ -32,6 +32,8 @@ In the table, `\|` stands for a plain `|` (the table needs it escaped).
 | 8 | docs/lanes/L30.md:27,153,156 | `127.0.0.1` | loopback | none needed |
 | 9 | golden/**/env.txt (`GRID_HOST=example.com`) | reserved example domain | placeholder already | none needed |
 | 10 | recordings/cases.py:43, golden/grid-env/discovered/setup.json:11, docs/old-plugin-map.md:1, many docs/lanes/*.md | `gridconsole` (the app id `app.gridconsole.desktop`, the module path, the old repo name) | product and org name, the module path in go.mod; public by design | none needed |
+| 11 | docs/lanes/L37.md:99 | `/home/example...` redaction examples | generic example name, no real user | none needed |
+| 12 | docs/lanes/L56.md:150 | `Selection/home/I/O` matched the home-path pattern | false positive (prose) | none needed |
 
 Email addresses: no hit in any of the seven folders. Tokens and keys: no true hit. Client names: no hit. Home paths in `evals`, `corpus`, `recordings`, `fixtures`, `golden` and `agent-templates`: no hit, so there was no test data to replace with placeholders (row 2 of the brief).
 
