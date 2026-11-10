@@ -284,6 +284,7 @@ func TestLiveness(t *testing.T) {
 		}
 	})
 }
+
 // TestDeadAgentWaitsForItsLiveWorkerExit: the worker holds the task and supervises J-1. Its
 // agent's process (the .live pid) has ended, but the worker (the task lease pid) is alive and
 // will post the worker-exit. The tick must not retry the attempt first, or that exit is stale.
