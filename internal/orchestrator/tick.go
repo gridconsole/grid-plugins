@@ -340,11 +340,26 @@ func (s Store) liveness(j *contract.Job, m *jobMemory) string {
 		}
 		return "unknown"
 	}
+	// supervisor: this worker holds the Job and its process (the task lease pid) is alive.
+	supervisor := func() bool {
+		if a.To != s.Writer.Worker || s.Probe == nil {
+			return false
+		}
+		task, e := (lease.TaskStore{Feed: s.Feed}).Read("task")
+		return e == nil && task.PID != nil && task.PIDStart != nil && s.Probe(session.Live{Lease: j.ID, Holder: a.To, Fence: uint64(a.Fence), Attempt: j.Attempt, PID: *task.PID, PIDStart: *task.PIDStart}) == session.Alive
+	}
 	observed := func(process session.ProcessState, heartbeat bool) string {
 		switch process {
 		case session.Dead:
 			m.LastCheck = s.now()
 			m.WakePending = false
+			// The worker that supervises the agent reports its end with a worker-exit, the
+			// evidence of how it ended. While that worker lives and the beat is valid, a dead
+			// agent is not yet a failed attempt (its end is unknown until the exit arrives):
+			// retrying now would make that exit stale.
+			if heartbeat && s.now().Before(until) && supervisor() {
+				return "unknown"
+			}
 			return "dead"
 		case session.Alive:
 			m.LastCheck = s.now()
