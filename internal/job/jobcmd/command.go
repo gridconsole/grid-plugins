@@ -49,7 +49,9 @@ type report struct {
 	Path     string         `json:"path,omitempty"`
 	Inputs   string         `json:"inputs,omitempty"`
 	Job      *job.Job       `json:"job,omitempty"`
-	Brief    string         `json:"brief,omitempty"`
+	State    string         `json:"state,omitempty"`
+	Reason   string         `json:"state_reason,omitempty"`
+	Brief   string         `json:"brief,omitempty"`
 	Findings []lint.Finding `json:"findings"`
 	Error    string         `json:"error,omitempty"`
 }
@@ -219,7 +221,9 @@ func Run(args []string, e Env) int {
 		if err != nil {
 			return fail(err, 1)
 		}
-		return output(e, f, report{OK: true, ID: j.ID, Path: display(path, e), Job: &j, Brief: string(b), Findings: []lint.Finding{}}, 0)
+		// A saved brief carries no run record, so a brief with no stored status reads Not started.
+		state, why := contract.StateOf(contract.Status(j.Status))
+		return output(e, f, report{OK: true, ID: j.ID, Path: display(path, e), Job: &j, State: state, Reason: why, Brief: string(b), Findings: []lint.Finding{}}, 0)
 	default:
 		return fail(fmt.Errorf("unknown job command %q; use render, lint or show", action), 2)
 	}

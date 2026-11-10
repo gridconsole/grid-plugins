@@ -26,7 +26,7 @@ import (
 func runOrchestratorJob(args []string, env Env) int {
 	if len(args) > 0 {
 		switch args[0] {
-		case "next", "post", "ack", "result", "cancel", "tree", "blocked":
+		case "next", "post", "ack", "result", "cancel", "tree", "blocked", "order":
 			return runOrchestrator(args, env)
 		}
 	}
@@ -44,7 +44,12 @@ func runOrchestrator(args []string, env Env) int {
 	if len(rest) > 0 && !strings.HasPrefix(rest[0], "-") {
 		id, rest = rest[0], rest[1:]
 	}
+	orderArg := ""
+	if verb == "order" && len(rest) > 0 && !strings.HasPrefix(rest[0], "-") {
+		orderArg, rest = rest[0], rest[1:]
+	}
 	fs := newFlags("job "+verb, env)
+	orderFlag := fs.Int("order", -1, "queue order of the Job (lowest first); on job post only")
 	task := fs.String("task", "", "task folder or id")
 	project := fs.String("project", "", "project name or id")
 	asJSON := fs.Bool("json", false, "print JSON")
@@ -99,6 +104,12 @@ func runOrchestrator(args []string, env Env) int {
 		}
 		if err := json.Unmarshal([]byte(*body), &obj); err != nil || obj == nil {
 			return fail(errors.New("--body must be a JSON object"))
+		}
+		if *orderFlag >= 0 {
+			if *kind != "job" {
+				return fail(&feed.InvalidRecordError{Err: errors.New("--order applies to a Job post")})
+			}
+			obj["order"] = *orderFlag
 		}
 		if *person != "" {
 			obj["role"] = "Person"
@@ -296,6 +307,29 @@ func runOrchestrator(args []string, env Env) int {
 	typ := verb
 	if verb == "post" {
 		typ = *kind
+	}
+	if verb == "order" {
+		n, convErr := strconv.Atoi(orderArg)
+		if convErr != nil || n < 0 {
+			if *orderFlag >= 0 && orderArg == "" {
+				n, convErr = *orderFlag, nil
+			} else {
+				return fail(errors.New("order needs a Job id and a number: grid job order <id> <n>"))
+			}
+		}
+		snap, err := orchestrator.Load(store)
+		if err != nil {
+			return fail(err)
+		}
+		cur := snap.State.Jobs[*job]
+		if cur == nil {
+			return fail(fmt.Errorf("unknown Job %s", *job))
+		}
+		if state, _ := contract.StateOf(cur.Status); state != contract.StateNotStarted {
+			return fail(fmt.Errorf("%s is %s; only a Job that has not started can change order", *job, state))
+		}
+		typ = "control"
+		obj = map[string]any{"target": *job, "order": n}
 	}
 	if verb == "cancel" {
 		if *reason == "" {

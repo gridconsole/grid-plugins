@@ -214,6 +214,20 @@
               "needs_lead": {
                 "type": "boolean"
               },
+              "order": {
+                "type": "integer"
+              },
+              "state": {
+                "enum": [
+                  "Not started",
+                  "Started",
+                  "Needs review",
+                  "Done"
+                ]
+              },
+              "state_reason": {
+                "type": "string"
+              },
               "open_questions": {
                 "anyOf": [
                   {

@@ -151,6 +151,35 @@ type Job struct {
 	DecisionsNeeded []string        `json:"decisions_needed"`
 	Verified        json.RawMessage `json:"verified"`
 	NeedsLead       bool            `json:"needs_lead"`
+	Order           *int            `json:"order,omitempty"`
+	State           string          `json:"state,omitempty"`
+	StateReason     string          `json:"state_reason,omitempty"`
+}
+
+// The four states a Job reads in. The stored Status stays the record; these are
+// how it reads to a person and the orchestrator.
+const (
+	StateNotStarted  = "Not started"
+	StateStarted     = "Started"
+	StateNeedsReview = "Needs review"
+	StateDone        = "Done"
+)
+
+// StateOf maps a stored status to one of the four states. Cancelled reads as
+// Done with the reason "cancelled". integrated (in the control schema, not the
+// Status constants) reads as Needs review; any other status reads as Not started.
+func StateOf(s Status) (state, reason string) {
+	switch s {
+	case Assigned, Running:
+		return StateStarted, ""
+	case Submitted, "integrated":
+		return StateNeedsReview, ""
+	case Accepted:
+		return StateDone, ""
+	case Cancelled:
+		return StateDone, "cancelled"
+	}
+	return StateNotStarted, ""
 }
 
 type ProposedJob struct {

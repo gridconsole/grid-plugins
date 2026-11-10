@@ -446,6 +446,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"job ack":               {args: []string{"[job]"}},
 		"job result":            {args: []string{"[job]"}},
 		"job cancel":            {args: []string{"[job]"}, required: map[string]bool{"--reason": true}},
+		"job order":             {args: []string{"<job>", "<n>"}},
 		"job tree":              {args: []string{"[job]"}},
 		"job blocked":           {args: []string{"[job]"}},
 		"job render":            {args: []string{"<task>", "<item>"}},

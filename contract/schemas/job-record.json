@@ -24,6 +24,10 @@
     "irreversible": {
       "type": "boolean"
     },
+    "order": {
+      "type": "integer",
+      "minimum": 0
+    },
     "review_reason": {
       "type": "string",
       "minLength": 1,

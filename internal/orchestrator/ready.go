@@ -170,6 +170,18 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 	if err != nil {
 		return out, err
 	}
+	// Lowest order first; Jobs with no order follow in the canonical posting order.
+	// The sort is stable, so ties keep that order.
+	sort.SliceStable(out.Ready, func(i, j int) bool {
+		a, b := s.State.Jobs[out.Ready[i]], s.State.Jobs[out.Ready[j]]
+		if a == nil || b == nil || a.Order == nil && b.Order == nil {
+			return false
+		}
+		if a.Order == nil || b.Order == nil {
+			return a.Order != nil
+		}
+		return *a.Order < *b.Order
+	})
 	// A person's step is never offered to a worker; it waits for the person.
 	people := map[string]job.Job{}
 	for _, item := range s.Items {

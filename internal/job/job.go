@@ -45,6 +45,7 @@ type Job struct {
 	LevelRaised    *LevelRaised `json:"level_raised"`
 	Worktree       Worktree     `json:"worktree"`
 	PostsBack      []string     `json:"posts_back"`
+	Order          *int         `json:"order,omitempty"`
 	Status         string       `json:"status,omitempty"`
 	FollowUp       string       `json:"follow_up,omitempty"`
 }
