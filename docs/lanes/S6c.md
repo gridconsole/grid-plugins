@@ -50,16 +50,16 @@ Against b8378c46, none in production. The only removed line is the regenerated `
 `git diff b8378c46 --stat` on the lane head:
 
 ```
- contract/commands.json             |  45 +++++++++++++
+ contract/commands.json             |  45 ++++++++++++
  contract/schemas/control.json      |  20 ++++++
- docs/lanes/S6c.md                  |  STAT_DOC
- internal/cli/approve_job_test.go   | 131 +++++++++++++++++++++++++++++++++++++
- internal/cli/approve_lock_test.go  |  80 ++++++++++++++++++++++
- internal/cli/orchestrator.go       |  97 +++++++++++++++++++++++++++
+ docs/lanes/S6c.md                  | 139 +++++++++++++++++++++++++++++++++++++
+ internal/cli/approve_job_test.go   | 131 ++++++++++++++++++++++++++++++++++
+ internal/cli/approve_lock_test.go  |  80 +++++++++++++++++++++
+ internal/cli/orchestrator.go       |  97 ++++++++++++++++++++++++++
  internal/cli/task_write.go         |  16 +++++
  internal/task/gates.go             |  58 ++++++++++++++++
  testdata/golden/mcp-session.golden |   2 +-
- STAT_TOTAL
+ 9 files changed, 587 insertions(+), 1 deletion(-)
 ```
 
 ## Tests
