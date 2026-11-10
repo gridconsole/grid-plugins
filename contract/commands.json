@@ -3383,6 +3383,30 @@
           ],
           "json": true,
           "output": "cmd-worker-list.json"
+        },
+        {
+          "name": "next",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--pid",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--pid-start",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": "",
+          "stream": true
         }
       ]
     },
