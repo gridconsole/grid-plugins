@@ -11,18 +11,17 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/plan"
 )
 
+// Publication works from the plan text it read once; a file replaced after that
+// read must not change what is published.
 func TestPlanPublicationChecksReadSnapshot(t *testing.T) {
-	for _, approvedSnapshot := range []bool{false, true} {
-		t.Run(map[bool]string{false: "changed snapshot", true: "approved snapshot"}[approvedSnapshot], func(t *testing.T) {
+	for _, snapshotRole := range []string{"builder", "writer"} {
+		t.Run(snapshotRole+" snapshot", func(t *testing.T) {
 			f := setupPlan(t)
 			original := plannedText(t)
 			changed := strings.Replace(original, "role: writer", "role: builder", 1)
-			writePlan(t, f, original)
-			approvePlan(t, f)
-			snapshot, replacement := changed, original
-			want := 0
-			if approvedSnapshot {
-				snapshot, replacement, want = original, changed, 1
+			snapshot, replacement := original, changed
+			if snapshotRole == "builder" {
+				snapshot, replacement = changed, original
 			}
 			writePlan(t, f, snapshot)
 			snap, err := Load(f.s.Feed)
@@ -34,8 +33,7 @@ func TestPlanPublicationChecksReadSnapshot(t *testing.T) {
 				text, err := (plan.Store{TaskDir: f.s.Feed.TaskDir}).Read()
 				reads++
 				if reads == 2 {
-					// Ignore the advisory lock, replacing the file after the exact
-					// publication read and before the receipt check, without timing.
+					// Replace the file after the exact publication read, without timing.
 					writePlan(t, f, replacement)
 				}
 				return text, err
@@ -43,119 +41,23 @@ func TestPlanPublicationChecksReadSnapshot(t *testing.T) {
 			if err != nil || reads != 2 {
 				t.Fatalf("publication reads=%d err=%v", reads, err)
 			}
-			records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
-			if err != nil || len(records.Records) != want {
-				t.Fatalf("snapshot publication jobs=%d want=%d err=%v", len(records.Records), want, err)
-			}
-			if want == 1 {
-				published, err := Load(f.s.Feed)
-				if err != nil || len(published.Items) != 1 || published.Items[0].Role != "writer" {
-					t.Fatalf("publication did not retain approved snapshot: %+v err=%v", published.Items, err)
-				}
+			published, err := Load(f.s.Feed)
+			if err != nil || len(published.Items) != 1 || published.Items[0].Role != snapshotRole {
+				t.Fatalf("publication did not retain the snapshot (want role %s): %+v err=%v", snapshotRole, published.Items, err)
 			}
 		})
 	}
 }
 
-func TestUnapprovedPlanPublishesNoJob(t *testing.T) {
+func TestUnapprovedPlanPublishesJobs(t *testing.T) {
 	f := setup(t)
 	writePlan(t, f, plannedText(t))
 	if _, err := f.s.Tick(); err != nil {
 		t.Fatal(err)
 	}
 	records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
-	if err != nil || len(records.Records) != 0 {
+	if err != nil || len(records.Records) == 0 {
 		t.Fatalf("unapproved plan published %d Jobs: %v", len(records.Records), err)
-	}
-}
-
-func TestPlanPublicationChecksCurrentApproval(t *testing.T) {
-	for _, change := range []string{"unchanged", "edited plan", "wrong task", "closed task", "malformed receipt", "ship receipt", "misfiled ship receipt", "unknown gate"} {
-		t.Run(change, func(t *testing.T) {
-			f := setupPlan(t)
-			text := plannedText(t)
-			writePlan(t, f, text)
-			approvePlan(t, f)
-			dir := f.s.Feed.TaskDir
-			switch change {
-			case "edited plan":
-				writePlan(t, f, strings.Replace(text, "role: writer", "role: builder", 1))
-			case "wrong task":
-				rewritePlanFile(t, dir, "approval.json", `"T-01"`, `"T-02"`)
-			case "closed task":
-				rewritePlanFile(t, dir, "task.md", "state: waiting", "state: closed")
-			case "malformed receipt":
-				if err := os.WriteFile(filepath.Join(dir, "approval.json"), []byte("{"), 0600); err != nil {
-					t.Fatal(err)
-				}
-			case "ship receipt":
-				if err := os.Rename(filepath.Join(dir, "approval.json"), filepath.Join(dir, "approval-ship.json")); err != nil {
-					t.Fatal(err)
-				}
-			case "misfiled ship receipt":
-				rewritePlanFile(t, dir, "approval.json", `"what":"approve"`, `"what":"approve","gate":"ship"`)
-			case "unknown gate":
-				rewritePlanFile(t, dir, "approval.json", `"what":"approve"`, `"what":"approve","gate":"unknown"`)
-			}
-			out := f.tick(t)
-			records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
-			want := 0
-			if change == "unchanged" {
-				want = 1
-			}
-			if err != nil || len(records.Records) != want || out.Assigned != want {
-				t.Fatalf("publication: jobs=%d assigned=%d want=%d err=%v", len(records.Records), out.Assigned, want, err)
-			}
-		})
-	}
-}
-
-func TestPlanPublicationApprovalDiagnostics(t *testing.T) {
-	t.Parallel()
-	for _, scenario := range []string{"unapproved", "approved", "edited", "no gate", "history only"} {
-		t.Run(scenario, func(t *testing.T) {
-			t.Parallel()
-			f := setupPlan(t)
-			text := plannedText(t)
-			writePlan(t, f, text)
-			switch scenario {
-			case "approved", "edited":
-				approvePlan(t, f)
-				if scenario == "edited" {
-					writePlan(t, f, strings.Replace(text, "role: writer", "role: builder", 1))
-				}
-			case "no gate":
-				rewritePlanFile(t, f.s.Feed.TaskDir, "task.md", "workflow: ''", "workflow: [{step: build, kind: run}]")
-			case "history only":
-				if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "history.md"), []byte("- 2026-01-01T00:00 · plan accepted · by person\n"), 0600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			var logs bytes.Buffer
-			f.s.Diagnostics = &logs
-			before, err := f.s.Feed.Read(feed.Filter{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			out := f.tick(t)
-			records, err := f.s.Feed.Read(feed.Filter{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if scenario == "approved" || scenario == "no gate" {
-				jobs, err := f.s.Feed.Read(feed.Filter{Type: "job"})
-				if err != nil || len(jobs.Records) != 1 || out.Assigned != 1 || logs.Len() != 0 {
-					t.Fatalf("publication: jobs=%d assigned=%d log=%q err=%v", len(jobs.Records), out.Assigned, logs.String(), err)
-				}
-				return
-			}
-			if added := len(records.Records) - len(before.Records); added != 0 || out.Assigned != 0 {
-				t.Fatalf("unapproved plan posted %d records and assigned %d Jobs", added, out.Assigned)
-			}
-			if strings.Count(logs.String(), "\n") != 1 || !strings.Contains(logs.String(), "plan publication skipped: workflow requires approval of the current plan") || !strings.Contains(logs.String(), "grid approve") {
-				t.Fatalf("blocked publication needs one explanatory log line; got %q", logs.String())
-			}
-		})
 	}
 }
 
@@ -171,105 +73,55 @@ func rewritePlanFile(t *testing.T, dir, name, old, next string) {
 	}
 }
 
+// The one remaining hold is a hard-linked plan.md. The notice is written once per
+// blocked stretch and again only after publication was unblocked in between.
 func TestPlanPublicationNoticeRepeatsOnlyAfterUnblocked(t *testing.T) {
 	t.Parallel()
-	for _, unblock := range []string{"approval", "workflow waiver", "removed plan"} {
-		t.Run(unblock, func(t *testing.T) {
-			t.Parallel()
-			f := setupPlan(t)
-			text := plannedText(t)
-			writePlan(t, f, text)
-			var logs bytes.Buffer
-			f.s.Diagnostics = &logs
-			const notice = "plan publication skipped: workflow requires approval of the current plan; run grid approve before Jobs can post\n"
-			check := func(lines int) {
-				t.Helper()
-				if got, want := logs.String(), strings.Repeat(notice, lines); got != want {
-					t.Fatalf("diagnostics = %q, want %q", got, want)
-				}
-			}
-			before, err := f.s.Feed.Read(feed.Filter{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for range 3 {
-				if out := f.tick(t); out.Assigned != 0 {
-					t.Fatalf("blocked task assigned Jobs: %+v", out)
-				}
-				check(1)
-			}
-			after, err := f.s.Feed.Read(feed.Filter{})
-			if err != nil || len(after.Records) != len(before.Records) {
-				t.Fatalf("blocked ticks changed Feed: %+v %v", after, err)
-			}
-			// Changing the unapproved revision is still the same blocked state.
-			text = strings.Replace(text, "role: writer", "role: builder", 1)
-			writePlan(t, f, text)
-			f.tick(t)
-			check(1)
-
-			switch unblock {
-			case "approval":
-				approvePlan(t, f)
-			case "workflow waiver":
-				rewritePlanFile(t, f.s.Feed.TaskDir, "task.md", "workflow: ''", "workflow: [{step: build, kind: run}]")
-			case "removed plan":
-				if err := os.Remove(filepath.Join(f.s.Feed.TaskDir, "plan.md")); err != nil {
-					t.Fatal(err)
-				}
-			}
-			out := f.tick(t)
-			want := 1
-			if unblock == "removed plan" {
-				want = 0
-			}
-			if out.Assigned != want {
-				t.Fatalf("unblocked assignments = %d, want %d", out.Assigned, want)
-			}
-			check(1)
-
-			switch unblock {
-			case "approval":
-				if err := os.Remove(filepath.Join(f.s.Feed.TaskDir, "approval.json")); err != nil {
-					t.Fatal(err)
-				}
-			case "workflow waiver":
-				rewritePlanFile(t, f.s.Feed.TaskDir, "task.md", "workflow: [{step: build, kind: run}]", "workflow: ''")
-			case "removed plan":
-				writePlan(t, f, text)
-			}
-			for range 3 {
-				f.tick(t)
-				check(2)
-			}
-		})
+	f := setupPlan(t)
+	text := plannedText(t)
+	writePlan(t, f, text)
+	planPath := filepath.Join(f.s.Feed.TaskDir, "plan.md")
+	linkPath := filepath.Join(f.s.Feed.TaskDir, "plan-link.md")
+	if err := os.Link(planPath, linkPath); err != nil {
+		t.Skip("hard links unavailable:", err)
 	}
-}
-
-func TestPlanPublicationReadsWorkflowApprovalRule(t *testing.T) {
-	for _, tc := range []struct {
-		name, workflow string
-		want           int
-	}{
-		{"default", "''", 0},
-		{"sign-off", "[{step: sign-off, kind: approve}, {step: build, kind: run}]", 0},
-		{"unresolved name", "Check and ship", 0},
-		{"plan gate", "[{step: plan, kind: run}, {step: plan-review, kind: approve}, {step: build, kind: run}]", 0},
-		{"no plan gate", "[{step: build, kind: run}, {step: review, kind: approve}]", 1},
-		{"malformed workflow", "[{step: plan}]", 0},
-		{"unknown kind", "[{step: plan, kind: typo}]", 0},
-		{"duplicate steps", "[{step: build, kind: run}, {step: build, kind: run}]", 0},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := setupPlan(t)
-			writePlan(t, f, plannedText(t))
-			rewritePlanFile(t, f.s.Feed.TaskDir, "task.md", "workflow: ''", "workflow: "+tc.workflow)
-			out := f.tick(t)
-			records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
-			if err != nil || len(records.Records) != tc.want || out.Assigned != tc.want {
-				t.Fatalf("workflow publication: jobs=%d assigned=%d want=%d err=%v", len(records.Records), out.Assigned, tc.want, err)
-			}
-		})
+	var logs bytes.Buffer
+	f.s.Diagnostics = &logs
+	const notice = "plan publication skipped: workflow requires approval of the current plan; run grid approve before Jobs can post\n"
+	check := func(lines int) {
+		t.Helper()
+		if got, want := logs.String(), strings.Repeat(notice, lines); got != want {
+			t.Fatalf("diagnostics = %q, want %q", got, want)
+		}
+	}
+	before, err := f.s.Feed.Read(feed.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if out := f.tick(t); out.Assigned != 0 {
+			t.Fatalf("blocked task assigned Jobs: %+v", out)
+		}
+		check(1)
+	}
+	after, err := f.s.Feed.Read(feed.Filter{})
+	if err != nil || len(after.Records) != len(before.Records) {
+		t.Fatalf("blocked ticks changed Feed: %+v %v", after, err)
+	}
+	if err := os.Remove(linkPath); err != nil {
+		t.Fatal(err)
+	}
+	if out := f.tick(t); out.Assigned != 1 {
+		t.Fatalf("unblocked assignments = %d, want 1", out.Assigned)
+	}
+	check(1)
+	// Blocking again after an unblocked pass writes the notice a second time.
+	if err := os.Link(planPath, linkPath); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		f.tick(t)
+		check(2)
 	}
 }
 

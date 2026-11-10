@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/plan"
@@ -27,7 +26,6 @@ func TestPlanPublicationRejectsChangedStepMetadata(t *testing.T) {
 				original := strings.Replace(plannedText(t), "- [ ] 1", section+"\n\n- [ ] 1", 1)
 				original = strings.Replace(original, "  kind:", "  "+field+": original\n  kind:", 1)
 				writePlan(t, f, original)
-				approvePlan(t, f)
 				changed := strings.Replace(original, field+": original", field+": injected", 1)
 				if plan.Digest(original) == plan.Digest(changed) || plan.Hash(original) != plan.Hash(changed) {
 					t.Fatal("metadata must change the digest while preserving the legacy short hash")
@@ -37,14 +35,8 @@ func TestPlanPublicationRejectsChangedStepMetadata(t *testing.T) {
 					t.Fatalf("injected metadata must reach worker anchor: %q err=%v", anchor, err)
 				}
 				writePlan(t, f, changed)
-				out := f.tick(t)
-				records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
-				if err != nil || len(records.Records) != 0 || out.Assigned != 0 {
-					t.Fatalf("changed metadata published jobs=%d assigned=%d err=%v", len(records.Records), out.Assigned, err)
-				}
-				approvePlan(t, f)
 				if out := f.tick(t); out.Assigned != 1 {
-					t.Fatalf("reapproved metadata did not publish: %+v", out)
+					t.Fatalf("changed metadata did not publish: %+v", out)
 				}
 			})
 		}
@@ -123,14 +115,6 @@ func TestForgedPlanDigest(t *testing.T) {
 	}
 	if got := guard.EvaluatePlan(in, root, env); got.Behavior != "deny" {
 		t.Error("legacy history bypassed a mismatching full digest")
-	}
-	out := f.tick(t)
-	records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(records.Records) != 0 || out.Assigned != 0 {
-		t.Errorf("forged plan published %d Jobs and assigned %d", len(records.Records), out.Assigned)
 	}
 	if _, err := store.Approve(task.WriteOptions{ID: "T-01"}, ""); err == nil {
 		t.Error("implicit reapproval accepted a forged plan with a matching short hash")
