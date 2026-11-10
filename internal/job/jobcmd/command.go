@@ -108,7 +108,7 @@ func Run(args []string, e Env) int {
 		if err != nil {
 			return fail(err, 1)
 		}
-		j, err := job.LoadPlan(task, args[1])
+		j, err := loadJob(task, args[1])
 		if err != nil {
 			return fail(err, 1)
 		}
@@ -227,7 +227,7 @@ func Run(args []string, e Env) int {
 		// never posted falls back to the brief, which reads Not started.
 		state, why := contract.StateOf(contract.Status(j.Status))
 		if taskDir != "" {
-			read, err := feed.Store{TaskDir: taskDir}.ReadOnly(feed.Filter{})
+			read, err := readFeed(taskDir, feed.Filter{})
 			if err != nil && !os.IsNotExist(err) {
 				return fail(err, 1)
 			}
@@ -351,7 +351,7 @@ func resolveTask(s string, e Env) (string, error) {
 	// resolver decides, so no path form answers differently from an unknown task.
 	local := ""
 	p := absolute(e.Cwd, s)
-	if stat, err := os.Stat(filepath.Join(p, "plan.md")); err == nil && !stat.IsDir() {
+	if isTaskDir(p) {
 		abs, err := filepath.Abs(p)
 		if err != nil {
 			return "", err
@@ -382,9 +382,20 @@ func resolveTask(s string, e Env) (string, error) {
 	}
 	return "", fmt.Errorf("cannot find task %q; pass a task folder with plan.md", s)
 }
+
+// isTaskDir reports whether dir is a task folder: it holds task.md, intent.md or
+// plan.md. A task with no plan.md is still a task.
+func isTaskDir(dir string) bool {
+	for _, name := range []string{"task.md", "intent.md", "plan.md"} {
+		if s, err := os.Stat(filepath.Join(dir, name)); err == nil && !s.IsDir() {
+			return true
+		}
+	}
+	return false
+}
 func findTask(dir string) string {
 	for {
-		if s, e := os.Stat(filepath.Join(dir, "plan.md")); e == nil && !s.IsDir() {
+		if isTaskDir(dir) {
 			return dir
 		}
 		parent := filepath.Dir(dir)
