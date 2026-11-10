@@ -142,6 +142,10 @@ var anyFormat = map[string]bool{"version": true, "doctor": true, "migrate": true
 // Run executes one grid call and returns the exit code: 0 done, 1 failed,
 // 2 usage, 3 rejected (stale lease or invalid record; do not retry), 4 disk full.
 func Run(args []string, env Env) (exit int) {
+	args, env, code := applyGlobalFlags(args, env)
+	if code != 0 {
+		return code
+	}
 	if jsonRequested(args) {
 		f := &commandFailure{stdout: outputCount{Writer: env.Stdout}}
 		env.failure = f
@@ -249,6 +253,11 @@ func printHelp(w io.Writer) {
 		}
 		fmt.Fprintf(w, "  %-*s  %s%s\n", width, c.name, c.summary, note)
 	}
+	fmt.Fprint(w, "\nGlobal flags go before the command; each wins over its environment variable:\n"+
+		"  --grid-home DIR    the Grid home (GRID_HOME)\n"+
+		"  --member ID        who is calling (GRID_MEMBER)\n"+
+		"  --role ROLE        the caller's role (GRID_ROLE)\n"+
+		"  --lease-epoch G.F  the lease generation.fence (GRID_LEASE_EPOCH)\n")
 	fmt.Fprintln(w, "\n"+exitStatusHelp)
 }
 

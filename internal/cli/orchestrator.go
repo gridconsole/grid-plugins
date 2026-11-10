@@ -500,7 +500,7 @@ func orchestratorWriter(env Env, name, epoch string) (feed.Writer, error) {
 	}
 	parts := strings.Split(epoch, ".")
 	if len(parts) != 2 {
-		return feed.Writer{}, errors.New("GRID_LEASE_EPOCH or --lease-epoch must be gen.fence")
+		return feed.Writer{}, errors.New("GRID_LEASE_EPOCH or --lease-epoch must be gen.fence; the task holder gets it from: grid lease take task")
 	}
 	gen, e := strconv.ParseInt(parts[0], 10, 64)
 	if e != nil {

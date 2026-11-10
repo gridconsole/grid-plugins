@@ -50,7 +50,7 @@ func runTaskLeaseAction(action string, args []string, env Env) int {
 	asJSON := fs.Bool("json", false, "print JSON")
 	var pid int
 	var gen int64
-	var adopt, takeover bool
+	var adopt, takeover, hold bool
 	var expected, offline string
 	var start, sessionID, epoch string
 	if action == "take" {
@@ -62,6 +62,7 @@ func runTaskLeaseAction(action string, args []string, env Env) int {
 		fs.IntVar(&pid, "pid", 0, "holder process id")
 		fs.StringVar(&start, "pid-start", "", "holder process start in RFC3339")
 		fs.StringVar(&sessionID, "session", "", "registered local session id")
+		fs.BoolVar(&hold, "hold", false, "hold the lease from the command line: the calling shell is the holder process, and --member names the holder")
 	}
 	if action == "release" {
 		fs.StringVar(&epoch, "epoch", "", "required generation.fence")
@@ -74,11 +75,25 @@ func runTaskLeaseAction(action string, args []string, env Env) int {
 		if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 			return livenessError(env, errors.New("task lease needs a Unix host for process identity"))
 		}
+		if hold {
+			// A one-shot CLI call exits at once, so the holder process is the shell
+			// or session that ran it. The lease stays held until it is released, and
+			// is open to adoption once that process is gone.
+			if sessionID != "" || pid != 0 || start != "" {
+				return usage("--hold cannot be combined with --session, --pid or --pid-start")
+			}
+			pid = os.Getppid()
+			started, err := session.ProcessStart(pid)
+			if err != nil {
+				return livenessError(env, err)
+			}
+			start = contract.FormatTime(started)
+		}
 		if sessionID != "" && (pid != 0 || start != "") {
 			return usage("use either --session or --pid and --pid-start")
 		}
 		if sessionID == "" && (pid < 1 || start == "") {
-			return usage("--pid and --pid-start, or --session, are required")
+			return usage("--pid and --pid-start, --session, or --hold, are required")
 		}
 		if sessionID == "" {
 			parsed, err := time.Parse(time.RFC3339Nano, start)
@@ -346,6 +361,9 @@ func runTaskLeaseAction(action string, args []string, env Env) int {
 			}{tenure, body["adopted"]})
 		}
 		fmt.Fprintf(env.Stdout, "task lease taken, fence %d\nepoch %d.%d\n", tenure.Fence, tenure.Gen, tenure.Fence)
+		if hold {
+			fmt.Fprintf(env.Stdout, "held by %s through shell pid %d; release with: grid lease release task --epoch %d.%d\n", writer.Worker, pid, tenure.Gen, tenure.Fence)
+		}
 		return 0
 	}
 	_, err = store.Handover(feed.Input{Body: body}, writer)

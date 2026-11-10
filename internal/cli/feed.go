@@ -56,9 +56,9 @@ func runFeed(args []string, env Env) int {
 		fs.StringVar(&job, "job", "", "Job id")
 		fs.IntVar(&attempt, "attempt", 0, "Job attempt")
 		fs.StringVar(&after, "after", "", "comma-separated record ULIDs")
-		fs.StringVar(&wake, "wake", os.Getenv("GRID_WAKE"), "wake event ULID/n")
-		fs.StringVar(&lease, "lease", os.Getenv("GRID_LEASE"), "task or Job lease")
-		fs.StringVar(&epoch, "lease-epoch", os.Getenv("GRID_LEASE_EPOCH"), "lease generation.fence")
+		fs.StringVar(&wake, "wake", env.getenv("GRID_WAKE"), "wake event ULID/n")
+		fs.StringVar(&lease, "lease", env.getenv("GRID_LEASE"), "task or Job lease")
+		fs.StringVar(&epoch, "lease-epoch", env.getenv("GRID_LEASE_EPOCH"), "lease generation.fence")
 	}
 	if verb == "handover" {
 		fs.StringVar(&reason, "reason", "", "reason for the handover")
