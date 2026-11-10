@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -225,7 +226,7 @@ func Run(args []string, e Env) int {
 		state, why := contract.StateOf(contract.Status(j.Status))
 		if taskDir != "" {
 			read, err := readFeed(taskDir, feed.Filter{})
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return fail(err, 1)
 			}
 			if err == nil {
@@ -377,7 +378,7 @@ func resolveTask(s string, e Env) (string, error) {
 	if p != "" {
 		return p, nil
 	}
-	return "", fmt.Errorf("cannot find task %q; pass a task folder with plan.md", s)
+	return "", fmt.Errorf("cannot find task %q; pass a task folder (one holding task.md, intent.md or plan.md)", s)
 }
 
 // isTaskDir reports whether dir is a task folder: it holds task.md, intent.md or
