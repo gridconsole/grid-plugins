@@ -114,6 +114,39 @@ func TestPlanChangeAfterJobResultIsNotApproved(t *testing.T) {
 	}
 }
 
+// After plan.md changes the old result is stale. Approving the new plan must
+// post a new result on the plan Job; approval.json at the new hash alone does
+// not approve it, because the Job result is the answer.
+func TestReapprovalAfterPlanChangePostsANewResult(t *testing.T) {
+	h, path, _, text := landJobHarness(t)
+	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(text)); code != 0 {
+		t.Fatalf("approve: %d %s", code, h.errb.String())
+	}
+	changed := text + "\nOne more step.\n"
+	if err := os.WriteFile(filepath.Join(path, "plan.md"), []byte(changed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// No Feed writer: approval.json moves to the new hash and no result is posted.
+	t.Setenv("GRID_MEMBER", "")
+	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(changed)); code != 0 {
+		t.Fatalf("approve without a writer: %d %s", code, h.errb.String())
+	}
+	if taskstore.Approved(path) {
+		t.Fatal("approved from a new approval.json with an old Job result")
+	}
+	if _, err := taskstore.ApprovalFromJob(path); err == nil || !strings.Contains(err.Error(), "Changed since you approved") {
+		t.Fatalf("reader message: %v", err)
+	}
+	t.Setenv("GRID_MEMBER", "member")
+	h.errb.Reset()
+	if code := h.run(path, "approve", path); code != 0 {
+		t.Fatalf("repeat approve: %d %s", code, h.errb.String())
+	}
+	if a, err := taskstore.ApprovalFromJob(path); err != nil || a.PlanHash != plan.Hash(changed) || a.PlanDigest != plan.Digest(changed) || !taskstore.Approved(path) {
+		t.Fatalf("%+v %v", a, err)
+	}
+}
+
 // approval.json is written but the Job has no result (the post failed): readers
 // say not approved and name the plan Job, and a repeat grid approve posts the
 // missing result.

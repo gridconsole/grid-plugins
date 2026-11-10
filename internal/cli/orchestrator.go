@@ -387,8 +387,12 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	return taskWriteResult(env, event, err, asJSON, resolved.Path)
 }
 
-// planPersonJob is the open person Job of the task's approve step, the first
-// in Feed order, or "" when the task has none.
+// planPersonJob is the plan Job a grid approve answers: the open person Job of
+// the task's approve step, the first in Feed order. When every such Job is
+// already accepted (the plan changed since and is approved again), it is the
+// last accepted one, which takes a new result: the readers use the newest
+// result, so a changed plan can be approved again. It is "" when the task has
+// no approve Job.
 func planPersonJob(dir string) (feed.Store, string) {
 	id, _, err := taskstore.FeedIdentity(dir)
 	if err != nil {
@@ -399,13 +403,18 @@ func planPersonJob(dir string) (feed.Store, string) {
 	if err != nil {
 		return store, ""
 	}
+	accepted := ""
 	for _, it := range snap.Items {
 		j := snap.State.Jobs[it.ID]
-		if it.IsPerson() && it.Kind == "approve" && j != nil && j.Status != contract.Accepted && j.Status != contract.Cancelled && j.Status != contract.Rejected {
+		if !it.IsPerson() || it.Kind != "approve" || j == nil || j.Status == contract.Cancelled || j.Status == contract.Rejected {
+			continue
+		}
+		if j.Status != contract.Accepted {
 			return store, it.ID
 		}
+		accepted = it.ID
 	}
-	return store, ""
+	return store, accepted
 }
 
 // personApproval posts an approval as the result of the person Job: one
