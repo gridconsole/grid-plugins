@@ -161,14 +161,20 @@ func runApprove(args []string, env Env) int {
 	// The approval is also the result of the open person Job of the approve
 	// step, when the task has one. Without a Feed writer it stays open and
 	// approval.json is written as before.
+	var post func(task.Event) error
 	if store, job := planPersonJob(resolved.Path); job != "" {
 		if w, err := orchestratorWriter(env, "task", env.getenv("GRID_LEASE_EPOCH")); err != nil {
 			fmt.Fprintf(env.Stderr, "grid approve: %s stays open: %v\n", job, err)
 		} else {
-			o.JobResult = personApproval(store, w, job, "approved")
+			post = func(e task.Event) error { return personApproval(store, w, job, "approved", e) }
 		}
 	}
 	event, err := (land.Store{Resolver: resolver(env)}).Approve(o, *hash)
+	// Approve has returned, so .task.lock and .plan.lock are released before
+	// the post takes .orchestrator.lock. A stale hash posts nothing.
+	if err == nil && post != nil {
+		err = post(event)
+	}
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 

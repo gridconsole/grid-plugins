@@ -352,8 +352,8 @@ func runOrchestrator(args []string, env Env) int {
 
 // runPersonApproval answers the person Job of an approve step with the plan
 // hash the person saw. It runs the compare-and-set of grid approve, which
-// writes approval.json as before and then posts the Job result; a stale hash
-// writes neither.
+// writes approval.json as before, and then posts the Job result once Approve
+// has released .task.lock and .plan.lock; a stale hash writes neither.
 func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string, body map[string]any, hash string, asJSON bool) int {
 	snap, err := orchestrator.Load(store)
 	if err != nil {
@@ -378,8 +378,12 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 		fmt.Fprintf(env.Stderr, "grid job result: %v\n", err)
 		return 3
 	}
-	o.JobResult = personApproval(store, w, job, answer)
 	event, err := (land.Store{Resolver: resolver(env)}).Approve(o, hash)
+	// Approve has returned, so no task or plan lock is held while the post
+	// waits for .orchestrator.lock, which a tick holds before .task.lock.
+	if err == nil {
+		err = personApproval(store, w, job, answer, event)
+	}
 	return taskWriteResult(env, event, err, asJSON, resolved.Path)
 }
 
@@ -404,40 +408,36 @@ func planPersonJob(dir string) (feed.Store, string) {
 	return store, ""
 }
 
-// personApproval posts an approval as the result of the person Job: the answer
-// as a Feed message, as AnswerPerson writes it, and the accepting control with
-// answer, plan_hash, plan_digest, lands_hash and note. The Feed record carries
-// who and when. A Job already accepted with this digest gets nothing new.
-func personApproval(store feed.Store, w feed.Writer, job, answer string) func(taskstore.Event) error {
-	return func(e taskstore.Event) error {
-		answer := strings.TrimSpace(answer)
-		if answer == "" {
-			answer = "approved"
-		}
-		snap, err := orchestrator.Load(store)
-		if err != nil {
-			return err
-		}
-		if j := snap.State.Jobs[job]; j != nil && j.Status == contract.Accepted {
-			if a, err := taskstore.ApprovalFromJob(store.TaskDir); err == nil && a.Job == job && a.PlanDigest == e.PlanDigest {
-				return nil
-			}
-		}
-		text := fmt.Sprintf("%s answered %s at %s: %s", w.Author.ID, job, contract.FormatTime(time.Now()), answer)
-		said, err := orchestrator.Write(store, w, feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}})
-		if err != nil {
-			return err
-		}
-		body := map[string]any{"target": job, "status": "accepted", "reason": "answered by " + w.Author.ID, "answer": answer, "plan_hash": e.PlanHash, "plan_digest": e.PlanDigest}
-		if e.LandsHash != "" {
-			body["lands_hash"] = e.LandsHash
-		}
-		if e.Note != "" {
-			body["note"] = e.Note
-		}
-		_, err = orchestrator.Write(store, w, feed.Input{Type: "control", Re: said.ID, Body: body})
+// personApproval posts an approval as the result of the person Job: one
+// accepting control with answer, plan_hash, plan_digest, lands_hash and note,
+// written by one orchestrator.Write, so a failure leaves no half-written answer
+// and a repeat press finds the Job accepted. The Feed record carries who and
+// when. A Job already accepted with this digest gets nothing new. The caller
+// holds no task or plan lock: Write takes .orchestrator.lock, and a tick takes
+// that lock before .task.lock.
+func personApproval(store feed.Store, w feed.Writer, job, answer string, e taskstore.Event) error {
+	answer = strings.TrimSpace(answer)
+	if answer == "" {
+		answer = "approved"
+	}
+	snap, err := orchestrator.Load(store)
+	if err != nil {
 		return err
 	}
+	if j := snap.State.Jobs[job]; j != nil && j.Status == contract.Accepted {
+		if a, err := taskstore.ApprovalFromJob(store.TaskDir); err == nil && a.Job == job && a.PlanDigest == e.PlanDigest {
+			return nil
+		}
+	}
+	body := map[string]any{"target": job, "status": "accepted", "reason": "answered by " + w.Author.ID, "answer": answer, "plan_hash": e.PlanHash, "plan_digest": e.PlanDigest}
+	if e.LandsHash != "" {
+		body["lands_hash"] = e.LandsHash
+	}
+	if e.Note != "" {
+		body["note"] = e.Note
+	}
+	_, err = orchestrator.Write(store, w, feed.Input{Type: "control", Body: body})
+	return err
 }
 
 func orchestratorRows(env Env, rows []orchestrator.Row, asJSON bool) int {

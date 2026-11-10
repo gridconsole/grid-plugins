@@ -119,11 +119,6 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 		if errors.Is(err, plan.ErrNoPlan) {
 			return errors.New("plan.md is missing; write the plan before approving it")
 		}
-		// A stale hash has already returned, so neither the receipt nor the
-		// Job result is written. A repeat press posts a result still missing.
-		if err == nil && o.JobResult != nil {
-			err = o.JobResult(event)
-		}
 		return err
 	})
 	return event, err
