@@ -170,28 +170,3 @@ func runWorkflowWrite(args []string, env Env) int {
 	}
 	return returnCode
 }
-
-// gateWorkflowPolicy retains person-gate decisions, but lets the policy reader
-// own successful read diagnostics so malformed policy produces exactly one line.
-func gateWorkflowPolicy(args []string, env *Env) int {
-	if len(args) < 2 || args[0] != "workflow" || args[1] != "show" {
-		return gateCommand(args, env)
-	}
-	fs := flag.NewFlagSet("workflow policy diagnostics", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	fs.String("project", "", "")
-	fs.Bool("json", false, "")
-	policy := fs.Bool("policy", false, "")
-	if err := fs.Parse(args[2:]); err != nil || !*policy {
-		return gateCommand(args, env)
-	}
-	stderr := env.Stderr
-	var diagnostics bytes.Buffer
-	env.Stderr = &diagnostics
-	code := gateCommand(args, env)
-	env.Stderr = stderr
-	if code != 0 {
-		_, _ = io.Copy(stderr, &diagnostics)
-	}
-	return code
-}

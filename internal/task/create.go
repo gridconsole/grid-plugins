@@ -162,15 +162,7 @@ func (s Store) taskFront(t *Task, project, stableID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	tmpl, _, err := workflow.TaskWorkflow(s.Resolver, project, "---\n"+string(front)+"---\n")
-	if errors.Is(err, ErrLinkedFile) {
-		return nil, err
-	}
-	if tmpl == nil {
-		return front, nil
-	}
-	t.WorkflowDigest = DefinitionDigest(tmpl.Steps)
-	return dump()
+	return front, nil
 }
 
 // owner names who made the task and the role their words carry. Without Who the

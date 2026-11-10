@@ -502,11 +502,6 @@ func commitWrite(dir string, event Event, files map[string][]byte) error {
 // commitWriteLines also appends the given prose history lines after the event,
 // in the same journal, so a receipt and its readable line land together.
 func commitWriteLines(dir string, event Event, files map[string][]byte, lines ...string) error {
-	// A linked protected file refuses the write before the journal exists, so
-	// nothing is written and no rename can replace the linked inode.
-	if err := Linked(dir); err != nil {
-		return err
-	}
 	history, err := readOptional(filepath.Join(dir, "history.md"))
 	if err != nil {
 		return err
@@ -546,11 +541,6 @@ func commitWriteLines(dir string, event Event, files map[string][]byte, lines ..
 func recoverWrite(dir string) error {
 	data, err := readOptional(filepath.Join(dir, journalName))
 	if err != nil || data == nil {
-		return err
-	}
-	// A journal left by a crash is replayed only while no protected file is
-	// linked; it stays in place, and the task held, until the link is removed.
-	if err := Linked(dir); err != nil {
 		return err
 	}
 	var files map[string][]byte

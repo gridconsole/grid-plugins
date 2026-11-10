@@ -98,9 +98,6 @@ func runSignal(args []string, env Env) int {
 				return 1
 			}
 		}
-		if code := withPersonErrorCode(&env, func(e *Env) int { return gateCommand(append([]string{"signal"}, args...), e) }); code != 0 {
-			return code
-		}
 	}
 	if verb == "act" || verb == "dismiss" {
 		if verb == "dismiss" {

@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
-	"github.com/gridconsole/grid-plugins/internal/persongate"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -30,11 +29,7 @@ type Env struct {
 	Machine          string                 // this machine's id, "" before it is made
 	Ceiling          string                 // "" walks to the root; tests set their fixture root
 	GitVersion       func() (string, error) // nil runs git --version
-	Procs            persongate.Procs       // nil snapshots the real process ancestry
-	PersonDir        func() (string, error) // nil resolves the account home
 	failure          *commandFailure
-	personVia        string
-	personSetupWrite bool
 	Getenv           func(string) string    // nil reads the process environment
 	Executable       func() (string, error) // nil asks os.Executable
 }
@@ -181,16 +176,6 @@ func Run(args []string, env Env) (exit int) {
 		if c.run == nil {
 			fmt.Fprintf(env.Stderr, "%s: not built yet\n", name)
 			return 2
-		}
-		// Move validates inbox policy before the gate can warn about malformed
-		// front matter, so a failed inbox policy has one exact diagnostic.
-		// Its handler still applies the same person gate before any move.
-		// usage budget set and clear gate in their handler: a parse error keeps exit 2 and a
-		// --workspace write checks its role first, so the handler knows when to gate.
-		if (name != "signal" || len(rest) == 0 || rest[0] != "move") && !usageBudgetWrite(name, rest) {
-			if code := withPersonErrorCode(&env, func(e *Env) int { return gateWorkflowPolicy(args, e) }); code != 0 {
-				return code
-			}
 		}
 		return c.run(rest, env)
 	}

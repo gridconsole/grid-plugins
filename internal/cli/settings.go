@@ -187,8 +187,7 @@ func runSetup(args []string, env Env) int {
 			projects = filepath.Join(env.Cwd, projects)
 		}
 		return settings.RunClaudeSetup(settings.ClaudeSetupOptions{
-			BeforeWrite: func() int { env.personSetupWrite = true; return gateCommand(append([]string{"setup"}, args...), &env) },
-			Home:        env.Home, GridHome: env.GridHome, ConfigDir: env.getenv("CLAUDE_CONFIG_DIR"),
+			Home: env.Home, GridHome: env.GridHome, ConfigDir: env.getenv("CLAUDE_CONFIG_DIR"),
 			Projects: projects, Yes: *yes, Remove: *remove, JSON: *asJSON,
 			Stdin: env.Stdin, Stdout: env.Stdout, Stderr: env.Stderr,
 		})

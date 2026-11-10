@@ -30,42 +30,6 @@ type StepLookup func(text string) ([]taskfile.WorkflowStep, error)
 // own project.
 var ErrProjectMismatch = errors.New("task.md names another project than its folder")
 
-// ErrWorkflowChanged (code workflow_changed) is the lookup error of a task
-// whose workflow is now defined otherwise than when task.md's workflow_digest
-// was made: a project folder swapped or rebuilt under it, or a workflows.md a
-// person changed. It holds like ErrProjectMismatch, and no receipt releases it.
-var ErrWorkflowChanged = errors.New("workflow_changed: the task's workflow is defined otherwise than when the task was created")
-
-// WorkflowDigest is the hex sha256 of the canonical resolved steps: each step's
-// name, kind and whether it is the plan gate, one quoted line per step, in order.
-func WorkflowDigest(steps []taskfile.WorkflowStep) string {
-	gate := taskfile.PlanApprovalIndex(steps)
-	var b strings.Builder
-	for i, step := range steps {
-		b.WriteString(strconv.Quote(step.Step) + " " + strconv.Quote(step.Kind) + " " + strconv.FormatBool(i == gate) + "\n")
-	}
-	sum := sha256.Sum256([]byte(b.String()))
-	return hex.EncodeToString(sum[:])
-}
-
-// DefinitionDigest is the hex sha256 of a template's whole step list, whatever
-// the task's size: each step's name (as a task runs it), kind, whether it is
-// the plan gate of the full list, and the sizes it runs for, one quoted line
-// per step, in order. task.md's workflow_digest holds it.
-func DefinitionDigest(rows []workflow.TemplateStep) string {
-	steps := make([]taskfile.WorkflowStep, len(rows))
-	for i, row := range rows {
-		steps[i] = taskfile.WorkflowStep{Step: strings.ToLower(row.Name), Kind: row.Kind}
-	}
-	gate := taskfile.PlanApprovalIndex(steps)
-	var b strings.Builder
-	for i, step := range steps {
-		b.WriteString(strconv.Quote(step.Step) + " " + strconv.Quote(step.Kind) + " " + strconv.FormatBool(i == gate) + " " + strconv.Quote(rows[i].Sizes) + "\n")
-	}
-	sum := sha256.Sum256([]byte(b.String()))
-	return hex.EncodeToString(sum[:])
-}
-
 // StepsFor resolves the steps of the task in dir through its workflow: the
 // inline list, the named template (the project's copy first) or the workspace
 // default. The project is the folder above tasks/, as the guard places a task,
@@ -86,38 +50,12 @@ func StepsFor(r where.Resolver, dir string) StepLookup {
 		if err := inFolderProject(text, project); err != nil {
 			return nil, err
 		}
-		t, steps, err := workflow.TaskWorkflow(r, project, text)
-		if t == nil && err != nil {
-			return nil, err
-		}
-		if t != nil {
-			if err := sameDigest(text, t.Steps); err != nil {
-				return nil, err
-			}
-		}
+		_, steps, err := workflow.TaskWorkflow(r, project, text)
 		if err != nil {
 			return nil, err
 		}
 		return steps, nil
 	}
-}
-
-// sameDigest checks a workflow's definition against task.md's workflow_digest.
-// A value that is not a string, or any other digest, is a change.
-func sameDigest(text string, rows []workflow.TemplateStep) error {
-	fm := taskfile.ParseFrontmatter(text)
-	if fm == nil || fm.Odd {
-		return errors.New("task.md front matter cannot be read")
-	}
-	raw, has := fm.Data["workflow_digest"]
-	if !has {
-		return nil
-	}
-	want, _ := raw.(string)
-	if got := DefinitionDigest(rows); strings.TrimSpace(want) != got {
-		return fmt.Errorf("%w (task.md has %q, the workflow now gives %q)", ErrWorkflowChanged, want, got)
-	}
-	return nil
 }
 
 // inFolderProject checks that a task whose workflow is told through its project
@@ -203,9 +141,6 @@ func HeldStage(stage string) bool {
 // guard and Deliver both ask it with StepsFor, so neither can release a plan
 // the other holds.
 func PlanHeldWith(lookup StepLookup, dir, text, history string) bool {
-	if Linked(dir) != nil {
-		return true
-	}
 	// A JSON receipt takes precedence over legacy history/step advancement:
 	// stale full digests must not be released by an old prose acceptance.
 	if _, err := os.Lstat(filepath.Join(dir, approvalFile)); !os.IsNotExist(err) {

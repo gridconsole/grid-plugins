@@ -13,11 +13,8 @@ import (
 )
 
 func runPerson(args []string, env Env) int {
-	if len(args) > 0 && args[0] == "check" {
-		return withPersonErrorCode(&env, func(e *Env) int { return runPersonCheck(args[1:], *e) })
-	}
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid person check [--json]\n       grid person list [--project P] [--json]\n       grid person show <handle> [--project P] [--json]\n       grid person approvers --area <area> [--task <folder or id>] [--project P] [--json]\n\nReads the synced people cache. Without --project, reads home, or the supplied task's project then home.\nNo match requires --task with an owner in task.md.\nExit codes: 0 success, 1 read failure or unknown handle, 2 usage error.")
+		fmt.Fprintln(env.Stdout, "Usage: grid person list [--project P] [--json]\n       grid person show <handle> [--project P] [--json]\n       grid person approvers --area <area> [--task <folder or id>] [--project P] [--json]\n\nReads the synced people cache. Without --project, reads home, or the supplied task's project then home.\nNo match requires --task with an owner in task.md.\nExit codes: 0 success, 1 read failure or unknown handle, 2 usage error.")
 		return 0
 	}
 	verb := args[0]

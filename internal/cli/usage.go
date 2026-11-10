@@ -238,11 +238,7 @@ func runUsageConfig(kind string, args []string, env Env) int {
 			fmt.Fprintln(env.Stderr, "usage budget: --workspace accepts only tokens; set requires --tokens of at least 1")
 			return 2
 		}
-		// The workspace write is person-only like the task write; its role check runs first.
-		personGate := func() int {
-			return withPersonErrorCode(&env, func(e *Env) int { return gateCommand(append([]string{"usage", "budget", op}, args[1:]...), e) })
-		}
-		return runWorkspaceBudgetGated(op, tokenBudget.amount(), *asJSON, env, personGate)
+		return runWorkspaceBudgetGated(op, tokenBudget.amount(), *asJSON, env)
 	}
 	res, err := taskFor(env, *task)
 	if err != nil {
@@ -330,12 +326,6 @@ func parseBudgetWrite(fs *flag.FlagSet, op string, args []string, workspace *boo
 	fs.SetOutput(held)
 	err := fs.Parse(args)
 	fs.SetOutput(env.Stderr)
-	if err == nil && !*workspace {
-		gate := func(e *Env) int { return gateCommand(append([]string{"usage", "budget", op}, args...), e) }
-		if code := withPersonErrorCode(env, gate); code != 0 {
-			return code, true
-		}
-	}
 	_, _ = env.Stderr.Write(held.Bytes())
 	if errors.Is(err, flag.ErrHelp) {
 		return 0, true
@@ -350,10 +340,8 @@ func parseBudgetWrite(fs *flag.FlagSet, op string, args []string, workspace *boo
 	return 0, false
 }
 
-// runWorkspaceBudgetGated checks the caller role, then runs person (exit 3 refuses) before a
-// write, then reads or writes the workspace budget. A show never runs person; a write with a
-// nil person is refused with exit 3.
-func runWorkspaceBudgetGated(op string, value *uint64, asJSON bool, env Env, person func() int) int {
+// runWorkspaceBudgetGated checks the caller role, then reads or writes the workspace budget.
+func runWorkspaceBudgetGated(op string, value *uint64, asJSON bool, env Env) int {
 	allowed := usage.WorkspaceBudgetReadAllowed
 	if op != "show" {
 		allowed = usage.WorkspaceBudgetWriteAllowed
@@ -361,15 +349,6 @@ func runWorkspaceBudgetGated(op string, value *uint64, asJSON bool, env Env, per
 	if !allowed(env.getenv("GRID_ROLE")) {
 		fmt.Fprintln(env.Stderr, "usage budget: caller role is not allowed to access the workspace budget")
 		return 3
-	}
-	if op != "show" {
-		if person == nil {
-			fmt.Fprintln(env.Stderr, "usage budget: a workspace write needs a person gate")
-			return 3
-		}
-		if code := person(); code != 0 {
-			return code
-		}
 	}
 	s := usage.Store{GridHome: env.GridHome}
 	if op == "show" {

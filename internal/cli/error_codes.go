@@ -43,12 +43,8 @@ func errorCode(err error) string {
 		return CodeNoSuchTask
 	case errors.Is(err, signal.ErrNoNote):
 		return CodeNoSuchNote
-	case errors.Is(err, task.ErrWorkflowChanged):
-		return CodeWorkflowChanged
 	case errors.As(err, &bad), errors.Is(err, errTaskOperand):
 		return CodeInvalidArgument
-	case errors.Is(err, task.ErrLinkedFile):
-		return CodeLinkedFile
 	default:
 		return ""
 	}
@@ -106,32 +102,6 @@ func (f *commandFailure) finish(args []string, exit int) {
 	writeJSON(f.stdout.Writer, struct {
 		Error detail `json:"error"`
 	}{detail{code, strings.TrimSuffix(f.stderr.String(), "\n")}})
-}
-
-// withPersonErrorCode adds fields to the existing gate/probe JSON, preserving
-// reason, hint and decision fields without changing the person-gate implementation.
-// These calls emit at most one small object, so only their stdout is buffered.
-func withPersonErrorCode(env *Env, run func(*Env) int) int {
-	if env.failure == nil {
-		return run(env)
-	}
-	stdout := env.Stdout
-	start := env.failure.stderr.Len()
-	var out bytes.Buffer
-	env.Stdout = &out
-	exit := run(env)
-	env.Stdout = stdout
-	if exit == 3 && out.Len() > 0 {
-		var object map[string]json.RawMessage
-		if json.Unmarshal(out.Bytes(), &object) == nil && string(object["error"]) == `"person_required"` {
-			object["code"], _ = json.Marshal(CodePersonRequired)
-			object["message"], _ = json.Marshal(strings.TrimSuffix(string(env.failure.stderr.Bytes()[start:]), "\n"))
-			writeJSON(stdout, object)
-			return exit
-		}
-	}
-	_, _ = stdout.Write(out.Bytes())
-	return exit
 }
 
 // Parsing can stop before --json; inspect flags without treating option values

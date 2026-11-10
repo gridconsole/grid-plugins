@@ -323,7 +323,7 @@ func sessionDefaults(in feed.Input) (feed.Input, error) {
 
 func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
 	member := env.getenv("GRID_MEMBER")
-	if env.personVia != "" && env.getenv("GRID_ACTOR") != "" {
+	if env.getenv("GRID_ACTOR") != "" {
 		member = env.getenv("GRID_ACTOR")
 	}
 	if member == "" {

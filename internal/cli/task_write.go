@@ -28,7 +28,7 @@ func writeOptions(env Env, id, action, note string) task.WriteOptions {
 	if contract.NormalizeRole(env.getenv("GRID_ROLE")) == "member" {
 		role = "member"
 	}
-	return task.WriteOptions{Cwd: env.Cwd, ID: id, Action: action, Note: note, Who: contract.Author{ID: who, Role: role}, Via: env.personVia}
+	return task.WriteOptions{Cwd: env.Cwd, ID: id, Action: action, Note: note, Who: contract.Author{ID: who, Role: role}}
 }
 
 func runTaskWrite(args []string, env Env) int {

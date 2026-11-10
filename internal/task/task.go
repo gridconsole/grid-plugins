@@ -31,9 +31,6 @@ type Record struct {
 	OwnerRole string `yaml:"owner_role,omitempty" json:"owner_role,omitempty"`
 	Size      string `yaml:"size" json:"size"`
 	Workflow  string `yaml:"workflow" json:"workflow"`
-	// WorkflowDigest binds the task to its workflow's definition when it was
-	// made (DefinitionDigest); only Grid writes it, and no command shows it.
-	WorkflowDigest string `yaml:"workflow_digest,omitempty" json:"-"`
 	State          string `yaml:"state" json:"state"`
 	Gate           string `yaml:"gate,omitempty" json:"gate,omitempty"`
 	Created        string `yaml:"created" json:"created"`
@@ -192,9 +189,6 @@ func dropWorkflowList(doc *yaml.Node) {
 
 // Read folds both files of a published task folder.
 func Read(path string) (Task, error) {
-	if err := Linked(path); err != nil {
-		return Task{}, err
-	}
 	text, err := os.ReadFile(filepath.Join(path, "task.md"))
 	if err != nil {
 		return Task{}, err

@@ -123,9 +123,6 @@ func AppendHistory(dir, event, detail, who, via string) error {
 		return err
 	}
 	defer fslock.Unlock(lock)
-	if err := Linked(dir); err != nil {
-		return err
-	}
 	f, err := fslock.OpenNoFollow(path, os.O_RDWR, 0)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
