@@ -161,3 +161,51 @@ TestApproveGateAgentRefused, TestContractCommandsParserInventory, TestDeliverWor
 - Row 1 (agent environment succeeds): TestApproveGateAgentApproves already exists. On base 6ac08ed9 it fails: `agent approve: exit 3: grid approve: a person must run this ... (reason: agent_env)`. `grid task new` and `grid job render` under GRID_AGENT/GRID_WORKER_ID already succeeded on base (no gate), so no new test for them.
 - Base checks were made on scratch branches from 6ac08ed9 with the lane test files checked out onto them.
 - Checks: go test -count=1 ./internal/... ./cmd/... exit 0; go vet ./... exit 0; gofmt -l internal cmd clean; GOOS=windows and GOOS=darwin go build ./... exit 0. make lint not run (not on allow list). UI: none.
+
+# S6b8 (rework for the S6b7 review; branch lane-S6b8, from f3d3ee08)
+
+## Production changes
+1. No agent-environment refusal is left in task trash, question withdraw or the feed withdrawal post.
+   - `internal/cli/task_write.go`: `grid task delete|restore` no longer passes `Agent` or `PersonalAllowed`. `agentShell` stays, with a new comment: only `task attach` uses it (internal/cli/task.go:211, the scope rule that binds an agent to its assigned task, kept as the brief says).
+   - `internal/task/trash.go`: removed the `Agent` and `PersonalAllowed` fields of `TrashOptions`, the `o.Agent` refusal and `trashPersonal` ("Personal tasks require the person guard") with its two calls. The role policy (`DeleteAllowed`, `RestoreAllowed`), the empty-`Who.ID` refusal and the resolver's replaceable `PersonalAllowed` caller policy stay.
+   - `internal/question/question.go`, `command.go` and `internal/cli/question.go`: removed `Store.AgentShell`, `Env.AgentShell`, the refusal "agent shell requires a task lease to withdraw" (it also covered writer roles "agent" and "cli"; `WithdrawAllowed(role)` still refuses a role the policy does not list) and the bare-writer branch in `questionEnv`.
+   - `internal/cli/feed.go`, `mcp.go`, `orchestrator.go`: removed `refuseWithdrawalPost` and `withdrawalPostRefusal` ("agent shell requires a task lease fence to withdraw") with its three call sites. The lease and fence checks of the feed writer stay.
+2. The workflow policy's role lists are enforced again: new `internal/cli/role_policy.go`, called from `Run` right before the command runs (after the guest write-verb answers, so a guest gets the same answer for every project state). For each policy that names the verb (task-local `workflow.md`, project or workspace `workflows.md`, signal act aliases as on base), `GRID_ROLE` (default `member`) must be in its role list, otherwise the refusal is exit 3 with the base text `grid <verb>: a person must run this, from the Grid app or your own terminal outside Claude Code or Codex (reason: agent_env).` and, with `--json`, `{"error":"person_required","reason":"agent_env","hint":...}` on stdout. It reads the role only: no process, no ancestry, no agent variable.
+   - Kept from the base gate: hook commands (except `hook level`) are not checked; a standalone `--help`/`-h` is not checked; `question withdraw` with `GRID_LEASE=task` is not checked (the lease rule); a policy that cannot be read adds no role rule.
+   - Not restored (they belonged to the person floor, not the role list): the person-only floor verbs, the `setup` preview exemption (with a role list on `setup`, the preview is checked too), and the warning "invalid person_verbs; ignoring the key and keeping the person-only floor" (adding a variant of it failed three existing stderr tests, so the key is ignored silently; `grid workflow show` reports the bad file).
+
+## Test changes (each changed expectation or deletion)
+- `internal/task/trash_test.go`: `trashOptions` lost `PersonalAllowed: true`. `TestTrashPersonalAndPersonGuards` is renamed `TestTrashRequiresAWho` and keeps only the "empty Who.ID refused" row; the "personal" (PersonalAllowed=false) and "agent" (Agent=true) rows are removed: behaviour removed by this brief (must-fix 1). Roles are still covered by `TestTrashPolicies`; the resolver's Personal policy by `TestTrashResolverPersonalPolicy`.
+- `internal/cli/task_trash_test.go`: rows "agent" and "restore_agent" removed from `TestTaskTrashRefusals` (they expected exit 3 for an owner with `GRID_AGENT=worker`; removed by this brief). New `TestTaskTrashAgentEnvironmentAllowed`: delete then restore exit 0 for an owner with `GRID_AGENT` or `GRID_WORKER_ID` set.
+- `internal/cli/withdraw_post_test.go`: `TestFeedPostAgentWithdrawalRefused`, `TestJobPostAgentWithdrawalRefused`, `TestMCPFeedPostAgentWithdrawalRefused`, `TestAgentWithdrawalPostVariants` and the helper `assertWithdrawalUnchanged` deleted: they asserted only the removed refusal (behaviour removed by this brief; the role and lease rules stay covered by `TestAgentWithdrawalWithTaskFence`, `TestWithdrawPolicyRefusals` and `TestAgentWithdrawUnreadablePolicy`). New `TestAgentEnvWithdrawalPostSucceeds`: a withdrawal post by `grid feed post` and MCP `feed_post` under `GRID_AGENT` or `GRID_WORKER_ID` closes the question.
+- `internal/question/question_test.go` `TestWithdrawPolicyRefusals`: rows "agent cannot bypass policy" and "worker shell" and the `agent` field removed (the refusal is gone); "default guest" and "custom owner only" stay.
+- `internal/question/withdraw_cli_test.go` `TestPersonWithdrawCLI`: rows "agent shell", "worker id" now expect a successful withdrawal (renamed "agent env member withdraws", "worker id owner withdraws"). Row "worker" is renamed "worker mismatch" and expects exit 1 `GRID_WORKER must match GRID_MEMBER and the local machine id`, the feed writer's identity check, which is unchanged.
+- New `internal/cli/role_policy_test.go`: `TestPersonAnswerScopeAndWorkflowRoles` restores the rows guest_other_question, guest_workflow_denied, lead_workflow_denied, guest_workflow_allowed and lead_workflow_allowed for `answer` and `question answer` from 6ac08ed9 (no process-tree setup), adds member_workflow_allowed and default_role_is_member, and checks exit 3 with the `person_required` JSON code and no file change on a refusal. `TestWorkflowRoleListIgnoresAgentEnvironment`: `person_verbs: {answer: [member]}` admits a member and refuses a guest with `GRID_AGENT` set, so the rule looks at the role only.
+
+## Acceptance rows
+1. Row 1, grep of non-test .go files (`agentShell|GRID_AGENT|GRID_WORKER_ID|GRID_WORKER\b|PersonVerbs|AgentShell`), one line per hit:
+   - internal/cli/task_write.go:205-209 `agentShell`: reads GRID_AGENT, GRID_WORKER_ID, GRID_WORKER and a non-person GRID_ROLE; used only by task attach.
+   - internal/cli/task.go:211 `Agent: agentShell(env)`: task attach binds an agent to its assigned task folder (scope rule, kept by the brief).
+   - internal/cli/feed.go:328-329 `GRID_WORKER`: the feed writer's identity check, refuses a GRID_WORKER that is not `<member>@<machine>`. It does not decide who is a person and is on base; NOT in the brief's removal list. See open items.
+   - internal/hook/events.go:258,266 `GRID_WORKER`: the hook's own test for a worker session with a Job; refuses nothing. Outside the may-touch list.
+   - internal/cli/role_policy.go:117,120 and internal/workflow/person.go, project_person.go `PersonVerbs`, `ProjectPersonVerbs`, `DefaultPersonVerbs`: read the role lists; the only caller is the role check.
+2. Row 2: `TestTaskTrashAgentEnvironmentAllowed` and `TestAgentEnvWithdrawalPostSucceeds`. On f3d3ee08 (scratch branch, lane test files checked out onto it) they fail: `task_trash_test.go:92: delete exit = 3: grid task delete: task edit rejected: a person with an allowed role must perform this task move` (both markers) and `withdraw_post_test.go:44: withdrawal under GRID_AGENT: exit=3 ... stderr=grid feed: agent shell requires a task lease fence to withdraw`; the MCP rows fail with an `isError` reply.
+3. Row 3: `TestPersonAnswerScopeAndWorkflowRoles` and `TestWorkflowRoleListIgnoresAgentEnvironment`. On f3d3ee08 the denied rows fail: `role_policy_test.go:41: answer exit 0: {"id":"Q-1",... "state":"answered","answer":"Yes", ... "role":"guest" ...}` (also lead, both verbs) and `role_policy_test.go:70: exit 0, want 3` for the guest. They pass on the lane.
+4. Row 4: see Checks.
+
+## Checks (on the lane head)
+- `go build ./...`: exit 0. `go vet ./...`: exit 0. `gofmt -l internal cmd`: no output. `GOOS=windows go build ./...` and `GOOS=darwin go build ./...`: exit 0 (one chain, printed CHAIN_OK).
+- `go test -count=1 ./internal/... ./cmd/...`: every package `ok` or `[no test files]`, no FAIL line; 55 packages ok. The count came from `go test ... | grep -cE "^ok "`, so the printed exit status was grep's; the first run piped through `grep -vE "^ok "` showed no FAIL.
+- `go test -count=1 ./internal/cli/ ./internal/task/ ./internal/question/`: ok (cli 13.2s).
+- Importers of internal/cli, internal/task, internal/question (go list): cmd/grid, braincmd, cli, guard, hook, job, job/jobcmd, job/jobtest, land, orchestrator, signal, task, question; all inside the whole-module run above.
+- `make lint`: exit 0 (its target prints `go vet ./...`).
+
+## NOT VERIFIED
+- UI: none changed.
+- The exit status of the whole `go test` run itself (see above); the orchestrator's landing run is the check.
+- The setup preview under a `setup` role list (not restored; no test).
+
+## Open items for the orchestrator
+- The role refusal keeps the base wording and the reason `agent_env`, as the brief says. The text now misleads (it says "a person must run this ... outside Claude Code" for a role that is simply not listed). Suggest new wording and a `role_not_allowed` reason in a later lane; the JSON code `person_required` is the same on base.
+- `internal/cli/feed.go:328` still refuses a `GRID_WORKER` that does not match `<member>@<machine>`. It is an identity check on the writer, on base, and not in this brief's list; say if it should go.
+- `internal/cli/task.go:211` keeps `agentShell` for task attach as the brief directs; it is the one remaining place an agent variable changes behaviour.
