@@ -133,6 +133,14 @@ func merge(dst *Document, src Document) {
 	}
 }
 
+// WithBudget binds the budget operations to this store: the caller-aware one the
+// CLI got from settingsStore, which already refused a guest for writes.
+func (s Store) WithBudget(o BudgetOptions) BudgetOptions {
+	o.GridHome = s.Home
+	o.store = budgetStore{directory: s.directory, effective: s.Effective, locked: s.locked}
+	return o
+}
+
 // SetAgents changes several agents, and optionally the applied preset name, in one
 // locked write. An empty budget leaves the recorded preset as it is.
 func (s Store) SetAgents(set map[string]Agent, budget string) error {

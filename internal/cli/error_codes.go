@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/signal"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -28,7 +29,10 @@ const (
 
 func errorCode(err error) string {
 	var bad *signal.BadInputError
+	var coded *settings.CodedError
 	switch {
+	case errors.As(err, &coded):
+		return coded.Code
 	case errors.Is(err, where.ErrProjectUnregistered):
 		return CodeNoSuchProject
 	case errors.Is(err, where.ErrTaskNotFound):

@@ -18,8 +18,11 @@ func runAgentCommand(args []string, env Env) int {
 	if len(args) > 0 && args[0] == "sync" {
 		return runAgentSync(args[1:], env)
 	}
+	if len(args) > 0 && args[0] == "budget" {
+		return runAgentBudget(args[1:], env)
+	}
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid agent check [--json]\n       grid agent sync [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid agent check [--json]\n       grid agent sync [--json]\n       grid agent budget show|apply|undo")
 	}
 	return runAgent(args, env)
 }

@@ -3496,6 +3496,52 @@
       ]
     },
     {
+      "name": "claude",
+      "summary": "show and set the person's Claude Code settings rows",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "settings set",
+          "args": [
+            "\u003ckey\u003e",
+            "\u003cvalue\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--expect",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "settings show",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
       "name": "workflow",
       "summary": "show workflow template files and parse problems",
       "built": true,

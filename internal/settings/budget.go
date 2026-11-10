@@ -261,6 +261,21 @@ type BudgetOptions struct {
 	With                                  []string // compact and/or advisor
 	Expect                                string   // digest from the preview; empty skips the check
 	beforeRename                          func()
+	store                                 budgetStore // bound by Store.WithBudget, the caller-aware store
+}
+
+// budgetStore is the part of a Store the budget needs; the package builds no Store itself.
+type budgetStore struct {
+	directory func() (string, error)
+	effective func() (Document, error)
+	locked    func(func() error) error
+}
+
+func (o BudgetOptions) lock(f func() error) error {
+	if o.store.locked == nil {
+		return errors.New("budget options are not bound to a settings store")
+	}
+	return o.store.locked(f)
 }
 
 type budgetState struct {
@@ -286,13 +301,15 @@ func (o BudgetOptions) env() func(string) string {
 }
 
 func (o BudgetOptions) load() (*budgetState, error) {
-	store := Store{Home: o.GridHome}
-	dir, err := store.directory()
+	if o.store.directory == nil {
+		return nil, errors.New("budget options are not bound to a settings store")
+	}
+	dir, err := o.store.directory()
 	if err != nil {
 		return nil, err
 	}
 	st := &budgetState{getenv: o.env(), overlayDir: dir, agents: map[string]agentFile{}}
-	if st.eff, err = store.Effective(); err != nil {
+	if st.eff, err = o.store.effective(); err != nil {
 		return nil, err
 	}
 	if st.explicit, err = readDocument(dir); err != nil {
@@ -335,7 +352,9 @@ func (st *budgetState) projectFile(o BudgetOptions, name string) bool {
 
 func (st *budgetState) digest(o BudgetOptions) string {
 	h := sha256.New()
-	add := func(label string, f claudeFile) { fmt.Fprintf(h, "%s|%t|%d|%s\n", label, f.exists, len(f.data), shaOf(f.data)) }
+	add := func(label string, f claudeFile) {
+		fmt.Fprintf(h, "%s|%t|%d|%s\n", label, f.exists, len(f.data), shaOf(f.data))
+	}
 	fmt.Fprintf(h, "%s|%s|%s\n", o.Preset, strings.Join(o.With, ","), shaOf(st.noteRaw))
 	add("overlay", st.overlay)
 	for _, n := range st.names {
@@ -506,19 +525,19 @@ type budgetWork struct {
 
 func (st *budgetState) plan(o BudgetOptions) (*budgetWork, error) {
 	if st.note.State == "invalid" {
-		return nil, codedErr(CodeInvalidSettings, st.note.Path, "The Agent budget note is invalid: %s. Nothing applied.", *st.note.Error)
+		return nil, codedErr(codeInvalidSettings, st.note.Path, "The Agent budget note is invalid: %s. Nothing applied.", *st.note.Error)
 	}
 	p, ok := st.data.Presets[o.Preset]
 	if !ok {
-		return nil, codedErr(CodeInvalidSettings, "", "unknown preset %q; allowed: %s", o.Preset, strings.Join(budgetPresetNames, ", "))
+		return nil, codedErr(codeInvalidSettings, "", "unknown preset %q; allowed: %s", o.Preset, strings.Join(budgetPresetNames, ", "))
 	}
 	for _, w := range o.With {
 		switch w {
 		case "compact", "advisor":
 		case "codex":
-			return nil, codedErr(CodeUnconfirmedKey, "", "Codex keys are read-only until checked on a real install. Nothing written.")
+			return nil, codedErr(codeUnconfirmedKey, "", "Codex keys are read-only until checked on a real install. Nothing written.")
 		default:
-			return nil, codedErr(CodeInvalidSettings, "", "unknown setting %q; allowed: compact, advisor", w)
+			return nil, codedErr(codeInvalidSettings, "", "unknown setting %q; allowed: compact, advisor", w)
 		}
 	}
 	w := &budgetWork{overlayBudget: o.Preset}
@@ -713,7 +732,7 @@ func BudgetApply(o BudgetOptions) (BudgetApplyResult, error) {
 		now = o.Now
 	}
 	var res BudgetApplyResult
-	err := (Store{Home: o.GridHome}).locked(func() error {
+	err := o.lock(func() error {
 		st, err := o.load()
 		if err != nil {
 			return err
@@ -723,7 +742,7 @@ func BudgetApply(o BudgetOptions) (BudgetApplyResult, error) {
 			return err
 		}
 		if o.Expect != "" && o.Expect != w.preview.Digest {
-			return codedErr(CodeChanged, "", "The files changed since the preview. Look at the preview again. Nothing written.")
+			return codedErr(codeChanged, "", "The files changed since the preview. Look at the preview again. Nothing written.")
 		}
 		snap := budgetSnapshot{At: now().UTC().Format(time.RFC3339), Preset: o.Preset, From: st.eff.Budget, BudgetBefore: st.explicit.Budget}
 		var stages []staged
@@ -736,7 +755,7 @@ func BudgetApply(o BudgetOptions) (BudgetApplyResult, error) {
 		stage := func(f claudeFile, data []byte, mode os.FileMode) error {
 			tmp, err := stageClaudeFile(f.target, data, mode)
 			if err != nil {
-				return &CodedError{Code: CodeWriteFailed, Path: f.path, Msg: err.Error(), Err: err}
+				return &CodedError{Code: codeWriteFailed, Path: f.path, Msg: err.Error(), Err: err}
 			}
 			src := f
 			stages = append(stages, staged{f.target, tmp, &src, f.data, f.exists, mode})
@@ -782,7 +801,7 @@ func BudgetApply(o BudgetOptions) (BudgetApplyResult, error) {
 		}
 		for _, s := range stages {
 			if s.src != nil && !s.src.unchanged() {
-				return codedErr(CodeChanged, s.src.path, "%s", errClaudeChanged.Error())
+				return codedErr(codeChanged, s.src.path, "%s", errClaudeChanged.Error())
 			}
 		}
 		done := 0
@@ -800,7 +819,7 @@ func BudgetApply(o BudgetOptions) (BudgetApplyResult, error) {
 					_ = os.Remove(s.target)
 				}
 			}
-			return &CodedError{Code: CodeWriteFailed, Path: stages[done].target, Msg: err.Error(), Err: err}
+			return &CodedError{Code: codeWriteFailed, Path: stages[done].target, Msg: err.Error(), Err: err}
 		}
 		for _, s := range stages {
 			_ = atomicfile.SyncDir(filepath.Dir(s.target))
@@ -822,10 +841,10 @@ type BudgetUndoResult struct {
 // only where it still equals what Apply wrote; then the snapshot is deleted.
 func BudgetUndo(o BudgetOptions) (BudgetUndoResult, error) {
 	res := BudgetUndoResult{Restored: []string{}, Skipped: []BudgetSkip{}, Settings: []string{}}
-	err := (Store{Home: o.GridHome}).locked(func() error {
+	err := o.lock(func() error {
 		snap, err := readSnapshot(o)
 		if err != nil {
-			return codedErr(CodeNothingToUndo, snapshotPath(o), "There is no Apply to undo.")
+			return codedErr(codeNothingToUndo, snapshotPath(o), "There is no Apply to undo.")
 		}
 		restore := func(f snapFile, cur claudeFile) error {
 			if !f.Existed {
@@ -844,7 +863,7 @@ func BudgetUndo(o BudgetOptions) (BudgetUndoResult, error) {
 				continue
 			}
 			if err := restore(ag.File, cur); err != nil {
-				return &CodedError{Code: CodeWriteFailed, Path: ag.File.Path, Msg: err.Error(), Err: err}
+				return &CodedError{Code: codeWriteFailed, Path: ag.File.Path, Msg: err.Error(), Err: err}
 			}
 			restored[ag.Agent] = true
 		}
@@ -854,9 +873,9 @@ func BudgetUndo(o BudgetOptions) (BudgetUndoResult, error) {
 		}
 		if fileSHA(ov) == snap.Overlay.AfterSHA {
 			if err := restore(snap.Overlay, ov); err != nil {
-				return &CodedError{Code: CodeWriteFailed, Path: ov.path, Msg: err.Error(), Err: err}
+				return &CodedError{Code: codeWriteFailed, Path: ov.path, Msg: err.Error(), Err: err}
 			}
-		} else if dir, err := (Store{Home: o.GridHome}).directory(); err == nil { // the overlay moved on: put back only Apply's own entries
+		} else if dir, err := o.store.directory(); err == nil { // the overlay moved on: put back only Apply's own entries
 			d, err := readDocument(dir)
 			if err != nil {
 				return err
@@ -879,7 +898,7 @@ func BudgetUndo(o BudgetOptions) (BudgetUndoResult, error) {
 				return err
 			}
 			if err := atomicfile.Write(ov.target, append(b, '\n'), 0o644); err != nil {
-				return &CodedError{Code: CodeWriteFailed, Path: ov.path, Msg: err.Error(), Err: err}
+				return &CodedError{Code: codeWriteFailed, Path: ov.path, Msg: err.Error(), Err: err}
 			}
 		}
 		for _, ag := range snap.Agents {
@@ -894,7 +913,7 @@ func BudgetUndo(o BudgetOptions) (BudgetUndoResult, error) {
 			}
 			if fileSHA(cur) == snap.SettingsFile.AfterSHA {
 				if err := restore(snap.SettingsFile, cur); err != nil {
-					return &CodedError{Code: CodeWriteFailed, Path: cur.path, Msg: err.Error(), Err: err}
+					return &CodedError{Code: codeWriteFailed, Path: cur.path, Msg: err.Error(), Err: err}
 				}
 				for _, s := range snap.Settings {
 					res.Settings = append(res.Settings, s.Key)
@@ -904,7 +923,7 @@ func BudgetUndo(o BudgetOptions) (BudgetUndoResult, error) {
 				for _, s := range snap.Settings {
 					doc, perr := parseClaudeObject(append([]byte(nil), orEmpty(cur.data)...))
 					if perr != nil {
-						return codedErr(CodeInvalidSettings, cur.path, "Settings file %s is not valid JSON. Settings left as they are.", cur.path)
+						return codedErr(codeInvalidSettings, cur.path, "Settings file %s is not valid JSON. Settings left as they are.", cur.path)
 					}
 					if now, _ := getClaudePath(doc, s.Key); canon(now) == canon(s.After) {
 						edits = append(edits, keyEdit{s.Key, s.Before})
@@ -918,7 +937,7 @@ func BudgetUndo(o BudgetOptions) (BudgetUndoResult, error) {
 					}
 					if changed {
 						if err := atomicfile.Write(cur.target, data, cur.mode); err != nil {
-							return &CodedError{Code: CodeWriteFailed, Path: cur.path, Msg: err.Error(), Err: err}
+							return &CodedError{Code: codeWriteFailed, Path: cur.path, Msg: err.Error(), Err: err}
 						}
 					}
 				}

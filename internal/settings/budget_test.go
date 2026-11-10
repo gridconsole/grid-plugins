@@ -103,7 +103,7 @@ func TestClaudeSetRefusesInvalid(t *testing.T) {
 			o.Key, o.Value = "autoCompactWindow", json.RawMessage("250000")
 			_, err := ClaudeSet(o)
 			var ce *CodedError
-			if !errors.As(err, &ce) || ce.Code != CodeInvalidSettings {
+			if !errors.As(err, &ce) || ce.Code != codeInvalidSettings {
 				t.Fatalf("want invalid_settings, got %v", err)
 			}
 			if string(contents(t, path)) != content {
@@ -121,7 +121,7 @@ func TestClaudeSetChangedSinceRead(t *testing.T) {
 	o.HasExpect, o.Expect = true, json.RawMessage("300000") // the panel saw another value
 	_, err := ClaudeSet(o)
 	var ce *CodedError
-	if !errors.As(err, &ce) || ce.Code != CodeChanged || string(contents(t, path)) != string(original) {
+	if !errors.As(err, &ce) || ce.Code != codeChanged || string(contents(t, path)) != string(original) {
 		t.Fatalf("expect mismatch: %v", err)
 	}
 	// a change between the read and the rename
@@ -129,7 +129,7 @@ func TestClaudeSetChangedSinceRead(t *testing.T) {
 	other := reindent(t, `{"other":1}`)
 	o.beforeRename = func() { put(t, path, other, 0o600) }
 	_, err = ClaudeSet(o)
-	if !errors.As(err, &ce) || ce.Code != CodeChanged || string(contents(t, path)) != string(other) {
+	if !errors.As(err, &ce) || ce.Code != codeChanged || string(contents(t, path)) != string(other) {
 		t.Fatalf("seam change: %v", err)
 	}
 	if left, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".grid-claude-*")); len(left) != 0 {
@@ -208,14 +208,14 @@ func TestCodexKeysReadOnly(t *testing.T) {
 	}
 	_, err = ClaudeSet(ClaudeSetOptions{Home: home, Key: "codex.model_auto_compact_token_limit", Value: json.RawMessage("250000")})
 	var ce *CodedError
-	if !errors.As(err, &ce) || ce.Code != CodeUnconfirmedKey {
+	if !errors.As(err, &ce) || ce.Code != codeUnconfirmedKey {
 		t.Fatalf("want unconfirmed_key, got %v", err)
 	}
 	before := contents(t, filepath.Join(home, ".codex", "config.toml"))
 	o, _ := budgetFixture(t)
 	o.With = []string{"codex"}
 	o.Preset = "high"
-	if _, err := BudgetApply(o); !errors.As(err, &ce) || ce.Code != CodeUnconfirmedKey {
+	if _, err := BudgetApply(o); !errors.As(err, &ce) || ce.Code != codeUnconfirmedKey {
 		t.Fatalf("apply --with codex: %v", err)
 	}
 	if string(contents(t, filepath.Join(home, ".codex", "config.toml"))) != string(before) {
@@ -287,7 +287,7 @@ func budgetFixture(t *testing.T) (BudgetOptions, string) {
 		put(t, filepath.Join(agents, n+".md"), agentText(n, "sonnet", "high", true), 0o644)
 	}
 	put(t, filepath.Join(home, ".claude", "settings.json"), reindent(t, userFile), 0o600)
-	return BudgetOptions{Home: home, GridHome: grid, Getenv: func(string) string { return "" }, Now: func() time.Time { return time.Unix(1700000000, 0) }}, agents
+	return (Store{Home: grid}).WithBudget(BudgetOptions{Home: home, Getenv: func(string) string { return "" }, Now: func() time.Time { return time.Unix(1700000000, 0) }}), agents
 }
 
 func snapshotFiles(t *testing.T, o BudgetOptions) map[string]string {
@@ -320,7 +320,7 @@ func TestBudgetNoteStrict(t *testing.T) {
 	}
 	o.Preset = "high"
 	var ce *CodedError
-	if _, err := BudgetPreviewFor(o); !errors.As(err, &ce) || ce.Code != CodeInvalidSettings {
+	if _, err := BudgetPreviewFor(o); !errors.As(err, &ce) || ce.Code != codeInvalidSettings {
 		t.Fatalf("never apply from an invalid note: %v", err)
 	}
 }
@@ -391,7 +391,7 @@ func TestBudgetApplyThenUndoGivesTheSameBytes(t *testing.T) {
 		t.Fatalf("apply then undo must give the same bytes:\nbefore %v\nafter  %v", before, after)
 	}
 	var ce *CodedError
-	if _, err := BudgetUndo(o); !errors.As(err, &ce) || ce.Code != CodeNothingToUndo {
+	if _, err := BudgetUndo(o); !errors.As(err, &ce) || ce.Code != codeNothingToUndo {
 		t.Fatalf("undo is one level: %v", err)
 	}
 }
@@ -458,7 +458,7 @@ func TestBudgetApplyAllOrNothing(t *testing.T) {
 	t.Cleanup(func() { os.Chmod(agents, 0o755) })
 	o.Preset, o.With = "high", []string{"compact"}
 	var ce *CodedError
-	if _, err := BudgetApply(o); !errors.As(err, &ce) || ce.Code != CodeWriteFailed {
+	if _, err := BudgetApply(o); !errors.As(err, &ce) || ce.Code != codeWriteFailed {
 		t.Fatalf("want write_failed, got %v", err)
 	}
 	must(t, os.Chmod(agents, 0o755))
@@ -481,7 +481,7 @@ func TestBudgetApplyDigestMismatch(t *testing.T) {
 	put(t, filepath.Join(agents, "grid-planner.md"), agentText("grid-planner", "opus", "low", true), 0o644)
 	o.Expect = pv.Digest
 	var ce *CodedError
-	if _, err := BudgetApply(o); !errors.As(err, &ce) || ce.Code != CodeChanged {
+	if _, err := BudgetApply(o); !errors.As(err, &ce) || ce.Code != codeChanged {
 		t.Fatalf("want changed, got %v", err)
 	}
 	if got := string(contents(t, filepath.Join(agents, "grid-planner.md"))); !strings.Contains(got, "effort: low") {

@@ -17,11 +17,11 @@ import (
 
 // Stable error codes the CLI prints and the app maps to HTTP statuses.
 const (
-	CodeChanged         = "changed"
-	CodeInvalidSettings = "invalid_settings"
-	CodeWriteFailed     = "write_failed"
-	CodeUnconfirmedKey  = "unconfirmed_key"
-	CodeNothingToUndo   = "nothing_to_undo"
+	codeChanged         = "changed"
+	codeInvalidSettings = "invalid_settings"
+	codeWriteFailed     = "write_failed"
+	codeUnconfirmedKey  = "unconfirmed_key"
+	codeNothingToUndo   = "nothing_to_undo"
 )
 
 // CodedError is a failure with a stable code; nothing was written when it is returned.
@@ -138,7 +138,7 @@ type keyEdit struct {
 // key, its order and its raw value stay as read. The bytes differ only in whitespace.
 func applyClaudeEdits(file claudeFile, edits []keyEdit) (data []byte, from []json.RawMessage, changed bool, err error) {
 	invalid := func() error {
-		return codedErr(CodeInvalidSettings, file.path, "Settings file %s is not valid JSON; fix it or remove it. Nothing written.", file.path)
+		return codedErr(codeInvalidSettings, file.path, "Settings file %s is not valid JSON; fix it or remove it. Nothing written.", file.path)
 	}
 	doc := claudeObject{}
 	if file.exists {
@@ -165,7 +165,7 @@ func applyClaudeEdits(file claudeFile, edits []keyEdit) (data []byte, from []jso
 }
 
 func validateClaudeValue(key string, raw json.RawMessage) (json.RawMessage, error) {
-	bad := func(want string) error { return codedErr(CodeInvalidSettings, "", "%s must be %s.", key, want) }
+	bad := func(want string) error { return codedErr(codeInvalidSettings, "", "%s must be %s.", key, want) }
 	if canon(raw) == "null" {
 		return nil, nil
 	}
@@ -222,10 +222,10 @@ type ClaudeSetResult struct {
 // order are kept; an invalid, duplicate-key or changed file is never written.
 func ClaudeSet(o ClaudeSetOptions) (ClaudeSetResult, error) {
 	if strings.HasPrefix(o.Key, "codex.") {
-		return ClaudeSetResult{}, codedErr(CodeUnconfirmedKey, "", "Codex key %s is read-only until its name is checked on a real install. Nothing written.", o.Key)
+		return ClaudeSetResult{}, codedErr(codeUnconfirmedKey, "", "Codex key %s is read-only until its name is checked on a real install. Nothing written.", o.Key)
 	}
 	if !slices.Contains(claudeRows, o.Key) {
-		return ClaudeSetResult{}, codedErr(CodeInvalidSettings, "", "unknown key %q; allowed: %s. Nothing written.", o.Key, strings.Join(claudeRows, ", "))
+		return ClaudeSetResult{}, codedErr(codeInvalidSettings, "", "unknown key %q; allowed: %s. Nothing written.", o.Key, strings.Join(claudeRows, ", "))
 	}
 	value, err := validateClaudeValue(o.Key, o.Value)
 	if err != nil {
@@ -245,27 +245,27 @@ func ClaudeSet(o ClaudeSetOptions) (ClaudeSetResult, error) {
 	}
 	res := ClaudeSetResult{Path: path, Key: o.Key, From: from[0], To: value}
 	if o.HasExpect && canon(o.Expect) != canon(from[0]) {
-		return res, codedErr(CodeChanged, path, "Settings file changed since you looked. Nothing written.")
+		return res, codedErr(codeChanged, path, "Settings file changed since you looked. Nothing written.")
 	}
 	if !changed {
 		return res, nil
 	}
 	stage, err := stageClaudeFile(file.target, data, file.mode)
 	if err != nil {
-		return res, &CodedError{Code: CodeWriteFailed, Path: path, Msg: err.Error(), Err: err}
+		return res, &CodedError{Code: codeWriteFailed, Path: path, Msg: err.Error(), Err: err}
 	}
 	defer os.Remove(stage)
 	if o.beforeRename != nil {
 		o.beforeRename()
 	}
 	if !file.unchanged() {
-		return res, codedErr(CodeChanged, path, "%s", errClaudeChanged.Error())
+		return res, codedErr(codeChanged, path, "%s", errClaudeChanged.Error())
 	}
 	if err := os.Rename(stage, file.target); err != nil {
-		return res, &CodedError{Code: CodeWriteFailed, Path: path, Msg: err.Error(), Err: err}
+		return res, &CodedError{Code: codeWriteFailed, Path: path, Msg: err.Error(), Err: err}
 	}
 	if err := atomicfile.SyncDir(filepath.Dir(file.target)); err != nil {
-		return res, &CodedError{Code: CodeWriteFailed, Path: path, Msg: err.Error(), Err: err}
+		return res, &CodedError{Code: codeWriteFailed, Path: path, Msg: err.Error(), Err: err}
 	}
 	res.Written = true
 	return res, nil

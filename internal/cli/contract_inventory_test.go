@@ -278,6 +278,8 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 	paths["agent"] = []string{"list", "set"}
 	paths["skill"] = []string{"disable", "enable", "list"}
 	paths["hook"] = []string{"", "level", "levels"}
+	// runClaude has one level of its own ("settings") and a second of show and set.
+	paths["claude"] = []string{"settings set", "settings show"}
 	// "answer" is the top-level command; question.Run keeps no such route.
 	paths["question"] = []string{"add", "list", "sync", "tick", "withdraw"}
 	candidates := []string{"--__contract_unknown"}
@@ -422,6 +424,8 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"account sign-in":       {},
 		"agent list":            {},
 		"agent set":             {args: []string{"<agent>"}},
+		"claude settings show":  {},
+		"claude settings set":   {args: []string{"<key>", "<value>"}},
 		"person list":           {},
 		"person show":           {args: []string{"<handle>"}},
 		"person approvers":      {required: map[string]bool{"--area": true}},
