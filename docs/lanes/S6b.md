@@ -152,3 +152,12 @@ Changed expectations:
 
 ## S6b6 internal/cli failures left for S6b5 (not touched)
 TestApproveGateAgentRefused, TestContractCommandsParserInventory, TestDeliverWorkflowChangedThroughCLI, TestSizedLaterKeepsWorkflowDigest, TestInlineRewriteOfStampedTaskNotHeld, TestGuestProjectSettingsWrites, TestGuestProjectParity, TestBlockedPublicationNoticeUsesCLIStderrOnce, TestPersonalBypassTaskCommands, TestPlanDigestRoundTrip, TestAnswerFeedAndRecovery, TestSettingsPersonalAllowedCallers, TestSettingsRefusalCreatesNothing, TestTaskRenameDecline, TestTaskWriteGolden, TestTaskPersonGates, TestAgentWithdrawUnreadablePolicy.
+
+## S6b7
+- TestGuestProjectParity: on base the person gate refused task delete, task restore, question withdraw and setup for a guest before any project was resolved, so every project state got one answer. Now `Run` in internal/cli/cli.go (`guestWriteVerb`) gives a guest role (GRID_ROLE=guest, no task lease) those same refusals before resolving, using the messages the stores already gave (exit 3 task edit rejected, exit 3 question role may not withdraw, exit 1 guests cannot change project settings). This is a role rule; nothing checks agents. The test file only gained accepted early answers for those four commands (`guestParityEarlyAnswer`); no row was removed or weakened.
+- TestAgentWithdrawUnreadablePolicy/question expected the removed person gate's answer (exit 3, agent_env). It now expects exit 1 "cannot read task withdrawal policy", as the feed, job and mcp rows already did. Not a regression.
+- gofmt -w on signal_inbox_test.go and jobcmd/command_test.go.
+- New test TestRenderHardLinkedPlan (internal/job/jobcmd): fails on base 6ac08ed9 with `linked_file: a file of this task has more than one hard link` (exit 2), passes now.
+- Row 1 (agent environment succeeds): TestApproveGateAgentApproves already exists. On base 6ac08ed9 it fails: `agent approve: exit 3: grid approve: a person must run this ... (reason: agent_env)`. `grid task new` and `grid job render` under GRID_AGENT/GRID_WORKER_ID already succeeded on base (no gate), so no new test for them.
+- Base checks were made on scratch branches from 6ac08ed9 with the lane test files checked out onto them.
+- Checks: go test -count=1 ./internal/... ./cmd/... exit 0; go vet ./... exit 0; gofmt -l internal cmd clean; GOOS=windows and GOOS=darwin go build ./... exit 0. make lint not run (not on allow list). UI: none.

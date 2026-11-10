@@ -181,6 +181,18 @@ func Run(args []string, env Env) (exit int) {
 		if guestWriteVerb(name, rest) && strings.ToLower(strings.TrimSpace(env.getenv("GRID_ROLE"))) == "guest" && env.getenv("GRID_LEASE") != "task" {
 			// A guest's role is refused before any project is resolved, so the
 			// answer is the same for an unknown project and an invited one.
+			if name == "question" {
+				id := ""
+				if len(rest) > 1 {
+					id = rest[1]
+				}
+				fmt.Fprintf(env.Stderr, "question: %s role \"guest\" may not withdraw\n", id)
+				return 3
+			}
+			if name == "task" {
+				fmt.Fprintf(env.Stderr, "grid task %s: task edit rejected: a person with an allowed role must perform this task move\n", rest[0])
+				return 3
+			}
 			fmt.Fprintln(env.Stderr, "grid: guests cannot change project settings")
 			return 1
 		}

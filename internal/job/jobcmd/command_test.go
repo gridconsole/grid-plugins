@@ -39,6 +39,7 @@ func call(t *testing.T, e Env, out, errs *bytes.Buffer, want int, args ...string
 	}
 	return r
 }
+
 // A plan.md with another hard link still renders its Jobs: the hard-link refusal was removed.
 func TestRenderHardLinkedPlan(t *testing.T) {
 	e, out, errs := fixture(t)
