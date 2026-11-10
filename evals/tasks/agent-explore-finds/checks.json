@@ -1,0 +1,9 @@
+[
+  {"id":"answer","type":"file_exists","path":"answer.md","gate":true},
+  {"id":"template-read-only","type":"command_passes","command":["sh","-c","grep -q '^tools: Read' .claude/agents/Explore.md && ! grep -Eq '^tools:.*(Edit|Write|Bash|NotebookEdit)' .claude/agents/Explore.md"],"weight":2},
+  {"id":"class","type":"command_passes","command":["sh","-c","grep -Eq 'src/models\\.py:[0-9]+' answer.md"],"weight":2},
+  {"id":"snake","type":"command_passes","command":["sh","-c","grep -Eq 'src/db\\.py:[0-9]+' answer.md"],"weight":2},
+  {"id":"kebab","type":"command_passes","command":["sh","-c","grep -Eq 'web/routes\\.js:[0-9]+' answer.md"],"weight":2},
+  {"id":"skips-vendored","type":"command_passes","command":["sh","-c","! grep -q 'node_modules' answer.md"]},
+  {"id":"nothing-written","type":"command_passes","command":["sh","-c","[ \"$(find . -type f ! -path './.claude/*' | sort | tr '\\n' ' ')\" = './answer.md ./node_modules/lib/index.js ./src/db.py ./src/models.py ./web/routes.js ' ]"],"weight":2}
+]
