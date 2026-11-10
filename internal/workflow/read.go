@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 

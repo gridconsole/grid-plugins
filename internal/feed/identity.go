@@ -12,7 +12,6 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
-	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
 // MachineID creates the stable local machine key once, under a file lock.

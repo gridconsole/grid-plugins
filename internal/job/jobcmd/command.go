@@ -89,9 +89,6 @@ func Run(args []string, e Env) int {
 	}
 	action, args := f.args[0], f.args[1:]
 	fail := func(err error, code int) int {
-		if errors.Is(err, job.ErrPlanNeedsApproval) {
-			code = 2
-		}
 		return output(e, f, report{Error: err.Error(), Findings: []lint.Finding{}}, code)
 	}
 	if f.dir != "" && action != "verify" {

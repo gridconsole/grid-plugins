@@ -14,7 +14,6 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/jobgraph"
 	"github.com/gridconsole/grid-plugins/internal/plan"
-	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 // publishPlan runs under the task lease and pass lock. The Feed owns published
@@ -49,11 +48,6 @@ func (s Store) publishPlanWithReader(snap Snapshot, m *memory, read func() (stri
 		if err != nil {
 			return err
 		}
-		// A linked protected file may have been written through the link, so
-		// task.md cannot decide whether approval is required: post nothing.
-		if task.Linked(s.Feed.TaskDir) != nil {
-			return s.publicationBlocked(m, true)
-		}
 		if err := s.publicationBlocked(m, false); err != nil {
 			return err
 		}
@@ -70,9 +64,6 @@ func (s Store) publicationBlocked(m *memory, blocked bool) error {
 	m.PlanPublicationBlocked = blocked
 	if err := s.saveMemory(*m); err != nil {
 		return err
-	}
-	if blocked && s.Diagnostics != nil {
-		fmt.Fprintln(s.Diagnostics, "plan publication skipped: workflow requires approval of the current plan; run grid approve before Jobs can post")
 	}
 	return nil
 }

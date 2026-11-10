@@ -1,14 +1,11 @@
 package task
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
@@ -145,7 +142,7 @@ func PlanHeldWith(lookup StepLookup, dir, text, history string) bool {
 	// stale full digests must not be released by an old prose acceptance.
 	if _, err := os.Lstat(filepath.Join(dir, approvalFile)); !os.IsNotExist(err) {
 		steps, err := lookup(text)
-		if errors.Is(err, ErrProjectMismatch) || errors.Is(err, ErrWorkflowChanged) {
+		if errors.Is(err, ErrProjectMismatch) {
 			return true
 		}
 		return approvalRequired(steps, err) && !Approved(dir)

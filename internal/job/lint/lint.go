@@ -2,7 +2,6 @@
 package lint
 
 import (
-	"errors"
 	"fmt"
 	"path"
 	"regexp"
@@ -44,9 +43,6 @@ func (c *checker) add(rule, key, message, fix string) {
 	c.addAt(rule, c.line(key), "error", message, fix)
 }
 func (c *checker) sourceError(rule, key string, err error, fix string) {
-	if errors.Is(err, job.ErrPlanNeedsApproval) {
-		rule, fix = "job.plan-approval", "Review and approve the current plan before rendering a Job."
-	}
 	c.add(rule, key, err.Error(), fix)
 }
 func (c *checker) line(key string) int {

@@ -20,7 +20,6 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/where"
-	"github.com/gridconsole/grid-plugins/internal/workflow"
 	"go.yaml.in/yaml/v4"
 )
 

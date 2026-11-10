@@ -27,15 +27,6 @@ func readTaskPolicy(taskDir string) ([]byte, error) {
 		return nil, err
 	}
 	defer f.Close()
-	// A linked workflow.md may have been written through the other link, so it
-	// is unreadable like a linked workflows.md. The error is a read error, so
-	// every caller that fails closed on one fails closed on this. Only a
-	// regular file is counted: a directory's links are its entries, and reading
-	// one fails below as before.
-	opened, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
 	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
 	if err != nil {
 		return nil, err

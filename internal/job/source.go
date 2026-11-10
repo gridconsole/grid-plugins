@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,7 +16,6 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
 	"github.com/gridconsole/grid-plugins/internal/plan"
-	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
 // Source is a resolved, pinned pointer. Tier comes from where the text was read
@@ -70,28 +68,8 @@ func ParseBrain(id string) (level, name string, ok bool) {
 	return level, name, strings.HasPrefix(id, "brain:") && ok && (level == "home" || level == "project") && brain.ValidName(name)
 }
 
-// ErrPlanNeedsApproval refuses worker text from an unapproved or changed plan.
-var ErrPlanNeedsApproval = errors.New("plan needs approval: review and approve the current plan before rendering a Job")
-
-// linkedPlanError refuses a plan whose task has a protected file with a second
-// hard link, before the receipt is read: no approval can be recorded for that
-// task until the other links are removed. errors.Is matches task.ErrLinkedFile
-// and ErrPlanNeedsApproval, so every caller that holds an unapproved plan holds
-// this one too. The text names no machine path.
-type linkedPlanError struct{ cause error }
-
-func (e linkedPlanError) Error() string {
-	return "linked_file: a file of this task has more than one hard link; remove the other links before rendering a Job"
-}
-
-func (e linkedPlanError) Unwrap() []error { return []error{e.cause, ErrPlanNeedsApproval} }
-
-// planReadable keeps the hard-link refusal where it was (lane S6 removes it).
-// There is no plan rule: an unapproved, edited or missing-receipt plan renders.
+// planReadable has no plan rule: an unapproved, edited or missing-receipt plan renders.
 func planReadable(dir string) error {
-	if err := task.Linked(dir); errors.Is(err, task.ErrLinkedFile) {
-		return linkedPlanError{err}
-	}
 	return nil
 }
 

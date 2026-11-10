@@ -2,15 +2,14 @@ package cli
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"flag"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/signal"
-	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -21,17 +20,10 @@ const (
 	CodeNoSuchTask = "no_such_task"
 	// CodeNoSuchNote means the requested signal or inbox note does not exist.
 	CodeNoSuchNote = "no_such_note"
-	// CodePersonRequired means the existing person gate refused the request.
-	CodePersonRequired = "person_required"
 	// CodeInvalidArgument means the command rejected its arguments.
 	CodeInvalidArgument = "invalid_argument"
 	// CodeInvalidPolicy means a workflow policy value the command depends on is invalid.
 	CodeInvalidPolicy = "invalid_policy"
-	// CodeWorkflowChanged means the task's workflow now resolves to other steps
-	// than the ones it was created with, so it is held.
-	CodeWorkflowChanged = "workflow_changed"
-	// CodeLinkedFile means a protected task or workflow file has more than one hard link.
-	CodeLinkedFile = "linked_file"
 )
 
 func errorCode(err error) string {
@@ -102,6 +94,10 @@ func (f *commandFailure) finish(args []string, exit int) {
 	writeJSON(f.stdout.Writer, struct {
 		Error detail `json:"error"`
 	}{detail{code, strings.TrimSuffix(f.stderr.String(), "\n")}})
+}
+
+func jsonRequested(args []string) bool {
+	return slices.Contains(args, "--json") || slices.Contains(args, "-json") || slices.Contains(args, "--json=true") || slices.Contains(args, "-json=true")
 }
 
 // Parsing can stop before --json; inspect flags without treating option values
