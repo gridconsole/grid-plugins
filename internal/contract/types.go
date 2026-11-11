@@ -220,29 +220,6 @@ type State struct {
 	Hosts     map[string]string    `json:"hosts"`
 }
 
-// MergeLease belongs to a project, not a task. A release clears Holder. Its
-// fifteen-minute window starts at RenewedAt, or Since when never renewed.
-type MergeLease struct {
-	Lease     string  `json:"lease"`
-	Project   string  `json:"project"`
-	Holder    *string `json:"holder"`
-	Fence     int64   `json:"fence"`
-	Gen       int64   `json:"gen"`
-	Since     string  `json:"since"`
-	RenewedAt *string `json:"renewed_at,omitempty"`
-	Until     string  `json:"until"`
-}
-
-// Breakable reports release or expiry; a malformed held lease is not breakable.
-func (l MergeLease) Breakable(now time.Time) bool {
-	data, err := json.Marshal(l)
-	if err != nil || Validate("merge-lease", data) != nil {
-		return false
-	}
-	end, _ := time.Parse(time.RFC3339Nano, l.Until)
-	return l.Holder == nil || !now.Before(end)
-}
-
 func isJobSide(typ string) bool {
 	switch typ {
 	case "ack", "submit", "result", "checkpoint", "worker-exit":

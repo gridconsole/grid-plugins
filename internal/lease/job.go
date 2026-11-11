@@ -1,3 +1,5 @@
+// Package lease reads and grants task and Job leases. Git remains the authority
+// for whether a branch can land; there is no project-wide merge slot.
 package lease
 
 import (
@@ -15,6 +17,18 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/job"
 )
+
+// Record is the wire view of one grant: who holds it, at which fence, since when.
+type Record struct {
+	Lease     string     `json:"lease"`
+	Project   string     `json:"project"`
+	Gen       int64      `json:"gen"`
+	RenewedAt *time.Time `json:"renewed_at,omitempty"`
+	Holder    *string    `json:"holder"`
+	Fence     uint64     `json:"fence"`
+	Since     time.Time  `json:"since"`
+	Until     time.Time  `json:"until"`
+}
 
 // JobStatus is a read-only view of a Job grant and its supervision heartbeat.
 // Missing grants or beats do not prove expiry. This reader never creates files,

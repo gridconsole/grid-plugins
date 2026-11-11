@@ -158,9 +158,6 @@
         "pid_start"
       ],
       "additionalProperties": false
-    },
-    {
-      "$ref": "merge-lease.json"
     }
   ]
 }
