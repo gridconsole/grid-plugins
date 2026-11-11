@@ -25,6 +25,13 @@ func kbFrSecondStore(f *fixture) Store {
 	return s
 }
 
+// kbFrFound posts a security found record on job the way the fixture writer
+// (role lead) does. The re field is a record id, so the task id stands in for one.
+func kbFrFound(t *testing.T, f *fixture, job, text string) feed.Record {
+	t.Helper()
+	return f.post(t, feed.Input{Type: "found", Body: map[string]any{"job": job, "re": taskID, "at": "internal/auth/token.go:42", "text": text, "kind": "security", "class": nil}}, f.s.Writer)
+}
+
 // kbFrTickTogether runs Tick on every Store at once and returns what each
 // returned. Each goroutine is started and then waits on start, a channel closed
 // once, after every goroutine is parked at it: no sleep and no timeout releases
@@ -96,7 +103,7 @@ func kbFrRace(t *testing.T, round int) {
 	t.Helper()
 	f := setup(t)
 	f.job(t, "J-1", nil)
-	found := kbSfFound(t, f, "J-1", "security", "The token is written to the log in clear.")
+	found := kbFrFound(t, f, "J-1", "The token is written to the log in clear.")
 	blocked := kbFrBlocked(t)
 	for i, err := range kbFrTickTogether(f.s, kbFrSecondStore(f)) {
 		if err != nil {
