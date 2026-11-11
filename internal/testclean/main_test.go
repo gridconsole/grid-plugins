@@ -17,15 +17,16 @@ func TestMain(m *testing.M) {
 func TestTransientEntryOfAnotherProcessIsIgnored(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "grid-eval-other")
+	old := pause
+	t.Cleanup(func() { pause = old })
+	// The other process removes its entry from inside the pause, so the order
+	// is fixed by the code and not by the scheduler.
+	pause = func(time.Duration) { _ = os.Remove(path) }
 	var stderr bytes.Buffer
 	status := check(dir, func() int {
 		if err := os.Mkdir(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
-		go func() {
-			time.Sleep(30 * time.Millisecond)
-			_ = os.Remove(path)
-		}()
 		return 0
 	}, &stderr)
 	if status != 0 {
