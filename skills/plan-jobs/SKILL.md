@@ -23,6 +23,14 @@ Checks the orchestrator runs on each Job before posting it (the rules of 10 Nov)
 6. Hand-off: acceptance rows are written so each can be answered HOLDS (with a command and exit code or `path:line`) or NOT DONE. The builder hands off a proof table; a row it could not prove is NOT DONE.
 7. Verify: a test command with a positive `min_tests`, or `kind: file-exists` or `kind: reviewer-check` for non-code work.
 
+## Bash
+
+- Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- `grid` and `git` are pre-approved. A Job's verify command is still run, as the Job writes it, in a call of its own.
+- Put no `VAR=value` in front of a command; use the command's own flags.
+- Use Read, Glob and Grep instead of ls, cat, find and grep. Use Write and Edit instead of sed, cp and heredocs.
+- Never set `dangerouslyDisableSandbox`.
+
 ## Pointers
 
 Point, do not paste. A pasted block goes stale, fills the worker's context and hides which part mattered; a pointer with a why lets the worker read only what it needs.
