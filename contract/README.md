@@ -78,7 +78,7 @@ during `task show` exits 1.
 | `invalid_settings` | A settings value, key, preset or file is invalid; nothing was written. |
 | `write_failed` | Writing a settings file failed. |
 | `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
-| `nothing_to_undo` | `grid agent budget undo` found no Apply to undo. |
+| `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
 
 The first five constants live in `internal/cli/error_codes.go` and the settings
 codes in `internal/settings/claude_user.go`; `person_required` and `job_waiting` are
