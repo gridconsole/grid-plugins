@@ -248,6 +248,12 @@ func run(args []string, env Env) int {
 	if action != "list" {
 		f, err := store.feed()
 		if err == nil {
+			// The write already warned once about an unreadable policy; the fold
+			// reads the same roles and stays quiet about it.
+			f.WithdrawAllowed = env.WithdrawAllowed
+			if f.WithdrawAllowed == nil {
+				f.WithdrawAllowed = feed.QuestionWithdrawReadPolicy(scope.TaskPath, io.Discard)
+			}
 			_, err = f.SaveState()
 		}
 		if err != nil {
