@@ -192,23 +192,30 @@ func (s Store) control(j *contract.Job, status contract.Status, reason, re strin
 // Next polls feed/ and lease/ through a single pass every second. This is a
 // portable file watch; the unconditional rescan is more frequent than 30 s.
 func (s Store) Next(ctx context.Context, wait bool) (Output, error) {
+	pause := s.pause
+	if pause == nil {
+		pause = tickPause
+	}
 	for {
 		out, err := s.Tick()
 		if err != nil || !wait || out.Assigned > 0 || out.Wake != nil {
 			return out, err
 		}
-		if s.pause != nil {
-			if err := s.pause(ctx); err != nil {
-				return out, err
-			}
-			continue
+		if err := pause(ctx); err != nil {
+			return out, err
 		}
-		timer := time.NewTimer(time.Second)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return out, ctx.Err()
-		case <-timer.C:
-		}
+	}
+}
+
+// tickPause is the default wait between two passes of Next: one second, or
+// the context's error as soon as it is done.
+func tickPause(ctx context.Context) error {
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
