@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 )
 
@@ -100,7 +101,7 @@ func decode(data []byte) (Document, error) {
 		case "skills":
 			names = skills
 		case "hooks":
-			names = hooks
+			names = append(slices.Clone(hooks), retiredHooks...)
 		}
 		entries, err := object(raw[group], names)
 		if err != nil {
@@ -108,6 +109,9 @@ func decode(data []byte) (Document, error) {
 		}
 		for _, name := range keysOf(entries) {
 			value := entries[name]
+			if group == "hooks" && slices.Contains(retiredHooks, name) {
+				continue
+			}
 			switch group {
 			case "agents":
 				fields, err := object(value, []string{"model", "effort"})

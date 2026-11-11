@@ -144,13 +144,13 @@ func TestAllowedValues(t *testing.T) {
 	}
 }
 
-// No hook has a fixed level. The four guards (brief-lint, host-guard,
+// No hook has a fixed level. The three guards (host-guard,
 // only-writer, plan-guard) default to block; off, warn and block are accepted
 // from the command and from a settings file, a project's level wins over the
 // personal one, and ResolveHookLevel returns the level that was set.
 func TestGuardLevelsAreSettableAndResolved(t *testing.T) {
 	personal, proj := fixture(t)
-	guards := []string{"brief-lint", "host-guard", "only-writer", "plan-guard"}
+	guards := []string{"host-guard", "only-writer", "plan-guard"}
 	query := where.Query{Cwd: t.TempDir()}
 	resolver := where.Resolver{GridHome: personal.Home}
 	for _, name := range guards {
@@ -198,6 +198,34 @@ func TestGuardLevelsAreSettableAndResolved(t *testing.T) {
 	err := personal.SetHook("plan-guard", "never")
 	if err == nil || !strings.Contains(err.Error(), "allowed: off, warn, block") {
 		t.Fatalf("bad level: %v", err)
+	}
+}
+
+// A settings.json written before the brief-lint hook was removed still loads: the
+// retired key is ignored, the other hooks read as set, and a rewrite drops it.
+// The command no longer accepts the name.
+func TestRetiredBriefLintKeyIsIgnored(t *testing.T) {
+	personal, _ := fixture(t)
+	path := filepath.Join(personal.Home, "settings.json")
+	must(t, os.WriteFile(path, []byte(`{"hooks":{"brief-lint":"block","host-guard":"warn"}}`), 0o600))
+	d, err := personal.Effective()
+	if err != nil {
+		t.Fatalf("settings naming brief-lint refused: %v", err)
+	}
+	if _, ok := d.Hooks["brief-lint"]; ok {
+		t.Fatalf("retired hook still listed: %v", d.Hooks)
+	}
+	if d.Hooks["host-guard"] != "warn" {
+		t.Fatalf("host-guard = %q, want warn", d.Hooks["host-guard"])
+	}
+	if err := personal.SetHook("history-log", "off"); err != nil {
+		t.Fatalf("rewrite of a file naming brief-lint refused: %v", err)
+	}
+	if strings.Contains(string(contents(t, path)), "brief-lint") {
+		t.Fatalf("rewrite kept the retired key: %s", contents(t, path))
+	}
+	if err := personal.SetHook("brief-lint", "off"); err == nil {
+		t.Fatal("the command accepted the removed hook")
 	}
 }
 

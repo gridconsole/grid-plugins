@@ -177,7 +177,6 @@ func sessionContext(r where.Result, resolver where.Resolver, note string) string
 		"GRID_HOME is the Grid data folder " + home + "; GRID_PROJECTS is " + gridhome.Tilde(filepath.Join(resolver.GridHome, "projects"), resolver.Home) + ".",
 		ProjectLine(r, resolver.Home) + note,
 		"Task files are written by grid under the Grid home. Project records and task files live outside repositories.",
-		"Grid agents cover delegated work in any folder: grid-scout maps code; grid-researcher researches facts; grid-builder changes files; grid-runner runs checks; grid-reviewer reviews work; grid-designer designs interfaces; grid-checker checks pages; grid-operator changes browser state; grid-planner plans tasks; grid-curator curates knowledge; grid-library answers questions from the brain. Job briefs are rendered by grid job.",
 		"The Grid brain holds shared topics, knowledge and decisions at home and project level.",
 		"Approvals come from a person through the Grid app or grid approve in a terminal outside Claude Code or Codex.",
 	}, "\n")
@@ -269,7 +268,6 @@ func evaluateGuards(o Options, in hookio.Input, env map[string]string) hookio.De
 		guard.EvaluateHost(in, o.Cwd, env),
 		guard.EvaluateOnlyWriter(in, o.Cwd, env),
 		guard.EvaluatePlan(in, o.Cwd, env),
-		guard.EvaluateBrief(in, o.Cwd, env),
 		guard.EvaluateHome(in, o.Cwd, env),
 	)
 }

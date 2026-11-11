@@ -291,9 +291,6 @@ func PlanGuard(stdin []byte, env map[string]string) ([]byte, int) {
 func HostGuard(stdin []byte, env map[string]string) ([]byte, int) {
 	return invoke(stdin, env, EvaluateHost)
 }
-func BriefLint(stdin []byte, env map[string]string) ([]byte, int) {
-	return invoke(stdin, env, EvaluateBrief)
-}
 func HomeAllow(stdin []byte, env map[string]string) ([]byte, int) {
 	return invoke(stdin, env, EvaluateHome)
 }

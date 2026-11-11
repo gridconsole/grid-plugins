@@ -11,10 +11,10 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
-// No guard is fixed at block. brief-lint, host-guard, only-writer and plan-guard
+// No guard is fixed at block. host-guard, only-writer and plan-guard
 // default to block; a setting lowers one to warn (a warning, no refusal) or off,
 // and a settings file that cannot be read keeps the refusal and reports why.
-func TestFourGuardsFollowTheirLevel(t *testing.T) {
+func TestGuardsFollowTheirLevel(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		eval  func(hookio.Input, string, map[string]string) hookio.Decision
@@ -25,10 +25,6 @@ func TestFourGuardsFollowTheirLevel(t *testing.T) {
 		}},
 		{"host-guard", EvaluateHost, func(f *fixture) hookio.Input { return f.input("Write", filepath.Join(f.grid, ".host", "approval")) }},
 		{"only-writer", EvaluateOnlyWriter, func(f *fixture) hookio.Input { return f.input("Write", filepath.Join(f.task, "notes.md")) }},
-		{"brief-lint", EvaluateBrief, func(f *fixture) hookio.Input {
-			f.write(filepath.Join(f.task, "subagents", "01-work.md"), "incomplete")
-			return f.input("Agent", "Read subagents/01-work.md")
-		}},
 	} {
 		for _, level := range []string{"none", "off", "warn", "block", "malformed"} {
 			t.Run(tc.name+"/"+level, func(t *testing.T) {
