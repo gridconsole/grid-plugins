@@ -70,9 +70,6 @@ var ggProjectKnownOpen = map[string]string{
 	"brain show":      `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
 	"brain supersede": `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
 	"brain topics":    `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-
-	"workflow show":  `exit 1; stderr "grid: project \"absent\" is missing or ambiguous"; stdout empty`,
-	"workflow write": `exit 1; stderr "grid workflow write: project \"absent\" is missing or ambiguous"; stdout empty`,
 }
 
 type ggProjectOutcome struct {

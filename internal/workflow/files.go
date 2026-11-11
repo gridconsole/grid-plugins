@@ -92,10 +92,12 @@ func selectProject(entries []workflowProject, selector string) (workflowProject,
 func projectSelectionError(r where.Resolver, selector string) error {
 	// Callers with hidden projects must get identical diagnostics for every
 	// unavailable selector, whether it is a private name, private ID or unknown.
+	// Every one carries the same kind, so the CLI gives them all one error code.
+	message := fmt.Sprintf("project %q is missing or ambiguous", writeDiagnostic(selector))
 	if r.Caller.IsGuest() || !r.PersonalOK() {
-		return errors.New("project is missing or ambiguous")
+		message = "project is missing or ambiguous"
 	}
-	return fmt.Errorf("project %q is missing or ambiguous", writeDiagnostic(selector))
+	return &where.LookupError{Kind: where.ErrProjectUnregistered, Message: message}
 }
 
 // Discover records independently: Store.List deliberately fails closed for

@@ -66,6 +66,7 @@ func runWorkflow(args []string, env Env) int {
 			fmt.Fprintln(env.Stderr, "grid workflow show: workflow path is unsafe or inaccessible")
 			return 2
 		}
+		env.recordError(err)
 		fmt.Fprintf(env.Stderr, "grid: %v\n", err)
 		return exitCode(err)
 	}
@@ -149,6 +150,7 @@ func runWorkflowWrite(args []string, env Env) int {
 	}
 	answer, err := workflow.Write(resolver(env), *project, *rev, input)
 	if err != nil {
+		env.recordError(err)
 		fmt.Fprintf(env.Stderr, "grid workflow write: %v\n", err)
 		switch {
 		case errors.Is(err, workflow.ErrChanged):

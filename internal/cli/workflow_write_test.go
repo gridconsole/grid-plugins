@@ -144,9 +144,16 @@ func TestWorkflowWriteUsageAndPaths(t *testing.T) {
 	for _, selector := range []string{"missing", "../alpha", filepath.Join(h.root, "private")} {
 		h.env.Stdin = strings.NewReader(cliWorkflow)
 		code := h.run(h.root, append(workflowWriteArgs("none"), "--project", selector)...)
-		if (code != 1 && code != 2) || h.out.Len() != 0 || strings.Contains(h.errb.String(), h.root) {
+		if (code != 1 && code != 2) || strings.Contains(h.errb.String(), h.root) {
 			t.Fatalf("selector: exit %d: %s %s", code, h.out, h.errb)
 		}
+		// With --json each failure carries its envelope: an unknown project is
+		// no_such_project (exit 1), a rejected selector is invalid_argument (exit 2).
+		wantCode := CodeNoSuchProject
+		if code == 2 {
+			wantCode = CodeInvalidArgument
+		}
+		assertErrorOutput(t, h.out.String(), h.errb.String(), wantCode)
 	}
 	if code := h.run(h.root, "workflow", "write", "--rev", "none", "--file", filepath.Join(h.root, "secret", "missing")); code == 0 || strings.Contains(h.errb.String(), h.root) {
 		t.Fatalf("input path: exit %d: %s", code, h.errb)
