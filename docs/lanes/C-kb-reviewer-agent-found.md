@@ -12,12 +12,12 @@ The reviewer agent names the `found` post, and its Bash line allows it.
 | 4. `TestSkillAndAgentCommandsExist`, `TestImBash`, `TestDtGateWordsTemplates` | HOLDS. `go test -count=1 -v -run 'TestKbRa\|TestSkillAndAgentCommandsExist\|TestImBash\|TestDtGateWordsTemplates' ./internal/contract/` exit 0, `--- PASS: TestSkillAndAgentCommandsExist`, no FAIL. All flags in the new code span (`--task`, `--job`, `--type`, `--body`) exist for `grid job post` in contract/commands.json:1164-1273. |
 | 5. diff names only the Touches files | HOLDS. `agents/reviewer.md`, `internal/contract/kb_reviewer_agent_found_test.go`, plus this report `docs/lanes/C-kb-reviewer-agent-found.md` as the runbook requires. |
 | 5. `make lint` | HOLDS. exit 0 (`go vet ./...`). |
-| 5. `make cross` | see the Cross line below. |
+| 5. `make cross` | HOLDS. exit 0: darwin/arm64 and windows/amd64 each ran vet and a test compile. |
 | New tests fail on base, pass on lane | HOLDS. Failure lines pasted in rows 1 to 3 (agents/reviewer.md stashed, test file kept). |
 | No guard, gate, cap or hold on agents | HOLDS. The change adds an allowed command and a step; nothing is blocked. Nothing removed. |
 | Package tests, changed packages and importers | HOLDS. Changed: `internal/contract` (test file) and the embedded `agents/reviewer.md` (root package `grid-plugins`). Importers of the root embed and of contract that read the agent text: `internal/job`, `internal/job/...`, `internal/packaging/...`, `internal/cli`, `lib`, `cmd/grid`, `contract/...`. `go test -count=1 . ./internal/contract/... ./internal/job/... ./internal/packaging/... ./internal/cli/ ./lib/ ./cmd/grid/ ./contract/...` exit 0, every package `ok`. |
 | Walk tests (plugin) | HOLDS. `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` -> `ok  .../internal/cli 4.415s`. `go test -count=1 ./internal/job/lint/` -> `ok  .../internal/job/lint 3.937s` (in the package run above). |
-| Windows and macOS builds | see the Cross line below. |
+| Windows and macOS builds | HOLDS. Same `make cross` run, exit 0. |
 | `*RealPlugin*` tests | Not named by a row; none run. |
 | No attribution lines, no personal paths | HOLDS. Commit message is one sentence; no paths, hosts or emails in the files. |
 
