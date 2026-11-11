@@ -8,10 +8,13 @@ uses `job.Job` for dependencies and floor evaluation.
 
 ## Planned fields
 
-Every entry supplies `id`, `item`, `title`, `role`, `skills`, `review`, `risk`,
-`max_rounds`, `intent`, `links`, `keep`, `decisions`, `read`, `write`,
-`out_of_scope`, `acceptance`, `verify`, `budget`, `on_blocked`, and `after`.
-These are `job.PlannedFields`; empty lists remain explicit lists.
+Every entry supplies `id`, `item`, `title`, `role`, `skills`, `risk`, `intent`,
+`links`, `keep`, `decisions`, `read`, `write`, `out_of_scope`, `acceptance`,
+`verify`, `budget`, `on_blocked`, and `after`.
+These are `job.PlannedFields`; empty lists remain explicit lists. A Job names
+no review level and no round count: whether a review runs is judged per step by
+the orchestrator. A plan or record that still carries `review` or `max_rounds`
+reads without error and the value is ignored.
 The parser derives omitted `item`, `title`, `intent.item`, and `intent.goal`
 from the enclosing checklist item. `intent.owner` is required. The step's
 `kind` applies to its Jobs and is not repeated inside a Job entry.
@@ -49,13 +52,13 @@ then `rejected`, a dependent that has not started goes back to waiting; one
 that has started is not held or stopped, and a note naming the rejection is
 posted to its Feed. `failed` and `children-done` edges are unchanged.
 
-The first applicable review rule sets the floor: irreversible or environment
-work is L2; declared risk or a tagged risk path is L2; a big visible change or
-UI path is L1; tests, docs, renames, generated files, and task-only research
-are L0; other work is L1. The declared review must be L0 through L3. A lower
-level needs a nonempty `review_reason`; this records the exception without
-changing the floor or removing classify/capture requirements. `visible: small`
-does not lower a floor established by scope or risk.
+`grid job floor` reports an advisory floor from scope and risk: irreversible or
+environment work, declared risk or a tagged risk path, a big visible change or
+UI path, and ordinary work. A Job declares no review level and none is
+required; a Job without one is not refused. A level that an older plan still
+declares is compared with the floor as before, and a lower one needs a nonempty
+`review_reason`. `visible: small` does not lower a floor established by scope
+or risk.
 
 Code verification names a test command and a positive `min_tests`. For
 `non-code`, `research`, or `scout` work, `verify` may instead name

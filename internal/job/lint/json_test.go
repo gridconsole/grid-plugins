@@ -49,7 +49,7 @@ func TestCheckJSONRunsTheBriefRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	m["on_blocked"] = "ask-and-continue"
-	m["max_rounds"] = 0
+	m["risk"] = []string{"not-a-risk"}
 	b, _ := json.Marshal(m)
 	fs := lint.CheckJSON(b, lint.Options{})
 	if !lint.HasErrors(fs) {

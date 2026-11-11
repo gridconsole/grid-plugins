@@ -106,8 +106,11 @@ func ReviewFloor(item job.Job, policy Policy) (Floor, error) {
 	default:
 		out.Floor, out.Reason = "L1", "ordinary work"
 	}
-	level := reviewRank(item.Review)
-	if level < 0 {
+	// A Job no longer needs a level: whether a review runs is judged per step,
+	// so none is the normal case and raises no error. A level that an old plan
+	// still declares is checked as before (follow-up lane F-review-floor-drop).
+	if level := reviewRank(item.Review); item.Review == "" {
+	} else if level < 0 {
 		out.Errors = append(out.Errors, "review must be L0, L1, L2 or L3")
 	} else if level < reviewRank(out.Floor) {
 		if strings.TrimSpace(item.ReviewReason) == "" {

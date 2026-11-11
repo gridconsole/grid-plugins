@@ -229,8 +229,10 @@ func TestProgressResetsCrashLoop(t *testing.T) {
 	if j.Status == contract.Parked {
 		t.Fatalf("progress did not reset crashes: %+v", j)
 	}
-	if j.Status != contract.Rejected {
-		t.Fatal("max_rounds not enforced", j.Status)
+	// max_rounds is retired (owner, 11 Nov q-levels and verdicts v-10): a failed
+	// attempt carries on by itself; only the crash loop parks a Job.
+	if j.Status == contract.Rejected || j.Status == contract.Parked {
+		t.Fatal("a failed attempt must carry on", j.Status)
 	}
 }
 func TestLiveness(t *testing.T) {
@@ -631,12 +633,15 @@ func TestUsageHoldBlocksHostDemand(t *testing.T) {
 	}
 }
 
-func TestReviewCapacityUsesReady(t *testing.T) {
+// The review slots keyed on L2/L3 are gone with the levels and the owner's
+// rule of no Grid-made caps (11 Nov q-levels and verdicts v-10): reviewer Jobs
+// are ready like any other Job.
+func TestReviewerJobsHaveNoCapacityCap(t *testing.T) {
 	f := setup(t)
 	for n := 1; n <= 4; n++ {
 		id := fmt.Sprintf("J-%d", n)
 		body := jobBody(t, id)
-		body["role"], body["review"] = "reviewer", "L2"
+		body["role"] = "reviewer"
 		f.post(t, feed.Input{Type: "job", Job: id, Body: body}, f.s.Writer)
 	}
 	snap, err := Load(f.s.Feed)
@@ -648,14 +653,11 @@ func TestReviewCapacityUsesReady(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ready.Ready) != 3 || len(ready.Waiting) != 1 || ready.Waiting[0].Reason != "review_capacity" {
+	if len(ready.Ready) != 4 || len(ready.Waiting) != 0 {
 		t.Fatal(ready)
 	}
-	if f.tick(t).Assigned != 3 {
+	if f.tick(t).Assigned != 4 {
 		t.Fatal("spawn demand disagreed")
-	}
-	if f.tick(t).Assigned != 0 {
-		t.Fatal("capacity exceeded")
 	}
 }
 
@@ -1018,7 +1020,7 @@ func TestAppliedRetrySurvivesMetadataLoss(t *testing.T) {
 	f.ack(t)
 	f.exit(t, "crash")
 	f.tick(t)
-	if f.state(t).Status != contract.Rejected {
+	if f.state(t).Status == contract.Parked {
 		t.Fatal("recovery forgot applied retry and restored old crash count")
 	}
 }
