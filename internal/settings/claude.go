@@ -182,6 +182,9 @@ func (e claudeInvalid) Error() string {
 	return fmt.Sprintf("Settings file %s is not valid JSON; fix it or remove it. Nothing written.", e.path)
 }
 
+// opsDefaultsLine states the owner's ops defaults in the setup summary.
+const opsDefaultsLine = "No telemetry. Crash reports and a daily copy (7 days) stay in your Grid home. Old sessions are not imported."
+
 // RunClaudeSetup previews, confirms, and applies only entries owned by setup.
 func RunClaudeSetup(o ClaudeSetupOptions) int {
 	code, err := runClaudeSetup(o)
@@ -334,6 +337,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 			return 1, err
 		}
 		fmt.Fprintln(o.Stdout, pretty.String())
+		fmt.Fprintln(o.Stdout, opsDefaultsLine)
 	}
 	if len(changes) == 0 && !o.Remove {
 		return finish("Nothing written.")

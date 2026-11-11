@@ -38,4 +38,5 @@
     ]
   }
 }
+No telemetry. Crash reports and a daily copy (7 days) stay in your Grid home. Old sessions are not imported.
 Nothing written.
