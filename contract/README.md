@@ -352,8 +352,7 @@ Under the Grid home, `projects/<project>/`:
 - `tasks/<task>/feed/.live/<holder>.<fence>.json`: the Job liveness file
   (feed-contract.md:17 and :27), never shipped off the host.
 
-Session and task allocation code uses `flock`; on Windows it returns
-"not supported until the Windows Feed is decided" (feed-contract.md:12).
+Session and task allocation use `flock` on Unix and `LockFileEx` on Windows (`internal/fslock`).
 
 ## Command output
 
@@ -735,8 +734,8 @@ complete claim, and `done` for a completion. A partial unexpired claim has state
 `claimed` without a `claim` object. `--pending` returns only requests currently
 available to claim, including expired claims. Empty output is `[]`.
 
-The worker protocol runs on Linux and macOS. Windows builds, but the existing
-fslock implementation refuses operations requiring locks there.
+Windows builds and its locks are implemented (`LockFileEx`), compiled by
+`make cross`; a run on a real Windows machine is still to do.
 
 CLI syntax (positional arguments precede flags):
 
