@@ -9,7 +9,10 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 )
 
-const off = " To turn this guard off, start Claude Code with GRID_PLAN_GUARD=off."
+// PlanGuardOffCommand is the command a person runs to turn the plan guard off.
+const PlanGuardOffCommand = "grid hook level plan-guard off"
+
+const off = " To turn this guard off, run " + PlanGuardOffCommand + " (or start Claude Code with GRID_PLAN_GUARD=off)."
 
 var oddName = regexp.MustCompile(`[^\x20-\x7e]|:|[. ](?:/|$)`)
 
