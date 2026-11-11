@@ -32,6 +32,8 @@ var guestParityCommands = map[string][]string{
 	"brain index":          {"--read-only"},
 	"brain keep":           {},
 	"brain revert":         {"parity/parity", "--to", "1"},
+	"brain drop":           {"parity/parity", "--expect", "0000000000000000"},
+	"brain restore":        {"parity/parity", "--expect", "0000000000000000"},
 	"brain supersede":      {"parity", "--by", "parity-v2", "--reason", "parity reason here"},
 	"brain propose":        {"--name", "parity", "--topic", "general", "--description", "parity", "--summary", "parity", "--body", "parity", "--external"},
 	"brain search":         {"parity"},
@@ -440,6 +442,10 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 			want = guestParityOutput{3, "", "grid brain changes: caller role is not allowed to read brain changes\n"}
 		case "brain revert":
 			want = guestParityOutput{3, "", "grid brain revert: caller role is not allowed to revert brain entries\n"}
+		case "brain drop":
+			want = guestParityOutput{3, "", "grid brain drop: caller role is not allowed to drop brain entries\n"}
+		case "brain restore":
+			want = guestParityOutput{3, "", "grid brain restore: caller role is not allowed to restore brain entries\n"}
 		case "brain supersede":
 			want = guestParityOutput{3, "", "grid brain supersede: caller role is not allowed to supersede brain entries\n"}
 		case "feed types":

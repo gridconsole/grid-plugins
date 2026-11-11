@@ -25,6 +25,10 @@ type Env struct {
 	TempRoots           []string
 	// Role is the caller's GRID_ROLE, read from the CLI's environment.
 	Role string
+	// Member is the person the host runs the plugin for: GRID_WHO, else
+	// GRID_ACTOR, else GRID_MEMBER, read by the CLI. drop and restore name this
+	// person in the audit line; no flag lets a caller name someone else.
+	Member string
 	// The CLI supplies its shared folder resolver and refusal contract.
 	ResolveTask      func(string) (task.Task, error)
 	TaskOperandError func(string, error) int
@@ -35,7 +39,7 @@ type Env struct {
 	RecordError func(error)
 }
 
-const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|supersede> [flags]
+const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|supersede> [flags]
   show <id> [--task <task>]  Show an accepted note and its links.
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
@@ -54,6 +58,10 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
   changes [--since <RFC3339>] [--limit <n>]  List what changed in the brain, newest first.
   revert <topic>/<name> --to <n> [--reason <why>]  Publish version n of an entry again as a new version; the reason shows in changes.
                              Exit 0 done, 1 store error or no such version, 3 role refused.
+  drop <topic>/<name> --expect <rev> [--reason <why>]  Hide a knowledge entry from search, the index and job sources; nothing is deleted.
+                             Exit 0 done, 1 store error, 2 usage, 3 role refused, 6 stale rev, 8 no such note, 9 refused.
+  restore <topic>/<name> --expect <rev> [--reason <why>]  Bring a dropped entry back.
+                             Exit 0 done, 1 store error, 2 usage, 3 role refused, 6 stale rev, 8 no such note, 9 refused.
   supersede <old> --by <new> --reason <why>  Mark an accepted note replaced by another, after the fact.
                              Exit 0 done or already done, 1 refused or store error, 2 usage, 3 role refused.
 
@@ -91,7 +99,9 @@ func (l *linkFlags) Set(raw string) error {
 
 // Run returns 0 on success, 1 for a store/gate error, 2 for usage errors and 3
 // when check finds something, changes and revert refuse the caller's role, or the
-// accept-time check refuses a proposal.
+// accept-time check refuses a proposal. drop and restore also return 6 for a
+// stale --expect rev, 8 for no such note and 9 when the note's state refuses the
+// operation, with the failure as JSON on stderr; they never return 4, 5 or 7.
 func Run(args []string, env Env) int {
 	if env.Resolver.GridHome == "" {
 		env.Resolver.GridHome = env.GridHome
@@ -122,6 +132,12 @@ func Run(args []string, env Env) int {
 	}
 	if verb == "revert" {
 		return runRevert(args[1:], env)
+	}
+	if verb == "drop" {
+		return runDrop(args[1:], env)
+	}
+	if verb == "restore" {
+		return runRestore(args[1:], env)
 	}
 	if verb == "supersede" {
 		return runSupersede(args[1:], env)
