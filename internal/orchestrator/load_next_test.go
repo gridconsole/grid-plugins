@@ -248,8 +248,10 @@ func TestNextWaitReturnsAssignedJobBeforeTheTick(t *testing.T) {
 func TestNextWaitStopsWhenContextIsCancelled(t *testing.T) {
 	f := setup(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	time.AfterFunc(50*time.Millisecond, cancel)
+	// Take start before arming the timer so the elapsed time can never be
+	// shorter than the timer, even if this goroutine is parked in between.
 	start := time.Now()
+	time.AfterFunc(50*time.Millisecond, cancel)
 	out, err := f.s.Next(ctx, true)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, out = %+v", err, out)
