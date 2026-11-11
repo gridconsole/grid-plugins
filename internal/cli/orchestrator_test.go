@@ -8,11 +8,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 )
@@ -94,7 +96,75 @@ func TestJobNextProcess(t *testing.T) {
 	if os.Getenv("GRID_TEST_NEXT_WAIT") == "1" {
 		args = append(args, "--wait")
 	}
+	if os.Getenv("GRID_TEST_NEXT_BLOCKED") == "1" {
+		koJnAnnounceBlock()
+	}
 	os.Exit(Run(args, env))
+}
+
+// koJnBlockedLine is the one line the helper child writes to stderr when its
+// lock call on .orchestrator.lock finds the lock held and is about to wait.
+const koJnBlockedLine = "grid-test: job next is waiting on .orchestrator.lock"
+
+// koJnAnnounceBlock makes the helper child write koJnBlockedLine when a lock call
+// on .orchestrator.lock is about to wait. The hook runs on the goroutine that is
+// about to wait, so it only writes the line and never blocks. The child ends with
+// os.Exit, so the hook is not put back.
+func koJnAnnounceBlock() {
+	fslock.OnBlockForTest(func(path string) {
+		if strings.HasSuffix(path, ".orchestrator.lock") {
+			fmt.Fprintln(os.Stderr, koJnBlockedLine)
+		}
+	})
+}
+
+// koJnOutput keeps what a child writes and closes found once that text holds
+// koJnBlockedLine. exec copies the child's pipe into it, and Wait returns after
+// that copy has ended, so String after Wait holds all the output.
+type koJnOutput struct {
+	mu    sync.Mutex
+	text  strings.Builder
+	once  sync.Once
+	found chan struct{}
+}
+
+func (o *koJnOutput) Write(p []byte) (int, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.text.Write(p)
+	if strings.Contains(o.text.String(), koJnBlockedLine) {
+		o.once.Do(func() { close(o.found) })
+	}
+	return len(p), nil
+}
+
+func (o *koJnOutput) String() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.text.String()
+}
+
+// koJnHold takes .orchestrator.lock in the Feed folder the way orchestrator
+// Store.exclusive does, and holds it until release is called or the test ends.
+func koJnHold(t *testing.T, feedDir string) (release func()) {
+	t.Helper()
+	f, err := fslock.OpenNoFollow(filepath.Join(feedDir, ".orchestrator.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fslock.LockExclusive(f); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	var once sync.Once
+	release = func() {
+		once.Do(func() {
+			fslock.Unlock(f)
+			_ = f.Close()
+		})
+	}
+	t.Cleanup(release)
+	return release
 }
 func TestTwoProcessesJobNext(t *testing.T) {
 	h, path, store := orchestratorHarness(t)
@@ -312,41 +382,44 @@ func TestTaskAdoptionRefusesLiveAndUnknownCLI(t *testing.T) {
 }
 
 func TestJobNextInterruptExits130(t *testing.T) {
-	h, path, _ := orchestratorHarness(t)
+	h, path, store := orchestratorHarness(t)
 	if code := h.run(path, "job", "next"); code != 0 {
 		t.Fatal(h.errb)
 	}
-	projection := filepath.Join(path, "feed", "state.json")
-	if err := os.Remove(projection); err != nil {
-		t.Fatal(err)
-	}
+	// The parent holds .orchestrator.lock, so the child's first pass of job next
+	// --wait blocks on it. The CLI sets up its interrupt context before that pass,
+	// so the child's line about the wait says its SIGINT handling is in place.
+	release := koJnHold(t, store.Dir())
 	cmd := exec.Command(os.Args[0], "-test.run=^TestJobNextProcess$")
-	cmd.Env = append(os.Environ(), "GRID_TEST_NEXT_PROCESS=1", "GRID_TEST_NEXT_WAIT=1", "GRID_TEST_TASK="+path, "GRID_TEST_ROOT="+h.root, "GRID_HOME="+h.gridHome)
-	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
+	cmd.Env = append(os.Environ(), "GRID_TEST_NEXT_PROCESS=1", "GRID_TEST_NEXT_WAIT=1", "GRID_TEST_NEXT_BLOCKED=1", "GRID_TEST_TASK="+path, "GRID_TEST_ROOT="+h.root, "GRID_HOME="+h.gridHome)
+	output := &koJnOutput{found: make(chan struct{})}
+	cmd.Stdout, cmd.Stderr = output, output
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = cmd.Process.Kill() }()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if _, err := os.Stat(projection); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
-			t.Fatalf("child did not enter wait: %s", &output)
-		}
-		time.Sleep(10 * time.Millisecond)
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	select {
+	case <-output.found:
+	case err := <-exited:
+		t.Fatalf("child ended before it waited on .orchestrator.lock: %v, output: %s", err, output)
+	case <-time.After(10 * time.Second):
+		t.Fatalf("child did not wait on .orchestrator.lock: %s", output)
 	}
 	if err := cmd.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)
 	}
-	err := cmd.Wait()
+	release()
+	var err error
+	select {
+	case err = <-exited:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("child did not end after Ctrl-C: %s", output)
+	}
 	exit, ok := err.(*exec.ExitError)
 	if !ok || exit.ExitCode() != 130 {
-		t.Fatalf("Ctrl-C exit: %v, output: %s", err, &output)
+		t.Fatalf("Ctrl-C exit: %v, output: %s", err, output)
 	}
 	if strings.Contains(output.String(), "context canceled") {
 		t.Fatal(output.String())
