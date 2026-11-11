@@ -141,7 +141,6 @@ func taskAt(p, projects string) *task {
 	return &task{filepath.Join(resolve(".", projects), filepath.Join(parts[:3]...)), strings.Join(parts[3:], "/")}
 }
 
-const previewApproved = "· preview approved ·"
 const planReady = "· plan ready ·"
 
 // stepLookup resolves the steps of one task from the task.md text it is given.

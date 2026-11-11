@@ -32,6 +32,7 @@ func TestRecallBash(t *testing.T) {
 		for _, recall := range []bool{false, true} {
 			t.Run(tt.command+map[bool]string{false: "/missing", true: "/recall"}[recall], func(t *testing.T) {
 				f := setup(t)
+				planBlock(f) // plan-guard warns by default; the recall deny is covered at block
 				if recall {
 					f.write(filepath.Join(f.task, "plan.md"), "- **Used:** knowledge/note.md\n")
 				}

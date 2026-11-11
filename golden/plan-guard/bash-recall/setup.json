@@ -1,7 +1,8 @@
 {
   "contains": "deny",
   "files": {
-    "$GRID_HOME/projects/demo/tasks/T-1-demo/plan.md": "# Plan\n"
+    "$GRID_HOME/projects/demo/tasks/T-1-demo/plan.md": "# Plan\n",
+    "$GRID_HOME/settings.json": "{\"hooks\":{\"plan-guard\":\"block\"}}\n"
   },
   "hook": "plan-guard",
   "name": "bash-recall",
