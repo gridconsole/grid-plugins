@@ -127,13 +127,7 @@ func Run(args []string, e Env) int {
 		skeleton := meta + "\n## Intent\n## Job\n## Context\n## Out of scope\n## Open\n## Acceptance\n## Outcome\n## Verdict\n## Follow-up\n"
 		findings := lint.Check(skeleton, w.lintOptions())
 		if lint.HasErrors(findings) {
-			code := 1
-			for _, finding := range findings {
-				if finding.Rule == "job.plan-approval" {
-					code = 2
-				}
-			}
-			return output(e, f, report{ID: j.ID, Findings: findings}, code)
+			return output(e, f, report{ID: j.ID, Findings: findings}, 1)
 		}
 		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j)})
 		if err != nil {
