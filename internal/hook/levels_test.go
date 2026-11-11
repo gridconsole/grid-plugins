@@ -68,8 +68,6 @@ func TestCatalogContextLevels(t *testing.T) {
 		text        string
 	}{
 		{"session-start", "SessionStart", hookio.Input{}, "Grid tracks tasks"},
-		{"user-prompt", "UserPromptSubmit", hookio.Input{Prompt: "/grid:plan"}, "Brain recall"},
-		{"subagent-start", "SubagentStart", hookio.Input{AgentType: "grid:grid-builder"}, "Brain recall"},
 	} {
 		levelCases(t, tc.name, func(t *testing.T, f *eventFixture, on, warn, broken bool) {
 			out, log, code := f.run(t, tc.event, tc.in)
@@ -218,10 +216,6 @@ func TestHistoryOffCoversEveryWriter(t *testing.T) {
 				run("PostToolUseFailure", "history-log", shell)
 				run("SubagentStop", "history-log", hookio.Input{})
 				run("PostToolUse", "brain-read", hookio.Input{ToolName: "Read", ToolInput: map[string]any{"file_path": filepath.Join(f.home, entry.Path)}})
-				out := run("UserPromptSubmit", "brain-recall", hookio.Input{Prompt: "/grid:plan"})
-				if !strings.Contains(out, "Brain pointers") {
-					t.Fatal(out)
-				}
 				b, err := os.ReadFile(filepath.Join(f.dir, "history.md"))
 				if err != nil {
 					t.Fatal(err)
@@ -229,7 +223,7 @@ func TestHistoryOffCoversEveryWriter(t *testing.T) {
 				if level == "off" && len(b) != 0 {
 					t.Fatalf("off wrote history: %s", b)
 				}
-				for _, text := range []string{"file written", "subagent finished", "brain read", "brain recall"} {
+				for _, text := range []string{"file written", "subagent finished", "brain read"} {
 					if strings.Contains(string(b), text) != (level != "off") {
 						t.Fatalf("%s: %s", text, b)
 					}
@@ -266,35 +260,6 @@ func TestUsageOffSuppressesTranscriptRecords(t *testing.T) {
 			}
 			if a.Transcript != "" || len(a.Transcripts) > 0 {
 				t.Fatalf("usage off recorded transcript: %+v", a)
-			}
-		})
-	}
-}
-
-func TestContextComponentLevels(t *testing.T) {
-	for _, tc := range []struct {
-		name, event string
-		in          hookio.Input
-	}{
-		{"user-prompt", "UserPromptSubmit", hookio.Input{Prompt: "/grid:plan"}},
-		{"subagent-start", "SubagentStart", hookio.Input{AgentType: "grid:grid-builder"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := eventSetup(t)
-			if err := (settings.Store{Home: f.home}).SetHook(tc.name, "off"); err != nil {
-				t.Fatal(err)
-			}
-			tc.in.HookEventName = tc.event
-			out, log, code := f.run(t, "brain-recall", tc.in)
-			if out != "" || log != "" || code != 0 {
-				t.Fatalf("off: %d %s %s", code, out, log)
-			}
-			if err := (settings.Store{Home: f.home}).SetHook(tc.name, "warn"); err != nil {
-				t.Fatal(err)
-			}
-			out, log, code = f.run(t, "brain-recall", tc.in)
-			if !strings.Contains(out, "Brain recall") || log != "" || code != 0 {
-				t.Fatalf("warn: %d %s %s", code, out, log)
 			}
 		})
 	}

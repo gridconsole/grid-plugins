@@ -116,13 +116,11 @@ personal values, and missing values use the catalog defaults.
 | home-allow | warn | Home permission fallback |
 | session-start | warn | SessionStart context |
 | stop-check | block | Stop and SubagentStop completion checks, including saved Job verification |
-| history-log | warn | File, Bash, subagent, brain-read and brain-recall history entries |
+| history-log | warn | File, Bash, subagent, brain-read history entries |
 | usage-log | warn | Usage totals and session/subagent transcript references |
 | session-end | warn | Worker exit records and SessionEnd terminal state |
-| subagent-start | warn | SubagentStart brain recall context |
-| user-prompt | warn | UserPromptSubmit brain recall context |
 | job-lint | block | No runtime counterpart; has no effect yet |
-| needs-you, session-check, topic-trigger | warn | No runtime counterpart; have no effect yet |
+| needs-you, session-check | warn | No runtime counterpart; have no effect yet |
 
 No guard level is fixed. brief-lint, host-guard, only-writer and plan-guard read
 their level like every other hook; brief-lint defaults to `block`,
@@ -149,7 +147,7 @@ fallback grants at both `warn` and `block`; `off` suppresses that grant.
 For context hooks, `off` adds no context; `warn` and `block` preserve it. For log
 hooks, `off` writes nothing for that hook; `warn` and `block` preserve logging.
 `session-start off` still initializes the environment. `history-log off` also
-skips Bash snapshots and brain history entries, while recall context continues.
+skips Bash snapshots and brain history entries.
 `session-end off` skips worker exit recording and ending the worker's session,
 including the worker-exit path on SubagentStop. Other hooks sharing the event
 still run under their own settings. Usage settings do not control the separate
@@ -163,8 +161,10 @@ SessionStart also retains its context note. The legacy `GRID_PLAN_GUARD=off`
 switch still suppresses plan checks; it does not suppress the host guard.
 
 The inactive names above remain accepted and stored for compatibility. Setting
-`job-lint`, `needs-you`, `session-check` or `topic-trigger` currently changes no
-runtime behavior. See [the L64 lane note](lanes/L64.md) for the complete mapping
+`job-lint`, `needs-you` or `session-check` currently changes no
+runtime behavior. The `subagent-start`, `topic-trigger` and `user-prompt` names
+are retired with the recall hooks: a settings file that still names them loads
+and the entries are ignored. See [the L64 lane note](lanes/L64.md) for the complete mapping
 and the default policies that an owner may change.
 
 ## Setup answers

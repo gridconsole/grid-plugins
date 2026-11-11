@@ -293,10 +293,6 @@ func toolUse(o Options) {
 	decision := evaluateGuards(o, *in, env)
 	if in.HookEventName == "PreToolUse" && decision.Behavior != "deny" {
 		history(o, *in)
-		recall(o, *in)
-		// Topic text rides on the verdict envelope, so a call with or without a
-		// guard verdict writes one JSON object.
-		decision.Context = topicContext(o, *in)
 	}
 	if decision.Behavior == "allow" {
 		CountHomeAllow(env, *in)

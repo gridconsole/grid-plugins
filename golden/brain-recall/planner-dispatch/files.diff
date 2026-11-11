@@ -1,6 +1,0 @@
-diff --grid a/demo/plugin-data/sessions/session-demo.planner b/demo/plugin-data/sessions/session-demo.planner
-new file mode 0644
---- /dev/null
-+++ b/demo/plugin-data/sessions/session-demo.planner
-@@ -0,0 +1 @@
-+$GRID_HOME/projects/demo/tasks/T-1-demo
