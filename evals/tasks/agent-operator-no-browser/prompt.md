@@ -1,0 +1,1 @@
+The file job.md is a Grid Job: it submits the contact form of the local site in ./site. Use the grid-operator agent to do it, and save the agent's reply, unchanged, as result.md. No browser is connected in this run. Do not do the work any other way and do not change any other file.
