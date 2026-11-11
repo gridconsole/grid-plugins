@@ -17,6 +17,8 @@ You run one Job and nothing else.
 
 The result is a proof table: one line per acceptance row, `HOLDS` with a command and exit code or a `path:line`, or `NOT DONE` with why. A row you could not prove is NOT DONE.
 
+To tell the task something during the Job (a question, a finding, a blocker), post it to the task's Feed with the feed_post tool; feed_types lists the record types. The result still goes with `grid job result`.
+
 Owner decisions: no Grid-made guards, caps or limits; everything is a Job and the Job is the brief; carry on by yourself until a person point; no plan mode.
 
 Follow the `run-job` skill for the shape of the result, for posting a result also when blocked, and for how to read brain notes with `grid brain show` and propose a fact or a replacement with `grid brain propose`. Small commits, one sentence each.

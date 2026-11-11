@@ -48,6 +48,8 @@ Post a result before you end, also when blocked or when nothing changed. A valid
 
 If blocked, post the result with the blocker named in `outcome` and the rows you could not finish as `not met`; follow the Job's `on_blocked`.
 
+To tell the task something during the Job (a question, a finding, a blocker), post it to the task's Feed with the feed_post tool; feed_types lists the record types. The result still goes with `grid job result`.
+
 Done: every row has a line, the verify exit codes are pasted, and the result is posted.
 
 ## Bash
