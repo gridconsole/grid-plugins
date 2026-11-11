@@ -26,6 +26,46 @@ type Document struct {
 	// settings.json. The plugin owns no part of them: the array is carried through
 	// every rewrite as it was read, never merged into Effective and never shown.
 	Accounts json.RawMessage `json:"accounts,omitempty"`
+	// ezKeysApp holds the seven keys the app's Settings page saves into the same
+	// settings.json (the app's check.go field list). Like Accounts, the plugin owns
+	// no part of them: each value is carried through every rewrite exactly as it was
+	// read, never merged into Effective and never shown by a list.
+	ezKeysApp
+}
+
+// ezKeysApp is the app's part of settings.json. The embedded struct is written
+// inline, so a rewrite puts each key back beside the plugin's own.
+type ezKeysApp struct {
+	Notifications    json.RawMessage `json:"notifications,omitempty"`
+	Models           json.RawMessage `json:"models,omitempty"`
+	UsageRules       json.RawMessage `json:"usageRules,omitempty"`
+	WindowRules      json.RawMessage `json:"windowRules,omitempty"`
+	Workspace        json.RawMessage `json:"workspace,omitempty"`
+	AccountSelection json.RawMessage `json:"accountSelection,omitempty"`
+	HiddenProjects   json.RawMessage `json:"hiddenProjects,omitempty"`
+}
+
+// ezKeysAppNames lists the keys ezKeysApp carries; decode accepts these and no others.
+var ezKeysAppNames = []string{"notifications", "models", "usageRules", "windowRules", "workspace", "accountSelection", "hiddenProjects"}
+
+// ezKeysSet keeps the value of one app key verbatim.
+func (k *ezKeysApp) ezKeysSet(key string, v json.RawMessage) {
+	switch key {
+	case "notifications":
+		k.Notifications = v
+	case "models":
+		k.Models = v
+	case "usageRules":
+		k.UsageRules = v
+	case "windowRules":
+		k.WindowRules = v
+	case "workspace":
+		k.Workspace = v
+	case "accountSelection":
+		k.AccountSelection = v
+	case "hiddenProjects":
+		k.HiddenProjects = v
+	}
 }
 
 func empty() Document {
