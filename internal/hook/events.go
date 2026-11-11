@@ -115,9 +115,6 @@ func remaining(o Options) int {
 	case "stop-check":
 		return stopCheck(o, *in)
 	default:
-		if name == "precompact" && o.Stdout != nil && o.hookEnabled("precompact", *in) {
-			fmt.Fprintln(o.Stdout, "Keep the Job id, acceptance ids and open decisions in the summary.")
-		}
 		o.record("heartbeat", func() { heartbeat(o, *in) })
 		o.record("history", func() { history(o, *in) })
 		o.record("session", func() { recordSession(o, *in) })

@@ -27,12 +27,12 @@ var agents = []agentDefault{
 var models = []string{"haiku", "sonnet", "opus"}
 var efforts = []string{"low", "medium", "high", "xhigh", "max"}
 var skills = []string{"brain-keeper", "browser", "deliver", "plan-jobs", "questions", "research", "review-job", "run-job", "setup", "signals", "task", "visual-design-review"}
-var hooks = []string{"history-log", "home-allow", "host-guard", "job-lint", "needs-you", "only-writer", "plan-guard", "precompact", "session-check", "session-end", "session-start", "stop-check", "subagent-start", "topic-trigger", "usage-log", "user-prompt"}
+var hooks = []string{"history-log", "home-allow", "host-guard", "job-lint", "needs-you", "only-writer", "plan-guard", "session-check", "session-end", "session-start", "stop-check", "subagent-start", "topic-trigger", "usage-log", "user-prompt"}
 var levels = []string{"off", "warn", "block"}
 
 // retiredHooks are hooks removed from Grid. A settings.json written earlier may
 // still name one; the file reads without error and the entry is ignored.
-var retiredHooks = []string{"brief-lint"}
+var retiredHooks = []string{"brief-lint", "precompact"}
 
 // AgentNames returns the supported agents in stable order.
 func AgentNames() []string {

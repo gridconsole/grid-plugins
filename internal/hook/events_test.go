@@ -228,11 +228,3 @@ func TestHistoryBashFailureUsesRecordedContent(t *testing.T) {
 		t.Fatalf("history: %s", b)
 	}
 }
-
-func TestPreCompactSteersSummary(t *testing.T) {
-	f := eventSetup(t)
-	out, log, code := f.run(t, "PreCompact", hookio.Input{})
-	if code != 0 || log != "" || !strings.Contains(out, "acceptance ids") || strings.Contains(out, "additionalContext") {
-		t.Fatalf("precompact: %d %s %s", code, out, log)
-	}
-}

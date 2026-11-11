@@ -118,7 +118,6 @@ personal values, and missing values use the catalog defaults.
 | stop-check | block | Stop and SubagentStop completion checks, including saved Job verification |
 | history-log | warn | File, Bash, subagent, brain-read and brain-recall history entries |
 | usage-log | warn | Usage totals and session/subagent transcript references |
-| precompact | warn | PreCompact summary guidance |
 | session-end | warn | Worker exit records and SessionEnd terminal state |
 | subagent-start | warn | SubagentStart brain recall context |
 | user-prompt | warn | UserPromptSubmit brain recall context |
