@@ -23,6 +23,8 @@ their existing unprefixed, sometimes redacted `message`:
 {"error":"refused","message":"no such project","code":"no_such_project"}
 ```
 
+`job lint`, `job render`, `job show`, `job verify` and `job trace` write their own objects (`ok`, `findings`, `error`; trace: `rows`, `problems`), and these gain the top-level `code` on a classified refusal; a success and an unclassified failure print no `code`.
+
 Person-gate refusals and `person check` retain `error: "person_required"`, `reason`,
 `hint`, and any decision fields. They gain `code: "person_required"` and a
 `message` matching stderr without its final newline. The reason remains the

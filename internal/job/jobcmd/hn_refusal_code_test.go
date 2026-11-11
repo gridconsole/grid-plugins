@@ -116,6 +116,9 @@ func TestHnCodeLookup(t *testing.T) {
 	guest := e
 	guest.Resolver.Caller = where.Caller{Role: "guest", Member: "gus"}
 	hnCodeWant(t, guest, 1, "no_such_task", absent...)
+	// render and verify reach the project through the same lookup.
+	hnCodeWant(t, e, 1, "no_such_project", "render", "T-99", "I-01", "--project", "absent", "--json")
+	hnCodeWant(t, e, 1, "no_such_project", "verify", "J-01", "--project", "absent", "--json")
 	obj := hnCodeWant(t, e, traceExitNotFound, "no_such_project", "trace", "brain:project/a", "--project", "absent", "--json")
 	if string(obj["rows"]) != "[]" || !strings.Contains(string(obj["problems"]), "project not found") {
 		t.Fatalf("trace lost rows or problems: rows %s problems %s", obj["rows"], obj["problems"])

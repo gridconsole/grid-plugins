@@ -58,10 +58,10 @@ type ggTaskOpen struct {
 // its own on stdout with an "error" string, and stderr stays empty; signal act
 // exits 0.
 var ggTaskKnownOpen = map[string]ggTaskOpen{
-	"job lint":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
-	"job render": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
-	"job show":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
-	"job verify": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
+	"job lint":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
+	"job render": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
+	"job show":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
+	"job verify": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
 	"signal act": {0, `stdout: {"result":"updated","id":"S-01ARZ3NDEKTSV4RRFFQ69G5FAV","project":"example","note":"S-01ARZ3NDEKTSV4RRFFQ69G5F...`},
 }
 
