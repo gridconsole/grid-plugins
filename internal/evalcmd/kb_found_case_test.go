@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/eval"
+	"github.com/gridconsole/grid-plugins/internal/mdfile"
 )
 
 const (
@@ -22,15 +23,33 @@ const (
 
 var kbEvKnownTypes = map[string]bool{"regex": true, "tool_used": true, "tool_order": true, "file_exists": true, "llm": true}
 
-// kbEvGrader is one graders/*.md file: flat front matter keys and the body.
+// kbEvGrader is one graders/*.md file: the front matter decoded as YAML and the
+// body. The grader's name is its file name.
 type kbEvGrader struct {
 	file string
-	meta map[string]string
+	meta map[string]any
 	body string
 }
 
-func (g kbEvGrader) name() string { return g.meta["name"] }
-func (g kbEvGrader) kind() string { return g.meta["type"] }
+func (g kbEvGrader) name() string { return strings.TrimSuffix(filepath.Base(g.file), ".md") }
+func (g kbEvGrader) kind() string { return g.str("type") }
+
+// str returns a scalar front matter value as text, "" when the key is absent.
+func (g kbEvGrader) str(key string) string {
+	v, ok := g.meta[key]
+	if !ok {
+		return ""
+	}
+	return fmt.Sprint(v)
+}
+
+// side returns the tool and input_match of the `before` or `after` map.
+func (g kbEvGrader) side(key string) (tool, match string) {
+	m, _ := g.meta[key].(map[string]any)
+	tool, _ = m["tool"].(string)
+	match, _ = m["input_match"].(string)
+	return tool, match
+}
 
 // kbEvFrontMatter reads the flat `key: value` lines between the leading ---
 // lines and returns them with the rest of the text.
@@ -85,8 +104,12 @@ func kbEvGraders(t *testing.T) []kbEvGrader {
 	sort.Strings(files)
 	var out []kbEvGrader
 	for _, f := range files {
-		meta, body, err := kbEvFrontMatter(kbEvRead(t, f))
+		front, body, err := mdfile.Split([]byte(kbEvRead(t, f)))
 		if err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		var meta map[string]any
+		if err := mdfile.Load(front, &meta, false); err != nil {
 			t.Fatalf("%s: %v", f, err)
 		}
 		out = append(out, kbEvGrader{file: f, meta: meta, body: body})
@@ -172,44 +195,46 @@ func kbEvGrade(g kbEvGrader, calls []eval.ToolCall, last, filesDir string) (pass
 	case "llm":
 		return false, false, "not graded (llm)"
 	case "tool_used":
-		count, _, err := kbEvCount(calls, g.meta["tool"], g.meta["input_match"])
+		count, _, err := kbEvCount(calls, g.str("tool"), g.str("input_match"))
 		if err != nil {
 			return false, true, err.Error()
 		}
 		min := 1
-		if v, ok := g.meta["min"]; ok {
-			min, _ = strconv.Atoi(v)
+		if _, ok := g.meta["min"]; ok {
+			min, _ = strconv.Atoi(g.str("min"))
 		}
 		ok := count >= min
-		if v, has := g.meta["max"]; has {
-			max, _ := strconv.Atoi(v)
+		if _, has := g.meta["max"]; has {
+			max, _ := strconv.Atoi(g.str("max"))
 			ok = ok && count <= max
 		}
-		return ok, true, fmt.Sprintf("%s matching %q called %d times", g.meta["tool"], g.meta["input_match"], count)
+		return ok, true, fmt.Sprintf("%s matching %q called %d times", g.str("tool"), g.str("input_match"), count)
 	case "tool_order":
-		_, before, err1 := kbEvCount(calls, g.meta["before_tool"], g.meta["before_match"])
-		_, after, err2 := kbEvCount(calls, g.meta["after_tool"], g.meta["after_match"])
+		beforeTool, beforeMatch := g.side("before")
+		afterTool, afterMatch := g.side("after")
+		_, before, err1 := kbEvCount(calls, beforeTool, beforeMatch)
+		_, after, err2 := kbEvCount(calls, afterTool, afterMatch)
 		if err1 != nil || err2 != nil {
 			return false, true, "bad pattern"
 		}
 		return before >= 0 && after >= 0 && before < after, true, fmt.Sprintf("before at %d, after at %d", before, after)
 	case "regex":
 		text := last
-		if f := g.meta["file"]; f != "" {
+		if f := g.str("file"); f != "" {
 			data, err := os.ReadFile(filepath.Join(filesDir, f))
 			if err != nil {
 				return false, true, err.Error()
 			}
 			text = string(data)
 		}
-		re, err := regexp.Compile(g.meta["pattern"])
+		re, err := regexp.Compile(g.str("pattern"))
 		if err != nil {
 			return false, true, err.Error()
 		}
-		return re.MatchString(text), true, fmt.Sprintf("pattern %q", g.meta["pattern"])
+		return re.MatchString(text), true, fmt.Sprintf("pattern %q", g.str("pattern"))
 	case "file_exists":
-		_, err := os.Stat(filepath.Join(filesDir, g.meta["path"]))
-		return err == nil, true, fmt.Sprintf("path %q", g.meta["path"])
+		_, err := os.Stat(filepath.Join(filesDir, g.str("path")))
+		return err == nil, true, fmt.Sprintf("path %q", g.str("path"))
 	}
 	return false, true, "unknown type " + g.kind()
 }
@@ -316,20 +341,22 @@ func TestKbEvShape(t *testing.T) {
 		if !kbEvKnownTypes[g.kind()] {
 			t.Errorf("%s: unknown grader type %q", g.file, g.kind())
 		}
-		if g.name() != strings.TrimSuffix(filepath.Base(g.file), ".md") {
-			t.Errorf("%s: name %q does not match the file", g.file, g.name())
+		if _, has := g.meta["name"]; has {
+			t.Errorf("%s: has a name: key, the grader is named by its file", g.file)
 		}
 	}
 	used := kbEvGrader1(t, graders, "found-posted")
-	if used.kind() != "tool_used" || used.meta["tool"] != "Bash" || used.meta["input_match"] != "--type found" || used.meta["min"] != "1" {
+	if used.kind() != "tool_used" || used.str("tool") != "Bash" || used.str("input_match") != "--type found" || used.str("min") != "1" {
 		t.Errorf("found-posted: %v, want tool_used on Bash with input_match --type found and min 1", used.meta)
 	}
 	order := kbEvGrader1(t, graders, "found-before-result")
-	if order.kind() != "tool_order" || !strings.Contains(order.meta["before_match"], "--type found") || !strings.Contains(order.meta["after_match"], "grid job result") {
+	beforeTool, beforeMatch := order.side("before")
+	afterTool, afterMatch := order.side("after")
+	if order.kind() != "tool_order" || beforeTool != "Bash" || afterTool != "Bash" || !strings.Contains(beforeMatch, "--type found") || !strings.Contains(afterMatch, "grid job result") {
 		t.Errorf("found-before-result: %v, want the found post before grid job result", order.meta)
 	}
-	if g := kbEvGrader1(t, graders, "found-security"); g.kind() != "llm" || g.meta["weight"] != "1" {
-		t.Errorf("found-security: type=%q weight=%q, want llm and 1", g.kind(), g.meta["weight"])
+	if g := kbEvGrader1(t, graders, "found-security"); g.kind() != "llm" || g.str("weight") != "1" {
+		t.Errorf("found-security: type=%q weight=%q, want llm and 1", g.kind(), g.str("weight"))
 	}
 	for _, name := range []string{"bad.jsonl", "good.jsonl"} {
 		if n := strings.Count(kbEvRead(t, filepath.Join(kbEvDataDir, name)), "\n"); n > 40 {
@@ -352,12 +379,12 @@ func TestKbEvRules(t *testing.T) {
 		g    kbEvGrader
 		want bool
 	}{
-		{kbEvGrader{meta: map[string]string{"type": "tool_used", "tool": "Bash", "input_match": "--type found"}}, true},
-		{kbEvGrader{meta: map[string]string{"type": "tool_used", "tool": "Read", "input_match": "--type found"}}, false},
-		{kbEvGrader{meta: map[string]string{"type": "tool_used", "tool": "Bash", "input_match": "--type found", "max": "0"}}, false},
-		{kbEvGrader{meta: map[string]string{"type": "tool_order", "before_tool": "Bash", "before_match": "--type found", "after_tool": "Bash", "after_match": "grid job result"}}, true},
-		{kbEvGrader{meta: map[string]string{"type": "tool_order", "before_tool": "Bash", "before_match": "grid job result", "after_tool": "Bash", "after_match": "--type found"}}, false},
-		{kbEvGrader{meta: map[string]string{"type": "tool_order", "before_tool": "Bash", "before_match": "--type found", "after_tool": "Bash", "after_match": "no such"}}, false},
+		{kbEvGrader{meta: map[string]any{"type": "tool_used", "tool": "Bash", "input_match": "--type found"}}, true},
+		{kbEvGrader{meta: map[string]any{"type": "tool_used", "tool": "Read", "input_match": "--type found"}}, false},
+		{kbEvGrader{meta: map[string]any{"type": "tool_used", "tool": "Bash", "input_match": "--type found", "max": 0}}, false},
+		{kbEvGrader{meta: map[string]any{"type": "tool_order", "before": map[string]any{"tool": "Bash", "input_match": "--type found"}, "after": map[string]any{"tool": "Bash", "input_match": "grid job result"}}}, true},
+		{kbEvGrader{meta: map[string]any{"type": "tool_order", "before": map[string]any{"tool": "Bash", "input_match": "grid job result"}, "after": map[string]any{"tool": "Bash", "input_match": "--type found"}}}, false},
+		{kbEvGrader{meta: map[string]any{"type": "tool_order", "before": map[string]any{"tool": "Bash", "input_match": "--type found"}, "after": map[string]any{"tool": "Bash", "input_match": "no such"}}}, false},
 	} {
 		got, graded, reason := kbEvGrade(c.g, calls, "", "")
 		if !graded || got != c.want {

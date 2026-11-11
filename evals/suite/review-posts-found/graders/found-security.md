@@ -1,5 +1,4 @@
 ---
-name: found-security
 type: llm
 weight: 1
 ---
