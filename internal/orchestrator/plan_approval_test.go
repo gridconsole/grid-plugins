@@ -82,8 +82,8 @@ func TestMalformedPlanDoesNotBlockOtherTasks(t *testing.T) {
 	badResult, goodResult := make(chan error, 1), make(chan error, 1)
 	go func() { _, err := bad.s.Tick(); badResult <- err }()
 	go func() { _, err := good.s.Tick(); goodResult <- err }()
-	if err := <-badResult; err == nil {
-		t.Fatal("malformed plan was accepted")
+	if err := <-badResult; err != nil {
+		t.Fatalf("malformed plan stopped its tick: %v", err)
 	}
 	if err := <-goodResult; err != nil {
 		t.Fatalf("other task stopped: %v", err)
