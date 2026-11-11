@@ -39,6 +39,7 @@ type Env struct {
 	Getenv     func(string) string    // nil reads the process environment
 	Executable func() (string, error) // nil asks os.Executable
 	OpenURL    func(string) error     // nil opens the system browser; tests set it
+	AppStart   *AppStart              // how grid open starts the app; nil starts nothing, OSEnv sets it
 	// afterApprove is a test seam: it runs once Approve has returned and before
 	// the person Job result is posted, so a test can look at the locks there.
 	afterApprove func()
@@ -87,6 +88,7 @@ func OSEnv() Env {
 		Cwd: cwd, Home: home, GridHome: gh,
 		TempRoots: []string{os.TempDir(), "/tmp", "/var/tmp"},
 		Machine:   machine,
+		AppStart:  &AppStart{},
 	}
 }
 
