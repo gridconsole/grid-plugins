@@ -9,6 +9,26 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
+// TestGmJobFailureWithoutSentinelKeepsOutput pins what did not change: a job
+// failure that carries no lookup sentinel (here no task selected) keeps its stderr
+// line and writes nothing on stdout with --json. It passes on the base too.
+func TestGmJobFailureWithoutSentinelKeepsOutput(t *testing.T) {
+	h, _, _ := actFixture(t, "new")
+	h.env.Getenv = func(string) string { return "" }
+	cwd := filepath.Join(h.root, "checkout")
+	h.mkdir(cwd)
+	h.record(project.Record{Name: "example", Folders: []project.Folder{{Machine: h.env.Machine, Path: cwd}}})
+	const want = "no task selected; use --task\n"
+	for _, args := range [][]string{{"job", "tree"}, {"job", "tree", "--json"}} {
+		if exit := h.run(cwd, args...); exit != 1 {
+			t.Fatalf("%v: exit = %d, want 1: %s", args, exit, h.errb)
+		}
+		if h.errb.String() != want || h.out.Len() != 0 {
+			t.Fatalf("%v: stderr = %q, stdout = %q; want %q and empty", args, h.errb, h.out, want)
+		}
+	}
+}
+
 // TestGmJobUnknownScope holds the eight job verbs and feed tick that printed the
 // lookup error on stderr and wrote nothing on stdout with --json: each gives the
 // no_such_project envelope for a project that is not registered and the
