@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
 func hardenHome(t *testing.T) string {
@@ -121,11 +119,10 @@ func TestWorkflowHardenBadProjectCLI(t *testing.T) {
 				if selector != "" {
 					args = append(args, "--project", selector)
 				}
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
+				ctx := iqWfHangCtx(t)
 				cmd := exec.CommandContext(ctx, binary, args...)
 				cmd.Env = append(os.Environ(), "GRID_HOME="+home)
-				data, err := cmd.CombinedOutput()
+				data, err := iqWfRun(t, ctx, cmd)
 				if err != nil {
 					t.Errorf("selector %q: exit must be 0: %v\n%s", selector, err, data)
 					continue
@@ -154,7 +151,7 @@ func TestWorkflowHardenBadProjectCLI(t *testing.T) {
 }
 
 // Run FIFO reads in a subprocess: a regression must neither hang the test suite
-// nor leave a blocked goroutine behind when the two-second deadline expires.
+// nor leave a blocked goroutine behind when the hang context (iqWfHangCtx) ends.
 func TestWorkflowHardenFIFO(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix FIFO test")
@@ -174,13 +171,12 @@ func TestWorkflowHardenFIFO(t *testing.T) {
 			} else {
 				putWorkflowFixture(t, path, "# Workflows\n")
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
+			ctx := iqWfHangCtx(t)
 			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestWorkflowHardenOpenChild$")
 			cmd.Env = append(os.Environ(), "GRID_WORKFLOW_TEST_HOME="+home, "GRID_WORKFLOW_TEST_SWAP="+swap)
-			data, err := cmd.CombinedOutput()
+			data, err := iqWfRun(t, ctx, cmd)
 			if ctx.Err() != nil {
-				t.Fatal("FIFO read blocked for two seconds")
+				t.Fatal("FIFO read blocked")
 			}
 			if err != nil {
 				t.Fatalf("read: %v: %s", err, data)
