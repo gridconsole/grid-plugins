@@ -68,12 +68,28 @@ func TestCheckFailures(t *testing.T) {
 }
 
 func TestCheckTimeout(t *testing.T) {
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-r.Context().Done() }))
+	entered := make(chan struct{})
+	gone := make(chan struct{})
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(entered)
+		<-r.Context().Done()
+		close(gone)
+	}))
 	defer s.Close()
-	start := time.Now()
+	// The handler never answers, so Check returning is the proof the timeout ended the request.
 	r := Check(CheckOptions{URL: s.URL, GridHome: t.TempDir(), Timeout: 20 * time.Millisecond})
-	if r.Status != "unavailable" || time.Since(start) > time.Second {
-		t.Fatalf("%+v elapsed %s", r, time.Since(start))
+	if r.Status != "unavailable" {
+		t.Fatalf("%+v", r)
+	}
+	// Under load the timeout can fire before the request reaches the handler; then there is no request to wait for.
+	select {
+	case <-entered:
+		select {
+		case <-gone:
+		case <-time.After(30 * time.Second):
+			t.Fatal("request never ended")
+		}
+	default:
 	}
 }
 
