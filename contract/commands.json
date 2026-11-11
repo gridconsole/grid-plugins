@@ -539,32 +539,6 @@
           "output": ""
         },
         {
-          "name": "diff",
-          "args": [
-            "\u003crev-a\u003e",
-            "\u003crev-b\u003e"
-          ],
-          "flags": [
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--project",
-              "takes": "value",
-              "required": false
-            },
-            {
-              "name": "--task",
-              "takes": "value",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
-        {
           "name": "hash",
           "args": [],
           "flags": [
@@ -1917,31 +1891,6 @@
       "summary": "tick, post, read, state, types, handover, fold",
       "built": true,
       "subcommands": [
-        {
-          "name": "fold",
-          "args": [
-            "[task]"
-          ],
-          "flags": [
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--project",
-              "takes": "value",
-              "required": false
-            },
-            {
-              "name": "--task",
-              "takes": "value",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
         {
           "name": "handover",
           "args": [

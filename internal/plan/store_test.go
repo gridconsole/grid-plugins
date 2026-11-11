@@ -1,7 +1,6 @@
 package plan
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/gridconsole/grid-plugins/internal/golden"
 )
 
 func testStore(t *testing.T) Store {
@@ -320,39 +317,6 @@ func TestConcurrentWritersAndReaders(t *testing.T) {
 	}
 }
 
-func TestDiffGolden(t *testing.T) {
-	s := testStore(t)
-	put(t, filepath.Join(s.TaskDir, "plan.md"), fixture(t, "plan.md"))
-	if _, err := s.Write(fixture(t, "revised.md")); err != nil {
-		t.Fatal(err)
-	}
-	diff, err := s.Diff("3", "4")
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := json.MarshalIndent(diff, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	golden.Assert(t, "plan-diff", string(b)+"\n")
-	if len(diff.Changed) != 1 || diff.Changed[0].After.ID != "i-1" {
-		t.Fatalf("%+v", diff)
-	}
-	for _, pair := range [][2]string{{"../3", "4"}, {"0", "4"}, {"+3", "4"}, {"3.1", "4"}, {"3", "99"}} {
-		if _, err := s.Diff(pair[0], pair[1]); err == nil {
-			t.Errorf("accepted %v", pair)
-		}
-	}
-	same, err := s.Diff("4", "4")
-	if err != nil || len(same.Added)+len(same.Removed)+len(same.Changed) != 0 {
-		t.Fatalf("same: %+v %v", same, err)
-	}
-	reverse, err := s.Diff("4", "3")
-	if err != nil || reverse.Added[0].ID != "i-4" || reverse.Removed[0].ID != "i-5" {
-		t.Fatalf("reverse: %+v %v", reverse, err)
-	}
-}
-
 func TestDiffPositionAndFields(t *testing.T) {
 	base := "# Plan\n- [ ] 1 First\n  jobs:\n    - write: [src/one/**]\n      after: []\n      review: L1\n      risk: []\n      verify: pass\n- [ ] 2 Second\n  jobs: []\n"
 	for _, pair := range [][2]string{{"src/one", "src/two"}, {"after: []", "after: [J-3]"}, {"L1", "L2"}, {"risk: []", "risk: [security]"}, {"verify: pass", "verify: check"}} {
@@ -371,9 +335,6 @@ func TestReadCommandsCreateNothing(t *testing.T) {
 	s := testStore(t)
 	put(t, filepath.Join(s.TaskDir, "plan.md"), fixture(t, "plan.md"))
 	if _, err := s.Items(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Diff("3", "3"); err != nil {
 		t.Fatal(err)
 	}
 	entries, err := os.ReadDir(s.TaskDir)

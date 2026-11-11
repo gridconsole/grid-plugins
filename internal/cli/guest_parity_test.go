@@ -39,7 +39,6 @@ var guestParityCommands = map[string][]string{
 	"brain topics":         {},
 	"deliver":              {"--outcome", "parity"},
 
-	"feed fold":     {},
 	"feed handover": {},
 	"feed post":     {"--type", "post", "--body", "{}"},
 	"feed read":     {},
@@ -75,7 +74,6 @@ var guestParityCommands = map[string][]string{
 	"person list":        {},
 	"person show":        {"gus"},
 	"plan check":         {},
-	"plan diff":          {"1", "2"},
 	"plan hash":          {},
 	"plan items":         {},
 	"plan migrate":       {"--dry-run"},
