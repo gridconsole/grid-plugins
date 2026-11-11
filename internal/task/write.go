@@ -102,45 +102,78 @@ func (s Store) Change(o WriteOptions) (Event, error) {
 		return event, err
 	}
 	err := s.withWrite(o.Cwd, o.ID, func(t Task) error {
-		next, err := NextState(t.State, o.Action, o.State)
-		if err != nil {
-			return err
-		}
-		event = s.event(t, o, next)
-		data, err := os.ReadFile(filepath.Join(t.Path, "task.md"))
-		if err != nil {
-			return err
-		}
-		updated, err := rewriteTask(data, func(mapping *yaml.Node) error {
-			setScalar(mapping, "state", next, false)
-			return nil
-		}, nil)
-		if err != nil {
-			return err
-		}
-		if _, err := Fold(t.Path, string(updated), t.Intent); err != nil {
-			return err
-		}
-		files := map[string][]byte{"task.md": updated}
-		if o.Action == "reopen" {
-			// A reopened task needs its plan approved again: the receipt below is
-			// not an approve event, so approval.json no longer matches. The plan
-			// Job's old result is superseded by the new plan Job that grid task
-			// reopen posts (see planJobResult).
-			previous, err := readOptional(filepath.Join(t.Path, approvalFile))
-			if err != nil {
-				return err
-			}
-			if previous != nil {
-				files[approvalFile], err = json.Marshal(event)
-				if err != nil {
-					return err
-				}
-			}
-		}
-		return commitWrite(t.Path, event, files)
+		var err error
+		event, err = s.change(t, o)
+		return err
 	})
 	return event, err
+}
+
+// change is the move Change makes under the task lock: it checks the move
+// against the state table, rewrites task.md and appends the receipt.
+func (s Store) change(t Task, o WriteOptions) (Event, error) {
+	var event Event
+	next, err := NextState(t.State, o.Action, o.State)
+	if err != nil {
+		return event, err
+	}
+	event = s.event(t, o, next)
+	data, err := os.ReadFile(filepath.Join(t.Path, "task.md"))
+	if err != nil {
+		return event, err
+	}
+	updated, err := rewriteTask(data, func(mapping *yaml.Node) error {
+		setScalar(mapping, "state", next, false)
+		return nil
+	}, nil)
+	if err != nil {
+		return event, err
+	}
+	if _, err := Fold(t.Path, string(updated), t.Intent); err != nil {
+		return event, err
+	}
+	files := map[string][]byte{"task.md": updated}
+	if o.Action == "reopen" {
+		// A reopened task needs its plan approved again: the receipt below is
+		// not an approve event, so approval.json no longer matches. The plan
+		// Job's old result is superseded by the new plan Job that grid task
+		// reopen posts (see planJobResult).
+		previous, err := readOptional(filepath.Join(t.Path, approvalFile))
+		if err != nil {
+			return event, err
+		}
+		if previous != nil {
+			files[approvalFile], err = json.Marshal(event)
+			if err != nil {
+				return event, err
+			}
+		}
+	}
+	return event, commitWrite(t.Path, event, files)
+}
+
+// RunningFromQueued moves a task from queued to running, as the worker does
+// when it assigns the task's first Job. It makes the move of Change for action
+// status and writes the same receipt, under the same lock. The state is read
+// inside the lock and only queued moves: a person may have set waiting, stuck
+// or paused a moment before, and then the task is left as it is, with no
+// receipt and no error. moved reports whether this call wrote the move. o names
+// the task (ID, Cwd), the author (Who) and the note; Action and State are set here.
+func (s Store) RunningFromQueued(o WriteOptions) (moved bool, event Event, err error) {
+	o.Action, o.State = "status", "running"
+	if err := o.validateText(); err != nil {
+		return false, event, err
+	}
+	err = s.withWrite(o.Cwd, o.ID, func(t Task) error {
+		if t.State != "queued" {
+			return nil
+		}
+		var moveErr error
+		event, moveErr = s.change(t, o)
+		moved = moveErr == nil
+		return moveErr
+	})
+	return moved, event, err
 }
 
 // rewriteTask edits the task.md header as a YAML document and writes back only
