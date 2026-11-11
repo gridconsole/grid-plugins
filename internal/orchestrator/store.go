@@ -68,6 +68,8 @@ type Store struct {
 	Incident     func(string, []string) error
 	// Diagnostics receives publication notices; nil discards them.
 	Diagnostics io.Writer
+	// pause is the wait between two passes of Next; nil means the one-second tick.
+	pause func(context.Context) error
 }
 
 func (s Store) now() time.Time {
@@ -194,6 +196,12 @@ func (s Store) Next(ctx context.Context, wait bool) (Output, error) {
 		out, err := s.Tick()
 		if err != nil || !wait || out.Assigned > 0 || out.Wake != nil {
 			return out, err
+		}
+		if s.pause != nil {
+			if err := s.pause(ctx); err != nil {
+				return out, err
+			}
+			continue
 		}
 		timer := time.NewTimer(time.Second)
 		select {

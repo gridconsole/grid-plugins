@@ -228,7 +228,11 @@ func TestNextWithoutWaitReturnsAfterOnePass(t *testing.T) {
 func TestNextWaitReturnsAssignedJobBeforeTheTick(t *testing.T) {
 	f := setup(t)
 	f.job(t, "J-1", nil)
-	start := time.Now()
+	pauses := 0
+	f.s.pause = func(context.Context) error {
+		pauses++
+		return errors.New("TestNextWaitReturnsAssignedJobBeforeTheTick: Next waited between passes")
+	}
 	out, err := f.s.Next(context.Background(), true)
 	if err != nil {
 		t.Fatal(err)
@@ -236,8 +240,8 @@ func TestNextWaitReturnsAssignedJobBeforeTheTick(t *testing.T) {
 	if out.Assigned != 1 || len(out.Spawns) != 1 || out.Spawns[0].Job != "J-1" {
 		t.Fatalf("Next = %+v", out)
 	}
-	if d := time.Since(start); d >= time.Second {
-		t.Fatalf("returned after %v, not before the one-second tick", d)
+	if pauses != 0 {
+		t.Fatalf("Next waited %d times, want 0", pauses)
 	}
 }
 
