@@ -304,7 +304,7 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 			// the first sentinel (or rejects it as an invalid value); a boolean flag
 			// leaves it for the parser to reject. This also handles IsBoolFlag and
 			// hand-written parsers without guessing their arity from help text.
-			probe := func(flag string) (bool, string) {
+			probeAt := func(prefix []string, flag string) (bool, string) {
 				const value = "--__contract_value"
 				const stop = "--__contract_stop"
 				args := append(append([]string(nil), prefix...), flag, value, stop)
@@ -324,6 +324,25 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 					return true, "none"
 				}
 				return true, "value"
+			}
+			probe := func(flag string) (bool, string) { return probeAt(prefix, flag) }
+			if key == "setup" {
+				// runSetup picks its parser by operand (settings.ClaudeSetupCommand): no
+				// operand is the Claude Code branch, a project operand is the answers
+				// branch. List a flag when either branch knows it; the two must agree on
+				// what it takes, and both must refuse the unknown-flag probe.
+				probe = func(flag string) (bool, string) {
+					const project = "contractproject"
+					noProject, noProjectTakes := probeAt(prefix, flag)
+					withProject, withProjectTakes := probeAt(append(append([]string(nil), prefix...), project), flag)
+					if noProject && withProject && noProjectTakes != withProjectTakes {
+						t.Fatalf("%s: flag %s takes %q without a project and %q with one", key, flag, noProjectTakes, withProjectTakes)
+					}
+					if noProject {
+						return true, noProjectTakes
+					}
+					return withProject, withProjectTakes
+				}
 			}
 			// Hook deliberately ignores invalid input and has no flags.
 			// answer takes <task> first, so a leading probe flag is swallowed as the task.
@@ -545,7 +564,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"land":                 {args: []string{"<task>"}},
 		"project-md get":       {args: []string{"<project>", "<key>"}},
 		"project-md set":       {args: []string{"<project>", "<key>", "<value>"}},
-		"setup":                {},
+		"setup":                {args: []string{"[project]"}},
 		"workflow show":        {},
 		"workflow write":       {required: map[string]bool{"--file": true, "--rev": true}},
 		"usage post":           {required: map[string]bool{"--job": true}},

@@ -4676,8 +4676,15 @@
       "subcommands": [
         {
           "name": "",
-          "args": [],
+          "args": [
+            "[project]"
+          ],
           "flags": [
+            {
+              "name": "--answers",
+              "takes": "value",
+              "required": false
+            },
             {
               "name": "--json",
               "takes": "none",

@@ -95,14 +95,6 @@ func frontMatter(text string) (map[string]string, map[string][]string, error) {
 	return keys, lists, nil
 }
 
-// contractGaps lists flags the shipped CLI accepts (internal/cli/settings.go:198
-// reads --answers) that contract/commands.json does not list, and no listed
-// flag fits. The text is left as it is and the assertion is left out; the fix is
-// to add the flag to commands.json. Key: file, group, verb, flag.
-var contractGaps = map[string]bool{
-	"skills/setup/SKILL.md setup  --answers": true,
-}
-
 var (
 	backtickSpan = regexp.MustCompile("`([^`\n]*)`")
 	quotedText   = regexp.MustCompile(`"[^"]*"`)
@@ -194,9 +186,6 @@ func checkPluginFiles(agents, skills map[string]string, skillDirs map[string]boo
 					continue // the group alone, as in "`grid task` opens the task skill"; no verb given
 				}
 				for _, fm := range flagToken.FindAllStringSubmatch(quotedText.ReplaceAllString(span, ""), -1) {
-					if contractGaps[f.path+" "+group+" "+verb+" "+fm[1]] {
-						continue
-					}
 					if !flags[fm[1]] {
 						add("%s: `%s` uses flag %s, which grid %s %s does not have", where, span, fm[1], group, verb)
 					}
