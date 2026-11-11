@@ -129,6 +129,20 @@ type Attempt struct {
 	// gave no reason, so Exit reads crash only by default.
 	Code          string `json:"code,omitempty"`
 	ReasonMissing bool   `json:"reason_missing,omitempty"`
+	// The record times of the assign, the ack and the worker-exit. They come from
+	// the Feed records, never from the clock.
+	AssignedAt string `json:"assigned_at,omitempty"`
+	AckedAt    string `json:"acked_at,omitempty"`
+	ExitedAt   string `json:"exited_at,omitempty"`
+}
+
+// recordTime reads a record's At as the time layout every other tree time uses.
+func recordTime(at string) string {
+	t, err := time.Parse(time.RFC3339Nano, at)
+	if err != nil {
+		return at
+	}
+	return contract.FormatTime(t)
 }
 
 // exitCodeText reads a worker-exit body's code the way the fold keeps it: a
@@ -165,6 +179,11 @@ type TreeJob struct {
 	*contract.Job
 	Attempts []Attempt `json:"attempts"`
 	Orphan   *Orphan   `json:"orphan,omitempty"`
+	// ReadyAt is when the Job became ready: its post, or the record that closed
+	// the last Job it waited on. A Job still waiting has none. PickupSeconds is
+	// the latest attempt's ack minus ReadyAt, and is absent until an ack exists.
+	ReadyAt       string   `json:"ready_at,omitempty"`
+	PickupSeconds *float64 `json:"pickup_seconds,omitempty"`
 }
 
 func Tree(s Snapshot) []TreeJob { return TreeAt(s, time.Now()) }
@@ -178,9 +197,17 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 	plain.Assignee = ""
 	readiness, since, err := readyAt(plain, now)
 	ready := map[string]bool{}
+	// open: no unmet after, so the Job has a ready time. A person's Job is held
+	// back from Ready by a wait with no target; a started Job was ready to start.
+	open := map[string]bool{}
 	if err == nil {
 		for _, id := range readiness.Ready {
-			ready[id] = true
+			ready[id], open[id] = true, true
+		}
+		for _, w := range readiness.Waiting {
+			if w.Target == "" && w.Reason != "usage_limit" && w.Reason != "review_capacity" {
+				open[w.Job] = true
+			}
 		}
 	}
 	for _, id := range ids(s) {
@@ -192,7 +219,7 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 		for _, event := range j.History {
 			r := s.Records[event]
 			if a, ok := r.Body["assign"].(map[string]any); ok {
-				row.Attempts = append(row.Attempts, Attempt{Number: int(a["attempt"].(float64)), Fence: int64(a["fence"].(float64)), State: "assigned"})
+				row.Attempts = append(row.Attempts, Attempt{Number: int(a["attempt"].(float64)), Fence: int64(a["fence"].(float64)), State: "assigned", AssignedAt: recordTime(r.At)})
 				until, _ = time.Parse(time.RFC3339Nano, stringValue(a["until"]))
 				to, hasResult = stringValue(a["to"]), false
 			} else if len(row.Attempts) > 0 {
@@ -201,8 +228,9 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 				case "result":
 					hasResult = true
 				case "ack":
-					a.State = "running"
+					a.State, a.AckedAt = "running", recordTime(r.At)
 				case "worker-exit":
+					a.ExitedAt = recordTime(r.At)
 					a.Exit = stringValue(r.Body["reason"])
 					if a.Exit == "" {
 						a.Exit, a.ReasonMissing = "crash", true
@@ -213,6 +241,14 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 						a.State = status
 					}
 				}
+			}
+		}
+		if (open[id] || len(row.Attempts) > 0) && !since[id].IsZero() {
+			row.ReadyAt = contract.FormatTime(since[id])
+			if n := len(row.Attempts); n > 0 && row.Attempts[n-1].AckedAt != "" {
+				acked, _ := time.Parse(time.RFC3339Nano, row.Attempts[n-1].AckedAt)
+				secs := acked.Sub(since[id]).Seconds()
+				row.PickupSeconds = &secs
 			}
 		}
 		row.Orphan = orphanOf(j, row.Attempts, ready[id], since[id], until, to, hasResult, now)
