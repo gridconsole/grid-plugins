@@ -2,7 +2,7 @@
 
 `grid setup --yes` writes one more Claude Code deny rule: `Edit(<home>/*/tasks/[Tt]-[0-9]*/**)` (with "tasks" folded), for gate files in a task-like folder one level below the Grid home. The host guard's other outside forms are named "not carried, by decision" in the `claudeHostPaths` comment and get no rule.
 
-Base: `cf5b259f` (origin/main, lane-Pint121 merge; the brief's line numbers held: `Not covered` was at claude.go:80). Code head: `461b30b9`; the report commit sits on top of it.
+Base: `cf5b259f` (origin/main, lane-Pint121 merge; the brief's line numbers held: `Not covered` was at claude.go:80). Code commits: `d33613ec` (rule, comment, goldens) and `461b30b9` (tests); the report commits and a one-line comment drop in setup_claude_host_test.go sit on top. The row 2 PASS lines were re-run on the final head.
 
 ## Proof table
 
@@ -40,7 +40,7 @@ Base: `cf5b259f` (origin/main, lane-Pint121 merge; the brief's line numbers held
 FAIL	github.com/gridconsole/grid-plugins/internal/cli
 ```
 
-Both layouts (`default`, `outside_home`) fail the same way. The guard oracle at setup_claude_host_test.go:178-179 did not fire for the new rows, so EvaluateHost refuses both today, as the brief said.
+Both layouts (`default`, `outside_home`) fail the same way. The pasted `:190` is from that run; a comment line above the rows was dropped afterwards, so the same check is now at :189. The guard oracle at setup_claude_host_test.go:177-178 did not fire for the new rows, so EvaluateHost refuses both today, as the brief said.
 
 ## What changed
 
@@ -58,3 +58,5 @@ Both layouts (`default`, `outside_home`) fail the same way. The guard oracle at 
 ## NOT VERIFIED on a live screen
 
 Claude Code's own matching of the new deny pattern is not exercised: the tests use the repo's `claudePatternMatches` model of the pattern (the same one the existing parity test uses). No UI row.
+
+DONE
