@@ -96,6 +96,7 @@ func runOrchestrator(args []string, env Env) int {
 		if err.Error() == "--body must be a JSON object" {
 			err = &feed.InvalidRecordError{Err: err}
 		}
+		recordLookupError(env, err)
 		return exitCode(err)
 	}
 	var obj map[string]any
@@ -461,6 +462,15 @@ func printPostFindings(w io.Writer, job string, findings []lint.Finding, err err
 	}
 }
 
+// recordLookupError records a failure that carries a lookup sentinel (an
+// unregistered project, an unknown task) so --json also gets the error envelope;
+// any other failure keeps its stderr line and empty stdout.
+func recordLookupError(env Env, err error) {
+	if errorCode(err) != "" {
+		env.recordError(err)
+	}
+}
+
 // runPersonApproval answers the person Job of an approve step with the plan
 // hash the person saw. It moves an old approval receipt into the Feed first, runs
 // the compare-and-set of grid approve, and then posts the Job result once
@@ -470,6 +480,7 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	note, _ := body["note"].(string)
 	if _, _, err := migrate.ReceiptToJob(store.TaskDir, w); err != nil {
 		fmt.Fprintln(env.Stderr, err)
+		recordLookupError(env, err)
 		return 1
 	}
 	// The same refusals AnswerPerson gives, before anything is written: an answer
@@ -479,6 +490,7 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	}
 	if err := orchestrator.CheckPersonAnswer(answer); err != nil {
 		fmt.Fprintln(env.Stderr, err)
+		recordLookupError(env, err)
 		return exitCode(err)
 	}
 	snap, err := orchestrator.Load(store)
@@ -487,6 +499,7 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	}
 	if err != nil {
 		fmt.Fprintln(env.Stderr, err)
+		recordLookupError(env, err)
 		return exitCode(err)
 	}
 	resolved, err := resolveTaskOperand(env, dir)
