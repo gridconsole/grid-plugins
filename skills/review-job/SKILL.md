@@ -26,4 +26,26 @@ Notes: one line each, never blocking
 
 If a row cannot be checked, say it is NOT VERIFIED; never guess it held.
 
+The verdict text goes in `outcome`. A rejecting body looks like this; keep every field, with `[]` where you have nothing to list:
+
+```json
+{
+  "outcome": "REJECTED\nRows: A1 met, A2 NOT MET (internal/sync/client.go:42)\nMust-fix: A2 the retry is never reached\nNotes: the helper name is unclear",
+  "changed": [],
+  "evidence": ["go test ./internal/sync/ exit 1", "internal/sync/client.go:42"],
+  "acceptance": [
+    {"id": "A1", "state": "met"},
+    {"id": "A2", "state": "not met"}
+  ],
+  "verified": null,
+  "must_fix": [{"row": "A2", "at": "internal/sync/client.go:42"}],
+  "found": [],
+  "proposed_jobs": [],
+  "decisions_needed": [],
+  "knowledge": []
+}
+```
+
+An `ACCEPTED` body has `"must_fix": []`. Each `must_fix` row is `A<n>` (or `write`, `verify`, `classify`) with the `path:line` in `at`.
+
 Done: the verdict is posted and every must-fix names a row.

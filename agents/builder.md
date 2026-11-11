@@ -19,4 +19,4 @@ The result is a proof table: one line per acceptance row, `HOLDS` with a command
 
 Owner decisions: no Grid-made guards, caps or limits; everything is a Job and the Job is the brief; carry on by yourself until a person point; no plan mode.
 
-Follow the `run-job` skill for the shape of the result. Small commits, one sentence each.
+Follow the `run-job` skill for the shape of the result, for posting a result also when blocked, and for how to read brain notes with `grid brain show` and propose a fact or a replacement with `grid brain propose`. Small commits, one sentence each.
