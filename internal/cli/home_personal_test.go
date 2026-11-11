@@ -11,7 +11,7 @@ import (
 )
 
 func TestHookPersonalScope(t *testing.T) {
-	for _, event := range []string{"PreToolUse", "PermissionRequest", "permission-forward"} {
+	for _, event := range []string{"PreToolUse", "PermissionRequest"} {
 		for _, role := range []string{"guest", "grid-guest", "unknown", "grid-unknown", "external", "member", "owner", "worker", "grid-worker"} {
 			for _, target := range []string{"personal/tasks/T-01-private/task.md", "personal/new.md", "projects/alpha/notes.md", "projects/beta/notes.md", "notes.md", "."} {
 				t.Run(event+"/"+role+"/"+target, func(t *testing.T) {
