@@ -92,8 +92,13 @@ func runWrite(args []string, env Env) int {
 	if !brain.RevertAllowed(env.Role) {
 		return roleRefused(env, "write", "write brain entries", l.asJSON)
 	}
+	// The store comes before the input, so a project that is not registered answers
+	// no_such_project (exit 1) whatever --file holds or whether stdin is empty.
+	store, level, err := levelStore(env, l.level, l.project, true)
+	if err != nil {
+		return failWith(env, l.asJSON, err)
+	}
 	var data []byte
-	var err error
 	if *file == "-" {
 		data, err = readInput(env.Stdin)
 	} else {
@@ -118,10 +123,6 @@ func runWrite(args []string, env Env) int {
 	allowWorkflow := env.Role == "" || env.Role == "owner"
 	if brain.IsWorkflowNote(n) && !allowWorkflow {
 		return roleRefused(env, "write", "write workflow notes", l.asJSON)
-	}
-	store, level, err := levelStore(env, l.level, l.project, true)
-	if err != nil {
-		return failWith(env, l.asJSON, err)
 	}
 	origin, err := hyDrOrigin(env)
 	if err != nil {

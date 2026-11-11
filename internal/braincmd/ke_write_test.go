@@ -226,6 +226,11 @@ func TestKeWrCommand(t *testing.T) {
 	refuse("machines json", 7, notVersioned, "", "owner", "ana", "machines/x", "--expect", "none", "--file", f.path("machines", keWrBytes("machines", "x", "# M\n")), home, "--json")
 	refuse("a note placed by hand", 7, notVersioned, "", "owner", "ana", "decisions/y", "--expect", brain.NoteRev(hand), "--file", f.path("y2", keWrBytes("decisions", "y", "# Y2\n")), home)
 	refuse("an unregistered project", 1, "brain: ", "", "owner", "ana", "decisions/x", "--expect", rev1, "--file", xNew, "--project", "no-such-project")
+	// The store is resolved before the input is read: an unregistered project is
+	// exit 1 whatever --file holds, as the mount's unknown-project walk needs.
+	refuse("an unregistered project with a missing file", 1, "brain: ", "", "owner", "ana", "decisions/x", "--expect", "none", "--file", filepath.Join(f.files, "absent.md"), "--project", "no-such-project")
+	refuse("an unregistered project with empty stdin", 1, "brain: ", "", "owner", "ana", "decisions/x", "--expect", "none", "--file", "-", "--project", "no-such-project")
+	refuse("an unregistered project with a file that is not a note", 1, "brain: ", "", "owner", "ana", "decisions/x", "--expect", "none", "--file", f.path("not-a-note", []byte("plain text\n")), "--project", "no-such-project")
 	refuse("name held by another topic", 9, `{"error":"refused","reason":"note name \"x\" already belongs to topic decisions"}`+"\n", "", "owner", "ana", "notes/x", "--expect", "none", "--file", f.path("held", keWrBytes("notes", "x", "# H\n")), home)
 
 	// The roles that write: the empty role, owner and member each replace x in turn.
