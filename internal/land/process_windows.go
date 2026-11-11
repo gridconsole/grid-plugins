@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -31,12 +32,23 @@ func cleanupProcess(cmd *exec.Cmd) {
 	}
 }
 
+// killerEnvironment is the fixed allow list taken from the environment the land
+// command was started with, so the killer sees the Call's variables when Store
+// has a Getenv and the host's when it has not. runProcess sets cmd.Env before
+// configureProcess; a command with no Env reads the host, as before.
+func killerEnvironment(cmd *exec.Cmd) []string {
+	if cmd.Env == nil {
+		return allowedEnvironment(nil)
+	}
+	return allowedEnvironmentFor(runtime.GOOS, cmd.Env, nil)
+}
+
 func killProcessTree(cmd *exec.Cmd) error {
 	// Resolve the OS tool directly, never a task-provided taskkill on PATH.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	killer := exec.CommandContext(ctx, windowsTaskkillPath(os.Getenv("SystemRoot")), "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid))
-	killer.Env = allowedEnvironment(nil)
+	killer.Env = killerEnvironment(cmd)
 	if err := killer.Run(); err != nil {
 		_ = cmd.Process.Kill()
 		return fmt.Errorf("terminate deploy process tree: %w", err)
