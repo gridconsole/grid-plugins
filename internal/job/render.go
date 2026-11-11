@@ -53,7 +53,8 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	}
 	seen := map[string]Source{}
 	resolve := func(p string) (Source, error) {
-		if s, ok := seen[p]; ok {
+		key := SourceKey(p)
+		if s, ok := seen[key]; ok {
 			return s, nil
 		}
 		s, e := o.Resolver.Resolve(p)
@@ -67,7 +68,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		if marked(s.Tier) && !s.PointerOnly {
 			r.Inputs.DisableSkillShellExecution = true
 		}
-		seen[p] = s
+		seen[key] = s
 		return s, nil
 	}
 	owner, e := resolve(j.Intent.Owner)
@@ -214,9 +215,29 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	}
 	b.WriteString(meta)
 	b.WriteString("\n## Intent\n\n")
-	b.WriteString(sourceBlock("Owner", owner))
-	b.WriteString(sourceBlock("Item", item))
-	b.WriteString(sourceBlock("Goal", goal))
+	// A source that several slots point at prints once, with the slot names joined.
+	slots := []struct {
+		label, pointer string
+		source         Source
+	}{{"Owner", j.Intent.Owner, owner}, {"Item", j.Intent.Item, item}, {"Goal", j.Intent.Goal, goal}}
+	for i, sl := range slots {
+		label, first := sl.label, true
+		for k, other := range slots {
+			if SourceKey(other.pointer) != SourceKey(sl.pointer) {
+				continue
+			}
+			if k < i {
+				first = false
+				break
+			}
+			if k > i {
+				label += ", " + other.label
+			}
+		}
+		if first {
+			b.WriteString(sourceBlock(label, sl.source))
+		}
+	}
 	b.WriteString("## Context\n\n")
 	b.WriteString(brain)
 	sort.Slice(relations, func(a, b int) bool {
@@ -293,6 +314,34 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	return r, nil
 }
 
+// SourceKey names the source a pointer reads, not how it is spelled. A task file
+// pointer drops a leading "task:" and writes ":N-M" as "#LN-LM", the two steps
+// Files.Resolve takes. brain:, repo:, prototype: and job: pointers keep their text.
+func SourceKey(p string) string {
+	rel, anchor := p, ""
+	if at := strings.IndexByte(rel, '#'); at >= 0 {
+		anchor = rel[at+1:]
+		rel = rel[:at]
+	}
+	if m := rangeSuffix.FindStringSubmatch(rel); m != nil {
+		if anchor != "" {
+			return p
+		}
+		anchor = "L" + m[1] + "-L" + m[2]
+		rel = strings.TrimSuffix(rel, m[0])
+	}
+	for _, kind := range []string{"brain:", "prototype:", "repo:", "job:"} {
+		if strings.HasPrefix(rel, kind) {
+			return p
+		}
+	}
+	rel = strings.TrimPrefix(rel, "task:")
+	if anchor == "" {
+		return rel
+	}
+	return rel + "#" + anchor
+}
+
 // agentBody is an agent file without its front matter.
 func agentBody(md string) string {
 	if rest, ok := strings.CutPrefix(md, "---\n"); ok {
@@ -351,6 +400,14 @@ type Replay map[string]Source
 
 func (r Replay) Resolve(p string) (Source, error) {
 	s, ok := r[p]
+	if !ok {
+		// A deduplicated render keeps one spelling; another spelling of it is the same source.
+		for q, c := range r {
+			if SourceKey(q) == SourceKey(p) {
+				return c, nil
+			}
+		}
+	}
 	if !ok {
 		return s, fmt.Errorf("%s: not in render inputs", p)
 	}
