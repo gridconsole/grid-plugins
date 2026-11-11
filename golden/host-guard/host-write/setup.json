@@ -3,6 +3,9 @@
   "env": {
     "GRID_PLAN_GUARD": "off"
   },
+  "files": {
+    "$GRID_HOME/settings.json": "{\"hooks\":{\"host-guard\":\"block\"}}\n"
+  },
   "hook": "host-guard",
   "name": "host-write",
   "proves": "Host approval files are denied even with plan guard off."

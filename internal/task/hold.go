@@ -134,8 +134,8 @@ func HeldStage(stage string) bool {
 // approval yet?". An approval from `grid approve` ends it only while it still
 // matches plan.md (Approved); the old "plan accepted" history line, which tasks
 // migrated from the old plugin carry, ends it through PlanStageWith. It holds
-// nothing: the guard asks it only for the brain-recall check on plan.md and for
-// the grid-planner's reach into a task folder, never to refuse a write.
+// nothing: the guard asks it only for the grid-planner's reach into a task
+// folder, never to refuse a write.
 func PlanHeldWith(lookup StepLookup, dir, text, history string) bool {
 	// A task with an approve person Job is answered by Approved, the plan Job
 	// result. The Job takes precedence over legacy history/step advancement:

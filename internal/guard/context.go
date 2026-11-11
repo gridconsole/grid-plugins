@@ -141,8 +141,6 @@ func taskAt(p, projects string) *task {
 	return &task{filepath.Join(resolve(".", projects), filepath.Join(parts[:3]...)), strings.Join(parts[3:], "/")}
 }
 
-const planReady = "· plan ready ·"
-
 // stepLookup resolves the steps of one task from the task.md text it is given.
 type stepLookup = taskstore.StepLookup
 
@@ -157,9 +155,8 @@ func stepsFor(env map[string]string, taskDir string) stepLookup {
 func planStage(text, history string) string { return taskstore.PlanStage(text, history) }
 
 // held reports that a task's plan is still being written (no plan accepted).
-// Two rules read it: the brain-recall check on plan.md and the grid-planner's
-// reach into a task folder. Neither blocks a repo write, and no rule blocks a
-// task's agents because its plan is not accepted.
+// One rule reads it: the grid-planner's reach into a task folder. It blocks no
+// repo write, and no rule blocks a task's agents because its plan is not accepted.
 func held(lookup stepLookup, dir, text, history string) bool {
 	return taskstore.PlanHeldWith(lookup, dir, text, history)
 }

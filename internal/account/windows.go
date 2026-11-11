@@ -66,13 +66,40 @@ func ConfigDir(env Env) string {
 // payload with no window (an API-key sign-in, or before the first reply) writes
 // nothing, so an earlier snapshot is not overwritten by silence.
 func Note(env Env, in io.Reader, dir string) error {
+	_, err := NoteKept(env, in, dir)
+	return err
+}
+
+// NoteKept is Note that also answers what it read: the snapshot of the payload
+// (nil windows when it held none), which `note --show` prints.
+func NoteKept(env Env, in io.Reader, dir string) (Snapshot, error) {
 	if env.GridHome == "" {
-		return errors.New("cannot find the Grid home; set GRID_HOME")
+		return Snapshot{}, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
 	data, err := io.ReadAll(in)
 	if err != nil {
-		return err
+		return Snapshot{}, err
 	}
+	snap, err := parsePayload(env, data, dir)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if snap.FiveHour == nil && snap.SevenDay == nil {
+		return snap, nil
+	}
+	path := snapshotPath(env, dir)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return snap, err
+	}
+	out, err := json.Marshal(snap)
+	if err != nil {
+		return snap, err
+	}
+	return snap, atomicfile.Write(path, append(out, '\n'), 0o600)
+}
+
+// parsePayload reads the rate_limits of one status line payload.
+func parsePayload(env Env, data []byte, dir string) (Snapshot, error) {
 	var payload struct {
 		RateLimits struct {
 			FiveHour *struct {
@@ -86,7 +113,7 @@ func Note(env Env, in io.Reader, dir string) error {
 		} `json:"rate_limits"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
-		return err
+		return Snapshot{}, err
 	}
 	snap := Snapshot{ConfigDir: gridhome.Real(dir), At: env.now().UTC().Format(time.RFC3339)}
 	if w := payload.RateLimits.FiveHour; w != nil {
@@ -95,18 +122,7 @@ func Note(env Env, in io.Reader, dir string) error {
 	if w := payload.RateLimits.SevenDay; w != nil {
 		snap.SevenDay = &Reading{w.Used, int64(w.ResetsAt)}
 	}
-	if snap.FiveHour == nil && snap.SevenDay == nil {
-		return nil
-	}
-	path := snapshotPath(env, dir)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	out, err := json.Marshal(snap)
-	if err != nil {
-		return err
-	}
-	return atomicfile.Write(path, append(out, '\n'), 0o600)
+	return snap, nil
 }
 
 func readSnapshot(env Env, dir string) (Snapshot, bool) {

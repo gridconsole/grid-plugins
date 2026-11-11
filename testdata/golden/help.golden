@@ -5,41 +5,35 @@ Usage: grid <command> [flags]
 Commands:
   version     print the CLI, contract and app_min versions
   where       show which project and task a folder belongs to
+  open        open the task page in the browser
   doctor      check machine health and collect a support bundle
   hook        answer a Claude Code or Codex hook event; set and list hook levels
   task        new, show, list, status, stop, close, reopen, history, attach, move
   plan        write, check, items, hash, diff, migrate
-  views       render the task pages (not built yet)
   job         next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor
-  lease       take, renew, release, status (merge or task lease)
+  lease       take, release, status (task lease)
   feed        tick, post, read, state, types, handover, fold
   mcp         stdio server with the Feed tools
   question    add, withdraw, list, tick and sync task questions
-  ask         ask a person a question (not built yet)
   answer      record a person's answer
   approve     approve the plan or a later approve step (a person or the app only)
-  refusal     decide a refused command (a person or the app only)
-  decide      alias for refusal decide
-  deliver     write the outcome and raise the ship gate
-  preview     check the spec and raise the preview gate
+  deliver     write the outcome and wait for the person
   proof       add evidence and rebuild the task proof index
   history     append a dated task history line
   land        land a task per the deploy topic
   brain       show, search, topics, index, propose, accept, keep, decide, check, changes, revert
-  machine     machines topic (not built yet)
   env         up, down browser Job dev environments
-  ports       claim, release, list, gc dev port blocks
-  deploy      deploy topic (not built yet)
   person      check person access; list, show and find approvers
   routine     add, list, remove, run, schedule and unschedule routines
   worker      list local grid-worker processes
   agent       check agent readiness; set models and efforts; list settings
+  claude      show and set the person's Claude Code settings rows
   workflow    show workflow template files and parse problems
   skill       enable, disable and list skills
   session     list, show, start, stop, send, pause, resume, handback, switch
   intent      list, claim, done (worker requests)
-  usage       post and show usage, set budgets and notice thresholds, fold observed session totals
-  account     agent accounts (not built yet)
+  usage       post and show usage, fold observed session totals
+  account     agent accounts
   project     add, remove, list, scan and relink projects
   project-md  get or set a project front-matter key
   setup       record validated project setup answers
@@ -47,6 +41,11 @@ Commands:
   artifact    import, link, list and publish task artifacts
   eval        list, run and show task evaluations
   migrate     upgrade the Grid home to this format
-  sync        sync with a Grid server (not built yet)
+
+Global flags go before the command; each wins over its environment variable:
+  --grid-home DIR    the Grid home (GRID_HOME)
+  --member ID        who is calling (GRID_MEMBER)
+  --role ROLE        the caller's role (GRID_ROLE)
+  --lease-epoch G.F  the lease generation.fence (GRID_LEASE_EPOCH)
 
 Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip).

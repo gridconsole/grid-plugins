@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -11,9 +12,15 @@ import (
 var settingsFile = regexp.MustCompile(`(?i)^(?:settings\.json|\.settings\.lock)$`)
 var gateFile = regexp.MustCompile(`(?i)^(?:task\.md|workflows?\.md|approval(?:-ship|-preview)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock)$`)
 
-const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, history.md, workflow.md, workflows.md, the approval receipt files (approval*.json), refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid; an agent cannot approve or answer its own gate with the Write or Edit tool. Reading is allowed."
+// Each text is one plain sentence for one kind of file. It names the file the
+// agent gave (the %s) and the grid verb the agent uses instead.
+const gateReason = "%s is a task record that grid writes; use the grid task or grid question command instead of the Write or Edit tool"
 
-const switchReason = "The guards and agent settings are the person's: <home>/settings.json, projects/<name>/settings.json and .settings.lock are written only by Grid; an agent cannot turn a guard off with the Write or Edit tool. Reading is allowed."
+const switchReason = "%s holds the person's Grid settings; grid hook level and grid settings change it"
+
+const feedReason = "%s is the task's Feed; post to it with grid feed or grid job"
+
+const hostReason = "%s is in Grid's host folder, which only Grid writes"
 
 // gridRoots are the roots a task or a settings file can sit under, resolved and
 // lower-case: the projects folder, and the Grid home beside it that also holds
@@ -50,9 +57,10 @@ func settingsAt(root, target string) bool {
 		(len(rel) == 3 && rel[0] == "projects" && settingsFile.MatchString(rel[2]))
 }
 
-// gateAt reports whether target (lower-case) is a gate entry of a task under one
-// grid root: its questions folder, its plan, preview and ship approvals, a refusal decision or its plan
-// revisions. The home root finds personal tasks, which sit beside projects.
+// Reports whether target (lower-case) is a task record that grid writes, under one
+// grid root: its questions folder, its plan, preview and ship approvals, a refusal
+// decision or its plan revisions. The home root finds personal tasks, which sit
+// beside projects.
 func gateAt(root, target string) bool {
 	if projectWorkflowAt(root, target) {
 		return true
@@ -86,11 +94,12 @@ func homeHostFolder(projects string) string {
 	return filepath.Join(filepath.Dir(resolve(".", projects)), ".host")
 }
 
-// EvaluateHost protects legacy .host and the new task Feed, which contains the
-// answer and gate records (feed-contract.md:17-29), from the file tools. It
-// does not read shell text: a Bash command is never refused here, and Claude
-// Code's own permission rules cover what a shell may write. The plan guard
-// switch does not reach it; its level is the host-guard setting, block by default.
+// EvaluateHost watches legacy .host, the task records grid writes, the person's
+// settings files and the new task Feed, which contains the answer and approval
+// records (feed-contract.md:17-29), against the file tools. It does not read
+// shell text: a Bash command is never answered here, and Claude Code's own
+// permission rules cover what a shell may write. The plan guard switch does not
+// reach it; its level is the host-guard setting, warn by default.
 func EvaluateHost(in hookio.Input, root string, env map[string]string) hookio.Decision {
 	return configuredLevel("host-guard", in, root, env, evaluateHost(in, root, env))
 }
@@ -101,15 +110,14 @@ func evaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 		return hookio.Decision{}
 	}
 	host := homeHostFolder(c.projects)
-	deny := func(what string) hookio.Decision {
-		return hookio.Deny("The host's folder is written only by Grid, so " + what + ". A held plan is approved by the person in Grid, never by a file an agent writes.")
-	}
-	person := func() hookio.Decision { return hookio.Deny(gateReason) }
-	switches := func() hookio.Decision { return hookio.Deny(switchReason) }
 	given := c.target()
 	if given == "" {
 		return hookio.Decision{}
 	}
+	inHost := func() hookio.Decision { return hookio.Deny(fmt.Sprintf(hostReason, given)) }
+	person := func() hookio.Decision { return hookio.Deny(fmt.Sprintf(gateReason, given)) }
+	switches := func() hookio.Decision { return hookio.Deny(fmt.Sprintf(switchReason, given)) }
+	feed := func() hookio.Decision { return hookio.Deny(fmt.Sprintf(feedReason, given)) }
 	target := strings.ToLower(c.path(given))
 	realProjects := realNative(c.projects, 0)
 	legacy := hostFolder(c.projects)
@@ -123,7 +131,7 @@ func evaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 	}
 	for _, folder := range folders {
 		if inside(strings.ToLower(realNative(folder.resolved, 0)), target) {
-			return deny(given + " is in " + folder.named)
+			return inHost()
 		}
 	}
 	for _, root := range c.gridRoots() {
@@ -137,7 +145,7 @@ func evaluateHost(in hookio.Input, root string, env map[string]string) hookio.De
 	// Compare the native resolved path as well as its lower-case form. The latter
 	// catches case aliases even on case-sensitive hosts used for tests.
 	if t := taskAtFold(target, strings.ToLower(realNative(c.projects, 0))); t != nil && (t.rel == "feed" || strings.HasPrefix(t.rel, "feed/")) {
-		return person()
+		return feed()
 	}
 	return hookio.Decision{}
 }

@@ -22,7 +22,7 @@ The public repo's root is the plugin root: exactly the contents of `dist/plugin`
 
 ```text
 .claude-plugin/plugin.json  .claude-plugin/marketplace.json  .codex-plugin/plugin.json
-.mcp.json  hooks/hooks.json  LICENSE
+.mcp.json  hooks/hooks.json  LICENSE  README.md
 bin/grid                      sh entry: macOS, Linux, and Windows under Git Bash
 bin/grid.cmd                  Windows cmd entry
 bin/grid-darwin-arm64  bin/grid-darwin-amd64  bin/grid-linux-amd64  bin/grid-linux-arm64
@@ -37,7 +37,8 @@ machine from `uname` (or runs the `.exe` on Windows), so no Go is needed at inst
 
 Everything that is not in `dist/plugin` stays in the internal source repo, because `make dist`
 copies only `skills/`, `agents/`, `agent-templates/` and `LICENSE` beside the generated files and
-the binaries. In particular these never reach the public repo:
+the binaries, and writes the public `README.md` from `internal/packaging/plugin-readme.md`. The
+source `README.md` is the developer's page and does not ship. In particular these never reach the public repo:
 
 - `evals/` and `corpus/`, `golden/`, `recordings/`, `fixtures/`, `testdata/`: internal. The evals
   hold task material that is not for publication (see D-privacy-audit).
@@ -74,7 +75,7 @@ with go.mod's Go version installed.
    person, a host or a local path:
 
    ```sh
-   ls -A dist/plugin dist/plugin/bin
+   ls -A dist/plugin dist/plugin/bin                           # README.md and LICENSE at the root
    grep -rIn '/home/\|/Users/\|/srv/\|@gmail' dist/plugin     # prints nothing
    ```
 

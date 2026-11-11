@@ -597,15 +597,11 @@ quoted text. Exit 0 with no findings, 3 with findings, 1 when the brain cannot
 be read, 2 on usage. Prose never changes the result: a knowledge proposal that
 asks to become a skill has no finding.
 
-`grid brain accept <id>` runs the proposal check on the bytes it is about to
-publish, under the level lock and after the keeper gate (a config topic is still
-refused by the gate: exit 1 and a rejected proposal). A finding refuses the
-accept with exit 3 and writes nothing: no entry, version, audit line or status
-change. `--json` prints `{"error":"check_failed","code":"check_failed","findings":[...]}`
-on stderr; plain output prints the findings as `brain check` does, on stderr. The
-replaceable `AcceptCheckRequired` host policy (key `brain_accept_check_levels`,
-default home and project) skips the check per level. `accept --reject` is never
-checked. The drift check does not run on accept.
+`grid brain accept <id>` publishes what passes the keeper gate (secrets, note
+validation, reserved and config topics). A config topic is refused by the gate:
+exit 1 and a rejected proposal. The proposal check does not run on accept;
+`grid brain check <id>` is a read the keeper may run first. The drift check does
+not run on accept either.
 
 ### `grid brain changes [--level home|project] [--project <p>] [--since <RFC3339>] [--limit <n>] [--json]`
 

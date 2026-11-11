@@ -3,11 +3,9 @@
 package session
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -18,25 +16,12 @@ import (
 )
 
 // ProcessStart reads the process start time in UTC at ps's second precision.
+// Linux reads it from /proc and forks no ps; darwin asks ps.
 func ProcessStart(pid int) (time.Time, error) {
 	if pid < 1 {
 		return time.Time{}, fmt.Errorf("pid must be positive")
 	}
-	observed, err := processStartText(pid)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return processid.ParseLstart(observed, time.UTC)
-}
-
-// processStartText runs ps in UTC so the line parses without a zone guess.
-func processStartText(pid int) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "ps", "-o", "lstart=", "-p", strconv.Itoa(pid))
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "TZ=UTC")
-	b, err := cmd.Output()
-	return strings.TrimSpace(string(b)), err
+	return procStart(pid)
 }
 
 // probeHost is the set of OS reads ProbeLocal makes, so tests can stand in for
@@ -61,8 +46,8 @@ var localHost = probeHost{
 		b, err := os.ReadFile(processid.BootIDPath)
 		return strings.TrimSpace(string(b)), err
 	},
-	lstartUTC:   processStartText,
-	lstartLocal: processid.PSLstart,
+	lstartUTC:   osLstartUTC,
+	lstartLocal: osLstartLocal,
 }
 
 // ProbeLocal proves absence or compares process start identity on this host.

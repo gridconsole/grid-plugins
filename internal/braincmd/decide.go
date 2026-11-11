@@ -62,10 +62,6 @@ func runDecide(args []string, env Env) int {
 	}
 	result, err := s.DecideTask(brain.TaskRef{ID: t.ID, Path: t.Path}, f.Arg(1), action, target, *note, history)
 	if err != nil {
-		var refusal *brain.CheckRefusal
-		if errors.As(err, &refusal) {
-			return refuseAccept(env, *asJSON, refusal.Result)
-		}
 		return fail(err)
 	}
 	if *asJSON {

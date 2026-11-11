@@ -2,7 +2,7 @@
 
 The Grid plugin for Claude Code and Codex: agents, skills, hooks and one Go command line, `grid`, that does every write to task folders, the Feed and the brain.
 
-This repo replaces the earlier JavaScript plugin. It is public and MIT licensed.
+This repo replaces the earlier JavaScript plugin. The source stays internal; the public plugin tree is `dist/plugin` (docs/release.md).
 
 ## Build and test
 
@@ -38,7 +38,7 @@ same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` thro
 - `grid agent`, `grid claude`, `grid workflow`, `grid skill`, `grid setup`: agent, Claude, workflow and skill settings, and project setup.
 - `grid project`, `grid project-md`, `grid signal`, `grid artifact`, `grid eval`, `grid migrate`: projects, inbox signals, artifacts, evaluations, home upgrade.
 
-These verbs are listed by `grid help` but print "not built yet": `grid views`, `grid ask`, `grid machine`, `grid deploy`, `grid sync`. The `--json` shapes are in [contract/README.md](contract/README.md).
+The `--json` shapes are in [contract/README.md](contract/README.md).
 
     grid task new "Fix the search label" --size small --json
     grid task show T-01 --json

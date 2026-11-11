@@ -37,7 +37,7 @@ The keeper is a subagent. It never asks the person.
 
 1. `grid brain keep --task <task>` lists the waiting proposals and writes nothing.
 2. `grid brain show <id> --proposal` reads one.
-3. `grid brain check <id>`: exit 0 clean, 3 findings. A finding means the text changes what runs (a config topic, a skill key that can run code, a shell line, an agent field). The keeper does not loosen it: reject with the finding code as the reason. No Grid-made guard, cap or hold is added on top; the check is the gate that exists.
+3. Run `grid brain check <id>` and judge the findings: exit 0 clean, 3 findings. A finding means the text changes what runs (a config topic, a skill key that can run code, a shell line, an agent field). When a finding is real, reject with the finding code as the reason. No Grid-made guard, cap or hold is added on top.
 4. Judge it against the bar below.
 5. Pass: `grid brain accept <id>`. For a task's proposal: `grid brain decide <task> <id> accept --note "<reason>"`.
 6. Duplicate or adds to a note: `grid brain decide <task> <id> merge-into <note-id> --note "<reason>"`.

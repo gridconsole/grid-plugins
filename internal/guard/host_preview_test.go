@@ -8,7 +8,7 @@ import (
 // The preview receipt is a gate file like the plan and ship receipts: an agent
 // cannot write it with a file tool.
 func TestHostPreviewApprovalReceipt(t *testing.T) {
-	f := setup(t)
+	f := hostSetup(t)
 	f.env["GRID_PLAN_GUARD"] = "off"
 	for _, name := range []string{"approval-preview.json", "APPROVAL-PREVIEW.JSON"} {
 		t.Run(name, func(t *testing.T) {

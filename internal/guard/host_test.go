@@ -10,7 +10,7 @@ func TestHostRules(t *testing.T) {
 	for _, tool := range []string{"Write", "Edit", "MultiEdit", "NotebookEdit"} {
 		for _, deny := range []bool{false, true} {
 			t.Run(tool+map[bool]string{true: "/deny", false: "/allow"}[deny], func(t *testing.T) {
-				f := setup(t)
+				f := hostSetup(t)
 				folder := filepath.Join(filepath.Dir(f.grid), ".HOST")
 				if !deny {
 					folder += "-other"
@@ -28,7 +28,7 @@ func TestHostRules(t *testing.T) {
 		}
 	}
 	t.Run("single home keeps .host inside it", func(t *testing.T) {
-		f := setup(t)
+		f := hostSetup(t)
 		for _, rel := range []string{".host/approval", ".host", ".host/queue/one"} {
 			expect(t, EvaluateHost(f.input("Write", filepath.Join(f.grid, rel)), f.root, f.env), "deny")
 		}
@@ -40,7 +40,7 @@ func TestHostRules(t *testing.T) {
 		}
 	})
 	t.Run("single home .host spelled in another case", func(t *testing.T) {
-		f := setup(t)
+		f := hostSetup(t)
 		skipUnlessFolding(t, f)
 		f.write(filepath.Join(f.grid, ".host", "existing"), "")
 		for _, p := range []string{alias(filepath.Join(f.grid, ".host", "approval"), ".grid"), alias(filepath.Join(f.grid, ".host", "existing"), ".host")} {
@@ -49,7 +49,7 @@ func TestHostRules(t *testing.T) {
 	})
 	for _, dangling := range []bool{false, true} {
 		t.Run(map[bool]string{false: "linked folder", true: "dangling link"}[dangling], func(t *testing.T) {
-			f := setup(t)
+			f := hostSetup(t)
 			host := hostFolder(f.projects)
 			if !dangling {
 				f.write(filepath.Join(host, "existing"), "")
@@ -60,7 +60,7 @@ func TestHostRules(t *testing.T) {
 		})
 	}
 	t.Run("linked projects both host readings", func(t *testing.T) {
-		f := setup(t)
+		f := hostSetup(t)
 		actual := filepath.Join(f.root, "elsewhere", "data", "projects")
 		f.write(filepath.Join(actual, "placeholder"), "")
 		alias := filepath.Join(f.root, "alias-projects")
@@ -72,17 +72,17 @@ func TestHostRules(t *testing.T) {
 	})
 	for _, rel := range []string{"feed", "feed/writer.0.jsonl", "FEED/bodies/record.json"} {
 		t.Run(rel, func(t *testing.T) {
-			f := setup(t)
+			f := hostSetup(t)
 			expect(t, EvaluateHost(f.input("Write", filepath.Join(f.task, rel)), f.root, f.env), "deny")
 			expect(t, EvaluateHost(f.input("Write", filepath.Join(f.task, "feed-notes.md")), f.root, f.env), "")
 		})
 	}
 	t.Run("no folders", func(t *testing.T) {
-		f := setup(t)
+		f := hostSetup(t)
 		expect(t, EvaluateHost(f.input("Bash", "echo .host"), f.root, nil), "")
 	})
 	t.Run("fallback does not fence shell", func(t *testing.T) {
-		f := setup(t)
+		f := hostSetup(t)
 		delete(f.env, "GRID_PROJECTS")
 		delete(f.env, "GRID_HOME")
 		expect(t, EvaluateHost(f.input("Bash", "echo .host"), f.root, f.env), "")
