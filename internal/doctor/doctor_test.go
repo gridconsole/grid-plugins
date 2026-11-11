@@ -57,8 +57,10 @@ func TestRun(t *testing.T) {
 func TestRunMissingHome(t *testing.T) {
 	rep := Run(Options{GridHome: filepath.Join(t.TempDir(), "absent"), Label: "~/.grid", GitVersion: gitOK})
 	assertChecks(t, rep, map[string]string{"grid home": "!~/.grid does not exist", "git": ""}, false)
-	if len(rep.Checks) != 5 {
-		t.Errorf("checks that need the folder should be skipped, got %+v", rep.Checks)
+	for _, check := range rep.Checks {
+		if check.Name == "grid home writable" || check.Name == "format version" {
+			t.Errorf("checks that need the folder should be skipped, got %+v", rep.Checks)
+		}
 	}
 }
 

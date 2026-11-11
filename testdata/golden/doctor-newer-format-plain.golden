@@ -6,3 +6,5 @@ ok git: git version 2.0.0-test
 ok grid on PATH: grid is on PATH
 ok plugin hooks: plugin hooks file is valid
 ok allow block: all setup allow rules are present
+ok deny block: all setup deny rules are present
+ok sandbox: off; grid setup --sandbox turns on Claude Code's sandbox

@@ -16,13 +16,16 @@ func healthyAllowSettings(t *testing.T, home, gridHome string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	allow := []string{}
+	allow, deny := []string{}, []string{}
 	for _, rule := range rules {
 		if rule.Section == "permissions" && rule.Key == "allow" {
 			allow = append(allow, rule.Value)
 		}
+		if rule.Section == "permissions" && rule.Key == "deny" {
+			deny = append(deny, rule.Value)
+		}
 	}
-	data, err := json.Marshal(map[string]any{"permissions": map[string]any{"allow": allow}})
+	data, err := json.Marshal(map[string]any{"permissions": map[string]any{"allow": allow, "deny": deny}})
 	if err != nil {
 		t.Fatal(err)
 	}
