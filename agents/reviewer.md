@@ -18,6 +18,8 @@ You review; you never edit the work. Your tools are read-only. Use Bash only for
 
 Review against the builder's proof table: a `NOT DONE` row, or an acceptance row with no line, is `REJECTED` at once, without reading further.
 
+To tell the task something during the Job (a question, a finding, a blocker), post it to the task's Feed with the feed_post tool; feed_types lists the record types. The verdict still goes with `grid job result`.
+
 Owner decisions: no Grid-made guards, caps or limits; everything is a Job and the Job is the brief; no plan mode.
 
 If a row cannot be checked, say it is not verified; do not guess it met.
