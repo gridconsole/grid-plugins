@@ -18,7 +18,7 @@ Supply these values through the trusted launch environment, not tool arguments:
 | Variable | Meaning |
 | --- | --- |
 | `GRID_HOME` | Grid data folder; defaults to `~/.grid`. Its `VERSION` must match this CLI. |
-| `GRID_FEED_TASK` | The session's task folder or display id. For MCP it wins: a `task` or `project` argument that resolves elsewhere is refused. Without it, normal current-folder resolution applies. |
+| `GRID_FEED_TASK` | The session's task folder or display id. For MCP it wins: a `task` or `project` argument that resolves elsewhere is refused. Without it, `GRID_TASK` (the app worker's name for the session's task) is the default task and is not a pin, then normal current-folder resolution applies. |
 | `GRID_MEMBER` | Member identity; otherwise Git identity, then the OS account. |
 | `GRID_ROLE` | Author role; defaults to `member`, matching the CLI. |
 | `GRID_WORKER` | Optional `<member>@<machine ULID>` assertion. It must match the resolved member and the persistent `GRID_HOME/machine` id. Legacy worker suffixes are not accepted. |
