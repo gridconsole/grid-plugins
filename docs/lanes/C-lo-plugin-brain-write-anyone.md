@@ -26,6 +26,7 @@ Base: 73c6e36d (plugin main f6383e8c merged with lane-C-ke-brain-write 66f9c41a)
 | store untouched | HOLDS: internal/brain/ke_write.go, store.Write's signature and internal/brain/ke_write_test.go are unchanged. The command passes `true` at ke_write.go:128. |
 | No attribution lines, no personal paths | HOLDS: commit messages are one sentence each; no host, home path or email in any file |
 | *RealPlugin* tests | not applicable: no row names one |
+| Skill go-conventions | not available in this sandbox's skill list; `gofmt -l internal/braincmd` prints nothing, `make lint` exit 0 |
 
 ## What changed
 
