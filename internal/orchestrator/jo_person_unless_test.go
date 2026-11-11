@@ -10,7 +10,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
-func joPuPersonJob(t *testing.T, id string) feed.Input {
+func joPjPersonJob(t *testing.T, id string) feed.Input {
 	t.Helper()
 	body := jobBody(t, id)
 	body["role"] = "Person"
@@ -41,7 +41,7 @@ func TestJoPjPersonUnlessUnderLock(t *testing.T) {
 
 	before := recordCount(t, f)
 	var held error
-	rec, skipped, err := PostPersonUnless(f.s.Feed, personWriterOf("member"), joPuPersonJob(t, "J-1"), probe(&held))
+	rec, skipped, err := PostPersonUnless(f.s.Feed, personWriterOf("member"), joPjPersonJob(t, "J-1"), probe(&held))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestJoPjPersonUnlessUnderLock(t *testing.T) {
 		t.Fatalf("a post that done stopped wrote %d record(s)", got-before)
 	}
 
-	rec, skipped, err = PostPersonUnless(f.s.Feed, personWriterOf("member"), joPuPersonJob(t, "J-1"), func() bool { return false })
+	rec, skipped, err = PostPersonUnless(f.s.Feed, personWriterOf("member"), joPjPersonJob(t, "J-1"), func() bool { return false })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestJoPjPersonUnlessUnderLock(t *testing.T) {
 
 	// A writer that is not a person of the team is refused before done is asked.
 	asked := false
-	if _, _, err := PostPersonUnless(f.s.Feed, personWriterOf("worker"), joPuPersonJob(t, "J-2"), func() bool { asked = true; return false }); err == nil || asked {
+	if _, _, err := PostPersonUnless(f.s.Feed, personWriterOf("worker"), joPjPersonJob(t, "J-2"), func() bool { asked = true; return false }); err == nil || asked {
 		t.Fatalf("a worker's post: err=%v done asked=%v", err, asked)
 	}
 }
