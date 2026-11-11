@@ -4262,6 +4262,11 @@
               "required": false
             },
             {
+              "name": "--result",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--session",
               "takes": "value",
               "required": false

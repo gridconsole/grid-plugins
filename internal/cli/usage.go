@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -87,7 +88,9 @@ func runUsage(args []string, env Env) int {
 	var dollars, minutes usageNumbers
 	var tokens usageTokens
 	var in usage.Input
+	var result string
 	if op == "post" {
+		fs.StringVar(&result, "result", "", "book the cost, minutes and tokens of the last result line of this Claude attempt log, once per session; not with --dollars, --minutes or --tokens")
 		fs.StringVar(&in.Job, "job", "", "Job id or lead")
 		fs.StringVar(&in.Session, "session", "", "optional session identifier")
 		fs.StringVar(&in.Model, "model", "", "optional model name")
@@ -97,6 +100,17 @@ func runUsage(args []string, env Env) int {
 	}
 	if code, stop := parse(fs, args[1:], env); stop {
 		return code
+	}
+	var parsed usage.Input
+	if result != "" {
+		if dollars.amount() != nil || minutes.amount() != nil || tokens.amount() != nil {
+			fmt.Fprintln(env.Stderr, "usage: --result books the amounts in the log; do not combine it with --dollars, --minutes or --tokens")
+			return 2
+		}
+		var err error
+		if parsed, err = readResultLog(result); err != nil {
+			return commandError(env, "usage", err)
+		}
 	}
 	res, err := taskFor(env, *task)
 	if err != nil {
@@ -115,6 +129,16 @@ func runUsage(args []string, env Env) int {
 		return 0
 	}
 	in.Dollars, in.Minutes, in.Tokens = dollars.amount(), minutes.amount(), tokens.amount()
+	if result != "" {
+		// Typed --session and --model override what the log says; the key stays the log's own.
+		in.Dollars, in.Minutes, in.Tokens, in.Key = parsed.Dollars, parsed.Minutes, parsed.Tokens, parsed.Key
+		if in.Session == "" {
+			in.Session = parsed.Session
+		}
+		if in.Model == "" {
+			in.Model = parsed.Model
+		}
+	}
 	out, err := s.Post(in)
 	if err != nil {
 		return commandError(env, "usage", err)
@@ -122,8 +146,25 @@ func runUsage(args []string, env Env) int {
 	if *asJSON {
 		return writeJSON(env.Stdout, out)
 	}
+	if out.AlreadyBooked {
+		fmt.Fprintf(env.Stdout, "already booked: %s\n", in.Key)
+	}
 	printUsage(env, out.Summary)
 	return 0
+}
+
+// readResultLog parses the attempt log at path; every error names the file.
+func readResultLog(path string) (usage.Input, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return usage.Input{}, err
+	}
+	defer f.Close()
+	in, _, err := usage.ParseResult(f)
+	if err != nil {
+		return usage.Input{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return in, nil
 }
 
 func printUsage(env Env, summary usage.Summary) {

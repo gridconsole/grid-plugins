@@ -24,8 +24,10 @@ import (
 // Input carries one delta. Nil amounts distinguish omission from an explicit zero.
 type Input struct {
 	Job, Session, Model string
-	Dollars, Minutes    *float64
-	Tokens              *uint64
+	// Key, when set, books the delta once: a post whose Key is already in the log appends nothing.
+	Key              string
+	Dollars, Minutes *float64
+	Tokens           *uint64
 }
 
 // Record is one complete line of usage/usage.jsonl. Amounts are always deltas.
@@ -38,6 +40,8 @@ type Record struct {
 	Dollars float64 `json:"dollars"`
 	Minutes float64 `json:"minutes"`
 	Tokens  *uint64 `json:"tokens,omitempty"`
+	// Key is the once-only key of a row booked from a run's result line; absent on typed posts.
+	Key string `json:"key,omitempty"`
 }
 
 // Store is scoped to an existing task resolved by where. Now is optional.
@@ -54,6 +58,8 @@ type PostResult struct {
 	Summary
 	Notices  []feed.Record `json:"notices"`
 	Warnings []string      `json:"warnings"`
+	// AlreadyBooked is true when the input's Key was already in the log and nothing was appended.
+	AlreadyBooked bool `json:"alreadyBooked,omitempty"`
 }
 
 // ParseTokens accepts only ASCII decimal digits in the uint64 range.
@@ -71,6 +77,7 @@ func ParseTokens(value string) (uint64, error) {
 var jobPattern = regexp.MustCompile(`^(lead|J-[1-9][0-9]*(\.[1-9][0-9]*)*)$`)
 var sessionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.@+-]{0,159}$`)
 var modelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_./:@+-]{0,159}$`)
+var keyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:@+-]{0,199}$`)
 
 func finite(n float64) bool { return !math.IsNaN(n) && !math.IsInf(n, 0) && n >= 0 }
 
@@ -91,6 +98,9 @@ func (in Input) validate() error {
 	}
 	if in.Model != "" && !modelPattern.MatchString(in.Model) {
 		return errors.New("model must be a name of at most 160 characters, not text")
+	}
+	if in.Key != "" && !keyPattern.MatchString(in.Key) {
+		return errors.New("key must be an identifier, not a path or text")
 	}
 	return nil
 }
@@ -172,11 +182,15 @@ func (s Store) Post(in Input) (PostResult, error) {
 		if err != nil {
 			return err
 		}
+		if in.Key != "" && before.keys[in.Key] {
+			out.Summary, out.AlreadyBooked = before, true
+			return nil
+		}
 		now := time.Now
 		if s.Now != nil {
 			now = s.Now
 		}
-		r := Record{V: 1, At: contract.FormatTime(now()), Job: in.Job, Session: in.Session, Model: in.Model, Tokens: in.Tokens}
+		r := Record{V: 1, At: contract.FormatTime(now()), Job: in.Job, Session: in.Session, Model: in.Model, Tokens: in.Tokens, Key: in.Key}
 		if in.Dollars != nil {
 			r.Dollars = *in.Dollars
 		}
