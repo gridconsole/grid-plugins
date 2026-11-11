@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -123,7 +124,7 @@ func sessionStart(o Options) {
 		return
 	}
 	if envFile := o.Getenv("CLAUDE_ENV_FILE"); envFile != "" {
-		if err := writeEnv(envFile, o.Resolver.GridHome, res.Task); err != nil {
+		if err := writeEnv(envFile, o.Resolver.GridHome, res.Task, pluginPathLine(o.Getenv("CLAUDE_PLUGIN_ROOT"), o.Getenv("PATH"))); err != nil {
 			o.log("session environment", err)
 			return
 		}
@@ -153,14 +154,36 @@ func syncAgents(o Options) {
 	o.log("agent sync", err)
 }
 
-func writeEnv(path, home, task string) error {
-	q := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
+
+// pluginPathLine returns the line that puts the plugin's bin folder on PATH, or ""
+// when the plugin root is unset, bin/grid is missing, the folder is already on PATH,
+// or the host is Windows (its env output is unchanged).
+func pluginPathLine(root, pathEnv string) string {
+	if root == "" || runtime.GOOS == "windows" {
+		return ""
+	}
+	bin := filepath.Join(root, "bin")
+	if st, err := os.Stat(filepath.Join(bin, "grid")); err != nil || st.IsDir() {
+		return ""
+	}
+	for _, p := range filepath.SplitList(pathEnv) {
+		if p != "" && filepath.Clean(p) == bin {
+			return ""
+		}
+	}
+	return "export PATH=" + shellQuote(bin) + ":\"$PATH\"\n"
+}
+
+func writeEnv(path, home, task string, extra ...string) error {
+	q := shellQuote
 	text := "\nexport GRID_HOME=" + q(home) + "\nexport GRID_PROJECTS=" + q(filepath.Join(home, "projects")) + "\n"
 	if task != "" {
 		text += "export GRID_TASK=" + q(task) + "\n"
 	} else {
 		text += "unset GRID_TASK\n"
 	}
+	text += strings.Join(extra, "")
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
 	if err != nil {
 		return err
