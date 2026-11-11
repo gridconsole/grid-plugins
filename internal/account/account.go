@@ -105,10 +105,11 @@ func folderList(env Env) []folderRef {
 	seen := map[string]bool{}
 	add := func(kind, dir string, home bool) {
 		dir = filepath.Clean(dir)
-		if seen[dir] || !isDir(dir) {
+		key := env.pathKey(dir)
+		if seen[key] || !isDir(dir) {
 			return
 		}
-		seen[dir] = true
+		seen[key] = true
 		out = append(out, folderRef{kind, dir, home})
 	}
 	var names []string
@@ -365,7 +366,7 @@ func SignIn(env Env, kind, dir string, in io.Reader, out, errOut io.Writer) (int
 	dir = filepath.Clean(dir)
 	var ref *folderRef
 	for _, r := range folderList(env) {
-		if r.kind == kind && r.dir == dir {
+		if r.kind == kind && env.pathKey(r.dir) == env.pathKey(dir) {
 			r := r
 			ref = &r
 		}
@@ -377,7 +378,7 @@ func SignIn(env Env, kind, dir string, in io.Reader, out, errOut io.Writer) (int
 	if kind == Claude {
 		args = []string{"auth", "login"}
 	}
-	child := dir
+	child := ref.dir
 	if ref.home {
 		child = ""
 	}
