@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	hdSDeploy = "· brain read · brain:project/deploy · by claude"
-	hdSHomeX  = "· brain read · brain:home/x · by claude"
+	hdSDeploy = "· brain read · brain:project/deploy · by claude · via session session-demo"
+	hdSHomeX  = "· brain read · brain:home/x · by claude · via session session-demo"
 )
 
 // hdSReadLines returns the `brain read` lines of the fixture task's history.
