@@ -37,6 +37,10 @@ func TestFourGuardsFollowTheirLevel(t *testing.T) {
 					t.Fatal(err)
 				}
 				want := "deny"
+				// only-writer warns by default (verdicts-11nov v-4); the other three block.
+				if tc.name == "only-writer" && level == "none" {
+					want = ""
+				}
 				switch level {
 				case "off", "warn", "block":
 					if err := (settings.Store{Home: f.grid}).SetHook(tc.name, level); err != nil {
@@ -58,6 +62,25 @@ func TestFourGuardsFollowTheirLevel(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// With no setting, a Write into a task folder is warned about and not refused:
+// the decision has no behavior, and its output is a systemMessage naming the rule.
+// A person who sets only-writer to block still gets the deny
+// (TestFourGuardsFollowTheirLevel/only-writer/block).
+func TestOnlyWriterDefaultWarnsAndDoesNotDeny(t *testing.T) {
+	f := setup(t)
+	d := EvaluateOnlyWriter(f.input("Write", filepath.Join(f.task, "notes.md")), f.root, f.env)
+	if d.Behavior != "" {
+		t.Fatalf("default only-writer refused the write: %+v", d)
+	}
+	if len(d.Warnings) != 1 || !strings.Contains(d.Warnings[0], "only-writer: Task folders and the brain are written only by grid") {
+		t.Fatalf("want the only-writer warning, got %+v", d)
+	}
+	out := string(d.Bytes())
+	if !strings.Contains(out, `"systemMessage":"only-writer: Task folders`) || strings.Contains(out, "permissionDecision") {
+		t.Fatalf("output must carry the warning and no decision: %s", out)
 	}
 }
 

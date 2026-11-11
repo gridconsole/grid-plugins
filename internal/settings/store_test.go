@@ -156,10 +156,14 @@ func TestGuardLevelsAreSettableAndResolved(t *testing.T) {
 	for _, name := range guards {
 		d, err := personal.Effective()
 		must(t, err)
-		if d.Hooks[name] != "block" {
-			t.Fatalf("%s defaults to %s, want block", name, d.Hooks[name])
+		def := "block"
+		if name == "only-writer" {
+			def = "warn" // verdicts-11nov v-4
 		}
-		if got, err := ResolveHookLevel(name, resolver, query); err != nil || got != "block" {
+		if d.Hooks[name] != def {
+			t.Fatalf("%s defaults to %s, want %s", name, d.Hooks[name], def)
+		}
+		if got, err := ResolveHookLevel(name, resolver, query); err != nil || got != def {
 			t.Fatalf("%s default resolves to %q, %v", name, got, err)
 		}
 		for _, level := range levels {
