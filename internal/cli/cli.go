@@ -131,7 +131,7 @@ func commands() []command {
 		{"intent", "list, claim, done, release, renew (worker requests)", runIntent},
 		{"usage", "post and show usage, fold observed session totals", runUsage},
 		{"account", "list, status, statusline, scan, sign-in, windows, folder and note for agent accounts", runAccount},
-		{"project", "add, remove, list, scan and relink projects", runProject},
+		{"project", "add, remove, list, scan and relink projects; repo edits a project's repos", runProject},
 		{"project-md", "get or set a project front-matter key", runProjectMD},
 		{"setup", "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)", runSetup},
 		{"signal", "add, act on, dismiss and move inbox signals", runSignal},

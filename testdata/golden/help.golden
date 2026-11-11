@@ -34,7 +34,7 @@ Commands:
   intent      list, claim, done, release, renew (worker requests)
   usage       post and show usage, fold observed session totals
   account     list, status, statusline, scan, sign-in, windows, folder and note for agent accounts
-  project     add, remove, list, scan and relink projects
+  project     add, remove, list, scan and relink projects; repo edits a project's repos
   project-md  get or set a project front-matter key
   setup       record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)
   signal      add, act on, dismiss and move inbox signals

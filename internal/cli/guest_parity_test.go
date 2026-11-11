@@ -82,6 +82,7 @@ var guestParityCommands = map[string][]string{
 	"plan write":         {"{file}"},
 	"project relink":     {"{project}", "{cwd}"},
 	"project remove":     {"{project}"},
+	"project repo":       {"add", "{project}", "--where", "/parity/app"},
 	"project-md get":     {"{project}", "id"},
 	"project-md set":     {"{project}", "title", "parity"},
 	"proof add":          {"I-01", "--text", "parity"},
@@ -411,7 +412,7 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 	{
 		switch command {
 		case "routine add", "routine remove", "routine run", "routine schedule", "routine unschedule",
-			"project relink", "project remove", "signal add",
+			"project relink", "project remove", "project repo", "signal add",
 			"setup":
 			want = guestParityOutput{1, "", "grid: guests cannot change project settings\n"}
 		case "task delete", "task restore":
