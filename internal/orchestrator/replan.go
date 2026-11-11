@@ -1,9 +1,11 @@
 package orchestrator
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -33,7 +35,7 @@ func (s Store) gkReplan(snap Snapshot) error {
 			continue
 		}
 		next := gkNextJobID(snap)
-		if _, err := s.Feed.Post(feed.Input{Type: "job", Job: next, Body: ReplanJobBody(next, id, waiting)}, s.Writer); err != nil {
+		if _, err := s.Feed.Post(feed.Input{Type: "job", Job: next, Body: ReplanJobBody(next, id, gqCauseText(j.ExitCode), waiting)}, s.Writer); err != nil {
 			return err
 		}
 		// The next cancelled Job counts this Job when it picks its id.
@@ -92,13 +94,50 @@ func gkNextJobID(snap Snapshot) string {
 	return "J-" + strconv.Itoa(highest+1)
 }
 
+// gqCauseMax is the most bytes of a cause the re-plan Job text holds.
+const gqCauseMax = 500
+
+// gqCauseText reads a folded exit code as text: a JSON string unquoted, a number
+// as its digits, nothing for no code.
+func gqCauseText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var n json.Number
+	if json.Unmarshal(raw, &n) == nil {
+		return n.String()
+	}
+	return ""
+}
+
+// gqCause trims a cause and cuts it to gqCauseMax bytes, never inside a rune.
+func gqCause(cause string) string {
+	cause = strings.TrimSpace(cause)
+	if len(cause) <= gqCauseMax {
+		return cause
+	}
+	cut := gqCauseMax
+	for cut > 0 && !utf8.RuneStart(cause[cut]) {
+		cut--
+	}
+	return cause[:cut]
+}
+
 // ReplanJobBody is the job-record of the orchestrator Job that re-plans after a
 // Job was cancelled while the Jobs in waiting hold a done edge to it. It has the
 // fields of the first Job of a task (internal/cli firstJob) and reads the task's
 // request. It carries no job: pointer: a Job that never started, or was refused
 // at render, has no jobs/<id>/brief.md to point at, and lint refuses such a
 // pointer. The Jobs are named in the title and the acceptance text only.
-func ReplanJobBody(id, cancelled string, waiting []string) map[string]any {
+//
+// cause is the cancelled Job's worker-exit code as text, empty when it has none.
+// It becomes one sentence of the acceptance text, cut to gqCauseMax bytes. It is
+// not put in intent.goal: that is a pointer render resolves.
+func ReplanJobBody(id, cancelled, cause string, waiting []string) map[string]any {
 	request := "intent.md#request"
 	list := strings.Join(waiting, ", ")
 	reason := jobgraph.DoneReason(cancelled, contract.Cancelled)
@@ -108,6 +147,9 @@ func ReplanJobBody(id, cancelled string, waiting []string) map[string]any {
 	}
 	text := fmt.Sprintf("No Job waits on %s any more: each of %s is cancelled with a reason or replaced by a new Job that does not wait on %s; the work of %s is posted again as a new Job that `grid job lint` passes when the task still needs it; a result is posted with `grid job result`.",
 		cancelled, strings.Join(each, ", "), cancelled, cancelled)
+	if c := gqCause(cause); c != "" {
+		text += " Stopped because: " + c
+	}
 	return map[string]any{
 		"id": id, "item": 1,
 		"title":  fmt.Sprintf("Re-plan after %s was cancelled: %s wait on it", cancelled, list),

@@ -121,7 +121,7 @@ func TestGkReplanAfterCancel(t *testing.T) {
 		t.Fatalf("the body on the Feed is not a job-record: %v", err)
 	}
 	// What the loop posts is what ReplanJobBody builds.
-	want, err := json.Marshal(ReplanJobBody("J-3", "J-1", []string{"J-2"}))
+	want, err := json.Marshal(ReplanJobBody("J-3", "J-1", "", []string{"J-2"}))
 	if err != nil {
 		t.Fatal(err)
 	}
