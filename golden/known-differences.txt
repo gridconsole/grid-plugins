@@ -56,3 +56,5 @@ worker-exit/post	Exit evidence is recorded in sessions pending the fenced Feed w
 lib-parseFrontmatter/lists	The shared parser retains values but Go sorts JSON object keys. See docs/lanes/L29.md:94.
 lib-parseFrontmatter/scalars	The shared parser retains values but Go sorts JSON object keys. See docs/lanes/L29.md:94.
 agent-routing/empty-object	SessionStart now includes the brain topic index. See docs/lanes/L29.md:59.
+plan-guard/bash-recall	the plan guard no longer reads Bash text for a brain recall line (verdict v-6, docs/lanes/C-eo-recall-guard-drop.md); the legacy deny is gone. Related: docs/lanes/L160.md:33.
+

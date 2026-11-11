@@ -186,14 +186,6 @@ func TestPlanHeaderRules(t *testing.T) {
 			}
 			return f.input("Write", filepath.Join(f.projects, "example", p, "T-03", "notes.md"))
 		}},
-		{"plan ready needs recall", func(f *fixture, deny bool) hookio.Input {
-			if !deny {
-				f.write(filepath.Join(f.task, "plan.md"), "## How we approach it\nRecall: nothing found\n")
-			}
-			i := f.input("Write", filepath.Join(f.task, "history.md"))
-			i.ToolInput["content"] = "- time · plan ready · by agent\n"
-			return i
-		}},
 		{"reviewer remains inside projects", func(f *fixture, deny bool) hookio.Input {
 			f.accept()
 			p := filepath.Join(f.task, "verdict.md")

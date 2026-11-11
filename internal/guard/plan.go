@@ -7,13 +7,11 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/hookio"
-	"github.com/gridconsole/grid-plugins/internal/plan"
 )
 
 const off = " To turn this guard off, start Claude Code with GRID_PLAN_GUARD=off."
 
 var oddName = regexp.MustCompile(`[^\x20-\x7e]|:|[. ](?:/|$)`)
-var historyAlias = regexp.MustCompile(`(?i)^history\.md(?::.*|[. ]*)$`)
 
 // EvaluatePlan ports the legacy plan rules. root is the filesystem base used
 // when cwd is omitted; all environment reads come from env. It performs no writes.
@@ -27,9 +25,6 @@ func evaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 	in = c.in
 	if c.projects == "" || strings.EqualFold(strings.TrimSpace(env["GRID_PLAN_GUARD"]), "off") {
 		return hookio.Decision{}
-	}
-	if in.ToolName == "Bash" {
-		return c.recallGate()
 	}
 	if !fileTool(in.ToolName) {
 		return hookio.Decision{}
@@ -52,13 +47,6 @@ func evaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 	slot := strings.Split(relative(projects, target), "/")
 	if owner == nil && inside(projects, target) && len(slot) > 2 && slot[1] != "tasks" && (oddName.MatchString(slot[1]) || strings.EqualFold(slot[1], "tasks")) {
 		return hookio.Deny("A folder beside a project's tasks folder keeps a plain name (printable ASCII, no colon, no dot or space at the end, not tasks in other letters): on macOS or Windows it can be the tasks folder under another spelling, so " + given + " is not written." + off)
-	}
-	if owner != nil && historyAlias.MatchString(owner.rel) {
-		for _, next := range after(in.ToolName, in.ToolInput, history) {
-			if addsMark(history, next, planReady) && !plan.HasRecall(read(filepath.Join(owner.dir, "plan.md"))) {
-				return hookio.Deny(given + " is not changed to add a plan ready line: plan.md has no brain recall line. Add it under ## How we approach it: one `Used: <path>` line for each note of the recall you used, or `Recall: nothing found` when no note bears on the task (the recall hits are in your context, or run `grid-brain recall --task <id>`). Then run plan-hash.mjs again and add the plan ready line." + off)
-			}
-		}
 	}
 	agent := agentName(in.AgentType)
 	if c.set && (contract.NormalizeRole(agent) == "reviewer" || contract.NormalizeRole(agent) == "checker") && !inside(projects, target) {
@@ -115,29 +103,4 @@ func artifact(root, target string, owner *task) bool {
 	}
 	slot := strings.Split(relative(root, target), "/")
 	return len(slot) > 2 && slot[1] == "artifacts"
-}
-func addsMark(text, next string, markers ...string) bool {
-	counts := map[string]int{}
-	marked := func(line string) bool {
-		for _, m := range markers {
-			if strings.Contains(line, m) {
-				return true
-			}
-		}
-		return false
-	}
-	for _, line := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
-		if marked(line) {
-			counts[line]++
-		}
-	}
-	for _, line := range strings.Split(strings.ReplaceAll(next, "\r\n", "\n"), "\n") {
-		if marked(line) {
-			if counts[line] == 0 {
-				return true
-			}
-			counts[line]--
-		}
-	}
-	return false
 }

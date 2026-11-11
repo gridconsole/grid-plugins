@@ -112,7 +112,7 @@ personal values, and missing values use the catalog defaults.
 | brief-lint | block | Legacy brief guard |
 | host-guard | warn | Host and Feed guard; warns by default, `block` refuses the write |
 | only-writer | warn | Task and brain ownership guard; warns by default, `block` refuses the write |
-| plan-guard | warn | Plan guard (recall line, folder name and agent role folders); warns by default, `block` refuses the write |
+| plan-guard | warn | Plan guard (folder name and agent role folders); warns by default, `block` refuses the write |
 | home-allow | warn | Home permission fallback |
 | session-start | warn | SessionStart context |
 | stop-check | block | Stop and SubagentStop completion checks, including saved Job verification |
@@ -136,8 +136,7 @@ person does, in Grid or with the command.
 The plan guard does not refuse repo writes because a task's plan is not accepted.
 Whether a plan needs a person's approval is a step of the task's workflow (an
 `approve` step), and the workflow's default says who answers and when. The
-guard's other plan rules (the brain-recall check on plan.md, the grid-planner's
-reach into a task folder) stay.
+guard's other plan rule (the grid-planner's reach into a task folder) stays.
 
 For every guard, `off` skips the check, `warn` turns a denial or stop
 block into a warning, and `block` keeps the original decision. Permission warnings
