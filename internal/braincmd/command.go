@@ -28,6 +28,11 @@ type Env struct {
 	// The CLI supplies its shared folder resolver and refusal contract.
 	ResolveTask      func(string) (task.Task, error)
 	TaskOperandError func(string, error) int
+	// RecordError, when set, is told of a failure that names a project or task
+	// the caller cannot see, so the CLI can answer --json with its standard error
+	// envelope. Such a failure prints the plain line even under --json; every
+	// other failure keeps the JSON object on stderr.
+	RecordError func(error)
 }
 
 const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|supersede> [flags]
@@ -238,14 +243,7 @@ func Run(args []string, env Env) int {
 	if file != "" && body != "" {
 		return usageError("choose --file or --body")
 	}
-	fail := func(err error) int {
-		if *asJSON {
-			_ = json.NewEncoder(env.Stderr).Encode(map[string]string{"error": err.Error()})
-		} else {
-			fmt.Fprintf(env.Stderr, "brain: %v\n", err)
-		}
-		return 1
-	}
+	fail := func(err error) int { return failWith(env, *asJSON, err) }
 	if env.GridHome == "" {
 		return fail(fmt.Errorf("cannot find the Grid home; set GRID_HOME"))
 	}

@@ -212,7 +212,11 @@ func TestSplitMissingTargets(t *testing.T) {
 
 func TestNextWithoutWaitReturnsAfterOnePass(t *testing.T) {
 	f := setup(t)
-	start := time.Now()
+	pauses := 0
+	f.s.pause = func(context.Context) error {
+		pauses++
+		return errors.New("TestNextWithoutWaitReturnsAfterOnePass: Next waited between passes")
+	}
 	out, err := f.s.Next(context.Background(), false)
 	if err != nil {
 		t.Fatal(err)
@@ -220,8 +224,8 @@ func TestNextWithoutWaitReturnsAfterOnePass(t *testing.T) {
 	if out.Assigned != 0 || out.Wake != nil || len(out.Spawns) != 0 {
 		t.Fatalf("empty feed gave %+v", out)
 	}
-	if d := time.Since(start); d >= time.Second {
-		t.Fatalf("wait=false took %v", d)
+	if pauses != 0 {
+		t.Fatalf("wait=false paused %d times, want 0", pauses)
 	}
 }
 
@@ -248,10 +252,20 @@ func TestNextWaitReturnsAssignedJobBeforeTheTick(t *testing.T) {
 func TestNextWaitStopsWhenContextIsCancelled(t *testing.T) {
 	f := setup(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	// Take start before arming the timer so the elapsed time can never be
-	// shorter than the timer, even if this goroutine is parked in between.
-	start := time.Now()
-	time.AfterFunc(50*time.Millisecond, cancel)
+	defer cancel()
+	// The first pause cancels the context and runs the real tick wait, which
+	// must return the context's error at once. A second pause means Next kept
+	// waiting after the cancel.
+	pauses := 0
+	f.s.pause = func(ctx context.Context) error {
+		pauses++
+		if pauses > 1 {
+			t.Error("Next paused again after cancel")
+			return ctx.Err()
+		}
+		cancel()
+		return tickPause(ctx)
+	}
 	out, err := f.s.Next(ctx, true)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, out = %+v", err, out)
@@ -259,8 +273,8 @@ func TestNextWaitStopsWhenContextIsCancelled(t *testing.T) {
 	if out.Assigned != 0 {
 		t.Fatalf("Assigned = %d", out.Assigned)
 	}
-	if d := time.Since(start); d < 40*time.Millisecond || d >= time.Second {
-		t.Fatalf("returned after %v, want about 50ms", d)
+	if pauses != 1 {
+		t.Fatalf("Next paused %d times, want 1", pauses)
 	}
 }
 

@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -137,6 +139,44 @@ func TestVerifyDirectoryAndCommit(t *testing.T) {
 	}
 }
 
+// gtVerifyReadPid returns the pid the fixture shell wrote to bg.pid, or 0 when
+// the file is absent or does not yet hold a whole line.
+func gtVerifyReadPid(dir string) int {
+	b, err := os.ReadFile(filepath.Join(dir, "bg.pid"))
+	if err != nil || !strings.HasSuffix(string(b), "\n") {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || pid <= 0 {
+		return 0
+	}
+	return pid
+}
+
+// gtVerifyWaitPidGone waits for the pid in bg.pid to disappear; the bound only
+// names what never happened.
+func gtVerifyWaitPidGone(t *testing.T, dir string) {
+	t.Helper()
+	pid := gtVerifyReadPid(dir)
+	if pid == 0 {
+		t.Fatal("bg.pid missing or incomplete")
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(30 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for p.Signal(syscall.Signal(0)) == nil {
+		select {
+		case <-deadline:
+			t.Fatalf("descendant still alive: pid %d", pid)
+		case <-ticker.C:
+		}
+	}
+}
+
 func TestVerifyCancelKillsChild(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX shell command fixture")
@@ -146,14 +186,14 @@ func TestVerifyCancelKillsChild(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		_, err := RunVerify(ctx, Job{Verify: Verify{Command: "(echo ready > ready; sleep 1; echo survived > survived) & wait"}}, dir)
+		_, err := RunVerify(ctx, Job{Verify: Verify{Command: "(echo ready > ready; sleep 30; echo survived > survived) & echo $! > bg.pid; wait"}}, dir)
 		done <- err
 	}()
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(30 * time.Second)
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		if _, err := os.Stat(filepath.Join(dir, "ready")); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, "ready")); err == nil && gtVerifyReadPid(dir) != 0 {
 			break
 		}
 		select {
@@ -170,10 +210,10 @@ func TestVerifyCancelKillsChild(t *testing.T) {
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("cancel: %v", err)
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("cancel did not return")
 	}
-	time.Sleep(1200 * time.Millisecond)
+	gtVerifyWaitPidGone(t, dir)
 	if _, err := os.Stat(filepath.Join(dir, "survived")); !os.IsNotExist(err) {
 		t.Fatal("child survived cancellation")
 	}
@@ -186,11 +226,11 @@ func TestVerifyExitedShellKillsDescendants(t *testing.T) {
 	dir := t.TempDir()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	r, err := RunVerify(ctx, Job{Verify: Verify{Command: "(sleep 1; echo survived > survived) & exit 0"}}, dir)
+	r, err := RunVerify(ctx, Job{Verify: Verify{Command: "(sleep 30; echo survived > survived) & echo $! > bg.pid; exit 0"}}, dir)
 	if err == nil || r.Pass {
 		t.Fatalf("unclosed output pipe should fail: %+v %v", r, err)
 	}
-	time.Sleep(1200 * time.Millisecond)
+	gtVerifyWaitPidGone(t, dir)
 	if _, err := os.Stat(filepath.Join(dir, "survived")); !os.IsNotExist(err) {
 		t.Fatal("descendant survived its shell")
 	}

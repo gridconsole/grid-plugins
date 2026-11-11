@@ -12,6 +12,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/jobgraph"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 )
 
@@ -167,6 +168,9 @@ const (
 	OrphanNeverPickedUp = "never_picked_up"
 	OrphanNeverAcked    = "never_acked"
 	OrphanNoExit        = "no_exit"
+	// OrphanDeadWait is a Posted or Ready Job that waits through a done edge on a
+	// Job that was rejected or cancelled: it is never released by itself.
+	OrphanDeadWait = "dead_wait"
 )
 
 // Orphan names a Job left behind: ready and never assigned, assigned and never
@@ -203,6 +207,9 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 	// open: no unmet after, so the Job has a ready time. A person's Job is held
 	// back from Ready by a wait with no target; a started Job was ready to start.
 	open := map[string]bool{}
+	// dead: the first wait of a Job through a done edge on a Rejected or
+	// Cancelled Job, which nothing will release by itself.
+	dead := map[string]jobgraph.Wait{}
 	if err == nil {
 		for _, id := range readiness.Ready {
 			ready[id], open[id] = true, true
@@ -210,6 +217,9 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 		for _, w := range readiness.Waiting {
 			if w.Target == "" && w.Reason != "usage_limit" && w.Reason != "review_capacity" {
 				open[w.Job] = true
+			}
+			if _, named := dead[w.Job]; !named && deadDoneWait(s, w) {
+				dead[w.Job] = w
 			}
 		}
 	}
@@ -258,9 +268,42 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 			}
 		}
 		row.Orphan = orphanOf(j, row.Attempts, ready[id], since[id], until, to, hasResult, now)
+		if w, isDead := dead[id]; isDead && row.Orphan == nil && (j.Status == contract.Posted || j.Status == contract.Ready) {
+			row.Orphan = &Orphan{Kind: OrphanDeadWait, Since: contract.FormatTime(closedAt(s, w.Target)), Detail: w.Reason}
+		}
 		out = append(out, row)
 	}
 	return out
+}
+
+// deadDoneWait reports whether w is a wait through a done edge on a Job that
+// was rejected or cancelled. Such a Job is never released by itself, so the
+// wait never ends. A gate, a failed edge and a live target are not dead.
+func deadDoneWait(s Snapshot, w jobgraph.Wait) bool {
+	if w.Target == "" || strings.HasPrefix(w.Target, "gate:") {
+		return false
+	}
+	target := s.State.Jobs[w.Target]
+	if target == nil || target.Status != contract.Rejected && target.Status != contract.Cancelled {
+		return false
+	}
+	return w.Reason == jobgraph.DoneReason(w.Target, target.Status)
+}
+
+// closedAt is when a Job reached its present status: the latest control in its
+// History whose status is that status, read as readyAt reads it.
+func closedAt(s Snapshot, id string) time.Time {
+	var at time.Time
+	j := s.State.Jobs[id]
+	if j == nil {
+		return at
+	}
+	for _, rid := range j.History {
+		if r := s.Records[rid]; r.Type == "control" && r.Body["status"] == string(j.Status) {
+			at, _ = time.Parse(time.RFC3339Nano, r.At)
+		}
+	}
+	return at
 }
 
 // orphanOf judges one Job on its latest attempt only. A closed Job has none.

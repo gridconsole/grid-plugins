@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -91,14 +92,40 @@ func TestRunnerEnvironment(t *testing.T) {
 	}
 }
 
+// gtProbeCancelWhenStarted cancels once the helper has written its marker. The
+// failure bound only ends the wait if the helper never started; the test then
+// fails on the missing marker.
+func gtProbeCancelWhenStarted(marker string, cancel context.CancelFunc, stopped <-chan struct{}) {
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	giveUp := time.After(60 * time.Second)
+	for {
+		select {
+		case <-stopped:
+			return
+		case <-giveUp:
+			cancel()
+			return
+		case <-tick.C:
+			if _, err := os.Stat(marker); err == nil {
+				cancel()
+				return
+			}
+		}
+	}
+}
+
 func TestProbeOutputTimeout(t *testing.T) {
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(t.TempDir(), "started")
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	stopped := make(chan struct{})
+	defer close(stopped)
+	go gtProbeCancelWhenStarted(marker, cancel, stopped)
 	cmd := exec.CommandContext(ctx, exe, "-test.run=^TestAgentProbeHelper$", "--", "--agent-probe-helper", "block", marker)
 	t.Cleanup(func() {
 		if cmd.Process != nil {
@@ -106,10 +133,9 @@ func TestProbeOutputTimeout(t *testing.T) {
 			_, _ = cmd.Process.Wait()
 		}
 	})
-	start := time.Now()
 	out, code := probeOutput(cmd)
-	if code == 0 || ctx.Err() != context.DeadlineExceeded || time.Since(start) > 4*time.Second {
-		t.Fatalf("output %q, exit %d, context %v, elapsed %s", out, code, ctx.Err(), time.Since(start))
+	if code == 0 || !errors.Is(ctx.Err(), context.Canceled) {
+		t.Fatalf("output %q, exit %d, context %v", out, code, ctx.Err())
 	}
 	if _, err := os.Stat(marker); err != nil {
 		t.Fatalf("helper did not start: %v", err)
