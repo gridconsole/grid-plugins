@@ -6,10 +6,22 @@ Code head (tests and fixtures): 39b7ecef; this report is committed on top of it.
 ## Base check
 
 I read read.go:38-110, contract_test.go:225-281 and fold.go:110-140 on the base. No test in `internal/feed` mentions
-`max_rounds` (`grep -rln max_rounds internal --include=*_test.go` lists orchestrator, job/jobcmd, job/lint, task and
-contract tests only; none is in `internal/feed`). So the stop condition does not apply. For the record: the nearest other
-test is `internal/task/approval_read_test.go:66`, which posts a person Job body with `max_rounds` through `Store.Post`
-for an approval test; it is in another package, written by today's code, and does not read older bytes from git.
+`max_rounds` in its source (`grep -rln max_rounds internal --include=*_test.go` lists orchestrator, job/jobcmd, job/lint,
+task and contract tests only). **But the brief's stop condition is met by another route.** `foldJob`
+(fold_state_test.go:18-21) takes its body from `contractBody` (wire_test.go:67-83), which reads
+`contract/fixtures/job/valid/basic.json` on this tree, and that file still carries `"review": "L1"` (:28) and
+`"max_rounds": 2` (:30) (`grep -n "max_rounds\|\"review\"" contract/fixtures/job/valid/basic.json`). So on the base,
+`TestFoldReadAdmitsOnlyCountedAndStale` (fold_state_test.go:55) and every other test that posts a Job through `foldJob` or
+`assignedJob` (contract_test.go:115-118, `TestAssignmentFold` :126) already read a Job record whose body has `max_rounds`
+and `review` through `Store.Read` and `Store.State`, and they pass. The brief says "Job posted with today's shape through
+foldJob", and that is not true: the fixture was not updated by e11cf80a.
+
+**Status: NOT DONE under the brief's own stop condition.** I found this after building. I did not discard the work: the
+four tests below are built, pass on the base's production code and are in the bundle, so the orchestrator can decide
+whether to land them. What they add over the base's implicit coverage: the bytes come from git before e11cf80a, the
+Job body is pinned with a README and a fixture check, the reader's body is compared whole, and the fold's output is checked
+for the dropped keys. What they do not add: a new behaviour proof that the base lacks for the old keys themselves.
+Another package's test, `internal/task/approval_read_test.go:66`, also posts a Job body with `max_rounds`.
 
 ## Proof table
 
@@ -17,7 +29,7 @@ for an approval test; it is in another package, written by today's code, and doe
 |---|---|---|
 | 1 TestGjOlderRecordCounts | HOLDS | gj_older_job_record_test.go:154. `go test -count=1 -v -run TestGjOlderRecord ./internal/feed/` exit 0, `--- PASS: TestGjOlderRecordCounts` with subtests whole_record and planned_fields_body. Verdict "counted", Reason "", Body has review "L1" and max_rounds 2, body equal to the fixture body (reflect.DeepEqual). A control subtest (body without title gives "ignored") PASSes, so "counted" is not the helper never looking. |
 | 2 TestGjOlderRecordFolds | HOLDS | :198. `s.State()` has Job J-1, title "Build example feature", Status posted, role builder, kind "non-code" for the planned-fields body, fold verdict "counted"; the marshalled state has no "max_rounds" or "level_raised" key anywhere and the Job has no "review". PASS in the same run. |
-| 3 TestGjOlderRecordMixedWithNew | HOLDS | :241. Old record (seq 1, fence 0 file) plus `foldJob` J-2 (today's shape, fold_state_test.go:18): both "counted", `foldJobIDs` = [J-1 J-2], both posted. PASS in the same run. |
+| 3 TestGjOlderRecordMixedWithNew | HOLDS as a test, but the "today's shape" half is not distinct | :241. Old record (seq 1, fence 0 file) plus `foldJob` J-2 (fold_state_test.go:18): both "counted", `foldJobIDs` = [J-1 J-2], both posted. PASS in the same run. The `foldJob` body comes from contract/fixtures/job/valid/basic.json, which still has review and max_rounds (:28, :30), so both Jobs carry the old keys; see Base check. |
 | 4 TestGjOlderRecordFixturesKeepTheOldShape | HOLDS | :275. Both testdata files hold review "L1", max_rounds 2 and level_raised; job-basic.json is type job; README.md names e11cf80a (testdata/older-records/README.md:3). The files equal git: `git show e11cf80a^:<path> \| diff - <file>` printed nothing for both. PASS in the same run. |
 | 5 home rule | HOLDS | gjOldHome (:26) t.Setenv's HOME, CLAUDE_CONFIG_DIR, CODEX_HOME and GRID_HOME to folders under one t.TempDir() and t.Fatal's when HOME is not under it; every test calls it first (gjOldStore :43 or directly at :276). It logs no value. |
 | 5 no sleep in the file | HOLDS | `grep -n -i "sleep\|/home/\|/srv/\|gridwork"` on the test file and README: no match. |
