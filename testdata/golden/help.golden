@@ -39,7 +39,7 @@ Commands:
   setup       record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)
   signal      add, act on, dismiss and move inbox signals
   artifact    import, link, list and publish task artifacts
-  eval        list, run and show task evaluations
+  eval        list, run and show task evaluations; export-suite writes plugin eval cases
   migrate     upgrade the Grid home to this format
 
 Global flags go before the command; each wins over its environment variable:

@@ -136,7 +136,7 @@ func commands() []command {
 		{"setup", "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)", runSetup},
 		{"signal", "add, act on, dismiss and move inbox signals", runSignal},
 		{"artifact", "import, link, list and publish task artifacts", runArtifact},
-		{"eval", "list, run and show task evaluations", runEval},
+		{"eval", "list, run and show task evaluations; export-suite writes plugin eval cases", runEval},
 		{"migrate", "upgrade the Grid home to this format", runMigrate},
 	}
 }

@@ -5055,9 +5055,32 @@
     },
     {
       "name": "eval",
-      "summary": "list, run and show task evaluations",
+      "summary": "list, run and show task evaluations; export-suite writes plugin eval cases",
       "built": true,
       "subcommands": [
+        {
+          "name": "export-suite",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--out",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--suite",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
         {
           "name": "list",
           "args": [],
