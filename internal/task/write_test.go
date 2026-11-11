@@ -5,12 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 func TestStateMachine(t *testing.T) {
@@ -176,74 +173,5 @@ func TestWriteRefusesSymlinks(t *testing.T) {
 // successful write prints a receipt; rejected moves print nothing. The parent
 // compares receipts to disk and checks the entire state chain, not just counts.
 func TestConcurrentCloseReopen(t *testing.T) {
-	if os.Getenv("GRID_TASK_WRITE_CHILD") == "1" {
-		s := Store{Resolver: where.Resolver{GridHome: os.Getenv("GRID_TASK_WRITE_HOME")}}
-		action := os.Getenv("GRID_TASK_WRITE_ACTION")
-		for range 100 {
-			event, err := s.Change(WriteOptions{ID: "T-01", Action: action})
-			if err == nil {
-				data, _ := json.Marshal(event)
-				fmt.Println(string(data))
-			} else if !strings.Contains(err.Error(), "current state") {
-				t.Fatal(err)
-			}
-		}
-		return
-	}
-	s, task := writeFixture(t)
-	type child struct {
-		cmd    *exec.Cmd
-		out    bytes.Buffer
-		stderr bytes.Buffer
-	}
-	children := []*child{{}, {}}
-	for i, action := range []string{"close", "reopen"} {
-		c := children[i]
-		c.cmd = exec.Command(os.Args[0], "-test.run=^TestConcurrentCloseReopen$")
-		c.cmd.Env = append(os.Environ(), "GRID_TASK_WRITE_CHILD=1", "GRID_TASK_WRITE_HOME="+s.Resolver.GridHome, "GRID_TASK_WRITE_ACTION="+action)
-		c.cmd.Stdout, c.cmd.Stderr = &c.out, &c.stderr
-		if err := c.cmd.Start(); err != nil {
-			t.Fatal(err)
-		}
-	}
-	receipts := map[string]int{}
-	for _, c := range children {
-		if err := c.cmd.Wait(); err != nil {
-			t.Fatalf("%v: %s %s", err, c.out.String(), c.stderr.String())
-		}
-		for _, line := range strings.Split(c.out.String(), "\n") {
-			if strings.HasPrefix(line, "{") {
-				receipts[line]++
-			}
-		}
-	}
-	lines, err := s.History("", task.ID)
-	if err != nil || len(lines) < 2 {
-		t.Fatalf("history %v: %v", lines, err)
-	}
-	state := "queued"
-	for _, line := range lines {
-		raw := strings.TrimPrefix(line, "- ")
-		if receipts[raw] == 0 {
-			t.Fatalf("missing process receipt: %s", raw)
-		}
-		receipts[raw]--
-		var e Event
-		if err := json.Unmarshal([]byte(raw), &e); err != nil {
-			t.Fatal(err)
-		}
-		if e.FromState != state {
-			t.Fatalf("broken state chain: %s", raw)
-		}
-		state = e.ToState
-	}
-	for line, count := range receipts {
-		if count != 0 {
-			t.Fatalf("lost history line: %s", line)
-		}
-	}
-	got, err := Read(task.Path)
-	if err != nil || got.State != state {
-		t.Fatalf("torn task: %+v %v", got, err)
-	}
+	flakeCRRun(t, []string{"close", "reopen"}, 0)
 }
