@@ -62,10 +62,11 @@ func (s Store) postsJob() bool {
 	}
 	// The Feed refuses an agent a person gate; post no Job the question post
 	// would then leave without its question. A cli writer posts one only as the
-	// task holder: its ControlWriter holds lease "task".
+	// task holder: it and its ControlWriter hold lease "task"; an unleased cli
+	// writer posts none.
 	role := contract.NormalizeRole(s.Writer.Author.Role)
 	if role == "cli" {
-		return s.ControlWriter.Lease == "task"
+		return s.Writer.Lease == "task" && s.ControlWriter.Lease == "task"
 	}
 	return role != "agent"
 }
