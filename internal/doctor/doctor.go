@@ -96,6 +96,8 @@ func Run(o Options) Report {
 func checkFormat(add func(string, bool, string), dir, label string) {
 	n, err := gridhome.ReadFormat(dir)
 	switch {
+	case errors.Is(err, fs.ErrNotExist) && freshHome(dir):
+		add("format version", false, "fresh home: run grid setup")
 	case err != nil:
 		add("format version", false, "cannot read "+filepath.ToSlash(filepath.Join(label, "VERSION")))
 	case gridhome.FormatProblem(n) != "":
@@ -103,6 +105,16 @@ func checkFormat(add func(string, bool, string), dir, label string) {
 	default:
 		add("format version", true, strconv.Itoa(n))
 	}
+}
+
+// freshHome reports a home the plugin hooks created but grid setup never
+// filled: sessions/ exists and projects/ does not.
+func freshHome(dir string) bool {
+	if s, err := os.Stat(filepath.Join(dir, "sessions")); err != nil || !s.IsDir() {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(dir, "projects"))
+	return errors.Is(err, fs.ErrNotExist)
 }
 
 func writable(dir string) bool {
