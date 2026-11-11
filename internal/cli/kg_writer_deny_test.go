@@ -77,15 +77,15 @@ func TestKgWriterDenyRulesWritten(t *testing.T) {
 }
 
 // With the only-writer level at block, the hook no longer refuses a write into a
-// task folder: no Grid guard stands behind the deny rules any more. A write to
-// the host folder is still refused at host-guard block, which shows the hook ran.
+// task folder: no Grid guard stands behind the deny rules any more. A Bash call
+// through `grid hook pretooluse` still leaves its snapshot in the task's session
+// activity, which shows the hook ran.
 func TestKgWriterHookNoLongerRefuses(t *testing.T) {
-	root := t.TempDir()
-	home := filepath.Join(root, "home")
-	grid := filepath.Join(home, ".grid")
+	h := newHarness(t)
+	root, home, grid := h.root, h.home, h.gridHome
 	cwd := filepath.Join(root, "repo")
 	store := settings.Store{Home: grid}
-	for _, name := range []string{"only-writer", "host-guard"} {
+	for _, name := range []string{"only-writer"} {
 		if err := store.SetHook(name, "block"); err != nil {
 			t.Fatal(err)
 		}
@@ -111,7 +111,7 @@ func TestKgWriterHookNoLongerRefuses(t *testing.T) {
 	if strings.Contains(got, `"deny"`) || strings.Contains(got, "written only by grid") {
 		t.Fatalf("the hook still refuses a task-folder write: %s", got)
 	}
-	if control := run(filepath.Join(grid, ".host", "x")); !strings.Contains(control, `"deny"`) {
-		t.Fatalf("the hook did not judge the control write: %s", control)
+	if code, out, ids := laCliBashHook(t, h, "use-1"); code != 0 || strings.Contains(out, `"deny"`) || !slices.Contains(ids, "use-1") {
+		t.Fatalf("the hook left no record of the Bash call: exit %d, snapshots %q: %s", code, ids, out)
 	}
 }
