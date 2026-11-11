@@ -1,4 +1,4 @@
-//go:build !linux && !darwin
+//go:build !linux && !darwin && !windows
 
 package session
 
@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// ProcessStart is unavailable on hosts without supported Unix process identity.
+// ProcessStart is unavailable on hosts with no Linux, macOS or Windows process identity.
 func ProcessStart(int) (time.Time, error) {
 	return time.Time{}, errors.New("task lease needs a Unix host for process identity")
 }
