@@ -34,6 +34,8 @@ ambiguous when it has more than one Job; select the Job id in that case.
 `plan.md#step-N` quotes the checklist line and prose only. `plan.md#verify`
 quotes the first paragraph under `## Verify`.
 
+A `read` path renders as `- Read <path> · <summary> · <why> [tier]`, where `<why>` is the reason of a `links` entry with the same `to` (left out when there is none); a guest or external file shows its summary inside the data fence instead of on the line, a personal note shows the id only, and a file with no summary keeps the bare `- Read <path> [tier]`.
+
 ## Dependencies and review
 
 `after` is a list of bare Job ids, person-question ids, or objects with `job`, `kind`, and

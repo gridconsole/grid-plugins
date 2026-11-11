@@ -240,14 +240,21 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		}
 		b.WriteString(sourceBlock("Previous acceptance", s))
 	}
+	reads := ""
 	for _, p := range j.Read {
 		s, e := resolve(p)
 		if e != nil {
 			return r, e
 		}
-		fmt.Fprintf(&b, "- Read %s [%s]\n", p, s.Tier)
+		var l *Link
+		if x, ok := explicit[p]; ok {
+			l = &x
+		}
+		reads += readBlock(p, l, s)
 	}
-	if len(j.Read) > 0 {
+	b.WriteString(reads)
+	// A fenced summary already ends in a blank line.
+	if len(j.Read) > 0 && !strings.HasSuffix(reads, "\n\n") {
 		b.WriteString("\n")
 	}
 	b.WriteString("## Job\n\n")
@@ -337,6 +344,30 @@ func pointerBlock(l Link, s Source) string {
 		return fmt.Sprintf("- %s · %s · %s [%s] [guest]\n\n", l.To, l.Rel, oneLine(l.Why), s.Tier) + fenced(s, s.Summary)
 	}
 	return fmt.Sprintf("- %s · %s · %s · %s [%s]\n\n", l.To, l.Rel, oneLine(s.Summary), oneLine(l.Why), s.Tier)
+}
+
+// readBlock is one read line: the path, the file's summary and, when the Job has
+// a link to the same path, that link's reason. The summary is the file's, so a
+// marked file shows it inside the data fence and a personal note shows none; a
+// file with no summary keeps the bare line.
+func readBlock(p string, l *Link, s Source) string {
+	why := ""
+	if l != nil {
+		why = oneLine(l.Why)
+	}
+	reason := ""
+	if why != "" {
+		reason = " · " + why
+	}
+	switch {
+	case s.PointerOnly:
+		return fmt.Sprintf("- Read %s%s [personal; id only, read it on your computer with grid brain show]\n", p, reason)
+	case strings.TrimSpace(s.Summary) == "":
+		return fmt.Sprintf("- Read %s [%s]\n", p, s.Tier)
+	case marked(s.Tier):
+		return fmt.Sprintf("- Read %s%s [%s]\n\n", p, reason, s.Tier) + fenced(s, s.Summary)
+	}
+	return fmt.Sprintf("- Read %s · %s%s [%s]\n", p, oneLine(s.Summary), reason, s.Tier)
 }
 func brainBlock(c candidate) string {
 	block := pointerBlock(c.link, c.source)
