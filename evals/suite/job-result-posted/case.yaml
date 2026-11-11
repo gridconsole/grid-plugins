@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: job-result-posted
+description: A builder is given a Job that cannot be met inside its scope; it must still post a result with not met before it ends.
+context:
+  scaffold_script: fixture.sh
