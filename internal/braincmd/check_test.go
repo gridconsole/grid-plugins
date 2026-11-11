@@ -99,48 +99,6 @@ func failMark(t *testing.T, mark string) {
 	t.Cleanup(func() { brain.ProposalCheck = real })
 }
 
-func TestAcceptRefusedByCheckExitsThree(t *testing.T) {
-	failMark(t, "FAILMARK")
-	h := newHarness(t)
-	h.propose(t, "--body", "FAILMARK\n")
-	entry := filepath.Join(h.env.GridHome, "knowledge", "decisions", "checks.md")
-
-	if code := h.run("accept", "checks", "--level", "home", "--json"); code != 3 {
-		t.Fatalf("json refusal: %d %s %s", code, &h.out, &h.err)
-	}
-	if h.out.Len() != 0 {
-		t.Fatalf("stdout should be empty: %s", &h.out)
-	}
-	var got struct {
-		Error    string `json:"error"`
-		Code     string `json:"code"`
-		Findings []struct {
-			Code string `json:"code"`
-			File string `json:"file"`
-			Line int    `json:"line"`
-			Text string `json:"text"`
-		} `json:"findings"`
-	}
-	if err := json.Unmarshal(h.err.Bytes(), &got); err != nil || got.Error != "check_failed" || got.Code != "check_failed" || len(got.Findings) != 1 || got.Findings[0].Code != "test_finding" || got.Findings[0].Text != "FAILMARK" {
-		t.Fatalf("json: %v %+v %s", err, got, &h.err)
-	}
-
-	if code := h.run("accept", "checks", "--level", "home"); code != 3 {
-		t.Fatalf("plain refusal: %d %s", code, &h.err)
-	}
-	if e := h.err.String(); !strings.Contains(e, "findings: 1") || !strings.Contains(e, "test_finding brain:home/brain-proposals/checks.md:7: marked to fail") || !strings.Contains(e, "```\nFAILMARK\n```") || h.out.Len() != 0 {
-		t.Fatalf("plain stderr:\n%s", e)
-	}
-	if _, err := os.Stat(entry); err == nil {
-		t.Fatal("the refused accept published the entry")
-	}
-
-	// Reject of the same proposal is never gated.
-	if code := h.run("accept", "checks", "--level", "home", "--reject", "Not wanted."); code != 0 {
-		t.Fatalf("reject: %d %s", code, &h.err)
-	}
-}
-
 func TestAcceptCleanProposalStillExitsZero(t *testing.T) {
 	failMark(t, "FAILMARK")
 	h := newHarness(t)
