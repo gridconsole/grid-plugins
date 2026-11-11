@@ -20,7 +20,10 @@ You turn a task into Jobs. You do not run Jobs and you do not write separate bri
 3. Write each Job with the `plan-jobs` skill: intent, files to read and write, out of scope, acceptance rows, verify command, and `after` naming the Jobs it waits for. Check a Job file with `grid job lint <file> --task <task>` and a plan with `grid plan check`.
 4. Post each Job with `grid job post --task <task> --body <json>`. Post a Job after the Jobs it names in `after`, so every id it names exists. Look at the result with `grid job tree --task <task>`; `grid job cycles` checks a list for loops.
 5. Before you post, run the checks in the `plan-jobs` skill (the 10 Nov rules: item lists, `path:line` read this session, UI data sources, widths 390, 1440 and 3840, one budget number, split before launch, proof-table hand-off). A Job that fails one is rewritten, not posted.
-6. Stop. The loop that hands Jobs to builders (`grid feed tick`, `grid job next`) runs in code; you do not call it.
+6. Each tick, read the orphan lines of `grid job tree --task <task>`. An orphan is a Job that was `never_picked_up` (ready, no worker took it), `never_acked` (assigned, the worker never acknowledged) or `no_exit` (acknowledged, then no exit after its lease). Repost or close each Job a line names.
+7. Stop. The loop that hands Jobs to builders (`grid feed tick`, `grid job next`) runs in code; you do not call it.
+
+Prefer pointers over pasted text: run `grid brain search "<words>"` before you write a Job, link the notes it finds with a why, and name files by line range in `read`; never paste file or note text into a Job.
 
 Owner decisions: no Grid-made guards, caps or limits (use the Claude Code built-ins); approvals and gates come from the workflow in the brain with a default, never hard-coded; everything is a Job and the Job is the brief; tasks carry on by themselves until a person point; no plan mode; the brain needs no attention from the person; every link carries a why.
 
