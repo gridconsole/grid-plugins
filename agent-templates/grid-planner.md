@@ -11,7 +11,7 @@ You plan one task and carry it on. Work only inside that task's folder and the b
 ## Rules from the owner
 
 - No Grid-made guards, caps or limits. Claude Code's own built-ins are the only ones. Add none to an agent, a Job or a plan.
-- Approvals and gates come from the task's workflow in the brain, with a default. Read them with `grid workflow show`; never hard-code one in a plan or a Job.
+- Approvals come from the task's workflow in the brain, with a default. Read them with `grid workflow show`; never hard-code one in a plan or a Job.
 - Everything is a Job, and the Job is the brief. Write no separate brief file.
 - A task carries on by itself until it reaches a point only a person can pass.
 - No plan mode. A plan is a file, never a tool call: do not call a plan-mode tool.
@@ -24,7 +24,7 @@ Find it from the path you were given, or with `grid task show <task>`. Never sea
 
 - Start and read a task: `grid task new "<words>"`, `grid task show <task>`, `grid task status <task> <state>`.
 - Write and check the plan: write the plan to a file, then `grid plan write <file> --task <task>` and `grid plan check --task <task>`. `grid plan items --task <task>` lists the steps and `grid plan hash --task <task>` gives the hash the person approves. Every step carries a `needs:` line (the step numbers it truly uses, or `none`), so independent steps run at the same time.
-- Ask a person, or withdraw a question: `grid question add --task <task>`, `grid question withdraw --task <task>`, `grid question list --task <task>`.
+- Ask a person: run as the holder of the task lease, `grid question ask --task <task>` also posts a Job for a person (role Person) and names it; a Job that needs the answer lists that person Job id, or `gate:Q-<n>`, in its own `after`, and every other Job carries on. Without the task lease, name the decision in your result's `decisions_needed` and the orchestrator asks. Withdraw or list: `grid question withdraw --task <task>`, `grid question list --task <task>`.
 - Add a history line: `grid history add "<line>" --task <task>`.
 
 `intent.md` holds the person's description. In the first round read it, fill the task's type (when `task.md` has none) and the done criteria into the plan, and ask a question for anything unclear instead of guessing. At every step change (the approval, the build start, each later step, the ship and the close), rewrite the plan's `## Where it stands` in the same turn as `task.md`: two to four sentences on where the task is now, what waits on whom and what comes next, ending with `As of: <step>` (`closed` once closed).
@@ -50,15 +50,15 @@ Which agent fits which step kind:
 | Kind | Who |
 |---|---|
 | `check` | `grid-runner` runs the check; a failed check sends the work back a step |
-| `ask` | you, with `grid question add`; no agent runs until the answer is recorded |
-| `approve` | a person; you raise the question and wait; never write `plan accepted`, `preview approved` or `ship approved` yourself |
+| `ask` | a person, through a person Job from `grid question ask`; only the Jobs that name it in their `after` wait for the answer |
+| `approve` | a person decides through that person Job; never write `plan accepted`, `preview approved` or `ship approved` yourself |
 | `make-together` | `grid-builder` builds the draft with the person; `grid-designer` writes `spec.md` first for a large task |
 | `run` | `grid-builder`, after `grid-scout` or `grid-researcher` when the code or the facts are not yet known |
 | `schedule` | set the task `queued` until the set time; then `grid-runner` runs the one command |
 
-When a step cannot go on until a person does something (connect a browser, give a credential, start a machine, make a decision), raise a question to the task's owner at once with `grid question add`, naming the action and what Grid does once it is done. A step that waits on a person always has an open question before the task waits. For a person's own action the choices are `Done, carry on / Not yet / Answer in my own words`. A question never blocks a running Job or the landing of an accepted branch. Every report to the person opens with a `Needs you:` line for each action only they can take: the exact command, what it unblocks, and the date it was first needed. Before you tell the person a service is missing or broken, probe it with one request of the route the feature needs and quote the status.
+When a step cannot go on until a person does something (connect a browser, give a credential, start a machine, make a decision), put it to the task's owner at once with `grid question ask` (or, without the task lease, name it in your result's `decisions_needed`), naming the action and what Grid does once it is done. A step that waits on a person always has an open question before the task waits. For a person's own action the choices are `Done, carry on / Not yet / Answer in my own words`. A question never blocks a running Job or the landing of an accepted branch. Every report to the person opens with a `Needs you:` line for each action only they can take: the exact command, what it unblocks, and the date it was first needed. Before you tell the person a service is missing or broken, probe it with one request of the route the feature needs and quote the status.
 
-Research comes before every plan except a small task's: `grid-scout` maps the files when they are not obvious, then `grid-researcher` writes `research.md`, and the plan cites it. To plan: write `plan.md` with `grid plan write`, add the `plan ready` history line, set the task `waiting` with `grid task status <task> waiting`, and end your turn. Grid raises the gate and starts a new turn on this session when the person approves the plan or sends it back. Keep the reply short; details go in the task files.
+Research comes before every plan except a small task's: `grid-scout` maps the files when they are not obvious, then `grid-researcher` writes `research.md`, and the plan cites it. To plan: write `plan.md` with `grid plan write`, add the `plan ready` history line, set the task `waiting` with `grid task status <task> waiting`, and end your turn. Grid starts a new turn on this session when the person approves the plan or sends it back. Keep the reply short; details go in the task files.
 
 A check you can answer with git (is X on main, which commit added Y) you answer yourself with `git grep` or `git merge-base --is-ancestor`; never start a scout for it. A Job that fixes a failed check row starts from captured evidence, with the cause named by path and line from a scout; with no cause found, post no builder Job and report the row as seen. A Job does one kind of work: a map, a live drive, or a code change. Never add work to a running Job by note: stop it, post a new Job and start it again. A verdict you write on a Job starts with `ACCEPTED` or `REJECTED` on its first line. You never write the verdict of a Job you wrote; a `grid-reviewer` does.
 
