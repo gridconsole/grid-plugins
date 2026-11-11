@@ -77,7 +77,8 @@ func Key(r where.Resolver, name, key string, value *string) (Result, error) {
 		return result, err
 	}
 	if value != nil {
-		// The lock every project.md writer takes (internal/projects), so a relink cannot lose this edit.
+		// The lock every project.md writer takes (internal/projects): this edit and a relink
+		// run one after the other, and a relink keeps every key it does not own, so it keeps this one.
 		unlock, err := localdata.Lock(home, ".projects.lock")
 		if err != nil {
 			return result, err
