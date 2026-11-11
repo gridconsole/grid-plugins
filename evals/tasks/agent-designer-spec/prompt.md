@@ -1,0 +1,1 @@
+The file job.md is a Grid Job for a design step. There is no Grid state to read: the Job is job.md and the task folder is ./task. Use the grid-designer agent to write task/spec.md for it. Build nothing and write no other file.

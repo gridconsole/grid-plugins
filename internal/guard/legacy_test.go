@@ -30,12 +30,6 @@ func legacyCompare(t *testing.T, fn Adapter, in hookio.Input, env map[string]str
 		script = "host-guard"
 	case reflect.ValueOf(HomeAllow).Pointer():
 		script = "grid-home-allow"
-	case reflect.ValueOf(BriefLint).Pointer():
-		// Its diagnostic now names grid job, not the removed brief-writing agent.
-		if len(out) > 0 {
-			return
-		}
-		script = "brief-lint"
 	}
 	if script == "" {
 		t.Fatal("unknown adapter")
@@ -51,9 +45,6 @@ func legacyCompare(t *testing.T, fn Adapter, in hookio.Input, env map[string]str
 	cmd.Stdin = bytes.NewReader(b)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH")}
 	for k, v := range env {
-		if script == "brief-lint" && k == "CLAUDE_PLUGIN_DATA" {
-			continue
-		}
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	cmd.Env = testenv.Temp(t, cmd.Env)

@@ -97,12 +97,16 @@ func TestSettingsCLIOverridesAndFailures(t *testing.T) {
 // No guard is fixed at block: the four guards take off, warn and block from the
 // command, personal and per project, and the levels list shows what was set.
 func TestHookLevelAcceptsEveryLevelForTheFourGuards(t *testing.T) {
-	for _, name := range []string{"brief-lint", "host-guard", "only-writer", "plan-guard"} {
+	for _, name := range []string{"host-guard", "only-writer", "plan-guard"} {
 		for _, level := range []string{"off", "warn", "block"} {
 			t.Run(name+"/"+level, func(t *testing.T) {
 				h := newHarness(t)
 				h.record(project.Record{Name: "example", Folders: []project.Folder{{Machine: h.env.Machine, Path: h.home}}})
-				if code := h.run(h.home, "hook", "levels", "--json"); code != 0 || !strings.Contains(h.out.String(), `"`+name+`":"block"`) {
+				def := "block"
+				if name == "only-writer" {
+					def = "warn" // verdicts-11nov v-4
+				}
+				if code := h.run(h.home, "hook", "levels", "--json"); code != 0 || !strings.Contains(h.out.String(), `"`+name+`":"`+def+`"`) {
 					t.Fatalf("default: %d %s %s", code, h.out, h.errb)
 				}
 				h.out.Reset()

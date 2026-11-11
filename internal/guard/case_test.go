@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
 // foldsCase reports whether dir's filesystem treats two spellings of a name as
@@ -115,16 +117,11 @@ func (f *fixture) heldCwd(cwd string) func(string) string {
 	}
 }
 
-func TestBriefNamedInAnotherCaseIsStillLinted(t *testing.T) {
-	f := setup(t)
-	skipUnlessFolding(t, f)
-	f.write(filepath.Join(f.task, "subagents", "01-work.md"), "not a brief")
-	i := f.input("Agent", "Read subagents/01-WORK.md")
-	expect(t, EvaluateBrief(i, f.root, f.env), "deny")
-}
-
 func TestOnlyWriterBlocksTaskInputsAndAttachments(t *testing.T) {
 	f := setup(t)
+	if err := (settings.Store{Home: f.grid}).SetHook("only-writer", "block"); err != nil {
+		t.Fatal(err)
+	}
 	for _, folder := range []string{"inputs", "attachments"} {
 		t.Run(folder, func(t *testing.T) {
 			if got := f.onlyWriter(filepath.Join(f.task, folder, "example.txt")); got != "deny" {

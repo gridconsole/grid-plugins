@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/golden"
 )
 
@@ -47,8 +46,8 @@ func TestProposalLifecycle(t *testing.T) {
 	s := testStore(t)
 	n := sample()
 	// Text cannot self-approve or choose its own provenance.
-	n.Status, n.Origin.Tier = "accepted", "person-team"
-	origin := Origin{Kind: "job", ID: "T-02/J-02", Tier: "agent"}
+	n.Status, n.Origin = "accepted", Origin{Kind: "server", ID: "forged"}
+	origin := Origin{Kind: "job", ID: "T-02/J-02"}
 	e, err := s.Propose(n, origin)
 	if err != nil {
 		t.Fatal(err)
@@ -94,15 +93,14 @@ func TestProposalLifecycle(t *testing.T) {
 
 func TestAcceptanceGates(t *testing.T) {
 	for _, tc := range []struct {
-		name, topic string
-		tier        contract.TrustTier
+		name, topic, kind string
 	}{
-		{"config", "agents", contract.Agent}, {"guest", "decisions", contract.PersonGuest}, {"external", "decisions", contract.External},
+		{"config", "agents", "session"}, {"import", "decisions", "import"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := testStore(t)
 			n := sample()
-			n.Topic, n.Origin.Tier = tc.topic, tc.tier
+			n.Topic, n.Origin.Kind = tc.topic, tc.kind
 			if _, err := s.Propose(n, n.Origin); err != nil {
 				t.Fatal(err)
 			}

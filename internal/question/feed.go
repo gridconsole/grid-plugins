@@ -116,6 +116,10 @@ func (s Store) publishEvents(dir string, r *Record, before int) error {
 			return fmt.Errorf("invalid Feed timestamp: %w", err)
 		}
 	}
+	// The Job follows the decision just posted; the file is written last, from it.
+	if err = s.settleJob(f, *r); err != nil {
+		return err
+	}
 	return save(dir, *r)
 }
 

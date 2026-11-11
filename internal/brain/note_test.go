@@ -11,7 +11,7 @@ func sample() Note {
 		Name: "checks", Topic: "conventions", Type: "reference",
 		Description: "Read before changing the checks.", Summary: "Run the project checks before delivery.",
 		Source: "job:T-01/J-01", Level: "project", Status: "proposed",
-		Origin: Origin{Kind: "job", ID: "T-01/J-01", Tier: "agent"},
+		Origin: Origin{Kind: "job", ID: "T-01/J-01"},
 		Links:  []Link{{To: "job:T-01/J-01", Rel: "decided-by", Summary: "The job that established the checks.", Why: "Explains which checks cover this change."}},
 		Body:   "# Checks\n\nRun the project checks.\n",
 	}
@@ -60,7 +60,7 @@ func TestMarkdownRoundTripOddText(t *testing.T) {
 
 func TestMarkdownHandwritten(t *testing.T) {
 	n, err := Parse([]byte("---\nname: checks\nsummary: |-\n  First line.\n  Second line.\nlinks:\n  - to: 'brain:project/checks#commands'\n    rel: explains\n    summary: The checks.\n    why: Explains how to run the checks.\norigin:\n  kind: job\n  id: T-01/J-01\n  tier: agent\n---\nBody\n"))
-	if err != nil || n.Summary != "First line.\nSecond line." || len(n.Links) != 1 || n.Origin.Tier != "agent" {
+	if err != nil || n.Summary != "First line.\nSecond line." || len(n.Links) != 1 || n.Origin != (Origin{Kind: "job", ID: "T-01/J-01"}) {
 		t.Fatalf("parse: %#v, %v", n, err)
 	}
 	if err := n.Links[0].Validate(); err != nil {
@@ -89,7 +89,6 @@ func TestNoteValidation(t *testing.T) {
 		"summary":      func(n *Note) { n.Summary = strings.Repeat("x", 301) },
 		"description":  func(n *Note) { n.Description = strings.Repeat("x", 201) },
 		"status":       func(n *Note) { n.Status = "active" },
-		"tier":         func(n *Note) { n.Origin.Tier = "unknown" },
 		"why":          func(n *Note) { n.Links[0].Why = "see also" },
 		"link summary": func(n *Note) { n.Links[0].Summary = "" },
 		"relation":     func(n *Note) { n.Links[0].Rel = "informs" },

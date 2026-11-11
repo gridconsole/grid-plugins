@@ -109,7 +109,7 @@ personal values, and missing values use the catalog defaults.
 | --- | --- | --- |
 | brief-lint | block | Legacy brief guard |
 | host-guard | block | Host and Feed guard |
-| only-writer | block | Task and brain ownership guard |
+| only-writer | warn | Task and brain ownership guard; warns by default, `block` refuses the write |
 | plan-guard | block | Plan guard |
 | home-allow | warn | Home permission fallback |
 | session-start | warn | SessionStart context |
@@ -124,7 +124,8 @@ personal values, and missing values use the catalog defaults.
 | needs-you, session-check, topic-trigger | warn | No runtime counterpart; have no effect yet |
 
 No guard level is fixed. brief-lint, host-guard, only-writer and plan-guard read
-their level like every other hook, and each defaults to `block`; `grid hook level`
+their level like every other hook; brief-lint, host-guard and plan-guard default
+to `block` and only-writer to `warn`; `grid hook level`
 takes `off`, `warn` or `block` for them. A settings file the guard cannot read
 keeps its refusal and reports why. While the host guard is at `block` it denies
 agent writes to the settings files and the `grid hook level`, `agent set`,

@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -331,7 +330,7 @@ func Run(args []string, env Env) int {
 		if err != nil {
 			break
 		}
-		// Supplied note text can never select the write scope or author tier.
+		// Supplied note text can never select the write scope or the author.
 		n.Level = writeLevel
 		if name != "" {
 			n.Name = name
@@ -357,7 +356,7 @@ func Run(args []string, env Env) int {
 		var origin brain.Origin
 		origin, err = brain.SessionOrigin()
 		if external {
-			origin.Kind, origin.Tier = "import", contract.External
+			origin.Kind = "import"
 		}
 		if err == nil {
 			result, err = store.Propose(n, origin)

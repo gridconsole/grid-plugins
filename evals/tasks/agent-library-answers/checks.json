@@ -1,0 +1,9 @@
+[
+  {"id":"answer","type":"file_exists","path":"answer.md","gate":true},
+  {"id":"template-read-only","type":"command_passes","command":["sh","-c","grep -q '^tools: Read' .claude/agents/grid-library.md && ! grep -Eq '^tools:.*(Edit|Write|NotebookEdit)' .claude/agents/grid-library.md"],"weight":2},
+  {"id":"names-note","type":"text_contains","path":"answer.md","text":"tag-storage","weight":2},
+  {"id":"gives-fact","type":"text_contains","path":"answer.md","text":"lowercase"},
+  {"id":"gives-why","type":"text_contains","path":"answer.md","text":"separate table"},
+  {"id":"no-unrelated-note","type":"command_passes","command":["sh","-c","! grep -q 'semicolon' answer.md"]},
+  {"id":"brain-unchanged","type":"command_passes","command":["sh","-c","[ \"$(find \"$GRID_HOME/knowledge\" -mindepth 2 -type f | sort | sed \"s|.*/knowledge/||\" | tr '\\n' ' ')\" = 'decisions/export-format.md decisions/tag-storage.md ' ] && [ ! -e \"$GRID_HOME/brain-proposals\" ] && [ \"$(find . -type f ! -path './.claude/*' | sort | tr '\\n' ' ')\" = './answer.md ' ]"],"weight":2}
+]

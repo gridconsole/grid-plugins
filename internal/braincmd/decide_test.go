@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
 )
@@ -29,7 +28,7 @@ func decideFixture(t *testing.T) (Env, string) {
 			t.Fatal(err)
 		}
 	}
-	n := brain.Note{Name: "lesson", Topic: "conventions", Type: "reference", Description: "When checking changes", Summary: "Run the checks", Source: "T-01", Level: "project", Status: "proposed", Origin: brain.Origin{Kind: "session", ID: "example", Tier: contract.Agent}, Body: "Run checks before landing.\n"}
+	n := brain.Note{Name: "lesson", Topic: "conventions", Type: "reference", Description: "When checking changes", Summary: "Run the checks", Source: "T-01", Level: "project", Status: "proposed", Origin: brain.Origin{Kind: "session", ID: "example"}, Body: "Run checks before landing.\n"}
 	b, err := brain.Encode(n)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +48,7 @@ func TestTaskDecisions(t *testing.T) {
 			env.Stderr = &stderr
 			s := brain.Store{GridHome: env.GridHome, Project: "sample"}
 			if action == "merge-into" {
-				_, err := s.Propose(brain.Note{Name: "target", Topic: "conventions", Description: "When testing", Summary: "Original", Source: "T-00", Level: "project", Body: "Original body."}, brain.Origin{Kind: "session", ID: "example", Tier: contract.Agent})
+				_, err := s.Propose(brain.Note{Name: "target", Topic: "conventions", Description: "When testing", Summary: "Original", Source: "T-00", Level: "project", Body: "Original body."}, brain.Origin{Kind: "session", ID: "example"})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -130,7 +129,7 @@ func TestDecideRefusesUnsafeProposals(t *testing.T) {
 			b, _ := os.ReadFile(path)
 			n, _ := brain.Parse(b)
 			if kind == "external" {
-				n.Origin.Tier = contract.External
+				n.Origin.Kind = "import"
 			}
 			if kind == "config" {
 				n.Topic = "deploy"
@@ -215,7 +214,7 @@ func TestDecideRefusedByCheckWritesNothing(t *testing.T) {
 			env.Stderr = &stderr
 			s := brain.Store{GridHome: env.GridHome, Project: "sample"}
 			if action == "merge-into" {
-				if _, err := s.Propose(brain.Note{Name: "target", Topic: "conventions", Description: "When testing", Summary: "Original", Source: "T-00", Level: "project", Body: "Original body."}, brain.Origin{Kind: "session", ID: "example", Tier: contract.Agent}); err != nil {
+				if _, err := s.Propose(brain.Note{Name: "target", Topic: "conventions", Description: "When testing", Summary: "Original", Source: "T-00", Level: "project", Body: "Original body."}, brain.Origin{Kind: "session", ID: "example"}); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := s.Accept("project", "target"); err != nil {

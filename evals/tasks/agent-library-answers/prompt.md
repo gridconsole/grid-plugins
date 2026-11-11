@@ -1,0 +1,1 @@
+My Grid home is the one in GRID_HOME and it holds a brain. Use the grid-library agent to answer this question: how are the labels on a note stored, and why? Save the agent's reply, unchanged, as answer.md. Do not change the brain or any other file.

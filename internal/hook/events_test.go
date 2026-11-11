@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/session"
@@ -139,7 +138,7 @@ func TestUsageHooksKeepNumbersAndFoldRetries(t *testing.T) {
 func TestRecallPointersReadDedupeAndPlanChange(t *testing.T) {
 	f := eventSetup(t)
 	s := brain.Store{GridHome: f.home}
-	n := brain.Note{Name: "cache", Topic: "decisions", Type: "convention", Description: "Use when changing cache configuration.", Summary: "Keep cache settings explicit.", Source: "task:T-01", Level: "home", Body: "PRIVATE BODY that must never be dumped.", Origin: brain.Origin{Tier: contract.PersonTeam, Kind: "session", ID: "session-demo"}}
+	n := brain.Note{Name: "cache", Topic: "decisions", Type: "convention", Description: "Use when changing cache configuration.", Summary: "Keep cache settings explicit.", Source: "task:T-01", Level: "home", Body: "PRIVATE BODY that must never be dumped.", Origin: brain.Origin{Kind: "session", ID: "session-demo"}}
 	if _, err := s.Propose(n, n.Origin); err != nil {
 		t.Fatal(err)
 	}
@@ -186,45 +185,11 @@ func TestRecallPointersReadDedupeAndPlanChange(t *testing.T) {
 		t.Fatalf("read history: %s", b)
 	}
 }
-func TestStopGuardBlocksOnceAndMarksOwnedBrief(t *testing.T) {
-	f := eventSetup(t)
-	sub := filepath.Join(f.dir, "subagents")
-	if err := os.Mkdir(sub, 0700); err != nil {
-		t.Fatal(err)
-	}
-	brief := filepath.Join(sub, "01-build.md")
-	text := "---\nrole: builder\nstatus: running\n---\n## Outcome\n\n## Verdict\n"
-	if err := os.WriteFile(brief, []byte(text), 0600); err != nil {
-		t.Fatal(err)
-	}
-	transcript := filepath.Join(f.home, "transcript.jsonl")
-	row := map[string]any{"message": map[string]any{"content": "Use " + brief}}
-	b, _ := json.Marshal(row)
-	if err := os.WriteFile(transcript, append(b, '\n'), 0600); err != nil {
-		t.Fatal(err)
-	}
-	in := hookio.Input{AgentType: "grid:grid-builder", AgentTranscriptPath: transcript}
-	_, log, code := f.run(t, "SubagentStop", in)
-	if code != 2 || !strings.Contains(log, "Outcome") {
-		t.Fatalf("guard: %d %s", code, log)
-	}
-	a, err := (session.Store{TaskDir: f.dir}).Activity("session-demo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(a.Exits) != 0 {
-		t.Fatal("blocked subagent recorded as exited")
-	}
-	in.StopHookActive = true
-	_, log, code = f.run(t, "SubagentStop", in)
-	if code != 0 || log != "" {
-		t.Fatalf("retry: %d %s", code, log)
-	}
-	b, _ = os.ReadFile(brief)
-	if !strings.Contains(string(b), "status: blocked") {
-		t.Fatalf("not marked: %s", b)
-	}
-}
+
+// TestStopGuardBlocksOnceAndMarksOwnedBrief was deleted: the brief Outcome and
+// Verdict check, and the brief marking, were removed by the owner's direction
+// (verdicts-11nov v-5, one stop check). TestStopJobWithoutResultBlocksOnce in
+// stop_test.go still covers the remaining check, block once then stop.
 func TestInternalErrorsAllowAndGuardStillDenies(t *testing.T) {
 	f := eventSetup(t)
 	sessions := filepath.Join(f.dir, "sessions")

@@ -3,44 +3,37 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/usage"
 )
 
-// A task budget set or clear is an ordinary write: agents and people run the same verb.
+// Usage is a number: there is no verb that sets or clears a task budget, and a
+// budget a task already carries is only read.
 
-func budgetGateHarness(t *testing.T) (*harness, string) {
+// setTaskBudget gives a task a budget the way an older task already has one.
+func setTaskBudget(t *testing.T, h *harness, task string, change usage.Change) {
 	t.Helper()
-	h := newHarness(t)
-	h.env.Getenv = func(string) string { return "" }
-	return h, taskFixture(t, h).Path
-}
-
-func budgetShow(t *testing.T, h *harness, task string) string {
-	t.Helper()
-	if code := h.run(task, "usage", "budget", "show", "--json"); code != 0 {
-		t.Fatalf("show: exit %d: %s %s", code, h.out, h.errb)
-	}
-	return h.out.String()
-}
-
-func TestUsageBudgetSetAndClear(t *testing.T) {
-	h, task := budgetGateHarness(t)
-	if code := h.run(task, "usage", "budget", "set", "--tokens", "100"); code != 0 {
-		t.Fatalf("set: %d %s", code, h.errb)
-	}
-	if !strings.Contains(budgetShow(t, h, task), `"budget":{"tokens":100}`) {
-		t.Fatal("set did not store the budget")
-	}
-	if code := h.run(task, "usage", "budget", "clear", "--tokens"); code != 0 {
-		t.Fatalf("clear: %d %s", code, h.errb)
-	}
-	if strings.Contains(budgetShow(t, h, task), `"tokens":100`) {
-		t.Fatal("clear left the budget")
+	change.Budget = true
+	if _, err := (usage.Store{TaskPath: task, GridHome: h.gridHome}).Configure(change); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestUsageBudgetSyntaxError(t *testing.T) {
-	h, task := budgetGateHarness(t)
-	if code := h.run(task, "usage", "budget", "set", "--tokens", "lots"); code != 2 || !strings.Contains(h.errb.String(), "non-negative integer") {
-		t.Fatalf("syntax error: exit %d: %s", code, h.errb)
+func TestUsageBudgetSetAndClearAreUnknownVerbs(t *testing.T) {
+	for _, args := range [][]string{
+		{"usage", "budget", "set", "--tokens", "100"},
+		{"usage", "budget", "set", "--workspace", "--tokens", "100"},
+		{"usage", "budget", "clear", "--tokens"},
+		{"usage", "budget", "clear", "--workspace"},
+	} {
+		h := newHarness(t)
+		h.env.Getenv = func(string) string { return "" }
+		task := taskFixture(t, h).Path
+		if code := h.run(task, args...); code != 2 || !strings.Contains(h.errb.String(), `usage budget: unknown command "`+args[2]+`"`) || h.out.Len() != 0 {
+			t.Fatalf("%v: exit %d: %s %s", args, code, h.out, h.errb)
+		}
+		if code := h.run(task, "usage", "--help"); code != 0 || strings.Contains(h.out.String(), "budget set") || strings.Contains(h.out.String(), "budget show | clear") {
+			t.Fatalf("help still lists the budget verbs: %s", h.out)
+		}
 	}
 }

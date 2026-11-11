@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/plan"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -71,14 +70,14 @@ func New(t *testing.T, testdata string) Home {
 	}
 	h.Store = brain.Store{GridHome: gh, Project: Project, Now: func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) }}
 	h.Note("project", "export-format", "conventions", "The export column order and compatibility rule.",
-		"Keep the id column before the title column.\nChanging the column order requires a recorded decision.\n", contract.PersonTeam)
+		"Keep the id column before the title column.\nChanging the column order requires a recorded decision.\n")
 	return h
 }
 
 // Note proposes and accepts one note at level "project" or "home".
-func (h Home) Note(level, name, topic, summary, body string, tier contract.TrustTier) brain.Entry {
+func (h Home) Note(level, name, topic, summary, body string) brain.Entry {
 	n := brain.Note{Name: name, Topic: topic, Type: "convention", Description: summary, Summary: summary, Source: "fixture", Level: level, Body: body}
-	if _, err := h.Store.Propose(n, brain.Origin{Kind: "session", ID: "fixture", Tier: tier}); err != nil {
+	if _, err := h.Store.Propose(n, brain.Origin{Kind: "session", ID: "fixture"}); err != nil {
 		panic(err)
 	}
 	e, err := h.Store.Accept(level, name)
