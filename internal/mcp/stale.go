@@ -22,9 +22,10 @@ var stale struct {
 }
 
 // diskVersion returns the plugin version on disk, or "" when there is none to
-// report: CLAUDE_PLUGIN_ROOT unset, file unreadable or without a version.
-func diskVersion() string {
-	root := os.Getenv("CLAUDE_PLUGIN_ROOT")
+// report: CLAUDE_PLUGIN_ROOT unset, file unreadable or without a version. The
+// root comes from getenv; the cache below is keyed by that root.
+func diskVersion(getenv func(string) string) string {
+	root := getenv("CLAUDE_PLUGIN_ROOT")
 	if root == "" {
 		return ""
 	}
@@ -49,9 +50,14 @@ func diskVersion() string {
 }
 
 // withStaleNotice appends one text line when the plugin on disk differs from
-// the running build. Otherwise the result is returned untouched.
+// the running build. Otherwise the result is returned untouched. The plugin root
+// is read through s.Getenv; nil reads the process.
 func (s Server) withStaleNotice(r Result) Result {
-	disk := diskVersion()
+	getenv := s.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	disk := diskVersion(getenv)
 	if disk == "" || disk == s.Version {
 		return r
 	}
