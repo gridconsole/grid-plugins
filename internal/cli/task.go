@@ -309,7 +309,7 @@ func runTaskAttach(args []string, env Env) int {
 		advice = env.Stderr
 	}
 	for _, holder := range result.Holders {
-		fmt.Fprintf(advice, "Live holder: %s. Use grid lease take-over to take over; attach does not change leases.\n", holder)
+		fmt.Fprintf(advice, "Live holder: %s. Use grid lease take <task> --takeover --expected-epoch <gen.fence> to take over; attach does not change leases.\n", holder)
 	}
 	if *asJSON {
 		return writeJSON(env.Stdout, result)
