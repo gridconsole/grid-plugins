@@ -177,7 +177,8 @@ func approveRevision(t *testing.T, f *fixture, text string) {
 }
 
 // planJobRecords are the job records of the plan's own Jobs, without the approve
-// person Job that approvePlan posts.
+// person Job that approvePlan posts and without the re-plan Job the tick posts
+// when plan.md cannot be published.
 func planJobRecords(t *testing.T, f *fixture) []feed.Entry {
 	t.Helper()
 	records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
@@ -186,7 +187,7 @@ func planJobRecords(t *testing.T, f *fixture) []feed.Entry {
 	}
 	var out []feed.Entry
 	for _, r := range records.Records {
-		if r.Body["kind"] != "approve" {
+		if r.Body["kind"] != "approve" && r.Body["title"] != jiPlanFaultTitle {
 			out = append(out, r)
 		}
 	}

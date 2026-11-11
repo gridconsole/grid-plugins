@@ -85,7 +85,7 @@ func TestHvPlanOtherJobStillAssigned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tick stopped on an unpublishable plan: %v", err)
 	}
-	if got := f.state(t); out.Assigned != 1 || got == nil || got.Status != contract.Assigned {
+	if got := f.state(t); jiPfPlanAssigned(out) != 1 || got == nil || got.Status != contract.Assigned {
 		t.Fatalf("J-1 not assigned: out=%+v state=%+v", out, got)
 	}
 	if notices := hvPlanNotices(t, f); len(notices) != 1 {
