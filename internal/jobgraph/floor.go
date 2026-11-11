@@ -190,11 +190,59 @@ var testWord = regexp.MustCompile(`(?i)(^|[./_:-])(tests?|pytest|unittest|jest|v
 // separates invocations; comments and quoted descriptions do not count. This
 // deliberately cannot infer what an arbitrary wrapper such as "make check"
 // runs, nor prove that a named test will run successfully.
+//
+// The line is read as POSIX sh first. A command written for cmd.exe keeps its
+// backslashes as plain characters, so a second reading without backslash
+// escapes is made when the first found no test and no backslash in the line is
+// a POSIX escape that changes how the line splits. The answer is the same on
+// every host.
 func namesTest(command string) bool {
-	commands, ok := commandWords(command)
+	commands, ok := commandWords(command, true)
 	if !ok {
 		return false
 	}
+	if commandsNameTest(commands) {
+		return true
+	}
+	if !backslashesArePlain(command) {
+		return false
+	}
+	commands, ok = commandWords(command, false)
+	return ok && commandsNameTest(commands)
+}
+
+// backslashesArePlain reports whether the line has a backslash and none of
+// them stands where POSIX sh would take it as an escape that changes the split.
+func backslashesArePlain(command string) bool {
+	found := false
+	runes := []rune(command)
+	for i, r := range runes {
+		if r != '\\' {
+			continue
+		}
+		found = true
+		if i+1 == len(runes) || strings.ContainsRune(" \t\n;&|'\"#$`(){}\\", runes[i+1]) {
+			return false
+		}
+	}
+	return found
+}
+
+// programName is the base name of a command word, split at the last "/" or
+// "\". One trailing .exe, .cmd, .bat or .com is dropped and, when one was, the
+// name is lower-cased: Windows program names are case-blind.
+func programName(word string) string {
+	exe := path.Base(strings.ReplaceAll(word, `\`, "/"))
+	lower := strings.ToLower(exe)
+	for _, ext := range []string{".exe", ".cmd", ".bat", ".com"} {
+		if len(lower) > len(ext) && strings.HasSuffix(lower, ext) {
+			return strings.TrimSuffix(lower, ext)
+		}
+	}
+	return exe
+}
+
+func commandsNameTest(commands [][]string) bool {
 	for _, words := range commands {
 		if len(words) > 0 && words[0] == "env" {
 			words = words[1:]
@@ -205,7 +253,7 @@ func namesTest(command string) bool {
 		if len(words) == 0 {
 			continue
 		}
-		exe := path.Base(words[0])
+		exe := programName(words[0])
 		switch exe {
 		case "echo", "printf", "true", "false", "test", "[":
 			continue
@@ -250,8 +298,9 @@ func namesTest(command string) bool {
 
 // commandWords preserves quoted arguments and ignores shell comments. Dynamic
 // expansions and compound shell syntax are outside this static check: callers
-// should name a test script instead. No command is executed here.
-func commandWords(command string) ([][]string, bool) {
+// should name a test script instead. No command is executed here. With
+// escapes false a backslash is an ordinary character, as cmd.exe reads it.
+func commandWords(command string, escapes bool) ([][]string, bool) {
 	commands := [][]string{}
 	words := []string{}
 	var word strings.Builder
@@ -285,7 +334,7 @@ func commandWords(command string) ([][]string, bool) {
 			escape = false
 			continue
 		}
-		if r == '\\' && quote != '\'' {
+		if escapes && r == '\\' && quote != '\'' {
 			escape = true
 			started = true
 			continue
