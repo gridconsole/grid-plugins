@@ -140,7 +140,11 @@ func checkStop(o Options, in hookio.Input) int {
 		return 0
 	}
 	if o.Stderr != nil {
-		fmt.Fprintf(o.Stderr, "Post the result of Job %s on the Feed, then stop.\n", jobID)
+		taskRef := o.Getenv("GRID_TASK")
+		if taskRef == "" {
+			taskRef = dir
+		}
+		fmt.Fprintf(o.Stderr, "Post the result of Job %s on the Feed with `grid job result --task %s --job %s --body <json>`, then stop; a Job you cannot do is ended the same way, with the blocker named in the result.\n", jobID, taskRef, jobID)
 	}
 	return 2
 }
