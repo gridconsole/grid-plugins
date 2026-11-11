@@ -22,6 +22,9 @@ type Env struct {
 	Writer          func(bool) (feed.Writer, error)
 	// Jobs posts and closes the person Job of `ask`; nil leaves a plain question.
 	Jobs JobPort
+	// RecordError, when set, is told of the error that stops a command before it
+	// reads or writes the task, so the caller can give it a stable code.
+	RecordError func(error)
 }
 
 type options []string
@@ -192,6 +195,9 @@ func run(args []string, env Env) int {
 		err = errors.New("no enclosing task; use --task <path>")
 	}
 	if err != nil {
+		if env.RecordError != nil {
+			env.RecordError(err)
+		}
 		fmt.Fprintln(env.Stderr, "question:", err)
 		return 1
 	}
