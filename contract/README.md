@@ -520,7 +520,7 @@ The path is absolute. Plain output is two lines: `T-NN created`, then the task f
 
 Project defaults to the existing folder resolver's answer. `--project` selects a registered name or id; `personal` and `Personal` select the Personal project without requiring a record. Personal tasks live under `<GRID_HOME>/personal/tasks/` and use `project: personal`. Other tasks live under `<GRID_HOME>/projects/<project>/tasks/`. A first write creates the project record, machine identity and format version as needed.
 
-The title is the first nonblank line of the request, trimmed and limited to 120 Unicode characters. The folder slug uses lowercase ASCII letters and digits, separated by hyphens, limited to 60 characters, with `task` as the fallback. These transformations never change `intent.md`.
+The title comes from the request in four steps. When the request, after leading spaces, tabs and newlines, starts with a front matter block whose `title` is a string that is not blank, the title is that value with each run of whitespace folded to one space. When the block has no such `title`, the title is the first nonblank line of the text after the block, trimmed. A request without a front matter block keeps the first nonblank line of the request, trimmed. A request whose block has no such `title` and nothing but whitespace after it is refused with exit 2 and `task words hold only front matter and no title`, and nothing is written. Every title is limited to 120 Unicode characters. The folder slug uses lowercase ASCII letters and digits, separated by hyphens, limited to 60 characters, with `task` as the fallback. These transformations never change `intent.md`.
 
 ### Task operands
 
