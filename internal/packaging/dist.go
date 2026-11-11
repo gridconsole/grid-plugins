@@ -2,6 +2,7 @@ package packaging
 
 import (
 	"crypto/sha256"
+	_ "embed"
 	"fmt"
 	"io"
 	"io/fs"
@@ -64,6 +65,12 @@ func Build(root, version string, log io.Writer) error {
 // repo and are never listed here.
 var shippedDirs = []string{"skills", "agents", "agent-templates"}
 
+// pluginReadme is the README of the public repo. It is embedded, not read from the
+// source root, because the source README.md is the developer's page.
+//
+//go:embed plugin-readme.md
+var pluginReadme []byte
+
 // stage writes everything in the plugin except the binaries.
 func stage(root, plugin, version string) error {
 	if err := Write(plugin, version); err != nil {
@@ -78,7 +85,10 @@ func stage(root, plugin, version string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(plugin, "LICENSE"), license, 0o644)
+	if err := os.WriteFile(filepath.Join(plugin, "LICENSE"), license, 0o644); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(plugin, "README.md"), pluginReadme, 0o644)
 }
 
 func buildBinary(root, output, version, goos, goarch string, log io.Writer) error {
