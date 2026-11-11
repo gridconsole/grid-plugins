@@ -23,6 +23,26 @@ Base: ee8a96c126781462cbe0067771db40d01911cd76 (main). Skills and agents read on
 | Rule: no attribution lines, no personal paths | HOLDS | commit messages are one sentence each; the test uses relative paths only |
 | RealPlugin tests | N/A | none named by the brief |
 
+Row 1 output (`=== RUN` lines dropped):
+
+```
+    im_job_bash_lines_test.go:130: agents/builder.md preloads skills [run-job]
+    im_job_bash_lines_test.go:130: agents/curator.md preloads skills [brain-keeper]
+    im_job_bash_lines_test.go:130: agents/orchestrator.md preloads skills [plan-jobs]
+    im_job_bash_lines_test.go:130: agents/reviewer.md preloads skills [review-job]
+--- PASS: TestImBashEveryJobAgentSkillCarriesTheLines (0.00s)
+    --- PASS: TestImBashEveryJobAgentSkillCarriesTheLines/builder.md (0.00s)
+        --- PASS: TestImBashEveryJobAgentSkillCarriesTheLines/builder.md/run-job (0.00s)
+    --- PASS: TestImBashEveryJobAgentSkillCarriesTheLines/curator.md (0.00s)
+        --- PASS: TestImBashEveryJobAgentSkillCarriesTheLines/curator.md/brain-keeper (0.00s)
+    --- PASS: TestImBashEveryJobAgentSkillCarriesTheLines/orchestrator.md (0.00s)
+        --- PASS: TestImBashEveryJobAgentSkillCarriesTheLines/orchestrator.md/plan-jobs (0.00s)
+    --- PASS: TestImBashEveryJobAgentSkillCarriesTheLines/reviewer.md (0.00s)
+        --- PASS: TestImBashEveryJobAgentSkillCarriesTheLines/reviewer.md/review-job (0.00s)
+PASS
+ok  	github.com/gridconsole/grid-plugins/internal/contract	0.012s
+```
+
 ## Deviation from the brief, for review
 
 The brief names the word `` `$(` `` (backtick, `$(`, backtick). No skill line contains that: the lines write `` `$(...)` ``. Pinned the base line as it is, so the word is "`$(" (opening backtick plus `$(`), see internal/contract/im_job_bash_lines_test.go:18-20. With the brief's literal word, rows 1 and 6 failed on all four skills (first run: `the closest line lacks `$(``). It still pins the substitution word, and a later wording fix that keeps `` `$(...)` `` stays green.
