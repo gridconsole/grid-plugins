@@ -41,8 +41,8 @@ M-js-if-brain-partial-onto-main and C-if-brain-partial-code onto origin/main (fc
 | 4 ancestors | HOLDS, exit 0 each | `git merge-base --is-ancestor` of origin/lane-M-js-iy-signal-codes-onto-il, origin/lane-M-js-if-brain-partial-onto-main and origin/main (after the second `git fetch origin`) all exit 0 |
 | 5 one README row per code | HOLDS | `grep -n` on the table: no_such_project 1 (l.77), no_such_task 1 (78), no_such_note 1 (79), note_state 1 (80), note_exists 1 (81), notes_full 1 (82), invalid_argument 1 (84), invalid_policy 1 (85), workflow_file_changed 1 (86), guest_refused 1 (93); plus index_rebuild_failed 1 (94) from changes.go. `TestHfFsCodeTable` passes |
 | 6 `make lint` | HOLDS, exit 0 | `go vet ./...` printed nothing but its command line |
-| 6 `make cross` (darwin/arm64, windows/amd64) | see end of file | |
-| Importers of the changed package | HOLDS | `go list` importers of internal/cli: cmd/grid (no test files) and lib; see the lib line at the end |
+| 6 `make cross` (darwin/arm64, windows/amd64) | HOLDS, exit 0 | vet and test compile for both targets; last lines `cross: windows/amd64 test compile` and `ok .../grid-plugins` |
+| Importers of the changed package | HOLDS | `go list` importers of internal/cli: cmd/grid (no test files) and lib; `go test -count=1 ./cmd/grid/ ./lib/` exit 0: `ok .../lib 241.544s` (cmd/grid has no test files) |
 | Product code only where step 1 needs | HOLDS | one line, `internal/cli/update.go:87` |
 | No guard, gate, cap or hook added | HOLDS | none added; the change reuses an existing refusal sentinel |
 | No attribution lines, no personal paths | HOLDS | commits are one sentence |
