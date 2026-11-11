@@ -1,5 +1,4 @@
 ---
-name: showed
 type: tool_used
 tool: Bash
 input_match: grid job show

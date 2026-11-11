@@ -63,10 +63,9 @@ func hjuParseGrader(text string) (hjuGrader, error) {
 		return hjuGrader{}, err
 	}
 	g := hjuGrader{Head: head, Body: strings.TrimSpace(body)}
-	g.Name, _ = head["name"].(string)
 	g.Type, _ = head["type"].(string)
-	if g.Name == "" || g.Type == "" {
-		return g, fmt.Errorf("grader needs a name and a type")
+	if g.Type == "" {
+		return g, fmt.Errorf("grader needs a type")
 	}
 	return g, nil
 }
@@ -87,9 +86,10 @@ func hjuLoadGraders(t *testing.T) []hjuGrader {
 		if err != nil {
 			t.Fatalf("%s: %v", f, err)
 		}
-		if want := strings.TrimSuffix(filepath.Base(f), ".md"); g.Name != want {
-			t.Fatalf("%s: name %q does not match the file name", f, g.Name)
+		if _, has := g.Head["name"]; has {
+			t.Fatalf("%s: front matter has a name: key, the file name is the grader name", f)
 		}
+		g.Name = strings.TrimSuffix(filepath.Base(f), ".md")
 		out = append(out, g)
 	}
 	return out

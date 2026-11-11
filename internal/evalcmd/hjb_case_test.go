@@ -77,9 +77,10 @@ func hjbLoadGraders(t *testing.T) []hjbGrader {
 	for _, path := range paths {
 		var g hjbGrader
 		hjbReadFront(t, path, &g)
-		if want := strings.TrimSuffix(filepath.Base(path), ".md"); g.Name != want {
-			t.Fatalf("%s: name %q, want %q", path, g.Name, want)
+		if g.Name != "" {
+			t.Fatalf("%s: front matter has name %q, the file name is the grader name", path, g.Name)
 		}
+		g.Name = strings.TrimSuffix(filepath.Base(path), ".md")
 		graders = append(graders, g)
 	}
 	return graders

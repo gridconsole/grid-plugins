@@ -1,5 +1,4 @@
 ---
-name: cites-lines
 type: regex
 target:
   source: file
