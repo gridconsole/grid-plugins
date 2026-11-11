@@ -330,6 +330,7 @@ func pointerBlock(l Link, s Source) string {
 	}
 	return fmt.Sprintf("- %s · %s · %s · %s [%s]\n\n", l.To, l.Rel, oneLine(s.Summary), oneLine(l.Why), s.Tier)
 }
+
 // readBlock is one read line: the path, the file's summary and, when the Job has
 // a link to the same path, that link's reason. The summary is the file's, so a
 // marked file shows it inside the data fence and a personal note shows none; a
