@@ -22,7 +22,7 @@ func appEnvTasks(t *testing.T) (h *harness, first, second, third, outside string
 	h, first = feedHarness(t)
 	// The app starts a Job session with GRID_ROLE=worker.
 	t.Setenv("GRID_ROLE", "worker")
-	second =filepath.Join(h.gridHome, "projects", "example", "tasks", "T-08-other")
+	second = filepath.Join(h.gridHome, "projects", "example", "tasks", "T-08-other")
 	third = filepath.Join(h.gridHome, "projects", "example", "tasks", "T-09-third")
 	h.write(filepath.Join(second, "task.md"), "---\nid: "+appEnvOtherID+"\n---\n")
 	h.write(filepath.Join(third, "task.md"), "---\nid: "+appEnvThirdID+"\n---\n")
