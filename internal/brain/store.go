@@ -102,12 +102,11 @@ func randomID() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-// SessionOrigin creates a provenance stamp outside the supplied note text. The
-// CLI claims only the agent tier; authenticated team/guest tiers belong to the
-// server integration, and imported text must explicitly use external.
+// SessionOrigin creates an author stamp outside the supplied note text: the
+// CLI session that proposes the note. Imported text sets the "import" kind.
 func SessionOrigin() (Origin, error) {
 	id, err := randomID()
-	return Origin{Kind: "session", ID: id, Tier: contract.Agent}, err
+	return Origin{Kind: "session", ID: id}, err
 }
 
 func atomicWrite(root *os.Root, path string, data []byte) error {
@@ -457,8 +456,8 @@ func gate(root *os.Root, n Note) string {
 	if topic.Kind != "knowledge" {
 		return "Config topics must be changed through their own commands."
 	}
-	if n.Origin.Tier == contract.External || n.Origin.Tier == contract.PersonGuest {
-		return "Guest and external proposals are quarantined from accepted knowledge."
+	if n.Origin.Kind == "import" {
+		return "Imported proposals are quarantined from accepted knowledge."
 	}
 	return ""
 }
