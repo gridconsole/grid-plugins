@@ -2850,6 +2850,26 @@
           "args": [],
           "flags": [
             {
+              "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--description",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--external",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--file",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--json",
               "takes": "none",
               "required": false
@@ -2860,12 +2880,37 @@
               "required": false
             },
             {
+              "name": "--link",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--name",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
             },
             {
+              "name": "--source",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--summary",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--topic",
               "takes": "value",
               "required": false
             }

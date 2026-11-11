@@ -1,10 +1,28 @@
 Usage: grid brain keep [--task <task>] [flags]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
+  -body string
+    	Markdown body (otherwise stdin)
+  -description string
+    	when to read the note
+  -external
+    	quarantine externally sourced text
+  -file string
+    	Markdown with front matter, or - for stdin
   -json
     	print JSON
   -level string
     	home or project
+  -link value
+    	link object with to, rel, summary and why
+  -name string
+    	note name
   -project string
     	project name or id
+  -source string
+    	source task, Job or person
+  -summary string
+    	what the note contains
   -task string
     	include proposals from this task
+  -topic string
+    	topic

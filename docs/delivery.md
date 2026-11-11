@@ -74,6 +74,14 @@ one-line reason. JSON is an array of `{id, path, topic, reason}`. It includes
 current-task proposals and the project and home proposal stores. `--project`
 and `--level` retain the brain command's existing scope selection. It writes
 nothing and does not launch an agent or accept, merge, or decline proposals.
+The same command also carries the curator's three acts, each one a call a
+subagent can make: `brain keep --name <id> --topic <topic> --description <when>
+--summary <what> --source <source> --body <text> --link <JSON>` records a
+proposal (state `proposed`; each `--link` carries `to`, `rel`, `summary` and a
+`why`, and a link without a reason is refused), `brain keep accept <id>` files
+it as a linked note, and `brain keep refuse <id> [--why <reason>]` records the
+refusal and writes no note. They run the same code as `brain propose` and
+`brain accept [--reject]`.
 A missing topic is shown as `unassigned`. Project and home proposals are read
 with `brain.Parse`, the reader `accept` uses, so keep lists exactly what accept
 will read: an unknown field, an alias, a name that differs from the file name or
