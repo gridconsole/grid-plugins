@@ -69,6 +69,11 @@ func TestTaskNewFeedCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A tenure's first record must be its handover (feed/store.go), so the member posts it with the grant's Gen and Fence.
+	w.Gen, w.Fence = grant.Gen, grant.Fence
+	if _, err := store.Handover(feed.Input{Body: map[string]any{}}, w); err != nil {
+		t.Fatal(err)
+	}
 	if code := h.run(h.home, "job", "next", "--task", created.ID, "--project", "personal", "--lease-epoch", fmt.Sprintf("0.%d", grant.Fence), "--json"); code != 0 {
 		t.Fatalf("next: %d %s", code, h.errb)
 	}
