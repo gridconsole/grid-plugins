@@ -21,6 +21,13 @@ func testRunner(t *testing.T) Runner {
 func runTask(t *testing.T, runner Runner, task Task) Result {
 	t.Helper()
 	result, err := runner.Run(context.Background(), task)
+	return checkSavedRun(t, runner, result, err)
+}
+
+// checkSavedRun holds what every finished run must leave: no error from Run,
+// the result saved as returned, and no temporary workspace left behind.
+func checkSavedRun(t *testing.T, runner Runner, result Result, err error) Result {
+	t.Helper()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,15 +111,11 @@ func TestFailuresAreSaved(t *testing.T) {
 	}{
 		{"setup", "echo setup-failed >&2; exit 7", "exit 0", "failed", "setup"},
 		{"agent", "true", "echo agent-failed >&2; exit 9", "failed", "agent"},
-		{"timeout", "true", "sleep 20", "error", "agent"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			task, runner := sampleTask(t), testRunner(t)
 			task.Setup = tc.setup
 			runner.Agent = []string{"sh", "-c", tc.agent}
-			if tc.name == "timeout" {
-				runner.Timeout = 100 * time.Millisecond
-			}
 			r := runTask(t, runner, task)
 			if r.Status != tc.status || r.Summary.Skipped != len(task.Checks) || r.Summary.CheckScore != nil {
 				t.Fatalf("bad failure record: %+v", r)
@@ -120,12 +123,18 @@ func TestFailuresAreSaved(t *testing.T) {
 			if tc.phase == "setup" && (r.Setup.ExitCode != 7 || r.AgentResult.Status != "skipped") {
 				t.Fatalf("agent ran after setup failed: %+v", r)
 			}
-			if tc.name == "timeout" && (r.AgentResult.ExitCode == 0 || !strings.Contains(r.AgentResult.Error, "deadline")) {
-				t.Fatalf("timeout did not stop the command: %+v", r)
-			}
 		})
 	}
+	// The timeout case needs a named pipe, so it lives in if_process_drain_test.go
+	// (linux and darwin) and registers itself here.
+	if ifEdTimeoutCase != nil {
+		t.Run("timeout", ifEdTimeoutCase)
+	}
 }
+
+// ifEdTimeoutCase is the timeout case of TestFailuresAreSaved, set by
+// if_process_drain_test.go where named pipes exist.
+var ifEdTimeoutCase func(t *testing.T)
 
 func TestCommandNotFoundAndCancellation(t *testing.T) {
 	runner, task := testRunner(t), sampleTask(t)
