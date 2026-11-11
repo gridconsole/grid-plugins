@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -8,9 +9,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/task"
@@ -429,10 +432,93 @@ func TestSignalTurnProcess(t *testing.T) {
 	}
 	env := Env{Home: paths[0], GridHome: paths[1], Cwd: paths[2], Ceiling: paths[2], Machine: paths[3], TempRoots: []string{paths[4]}}
 	env.Stdout, env.Stderr = os.Stdout, os.Stderr
-	if err := os.WriteFile(os.Getenv("GRID_SIGNAL_TEST_READY"), nil, 0o600); err != nil {
-		panic(err)
-	}
+	// The child tells its parent when it is about to wait for the signal lock.
+	// The hook never blocks and is not restored: the process ends with os.Exit.
+	fslock.OnBlockForTest(func(path string) {
+		if strings.HasSuffix(path, ".signals.lock") {
+			fmt.Fprintln(os.Stderr, koSoBlocked)
+		}
+	})
 	os.Exit(Run(actArgs("turn"), env))
+}
+
+// koSoBlocked is the line a turn child writes to its stderr when it is about to
+// wait for the signal lock another process holds.
+const koSoBlocked = "koSo blocked"
+
+// koSoFailBound bounds the wait for a child's event. It is the failure case of a
+// select whose other cases are the event and the child's exit, never the proof.
+const koSoFailBound = 10 * time.Second
+
+// koSoStderr is the stderr of one turn child, read through a pipe. The event line
+// is taken out of the text; blocked closes when it has been read and done closes
+// when the pipe is at its end, which is when the child has exited.
+type koSoStderr struct {
+	mu      sync.Mutex
+	rest    strings.Builder
+	blocked chan struct{}
+	done    chan struct{}
+}
+
+// koSoReadStderr starts reading the child's stderr from cmd before cmd starts.
+func koSoReadStderr(cmd *exec.Cmd) (*koSoStderr, error) {
+	pipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	s := &koSoStderr{blocked: make(chan struct{}), done: make(chan struct{})}
+	go func() {
+		defer close(s.done)
+		r := bufio.NewReader(pipe)
+		seen := false
+		for {
+			line, err := r.ReadString('\n')
+			if line == koSoBlocked+"\n" {
+				if !seen {
+					seen = true
+					close(s.blocked)
+				}
+			} else if line != "" {
+				s.mu.Lock()
+				s.rest.WriteString(line)
+				s.mu.Unlock()
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return s, nil
+}
+
+// text is what the child wrote to stderr besides the event line.
+func (s *koSoStderr) text() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rest.String()
+}
+
+// awaitBlocked waits for the child's event line. The child's exit before it, or
+// the failure bound, fails the test.
+func (s *koSoStderr) awaitBlocked(t *testing.T, child int) {
+	t.Helper()
+	select {
+	case <-s.blocked:
+	case <-s.done:
+		t.Fatalf("child %d ended before it waited for the signal lock: %q", child, s.text())
+	case <-time.After(koSoFailBound):
+		t.Fatalf("child %d did not wait for the signal lock: %q", child, s.text())
+	}
+}
+
+// awaitEnd waits for the child's stderr to end, so cmd.Wait may be called.
+func (s *koSoStderr) awaitEnd(t *testing.T, child int) {
+	t.Helper()
+	select {
+	case <-s.done:
+	case <-time.After(koSoFailBound):
+		t.Fatalf("child %d did not end after the lock was released: %q", child, s.text())
+	}
 }
 func TestSignalConcurrentTurnProcesses(t *testing.T) {
 	h, path, _ := actFixture(t, "new")
@@ -457,32 +543,26 @@ func TestSignalConcurrentTurnProcesses(t *testing.T) {
 		}
 	}()
 	var cmds [2]*exec.Cmd
-	var outs, errs [2]bytes.Buffer
+	var outs [2]bytes.Buffer
+	var errs [2]*koSoStderr
 	for i := range cmds {
 		cmds[i] = exec.Command(exe, "-test.run=^TestSignalTurnProcess$")
-		cmds[i].Env = append(os.Environ(), "GRID_SIGNAL_TEST_PROCESS=1", "GRID_SIGNAL_TEST_ENV="+string(envJSON), "GRID_SIGNAL_TEST_READY="+filepath.Join(h.root, fmt.Sprintf("ready-%d", i)))
+		cmds[i].Env = append(os.Environ(), "GRID_SIGNAL_TEST_PROCESS=1", "GRID_SIGNAL_TEST_ENV="+string(envJSON))
 		cmds[i].Stdout = &outs[i]
-		cmds[i].Stderr = &errs[i]
+		if errs[i], err = koSoReadStderr(cmds[i]); err != nil {
+			t.Fatal(err)
+		}
 		if err := cmds[i].Start(); err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = cmds[i].Process.Kill(); _ = cmds[i].Wait() })
 	}
-	// Both processes have reached Run, but neither may read state or create a
-	// task until the parent releases the same persistent signal lock.
+	// Both processes are about to wait for the signal lock the parent holds (each
+	// says so on its stderr), so neither may read state or create a task until the
+	// parent releases it.
 	for i := range cmds {
-		deadline := time.Now().Add(10 * time.Second)
-		for {
-			if _, err := os.Stat(filepath.Join(h.root, fmt.Sprintf("ready-%d", i))); err == nil {
-				break
-			}
-			if time.Now().After(deadline) {
-				t.Fatal("child did not start")
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		errs[i].awaitBlocked(t, i)
 	}
-	time.Sleep(100 * time.Millisecond)
 	before, n := actRead(t, path)
 	if n["status"] != "new" {
 		t.Fatal("act bypassed the signal lock")
@@ -495,13 +575,15 @@ func TestSignalConcurrentTurnProcesses(t *testing.T) {
 	locked = false
 	wins := 0
 	for i, c := range cmds {
+		// The pipe is read to its end before Wait; the event line is not in text.
+		errs[i].awaitEnd(t, i)
 		err := c.Wait()
 		if err == nil {
 			wins++
 			continue
 		}
-		if c.ProcessState.ExitCode() != 3 || errs[i].String() != "grid: this note is already decided (done)\n" {
-			t.Fatalf("loser: %v, %s", err, &errs[i])
+		if c.ProcessState.ExitCode() != 3 || errs[i].text() != "grid: this note is already decided (done)\n" {
+			t.Fatalf("loser: %v, %s", err, errs[i].text())
 		}
 		assertSignalErrorJSON(t, outs[i].String(), "refused", "this note is already decided (done)")
 	}
