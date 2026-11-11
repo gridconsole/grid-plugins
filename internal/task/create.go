@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
@@ -411,7 +412,7 @@ func atomicWrite(path string, data []byte) error {
 	if err := writeAndSync(f, data); err != nil {
 		return err
 	}
-	if err := os.Rename(f.Name(), path); err != nil {
+	if err := atomicfile.Rename(f.Name(), path); err != nil {
 		return err
 	}
 	return syncDir(filepath.Dir(path))

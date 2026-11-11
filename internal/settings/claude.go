@@ -430,7 +430,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		return 1, errClaudeChanged
 	}
 	if settingsStage != "" {
-		if err := os.Rename(settingsStage, file.target); err != nil {
+		if err := atomicfile.Rename(settingsStage, file.target); err != nil {
 			return 1, err
 		}
 		if err := atomicfile.SyncDir(filepath.Dir(file.target)); err != nil {
@@ -440,7 +440,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	if o.Remove {
 		err = os.Remove(recordFile.target)
 	} else {
-		err = os.Rename(recordStage, recordFile.target)
+		err = atomicfile.Rename(recordStage, recordFile.target)
 	}
 	if err != nil {
 		return 1, err
