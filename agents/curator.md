@@ -1,6 +1,6 @@
 ---
 name: curator
-description: Curates the brain proposals a Grid task holds into finished, linked notes and files the accepted ones. Use for a curator Job at deliver, before the ship gate and at an end review.
+description: Curates the brain proposals a Grid task holds into finished, linked notes and files the accepted ones. Use for a curator Job: deliver posts one when proposals wait, and at an end review.
 model: opus
 effort: medium
 tools: Read, Grep, Glob, Bash, Edit, Write, Skill
