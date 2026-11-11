@@ -19,6 +19,15 @@ import (
 )
 
 var ErrStaleLease = errors.New("stale lease")
+
+// RecordIDUsedError is the cause of the refusal of a post whose record id a
+// record of another writer tenure already has on the Feed. It is returned inside
+// an InvalidRecordError, so it exits 3 like the other reuse refusals and keeps
+// their text; the CLI names it record_id_used.
+type RecordIDUsedError struct{ ID string }
+
+func (e *RecordIDUsedError) Error() string { return "record id already used for a different post" }
+
 var ErrDiskFull = errors.New("disk full")
 
 // Store is one task's Feed. TaskID is the stable ULID, not its display number.
@@ -295,6 +304,17 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		}
 		if prev.Seq >= r.Seq {
 			r.Seq = prev.Seq + 1
+		}
+	}
+	// A record id names one record on the whole Feed. A repeat by this tenure
+	// returned above; a record of any other tenure with the id refuses the post.
+	onFeed, err := s.ReadOnly(Filter{})
+	if err != nil {
+		return Record{}, err
+	}
+	for _, entry := range onFeed.Records {
+		if entry.ID == r.ID {
+			return Record{}, &InvalidRecordError{Err: &RecordIDUsedError{ID: r.ID}}
 		}
 	}
 	guestAnswer := contract.NormalizeRole(r.Author.Role) == "guest" && r.Type == "answer"

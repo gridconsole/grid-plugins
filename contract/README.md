@@ -77,23 +77,24 @@ during `task show` exits 1.
 | `no_such_project` | A requested project is missing or inaccessible. |
 | `no_such_task` | A requested task is missing or inaccessible. |
 | `no_such_note` | A signal/inbox note does not exist. |
-| `note_state` | A signal note's status does not allow the act or move (not snoozed, not decided, already decided); nothing was written and it exits 3. |
-| `note_exists` | A signal move found the note already in the target project; nothing was written and it exits 3. |
-| `notes_full` | A signal move found the target notes folder already holding 4000 files; nothing was written and it exits 3. |
-| `person_required` | The existing person gate refused the request. |
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
 | `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
 | `workflow_file_changed` | A workflow file changed since its revision was read (`grid workflow write`); nothing was written and it exits 3. |
+| `record_id_used` | A record of another writer tenure on the Feed already has the record id of the post (`grid feed post`, `grid job post` with `--id`); nothing was written and it exits 3. A repeat of the same post by the same writer tenure still returns the stored record. |
+| `note_state` | A signal note's status does not allow the act or move (not snoozed, not decided, already decided); nothing was written and it exits 3. |
+| `note_exists` | A signal move found the note already in the target project; nothing was written and it exits 3. |
+| `notes_full` | A signal move found the target notes folder already holding 4000 files; nothing was written and it exits 3. |
+| `guest_refused` | The caller is refused as a guest (role guest, external or an unknown role); nothing was written. |
+| `person_required` | The existing person gate refused the request. |
 | `job_waiting` | A person Job still waits for a Job in its after list (`grid approve`, `grid job result`); exits 3. |
 | `changed` | A settings file or preview changed since the person looked; nothing was written. |
 | `invalid_settings` | A settings value, key, preset or file is invalid; nothing was written. |
 | `write_failed` | Writing a settings file failed. |
 | `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
-| `guest_refused` | The caller is refused as a guest (role guest, external or an unknown role); nothing was written. |
 | `index_rebuild_failed` | The change was written; rebuilding index.md failed; the stdout object holds the result (`grid brain revert`, `grid brain supersede`); exits 1. |
 
-The first ten constants live in `internal/cli/error_codes.go`, the settings
+The first eleven constants live in `internal/cli/error_codes.go`, the settings
 codes in `internal/settings/claude_user.go` and `index_rebuild_failed` in
 `internal/braincmd/changes.go`; `person_required` and `job_waiting` are
 written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
