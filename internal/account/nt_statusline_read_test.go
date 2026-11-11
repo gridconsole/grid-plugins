@@ -92,18 +92,19 @@ func TestNtSlReadChangesNothing(t *testing.T) {
 }
 
 func TestNtSlReadRefusesBadFile(t *testing.T) {
-	for _, text := range []string{
-		`{not json`,
-		`{"statusLine": {"type": "static", "text": "x"}}`,
+	// The reasons are the ones the write gives (claude.go claudeInvalid, claude_statusline.go).
+	for text, reason := range map[string]string{
+		`{not json`: "is not valid JSON",
+		`{"statusLine": {"type": "static", "text": "x"}}`: "statusLine is not a command status line",
 	} {
 		h := newSLHome(t)
 		h.writeSettings(text)
 		before := mustRead(t, h.settingsPath())
-		if code := h.run("account", "statusline", "--json"); code == 0 {
-			t.Fatalf("read accepted %q: %s", text, h.out)
+		if code := h.run("account", "statusline", "--json"); code != 1 {
+			t.Fatalf("read of %q: exit %d, want 1: %s", text, code, h.out)
 		}
-		if !strings.Contains(h.errb.String(), "statusline") {
-			t.Fatalf("no reason for %q: %s", text, h.errb)
+		if !strings.Contains(h.errb.String(), reason) {
+			t.Fatalf("read of %q: stderr %q lacks %q", text, h.errb, reason)
 		}
 		ntSlSame(t, h, before, text)
 	}
