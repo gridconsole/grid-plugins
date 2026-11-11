@@ -102,8 +102,8 @@ func settingsPackageBypasses(file string, f *ast.File) []string {
 		"ParseAnswers": "setup.go", "ReadHookLevels": "store.go", "ResolveHookLevel": "store.go",
 		"ClaudeBlock": "claude.go", "ClaudeSetupCommand": "claude.go", "RunClaudeSetup": "claude.go", "claudeInvalid.Error": "claude.go",
 		"ClaudeSettingsPath": "claude.go", "ReadClaudeAllowStatus": "claude_status.go", // Read-only setup diagnostics; no Store access.
-		"EditClaudeStatusLine": "claude_statusline.go", // Writes only the statusLine key of the person's Claude settings file; no Store access.
-		"AgentTemplatesPath": "agentsync.go", "ClaudeAgentsDir": "agentsync.go", "SyncAgents": "agentsync.go", // Agent files: SyncAgents reads the personal overlay and writes only ~/.claude/agents.
+		"EditClaudeStatusLine": "claude_statusline.go",                                                          // Writes only the statusLine key of the person's Claude settings file; no Store access.
+		"AgentTemplatesPath":   "agentsync.go", "ClaudeAgentsDir": "agentsync.go", "SyncAgents": "agentsync.go", // Agent files: SyncAgents reads the personal overlay and writes only ~/.claude/agents.
 		"claudeReadError.Error": "claude.go", "claudeReadError.Unwrap": "claude.go", // Private read errors; no Store access.
 		// Budget and Claude settings rows: the budget runs on a Store the CLI got from settingsStore
 		// (Store.WithBudget); ClaudeSet and ClaudeShow touch the person's Claude files, not the Store.
