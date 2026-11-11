@@ -22,7 +22,7 @@ Fixtures: [cut 1](fixtures/fmt-sync-manifest/valid/cut-1.json),
 
 Status: **spec-only**. Proposed file path: `$GRID_HOME/sync/manifest.json`
 (default, owner may change; no production file is created). The intended writer
-is `grid sync`, invoked directly or by the worker; intended readers are the app's
+is a sync verb the plugin does not have today (the empty `grid sync` stub was removed), invoked directly or by the worker; intended readers are the app's
 sync slice, grid-server, another signed-in computer and the brain curator.
 `go-architecture.md:13` makes the plugin the only sync client and says the server
 never runs it. Sources: C8 (`findings-concept.md:185`), server-F1
