@@ -51,7 +51,7 @@ func TestLegacyTaskIdentityCLIAndMCP(t *testing.T) {
 			path := filepath.Join(dir, "task.md")
 			original := []byte("---\nid: T-07\n---\n")
 			h.write(path, string(original))
-			for _, verb := range []string{"read", "state", "fold"} {
+			for _, verb := range []string{"read", "state"} {
 				if code := h.run(dir, "feed", verb); code == 0 {
 					t.Fatalf("%s unexpectedly found an identity", verb)
 				}

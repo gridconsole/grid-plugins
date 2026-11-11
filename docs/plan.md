@@ -9,18 +9,15 @@ grid plan check T-07
 grid plan hash --task T-07
 grid plan items --task T-07 --json
 grid plan write draft.md --task T-07
-grid plan diff 3 4 --task T-07 --json
 ```
 
-Flags may precede or follow the file or revision arguments. Use `--` before a
+Flags may precede or follow the file argument. Use `--` before a
 filename that starts with a dash. Relative input filenames resolve from the
 working directory. The input may have any filename, including `plan.md` itself.
 The source file is read before the destination is replaced.
 
 All commands support `--json`. Hash returns `{"hash":"abcdef"}`; items
-returns an array; write returns `{"revision":4,"hash":"abcdef"}`; diff returns
-`from`, `to`, `added`, `removed`, and `changed`. Changed entries contain `before`
-and `after` items, one-based positions, and canonical step text for both sides.
+returns an array; write returns `{"revision":4,"hash":"abcdef"}`.
 Empty result lists are arrays, not null. Exit codes are 0 for success, 1 for a
 storage or content refusal, and 2 for invalid command syntax.
 
@@ -234,8 +231,7 @@ mixed current and legacy fields, and blank lines inside steps are refused with
 line numbers. No conversion invents a verification record or changes the
 verification sentence's wording or casing.
 
-Archived revisions are upgraded only in memory when `plan diff` needs them.
-Their files are never rewritten. Legacy parser refusals in `items`,
+Archived revisions are never rewritten. Legacy parser refusals in `items`,
 `write`, and `check` include a migration-preview hint only if conversion can
 succeed. Migration establishes parser compatibility; it does not promise that
 every Job passes `plan check`.
