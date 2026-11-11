@@ -21,9 +21,12 @@ const MaxMessage = 8 << 20
 
 // Server calls the Feed directly. Resolve and Session must use trusted process
 // context, never identity supplied by tools/call. They run lazily: discovery and
-// feed_types work without a Grid home, task, or writer identity.
+// feed_types work without a Grid home, task, or writer identity. Getenv answers
+// the one environment read the server makes (CLAUDE_PLUGIN_ROOT, for the
+// stale-plugin notice); nil reads the process.
 type Server struct {
 	Version string
+	Getenv  func(string) string
 	Resolve func(task, project string) (feed.Store, error)
 	Session func(feed.Input) (feed.Input, feed.Writer, error)
 }
