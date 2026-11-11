@@ -19,7 +19,7 @@ import (
 func (s Store) State() (contract.State, error) {
 	allowed := s.WithdrawAllowed
 	if allowed == nil {
-		allowed = QuestionWithdrawReadPolicy(s.TaskDir)
+		allowed = QuestionWithdrawReadPolicy(s.TaskDir, s.Warn)
 	}
 	read, err := s.Read(Filter{})
 	if err != nil {

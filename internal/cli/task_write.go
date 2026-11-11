@@ -271,7 +271,7 @@ func runApprove(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
 		return 1
 	}
-	store, job := planPersonJob(resolved.Path)
+	store, job := planPersonJob(env, resolved.Path)
 	if job != "" {
 		// The person Job waits for its after list like any other answer.
 		snap, err := loadFeedSnapshot(store)
@@ -291,7 +291,7 @@ func runApprove(args []string, env Env) int {
 	// the post takes .orchestrator.lock. A stale hash posts nothing.
 	if err == nil {
 		env.afterApproveHook()
-		err = recordApproval(resolved.Path, store, w, job, "approved", event)
+		err = recordApproval(env, resolved.Path, store, w, job, "approved", event)
 	}
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
@@ -309,7 +309,7 @@ func sendBackPlan(env Env, dir string, o task.WriteOptions, w feed.Writer, hash,
 		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
 		return 3
 	}
-	store, job := planPersonJob(dir)
+	store, job := planPersonJob(env, dir)
 	open := false
 	if job != "" {
 		snap, err := loadFeedSnapshot(store)

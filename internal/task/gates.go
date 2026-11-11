@@ -269,7 +269,7 @@ func planJobResult(dir string) (JobApproval, error) {
 	}
 	allowed := store.WithdrawAllowed
 	if allowed == nil {
-		allowed = feed.QuestionWithdrawReadPolicy(dir)
+		allowed = feed.QuestionWithdrawReadPolicy(dir, store.Warn)
 	}
 	state, _ := feed.FoldReadAt(read, time.Now(), allowed)
 	admitted := func(verdict string) bool { return verdict == "counted" || verdict == "stale" || verdict == "unknown" }

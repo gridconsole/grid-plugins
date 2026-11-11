@@ -153,7 +153,7 @@ func runOrchestrator(args []string, env Env) int {
 	}
 	if verb == "post" {
 		// A refused withdrawal must leave a legacy task untouched, so check before the identity write.
-		if err := (feed.Store{TaskDir: scope.TaskPath}).CheckWithdrawalPolicy(feed.Input{Type: *kind, Body: obj}); err != nil {
+		if err := (feed.Store{TaskDir: scope.TaskPath, Warn: env.Stderr}).CheckWithdrawalPolicy(feed.Input{Type: *kind, Body: obj}); err != nil {
 			return fail(err)
 		}
 	}
@@ -169,7 +169,7 @@ func runOrchestrator(args []string, env Env) int {
 	if *owner == "" {
 		*owner = taskOwner
 	}
-	store := feed.Store{TaskDir: scope.TaskPath, TaskID: taskID}
+	store := feed.Store{TaskDir: scope.TaskPath, TaskID: taskID, Warn: env.Stderr}
 	if verb == "tree" || verb == "blocked" {
 		snap, err := orchestrator.Load(store)
 		if err != nil {
@@ -504,7 +504,7 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	// waits for .orchestrator.lock, which a tick holds before .task.lock.
 	if err == nil {
 		env.afterApproveHook()
-		err = recordApproval(resolved.Path, store, w, job, answer, event)
+		err = recordApproval(env, resolved.Path, store, w, job, answer, event)
 	}
 	return taskWriteResult(env, event, err, asJSON, resolved.Path)
 }
@@ -519,12 +519,12 @@ var loadFeedSnapshot = orchestrator.Load
 // last accepted one, which takes a new result: the readers use the newest
 // result, so a changed plan can be approved again. It is "" when the task has
 // no approve Job.
-func planPersonJob(dir string) (feed.Store, string) {
+func planPersonJob(env Env, dir string) (feed.Store, string) {
 	id, _, err := taskstore.FeedIdentity(dir)
 	if err != nil {
 		return feed.Store{}, ""
 	}
-	store := feed.Store{TaskDir: dir, TaskID: id}
+	store := feed.Store{TaskDir: dir, TaskID: id, Warn: env.Stderr}
 	snap, err := orchestrator.Load(store)
 	if err != nil {
 		return store, ""

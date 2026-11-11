@@ -65,7 +65,7 @@ func answered(snap orchestrator.Snapshot, j *contract.Job, e taskstore.Event) bo
 // without a lease posts an answer carrying plan_hash, plan_digest, lands_hash and
 // note, which the holder's next pass turns into the control. A plan that already
 // holds this approval gets nothing new. The caller holds no task or plan lock.
-func recordApproval(dir string, store feed.Store, w feed.Writer, job, answer string, e taskstore.Event) error {
+func recordApproval(env Env, dir string, store feed.Store, w feed.Writer, job, answer string, e taskstore.Event) error {
 	if answer = strings.TrimSpace(answer); answer == "" {
 		answer = "approved"
 	}
@@ -91,7 +91,7 @@ func recordApproval(dir string, store feed.Store, w feed.Writer, job, answer str
 		if err != nil {
 			return err
 		}
-		store = feed.Store{TaskDir: dir, TaskID: id}
+		store = feed.Store{TaskDir: dir, TaskID: id, Warn: env.Stderr}
 		_, owner, _ := taskstore.FeedIdentity(dir)
 		if owner == "" {
 			owner = w.Author.ID

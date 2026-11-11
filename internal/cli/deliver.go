@@ -79,7 +79,7 @@ func runDeliver(args []string, env Env) int {
 	curator := ""
 	if n := len(result.Waiting); n > 0 {
 		if o.DryRun {
-			if open, err := curatorJobOpen(t.Path); err == nil && !open {
+			if open, err := curatorJobOpen(env, t.Path); err == nil && !open {
 				result.Actions = append(result.Actions, fmt.Sprintf("Post a curator Job for %d proposals", n))
 			}
 		} else {
