@@ -417,6 +417,8 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 			want = guestParityOutput{1, "", "grid: guests cannot change project settings\n"}
 		case "task delete", "task restore":
 			want = guestParityOutput{3, "", "grid " + command + ": task edit rejected: a person with an allowed role must perform this task move\n"}
+		case "task close", "task reopen", "task stop":
+			want = guestParityOutput{3, "", "grid " + command + ": task edit rejected: role \"guest\" may not " + strings.TrimPrefix(command, "task ") + " a task; a guest answers and comments\n"}
 		case "question withdraw":
 			want = guestParityOutput{3, "", "question: Q-01 role \"guest\" may not withdraw\n"}
 		case "signal act", "signal dismiss", "signal move":
