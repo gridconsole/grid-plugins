@@ -70,6 +70,12 @@ func TestCaseAliasesAreJudgedLikeTheirTargets(t *testing.T) {
 	f.write(filepath.Join(f.projects, "example", "knowledge", "old.md"), "old\n")
 	f.write(filepath.Join(f.grid, "knowledge", "old.md"), "old\n")
 	f.write(filepath.Join(f.task, "feed", "000001.json"), "{}\n")
+	// only-writer, plan-guard and host-guard warn by default (verdicts-11nov v-4); these rows pin the deny each gives at block.
+	for _, name := range []string{"only-writer", "plan-guard", "host-guard"} {
+		if err := (settings.Store{Home: f.grid}).SetHook(name, "block"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, tt := range []struct {
 		name  string
 		path  string
@@ -85,7 +91,7 @@ func TestCaseAliasesAreJudgedLikeTheirTargets(t *testing.T) {
 		{"feed", alias(filepath.Join(f.task, "feed", "000002.json"), "projects"), f.host},
 		{"brain from a builder", alias(filepath.Join(f.grid, "knowledge", "n.md"), ".grid"), f.planAs("grid:grid-builder")},
 		{"project knowledge from a builder", alias(filepath.Join(f.projects, "example", "knowledge", "n.md"), "projects"), f.planAs("grid:grid-builder")},
-		{"repo write from a held task, cwd spelled differently", filepath.Join(f.repo, "file.go"), f.heldCwd(alias(f.task, "projects"))},
+		{"repo write from a held task, cwd spelled differently", filepath.Join(f.repo, "file.go"), f.sameAsExactCwd(f.task, alias(f.task, "projects"))},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.guard(tt.path); got != "deny" {
@@ -114,6 +120,20 @@ func (f *fixture) heldCwd(cwd string) func(string) string {
 		i := f.input("Write", path)
 		i.Cwd = cwd
 		return EvaluatePlan(i, f.root, f.env).Behavior
+	}
+}
+
+// sameAsExactCwd answers "deny" when the plan guard gives the alias cwd the same
+// verdict as the exact cwd, and otherwise names both verdicts. The plan hold this
+// row once pinned was removed (b10002db, its tests dropped in 62e8f7fc), so the
+// principle above is all that is left: another spelling changes nothing.
+func (f *fixture) sameAsExactCwd(exact, aliased string) func(string) string {
+	return func(path string) string {
+		want, got := f.heldCwd(exact)(path), f.heldCwd(aliased)(path)
+		if got == want {
+			return "deny"
+		}
+		return "alias cwd gave " + got + ", exact cwd gave " + want
 	}
 }
 
