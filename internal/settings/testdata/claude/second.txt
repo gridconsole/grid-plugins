@@ -3,6 +3,7 @@
 = Edit(~/.grid/**)
 = Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)
 = Edit(~/.grid/[pP][eE][rR][sS][oO][nN][aA][lL]/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)
+= Edit(~/.grid/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)
 = Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)
 = Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)
 = Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])
@@ -32,6 +33,7 @@
     "deny": [
       "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
       "Edit(~/.grid/[pP][eE][rR][sS][oO][nN][aA][lL]/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
+      "Edit(~/.grid/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
       "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
       "Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
       "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])",
