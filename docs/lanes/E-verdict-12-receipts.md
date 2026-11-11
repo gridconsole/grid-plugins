@@ -1,20 +1,29 @@
-# E-verdict-12-receipts: stopped at the sizing check, row 1 done, the build split into three lanes
+# E-verdict-12-receipts: E1 done (the migration, tested), E2 and E3 not done
 
-No code changed. The brief does not fit one lane (60 calls): it needs a new migration writer, a changed approval writer, and a rewrite of about twenty test files that use approval.json as their approval fixture. Row 1 (the inventory) is done and is the only deliverable here. The stop came after the inventory, past call 10 (about call 18), because the inventory took the extra calls.
+Fix round 1 asked for E1, E2 and E3. E1 is built and green. E2 (the writer) and E3 (the readers and about 37 test files) are not: they cannot be staged apart and do not fit what is left of the 60 calls. This head is green and changes no behaviour; the writer still writes approval.json and the fallback readers are still there. Rows 2 and 3 (removal) are NOT DONE, and the next lane is sized below with the two owner questions answered from the code.
 
 ## Proof table
 
 | Row / rule | Status | Evidence |
 |---|---|---|
-| 1. Every reader and writer of approval.json and receipt fields, plugin and app | HOLDS | The two lists below, from `grep -rnE "approvalFile|approval\.json|\.LandsHash|\.PlanDigest|readApproval|checkApproval|ApprovalForGate|ApprovedDigest|ApprovalFromJob" internal cmd --include=*.go --exclude=*_test.go` (exit 0) and `git grep -nE "approval\.json|plan_digest|plan_hash" main` on the app repo (exit 0). The app reader is a follow-up line, not a change. |
-| 2. `grid approve` records the approval only as the person Job result; with no person Job it creates one | NOT DONE | Needs the split below, lane E2. Unchanged: internal/cli/task_write.go:193 still reaches `Store.Approve`, which writes approval.json (internal/task/gates.go:92). |
-| 3. receiptForGate and the hold.go branch removed; old approval.json migrated once into a Job result, with a fixture-folder test | NOT DONE | Lane E1 (migration) then E3 (removal). internal/migrate has no Feed or Job code today (grep for Feed, Job, ULID in apply.go, plan.go, tree.go, record.go finds only a note at plan.go:270). |
-| 4. A stale plan revision is still refused; the existing stale-hash test passes unchanged | NOT DONE | Nothing changed, so nothing to prove. The test is `TestApproveStaleHashWritesNoJobResult` (docs/lanes/S6c.md:70). It must stay green in E2. |
-| 5. `go test ./...` and `make lint`: 0 fail | NOT DONE | Not run: no code changed. |
-| Small commits, one-sentence messages, no attribution lines | HOLDS | One commit, this file. |
-| New tests fail on base, pass on lane | NOT DONE | No tests written. |
-| No guard, gate, cap, hold or blocking hook added | HOLDS | No code changed. |
-| Tests of changed packages and importers, lint, Windows and macOS builds | NOT DONE | No code changed. |
+| 1. Every reader and writer of approval.json and receipt fields, plugin and app | HOLDS | The lists below (from the previous round; code is unchanged except one new reader, `internal/migrate/receipt.go:58,68`, which reads the file once and removes it). The app reader is a follow-up line, not a change. |
+| 2. `grid approve` records the approval only as the person Job result; with no person Job it creates one | NOT DONE | internal/cli/task_write.go:193 still reaches `Store.Approve`, which writes approval.json (internal/task/gates.go:92). Needs E2; see "The next lane". |
+| 3a. An old approval.json is read once by the migrate path into a person Job result, with a Go test on a fixture folder | HOLDS | `internal/migrate/receipt.go:56` (`ReceiptToJob`), `internal/migrate/receipt_test.go:80,113,128,150,176` (five tests, six cases). `go test ./internal/migrate -run ReceiptToJob -v`: all PASS. The migration is a library function with no caller yet: the caller is E2 (below). |
+| 3b. receiptForGate and the hold.go receipt branch removed | NOT DONE | internal/task/gates.go:120,147-175,198-207 and internal/task/hold.go:141-145 are unchanged. Removing them breaks the tests that use approval.json as their fixture (E3). |
+| 4. A stale plan revision is still refused; the existing stale-hash test passes unchanged | HOLDS (nothing changed in the writer) | `TestApproveStaleHashWritesNoJobResult` (internal/cli/approve_job_test.go:90) passes unedited: `go test ./internal/cli` is ok. New: `TestReceiptToJobKeepsTheStalePlanRefused` (internal/migrate/receipt_test.go:113) shows a moved receipt for another revision still gives "Changed since you approved". It must stay green in E2. |
+| 5. `go test ./...` and `make lint`: 0 fail | HOLDS on this head | `go test ./... 2>&1 \| grep -v "^ok \|no test files"` printed nothing: every package ok. `make lint` printed only `go vet ./...`, no error, exit 0. |
+| Small commits, one-sentence messages, no attribution lines | HOLDS | `git log be001ab6..HEAD`: three commits (887fa38a, 4ce80481 and this doc), no Co-Authored-By or Claude-Session line. |
+| New tests fail on base, pass on the lane | HOLDS | Base (receipt.go stashed): `go test ./internal/migrate` gives `internal/migrate/receipt_test.go:85:23: undefined: ReceiptToJob`, `:86:30: undefined: ReceiptMoved`, `:131:86: undefined: PlanJobBody` and more (build fails). On the lane: all PASS. |
+| No guard, gate, cap, hold or blocking hook added | HOLDS | Only a library function and its tests were added; no command calls it. |
+| Tests of changed packages and importers | HOLDS | `go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./... \| grep internal/migrate`: internal/cli (and internal/migrate itself). `go test ./internal/migrate ./internal/cli`: both ok (8.3 s, 37.0 s). |
+| Lint, Windows and macOS builds | HOLDS | `make lint` exit 0; `GOOS=windows CGO_ENABLED=0 go build ./...` exit 0; `GOOS=darwin CGO_ENABLED=0 go build ./...` exit 0. |
+
+## What changed
+
+- `internal/migrate/receipt.go`: `ReceiptToJob(dir, w)` reads a task folder's approval.json once. With no approve person Job it posts one (J-N, role Person, kind approve, `PlanJobBody`) and one accepting control carrying plan_hash, plan_digest, lands_hash and note, then removes the file. The receipt's who and when go into the control's `reason` because the Feed record names the writer. With an approve person Job already there, the Job is the record (every reader already preferred it): the file is removed and nothing is posted. A receipt that never approved a plan (no full 64-hex plan_digest, a gate name, not "approve") is left as it is. The file is removed only after the Feed holds the record, so a failed post leaves it for the next run and a crash between the post and the removal is closed by the "Job exists" rule on the next run. The caller supplies the task-lease writer: the migration holds no lease.
+- `internal/migrate/receipt_test.go`: the fixture-folder tests above. The Job record validated against the job-record schema on the first run.
+
+Choices made here, for the owner to confirm: the file is deleted, not renamed (the Feed result holds every field, and the guard fences the name); a receipt beside any approve person Job, open or answered, is retired without answering the Job (the readers never used it, so no task becomes approved by the move).
 
 ## Row 1: readers and writers in the plugin (non-test code, file:line)
 
@@ -31,6 +40,7 @@ Readers of approval.json:
 - internal/task/gates.go:329-366: `checkApproval` and `readApproval`, the receipt decoder.
 - internal/task/hold.go:145: `os.Lstat` of approval.json, only to choose between the receipt branch and the history branch of `PlanHeldWith`.
 - internal/plan/migrate.go:44-67: reads `plan_hash` of approval.json, approval-preview.json and approval-ship.json to warn before a plan-format migration.
+- internal/migrate/receipt.go:58,68 (new): the one-time read of the migration.
 - internal/guard/host.go:14: names approval.json in the write fence text (no read; stays).
 
 Receipt fields (`plan_hash`, `plan_digest`, `lands_hash`) that already live in the Job result:
@@ -42,16 +52,19 @@ Receipt fields (`plan_hash`, `plan_digest`, `lands_hash`) that already live in t
 - internal/slices/gates/model.go:477-491: `Model.approval` reads approval.json (`plan_hash`, `plan_digest`) to decide whether the plan item is already approved (returns `ErrClosed` on a match). After E3 it must read the plan Job result instead. Comment at :76 says "(approval.json)".
 - The web client only sends `plan_hash` and `plan_digest` to the approve route (internal/kernel/webui/app/pages/task/writes.mjs:225-266, transports/go.mjs:47-50) and reads the digest from the needs-you item detail. It never reads the file, so it needs no change.
 
-## The split
+## The next lane: E2 and E3 together
 
-- **E1, migration (additive, breaks no existing test).** A function in internal/migrate that, for a task folder with approval.json and no approve person Job, posts a person Job (kind approve, role Person) and one accepting control carrying plan_hash, plan_digest, lands_hash, note, who and when from the receipt, then retires the file. Fixture-folder Go test. Decisions needed first:
-  1. Which `feed.Writer` identity a migration uses (a writer needs Lease, Gen and Fence; `grid migrate` holds no lease).
-  2. What "once" means: at `grid migrate` apply, or on the first read or approve of that task.
-  3. What happens to the file afterwards: deleted, or renamed. The guard fences the name.
-- **E2, writer.** `Store.Approve` keeps the stale-hash check, the compare-and-set and the history line but stops writing approval.json; reopen stops writing it too (write.go:130-135); `runApprove` and `runPersonApproval` create the plan Job when none exists and answer it. Decision needed: a task with no ULID has no Feed, and a caller with no `GRID_MEMBER` or lease epoch has no writer. Today those two cases are the only reason approval.json is written. The brief does not say what `grid approve` does there (exit 3 with a message, or give the task an id first).
-- **E3, readers and tests.** Remove `receiptForGate`, the `ApprovedDigest` fallback, `checkApproval`/`readApproval` and the hold.go branch (hold.go would ask "has a plan Job" instead of "does approval.json exist"). Rewrite the tests that use approval.json as their approval fixture to Feed Job fixtures: task (gates_test.go, gates_digest_test.go, approval_workflow_test.go, deliver_test.go, fixture_approval_test.go, no_gate_test.go), cli (approve_job_test.go, approve_lock_test.go, approve_no_gate_test.go, approve_reader_test.go, approve_digest_test.go, delivery_test.go, reopen_plan_job_test.go, plan_digest_roundtrip_test.go with its golden receipt keys), orchestrator (plan_test.go, plan_digest_test.go), land (land_test.go), job (no_plan_rule_test.go). Delete by the brief's direction (row 3): plan_job_fallback_test.go and the fallback tests in task (`TestTaskWithoutPlanJobFallsBackToApprovalJSON`, `TestApprovedRejectsAnotherGate`), each naming the Job-path test that still covers the behaviour.
-- **Follow-up, app (not this repo):** internal/slices/gates/model.go:477-491, as above.
+E2 and E3 cannot be landed green one after the other: once `Store.Approve` stops writing approval.json, every test that uses it as an approval fixture fails, and once the fallback is removed, every test that writes approval.json by hand fails. They are one lane of about 37 test files (counts of `approval.json|.Approve(|approvalFile` per file, from grep): task gates_test (22), gates_digest_test (14), approve_repeat_test (7), approval_workflow_test (4), deliver_test (3), plan_job_fallback_test (3), mode_test, no_gate_test, and 5 more; cli approve_job_test (13), approve_reader_test (9), plan_test, delivery_test, reopen_plan_job_test, approve_lock_test, approve_digest_test and more; guard (task_gates, host_gates, host_approval, host_brief); job (approval_gaps, no_plan_rule, approval_workflow, plan, roundtrip, jobcmd/command_test); orchestrator (plan, plan_digest); land (land_test); plan (legacy_test). The edit tool has no multi-file replace, so the test rewrite is the cost: it needs a shared Job-fixture helper first (a plan Job plus its accepting control, with the lease and handover the Feed requires; `receiptFolder` in internal/migrate/receipt_test.go is a working pattern), then one package at a time.
+
+The two owner questions of the lane doc are answered by the code, so E2 does not wait for the owner:
+
+1. A caller with no Feed writer. `grid job post --person` and `grid job result` already give a person of the team with no lease epoch an unleased writer (`feedWriter(env, "", "")`, internal/cli/orchestrator.go:254-267), which is why the worker holding the task lease never blocks a person. `grid approve` should use the same writer for the same caller, and `AnswerPerson` has to carry plan_hash, plan_digest, lands_hash and note (today only the leased path, `personApproval`, orchestrator.go:482-500, does). A caller that is not a person of the team (no GRID_MEMBER) gets exit 3 and nothing is written: `grid approve` is person-only (internal/cli/cli.go:116), so this refuses no agent that could approve before.
+2. A task with no ULID. `grid approve` calls `feed.EnsureTaskID` (a writer's call, internal/feed/identity.go:117) before it posts, so the task gets its Feed and the Job.
+
+Still open for the owner, one line: when "once" runs for tasks nobody approves again. Calling `ReceiptToJob` at the start of `grid approve` covers a task that is approved again; a task that carries an old approval.json and is only read (land, hook, attach) would answer "no plan Job" after E3. The two places that see every task are the worker tick that posts the handover (internal/orchestrator/stream.go:253) and `grid migrate`.
+
+Then E2: `Store.Approve` keeps the stale-hash check, the compare-and-set (read from the Job result, not the file) and the history line but writes no file; reopen stops writing it (write.go:130-135); `runApprove` and `runPersonApproval` create the plan Job when none exists (`migrate.PlanJobBody`, or move it into orchestrator) and answer it. E3: remove `receiptForGate`, the `ApprovedDigest` fallback, `checkApproval`/`readApproval` and the hold.go branch (hold.go asks "has an approve person Job" instead of "does approval.json exist"); delete by the brief's direction (row 3) plan_job_fallback_test.go and `TestTaskWithoutPlanJobFallsBackToApprovalJSON`, `TestApprovedRejectsAnotherGate`, each naming the Job-path test that still covers the behaviour. Follow-up, app (not this repo): internal/slices/gates/model.go:477-491.
 
 ## What is NOT VERIFIED on a live screen
 
-Nothing was built, so nothing was changed on a screen.
+Nothing here touches a screen: no command calls `ReceiptToJob` yet, so the dev UI behaves as before.
