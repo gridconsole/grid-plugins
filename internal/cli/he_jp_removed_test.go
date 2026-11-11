@@ -2,8 +2,11 @@ package cli
 
 import (
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/feed"
 )
 
 // heJpRefused runs args and asserts the unknown-sub answer: exit 2 and the message
@@ -22,6 +25,27 @@ func heJpRefused(t *testing.T, h *harness, cwd, message string, args ...string) 
 	if code != 2 || !strings.Contains(h.errb.String(), message) || envelope != asJSON || (!asJSON && h.out.Len() != 0) {
 		t.Fatalf("%v: exit %d, want 2 with %q\nstdout: %s\nstderr: %s", args, code, message, h.out, h.errb)
 	}
+}
+
+// heJpAssigned returns the Jobs of the assign control records in the Feed, in the
+// order they were written.
+func heJpAssigned(t *testing.T, store feed.Store) []string {
+	t.Helper()
+	r, err := store.Read(feed.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var jobs []string
+	for _, rec := range r.Records {
+		if rec.Type != "control" {
+			continue
+		}
+		if a, ok := rec.Body["assign"].(map[string]any); ok {
+			id, _ := a["job"].(string)
+			jobs = append(jobs, id)
+		}
+	}
+	return jobs
 }
 
 // TestHeJpRemovedSubs holds the removal of `grid job order` and `grid person list`
@@ -77,8 +101,14 @@ func TestHeJpRemovedSubs(t *testing.T) {
 		}
 		h.out.Reset()
 		h.errb.Reset()
-		if code := h.run(path, "job", "next", "--json"); code != 0 || !strings.Contains(h.out.String(), `"id":"J-3"`) {
-			t.Fatalf("job next should offer J-3 first: exit %d: %s %s", code, h.out, h.errb)
+		if code := h.run(path, "job", "next", "--json"); code != 0 {
+			t.Fatalf("job next: exit %d: %s %s", code, h.out, h.errb)
+		}
+		// job next lists a row for every Job by id, so the rows say nothing of the order;
+		// it assigns the Jobs in the order it offers them, and the Feed keeps that sequence.
+		want := []string{"J-3", "J-2", "J-1"}
+		if got := heJpAssigned(t, store); !reflect.DeepEqual(got, want) {
+			t.Fatalf("job next assigned %v, want %v (lowest order first)", got, want)
 		}
 	})
 
