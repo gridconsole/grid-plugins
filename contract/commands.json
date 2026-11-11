@@ -3527,9 +3527,78 @@
     },
     {
       "name": "agent",
-      "summary": "check agent readiness; set models and efforts; list settings",
+      "summary": "check agent readiness; sync templates; set models and efforts; budget; list settings",
       "built": true,
       "subcommands": [
+        {
+          "name": "budget apply",
+          "args": [
+            "\u003ceconomic|balanced|high\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--dry-run",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--expect",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--with",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "budget show",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "budget undo",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "check",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
         {
           "name": "list",
           "args": [],
@@ -3566,6 +3635,29 @@
             },
             {
               "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "sync",
+          "args": [],
+          "flags": [
+            {
+              "name": "--dir",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--templates",
               "takes": "value",
               "required": false
             }

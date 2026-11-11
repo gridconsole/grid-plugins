@@ -26,7 +26,7 @@ Commands:
   person      check person access; list, show and find approvers
   routine     add, list, remove, run, schedule and unschedule routines
   worker      list local grid-worker processes; next is a worker's call for its next request
-  agent       check agent readiness; set models and efforts; list settings
+  agent       check agent readiness; sync templates; set models and efforts; budget; list settings
   claude      show and set the person's Claude Code settings rows
   workflow    show workflow template files and parse problems; write a template file
   skill       enable, disable and list skills
