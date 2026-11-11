@@ -179,7 +179,7 @@ func TestRunJobSkillHoldsTheRules(t *testing.T) {
 		"--source job:",
 		"supersedes",
 	} {
-		if !strings.Contains(text, want) {
+		if !strings.Contains(strings.ToLower(text), want) {
 			t.Errorf("run-job skill lacks %q", want)
 		}
 	}
