@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/proctree"
 )
 
 func identity(home, project, name string) string {
@@ -176,7 +177,7 @@ func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
 	defer cleanupProcess(cmd)
 	runCommand := p.runCommand
 	if runCommand == nil {
-		runCommand = func(cmd *exec.Cmd) error { return cmd.Run() }
+		runCommand = proctree.Run
 	}
 	err = runCommand(cmd)
 	if ctx.Err() != nil {
