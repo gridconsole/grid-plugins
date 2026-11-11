@@ -4,7 +4,7 @@ VERSION ?= $(shell go run ./internal/packaging/cmd -describe)
 RELEASE ?= $(shell go run ./internal/packaging/cmd -release)
 LDFLAGS := -buildid= -X $(PKG)/internal/version.Version=$(VERSION)
 
-.PHONY: build dist generate test test-clean lint golden eval-check clean
+.PHONY: build dist generate test test-clean lint cross golden eval-check clean
 
 build:
 	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(LDFLAGS)" -o dist/grid ./cmd/grid
@@ -27,6 +27,17 @@ test-clean:
 lint:
 	go vet ./...
 	@out="$$(gofmt -l .)"; if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
+
+# Vets and compiles every package and test for the release OSes, so a per-OS file that breaks is found here and not on the owner's Mac.
+# -exec /bin/true compiles each test binary and does not run it (the binaries are not for the VM's OS).
+cross:
+	for target in darwin/arm64 windows/amd64; do \
+		os="$${target%/*}"; arch="$${target#*/}"; \
+		echo "cross: $$os/$$arch vet"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go vet ./... || exit 1; \
+		echo "cross: $$os/$$arch test compile"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go test -run XXX_NONE -count=1 -exec /bin/true ./... || exit 1; \
+	done
 
 # Replays the legacy corpus in-process and prints every case plus totals; make test runs it too.
 golden:
