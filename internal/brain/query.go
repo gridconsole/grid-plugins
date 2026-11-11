@@ -20,12 +20,18 @@ func (s Store) entries() ([]Entry, error) {
 			return nil, err
 		}
 		notes, _, err := scan(root, level)
+		var dropped map[string]bool
+		if err == nil {
+			dropped, err = Dropped(root) // one read of the level's log
+		}
 		root.Close()
 		if err != nil {
 			return nil, err
 		}
 		for _, n := range notes {
-			entries = append(entries, s.entry(n, false))
+			e := s.entry(n, false)
+			e.Dropped = dropped[n.Topic+"/"+n.Name]
+			entries = append(entries, e)
 		}
 	}
 	return entries, nil
@@ -115,7 +121,7 @@ func (s Store) Search(query, topic string, limit int) ([]Hit, error) {
 	hits := []Hit{}
 	for _, e := range entries {
 		n := e.Note
-		if n.SupersededBy != "" {
+		if n.SupersededBy != "" || e.Dropped {
 			continue
 		}
 		if topic != "" && n.Topic != topic {

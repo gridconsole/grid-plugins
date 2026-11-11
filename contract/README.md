@@ -689,11 +689,59 @@ read or write. The replaceable `brain.ChangesReadAllowed` (host key
 `grid brain <changes|revert>: caller role is not allowed to <read brain changes|revert brain entries>`.
 `grid brain supersede` checks `brain.RevertAllowed` at the same point and exits 3
 with `grid brain supersede: caller role is not allowed to supersede brain entries`.
-With `--json` each of the three refusals keeps that stderr line and exit 3 and
+With `--json` each of the five refusals (changes, revert, supersede, drop,
+restore) keeps that stderr line and exit 3 and
 also prints one stdout object, the person-gate refusal shape:
-`{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to <read brain changes|revert brain entries|supersede brain entries>","code":"person_required","message":"<the stderr line without its newline>"}`.
+`{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to <read brain changes|revert brain entries|supersede brain entries|drop brain entries|restore brain entries>","code":"person_required","message":"<the stderr line without its newline>"}`.
 Without `--json` stdout stays empty.
 The CLI does not read a workflow file to configure them.
+
+### `grid brain drop <topic>/<name> --expect <16hex> [--reason <why>] [--level home|project] [--project <p>] [--json]`
+
+Hides a knowledge entry from `brain search`, the SessionStart index (and its
+entry count) and job sources. Nothing is deleted: the note file and its stored
+versions are never written, and `brain show` still returns the entry, now with
+`"dropped": true`. Under the level's brain lock it checks `--expect` against the
+note's current rev, appends one audit line with status `dropped` (the current
+version and hash, the origin and the reason, whitespace folded), then rebuilds
+that level's index after the lock. The rev is the first 8 bytes of the SHA-256 of
+the note file as 16 lower-case hex digits (the app's `vaultRev`). The newest
+`accepted`, `dropped` or `restored` line of the entry is its state: a drop needs
+an accepted note that is not superseded and not already dropped. Two drops with
+one rev at once write one line; the second is refused (exit 9).
+
+The origin of the line is the person from the session: `person:<id>` where `<id>`
+is `GRID_WHO`, else `GRID_ACTOR`, else `GRID_MEMBER` (a plain name), else a
+random `session` origin as for `revert`. No flag names the person; `--by` is an
+unknown flag (exit 2).
+
+`--json` prints `{"status":"dropped","version":<n>,"rev":"<rev>"}`; plain output
+is `dropped <topic>/<name> v<n> rev <rev>`. When the line is written but the index
+rebuild fails, the result is printed first, then the error, and the exit is 1.
+
+Exit codes (the table of every brain write verb): 0 done, 1 a store error (a full
+disk included), 2 usage (a missing operand, a topic or name that is not a plain
+name, a missing or non-hex `--expect`, an unknown flag), 3 role refused, 6 stale
+`--expect`, 8 no such note, 9 refused by the note's state. Never 4, 5 or 7. A
+failure with 6, 8 or 9 prints one JSON line on stderr, with or without `--json`:
+`{"error":"conflict","rev":"<current rev>"}`, `{"error":"no_such_note"}` or
+`{"error":"refused","reason":"<why>"}`. Refused (9): a topic that holds settings
+(`machines`, `skills`, `agents` and the like), the `TOPIC` file, a note that is
+not accepted or is superseded, an entry already dropped. The role check
+(`brain.RevertAllowed`, the empty local role, `owner` and `member`) runs after the
+usage check and before any resolution, read or write: any other role, including
+`guest`, exits 3 with
+`grid brain drop: caller role is not allowed to drop brain entries`. A project
+without a Grid record is refused as for `propose` (exit 1); use `--level home`.
+
+### `grid brain restore <topic>/<name> --expect <16hex> [--reason <why>] [--level home|project] [--project <p>] [--json]`
+
+Brings a dropped entry back to search, the index and job sources. Same flags,
+rev check, origin, output and exit codes as `brain drop`, with the audit status
+`restored` and the stderr line
+`grid brain restore: caller role is not allowed to restore brain entries` for exit
+3. A restore needs an entry whose newest state line is `dropped`; any other entry
+is refused (exit 9). The note file and its versions are not written.
 
 ## Task intent files
 
