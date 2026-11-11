@@ -44,6 +44,23 @@ The keeper is a subagent. It never asks the person.
 7. Fail: `grid brain accept <id> --reject "<why>"`. A proposal is filed as written and cannot be edited, so if the idea is worth keeping, propose the fixed version under a new name and put the rejected name in `--source`.
 8. After a batch: `grid brain index`. `grid brain changes` lists what changed; `grid brain revert <topic>/<name> --to <n>` publishes an older version again.
 
+## Prune
+
+A note that has gone stale is retired, never deleted. The old note stays readable with `grid brain show`; search no longer lists it.
+
+1. On each proposal, run `grid brain search "<its words>"` for an older note on the same fact.
+2. The newer fact wins: the proposal carries a `supersedes` link to the old note with a why, then `grid brain accept --project <project> <id>`. Accepting it sets `superseded_by` on the old note.
+3. An existing note made stale by another existing note: `grid brain supersede <old> --by <new> --reason "<why>"`. The reason is 8 to 160 characters and more than one word.
+4. A bad accept or a wrong supersede is put back with `grid brain revert <topic>/<name> --to <n> --reason "<why>"`. `grid brain changes` shows the reason.
+5. Never delete a note and never edit its file by hand: use the verbs above.
+
+```text
+grid brain search "deploy pipeline" --project <project>
+grid brain supersede <old> --by <new> --reason "the new pipeline replaced the old one" --project <project>
+grid brain revert <topic>/<old> --to <n> --reason "the old pipeline is still in use" --project <project>
+grid brain changes --project <project>
+```
+
 ## Quality bar
 
 A note:
