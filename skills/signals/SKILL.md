@@ -15,9 +15,9 @@ The routine names the project and the source. If either is missing, say so and s
 2. Decide per message. Keep what the person could act on or should know about; skip newsletters, receipts and notices that need nothing. When unsure, keep it: the person triages, you do not.
 3. Save each kept message with one command, the body on stdin:
 
-   `printf '%s' "<body, trimmed to the part that matters>" | grid signal add --project <project> --source <mail|slack|calendar> --source-id <the source's own message id> --title "<short phrase in your words>" --body -`
+   `printf '%s' "<body, trimmed to the part that matters>" | grid signal add --project <project> --source <mail|slack|calendar> --source-id <the source's own message id> --title "<short phrase in your words>" --sender "<who sent it, as the source names them>" --recipient "<the address or channel it came to>" --body -`
 
-   Always give `--source-id` when the source has one: it is how a message is never saved twice. The body is the message as it is, not a summary. Use a quoted here-document when the body holds quotes.
+   Always give `--source-id` when the source has one: it is how a message is never saved twice. The body is the message as it is, not a summary. Use a quoted here-document when the body holds quotes. Give `--sender` and `--recipient` when the source shows them, each as one line of at most 512 bytes; leave a flag out when the source does not say, and the note then has no such line.
 
    Personal is the project for messages that belong to no project. `--project personal` from any other folder fails with `project is not registered` (exit 1), because Personal is only set up when the command runs from the Grid home. So when the routine names Personal, leave `--project` out and run from the Grid home, in the same command: `cd "$GRID_HOME" && printf '%s' "<body>" | grid signal add --source mail --source-id <id> --title "<phrase>" --body -`. Do not hand-write a note, and do not run `grid project add` for it.
 4. Read the answer: `result: written` or a duplicate are both fine. If the command exits 2 or 3, fix the field it names and call once more; if it fails again, skip that message and name it in your last line.
