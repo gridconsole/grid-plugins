@@ -1,0 +1,16 @@
+{"type":"system","subtype":"init","session_id":"icp-good","tools":["Bash","Read","Glob","Grep"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will read the cancelled Job J-2 first."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"grid job show J-2 --task task-replan"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"J-2 cancelled, exit_code 137. Cause: cancelled after the run hit the memory limit while it read the whole orders table into memory."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"grid job tree --task task-replan"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"J-2 cancelled\n  J-3 waiting (after J-2)\n  J-4 waiting (after J-2)\nJ-5 ready"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Read","input":{"file_path":"task-replan/plan.md"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t3","content":"Step 2 open: J-3. Step 3 dropped: J-4."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t4","name":"Bash","input":{"command":"grid job lint /tmp/J-6.yaml --task task-replan && grid job post --task task-replan --body '{\"id\":\"J-6\",\"item\":1,\"title\":\"Add the CSV writer, streaming the rows\",\"role\":\"builder\",\"intent\":{\"owner\":\"intent.md\",\"item\":\"plan.md#step-1\",\"goal\":\"plan.md#verify\"},\"notes\":\"Replaces J-2, which was cancelled after it read the whole orders table into memory and hit the memory limit. Stream the rows instead.\",\"after\":[]}'"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t4","content":"lint ok\nposted J-6"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t5","name":"Bash","input":{"command":"grid job cancel --task task-replan --job J-4 --reason 'Plan step 3 was dropped, so the document is no longer wanted.'"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t5","content":"J-4 cancelled"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t6","name":"Bash","input":{"command":"grid job tree --task task-replan"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t6","content":"J-2 cancelled\nJ-6 ready\n  J-3 waiting (after J-6)\nJ-4 cancelled\nJ-5 ready"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"J-2 was cancelled after it read the whole orders table into memory. I posted J-6 to replace it, streaming the rows, and J-3 now waits on J-6. I cancelled J-4 because plan step 3 was dropped."}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":8,"result":"J-2 was cancelled after it read the whole orders table into memory. I posted J-6 to replace it, streaming the rows, and J-3 now waits on J-6. I cancelled J-4 because plan step 3 was dropped."}

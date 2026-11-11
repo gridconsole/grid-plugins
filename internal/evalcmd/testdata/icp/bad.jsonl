@@ -1,0 +1,8 @@
+{"type":"system","subtype":"init","session_id":"icp-bad","tools":["Bash","Read","Glob","Grep"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will look at the tree and post a new Job."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"grid job tree --task task-replan"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"J-2 cancelled\n  J-3 waiting (after J-2)\n  J-4 waiting (after J-2)\nJ-5 ready"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"grid job post --task task-replan --body '{\"id\":\"J-6\",\"item\":1,\"title\":\"Add the CSV writer\",\"role\":\"builder\",\"after\":[]}'"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"posted J-6"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I posted J-6 as a replacement for J-2. The other Jobs stay as they are."}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":3,"result":"I posted J-6 as a replacement for J-2. The other Jobs stay as they are."}
