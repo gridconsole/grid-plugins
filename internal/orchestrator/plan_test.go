@@ -99,7 +99,7 @@ func TestPlanPublicationValidatesBeforeWriting(t *testing.T) {
 		"duplicate":          "plan.md: duplicate Job J-1",
 	}
 	for name, bad := range map[string]string{
-		"missing field":     strings.Replace(text, "      skills: []\n", "", 1),
+		"missing field":      strings.Replace(text, "      skills: []\n", "", 1),
 		"invalid contract":   strings.Replace(text, "review: L0", "review: L99", 1),
 		"missing dependency": strings.Replace(text, "after: []", "after: [{job: J-9, kind: done, why: Reuse the documented format}]", 1),
 		"cycle":              strings.Replace(text, "after: []", "after: [{job: J-1, kind: done, why: Reuse the documented format}]", 1),
