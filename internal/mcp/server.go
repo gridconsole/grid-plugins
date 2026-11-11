@@ -169,9 +169,9 @@ func (s Server) handle(line []byte, c *connection) *response {
 		}
 		result, err := s.call(*tool, args)
 		if err != nil {
-			return success(id, toolError(err))
+			return success(id, s.withStaleNotice(toolError(err)))
 		}
-		return success(id, result)
+		return success(id, s.withStaleNotice(result))
 	default:
 		return failure(id, -32601, "Method not found")
 	}
