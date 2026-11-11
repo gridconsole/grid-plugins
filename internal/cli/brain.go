@@ -11,6 +11,6 @@ func runBrain(args []string, env Env) int {
 		TaskOperandError: func(command string, err error) int { return taskOperandError(env, command, err) },
 		Resolver:         resolver(env), Stdin: env.Stdin, Stdout: env.Stdout, Stderr: env.Stderr,
 		Cwd: env.Cwd, Home: env.Home, GridHome: env.GridHome, TempRoots: env.TempRoots,
-		Role: env.getenv("GRID_ROLE"),
+		Role: env.getenv("GRID_ROLE"), RecordError: env.recordError,
 	})
 }

@@ -18,14 +18,29 @@ const (
 	revertUsage  = "Usage: grid brain revert <topic>/<name> --to <n> [--reason <why>] [--level home|project] [--project <p>] [--json]"
 )
 
-// failWith prints a store error the way every brain verb does.
+// failWith prints a store error the way every brain verb does. A project or
+// task the caller cannot see prints the plain line and goes to RecordError, so
+// the CLI's standard error envelope carries its code; any other error keeps the
+// JSON object under --json.
 func failWith(env Env, asJSON bool, err error) int {
+	if env.RecordError != nil && hasCode(err) {
+		env.RecordError(err)
+		asJSON = false
+	}
 	if asJSON {
 		_ = json.NewEncoder(env.Stderr).Encode(map[string]string{"error": err.Error()})
 	} else {
 		fmt.Fprintf(env.Stderr, "brain: %v\n", err)
 	}
 	return 1
+}
+
+// hasCode reports whether the CLI maps err to a stable error code: the where
+// sentinels that errorCode in internal/cli/error_codes.go turns into
+// no_such_project and no_such_task. A refusal of the Personal project has no
+// code there, so it keeps the JSON object.
+func hasCode(err error) bool {
+	return errors.Is(err, where.ErrProjectUnregistered) || errors.Is(err, where.ErrTaskNotFound)
 }
 
 // levelStore resolves the store and the level a verb acts on, the way Run does
