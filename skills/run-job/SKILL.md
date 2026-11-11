@@ -12,7 +12,7 @@ Steps:
 2. Read each code fact again in this session before you rely on it, with a `path:line`. Do not trust the Job's own line numbers without reading them.
 3. For a move or removal, write the list of items first and work through it one by one.
 4. For UI, every field comes from the data source the Job names (served op answer, `frame/model.mjs`, decision doc). A field the read lacks is NOT DONE, not a guess. Check at widths 390, 1440 and 3840.
-5. If the Job will not fit in its `budget.turns_estimate`, stop at the point it stops fitting and say which rows are left. Do not rush it.
+5. `budget.turns_estimate` is the planner's estimate, not a limit; finish the Job. If you end before every row holds (Claude Code's own limit, a blocker), post the result with the rows left as NOT DONE (`not met` in the result body).
 6. A new test fails on the base and passes on your change; paste the failing lines. Never edit an existing test to make it pass.
 7. Run `grid job verify <job> --task <task>` and the Job's verify command.
 8. Post the result with `grid job result --task <task> --job <job> --body <json>`. If it exits 3 the lease or record was rejected: do not retry.
