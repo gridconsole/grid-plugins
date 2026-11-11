@@ -142,7 +142,7 @@ func (s Store) Supersede(oldID, newID, reason string, origin Origin) (SupersedeR
 		idx := s
 		idx.ReadLevel = level
 		if _, err := idx.RebuildIndex(); err != nil {
-			return res, fmt.Errorf("%s is superseded by %s, but rebuilding the index failed: %w", oldRef, newRef, err)
+			return res, fmt.Errorf("%s is superseded by %s, but %w: %w", oldRef, newRef, ErrIndexRebuild, err)
 		}
 	}
 	return res, nil

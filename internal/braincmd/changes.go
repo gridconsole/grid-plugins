@@ -43,6 +43,30 @@ func hasCode(err error) bool {
 	return errors.Is(err, where.ErrProjectUnregistered) || errors.Is(err, where.ErrTaskNotFound)
 }
 
+// codeIndexRebuildFailed is the stable code of contract/README.md for a revert
+// or supersede that wrote its change but could not rebuild index.md.
+const codeIndexRebuildFailed = "index_rebuild_failed"
+
+// partialCode returns the stable code of a written change whose index rebuild
+// failed, matched from the brain sentinel, and "" for any other error.
+func partialCode(err error) string {
+	if errors.Is(err, brain.ErrIndexRebuild) {
+		return codeIndexRebuildFailed
+	}
+	return ""
+}
+
+// partialFailure is the --json stderr object of a written change whose index
+// rebuild failed: the store's message and the stable code.
+func partialFailure(env Env, err error) int {
+	obj := map[string]string{"error": err.Error()}
+	if code := partialCode(err); code != "" {
+		obj["code"] = code
+	}
+	_ = json.NewEncoder(env.Stderr).Encode(obj)
+	return 1
+}
+
 // levelStore resolves the store and the level a verb acts on, the way Run does
 // for propose and accept: an explicit --level, else the resolved project, else
 // home. A write into a project needs its Grid record.
@@ -258,16 +282,16 @@ func runRevert(args []string, env Env) int {
 			Noop    bool   `json:"noop"`
 			Reason  string `json:"reason,omitempty"`
 			Error   string `json:"error,omitempty"`
+			Code    string `json:"code,omitempty"`
 		}{Version: version, Noop: noop, Reason: why}
 		if err != nil {
-			out.Error = err.Error()
+			out.Error, out.Code = err.Error(), partialCode(err)
 		}
 		if encErr := json.NewEncoder(env.Stdout).Encode(out); encErr != nil {
 			return failWith(env, l.asJSON, errors.Join(encErr, err))
 		}
 		if err != nil {
-			_ = json.NewEncoder(env.Stderr).Encode(map[string]string{"error": err.Error()})
-			return 1
+			return partialFailure(env, err)
 		}
 		return 0
 	}

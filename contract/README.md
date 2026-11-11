@@ -61,6 +61,10 @@ Other failures print nothing on stdout: with `--json`, an unclassified failure t
 exits 1 or 3 and is covered by none of the four shapes prints nothing on stdout, and
 only stderr carries it (`grid task show` with no operand outside a task folder is one).
 Some commands keep their own older JSON objects on failure; those carry no code.
+A partial success is the exception: when `grid brain revert --json` or
+`grid brain supersede --json` has written its change but rebuilding index.md failed,
+stdout holds the result object (revert's also gains `code`), stderr holds
+`{"error":"<message>","code":"index_rebuild_failed"}`, and the exit is 1.
 Plain output, successful JSON and streaming output are unchanged. A code does not
 imply an exit status: a missing project during `signal move` exits 3, a missing task
 during `task show` exits 1.
@@ -80,9 +84,11 @@ during `task show` exits 1.
 | `write_failed` | Writing a settings file failed. |
 | `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
+| `index_rebuild_failed` | The change was written; rebuilding index.md failed; the stdout object holds the result (`grid brain revert`, `grid brain supersede`); exits 1. |
 
-The first six constants live in `internal/cli/error_codes.go` and the settings
-codes in `internal/settings/claude_user.go`; `person_required` and `job_waiting` are
+The first six constants live in `internal/cli/error_codes.go`, the settings
+codes in `internal/settings/claude_user.go` and `index_rebuild_failed` in
+`internal/braincmd/changes.go`; `person_required` and `job_waiting` are
 written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
 and `internal/cli/task_write.go`. `TestHfFsCodeTable` keeps this table equal to that set.
 
