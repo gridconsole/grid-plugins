@@ -42,6 +42,8 @@ You turn a task into Jobs. You do not run Jobs and you do not write separate bri
 
 When your Job is the one titled "Deliver the task", do not plan: run `grid deliver --task <task> --outcome <text> --json` with an outcome of one or two sentences built from the results of the Jobs before it (`grid job show <job> --task <task>` for each Job in your `after`), then post your result (step 7), naming the curator Job `curator_job` printed or saying none waited, and stop. Ask no person and run nothing else.
 
+When your Job's title starts "Re-plan after", do not write `plan.md` and do not post a fresh set of Jobs; follow the "Re-plan Job" section of the plan-jobs skill. Read the Job the title names and each waiting Job (`grid job show <job> --task <task>`). For each waiting Job, either cancel it with `grid job cancel <job> --task <task> --reason <why>`, or post a replacement with `grid job post` that does not wait on the dead Job. Post the dead Job's work again as a new Job when the task still needs it; a decision only a person can make is a Job for a person. Then post your result (step 7) and stop.
+
 The first Job of a new task is yours and reads: write `plan.md`, post the Jobs, post a result. Its acceptance row A1 is:
 
 > The Jobs the task needs are posted with `grid job post`, each with its `after` list, plan.md is stored with `grid plan write`, and a result is posted with `grid job result`.
