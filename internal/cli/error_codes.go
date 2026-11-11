@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/signal"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -25,6 +26,8 @@ const (
 	CodeInvalidArgument = "invalid_argument"
 	// CodeInvalidPolicy means a workflow policy value the command depends on is invalid.
 	CodeInvalidPolicy = "invalid_policy"
+	// CodeJobExists means a Job post named a Job id the Feed already holds.
+	CodeJobExists = "job_exists"
 )
 
 func errorCode(err error) string {
@@ -41,6 +44,8 @@ func errorCode(err error) string {
 		return CodeNoSuchNote
 	case errors.As(err, &bad), errors.Is(err, errTaskOperand):
 		return CodeInvalidArgument
+	case errors.Is(err, feed.ErrJobExists):
+		return CodeJobExists
 	default:
 		return ""
 	}
