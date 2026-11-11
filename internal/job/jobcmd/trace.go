@@ -52,6 +52,7 @@ type TraceProblem struct {
 type TraceResult struct {
 	Rows     []TraceRow     `json:"rows"`
 	Problems []TraceProblem `json:"problems"`
+	Code     string         `json:"code,omitempty"`
 }
 
 var errTraceProjectNotFound = errors.New("project not found")
@@ -304,7 +305,7 @@ func runTrace(args []string, e Env) int {
 	}
 	fail := func(err error, code int) int {
 		if asJSON {
-			return traceOutput(e, TraceResult{Rows: []TraceRow{}, Problems: []TraceProblem{{Text: err.Error()}}}, true, code)
+			return traceOutput(e, TraceResult{Rows: []TraceRow{}, Problems: []TraceProblem{{Text: err.Error()}}, Code: refusalCode(err, code)}, true, code)
 		}
 		if _, writeErr := fmt.Fprintf(e.Stderr, "job trace: %s\n", err); writeErr != nil {
 			return traceExitFailed

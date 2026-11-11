@@ -59,7 +59,23 @@ type report struct {
 	Brief    string         `json:"brief,omitempty"`
 	Findings []lint.Finding `json:"findings"`
 	Error    string         `json:"error,omitempty"`
+	Code     string         `json:"code,omitempty"`
 	fromFeed bool           // show resolved a task, so the text output names the state
+}
+
+// refusalCode is the stable code (contract/README.md) of a refusal that exits
+// with exit: an unknown project or task, else a usage refusal. Any other failure
+// is unclassified and has no code, so the key is left out.
+func refusalCode(err error, exit int) string {
+	switch {
+	case errors.Is(err, where.ErrProjectUnregistered), errors.Is(err, errTraceProjectNotFound):
+		return "no_such_project"
+	case errors.Is(err, where.ErrTaskNotFound):
+		return "no_such_task"
+	case exit == 2:
+		return "invalid_argument"
+	}
+	return ""
 }
 
 const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--project <name>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--project <name>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--project <name>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip).\n"
@@ -71,9 +87,9 @@ func Run(args []string, e Env) int {
 			f.json = f.json || arg == "--json"
 		}
 		if len(args) > 0 && args[0] == "trace" && f.json {
-			return traceOutput(e, TraceResult{Rows: []TraceRow{}, Problems: []TraceProblem{{Text: err.Error()}}}, true, 2)
+			return traceOutput(e, TraceResult{Rows: []TraceRow{}, Problems: []TraceProblem{{Text: err.Error()}}, Code: refusalCode(err, 2)}, true, 2)
 		}
-		return output(e, f, report{Error: err.Error()}, 2)
+		return output(e, f, report{Error: err.Error(), Code: refusalCode(err, 2)}, 2)
 	}
 	if len(args) > 0 {
 		switch args[0] {
@@ -83,7 +99,7 @@ func Run(args []string, e Env) int {
 	}
 	f, err := parse(args)
 	if err != nil {
-		return output(e, f, report{Error: err.Error(), Findings: []lint.Finding{}}, 2)
+		return output(e, f, report{Error: err.Error(), Code: refusalCode(err, 2), Findings: []lint.Finding{}}, 2)
 	}
 	if f.help || len(f.args) == 0 {
 		if _, err := io.WriteString(e.Stdout, usage); err != nil {
@@ -94,7 +110,7 @@ func Run(args []string, e Env) int {
 	e.project = f.project
 	action, args := f.args[0], f.args[1:]
 	fail := func(err error, code int) int {
-		return output(e, f, report{Error: err.Error(), Findings: []lint.Finding{}}, code)
+		return output(e, f, report{Error: err.Error(), Code: refusalCode(err, code), Findings: []lint.Finding{}}, code)
 	}
 	if f.dir != "" && action != "verify" {
 		return fail(errors.New("--dir is only supported by verify"), 2)
