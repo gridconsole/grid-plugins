@@ -5,7 +5,12 @@ package proctree
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -34,15 +39,62 @@ func TestRunUnixStartFailureIsReturned(t *testing.T) {
 }
 
 func TestRunUnixCancelledContextReturnsPromptly(t *testing.T) {
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "pid")
 	ctx, cancel := context.WithCancel(context.Background())
-	time.AfterFunc(100*time.Millisecond, cancel)
 	defer cancel()
-	started := time.Now()
-	err := Run(exec.CommandContext(ctx, "sleep", "30"))
+
+	// Cancel once the child has written its pid, so the cancel always lands on a
+	// running child. The 30 s bound only names what never happened.
+	neverStarted := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		bound := time.After(30 * time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-bound:
+				close(neverStarted)
+				cancel()
+				return
+			case <-ticker.C:
+				if b, err := os.ReadFile(pidFile); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+
+	cmd := exec.CommandContext(ctx, "sh", "-c", `echo $$ > "$DIR/pid"; exec sleep 30`)
+	cmd.Env = append(os.Environ(), "DIR="+dir)
+	err := Run(cmd)
+	select {
+	case <-neverStarted:
+		t.Fatal("child never started")
+	default:
+	}
 	if err == nil {
 		t.Fatal("Run of a cancelled sleep returned nil")
 	}
-	if took := time.Since(started); took > 2*time.Second {
-		t.Fatalf("Run took %v after cancel, want under 2s", took)
+	if cmd.ProcessState == nil {
+		t.Fatal("cmd.ProcessState is nil after Run")
+	}
+	ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
+	if !ok || !ws.Signaled() {
+		t.Fatalf("child was not signalled: %v", cmd.ProcessState)
+	}
+	b, rerr := os.ReadFile(pidFile)
+	if rerr != nil {
+		t.Fatalf("read pid file: %v", rerr)
+	}
+	pid, perr := strconv.Atoi(strings.TrimSpace(string(b)))
+	if perr != nil {
+		t.Fatalf("pid file %q: %v", b, perr)
+	}
+	if kerr := syscall.Kill(pid, 0); !errors.Is(kerr, syscall.ESRCH) {
+		t.Fatalf("child %d still exists after cancel: %v", pid, kerr)
 	}
 }
