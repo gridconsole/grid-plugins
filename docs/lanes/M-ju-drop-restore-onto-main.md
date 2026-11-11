@@ -25,6 +25,8 @@ testdata/golden/help.golden).
   `return roleRefused(env, op, op+" brain entries", l.asJSON)`. Same stderr line,
   same exit 3, same place (after the usage check, before `levelStore`); only
   `--json` adds the person_required object on stdout.
+  This production change is in the merge commit 4700bc91, with the resolved
+  hunk, because the resolved guest-parity JSON rows fail without it.
 - internal/braincmd/ia_brain_role_refusal_test.go:25-26: drop and restore rows in
   `iaBrVerbs`. `TestIaBrHiddenProjectSame` still walks `iaBrVerbs[:2]`.
 - contract/README.md:692-695: "each of the five refusals (changes, revert,
@@ -48,6 +50,7 @@ testdata/golden/help.golden).
 | R5 | Tests of changed packages and of importers | HOLDS | importers from `go list` (below); `go test -count=1 ./cmd/grid ./contract/formats ./internal/account ./internal/golden ./internal/jobgraph ./internal/mcp ./internal/packaging ./internal/question ./internal/settings ./lib` exit 0 |
 | R6 | gofmt | HOLDS | `gofmt -l internal/braincmd internal/cli internal/brain internal/job` prints nothing, exit 0 |
 | R7 | UI rows | N/A | no UI change |
+| R9 | Bundle | HOLDS | `git bundle create <hand>/M-ju-drop-restore-onto-main.bundle origin/main..lane-M-ju-drop-restore-onto-main` exit 0; its prerequisites fc3b76aa and 91fadeff are both on origin/main (`git merge-base --is-ancestor 91fadeff origin/main` exit 0); `git bundle verify` exit 0 |
 | R8 | RealPlugin rows | N/A | no row names a *RealPlugin* test |
 
 ### Row 2 lines
