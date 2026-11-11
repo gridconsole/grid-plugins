@@ -21,7 +21,7 @@ Commands:
   proof       add evidence and rebuild the task proof index
   history     add a dated line to the task history
   land        land a task per the deploy topic
-  brain       show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore
+  brain       show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore/rename
   env         up, down browser Job dev environments
   person      check person access; list, show and find approvers
   routine     add, list, remove, run, schedule and unschedule routines
