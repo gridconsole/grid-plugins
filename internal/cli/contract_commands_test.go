@@ -181,8 +181,8 @@ func TestContractCommandsApp(t *testing.T) {
 					} else if name == "worker-list" {
 						if populated {
 							run(cwd, "task", "new", "Example worker task", "--json")
-							// Presence is app-owned input; the plugin has no worker writer.
-							h.write(filepath.Join(h.gridHome, "worker.json"), `{"version":1,"machine":"01ARZ3NDEKTSV4RRFFQ69G5FAW","pid":42,"started_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:01Z","state":"stopped"}`)
+							// Presence is app-owned input; the plugin has no worker writer. A status file with no held lock is a stopped worker.
+							h.write(filepath.Join(h.gridHome, "worker-status.json"), `{"pid":42,"version":"1.2.3","started_at":"2026-01-01T00:00:00Z","uptime_seconds":1,"address":"127.0.0.1:43111","token":"x"}`)
 						}
 						out = run(cwd, "worker", "list", "--json")
 					} else if name == "feed-state" || name == "feed-post" || name == "job-next" {

@@ -144,7 +144,7 @@ are reference-document names and original line numbers, not machine paths.
 | grid task move output | [cmd-task-move.json](schemas/cmd-task-move.json) | internal/cli/intent.go:140 |
 | grid task show output | [cmd-task-show.json](schemas/cmd-task-show.json) | internal/cli/task.go:122 |
 | grid version output | [cmd-version.json](schemas/cmd-version.json) | internal/cli/version.go:54 |
-| grid worker list output | [cmd-worker-list.json](schemas/cmd-worker-list.json) | internal/cli/worker.go:44 |
+| grid worker list output | [cmd-worker-list.json](schemas/cmd-worker-list.json) | internal/cli/worker.go:57 |
 
 Run `make test` and `make lint` from the repository root. Keep the default
 TMPDIR so the test runner can check for leaked temporary folders. Focused

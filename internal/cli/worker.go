@@ -57,7 +57,12 @@ func runWorker(args []string, env Env) int {
 		return writeJSON(env.Stdout, entries)
 	}
 	for _, entry := range entries {
-		fmt.Fprintf(env.Stdout, "machine: %s\npid: %d\nstate: %s\npresence: %s\n", entry.Machine, entry.PID, entry.State, entry.Presence)
+		started := ""
+		if !entry.StartedAt.IsZero() {
+			started = contract.FormatTime(entry.StartedAt)
+		}
+		fmt.Fprintf(env.Stdout, "machine: %s\npid: %d\nversion: %s\nstarted_at: %s\naddress: %s\nstate: %s\npresence: %s\n",
+			entry.Machine, entry.PID, entry.Version, started, entry.Address, entry.State, entry.Presence)
 	}
 	return 0
 }

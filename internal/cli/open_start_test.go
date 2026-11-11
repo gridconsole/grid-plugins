@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,19 +11,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gridconsole/grid-plugins/internal/worker"
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
+// workerStatusJSON is worker-status.json as the app's grid-worker writes it.
+const workerStatusJSON = `{"pid":4242,"version":"0.0.0-test","started_at":"2026-11-08T09:00:00Z","uptime_seconds":10,"address":"127.0.0.1:43111","token":"not-for-the-list"}`
+
 // startFixture is an open fixture plus a folder of fake grid-server and grid-worker
-// scripts. Each start appends a line to <markers>/<name>.started. The fake worker copies
-// the presence files a real one writes; the fake server writes app-url with the address of
-// a listener the test holds.
+// scripts. Each start appends a line to <markers>/<name>.started. A worker that runs
+// holds an empty worker.lock with an OS lock and has written worker-status.json: the
+// test process plays that part (a script cannot hold the lock), starting once the fake
+// grid-worker has been run. The fake server writes app-url with the address of a
+// listener the test holds.
 type startFixture struct {
 	*harness
 	project, id string
 	bin         string // folder of fake programs
 	markers     string
-	presence    string // folder holding the worker.json and worker.lock the fake worker copies
 	addr        string // where the fake server "listens"
 }
 
@@ -35,7 +38,7 @@ func newStartFixture(t *testing.T) *startFixture {
 	}
 	h, project, id := openFixture(t, true)
 	f := &startFixture{harness: h, project: project, id: id,
-		bin: t.TempDir(), markers: t.TempDir(), presence: t.TempDir()}
+		bin: t.TempDir(), markers: t.TempDir()}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -43,21 +46,35 @@ func newStartFixture(t *testing.T) *startFixture {
 	t.Cleanup(func() { ln.Close() })
 	f.addr = ln.Addr().String()
 	t.Setenv("FAKE_MARKERS", f.markers)
-	t.Setenv("FAKE_PRESENCE", f.presence)
 	t.Setenv("FAKE_ADDR", f.addr)
 
-	// The worker's presence files name this machine by its ULID, as the app writes them.
-	machine := "01BX5ZZKBKACTAV9WEVGEMMVRZ"
-	h.write(filepath.Join(h.gridHome, "machine"), machine+"\n")
-	now := time.Now().UTC()
-	status, _ := json.Marshal(worker.Status{Version: 1, Machine: machine, PID: 4242, StartedAt: now.Add(-10 * time.Second), UpdatedAt: now.Add(-time.Second), State: "running"})
-	lock, _ := json.Marshal(worker.Lock{Version: 1, Machine: machine, PID: 4242, StartedAt: now.Add(-10 * time.Second)})
-	h.write(filepath.Join(f.presence, "worker.json"), string(status))
-	h.write(filepath.Join(f.presence, "worker.lock"), string(lock))
-
-	f.program("grid-worker", `cp "$FAKE_PRESENCE/worker.json" "$GRID_HOME/worker.json"
-cp "$FAKE_PRESENCE/worker.lock" "$GRID_HOME/worker.lock"
-`)
+	h.write(filepath.Join(h.gridHome, "machine"), "01BX5ZZKBKACTAV9WEVGEMMVRZ\n")
+	f.program("grid-worker", "exit 0\n")
+	// The worker the fake program stands for: once it has been run, the status file
+	// is there and the lock is held until the test ends.
+	stop, done := make(chan struct{}), make(chan struct{})
+	t.Cleanup(func() { close(stop); <-done })
+	go func() {
+		defer close(done)
+		marker := filepath.Join(f.markers, "grid-worker.started")
+		for {
+			if _, err := os.Stat(marker); err == nil {
+				break
+			}
+			select {
+			case <-stop:
+				return
+			case <-time.After(5 * time.Millisecond):
+			}
+		}
+		lock, err := f.holdWorkerFiles()
+		if err != nil {
+			t.Errorf("fake worker: %v", err)
+			return
+		}
+		<-stop
+		lock.Close()
+	}()
 	// The sleep keeps the first start in flight while a second grid open arrives.
 	f.program("grid-server", `sleep 0.3
 printf 'http://%s\n' "$FAKE_ADDR" > "$GRID_HOME/app-url"
@@ -80,13 +97,30 @@ func (f *startFixture) program(name, body string) {
 func (f *startFixture) running() {
 	f.t.Helper()
 	f.write(filepath.Join(f.gridHome, AppURLFile), "http://"+f.addr+"\n")
-	for _, n := range []string{"worker.json", "worker.lock"} {
-		b, err := os.ReadFile(filepath.Join(f.presence, n))
-		if err != nil {
-			f.t.Fatal(err)
-		}
-		f.write(filepath.Join(f.gridHome, n), string(b))
+	lock, err := f.holdWorkerFiles()
+	if err != nil {
+		f.t.Fatal(err)
 	}
+	f.t.Cleanup(func() { lock.Close() })
+}
+
+// holdWorkerFiles makes the Grid home look as it does while the app's worker runs: an
+// empty worker.lock held with an OS lock (the caller closes the file to let go) and
+// worker-status.json.
+func (f *startFixture) holdWorkerFiles() (*os.File, error) {
+	lock, err := os.OpenFile(filepath.Join(f.gridHome, "worker.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := fslock.LockExclusive(lock); err != nil {
+		lock.Close()
+		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(f.gridHome, "worker-status.json"), []byte(workerStatusJSON), 0o600); err != nil {
+		lock.Close()
+		return nil, err
+	}
+	return lock, nil
 }
 
 // starts counts how often a fake program ran. A detached program is not waited for, so
