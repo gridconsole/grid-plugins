@@ -107,7 +107,7 @@ func commands() []command {
 		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels", runHook},
 		{"task", "new, show, list, status, stop, close, reopen, history, attach, move, decline, delete, rename, restore", runTask},
 		{"plan", "write, check, items, hash, diff, migrate", runPlan},
-		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor, order, trace", runOrchestratorJob},
+		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace", runOrchestratorJob},
 		{"lease", "take, release, status (task lease)", runTaskLease},
 		{"feed", "tick, post, read, state, types, handover, fold", runOrchestratorFeed},
 		{"mcp", "stdio server with the Feed tools", runMCP},

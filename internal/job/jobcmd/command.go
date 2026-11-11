@@ -62,7 +62,7 @@ type report struct {
 	fromFeed bool           // show resolved a task, so the text output names the state
 }
 
-const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--project <name>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--project <name>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--project <name>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip).\n"
+const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--project <name>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--project <name>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--project <name>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip).\n"
 
 func Run(args []string, e Env) int {
 	if err := memberContext(e.Resolver); err != nil {

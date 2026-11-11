@@ -16,23 +16,19 @@ import (
 
 func runJobGraph(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]")
+		fmt.Fprintln(env.Stdout, "Usage: grid job cycles <items.json> [--json]")
 		if len(args) == 0 {
 			return 2
 		}
 		return 0
 	}
 	verb := args[0]
-	if verb != "cycles" && verb != "floor" {
+	if verb != "cycles" {
 		fmt.Fprintf(env.Stderr, "grid job: unknown or unbuilt command %q\n", verb)
 		return 2
 	}
 	fs := newFlags("job "+verb, env)
 	asJSON := fs.Bool("json", false, "print JSON")
-	policyFile := ""
-	if verb == "floor" {
-		fs.StringVar(&policyFile, "policy", "", "project path tags as JSON")
-	}
 	// flag stops at a positional argument; collect options separately so the
 	// documented trailing --json and ordinary leading options both work.
 	options, files := []string{}, []string{}
@@ -44,10 +40,6 @@ func runJobGraph(args []string, env Env) int {
 		}
 		if strings.HasPrefix(arg, "-") {
 			options = append(options, arg)
-			if (arg == "--policy" || arg == "-policy") && verb == "floor" && i+1 < len(args) {
-				i++
-				options = append(options, args[i])
-			}
 		} else {
 			files = append(files, arg)
 		}
@@ -71,58 +63,7 @@ func runJobGraph(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "grid job: items must be a JSON list, not null")
 		return 1
 	}
-	if verb == "cycles" {
-		return runJobCycles(items, *asJSON, env)
-	}
-	policy := jobgraph.Policy{}
-	if policyFile != "" {
-		var supplied *jobgraph.Policy
-		if err := readJobJSON(env, policyFile, &supplied); err != nil {
-			fmt.Fprintf(env.Stderr, "grid job floor: %v\n", err)
-			return 1
-		}
-		if supplied == nil {
-			fmt.Fprintln(env.Stderr, "grid job floor: policy must be a JSON object, not null")
-			return 1
-		}
-		policy = *supplied
-	}
-	floors, err := jobgraph.Floors(items, policy)
-	if err != nil {
-		fmt.Fprintf(env.Stderr, "grid job floor: %v\n", err)
-		return 1
-	}
-	code := 0
-	for _, floor := range floors {
-		if len(floor.Errors) > 0 {
-			code = 1
-		}
-	}
-	if *asJSON {
-		if writeJSON(env.Stdout, struct {
-			OK   bool             `json:"ok"`
-			Jobs []jobgraph.Floor `json:"jobs"`
-		}{code == 0, floors}) != 0 {
-			return 1
-		}
-		return code
-	}
-	for _, floor := range floors {
-		fmt.Fprintf(env.Stdout, "%s: floor %s, review %s (%s)\n", floor.Job, floor.Floor, floor.Review, floor.Reason)
-		if floor.Classify {
-			fmt.Fprintf(env.Stdout, "%s: waits for classify\n", floor.Job)
-		}
-		if floor.CaptureAtL3 {
-			fmt.Fprintf(env.Stdout, "%s: checker capture at L3\n", floor.Job)
-		}
-		if floor.Override {
-			fmt.Fprintf(env.Stdout, "%s: recorded exception permits review below the floor\n", floor.Job)
-		}
-		for _, problem := range floor.Errors {
-			fmt.Fprintf(env.Stdout, "%s: %s\n", floor.Job, problem)
-		}
-	}
-	return code
+	return runJobCycles(items, *asJSON, env)
 }
 
 func runJobCycles(items []job.Job, asJSON bool, env Env) int {
