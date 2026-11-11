@@ -212,6 +212,10 @@ func Run(args []string, env Env) (exit int) {
 				fmt.Fprintf(env.Stderr, "grid task %s: %v\n", rest[0], fmt.Errorf("%w: %s", task.ErrEditRejected, task.MoveRefusal))
 				return 3
 			}
+			if name == "session" {
+				fmt.Fprintf(env.Stderr, "grid session %s: %s\n", rest[0], guestSessionRefusal(rest[0]))
+				return 1
+			}
 			fmt.Fprintln(env.Stderr, "grid: "+guestSettingsRefusal)
 			return 1
 		}
@@ -237,18 +241,37 @@ func guestWriteVerb(name string, rest []string) bool {
 		return len(rest) > 0 && (rest[0] == "delete" || rest[0] == "restore" || guestTaskMove(rest[0]))
 	case "question":
 		return len(rest) > 0 && rest[0] == "withdraw"
+	case "session":
+		return len(rest) > 0 && guestSessionWrite(rest[0])
 	}
 	return false
 }
 
-// guestTaskMove is a task move a person makes: the owner's rule is that a guest
-// answers and comments, and does not create, close, reopen or stop a task.
-func guestTaskMove(verb string) bool {
-	return verb == "new" || verb == "close" || verb == "reopen" || verb == "stop"
+// guestSessionWrite is a session write a person makes: the owner's rule is that a
+// guest answers and comments, and does not start, stop, steer or switch a session.
+// list and show read, so a guest keeps them.
+func guestSessionWrite(verb string) bool {
+	switch verb {
+	case "start", "stop", "send", "pause", "resume", "handback", "switch":
+		return true
+	}
+	return false
 }
 
-// guestTaskMoveRefusal is the reason a guest's new, close, reopen or stop gives;
-// it names the role the way a guest's question withdrawal does.
+// guestSessionRefusal is the reason a guest's session write gives; it names the
+// role the way a guest's task move does.
+func guestSessionRefusal(verb string) string {
+	return fmt.Sprintf("role %q may not %s a session; a guest answers and comments", "guest", verb)
+}
+
+// guestTaskMove is a task move a person makes: the owner's rule is that a guest
+// answers and comments, and does not create, close, reopen, stop or move a task.
+func guestTaskMove(verb string) bool {
+	return verb == "new" || verb == "close" || verb == "reopen" || verb == "stop" || verb == "move"
+}
+
+// guestTaskMoveRefusal is the reason a guest's new, close, reopen, stop or move
+// gives; it names the role the way a guest's question withdrawal does.
 func guestTaskMoveRefusal(verb string) string {
 	return fmt.Sprintf("role %q may not %s a task; a guest answers and comments", "guest", verb)
 }
