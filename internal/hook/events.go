@@ -293,6 +293,7 @@ func workerExit(o Options, in hookio.Input) {
 		return
 	}
 	reason := exitReason(in)
+	code := exitCode(in)
 	store := session.Store{TaskDir: dir}
 	key := "exit:" + in.AgentID + ":" + jobID + ":" + o.Getenv("GRID_LEASE_EPOCH") + ":" + o.Getenv("GRID_ATTEMPT")
 	o.log("worker exit", store.UpdateActivity(in.SessionID, func(a *session.Activity) error {
@@ -302,6 +303,11 @@ func workerExit(o Options, in hookio.Input) {
 				a.Exits = map[string]string{}
 			}
 			a.Exits[key] = reason
+			a.ExitCode = code
+			if a.ExitCodes == nil {
+				a.ExitCodes = map[string]string{}
+			}
+			a.ExitCodes[key] = code
 			if a.Seen == nil {
 				a.Seen = map[string]bool{}
 			}
@@ -326,6 +332,18 @@ func workerExit(o Options, in hookio.Input) {
 			o.log("end session", err)
 		}
 	}
+}
+
+// exitCode is the raw end reason kept beside the mapped one: what Claude Code
+// sent, subagent_stop for a SubagentStop, none when SessionEnd gave no reason.
+func exitCode(in hookio.Input) string {
+	if in.HookEventName == "SubagentStop" {
+		return "subagent_stop"
+	}
+	if in.Reason == "" {
+		return "none"
+	}
+	return in.Reason
 }
 
 // exitReason maps a SessionEnd reason to the contract's worker-exit reasons.
