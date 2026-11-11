@@ -168,7 +168,7 @@
     },
     {
       "name": "task",
-      "summary": "new, show, list, status, stop, close, reopen, history, attach, move",
+      "summary": "new, show, list, status, stop, close, reopen, history, attach, move, decline, delete, rename, restore",
       "built": true,
       "subcommands": [
         {
@@ -651,7 +651,7 @@
     },
     {
       "name": "job",
-      "summary": "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor",
+      "summary": "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor, order, trace",
       "built": true,
       "subcommands": [
         {
@@ -2294,7 +2294,7 @@
     },
     {
       "name": "question",
-      "summary": "add, withdraw, list, tick and sync task questions",
+      "summary": "add, ask, withdraw, list, tick and sync task questions",
       "built": true,
       "subcommands": [
         {
@@ -2702,7 +2702,7 @@
     },
     {
       "name": "history",
-      "summary": "append a dated task history line",
+      "summary": "add a dated line to the task history",
       "built": true,
       "subcommands": [
         {
@@ -2756,7 +2756,7 @@
     },
     {
       "name": "brain",
-      "summary": "show, search, topics, index, propose, accept, keep, decide, check, changes, revert",
+      "summary": "show, search, topics, index, propose, accept, keep, decide, supersede, check, changes, revert",
       "built": true,
       "subcommands": [
         {
@@ -3483,7 +3483,7 @@
     },
     {
       "name": "worker",
-      "summary": "list local grid-worker processes",
+      "summary": "list local grid-worker processes; next is a worker's call for its next request",
       "built": true,
       "subcommands": [
         {
@@ -3623,7 +3623,7 @@
     },
     {
       "name": "workflow",
-      "summary": "show workflow template files and parse problems",
+      "summary": "show workflow template files and parse problems; write a template file",
       "built": true,
       "subcommands": [
         {
@@ -4061,7 +4061,7 @@
     },
     {
       "name": "intent",
-      "summary": "list, claim, done (worker requests)",
+      "summary": "list, claim, done, release, renew (worker requests)",
       "built": true,
       "subcommands": [
         {
@@ -4332,7 +4332,7 @@
     },
     {
       "name": "account",
-      "summary": "agent accounts",
+      "summary": "list, status, statusline, scan, sign-in, windows, folder and note for agent accounts",
       "built": true,
       "subcommands": [
         {
@@ -4619,7 +4619,7 @@
     },
     {
       "name": "setup",
-      "summary": "record validated project setup answers",
+      "summary": "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)",
       "built": true,
       "subcommands": [
         {
@@ -4661,7 +4661,7 @@
     },
     {
       "name": "signal",
-      "summary": "add, act on and dismiss inbox signals",
+      "summary": "add, act on, dismiss and move inbox signals",
       "built": true,
       "subcommands": [
         {

@@ -8,36 +8,36 @@ Commands:
   open        open the task page in the browser
   doctor      check machine health and collect a support bundle
   hook        answer a Claude Code or Codex hook event; set and list hook levels
-  task        new, show, list, status, stop, close, reopen, history, attach, move
+  task        new, show, list, status, stop, close, reopen, history, attach, move, decline, delete, rename, restore
   plan        write, check, items, hash, diff, migrate
-  job         next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor
+  job         next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor, order, trace
   lease       take, release, status (task lease)
   feed        tick, post, read, state, types, handover, fold
   mcp         stdio server with the Feed tools
-  question    add, withdraw, list, tick and sync task questions
+  question    add, ask, withdraw, list, tick and sync task questions
   answer      record a person's answer
   approve     approve the plan or a later approve step (a person or the app only)
   deliver     write the outcome and wait for the person
   proof       add evidence and rebuild the task proof index
-  history     append a dated task history line
+  history     add a dated line to the task history
   land        land a task per the deploy topic
-  brain       show, search, topics, index, propose, accept, keep, decide, check, changes, revert
+  brain       show, search, topics, index, propose, accept, keep, decide, supersede, check, changes, revert
   env         up, down browser Job dev environments
   person      check person access; list, show and find approvers
   routine     add, list, remove, run, schedule and unschedule routines
-  worker      list local grid-worker processes
+  worker      list local grid-worker processes; next is a worker's call for its next request
   agent       check agent readiness; set models and efforts; list settings
   claude      show and set the person's Claude Code settings rows
-  workflow    show workflow template files and parse problems
+  workflow    show workflow template files and parse problems; write a template file
   skill       enable, disable and list skills
   session     list, show, start, stop, send, pause, resume, handback, switch
-  intent      list, claim, done (worker requests)
+  intent      list, claim, done, release, renew (worker requests)
   usage       post and show usage, fold observed session totals
-  account     agent accounts
+  account     list, status, statusline, scan, sign-in, windows, folder and note for agent accounts
   project     add, remove, list, scan and relink projects
   project-md  get or set a project front-matter key
-  setup       record validated project setup answers
-  signal      add, act on and dismiss inbox signals
+  setup       record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)
+  signal      add, act on, dismiss and move inbox signals
   artifact    import, link, list and publish task artifacts
   eval        list, run and show task evaluations
   migrate     upgrade the Grid home to this format
