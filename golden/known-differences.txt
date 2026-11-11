@@ -37,8 +37,6 @@ history-log/history-self	Task history omits legacy attachment lists and stores b
 history-log/missing-history	Task history omits legacy attachment lists and stores bounded content snapshots in session JSON. See docs/lanes/L29.md:66.
 brain-read/project-note	Loose untyped files are not accepted brain notes. See docs/lanes/L29.md:71.
 brain-read/workspace-note	Loose untyped files are not accepted brain notes. See docs/lanes/L29.md:71.
-brain-recall/no-hits	Recall uses bounded pointers, revised wording and locked JSON markers. See docs/lanes/L29.md:76.
-brain-recall/planner-dispatch	Recall uses bounded pointers, revised wording and locked JSON markers. See docs/lanes/L29.md:76.
 stop-check/empty-next	Stop messages use concise names; brief transitions use the shared atomic writer and persistent lock. See docs/lanes/L29.md:80.
 stop-check/empty-summary	Stop messages use concise names; brief transitions use the shared atomic writer and persistent lock. See docs/lanes/L29.md:80.
 stop-check/finished-no-outcome	Stop messages use concise names; brief transitions use the shared atomic writer and persistent lock. See docs/lanes/L29.md:80.

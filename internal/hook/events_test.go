@@ -146,33 +146,9 @@ func TestRecallPointersReadDedupeAndPlanChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in := hookio.Input{Prompt: "/grid:plan"}
-	out, log, code := f.run(t, "UserPromptSubmit", in)
-	if code != 0 || log != "" {
-		t.Fatalf("recall: %d %s", code, log)
-	}
-	for _, part := range []string{e.ID, n.Summary, "Why:", n.Description} {
-		if !strings.Contains(out, part) {
-			t.Fatalf("missing %s: %s", part, out)
-		}
-	}
-	if strings.Contains(out, "PRIVATE BODY") {
-		t.Fatal("dumped body")
-	}
-	out, log, code = f.run(t, "UserPromptSubmit", in)
-	if out != "" || log != "" || code != 0 {
-		t.Fatalf("repeat: %q %q %d", out, log, code)
-	}
-	if err := os.WriteFile(filepath.Join(f.dir, "plan.md"), []byte("# Plan, rev 2\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	out, _, _ = f.run(t, "UserPromptSubmit", in)
-	if out == "" {
-		t.Fatal("plan change did not recall")
-	}
 	read := hookio.Input{ToolName: "Read", ToolInput: map[string]any{"file_path": filepath.Join(f.home, e.Path)}}
 	for i := 0; i < 2; i++ {
-		_, log, code = f.run(t, "PostToolUse", read)
+		_, log, code := f.run(t, "PostToolUse", read)
 		if code != 0 || log != "" {
 			t.Fatalf("read: %d %s", code, log)
 		}

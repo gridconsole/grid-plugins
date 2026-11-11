@@ -141,9 +141,4 @@ func TestHookAndAttachLockOrderFinishes(t *testing.T) {
 		path := acceptedNote(t, f)
 		lockOrderFinishes(t, f, "PostToolUse", hookio.Input{ToolName: "Read", ToolInput: map[string]any{"file_path": path}}, "brain read")
 	})
-	t.Run("brain recall", func(t *testing.T) {
-		f := eventSetup(t)
-		acceptedNote(t, f)
-		lockOrderFinishes(t, f, "UserPromptSubmit", hookio.Input{Prompt: "/grid:plan"}, "brain recall")
-	})
 }

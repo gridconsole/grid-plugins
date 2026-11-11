@@ -68,7 +68,7 @@ func quiet(f func(Options)) func(Options) int {
 	return func(o Options) int { f(o); return 0 }
 }
 
-var components = map[string]bool{"heartbeat": true, "stop-check": true, "worker-exit": true, "history-log": true, "usage-log": true, "brain-read": true, "brain-recall": true,
+var components = map[string]bool{"heartbeat": true, "stop-check": true, "worker-exit": true, "history-log": true, "usage-log": true, "brain-read": true,
 	"lib-agentname": true, "lib-gatelike": true, "lib-historyline": true, "lib-parsefrontmatter": true, "lib-workflowsteps": true, "lib-planstage": true}
 
 func componentEvent(event string) bool { return components[strings.ToLower(event)] }
@@ -110,8 +110,6 @@ func remaining(o Options) int {
 		o.record("session", func() { recordSession(o, *in) })
 	case "brain-read":
 		o.record("brain read", func() { brainRead(o, *in) })
-	case "brain-recall":
-		o.record("recall", func() { recall(o, *in) })
 	case "stop-check":
 		return stopCheck(o, *in)
 	default:
@@ -119,7 +117,6 @@ func remaining(o Options) int {
 		o.record("history", func() { history(o, *in) })
 		o.record("session", func() { recordSession(o, *in) })
 		o.record("brain read", func() { brainRead(o, *in) })
-		o.record("recall", func() { recall(o, *in) })
 		if name == "stop" || name == "subagentstop" {
 			if code := stopCheck(o, *in); code != 0 {
 				return code

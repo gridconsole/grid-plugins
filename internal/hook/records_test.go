@@ -43,7 +43,7 @@ func TestRecordEventsNeverBlockOrDeny(t *testing.T) {
 	events := []string{
 		"SessionStart", "UserPromptSubmit", "SubagentStart", "PostToolUse", "PreCompact",
 		"SessionEnd", "PostToolUseFailure",
-		"heartbeat", "worker-exit", "history-log", "usage-log", "brain-read", "brain-recall",
+		"heartbeat", "worker-exit", "history-log", "usage-log", "brain-read",
 	}
 	well := func(event string) string {
 		b, _ := json.Marshal(map[string]any{
