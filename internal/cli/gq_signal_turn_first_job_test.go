@@ -116,10 +116,15 @@ func TestSignalOtherActsPostNoJob(t *testing.T) {
 	for _, act := range []string{"add", "note", "snooze", "dismiss"} {
 		t.Run(act, func(t *testing.T) {
 			h, _ := gqSignalHarness(t, "")
+			existing := 0
+			if act == "add" { // add links to a task that must already exist
+				h.mkdir(filepath.Join(h.gridHome, "projects", "example", "tasks", "T-12"))
+				existing = 1
+			}
 			if code := h.run(h.root, actArgs(act)...); code != 0 {
 				t.Fatalf("exit %d: %s", code, h.errb)
 			}
-			if f := gqSignalTaskFolders(t, h); len(f) != 0 {
+			if f := gqSignalTaskFolders(t, h); len(f) != existing {
 				t.Fatalf("act %s made a task folder: %v", act, f)
 			}
 		})
