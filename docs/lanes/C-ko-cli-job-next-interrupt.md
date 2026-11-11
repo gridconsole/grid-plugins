@@ -47,3 +47,7 @@ and `pause(ctx)` (store.go:206) returns `context.Canceled`, which the CLI maps t
 ## NOT VERIFIED on a live screen
 
 Nothing here needs a screen. A real Ctrl-C from a terminal against the built `grid` binary was not run: the proof is the in-process child that receives `os.Interrupt` from the parent.
+
+The `go-conventions` skill named in the brief was not in this session's skill list; the code follows the style of the neighbouring tests in the package (gofmt clean, `go vet` clean).
+
+DONE
