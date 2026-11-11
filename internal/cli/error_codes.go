@@ -41,6 +41,8 @@ const (
 	CodeNotesFull = "notes_full"
 	// CodeGuestRefused means the caller is refused as a guest; nothing was written.
 	CodeGuestRefused = "guest_refused"
+	// CodeJobExists means a Job post named a Job id the Feed already holds.
+	CodeJobExists = "job_exists"
 )
 
 func errorCode(err error) string {
@@ -63,6 +65,8 @@ func errorCode(err error) string {
 		return CodeInvalidArgument
 	case errors.Is(err, workflow.ErrChanged):
 		return CodeWorkflowFileChanged
+	case errors.Is(err, feed.ErrJobExists):
+		return CodeJobExists
 	case errors.Is(err, ilGuestRefused):
 		return CodeGuestRefused
 	case errors.As(err, &refused) && refused.Code != "":
