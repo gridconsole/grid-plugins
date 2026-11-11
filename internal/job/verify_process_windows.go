@@ -4,23 +4,46 @@ package job
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
 	"os/exec"
-	"strconv"
 	"syscall"
+	"time"
 )
 
+// Each verification command starts its own process group, as Setpgid does on
+// Unix, so the parent's console Ctrl+C cannot reach it, and cancellation ends
+// the whole tree. CmdLine keeps the cmd.exe quoting of windowsVerifyCommandLine.
 func verifyShell(ctx context.Context, command string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "cmd.exe", "/d", "/s", "/c", command)
-	cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: windowsVerifyCommandLine(command)}
-	cmd.Cancel = func() error {
-		// taskkill /T terminates the shell and its descendants on Windows.
-		err := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(cmd.Process.Pid)).Run()
-		if err != nil {
-			return cmd.Process.Kill()
-		}
-		return nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CmdLine:       windowsVerifyCommandLine(command),
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
 	}
+	cmd.Cancel = func() error { return killProcessTree(cmd) }
 	return cmd
 }
 
-func cleanupVerifyProcess(cmd *exec.Cmd) {}
+// cleanupVerifyProcess ends the tree of a command that is still running. Once
+// Wait has returned the process handle is closed and the pid may belong to an
+// unrelated process, so it is never used for a kill after that.
+func cleanupVerifyProcess(cmd *exec.Cmd) {
+	if cmd.Process != nil && cmd.ProcessState == nil {
+		_ = killProcessTree(cmd)
+	}
+}
+
+// killProcessTree runs the OS taskkill by absolute path, never one found on PATH.
+func killProcessTree(cmd *exec.Cmd) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	killer := exec.CommandContext(ctx, windowsTaskkillPath(os.Getenv("SystemRoot")), taskkillArgs(cmd.Process.Pid)...)
+	if err := killer.Run(); err != nil {
+		if kerr := cmd.Process.Kill(); errors.Is(kerr, os.ErrProcessDone) {
+			return os.ErrProcessDone
+		}
+		return fmt.Errorf("terminate process tree: %w", err)
+	}
+	return nil
+}
