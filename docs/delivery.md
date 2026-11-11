@@ -85,8 +85,14 @@ kinds: the task's own folder, the whole project store, and home-level proposals
 whose `source` or `origin.id` names this task (`T-NN`, also as `T-NN/J-NN` or a
 `T-NN-title` folder name) or its project, as a whole word. It goes ahead and
 returns them as `waiting_proposals` (`{id, path, topic, reason}` rows) in the
-`--json` result, and prints `N brain proposals wait for the curator` otherwise,
-so the orchestrator can start `grid-curator`. The home store is shared by every
+`--json` result, and prints `N brain proposals wait for the curator (Job J-n)`
+otherwise. After the delivery is written, with the task lease held (`GRID_MEMBER`
+and `GRID_LEASE_EPOCH`), it posts one curator Job (role `curator`, skill
+`brain-keeper`, level L0) that points at the waiting proposals; `--json` names it
+in `curator_job` (empty when none is posted). No second curator Job is posted while
+one is open, and none when no proposal waits. A Job that cannot be posted never
+fails the delivery: one stderr line says why, and the dry run posts nothing and
+lists `Post a curator Job for N proposals`. The home store is shared by every
 project, so an unrelated proposal there is not counted; `brain keep` still lists
 it. A proposal that cannot be read is still an error.
 
