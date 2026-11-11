@@ -137,9 +137,13 @@ func runOrchestrator(args []string, env Env) int {
 		}
 	}
 	// An agent works in a git worktree outside the task folder, so its folder names no task; the
-	// worker gives it the session's task as GRID_FEED_TASK, which grid feed reads the same way.
+	// worker gives it the session's task as GRID_FEED_TASK, or as GRID_TASK when the app starts it,
+	// which grid feed reads the same way: --task, GRID_FEED_TASK, GRID_TASK, then the cwd.
 	if *task == "" {
 		*task = env.getenv("GRID_FEED_TASK")
+	}
+	if *task == "" {
+		*task = env.getenv("GRID_TASK")
 	}
 	scope, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: *task, Project: *project})
 	if err != nil {

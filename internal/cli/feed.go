@@ -190,6 +190,10 @@ func feedStore(env Env, task, project string) (feed.Store, error) {
 	if task == "" {
 		task = env.getenv("GRID_FEED_TASK")
 	}
+	if task == "" {
+		// The app's worker names the session's task GRID_TASK and never sets GRID_FEED_TASK.
+		task = env.getenv("GRID_TASK")
+	}
 	res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: task, Project: project})
 	if err != nil {
 		return feed.Store{}, err
