@@ -263,7 +263,7 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 			s.afterJobCheck()
 		}
 	}
-	file :=filepath.Join(s.Dir(), writerFile(w.Worker, w.Fence))
+	file := filepath.Join(s.Dir(), writerFile(w.Worker, w.Fence))
 	f, err := fslock.OpenNoFollow(file, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0o600)
 	if err != nil {
 		return Record{}, diskError(err)
