@@ -112,7 +112,7 @@ func settingsPackageBypasses(file string, f *ast.File) []string {
 		"ClaudeShow": "claude_user.go", "ClaudeSet": "claude_user.go", "ClaudeRowNames": "claude_user.go", "AdvisorBlocked": "claude_user.go",
 		"CodedError.Error": "claude_user.go", "CodedError.Unwrap": "claude_user.go",
 		"AgentForRole": "role.go", "Store.ModelFor": "role.go", // Read-only: the model and effort a spawned Job of a role runs on.
-		"Store.Effective": "store.go", "Store.SetAgent": "store.go", "Store.SetSkill": "store.go", "Store.SetHook": "store.go", "Store.RecordSetup": "setup.go",
+		"Store.Effective": "store.go", "Store.SetAgent": "store.go", "Store.UnsetAgent": "store.go", "Store.SetSkill": "store.go", "Store.SetHook": "store.go", "Store.RecordSetup": "setup.go",
 	}
 	for _, decl := range f.Decls {
 		var inspect ast.Node = decl

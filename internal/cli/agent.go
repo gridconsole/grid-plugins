@@ -22,7 +22,7 @@ func runAgentCommand(args []string, env Env) int {
 		return runAgentBudget(args[1:], env)
 	}
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid agent check [--json]\n       grid agent sync [--json]\n       grid agent budget show|apply|undo")
+		fmt.Fprintln(env.Stdout, "Usage: grid agent check [--json]\n       grid agent sync [--json]\n       grid agent unset <agent> [--project P]\n       grid agent budget show|apply|undo")
 	}
 	return runAgent(args, env)
 }

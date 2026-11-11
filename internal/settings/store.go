@@ -254,6 +254,36 @@ func (s Store) SetAgent(name string, a Agent) error {
 	return s.update(func(d *Document) { merge(d, Document{Agents: map[string]Agent{name: a}}) })
 }
 
+// UnsetAgent removes an agent's entry at this level so it inherits again. An
+// agent with no entry here leaves the file untouched.
+func (s Store) UnsetAgent(name string) error {
+	if err := allowed("agent", name, AgentNames()); err != nil {
+		return err
+	}
+	dir, err := s.directory()
+	if err != nil {
+		return err
+	}
+	if _, err := readDocument(dir); err != nil {
+		return err
+	}
+	return s.locked(func() error {
+		d, err := readDocument(dir)
+		if err != nil {
+			return err
+		}
+		if _, ok := d.Agents[name]; !ok {
+			return nil
+		}
+		delete(d.Agents, name)
+		b, err := json.MarshalIndent(d, "", "  ")
+		if err != nil {
+			return err
+		}
+		return atomicfile.Write(filepath.Join(dir, "settings.json"), append(b, '\n'), 0o644)
+	})
+}
+
 // SetSkill enables or disables a known skill.
 func (s Store) SetSkill(name string, enabled bool) error {
 	if err := allowed("skill", name, skills); err != nil {

@@ -19,7 +19,7 @@ func runSkill(args []string, env Env) int { return runSettings("skill", args, en
 func settingsUsage(kind string, env Env) {
 	switch kind {
 	case "agent":
-		fmt.Fprintln(env.Stdout, "Usage: grid agent set <agent> [--model M] [--effort E] [--project P]\n       grid agent list [--json]\nField   Allowed values\nmodel   haiku, sonnet, opus\neffort  low, medium, high, xhigh, max")
+		fmt.Fprintln(env.Stdout, "Usage: grid agent set <agent> [--model M] [--effort E] [--project P]\n       grid agent unset <agent> [--project P]\n       grid agent list [--json]\nField   Allowed values\nmodel   haiku, sonnet, opus\neffort  low, medium, high, xhigh, max")
 	case "skill":
 		fmt.Fprintln(env.Stdout, "Usage: grid skill enable|disable <skill> [--project P]\n       grid skill list [--json]")
 	case "hook":
@@ -57,7 +57,7 @@ func runSettings(kind string, args []string, env Env) int {
 	}
 	op := args[0]
 	listing := op == "list" || (kind == "hook" && op == "levels")
-	valid := kind == "agent" && (op == "set" || op == "list") || kind == "skill" && (op == "enable" || op == "disable" || op == "list") || kind == "hook" && (op == "level" || op == "levels")
+	valid := kind == "agent" && (op == "set" || op == "unset" || op == "list") || kind == "skill" && (op == "enable" || op == "disable" || op == "list") || kind == "hook" && (op == "level" || op == "levels")
 	if !valid {
 		fmt.Fprintf(env.Stderr, "%s: unknown command %q\n", kind, op)
 		return 2
@@ -71,7 +71,7 @@ func runSettings(kind string, args []string, env Env) int {
 	} else {
 		project = fs.String("project", "", "registered project name or id; defaults to personal")
 	}
-	if kind == "agent" && !listing {
+	if kind == "agent" && !listing && op == "set" {
 		model = fs.String("model", "", "haiku, sonnet, opus")
 		effort = fs.String("effort", "", "low, medium, high, xhigh, max")
 	}
@@ -89,7 +89,7 @@ func runSettings(kind string, args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "%s %s: expected %d operands\n", kind, op, count)
 		return 2
 	}
-	if kind == "agent" && !listing {
+	if kind == "agent" && op == "set" {
 		invalid := false
 		fs.Visit(func(f *flag.Flag) {
 			if (f.Name == "model" || f.Name == "effort") && f.Value.String() == "" {
@@ -147,7 +147,11 @@ func runSettings(kind string, args []string, env Env) int {
 	}
 	switch kind {
 	case "agent":
-		err = store.SetAgent(operands[0], settings.Agent{Model: *model, Effort: *effort})
+		if op == "unset" {
+			err = store.UnsetAgent(operands[0])
+		} else {
+			err = store.SetAgent(operands[0], settings.Agent{Model: *model, Effort: *effort})
+		}
 	case "skill":
 		err = store.SetSkill(operands[0], op == "enable")
 	case "hook":

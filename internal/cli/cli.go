@@ -123,7 +123,7 @@ func commands() []command {
 		{"person", "check person access; list, show and find approvers", runPerson},
 		{"routine", "add, list, remove, run, schedule and unschedule routines", runRoutine},
 		{"worker", "list local grid-worker processes; next is a worker's call for its next request", runWorker},
-		{"agent", "check agent readiness; sync templates; set models and efforts; budget; list settings", runAgentCommand},
+		{"agent", "check agent readiness; sync templates; set or unset models and efforts; budget; list settings", runAgentCommand},
 		{"claude", "show and set the person's Claude Code settings rows", runClaude},
 		{"workflow", "show workflow template files and parse problems; write a template file", runWorkflow},
 		{"skill", "enable, disable and list skills", runSkill},
