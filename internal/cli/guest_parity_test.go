@@ -433,6 +433,9 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 			}
 		case "workflow write":
 			want = guestParityOutput{3, "", "grid workflow write: caller role is not allowed to write workflows\n"}
+			if mode == "json" {
+				want.Stdout = "{\"error\":\"person_required\",\"reason\":\"role_not_allowed\",\"hint\":\"caller role is not allowed to write workflows\",\"code\":\"person_required\",\"message\":\"grid workflow write: caller role is not allowed to write workflows\"}\n"
+			}
 		case "job lint":
 			// The row lints a file outside the Grid home with --task: the by-path
 			// gate answers as an unknown task whatever the invitation.

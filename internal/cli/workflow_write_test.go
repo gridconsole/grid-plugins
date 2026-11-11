@@ -92,6 +92,9 @@ func TestWorkflowWriteRefusals(t *testing.T) {
 			if tc.code == 2 {
 				errorCode = CodeInvalidArgument
 			}
+			if tc.code == 3 {
+				errorCode = CodeWorkflowFileChanged
+			}
 			assertErrorOutput(t, h.out.String(), h.errb.String(), errorCode)
 			data, err := os.ReadFile(filepath.Join(h.gridHome, "workflows.md"))
 			if err != nil || string(data) != cliWorkflow {
@@ -244,9 +247,10 @@ func TestWorkflowWriteConcurrent(t *testing.T) {
 			winner = r.text
 		case 3:
 			conflicts++
-			if r.out != "" || !strings.Contains(r.err, "workflow changed since read") {
+			if !strings.Contains(r.err, "workflow changed since read") {
 				t.Fatalf("conflict: %+v", r)
 			}
+			assertErrorOutput(t, r.out, r.err, CodeWorkflowFileChanged)
 		default:
 			t.Fatalf("writer: %+v", r)
 		}
