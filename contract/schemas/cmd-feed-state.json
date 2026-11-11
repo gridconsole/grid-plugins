@@ -153,8 +153,22 @@
                   }
                 ]
               },
+              "exit_code": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                ]
+              },
               "exit_reason": {
                 "type": "string"
+              },
+              "exit_reason_missing": {
+                "type": "boolean"
               },
               "exited": {
                 "type": "string"

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -123,6 +125,24 @@ type Attempt struct {
 	Fence  int64  `json:"fence"`
 	State  string `json:"state"`
 	Exit   string `json:"exit,omitempty"`
+	// Code is the worker-exit's code as text; ReasonMissing says the worker-exit
+	// gave no reason, so Exit reads crash only by default.
+	Code          string `json:"code,omitempty"`
+	ReasonMissing bool   `json:"reason_missing,omitempty"`
+}
+
+// exitCodeText reads a worker-exit body's code the way the fold keeps it: a
+// non-empty string, or a whole number written without its fraction.
+func exitCodeText(v any) string {
+	switch c := v.(type) {
+	case string:
+		return c
+	case float64:
+		if c == math.Trunc(c) && math.Abs(c) < 1<<53 {
+			return strconv.FormatInt(int64(c), 10)
+		}
+	}
+	return ""
 }
 
 // Orphan kinds: a Job that nobody is working and nothing will move by itself.
@@ -185,9 +205,9 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 				case "worker-exit":
 					a.Exit = stringValue(r.Body["reason"])
 					if a.Exit == "" {
-						a.Exit = "crash"
+						a.Exit, a.ReasonMissing = "crash", true
 					}
-					a.State = "exited"
+					a.State, a.Code = "exited", exitCodeText(r.Body["code"])
 				case "control":
 					if status := stringValue(r.Body["status"]); status != "" {
 						a.State = status
