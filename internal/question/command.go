@@ -242,6 +242,24 @@ func run(args []string, env Env) int {
 		}
 		return 1
 	}
+	// The write is done. The plugin owns needs-you.json, so refold it here: a
+	// person who answers or withdraws must leave Needs you without another fold.
+	// A fold error does not undo the write; the next fold repairs the projection.
+	if action != "list" {
+		f, err := store.feed()
+		if err == nil {
+			// The write already warned once about an unreadable policy; the fold
+			// reads the same roles and stays quiet about it.
+			f.WithdrawAllowed = env.WithdrawAllowed
+			if f.WithdrawAllowed == nil {
+				f.WithdrawAllowed = feed.QuestionWithdrawReadPolicy(scope.TaskPath, io.Discard)
+			}
+			_, err = f.SaveState()
+		}
+		if err != nil {
+			fmt.Fprintln(env.Stderr, "question: refold:", err)
+		}
+	}
 	if *asJSON {
 		enc := json.NewEncoder(env.Stdout)
 		enc.SetEscapeHTML(false)
