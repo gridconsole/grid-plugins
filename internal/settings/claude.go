@@ -27,9 +27,9 @@ type ClaudeRule struct {
 	Value   string `json:"value"`
 }
 
-// ClaudeBlock follows EvaluateOnlyWriter in internal/guard/writer.go: project
-// tasks, personal tasks, project knowledge, home knowledge, and project.md.
-// Keep its reserved kinds in step with that guard (see the parity test).
+// ClaudeBlock holds the Claude Code deny rules for what only grid writes:
+// project tasks, personal tasks, project knowledge, home knowledge, and
+// project.md. No Grid hook guard repeats them.
 func ClaudeBlock(home, gridHome string) ([]ClaudeRule, error) {
 	return claudeBlock(home, gridHome, "")
 }
