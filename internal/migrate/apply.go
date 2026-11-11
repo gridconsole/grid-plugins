@@ -38,6 +38,8 @@ type manifest struct {
 	Home        string            `json:"home"`
 	Backup      string            `json:"backup"`
 	Actions     []Action          `json:"actions"`
+	IDs         []IDMapping       `json:"ids,omitempty"`
+	Skipped     []string          `json:"skipped,omitempty"`
 	SourceFiles map[string]digest `json:"source_files"`
 	HomeFiles   map[string]digest `json:"home_files,omitempty"`
 	PluginData  string            `json:"plugin_data,omitempty"`
@@ -167,7 +169,7 @@ func (p *Plan) publish(parent string) (Result, error) {
 	if err := os.Mkdir(j.Backup, 0700); err != nil {
 		return fail(err)
 	}
-	man := manifest{Format: gridhome.FormatVersion, Source: p.From, Home: p.Home, Backup: j.Backup, Actions: p.Actions}
+	man := manifest{Format: gridhome.FormatVersion, Source: p.From, Home: p.Home, Backup: j.Backup, Actions: p.Actions, IDs: p.IDs, Skipped: p.Skipped}
 	var err error
 	if man.SourceFiles, err = backupTree(filepath.Join(j.Backup, "source"), p.source, p.From); err != nil {
 		return fail(err)

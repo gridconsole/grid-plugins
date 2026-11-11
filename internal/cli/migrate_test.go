@@ -74,6 +74,30 @@ func TestMigrateCommand(t *testing.T) {
 		t.Fatal(h.out.String())
 	}
 }
+
+// A task folder with no task.md is listed as skipped and does not stop --apply; the
+// folder stays as it was, and a second --apply changes nothing.
+func TestMigrateSkipsTaskFolderWithoutRecord(t *testing.T) {
+	h := newHarness(t)
+	h.write(filepath.Join(h.gridHome, "projects", "dw6", "project.md"), "---\nid: dw6\nfolder: /example/work/dw6\n---\n")
+	h.write(filepath.Join(h.gridHome, "projects", "dw6", "tasks", "T-345-sent", "task.md"), "---\nid: T-345\nproject: dw6\n---\n")
+	report := filepath.Join(h.gridHome, "projects", "dw6", "tasks", "T-346-unsent", "report.md")
+	h.write(report, "# Unsent\n")
+	skip := "skip: projects/dw6/tasks/T-346-unsent: no task.md; kept in place, copied untouched\n"
+	if code := h.run(h.root, "migrate"); code != 0 || !strings.Contains(h.out.String(), skip) || !strings.Contains(h.out.String(), "0 conflicts, 0 unmapped") {
+		t.Fatalf("dry run: %d: %s%s", code, h.out, h.errb)
+	}
+	if code := h.run(h.root, "migrate", "--apply"); code != 0 || !strings.Contains(h.out.String(), "migrate: applied\n") {
+		t.Fatalf("apply: %d: %s%s", code, h.out, h.errb)
+	}
+	if b, err := os.ReadFile(report); err != nil || string(b) != "# Unsent\n" {
+		t.Fatalf("the folder with no task.md changed: %q %v", b, err)
+	}
+	if code := h.run(h.root, "migrate", "--apply"); code != 0 || h.out.String() != "migrate: already at format 1; no changes\n" {
+		t.Fatalf("second apply: %d: %s%s", code, h.out, h.errb)
+	}
+}
+
 func TestMigrateInPlaceDefault(t *testing.T) {
 	h := newHarness(t)
 	h.write(filepath.Join(h.gridHome, "legacy", "projects", "example", "project.md"), "---\nfolder: /example/work/project\n---\n")

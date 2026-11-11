@@ -20,6 +20,16 @@ import (
 // Action describes a source-relative to destination-relative file operation.
 type Action struct{ Kind, From, To string }
 
+// IDMapping gives the id a project or task had before migration and the id it has
+// now. Path is the folder in the new home. A project with no id has its folder name
+// as the old id; a task is known by the id in its task.md.
+type IDMapping struct {
+	Kind string `json:"kind"`
+	Path string `json:"path"`
+	Old  string `json:"old"`
+	New  string `json:"new"`
+}
+
 // Plan is a read-only preview. Apply uses its private snapshot, and refuses if
 // either input tree has changed since Scan. Conflicts and Unmapped block apply.
 // Interrupted is set instead of a plan when an earlier run stopped part way; Apply
@@ -28,8 +38,14 @@ type Plan struct {
 	From, Home                 string
 	Actions                    []Action
 	Conflicts, Unmapped, Notes []string
-	Current                    bool
-	Interrupted                string
+	// Skipped lists the task folders (source-relative) that have no task.md. They
+	// are copied untouched and do not block apply.
+	Skipped []string
+	// IDs lists every project and task id of the old home beside the id it has in
+	// the new one. It is written to migration.log.
+	IDs         []IDMapping
+	Current     bool
+	Interrupted string
 
 	source, destination snap
 	result              tree
@@ -542,6 +558,10 @@ func (p *Plan) projectRecord(src, dst string) {
 	machine := p.machineID()
 	repos, keys := discover(folder, machine, p.ceiling)
 	id := r.value("id")
+	oldID := id
+	if oldID == "" {
+		oldID = path.Base(src)
+	}
 	if !ulidRE.MatchString(id) {
 		id = legacyID("project:" + p.From + ":" + src + ":" + string(data))
 	}
@@ -561,12 +581,20 @@ func (p *Plan) projectRecord(src, dst string) {
 	p.result[pr.dst] = e
 	p.records = append(p.records, pr)
 	p.Actions = append(p.Actions, Action{"identify", file, pr.dst})
+	p.IDs = append(p.IDs, IDMapping{Kind: "project", Path: dst, Old: oldID, New: id})
 }
 
 func (p *Plan) taskRecord(src, dst, projectName string) {
 	file := path.Join(src, "task.md")
 	e, ok := p.source.get(file)
 	if !ok {
+		// A task folder with no task.md has no record to give an id. It is not a
+		// problem to resolve: the folder is copied as it is, with everything in it,
+		// and listed as skipped. A stray file under tasks/ is still unmapped.
+		if dir, isDir := p.source.get(src); isDir && dir.Mode.IsDir() {
+			p.Skipped = append(p.Skipped, src)
+			return
+		}
 		p.Unmapped = append(p.Unmapped, src+": missing task.md")
 		return
 	}
@@ -581,6 +609,7 @@ func (p *Plan) taskRecord(src, dst, projectName string) {
 		return
 	}
 	id := r.value("id")
+	oldID := id
 	display := r.value("display")
 	if taskRE.MatchString(id) {
 		display = id
@@ -602,6 +631,7 @@ func (p *Plan) taskRecord(src, dst, projectName string) {
 	e.Src = filepath.Join(p.From, filepath.FromSlash(file))
 	p.result[path.Join(dst, "task.md")] = e
 	p.Actions = append(p.Actions, Action{"identify", file, path.Join(dst, "task.md")})
+	p.IDs = append(p.IDs, IDMapping{Kind: "task", Path: dst, Old: oldID, New: id})
 }
 
 // WriteText prints stable, relative action paths suitable for review and golden tests.
@@ -626,6 +656,9 @@ func (p *Plan) WriteText(w io.Writer) error {
 			} else {
 				fmt.Fprintf(&b, "%s: %s -> %s\n", a.Kind, a.From, a.To)
 			}
+		}
+		for _, s := range p.Skipped {
+			fmt.Fprintf(&b, "skip: %s: no task.md; kept in place, copied untouched\n", s)
 		}
 		fmt.Fprintln(&b, "write: migration.log (backup path, checksums and actions)")
 		for _, n := range p.Notes {
