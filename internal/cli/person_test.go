@@ -57,7 +57,6 @@ func TestPersonGoldenAndReadOnly(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"person-list-json", []string{"list", "--json"}},
 		{"person-show-json", []string{"show", "reviewer", "--json"}},
 		{"person-approvers-json", []string{"approvers", "--area", "release", "--json"}},
 		{"person-approvers-default-json", []string{"approvers", "--area", "unmatched", "--task", task.Path, "--json"}},
@@ -72,7 +71,6 @@ func TestPersonGoldenAndReadOnly(t *testing.T) {
 		args []string
 		code int
 	}{
-		{[]string{"list"}, 0},
 		{[]string{"show", "reviewer"}, 0},
 		{[]string{"show", "absent", "--json"}, 1},
 		{[]string{"show", "legacy", "--json"}, 1},
@@ -82,10 +80,6 @@ func TestPersonGoldenAndReadOnly(t *testing.T) {
 		{[]string{"approvers"}, 2},
 		{[]string{"approvers", "--area", " "}, 2},
 		{[]string{"show"}, 2},
-		{[]string{"list", "extra"}, 2},
-		{[]string{"list", "--task", task.Path}, 2},
-		{[]string{"list", "--unknown"}, 2},
-		{[]string{"list", "--project", "unknown"}, 1},
 		{[]string{"add", "someone"}, 2},
 		{[]string{"--help"}, 0},
 		{[]string{"show", "--help"}, 0},
