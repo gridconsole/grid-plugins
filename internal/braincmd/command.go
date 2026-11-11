@@ -39,7 +39,7 @@ type Env struct {
 	RecordError func(error)
 }
 
-const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|supersede> [flags]
+const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|rename|supersede> [flags]
   show <id> [--task <task>]  Show an accepted note and its links.
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
@@ -62,6 +62,8 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
                              Exit 0 done, 1 store error, 2 usage, 3 role refused, 6 stale rev, 8 no such note, 9 refused.
   restore <topic>/<name> --expect <rev> [--reason <why>]  Bring a dropped entry back.
                              Exit 0 done, 1 store error, 2 usage, 3 role refused, 6 stale rev, 8 no such note, 9 refused.
+  rename <topic>/<name> <new-name> --expect <rev> [--reason <why>]  Rename a versioned knowledge entry and relink the entries of its level that name it.
+                             Exit 0 done (entries whose relink failed are listed as kept), 1 store error, 2 usage, 3 role refused, 6 stale rev, 7 not versioned, 8 no such note, 9 refused.
   supersede <old> --by <new> --reason <why>  Mark an accepted note replaced by another, after the fact.
                              Exit 0 done or already done, 1 refused or store error, 2 usage, 3 role refused.
 
@@ -138,6 +140,9 @@ func Run(args []string, env Env) int {
 	}
 	if verb == "restore" {
 		return runRestore(args[1:], env)
+	}
+	if verb == "rename" {
+		return runRename(args[1:], env)
 	}
 	if verb == "supersede" {
 		return runSupersede(args[1:], env)
