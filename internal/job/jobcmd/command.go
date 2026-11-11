@@ -125,7 +125,7 @@ func Run(args []string, e Env) int {
 			return fail(err, 1)
 		}
 		skeleton := meta + "\n## Intent\n## Job\n## Context\n## Out of scope\n## Open\n## Acceptance\n## Outcome\n## Verdict\n## Follow-up\n"
-		findings := lint.Check(skeleton, lint.Options{Resolver: w.files, Repos: w.repos})
+		findings := lint.Check(skeleton, w.lintOptions())
 		if lint.HasErrors(findings) {
 			code := 1
 			for _, finding := range findings {
@@ -208,7 +208,7 @@ func Run(args []string, e Env) int {
 		if err != nil {
 			return fail(err, 1)
 		}
-		opts := lint.Options{Resolver: w.files, Repos: w.repos}
+		opts := w.lintOptions()
 		var findings []lint.Finding
 		if lint.IsJSON(path, b) {
 			findings = lint.CheckJSON(b, opts)
@@ -567,6 +567,21 @@ func sources(task string, e Env) (*world, error) {
 	}
 	sort.Strings(w.repos)
 	return w, nil
+}
+
+// lintOptions is what lint checks a Job against: the task's files and the project's repos.
+func (w *world) lintOptions() lint.Options {
+	return lint.Options{Resolver: w.files, Repos: w.repos}
+}
+
+// LintOptions returns the lint Options that grid job render and grid job lint use for
+// the Job of task, so another command can report what render will say.
+func LintOptions(task string, e Env) (lint.Options, error) {
+	w, err := sources(task, e)
+	if err != nil {
+		return lint.Options{}, err
+	}
+	return w.lintOptions(), nil
 }
 
 // ownerTier maps the role task.md records for the owner to a trust tier. A task

@@ -18,6 +18,8 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/job/jobcmd"
+	"github.com/gridconsole/grid-plugins/internal/job/lint"
 	"github.com/gridconsole/grid-plugins/internal/land"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/session"
@@ -392,6 +394,13 @@ func runOrchestrator(args []string, env Env) int {
 	if unleased {
 		write = orchestrator.PostPerson
 	}
+	// A Job post says what render will say about the Job; it refuses nothing itself.
+	var findings []lint.Finding
+	var findingsErr error
+	checked := verb == "post" && *kind == "job" && *person == ""
+	if checked {
+		findings, findingsErr = postFindings(env, scope.TaskPath, obj)
+	}
 	record, err := write(store, writer, feed.Input{ID: *recordID, Type: typ, Body: obj, Job: *job, Attempt: *attempt, Wake: *wake, Re: *re})
 	if errors.Is(err, orchestrator.ErrDuplicateWake) {
 		fmt.Fprintln(env.Stdout, record.ID)
@@ -400,11 +409,50 @@ func runOrchestrator(args []string, env Env) int {
 	if err != nil {
 		return fail(err)
 	}
+	if checked {
+		printPostFindings(env.Stderr, *job, findings, findingsErr)
+		if *asJSON {
+			return writeJSON(env.Stdout, struct {
+				feed.Record
+				Findings []lint.Finding `json:"findings"`
+			}{record, findings})
+		}
+	}
 	if *asJSON {
 		return writeJSON(env.Stdout, record)
 	}
 	fmt.Fprintln(env.Stdout, record.ID)
 	return 0
+}
+
+// postFindings lints a Job body with the options grid job render uses. It is told
+// to the poster and never refuses: a failure to build the options is returned for
+// the caller to say, with no findings.
+func postFindings(env Env, taskPath string, body map[string]any) ([]lint.Finding, error) {
+	opts, err := jobcmd.LintOptions(taskPath, jobcmdEnv(env, resolver(env)))
+	if err != nil {
+		return []lint.Finding{}, err
+	}
+	data, err := json.Marshal(body)
+	if err != nil {
+		return []lint.Finding{}, err
+	}
+	return lint.CheckJSON(data, opts), nil
+}
+
+// printPostFindings writes one stderr line per finding; an error says render will refuse the Job.
+func printPostFindings(w io.Writer, job string, findings []lint.Finding, err error) {
+	if err != nil {
+		fmt.Fprintf(w, "grid job post: %s: the findings could not be checked: %v\n", job, err)
+		return
+	}
+	for _, f := range findings {
+		tail := ""
+		if f.Severity == "error" {
+			tail = " (render will refuse this Job)"
+		}
+		fmt.Fprintf(w, "grid job post: %s: %s: %s%s\n", job, f.Rule, f.Message, tail)
+	}
 }
 
 // runPersonApproval answers the person Job of an approve step with the plan
