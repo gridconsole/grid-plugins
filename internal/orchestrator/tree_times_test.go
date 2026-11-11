@@ -122,13 +122,16 @@ func TestTreeCarriesPickupTimes(t *testing.T) {
 // Row 3: a Job after J-1 is ready from the record that closed J-1.
 func TestTreeReadyAtIsTheAfterClose(t *testing.T) {
 	f := setup(t)
+	// Record times follow the fixture clock, so the close of J-1 gets a later
+	// time than the post of J-2 by moving the clock, not by waiting.
+	f.s.Feed.Now = func() time.Time { return f.now }
 	f.job(t, "J-1", nil)
 	f.job(t, "J-2", []any{"J-1"})
 	f.tick(t)
 	if r := timesRow(t, f, "J-2"); r["ready_at"] != nil || r["pickup_seconds"] != nil {
 		t.Fatalf("J-2 waits on J-1 and is not ready: %v", r)
 	}
-	time.Sleep(20 * time.Millisecond)
+	f.now = f.now.Add(time.Second)
 	if err := f.s.control(f.state(t), contract.Accepted, "accepted", ""); err != nil {
 		t.Fatal(err)
 	}
