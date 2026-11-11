@@ -4,21 +4,19 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 )
 
 // Row 6: the seeded Feed holds J-1, ready and never picked up, and J-2 behind
 // it. job tree prints the orphan line under J-1 only, and --json carries
 // `orphan` on J-1 only.
 func TestJobTreePrintsOrphanLine(t *testing.T) {
-	h, path, _ := orchestratorHarness(t)
+	h, path, _ := hkOrphHarness(t, "2020-01-01T00:00:00.000Z")
 	body := workerNextBody(t, "J-2")
 	body["after"] = []any{"J-1"}
 	raw, _ := json.Marshal(body)
 	if code := h.run(path, "job", "post", "--type", "job", "--body", string(raw)); code != 0 {
 		t.Fatalf("post J-2: %d %s", code, h.errb)
 	}
-	time.Sleep(5 * time.Millisecond)
 	h.out.Reset()
 	if code := h.run(path, "job", "tree"); code != 0 {
 		t.Fatalf("%d %s", code, h.errb)
