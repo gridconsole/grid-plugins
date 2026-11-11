@@ -23,6 +23,8 @@ Bash:
 - Use Read, Glob and Grep instead of ls, cat, find and grep.
 - Never set `dangerouslyDisableSandbox`.
 
+Post each finding before the verdict. For each security problem and each must-fix bug, make one call, in a Bash call of its own: `grid job post --task <task> --job <review-job> --type found --body <json>`. The body is `{"job": "<reviewed job>", "re": "<the builder's result record id>", "at": "<path:line>", "text": "<one line>", "kind": "security|bug|test|evolvability", "class": null}`. Pass `--job` as the review Job, because `grid job post` takes its lease from `--job`; the reviewed Job goes in `body.job`. The command prints the record id. A note stays a note: it makes no `found` record.
+
 Post with `grid job result --task <task> --job <review-job> --body <json>`. The first line is exactly `ACCEPTED` or `REJECTED`:
 
 ```
@@ -53,6 +55,8 @@ The verdict text goes in `outcome`. A rejecting body looks like this; keep every
   "knowledge": []
 }
 ```
+
+`found` holds the record ids that the `grid job post` calls above printed, one id per finding; it is `[]` when you posted none.
 
 An `ACCEPTED` body has `"must_fix": []`. Each `must_fix` row is `A<n>` (or `write`, `verify`, `classify`) with the `path:line` in `at`.
 
