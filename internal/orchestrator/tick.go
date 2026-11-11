@@ -79,6 +79,9 @@ func (s Store) Tick() (out Output, err error) {
 		if e != nil {
 			return e
 		}
+		if e := s.gkReplan(snap); e != nil {
+			return e
+		}
 		if e := s.proposals(snap); e != nil {
 			return e
 		}
