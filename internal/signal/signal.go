@@ -178,12 +178,21 @@ func read(path string) (Note, error) {
 	if err != nil {
 		return n, err
 	}
-	if !bytes.HasPrefix(data, []byte("---\n")) {
+	// Only the front matter is read with either line ending; the body is the
+	// bytes after the closing line, exactly as they are in the file.
+	open, closing, crlf := []byte("---\n"), []byte("\n---\n"), false
+	if bytes.HasPrefix(data, []byte("---\r\n")) {
+		open, closing, crlf = []byte("---\r\n"), []byte("\r\n---\r\n"), true
+	}
+	if !bytes.HasPrefix(data, open) {
 		return n, fmt.Errorf("signal has no front matter")
 	}
-	header, body, ok := bytes.Cut(data[4:], []byte("\n---\n"))
+	header, body, ok := bytes.Cut(data[len(open):], closing)
 	if !ok {
 		return n, fmt.Errorf("signal has no closing front matter")
+	}
+	if crlf {
+		header = bytes.ReplaceAll(header, []byte("\r\n"), []byte("\n"))
 	}
 	if err := yaml.Load(header, &n); err != nil {
 		return n, err
