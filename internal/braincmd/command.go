@@ -30,7 +30,7 @@ type Env struct {
 	TaskOperandError func(string, error) int
 }
 
-const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert> [flags]
+const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|supersede> [flags]
   show <id> [--task <task>]  Show an accepted note and its links.
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
@@ -45,6 +45,8 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
   changes [--since <RFC3339>] [--limit <n>]  List what changed in the brain, newest first.
   revert <topic>/<name> --to <n>  Publish version n of an entry again as a new version.
                              Exit 0 done, 1 store error or no such version, 3 role refused.
+  supersede <old> --by <new> --reason <why>  Mark an accepted note replaced by another, after the fact.
+                             Exit 0 done or already done, 1 refused or store error, 2 usage, 3 role refused.
 
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 
@@ -111,6 +113,9 @@ func Run(args []string, env Env) int {
 	}
 	if verb == "revert" {
 		return runRevert(args[1:], env)
+	}
+	if verb == "supersede" {
+		return runSupersede(args[1:], env)
 	}
 	switch verb {
 	case "show", "search", "topics", "index", "propose", "accept", "keep", "check":
