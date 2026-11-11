@@ -110,12 +110,6 @@ func TestDeliveryCommandRefusals(t *testing.T) {
 	}{
 		{"missing-outcome", nil, []string{"deliver"}, "supply --outcome", 2},
 		{"missing-proof", nil, []string{"deliver", "--outcome", "Result ready"}, "i-1 lacks check proof", 1},
-		{"pending", func(h *harness, d string) {
-			h.write(filepath.Join(d, "brain-proposals", "fact.md"), "---\nstatus: proposed\ntopic: testing\nreason: Reuse this check\n---\n")
-		}, []string{"deliver", "Result ready"}, "Deliver blocked: 1 brain proposals wait. Run: grid brain keep\n", 1},
-		{"home-pending", func(h *harness, d string) {
-			h.write(filepath.Join(h.gridHome, "brain-proposals", "fact.md"), homeProposal("fact", "T-01/J-01"))
-		}, []string{"deliver", "Result ready"}, "Deliver blocked: 1 brain proposals wait", 1},
 		{"home-malformed", func(h *harness, d string) {
 			h.write(filepath.Join(h.gridHome, "brain-proposals", "fact.md"), "---\nstatus: proposed\ntopic: testing\n---\n")
 		}, []string{"deliver", "Result ready"}, "proposal fact.md", 1},
@@ -131,9 +125,6 @@ func TestDeliveryCommandRefusals(t *testing.T) {
 		}, []string{"deliver", "Result ready"}, "unknown proof level", 1},
 		{"empty-plan", func(h *harness, d string) { h.write(filepath.Join(d, "plan.md"), "# Plan 1\n") }, []string{"deliver", "Result ready"}, "no items to prove", 1},
 		{"missing-file", func(h *harness, d string) { addDeliveryProof(t, h, d) }, []string{"deliver", "Result ready", "absent.txt"}, "absent.txt", 1},
-		{"dry-pending", func(h *harness, d string) {
-			h.write(filepath.Join(d, "brain-proposals", "fact.md"), "---\nstatus: proposed\ntopic: testing\n---\n")
-		}, []string{"deliver", "Result ready", "--dry-run"}, "brain proposals wait", 1},
 		{"closed", func(h *harness, d string) {
 			p := filepath.Join(d, "task.md")
 			b, e := os.ReadFile(p)
@@ -158,6 +149,46 @@ func TestDeliveryCommandRefusals(t *testing.T) {
 			}
 			if !reflect.DeepEqual(before, treeBytes(t, h.gridHome)) {
 				t.Fatal("refusal wrote files")
+			}
+		})
+	}
+}
+
+// Replaces the refusal rows "pending", "home-pending" and "dry-pending": a waiting
+// proposal no longer stops a delivery, and the result names how many wait.
+func TestDeliverGoesAheadWhileProposalsWait(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(*harness, string)
+	}{
+		{"pending", func(h *harness, d string) {
+			h.write(filepath.Join(d, "brain-proposals", "fact.md"), "---\nstatus: proposed\ntopic: testing\nreason: Reuse this check\n---\n")
+		}},
+		{"home-pending", func(h *harness, d string) {
+			h.write(filepath.Join(h.gridHome, "brain-proposals", "fact.md"), homeProposal("fact", "T-01/J-01"))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, dir := deliveryFixture(t)
+			addDeliveryProof(t, h, dir)
+			tc.setup(h, dir)
+			if code := h.run(dir, "deliver", "--outcome", "Result ready", "--dry-run", "--json"); code != 0 {
+				t.Fatalf("dry run exit %d: %s", code, h.errb)
+			}
+			var preview task.Delivery
+			if err := json.Unmarshal(h.out.Bytes(), &preview); err != nil || len(preview.Waiting) != 1 {
+				t.Fatalf("%v %s", err, h.out)
+			}
+			h.out.Reset()
+			if code := h.run(dir, "deliver", "--outcome", "Result ready"); code != 0 {
+				t.Fatalf("exit %d: %s", code, h.errb)
+			}
+			if !strings.Contains(h.out.String(), "1 brain proposals wait for the curator") {
+				t.Fatalf("count not reported: %q", h.out)
+			}
+			b, err := os.ReadFile(filepath.Join(dir, "task.md"))
+			if err != nil || !strings.Contains(string(b), "state: waiting") {
+				t.Fatalf("task not delivered: %v\n%s", err, b)
 			}
 		})
 	}
