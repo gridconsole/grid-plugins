@@ -14,7 +14,8 @@ func TestSampleSuite(t *testing.T) {
 	want := []string{"clean-csv", "fix-total", "release-notes", "agent-reviewer-verdict", "deliver-refuses-rejected", "deliver-skill",
 		"execute-approve-waits", "memory-skill", "questions-skill", "routing-skill", "views-skill",
 		"execute-check-after-make-together", "execute-check-fails", "execute-check-fails-out-of-scope", "execute-review-changes-rework",
-		"execute-review-changes-past-limit", "deliver-refuses-closed", "preview-skill", "agent-reviewer-read-only"}
+		"execute-review-changes-past-limit", "deliver-refuses-closed", "preview-skill", "agent-reviewer-read-only",
+		"job-plan", "job-run", "job-review"}
 	got := map[string]bool{}
 	for _, task := range tasks {
 		got[task.ID] = true
