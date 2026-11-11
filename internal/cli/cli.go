@@ -132,7 +132,7 @@ func commands() []command {
 		{"open", "open the task page in the browser", runOpen},
 		{"doctor", "check machine health and collect a support bundle", runDoctor},
 		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels", runHook},
-		{"task", "new, show, list, status, lane, stop|close|reopen, history, attach, move, decline, delete, rename, restore", runTask},
+		{"task", "new|show|list|status|lane, stop|close|reopen, history|attach|move, decline|delete|rename|restore|summary", runTask},
 		{"plan", "write, check, items, hash, diff, migrate", runPlan},
 		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace", runOrchestratorJob},
 		{"lease", "take, release, status (task lease)", runTaskLease},

@@ -168,7 +168,7 @@
     },
     {
       "name": "task",
-      "summary": "new, show, list, status, lane, stop|close|reopen, history, attach, move, decline, delete, rename, restore",
+      "summary": "new|show|list|status|lane, stop|close|reopen, history|attach|move, decline|delete|rename|restore|summary",
       "built": true,
       "subcommands": [
         {
@@ -509,7 +509,7 @@
         {
           "name": "summary",
           "args": [
-            "<task>"
+            "\u003ctask\u003e"
           ],
           "flags": [
             {
