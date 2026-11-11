@@ -94,7 +94,10 @@ func rows(root *os.Root, level string) ([]TopicRow, []Note, error) {
 		}
 		for _, n := range notes {
 			if n.Topic == t.Name {
-				r.Entries++
+				// A superseded note leaves the count and stays on disk.
+				if n.SupersededBy == "" {
+					r.Entries++
+				}
 				if n.Updated > r.LastChange {
 					r.LastChange = n.Updated
 				}

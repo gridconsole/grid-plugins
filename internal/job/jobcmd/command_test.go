@@ -346,7 +346,7 @@ func TestPersonalNoteStaysOutOfSavedFiles(t *testing.T) {
 	e, out, errs := fixture(t)
 	store := brain.Store{GridHome: e.GridHome, Project: jobtest.Project}
 	n := brain.Note{Name: "my-habits", Topic: "decisions", Type: "decision", Description: "HOME-SUMMARY-MARKER", Summary: "HOME-SUMMARY-MARKER", Source: "fixture", Level: "home", Body: "HOME-BODY-MARKER\n"}
-	if _, err := store.Propose(n, brain.Origin{Kind: "session", ID: "me", Tier: contract.PersonTeam}); err != nil {
+	if _, err := store.Propose(n, brain.Origin{Kind: "session", ID: "me"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Accept("home", "my-habits"); err != nil {

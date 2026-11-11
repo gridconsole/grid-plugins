@@ -1,0 +1,1 @@
+I am Alex. The notes-app project is at ./work/notes-app. Use the grid-scout agent to map two things in one go: where a note is added to the store, and where notes are exported to PDF. Write the scout's answer as it gave it to ./map.txt, and change nothing else.

@@ -12,8 +12,14 @@ import (
 // brain (plugin-design.md:49,90). It is composed at the event boundary so the
 // individual legacy guard adapters remain useful for recording comparisons.
 // Shell writes still require the worker's settings/sandbox; a text guard cannot
-// reliably identify computed paths or arbitrary programs that write files.
+// reliably identify computed paths or arbitrary programs that write files. Its
+// level is the only-writer setting, warn by default (verdicts-11nov v-4): the
+// write goes ahead and the warning reaches the session; block refuses it.
 func EvaluateOnlyWriter(in hookio.Input, root string, env map[string]string) hookio.Decision {
+	return configuredLevel("only-writer", in, root, env, evaluateOnlyWriter(in, root, env))
+}
+
+func evaluateOnlyWriter(in hookio.Input, root string, env map[string]string) hookio.Decision {
 	if !fileTool(in.ToolName) {
 		return hookio.Decision{}
 	}

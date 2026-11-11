@@ -67,9 +67,7 @@ Used: brain:project/conventions/task-page
     - id: J-14
       role: builder
       skills: []
-      review: L1
       risk: []
-      max_rounds: 2
       intent: {owner: intent.md#request}
       links: []
       keep: []
@@ -147,7 +145,7 @@ or trimmed boundary blank lines is refused, including through plan aliases.
 Step and verify anchors continue to select their defined plan content.
 
 Receipts remain valid only if both the stored short hash and full digest match
-(and the task and gate checks pass). Pre-L107 canonical receipts omitted line
+(and the task and approval checks pass). Pre-L107 canonical receipts omitted line
 one: a normal titled plan needs reapproval even if its heading has not changed.
 A blank first line can leave the old canonical digest unchanged. L107 raw-file
 receipts survive only if their stored digest equals the new canonical digest;
@@ -157,13 +155,13 @@ without a full digest remain invalid. See `docs/lanes/L107R.md` for tested cases
 After reviewing a stale plan, obtain its current short hash with
 `grid plan hash --task T-NN`, then use
 `grid approve T-NN --plan-hash <current-hash>` while the task is waiting at the
-plan gate. An implicit approval does not migrate a stale receipt.
+approve-the-plan step. An implicit approval does not migrate a stale receipt.
 
 ## Writes and history
 
 Write requires a nonempty `Used:` citation or exactly `Recall: nothing found`.
 Legacy bullet and bold forms and case-insensitive labels are accepted. Fenced
-examples, HTML comments, blockquotes and indented code do not satisfy the gate.
+examples, HTML comments, blockquotes and indented code do not satisfy the check.
 This is a citation-presence check; it does not resolve or validate the note.
 
 Every successful write increments the installed revision, even if the hash

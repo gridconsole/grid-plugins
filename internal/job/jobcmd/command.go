@@ -24,6 +24,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -124,7 +125,7 @@ func Run(args []string, e Env) int {
 			return fail(err, 1)
 		}
 		skeleton := meta + "\n## Intent\n## Job\n## Context\n## Out of scope\n## Open\n## Acceptance\n## Outcome\n## Verdict\n## Follow-up\n"
-		findings := lint.Check(skeleton, lint.Options{Resolver: w.files, Repos: w.repos})
+		findings := lint.Check(skeleton, w.lintOptions())
 		if lint.HasErrors(findings) {
 			code := 1
 			for _, finding := range findings {
@@ -134,7 +135,7 @@ func Run(args []string, e Env) int {
 			}
 			return output(e, f, report{ID: j.ID, Findings: findings}, code)
 		}
-		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget})
+		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j)})
 		if err != nil {
 			return fail(err, 1)
 		}
@@ -150,9 +151,18 @@ func Run(args []string, e Env) int {
 			sum := sha256.Sum256(b)
 			rendered.Inputs.Generation = "content:" + hex.EncodeToString(sum[:])
 		}
-		path, err := save(task, j, rendered)
+		path, wrote, err := saveReport(task, j, rendered)
 		if err != nil {
 			return fail(err, 1)
+		}
+		if wrote {
+			// save has returned and holds no lock; AppendHistory takes .task.lock itself.
+			// A history failure never fails the render.
+			for _, id := range brainGiven(j, rendered.Inputs) {
+				if err := taskstore.AppendHistory(task, "brain given", id, "grid job render", j.ID); err != nil {
+					fmt.Fprintf(e.Stderr, "grid job render: history: %v\n", err)
+				}
+			}
 		}
 		return output(e, f, report{OK: true, ID: j.ID, Path: display(path, e), Inputs: display(filepath.Join(filepath.Dir(path), "inputs.json"), e), Findings: findings}, 0)
 	case "lint":
@@ -198,7 +208,13 @@ func Run(args []string, e Env) int {
 		if err != nil {
 			return fail(err, 1)
 		}
-		findings := lint.Check(string(b), lint.Options{Resolver: w.files, Repos: w.repos})
+		opts := w.lintOptions()
+		var findings []lint.Finding
+		if lint.IsJSON(path, b) {
+			findings = lint.CheckJSON(b, opts)
+		} else {
+			findings = lint.Check(string(b), opts)
+		}
 		ok := !lint.HasErrors(findings)
 		code := 0
 		if !ok {
@@ -285,6 +301,45 @@ func parse(args []string) (flags, error) {
 	}
 	return f, nil
 }
+
+// brainGiven lists the project brain notes whose text the render pasted into the
+// brief: a brain pointer that is not personal (PointerOnly) and was not cut by the
+// budget. An anchor or line range names the same note, so each note appears once.
+func brainGiven(j job.Job, in job.Inputs) []string {
+	cut := map[string]bool{}
+	for _, id := range in.NotRendered {
+		cut[id] = true
+	}
+	// A brain pointer the Job only lists under read: or in its intent is named in
+	// the brief, not pasted into it, so it is not given.
+	listedOnly := map[string]bool{j.Intent.Owner: true, j.Intent.Item: true, j.Intent.Goal: true}
+	for _, p := range j.Read {
+		listedOnly[p] = true
+	}
+	for _, p := range append(append([]string{}, j.Keep...), j.Decisions...) {
+		delete(listedOnly, p)
+	}
+	for _, l := range j.Links {
+		delete(listedOnly, l.To)
+	}
+	seen := map[string]bool{}
+	ids := []string{}
+	for _, s := range in.Sources {
+		if !strings.HasPrefix(s.Pointer, "brain:") || s.PointerOnly || cut[s.Pointer] || listedOnly[s.Pointer] {
+			continue
+		}
+		id := s.Pointer
+		if i := strings.IndexByte(id, '#'); i >= 0 {
+			id = id[:i]
+		}
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 func output(e Env, f flags, r report, code int) int {
 	if r.Findings == nil {
 		r.Findings = []lint.Finding{}
@@ -512,6 +567,21 @@ func sources(task string, e Env) (*world, error) {
 	}
 	sort.Strings(w.repos)
 	return w, nil
+}
+
+// lintOptions is what lint checks a Job against: the task's files and the project's repos.
+func (w *world) lintOptions() lint.Options {
+	return lint.Options{Resolver: w.files, Repos: w.repos}
+}
+
+// LintOptions returns the lint Options that grid job render and grid job lint use for
+// the Job of task, so another command can report what render will say.
+func LintOptions(task string, e Env) (lint.Options, error) {
+	w, err := sources(task, e)
+	if err != nil {
+		return lint.Options{}, err
+	}
+	return w.lintOptions(), nil
 }
 
 // ownerTier maps the role task.md records for the owner to a trust tier. A task

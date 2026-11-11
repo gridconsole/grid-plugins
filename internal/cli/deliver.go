@@ -52,15 +52,33 @@ func runDeliver(args []string, env Env) int {
 			return 2
 		}
 		env.recordError(err)
-		line := strings.Join(strings.Fields(err.Error()), " ")
-		if !strings.HasPrefix(line, "Deliver blocked:") {
-			line = "Deliver blocked: " + line
-		}
-		fmt.Fprintln(env.Stderr, line)
+		fmt.Fprintln(env.Stderr, "deliver: "+strings.Join(strings.Fields(err.Error()), " "))
 		return 1
 	}
+	// Waiting proposals get a curator Job on the Feed. The delivery is already
+	// written and holds no lock here; a Job that cannot be posted never fails it.
+	curator := ""
+	if n := len(result.Waiting); n > 0 {
+		if o.DryRun {
+			if open, err := curatorJobOpen(t.Path); err == nil && !open {
+				result.Actions = append(result.Actions, fmt.Sprintf("Post a curator Job for %d proposals", n))
+			}
+		} else {
+			ids := make([]string, 0, n)
+			for _, w := range result.Waiting {
+				ids = append(ids, w.ID)
+			}
+			posted, err := postCuratorJob(env, t.Path, result.Task, ids)
+			if err != nil {
+				fmt.Fprintln(env.Stderr, "deliver: the curator Job was not posted: "+strings.Join(strings.Fields(err.Error()), " "))
+			} else if posted != "" {
+				curator = posted
+				result.Actions = append(result.Actions, fmt.Sprintf("Post curator Job %s for %d proposals", posted, n))
+			}
+		}
+	}
 	if *asJSON {
-		return writeJSON(env.Stdout, result)
+		return writeJSON(env.Stdout, deliverOutput{Delivery: result, CuratorJob: curator})
 	}
 	if o.DryRun {
 		for _, action := range result.Actions {
@@ -69,5 +87,12 @@ func runDeliver(args []string, env Env) int {
 		return 0
 	}
 	fmt.Fprintf(env.Stdout, "%s delivered; waiting for the person\n", result.Task)
+	if n := len(result.Waiting); n > 0 {
+		fmt.Fprintf(env.Stdout, "%d brain proposals wait for the curator", n)
+		if curator != "" {
+			fmt.Fprintf(env.Stdout, " (Job %s)", curator)
+		}
+		fmt.Fprintln(env.Stdout)
+	}
 	return 0
 }

@@ -131,16 +131,16 @@ func HeldStage(stage string) bool {
 	return stage == "before" || stage == "gate" || stage == "unreadable"
 }
 
-// PlanHeldWith is the one answer to "does this task's plan still wait for a
-// person?". An approval from `grid approve` releases it only while it still
+// PlanHeldWith answers "is this task's plan still being written, with no
+// approval yet?". An approval from `grid approve` ends it only while it still
 // matches plan.md (Approved); the old "plan accepted" history line, which tasks
-// migrated from the old plugin carry, releases it through PlanStageWith. The
-// guard and Deliver both ask it with StepsFor, so neither can release a plan
-// the other holds.
+// migrated from the old plugin carry, ends it through PlanStageWith. It holds
+// nothing: the guard asks it only for the brain-recall check on plan.md and for
+// the grid-planner's reach into a task folder, never to refuse a write.
 func PlanHeldWith(lookup StepLookup, dir, text, history string) bool {
 	// approval.json is read here only for its existence, to choose between this
 	// branch and the history branch; the answer is Approved, the plan Job result.
-	// S6c5 deletes the plan hold. A JSON receipt takes precedence over legacy history/step advancement:
+	// A JSON receipt takes precedence over legacy history/step advancement:
 	// stale full digests must not be released by an old prose acceptance.
 	if _, err := os.Lstat(filepath.Join(dir, approvalFile)); !os.IsNotExist(err) {
 		steps, err := lookup(text)

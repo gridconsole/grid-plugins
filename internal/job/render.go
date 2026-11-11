@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	gridplugins "github.com/gridconsole/grid-plugins"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
@@ -26,7 +27,27 @@ type Inputs struct {
 	NotRendered                []string `json:"not_rendered"`
 	BrainTokens                int      `json:"brain_tokens"`
 	DisableSkillShellExecution bool     `json:"disableSkillShellExecution"`
+	// BriefBytes is len(Rendered.Brief). PastedChars is the rune count of the
+	// source text the brief carries: each Source.Text written by sourceBlock, as
+	// an intent source, an excerpt or the previous acceptance.
+	BriefBytes  int `json:"brief_bytes"`
+	PastedChars int `json:"pasted_chars"`
 }
+
+// How a brief used a source, weakest first. The strongest use of a source wins.
+const (
+	ShownPointer = "pointer"
+	ShownSummary = "summary"
+	ShownExcerpt = "excerpt"
+	ShownText    = "text"
+)
+
+var shownRank = map[string]int{"": 0, ShownPointer: 1, ShownSummary: 2, ShownExcerpt: 3, ShownText: 4}
+
+// excerpted reports whether a brain candidate's text is pasted after its pointer
+// line: marked and personal sources never are.
+func excerpted(s Source) bool { return !s.PointerOnly && !marked(s.Tier) }
+
 type Rendered struct {
 	Brief  string `json:"brief"`
 	Inputs Inputs `json:"inputs"`
@@ -51,8 +72,31 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		o.BrainTokens = 2000
 	}
 	seen := map[string]Source{}
+	shown := map[string]string{}
+	pasted := 0
+	use := func(p, mode string) {
+		if shownRank[mode] > shownRank[shown[p]] {
+			shown[p] = mode
+		}
+	}
+	// paste writes a source's text into the brief, so it counts as pasted.
+	paste := func(label string, s Source) string {
+		use(s.Pointer, ShownText)
+		pasted += utf8.RuneCountInString(s.Text)
+		return sourceBlock(label, s)
+	}
+	// named marks a pointer line: a personal note shows only its id, any other
+	// source its summary.
+	named := func(s Source) {
+		if s.PointerOnly {
+			use(s.Pointer, ShownPointer)
+		} else {
+			use(s.Pointer, ShownSummary)
+		}
+	}
 	resolve := func(p string) (Source, error) {
-		if s, ok := seen[p]; ok {
+		key := SourceKey(p)
+		if s, ok := seen[key]; ok {
 			return s, nil
 		}
 		s, e := o.Resolver.Resolve(p)
@@ -60,13 +104,14 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 			return s, e
 		}
 		s.Pointer = p
+		s.Shown = "" // a replayed snapshot's mode is rebuilt from this render's uses
 		if s.Tier != contract.PersonTeam && s.Tier != contract.Agent && s.Tier != contract.PersonGuest {
 			s.Tier = contract.External
 		}
 		if marked(s.Tier) && !s.PointerOnly {
 			r.Inputs.DisableSkillShellExecution = true
 		}
-		seen[p] = s
+		seen[key] = s
 		return s, nil
 	}
 	owner, e := resolve(j.Intent.Owner)
@@ -201,6 +246,13 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	if tokens(brain) > o.BrainTokens {
 		return r, fmt.Errorf("brain budget too small for the elision banner")
 	}
+	for _, c := range kept {
+		named(c.source)
+		if excerpted(c.source) {
+			use(c.source.Pointer, ShownExcerpt)
+			pasted += utf8.RuneCountInString(c.source.Text)
+		}
+	}
 	for _, c := range cut {
 		r.Inputs.NotRendered = append(r.Inputs.NotRendered, c.link.To)
 	}
@@ -213,9 +265,29 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	}
 	b.WriteString(meta)
 	b.WriteString("\n## Intent\n\n")
-	b.WriteString(sourceBlock("Owner", owner))
-	b.WriteString(sourceBlock("Item", item))
-	b.WriteString(sourceBlock("Goal", goal))
+	// A source that several slots point at prints once, with the slot names joined.
+	slots := []struct {
+		label, pointer string
+		source         Source
+	}{{"Owner", j.Intent.Owner, owner}, {"Item", j.Intent.Item, item}, {"Goal", j.Intent.Goal, goal}}
+	for i, sl := range slots {
+		label, first := sl.label, true
+		for k, other := range slots {
+			if SourceKey(other.pointer) != SourceKey(sl.pointer) {
+				continue
+			}
+			if k < i {
+				first = false
+				break
+			}
+			if k > i {
+				label += ", " + other.label
+			}
+		}
+		if first {
+			b.WriteString(paste(label, sl.source))
+		}
+	}
 	b.WriteString("## Context\n\n")
 	b.WriteString(brain)
 	sort.Slice(relations, func(a, b int) bool {
@@ -230,6 +302,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		if e != nil {
 			return r, e
 		}
+		named(s)
 		b.WriteString(pointerBlock(l, s))
 	}
 	if j.Continues != nil && *j.Continues != "" {
@@ -237,20 +310,36 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		if e != nil {
 			return r, e
 		}
-		b.WriteString(sourceBlock("Previous acceptance", s))
+		b.WriteString(paste("Previous acceptance", s))
 	}
+	reads := ""
 	for _, p := range j.Read {
 		s, e := resolve(p)
 		if e != nil {
 			return r, e
 		}
-		fmt.Fprintf(&b, "- Read %s [%s]\n", p, s.Tier)
+		var l *Link
+		if x, ok := explicit[p]; ok {
+			l = &x
+		}
+		if s.PointerOnly || strings.TrimSpace(s.Summary) == "" {
+			use(s.Pointer, ShownPointer) // the line names the path and nothing of the file
+		} else {
+			use(s.Pointer, ShownSummary)
+		}
+		reads += readBlock(p, l, s)
 	}
-	if len(j.Read) > 0 {
+	b.WriteString(reads)
+	// A fenced summary already ends in a blank line.
+	if len(j.Read) > 0 && !strings.HasSuffix(reads, "\n\n") {
 		b.WriteString("\n")
 	}
 	b.WriteString("## Job\n\n")
 	fmt.Fprintf(&b, "%s\n\n", j.Title)
+	if md, ok := gridplugins.AgentFor(contract.NormalizeRole(j.Role)); ok {
+		// The worker starts claude without --agent, so the Job carries the role's own instructions.
+		b.WriteString("### Instructions\n\n" + agentBody(md) + "\n\n")
+	}
 	if j.Checkpoint != nil {
 		fmt.Fprintf(&b, "Checkpoint: %s (%s)\n\n", j.Checkpoint.Step, j.Checkpoint.Commit)
 	}
@@ -277,15 +366,57 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	fmt.Fprintf(&b, "On blocked: %s\n", j.OnBlocked)
 	b.WriteString("\n## Outcome\n\n## Verdict\n\n## Follow-up\n")
 	r.Brief = b.String()
+	r.Inputs.BriefBytes = len(r.Brief)
+	r.Inputs.PastedChars = pasted
 	keys := []string{}
 	for k := range seen {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		r.Inputs.Sources = append(r.Inputs.Sources, seen[k])
+		s := seen[k]
+		s.Shown = shown[s.Pointer] // shown is keyed by the pointer spelling the source kept
+		r.Inputs.Sources = append(r.Inputs.Sources, s)
 	}
 	return r, nil
+}
+
+// SourceKey names the source a pointer reads, not how it is spelled. A task file
+// pointer drops a leading "task:" and writes ":N-M" as "#LN-LM", the two steps
+// Files.Resolve takes. brain:, repo:, prototype: and job: pointers keep their text.
+func SourceKey(p string) string {
+	rel, anchor := p, ""
+	if at := strings.IndexByte(rel, '#'); at >= 0 {
+		anchor = rel[at+1:]
+		rel = rel[:at]
+	}
+	if m := rangeSuffix.FindStringSubmatch(rel); m != nil {
+		if anchor != "" {
+			return p
+		}
+		anchor = "L" + m[1] + "-L" + m[2]
+		rel = strings.TrimSuffix(rel, m[0])
+	}
+	for _, kind := range []string{"brain:", "prototype:", "repo:", "job:"} {
+		if strings.HasPrefix(rel, kind) {
+			return p
+		}
+	}
+	rel = strings.TrimPrefix(rel, "task:")
+	if anchor == "" {
+		return rel
+	}
+	return rel + "#" + anchor
+}
+
+// agentBody is an agent file without its front matter.
+func agentBody(md string) string {
+	if rest, ok := strings.CutPrefix(md, "---\n"); ok {
+		if _, body, ok := strings.Cut(rest, "\n---\n"); ok {
+			return strings.TrimSpace(body)
+		}
+	}
+	return strings.TrimSpace(md)
 }
 func tokens(s string) int     { return (utf8.RuneCountInString(s) + 3) / 4 }
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
@@ -323,6 +454,30 @@ func pointerBlock(l Link, s Source) string {
 	}
 	return fmt.Sprintf("- %s · %s · %s · %s [%s]\n\n", l.To, l.Rel, oneLine(s.Summary), oneLine(l.Why), s.Tier)
 }
+
+// readBlock is one read line: the path, the file's summary and, when the Job has
+// a link to the same path, that link's reason. The summary is the file's, so a
+// marked file shows it inside the data fence and a personal note shows none; a
+// file with no summary keeps the bare line.
+func readBlock(p string, l *Link, s Source) string {
+	why := ""
+	if l != nil {
+		why = oneLine(l.Why)
+	}
+	reason := ""
+	if why != "" {
+		reason = " · " + why
+	}
+	switch {
+	case s.PointerOnly:
+		return fmt.Sprintf("- Read %s%s [personal; id only, read it on your computer with grid brain show]\n", p, reason)
+	case strings.TrimSpace(s.Summary) == "":
+		return fmt.Sprintf("- Read %s [%s]\n", p, s.Tier)
+	case marked(s.Tier):
+		return fmt.Sprintf("- Read %s%s [%s]\n\n", p, reason, s.Tier) + fenced(s, s.Summary)
+	}
+	return fmt.Sprintf("- Read %s · %s%s [%s]\n", p, oneLine(s.Summary), reason, s.Tier)
+}
 func brainBlock(c candidate) string {
 	block := pointerBlock(c.link, c.source)
 	if c.source.PointerOnly || marked(c.source.Tier) {
@@ -336,6 +491,14 @@ type Replay map[string]Source
 
 func (r Replay) Resolve(p string) (Source, error) {
 	s, ok := r[p]
+	if !ok {
+		// A deduplicated render keeps one spelling; another spelling of it is the same source.
+		for q, c := range r {
+			if SourceKey(q) == SourceKey(p) {
+				return c, nil
+			}
+		}
+	}
 	if !ok {
 		return s, fmt.Errorf("%s: not in render inputs", p)
 	}

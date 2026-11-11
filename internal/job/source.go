@@ -34,6 +34,11 @@ type Source struct {
 	Updated     string             `json:"updated,omitempty"`
 	Links       []Link             `json:"links,omitempty"`
 	PointerOnly bool               `json:"pointer_only,omitempty"`
+	// Shown is how the rendered brief used the source: text, excerpt, summary or
+	// pointer. Render sets it, the strongest use winning; a source the brief did
+	// not use at all has none. Text stays whatever the mode, so a replay rebuilds
+	// the same brief.
+	Shown string `json:"shown,omitempty"`
 }
 type Resolver interface {
 	Resolve(pointer string) (Source, error)
@@ -168,7 +173,10 @@ func (f *Files) brain(pointer, rel, anchor string) (Source, error) {
 	if n.SupersededBy != "" {
 		return Source{}, fmt.Errorf("%s: note is superseded by %s", pointer, n.SupersededBy)
 	}
-	s := Source{Pointer: pointer, Tier: contract.TrustTier(n.Origin.Tier), State: n.Status}
+	// A brain note no longer records a trust tier (verdicts-11nov v-7). Every note
+	// the brain store accepts was written by an agent (SessionOrigin) and passed the
+	// quarantine of imported text, so its text reads as the agent's own.
+	s := Source{Pointer: pointer, Tier: contract.Agent, State: n.Status}
 	if level == "home" {
 		s.PointerOnly = true
 		return s, nil
@@ -498,7 +506,10 @@ func Metadata(j Job) (string, error) {
 			fmt.Fprintf(&out, "%s: %s\n", key, value)
 		}
 	}
-	for _, key := range []string{"id", "item", "title", "role", "skills", "review", "risk", "max_rounds", "intent", "links", "keep", "decisions", "read", "write", "out_of_scope", "acceptance", "verify", "budget", "on_blocked", "after", "attempt", "continues", "discovered_from", "close_reason", "checkpoint", "review_rounds", "level_raised", "worktree", "posts_back", "status", "follow_up"} {
+	for _, key := range []string{"id", "item", "title", "role", "skills", "review", "risk", "intent", "links", "keep", "decisions", "read", "write", "out_of_scope", "acceptance", "verify", "budget", "on_blocked", "after", "attempt", "continues", "discovered_from", "close_reason", "checkpoint", "review_rounds", "level_raised", "worktree", "posts_back", "status", "follow_up"} {
+		if _, ok := m[key]; !ok && key == "review" {
+			continue // retired: written only when an old plan still carries it
+		}
 		fmt.Fprintf(&out, "%s: %s\n", key, m[key])
 	}
 	out.WriteString("---\n")

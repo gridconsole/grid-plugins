@@ -40,6 +40,45 @@ func TestGoldenBriefPasses(t *testing.T) {
 		t.Fatalf("findings: %+v", fs)
 	}
 }
+
+// The review level and max_rounds were retired by the owner (11 Nov q-levels,
+// verdicts v-10): whether a review runs is judged per step, so a Job carries
+// neither field and lint no longer checks them.
+func briefWith(t *testing.T, extra ...string) string {
+	t.Helper()
+	var out []string
+	for _, l := range strings.Split(brief(t), "\n") {
+		if strings.HasPrefix(l, "review:") || strings.HasPrefix(l, "max_rounds:") {
+			continue
+		}
+		out = append(out, l)
+		if strings.HasPrefix(l, "role:") {
+			out = append(out, extra...)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+func TestJobWithoutLevelOrRoundsLintsClean(t *testing.T) {
+	text := briefWith(t)
+	if strings.Contains(text, "\nreview:") || strings.Contains(text, "\nmax_rounds:") {
+		t.Fatal("the brief still names a level or max_rounds")
+	}
+	if fs := lint.Check(text, lint.Options{Resolver: testFiles(t)}); len(fs) != 0 {
+		t.Fatalf("findings: %+v", fs)
+	}
+}
+func TestRetiredLevelAndRoundsAreNotChecked(t *testing.T) {
+	text := briefWith(t, "review: L4", "max_rounds: 0")
+	fs := lint.Check(text, lint.Options{Resolver: testFiles(t)})
+	for _, rule := range []string{"job.review", "job.max-rounds"} {
+		if has(fs, rule) {
+			t.Fatalf("lint still checks %s: %+v", rule, fs)
+		}
+	}
+	if len(fs) != 0 {
+		t.Fatalf("findings: %+v", fs)
+	}
+}
 func TestEveryLegacyFieldAndHeading(t *testing.T) {
 	base := brief(t)
 	for _, key := range []string{"id", "role", "status", "verify", "follow_up"} {
@@ -81,8 +120,6 @@ func TestContractRules(t *testing.T) {
 		{"id", "job.id", func(j *job.Job) { j.ID = "../J-1" }},
 		{"item", "job.item", func(j *job.Job) { j.Item = 0 }},
 		{"intent", "job.intent", func(j *job.Job) { j.Intent.Owner = "" }},
-		{"review", "job.review", func(j *job.Job) { j.Review = "L4" }},
-		{"rounds", "job.max-rounds", func(j *job.Job) { j.MaxRounds = 0 }},
 		{"risk", "job.risk", func(j *job.Job) { j.Risk = []string{"unknown"} }},
 		{"budget", "job.budget", func(j *job.Job) { j.Budget.TurnsEstimate = 0 }},
 		{"blocked", "job.on-blocked", func(j *job.Job) { j.OnBlocked = "wait" }},

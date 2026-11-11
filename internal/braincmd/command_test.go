@@ -46,7 +46,7 @@ func (h *harness) propose(t *testing.T, extra ...string) brain.Entry {
 func TestAllCommandsPlainAndJSON(t *testing.T) {
 	h := newHarness(t)
 	p := h.propose(t, "--link", `{"to":"job:T-01/J-01","rel":"decided-by","summary":"The source job.","why":"Explains why these checks were chosen."}`)
-	if p.Note.Status != "proposed" || p.Note.Origin.Kind != "session" || p.Note.Origin.Tier != "agent" {
+	if p.Note.Status != "proposed" || p.Note.Origin.Kind != "session" || p.Note.Origin.ID == "" {
 		t.Fatalf("proposal: %+v", p)
 	}
 	if code := h.run("show", "checks", "--level", "home", "--proposal"); code != 0 || !strings.Contains(h.out.String(), "note.status: proposed") {
@@ -88,7 +88,7 @@ func TestProposalFileAndStdinStamping(t *testing.T) {
 	if err := json.Unmarshal(h.out.Bytes(), &e); err != nil {
 		t.Fatal(err)
 	}
-	if e.Note.Level != "home" || e.Note.Status != "proposed" || e.Note.Origin.Tier != "external" || e.Note.Origin.ID == "forged" {
+	if e.Note.Level != "home" || e.Note.Status != "proposed" || e.Note.Origin.Kind != "import" || e.Note.Origin.ID == "forged" {
 		t.Fatalf("forged metadata retained: %+v", e)
 	}
 	if code := h.run("accept", "imported", "--level", "home", "--json"); code != 1 || !json.Valid(h.err.Bytes()) {

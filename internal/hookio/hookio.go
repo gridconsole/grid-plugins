@@ -158,6 +158,8 @@ type Decision struct {
 	Reason       string
 	Directories  []string
 	Warnings     []string
+	// Context is text a PreToolUse hook adds for the agent; it is not a verdict.
+	Context string
 }
 
 func Allow(reason string) Decision {
@@ -179,12 +181,19 @@ func PermissionAllow(home string) Decision {
 
 // Bytes emits JSON.stringify-compatible compact JSON without a trailing newline.
 func (d Decision) Bytes() []byte {
-	if d.Behavior == "" && len(d.Warnings) == 0 {
+	if d.Behavior == "" && len(d.Warnings) == 0 && d.Context == "" {
 		return nil
 	}
 	var out any
 	if d.Behavior == "" {
-		out = map[string]string{"systemMessage": strings.Join(d.Warnings, "\n")}
+		fields := map[string]any{}
+		if len(d.Warnings) > 0 {
+			fields["systemMessage"] = strings.Join(d.Warnings, "\n")
+		}
+		if d.Context != "" {
+			fields["hookSpecificOutput"] = map[string]string{"hookEventName": "PreToolUse", "additionalContext": d.Context}
+		}
+		out = fields
 	} else if d.Event == "PermissionRequest" {
 		type permission struct {
 			Type        string   `json:"type"`
@@ -215,7 +224,8 @@ func (d Decision) Bytes() []byte {
 			Event    string `json:"hookEventName"`
 			Behavior string `json:"permissionDecision"`
 			Reason   string `json:"permissionDecisionReason"`
-		}{d.Event, d.Behavior, d.Reason}}
+			Context  string `json:"additionalContext,omitempty"`
+		}{d.Event, d.Behavior, d.Reason, d.Context}}
 	}
 	if d.Behavior != "" && len(d.Warnings) > 0 {
 		data, _ := json.Marshal(out)

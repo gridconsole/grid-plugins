@@ -33,14 +33,13 @@ func TestTaskPolicyFileLimits(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			thresholds, usageErr := UsageNoticeThresholds(dir)
 			roles, gateErr := GatePostRoles(dir)
 			if kind == "at limit" {
-				if usageErr != nil || gateErr != nil || len(thresholds["tokens"]) != 2 || len(roles["person"]) != 1 || roles["person"][0] != "agent" {
-					t.Fatalf("valid file refused: %v %v %v %v", thresholds, usageErr, roles, gateErr)
+				if gateErr != nil || len(roles["person"]) != 1 || roles["person"][0] != "agent" {
+					t.Fatalf("valid file refused: %v %v", roles, gateErr)
 				}
-			} else if usageErr == nil || gateErr == nil || thresholds != nil || roles != nil {
-				t.Fatalf("unsafe policy accepted: thresholds=%v err=%v roles=%v err=%v", thresholds, usageErr, roles, gateErr)
+			} else if gateErr == nil || roles != nil {
+				t.Fatalf("unsafe policy accepted: roles=%v err=%v", roles, gateErr)
 			} else {
 				var pathErr *os.PathError
 				if !errors.As(gateErr, &pathErr) {

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
@@ -30,6 +31,9 @@ import (
 // fslock is unsupported, New fails with fslock.ErrUnsupported before it makes a task.
 func (s Store) New(o NewOptions) (Task, error) {
 	if err := o.Validate(); err != nil {
+		return Task{}, err
+	}
+	if err := checkInputs(o.Inputs); err != nil {
 		return Task{}, err
 	}
 	if s.Resolver.GridHome == "" {
@@ -107,6 +111,9 @@ func (s Store) New(o NewOptions) (Task, error) {
 	}
 	defer os.RemoveAll(stage)
 	if err := writeSynced(filepath.Join(stage, "intent.md"), []byte(IntentHead+o.Words)); err != nil {
+		return Task{}, err
+	}
+	if err := copyInputs(stage, o.Inputs); err != nil {
 		return Task{}, err
 	}
 	if err := atomicWrite(filepath.Join(home, "VERSION"), []byte(fmt.Sprintf("%d\n", gridhome.FormatVersion))); err != nil {
@@ -405,7 +412,7 @@ func atomicWrite(path string, data []byte) error {
 	if err := writeAndSync(f, data); err != nil {
 		return err
 	}
-	if err := os.Rename(f.Name(), path); err != nil {
+	if err := atomicfile.Rename(f.Name(), path); err != nil {
 		return err
 	}
 	return syncDir(filepath.Dir(path))

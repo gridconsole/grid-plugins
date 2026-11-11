@@ -807,7 +807,7 @@ func BudgetApply(o BudgetOptions) (BudgetApplyResult, error) {
 		done := 0
 		for ; done < len(stages); done++ {
 			s := stages[done]
-			if err = os.Rename(s.tmp, s.target); err != nil {
+			if err = atomicfile.Rename(s.tmp, s.target); err != nil {
 				break
 			}
 		}

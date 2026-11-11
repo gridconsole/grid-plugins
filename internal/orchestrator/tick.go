@@ -95,6 +95,9 @@ func (s Store) Tick() (out Output, err error) {
 		if e != nil {
 			return e
 		}
+		if e := s.noteStartedDependents(snap, ready.Notes); e != nil {
+			return e
+		}
 		waits := map[string]string{}
 		for _, w := range ready.Waiting {
 			if waits[w.Job] == "" {
@@ -311,11 +314,6 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 		}
 		m.ParkProgress = s.progress(snap, j)
 		return nil
-	}
-	// max_rounds counts rework after the first attempt. Crash parking takes
-	// precedence when the third consecutive failure hits the same boundary.
-	if j.Attempt >= j.MaxRounds+1 {
-		return s.control(j, contract.Rejected, "max_rounds exhausted", failure)
 	}
 	return s.control(j, contract.Ready, "retry after failed attempt", failure)
 }

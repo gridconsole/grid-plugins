@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
@@ -186,7 +187,7 @@ func replaceJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := atomicfile.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return err
 	}

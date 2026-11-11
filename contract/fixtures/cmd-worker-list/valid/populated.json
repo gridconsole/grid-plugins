@@ -1,11 +1,11 @@
 [
   {
+    "address": "127.0.0.1:43111",
     "machine": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
     "pid": 42,
     "presence": "stale",
     "started_at": "2026-01-01T00:00:00Z",
     "state": "stopped",
-    "updated_at": "2026-01-01T00:00:01Z",
-    "version": 1
+    "version": "1.2.3"
   }
 ]

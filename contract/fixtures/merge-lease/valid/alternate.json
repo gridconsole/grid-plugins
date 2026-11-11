@@ -1,9 +1,0 @@
-{
-  "lease": "merge",
-  "project": "example-project",
-  "holder": null,
-  "fence": 3,
-  "gen": 0,
-  "since": "2026-11-08T10:00:00.000Z",
-  "until": "2026-11-08T10:15:00.000Z"
-}

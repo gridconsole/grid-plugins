@@ -3,6 +3,7 @@
 package jobgraph
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -190,9 +191,54 @@ type Wait struct {
 	Reason string   `json:"reason"`
 }
 
+// Note is something a started Job's Feed should hear: a Job it waited on was
+// rejected after it started. It is information only; nothing is held or killed.
+type Note struct {
+	Job    string `json:"job"`
+	Target string `json:"target"`
+	Reason string `json:"reason"`
+}
+
 type Readiness struct {
 	Ready   []string `json:"ready"`
 	Waiting []Wait   `json:"waiting"`
+	Notes   []Note   `json:"notes,omitempty"`
+}
+
+// VerifyPassed reports whether the Job's latest result carries a passing
+// verify: a verified object whose pass is true or "pass". An absent or null
+// verified, false, and "unsure" are not a pass.
+func VerifyPassed(j contract.Job) bool {
+	var v struct {
+		Pass any `json:"pass"`
+	}
+	if len(j.Verified) == 0 || json.Unmarshal(j.Verified, &v) != nil {
+		return false
+	}
+	switch p := v.Pass.(type) {
+	case bool:
+		return p
+	case string:
+		return p == "pass"
+	}
+	return false
+}
+
+// Released reports whether a Job releases the Jobs that wait on it with a done
+// edge: it is accepted, or it is submitted with its verify passing. Rejected,
+// cancelled, running and a submit whose verify has not passed do not release.
+func Released(j contract.Job) bool {
+	return j.Status == contract.Accepted || j.Status == contract.Submitted && VerifyPassed(j)
+}
+
+// started is a Job that a worker holds or has handed in: it reads as Started or
+// Needs review, or it is parked mid-run.
+func started(status contract.Status) bool {
+	switch status {
+	case contract.Assigned, contract.Running, contract.Submitted, contract.Parked:
+		return true
+	}
+	return false
 }
 
 // Ready lists unstarted posted/ready Jobs whose dependencies are satisfied.
@@ -206,6 +252,15 @@ func (g *Graph) Ready(s Snapshot) (Readiness, error) {
 	for _, id := range g.ids {
 		status := s.Jobs[id].Status
 		if status != "" && status != contract.Posted && status != contract.Ready {
+			// A Job that has started is never held or stopped by a later
+			// rejection of a Job it waited on; its Feed is told instead.
+			if started(status) {
+				for _, e := range g.items[id].After {
+					if !strings.HasPrefix(e.Job, "gate:") && edgeKind(e) == Done && s.Jobs[e.Job].Status == contract.Rejected {
+						out.Notes = append(out.Notes, Note{Job: id, Target: e.Job, Reason: e.Job + " was rejected after " + id + " started; " + id + " carries on"})
+					}
+				}
+			}
 			continue
 		}
 		start := len(out.Waiting)
@@ -218,8 +273,11 @@ func (g *Graph) Ready(s Snapshot) (Readiness, error) {
 				satisfied = s.OpenGates[e.Job]
 				reason = "waiting on gate " + strings.TrimPrefix(e.Job, "gate:")
 			case kind == Done:
-				satisfied = s.Jobs[e.Job].Status == contract.Accepted
+				satisfied = Released(s.Jobs[e.Job])
 				reason = "waiting for " + e.Job + " to be accepted"
+				if s.Jobs[e.Job].Status == contract.Rejected {
+					reason = "waiting for " + e.Job + ", which was rejected"
+				}
 			case kind == Failed:
 				status := s.Jobs[e.Job].Status
 				satisfied = (status == contract.Rejected || status == contract.Cancelled) && s.Exhausted[e.Job]

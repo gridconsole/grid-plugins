@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/session"
@@ -112,7 +111,7 @@ func lockOrderFinishes(t *testing.T, f *eventFixture, event string, in hookio.In
 func acceptedNote(t *testing.T, f *eventFixture) string {
 	t.Helper()
 	s := brain.Store{GridHome: f.home}
-	n := brain.Note{Name: "cache", Topic: "decisions", Type: "convention", Description: "Use when changing cache configuration.", Summary: "Keep cache settings explicit.", Source: "task:T-01", Level: "home", Body: "Body.", Origin: brain.Origin{Tier: contract.PersonTeam, Kind: "session", ID: "session-demo"}}
+	n := brain.Note{Name: "cache", Topic: "decisions", Type: "convention", Description: "Use when changing cache configuration.", Summary: "Keep cache settings explicit.", Source: "task:T-01", Level: "home", Body: "Body.", Origin: brain.Origin{Kind: "session", ID: "session-demo"}}
 	if _, err := s.Propose(n, n.Origin); err != nil {
 		t.Fatal(err)
 	}

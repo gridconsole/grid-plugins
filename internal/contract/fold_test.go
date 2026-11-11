@@ -252,14 +252,16 @@ func TestFoldScenarios(t *testing.T) {
 		}, Running, 1, nil},
 		{"cancelled-with-reason", func(t *testing.T) []Post { return append(base(t), move(t, 4, Cancelled)) }, Cancelled, 1, nil},
 		{"rejected-with-reason", func(t *testing.T) []Post { return append(base(t), move(t, 4, Rejected)) }, Rejected, 1, nil},
-		{"security-finding-raises-level", func(t *testing.T) []Post {
+		{"security-finding-needs-lead", func(t *testing.T) []Post {
 			r := side(t, "result", 4)
 			f := sample(t, "found", 5)
 			changeBody(t, &f, func(v map[string]any) { v["kind"], v["re"] = "security", r.ID })
 			return append(base(t), r, f)
 		}, Running, 1, func(t *testing.T, s State) {
-			if j := s.Jobs["J-1"]; j.Review != "L3" || j.LevelRaised == nil || !j.NeedsLead {
-				t.Fatal("security finding did not escalate")
+			// The level raise is gone with the levels (owner, 11 Nov q-levels and
+			// verdicts v-10); the lead is still told.
+			if !s.Jobs["J-1"].NeedsLead {
+				t.Fatal("security finding did not reach the lead")
 			}
 		}},
 		{"proposal-does-not-create-job", func(t *testing.T) []Post {
@@ -297,6 +299,46 @@ func TestFoldScenarios(t *testing.T) {
 				t.Fatalf("input interleaving or display clock changed state: %+v", other.Jobs["J-1"])
 			}
 		})
+	}
+}
+
+// An old Feed record may still carry review, max_rounds and level_raised. The
+// fold reads the Job without error and the retired fields are not in the state.
+func TestFoldIgnoresRetiredLevelFields(t *testing.T) {
+	posts := base(t)
+	var raw map[string]any
+	if err := json.Unmarshal(posts[0].Body, &raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"review", "max_rounds"} {
+		if _, ok := raw[key]; !ok {
+			t.Fatalf("fixture job/valid/basic no longer carries %s; the test needs an old record", key)
+		}
+	}
+	changeBody(t, &posts[0], func(v map[string]any) {
+		v["review"], v["max_rounds"] = "L3", 7
+		v["level_raised"] = map[string]any{"from": "L1", "to": "L3", "why": "an old security finding"}
+	})
+	state := Fold(posts)
+	j := state.Jobs["J-1"]
+	if j == nil || j.Status != Running {
+		t.Fatalf("old record with a level did not fold: %+v", j)
+	}
+	if v := verdict(state, posts[0].ID); v.Kind == "ignored" {
+		t.Fatalf("old record was ignored: %+v", v)
+	}
+	data, err := json.Marshal(j)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"review", "max_rounds", "level_raised"} {
+		if _, ok := m[key]; ok {
+			t.Fatalf("state still carries %s: %s", key, data)
+		}
 	}
 }
 

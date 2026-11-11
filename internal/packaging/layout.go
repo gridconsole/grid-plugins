@@ -2,6 +2,7 @@
 package packaging
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"os"
@@ -13,6 +14,11 @@ import (
 
 //go:embed grid.sh
 var launcher []byte
+
+// launcherCmd is the Windows entry, bin/grid.cmd. It ships with CRLF line endings, which cmd.exe needs.
+//
+//go:embed grid.cmd
+var launcherCmd []byte
 
 // HookConfig is shared by the Claude Code and Codex manifests.
 type HookConfig struct {
@@ -67,6 +73,7 @@ func Files(version string) (map[string][]byte, error) {
 		files[path] = append(b, '\n')
 	}
 	files["bin/grid"] = launcher
+	files["bin/grid.cmd"] = bytes.ReplaceAll(launcherCmd, []byte("\n"), []byte("\r\n"))
 	return files, nil
 }
 

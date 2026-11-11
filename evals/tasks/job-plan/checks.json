@@ -1,0 +1,9 @@
+[
+  {"id":"job","type":"file_exists","path":"job.md","gate":true},
+  {"id":"not-done","type":"command_passes","command":["sh","-c","test -f scripts/build.sh && test -f scripts/lint.sh && test -f scripts/pack.sh && test ! -d tools"],"rubric":"S3"},
+  {"id":"items","type":"command_passes","command":["sh","-c","grep -q 'scripts/build.sh' job.md && grep -q 'scripts/lint.sh' job.md && grep -q 'scripts/pack.sh' job.md && grep -Eq 'tools/(build|lint|pack).sh' job.md"],"rubric":"S3"},
+  {"id":"path-line","type":"command_passes","command":["sh","-c","grep -Eq '[a-z/]+\\.(sh|html|json):[0-9]+' job.md"],"rubric":"S3","weight":2},
+  {"id":"data-source","type":"command_passes","command":["sh","-c","grep -qi 'data source' job.md && grep -q 'ops/status.json' job.md"],"rubric":"S3","weight":2},
+  {"id":"widths","type":"command_passes","command":["sh","-c","grep -q 390 job.md && grep -q 1440 job.md && grep -q 3840 job.md"],"rubric":"S3","weight":2},
+  {"id":"budget","type":"command_passes","command":["sh","-c","grep -q turns_estimate job.md && grep -Eqi 'NOT DONE' job.md"],"rubric":"S3","weight":2}
+]

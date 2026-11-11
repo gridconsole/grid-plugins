@@ -78,7 +78,6 @@ func TestSettingsCLIOverridesAndFailures(t *testing.T) {
 		{"agent", "set", "grid-builder", "--model", "wrong"}, {"agent", "set", "grid-builder", "--model="},
 		{"agent", "set", "grid-builder"}, {"agent", "set", "unknown", "--model", "opus"},
 		{"skill", "disable", "unknown"}, {"hook", "level", "plan-guard", "never"},
-		{"hook", "level", "host-guard", "off"}, {"hook", "level", "only-writer", "warn", "--project", "example"},
 		{"skill", "enable", "research", "--unknown"}, {"agent", "list", "extra"},
 		{"skill", "disable", "research", "--project", "missing"},
 	} {
@@ -95,27 +94,37 @@ func TestSettingsCLIOverridesAndFailures(t *testing.T) {
 	}
 }
 
-func TestHookLevelRefusesToLowerAlwaysBlockGuards(t *testing.T) {
-	for _, name := range []string{"brief-lint", "host-guard", "only-writer", "plan-guard"} {
-		for _, level := range []string{"off", "warn"} {
+// No guard is fixed at block: the four guards take off, warn and block from the
+// command, personal and per project, and the levels list shows what was set.
+func TestHookLevelAcceptsEveryLevelForTheFourGuards(t *testing.T) {
+	for _, name := range []string{"host-guard", "only-writer", "plan-guard"} {
+		for _, level := range []string{"off", "warn", "block"} {
 			t.Run(name+"/"+level, func(t *testing.T) {
 				h := newHarness(t)
 				h.record(project.Record{Name: "example", Folders: []project.Folder{{Machine: h.env.Machine, Path: h.home}}})
+				def := "block"
+				if name == "only-writer" || name == "plan-guard" {
+					def = "warn" // verdicts-11nov v-4; plan-guard: needed.md:47
+				}
+				if code := h.run(h.home, "hook", "levels", "--json"); code != 0 || !strings.Contains(h.out.String(), `"`+name+`":"`+def+`"`) {
+					t.Fatalf("default: %d %s %s", code, h.out, h.errb)
+				}
+				h.out.Reset()
 				for _, scope := range [][]string{nil, {"--project", "example"}} {
 					args := append([]string{"hook", "level", name, level}, scope...)
-					if code := h.run(h.home, args...); code != 1 {
-						t.Fatalf("%v: exit %d", args, code)
-					}
-					if !strings.Contains(h.errb.String(), name+" always blocks") || !strings.Contains(h.errb.String(), "allowed: block") {
-						t.Fatalf("%v: %q", args, h.errb)
+					if code := h.run(h.home, args...); code != 0 {
+						t.Fatalf("%v: exit %d: %s", args, code, h.errb)
 					}
 					h.errb.Reset()
 				}
-				if _, err := os.Stat(filepath.Join(h.gridHome, "settings.json")); !os.IsNotExist(err) {
-					t.Fatalf("refused level wrote a settings file: %v", err)
+				if _, err := os.Stat(filepath.Join(h.gridHome, "settings.json")); err != nil {
+					t.Fatalf("accepted level wrote no personal settings file: %v", err)
 				}
-				if code := h.run(h.home, "hook", "levels", "--json"); code != 0 || !strings.Contains(h.out.String(), `"`+name+`":"block"`) {
-					t.Fatalf("%d %s %s", code, h.out, h.errb)
+				if _, err := os.Stat(filepath.Join(h.gridHome, "projects", "example", "settings.json")); err != nil {
+					t.Fatalf("accepted level wrote no project settings file: %v", err)
+				}
+				if code := h.run(h.home, "hook", "levels", "--json"); code != 0 || !strings.Contains(h.out.String(), `"`+name+`":"`+level+`"`) {
+					t.Fatalf("%s %s: %d %s %s", name, level, code, h.out, h.errb)
 				}
 			})
 		}

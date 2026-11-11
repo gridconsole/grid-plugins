@@ -119,8 +119,7 @@ are reference-document names and original line numbers, not machine paths.
 | Host | [host.json](schemas/host.json) | feed-contract.md:86; old-plugin/feed/types/host.md:5-15 |
 | Transfer | [transfer.json](schemas/transfer.json) | feed-contract.md:86; old-plugin/feed/types/transfer.md:5-13 |
 | Deploy failed | [deploy-failed.json](schemas/deploy-failed.json) | feed-contract.md:86; old-plugin/feed/types/deploy-failed.md:5-17 |
-| Task, Job or merge lease | [lease.json](schemas/lease.json) | feed-contract.md:92-124 |
-| Project merge lease | [merge-lease.json](schemas/merge-lease.json) | feed-contract.md:115; plugin-design.md:113 |
+| Task or Job lease | [lease.json](schemas/lease.json) | feed-contract.md:92-124 |
 | Heartbeat file, not a post | [heartbeat.json](schemas/heartbeat.json) | feed-contract.md:200-218 |
 | Takeover log entry | [takeover.json](schemas/takeover.json) | feed-contract.md:105-111 |
 | Trust tier field | [trust-tier.json](schemas/trust-tier.json) | feed-contract.md:90; job-contract.md:87-91 |
@@ -144,7 +143,7 @@ are reference-document names and original line numbers, not machine paths.
 | grid task move output | [cmd-task-move.json](schemas/cmd-task-move.json) | internal/cli/intent.go:140 |
 | grid task show output | [cmd-task-show.json](schemas/cmd-task-show.json) | internal/cli/task.go:122 |
 | grid version output | [cmd-version.json](schemas/cmd-version.json) | internal/cli/version.go:54 |
-| grid worker list output | [cmd-worker-list.json](schemas/cmd-worker-list.json) | internal/cli/worker.go:44 |
+| grid worker list output | [cmd-worker-list.json](schemas/cmd-worker-list.json) | internal/cli/worker.go:57 |
 
 Run `make test` and `make lint` from the repository root. Keep the default
 TMPDIR so the test runner can check for leaked temporary folders. Focused
@@ -280,6 +279,12 @@ Disagreements and defaults chosen:
   Exit alone does not manufacture a retry/control; a missing reason means crash.
   Loop increments review_rounds and requests a lead wake; usage_limit sets a hold
   reason. The scheduler decides retry limits and posts the resulting controls.
+- A `done` after edge (and a bare Job id) is met by `accepted`, or by `submitted`
+  when the Job's latest result has `verified.pass` true or `"pass"`; no verify,
+  false and `"unsure"` do not meet it. A later `rejected` puts a dependent that
+  has not started back to waiting; a started dependent is neither held nor
+  stopped and gets one message post carrying its `job` that names the
+  rejection. `failed` and `children-done` edges still wait for their own states.
 - Result arrival alone is not acceptance. Control posts decide acceptance,
   rejection and stale status. Proposed Jobs remain typed proposals with their
   discovered_from edge; the fold never turns a worker proposal into a Job.
@@ -311,77 +316,19 @@ Disagreements and defaults chosen:
   CI, job/state for Job gates, and optional default/at for person gates. Exact
   payload names were unspecified. The fold exposes unanswered questions and
   applies selected answers, but scheduling gate readiness needs external facts.
-- Usage thresholds are numeric percentages from 0 through 100, defaulting to
-  80 and 100 for tokens, and 50, 80 and 100 for dollars and minutes. Task
-  `thresholds.json` values override per-unit `usage_notice_thresholds` workflow
-  defaults, which override the built-in defaults. Existing explicit token
-  thresholds, including 50, and previously written notices are preserved. Dollars
-  and minutes are nonnegative numbers; tokens are nonnegative integers. Exactly one unit is
-  present in a usage-notice, and its
-  body task must equal the envelope task. `grid usage post --tokens N` adds a
-  delta; `usage show` includes token totals. `usage budget set --tokens N` sets
-  a positive task budget, overriding the replaceable `tokens_per_task` default
-  in `<GRID_HOME>/workspace.md` front matter (digits only, at least 1; missing,
-  linked, unreadable, invalid or oversized files give no default). Budget show
-  reports the effective token budget and source: task, workspace or none.
-  `usage budget clear --tokens` restores that default. `usage budget set` and `usage
-  budget clear` are person-only writes on the person-gate floor, with `--workspace`
-  or without: an agent context exits 3 with the usual `person_required` refusal and
-  nothing changes, so a held session cannot lift its own hold or the workspace
-  default. The gate runs after the flags parse (a syntax error still exits 2); a
-  `--workspace` write also checks the caller role below first, which keeps its own
-  exit 3. `usage budget show` stays open to every caller.
-
-  Task `workflow.md` front matter may set `usage_notice_thresholds` to a map of
-  `tokens`, `dollars`, and/or `minutes` to percentage lists, for example
-  `usage_notice_thresholds: {tokens: [90, 100]}`. Each supplied list must contain
-  at most eight positive finite numbers in strictly increasing order and end
-  at 100. Per unit, explicit task `thresholds.json` settings win, then this
-  workflow key, then the default (tokens 80/100; dollars and minutes 50/80/100); omitted units retain
-  their own settings or defaults. Invalid units fall back while valid units
-  still apply, with one diagnostic per command; usage recording and
-  notices continue, and existing fired notice files are never rewritten.
-
-  `grid usage budget show|set|clear --workspace` accesses the workspace default
-  without resolving a task: show returns `{"tokens_per_task":100}` or
-  `{"tokens_per_task":null}` with `--json`, and `tokens_per_task 100` or
-  `tokens_per_task none` as plain text. Set requires `--tokens N`, a positive
-  integer; clear accepts optional `--tokens` and removes the key. Invalid flags
-  and amounts exit 2; all three reject `--task`, `--dollars` and `--minutes`.
-  Workspace writes preserve every byte outside the token-key lines, add an absent
-  key last in the front matter, and create front matter or the file when needed.
-  They use an exclusive
-  `.workspace.lock` and atomic replacement. An unsafe, oversized, non-UTF-8 or
-  unparsable workspace file, a lock failure or a write failure exits 1, leaving
-  the file unchanged. Clearing an absent key does not rewrite the file.
-  Replaceable `WorkspaceBudgetReadAllowed` and
-  `WorkspaceBudgetWriteAllowed` policies use `GRID_ROLE`: reads default to the
-  empty local role, owner and member; writes default to the empty role and owner.
-  Other roles are refused with exit 3 before workspace access, and a write that passes
-  the role check still needs a person: an agent ancestor or agent environment marker is
-  refused with `person_required`, even with an empty role. A replaced
-  `WorkspaceBudgetWriteAllowed` cannot admit a role the person gate refuses: the
-  gate allows only the empty role, `owner`, `member` and `cli`
-  (`internal/persongate/gate.go:132`), so any other role still exits 3 with
-  `role_not_allowed`. A `person_verbs` entry for `usage budget set|clear` in a task
-  `workflow.md`, or, with no task, in the project's `workflows.md`, applies to the
-  `--workspace` form as to the task form; a project with no policy of its own falls
-  back to `$GRID_HOME/workflows.md` (`internal/workflow/project_person.go:19`).
-  Workflow keys are
-  `token_limit_read_roles` and `token_limit_write_roles`; the CLI does not read a
-  workflow file to configure these policies. Notices are chatter;
-  the hold at the limit is not enforced yet and requires worker/session hooks.
-- The task-local lease path table conflicts with the per-project merge rule.
-  Merge leases explicitly require project and are stored by their caller at
-  project scope. The merge wire format is otherwise unspecified: choose lease,
-  project, holder, fence, gen, since and until, plus optional renewed_at. The
-  docs say "without renewal" but give no renewal payload: choose renewed_at for
-  an explicit renewal, never earlier than since. Until is exactly 15 minutes
-  after the most recent renewal, or since if never renewed. There is no automatic
-  renewal in this package; a released or expired valid lease is breakable by the
-  next holder. A new grant needs a new fence. `lease.json`
-  also validates the merge variant. Task leases have pid/pid_start while held;
-  Job leases carry an attempt and null pid fields, with liveness in `.live`.
+- Usage is a number the window shows. Dollars and minutes are nonnegative
+  numbers; tokens are nonnegative integers. `grid usage post --tokens N` adds a
+  delta; `usage show` includes token totals. The CLI has no threshold or budget
+  verbs: `grid usage threshold ...` and `grid usage budget ...` answer the
+  unknown-command error with exit 2, a post writes no usage-notice and prints no
+  usage-notice line, and the workflow key `usage_notice_thresholds`, a budget in
+  a task's `usage/thresholds.json` and `tokens_per_task` in `workspace.md` are
+  ignored when present in an old home. The `usage-notice` feed type stays in the
+  schema so notices already written to old feeds still read.
+- There is no project-wide landing slot; landing safety stays with git and `land.lock`.
+  `lease.json` validates the task and Job variants. Task leases have
+  pid/pid_start while held; Job leases carry an attempt and null pid fields, with
+  liveness in `.live`.
 - Heartbeat until must equal beat_at plus ten minutes. The schema does not permit
   renewal through Feed posts. `Fold(posts)` has no heartbeat input and therefore
   cannot copy beat_at for display; a caller can overlay display-only liveness.
@@ -400,19 +347,12 @@ Disagreements and defaults chosen:
 
 Under the Grid home, `projects/<project>/`:
 
-- `lease/merge.json` and `lease/seq`: the project merge lease and its fence
-  counter. The lease is one per project (feed-contract.md:113), so its fence
-  counter is per project too, not the task Feed's `lease/seq`. The lease
-  package writes `{lease, holder, fence, since, until}` and does not yet carry
-  `project`, `gen` or `renewed_at`, so it does not validate against
-  [merge-lease.json](schemas/merge-lease.json); settle that shape before task
-  and Job leases share the reader.
 - `tasks/<task>/sessions/<machine>/<session>.json`: one session record per
   runtime session id and machine (plugin-design.md has no path entry for it).
 - `tasks/<task>/feed/.live/<holder>.<fence>.json`: the Job liveness file
   (feed-contract.md:17 and :27), never shipped off the host.
 
-Merge lease, session and task allocation code uses `flock`; on Windows it returns
+Session and task allocation code uses `flock`; on Windows it returns
 "not supported until the Windows Feed is decided" (feed-contract.md:12).
 
 ## Command output
@@ -680,13 +620,15 @@ is one line per change, `<at> <status> <topic>/<name> v<n> <hash> <reason>`
 (`-` for an empty hash, no reason field when empty, control characters shown as
 `?`). A missing log is an empty list: `{"changes":[]}` or no output, exit 0.
 
-### `grid brain revert <topic>/<name> --to <n> [--level home|project] [--project <p>] [--json]`
+### `grid brain revert <topic>/<name> --to <n> [--reason <why>] [--level home|project] [--project <p>] [--json]`
 
 Publishes stored version `n` of a knowledge entry again, as a new version, so the
 history only grows: after versions 1 to 3, `--to 1` makes version 4 with version
 1's bytes. Under the level lock it stores the copy, publishes the entry
 atomically, appends an audit line with status `reverted`, reason `revert to v<n>`
-and the new version and hash, then rebuilds that level's index. When the entry
+(`revert to v<n>: <why>` when `--reason` is given; the audit line folds whitespace
+and writes `|` as `/`) and the new version and hash, then rebuilds that level's
+index. `--json` adds `reason` when given. When the entry
 already holds those bytes (and the newest stored copy does too) nothing is written
 and the current version is reported (`noop` means nothing was written). A stale
 or missing entry is written again, so it is not a no-op even when the newest

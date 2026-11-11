@@ -28,7 +28,7 @@ func (h *harness) threeVersions(t *testing.T) brain.Store {
 	for _, name := range []string{"second", "third"} {
 		b, err := brain.Encode(brain.Note{Name: name, Topic: "decisions", Type: "reference", Description: "Before changing checks.",
 			Summary: "Run the checks.", Source: "job:T-01/J-01", Level: "home", Status: "proposed",
-			Origin: brain.Origin{Kind: "job", ID: "T-01/J-01", Tier: "agent"}, Links: []brain.Link{}, Body: "# " + name + "\n"})
+			Origin: brain.Origin{Kind: "job", ID: "T-01/J-01"}, Links: []brain.Link{}, Body: "# " + name + "\n"})
 		if err != nil {
 			t.Fatal(err)
 		}

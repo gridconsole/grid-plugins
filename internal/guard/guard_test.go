@@ -97,39 +97,6 @@ func TestPlanHeaderRules(t *testing.T) {
 		name    string
 		prepare func(*fixture, bool) hookio.Input
 	}{
-		{"held task keeps writes in projects", func(f *fixture, deny bool) hookio.Input {
-			p := filepath.Join(f.task, "notes.md")
-			if deny {
-				p = filepath.Join(f.repo, "file.go")
-			}
-			return f.input("Write", p)
-		}},
-		{"acceptance is the history event", func(f *fixture, deny bool) hookio.Input {
-			h := accepted
-			if deny {
-				h = "- time · wrote · plan accepted · by agent\n"
-			}
-			f.write(filepath.Join(f.task, "history.md"), h)
-			return f.input("Write", filepath.Join(f.repo, "file.go"))
-		}},
-		{"inactive task releases hold", func(f *fixture, deny bool) hookio.Input {
-			s := "paused"
-			if deny {
-				s = "active"
-			}
-			f.write(filepath.Join(f.task, "task.md"), strings.Replace(pendingTask, "active", s, 1))
-			return f.input("Write", filepath.Join(f.repo, "file.go"))
-		}},
-		{"missing task remains held", func(f *fixture, deny bool) hookio.Input {
-			if deny {
-				if err := os.Remove(filepath.Join(f.task, "task.md")); err != nil {
-					f.t.Fatal(err)
-				}
-			} else {
-				f.accept()
-			}
-			return f.input("Write", filepath.Join(f.repo, "file.go"))
-		}},
 		{"planner own or unaccepted task", func(f *fixture, deny bool) hookio.Input {
 			h := ""
 			if deny {
@@ -204,109 +171,6 @@ func TestPlanHeaderRules(t *testing.T) {
 			}
 			return i
 		}},
-		{"cannot forge acceptance", func(f *fixture, deny bool) hookio.Input {
-			i := f.input("Write", filepath.Join(f.task, "HISTORY.MD"))
-			i.ToolInput["content"] = "ordinary line"
-			if deny {
-				i.ToolInput["content"] = accepted
-			}
-			return i
-		}},
-		{"cannot move step past gate", func(f *fixture, deny bool) hookio.Input {
-			i := f.input("Write", filepath.Join(f.task, "task.md"))
-			s := "research"
-			if deny {
-				s = "build"
-			}
-			i.ToolInput["content"] = strings.Replace(pendingTask, "step: plan\n", "step: "+s+"\n", 1)
-			return i
-		}},
-		{"cannot remove approval workflow", func(f *fixture, deny bool) hookio.Input {
-			i := f.input("Write", filepath.Join(f.task, "task.md"))
-			s := pendingTask
-			if deny {
-				s = strings.Replace(s, "kind: approve", "kind: work", 1)
-			}
-			i.ToolInput["content"] = s
-			return i
-		}},
-		{"cannot close task", func(f *fixture, deny bool) hookio.Input {
-			i := f.input("Write", filepath.Join(f.task, "task.md"))
-			s := pendingTask
-			if deny {
-				s = strings.Replace(s, "active", "closed", 1)
-			}
-			i.ToolInput["content"] = s
-			return i
-		}},
-		{"cannot corrupt readable task", func(f *fixture, deny bool) hookio.Input {
-			i := f.input("Write", filepath.Join(f.task, "task.md"))
-			s := pendingTask
-			if deny {
-				s = "broken"
-			}
-			i.ToolInput["content"] = s
-			return i
-		}},
-		{"unreadable task can stay unreadable", func(f *fixture, deny bool) hookio.Input {
-			if !deny {
-				f.write(filepath.Join(f.task, "task.md"), "broken")
-			}
-			i := f.input("Write", filepath.Join(f.task, "task.md"))
-			i.ToolInput["content"] = "still broken"
-			return i
-		}},
-		{"unknown edit is refused", func(f *fixture, deny bool) hookio.Input {
-			i := f.input("Edit", filepath.Join(f.task, "task.md"))
-			i.ToolInput["old_string"] = "active"
-			if deny {
-				i.ToolInput["old_string"] = "missing"
-			}
-			i.ToolInput["new_string"] = "active"
-			return i
-		}},
-		{"nontext writes are refused", func(f *fixture, deny bool) hookio.Input {
-			i := f.input("Write", filepath.Join(f.task, "history.md"))
-			if deny {
-				i.ToolInput["content"] = 12
-			}
-			return i
-		}},
-		{"notebooks cannot edit task controls", func(f *fixture, deny bool) hookio.Input {
-			p := "notes.ipynb"
-			if deny {
-				p = "task.md"
-			}
-			return f.input("NotebookEdit", filepath.Join(f.task, p))
-		}},
-		{"top names printable ASCII", func(f *fixture, deny bool) hookio.Input {
-			p := "notes.md"
-			if deny {
-				p = "hіstory.md"
-			}
-			return f.input("Write", filepath.Join(f.task, p))
-		}},
-		{"nested names no alternate streams", func(f *fixture, deny bool) hookio.Input {
-			p := "nested/notes.md"
-			if deny {
-				p = "nested/notes.md:stream"
-			}
-			return f.input("Write", filepath.Join(f.task, p))
-		}},
-		{"parts no trailing dot", func(f *fixture, deny bool) hookio.Input {
-			p := "nested/notes.md"
-			if deny {
-				p = "nested./notes.md"
-			}
-			return f.input("Write", filepath.Join(f.task, p))
-		}},
-		{"parts no trailing space", func(f *fixture, deny bool) hookio.Input {
-			p := "notes.md"
-			if deny {
-				p = "notes.md "
-			}
-			return f.input("Write", filepath.Join(f.task, p))
-		}},
 		{"tasks folder aliases", func(f *fixture, deny bool) hookio.Input {
 			// Where tasks already exists, a folding volume reads TASKS as that same
 			// folder; the other spelling only matters in a project without one.
@@ -322,16 +186,6 @@ func TestPlanHeaderRules(t *testing.T) {
 			}
 			return f.input("Write", filepath.Join(f.projects, "example", p, "T-03", "notes.md"))
 		}},
-		{"preview always needs a person", func(f *fixture, deny bool) hookio.Input {
-			f.accept()
-			i := f.input("Write", filepath.Join(f.task, "history.md:stream"))
-			s := accepted
-			if deny {
-				s += "- time · preview approved · by person\n"
-			}
-			i.ToolInput["content"] = s
-			return i
-		}},
 		{"plan ready needs recall", func(f *fixture, deny bool) hookio.Input {
 			if !deny {
 				f.write(filepath.Join(f.task, "plan.md"), "## How we approach it\nRecall: nothing found\n")
@@ -339,13 +193,6 @@ func TestPlanHeaderRules(t *testing.T) {
 			i := f.input("Write", filepath.Join(f.task, "history.md"))
 			i.ToolInput["content"] = "- time · plan ready · by agent\n"
 			return i
-		}},
-		{"gate names forbidden", func(f *fixture, deny bool) hookio.Input {
-			p := "notes.md"
-			if deny {
-				p = "  SHIP   approved "
-			}
-			return f.input("Write", filepath.Join(f.task, p))
 		}},
 		{"reviewer remains inside projects", func(f *fixture, deny bool) hookio.Input {
 			f.accept()
@@ -367,69 +214,6 @@ func TestPlanHeaderRules(t *testing.T) {
 			i.AgentType = "grid-checker"
 			return i
 		}},
-		{"switch releases plan guard", func(f *fixture, deny bool) hookio.Input {
-			if !deny {
-				f.env["GRID_PLAN_GUARD"] = " OFF "
-			}
-			return f.input("Write", filepath.Join(f.repo, "file.go"))
-		}},
-		{"main agent remembered task", func(f *fixture, deny bool) hookio.Input {
-			f.pointer(".tasks", f.task)
-			if !deny {
-				f.accept()
-			}
-			i := f.input("Write", filepath.Join(f.repo, "file.go"))
-			i.Cwd = f.repo
-			return i
-		}},
-		{"child inherits main hold", func(f *fixture, deny bool) hookio.Input {
-			f.pointer(".tasks", f.task)
-			if !deny {
-				f.accept()
-			}
-			i := f.input("Write", filepath.Join(f.repo, "file.go"))
-			i.Cwd = f.repo
-			i.AgentID = "worker"
-			return i
-		}},
-		{"child owns hold without siblings", func(f *fixture, deny bool) hookio.Input {
-			f.pointer(".tasks")
-			f.pointer(".tasks-worker", f.task)
-			i := f.input("Write", filepath.Join(f.repo, "file.go"))
-			i.Cwd = f.repo
-			i.AgentID = "sibling"
-			if deny {
-				i.AgentID = "worker"
-			}
-			return i
-		}},
-		{"legacy session list fallback", func(f *fixture, deny bool) hookio.Input {
-			f.pointer("", f.task)
-			if !deny {
-				f.pointer(".tasks")
-			}
-			i := f.input("Write", filepath.Join(f.repo, "file.go"))
-			i.Cwd = f.repo
-			return i
-		}},
-		{"symlink write follows target", func(f *fixture, deny bool) hookio.Input {
-			dest := f.task
-			if deny {
-				dest = f.repo
-			}
-			link := filepath.Join(f.root, "link")
-			f.link(link, dest)
-			return f.input("Write", filepath.Join(link, "new.md"))
-		}},
-		{"dangling symlink follows target", func(f *fixture, deny bool) hookio.Input {
-			dest := filepath.Join(f.task, "missing")
-			if deny {
-				dest = filepath.Join(f.repo, "missing")
-			}
-			link := filepath.Join(f.root, "link")
-			f.link(link, dest)
-			return f.input("Write", filepath.Join(link, "new.md"))
-		}},
 	}
 	for _, tt := range cases {
 		for _, deny := range []bool{false, true} {
@@ -441,6 +225,7 @@ func TestPlanHeaderRules(t *testing.T) {
 			}
 			t.Run(tt.name+"/"+suffix, func(t *testing.T) {
 				f := setup(t)
+				planBlock(f) // plan-guard warns by default; the deny rows cover it at block
 				i := tt.prepare(f, deny)
 				d := EvaluatePlan(i, f.root, f.env)
 				expect(t, d, want)

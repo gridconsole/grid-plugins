@@ -1,0 +1,1 @@
+Use the Explore agent to find every place in this repository that uses the user profile: the class, the loader and the route. Ask it to answer with path:line. Save the agent's reply, unchanged, as answer.md. Do not change any other file.

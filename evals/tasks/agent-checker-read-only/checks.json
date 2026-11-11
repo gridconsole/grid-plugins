@@ -1,0 +1,7 @@
+[
+  {"id":"verdict","type":"file_exists","path":"verdict.md","gate":true},
+  {"id":"template-read-only","type":"command_passes","command":["sh","-c","grep -q '^tools: Read' .claude/agents/grid-checker.md && ! grep -Eq '^tools:.*(Edit|Write|Bash|NotebookEdit)' .claude/agents/grid-checker.md"],"weight":2},
+  {"id":"rejected-first","type":"command_passes","command":["sh","-c","head -n 1 verdict.md | grep -qx REJECTED"],"weight":2},
+  {"id":"no-browser","type":"text_contains","path":"verdict.md","text":"No browser"},
+  {"id":"site-unchanged","type":"command_passes","command":["sh","-c","grep -q 'href=\"/missing\"' site/index.html && grep -q 'action=\"/send\"' site/index.html && [ \"$(find . -type f ! -path './.claude/*' | sort | tr '\\n' ' ')\" = './job.md ./site/index.html ./verdict.md ' ]"],"weight":2}
+]

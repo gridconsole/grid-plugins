@@ -33,15 +33,18 @@ type Delivery struct {
 	DryRun    bool              `json:"dry_run"`
 	Actions   []string          `json:"actions"`
 	Artifacts []artifact.Record `json:"artifacts"`
+	// Waiting lists the brain proposals still waiting. They never stop a delivery;
+	// the orchestrator reads them to start the curator.
+	Waiting []brain.WaitingProposal `json:"waiting_proposals"`
 }
 
-// Deliver checks the keeper and proof, then writes the Outcome and moves the task
+// Deliver checks the proof, then writes the Outcome and moves the task
 // to waiting at step ship. It raises no gate: the person's answer is a Job. The task record is written only through the task writer: one
 // commitWrite carries task.md and the delivery receipt, under .task.lock. The
 // lock order is .task.lock, .plan.lock, the brain levels' locks, .proof.lock;
 // no writer takes them the other way round.
 func (s Store) Deliver(o DeliverOptions) (Delivery, error) {
-	out := Delivery{DryRun: o.DryRun, Actions: []string{}, Artifacts: []artifact.Record{}}
+	out := Delivery{DryRun: o.DryRun, Actions: []string{}, Artifacts: []artifact.Record{}, Waiting: []brain.WaitingProposal{}}
 	if err := checkTaskText("outcome", o.Outcome, true); err != nil {
 		return out, err
 	}
@@ -76,6 +79,7 @@ func (s Store) Deliver(o DeliverOptions) (Delivery, error) {
 		brain:     brain.Store{GridHome: s.Resolver.GridHome, Project: project},
 		proof:     proof.Store{TaskDir: dir},
 		artifacts: artifact.Store{TaskPath: dir, ProjectFolder: res.Folder, Now: s.Now},
+		waiting:   &out.Waiting,
 	}
 	for _, file := range o.Files {
 		if !filepath.IsAbs(file) {
@@ -85,7 +89,7 @@ func (s Store) Deliver(o DeliverOptions) (Delivery, error) {
 	}
 
 	// Everything before the lock is read-only, including the dry-run path.
-	if err = d.check(t); err != nil {
+	if out.Waiting, err = d.check(t); err != nil {
 		return out, err
 	}
 	out.Actions = append(out.Actions, "Write Outcome in task.md")
@@ -121,63 +125,65 @@ type delivery struct {
 	brain     brain.Store
 	proof     proof.Store
 	artifacts artifact.Store
+	// waiting receives the proposals still waiting when the delivery is written.
+	waiting *[]brain.WaitingProposal
 }
 
-// check refuses a delivery that cannot succeed. It only reads, so it serves both
-// the dry run and the re-check under the locks.
-func (d delivery) check(t Task) error {
+// check refuses a delivery that cannot succeed and returns the brain proposals
+// that wait. It only reads, so it serves both the dry run and the re-check under
+// the locks.
+func (d delivery) check(t Task) ([]brain.WaitingProposal, error) {
 	data, err := os.ReadFile(filepath.Join(d.dir, "task.md"))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var doc yaml.Node
 	if err = yaml.NewDecoder(bytes.NewReader(data)).Decode(&doc); err != nil {
-		return err
+		return nil, err
 	}
 	legacy := ""
 	if len(doc.Content) > 0 {
 		legacy = scalar(doc.Content[0], "status")
 	}
 	if t.State == "closed" || legacy == "closed" || legacy == "cancelled" || legacy == "stopped" {
-		return errors.New("task is closed or stopped; delivery cannot reopen it")
+		return nil, errors.New("task is closed or stopped; delivery cannot reopen it")
 	}
 	// The state table decides which states may reach waiting; delivery from
 	// paused, or from a task already at a gate, is refused like a status move.
 	if _, err = NextState(t.State, "status", "waiting"); err != nil {
-		return err
+		return nil, err
 	}
+	// Waiting proposals never stop a delivery: they are read and returned so the
+	// orchestrator can start the curator. An unreadable proposal is still an error.
 	waiting, err := d.brain.WaitingForTask(d.dir, t.ID)
 	if err != nil {
-		return err
-	}
-	if len(waiting) > 0 {
-		return fmt.Errorf("Deliver blocked: %d brain proposals wait. Run: grid brain keep", len(waiting))
+		return nil, err
 	}
 	if _, err = (plan.Store{TaskDir: d.dir}).Read(); errors.Is(err, os.ErrNotExist) {
-		return errors.New("plan.md is missing; write the plan before delivering")
+		return nil, errors.New("plan.md is missing; write the plan before delivering")
 	}
 	idx, err := d.proof.Build()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err = idx.Check(); err != nil {
-		return err
+		return nil, err
 	}
 	for _, file := range d.files {
 		if err = d.artifacts.CheckImport(file); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	path, err := localdata.Safe(d.dir, "proof", "index.json")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
-		return errors.New("proof/index.json must be a regular file")
+		return nil, errors.New("proof/index.json must be a regular file")
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+		return nil, err
 	}
-	return nil
+	return waiting, nil
 }
 
 // write runs under the task, plan and brain locks. Artifacts and the proof index
@@ -185,9 +191,11 @@ func (d delivery) check(t Task) error {
 // rises only when everything before it succeeded. A failure before the commit can
 // leave imported artifacts or a rebuilt index, never a half-written task record.
 func (d delivery) write(t Task) ([]artifact.Record, error) {
-	if err := d.check(t); err != nil {
+	waiting, err := d.check(t)
+	if err != nil {
 		return nil, err
 	}
+	*d.waiting = waiting
 	var imported []artifact.Record
 	for _, file := range d.files {
 		record, err := d.artifacts.Import(file, "")

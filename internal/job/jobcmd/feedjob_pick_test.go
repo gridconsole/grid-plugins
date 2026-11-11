@@ -36,7 +36,8 @@ func TestPickJobMarksTheOlderPostStale(t *testing.T) {
 
 func TestPickJobNamesRecordAndFieldOfTheSelectedJobOnly(t *testing.T) {
 	bad := entry("R2", "J-2", 2, "broken")
-	bad.Body["max_rounds"] = "many"
+	// max_rounds is retired and ignored, so another typed field proves the path.
+	bad.Body["item"] = "many"
 	records := []feed.Entry{entry("R1", "J-1", 1, "fine"), bad}
 	if j, err := pickJob(records, "J-1"); err != nil || j == nil {
 		t.Fatalf("selecting J-1 with a malformed J-2 posted: %+v, %v", j, err)
@@ -45,7 +46,7 @@ func TestPickJobNamesRecordAndFieldOfTheSelectedJobOnly(t *testing.T) {
 	if err == nil {
 		t.Fatal("selecting the malformed Job should fail")
 	}
-	for _, want := range []string{"J-2", "R2", "max_rounds"} {
+	for _, want := range []string{"J-2", "R2", "item"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not name %q", err, want)
 		}

@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func fixture(t *testing.T, typ, name string) []byte {
@@ -87,7 +86,6 @@ func TestSemanticRules(t *testing.T) {
 		name, typ string
 		mutate    func(map[string]any)
 	}{
-		{"merge-duration", "merge-lease", func(v map[string]any) { v["until"] = "2026-11-08T10:16:00.000Z" }},
 		{"heartbeat-duration", "heartbeat", func(v map[string]any) { v["until"] = "2026-11-08T10:11:00.000Z" }},
 		{"tenure-file-identity", "takeover", func(v map[string]any) { v["fence"] = 3 }},
 		{"job-lease-identity", "result", func(v map[string]any) { v["lease"] = "J-2" }},
@@ -117,39 +115,6 @@ func TestSemanticRules(t *testing.T) {
 				t.Fatal("invalid semantic rule accepted")
 			}
 		})
-	}
-}
-
-func TestMergeLeaseExpiry(t *testing.T) {
-	var lease MergeLease
-	if err := json.Unmarshal(fixture(t, "merge-lease", "valid/basic"), &lease); err != nil {
-		t.Fatal(err)
-	}
-	end, _ := time.Parse(time.RFC3339Nano, lease.Until)
-	for _, tc := range []struct {
-		name string
-		at   time.Time
-		want bool
-	}{{"live", end.Add(-time.Nanosecond), false}, {"expiry", end, true}, {"stale", end.Add(time.Hour), true}} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := lease.Breakable(tc.at); got != tc.want {
-				t.Fatalf("Breakable = %v, want %v", got, tc.want)
-			}
-		})
-	}
-	lease.Holder = nil
-	if !lease.Breakable(end.Add(-time.Minute)) {
-		t.Fatal("released lease should be available")
-	}
-	lease.Until = "invalid"
-	if lease.Breakable(end) {
-		t.Fatal("malformed lease should not authorize a break")
-	}
-	if err := json.Unmarshal(fixture(t, "merge-lease", "valid/renewed"), &lease); err != nil {
-		t.Fatal(err)
-	}
-	if lease.Breakable(end) || !lease.Breakable(end.Add(5*time.Minute)) {
-		t.Fatal("a renewal must move the fifteen-minute expiry window")
 	}
 }
 

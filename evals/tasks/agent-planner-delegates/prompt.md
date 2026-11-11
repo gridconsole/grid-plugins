@@ -1,0 +1,1 @@
+I am Alex. My Grid home is the one in GRID_HOME. Task T-01 in the notes-app project (code in ./work/notes-app) has reached its build step and its plan is accepted. Use the grid-planner agent to start that step: post the Job for plan step 1 with `grid job post`, name the agent that will run it, and stop. Do not write the briefing as a file and do not do the work yourself.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "origin",
-  "description": "The required origin block from brain note front matter. Null and absent stamps are invalid. Legacy notes must pass through the external-import upgrade path documented in formats.md before validation.",
+  "description": "The required origin block from brain note front matter. Null and absent stamps are invalid. The decoder ignores a legacy `tier` key on disk, so no import upgrade path is needed for it; the schema itself forbids `tier` (formats.md).",
   "type": "object",
   "properties": {
     "kind": {
@@ -20,21 +20,11 @@
       "not": {
         "pattern": "^[\t\n\u000b\f\r    -     　]*$"
       }
-    },
-    "tier": {
-      "type": "string",
-      "enum": [
-        "person-team",
-        "person-guest",
-        "agent",
-        "external"
-      ]
     }
   },
   "required": [
     "kind",
-    "id",
-    "tier"
+    "id"
   ],
   "additionalProperties": false
 }

@@ -94,7 +94,7 @@ func TestJobGraphUsageAndPlain(t *testing.T) {
 		t.Fatalf("leading flag: %d %s", code, h.out)
 	}
 	h.write(filepath.Join(h.tmp, "items.json"), `[{"id":"J-1","review":"L2","irreversible":true,"verify":{"command":"make test","min_tests":1}},{"id":"J-2","review":"L1","visible":"big","verify":{"command":"make test","min_tests":1}}]`)
-	if code := h.run(h.tmp, "job", "floor", "items.json"); code != 0 || !strings.Contains(h.out.String(), "gated by classify") || !strings.Contains(h.out.String(), "checker capture at L3") {
+	if code := h.run(h.tmp, "job", "floor", "items.json"); code != 0 || !strings.Contains(h.out.String(), "waits for classify") || !strings.Contains(h.out.String(), "checker capture at L3") {
 		t.Fatalf("floor: %d %s %s", code, h.out, h.errb)
 	}
 	if code := h.run(h.tmp, "job", "cycles", "items.json"); code != 0 || h.out.String() != "No Job cycles.\n" {

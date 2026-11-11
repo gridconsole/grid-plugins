@@ -51,6 +51,11 @@ type Stream struct {
 	// Configure sets the per-task Store fields the caller owns (worktrees,
 	// liveness probe, incident sink, owner); st.Feed, st.Writer and st.Assignee are set.
 	Configure func(st *Store, taskID string)
+	// Assigned, when set, is called with the task folder and the Job id of a spawn
+	// the stream prints for the first time, just before it prints the spawn line.
+	// An error is one Diag line: the spawn line is still printed and the pass goes
+	// on, so a failed callback neither undoes nor blocks the assign.
+	Assigned func(taskDir, job string) error
 	// Probe judges whether a recorded holder process is gone; nil uses session.ProbeLocal.
 	Probe func(session.Live) session.ProcessState
 
@@ -212,6 +217,11 @@ func (s *Stream) task(dir string) error {
 		key := fmt.Sprintf("%s\x00%s\x00%d", dir, sp.Job, sp.Fence)
 		if s.sent[key] {
 			continue
+		}
+		if s.Assigned != nil {
+			if err := s.Assigned(dir, sp.Job); err != nil {
+				s.diag("grid worker next: task %s: job %s assigned, the Assigned callback failed: %s\n", taskID, sp.Job, oneLine(err))
+			}
 		}
 		if err := s.emit("spawn", spawnLine{taskID, dir, sp.Job, sp.To, sp.Fence, sp.Gen, sp.Attempt, sp.Assign, epoch}); err != nil {
 			return err

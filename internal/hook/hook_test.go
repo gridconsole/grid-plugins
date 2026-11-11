@@ -73,7 +73,7 @@ func TestSessionStartSourcesAndEnvironment(t *testing.T) {
 				t.Fatalf("exit %d", code)
 			}
 			context := contextFrom(t, out)
-			for _, want := range []string{"GRID_HOME", "GRID_PROJECTS", "Grid project: example", "Task files are written by grid", "grid-builder changes files", "terminal outside Claude Code or Codex"} {
+			for _, want := range []string{"GRID_HOME", "GRID_PROJECTS", "Grid project: example", "Task files are written by grid", "terminal outside Claude Code or Codex"} {
 				if !strings.Contains(context, want) {
 					t.Errorf("missing %q: %s", want, context)
 				}
@@ -211,6 +211,29 @@ func TestContextCeiling(t *testing.T) {
 	text := sessionContext(where.Result{Project: strings.Repeat("界", 12000)}, where.Resolver{GridHome: "/example"}, "")
 	if !utf8.ValidString(text) || utf8.RuneCountInString(text) >= 10000 {
 		t.Fatal("invalid context bound")
+	}
+}
+
+// The agent routing line is gone from the session start text; the other lines stay.
+func TestSessionContextHasNoAgentRoutingLine(t *testing.T) {
+	r := where.Result{Project: "example"}
+	text := sessionContext(r, where.Resolver{GridHome: "/example"}, "")
+	for _, gone := range []string{"Grid agents cover", "grid-scout", "grid-builder", "Job briefs are rendered"} {
+		if strings.Contains(text, gone) {
+			t.Fatalf("session start text still carries %q:\n%s", gone, text)
+		}
+	}
+	for _, kept := range []string{
+		"Grid tracks tasks, Jobs and shared knowledge in one Grid home.",
+		"GRID_HOME is the Grid data folder",
+		ProjectLine(r, ""),
+		"Task files are written by grid under the Grid home.",
+		"The Grid brain holds shared topics, knowledge and decisions",
+		"Approvals come from a person through the Grid app",
+	} {
+		if !strings.Contains(text, kept) {
+			t.Fatalf("session start text lost %q:\n%s", kept, text)
+		}
 	}
 }
 

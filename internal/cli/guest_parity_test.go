@@ -31,6 +31,7 @@ var guestParityCommands = map[string][]string{
 	"brain index":          {"--read-only"},
 	"brain keep":           {},
 	"brain revert":         {"parity/parity", "--to", "1"},
+	"brain supersede":      {"parity", "--by", "parity-v2", "--reason", "parity reason here"},
 	"brain propose":        {"--name", "parity", "--topic", "general", "--description", "parity", "--summary", "parity", "--body", "parity", "--external"},
 	"brain search":         {"parity"},
 	"brain show":           {"parity"},
@@ -47,98 +48,91 @@ var guestParityCommands = map[string][]string{
 	"history add":   {"parity"},
 	"hook level":    {"home-allow", "off"},
 
-	"intent claim":          {"parity"},
-	"intent done":           {"parity", "--claim", "parity"},
-	"intent list":           {},
-	"intent release":        {"parity", "--claim", "parity"},
-	"intent renew":          {"parity", "--claim", "parity"},
-	"job ack":               {},
-	"job blocked":           {},
-	"job cancel":            {},
-	"job lint":              {"{file}"},
-	"job order":             {},
-	"job next":              {},
-	"job post":              {},
-	"job render":            {"{task}", "I-01"},
-	"job result":            {},
-	"job show":              {"J-01"},
-	"job trace":             {"parity.md"},
-	"job tree":              {},
-	"job verify":            {"J-01"},
-	"land":                  {"{task}", "--dry-run"},
-	"lease release":         {"merge", "--holder", "gus@01ARZ3NDEKTSV4RRFFQ69G5FAV", "--fence", "1"},
-	"lease renew":           {"merge", "--holder", "gus@01ARZ3NDEKTSV4RRFFQ69G5FAV", "--fence", "1"},
-	"lease status":          {"merge", "--holder", "gus@01ARZ3NDEKTSV4RRFFQ69G5FAV", "--fence", "1"},
-	"lease take":            {"merge", "--holder", "gus@01ARZ3NDEKTSV4RRFFQ69G5FAV", "--fence", "1"},
-	"person approvers":      {"--area", "code"},
-	"person list":           {},
-	"person show":           {"gus"},
-	"plan check":            {},
-	"plan diff":             {"1", "2"},
-	"plan hash":             {},
-	"plan items":            {},
-	"plan migrate":          {"--dry-run"},
-	"plan write":            {"{file}"},
-	"project relink":        {"{project}", "{cwd}"},
-	"project remove":        {"{project}"},
-	"project-md get":        {"{project}", "id"},
-	"project-md set":        {"{project}", "title", "parity"},
-	"proof add":             {"I-01", "--text", "parity"},
-	"proof index":           {},
-	"question add":          {"parity?", "--applies", "2030-01-01T00:00:00Z", "--default", "defer"},
-	"question list":         {},
-	"question sync":         {},
-	"question tick":         {},
-	"question withdraw":     {"Q-01", "--reason", "parity"},
-	"routine add":           {"parity", "--every", "1h", "--run", "grid version"},
-	"routine list":          {},
-	"routine remove":        {"parity"},
-	"routine run":           {"parity"},
-	"routine schedule":      {},
-	"routine unschedule":    {},
-	"session handback":      {},
-	"session list":          {},
-	"session pause":         {},
-	"session resume":        {},
-	"session send":          {"parity"},
-	"session show":          {"parity"},
-	"session start":         {},
-	"session stop":          {},
-	"session switch":        {"grid-builder"},
-	"setup":                 {"{project}", "--answers", "-"},
-	"signal act":            {"S-01ARZ3NDEKTSV4RRFFQ69G5FAV", "--act", "note"},
-	"signal add":            {"--title", "parity"},
-	"signal dismiss":        {"S-01ARZ3NDEKTSV4RRFFQ69G5FAV"},
-	"signal move":           {"S-01ARZ3NDEKTSV4RRFFQ69G5FAV", "--to", "alpha"},
-	"skill disable":         {"research"},
-	"skill enable":          {"research"},
-	"task attach":           {"{task}", "--session", "parity", "--runtime", "claude"},
-	"task close":            {"{task}"},
-	"task decline":          {"{task}", "--reason", "parity"},
-	"task delete":           {"{task}"},
-	"task history":          {"{task}"},
-	"task list":             {},
-	"task move":             {"parity-worker"},
-	"task new":              {"parity"},
-	"task rename":           {"{task}", "--title", "parity"},
-	"task reopen":           {"{task}"},
-	"task restore":          {"{task}"},
-	"task show":             {"{task}"},
-	"task status":           {"{task}", "waiting"},
-	"task stop":             {"{task}"},
-	"usage":                 {},
-	"usage budget clear":    {},
-	"usage budget set":      {"--tokens", "1"},
-	"usage budget show":     {},
-	"usage post":            {"--job", "J-01", "--tokens", "1"},
-	"usage show":            {},
-	"usage threshold clear": {},
-	"usage threshold set":   {"--tokens", "1"},
-	"usage threshold show":  {},
-	"open":                  {},
-	"where":                 {},
-	"workflow show":         {},
-	"workflow write":        {"--file", "{file}", "--rev", "none"},
+	"intent claim":       {"parity"},
+	"intent done":        {"parity", "--claim", "parity"},
+	"intent list":        {},
+	"intent release":     {"parity", "--claim", "parity"},
+	"intent renew":       {"parity", "--claim", "parity"},
+	"job ack":            {},
+	"job blocked":        {},
+	"job cancel":         {},
+	"job lint":           {"{file}"},
+	"job order":          {},
+	"job next":           {},
+	"job post":           {},
+	"job render":         {"{task}", "I-01"},
+	"job result":         {},
+	"job show":           {"J-01"},
+	"job trace":          {"parity.md"},
+	"job tree":           {},
+	"job verify":         {"J-01"},
+	"land":               {"{task}", "--dry-run"},
+	"lease release":      {"task", "--epoch", "0.1"},
+	"lease status":       {"task"},
+	"lease take":         {"task", "--session", "parity"},
+	"person approvers":   {"--area", "code"},
+	"person list":        {},
+	"person show":        {"gus"},
+	"plan check":         {},
+	"plan diff":          {"1", "2"},
+	"plan hash":          {},
+	"plan items":         {},
+	"plan migrate":       {"--dry-run"},
+	"plan write":         {"{file}"},
+	"project relink":     {"{project}", "{cwd}"},
+	"project remove":     {"{project}"},
+	"project-md get":     {"{project}", "id"},
+	"project-md set":     {"{project}", "title", "parity"},
+	"proof add":          {"I-01", "--text", "parity"},
+	"proof index":        {},
+	"question add":       {"parity?", "--applies", "2030-01-01T00:00:00Z", "--default", "defer"},
+	"question list":      {},
+	"question sync":      {},
+	"question tick":      {},
+	"question withdraw":  {"Q-01", "--reason", "parity"},
+	"routine add":        {"parity", "--every", "1h", "--run", "grid version"},
+	"routine list":       {},
+	"routine remove":     {"parity"},
+	"routine run":        {"parity"},
+	"routine schedule":   {},
+	"routine unschedule": {},
+	"session handback":   {},
+	"session list":       {},
+	"session pause":      {},
+	"session resume":     {},
+	"session send":       {"parity"},
+	"session show":       {"parity"},
+	"session start":      {},
+	"session stop":       {},
+	"session switch":     {"grid-builder"},
+	"setup":              {"{project}", "--answers", "-"},
+	"signal act":         {"S-01ARZ3NDEKTSV4RRFFQ69G5FAV", "--act", "note"},
+	"signal add":         {"--title", "parity"},
+	"signal dismiss":     {"S-01ARZ3NDEKTSV4RRFFQ69G5FAV"},
+	"signal move":        {"S-01ARZ3NDEKTSV4RRFFQ69G5FAV", "--to", "alpha"},
+	"skill disable":      {"research"},
+	"skill enable":       {"research"},
+	"task attach":        {"{task}", "--session", "parity", "--runtime", "claude"},
+	"task close":         {"{task}"},
+	"task decline":       {"{task}", "--reason", "parity"},
+	"task delete":        {"{task}"},
+	"task history":       {"{task}"},
+	"task list":          {},
+	"task move":          {"parity-worker"},
+	"task new":           {"parity"},
+	"task rename":        {"{task}", "--title", "parity"},
+	"task reopen":        {"{task}"},
+	"task restore":       {"{task}"},
+	"task show":          {"{task}"},
+	"task status":        {"{task}", "waiting"},
+	"task stop":          {"{task}"},
+	"usage":              {},
+	"usage post":         {"--job", "J-01", "--tokens", "1"},
+	"usage show":         {},
+	"open":               {},
+	"where":              {},
+	"workflow show":      {},
+	"workflow write":     {"--file", "{file}", "--rev", "none"},
 }
 
 // These --note options are text/reasons, not note locators. They still get a
@@ -227,7 +221,8 @@ func guestParityRows(t *testing.T) []guestParityRow {
 				}
 				add("task", args)
 			}
-			if projectArg || taskArg {
+			// The lease operand is the word task, not a task id; the task-lease rows below cover it.
+			if (projectArg || taskArg) && c.Name != "lease" {
 				args := slices.Clone(base)
 				if !slices.Contains(args, "{task}") && taskArg {
 					// Task-first shorthand is independent of the --task form.
@@ -251,9 +246,9 @@ func guestParityRows(t *testing.T) []guestParityRow {
 					add("act-"+act, args)
 				}
 			}
-			if c.Name == "lease" && sub.Name != "renew" {
-				// The parser inventory probes the default merge lease. The task lease
-				// dispatch has its own flags, and also resolves through a project.
+			if c.Name == "lease" {
+				// The task lease dispatch has its own flags, and also resolves through a
+				// project.
 				args := []string{"task", "--task", "{task}"}
 				if sub.Name == "take" {
 					args = append(args, "--session", "parity")
@@ -419,6 +414,8 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 			want = guestParityOutput{1, "", "grid: guests cannot change project settings\n"}
 		case "task delete", "task restore":
 			want = guestParityOutput{3, "", "grid " + command + ": task edit rejected: a person with an allowed role must perform this task move\n"}
+		case "task close", "task reopen", "task stop":
+			want = guestParityOutput{1, "", "grid " + command + ": role \"guest\" may not " + strings.TrimPrefix(command, "task ") + " a task; a guest answers and comments\n"}
 		case "question withdraw":
 			want = guestParityOutput{3, "", "question: Q-01 role \"guest\" may not withdraw\n"}
 		case "signal act", "signal dismiss", "signal move":
@@ -439,6 +436,8 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 			want = guestParityOutput{3, "", "grid brain changes: caller role is not allowed to read brain changes\n"}
 		case "brain revert":
 			want = guestParityOutput{3, "", "grid brain revert: caller role is not allowed to revert brain entries\n"}
+		case "brain supersede":
+			want = guestParityOutput{3, "", "grid brain supersede: caller role is not allowed to supersede brain entries\n"}
 		case "feed types":
 			// This command returns the public schema without resolving any scope.
 			return out.Code == 0 && out.Stderr == "" && strings.Contains(out.Stdout, "knowledge")

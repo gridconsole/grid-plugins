@@ -113,14 +113,11 @@ type Checkpoint struct {
 	Commit string `json:"commit"`
 }
 
-type LevelRaised struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-	Why  string `json:"why"`
-}
-
 // Job is the materialized run state. Retries are explicit assignments; the fold
 // never spawns a worker, increments an attempt on its own, or consults a clock.
+// ExitCode is the worker-exit's own code (an integer or a non-empty string, as
+// the writer sent it); ExitReasonMissing says the worker-exit gave no reason, so
+// ExitReason reads crash only by default.
 type Job struct {
 	ID              string          `json:"id"`
 	Task            string          `json:"task"`
@@ -142,10 +139,7 @@ type Job struct {
 	Checkpoint      *Checkpoint     `json:"checkpoint"`
 	Exited          string          `json:"exited"`
 	ExitReason      string          `json:"exit_reason"`
-	Review          string          `json:"review"`
-	LevelRaised     *LevelRaised    `json:"level_raised"`
 	ReviewRounds    int             `json:"review_rounds"`
-	MaxRounds       int             `json:"max_rounds"`
 	Continues       *string         `json:"continues"`
 	DiscoveredFrom  *string         `json:"discovered_from"`
 	ProposedJobs    []ProposedJob   `json:"proposed_jobs"`
@@ -155,6 +149,9 @@ type Job struct {
 	Order           *int            `json:"order,omitempty"`
 	State           string          `json:"state,omitempty"`
 	StateReason     string          `json:"state_reason,omitempty"`
+
+	ExitCode          json.RawMessage `json:"exit_code,omitempty"`
+	ExitReasonMissing bool            `json:"exit_reason_missing,omitempty"`
 }
 
 // The four states a Job reads in. The stored Status stays the record; these are
@@ -221,29 +218,6 @@ type State struct {
 	ByRef     map[string][]string  `json:"by_ref"`
 	Head      *string              `json:"head"`
 	Hosts     map[string]string    `json:"hosts"`
-}
-
-// MergeLease belongs to a project, not a task. A release clears Holder. Its
-// fifteen-minute window starts at RenewedAt, or Since when never renewed.
-type MergeLease struct {
-	Lease     string  `json:"lease"`
-	Project   string  `json:"project"`
-	Holder    *string `json:"holder"`
-	Fence     int64   `json:"fence"`
-	Gen       int64   `json:"gen"`
-	Since     string  `json:"since"`
-	RenewedAt *string `json:"renewed_at,omitempty"`
-	Until     string  `json:"until"`
-}
-
-// Breakable reports release or expiry; a malformed held lease is not breakable.
-func (l MergeLease) Breakable(now time.Time) bool {
-	data, err := json.Marshal(l)
-	if err != nil || Validate("merge-lease", data) != nil {
-		return false
-	}
-	end, _ := time.Parse(time.RFC3339Nano, l.Until)
-	return l.Holder == nil || !now.Before(end)
 }
 
 func isJobSide(typ string) bool {

@@ -6,41 +6,48 @@
       "pointer": "brain:project/export-format",
       "summary": "The export column order and compatibility rule.",
       "text": "Keep the id column before the title column.\nChanging the column order requires a recorded decision.",
-      "tier": "person-team",
-      "sha256": "2d82e2c5b126282a1cd2a14eba32029b8a7871b79e90dc5072b9fffa9501e27b",
+      "tier": "agent",
+      "sha256": "efff3e36637d02359b2810652068b20f20c25e2b5e0d8d43c81a1ef6d1c548cb",
       "topic": "conventions",
-      "updated": "2026-01-01T00:00:00.000Z"
+      "updated": "2026-01-01T00:00:00.000Z",
+      "shown": "excerpt"
     },
     {
       "pointer": "intent.md#request",
       "summary": "Request {#request}",
       "text": "## Request {#request}\n\nI want the export format documented so I can read the column order.",
       "tier": "person-team",
-      "sha256": "e8187d6338418a42bb6223c39a841ed50eb615d0929bdf34a520403647b81efa"
+      "sha256": "e8187d6338418a42bb6223c39a841ed50eb615d0929bdf34a520403647b81efa",
+      "shown": "text"
     },
     {
       "pointer": "plan.md#step-1",
       "summary": "- [ ] 1 Document the export format",
       "text": "- [ ] 1 Document the export format\n  Document the export format and column order.",
       "tier": "agent",
-      "sha256": "d8288be7c8e9058645f1ee0c03824762de7221f0d07ed1cb962312d9355d53bb"
+      "sha256": "d8288be7c8e9058645f1ee0c03824762de7221f0d07ed1cb962312d9355d53bb",
+      "shown": "text"
     },
     {
       "pointer": "plan.md#verify",
       "summary": "The export documentation lists the column order.",
       "text": "The export documentation lists the column order.",
       "tier": "agent",
-      "sha256": "d8288be7c8e9058645f1ee0c03824762de7221f0d07ed1cb962312d9355d53bb"
+      "sha256": "d8288be7c8e9058645f1ee0c03824762de7221f0d07ed1cb962312d9355d53bb",
+      "shown": "text"
     },
     {
       "pointer": "task:research.md#format",
       "summary": "Format {#format}",
       "text": "## Format {#format}\n\nThe export contains an id column followed by a title column.",
       "tier": "external",
-      "sha256": "0011b584c5fa5c090101b7d02ca4d83df330ec3d7291213878f27f50ff8a4d0d"
+      "sha256": "0011b584c5fa5c090101b7d02ca4d83df330ec3d7291213878f27f50ff8a4d0d",
+      "shown": "summary"
     }
   ],
   "not_rendered": [],
-  "brain_tokens": 80,
-  "disableSkillShellExecution": true
+  "brain_tokens": 77,
+  "disableSkillShellExecution": true,
+  "brief_bytes": 2108,
+  "pasted_chars": 318
 }

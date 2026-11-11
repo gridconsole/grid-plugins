@@ -54,6 +54,8 @@ type Row struct {
 type Summary struct {
 	Jobs   []Row  `json:"jobs"`
 	Totals Totals `json:"totals"`
+	// keys are the once-only keys seen in the log; they are not part of the answer.
+	keys map[string]bool
 }
 
 func emptySummary() Summary { return Summary{Jobs: []Row{}} }
@@ -83,6 +85,12 @@ func (s *Summary) add(r Record) error {
 	}
 	s.Jobs[i].addMicro(d, m)
 	s.Jobs[i].Tokens += tokens
+	if r.Key != "" {
+		if s.keys == nil {
+			s.keys = map[string]bool{}
+		}
+		s.keys[r.Key] = true
+	}
 	return nil
 }
 

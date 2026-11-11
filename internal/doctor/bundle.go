@@ -183,7 +183,7 @@ func bundleFiles(root, out string) ([]bundleFile, error) {
 		if err != nil {
 			return err
 		}
-		if !info.Mode().IsRegular() || !singleLinkBundleLog(info) || path == out {
+		if !info.Mode().IsRegular() || !singleLinkBundleEntry(path, info) || path == out {
 			return nil
 		}
 		name, err := filepath.Rel(root, path)
@@ -232,7 +232,7 @@ func readBundleTail(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !st.Mode().IsRegular() || !singleLinkBundleLog(st) {
+	if !st.Mode().IsRegular() || !singleLinkBundleLog(f, st) {
 		return "", errors.New("log is not a single-link regular file")
 	}
 	start := max(int64(0), st.Size()-bundleFileLimit)

@@ -12,6 +12,8 @@ import (
 // command, path, session id, or identity enters the counter. Append failures do
 // not change a permission decision. Pure guard evaluators never call this.
 func CountHomeAllow(env map[string]string, in hookio.Input) {
+	// A counter is a record: whatever goes wrong here stays here.
+	defer func() { _ = recover() }()
 	root := env["CLAUDE_PLUGIN_DATA"]
 	if root == "" {
 		if home := env["GRID_HOME"]; home != "" {

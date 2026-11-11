@@ -261,7 +261,7 @@ func ClaudeSet(o ClaudeSetOptions) (ClaudeSetResult, error) {
 	if !file.unchanged() {
 		return res, codedErr(codeChanged, path, "%s", errClaudeChanged.Error())
 	}
-	if err := os.Rename(stage, file.target); err != nil {
+	if err := atomicfile.Rename(stage, file.target); err != nil {
 		return res, &CodedError{Code: codeWriteFailed, Path: path, Msg: err.Error(), Err: err}
 	}
 	if err := atomicfile.SyncDir(filepath.Dir(file.target)); err != nil {

@@ -110,7 +110,7 @@ func runJobGraph(args []string, env Env) int {
 	for _, floor := range floors {
 		fmt.Fprintf(env.Stdout, "%s: floor %s, review %s (%s)\n", floor.Job, floor.Floor, floor.Review, floor.Reason)
 		if floor.Classify {
-			fmt.Fprintf(env.Stdout, "%s: gated by classify\n", floor.Job)
+			fmt.Fprintf(env.Stdout, "%s: waits for classify\n", floor.Job)
 		}
 		if floor.CaptureAtL3 {
 			fmt.Fprintf(env.Stdout, "%s: checker capture at L3\n", floor.Job)

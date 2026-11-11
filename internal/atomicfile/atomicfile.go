@@ -13,7 +13,8 @@ import (
 
 // Write replaces path with data: it writes a temp file in the same folder,
 // syncs it, renames it over path and syncs the folder, so the rename survives a
-// crash. An existing file keeps its permission bits; a new one gets perm.
+// crash. An existing file keeps its permission bits; a new one gets perm. On
+// Windows the rename waits a moment for a reader that holds path open (Rename).
 func Write(path string, data []byte, perm os.FileMode) error {
 	if st, err := os.Stat(path); err == nil {
 		perm = st.Mode().Perm()
@@ -25,7 +26,7 @@ func Write(path string, data []byte, perm os.FileMode) error {
 	}
 	tmp := f.Name()
 	defer os.Remove(tmp)
-	return replace(f, data, perm, func() error { return os.Rename(tmp, path) }, func() error { return SyncDir(dir) })
+	return replace(f, data, perm, func() error { return Rename(tmp, path) }, func() error { return SyncDir(dir) })
 }
 
 // WriteRoot is Write confined to root, refusing a symlink or non-regular target.
@@ -56,7 +57,7 @@ func WriteRoot(root *os.Root, path string, data []byte, perm os.FileMode) error 
 		return err
 	}
 	defer dir.Remove(tmp)
-	return replace(f, data, perm, func() error { return dir.Rename(tmp, name) }, func() error {
+	return replace(f, data, perm, func() error { return renameRetrying(func() error { return dir.Rename(tmp, name) }) }, func() error {
 		if runtime.GOOS == "windows" {
 			return nil // Match SyncDir: NTFS journals the rename.
 		}

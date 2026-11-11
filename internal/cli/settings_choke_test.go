@@ -98,7 +98,7 @@ func settingsPackageBypasses(file string, f *ast.File) []string {
 	var problems []string
 	allowedReads := map[*ast.Ident]bool{}
 	exports := map[string]string{
-		"AlwaysBlock": "catalog.go", "AgentNames": "catalog.go", "SkillNames": "catalog.go", "HookNames": "catalog.go",
+		"AgentNames": "catalog.go", "SkillNames": "catalog.go", "HookNames": "catalog.go",
 		"ParseAnswers": "setup.go", "ReadHookLevels": "store.go", "ResolveHookLevel": "store.go",
 		"ClaudeBlock": "claude.go", "ClaudeSetupCommand": "claude.go", "RunClaudeSetup": "claude.go", "claudeInvalid.Error": "claude.go",
 		"ClaudeSettingsPath": "claude.go", "ReadClaudeAllowStatus": "claude_status.go", // Read-only setup diagnostics; no Store access.

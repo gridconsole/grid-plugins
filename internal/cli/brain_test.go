@@ -33,7 +33,7 @@ func brainWithTwoVersions(t *testing.T, h *harness) {
 	dir := t.TempDir()
 	b, err := brain.Encode(brain.Note{Name: "second", Topic: "decisions", Type: "reference", Description: "Before changing checks.",
 		Summary: "Run the checks.", Source: "job:T-01/J-01", Level: "home", Status: "proposed",
-		Origin: brain.Origin{Kind: "job", ID: "T-01/J-01", Tier: "agent"}, Links: []brain.Link{}, Body: "# Second\n"})
+		Origin: brain.Origin{Kind: "job", ID: "T-01/J-01"}, Links: []brain.Link{}, Body: "# Second\n"})
 	if err != nil {
 		t.Fatal(err)
 	}

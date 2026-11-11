@@ -39,6 +39,7 @@ type Env struct {
 	Getenv     func(string) string    // nil reads the process environment
 	Executable func() (string, error) // nil asks os.Executable
 	OpenURL    func(string) error     // nil opens the system browser; tests set it
+	AppStart   *AppStart              // how grid open starts the app; nil starts nothing, OSEnv sets it
 	// afterApprove is a test seam: it runs once Approve has returned and before
 	// the person Job result is posted, so a test can look at the locks there.
 	afterApprove func()
@@ -87,6 +88,7 @@ func OSEnv() Env {
 		Cwd: cwd, Home: home, GridHome: gh,
 		TempRoots: []string{os.TempDir(), "/tmp", "/var/tmp"},
 		Machine:   machine,
+		AppStart:  &AppStart{},
 	}
 }
 
@@ -107,13 +109,13 @@ func commands() []command {
 		{"plan", "write, check, items, hash, diff, migrate", runPlan},
 		{"views", "render the task pages", nil},
 		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor", runOrchestratorJob},
-		{"lease", "take, renew, release, status (merge or task lease)", runTaskLease},
+		{"lease", "take, release, status (task lease)", runTaskLease},
 		{"feed", "tick, post, read, state, types, handover, fold", runOrchestratorFeed},
 		{"mcp", "stdio server with the Feed tools", runMCP},
 		{"question", "add, withdraw, list, tick and sync task questions", runQuestion},
 		{"ask", "ask a person a question", nil},
 		{"answer", "record a person's answer", runAnswer},
-		{"approve", "approve a gate (a person or the app only)", runApprove},
+		{"approve", "approve the plan or a later approve step (a person or the app only)", runApprove},
 		{"deliver", "write the outcome and wait for the person", runDeliver},
 		{"proof", "add evidence and rebuild the task proof index", runProof},
 		{"history", "append a dated task history line", runHistory},
@@ -132,7 +134,7 @@ func commands() []command {
 		{"skill", "enable, disable and list skills", runSkill},
 		{"session", "list, show, start, stop, send, pause, resume, handback, switch", runSessionCommand},
 		{"intent", "list, claim, done (worker requests)", runIntent},
-		{"usage", "post and show usage, set budgets and notice thresholds, fold observed session totals", runUsage},
+		{"usage", "post and show usage, fold observed session totals", runUsage},
 		{"account", "agent accounts", runAccount},
 		{"project", "add, remove, list, scan and relink projects", runProject},
 		{"project-md", "get or set a project front-matter key", runProjectMD},
@@ -211,6 +213,12 @@ func Run(args []string, env Env) (exit int) {
 				return 3
 			}
 			if name == "task" {
+				if guestTaskMove(rest[0]) {
+					// Exit 1, as a hidden task answers a guest's stop
+					// (TestPersonalBypassTaskCommands); delete and restore exit 3.
+					fmt.Fprintf(env.Stderr, "grid task %s: %s\n", rest[0], guestTaskMoveRefusal(rest[0]))
+					return 1
+				}
 				fmt.Fprintf(env.Stderr, "grid task %s: %v\n", rest[0], fmt.Errorf("%w: %s", task.ErrEditRejected, task.MoveRefusal))
 				return 3
 			}
@@ -236,11 +244,23 @@ func guestWriteVerb(name string, rest []string) bool {
 	case "setup":
 		return true
 	case "task":
-		return len(rest) > 0 && (rest[0] == "delete" || rest[0] == "restore")
+		return len(rest) > 0 && (rest[0] == "delete" || rest[0] == "restore" || guestTaskMove(rest[0]))
 	case "question":
 		return len(rest) > 0 && rest[0] == "withdraw"
 	}
 	return false
+}
+
+// guestTaskMove is a task move a person makes: the owner's rule is that a guest
+// answers and comments, and does not close, reopen or stop a task.
+func guestTaskMove(verb string) bool {
+	return verb == "close" || verb == "reopen" || verb == "stop"
+}
+
+// guestTaskMoveRefusal is the reason a guest's close, reopen or stop gives; it
+// names the role the way a guest's question withdrawal does.
+func guestTaskMoveRefusal(verb string) string {
+	return fmt.Sprintf("role %q may not %s a task; a guest answers and comments", "guest", verb)
 }
 
 // formatRefusal says why this grid must not read the Grid home, or "" when it may.

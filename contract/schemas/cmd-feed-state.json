@@ -153,8 +153,22 @@
                   }
                 ]
               },
+              "exit_code": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                ]
+              },
               "exit_reason": {
                 "type": "string"
+              },
+              "exit_reason_missing": {
+                "type": "boolean"
               },
               "exited": {
                 "type": "string"
@@ -354,10 +368,7 @@
               "checkpoint",
               "exited",
               "exit_reason",
-              "review",
-              "level_raised",
               "review_rounds",
-              "max_rounds",
               "continues",
               "discovered_from",
               "proposed_jobs",

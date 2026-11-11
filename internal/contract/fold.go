@@ -3,7 +3,9 @@ package contract
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 )
 
 type controlBody struct {
@@ -125,18 +127,19 @@ func Fold(posts []Post) State {
 		switch p.Type {
 		case "job":
 			var b struct {
-				ID, Title, Role, Kind, Review string
-				MaxRounds                     int     `json:"max_rounds"`
-				Continues                     *string `json:"continues"`
-				DiscoveredFrom                *string `json:"discovered_from"`
-				Order                         *int    `json:"order"`
+				ID, Title, Role, Kind string
+				Continues             *string `json:"continues"`
+				DiscoveredFrom        *string `json:"discovered_from"`
+				Order                 *int    `json:"order"`
 			}
+			// An old record may still carry review and max_rounds; they are not
+			// decoded, so they are ignored.
 			_ = json.Unmarshal(p.Body, &b)
 			if _, exists := out.Jobs[b.ID]; exists {
 				set(p, "ignored", "Job already exists; revisions need a new Job")
 				continue
 			}
-			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Status: Posted, Review: b.Review, MaxRounds: b.MaxRounds, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
+			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Status: Posted, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
 		case "question":
 			var b struct{ Who string }
 			_ = json.Unmarshal(p.Body, &b)
@@ -187,6 +190,7 @@ func Fold(posts []Post) State {
 			j.Assign, j.AssignPost, j.Generation = a, p.ID, p.Gen
 			j.Attempt, j.Status, j.LeaseExpires = a.Attempt, Assigned, a.Until
 			j.Exited, j.ExitReason, j.Reason = "", "", ""
+			j.ExitCode, j.ExitReasonMissing = nil, false
 			j.History = append(j.History, p.ID)
 			acknowledged := false
 			for _, side := range active {
@@ -251,10 +255,6 @@ func Fold(posts []Post) State {
 			var b struct{ Job, Kind string }
 			_ = json.Unmarshal(p.Body, &b)
 			if j := out.Jobs[b.Job]; j != nil && b.Kind == "security" {
-				if j.Review != "L3" {
-					j.LevelRaised = &LevelRaised{From: j.Review, To: "L3", Why: "security finding " + p.ID}
-					j.Review = "L3"
-				}
 				j.NeedsLead = true
 			}
 		}
@@ -357,12 +357,18 @@ func applySide(j *Job, p Post) {
 		_ = json.Unmarshal(p.Body, &b)
 		j.Checkpoint = &b
 	case "worker-exit":
-		var b struct{ Reason string }
+		var b struct {
+			Reason string
+			Code   json.RawMessage
+		}
 		_ = json.Unmarshal(p.Body, &b)
-		if b.Reason == "" {
+		// No reason still reads as crash; ExitReasonMissing keeps a writer that
+		// gave none apart from one that said crash.
+		j.ExitReasonMissing = b.Reason == ""
+		if j.ExitReasonMissing {
 			b.Reason = "crash"
 		}
-		j.Exited, j.ExitReason = p.ID, b.Reason
+		j.Exited, j.ExitReason, j.ExitCode = p.ID, b.Reason, exitCode(b.Code)
 		if b.Reason == "usage_limit" {
 			j.Reason = "usage_limit"
 		}
@@ -371,6 +377,30 @@ func applySide(j *Job, p Post) {
 			j.NeedsLead = true
 		}
 	}
+}
+
+// exitCode keeps a worker-exit code as the writer sent it when it is what the
+// schemas allow (an integer or a non-empty string); anything else is dropped so
+// state.json stays valid. A whole number written 2.0 reads as 2.
+func exitCode(raw json.RawMessage) json.RawMessage {
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		if text == "" {
+			return nil
+		}
+		return raw
+	}
+	var n json.Number
+	if len(raw) == 0 || raw[0] == '"' || json.Unmarshal(raw, &n) != nil {
+		return nil
+	}
+	if _, err := strconv.ParseInt(n.String(), 10, 64); err == nil {
+		return raw
+	}
+	if f, err := strconv.ParseFloat(n.String(), 64); err == nil && f == math.Trunc(f) && math.Abs(f) < 1<<53 {
+		return json.RawMessage(strconv.FormatInt(int64(f), 10))
+	}
+	return nil
 }
 
 func deref(s *string) string {

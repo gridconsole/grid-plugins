@@ -18,11 +18,16 @@ func runJob(args []string, env Env) int {
 			r.Caller.Role = "owner"
 		}
 	}
-	return jobcmd.Run(args, jobcmd.Env{Cwd: env.Cwd, Home: env.Home, GridHome: env.GridHome, Machine: env.Machine, Stdout: env.Stdout, Stderr: env.Stderr,
+	return jobcmd.Run(args, jobcmdEnv(env, r))
+}
+
+// jobcmdEnv is the environment grid job commands run in, for resolver r.
+func jobcmdEnv(env Env, r where.Resolver) jobcmd.Env {
+	return jobcmd.Env{Cwd: env.Cwd, Home: env.Home, GridHome: env.GridHome, Machine: env.Machine, Stdout: env.Stdout, Stderr: env.Stderr,
 		Resolver: r,
 		ResolveTask: func(task string) (string, error) {
 			result, err := r.Resolve(where.Query{Cwd: env.Cwd, Task: task})
 			return result.TaskPath, err
 		},
-	})
+	}
 }

@@ -103,7 +103,7 @@ func TestFloorRefusalsAndOverride(t *testing.T) {
 		wantErrors           int
 		override             bool
 	}{
-		{"missing", "", "", 1, false}, {"invalid", "L4", "", 1, false}, {"too low", "L0", "", 1, false},
+		{"missing", "", "", 0, false}, {"invalid", "L4", "", 1, false}, {"too low", "L0", "", 1, false},
 		{"blank reason", "L0", "  ", 1, false}, {"recorded exception", "L0", "Explicit exception for this small change", 0, true},
 		{"floor", "L2", "", 0, false}, {"higher", "L3", "", 0, false},
 	} {

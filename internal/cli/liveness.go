@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
-	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -18,86 +16,24 @@ import (
 // These adapters only resolve scope and render results. Persistence and liveness
 // decisions belong to the session and lease packages.
 func runLease(args []string, env Env) int {
-	if len(args) == 0 {
-		fmt.Fprintln(env.Stderr, "Usage: grid lease take|renew|release|status [merge] [--project <project>] [--holder <session>] [--fence <n>] [--json]")
-		return 2
-	}
-	action, args := args[0], args[1:]
-	switch action {
-	case "take", "renew", "release", "status":
-	default:
-		fmt.Fprintf(env.Stderr, "lease: unknown action %q; use take, renew, release or status\n", action)
-		return 2
-	}
-	if len(args) > 0 && args[0] == "task" {
-		return runTaskLeaseAction(action, args[1:], env)
-	}
-	if len(args) > 0 && args[0] == "merge" {
-		args = args[1:]
-	}
-	fs := newFlags("lease "+action+" merge", env)
-	project := fs.String("project", "", "project name or id (otherwise resolve the current folder)")
-	task := fs.String("task", "", "resolve the project from a task folder or id")
-	holder := fs.String("holder", "", "stable identity of the session landing the branch")
-	fence := fs.Uint64("fence", 0, "fence returned by take; required for renew and release")
-	asJSON := fs.Bool("json", false, "print JSON")
-	if code, stop := parse(fs, args, env); stop {
-		return code
-	}
-	if action != "status" && strings.TrimSpace(*holder) == "" {
-		fmt.Fprintln(env.Stderr, "lease: --holder is required")
-		return 2
-	}
-	if action != "status" && !contract.ValidWorker(*holder) {
-		fmt.Fprintln(env.Stderr, "lease: --holder must be <member>@<machine ULID> with no slash or whitespace (contract/schemas/lease.json)")
-		return 2
-	}
-	if (action == "renew" || action == "release") && *fence == 0 {
-		fmt.Fprintln(env.Stderr, "lease: --fence is required")
-		return 2
-	}
-	scope, err := livenessScope(env, *project, *task)
-	if err != nil {
-		return livenessError(env, err)
-	}
-	store := lease.Store{Project: scope.Project, ProjectDir: filepath.Join(env.GridHome, "projects", scope.Project)}
-	if action == "status" {
-		status, err := store.Status()
-		if err != nil {
-			return livenessError(env, err)
-		}
-		if *asJSON {
-			return writeJSON(env.Stdout, status)
-		}
-		if status.Held {
-			fmt.Fprintf(env.Stdout, "merge lease held by %s since %s\nfence: %d\nuntil: %s\n", *status.Holder, status.Since.Format(time.RFC3339), status.Fence, status.Until.Format(time.RFC3339))
-		} else if status.Holder != nil {
-			fmt.Fprintf(env.Stdout, "merge lease expired\nfence: %d\nuntil: %s\n", status.Fence, status.Until.Format(time.RFC3339))
-		} else {
-			fmt.Fprintln(env.Stdout, "merge lease free")
-		}
+	const usage = "Usage: grid lease take|release|status task --task <task> [--project <project>] [--json]"
+	help := func(a string) bool { return a == "-h" || a == "--help" || a == "-help" }
+	if len(args) > 0 && help(args[0]) || len(args) == 2 && help(args[1]) {
+		fmt.Fprintln(env.Stdout, usage)
 		return 0
 	}
-	var rec lease.Record
-	switch action {
-	case "take":
-		rec, err = store.Take(*holder)
-	case "renew":
-		rec, err = store.Renew(*holder, *fence)
-	case "release":
-		rec, err = store.Release(*holder, *fence)
+	if len(args) < 2 || args[1] != "task" {
+		fmt.Fprintln(env.Stderr, usage)
+		return 2
 	}
-	if err != nil {
-		// Preserve the exact grant refusal wording from feed-contract.md section 13.
-		fmt.Fprintln(env.Stderr, err)
-		return 1
+	switch action := args[0]; action {
+	case "take", "release", "status":
+		return runTaskLeaseAction(action, args[2:], env)
+	default:
+		// A task lease has no renewal, so renew is not an action.
+		fmt.Fprintf(env.Stderr, "lease: unknown action %q; use take, release or status\n", action)
+		return 2
 	}
-	if *asJSON {
-		return writeJSON(env.Stdout, lease.Status{Record: rec, Held: rec.Holder != nil})
-	}
-	verb := map[string]string{"take": "taken", "renew": "renewed", "release": "released"}[action]
-	fmt.Fprintf(env.Stdout, "merge lease %s, fence %d\n", verb, rec.Fence)
-	return 0
 }
 
 type sessionView struct {

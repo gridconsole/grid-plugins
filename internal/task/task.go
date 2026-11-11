@@ -56,6 +56,10 @@ type Store struct {
 // owner, so a new task never has an empty owner.
 type NewOptions struct {
 	Cwd, Words, Project, Size, Workflow, Who, Role string
+	// Inputs are files copied into the new task's inputs/ folder, each under
+	// its base name. New fails before it writes anything when one is missing or
+	// is not a file.
+	Inputs []string
 }
 
 // IntentHead precedes the person's words in intent.md. The Request heading is

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 )
 
@@ -69,11 +70,19 @@ func textValue(raw json.RawMessage) (string, error) {
 }
 func decode(data []byte) (Document, error) {
 	doc := empty()
-	raw, err := object(data, []string{"agents", "skills", "hooks", "budget"})
+	raw, err := object(data, []string{"agents", "skills", "hooks", "budget", "accounts"})
 	if err != nil {
 		return doc, err
 	}
 	for _, group := range keysOf(raw) {
+		if group == "accounts" {
+			// The app's account records: kept verbatim so a rewrite does not drop them.
+			if v := bytes.TrimSpace(raw[group]); len(v) == 0 || v[0] != '[' {
+				return doc, fmt.Errorf("accounts: expected a JSON array")
+			}
+			doc.Accounts = raw[group]
+			continue
+		}
 		if group == "budget" {
 			s, err := textValue(raw[group])
 			if err == nil {
@@ -92,7 +101,7 @@ func decode(data []byte) (Document, error) {
 		case "skills":
 			names = skills
 		case "hooks":
-			names = hooks
+			names = append(slices.Clone(hooks), retiredHooks...)
 		}
 		entries, err := object(raw[group], names)
 		if err != nil {
@@ -100,6 +109,9 @@ func decode(data []byte) (Document, error) {
 		}
 		for _, name := range keysOf(entries) {
 			value := entries[name]
+			if group == "hooks" && slices.Contains(retiredHooks, name) {
+				continue
+			}
 			switch group {
 			case "agents":
 				fields, err := object(value, []string{"model", "effort"})

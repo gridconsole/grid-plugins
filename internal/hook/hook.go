@@ -8,14 +8,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/settings"
-	"github.com/gridconsole/grid-plugins/internal/usage"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -103,18 +104,19 @@ func sessionStart(o Options) {
 	if level != "off" {
 		syncAgents(o)
 	}
-	context := sessionContext(res, o.Resolver, note)
 	brainProject := res.Project
 	if brainProject == where.Personal {
 		brainProject = ""
 	}
+	var brainText *string
 	if idx, err := (brain.Store{GridHome: o.Resolver.GridHome, Project: brainProject}).Index(); err == nil {
-		context += "\n" + idx.Text
+		brainText = &idx.Text
 	} else {
 		o.log("brain index", err)
 	}
+	context := assembleContext(sessionContext(res, o.Resolver, note), jobContext(o, res), brainText)
 	out := map[string]any{"hookSpecificOutput": map[string]string{
-		"hookEventName": "SessionStart", "additionalContext": boundContext(context),
+		"hookEventName": "SessionStart", "additionalContext": context,
 	}}
 	b, err := json.Marshal(out)
 	if err != nil {
@@ -178,11 +180,50 @@ func sessionContext(r where.Result, resolver where.Resolver, note string) string
 		"GRID_HOME is the Grid data folder " + home + "; GRID_PROJECTS is " + gridhome.Tilde(filepath.Join(resolver.GridHome, "projects"), resolver.Home) + ".",
 		ProjectLine(r, resolver.Home) + note,
 		"Task files are written by grid under the Grid home. Project records and task files live outside repositories.",
-		"Grid agents cover delegated work in any folder: grid-scout maps code; grid-researcher researches facts; grid-builder changes files; grid-runner runs checks; grid-reviewer reviews work; grid-designer designs interfaces; grid-checker checks pages; grid-operator changes browser state; grid-planner plans tasks; grid-curator curates knowledge; grid-library answers questions from the brain. Job briefs are rendered by grid job.",
 		"The Grid brain holds shared topics, knowledge and decisions at home and project level.",
 		"Approvals come from a person through the Grid app or grid approve in a terminal outside Claude Code or Codex.",
 	}, "\n")
 	return boundContext(text)
+}
+
+// assembleContext joins the session text, the Job lines and the brain index in
+// that order and bounds the whole, so a long index is what gets cut.
+func assembleContext(session, jobLines string, brainText *string) string {
+	context := session
+	if jobLines != "" {
+		context += "\n" + jobLines
+	}
+	if brainText != nil {
+		context += "\n" + *brainText
+	}
+	return boundContext(context)
+}
+
+// jobContext names the Job a worker started this session for, where its brief is
+// and the command that posts its result. It is empty for a session that has no
+// valid GRID_JOB or no resolved task.
+func jobContext(o Options, res where.Result) string {
+	id := o.Getenv("GRID_JOB")
+	if res.Task == "" || !job.ValidID(id) || strings.Trim(strings.SplitN(id[2:], ".", 2)[0], "0") == "" {
+		return ""
+	}
+	first := "You run Job " + id + " of task " + res.Task
+	if n, err := strconv.Atoi(o.Getenv("GRID_ATTEMPT")); err == nil && n > 0 {
+		first += " (attempt " + strconv.Itoa(n) + ")"
+	}
+	show := "grid job show " + res.Task + " " + id
+	brief := "Your brief: " + show + "."
+	if res.TaskPath != "" {
+		path := filepath.Join(res.TaskPath, "jobs", id, "brief.md")
+		if st, err := os.Stat(path); err == nil && st.Mode().IsRegular() {
+			brief = "Your brief: " + gridhome.Tilde(path, o.Resolver.Home) + " (or: " + show + ")."
+		}
+	}
+	return strings.Join([]string{
+		first + ".",
+		brief,
+		"Post your result with grid job result --task " + res.Task + " --job " + id + " --body <json> before you end, also when blocked.",
+	}, "\n")
 }
 
 func boundContext(text string) string {
@@ -251,17 +292,14 @@ func toolUse(o Options) {
 	// Convert a refusal to that event's decision shape after arbitration.
 	decision := evaluateGuards(o, *in, env)
 	if in.HookEventName == "PreToolUse" && decision.Behavior != "deny" {
-		// A held agent start is refused before the history and planner records it would make.
-		if decision = usageHold(o, *in, decision); decision.Behavior != "deny" {
-			history(o, *in)
-			recall(o, *in)
-		}
+		history(o, *in)
+		recall(o, *in)
+		// Topic text rides on the verdict envelope, so a call with or without a
+		// guard verdict writes one JSON object.
+		decision.Context = topicContext(o, *in)
 	}
 	if decision.Behavior == "allow" {
 		CountHomeAllow(env, *in)
-	}
-	if in.HookEventName == "PermissionRequest" && decision.Behavior == "" {
-		decision = forwardPermission(o, *in)
 	}
 	if in.HookEventName == "PermissionRequest" && decision.Behavior != "" {
 		decision.Event = "PermissionRequest"
@@ -276,38 +314,6 @@ func evaluateGuards(o Options, in hookio.Input, env map[string]string) hookio.De
 		guard.EvaluateHost(in, o.Cwd, env),
 		guard.EvaluateOnlyWriter(in, o.Cwd, env),
 		guard.EvaluatePlan(in, o.Cwd, env),
-		guard.EvaluateBrief(in, o.Cwd, env),
 		guard.EvaluateHome(in, o.Cwd, env),
 	)
-}
-
-// usageHold denies a tool call that starts an agent for a task at its usage
-// budget. It never replaces a guard's deny. Without a task, with no budget, or
-// when the usage data cannot be read, the guards' decision stands and the
-// error is logged: the budget is a spending convenience, not a security gate.
-func usageHold(o Options, in hookio.Input, decision hookio.Decision) hookio.Decision {
-	if !usage.HoldsTool(in.ToolName) {
-		return decision
-	}
-	dir, err := taskDir(o, in)
-	if err != nil {
-		o.log("usage hold", err)
-		return decision
-	}
-	if dir == "" {
-		return decision
-	}
-	held, err := (usage.Store{TaskPath: dir, GridHome: o.Resolver.GridHome}).Hold()
-	if err != nil {
-		o.log("usage hold", err)
-		return decision
-	}
-	if !held.Hold {
-		return decision
-	}
-	name := filepath.Base(dir)
-	deny := hookio.Deny("Task " + name + " is at its usage budget (" + held.Reason + "), so this session cannot start a new agent for it. " +
-		"Stop and ask the person: a person raises the budget with `grid usage budget set --task " + name + " --dollars N` (or --minutes N, --tokens N) or removes it with `grid usage budget clear --task " + name + "`. Do not run these yourself.")
-	deny.Warnings = decision.Warnings
-	return deny
 }

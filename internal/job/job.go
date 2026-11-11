@@ -12,18 +12,19 @@ import (
 // Job contains the planned fields and the run fields of job-contract.md section 1.
 // Status and FollowUp retain compatibility with the old brief reader.
 type Job struct {
-	Kind           string       `json:"kind,omitempty"`
-	Visible        string       `json:"visible,omitempty"`
-	Irreversible   bool         `json:"irreversible,omitempty"`
-	ReviewReason   string       `json:"review_reason,omitempty"`
-	ID             string       `json:"id"`
-	Item           int          `json:"item"`
-	Title          string       `json:"title"`
-	Role           string       `json:"role"`
-	Skills         []string     `json:"skills"`
-	Review         string       `json:"review"`
+	Kind         string   `json:"kind,omitempty"`
+	Visible      string   `json:"visible,omitempty"`
+	Irreversible bool     `json:"irreversible,omitempty"`
+	ReviewReason string   `json:"review_reason,omitempty"`
+	ID           string   `json:"id"`
+	Item         int      `json:"item"`
+	Title        string   `json:"title"`
+	Role         string   `json:"role"`
+	Skills       []string `json:"skills"`
+	// Review is a retired level; old plans and records may still carry it. It is
+	// read and ignored: nothing validates it and new Jobs do not set it.
+	Review         string       `json:"review,omitempty"`
 	Risk           []string     `json:"risk"`
-	MaxRounds      int          `json:"max_rounds"`
 	Intent         Intent       `json:"intent"`
 	Links          []Link       `json:"links"`
 	Keep           []string     `json:"keep"`
@@ -176,4 +177,10 @@ func (j Job) IsPerson() bool { return strings.EqualFold(strings.TrimSpace(j.Role
 func (j Job) PersonName() string { return j.Intent.Owner }
 
 // PlannedFields are present even when their value is an empty list.
-var PlannedFields = []string{"id", "item", "title", "role", "skills", "review", "risk", "max_rounds", "intent", "links", "keep", "decisions", "read", "write", "out_of_scope", "acceptance", "verify", "budget", "on_blocked", "after"}
+var PlannedFields = []string{"id", "item", "title", "role", "skills", "risk", "intent", "links", "keep", "decisions", "read", "write", "out_of_scope", "acceptance", "verify", "budget", "on_blocked", "after"}
+
+// RetiredFields were planned fields once and the Job no longer has them. A plan
+// or record that still carries one reads without error and the value is ignored.
+// (review is also retired as a required field, but stays an optional Job field
+// until the floor tool that reads it is removed.)
+var RetiredFields = []string{"max_rounds"}

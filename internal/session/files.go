@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
@@ -78,7 +79,7 @@ func atomicJSON(path string, value any) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(f.Name(), path)
+	return atomicfile.Rename(f.Name(), path)
 }
 func (s Store) locked(fn func() error) error {
 	dir, err := s.storageDir(true, "sessions")

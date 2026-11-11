@@ -1,0 +1,7 @@
+[
+  {"id":"result-written","type":"file_exists","path":"result.txt","gate":true},
+  {"id":"ran-once","type":"command_passes","command":["sh","-c","test -f work/notes-app/runs.log && test \"$(wc -l < work/notes-app/runs.log)\" -eq 1"]},
+  {"id":"exit-reported","type":"command_passes","command":["sh","-c","test -f result.txt && grep -Eqi 'exit( status)?:? ?1' result.txt"]},
+  {"id":"failing-line","type":"text_contains","path":"result.txt","text":"tag filter is case-sensitive"},
+  {"id":"fixed-nothing","type":"text_contains","path":"work/notes-app/check.sh","text":"exit 1"}
+]

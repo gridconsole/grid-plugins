@@ -7,7 +7,7 @@ This repo replaces the earlier JavaScript plugin. It is public and MIT licensed.
 ## Build and test
 
     make build    # ./dist/grid
-    make dist     # four platform binaries, installable dist/plugin, SHA256SUMS
+    make dist     # five platform binaries (macOS, Linux, Windows), installable dist/plugin stamped 0.1.<commit count>, SHA256SUMS
     make generate # refresh committed plugin metadata and launcher
     make test
     make test-clean # same suite with the temp leak guard, also included in make test
@@ -21,11 +21,24 @@ entries are left alone. Run it without other tests using the same prefixes in th
 same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` through
 `internal/testenv`; in-process CLI tests temporarily set TMPDIR with `t.Setenv`.
 
-`bin/grid` selects the packaged binary for macOS or Linux on arm64 or amd64. In a source checkout the launcher builds `dist/grid` itself when it is missing or older than the sources (needs Go), or uses `dist/plugin/bin/` after `make dist`. It follows shell symlinks and needs no Go or Node runtime. See [packaging](docs/packaging.md) for the generated layout and checksums.
+`bin/grid` selects the packaged binary for macOS or Linux on arm64 or amd64, or the Windows binary under Git Bash; `bin/grid.cmd` runs the Windows binary from cmd. To publish, see [release](docs/release.md). In a source checkout the launcher builds `dist/grid` itself when it is missing or older than the sources (needs Go), or uses `dist/plugin/bin/` after `make dist`. It follows shell symlinks and needs no Go or Node runtime. See [packaging](docs/packaging.md) for the generated layout and checksums.
 
-## Commands working today
+## Commands
 
-`grid version`, `grid where`, `grid doctor`, `grid hook <event>`, `grid task new|show|list`, `grid feed post|read|state|types|handover|fold`, and `grid mcp`. The other command groups are listed by `grid help` and print "not built yet". The `--json` shapes are in [contract/README.md](contract/README.md).
+`grid help` lists every command group with its verbs; [contract/commands.json](contract/commands.json) is the full table. The groups:
+
+- `grid version`, `grid where`, `grid open`, `grid doctor`: version, location, open the task page, machine health.
+- `grid hook`: answer hook events; set and list hook levels.
+- `grid task`, `grid plan`, `grid job`, `grid lease`: tasks, plans, Jobs and leases.
+- `grid feed`, `grid mcp`: the Feed and its stdio MCP server.
+- `grid question`, `grid answer`, `grid approve`, `grid deliver`, `grid proof`, `grid history`, `grid land`: questions, answers, gates, outcome, proof, history, landing.
+- `grid brain`: the brain notes and topics.
+- `grid env`, `grid ports`: dev environments and port blocks.
+- `grid person`, `grid routine`, `grid worker`, `grid session`, `grid intent`, `grid usage`, `grid account`: people, routines, workers, sessions, worker requests, usage, accounts.
+- `grid agent`, `grid claude`, `grid workflow`, `grid skill`, `grid setup`: agent, Claude, workflow and skill settings, and project setup.
+- `grid project`, `grid project-md`, `grid signal`, `grid artifact`, `grid eval`, `grid migrate`: projects, inbox signals, artifacts, evaluations, home upgrade.
+
+These verbs are listed by `grid help` but print "not built yet": `grid views`, `grid ask`, `grid machine`, `grid deploy`, `grid sync`. The `--json` shapes are in [contract/README.md](contract/README.md).
 
     grid task new "Fix the search label" --size small --json
     grid task show T-01 --json

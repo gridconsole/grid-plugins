@@ -96,21 +96,29 @@ func CleanHistory(s string) string {
 }
 
 // AppendHistory serializes append and consecutive duplicate suppression. It
-// never follows a symlink or creates a history file for an uninitialized task.
+// never follows a symlink. A task folder is a folder that holds a regular
+// task.md: there the first line creates history.md, because Create writes none
+// and a hook line before the first journal write would otherwise be lost. In any
+// other folder, where task.md is absent, a link or a directory, nothing is
+// written and the answer is nil.
 // It refuses a task with a linked protected file and writes nothing, so a
 // rename can never replace the linked inode and erase the evidence of the link.
 // Otherwise the line lands by renaming a new file into place under .task.lock.
 // Callers must not hold a session lock: .task.lock is always taken first.
 func AppendHistory(dir, event, detail, who, via string) error {
 	path := filepath.Join(dir, "history.md")
+	isTask := func() bool {
+		info, err := os.Lstat(filepath.Join(dir, "task.md"))
+		return err == nil && info.Mode().IsRegular()
+	}
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
+		if !isTask() {
+			return nil
+		}
+	} else if err != nil {
 		return err
-	}
-	if !info.Mode().IsRegular() {
+	} else if !info.Mode().IsRegular() {
 		return errors.New("history must be a regular file")
 	}
 
@@ -123,19 +131,25 @@ func AppendHistory(dir, event, detail, who, via string) error {
 		return err
 	}
 	defer fslock.Unlock(lock)
+	// Under the lock, the file is read again: another writer may have created
+	// it since the check above. A missing file starts empty in a task folder.
+	var b []byte
 	f, err := fslock.OpenNoFollow(path, os.O_RDWR, 0)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		if !isTask() {
+			return nil
+		}
+	case err != nil:
 		return err
-	}
-	b, err := io.ReadAll(f)
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return err
+	default:
+		b, err = io.ReadAll(f)
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			return err
+		}
 	}
 	event, detail, who, via = CleanHistory(event), CleanHistory(detail), CleanHistory(who), CleanHistory(via)
 	switch strings.ToLower(detail) {
