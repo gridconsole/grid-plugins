@@ -186,6 +186,7 @@ func TestRecallPointersReadDedupeAndPlanChange(t *testing.T) {
 		t.Fatalf("read history: %s", b)
 	}
 }
+
 // TestStopGuardBlocksOnceAndMarksOwnedBrief was deleted: the brief Outcome and
 // Verdict check, and the brief marking, were removed by the owner's direction
 // (verdicts-11nov v-5, one stop check). TestStopJobWithoutResultBlocksOnce in
