@@ -19,7 +19,6 @@ func TestGuardDispatch(t *testing.T) {
 			{"read home", "Read", "projects/example/notes.md", "allow"},
 			{"write own task", "Write", "projects/example/tasks/T-01/notes.md", "allow"},
 			{"write brain", "Edit", "knowledge/note.md", "allow"},
-			{"write feed", "Write", "projects/example/tasks/T-01/feed/record.jsonl", "deny"},
 			{"project record", "Write", "projects/example/project.md", "allow"},
 			{"ordinary home write", "Write", "notes.md", "allow"},
 		} {
@@ -29,12 +28,9 @@ func TestGuardDispatch(t *testing.T) {
 				grid := filepath.Join(home, ".grid")
 				cwd := filepath.Join(root, "repo")
 				data := filepath.Join(root, "data")
-				// host-guard warns by default (v-enforce); the feed row pins the deny it gives at
-				// block. A task folder, the brain and a project record are no longer refused by
-				// a Grid guard: the deny rules `grid setup` writes carry them.
-				if err := (settings.Store{Home: grid}).SetHook("host-guard", "block"); err != nil {
-					t.Fatal(err)
-				}
+				// A task folder, its Feed, the brain and a project record are not refused by a
+				// Grid guard: the deny rules `grid setup` writes carry them. The Feed is proven
+				// carried in TestLaHookFeedCarriedBySetupRule (la_hook_feed_rule_test.go).
 				in := hookio.Input{ToolName: tt.tool, Cwd: cwd, ToolInput: map[string]any{"file_path": filepath.Join(grid, tt.rel), "content": "text"}}
 				stdin, _ := json.Marshal(in)
 				var out bytes.Buffer
@@ -216,11 +212,9 @@ func TestEventAtTheLimitIsStillGuarded(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(grid, "projects"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// host-guard warns by default (v-enforce); pin its deny so the event is judged at block.
-	if err := (settings.Store{Home: grid}).SetHook("host-guard", "block"); err != nil {
-		t.Fatal(err)
-	}
-	head := `{"tool_name":"Write","tool_input":{"file_path":"` + filepath.Join(grid, ".host", "x") + `","content":"`
+	// The judged call is a role refusal of the home guard, which no setting turns off: a
+	// guest may not write into the Grid home's Personal scope.
+	head := `{"tool_name":"Write","tool_input":{"file_path":"` + filepath.Join(grid, "personal", "x") + `","content":"`
 	tail := `"}}`
 	stdin := head + strings.Repeat("x", hookio.InputLimit-len(head)-len(tail)) + tail
 	if len(stdin) != hookio.InputLimit {
@@ -228,8 +222,11 @@ func TestEventAtTheLimitIsStillGuarded(t *testing.T) {
 	}
 	var out bytes.Buffer
 	Run(Options{Event: "pretooluse", Stdin: strings.NewReader(stdin), Stdout: &out, Cwd: root,
-		Resolver: where.Resolver{GridHome: grid, Home: filepath.Join(root, "home")}, Getenv: func(string) string { return "" }})
-	if !strings.Contains(out.String(), `"deny"`) {
-		t.Fatalf("the host write was not judged by the guards: %.300s", out.String())
+		Resolver: where.Resolver{GridHome: grid, Home: filepath.Join(root, "home")},
+		Getenv: func(k string) string {
+			return map[string]string{"GRID_ROLE": "guest", "GRID_MEMBER": "gus", "GRID_PROJECT": "example"}[k]
+		}})
+	if !strings.Contains(out.String(), `"deny"`) || !strings.Contains(out.String(), "This caller cannot access this Grid home scope.") {
+		t.Fatalf("the guest write into Personal was not judged by the guards: %.300s", out.String())
 	}
 }
