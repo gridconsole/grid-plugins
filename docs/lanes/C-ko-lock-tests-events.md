@@ -39,3 +39,5 @@ Base: lane branch cut from main at `21f0273607ae73e7aa8494035743afecdd19f8fa` (m
 ## NOT VERIFIED on a live screen
 
 Nothing here is UI. Not run: the two tests on a real Windows or macOS machine; `make cross` only vets and compiles them there. The hook's Windows path (`LockFileEx` try, then block) is the product's, covered by internal/fslock tests that this lane does not touch.
+
+DONE
