@@ -73,7 +73,7 @@ func projectRepo(args []string, env Env) int {
 		}
 	}
 	if resolver(env).Caller.IsGuest() {
-		return failure(env, errors.New(guestSettingsRefusal))
+		return failure(env, ilGuestRefused)
 	}
 	s := projectStore(env)
 	var item projects.RepoItem

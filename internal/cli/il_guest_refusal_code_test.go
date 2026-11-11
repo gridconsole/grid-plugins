@@ -180,10 +180,8 @@ func TestIlGuestSettingsSites(t *testing.T) {
 }
 
 // ilGuestOpenSites are the settings refusals that still print no code with --json:
-// signal.go:65 waits for C-ia-signal-refusal-codes, settings.go is the store opener
-// (one call; its callers are not read yet) and budget.go and project_repo.go wait
-// for their argv to be read.
-var ilGuestOpenSites = map[string]int{"signal.go": 1, "settings.go": 1, "budget.go": 1, "project_repo.go": 1}
+// signal.go:65 waits for C-iy-signal-refusal-codes.
+var ilGuestOpenSites = map[string]int{"signal.go": 1}
 
 // ilGuestRefusalCalls counts the calls errors.New(guestSettingsRefusal) in the
 // function bodies of file; the package-level sentinel's own declaration is no site.
