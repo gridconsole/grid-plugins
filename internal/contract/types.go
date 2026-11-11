@@ -115,6 +115,9 @@ type Checkpoint struct {
 
 // Job is the materialized run state. Retries are explicit assignments; the fold
 // never spawns a worker, increments an attempt on its own, or consults a clock.
+// ExitCode is the worker-exit's own code (an integer or a non-empty string, as
+// the writer sent it); ExitReasonMissing says the worker-exit gave no reason, so
+// ExitReason reads crash only by default.
 type Job struct {
 	ID              string          `json:"id"`
 	Task            string          `json:"task"`
@@ -146,6 +149,9 @@ type Job struct {
 	Order           *int            `json:"order,omitempty"`
 	State           string          `json:"state,omitempty"`
 	StateReason     string          `json:"state_reason,omitempty"`
+
+	ExitCode          json.RawMessage `json:"exit_code,omitempty"`
+	ExitReasonMissing bool            `json:"exit_reason_missing,omitempty"`
 }
 
 // The four states a Job reads in. The stored Status stays the record; these are

@@ -113,12 +113,19 @@ func splitMissingTargets(items []job.Job) (keep, held []job.Job) {
 // The graph owns dependency semantics and canonical ordering. Readiness times
 // are metadata from the authority's controls, never authority for a transition.
 func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
+	out, _, err := readyAt(s, now)
+	return out, err
+}
+
+// readyAt is Ready plus the time each Job became ready: the latest settle of
+// its after targets, else its Created time. Tree reads it to date an orphan.
+func readyAt(s Snapshot, now time.Time) (jobgraph.Readiness, map[string]time.Time, error) {
 	// A Job whose after target was never posted (an old Feed, or a hand-written
 	// record) waits alone; it must not fail the queue of every other Job.
 	items, held := splitMissingTargets(s.Items)
 	g, err := jobgraph.New(items)
 	if err != nil {
-		return jobgraph.Readiness{}, err
+		return jobgraph.Readiness{}, nil, err
 	}
 	input := jobgraph.Snapshot{Jobs: map[string]contract.Job{}, Exhausted: map[string]bool{}, OpenGates: map[string]bool{}, ReadySince: map[string]time.Time{}, CreatedAt: s.Created}
 	settled := map[string]time.Time{}
@@ -183,7 +190,7 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 			at := settled[e.Job]
 			if strings.HasPrefix(e.Job, "gate:") {
 				if _, ok := input.OpenGates[e.Job]; !ok {
-					return jobgraph.Readiness{}, fmt.Errorf("%s: gate %s does not exist", item.ID, e.Job)
+					return jobgraph.Readiness{}, nil, fmt.Errorf("%s: gate %s does not exist", item.ID, e.Job)
 				}
 				at = gateTimes[e.Job]
 			} else if e.Kind == jobgraph.ChildrenDone {
@@ -201,7 +208,7 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 	}
 	out, err := g.Ready(input)
 	if err != nil {
-		return out, err
+		return out, nil, err
 	}
 	for _, item := range held {
 		if status := input.Jobs[item.ID].Status; status != "" && status != contract.Posted && status != contract.Ready {
@@ -267,7 +274,7 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 		}
 	}
 
-	return out, nil
+	return out, input.ReadySince, nil
 }
 func stringValue(v any) string { s, _ := v.(string); return s }
 func ids(s Snapshot) []string {

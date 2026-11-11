@@ -188,7 +188,17 @@ func runOrchestrator(args []string, env Env) int {
 				}
 				fmt.Fprintf(env.Stdout, "%s  %s  %s%s\n", r.ID, r.Role, r.Status, from)
 				for _, a := range r.Attempts {
-					fmt.Fprintf(env.Stdout, "  attempt %d  fence %d  %s  %s\n", a.Number, a.Fence, a.State, a.Exit)
+					line := fmt.Sprintf("  attempt %d  fence %d  %s  %s", a.Number, a.Fence, a.State, a.Exit)
+					if a.Code != "" {
+						line += " code " + a.Code
+					}
+					if a.ReasonMissing {
+						line += " (no reason given)"
+					}
+					fmt.Fprintln(env.Stdout, line)
+				}
+				if o := r.Orphan; o != nil {
+					fmt.Fprintf(env.Stdout, "  orphan %s since %s: %s\n", o.Kind, o.Since, o.Detail)
 				}
 			}
 			return 0

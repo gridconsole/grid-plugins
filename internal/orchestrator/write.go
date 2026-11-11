@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -122,32 +125,89 @@ type Attempt struct {
 	Fence  int64  `json:"fence"`
 	State  string `json:"state"`
 	Exit   string `json:"exit,omitempty"`
+	// Code is the worker-exit's code as text; ReasonMissing says the worker-exit
+	// gave no reason, so Exit reads crash only by default.
+	Code          string `json:"code,omitempty"`
+	ReasonMissing bool   `json:"reason_missing,omitempty"`
 }
+
+// exitCodeText reads a worker-exit body's code the way the fold keeps it: a
+// non-empty string, or a whole number written without its fraction.
+func exitCodeText(v any) string {
+	switch c := v.(type) {
+	case string:
+		return c
+	case float64:
+		if c == math.Trunc(c) && math.Abs(c) < 1<<53 {
+			return strconv.FormatInt(int64(c), 10)
+		}
+	}
+	return ""
+}
+
+// Orphan kinds: a Job that nobody is working and nothing will move by itself.
+const (
+	OrphanNeverPickedUp = "never_picked_up"
+	OrphanNeverAcked    = "never_acked"
+	OrphanNoExit        = "no_exit"
+)
+
+// Orphan names a Job left behind: ready and never assigned, assigned and never
+// acked past its lease, or acked with no result and no worker-exit past its
+// lease. It is a report; nothing acts on it.
+type Orphan struct {
+	Kind   string `json:"kind"`
+	Since  string `json:"since"`
+	Detail string `json:"detail"`
+}
+
 type TreeJob struct {
 	*contract.Job
 	Attempts []Attempt `json:"attempts"`
+	Orphan   *Orphan   `json:"orphan,omitempty"`
 }
 
-func Tree(s Snapshot) []TreeJob {
+func Tree(s Snapshot) []TreeJob { return TreeAt(s, time.Now()) }
+
+// TreeAt is Tree judged at now: a Job whose clock ran out reads as an orphan.
+func TreeAt(s Snapshot, now time.Time) []TreeJob {
 	out := []TreeJob{}
+	// Dependency readiness only; a person's Job and a Job behind an open after
+	// are not ready, so they never read as never picked up.
+	plain := s
+	plain.Assignee = ""
+	readiness, since, err := readyAt(plain, now)
+	ready := map[string]bool{}
+	if err == nil {
+		for _, id := range readiness.Ready {
+			ready[id] = true
+		}
+	}
 	for _, id := range ids(s) {
 		j := s.State.Jobs[id]
 		row := TreeJob{Job: j, Attempts: []Attempt{}}
+		var until time.Time
+		var to string
+		hasResult := false
 		for _, event := range j.History {
 			r := s.Records[event]
 			if a, ok := r.Body["assign"].(map[string]any); ok {
 				row.Attempts = append(row.Attempts, Attempt{Number: int(a["attempt"].(float64)), Fence: int64(a["fence"].(float64)), State: "assigned"})
+				until, _ = time.Parse(time.RFC3339Nano, stringValue(a["until"]))
+				to, hasResult = stringValue(a["to"]), false
 			} else if len(row.Attempts) > 0 {
 				a := &row.Attempts[len(row.Attempts)-1]
 				switch r.Type {
+				case "result":
+					hasResult = true
 				case "ack":
 					a.State = "running"
 				case "worker-exit":
 					a.Exit = stringValue(r.Body["reason"])
 					if a.Exit == "" {
-						a.Exit = "crash"
+						a.Exit, a.ReasonMissing = "crash", true
 					}
-					a.State = "exited"
+					a.State, a.Code = "exited", exitCodeText(r.Body["code"])
 				case "control":
 					if status := stringValue(r.Body["status"]); status != "" {
 						a.State = status
@@ -155,7 +215,34 @@ func Tree(s Snapshot) []TreeJob {
 				}
 			}
 		}
+		row.Orphan = orphanOf(j, row.Attempts, ready[id], since[id], until, to, hasResult, now)
 		out = append(out, row)
 	}
 	return out
+}
+
+// orphanOf judges one Job on its latest attempt only. A closed Job has none.
+func orphanOf(j *contract.Job, attempts []Attempt, ready bool, readySince, until time.Time, to string, hasResult bool, now time.Time) *Orphan {
+	if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected {
+		return nil
+	}
+	if len(attempts) == 0 {
+		if ready && (j.Status == contract.Posted || j.Status == contract.Ready) && !readySince.IsZero() && now.After(readySince) {
+			return &Orphan{Kind: OrphanNeverPickedUp, Since: contract.FormatTime(readySince), Detail: "ready and not assigned to any worker"}
+		}
+		return nil
+	}
+	last := attempts[len(attempts)-1]
+	switch last.State {
+	case "assigned":
+		if !until.IsZero() && until.Before(now) {
+			return &Orphan{Kind: OrphanNeverAcked, Since: contract.FormatTime(until), Detail: fmt.Sprintf("attempt %d assigned to %s and not acked before its lease ran out", last.Number, to)}
+		}
+	case "running":
+		lease, _ := time.Parse(time.RFC3339Nano, j.LeaseExpires)
+		if !hasResult && !lease.IsZero() && lease.Before(now) {
+			return &Orphan{Kind: OrphanNoExit, Since: contract.FormatTime(lease), Detail: fmt.Sprintf("attempt %d acked by %s, no result and no worker-exit after its lease ran out", last.Number, to)}
+		}
+	}
+	return nil
 }
