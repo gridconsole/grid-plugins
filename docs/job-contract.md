@@ -40,6 +40,15 @@ question id has the form `gate:Q-7` (the token is fixed) and no edge kind. Unkno
 cycles are errors; `children-done` also includes the target's children when
 checking cycles. Whether the person has answered is supplied by the Feed, never by a checkbox.
 
+A `done` edge (and a bare Job id) is met when the Job it names is `accepted`,
+or is `submitted` and its latest result carries a passing verify: a `verified`
+object whose `pass` is `true` or `"pass"`. A submit with no verify, a `false`
+or `"unsure"` pass, and a Job that is running again do not meet it, so
+dependent work starts in parallel without waiting for review. If that Job is
+then `rejected`, a dependent that has not started goes back to waiting; one
+that has started is not held or stopped, and a note naming the rejection is
+posted to its Feed. `failed` and `children-done` edges are unchanged.
+
 The first applicable review rule sets the floor: irreversible or environment
 work is L2; declared risk or a tagged risk path is L2; a big visible change or
 UI path is L1; tests, docs, renames, generated files, and task-only research
