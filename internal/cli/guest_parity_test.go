@@ -59,7 +59,6 @@ var guestParityCommands = map[string][]string{
 	"job blocked":        {},
 	"job cancel":         {},
 	"job lint":           {"{file}"},
-	"job order":          {},
 	"job next":           {},
 	"job post":           {},
 	"job render":         {"{task}", "I-01"},
@@ -73,7 +72,6 @@ var guestParityCommands = map[string][]string{
 	"lease status":       {"task"},
 	"lease take":         {"task", "--session", "parity"},
 	"person approvers":   {"--area", "code"},
-	"person list":        {},
 	"person show":        {"gus"},
 	"plan check":         {},
 	"plan hash":          {},
@@ -415,26 +413,37 @@ func TestGuestProjectParity(t *testing.T) {
 // Usage errors and ordinary "not found" errors never qualify.
 func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 	want := guestParityOutput{}
+	// The guest refusals that record guest_refused print its envelope with --json.
+	guestRefused := false
 	{
 		switch command {
 		case "routine add", "routine remove", "routine run", "routine schedule", "routine unschedule",
-			"project relink", "project remove", "project repo", "signal add",
+			"project relink", "project remove", "project repo",
 			"setup":
+			want = guestParityOutput{1, "", "grid: guests cannot change project settings\n"}
+			guestRefused = true
+		case "signal add":
+			// Known open (TestIlGuestSiteList): no code, so no stdout.
 			want = guestParityOutput{1, "", "grid: guests cannot change project settings\n"}
 		case "task delete", "task restore":
 			want = guestParityOutput{3, "", "grid " + command + ": task edit rejected: a person with an allowed role must perform this task move\n"}
+			guestRefused = true
 		case "task new", "task close", "task reopen", "task stop", "task move":
 			want = guestParityOutput{1, "", "grid " + command + ": role \"guest\" may not " + strings.TrimPrefix(command, "task ") + " a task; a guest answers and comments\n"}
+			guestRefused = true
 		case "task lane":
 			want = guestParityOutput{1, "", "grid task lane: role \"guest\" may not move a task to a lane; a guest answers and comments\n"}
+			guestRefused = true
 		case "session start", "session stop", "session send", "session pause", "session resume", "session handback", "session switch":
 			want = guestParityOutput{1, "", "grid " + command + ": role \"guest\" may not " + strings.TrimPrefix(command, "session ") + " a session; a guest answers and comments\n"}
+			guestRefused = true
 		case "question withdraw":
 			want = guestParityOutput{3, "", "question: Q-01 role \"guest\" may not withdraw\n"}
+			guestRefused = true
 		case "signal act", "signal dismiss", "signal move":
 			want = guestParityOutput{3, "", "grid: guests cannot act on signals\n"}
 			if mode == "json" {
-				want.Stdout = "{\"error\":\"refused\",\"message\":\"guests cannot act on signals\"}\n"
+				want.Stdout = "{\"error\":\"refused\",\"message\":\"guests cannot act on signals\",\"code\":\"guest_refused\"}\n"
 			}
 		case "workflow write":
 			want = guestParityOutput{3, "", "grid workflow write: caller role is not allowed to write workflows\n"}
@@ -479,6 +488,9 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 		default:
 			return false
 		}
+	}
+	if guestRefused && mode == "json" {
+		want.Stdout = ilGuestEnvelope(want.Stderr)
 	}
 	return out == want
 }

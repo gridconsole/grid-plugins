@@ -20,11 +20,14 @@ by message wording. Each example below is read by `TestHfFsShapes`.
 {"error":{"code":"no_such_task","message":"grid task show: task T-99 not found in the Grid home"}}
 ```
 
+   A guest's refused write (`setup`, `routine`, `project relink`/`remove`, `agent sync`, and the task, session and question writes a guest may not make) prints this envelope with `guest_refused`; its exit stays exit 1, or exit 3 for `question withdraw`, `task delete` and `task restore`.
+
 2. **Signal object**, printed by `signal act`, `signal dismiss` and `signal move`.
    `error` is a category string and `message` is unprefixed and sometimes redacted. The
-   category `refused` exits 3 and its `code` is present only when the refusal is
-   classified (`no_such_project`, `no_such_note`); a refusal such as "this note is not
-   snoozed" prints no `code`. The category `invalid` exits 2 and always carries
+   category `refused` exits 3 and always carries a `code`: `no_such_project`,
+   `no_such_note`, `no_such_task`, `guest_refused`, `note_state` (the note's status
+   does not allow the act or move, such as "this note is not snoozed"), `note_exists`
+   or `notes_full`. The category `invalid` exits 2 and always carries
    `code: "invalid_argument"`.
 
 <!-- shape:signal-refused -->
@@ -61,6 +64,10 @@ Other failures print nothing on stdout: with `--json`, an unclassified failure t
 exits 1 or 3 and is covered by none of the four shapes prints nothing on stdout, and
 only stderr carries it (`grid task show` with no operand outside a task folder is one).
 `job lint`, `job render`, `job show`, `job verify` and `job trace` keep their own objects (`ok`, `findings`, `error`; trace: `rows`, `problems`) and gain the top-level `code` on a classified refusal; a success and an unclassified failure print no `code`. Other commands that keep their own older JSON objects on failure carry no code.
+A partial success is the exception: when `grid brain revert --json` or
+`grid brain supersede --json` has written its change but rebuilding index.md failed,
+stdout holds the result object (revert's also gains `code`), stderr holds
+`{"error":"<message>","code":"index_rebuild_failed"}`, and the exit is 1.
 Plain output, successful JSON and streaming output are unchanged. A code does not
 imply an exit status: a missing project during `signal move` exits 3, a missing task
 during `task show` exits 1.
@@ -70,20 +77,27 @@ during `task show` exits 1.
 | `no_such_project` | A requested project is missing or inaccessible. |
 | `no_such_task` | A requested task is missing or inaccessible. |
 | `no_such_note` | A signal/inbox note does not exist. |
-| `person_required` | The existing person gate refused the request. |
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
 | `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
 | `workflow_file_changed` | A workflow file changed since its revision was read (`grid workflow write`); nothing was written and it exits 3. |
+| `record_id_used` | A record of another writer tenure on the Feed already has the record id of the post (`grid feed post`, `grid job post` with `--id`); nothing was written and it exits 3. A repeat of the same post by the same writer tenure still returns the stored record. |
+| `note_state` | A signal note's status does not allow the act or move (not snoozed, not decided, already decided); nothing was written and it exits 3. |
+| `note_exists` | A signal move found the note already in the target project; nothing was written and it exits 3. |
+| `notes_full` | A signal move found the target notes folder already holding 4000 files; nothing was written and it exits 3. |
+| `guest_refused` | The caller is refused as a guest (role guest, external or an unknown role); nothing was written. |
+| `job_exists` | A Job post (`grid job post`, `grid feed post --type job`) named a Job id the Feed already holds; nothing was written. A repeat of the same request (same `--id`, same body) exits 0 instead. Exits 3. |
+| `person_required` | The existing person gate refused the request. |
 | `job_waiting` | A person Job still waits for a Job in its after list (`grid approve`, `grid job result`); exits 3. |
 | `changed` | A settings file or preview changed since the person looked; nothing was written. |
 | `invalid_settings` | A settings value, key, preset or file is invalid; nothing was written. |
 | `write_failed` | Writing a settings file failed. |
 | `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
-| `job_exists` | A Job post (`grid job post`, `grid feed post --type job`) named a Job id the Feed already holds; nothing was written. A repeat of the same request (same `--id`, same body) exits 0 instead. Exits 3. |
+| `index_rebuild_failed` | The change was written; rebuilding index.md failed; the stdout object holds the result (`grid brain revert`, `grid brain supersede`); exits 1. |
 
-The first seven constants live in `internal/cli/error_codes.go` and the settings
-codes in `internal/settings/claude_user.go`; `person_required` and `job_waiting` are
+The first twelve constants live in `internal/cli/error_codes.go`, the settings
+codes in `internal/settings/claude_user.go` and `index_rebuild_failed` in
+`internal/braincmd/changes.go`; `person_required` and `job_waiting` are
 written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
 and `internal/cli/task_write.go`. `TestHfFsCodeTable` keeps this table equal to that set.
 
@@ -582,13 +596,13 @@ Renames an open task. The title is trimmed and whitespace is collapsed, with 1鈥
 
 ### `grid task decline <task> --reason <text> [--project <p>] [--json]`
 
-Closes an open task with a required reason after whitespace collapse. Reasons containing control, bidi override/isolate, or Unicode noncharacter code points are refused with exit 2 before YAML encoding. Tasks with `kind: planner` and already closed tasks are rejected. Writes `state: closed`, `next: declined by <who>` and `updated`; the host person comes from `GRID_ACTOR`, then `GRID_WHO`, otherwise `you`. History records `closed 路 declined 路 <reason>` in the existing JSON receipt's `note` field, with `what: decline`.
+Closes an open task with a required reason after whitespace collapse. Reasons containing control, bidi override/isolate, or Unicode noncharacter code points are refused with exit 2 before YAML encoding. Tasks with `kind: planner` and already closed tasks are rejected. Writes `state: closed`, `next: declined by <who>` and `updated`; the host person comes from `GRID_ACTOR`, then `GRID_WHO`, otherwise `you`; an agent shell (no `GRID_ACTOR` and a worker mark, `GRID_WORKER_ID`, `GRID_AGENT` or `GRID_WORKER`) records its worker id instead, so `next` reads `declined by <worker id>`. History records `closed 路 declined 路 <reason>` in the existing JSON receipt's `note` field, with `what: decline`.
 
 Both verbs use the same task lock, journal and atomic commit as stop and close, and refuse symlinked `task.md` files. `--project` constrains the task to a registered project name or id, or `personal`; omission uses the home-wide task id. `--json` prints the existing task write receipt; plain output uses `T-NN <verb>: <from-state> -> <to-state>`. Errors print one diagnostic line: exit 2 for invalid title or reason, 3 for a rejected task state or unchanged title, and 1 for scope, resolution or write failures. Success exits 0.
 
 `RenameAllowed` and `DeclineAllowed` are replaceable role policies in `internal/task`, called with the host's trimmed `GRID_ROLE`. Defaults allow the empty local role, owner and member; all other roles, including guest, are refused. A host or workflow may replace the policies during initialization; these commands do not read a workflow file.
 
-`grid task delete <T-NN> [--project <p>] [--json]` moves the whole task folder to `<GRID_HOME>/trash/<project>/<folder>@YYYYMMDDTHHMM/` using the UTC minute; `grid task restore <T-NN> --project <p> [--json]` restores the newest stamped copy. Both hold the existing task lock and serialize folder publication with task creation, append one history receipt after a successful move, print the resulting folder name, and return `{project, id, folder}` with `--json`. Delete accepts any state but refuses the standing Planner and any recorded task lease holder; it never takes or breaks a lease. Same-minute destination collisions, occupied restore ids, absent trash copies, and denied roles exit 3; unsafe symlink paths and invalid input exit 2; unknown delete ids and I/O failures exit 1. Neither move overwrites an existing folder or copies across filesystems. A failed rename leaves no history receipt; a history failure after rename reports that the move happened and does not undo it. Actor and role come from `GRID_ACTOR` and `GRID_ROLE`, with local-person/owner defaults for an ordinary shell; agent shells are refused, and Personal tasks require the same person guard and use `trash/personal/`. Replaceable `DeleteAllowed` and `RestoreAllowed` policies default to owner only; these commands read no workflow file.
+`grid task delete <T-NN> [--project <p>] [--json]` moves the whole task folder to `<GRID_HOME>/trash/<project>/<folder>@YYYYMMDDTHHMM/` using the UTC minute; `grid task restore <T-NN> --project <p> [--json]` restores the newest stamped copy. Both hold the existing task lock and serialize folder publication with task creation, append one history receipt after a successful move, print the resulting folder name, and return `{project, id, folder}` with `--json`. Delete accepts any state but refuses the standing Planner and any recorded task lease holder; it never takes or breaks a lease. Same-minute destination collisions, occupied restore ids, absent trash copies, and denied roles exit 3; unsafe symlink paths and invalid input exit 2; unknown delete ids and I/O failures exit 1. Neither move overwrites an existing folder or copies across filesystems. A failed rename leaves no history receipt; a history failure after rename reports that the move happened and does not undo it. Actor and role come from `GRID_ACTOR` and `GRID_ROLE`, with local-person/owner defaults for an ordinary shell; an agent shell (no `GRID_ACTOR` and a worker mark) records its worker id and the role `agent` in the receipt, while the allowed-role policy still reads the host role, so an agent role is refused; and Personal tasks require the same person guard and use `trash/personal/`. Replaceable `DeleteAllowed` and `RestoreAllowed` policies default to owner only; these commands read no workflow file.
 
 ### `grid task list [--project <name-or-id>] [--state <state>] --json`
 

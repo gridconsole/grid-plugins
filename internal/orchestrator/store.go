@@ -137,10 +137,12 @@ func (s Store) exclusive(fn func() error) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	if err := fslock.LockExclusive(f); err != nil {
+	// The wait owns f from here and the Feed's Context ends it: a failed or
+	// cancelled lock closes f, so the close is deferred only once the lock is held.
+	if err := fslock.LockExclusiveContext(s.Feed.Context, f); err != nil {
 		return err
 	}
+	defer f.Close()
 	defer fslock.Unlock(f)
 	return fn()
 }

@@ -1,7 +1,9 @@
 package question
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -52,18 +54,45 @@ func jobBody(qid string, in Input) map[string]any {
 	}
 }
 
-// postJob posts the person Job of a new question and returns its id, or "" when
-// there is no port or no writer that may post one.
-func (s Store) postJob(f feed.Store, qid string, in Input) (string, error) {
+// postsJob says whether an ask posts a person Job: there is a port and a writer
+// that may post one.
+func (s Store) postsJob() bool {
 	if s.Jobs.Post == nil {
-		return "", nil
+		return false
 	}
 	// The Feed refuses an agent a person gate; post no Job the question post
 	// would then leave without its question.
-	if role := contract.NormalizeRole(s.Writer.Author.Role); role == "agent" || role == "cli" {
+	role := contract.NormalizeRole(s.Writer.Author.Role)
+	return role != "agent" && role != "cli"
+}
+
+// postJob posts the person Job of a new question and returns its id, or "" when
+// there is no port or no writer that may post one. It runs with questions/.lock
+// let go, as every Job port call does: the port reaches .orchestrator.lock, and a
+// holder pass that holds that lock takes the questions lock in ReserveGate.
+func (s Store) postJob(f feed.Store, qid string, in Input) (string, error) {
+	if !s.postsJob() {
 		return "", nil
 	}
 	return s.Jobs.Post(f, s.ControlWriter, s.Writer, jobBody(qid, in))
+}
+
+// settleJobs closes the person Jobs of the records a verb decided. Callers run
+// it after questions/.lock is let go, for the reason postJob gives. Each record
+// is settled even when another fails, so one Job's error leaves no other open.
+func (s Store) settleJobs(records ...Record) error {
+	if s.Jobs.Close == nil || !slices.ContainsFunc(records, func(r Record) bool { return r.Job != "" }) {
+		return nil
+	}
+	f, err := s.feed()
+	if err != nil {
+		return err
+	}
+	errs := []error{}
+	for _, r := range records {
+		errs = append(errs, s.settleJob(f, r))
+	}
+	return errors.Join(errs...)
 }
 
 // settleJob closes the question's person Job from the last answer, default or

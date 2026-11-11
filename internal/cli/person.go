@@ -14,7 +14,7 @@ import (
 
 func runPerson(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid person list [--project P] [--json]\n       grid person show <handle> [--project P] [--json]\n       grid person approvers --area <area> [--task <folder or id>] [--project P] [--json]\n       grid person check [--json]\n\nReads the synced people cache. Without --project, reads home, or the supplied task's project then home.\nNo match requires --task with an owner in task.md.\ncheck answers whether the caller is a person: {\"ok\":true}, or exit 3 with person_required and a reason.\nExit codes: 0 success, 1 read failure or unknown handle, 2 usage error, 3 check: not a person.")
+		fmt.Fprintln(env.Stdout, "Usage: grid person show <handle> [--project P] [--json]\n       grid person approvers --area <area> [--task <folder or id>] [--project P] [--json]\n       grid person check [--json]\n\nReads the synced people cache. Without --project, reads home, or the supplied task's project then home.\nNo match requires --task with an owner in task.md.\ncheck answers whether the caller is a person: {\"ok\":true}, or exit 3 with person_required and a reason.\nExit codes: 0 success, 1 read failure or unknown handle, 2 usage error, 3 check: not a person.")
 		return 0
 	}
 	verb := args[0]
@@ -26,7 +26,7 @@ func runPerson(args []string, env Env) int {
 	asJSON := fs.Bool("json", false, "print JSON")
 	var area, taskArg string
 	switch verb {
-	case "list", "show":
+	case "show":
 	case "approvers":
 		fs.StringVar(&area, "area", "", "exact approval area")
 		fs.StringVar(&taskArg, "task", "", "task folder or id supplying the default owner")
@@ -90,20 +90,8 @@ func runPerson(args []string, env Env) int {
 	if err != nil {
 		return failure(env, err)
 	}
-	if verb == "list" && *asJSON {
-		return writeJSON(env.Stdout, struct {
-			People   []people.Entry   `json:"people"`
-			Problems []people.Problem `json:"problems"`
-		}{entries, problems})
-	}
 	for _, problem := range problems {
 		fmt.Fprintf(env.Stderr, "person %s: %s\n", problem.Name, problem.Reason)
-	}
-	if verb == "list" {
-		for _, entry := range entries {
-			fmt.Fprintf(env.Stdout, "%s  %s  %s\n", entry.Handle, entry.Name, entry.Role)
-		}
-		return 0
 	}
 	// An empty sentinel distinguishes a people match from fallback even when
 	// the matched person happens to be the task owner.

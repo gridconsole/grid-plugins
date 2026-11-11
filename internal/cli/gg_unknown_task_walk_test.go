@@ -23,7 +23,7 @@ var ggTaskWalked = []string{
 	"where", "task attach", "task close", "task decline", "task delete", "task history",
 	"task lane", "task move", "task rename", "task reopen", "task show", "task status", "task stop",
 	"plan check", "plan hash", "plan items", "plan migrate", "plan write",
-	"job ack", "job blocked", "job cancel", "job lint", "job next", "job order", "job post",
+	"job ack", "job blocked", "job cancel", "job lint", "job next", "job post",
 	"job render", "job result", "job show", "job tree", "job verify",
 	"lease release", "lease status", "lease take",
 	"feed handover", "feed post", "feed read", "feed state", "feed tick", "feed types",

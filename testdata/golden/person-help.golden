@@ -1,5 +1,4 @@
 Usage: grid person check [--json]
-       grid person list [--project P] [--json]
        grid person show <handle> [--project P] [--json]
        grid person approvers --area <area> [--task <folder or id>] [--project P] [--json]
 

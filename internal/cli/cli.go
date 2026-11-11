@@ -25,6 +25,10 @@ import (
 // guestSettingsRefusal is the one text every settings write gives a guest.
 const guestSettingsRefusal = "guests cannot change project settings"
 
+// ilGuestRefused is the settings refusal as an error; errorCode gives it
+// guest_refused, and the early guest gate records it for every write it refuses.
+var ilGuestRefused = errors.New(guestSettingsRefusal)
+
 // Env is everything a command reads from the machine, so tests can set it.
 // Paths are expected to be symlink-resolved (see gridhome.Real).
 type Env struct {
@@ -218,6 +222,8 @@ func Run(args []string, env Env) (exit int) {
 		if guestWriteVerb(name, rest) && strings.ToLower(strings.TrimSpace(env.getenv("GRID_ROLE"))) == "guest" && env.getenv("GRID_LEASE") != "task" {
 			// A guest's role is refused before any project is resolved, so the
 			// answer is the same for an unknown project and an invited one.
+			// With --json, finish prints the envelope with guest_refused.
+			env.recordError(ilGuestRefused)
 			if name == "question" {
 				id := ""
 				if len(rest) > 1 {

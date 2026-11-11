@@ -2,6 +2,7 @@ package feed
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,15 @@ import (
 )
 
 var ErrStaleLease = errors.New("stale lease")
+
+// RecordIDUsedError is the cause of the refusal of a post whose record id a
+// record of another writer tenure already has on the Feed. It is returned inside
+// an InvalidRecordError, so it exits 3 like the other reuse refusals and keeps
+// their text; the CLI names it record_id_used.
+type RecordIDUsedError struct{ ID string }
+
+func (e *RecordIDUsedError) Error() string { return "record id already used for a different post" }
+
 var ErrDiskFull = errors.New("disk full")
 
 // Store is one task's Feed. TaskID is the stable ULID, not its display number.
@@ -29,6 +39,10 @@ type Store struct {
 	// WithdrawAllowed overrides person withdrawal roles for projections only.
 	// Nil reads workflow.md. Writes always check the current policy separately.
 	WithdrawAllowed func(string) bool
+	// Context stops a Post or a lease check that is waiting on a Feed file lock:
+	// the call returns the context's error and writes nothing. Nil means
+	// context.Background, which waits as long as the holder keeps the lock.
+	Context context.Context
 	// afterGateCheck is a test hook inside the gate lock, before the append.
 	afterGateCheck func()
 	// afterJobCheck is a test hook inside the job lock, before the append.
@@ -112,8 +126,8 @@ func (s Store) leaseLock(w Writer, attempt *int) (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: cannot read lease: %v", ErrStaleLease, err)
 	}
-	if err := fslock.LockShared(f); err != nil {
-		f.Close()
+	// The wait owns f from here: a failed or cancelled lock closes it, not us.
+	if err := fslock.LockSharedContext(s.Context, f); err != nil {
 		return nil, err
 	}
 	fail := func(err error) (*os.File, error) { fslock.Unlock(f); f.Close(); return nil, err }
@@ -268,10 +282,12 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	if err != nil {
 		return Record{}, diskError(err)
 	}
-	defer f.Close()
-	if err := fslock.LockExclusive(f); err != nil {
+	// The wait owns f from here: a failed or cancelled lock closes it, so the
+	// close is deferred only once the lock is held.
+	if err := fslock.LockExclusiveContext(s.Context, f); err != nil {
 		return Record{}, err
 	}
+	defer f.Close()
 	defer fslock.Unlock(f)
 	// Repair on open: a writer that died mid-line left a fragment, and an empty
 	// file is new, so its name is made durable before any record in it is acked.
@@ -314,6 +330,17 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		}
 		if prev.Seq >= r.Seq {
 			r.Seq = prev.Seq + 1
+		}
+	}
+	// A record id names one record on the whole Feed. A repeat by this tenure
+	// returned above; a record of any other tenure with the id refuses the post.
+	onFeed, err := s.ReadOnly(Filter{})
+	if err != nil {
+		return Record{}, err
+	}
+	for _, entry := range onFeed.Records {
+		if entry.ID == r.ID {
+			return Record{}, &InvalidRecordError{Err: &RecordIDUsedError{ID: r.ID}}
 		}
 	}
 	guestAnswer := contract.NormalizeRole(r.Author.Role) == "guest" && r.Type == "answer"
@@ -578,8 +605,8 @@ func (s Store) wakeLock() (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := fslock.LockExclusive(f); err != nil {
-		f.Close()
+	// The wait owns f from here: a failed or cancelled lock closes it, not us.
+	if err := fslock.LockExclusiveContext(s.Context, f); err != nil {
 		return nil, err
 	}
 	return f, nil

@@ -15,6 +15,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -162,6 +163,8 @@ func runFeed(args []string, env Env) int {
 	var record feed.Record
 	if verb == "handover" {
 		record, err = store.Handover(in, writer)
+	} else if kind == "job" {
+		record, err = orchestrator.PostJobLocked(store, in, writer)
 	} else {
 		record, err = store.Post(in, writer)
 	}
@@ -210,7 +213,7 @@ func feedStore(env Env, task, project string) (feed.Store, error) {
 	if err != nil && !errors.Is(err, feed.ErrNoTaskID) {
 		return feed.Store{}, err
 	}
-	return feed.Store{TaskDir: res.TaskPath, TaskID: taskID}, nil
+	return feed.Store{TaskDir: res.TaskPath, TaskID: taskID, Context: env.Context}, nil
 }
 
 // feedDefaults supplies the supervised session's Job context for either front end.

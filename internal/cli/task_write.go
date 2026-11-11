@@ -37,19 +37,62 @@ func writeJobWaiting(env Env, err error) bool {
 }
 
 func writeOptions(env Env, id, action, note string) task.WriteOptions {
-	// A host can supply its authenticated member id; a terminal without an
-	// account records a local person without copying an OS login into task files.
-	who := env.getenv("GRID_ACTOR")
-	if who == "" {
-		who = "local"
+	who, _ := writeAuthor(env)
+	return task.WriteOptions{Cwd: env.Cwd, ID: id, Action: action, Note: note, Who: who}
+}
+
+// writeAuthor names who a task write records, and reports whether that is an
+// agent. It only records: no command admits or refuses anyone because of it.
+//
+//   - A person's shell (no role, owner, member or the plain cli role) records the
+//     host's member id (GRID_ACTOR) or the local person, as owner or member. With
+//     no GRID_ACTOR and a worker mark (GRID_AGENT, GRID_WORKER_ID, GRID_WORKER) the
+//     shell is an agent's and records the worker, role "agent", as deliver does.
+//   - lead, guest and external record themselves (GRID_ACTOR else local), whatever
+//     marks the shell carries: a guest with a worker id is still a guest.
+//   - Any other role is an agent's (contract.TierFor): the worker, else the host's
+//     member id, in the role the host gave.
+func writeAuthor(env Env) (contract.Author, bool) {
+	role := contract.NormalizeRole(env.getenv("GRID_ROLE"))
+	actor := env.getenv("GRID_ACTOR")
+	person := func(role string) contract.Author {
+		// A host can supply its authenticated member id; a terminal without an
+		// account records a local person without copying an OS login into task files.
+		if actor == "" {
+			return contract.Author{ID: "local", Role: role}
+		}
+		return contract.Author{ID: actor, Role: role}
 	}
-	// A member's write is recorded as the member's; "owner" is only the
-	// no-account default (also for the plain "cli" role of a person's shell).
-	role := "owner"
-	if contract.NormalizeRole(env.getenv("GRID_ROLE")) == "member" {
-		role = "member"
+	switch role {
+	case "", "cli", "owner", "member":
+		if actor == "" && workerMarked(env) {
+			return contract.Author{ID: workerAuthorID(env), Role: "agent"}, true
+		}
+		// A member's write is recorded as the member's; "owner" is only the
+		// no-account default (also for the plain "cli" role of a person's shell).
+		if role == "member" {
+			return person("member"), false
+		}
+		return person("owner"), false
 	}
-	return task.WriteOptions{Cwd: env.Cwd, ID: id, Action: action, Note: note, Who: contract.Author{ID: who, Role: role}}
+	if contract.TierFor(role) != contract.Agent {
+		return person(role), false
+	}
+	if actor != "" {
+		return contract.Author{ID: actor, Role: role}, true
+	}
+	return contract.Author{ID: workerAuthorID(env), Role: role}, true
+}
+
+// workerAuthorID is the worker a shell names: GRID_WORKER_ID, else GRID_AGENT,
+// else GRID_WORKER, else "grid".
+func workerAuthorID(env Env) string {
+	for _, key := range []string{"GRID_WORKER_ID", "GRID_AGENT", "GRID_WORKER"} {
+		if id := strings.TrimSpace(env.getenv(key)); id != "" {
+			return id
+		}
+	}
+	return "grid"
 }
 
 func runTaskWrite(args []string, env Env) int {
@@ -115,9 +158,12 @@ func runTaskWrite(args []string, env Env) int {
 		} else {
 			// An absent host person means "you" in next; the receipt still uses
 			// the existing local author default.
-			o.Who.ID = env.getenv("GRID_ACTOR")
-			if o.Who.ID == "" {
-				o.Who.ID = env.getenv("GRID_WHO")
+			// An agent's write keeps the worker writeOptions named.
+			if _, agent := writeAuthor(env); !agent {
+				o.Who.ID = env.getenv("GRID_ACTOR")
+				if o.Who.ID == "" {
+					o.Who.ID = env.getenv("GRID_WHO")
+				}
 			}
 			event, err = store.Decline(task.DeclineOptions{WriteOptions: o, Reason: reason, Project: project, Role: role})
 		}
@@ -286,7 +332,10 @@ func runTaskTrash(args []string, env Env) int {
 		role = "owner"
 	}
 	o := task.TrashOptions{WriteOptions: writeOptions(env, pos[0], sub, ""), Project: *project, Role: role}
-	o.Who.Role = role
+	// The policy reads o.Role; the audit role is the host's, unless an agent wrote.
+	if _, agent := writeAuthor(env); !agent {
+		o.Who.Role = role
+	}
 	var result task.TrashResult
 	if sub == "delete" {
 		result, err = taskWriter(env).Delete(o)

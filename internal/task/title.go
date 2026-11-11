@@ -16,7 +16,15 @@ import (
 // error. The title is cut at 120 runes.
 func titleOf(words string) (string, error) {
 	text := words
-	if doc := taskfile.ParseFrontmatter(strings.TrimLeft(words, " \t\n")); doc != nil {
+	trimmed := strings.TrimLeft(words, " \t\n")
+	if body, ok := emptyBlockBody(trimmed); ok {
+		// `---` straight followed by `---` is an empty block; the shared parser
+		// needs a line between the fences, so it does not see one.
+		if strings.TrimSpace(body) == "" {
+			return "", errors.New("task words hold only front matter and no title")
+		}
+		text = body
+	} else if doc := taskfile.ParseFrontmatter(trimmed); doc != nil {
 		raw, _ := doc.Data["title"].(string)
 		if title := strings.Join(strings.Fields(raw), " "); title != "" {
 			return cutTitle(title), nil
@@ -27,6 +35,35 @@ func titleOf(words string) (string, error) {
 		text = doc.Body
 	}
 	return cutTitle(strings.TrimSpace(strings.SplitN(strings.TrimSpace(text), "\n", 2)[0])), nil
+}
+
+// emptyBlockBody reports whether text opens with a `---` line followed at once
+// by a closing `---` line, and gives what follows the closing line.
+func emptyBlockBody(text string) (string, bool) {
+	rest, ok := strings.CutPrefix(text, "---")
+	if !ok {
+		return "", false
+	}
+	rest, ok = cutLineEnd(rest)
+	if !ok {
+		return "", false
+	}
+	rest, ok = strings.CutPrefix(rest, "---")
+	if !ok {
+		return "", false
+	}
+	if rest == "" {
+		return "", true
+	}
+	return cutLineEnd(rest)
+}
+
+// cutLineEnd removes a leading \n or \r\n.
+func cutLineEnd(s string) (string, bool) {
+	if rest, ok := strings.CutPrefix(s, "\r\n"); ok {
+		return rest, true
+	}
+	return strings.CutPrefix(s, "\n")
 }
 
 func cutTitle(title string) string {

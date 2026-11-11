@@ -23,8 +23,8 @@ func (s Store) gateLock() (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := fslock.LockExclusive(f); err != nil {
-		f.Close()
+	// The wait owns f from here: a failed or cancelled lock closes it, not us.
+	if err := fslock.LockExclusiveContext(s.Context, f); err != nil {
 		return nil, err
 	}
 	return f, nil

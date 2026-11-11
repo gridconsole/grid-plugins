@@ -9,6 +9,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 )
 
 type Property struct {
@@ -221,6 +222,8 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		var post feed.Record
 		if tool.Name == "feed_handover" {
 			post, err = store.Handover(in, writer)
+		} else if in.Type == "job" {
+			post, err = orchestrator.PostJobLocked(store, in, writer)
 		} else {
 			post, err = store.Post(in, writer)
 		}
