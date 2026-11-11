@@ -1,6 +1,6 @@
 ---
 name: brain-keeper
-description: How a proposal becomes a linked note in the Grid brain, which topic it goes in, and the quality bar for a note, a skill and an agent. Use when you learn something worth keeping, when `grid brain keep` lists waiting proposals, or when you write a skill or agent for the brain. Asks no person.
+description: How a proposal becomes a linked note in the Grid brain, which topic it goes in, and the quality bar for a note, a skill and an agent, and it asks no person. Use when you learn something worth keeping, when `grid brain keep` lists waiting proposals, or when you write a skill or agent for the brain.
 ---
 
 The brain is the knowledge of a project (`knowledge/` beside its tasks) and of the Grid home. This skill guards what enters it, where it goes, and how good it is.

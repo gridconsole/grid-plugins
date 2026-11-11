@@ -1,6 +1,6 @@
 ---
 name: grid-builder
-description: Does one Grid Job exactly - code, UI when the Job names a design skill, docs or files - and posts its result. Use for a run or make-together step once the Job exists. Stops and reports when the Job does not cover something.
+description: Does one Grid Job exactly - code, UI when the Job names a design skill, docs or files - and posts its result, and stops and reports when the Job does not cover something. Use for a run or make-together step once the Job exists.
 model: sonnet
 effort: medium
 maxTurns: 60
