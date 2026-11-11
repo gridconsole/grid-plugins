@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/proctree"
 )
 
 const outputLimit = 64 * 1024
@@ -62,7 +64,7 @@ func runProcess(ctx context.Context, argv []string, dir string, env []string, st
 	if tee != nil {
 		cmd.Stdout = io.MultiWriter(&stdout, tee)
 	}
-	err := cmd.Run()
+	err := proctree.Run(cmd)
 	cleanupProcess(cmd)
 	result.DurationMS = time.Since(started).Milliseconds()
 	result.Stdout, result.Stderr = stdout.buffer.String(), stderr.buffer.String()
