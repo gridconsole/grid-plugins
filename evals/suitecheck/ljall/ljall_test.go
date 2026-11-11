@@ -18,10 +18,7 @@ const ljAllTranscript = `{"type":"assistant","message":{"content":[{"type":"text
 
 // ljAllKnownOpen lists the cases GradeCase refuses today, each with the substring
 // its error must contain.
-var ljAllKnownOpen = map[string]string{
-	// found-before-result.md uses before_tool/before_match/after_tool/after_match, not the before/after maps (graderKeys, suitegrade.go:59-64).
-	"review-posts-found": "unknown key",
-}
+var ljAllKnownOpen = map[string]string{}
 
 // ljAllWalk grades every case folder of suiteDir; nil means the case grades clean.
 func ljAllWalk(suiteDir string) map[string]error {
