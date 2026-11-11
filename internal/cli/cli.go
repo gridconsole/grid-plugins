@@ -133,6 +133,7 @@ func commands() []command {
 		{"account", "list, status, statusline, scan, sign-in, windows, folder and note for agent accounts", runAccount},
 		{"project", "add, remove, list, scan and relink projects", runProject},
 		{"project-md", "get or set a project front-matter key", runProjectMD},
+		{"update", "draft, edit, discard, skip and send a project's update", runUpdate},
 		{"setup", "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)", runSetup},
 		{"signal", "add, act on, dismiss and move inbox signals", runSignal},
 		{"artifact", "import, link, list and publish task artifacts", runArtifact},

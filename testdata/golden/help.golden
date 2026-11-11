@@ -36,6 +36,7 @@ Commands:
   account     list, status, statusline, scan, sign-in, windows, folder and note for agent accounts
   project     add, remove, list, scan and relink projects
   project-md  get or set a project front-matter key
+  update      draft, edit, discard, skip and send a project's update
   setup       record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)
   signal      add, act on, dismiss and move inbox signals
   artifact    import, link, list and publish task artifacts
