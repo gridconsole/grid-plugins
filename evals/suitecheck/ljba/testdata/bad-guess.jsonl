@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init"}
+{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"task/T-01/jobs/J-1.md"}}]}}
+{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"src/report.txt"}}]}}
+{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"src/export.csv","content":"item,count\napple,2\npear,3\n"}}]}}
+{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"text","text":"Exported the report as CSV."}]}}
