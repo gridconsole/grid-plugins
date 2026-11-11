@@ -54,6 +54,18 @@ type Env struct {
 	Getenv   func(string) string
 	Now      func() time.Time
 	GOOS     string // the OS whose path rules apply; "" means the host's own
+	// Environ is the environment the provider child runs with, as KEY=VALUE
+	// entries. nil reads the host process environment (os.Environ), as the
+	// binary does. The provider itself is still looked up on the host PATH.
+	Environ func() []string
+}
+
+// environ is the child's environment, read at each call and never cached.
+func (e Env) environ() []string {
+	if e.Environ != nil {
+		return e.Environ()
+	}
+	return os.Environ()
 }
 
 func (e Env) goos() string {
@@ -148,7 +160,7 @@ func Scan(env Env) []Folder {
 		case Claude:
 			f.Email, f.Plan, f.SignedIn = readClaude(env, r)
 		case Codex:
-			f.Email, f.Plan, f.SignedIn = readCodex(r)
+			f.Email, f.Plan, f.SignedIn = readCodex(env, r)
 		}
 		out = append(out, f)
 	}
@@ -165,10 +177,31 @@ func normEmail(s string) string {
 
 func boolPtr(b bool) *bool { return &b }
 
+// providerEnv is the child's environment: every entry of environ in order except
+// the folder variable, then dirVar=dir when dir is not "". Names fold case on
+// Windows, so Claude_Config_Dir is the folder variable there; elsewhere the name
+// must match exactly. The result is never nil, because a nil cmd.Env makes
+// exec.Cmd hand the host environment to the child.
+func providerEnv(environ []string, dirVar, dir, goos string) []string {
+	out := make([]string, 0, len(environ)+1)
+	for _, kv := range environ {
+		if name, _, found := strings.Cut(kv, "="); found {
+			if name == dirVar || (goos == "windows" && strings.EqualFold(name, dirVar)) {
+				continue
+			}
+		}
+		out = append(out, kv)
+	}
+	if dir != "" {
+		out = append(out, dirVar+"="+dir)
+	}
+	return out
+}
+
 // runProvider runs the provider's own command with the folder variable set for a
-// folder of its own, and unset for the home folder (dir ""). ran is false when
-// the command is not installed.
-func runProvider(bin string, args []string, dirVar, dir string, in io.Reader, out, errOut io.Writer) (code int, ran bool, err error) {
+// folder of its own, and unset for the home folder (dir ""), on the environment
+// env gives. ran is false when the command is not installed.
+func runProvider(env Env, bin string, args []string, dirVar, dir string, in io.Reader, out, errOut io.Writer) (code int, ran bool, err error) {
 	path, lookErr := exec.LookPath(bin)
 	if lookErr != nil {
 		return 0, false, lookErr
@@ -180,14 +213,7 @@ func runProvider(bin string, args []string, dirVar, dir string, in io.Reader, ou
 		defer cancel()
 	}
 	cmd := exec.CommandContext(ctx, path, args...)
-	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, dirVar+"=") {
-			cmd.Env = append(cmd.Env, kv)
-		}
-	}
-	if dir != "" {
-		cmd.Env = append(cmd.Env, dirVar+"="+dir)
-	}
+	cmd.Env = providerEnv(env.environ(), dirVar, dir, env.goos())
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = in, out, errOut
 	if err := cmd.Run(); err != nil {
 		var ee *exec.ExitError
@@ -211,7 +237,7 @@ func readClaude(env Env, r folderRef) (email, plan string, signedIn *bool) {
 		child = ""
 	}
 	var out captured
-	code, ran, _ := runProvider("claude", []string{"auth", "status"}, dirVars[Claude], child, nil, &out, io.Discard)
+	code, ran, _ := runProvider(env, "claude", []string{"auth", "status"}, dirVars[Claude], child, nil, &out, io.Discard)
 	if ran {
 		var st struct {
 			LoggedIn         *bool  `json:"loggedIn"`
@@ -256,7 +282,7 @@ func claudeDetails(path string) string {
 // tokens.id_token. Only the email and plan claims are kept; the token is not.
 // With no auth.json (the login is in the OS keyring), the email is ” and
 // signedIn comes from `codex login status`.
-func readCodex(r folderRef) (email, plan string, signedIn *bool) {
+func readCodex(env Env, r folderRef) (email, plan string, signedIn *bool) {
 	if data, err := os.ReadFile(filepath.Join(r.dir, "auth.json")); err == nil {
 		email, plan = codexIdentity(data)
 		if email != "" {
@@ -267,7 +293,7 @@ func readCodex(r folderRef) (email, plan string, signedIn *bool) {
 	if r.home {
 		child = ""
 	}
-	if code, ran, _ := runProvider("codex", []string{"login", "status"}, dirVars[Codex], child, nil, io.Discard, io.Discard); ran {
+	if code, ran, _ := runProvider(env, "codex", []string{"login", "status"}, dirVars[Codex], child, nil, io.Discard, io.Discard); ran {
 		signedIn = boolPtr(code == 0)
 	}
 	return "", "", signedIn
@@ -382,7 +408,7 @@ func SignIn(env Env, kind, dir string, in io.Reader, out, errOut io.Writer) (int
 	if ref.home {
 		child = ""
 	}
-	code, ran, err := runProvider(kind, args, dirVars[kind], child, in, out, errOut)
+	code, ran, err := runProvider(env, kind, args, dirVars[kind], child, in, out, errOut)
 	if !ran {
 		return 1, fmt.Errorf("%s is not installed or cannot start (%v): %w", kind, err, ErrNoAgent)
 	}
