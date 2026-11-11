@@ -1767,59 +1767,19 @@
     },
     {
       "name": "lease",
-      "summary": "take, renew, release, status (merge or task lease)",
+      "summary": "take, release, status (task lease)",
       "built": true,
       "subcommands": [
         {
           "name": "release",
           "args": [
-            "[merge]"
+            "task"
           ],
           "flags": [
             {
-              "name": "--fence",
-              "takes": "value",
-              "required": true
-            },
-            {
-              "name": "--holder",
-              "takes": "value",
-              "required": true
-            },
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--project",
+              "name": "--epoch",
               "takes": "value",
               "required": false
-            },
-            {
-              "name": "--task",
-              "takes": "value",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
-        {
-          "name": "renew",
-          "args": [
-            "[merge]"
-          ],
-          "flags": [
-            {
-              "name": "--fence",
-              "takes": "value",
-              "required": true
-            },
-            {
-              "name": "--holder",
-              "takes": "value",
-              "required": true
             },
             {
               "name": "--json",
@@ -1843,19 +1803,9 @@
         {
           "name": "status",
           "args": [
-            "[merge]"
+            "task"
           ],
           "flags": [
-            {
-              "name": "--fence",
-              "takes": "value",
-              "required": false
-            },
-            {
-              "name": "--holder",
-              "takes": "value",
-              "required": false
-            },
             {
               "name": "--json",
               "takes": "none",
@@ -1878,18 +1828,28 @@
         {
           "name": "take",
           "args": [
-            "[merge]"
+            "task"
           ],
           "flags": [
             {
-              "name": "--fence",
+              "name": "--adopt",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--expected-epoch",
               "takes": "value",
               "required": false
             },
             {
-              "name": "--holder",
+              "name": "--gen",
               "takes": "value",
-              "required": true
+              "required": false
+            },
+            {
+              "name": "--hold",
+              "takes": "none",
+              "required": false
             },
             {
               "name": "--json",
@@ -1897,8 +1857,33 @@
               "required": false
             },
             {
+              "name": "--pid",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--pid-start",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--server-offline-since",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--session",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--takeover",
+              "takes": "none",
               "required": false
             },
             {

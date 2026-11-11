@@ -66,10 +66,9 @@ var guestParityCommands = map[string][]string{
 	"job tree":           {},
 	"job verify":         {"J-01"},
 	"land":               {"{task}", "--dry-run"},
-	"lease release":      {"merge", "--holder", "gus@01ARZ3NDEKTSV4RRFFQ69G5FAV", "--fence", "1"},
-	"lease renew":        {"merge", "--holder", "gus@01ARZ3NDEKTSV4RRFFQ69G5FAV", "--fence", "1"},
-	"lease status":       {"merge", "--holder", "gus@01ARZ3NDEKTSV4RRFFQ69G5FAV", "--fence", "1"},
-	"lease take":         {"merge", "--holder", "gus@01ARZ3NDEKTSV4RRFFQ69G5FAV", "--fence", "1"},
+	"lease release":      {"task", "--epoch", "0.1"},
+	"lease status":       {"task"},
+	"lease take":         {"task", "--session", "parity"},
 	"person approvers":   {"--area", "code"},
 	"person list":        {},
 	"person show":        {"gus"},
@@ -221,7 +220,8 @@ func guestParityRows(t *testing.T) []guestParityRow {
 				}
 				add("task", args)
 			}
-			if projectArg || taskArg {
+			// The lease operand is the word task, not a task id; the task-lease rows below cover it.
+			if (projectArg || taskArg) && c.Name != "lease" {
 				args := slices.Clone(base)
 				if !slices.Contains(args, "{task}") && taskArg {
 					// Task-first shorthand is independent of the --task form.
@@ -245,9 +245,9 @@ func guestParityRows(t *testing.T) []guestParityRow {
 					add("act-"+act, args)
 				}
 			}
-			if c.Name == "lease" && sub.Name != "renew" {
-				// The parser inventory probes the default merge lease. The task lease
-				// dispatch has its own flags, and also resolves through a project.
+			if c.Name == "lease" {
+				// The task lease dispatch has its own flags, and also resolves through a
+				// project.
 				args := []string{"task", "--task", "{task}"}
 				if sub.Name == "take" {
 					args = append(args, "--session", "parity")

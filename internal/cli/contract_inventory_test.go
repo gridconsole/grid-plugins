@@ -295,6 +295,10 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 				sub.Args = []string{}
 			}
 			prefix := append([]string{c.name}, strings.Fields(path)...)
+			if c.name == "lease" {
+				// The only lease left is the task lease; its parser follows the word task.
+				prefix = append(prefix, "task")
+			}
 
 			// Two unknown flags fence off command execution. A value flag consumes
 			// the first sentinel (or rejects it as an invalid value); a boolean flag
@@ -455,10 +459,9 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"job show":             {args: []string{"[task job | job | file]"}},
 		"job cycles":           {args: []string{"<items.json>"}},
 		"job floor":            {args: []string{"<items.json>"}},
-		"lease take":           {args: []string{"[merge]"}, required: map[string]bool{"--holder": true}},
-		"lease renew":          {args: []string{"[merge]"}, required: map[string]bool{"--fence": true, "--holder": true}},
-		"lease release":        {args: []string{"[merge]"}, required: map[string]bool{"--fence": true, "--holder": true}},
-		"lease status":         {args: []string{"[merge]"}},
+		"lease take":           {args: []string{"task"}},
+		"lease release":        {args: []string{"task"}},
+		"lease status":         {args: []string{"task"}},
 		"feed tick":            {args: []string{"[job]"}},
 		"feed post":            {args: []string{"[task]"}, required: map[string]bool{"--body": true, "--type": true}, output: "cmd-feed-post.json"},
 		"feed read":            {args: []string{"[task]"}},

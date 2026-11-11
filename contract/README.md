@@ -119,8 +119,7 @@ are reference-document names and original line numbers, not machine paths.
 | Host | [host.json](schemas/host.json) | feed-contract.md:86; old-plugin/feed/types/host.md:5-15 |
 | Transfer | [transfer.json](schemas/transfer.json) | feed-contract.md:86; old-plugin/feed/types/transfer.md:5-13 |
 | Deploy failed | [deploy-failed.json](schemas/deploy-failed.json) | feed-contract.md:86; old-plugin/feed/types/deploy-failed.md:5-17 |
-| Task, Job or merge lease | [lease.json](schemas/lease.json) | feed-contract.md:92-124 |
-| Project merge lease | [merge-lease.json](schemas/merge-lease.json) | feed-contract.md:115; plugin-design.md:113 |
+| Task or Job lease | [lease.json](schemas/lease.json) | feed-contract.md:92-124 |
 | Heartbeat file, not a post | [heartbeat.json](schemas/heartbeat.json) | feed-contract.md:200-218 |
 | Takeover log entry | [takeover.json](schemas/takeover.json) | feed-contract.md:105-111 |
 | Trust tier field | [trust-tier.json](schemas/trust-tier.json) | feed-contract.md:90; job-contract.md:87-91 |
@@ -326,17 +325,10 @@ Disagreements and defaults chosen:
   a task's `usage/thresholds.json` and `tokens_per_task` in `workspace.md` are
   ignored when present in an old home. The `usage-notice` feed type stays in the
   schema so notices already written to old feeds still read.
-- The task-local lease path table conflicts with the per-project merge rule.
-  Merge leases explicitly require project and are stored by their caller at
-  project scope. The merge wire format is otherwise unspecified: choose lease,
-  project, holder, fence, gen, since and until, plus optional renewed_at. The
-  docs say "without renewal" but give no renewal payload: choose renewed_at for
-  an explicit renewal, never earlier than since. Until is exactly 15 minutes
-  after the most recent renewal, or since if never renewed. There is no automatic
-  renewal in this package; a released or expired valid lease is breakable by the
-  next holder. A new grant needs a new fence. `lease.json`
-  also validates the merge variant. Task leases have pid/pid_start while held;
-  Job leases carry an attempt and null pid fields, with liveness in `.live`.
+- There is no project-wide landing slot; landing safety stays with git and `land.lock`.
+  `lease.json` validates the task and Job variants. Task leases have
+  pid/pid_start while held; Job leases carry an attempt and null pid fields, with
+  liveness in `.live`.
 - Heartbeat until must equal beat_at plus ten minutes. The schema does not permit
   renewal through Feed posts. `Fold(posts)` has no heartbeat input and therefore
   cannot copy beat_at for display; a caller can overlay display-only liveness.
@@ -355,19 +347,12 @@ Disagreements and defaults chosen:
 
 Under the Grid home, `projects/<project>/`:
 
-- `lease/merge.json` and `lease/seq`: the project merge lease and its fence
-  counter. The lease is one per project (feed-contract.md:113), so its fence
-  counter is per project too, not the task Feed's `lease/seq`. The lease
-  package writes `{lease, holder, fence, since, until}` and does not yet carry
-  `project`, `gen` or `renewed_at`, so it does not validate against
-  [merge-lease.json](schemas/merge-lease.json); settle that shape before task
-  and Job leases share the reader.
 - `tasks/<task>/sessions/<machine>/<session>.json`: one session record per
   runtime session id and machine (plugin-design.md has no path entry for it).
 - `tasks/<task>/feed/.live/<holder>.<fence>.json`: the Job liveness file
   (feed-contract.md:17 and :27), never shipped off the host.
 
-Merge lease, session and task allocation code uses `flock`; on Windows it returns
+Session and task allocation code uses `flock`; on Windows it returns
 "not supported until the Windows Feed is decided" (feed-contract.md:12).
 
 ## Command output
