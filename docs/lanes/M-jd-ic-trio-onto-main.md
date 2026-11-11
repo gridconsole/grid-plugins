@@ -21,7 +21,7 @@ No value clash: no two codes share a value, no code has two values.
 | 2 jv rows | HOLDS. Same run: PASS TestContractCommandsParserInventory, TestJvSendBackRejects, TestJvSendBackRefusals (7 rows), TestJvSendBackOldReader; `./internal/orchestrator` PASS TestJvSendBackTeamOnly; `./internal/contract` TestFixtures ok. |
 | 3 step 4 | HOLDS. `go test -count=1 -race ./internal/feed/... ./internal/cli/... ./internal/question/...` exit 0: `ok internal/feed 45.051s`, `ok internal/cli 104.749s`, `ok internal/question 6.590s`. `TestHfFsCodeTable` (the README table against error_codes.go) PASS. |
 | importers | HOLDS. The importers of the changed packages are most of the module, so `go test -count=1 ./...` was run: exit 0, every package ok (internal/approvefix has no test files). |
-| 4 lint, cross | `make lint` exit 0 (`go vet ./...`). `make cross`: see the end of this file. |
+| 4 lint, cross | `make lint` exit 0 (`go vet ./...`). `make cross` exit 0 (darwin/arm64 and windows/amd64 vet and test compile). |
 | 6 no test deleted or skipped | HOLDS. No test deleted; no SKIP in the runs above. |
 | Rules | No attribution lines; no guard, gate or cap added; plugin repo has no personal paths or emails in the diff. |
 
