@@ -97,7 +97,8 @@ func TestCuratorDecides(t *testing.T) {
 
 	t.Run("brain file written by hand", func(t *testing.T) {
 		script := curatorDecisions + ` &&
-printf -- '---\nname: by-hand\n---\nWritten without grid.\n' > "$GRID_HOME/projects/notes-app/knowledge/conventions/by-hand.md"`
+d="$GRID_HOME/projects/notes-app/knowledge/conventions" && mkdir -p "$d" &&
+printf -- '---\nname: by-hand\n---\nWritten without grid.\n' > "$d/by-hand.md"`
 		result := runCurator(t, task, script)
 		if result.Summary.Failed != 1 || result.Summary.GatesPassed != 1 {
 			t.Fatalf("want exactly one failed check and the gate passed: %v, %+v", failedChecks(result), result.Summary)

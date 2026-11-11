@@ -1,0 +1,1 @@
+{"schema_version":1,"id":"agent-curator-decides","title":"The curator decides each waiting proposal with grid brain decide and a reason, and writes no brain file itself","tier":"c","size":"small"}

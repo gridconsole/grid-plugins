@@ -1,0 +1,1 @@
+This folder is the project notes-app. Its task T-01 holds two brain proposals that are still waiting. Use the grid-curator agent to curate them: it decides each one itself, with a reason, and asks nobody. Do not decide them yourself and do not change any other file.
