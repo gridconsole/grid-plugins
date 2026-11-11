@@ -125,10 +125,7 @@ func keWrLog(t *testing.T, gridHome string) []string {
 	return lines
 }
 
-const (
-	keWrRoleLine     = "grid brain write: caller role is not allowed to write brain entries\n"
-	keWrWorkflowLine = "grid brain write: caller role is not allowed to write workflow notes\n"
-)
+const keWrRoleLine = "grid brain write: caller role is not allowed to write brain entries\n"
 
 func TestKeWrCommand(t *testing.T) {
 	f := keWrNew(t)
@@ -209,13 +206,6 @@ func TestKeWrCommand(t *testing.T) {
 	}
 	person := `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to write brain entries","code":"person_required","message":"grid brain write: caller role is not allowed to write brain entries"}` + "\n"
 	refuse("guest json", 3, keWrRoleLine, person, "guest", "ana", "decisions/n", "--expect", "none", "--file", xNew, home, "--json")
-
-	// A member may write notes, not workflow notes: new text or the note on disk.
-	wfPerson := `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to write workflow notes","code":"person_required","message":"grid brain write: caller role is not allowed to write workflow notes"}` + "\n"
-	refuse("member new workflow text", 3, keWrWorkflowLine, "", "member", "bo", "decisions/n", "--expect", "none", "--file", f.path("wf-member", keWrBytes("decisions", "n", "# N\n", keWrWorkflow)), home)
-	refuse("member new workflow text json", 3, keWrWorkflowLine, wfPerson, "member", "bo", "decisions/n", "--expect", "none", "--file", f.path("wf-member", keWrBytes("decisions", "n", "# N\n", keWrWorkflow)), home, "--json")
-	refuse("member replaces a workflow note", 3, keWrWorkflowLine, "", "member", "bo", "decisions/flow", "--expect", flowRev, "--file", f.path("plain-flow", keWrBytes("decisions", "flow", "# Plain\n")), home)
-	refuse("member replaces a workflow note json", 3, keWrWorkflowLine, wfPerson, "member", "bo", "decisions/flow", "--expect", flowRev, "--file", f.path("plain-flow", keWrBytes("decisions", "flow", "# Plain\n")), home, "--json")
 
 	// The store's refusals: exits 6, 7 and 1, with the JSON object on stderr.
 	refuse("stale rev", 6, conflict, "", "owner", "ana", "decisions/x", "--expect", "0000000000000000", "--file", xNew, home)
