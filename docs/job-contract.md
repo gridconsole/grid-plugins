@@ -4,7 +4,7 @@ The checklist block in [Plan format](plan.md#plan-format) is the sole planned
 Job source. A plan item can contain several Jobs under its `jobs` list. There
 is no front-matter Job list and no heading-based item model. `internal/plan`
 parses the block; `internal/job` decodes the planned fields; `internal/jobgraph`
-uses `job.Job` for dependencies and floor evaluation.
+uses `job.Job` for dependencies and the plan check.
 
 ## Planned fields
 
@@ -22,7 +22,7 @@ from the enclosing checklist item. `intent.owner` is required. The step's
 Optional Job fields are `visible` (`big` or `small`), `irreversible` (boolean),
 and `review_reason` (text). Run fields such as `status`, `attempt`, and
 `worktree` do not belong in the plan and are refused there. Rendered brief
-metadata retains the step kind and supplied floor fields for later readers.
+metadata retains the step kind and the supplied optional fields for later readers.
 
 Job-record contract version 1 also accepts these optional fields: `kind` matches
 `^[a-z][a-z-]*$` (1–40 characters), `visible` is `big` or `small`, `irreversible`
@@ -54,13 +54,11 @@ then `rejected`, a dependent that has not started goes back to waiting; one
 that has started is not held or stopped, and a note naming the rejection is
 posted to its Feed. `failed` and `children-done` edges are unchanged.
 
-`grid job floor` reports an advisory floor from scope and risk: irreversible or
-environment work, declared risk or a tagged risk path, a big visible change or
-UI path, and ordinary work. A Job declares no review level and none is
-required; a Job without one is not refused. A level that an older plan still
-declares is compared with the floor as before, and a lower one needs a nonempty
-`review_reason`. `visible: small` does not lower a floor established by scope
-or risk.
+A Job declares no review level: `review` is a retired optional field that
+nothing reads, and a Job that still carries one is not refused. The plan check
+refuses an unknown `risk` value (`concurrency`, `security`, `data-format` or
+`cross-platform`), an unknown work `kind`, a `visible` value other than `big` or
+`small`, and a `write` pattern that is not a relative slash-separated path.
 
 Code verification names a test command and a positive `min_tests`. For
 `non-code`, `research`, or `scout` work, `verify` may instead name
@@ -68,8 +66,5 @@ Code verification names a test command and a positive `min_tests`. For
 combined. These checks validate planned instructions, not execution evidence.
 
 `grid plan check [T-NN]` validates the checklist through the shared parser.
-`grid job cycles` and `grid job floor` also accept JSON arrays of `job.Job`
-objects for graph inspection; they are not alternative plan-file parsers.
-Project path tags can be passed to `grid job floor --policy <policy.json>`.
-The plan check currently applies built-in path rules and explicit Job fields;
-it does not discover project path tags from brain notes.
+`grid job cycles` also accepts a JSON array of `job.Job` objects for graph
+inspection; it is not an alternative plan-file parser.

@@ -181,6 +181,6 @@ var PlannedFields = []string{"id", "item", "title", "role", "skills", "risk", "i
 
 // RetiredFields were planned fields once and the Job no longer has them. A plan
 // or record that still carries one reads without error and the value is ignored.
-// (review is also retired as a required field, but stays an optional Job field
-// until the floor tool that reads it is removed.)
+// (review is a retired optional field: a Job may still carry it, and nothing
+// reads it.)
 var RetiredFields = []string{"max_rounds"}

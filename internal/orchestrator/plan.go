@@ -97,12 +97,8 @@ func (s Store) publishPlanText(snap Snapshot, text string) error {
 			if err := contract.Validate("job-record", data); err != nil {
 				return fmt.Errorf("plan.md Job %s: %w", j.ID, err)
 			}
-			floor, err := jobgraph.ReviewFloor(j, jobgraph.Policy{})
-			if err != nil {
-				return err
-			}
-			if len(floor.Errors) > 0 {
-				return fmt.Errorf("plan.md Job %s: %s", j.ID, strings.Join(floor.Errors, "; "))
+			if err := jobgraph.CheckPlanJob(j); err != nil {
+				return fmt.Errorf("plan.md Job %s: %w", j.ID, err)
 			}
 			var body map[string]any
 			if err := json.Unmarshal(data, &body); err != nil {

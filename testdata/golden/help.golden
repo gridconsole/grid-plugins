@@ -10,7 +10,7 @@ Commands:
   hook        answer a Claude Code or Codex hook event; set and list hook levels
   task        new, show, list, status, stop, close, reopen, history, attach, move, decline, delete, rename, restore
   plan        write, check, items, hash, diff, migrate
-  job         next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor, order, trace
+  job         next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace
   lease       take, release, status (task lease)
   feed        tick, post, read, state, types, handover, fold
   mcp         stdio server with the Feed tools

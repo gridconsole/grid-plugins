@@ -39,13 +39,8 @@ func CheckPlanReport(text string) PlanReport {
 			for _, issue := range issues {
 				problems = append(problems, label+": "+issue)
 			}
-			floor, err := ReviewFloor(j, Policy{})
-			if err != nil {
+			if err := CheckPlanJob(j); err != nil {
 				problems = append(problems, label+": "+err.Error())
-			} else {
-				for _, issue := range floor.Errors {
-					problems = append(problems, label+": "+issue)
-				}
 			}
 			if warning := verifyCountWarning(j); warning != "" {
 				report.Warnings = append(report.Warnings, label+": "+warning)

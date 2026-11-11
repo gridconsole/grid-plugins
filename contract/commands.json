@@ -651,7 +651,7 @@
     },
     {
       "name": "job",
-      "summary": "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor, order, trace",
+      "summary": "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace",
       "built": true,
       "subcommands": [
         {
@@ -1008,26 +1008,6 @@
             {
               "name": "--json",
               "takes": "none",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
-        {
-          "name": "floor",
-          "args": [
-            "\u003citems.json\u003e"
-          ],
-          "flags": [
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--policy",
-              "takes": "value",
               "required": false
             }
           ],

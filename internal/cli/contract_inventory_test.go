@@ -486,7 +486,6 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"job lint":             {args: []string{"<file>"}},
 		"job show":             {args: []string{"[task job | job | file]"}},
 		"job cycles":           {args: []string{"<items.json>"}},
-		"job floor":            {args: []string{"<items.json>"}},
 		"lease take":           {args: []string{"task"}},
 		"lease release":        {args: []string{"task"}},
 		"lease status":         {args: []string{"task"}},

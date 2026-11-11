@@ -6,8 +6,8 @@ import (
 )
 
 func runJob(args []string, env Env) int {
-	// cycles and floor are pure graph checks over a JSON file; jobcmd owns the rest.
-	if len(args) > 0 && (args[0] == "cycles" || args[0] == "floor") {
+	// cycles is a pure graph check over a JSON file; jobcmd owns the rest.
+	if len(args) > 0 && args[0] == "cycles" {
 		return runJobGraph(args, env)
 	}
 	r := resolver(env)
