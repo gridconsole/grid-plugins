@@ -20,6 +20,8 @@ by message wording. Each example below is read by `TestHfFsShapes`.
 {"error":{"code":"no_such_task","message":"grid task show: task T-99 not found in the Grid home"}}
 ```
 
+   A guest's refused write (`setup`, `routine`, `project relink`/`remove`, `agent sync`, and the task, session and question writes a guest may not make) prints this envelope with `guest_refused`; its exit stays exit 1, or exit 3 for `question withdraw`, `task delete` and `task restore`.
+
 2. **Signal object**, printed by `signal act`, `signal dismiss` and `signal move`.
    `error` is a category string and `message` is unprefixed and sometimes redacted. The
    category `refused` exits 3 and its `code` is present only when the refusal is
@@ -79,6 +81,7 @@ during `task show` exits 1.
 | `write_failed` | Writing a settings file failed. |
 | `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
+| `guest_refused` | The caller is refused as a guest (role guest, external or an unknown role); nothing was written. |
 
 The first five constants live in `internal/cli/error_codes.go` and the settings
 codes in `internal/settings/claude_user.go`; `person_required` and `job_waiting` are

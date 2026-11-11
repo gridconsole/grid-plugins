@@ -41,7 +41,7 @@ func runAgentSync(args []string, env Env) int {
 		return commandError(env, "agent sync", errors.New("cannot find the Grid home; set GRID_HOME"))
 	}
 	if resolver(env).Caller.IsGuest() {
-		return commandError(env, "agent sync", errors.New(guestSettingsRefusal))
+		return commandError(env, "agent sync", ilGuestRefused)
 	}
 	if *templates == "" {
 		root := pluginRoot(env)

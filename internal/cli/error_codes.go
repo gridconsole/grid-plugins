@@ -25,6 +25,8 @@ const (
 	CodeInvalidArgument = "invalid_argument"
 	// CodeInvalidPolicy means a workflow policy value the command depends on is invalid.
 	CodeInvalidPolicy = "invalid_policy"
+	// CodeGuestRefused means the caller's guest role may not make this write.
+	CodeGuestRefused = "guest_refused"
 )
 
 func errorCode(err error) string {
@@ -41,6 +43,8 @@ func errorCode(err error) string {
 		return CodeNoSuchNote
 	case errors.As(err, &bad), errors.Is(err, errTaskOperand):
 		return CodeInvalidArgument
+	case errors.Is(err, ilGuestRefused):
+		return CodeGuestRefused
 	default:
 		return ""
 	}
