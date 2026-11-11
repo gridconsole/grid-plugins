@@ -34,7 +34,7 @@ var events = []struct {
 	Event
 	run func(Options) int
 }{
-	{Event{"SessionStart", "startup|resume|clear|compact|fork", 10}, quiet(sessionStart)},
+	{Event{"SessionStart", "startup|resume|clear|compact|fork", 10}, quiet(func(o Options) { o.record("session start", func() { sessionStart(o) }) })},
 	{Event{"UserPromptSubmit", "", 10}, remaining},
 	{Event{"SubagentStart", "", 10}, remaining},
 	{Event{"PreToolUse", "", 10}, quiet(toolUse)},
@@ -102,17 +102,17 @@ func remaining(o Options) int {
 	}
 	switch name {
 	case "heartbeat":
-		heartbeat(o, *in)
+		o.record("heartbeat", func() { heartbeat(o, *in) })
 	case "worker-exit":
-		workerExit(o, *in)
+		o.record("worker exit", func() { workerExit(o, *in) })
 	case "history-log":
-		history(o, *in)
+		o.record("history", func() { history(o, *in) })
 	case "usage-log":
-		recordSession(o, *in)
+		o.record("session", func() { recordSession(o, *in) })
 	case "brain-read":
-		brainRead(o, *in)
+		o.record("brain read", func() { brainRead(o, *in) })
 	case "brain-recall":
-		recall(o, *in)
+		o.record("recall", func() { recall(o, *in) })
 	case "stop-check":
 		return stopCheck(o, *in)
 	case "permission-forward":
@@ -122,21 +122,34 @@ func remaining(o Options) int {
 		if name == "precompact" && o.Stdout != nil && o.hookEnabled("precompact", *in) {
 			fmt.Fprintln(o.Stdout, "Keep the Job id, acceptance ids and open decisions in the summary.")
 		}
-		heartbeat(o, *in)
-		history(o, *in)
-		recordSession(o, *in)
-		brainRead(o, *in)
-		recall(o, *in)
+		o.record("heartbeat", func() { heartbeat(o, *in) })
+		o.record("history", func() { history(o, *in) })
+		o.record("session", func() { recordSession(o, *in) })
+		o.record("brain read", func() { brainRead(o, *in) })
+		o.record("recall", func() { recall(o, *in) })
 		if name == "stop" || name == "subagentstop" {
 			if code := stopCheck(o, *in); code != 0 {
 				return code
 			}
 		}
 		if name == "sessionend" || name == "subagentstop" {
-			workerExit(o, *in)
+			o.record("worker exit", func() { workerExit(o, *in) })
 		}
 	}
 	return 0
+}
+
+// record runs one function that only records (history, usage, heartbeat, brain
+// reads, session end). Verdict v-15: it never blocks or denies. A Go panic exits
+// the process with code 2, which Claude Code reads as a block, so a panic here
+// goes to the hook log and the hook carries on and exits 0.
+func (o Options) record(name string, f func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			o.log(name, fmt.Errorf("panic: %v", r))
+		}
+	}()
+	f()
 }
 func reader(in hookio.Input) *strings.Reader {
 	b, _ := json.Marshal(in)
