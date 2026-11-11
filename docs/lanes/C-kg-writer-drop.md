@@ -10,11 +10,12 @@ Base: plugin main 35af7d3c. Head: see the report line of the hand-off (commits o
 | 2. `TestKgWriterDenyRulesWritten` | HOLDS | internal/cli/kg_writer_deny_test.go:46; `go test -count=1 -v -run TestKgWriter ./internal/cli/` printed `--- PASS: TestKgWriterDenyRulesWritten` with `default` and `outside_home`. It checks the five exact rule strings of claude.go:50-56 in permissions.deny. It also passes on base (the rules were already written there), as the brief says. |
 | 3. `TestKgWriterHookNoLongerRefuses` | HOLDS | internal/cli/kg_writer_deny_test.go:81; `--- PASS: TestKgWriterHookNoLongerRefuses`. On base (writer.go and hook.go restored from origin/main, then put back; `git status --short` clean): `kg_writer_deny_test.go:112: the hook still refuses a task-folder write: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Task folders and the brain are written only by grid. Use the corresponding grid command to make this change."}}` then `--- FAIL: TestKgWriterHookNoLongerRefuses`, exit 1. The test also writes to `<grid>/.host/x` at host-guard block and wants a deny, so it shows the hook ran. |
 | 4. tests of the five packages | HOLDS | `go test -count=1 ./internal/guard/ ./internal/hook/ ./internal/cli/ ./internal/settings/ ./internal/golden/ ./internal/account/ ./internal/doctor/ ./internal/packaging/ ./internal/updates/` : every package `ok` (updates has no test files), exit 0 (no FAIL line). The list is the packages `go list` shows importing guard, hook or settings (account, cli, doctor, guard, hook, packaging, updates) plus settings and golden. The two new tests were run with `-v` and print `--- PASS` (rows 2 and 3). |
-| 5. `make lint` and `make cross` | HOLDS | `make lint && make cross` exit 0: go vet ./..., then darwin/arm64 and windows/amd64 vet and test compile, all `ok`. |
-| Walk tests, plugin | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList' && go test -count=1 ./internal/job/lint/` : `ok .../internal/cli`, `ok .../internal/job/lint`, exit 0. The app walk tests (make webui-test and the rest) are not for this repo. |
+| 5. `make lint` and `make cross` | HOLDS | Rerun on the fix-round head fb9f27ed: `make lint` printed `go vet ./...` and returned exit 0; `make cross` ran darwin/arm64 and windows/amd64 vet and test compile, every package `ok`, exit 0. |
+| Walk tests, plugin | HOLDS | On head fb9f27ed: `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` printed `ok .../internal/cli 0.146s`; `go test -count=1 ./internal/job/lint/` printed `ok .../internal/job/lint 0.221s`. The app walk tests (make webui-test and the rest) are not for this repo. |
+| Whole-module test (fix round 1) | HOLDS | `go test -count=1 ./...` on head fb9f27ed: every package `ok` or `[no test files]`, no `FAIL` line, including `ok .../internal/contract 24.576s`, `ok .../internal/cli 300.862s`, `ok .../internal/guard`, `ok .../internal/hook`, `ok .../internal/settings`, `ok .../internal/golden`. The harness reported no error exit for the call. I could not print `$?`: a `; echo` chain is refused in this shell, and the 9-minute run was not repeated. Before the fix `TestHeMvProseListBothWays` failed with `he_mv_message_verbs_test.go:332: heMvProse entry "internal/guard/writer.go:project to" matches no string literal; remove it`. |
 | New tests in the one new file | HOLDS | internal/cli/kg_writer_deny_test.go only; helpers `kgWriter*`, tests `TestKgWriter*`. |
 | No guard, gate, cap or hold added | HOLDS | The lane only removes the guard call. The only-writer name stays in internal/settings/catalog.go:30. stop.go, events.go and internal/guard/helpers.go are not edited. |
-| No attribution lines, no personal paths | HOLDS | One commit, one sentence, no trailer. |
+| No attribution lines, no personal paths | HOLDS | Three commits (`git log origin/main..HEAD`: 48f3affc, e40b0f3f, fb9f27ed), one sentence each, no trailer. |
 | Tests named RealPlugin | n/a | None in the brief. |
 | UI rows | n/a | No UI. |
 
@@ -24,6 +25,11 @@ Base: plugin main 35af7d3c. Head: see the report line of the hand-off (commits o
 - internal/settings/testdata/claude/writer.go.golden deleted with its test.
 - Tests: see the next section.
 - golden/known-differences.txt: four lines removed (host-guard/ordinary-write, plan-guard/brain-curator, plan-guard/recall-present, plan-guard/task-write). With no only-writer deny, those cases match the recording, and `TestGoldenCorpus` fails on a listed case that matches ("remove the line"). This file is outside the Touches list; the test named in row 4 demands it.
+
+## Fix round 1
+
+- internal/contract/he_mv_message_verbs_test.go:56, the `heMvProse` entry `"internal/guard/writer.go:project to"`, deleted (commit fb9f27ed). It excused the prose "Use grid project to make this change" in writer.go; with writer.go gone no string literal carries it, and `TestHeMvProseListBothWays` fails on an entry that matches nothing (he_mv_message_verbs_test.go:332). The test that still covers the behaviour is `TestHeMvProseListBothWays` itself, which now holds: `go test -count=1 ./internal/contract/` prints `ok`. `git grep -n 'guard/writer' -- . ':!docs'` prints nothing now. `gofmt -l internal/contract` prints nothing.
+- Whole-module run and the walk tests rerun on the new head, see the proof table.
 
 ## Tests deleted or changed, and what still covers them
 
@@ -43,7 +49,7 @@ Base: plugin main 35af7d3c. Head: see the report line of the hand-off (commits o
 
 - golden/known-differences.txt still has other lines whose reason says "the only-writer rule denies ..." (grid-home-allow/permission, plan-guard/brain-builder, forged-acceptance, forged-preview, gate-filename, missing-recall, unmatched-edit). They still differ from the recording, so the test passes, but I did not check whether the stated reason is still true. Left for the cleanup after the four guards.
 - internal/guard/settings_test.go has one comment ("All three guards warn by default") that now counts one guard too many. Comment only.
-- The whole-module test and the cross-repo set are the orchestrator's at landing.
+- The whole-module test passed on this lane's head (fix round 1, see the proof table); the cross-repo set is the orchestrator's at landing.
 
 ## NOT VERIFIED on a live screen
 
