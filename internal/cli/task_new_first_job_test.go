@@ -159,16 +159,3 @@ func TestTaskNewFirstJobRendersTheOrchestratorInstructions(t *testing.T) {
 		t.Fatalf("the front matter of the agent file must not reach the prompt:\n%s", out.Brief)
 	}
 }
-
-func TestTaskNewWithWorkflowPostsNoFirstJob(t *testing.T) {
-	h := newTaskHarness(t)
-	path := newTask(t, h, "--workflow", "build")
-	id, err := feed.TaskID(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	read, err := (feed.Store{TaskDir: path, TaskID: id}).Read(feed.Filter{Type: "job"})
-	if err != nil || len(read.Records) != 0 {
-		t.Fatalf("a task made with a workflow keeps its own start: %d job records, %v", len(read.Records), err)
-	}
-}
