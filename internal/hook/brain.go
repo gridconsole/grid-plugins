@@ -27,6 +27,7 @@ func brainRead(o Options, in hookio.Input) {
 	case "Read":
 	case "Bash":
 		brainShow(o, in)
+		brainSearch(o, in)
 		return
 	default:
 		return
@@ -73,6 +74,12 @@ func brainRead(o Options, in hookio.Input) {
 // the `grid brain show` paths share the read:<id> key. The Job id, when the
 // agent runs inside one, goes in the via field.
 func recordBrainRead(o Options, in hookio.Input, dir, id string) error {
+	return recordBrainReadWhy(o, in, dir, id, "")
+}
+
+// recordBrainReadWhy is recordBrainRead with a reason that ends the line, as
+// `grid brain search` gives the words it searched for.
+func recordBrainReadWhy(o Options, in hookio.Input, dir, id, why string) error {
 	// Decide and mark under the session lock, then append once it is
 	// released: .task.lock is never taken while the session lock is held.
 	s := session.Store{TaskDir: dir}
@@ -84,7 +91,7 @@ func recordBrainRead(o Options, in hookio.Input, dir, id string) error {
 		return nil
 	})
 	if err == nil && first {
-		err = task.AppendHistory(dir, "brain read", id, writer(in), o.Getenv("GRID_JOB"))
+		err = task.AppendHistoryWhy(dir, "brain read", id, writer(in), o.Getenv("GRID_JOB"), why)
 	}
 	return err
 }
