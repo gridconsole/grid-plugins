@@ -32,7 +32,7 @@ func guestAddressed(snap Snapshot, w feed.Writer, id string) bool {
 	return false
 }
 
-var errPersonOnly =&feed.InvalidRecordError{Err: errors.New("only a person of the team posts a Job without the task lease")}
+var errPersonOnly = &feed.InvalidRecordError{Err: errors.New("only a person of the team posts a Job without the task lease")}
 
 // PostPerson writes a person's Job post without a lease, at fence zero like an
 // answer to a question, so a held task lease does not stop it. The post is a

@@ -171,11 +171,11 @@ func TestGyGpHandAnswerIgnored(t *testing.T) {
 
 func TestGyGpGuestAddresseeRule(t *testing.T) {
 	for _, tc := range []struct {
-		name                             string
-		role, author                     string
-		leased                           bool
-		jobRole, owner, kind             string
-		want                             bool
+		name                 string
+		role, author         string
+		leased               bool
+		jobRole, owner, kind string
+		want                 bool
 	}{
 		{"addressee", "guest", "dana", false, "Person", "dana", "ask", true},
 		{"plugin prefix", "grid-guest", "dana", false, "Person", "dana", "", true},

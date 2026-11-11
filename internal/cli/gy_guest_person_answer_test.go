@@ -140,8 +140,8 @@ func TestGyGpGuestRefusals(t *testing.T) {
 	hash := strings.Repeat("a", 64)
 	for _, tc := range []struct {
 		name, member, job string
-		extra            []string
-		want             string
+		extra             []string
+		want              string
 	}{
 		{"another guest", "eve", "J-2", nil, gyGpGenFence},
 		{"different case", "Dana", "J-2", nil, gyGpGenFence},
