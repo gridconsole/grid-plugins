@@ -134,7 +134,7 @@ func Run(args []string, e Env) int {
 			}
 			return output(e, f, report{ID: j.ID, Findings: findings}, code)
 		}
-		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget})
+		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j)})
 		if err != nil {
 			return fail(err, 1)
 		}
