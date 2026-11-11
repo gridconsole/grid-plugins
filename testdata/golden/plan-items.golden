@@ -5,6 +5,7 @@
     "title": "Add a tag filter to the store",
     "prose": "Match tags without case sensitivity and reuse the existing index.\nneeds: none\nevidence: checks/R-1/store.txt",
     "kind": "build",
+    "needs": [],
     "jobs": [
       {
         "after": [],
@@ -37,6 +38,9 @@
     "title": "Add the tag box to the list view",
     "prose": "Keep the current selection when the query changes.\nneeds: 1",
     "kind": "build",
+    "needs": [
+      1
+    ],
     "jobs": [
       {
         "after": [
@@ -78,6 +82,7 @@
     "title": "Write the release note",
     "prose": "Explain the case-insensitive match and keyboard shortcut.\nneeds: none",
     "kind": "build",
+    "needs": [],
     "jobs": [
       {
         "id": "J-4",
