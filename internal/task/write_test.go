@@ -173,5 +173,5 @@ func TestWriteRefusesSymlinks(t *testing.T) {
 // successful write prints a receipt; rejected moves print nothing. The parent
 // compares receipts to disk and checks the entire state chain, not just counts.
 func TestConcurrentCloseReopen(t *testing.T) {
-	flakeCRRun(t, []string{"close", "reopen"}, 0)
+	flakeCRRun(t, []string{"close", "reopen"}, false)
 }
