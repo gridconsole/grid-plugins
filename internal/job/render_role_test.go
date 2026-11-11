@@ -78,12 +78,14 @@ func TestRoleWithoutAgentFileGetsNoSection(t *testing.T) {
 
 func TestInstructionsAreNotASourceOrBrainText(t *testing.T) {
 	base := renderRole(t, "writer")
+	base.Inputs.BriefBytes = 0 // the instructions make the brief longer, so brief_bytes differs by design
 	bj, e := base.Inputs.JSON()
 	if e != nil {
 		t.Fatal(e)
 	}
 	for _, role := range []string{"builder", "reviewer", "orchestrator", "curator"} {
 		got := renderRole(t, role)
+		got.Inputs.BriefBytes = 0 // see above
 		gj, e := got.Inputs.JSON()
 		if e != nil {
 			t.Fatal(e)
