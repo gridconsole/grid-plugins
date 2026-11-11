@@ -86,7 +86,15 @@ func (s Store) personAnswers(snap Snapshot) error {
 				return err
 			}
 		}
-		if _, err := s.Feed.Post(feed.Input{Type: "control", Re: said.ID, Body: map[string]any{"target": item.ID, "status": "accepted", "reason": "answered by " + first.Author.ID}}, s.Writer); err != nil {
+		body := map[string]any{"target": item.ID, "status": "accepted", "reason": "answered by " + first.Author.ID}
+		// What the person's answer carried, such as the plan revision they approved,
+		// goes into the result the readers use.
+		for _, key := range answerFields {
+			if v, ok := first.Body[key]; ok {
+				body[key] = v
+			}
+		}
+		if _, err := s.Feed.Post(feed.Input{Type: "control", Re: said.ID, Body: body}, s.Writer); err != nil {
 			return err
 		}
 	}
@@ -130,6 +138,19 @@ func PersonOpen(snap Snapshot, id string, now time.Time) error {
 // lease does not stop the answer; the next pass of the holder finds the Job
 // accepted and releases the Jobs behind it.
 func AnswerPerson(store feed.Store, w feed.Writer, id, answer string, now time.Time) (record feed.Record, err error) {
+	return AnswerPersonWith(store, w, id, answer, nil, now)
+}
+
+// answerFields are the keys of an answer, besides the text, that reach the
+// accepting control of a person Job: the plan revision an approval was made on,
+// the lands hash, the person's note, and the reason when it is not "answered by".
+var answerFields = []string{"plan_hash", "plan_digest", "lands_hash", "note", "reason"}
+
+// AnswerPersonWith is AnswerPerson with fields that become part of the result:
+// the plan_hash, plan_digest, lands_hash and note of an approval. A leased writer
+// puts them in the accepting control; an unleased person puts them in the answer,
+// and the holder's next pass copies them into the control (personAnswers).
+func AnswerPersonWith(store feed.Store, w feed.Writer, id, answer string, fields map[string]any, now time.Time) (record feed.Record, err error) {
 	unleased := PersonWriter(w)
 	if w.Lease != "task" && !unleased {
 		return record, feed.ErrStaleLease
@@ -157,7 +178,13 @@ func AnswerPerson(store feed.Store, w feed.Writer, id, answer string, now time.T
 		if unleased {
 			// A person writes no closing control without the lease; the answer waits
 			// for the holder's next pass, which accepts the Job (personAnswers).
-			record, e = store.Post(feed.Input{Type: "answer", Re: j.History[0], Body: map[string]any{"answer": answer}}, w)
+			body := map[string]any{"answer": answer}
+			for _, key := range answerFields {
+				if v, ok := fields[key]; ok {
+					body[key] = v
+				}
+			}
+			record, e = store.Post(feed.Input{Type: "answer", Re: j.History[0], Body: body}, w)
 			return e
 		}
 		text := fmt.Sprintf("%s answered %s at %s: %s", w.Author.ID, id, contract.FormatTime(now), answer)
@@ -165,7 +192,13 @@ func AnswerPerson(store feed.Store, w feed.Writer, id, answer string, now time.T
 		if e != nil {
 			return e
 		}
-		record, e = store.Post(feed.Input{Type: "control", Re: said.ID, Body: map[string]any{"target": id, "status": "accepted", "reason": "answered by " + w.Author.ID}}, w)
+		body := map[string]any{"target": id, "status": "accepted", "reason": "answered by " + w.Author.ID}
+		for _, key := range answerFields {
+			if v, ok := fields[key]; ok {
+				body[key] = v
+			}
+		}
+		record, e = store.Post(feed.Input{Type: "control", Re: said.ID, Body: body}, w)
 		return e
 	})
 	return
