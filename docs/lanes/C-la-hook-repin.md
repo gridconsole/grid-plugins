@@ -58,3 +58,5 @@ TestLaHookFeedCarriedBySetupRule states a fact about setup that already holds on
 ## NOT VERIFIED on a live screen
 
 Nothing here is UI. `path.Match` on the pattern with `/**` cut is the brief's stand-in for Claude Code's own deny matching; I did not run Claude Code, so that the real matcher carries the same paths is not verified.
+
+DONE
