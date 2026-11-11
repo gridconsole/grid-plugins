@@ -124,7 +124,12 @@ comments and unknown keys survive; new keys go at the end.
 
 The state moves through `task.NextState`: delivery is refused from `paused` and
 `closed`, and from a task that is already `waiting`, as `grid task status` would
-refuse the same move. To deliver again after the ship approve step began waiting for the person, send the
+refuse the same move. One waiting task is delivered: a task at its plan gate
+whose plan approval is current. `grid approve` keeps the task waiting, so when
+`approval.json` holds the plan hash that `plan.md` has now, delivery moves the
+task to waiting at step `ship` as it does from `running`. A waiting task with no
+approval, with an approval of an older plan, or already at step `ship` is
+refused. To deliver again after the ship approve step began waiting for the person, send the
 task back first (`grid task status T-NN running`); delivery then replaces the
 Outcome and appends another receipt. A journal left by a crashed writer is
 replayed before delivery reads the task, so it cannot overwrite the delivery
