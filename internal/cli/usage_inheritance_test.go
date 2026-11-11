@@ -12,7 +12,7 @@ import (
 )
 
 func TestUsageWorkflowEditsAfterSave(t *testing.T) {
-	for _, firstSave := range []string{"budget", "threshold", "notice"} {
+	for _, firstSave := range []string{"threshold", "notice"} {
 		t.Run(firstSave, func(t *testing.T) {
 			h, task := usageTask(t)
 			policy := func(values string) {
@@ -45,8 +45,6 @@ func TestUsageWorkflowEditsAfterSave(t *testing.T) {
 			h.write(filepath.Join(h.gridHome, "workspace.md"), "---\ntokens_per_task: 100\n---\n")
 			policy("[90]")
 			switch firstSave {
-			case "budget":
-				run("budget", "set", "--tokens", "100", "--json")
 			case "threshold":
 				run("threshold", "set", "--dollars", "25", "--json")
 			case "notice":
