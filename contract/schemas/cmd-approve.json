@@ -28,7 +28,10 @@
       "type": "string"
     },
     "what": {
-      "const": "approve"
+      "enum": [
+        "approve",
+        "send_back"
+      ]
     },
     "when": {
       "type": "string"
