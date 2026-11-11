@@ -1,6 +1,8 @@
 # C-fv-plugin-guest-task-new-approve
 
-Base: 4e736654 (plugin main). On the base `guestWriteVerb` (internal/cli/cli.go:229-242) did not name `task new`, so all rows apply. Lane code head: 8f13558d.
+Base: 4e736654 (plugin main). On the base `guestWriteVerb` (internal/cli/cli.go:229-242) did not name `task new`, so all rows apply. Lane code head: c1ea38a1 (fix round 1 on top of 8f13558d; the report commit follows it).
+
+Fix round 1: the orchestrator's must-fix named the one-line listing of `task new` in guestParityEarlyAnswer (internal/cli/guest_parity_test.go:418). Applied as directed, so Touches is widened by that one file. Rows 6b, 6c, the importers row and 6d are re-run below.
 
 ## Proof table
 
@@ -12,12 +14,12 @@ Base: 4e736654 (plugin main). On the base `guestWriteVerb` (internal/cli/cli.go:
 | 4. Guest `grid approve`: non-zero, `approving is for a person of the team: set GRID_MEMBER`, snapshot identical; member does not get the line | HOLDS | TestFvGuestApproveRefused/guest and /member PASS. The guest run reaches approvalWriter (approve_record.go:33); task_write.go:177-181 returns 3 (the test asserts non-zero plus the line). |
 | 5. TestFvGuestTaskVerbs, one row per write verb, plus the commands.json check | HOLDS | PASS, 11 subtests. The same test reads ../../contract/commands.json and fails on a `task` subcommand in neither the table nor show/list/history, or a table verb missing from commands.json. Table below. |
 | 6a. TestGuestStillAnswersAndComments passes unchanged | HOLDS | Passes in `go test -count=1 -run 'TestFvGuest\|TestGuest' ./internal/cli/` (not in the failing list). guest_role_test.go not edited. |
-| 6b. `go test -run 'TestFvGuest\|TestGuest' ./internal/cli/`: 0 fail | **NOT DONE** | 4 subtests of the existing TestGuestProjectParity fail, see "Blocker". |
-| 6c. `git diff main --stat` names only the two Touches files | HOLDS for code | `git diff main --stat`: internal/cli/cli.go (8 +-), internal/cli/fv_guest_task_test.go (286 +). This report is a third file, in its own commit, as the runbook asks. |
-| 6d. `make lint` exit 0 | HOLDS | `make lint` ran `go vet ./...` and printed no finding. The exit code was not captured (piped into tail). |
+| 6b. `go test -run 'TestFvGuest\|TestGuest' ./internal/cli/`: 0 fail | HOLDS | `go test -count=1 -run 'TestFvGuest\|TestGuest' ./internal/cli/`: `ok ... internal/cli 5.983s`, exit 0. TestGuestProjectParity alone: `ok`, was FAIL before the fix (see "Fix round 1"). |
+| 6c. `git diff main --stat` names only the Touches files | HOLDS with the widened Touches | `git diff main --stat`: internal/cli/cli.go (8 +-), internal/cli/fv_guest_task_test.go (286 +), internal/cli/guest_parity_test.go (2 +-, fix round 1, one `case` line), plus this report in its own commit as the runbook asks. |
+| 6d. `make lint` exit 0 | HOLDS | `make lint && echo "lint exit 0"`: `go vet ./...` then `lint exit 0`. |
 | New tests fail on base | HOLDS | With internal/cli/cli.go from 4e736654: `--- FAIL: TestFvGuestTaskNewRefusedEarly/invited`: `exit 0, want 1: grid task new: T-02 has no first Job: ...`; `/uninvited`: `stderr "grid task new: project is not registered", want "grid task new: role \"guest\" may not new a task; ..."`; `/unknown_project` the same; `/no_project_flag`: `"grid task new: this caller cannot use the Personal project"`; `TestFvGuestTaskVerbs/new`: `exit 0 ... changed true; stdout: T-02 created`. So on base an invited guest's `task new` created T-02. cli.go restored with `git checkout HEAD -- internal/cli/cli.go`; `git status --short` clean. |
-| Tests of changed package and its importers | HOLDS except the blocker | `go list` importers of internal/cli: cmd/grid, lib. `go test -count=1 ./internal/cli/ ./cmd/grid/ ./lib/`: lib ok, cmd/grid no test files, internal/cli FAIL only on TestGuestProjectParity/task_new/{project,project-project-id}/{plain,json}. Every other test in internal/cli passes. |
-| Windows and macOS builds | HOLDS | `GOOS=windows go build ./... && GOOS=darwin go build ./...` exit 0. |
+| Tests of changed package and its importers | HOLDS | `go list -f '{{.ImportPath}} {{join .Imports " "}}' ./...` filtered for internal/cli: importers are cmd/grid and lib. `go test -count=1 ./internal/cli/ ./cmd/grid/ ./lib/`: internal/cli `ok 70.748s`, cmd/grid `[no test files]`, lib `ok 6.042s`. The whole package ran, not only the guest subset. |
+| Windows and macOS builds | HOLDS | `GOOS=windows CGO_ENABLED=0 go build -o /dev/null ./cmd/grid && echo ok`: exit 0. `GOOS=darwin CGO_ENABLED=0 go build -o /dev/null ./cmd/grid && echo ok`: exit 0. |
 | No guard on agents | HOLDS | GRID_LEASE=task is still exempt (cli.go:194, unchanged); TestFvGuestTaskNewStillCreates/guest_with_task_lease PASS. Nothing removed. |
 | *RealPlugin* tests | n/a | None named by the brief; none run. |
 
@@ -36,16 +38,16 @@ Base: 4e736654 (plugin main). On the base `guestWriteVerb` (internal/cli/cli.go:
 
 TestFvGuestTaskVerbsWhenValid runs the two verbs the table leaves open with valid input: `task attach T-01` with GRID_TASK=T-01 exits 0 and writes a session record; `task move laptop --task T-01 --project example` on a project whose folder is a git repo with a remote exits 0 and queues a move intent (project folder changed).
 
-## Blocker (row 6b)
+## Fix round 1 (row 6b)
 
-The existing internal/cli/guest_parity_test.go (TestGuestProjectParity) fails four subtests, and I did not edit it: Touches names two files, and the rules forbid editing an existing test to make it pass.
+Before the fix the existing TestGuestProjectParity failed four subtests on the lane (`go test -count=1 -run TestGuestProjectParity ./internal/cli/`, exit 1):
 
 ```
 --- FAIL: TestGuestProjectParity/task_new/project/plain/invited
     guest_parity_test.go:388: invited guest still gets unknown answer: {Code:1 Stdout: Stderr:grid task new: role "guest" may not new a task; a guest answers and comments
 ```
 
-The same line for task_new/project/json, task_new/project-project-id/plain and /json. That test lists the early refusals in `guestParityEarlyAnswer` (guest_parity_test.go:408-435: task delete/restore, task close/reopen/stop, ...) and fails when an invited guest gets the same answer as an unknown project for any other command. The refusal this brief asks for is exactly such an early refusal, so the listing needs one more case. Needed change, not applied and not run: in `guestParityEarlyAnswer`, add `"task new"` to the case at guest_parity_test.go:418, or a case giving `guestParityOutput{1, "", "grid task new: role \"guest\" may not new a task; a guest answers and comments\n"}`. The orchestrator decides whether to apply it at landing or widen Touches.
+The same line for task_new/project/json, task_new/project-project-id/plain and /json. The test lists the allowed early refusals in `guestParityEarlyAnswer` and fails when an invited guest gets the same answer as an unknown project for any command not listed. The new refusal is such an early answer, so the one `case` line at guest_parity_test.go:418 now reads `case "task new", "task close", "task reopen", "task stop":` (commit c1ea38a1). The want string it builds for `task new` is exit 1, empty stdout, `grid task new: role "guest" may not new a task; a guest answers and comments\n`, so the test still pins the exact refusal. After the fix `go test -count=1 -run TestGuestProjectParity ./internal/cli/` gives `ok`, exit 0. This is an edit to an existing test file, made because the orchestrator's must-fix names it; no assertion was loosened and no test was deleted.
 
 ## What changed
 
