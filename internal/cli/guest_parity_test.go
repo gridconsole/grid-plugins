@@ -17,6 +17,7 @@ import (
 // usage-error check. Selectors are added separately for every supported form.
 var guestParityCommands = map[string][]string{
 	"agent set":            {"grid-builder", "--model", "opus"},
+	"agent unset":          {"grid-builder"},
 	"claude settings show": {},
 	"answer":               {"{task}", "Q-01", "parity"},
 	"approve":              {"{task}"},

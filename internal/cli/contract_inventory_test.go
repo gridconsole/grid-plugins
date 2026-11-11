@@ -267,7 +267,7 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 	// runAgentCommand also serves check, sync and budget. The budget routes are listed by hand:
 	// runAgentBudget compares its op (show, apply, undo) in budget.go, which the parser-source
 	// follow-through cannot see. The app calls "agent budget show".
-	paths["agent"] = []string{"budget apply", "budget show", "budget undo", "check", "list", "set", "sync"}
+	paths["agent"] = []string{"budget apply", "budget show", "budget undo", "check", "list", "set", "sync", "unset"}
 	paths["skill"] = []string{"disable", "enable", "list"}
 	paths["hook"] = []string{"", "level", "levels"}
 	// runClaude has one level of its own ("settings") and a second of show and set.
@@ -440,6 +440,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"account statusline":   {},
 		"agent list":           {},
 		"agent set":            {args: []string{"<agent>"}},
+		"agent unset":          {args: []string{"<agent>"}},
 		"agent check":          {},
 		"agent sync":           {},
 		"agent budget show":    {},

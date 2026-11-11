@@ -73,7 +73,7 @@ func TestFcAgentRoutesInContract(t *testing.T) {
 		got = append(got, name)
 	}
 	sort.Strings(got)
-	want := []string{"budget apply", "budget show", "budget undo", "check", "list", "set", "sync"}
+	want := []string{"budget apply", "budget show", "budget undo", "check", "list", "set", "sync", "unset"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("agent subcommands in contract = %v, want %v", got, want)
 	}
