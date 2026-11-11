@@ -6,6 +6,17 @@ printf "1\n" > "$GRID_HOME/VERSION"
 p="$GRID_HOME"/projects/notes-app
 d="$p"/tasks/T-01-sample
 mkdir -p "$d" "$p/knowledge/conventions" "$p/brain-proposals" work/notes-app/src
+# The project record: without it every grid brain command says the project is not registered.
+cat > "$p/project.md" <<'X'
+---
+id: 01J8ZQ4N7K2M5P6R8S9T0V1W2X
+repos:
+  - path: .
+    remote: example.com/alex/notes-app
+keys:
+  - key: remote:example.com/alex/notes-app
+---
+X
 printf 'add a way to search the notes by tag\n' > "$d/intent.md"
 cat > "$d/task.md" <<'X'
 ---
@@ -19,8 +30,9 @@ workflow:
   - {step: build, kind: run}
   - {step: review, kind: approve}
 step: build
-status: running
-updated: 2026-03-04T10:00
+state: running
+created: 2026-03-04T10:00:00Z
+updated: 2026-03-04T10:00:00Z
 summary: Let people filter the note list by tag.
 next: Build the tag search.
 ---
