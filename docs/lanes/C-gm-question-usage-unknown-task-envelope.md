@@ -104,3 +104,5 @@ envelope; `TestGuestProjectParity` PASSes unchanged.
 
 Nothing here is UI. No live run of the built `grid` binary was made; every proof is the in-process
 test harness.
+
+DONE
