@@ -227,8 +227,8 @@ func TestVerifyExitedShellKillsDescendants(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	r, err := RunVerify(ctx, Job{Verify: Verify{Command: "(sleep 30; echo survived > survived) & echo $! > bg.pid; exit 0"}}, dir)
-	if err == nil || r.Pass {
-		t.Fatalf("unclosed output pipe should fail: %+v %v", r, err)
+	if err != nil || !r.Pass {
+		t.Fatalf("a shell that exits 0 passes after its group is ended: %+v %v", r, err)
 	}
 	gtVerifyWaitPidGone(t, dir)
 	if _, err := os.Stat(filepath.Join(dir, "survived")); !os.IsNotExist(err) {
