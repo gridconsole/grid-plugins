@@ -208,6 +208,28 @@ func TestGuDpNoWaiterLeft(t *testing.T) {
 	}
 }
 
+// One tick posts a re-plan Job (J-4 is rejected with J-5 waiting) and the person
+// Job for the dead re-plan Job J-3: the second post picks its id on a snapshot
+// that holds the first, or the fold drops it without an error.
+func TestGuDpSameTickAsRejectReplan(t *testing.T) {
+	f := guDpRig(t)
+	f.job(t, "J-4", nil)
+	f.job(t, "J-5", []any{"J-4"})
+	guDpClose(t, f, "J-4", contract.Rejected)
+	guDpExit(t, f, "J-3", "cancelled")
+	f.tick(t)
+	people, all := guDpPeople(t, f)
+	if want := []string{"J-1", "J-2", "J-3", "J-4", "J-5", "J-6", "J-7"}; !reflect.DeepEqual(all, want) {
+		t.Fatalf("Jobs on the Feed = %v, want %v", all, want)
+	}
+	if people["J-7"] == nil || people["J-7"]["discovered_from"] != "J-3" || len(people) != 1 {
+		t.Fatalf("want one person Job J-7 from J-3, got %v", people)
+	}
+	if replans, _ := gkReplans(t, f); replans["J-6"] == nil || replans["J-6"]["discovered_from"] != "J-4" || replans["J-6"]["role"] != "orchestrator" {
+		t.Fatalf("want the re-plan Job J-6 from J-4, got %v", replans)
+	}
+}
+
 // J-1 is rejected, the base pass posts the re-plan Job J-3, J-3 is cancelled by a
 // control: the chain ends at one person Job, with no second re-plan Job for J-1.
 func TestGuDpChainEndsAtPerson(t *testing.T) {
