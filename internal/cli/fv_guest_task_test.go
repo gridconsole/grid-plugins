@@ -149,11 +149,12 @@ func TestFvGuestApproveRefused(t *testing.T) {
 // fvGuestVerbs is one row per `grid task` write verb, run as the invited guest
 // of guestTaskFixture (a queued task T-01, a project with no git remote, no
 // GRID_TASK). A row says the exit code, the first stderr line and whether the
-// project folder changed. The rows for new to decline are role refusals; move
-// and attach are refused here for a reason that is not the role (no remote, no
+// project folder changed. The rows for new to move are role refusals (the guard
+// in cli.go answers move before the project is looked at, so its missing remote
+// does not show); attach is refused here for a reason that is not the role (no
 // assigned task folder), and status is a legal queued to running move that a
-// guest makes: TestFvGuestTaskVerbsWhenValid shows move and attach with valid
-// input.
+// guest makes: TestFvGuestTaskVerbsWhenValid shows attach with valid input and
+// move with a remote.
 var fvGuestVerbs = []struct {
 	verb    string
 	args    []string
@@ -169,7 +170,7 @@ var fvGuestVerbs = []struct {
 	{"restore", []string{"task", "restore", "T-01", "--project", "example"}, 3, "grid task restore: task edit rejected: a person with an allowed role must perform this task move", false},
 	{"rename", []string{"task", "rename", "T-01", "--title", "A guest title", "--project", "example"}, 1, "grid task rename: scope: role cannot rename tasks", false},
 	{"decline", []string{"task", "decline", "T-01", "--reason", "a guest reason", "--project", "example"}, 1, "grid task decline: scope: role cannot decline tasks", false},
-	{"move", []string{"task", "move", "laptop", "--task", "T-01", "--project", "example"}, 1, "grid: " + noMoveRemote, false},
+	{"move", []string{"task", "move", "laptop", "--task", "T-01", "--project", "example"}, 1, `grid task move: role "guest" may not move a task; a guest answers and comments`, false},
 	{"attach", []string{"task", "attach", "T-01"}, 1, "grid task attach: agent cannot attach T-01 without its assigned task folder", false},
 	{"status", []string{"task", "status", "T-01", "running"}, 0, "", true},
 }
@@ -178,7 +179,9 @@ var fvGuestVerbs = []struct {
 // with the input that gets past their non-role checks: a task bound to the
 // session (GRID_TASK) for attach, a project with a git remote for move. A row
 // that changes the project folder is a guest write the CLI layer does not refuse;
-// it is asserted as seen here and is a follow-up, not fixed in this lane.
+// it is asserted as seen here and is a follow-up, not fixed in this lane. Move was
+// such a row until the guard refused it (C-fy-plugin-guest-task-move); it now
+// shows the refusal with input that would otherwise enqueue an intent.
 func TestFvGuestTaskVerbsWhenValid(t *testing.T) {
 	for _, row := range []struct {
 		name    string
@@ -190,7 +193,7 @@ func TestFvGuestTaskVerbsWhenValid(t *testing.T) {
 		changed bool
 	}{
 		{"attach_bound_task", []string{"task", "attach", "T-01"}, true, false, 0, "", true},
-		{"move_with_remote", []string{"task", "move", "laptop", "--task", "T-01", "--project", "example"}, false, true, 0, "", true},
+		{"move_with_remote", []string{"task", "move", "laptop", "--task", "T-01", "--project", "example"}, false, true, 1, `grid task move: role "guest" may not move a task; a guest answers and comments`, false},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			h, fixture := guestTaskFixture(t, "guest", "", false)
