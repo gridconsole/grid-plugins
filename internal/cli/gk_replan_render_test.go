@@ -33,7 +33,7 @@ func TestGkReplanBodyPassesRenderLint(t *testing.T) {
 			t.Fatalf("jobs/%s exists: the test needs a Job that never rendered", name)
 		}
 	}
-	body := orchestrator.ReplanJobBody("J-7", "J-2", []string{"J-4", "J-6"})
+	body := orchestrator.ReplanJobBody("J-7", "J-2", "", []string{"J-4", "J-6"})
 	findings, err := postFindings(h.env, path, body)
 	if err != nil {
 		t.Fatalf("the lint options could not be built: %v", err)
