@@ -32,7 +32,7 @@ func TestTaskWriteGolden(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
-			h.env.Getenv = func(string) string { return "" }
+			h.person()
 			fixture := taskFixture(t, h)
 			s := taskWriter(h.env)
 			switch tc.name {
@@ -103,9 +103,12 @@ func TestTaskWriteRecordsRole(t *testing.T) {
 					return tc.role
 				case "GRID_ACTOR":
 					return tc.actor
+				case "GRID_MEMBER":
+					return "sam"
 				}
 				return ""
 			}
+			h.write(filepath.Join(h.gridHome, "machine"), feedMachine+"\n")
 			h.record(project.Record{Name: "example", ID: "01EXAMPLE"})
 			fixture := taskFixtureProject(t, h, "example")
 			s := taskWriter(h.env)
@@ -133,7 +136,7 @@ func TestTaskWriteRecordsRole(t *testing.T) {
 // The normal path: read the hash from grid task show, approve exactly that.
 func TestTaskShowPrintsPlanHashForApprove(t *testing.T) {
 	h := newHarness(t)
-	h.env.Getenv = func(string) string { return "" }
+	h.person()
 	fixture := taskFixture(t, h)
 	if code := h.run(h.home, "task", "show", "T-01"); code != 0 || strings.Contains(h.out.String(), "plan_hash") {
 		t.Fatalf("no plan yet, exit %d: %s%s", code, h.out, h.errb)

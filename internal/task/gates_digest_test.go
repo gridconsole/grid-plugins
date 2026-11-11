@@ -1,7 +1,6 @@
 package task
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -19,23 +18,22 @@ func TestApproveDigestReceipt(t *testing.T) {
 	for _, gate := range []string{"plan"} {
 		t.Run(gate, func(t *testing.T) {
 			s, task := waitingFixture(t)
-			name := approvalFile
 			hash := setPlan(t, task, planV1)
 			digest := plan.Digest(planV1)
-			event, err := s.Approve(WriteOptions{ID: task.ID}, digest)
+			event, err := approve(t, s, task, WriteOptions{ID: task.ID}, digest)
 			if err != nil {
 				t.Fatalf("current digest refused: %v", err)
 			}
 			if event.PlanHash != hash || event.PlanDigest != digest {
-				t.Fatalf("receipt hash = %q, digest = %q; want %q, %q", event.PlanHash, event.PlanDigest, hash, digest)
+				t.Fatalf("approval hash = %q, digest = %q; want %q, %q", event.PlanHash, event.PlanDigest, hash, digest)
 			}
-			data, err := os.ReadFile(filepath.Join(task.Path, name))
-			var receipt Event
-			if err != nil || json.Unmarshal(data, &receipt) != nil || receipt != event {
-				t.Fatalf("stored receipt differs: %s (%v)", data, err)
+			noReceiptFile(t, task.Path)
+			found, err := planJobResult(task.Path)
+			if err != nil || found.PlanHash != hash || found.PlanDigest != digest {
+				t.Fatalf("the plan Job result differs: %+v (%v)", found, err)
 			}
-			if got, err := s.ApprovalForGate("", task.ID, gate); err != nil || got != event {
-				t.Fatalf("receipt cannot release %s gate: %v", gate, err)
+			if got, err := s.ApprovalForGate("", task.ID, gate); err != nil || !sameApproval(got, event) {
+				t.Fatalf("the plan Job result cannot release %s gate: %v", gate, err)
 			}
 			history, err := s.History("", task.ID)
 			if err != nil || len(history) == 0 || !strings.Contains(history[len(history)-1], `"plan_hash":"`+hash+`"`) {
@@ -51,7 +49,7 @@ func TestApproveDigestMismatch(t *testing.T) {
 			s, task := waitingFixture(t)
 			setPlan(t, task, planV1)
 			if previous {
-				if _, err := s.Approve(WriteOptions{ID: task.ID}, ""); err != nil {
+				if _, err := approve(t, s, task, WriteOptions{ID: task.ID}, ""); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -102,8 +100,8 @@ func TestApproveDigestCollision(t *testing.T) {
 	setPlan(t, task, second)
 	_, err := s.Approve(WriteOptions{ID: task.ID}, token)
 	assertDigestMismatch(t, err, second)
-	if _, err := os.Stat(filepath.Join(task.Path, approvalFile)); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("collision wrote an approval receipt")
+	if _, err := planJobResult(task.Path); !errors.Is(err, ErrNoPlanJob) {
+		t.Fatalf("collision wrote an approval: %v", err)
 	}
 	// Legacy compatibility deliberately still allows the same short token.
 	if _, err := s.Approve(WriteOptions{ID: task.ID}, plan.Hash(first)); err != nil {
@@ -128,7 +126,7 @@ func TestApproveTokenPolicy(t *testing.T) {
 				setPlan(t, task, planV1)
 				o := WriteOptions{ID: task.ID, PlanHashToken: policy}
 				before := treeSnapshot(t, task.Path)
-				_, err := s.Approve(o, token)
+				_, err := approve(t, s, task, o, token)
 				if policy == "unknown" || policy == "digest" && len(token) == 6 {
 					if !errors.Is(err, ErrEditUsage) {
 						t.Fatalf("policy %q: expected usage error, got %v", policy, err)
@@ -223,8 +221,8 @@ func TestApproveDigestUsesLockedSnapshot(t *testing.T) {
 					}
 				} else {
 					assertDigestMismatch(t, err, planV2)
-					if _, err := os.Stat(filepath.Join(task.Path, approvalFile)); !errors.Is(err, os.ErrNotExist) {
-						t.Fatal("stale snapshot wrote an approval receipt")
+					if _, err := planJobResult(task.Path); !errors.Is(err, ErrNoPlanJob) {
+						t.Fatalf("stale snapshot wrote an approval: %v", err)
 					}
 				}
 			case <-time.After(10 * time.Second):

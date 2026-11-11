@@ -16,7 +16,7 @@ import (
 func operandFixture(t *testing.T, verb string) (*harness, task.Task) {
 	t.Helper()
 	h := newHarness(t)
-	h.env.Getenv = func(string) string { return "" }
+	h.env.Getenv = memberShell
 	h.env.Machine = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 	f := taskFixture(t, h)
 	renamed := filepath.Join(filepath.Dir(f.Path), f.ID+"-renamed")

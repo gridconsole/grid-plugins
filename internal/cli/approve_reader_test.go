@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,8 +76,9 @@ func TestJobResultAnswersWithoutApprovalJSONAndForAnyGateName(t *testing.T) {
 	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(text)); code != 0 {
 		t.Fatalf("approve: %d %s", code, h.errb.String())
 	}
-	if err := os.Remove(filepath.Join(path, "approval.json")); err != nil {
-		t.Fatal(err)
+	// No approval.json is written any more (verdict 12), so the Job result is all there is.
+	if _, err := os.Stat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("approval.json was written: %v", err)
 	}
 	if !taskstore.Approved(path) {
 		t.Fatal("Approved ignored the Job result")
@@ -115,8 +117,8 @@ func TestPlanChangeAfterJobResultIsNotApproved(t *testing.T) {
 }
 
 // After plan.md changes the old result is stale. Approving the new plan must
-// post a new result on the plan Job; approval.json at the new hash alone does
-// not approve it, because the Job result is the answer.
+// post a new result on the plan Job; with no Feed writer nothing is recorded (no
+// approval.json is written either), because the Job result is the answer.
 func TestReapprovalAfterPlanChangePostsANewResult(t *testing.T) {
 	h, path, _, text := landJobHarness(t)
 	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(text)); code != 0 {
@@ -126,20 +128,24 @@ func TestReapprovalAfterPlanChangePostsANewResult(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(path, "plan.md"), []byte(changed), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// No Feed writer: approval.json moves to the new hash and no result is posted.
+	// No Feed writer: grid approve refuses (exit 3) and records nothing.
 	t.Setenv("GRID_MEMBER", "")
-	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(changed)); code != 0 {
+	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(changed)); code != 3 || !strings.Contains(h.errb.String(), "GRID_MEMBER is required") {
 		t.Fatalf("approve without a writer: %d %s", code, h.errb.String())
 	}
+	if _, err := os.Stat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("approve without a writer wrote approval.json: %v", err)
+	}
 	if taskstore.Approved(path) {
-		t.Fatal("approved from a new approval.json with an old Job result")
+		t.Fatal("approved the changed plan with an old Job result")
 	}
 	if _, err := taskstore.ApprovalFromJob(path); err == nil || !strings.Contains(err.Error(), "Changed since you approved") {
 		t.Fatalf("reader message: %v", err)
 	}
+	// With a writer, the stale result is replaced by naming the new plan hash.
 	t.Setenv("GRID_MEMBER", "member")
 	h.errb.Reset()
-	if code := h.run(path, "approve", path); code != 0 {
+	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(changed)); code != 0 {
 		t.Fatalf("repeat approve: %d %s", code, h.errb.String())
 	}
 	if a, err := taskstore.ApprovalFromJob(path); err != nil || a.PlanHash != plan.Hash(changed) || a.PlanDigest != plan.Digest(changed) || !taskstore.Approved(path) {
@@ -147,20 +153,22 @@ func TestReapprovalAfterPlanChangePostsANewResult(t *testing.T) {
 	}
 }
 
-// approval.json is written but the Job has no result (the post failed): readers
-// say not approved and name the plan Job, and a repeat grid approve posts the
-// missing result.
-func TestApprovalJSONWithoutJobResultIsRecoverable(t *testing.T) {
+// Approve without a Feed writer records nothing (no approval.json either): the
+// plan Job has no result, readers say not approved and name the plan Job, and a
+// repeat grid approve with a writer posts the result. This replaces
+// TestApprovalJSONWithoutJobResultIsRecoverable, whose "approval.json is written
+// and the post failed" state no longer exists (verdict 12).
+func TestApproveWithoutAWriterIsRecoverable(t *testing.T) {
 	h, path, repo, text := landJobHarness(t)
 	t.Setenv("GRID_MEMBER", "")
-	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(text)); code != 0 || !strings.Contains(h.errb.String(), "J-2 stays open") {
+	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(text)); code != 3 || !strings.Contains(h.errb.String(), "GRID_MEMBER is required") {
 		t.Fatalf("approve without a writer: %d %s", code, h.errb.String())
 	}
-	if _, err := os.Stat(filepath.Join(path, "approval.json")); err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("approve without a writer wrote approval.json: %v", err)
 	}
 	if taskstore.Approved(path) || attachApproved(t, h) {
-		t.Fatal("approved from approval.json alone, with a plan Job that has no result")
+		t.Fatal("approved with a plan Job that has no result")
 	}
 	if _, err := taskstore.ApprovalFromJob(path); err == nil || !strings.Contains(err.Error(), "plan Job J-2 has no result yet") {
 		t.Fatalf("reader message: %v", err)
@@ -169,7 +177,7 @@ func TestApprovalJSONWithoutJobResultIsRecoverable(t *testing.T) {
 	if code := h.run(repo, "land", "T-07"); code != 3 || !strings.Contains(h.errb.String(), "plan Job J-2 has no result yet") || landed(t, repo) {
 		t.Fatalf("land: %d %s", code, h.errb.String())
 	}
-	// The repeat, with a writer, posts the result; approval.json already matches.
+	// The repeat, with a writer, posts the result.
 	t.Setenv("GRID_MEMBER", "member")
 	h.errb.Reset()
 	if code := h.run(path, "approve", path); code != 0 {

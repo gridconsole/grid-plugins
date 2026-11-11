@@ -3,7 +3,6 @@ package task
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -138,11 +137,10 @@ func HeldStage(stage string) bool {
 // nothing: the guard asks it only for the brain-recall check on plan.md and for
 // the grid-planner's reach into a task folder, never to refuse a write.
 func PlanHeldWith(lookup StepLookup, dir, text, history string) bool {
-	// approval.json is read here only for its existence, to choose between this
-	// branch and the history branch; the answer is Approved, the plan Job result.
-	// A JSON receipt takes precedence over legacy history/step advancement:
+	// A task with an approve person Job is answered by Approved, the plan Job
+	// result. The Job takes precedence over legacy history/step advancement:
 	// stale full digests must not be released by an old prose acceptance.
-	if _, err := os.Lstat(filepath.Join(dir, approvalFile)); !os.IsNotExist(err) {
+	if HasPlanJob(dir) {
 		steps, err := lookup(text)
 		if errors.Is(err, ErrProjectMismatch) {
 			return true

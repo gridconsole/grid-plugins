@@ -46,13 +46,12 @@
             "who"
           ],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "note",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ]
@@ -66,13 +65,12 @@
           "exit": 0,
           "stdout_keys": [],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "note",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ],
@@ -88,13 +86,12 @@
           "exit": 0,
           "stdout_keys": [],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "note",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ],
@@ -111,13 +108,12 @@
           "exit": 1,
           "stdout_keys": [],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "note",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ],
@@ -133,13 +129,12 @@
           "exit": 0,
           "stdout_keys": [],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "note",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ],
@@ -152,16 +147,15 @@
             "$task",
             "1"
           ],
-          "exit": 2,
+          "exit": 1,
           "stdout_keys": [],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "note",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ],
@@ -185,11 +179,7 @@
             "digest",
             "hash"
           ],
-          "receipt_keys": [
-            "plan_hash",
-            "task",
-            "what"
-          ]
+          "receipt_keys": []
         },
         {
           "argv": [
@@ -199,11 +189,7 @@
           ],
           "exit": 0,
           "stdout_keys": [],
-          "receipt_keys": [
-            "plan_hash",
-            "task",
-            "what"
-          ],
+          "receipt_keys": [],
           "stdout_contains": "approved: false\n"
         },
         {
@@ -215,11 +201,7 @@
           ],
           "exit": 2,
           "stdout_keys": [],
-          "receipt_keys": [
-            "plan_hash",
-            "task",
-            "what"
-          ],
+          "receipt_keys": [],
           "stderr_contains": "plan needs approval: review and approve the current plan before rendering a Job"
         },
         {
@@ -232,12 +214,11 @@
           "exit": 0,
           "stdout_keys": [],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ]
@@ -251,12 +232,11 @@
           "exit": 0,
           "stdout_keys": [],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ],
@@ -272,12 +252,11 @@
           "exit": 0,
           "stdout_keys": [],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ],
@@ -325,12 +304,11 @@
             "who"
           ],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ]
@@ -344,12 +322,11 @@
           "exit": 0,
           "stdout_keys": [],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ],
@@ -365,12 +342,11 @@
           "exit": 0,
           "stdout_keys": [],
           "receipt_keys": [
-            "from_state",
+            "answer",
+            "job",
             "plan_digest",
             "plan_hash",
-            "task",
-            "to_state",
-            "what",
+            "record",
             "when",
             "who"
           ],

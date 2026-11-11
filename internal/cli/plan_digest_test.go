@@ -58,7 +58,7 @@ func TestApproveDigestCLI(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
-			h.env.Getenv = func(string) string { return "" }
+			h.person()
 			fixture := taskFixture(t, h)
 			if _, err := taskWriter(h.env).Change(task.WriteOptions{ID: fixture.ID, Action: "status", State: "waiting"}); err != nil {
 				t.Fatal(err)
@@ -92,7 +92,7 @@ func TestApproveDigestCLI(t *testing.T) {
 
 func TestApproveDigestOnlyUsageExit(t *testing.T) {
 	h := newHarness(t)
-	h.env.Getenv = func(string) string { return "" }
+	h.person()
 	fixture := taskFixture(t, h)
 	if _, err := taskWriter(h.env).Change(task.WriteOptions{ID: fixture.ID, Action: "status", State: "waiting"}); err != nil {
 		t.Fatal(err)
