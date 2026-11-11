@@ -231,6 +231,19 @@ func Released(j contract.Job) bool {
 	return j.Status == contract.Accepted || j.Status == contract.Submitted && VerifyPassed(j)
 }
 
+// DoneReason is why a Job with a done edge on target still waits, given the
+// target's status. A rejected or cancelled target will not be accepted by
+// itself, so the reason says what happened to it instead of promising an accept.
+func DoneReason(target string, status contract.Status) string {
+	switch status {
+	case contract.Rejected:
+		return "waiting for " + target + ", which was rejected"
+	case contract.Cancelled:
+		return "waiting for " + target + ", which was cancelled"
+	}
+	return "waiting for " + target + " to be accepted"
+}
+
 // started is a Job that a worker holds or has handed in: it reads as Started or
 // Needs review, or it is parked mid-run.
 func started(status contract.Status) bool {
@@ -274,10 +287,7 @@ func (g *Graph) Ready(s Snapshot) (Readiness, error) {
 				reason = "waiting on gate " + strings.TrimPrefix(e.Job, "gate:")
 			case kind == Done:
 				satisfied = Released(s.Jobs[e.Job])
-				reason = "waiting for " + e.Job + " to be accepted"
-				if s.Jobs[e.Job].Status == contract.Rejected {
-					reason = "waiting for " + e.Job + ", which was rejected"
-				}
+				reason = DoneReason(e.Job, s.Jobs[e.Job].Status)
 			case kind == Failed:
 				status := s.Jobs[e.Job].Status
 				satisfied = (status == contract.Rejected || status == contract.Cancelled) && s.Exhausted[e.Job]
