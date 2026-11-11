@@ -1,6 +1,7 @@
 package task
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -78,12 +79,18 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 				event = previous.event(t)
 				return nil
 			}
-			// Only the history line is written here: the caller records the approval as
-			// the result of the plan Job, once this has released the task and plan locks.
+			// The history line and the approval.json receipt are written here: the caller
+			// records the approval as the result of the plan Job, once this has released
+			// the task and plan locks. The receipt file is a copy for readers of the
+			// task folder (the app reads it); the plan Job result stays the approval.
 			o.Action = "approve"
 			event = s.event(t, o, t.State)
 			event.PlanHash, event.PlanDigest, event.LandsHash = current, digest, o.LandsHash
-			return commitWrite(t.Path, event, map[string][]byte{})
+			data, err := json.Marshal(event)
+			if err != nil {
+				return err
+			}
+			return commitWrite(t.Path, event, map[string][]byte{approvalFile: append(data, '\n')})
 		})
 		if errors.Is(err, plan.ErrNoPlan) {
 			return errors.New("plan.md is missing; write the plan before approving it")

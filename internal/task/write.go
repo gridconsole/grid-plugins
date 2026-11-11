@@ -133,9 +133,21 @@ func (s Store) change(t Task, o WriteOptions) (Event, error) {
 		return event, err
 	}
 	files := map[string][]byte{"task.md": updated}
-	// A reopened task needs its plan approved again: the plan Job's old result is
-	// superseded by the new plan Job that grid task reopen posts (see
-	// planJobResult), so nothing but the state and history is written here.
+	if o.Action == "reopen" {
+		// A reopened task needs its plan approved again: the receipt below is not an
+		// approve event, so approval.json no longer matches. The plan Job's old result
+		// is superseded by the new plan Job that grid task reopen posts (see
+		// planJobResult).
+		previous, err := readOptional(filepath.Join(t.Path, approvalFile))
+		if err != nil {
+			return event, err
+		}
+		if previous != nil {
+			if files[approvalFile], err = json.Marshal(event); err != nil {
+				return event, err
+			}
+		}
+	}
 	return event, commitWrite(t.Path, event, files)
 }
 
@@ -500,12 +512,18 @@ func (s Store) withWrite(cwd, id string, fn func(Task) error) error {
 	return fn(t)
 }
 
-const journalName = ".task-write.json"
+const (
+	journalName = ".task-write.json"
+	// approvalFile is the receipt of the plan approval that grid approve writes beside
+	// the plan Job result, and that reopen overwrites with its own event.
+	approvalFile = "approval.json"
+)
 
 var decisionFile = regexp.MustCompile(`^refusal-R-[1-9][0-9]*\.json$`)
 
-// legacyReceipt names the receipt files of older plugins; journal replay drops them.
-var legacyReceipt = regexp.MustCompile(`^approval(?:-ship|-preview)?\.json$`)
+// legacyReceipt names the per-gate receipt files of older plugins (no gate but the
+// plan is approved any more); journal replay drops them.
+var legacyReceipt = regexp.MustCompile(`^approval-(?:ship|preview)\.json$`)
 
 // commitWrite uses the existing atomic writer. The durable redo journal is the
 // commit point. Recovery is idempotent (full file images, including the appended
@@ -567,13 +585,13 @@ func recoverWrite(dir string) error {
 		return errors.New("incomplete task write journal")
 	}
 	for name := range files {
-		// A journal an older plugin left before this one started may carry a receipt
-		// file. Nothing reads receipts any more, so it is dropped and the rest replays.
+		// A journal an older plugin left before this one started may carry a per-gate
+		// receipt file. Nothing reads those, so it is dropped and the rest replays.
 		if legacyReceipt.MatchString(name) {
 			delete(files, name)
 			continue
 		}
-		if name != "task.md" && name != "history.md" && !decisionFile.MatchString(name) {
+		if name != "task.md" && name != "history.md" && name != approvalFile && !decisionFile.MatchString(name) {
 			return fmt.Errorf("invalid journal file %q", name)
 		}
 		if err := writableFile(dir, name); err != nil {

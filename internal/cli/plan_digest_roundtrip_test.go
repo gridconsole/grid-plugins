@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 )
 
 type planDigestTranscript struct {
@@ -76,16 +76,14 @@ func TestPlanDigestRoundTrip(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			// The receipt of a step is the result of the plan Job, as the readers
-			// return it (job, record, who, when, answer, plan_hash, plan_digest,
-			// lands_hash, note); nothing is written to approval.json any more.
+			// The receipt of a step is the approval.json that grid approve writes beside
+			// the plan Job result: the nine keys the app's replay of this transcript reads.
 			jobResult := func() map[string]any {
 				out := map[string]any{}
-				a, _ := taskstore.ApprovalFromJob(folder)
-				if a.Record == "" {
+				data, err := os.ReadFile(filepath.Join(folder, "approval.json"))
+				if errors.Is(err, fs.ErrNotExist) {
 					return out
 				}
-				data, err := json.Marshal(a)
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -30,13 +30,13 @@ type ReceiptOutcome string
 const (
 	// ReceiptNone: the folder has no approval.json; nothing was read or written.
 	ReceiptNone ReceiptOutcome = "none"
-	// ReceiptMoved: the receipt became the result of a new approve person Job, and
-	// the file was removed.
+	// ReceiptMoved: the receipt became the result of a new approve person Job. The
+	// file stays: it matches that result, and the app reads it.
 	ReceiptMoved ReceiptOutcome = "moved"
-	// ReceiptRetired: the task already has an approve person Job, which is the
-	// record (and was already the only one the readers used); the file was
-	// removed and nothing was posted.
-	ReceiptRetired ReceiptOutcome = "retired"
+	// ReceiptCurrent: the task already has an approve person Job, which is the
+	// record (and the only one the plugin's readers use); nothing was posted and
+	// the file stays beside it as the copy grid approve wrote.
+	ReceiptCurrent ReceiptOutcome = "current"
 	// ReceiptKept: the receipt never approved a plan (no full plan_digest, a gate
 	// name, another action); the file is left as it was.
 	ReceiptKept ReceiptOutcome = "kept"
@@ -89,12 +89,24 @@ func readReceipt(dir string) (r receiptData, ok bool, out ReceiptOutcome, why st
 }
 
 // ReceiptPending reports whether ReceiptToJob has something to do in the folder:
-// an approval.json that is a plan approval. A receipt it would keep, or cannot
-// read, is not pending, so a caller that visits every task does not come back to
-// it on every pass.
+// an approval.json that is a plan approval, in a task that has no approve person
+// Job yet. A receipt it would keep, or cannot read, or that already sits beside the
+// task's Job (the copy grid approve writes), is not pending, so a caller that
+// visits every task does not come back to it on every pass.
 func ReceiptPending(dir string) bool {
 	_, ok, _, _, err := readReceipt(dir)
-	return err == nil && ok
+	if err != nil || !ok {
+		return false
+	}
+	id, err := feed.TaskID(dir)
+	if errors.Is(err, feed.ErrNoTaskID) {
+		return true // no Feed identity, so no Job
+	}
+	if err != nil {
+		return false
+	}
+	has, err := hasApproveJob(feed.Store{TaskDir: dir, TaskID: id})
+	return err == nil && !has
 }
 
 // ReceiptToJob reads the approval.json of one task folder once and turns it into
@@ -123,16 +135,14 @@ func ReceiptToJob(dir string, w feed.Writer) (ReceiptOutcome, string, error) {
 		return "", "", err
 	}
 	store := feed.Store{TaskDir: dir, TaskID: id}
-	snap, err := orchestrator.Load(store)
+	has, err := hasApproveJob(store)
 	if err != nil {
 		return "", "", err
 	}
-	for _, it := range snap.Items {
-		j := snap.State.Jobs[it.ID]
-		if it.IsPerson() && it.Kind == "approve" && j != nil && j.Status != contract.Cancelled && j.Status != contract.Rejected {
-			// The Job is the record. Every reader already preferred it to the file.
-			return ReceiptRetired, "the task has an approve person Job", os.Remove(filepath.Join(dir, receiptFile))
-		}
+	if has {
+		// The Job is the record. Every reader already preferred it to the file, and
+		// the file stays as the copy grid approve wrote beside it.
+		return ReceiptCurrent, "the task has an approve person Job", nil
 	}
 	jobID, err := PostPlanJob(store, w, receipt.Who.ID)
 	if err != nil {
@@ -161,7 +171,26 @@ func ReceiptToJob(dir string, w feed.Writer) (ReceiptOutcome, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	return ReceiptMoved, jobID, os.Remove(filepath.Join(dir, receiptFile))
+	// The file is not removed: it matches the Job result just posted, and the readers
+	// of the task folder (the app) still read it. ReceiptPending is false from here on,
+	// because the task now has its approve person Job.
+	return ReceiptMoved, jobID, nil
+}
+
+// hasApproveJob reports whether the Feed holds a person Job of kind approve that is
+// not cancelled or rejected.
+func hasApproveJob(store feed.Store) (bool, error) {
+	snap, err := orchestrator.Load(store)
+	if err != nil {
+		return false, err
+	}
+	for _, it := range snap.Items {
+		j := snap.State.Jobs[it.ID]
+		if it.IsPerson() && it.Kind == "approve" && j != nil && j.Status != contract.Cancelled && j.Status != contract.Rejected {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // PostPlanJob posts a new person Job of kind approve for the plan, with the next
