@@ -37,14 +37,16 @@ type Env struct {
 	Stdout      io.Writer
 	Stderr      io.Writer
 	ResolveTask func(string) (string, error)
+	project     string // --project value; set by Run, passed to the resolver as Query.Project
 }
 type flags struct {
-	json   bool
-	task   string
-	dir    string
-	budget int
-	args   []string
-	help   bool
+	json    bool
+	project string
+	task    string
+	dir     string
+	budget  int
+	args    []string
+	help    bool
 }
 type report struct {
 	OK       bool           `json:"ok"`
@@ -60,7 +62,7 @@ type report struct {
 	fromFeed bool           // show resolved a task, so the text output names the state
 }
 
-const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip).\n"
+const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--project <name>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--project <name>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--project <name>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\n       grid job floor <items.json> [--json] [--policy <policy.json>]Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip).\n"
 
 func Run(args []string, e Env) int {
 	if err := memberContext(e.Resolver); err != nil {
@@ -89,6 +91,7 @@ func Run(args []string, e Env) int {
 		}
 		return 0
 	}
+	e.project = f.project
 	action, args := f.args[0], f.args[1:]
 	fail := func(err error, code int) int {
 		return output(e, f, report{Error: err.Error(), Findings: []lint.Finding{}}, code)
@@ -271,13 +274,15 @@ func parse(args []string) (flags, error) {
 		case a == "--json":
 		case a == "--help" || a == "-h":
 			f.help = true
-		case a == "--task" || a == "--budget" || a == "--dir":
+		case a == "--task" || a == "--budget" || a == "--dir" || a == "--project":
 			if i+1 == len(args) {
 				return f, fmt.Errorf("%s needs a value", a)
 			}
 			i++
 			if a == "--task" {
 				f.task = args[i]
+			} else if a == "--project" {
+				f.project = args[i]
 			} else if a == "--dir" {
 				f.dir = args[i]
 			} else {
@@ -414,14 +419,18 @@ func resolveTask(s string, e Env) (string, error) {
 		s = local
 	}
 	var err error
-	if e.ResolveTask != nil {
+	if e.ResolveTask != nil && e.project == "" {
 		p, err = e.ResolveTask(s)
 	} else {
 		var result where.Result
-		result, err = e.Resolver.Resolve(where.Query{Cwd: e.Cwd, Task: s})
+		result, err = e.Resolver.Resolve(where.Query{Cwd: e.Cwd, Task: s, Project: e.project})
 		p = result.TaskPath
 	}
 	if err != nil {
+		// A guest naming a project it is not in gets the answer it gets without the flag.
+		if e.project != "" && e.Resolver.Caller.IsGuest() && errors.Is(err, where.ErrProjectUnregistered) {
+			err = where.ErrTaskNotFound
+		}
 		return "", err
 	}
 	if p != "" {
