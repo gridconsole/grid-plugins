@@ -36,7 +36,7 @@ same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` thro
 - `grid env`: dev environments.
 - `grid person`, `grid routine`, `grid worker`, `grid session`, `grid intent`, `grid usage`, `grid account`: people, routines, workers, sessions, worker requests, usage, accounts.
 - `grid agent`, `grid claude`, `grid workflow`, `grid skill`, `grid setup`: agent, Claude, workflow and skill settings, and project setup.
-- `grid project`, `grid project-md`, `grid signal`, `grid artifact`, `grid eval`, `grid migrate`: projects, inbox signals, artifacts, evaluations, home upgrade.
+- `grid project`, `grid project-md`, `grid update`, `grid signal`, `grid artifact`, `grid eval`, `grid migrate`: projects, project updates, inbox signals, artifacts, evaluations, home upgrade.
 
 The `--json` shapes are in [contract/README.md](contract/README.md).
 
