@@ -189,6 +189,7 @@ func runUsageObserved(args []string, env Env) int {
 	}
 	r, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: *id})
 	if err != nil {
+		env.recordError(err)
 		fmt.Fprintln(env.Stderr, err)
 		return 1
 	}
