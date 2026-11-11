@@ -384,7 +384,7 @@ func Run(args []string, env Env) int {
 			origin.Kind = "import"
 		}
 		if err == nil && proposeTask.Path != "" {
-			// The task's own folder is where decide and the ship gate look.
+			// The task's own folder is where decide and deliver look.
 			tasks := task.Store{Resolver: env.Resolver}
 			history := func(text string) error {
 				_, err := tasks.Note(task.WriteOptions{Cwd: proposeTask.Path, ID: proposeTask.ID, Note: text, Who: contract.Author{ID: "grid-brain", Role: "agent"}})

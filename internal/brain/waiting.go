@@ -47,11 +47,12 @@ func (s Store) WithKeeperGate(taskDir string, fn func() error) error {
 	return visit(0)
 }
 
-// WaitingForTask is the part of the queue that holds back a task's ship gate:
-// the task's own proposals, every proposal in its project's store, and the
-// home-level proposals whose source or origin id names the task (T-NN) or its
-// project. The home store is shared by every project, so an unrelated waiting
-// proposal there does not stop this task; `grid brain keep` still lists it.
+// WaitingForTask is the part of the queue that deliver reads and returns so the
+// orchestrator can start the curator; it never stops a delivery: the task's own
+// proposals, every proposal in its project's store, and the home-level
+// proposals whose source or origin id names the task (T-NN) or its project.
+// The home store is shared by every project, so an unrelated waiting proposal
+// there is not counted for this task; `grid brain keep` still lists it.
 func (s Store) WaitingForTask(taskDir, taskID string) ([]WaitingProposal, error) {
 	rows, err := s.Waiting(taskDir)
 	if err != nil {
