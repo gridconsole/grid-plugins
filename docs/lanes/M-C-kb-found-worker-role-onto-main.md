@@ -18,7 +18,7 @@ Repo: plugin. Branch lane-M-C-kb-found-worker-role-onto-main, lane-C-kb-found-wo
 | 2g. C-kb base check (new test fails on the role enum on base) | HOLDS (earlier proof) | Recorded in docs/lanes/C-kb-found-worker-role.md row "Base check": `$.author.role: value outside enum`. Unchanged by this merge: the lane's test and schema are the same bytes. |
 | 3. Walk tests (plugin) | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList' -v` exit 0: `--- PASS: TestHsIpWalksEveryCommand`, `--- PASS: TestIlGuestSiteList`. `go test -count=1 ./internal/job/lint/` exit 0 (`ok .../internal/job/lint 0.379s`). |
 | 4a. `make lint` | HOLDS | `make lint` exit 0 (`go vet ./...`) |
-| 4b. `make cross` | see Open items | see below |
+| 4b. `make cross` | HOLDS | `make cross > /dev/null 2>&1 && echo cross-exit=0` printed `cross-exit=0` (darwin/arm64 and windows/amd64 vet and test compile) |
 | Rule: tests of changed packages and importers | HOLDS | Changed: internal/cli (test), contract/formats (test), schema embedded in package contract, golden used by internal/mcp. Importers by `go list`: cmd/grid, lib. `go test -count=1 ./internal/cli/ ./internal/mcp/ ./contract/formats/ ./cmd/grid/ ./lib/...` exit 0: ok internal/cli 94.4s, ok internal/mcp 2.3s, ok contract/formats 0.6s, cmd/grid no test files, ok lib 32.7s. `./internal/contract/` ok 1.5s. The whole-module test is the orchestrator's. |
 | Rule: no guard, gate, cap, hold or hook | HOLDS | The lane only widens a role enum; the merge adds no code. |
 | Rule: no attribution lines, no personal paths or hosts | HOLDS | Merge commit message is one sentence, no trailer. The paths in this doc are `/srv/gridwork/...` grid paths, as in the existing lane docs. |
