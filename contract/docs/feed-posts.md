@@ -190,9 +190,9 @@ A deploy-failed post records that a delivery to an environment (`env`) stopped a
 Read: contract/schemas/deploy-failed.json:87; internal/contract/fold.go:292-319 (no deploy-failed case); contract/README.md:174.
 
 ## found
-Version 1. Class chatter. Written by reviewer, lead, cli.
+Version 1. Class chatter. Written by reviewer, lead, worker, agent, cli.
 
-A found post is a finding a reviewer raises on a Job: the `job`, the post it is about (`re`), where (`at`, as file:line), the `text`, a `kind` such as bug, and an optional `class`. It changes no status. The one exception is a finding of kind `security`: the fold marks that Job as needing the lead and lists the post among the wakes.
+A found post is a finding a reviewer raises on a Job (a Job agent with role worker or agent may also author one): the `job`, the post it is about (`re`), where (`at`, as file:line), the `text`, a `kind` such as bug, and an optional `class`. It changes no status. The one exception is a finding of kind `security`: the fold marks that Job as needing the lead and lists the post among the wakes.
 
 ```json
 {
