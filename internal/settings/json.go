@@ -70,11 +70,16 @@ func textValue(raw json.RawMessage) (string, error) {
 }
 func decode(data []byte) (Document, error) {
 	doc := empty()
-	raw, err := object(data, []string{"agents", "skills", "hooks", "budget", "accounts"})
+	raw, err := object(data, append([]string{"agents", "skills", "hooks", "budget", "accounts"}, ezKeysAppNames...))
 	if err != nil {
 		return doc, err
 	}
 	for _, group := range keysOf(raw) {
+		if slices.Contains(ezKeysAppNames, group) {
+			// The app's keys: kept verbatim so a rewrite does not drop them.
+			doc.ezKeysSet(group, raw[group])
+			continue
+		}
 		if group == "accounts" {
 			// The app's account records: kept verbatim so a rewrite does not drop them.
 			if v := bytes.TrimSpace(raw[group]); len(v) == 0 || v[0] != '[' {
