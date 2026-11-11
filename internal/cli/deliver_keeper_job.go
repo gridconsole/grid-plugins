@@ -74,7 +74,7 @@ func curatorJobBody(id, taskID string, ids []string) map[string]any {
 	return map[string]any{
 		"id": id, "item": 1, "role": curatorRole,
 		"title":  fmt.Sprintf("Curate %d brain %s of %s", len(ids), noun, taskID),
-		"skills": []any{"brain-keeper"}, "review": "L0", "risk": []any{}, "max_rounds": 1,
+		"skills": []any{"brain-keeper"}, "risk": []any{},
 		"intent": map[string]any{"owner": pointer, "item": pointer, "goal": pointer},
 		"links":  []any{}, "keep": []any{}, "decisions": []any{},
 		"read": reads, "write": []any{}, "out_of_scope": []any{},

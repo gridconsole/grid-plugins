@@ -86,8 +86,8 @@ the schema.
 | `irreversible` | optional | plan `internal/job/planned.go` | Boolean; the Job does something that cannot be undone. |
 | `review_reason` | optional | plan `internal/job/planned.go` | A nonempty sentence, at most 500 characters, saying why a review is wanted. |
 | `order` | optional | run `internal/cli/orchestrator.go`, `internal/contract/fold.go` | Queue position, lowest first; changes only a Job that has not started. |
-| `review` | optional | plan `internal/job/planned.go`, `internal/cli/task_new_first_job.go`, `internal/cli/deliver_keeper_job.go`, `internal/question/job.go`, `internal/approvefix/approvefix.go`, `internal/migrate/receipt.go` | Retired review level `L0` to `L3`; an old plan still carries it and the five builders of a Job record outside the plan still write it; nothing reads it. |
-| `max_rounds` | optional | plan `internal/cli/task_new_first_job.go`, `internal/cli/deliver_keeper_job.go`, `internal/question/job.go`, `internal/orchestrator/replan.go`, `internal/approvefix/approvefix.go`, `internal/migrate/receipt.go` | Retired round count; the same builders still write it; nothing reads it. |
+| `review` | optional | plan `internal/job/planned.go`, run `internal/migrate/receipt.go` | Retired review level `L0` to `L3`; an old plan still carries it and the migrate receipt still writes it; the other builders of a Job record no longer write it; nothing reads it. |
+| `max_rounds` | optional | run `internal/migrate/receipt.go` | Retired round count; the migrate receipt still writes it; the other builders of a Job record no longer write it; nothing reads it. |
 | `created_at` | optional | none | UTC time with milliseconds; no code writes it. The ready order reads it and falls back to the post time (`internal/orchestrator/ready.go`). |
 | `status` | optional | run `internal/contract/fold.go` | The lifecycle status; `Record` drops the brief-only `briefed`, `done` and `blocked` (`internal/job/record.go`). |
 | `review_override` | optional | none | `level` and `reason`; the schema allows it, no code writes or reads it. |
