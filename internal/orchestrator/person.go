@@ -211,7 +211,7 @@ func AnswerPersonWith(store feed.Store, w feed.Writer, id, answer string, fields
 		if e != nil {
 			return e
 		}
-		body := map[string]any{"target": id, "status": "accepted", "reason": "answered by " + w.Author.ID}
+		body := map[string]any{"target": id, "status": "accepted", "reason": "answered by " + w.Author.ID, "answer": answer}
 		for _, key := range answerFields {
 			if v, ok := fields[key]; ok {
 				body[key] = v
