@@ -1,0 +1,9 @@
+[
+  {"id":"question-filed","type":"command_passes","command":["sh","-c","grep -rIil 'sam' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-box --include='*' | grep -v -e task.md -e history.md -e intent.md | xargs grep -il 'tag' | grep -q ."],"gate":true},
+  {"id":"both-options","type":"command_passes","command":["sh","-c","f=$(grep -rIl -i 'sam' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-box | grep -v -e task.md -e history.md -e intent.md); test -n \"$f\" && cat $f | grep -Eiq 'five|5' && cat $f | grep -Eiq 'ten|10'"],"weight":2},
+  {"id":"recommendation","type":"command_passes","command":["sh","-c","f=$(grep -rIl -i 'sam' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-box | grep -v -e task.md -e history.md -e intent.md); test -n \"$f\" && cat $f | grep -Eiq 'recommend'"],"weight":2},
+  {"id":"why","type":"command_passes","command":["sh","-c","f=$(grep -rIl -i 'sam' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-box | grep -v -e task.md -e history.md -e intent.md); test -n \"$f\" && cat $f | grep -Eiq '\"why\"|why:|why '"]},
+  {"id":"no-money","type":"command_passes","command":["sh","-c","! grep -rIEq '[$€£] ?[0-9]|[0-9] ?(usd|eur|euro|dollar)' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-box"]},
+  {"id":"not-closed","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-box/task.md && ! grep -Eq '^(status|state): closed$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-box/task.md"]},
+  {"id":"intent-untouched","type":"command_passes","command":["sh","-c","printf '%s\\n' 'add a tag box to the note form' | cmp - \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-box/intent.md"]}
+]

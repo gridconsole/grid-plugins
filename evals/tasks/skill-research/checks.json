@@ -1,0 +1,9 @@
+[
+  {"id":"research-file","type":"command_passes","command":["sh","-c","test -s \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-rules/research.md"],"gate":true},
+  {"id":"cites-validate-line","type":"command_passes","command":["sh","-c","grep -Eq 'store\\.js:(8|9|10)' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-rules/research.md"],"weight":3},
+  {"id":"cites-limit-line","type":"command_passes","command":["sh","-c","grep -Eq 'store\\.js:(2|13|14)' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-rules/research.md"],"weight":2},
+  {"id":"states-rule","type":"command_passes","command":["sh","-c","grep -Eq 'a-z0-9' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-rules/research.md"]},
+  {"id":"marks-unverified","type":"command_passes","command":["sh","-c","grep -Eiq 'unverified|not found|could not find|nothing left' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-rules/research.md"]},
+  {"id":"code-unchanged","type":"command_passes","command":["sh","-c","test \"$(wc -l < work/notes-app/src/store.js)\" -eq 16 && grep -Fq 'const MAX_TAGS = 5;' work/notes-app/src/store.js && grep -Fq 'return /^[a-z0-9-]{1,20}$/.test(tag);' work/notes-app/src/store.js"]},
+  {"id":"intent-untouched","type":"command_passes","command":["sh","-c","printf '%s\\n' 'find out how notes-app checks a tag before it is saved' | cmp - \"$GRID_HOME\"/projects/notes-app/tasks/T-01-tag-rules/intent.md"]}
+]
