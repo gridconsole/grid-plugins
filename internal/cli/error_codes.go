@@ -56,6 +56,8 @@ func errorCode(err error) string {
 		return CodeInvalidArgument
 	case errors.Is(err, workflow.ErrChanged):
 		return CodeWorkflowFileChanged
+	case errors.Is(err, ilGuestRefused):
+		return CodeGuestRefused
 	case errors.As(err, &refused) && refused.Code != "":
 		return refused.Code
 	default:

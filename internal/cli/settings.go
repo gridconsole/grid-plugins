@@ -173,7 +173,7 @@ func runSettings(kind string, args []string, env Env) int {
 
 func runSetup(args []string, env Env) int {
 	if resolver(env).Caller.IsGuest() {
-		return commandError(env, "setup", errors.New(guestSettingsRefusal))
+		return commandError(env, "setup", ilGuestRefused)
 	}
 	if settings.ClaudeSetupCommand(args) {
 		fs := newFlags("setup", env)

@@ -20,6 +20,8 @@ by message wording. Each example below is read by `TestHfFsShapes`.
 {"error":{"code":"no_such_task","message":"grid task show: task T-99 not found in the Grid home"}}
 ```
 
+   A guest's refused write (`setup`, `routine`, `project relink`/`remove`, `agent sync`, and the task, session and question writes a guest may not make) prints this envelope with `guest_refused`; its exit stays exit 1, or exit 3 for `question withdraw`, `task delete` and `task restore`.
+
 2. **Signal object**, printed by `signal act`, `signal dismiss` and `signal move`.
    `error` is a category string and `message` is unprefixed and sometimes redacted. The
    category `refused` exits 3 and always carries a `code`: `no_such_project`,

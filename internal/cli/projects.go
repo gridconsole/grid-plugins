@@ -102,7 +102,7 @@ func runProject(args []string, env Env) int {
 		return 2
 	}
 	if (verb == "add" || verb == "remove" || verb == "relink" || verb == "scan" && apply) && resolver(env).Caller.IsGuest() {
-		return failure(env, errors.New(guestSettingsRefusal))
+		return failure(env, ilGuestRefused)
 	}
 	s := projectStore(env)
 	if verb == "list" {
