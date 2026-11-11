@@ -17,7 +17,7 @@ var historyAlias = regexp.MustCompile(`(?i)^history\.md(?::.*|[. ]*)$`)
 
 // EvaluatePlan ports the legacy plan rules. root is the filesystem base used
 // when cwd is omitted; all environment reads come from env. It performs no writes.
-// Its level is the plan-guard setting, block by default.
+// Its level is the plan-guard setting, warn by default.
 func EvaluatePlan(in hookio.Input, root string, env map[string]string) hookio.Decision {
 	return configuredLevel("plan-guard", in, root, env, evaluatePlan(in, root, env))
 }
@@ -41,11 +41,10 @@ func evaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 	target := c.path(given)
 	projects := realNative(c.projects, 0)
 	owner := taskAt(target, projects)
-	text, history, top := "", "", ""
+	text, history := "", ""
 	if owner != nil {
 		text = read(filepath.Join(owner.dir, "task.md"))
 		history = read(filepath.Join(owner.dir, "history.md"))
-		top = strings.Split(owner.rel, "/")[0]
 	}
 	// planning only widens what a grid-planner may write (the planner fence below);
 	// it never blocks a write.
@@ -54,15 +53,7 @@ func evaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 	if owner == nil && inside(projects, target) && len(slot) > 2 && slot[1] != "tasks" && (oddName.MatchString(slot[1]) || strings.EqualFold(slot[1], "tasks")) {
 		return hookio.Deny("A folder beside a project's tasks folder keeps a plain name (printable ASCII, no colon, no dot or space at the end, not tasks in other letters): on macOS or Windows it can be the tasks folder under another spelling, so " + given + " is not written." + off)
 	}
-	if owner != nil && gateLike(top) {
-		return hookio.Deny(given + " is not written: a name at the top of a task folder is not plan accepted, preview approved or ship approved, as history.md would log it like a person's approval." + off)
-	}
 	if owner != nil && historyAlias.MatchString(owner.rel) {
-		for _, next := range after(in.ToolName, in.ToolInput, history) {
-			if addsMark(history, next, previewApproved) {
-				return hookio.Deny(given + " is not changed to add a preview approved line: a person approves the preview in Grid, and Grid writes the line." + off)
-			}
-		}
 		for _, next := range after(in.ToolName, in.ToolInput, history) {
 			if addsMark(history, next, planReady) && !plan.HasRecall(read(filepath.Join(owner.dir, "plan.md"))) {
 				return hookio.Deny(given + " is not changed to add a plan ready line: plan.md has no brain recall line. Add it under ## How we approach it: one `Used: <path>` line for each note of the recall you used, or `Recall: nothing found` when no note bears on the task (the recall hits are in your context, or run `grid-brain recall --task <id>`). Then run plan-hash.mjs again and add the plan ready line." + off)

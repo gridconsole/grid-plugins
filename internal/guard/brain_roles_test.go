@@ -20,6 +20,7 @@ func TestBrainWritePluginAgents(t *testing.T) {
 	} {
 		t.Run(agent.name, func(t *testing.T) {
 			f := setup(t)
+			planBlock(f) // plan-guard warns by default; the brain fence is covered at block
 			for _, dir := range []string{f.grid, filepath.Join(f.projects, "example")} {
 				in := f.input("Write", filepath.Join(dir, "knowledge", "note.md"))
 				in.AgentType = agent.name

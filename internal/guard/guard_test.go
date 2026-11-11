@@ -186,16 +186,6 @@ func TestPlanHeaderRules(t *testing.T) {
 			}
 			return f.input("Write", filepath.Join(f.projects, "example", p, "T-03", "notes.md"))
 		}},
-		{"preview always needs a person", func(f *fixture, deny bool) hookio.Input {
-			f.accept()
-			i := f.input("Write", filepath.Join(f.task, "history.md:stream"))
-			s := accepted
-			if deny {
-				s += "- time · preview approved · by person\n"
-			}
-			i.ToolInput["content"] = s
-			return i
-		}},
 		{"plan ready needs recall", func(f *fixture, deny bool) hookio.Input {
 			if !deny {
 				f.write(filepath.Join(f.task, "plan.md"), "## How we approach it\nRecall: nothing found\n")
@@ -203,13 +193,6 @@ func TestPlanHeaderRules(t *testing.T) {
 			i := f.input("Write", filepath.Join(f.task, "history.md"))
 			i.ToolInput["content"] = "- time · plan ready · by agent\n"
 			return i
-		}},
-		{"gate names forbidden", func(f *fixture, deny bool) hookio.Input {
-			p := "notes.md"
-			if deny {
-				p = "  SHIP   approved "
-			}
-			return f.input("Write", filepath.Join(f.task, p))
 		}},
 		{"reviewer remains inside projects", func(f *fixture, deny bool) hookio.Input {
 			f.accept()
@@ -242,6 +225,7 @@ func TestPlanHeaderRules(t *testing.T) {
 			}
 			t.Run(tt.name+"/"+suffix, func(t *testing.T) {
 				f := setup(t)
+				planBlock(f) // plan-guard warns by default; the deny rows cover it at block
 				i := tt.prepare(f, deny)
 				d := EvaluatePlan(i, f.root, f.env)
 				expect(t, d, want)
