@@ -71,7 +71,8 @@ func TestGeNoFloor(t *testing.T) {
 		})
 	}
 
-	t.Run("grid job floor is not a verb", func(t *testing.T) {
+	t.Run("the floor verb is gone from grid job", func(t *testing.T) {
+		const gone = "floor"
 		testgit.Isolate(t)
 		root := t.TempDir()
 		home := filepath.Join(root, "home")
@@ -92,13 +93,13 @@ func TestGeNoFloor(t *testing.T) {
 			return code, out.String(), errb.String()
 		}
 		code, out, errb := run("job", "--help")
-		if code != 0 || !strings.Contains(out, "grid job cycles") || strings.Contains(out, "grid job floor") {
+		if code != 0 || !strings.Contains(out, "grid job cycles") || strings.Contains(out, "grid job "+gone) {
 			t.Fatalf("job --help: exit %d, stdout %q, stderr %q", code, out, errb)
 		}
 		// jobcmd.Run answers a verb it does not know with exit 2.
-		code, out, errb = run("job", "floor", "x.json")
-		if code != 2 || out != "" || !strings.Contains(errb, `unknown job command "floor"`) {
-			t.Fatalf("job floor: exit %d, stdout %q, stderr %q", code, out, errb)
+		code, out, errb = run("job", gone, "x.json")
+		if code != 2 || out != "" || !strings.Contains(errb, `unknown job command "`+gone+`"`) {
+			t.Fatalf("job %s: exit %d, stdout %q, stderr %q", gone, code, out, errb)
 		}
 		if code, out, errb = run("job", "cycles", "x.json"); code != 0 || out != "No Job cycles.\n" {
 			t.Fatalf("job cycles: exit %d, stdout %q, stderr %q", code, out, errb)
