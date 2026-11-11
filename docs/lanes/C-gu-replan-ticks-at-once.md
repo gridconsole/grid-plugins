@@ -12,7 +12,7 @@ Repo plugin, branch lane-C-gu-replan-ticks-at-once, from main d1c76719. Test com
 | 4. `go test -race ./internal/orchestrator/ -run 'GuCt\|GkReplan' -count=1` passes | HOLDS | exit 0: `ok github.com/gridconsole/grid-plugins/internal/orchestrator 26.760s`; all 7 TestGkReplan* and the 3 TestGuCt* PASS. Also `-run GuCt -count=3 -race` exit 0 (52.5s) |
 | Start barrier, goroutines on a copy of the fixture Store, sync.WaitGroup, no sleep, no timeout | HOLDS | gu_replan_ticks_test.go:18-35 (`s := f.s` per goroutine; `waiting` WaitGroup closes `start` once all n goroutines reported; `done.Go`/`done.Wait`). No `time.` import, no clock read |
 | New tests fail on base and pass on the lane | NOT APPLICABLE, see notes | The file is new, so base has no GuCt test (`-run GuCt` on main runs none). The gk pass on main already posts once under two Ticks at once, so no row failed on main and no production cause needed a fix. No failing lines to paste |
-| Do not edit an existing test; no test deleted | HOLDS | `git diff --stat origin/main..HEAD` lists the new test file and this report only |
+| Do not edit an existing test; no test deleted | HOLDS | `git diff --stat origin/main..HEAD` exit 0: `docs/lanes/C-gu-replan-ticks-at-once.md \| 39 +++`, `internal/orchestrator/gu_replan_ticks_test.go \| 149 +++`, 2 files changed, 188 insertions(+), 0 deletions |
 | Only the new file named in Touches; prefix guCt | HOLDS | package-level names in the file: guCtTicks, guCtNoErrors, guCtJob, guCtAck, guCtExit, guCtDiscovered, TestGuCt*. It reuses setup, f.job, f.tick, gkRig, gkReplans from the existing tests unchanged |
 | No guard, gate, cap, hold or blocking hook added | HOLDS | tests only; no production file changed |
 | Tests of the packages changed and of every package that imports them | HOLDS | `go list` importers of internal/orchestrator: internal/cli, internal/migrate, internal/orchestrator. `go test -race ./internal/orchestrator/ ./internal/migrate/ ./internal/cli/ -count=1` exit 0: orchestrator 249.5s, migrate 23.9s, cli 189.2s |
@@ -37,3 +37,5 @@ Repo plugin, branch lane-C-gu-replan-ticks-at-once, from main d1c76719. Test com
 ## NOT VERIFIED on a live screen
 
 Nothing here is UI; there is nothing to look at on a screen.
+
+DONE
