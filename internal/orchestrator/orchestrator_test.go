@@ -22,6 +22,10 @@ import (
 const taskID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 const machine = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
 
+// ifLwDeadline bounds the wait for a lock-wait event; it proves nothing and its
+// failure names what was awaited.
+const ifLwDeadline = 30 * time.Second
+
 type fixture struct {
 	s      Store
 	now    time.Time
@@ -942,7 +946,8 @@ func TestWorkerWriteWaitsForTaskLeaseBeforePassLock(t *testing.T) {
 	f.job(t, "J-1", nil)
 	f.tick(t)
 	f.ack(t)
-	task, err := fslock.OpenNoFollow(filepath.Join(f.s.Feed.Dir(), "lease", "task.json"), os.O_RDWR, 0)
+	taskPath := filepath.Join(f.s.Feed.Dir(), "lease", "task.json")
+	task, err := fslock.OpenNoFollow(taskPath, os.O_RDWR, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -956,6 +961,18 @@ func TestWorkerWriteWaitsForTaskLeaseBeforePassLock(t *testing.T) {
 			fslock.Unlock(task)
 		}
 	}()
+	// The hook says a lock call on task.json is about to wait; it only compares
+	// the path and sends without blocking.
+	queued := make(chan struct{}, 1)
+	t.Cleanup(fslock.OnBlockForTest(func(path string) {
+		if path != taskPath {
+			return
+		}
+		select {
+		case queued <- struct{}{}:
+		default:
+		}
+	}))
 	done := make(chan error, 1)
 	go func() {
 		_, err := Write(f.s.Feed, f.worker, feed.Input{Type: "result", Job: "J-1", Attempt: 1, Body: resultBody()})
@@ -964,7 +981,9 @@ func TestWorkerWriteWaitsForTaskLeaseBeforePassLock(t *testing.T) {
 	select {
 	case err := <-done:
 		t.Fatalf("worker wrote while task lease was exclusively held: %v", err)
-	case <-time.After(100 * time.Millisecond):
+	case <-queued:
+	case <-time.After(ifLwDeadline):
+		t.Fatal("timed out waiting for the writer to queue on task.json")
 	}
 	// The queued writer must leave the pass lock free while waiting for task.json.
 	pass, err := fslock.OpenNoFollow(filepath.Join(f.s.Feed.Dir(), ".orchestrator.lock"), os.O_RDWR, 0)
