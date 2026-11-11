@@ -171,7 +171,18 @@ func approveRevision(t *testing.T, f *fixture, text string) {
 			approved++
 		}
 	}
-	id := "J-" + strconv.Itoa(90+approved)
+	// A Job id the Feed holds is refused (job_exists): a tick may have posted a
+	// re-plan Job under the id this count gives, so the id steps past held ones.
+	held := map[string]bool{}
+	for _, r := range all.Records {
+		id, _ := r.Body["id"].(string)
+		held[id] = true
+	}
+	n := 90 + approved
+	for held["J-"+strconv.Itoa(n)] {
+		n++
+	}
+	id := "J-" + strconv.Itoa(n)
 	f.post(t, feed.Input{Type: "job", Job: id, Body: approvefix.JobBody(id)}, f.s.Writer)
 	f.post(t, feed.Input{Type: "control", Body: map[string]any{"target": id, "status": "accepted", "reason": "answered by dana", "answer": "approved", "plan_hash": plan.Hash(text), "plan_digest": plan.Digest(text)}}, f.s.Writer)
 }
