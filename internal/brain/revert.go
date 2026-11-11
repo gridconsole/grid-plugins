@@ -22,6 +22,10 @@ var (
 	RevertAllowed      = func(role string) bool { return ownerOrMember(role) }
 )
 
+// ErrIndexRebuild is wrapped in the error of a revert or supersede that wrote
+// its change but could not rebuild index.md afterwards; the result is valid.
+var ErrIndexRebuild = errors.New("rebuilding the index failed")
+
 func ownerOrMember(role string) bool {
 	switch strings.TrimSpace(role) {
 	case "", "owner", "member":
@@ -177,7 +181,7 @@ func (s Store) RevertWith(level, topic, name string, to int, origin Origin, opts
 		idx := s
 		idx.ReadLevel = level
 		if _, err := idx.RebuildIndex(); err != nil {
-			return res, fmt.Errorf("reverted to v%d as v%d, but rebuilding the index failed: %w", to, res.Version, err)
+			return res, fmt.Errorf("reverted to v%d as v%d, but %w: %w", to, res.Version, ErrIndexRebuild, err)
 		}
 	}
 	return res, nil

@@ -56,8 +56,11 @@ func TestGuestProjectSettingsWrites(t *testing.T) {
 					return
 				}
 				wantCode, wantReason := 1, "guests cannot"
-				if code != wantCode || h.out.Len() != 0 || !strings.Contains(h.errb.String(), wantReason) {
+				if code != wantCode || tc.name != "claude_setup" && h.out.Len() != 0 || !strings.Contains(h.errb.String(), wantReason) {
 					t.Errorf("exit=%d, refusal=%q; want exit %d, empty stdout and %q", code, h.errb.String(), wantCode, wantReason)
+				}
+				if tc.name == "claude_setup" {
+					assertErrorOutput(t, h.out.String(), h.errb.String(), CodeGuestRefused)
 				}
 				if changed {
 					t.Error("GRID_HOME tree changed after guest write")
@@ -81,8 +84,11 @@ func TestGuestClaudeSetupRemove(t *testing.T) {
 				if mode == "json" {
 					args = append(args, "--json")
 				}
-				if code := h.run(cwd, args...); code != 1 || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "guests cannot change project settings") {
-					t.Errorf("exit=%d, refusal=%q; want exit 1, empty stdout and guest refusal", code, h.errb.String())
+				if code := h.run(cwd, args...); code != 1 || mode == "plain" && h.out.Len() != 0 || !strings.Contains(h.errb.String(), "guests cannot change project settings") {
+					t.Errorf("exit=%d, refusal=%q; want exit 1, empty plain stdout and guest refusal", code, h.errb.String())
+				}
+				if mode == "json" {
+					assertErrorOutput(t, h.out.String(), h.errb.String(), CodeGuestRefused)
 				}
 				if !reflect.DeepEqual(before, bypassTree(t, h.gridHome)) || !reflect.DeepEqual(homeBefore, bypassTree(t, h.home)) {
 					t.Error("HOME or GRID_HOME tree changed after guest removal")

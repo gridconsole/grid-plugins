@@ -29,11 +29,20 @@ const (
 	// CodeWorkflowFileChanged means a workflow file changed since the caller read
 	// its revision; nothing was written.
 	CodeWorkflowFileChanged = "workflow_file_changed"
+	// CodeNoteState means a signal note's status does not allow the act or move.
+	CodeNoteState = "note_state"
+	// CodeNoteExists means the note is already in the target project.
+	CodeNoteExists = "note_exists"
+	// CodeNotesFull means the target notes folder already holds 4000 files.
+	CodeNotesFull = "notes_full"
+	// CodeGuestRefused means the caller is refused as a guest; nothing was written.
+	CodeGuestRefused = "guest_refused"
 )
 
 func errorCode(err error) string {
 	var bad *signal.BadInputError
 	var coded *settings.CodedError
+	var refused *signal.RefusedError
 	switch {
 	case errors.As(err, &coded):
 		return coded.Code
@@ -47,6 +56,10 @@ func errorCode(err error) string {
 		return CodeInvalidArgument
 	case errors.Is(err, workflow.ErrChanged):
 		return CodeWorkflowFileChanged
+	case errors.Is(err, ilGuestRefused):
+		return CodeGuestRefused
+	case errors.As(err, &refused) && refused.Code != "":
+		return refused.Code
 	default:
 		return ""
 	}

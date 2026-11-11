@@ -64,7 +64,7 @@ func runSignal(args []string, env Env) int {
 		if verb == "add" {
 			return failure(env, errors.New(guestSettingsRefusal))
 		}
-		return signalFailure(env, &signal.RefusedError{Message: "guests cannot act on signals"}, *asJSON)
+		return signalFailure(env, &signal.RefusedError{Message: "guests cannot act on signals", Code: CodeGuestRefused}, *asJSON)
 	}
 	if verb == "move" {
 		inbox := to == "-"
@@ -136,7 +136,7 @@ func runSignal(args []string, env Env) int {
 	res, err := ps.Resolver.Resolve(where.Query{Cwd: env.Cwd, Project: *proj})
 	if err != nil {
 		if verb == "move" && (errors.Is(err, where.ErrProjectUnregistered) || errors.Is(err, where.ErrPersonalRefused)) {
-			return signalFailure(env, &signal.RefusedError{Message: "no such project", Cause: where.ErrProjectUnregistered}, *asJSON)
+			return signalFailure(env, &signal.RefusedError{Message: "no such project", Code: CodeNoSuchProject, Cause: where.ErrProjectUnregistered}, *asJSON)
 		}
 		return failure(env, err)
 	}
@@ -154,7 +154,7 @@ func runSignal(args []string, env Env) int {
 
 	if !res.Record {
 		if verb == "move" {
-			return signalFailure(env, &signal.RefusedError{Message: "no such project", Cause: where.ErrProjectUnregistered}, *asJSON)
+			return signalFailure(env, &signal.RefusedError{Message: "no such project", Code: CodeNoSuchProject, Cause: where.ErrProjectUnregistered}, *asJSON)
 		}
 		if res.Rule != where.RulePersonal {
 			return failure(env, fmt.Errorf("project is not registered; run grid project add"))

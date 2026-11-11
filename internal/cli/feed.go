@@ -15,6 +15,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -162,6 +163,8 @@ func runFeed(args []string, env Env) int {
 	var record feed.Record
 	if verb == "handover" {
 		record, err = store.Handover(in, writer)
+	} else if kind == "job" {
+		record, err = orchestrator.PostJobLocked(store, in, writer)
 	} else {
 		record, err = store.Post(in, writer)
 	}

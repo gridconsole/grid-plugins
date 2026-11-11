@@ -63,7 +63,7 @@ func runRoutine(args []string, env Env) int {
 		return 2
 	}
 	if verb != "list" && resolver(env).Caller.IsGuest() {
-		return failure(env, errors.New(guestSettingsRefusal))
+		return failure(env, ilGuestRefused)
 	}
 	if homeOverride != "" {
 		if !filepath.IsAbs(homeOverride) {

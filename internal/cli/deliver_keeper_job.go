@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -134,7 +135,10 @@ func postCuratorJob(env Env, dir, taskID string, ids []string) (string, error) {
 		skipped := false
 		_, err = orchestrator.WriteUnless(store, w, feed.Input{Type: "job", Job: id, Body: body}, func() bool {
 			s, err := orchestrator.Load(store)
-			if err == nil && (openCuratorJob(s) != "" || s.State.Jobs[id] != nil) {
+			// A held record (its after target is on no record) is outside State but
+			// has taken the id: the fold gives it to the first record once released,
+			// so the id is chosen again, as nextJobID counts it.
+			if err == nil && (openCuratorJob(s) != "" || s.State.Jobs[id] != nil || slices.Contains(s.JobIDs, id)) {
 				skipped = true
 			}
 			return skipped

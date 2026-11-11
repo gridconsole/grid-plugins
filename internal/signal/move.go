@@ -37,7 +37,7 @@ func ValidateMove(id, from, to string) error {
 // fallback. The CLI resolves its inbox marker through workspace policy.
 func (s Store) Move(id, from, to string) (Result, error) {
 	if s.Resolver.Caller.IsGuest() {
-		return Result{}, &RefusedError{Message: "guests cannot act on signals"}
+		return Result{}, &RefusedError{Message: "guests cannot act on signals", Code: CodeGuestRefused}
 	}
 	if err := ValidateMove(id, from, to); err != nil {
 		return Result{}, err
@@ -66,19 +66,19 @@ func (s Store) Move(id, from, to string) (Result, error) {
 	}
 	n, err := read(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return Result{}, &RefusedError{Message: "no such note", Cause: ErrNoNote}
+		return Result{}, &RefusedError{Message: "no such note", Code: CodeNoSuchNote, Cause: ErrNoNote}
 	}
 	if err != nil {
 		return Result{}, err
 	}
 	if !openStatus(n.Status) {
-		return Result{}, &RefusedError{Message: fmt.Sprintf("this note is already decided (%s)", n.Status)}
+		return Result{}, &RefusedError{Message: fmt.Sprintf("this note is already decided (%s)", n.Status), Code: CodeNoteState}
 	}
 	if from == to {
-		return Result{}, &RefusedError{Message: "the note is already there"}
+		return Result{}, &RefusedError{Message: "the note is already there", Code: CodeNoteExists}
 	}
 	if _, err := os.Lstat(destination); err == nil {
-		return Result{}, &RefusedError{Message: "a note with this id is already there"}
+		return Result{}, &RefusedError{Message: "a note with this id is already there", Code: CodeNoteExists}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return Result{}, err
 	}
@@ -87,7 +87,7 @@ func (s Store) Move(id, from, to string) (Result, error) {
 		return Result{}, err
 	}
 	if len(files) >= 4000 {
-		return Result{}, &RefusedError{Message: "notes already holds 4000 files"}
+		return Result{}, &RefusedError{Message: "notes already holds 4000 files", Code: CodeNotesFull}
 	}
 	original, err := os.ReadFile(path)
 	if err != nil {
@@ -143,7 +143,7 @@ func (s Store) moveNotes() (string, error) {
 
 func moveNotesError(err error) error {
 	if errors.Is(err, where.ErrProjectUnregistered) || errors.Is(err, where.ErrPersonalRefused) {
-		return &RefusedError{Message: "no such project", Cause: where.ErrProjectUnregistered}
+		return &RefusedError{Message: "no such project", Code: CodeNoSuchProject, Cause: where.ErrProjectUnregistered}
 	}
 	return err
 }

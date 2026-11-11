@@ -22,10 +22,26 @@ type BadInputError struct{ Message string }
 func (e *BadInputError) Error() string { return e.Message }
 
 // RefusedError identifies a valid request refused by caller or note state.
+// Code is its stable code (one of the Code* constants); callers read it
+// instead of the message wording.
 type RefusedError struct {
 	Message string
+	Code    string
 	Cause   error
 }
+
+// Stable codes of a RefusedError. Package cli imports this package, so it
+// declares the same strings in internal/cli/error_codes.go and the contract
+// README lists them in its code table.
+const (
+	CodeGuestRefused  = "guest_refused"
+	CodeNoteState     = "note_state"
+	CodeNoteExists    = "note_exists"
+	CodeNotesFull     = "notes_full"
+	CodeNoSuchNote    = "no_such_note"
+	CodeNoSuchTask    = "no_such_task"
+	CodeNoSuchProject = "no_such_project"
+)
 
 func (e *RefusedError) Error() string { return e.Message }
 func (e *RefusedError) Unwrap() error { return e.Cause }
@@ -95,7 +111,7 @@ func (s Store) Dismiss(id string) (Result, error) { return s.Apply(id, ActOption
 // workflow configuration is read here. The turn body policy is link.
 func (s Store) Apply(id string, o ActOptions) (Result, error) {
 	if s.Resolver.Caller.IsGuest() {
-		return Result{}, &RefusedError{Message: "guests cannot act on signals"}
+		return Result{}, &RefusedError{Message: "guests cannot act on signals", Code: CodeGuestRefused}
 	}
 	o, err := o.normalized(id)
 	if err != nil {
@@ -116,7 +132,7 @@ func (s Store) Apply(id string, o ActOptions) (Result, error) {
 	}
 	n, err := read(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return Result{}, &RefusedError{Message: "no such note", Cause: ErrNoNote}
+		return Result{}, &RefusedError{Message: "no such note", Code: CodeNoSuchNote, Cause: ErrNoNote}
 	}
 	if err != nil {
 		return Result{}, err
@@ -124,17 +140,17 @@ func (s Store) Apply(id string, o ActOptions) (Result, error) {
 	open := openStatus(n.Status)
 	switch {
 	case o.Act == "wake" && n.Status != "snoozed":
-		return Result{}, &RefusedError{Message: "this note is not snoozed"}
+		return Result{}, &RefusedError{Message: "this note is not snoozed", Code: CodeNoteState}
 	case o.Act == "reopen" && open:
-		return Result{}, &RefusedError{Message: "this note is not decided"}
+		return Result{}, &RefusedError{Message: "this note is not decided", Code: CodeNoteState}
 	case o.Act == "note" && n.Status == "kept", o.Act == "dismiss" && n.Status == "dismissed":
 		return result(s, n, "unchanged"), nil
 	case o.Act != "wake" && o.Act != "reopen" && !open:
-		return Result{}, &RefusedError{Message: fmt.Sprintf("this note is already decided (%s)", n.Status)}
+		return Result{}, &RefusedError{Message: fmt.Sprintf("this note is already decided (%s)", n.Status), Code: CodeNoteState}
 	}
 	// An add links to a task that must exist; refuse before anything is written.
 	if o.Act == "add" && !s.taskExists(o.Task) {
-		return Result{}, &RefusedError{Message: "no task " + o.Task, Cause: where.ErrTaskNotFound}
+		return Result{}, &RefusedError{Message: "no task " + o.Task, Code: CodeNoSuchTask, Cause: where.ErrTaskNotFound}
 	}
 	if _, err := localdata.Machine(s.GridHome); err != nil {
 		return Result{}, err

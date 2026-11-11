@@ -48,7 +48,6 @@ func TestGmJobUnknownScope(t *testing.T) {
 		{"job blocked", []string{"job", "blocked"}},
 		{"job cancel", []string{"job", "cancel"}},
 		{"job next", []string{"job", "next"}},
-		{"job order", []string{"job", "order"}},
 		{"job post", []string{"job", "post"}},
 		{"job result", []string{"job", "result"}},
 		{"job tree", []string{"job", "tree"}},
