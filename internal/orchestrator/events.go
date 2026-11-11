@@ -94,8 +94,15 @@ func (s Store) park(snap Snapshot, j *contract.Job, m *jobMemory) error {
 		}
 	}
 	// A retry after a crash between the question and park reuses the question.
+	// The crash may also have come before the question file was written, so a
+	// task with an identity projects the Feed to files first, as ReserveGate does.
 	for _, r := range snap.Records {
 		if r.Type == "question" && r.Wake != nil && *r.Wake == m.Failure+"/1" && r.Job != nil && *r.Job == j.ID {
+			if s.Feed.TaskID != "" {
+				if _, err := (question.Store{TaskDir: s.Feed.TaskDir, TaskID: s.Feed.TaskID}).Sync(); err != nil {
+					return err
+				}
+			}
 			return s.control(j, contract.Parked, "needs_person", m.Failure)
 		}
 	}

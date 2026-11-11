@@ -84,7 +84,7 @@ func runUpdate(args []string, env Env) int {
 		if _, err := r.Resolve(where.Query{Cwd: env.Cwd, Project: fs.Arg(0)}); err != nil {
 			return commandError(env, "update "+verb, err)
 		}
-		return failure(env, errors.New(guestSettingsRefusal))
+		return failure(env, ilGuestRefused)
 	}
 	res, err := updates.Do(r, updates.Act{Act: verb, Project: fs.Arg(0), Cwd: env.Cwd, Title: title, Lines: lines})
 	if err != nil {

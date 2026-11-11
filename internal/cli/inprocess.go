@@ -71,7 +71,6 @@ var hsIpTable = map[string]hsIpVerb{
 		// jobcmd/verify.go:31 runs the verify commands as children.
 		"verify": {why: "runs the verify commands as host children (job/jobcmd/verify.go:31)"},
 		"cycles": {},
-		"order":  {},
 		"trace":  {},
 	}},
 	"lease": {subs: map[string]hsIpSub{
@@ -90,7 +89,6 @@ var hsIpTable = map[string]hsIpVerb{
 		"state":    {},
 		"types":    {},
 		"handover": {},
-		"fold":     {},
 	}},
 	// cli.go:113: a stdio MCP server on the host's own streams.
 	"mcp":      {why: "serves MCP on stdio (cli.go:113)"},

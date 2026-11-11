@@ -226,7 +226,7 @@ func TestHaQsPerson(t *testing.T) {
 		wantS string // the failed stdout a person verb must carry
 	}{
 		{"check owner", haQsEnviron(h), []string{"person", "check", "--json"}, 0, `"ok":true`},
-		{"list owner", haQsEnviron(h), []string{"person", "list", "--json"}, 0, `"people"`},
+		{"list removed", haQsEnviron(h), []string{"person", "list", "--json"}, 2, `"code":"invalid_argument"`},
 		{"approvers owner", haQsEnviron(h), []string{"person", "approvers", "--area", "code"}, 2, ""},
 		{"approvers owner with task", haQsEnviron(h), []string{"person", "approvers", "--area", "code", "--task", h.task, "--json"}, -1, ""},
 		// A guest and a caller with no member are still people: exit 0.

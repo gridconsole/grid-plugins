@@ -4,9 +4,11 @@ package question
 import (
 	"errors"
 	"fmt"
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"io"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -148,6 +150,10 @@ func (s Store) add(in Input, asJob bool) (rec Record, err error) {
 	if err = s.requireWritePolicy(); err != nil {
 		return
 	}
+	// An ask that posts a person Job reserves its id under the lock with the
+	// marker ReserveGate writes, posts the Job with the lock let go (postJob says
+	// why), and takes the lock again to publish the question that names the Job.
+	withJob := asJob && s.postsJob()
 	err = s.locked(true, func(dir string) error {
 		if _, e := s.project(dir, true); e != nil {
 			return e
@@ -161,21 +167,26 @@ func (s Store) add(in Input, asJob bool) (rec Record, err error) {
 			age = DefaultAgeAfter
 		}
 		rec = Record{Job: in.Job, Item: in.Item, ID: fmt.Sprintf("Q-%d", next), Question: in.Question, Who: in.Who, Why: in.Why, Blocking: in.Blocking, Options: append([]string{}, in.Options...), Recommended: in.Recommended, Gate: Gate{ID: fmt.Sprintf("Q-%d", next), Kind: "person", Default: in.Default, At: Stamp{in.Applies.UTC().Truncate(time.Millisecond)}}, Asked: Stamp{s.now()}, State: "open", AgeAfterSeconds: int64(age / time.Second), History: []Event{}}
-		if asJob {
-			f, e := s.feed()
-			if e != nil {
-				return e
-			}
-			job, e := s.postJob(f, rec.ID, in)
-			if e != nil {
-				return e
-			}
-			if job != "" {
-				rec.Job = job
-			}
+		if withJob {
+			return atomicfile.Write(filepath.Join(dir, rec.ID+".feed"), nil, 0600)
 		}
 		return s.publishQuestion(dir, &rec)
 	})
+	if err != nil || !withJob {
+		return
+	}
+	f, err := s.feed()
+	if err != nil {
+		return
+	}
+	job, err := s.postJob(f, rec.ID, in)
+	if err != nil {
+		return
+	}
+	if job != "" {
+		rec.Job = job
+	}
+	err = s.locked(true, func(dir string) error { return s.publishQuestion(dir, &rec) })
 	return
 }
 
@@ -299,13 +310,9 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 		}
 		rec = r
 		if len(r.History) == before {
-			// A repeated answer or withdrawal posts nothing new, but it still gives
-			// the Job its result when an earlier run stopped between the two posts.
-			if f, e := s.feed(); e != nil {
-				return e
-			} else if r.State == "answered" || r.State == "withdrawn" {
-				return s.settleJob(f, r)
-			}
+			// A repeated answer or withdrawal posts nothing new, but settleJobs below
+			// still gives the Job its result when an earlier run stopped between the
+			// decision and the Job.
 			return nil
 		}
 		if e = s.publishEvents(dir, &r, before); e != nil {
@@ -314,6 +321,11 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 		rec = r
 		return nil
 	})
+	if err != nil {
+		return
+	}
+	// The Job follows the decision with questions/.lock let go (postJob says why).
+	err = s.settleJobs(rec)
 	return
 }
 
@@ -359,6 +371,11 @@ func (s Store) Tick() (changed []Record, err error) {
 		}
 		return nil
 	})
+	// Each record decided here gets its Job's result once questions/.lock is let
+	// go (postJob says why), also when a later record failed.
+	if e := s.settleJobs(changed...); e != nil {
+		err = errors.Join(err, e)
+	}
 	return
 }
 
