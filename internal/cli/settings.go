@@ -174,14 +174,19 @@ func runSetup(args []string, env Env) int {
 	if settings.ClaudeSetupCommand(args) {
 		fs := newFlags("setup", env)
 		fs.Usage = func() {
-			fmt.Fprintln(env.Stdout, "Usage: grid setup [--remove] [--yes] [--json]\n       grid setup <project> [--answers <file|->] [--json]")
+			fmt.Fprintln(env.Stdout, "Usage: grid setup [--sandbox] [--remove] [--yes] [--json]\n       grid setup <project> [--answers <file|->] [--json]")
 		}
 		yes := fs.Bool("yes", false, "write without prompting")
 		remove := fs.Bool("remove", false, "remove the Claude Code entries added by setup")
+		sandbox := fs.Bool("sandbox", false, "switch on Claude Code's own sandbox for this user")
 		asJSON := fs.Bool("json", false, "print JSON")
 		_, code, stop := parseMixed(fs, args)
 		if stop {
 			return code
+		}
+		if *sandbox && *remove {
+			fmt.Fprintln(env.Stderr, "Usage: grid setup [--sandbox] [--remove] [--yes] [--json]; --remove already takes out the sandbox entry setup wrote")
+			return 2
 		}
 		projects := env.getenv("GRID_PROJECTS")
 		if projects != "" && !filepath.IsAbs(projects) {
@@ -189,7 +194,7 @@ func runSetup(args []string, env Env) int {
 		}
 		return settings.RunClaudeSetup(settings.ClaudeSetupOptions{
 			Home: env.Home, GridHome: env.GridHome, ConfigDir: env.getenv("CLAUDE_CONFIG_DIR"),
-			Projects: projects, Yes: *yes, Remove: *remove, JSON: *asJSON,
+			Projects: projects, Yes: *yes, Remove: *remove, Sandbox: *sandbox, JSON: *asJSON,
 			Stdin: env.Stdin, Stdout: env.Stdout, Stderr: env.Stderr,
 		})
 	}

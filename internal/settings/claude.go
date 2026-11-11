@@ -56,6 +56,9 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 	} {
 		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + path + ")"})
 	}
+	for _, path := range claudeHostPaths(anchor, projectAnchor) {
+		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + path + ")"})
+	}
 	return append(rules,
 		ClaudeRule{"permissions", "deny", "Edit(~/.grid-person/**)"},
 		ClaudeRule{"permissions", "deny", "Write(~/.grid-person/**)"},
@@ -63,6 +66,55 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 		ClaudeRule{"permissions", "deny", "Write(" + anchor + "/setup/**)"},
 		ClaudeRule{"autoMode", "environment", "$defaults"},
 		ClaudeRule{"autoMode", "environment", "The Grid home at " + anchor + " is trusted for Grid operations."}), nil
+}
+
+// claudeHostPaths lists the files EvaluateHost (internal/guard/host.go) refuses
+// to the file tools, as Claude Code deny patterns, so that they stay protected
+// when that guard is set to warn. Edit rules cover Write, MultiEdit and
+// NotebookEdit too. The task gate files (approval*.json, questions/, task.md,
+// workflow.md) and the task Feed sit under the task-folder deny rules in
+// claudeBlock and are not repeated. What is left: the settings, lock and
+// workflows files of the Grid home and of a project, and the host folder.
+// Claude Code enforces these; Grid adds no hook and refuses nothing itself.
+//
+// Not covered, as the guard also refuses them: the legacy .host two levels above
+// the projects folder (~/.host in the default layout, outside the Grid home);
+// settings.json, .settings.lock and workflows.md directly in, or one folder
+// below, the parent of a projects folder that sits outside the Grid home; and
+// the same three at <projects>/projects/<name>/.
+func claudeHostPaths(anchor, projectAnchor string) []string {
+	var paths []string
+	add := func(p string) {
+		if !slices.Contains(paths, p) {
+			paths = append(paths, p)
+		}
+	}
+	// The parent of the projects folder, empty when it is only a root.
+	parent := ""
+	if i := strings.LastIndex(projectAnchor, "/"); i > 0 && projectAnchor[:i] != "/" && projectAnchor[:i] != "//" {
+		parent = projectAnchor[:i]
+	}
+	// A projects folder directly in the Grid home is already <home>/*/.
+	inHome := parent == anchor
+	for _, name := range []string{"settings.json", ".settings.lock", "workflows.md"} {
+		name = claudeFold(name)
+		// <home>/<name>, <home>/<dir>/<name>, <home>/projects/<project>/<name>,
+		// then <projects>/<name> and <projects>/<project>/<name>.
+		add(anchor + "/" + name)
+		add(anchor + "/*/" + name)
+		add(anchor + "/" + claudeFold("projects") + "/*/" + name)
+		if !inHome {
+			add(projectAnchor + "/" + name)
+		}
+		add(projectAnchor + "/*/" + name)
+	}
+	add(anchor + "/" + claudeFold(".host") + "/**")
+	// The host folder also sits beside the projects folder (the same folder in
+	// the default layout).
+	if parent != "" {
+		add(parent + "/" + claudeFold(".host") + "/**")
+	}
+	return paths
 }
 
 // claudeAllowRules shares the allow entries and validated anchor with setup.
@@ -156,6 +208,7 @@ type ClaudeSetupOptions struct {
 	Home, GridHome, ConfigDir string
 	Projects                  string // absolute GRID_PROJECTS; empty selects <GridHome>/projects
 	Yes, Remove, JSON         bool
+	Sandbox                   bool // also switch on Claude Code's own sandbox (sandbox.enabled); a plain setup never writes or reads it
 	Stdin                     io.Reader
 	Stdout, Stderr            io.Writer
 	terminal                  func(io.Reader) bool
@@ -233,7 +286,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 			if o.Remove {
 				continue // Removal reports every non-block entry below.
 			}
-			if !(r.Section == "permissions" && (r.Key == "allow" || r.Key == "deny") || r.Section == "autoMode" && r.Key == "environment") || r.Value == "" {
+			if !(r.Section == "permissions" && (r.Key == "allow" || r.Key == "deny") || r.Section == "autoMode" && r.Key == "environment" || r == claudeSandboxRule) || r.Value == "" {
 				return 1, errors.New("Setup record contains an invalid rule. Nothing written.")
 			}
 		}
@@ -266,6 +319,12 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	if err != nil {
 		return 1, err
 	}
+	// The sandbox entry is only written on request. Removal lists it so that an
+	// entry recorded by an earlier --sandbox run can be taken out; it is read
+	// then only when the record names it.
+	if o.Sandbox || o.Remove {
+		block = append(block, claudeSandboxRule)
+	}
 	rules := block
 	if o.Remove {
 		// The writable record is evidence of installation, never authority to
@@ -282,6 +341,26 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	}
 	changes := []ClaudeRule{}
 	for _, rule := range rules {
+		if rule == claudeSandboxRule {
+			// A boolean, not an array entry: on means already true.
+			on, err := claudeSandboxOn(doc)
+			if err != nil {
+				return 2, claudeInvalid{path}
+			}
+			label := claudeLabel(rule)
+			switch {
+			case o.Remove && on:
+				changes = append(changes, rule)
+				result.Added = append(result.Added, label)
+			case o.Remove:
+			case on:
+				result.Present = append(result.Present, label)
+			default:
+				changes = append(changes, rule)
+				result.Added = append(result.Added, label)
+			}
+			continue
+		}
 		values, exists, err := claudeValues(doc, rule)
 		if err != nil {
 			return 2, claudeInvalid{path}
@@ -658,7 +737,67 @@ func claudeValues(doc claudeObject, r ClaudeRule) ([]string, bool, error) {
 	}
 	return values, true, nil
 }
+
+// claudeSandboxRule switches on Claude Code's own sandbox: "sandbox": {"enabled": true}.
+// It is the only sandbox key setup writes (never allowUnsandboxedCommands or
+// failIfUnavailable). It is a boolean, so it takes its own paths, not the array ones.
+var claudeSandboxRule = ClaudeRule{"sandbox", "enabled", "true"}
+
+// claudeLabel is how a rule is shown in previews and in the JSON result.
+func claudeLabel(r ClaudeRule) string {
+	if r == claudeSandboxRule {
+		return "sandbox.enabled: true"
+	}
+	return r.Value
+}
+
+// claudeSandboxOn reports whether sandbox.enabled is true. An absent key is off;
+// a sandbox that is not an object or an enabled that is not a boolean is invalid.
+func claudeSandboxOn(doc claudeObject) (bool, error) {
+	raw := doc.get("sandbox")
+	if raw == nil {
+		return false, nil
+	}
+	obj, err := parseClaudeObject(raw)
+	if err != nil {
+		return false, err
+	}
+	switch value := string(bytes.TrimSpace(obj.get("enabled"))); value {
+	case "":
+		return false, nil
+	case "true", "false":
+		return value == "true", nil
+	}
+	return false, errors.New("expected boolean")
+}
+
+func changeClaudeSandbox(doc *claudeObject, remove bool) error {
+	raw := doc.get("sandbox")
+	if raw == nil {
+		if remove {
+			return nil
+		}
+		raw = []byte("{}")
+	}
+	obj, err := parseClaudeObject(raw)
+	if err != nil {
+		return err
+	}
+	if !remove {
+		obj.set("enabled", []byte("true"))
+	} else if obj = slices.DeleteFunc(obj, func(f claudeField) bool { return f.key == "enabled" }); len(obj) == 0 {
+		// Setup made the object; leave no empty one behind.
+		*doc = slices.DeleteFunc(*doc, func(f claudeField) bool { return f.key == "sandbox" })
+		return nil
+	}
+	doc.set("sandbox", obj.bytes())
+	return nil
+}
+
 func changeClaudeRule(doc *claudeObject, r ClaudeRule, remove bool) error {
+	if r == claudeSandboxRule {
+		return changeClaudeSandbox(doc, remove)
+	}
 	raw := doc.get(r.Section)
 	if raw == nil {
 		raw = []byte("{}")

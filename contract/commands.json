@@ -4614,6 +4614,11 @@
               "required": false
             },
             {
+              "name": "--sandbox",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--yes",
               "takes": "none",
               "required": false
