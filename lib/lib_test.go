@@ -75,16 +75,24 @@ func (h home) post(text string, environ []string, flags ...string) (int, string,
 	return h.run(h.task, environ, args...)
 }
 
-// buildBinary builds the grid binary from this module into a folder of the test.
+// buildBinary builds the grid binary from this module once per package run into the folder of TestMain.
 func buildBinary(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "grid")
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/grid")
-	cmd.Dir = ".."
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("go build ./cmd/grid: %v\n%s", err, out)
+	jmGridOnce.Do(func() {
+		jmGridBuilds.Add(1)
+		bin := filepath.Join(jmGridDir, "grid")
+		cmd := exec.Command("go", "build", "-o", bin, "./cmd/grid")
+		cmd.Dir = ".."
+		if out, err := cmd.CombinedOutput(); err != nil {
+			jmGridErr = fmt.Errorf("%v\n%s", err, out)
+			return
+		}
+		jmGridBinary = bin
+	})
+	if jmGridErr != nil {
+		t.Fatalf("go build ./cmd/grid: %v", jmGridErr)
 	}
-	return bin
+	return jmGridBinary
 }
 
 // binary runs the built grid with exactly the given environment and returns what a person would see.
