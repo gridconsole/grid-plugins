@@ -22,6 +22,8 @@ var iaBrVerbs = []struct {
 	{"changes", []string{"changes"}, "grid brain changes: caller role is not allowed to read brain changes"},
 	{"revert", []string{"revert", "decisions/checks", "--to", "1"}, "grid brain revert: caller role is not allowed to revert brain entries"},
 	{"supersede", []string{"supersede", "parity", "--by", "parity-v2", "--reason", "parity reason here"}, "grid brain supersede: caller role is not allowed to supersede brain entries"},
+	{"drop", []string{"drop", "decisions/checks", "--expect", "0123456789abcdef"}, "grid brain drop: caller role is not allowed to drop brain entries"},
+	{"restore", []string{"restore", "decisions/checks", "--expect", "0123456789abcdef"}, "grid brain restore: caller role is not allowed to restore brain entries"},
 }
 
 // iaBrObject requires stdout to be one line holding exactly the person_required
