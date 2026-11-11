@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: clean-csv
+description: Remove duplicate rows from a csv, keep the header, sort the rows, and write a summary.
+context:
+  scaffold_script: fixture.sh
