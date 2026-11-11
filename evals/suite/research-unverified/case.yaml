@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: research-unverified
+description: A claim with no source in the code is marked UNVERIFIED in research.md and is never repeated as a fact.
+context:
+  scaffold_script: fixture.sh
