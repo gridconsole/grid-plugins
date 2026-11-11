@@ -53,6 +53,14 @@ type Env struct {
 	GridHome string // Grid's own folder; "" when it is not known
 	Getenv   func(string) string
 	Now      func() time.Time
+	GOOS     string // the OS whose path rules apply; "" means the host's own
+}
+
+func (e Env) goos() string {
+	if e.GOOS != "" {
+		return e.GOOS
+	}
+	return runtime.GOOS
 }
 
 func (e Env) getenv(key string) string {
