@@ -1,6 +1,6 @@
 ---
 name: signals
-description: Read new messages from a connected mail, chat or calendar source and save each one that needs the person's attention as a Grid signal. Use when a routine says "check the inbox", "collect signals" or names a source to read, or when the person asks to act on or dismiss a signal. Never for starting work.
+description: Read new messages from a connected mail, chat or calendar source and save each one that needs the person's attention as a Grid signal, never for starting work. Use when a routine says "check the inbox", "collect signals" or names a source to read, or when the person asks to act on or dismiss a signal.
 ---
 
 # Signals

@@ -48,7 +48,14 @@ func reopenPlanJob(env Env, dir string) (func() error, error) {
 	if last < 0 {
 		return nil, nil
 	}
-	w, err := orchestratorWriter(env, "task", env.getenv("GRID_LEASE_EPOCH"))
+	// A Job's agent holds its own Job epoch in GRID_LEASE_EPOCH and the task epoch
+	// in GRID_TASK_EPOCH; the plan Job is a task write, so it takes the task epoch
+	// unless --lease-epoch was typed as a global.
+	epoch := env.getenv("GRID_LEASE_EPOCH")
+	if t := env.getenv("GRID_TASK_EPOCH"); t != "" && !env.typedGlobal["GRID_LEASE_EPOCH"] {
+		epoch = t
+	}
+	w, err := orchestratorWriter(env, "task", epoch)
 	if err != nil {
 		return nil, fmt.Errorf("the plan Job cannot be posted for the reopened task: %w", err)
 	}

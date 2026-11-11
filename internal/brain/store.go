@@ -268,7 +268,7 @@ func (s Store) proposalNote(n Note, origin Origin) (Note, error) {
 }
 
 // ProposeTask writes the proposal to <task folder>/brain-proposals/<name>.md,
-// where DecideTask and the task's ship gate read it, instead of under the
+// where DecideTask and deliver read it, instead of under the
 // brain level. The note keeps its level, which is where a decision files it.
 // history appends the task's "brain proposed" line after the file is written
 // and the task's decide lock is released; if the line cannot be written the

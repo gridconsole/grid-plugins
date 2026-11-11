@@ -1,6 +1,0 @@
-{
-  "hook_event_name": "UserPromptSubmit",
-  "cwd": "$GRID_HOME/projects/demo/tasks/T-1-demo",
-  "session_id": "session-demo",
-  "prompt": "/grid:plan T-1"
-}

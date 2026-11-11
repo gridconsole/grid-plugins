@@ -1,6 +1,6 @@
 ---
 name: plan-jobs
-description: How the orchestrator writes and checks one Grid Job before posting it. The Job is the brief, and it points at what the worker needs with a stated why instead of pasting text. Use when posting, planning or splitting Jobs for a task, and before any move, removal, UI or code-fact Job goes out.
+description: How the orchestrator writes and checks one Grid Job before posting it: the Job is the brief, and it points at what the worker needs with a stated why instead of pasting text. Use when posting, planning or splitting Jobs for a task, and before any move, removal, UI or code-fact Job goes out.
 ---
 
 A Job is the brief. A builder or reviewer reads only the Job, so it stands alone: intent, files to read and write, out of scope, acceptance rows, verify, one budget number, `after`. Standing alone does not mean carrying everything: it means pointing at everything the worker needs, with a reason to follow each pointer. The field list is in `docs/job-contract.md`.
@@ -34,6 +34,7 @@ Point, do not paste. A pasted block goes stale, fills the worker's context and h
 - `intent` and `acceptance` state the goal and the check in your own words. If you are about to copy a paragraph from a file or a note, link or read it instead.
 - `after`: bare Job ids that must be done first, or objects with `job`, `kind` (`done`, `failed`, `children-done`) and `why` (8 to 160 characters). A gate is `gate:Q-7`. A review Job names the build Job it checks.
 - Keep a Job small: one outcome, one owner, a read list of a few ranges. If it needs more, split it into Jobs joined by `after`.
+- The last Job of a task is the deliver Job: title "Deliver the task", role orchestrator, `after` names every other Job (each with a why), and it runs `grid deliver --task <task> --outcome <text> --json`.
 
 One full example. It lints clean once the note and file it points at exist:
 
