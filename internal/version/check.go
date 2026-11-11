@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 )
 
 // Manifest describes one published release. Version is required.
@@ -165,7 +167,7 @@ func saveCache(path string, entry cacheEntry) {
 	_, writeErr := f.Write(b)
 	closeErr := f.Close()
 	if writeErr == nil && closeErr == nil {
-		_ = os.Rename(f.Name(), path)
+		_ = atomicfile.Rename(f.Name(), path)
 	}
 }
 
