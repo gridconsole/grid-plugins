@@ -88,8 +88,11 @@ type Store struct {
 	TaskID          string
 	Writer          feed.Writer
 	ControlWriter   feed.Writer
-	Now             func() time.Time
-	Warn            io.Writer // receives warnings about skipped files; nil discards them
+	// Jobs posts and closes the person Job of an asked question; the zero value
+	// leaves a question a plain Feed record.
+	Jobs JobPort
+	Now  func() time.Time
+	Warn io.Writer // receives warnings about skipped files; nil discards them
 }
 
 func (s Store) now() time.Time {
@@ -128,7 +131,17 @@ func validateInput(in Input) error {
 	return nil
 }
 
-func (s Store) Add(in Input) (rec Record, err error) {
+// Add posts a question to the Feed as a plain question record with no Job of its
+// own. Ask is the form a person Job backs.
+func (s Store) Add(in Input) (Record, error) { return s.add(in, false) }
+
+// Ask posts a person Job for the named person and the question post that names
+// it. The Job holds no other Job: only a Job that lists it (or gate:Q-N) in its
+// own after list waits for the answer, and every other Job carries on. The
+// questions/Q-N.md file is written from the Feed after both posts.
+func (s Store) Ask(in Input) (Record, error) { return s.add(in, true) }
+
+func (s Store) add(in Input, asJob bool) (rec Record, err error) {
 	if err = validateInput(in); err != nil {
 		return
 	}
@@ -148,6 +161,19 @@ func (s Store) Add(in Input) (rec Record, err error) {
 			age = DefaultAgeAfter
 		}
 		rec = Record{Job: in.Job, Item: in.Item, ID: fmt.Sprintf("Q-%d", next), Question: in.Question, Who: in.Who, Why: in.Why, Blocking: in.Blocking, Options: append([]string{}, in.Options...), Recommended: in.Recommended, Gate: Gate{ID: fmt.Sprintf("Q-%d", next), Kind: "person", Default: in.Default, At: Stamp{in.Applies.UTC().Truncate(time.Millisecond)}}, Asked: Stamp{s.now()}, State: "open", AgeAfterSeconds: int64(age / time.Second), History: []Event{}}
+		if asJob {
+			f, e := s.feed()
+			if e != nil {
+				return e
+			}
+			job, e := s.postJob(f, rec.ID, in)
+			if e != nil {
+				return e
+			}
+			if job != "" {
+				rec.Job = job
+			}
+		}
 		return s.publishQuestion(dir, &rec)
 	})
 	return
@@ -273,6 +299,13 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 		}
 		rec = r
 		if len(r.History) == before {
+			// A repeated answer or withdrawal posts nothing new, but it still gives
+			// the Job its result when an earlier run stopped between the two posts.
+			if f, e := s.feed(); e != nil {
+				return e
+			} else if r.State == "answered" || r.State == "withdrawn" {
+				return s.settleJob(f, r)
+			}
 			return nil
 		}
 		if e = s.publishEvents(dir, &r, before); e != nil {
