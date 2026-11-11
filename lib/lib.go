@@ -28,18 +28,18 @@
 //
 // A call does not claim that nothing is ever read from the host. These stay
 // with the host process, as in the binary:
-//   - the user name (USER, and the system account) that names a new task's
-//     owner (internal/task);
-//   - internal/account has its own fallback to the host's environment when it
-//     is given no getenv;
+//   - the environment of the provider child that `account list`, `status` and
+//     `scan` start: internal/cli/account.go:30 gives internal/account no
+//     Environ, so the child takes os.Environ (internal/account/account.go:68,
+//     :216);
 //   - the process that `ports claim`, `env up` and the task lease record as
 //     their owner: the Call's OwnerPID (with OwnerStart, or its looked-up start)
 //     when set, else the host's own process id (os.Getpid for `task new` and
-//     `env up`, os.Getppid for `task attach` and `lease take --hold`). Off Linux
+//     `env up`, internal/cli/task_new_first_job.go:84 and internal/env/env.go:117;
+//     os.Getppid for `task attach` and `lease take --hold`,
+//     internal/cli/task.go:241 and internal/cli/task_lease.go:85). Off Linux
 //     and macOS `lease take` is refused before --hold is read, so there the owner
-//     reaches only `task new`, `task attach` and `env up`;
-//   - the children that land, agent and routine runs start, which take the
-//     host's environment, not Environ.
+//     reaches only `task new`, `task attach` and `env up`.
 //
 // Executable is the path of the grid binary, which doctor reports and routine
 // schedules. Empty asks the host process for its own path, which is the right
