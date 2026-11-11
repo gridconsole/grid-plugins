@@ -7,7 +7,7 @@ import (
 )
 
 func TestHostApprovalReceipts(t *testing.T) {
-	f := setup(t)
+	f := hostSetup(t)
 	f.env["GRID_PLAN_GUARD"] = "off"
 	for _, name := range []string{"approval.json", "approval-ship.json", "APPROVAL-SHIP.JSON"} {
 		t.Run(name, func(t *testing.T) {
@@ -29,7 +29,7 @@ func TestHostApprovalReceipts(t *testing.T) {
 }
 
 func TestHostProtectsTaskWorkflow(t *testing.T) {
-	f := setup(t)
+	f := hostSetup(t)
 	f.env["GRID_PLAN_GUARD"] = "off"
 	for _, tool := range []string{"Write", "Edit", "MultiEdit", "NotebookEdit"} {
 		t.Run(tool, func(t *testing.T) {

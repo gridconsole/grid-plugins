@@ -156,10 +156,7 @@ func TestGuardLevelsAreSettableAndResolved(t *testing.T) {
 	for _, name := range guards {
 		d, err := personal.Effective()
 		must(t, err)
-		def := "block"
-		if name == "only-writer" || name == "plan-guard" {
-			def = "warn" // verdicts-11nov v-4; plan-guard: needed.md:47
-		}
+		def := "warn" // verdicts-11nov v-4; plan-guard: needed.md:47; host-guard: v-enforce
 		if d.Hooks[name] != def {
 			t.Fatalf("%s defaults to %s, want %s", name, d.Hooks[name], def)
 		}

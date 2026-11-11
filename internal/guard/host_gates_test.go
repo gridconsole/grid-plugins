@@ -9,7 +9,7 @@ import (
 )
 
 func TestHostFileToolsGatePaths(t *testing.T) {
-	f := setup(t)
+	f := hostSetup(t)
 	f.env["GRID_PLAN_GUARD"] = "off"
 	personal := filepath.Join(f.grid, "personal", "tasks", "T-02-mine")
 	for _, task := range []string{f.task, personal} {
@@ -22,7 +22,7 @@ func TestHostFileToolsGatePaths(t *testing.T) {
 			t.Run("Write/"+filepath.Base(task)+"/"+rel, func(t *testing.T) {
 				d := EvaluateHost(f.input("Write", filepath.Join(task, rel)), f.root, f.env)
 				expect(t, d, "deny")
-				if !strings.Contains(d.Reason, "Reading is allowed") {
+				if !strings.Contains(d.Reason, "is a task record that grid writes; use the grid task or grid question command") {
 					t.Fatalf("deny text: %s", d.Reason)
 				}
 			})
@@ -49,7 +49,7 @@ func TestHostFileToolsGatePaths(t *testing.T) {
 }
 
 func TestHostFileToolsSettingsPaths(t *testing.T) {
-	f := setup(t)
+	f := hostSetup(t)
 	f.env["GRID_PLAN_GUARD"] = "off"
 	for _, rel := range []string{
 		"settings.json", "SETTINGS.JSON", ".settings.lock", ".Settings.Lock",
@@ -58,7 +58,7 @@ func TestHostFileToolsSettingsPaths(t *testing.T) {
 		t.Run("Write/"+rel, func(t *testing.T) {
 			d := EvaluateHost(f.input("Write", filepath.Join(f.grid, rel)), f.root, f.env)
 			expect(t, d, "deny")
-			if !strings.Contains(d.Reason, "cannot turn a guard off") {
+			if !strings.Contains(d.Reason, "holds the person's Grid settings; grid hook level and grid settings change it") {
 				t.Fatalf("deny text: %s", d.Reason)
 			}
 		})
@@ -82,7 +82,7 @@ func TestHostFileToolsSettingsPaths(t *testing.T) {
 // The home fallback allows writes inside the Grid home. A settings file is in the
 // Grid home, so the arbitration must keep the host guard's deny.
 func TestAgentCannotWriteGuardOffIntoSettings(t *testing.T) {
-	f := setup(t)
+	f := hostSetup(t)
 	off := `{"hooks":{"host-guard":"off"}}`
 	for _, file := range []string{"settings.json", ".settings.lock", "projects/example/settings.json"} {
 		for _, tool := range []string{"Write", "Edit", "MultiEdit"} {
@@ -102,7 +102,7 @@ func TestAgentCannotWriteGuardOffIntoSettings(t *testing.T) {
 // A Bash command is never refused by Grid's reading of shell text: Claude Code's
 // permission rules decide what a shell may write.
 func TestHostNeverRefusesBash(t *testing.T) {
-	f := setup(t)
+	f := hostSetup(t)
 	for _, command := range []string{
 		"grid approve T-01", "echo x > questions/Q-1.md", "grid hook level off", "echo x > settings.json",
 		"echo '{}' > approval.json", "echo .host", "cat > $GRID_HOME/settings.json <<'EOF'\n{}\nEOF",

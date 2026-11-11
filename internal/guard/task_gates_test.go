@@ -6,7 +6,7 @@ import (
 )
 
 func TestTaskFileGateProtection(t *testing.T) {
-	f := setup(t)
+	f := hostSetup(t)
 	f.env["GRID_PLAN_GUARD"] = "off"
 	for _, dir := range []string{filepath.Join(f.projects, "example", "tasks", "T-01-example"), filepath.Join(f.grid, "personal", "tasks", "T-01-example")} {
 		for _, file := range []string{"approval.json", "refusal-R-1.json", ".task-write.json", ".task.lock", "APPROVAL.JSON"} {

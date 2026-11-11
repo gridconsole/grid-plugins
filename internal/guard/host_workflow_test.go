@@ -6,7 +6,7 @@ import (
 )
 
 func TestHostAgentWorkflowFileTools(t *testing.T) {
-	f := setup(t)
+	f := hostSetup(t)
 	f.env["GRID_PLAN_GUARD"] = "off"
 	for _, tool := range []string{"Write", "Edit", "MultiEdit", "NotebookEdit"} {
 		for _, path := range []string{
