@@ -21,7 +21,16 @@ while [ -L "$self" ]; do
 	*) self=$(dirname "$self")/$link ;;
 	esac
 done
-root=$(CDPATH= cd -P "$(dirname "$self")/.." && pwd -P)
+# The plugin folder can be absent for a moment while it is swapped; a hook then
+# skips instead of ending in the shell's exit 2, which Claude Code reads as a blocking error.
+if ! root=$(CDPATH= cd -P "$(dirname "$self")/.." 2>/dev/null && pwd -P); then
+	if [ "${1:-}" = hook ]; then
+		echo 'grid: plugin root not found; hook skipped' >&2
+		exit 0
+	fi
+	echo 'grid: plugin root not found' >&2
+	exit 1
+fi
 os=$(uname -s)
 arch=$(uname -m)
 case $os in
