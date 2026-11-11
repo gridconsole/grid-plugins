@@ -89,8 +89,8 @@ func TestStreamPassMovesTheReceiptOfATaskNobodyApproves(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if !gone(dir, "approval.json") {
-		t.Fatal("approval.json is still there")
+	if gone(dir, "approval.json") {
+		t.Fatal("the pass removed approval.json")
 	}
 	a, err := task.ApprovalFromJob(dir)
 	if err != nil || a.Job != "J-1" || a.PlanHash != plan.Hash(receiptPlan) || a.PlanDigest != plan.Digest(receiptPlan) || a.LandsHash != "ab12" || a.Note != "looks right" {
@@ -147,7 +147,7 @@ func TestStreamPassGivesAnOldTaskItsFeedWhenItMovesTheReceipt(t *testing.T) {
 	if _, err := feed.TaskID(dir); err != nil {
 		t.Fatalf("no task id after the pass: %v", err)
 	}
-	if !gone(dir, "approval.json") || !task.Approved(dir) {
+	if gone(dir, "approval.json") || !task.Approved(dir) {
 		t.Fatal("the receipt was not moved into an approved Job")
 	}
 }

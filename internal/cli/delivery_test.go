@@ -493,10 +493,8 @@ func TestApproveAfterDeliveryRecordsPlanApproval(t *testing.T) {
 	if err := json.Unmarshal(h.out.Bytes(), &event); err != nil || event.What != "approve" || event.Gate != "" || event.PlanHash == "" {
 		t.Fatalf("%+v %v", event, err)
 	}
-	// The approval is the plan Job result, not a file (verdict 12).
-	if _, err := os.Stat(filepath.Join(dir, "approval.json")); !os.IsNotExist(err) {
-		t.Fatal("approve wrote approval.json", err)
-	}
+	// The approval is the plan Job result; approval.json is the copy beside it.
+	requireApproveReceipt(t, dir)
 	if _, err := os.Stat(filepath.Join(dir, "approval-ship.json")); !os.IsNotExist(err) {
 		t.Fatal("approve wrote a ship receipt", err)
 	}

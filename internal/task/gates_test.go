@@ -234,8 +234,8 @@ func TestApproveStateAndFiles(t *testing.T) {
 			t.Fatal("hook predicate followed symlink")
 		}
 	})
-	// An old receipt name that is a symlink is neither read nor written any more:
-	// Approve does not follow it, and it approves nothing.
+	// A receipt name that is a symlink is neither read nor followed: Approve refuses to
+	// write through it, and it approves nothing.
 	t.Run("symlink/old receipt", func(t *testing.T) {
 		s, task := waitingFixture(t)
 		hash := setPlan(t, task, planV1)
@@ -245,8 +245,8 @@ func TestApproveStateAndFiles(t *testing.T) {
 		if err := os.Symlink(target, link); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.Approve(WriteOptions{ID: task.ID}, hash); err != nil {
-			t.Fatal(err)
+		if _, err := s.Approve(WriteOptions{ID: task.ID}, hash); err == nil {
+			t.Fatal("Approve wrote over a symlinked approval.json")
 		}
 		if Approved(task.Path) {
 			t.Fatal("a symlink approved the plan")

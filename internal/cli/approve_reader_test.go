@@ -76,10 +76,8 @@ func TestJobResultAnswersWithoutApprovalJSONAndForAnyGateName(t *testing.T) {
 	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(text)); code != 0 {
 		t.Fatalf("approve: %d %s", code, h.errb.String())
 	}
-	// No approval.json is written any more (verdict 12), so the Job result is all there is.
-	if _, err := os.Stat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("approval.json was written: %v", err)
-	}
+	// The Job result is the answer; approval.json is the copy grid approve wrote beside it.
+	requireApproveReceipt(t, path)
 	if !taskstore.Approved(path) {
 		t.Fatal("Approved ignored the Job result")
 	}
@@ -133,8 +131,9 @@ func TestReapprovalAfterPlanChangePostsANewResult(t *testing.T) {
 	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(changed)); code != 3 || !strings.Contains(h.errb.String(), "GRID_MEMBER is required") {
 		t.Fatalf("approve without a writer: %d %s", code, h.errb.String())
 	}
-	if _, err := os.Stat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("approve without a writer wrote approval.json: %v", err)
+	// The receipt file is still the first approval's: the refused approve left it alone.
+	if r := readApproveReceipt(t, path); r["plan_hash"] == plan.Hash(changed) {
+		t.Fatalf("approve without a writer rewrote approval.json: %v", r)
 	}
 	if taskstore.Approved(path) {
 		t.Fatal("approved the changed plan with an old Job result")

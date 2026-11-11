@@ -41,8 +41,8 @@ func TestApproveCompareAndSetReadsTheJobResult(t *testing.T) {
 	if _, err := approve(t, s, task, WriteOptions{ID: task.ID}, ""); err != nil {
 		t.Fatalf("a receipt file blocked the first approval: %v", err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(task.Path, "approval.json")); !strings.Contains(string(b), "abcdef") {
-		t.Fatalf("Approve rewrote the file: %s", b)
+	if b, _ := os.ReadFile(filepath.Join(task.Path, "approval.json")); strings.Contains(string(b), "abcdef") || !strings.Contains(string(b), `"what":"approve"`) {
+		t.Fatalf("Approve did not rewrite the file with its own receipt: %s", b)
 	}
 	// The plan changes: the Job result of planV1 is now the stale approval.
 	h2 := setPlan(t, task, planV2)
@@ -75,8 +75,8 @@ func TestReopenWritesNoReceiptFile(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if b, _ := os.ReadFile(filepath.Join(task.Path, "approval.json")); string(b) != old {
-		t.Fatalf("reopen rewrote the file: %s", b)
+	if b, _ := os.ReadFile(filepath.Join(task.Path, "approval.json")); !strings.Contains(string(b), `"what":"reopen"`) {
+		t.Fatalf("reopen did not overwrite the file with its event: %s", b)
 	}
 	// With no receipt file in the folder none appears either.
 	s2, task2 := waitingFixture(t)

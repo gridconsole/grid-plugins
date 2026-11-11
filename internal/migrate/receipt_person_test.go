@@ -27,8 +27,8 @@ func TestReceiptToJobWithAPersonWriterPostsAnAnswerTheHoldersPassAccepts(t *test
 	if err != nil || outcome != ReceiptMoved || job != "J-1" {
 		t.Fatalf("%q %q %v", outcome, job, err)
 	}
-	if !gone(t, filepath.Join(dir, "approval.json")) {
-		t.Fatal("approval.json is still there")
+	if gone(t, filepath.Join(dir, "approval.json")) {
+		t.Fatal("approval.json was removed")
 	}
 	store := feed.Store{TaskDir: dir, TaskID: receiptTaskID}
 	jobs, err := store.Read(feed.Filter{Type: "job"})

@@ -86,8 +86,8 @@ func TestReceiptToJobMovesTheReceiptIntoTheApproveJobResult(t *testing.T) {
 	if err != nil || outcome != ReceiptMoved || job != "J-1" {
 		t.Fatalf("outcome %q job %q err %v", outcome, job, err)
 	}
-	if !gone(t, filepath.Join(dir, "approval.json")) {
-		t.Fatal("approval.json is still on disk")
+	if gone(t, filepath.Join(dir, "approval.json")) {
+		t.Fatal("approval.json was removed")
 	}
 	a, err := taskstore.ApprovalFromJob(dir)
 	if err != nil {
@@ -100,8 +100,8 @@ func TestReceiptToJobMovesTheReceiptIntoTheApproveJobResult(t *testing.T) {
 	if err != nil || len(snap.Items) != 1 || !snap.Items[0].IsPerson() || snap.Items[0].Kind != "approve" {
 		t.Fatalf("items %+v err %v: want one person Job of kind approve", snap.Items, err)
 	}
-	if outcome, _, err := ReceiptToJob(dir, w); err != nil || outcome != ReceiptNone {
-		t.Fatalf("second run: %q %v; the file is read once", outcome, err)
+	if outcome, _, err := ReceiptToJob(dir, w); err != nil || outcome != ReceiptCurrent {
+		t.Fatalf("second run: %q %v; the Job is the record and the file stays", outcome, err)
 	}
 	if snap, _ := orchestrator.Load(feed.Store{TaskDir: dir, TaskID: receiptTaskID}); len(snap.Items) != 1 {
 		t.Fatalf("second run posted another Job: %+v", snap.Items)
@@ -134,11 +134,11 @@ func TestReceiptToJobRetiresTheFileBesideAnExistingJob(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "approval.json"), []byte(receiptJSON(t, nil)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if outcome, _, err := ReceiptToJob(dir, w); err != nil || outcome != ReceiptRetired {
+	if outcome, _, err := ReceiptToJob(dir, w); err != nil || outcome != ReceiptCurrent {
 		t.Fatalf("outcome %q err %v", outcome, err)
 	}
-	if !gone(t, filepath.Join(dir, "approval.json")) {
-		t.Fatal("approval.json is still on disk")
+	if gone(t, filepath.Join(dir, "approval.json")) {
+		t.Fatal("approval.json was removed")
 	}
 	if _, err := taskstore.ApprovalFromJob(dir); err == nil || !strings.Contains(err.Error(), "no result yet") {
 		t.Fatalf("the open Job was answered from the file: %v", err)

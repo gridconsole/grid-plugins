@@ -13,7 +13,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
 )
 
 type planDigestTranscript struct {

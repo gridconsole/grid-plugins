@@ -69,11 +69,12 @@ func arWriteReceipt(t *testing.T, path string) {
 	}
 }
 
-// arNoReceipt fails when an approval.json is in the folder.
-func arNoReceipt(t *testing.T, path string) {
+// arReceiptStays fails when the folder has no approval.json: grid approve keeps it
+// beside the Job result, and the migration of an old receipt leaves it.
+func arReceiptStays(t *testing.T, path string) {
 	t.Helper()
-	if _, err := os.Lstat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("approval.json is still there or unreadable: %v", err)
+	if _, err := os.Lstat(filepath.Join(path, "approval.json")); err != nil {
+		t.Fatalf("approval.json is missing: %v", err)
 	}
 }
 
@@ -161,7 +162,7 @@ func TestApproveRecordOpenJobAnswered(t *testing.T) {
 	if s := arStatus(t, store, "J-2"); s != "accepted" {
 		t.Fatalf("J-2 is %s", s)
 	}
-	arNoReceipt(t, path)
+	arReceiptStays(t, path)
 	history, err := os.ReadFile(filepath.Join(path, "history.md"))
 	if err != nil || !strings.Contains(string(history), `"what":"approve"`) {
 		t.Fatalf("history line: %v %s", err, history)
@@ -195,7 +196,7 @@ func TestApproveRecordNoUlidNoJobCreatesBoth(t *testing.T) {
 		t.Fatalf("answers %+v", answers)
 	}
 	arResultIs(t, answers[0].Body, "first look")
-	arNoReceipt(t, path)
+	arReceiptStays(t, path)
 }
 
 // A person with no lease epoch posts an unleased answer that carries the plan
@@ -232,7 +233,7 @@ func TestApproveRecordPersonWithoutLeaseWaitsForTheHoldersTick(t *testing.T) {
 	if err != nil || a.Job != "J-2" || a.PlanDigest != plan.Digest(text) || a.Note != "checked" {
 		t.Fatalf("%+v %v", a, err)
 	}
-	arNoReceipt(t, path)
+	arReceiptStays(t, path)
 }
 
 // grid job result --plan-hash answers the named person Job: with a lease epoch in
@@ -253,7 +254,7 @@ func TestApproveRecordJobResultPlanHashLeasedAndPerson(t *testing.T) {
 		if len(arAnswers(t, store)) != 0 {
 			t.Fatal("a leased approval wrote an answer record")
 		}
-		arNoReceipt(t, path)
+		arReceiptStays(t, path)
 	})
 	t.Run("person without a lease", func(t *testing.T) {
 		h, path, store, text := approveJobHarness(t)
@@ -281,7 +282,7 @@ func TestApproveRecordJobResultPlanHashLeasedAndPerson(t *testing.T) {
 		if a, err := taskstore.ApprovalFromJob(path); err != nil || a.Job != "J-2" {
 			t.Fatalf("%+v %v", a, err)
 		}
-		arNoReceipt(t, path)
+		arReceiptStays(t, path)
 	})
 }
 
@@ -296,7 +297,7 @@ func TestApproveRecordOldReceiptMovedOrRetired(t *testing.T) {
 		if code := h.run(path, "approve", path); code != 0 {
 			t.Fatalf("%d %s", code, h.errb.String())
 		}
-		arNoReceipt(t, path)
+		arReceiptStays(t, path)
 		jobs := arApproveJobs(t, store)
 		if len(jobs) != 1 || jobs["J-2"] == nil {
 			t.Fatalf("approve Jobs %v (J-1 is the ordinary Job)", jobs)
@@ -319,7 +320,7 @@ func TestApproveRecordOldReceiptMovedOrRetired(t *testing.T) {
 		if code := h.run(path, "approve", path, "--plan-hash", "000000"); code != 1 || !strings.Contains(h.errb.String(), "plan hash no longer matches") {
 			t.Fatalf("%d %s", code, h.errb.String())
 		}
-		arNoReceipt(t, path)
+		arReceiptStays(t, path)
 		if got := arAccepts(t, store, "J-2"); len(got) != 0 {
 			t.Fatalf("the receipt answered the Job: %v", got)
 		}
@@ -358,7 +359,9 @@ func TestApproveRecordCallerWithoutMemberWritesNothing(t *testing.T) {
 		if jobs := arApproveJobs(t, store); len(jobs) != 1 {
 			t.Fatalf("%v changed the Jobs %v", args, jobs)
 		}
-		arNoReceipt(t, path)
+		if _, err := os.Lstat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%v wrote approval.json: %v", args, err)
+		}
 		after, _ := os.ReadFile(filepath.Join(path, "history.md"))
 		if string(after) != string(before) {
 			t.Fatalf("%v wrote history: %s", args, after)
@@ -386,11 +389,11 @@ func TestApproveRecordWorkerPassMovesTheReceiptOfATaskOnlyRead(t *testing.T) {
 	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		if _, err := os.Lstat(filepath.Join(path, "approval.json")); errors.Is(err, os.ErrNotExist) {
+		if len(arApproveJobs(t, store)) == 1 {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("the worker pass did not move approval.json within 30s")
+			t.Fatal("the worker pass did not move approval.json into an approve Job within 30s")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

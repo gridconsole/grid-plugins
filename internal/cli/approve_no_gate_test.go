@@ -50,10 +50,8 @@ func TestApproveGateFlagIsUnknown(t *testing.T) {
 	if got["plan_hash"] != plan.Hash(approvedPlan) || got["plan_digest"] != plan.Digest(approvedPlan) {
 		t.Fatalf("approve output does not carry the plan hash and digest: %s", h.out)
 	}
-	// The approval is the plan Job result only: no approval.json.
-	if _, err := os.Stat(filepath.Join(fixture.Path, "approval.json")); err == nil {
-		t.Fatal("plain approve wrote approval.json")
-	}
+	// The approval is the plan Job result; approval.json is the copy beside it.
+	requireApproveReceipt(t, fixture.Path)
 	if a, err := task.ApprovalFromJob(fixture.Path); err != nil || a.PlanDigest != plan.Digest(approvedPlan) || a.PlanHash != plan.Hash(approvedPlan) {
 		t.Fatalf("Job result %+v: %v", a, err)
 	}

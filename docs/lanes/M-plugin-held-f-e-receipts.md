@@ -1,54 +1,54 @@
-# M-plugin-held-f-e-receipts: stopped at call 27, no fix built
+# M-plugin-held-f-e-receipts: grid approve writes the nine-key approval.json again (fix round 1, option B)
 
-Head is lane-M-plugin-held-f-e-ready2 (c90f97d8) plus this doc. No plugin code and no testdata changed. Two things stop the brief: the shell would not run the row 1 command, and the brief's premise conflicts with the owner direction the lane was built on. Both need a decision, so I built nothing that reverses them. I read /srv/gridwork/tmp/hand/runbook-reviewer.txt and checked the lane against it.
+Built on lane-M-plugin-held-f-e-ready2 (c90f97d8). Fix round 1 told this lane to do option B: write the nine-key approval.json on approve and reopen, stop the receipt migration and the worker pass from deleting a file that sits beside the approved Job, and put the transcript's receipt_keys back. The approve person Job result stays the approval the plugin's readers use; the file is a copy for the app, which reads it. I read /srv/gridwork/tmp/hand/runbook-reviewer.txt and checked the lane against it.
 
 ## Proof table
 
 | Row / rule | Status | Evidence |
 |---|---|---|
-| 1. Build the lane plugin | HOLDS | `go build -o dist/grid ./cmd/grid` exit 0. |
-| 1. Fresh app clone at main, run `GRID_PLUGIN_BIN=<lane>/dist/grid go test -count=1 -run 'RealPluginApprove\|RealPluginDigestReplay\|RealPluginGate' ./...`, paste the failing lines | NOT DONE | The shell allow list refuses a command that starts with `GRID_PLUGIN_BIN=` (only `GOOS=` and `CGO_ENABLED=` may precede `go`). Refused twice: once as `cd app && GRID_PLUGIN_BIN=... go test ... \| grep`, once as `GRID_PLUGIN_BIN=... go -C app test ... ./internal/slices/gates`. The gates tests read only `os.Getenv("GRID_PLUGIN_BIN")` (no `-plugin-bin` flag; realplugin_gate_test.go:50, realplugin_digest_test.go:43), so no allowed command passes the binary in. I did not use `env`, `bash -c` or a wrapper script to get round the refusal. The failing lines are therefore the brief's own, not mine. |
-| 1. Name the lane commit that dropped the receipt | HOLDS (by reading, not by bisect) | `git log -S"approval.json" origin/main..HEAD -- internal/task/gates.go internal/task/write.go internal/cli/task_write.go` lists 8ec0c09f ("Record an approval only as the result of the approve person Job, move an old approval.json into it, and drop the file fallbacks.") and aa4535b6 (the test fixtures that followed). 8ec0c09f is the one: `Store.Approve` stopped writing approval.json (internal/task/gates.go) and reopen stopped writing it (internal/task/write.go). I did not bisect against the app tests, because I could not run them. |
-| 2. `grid approve --json` prints one JSON object with from_state, note, plan_digest, plan_hash, task, to_state, what, when, who | HOLDS for stdout (by reading, not run) | internal/cli/task_write.go:237-242: `--json` prints `task.Event` plus `folder` through `writeJSON`; the lane did not change that. What the lane dropped is the file, not the stdout. See "What the app tests read". |
-| 2. Fix: the app tests pass again, keeping the held F and E behaviour | NOT DONE | Needs an owner decision. See "Why I stopped". |
-| 3. Row 1 command: 0 fail, 0 skip; then `-run RealPlugin -json ./...` with no fail, no skip, counts pasted | NOT DONE | Same refusal as row 1. |
-| 4. Plugin `go test -count=1 ./...` | HOLDS (unchanged head) | exit 0; every package `ok`, packages without tests print `[no test files]`. This is the lane's own state, since I changed nothing in code. |
-| 4. `make lint` | HOLDS | exit 0 (`go vet ./...`). |
-| 4. `GOOS=windows go vet ./...` | HOLDS | exit 0, no output. |
-| 4. `GOOS=darwin go vet ./...` | HOLDS | exit 0, no output. |
-| 4. Changes to testdata/contract/plan-digest/transcript.json explained | HOLDS (nothing changed by me) | The 104-line change is the lane's (aa4535b6 and the merges). Its `receipt_keys` went from the nine keys to `answer job note plan_digest plan_hash record when who` (the keys of a Job result), the exit of one step went 2 to 1, and the plan-hash-only steps went to `[]`. Whether to revert it depends on the decision below. |
-| New tests fail on base, pass on the lane | NOT APPLICABLE | No test written: the fix is not built. |
-| Existing tests not edited, none deleted | HOLDS | `git diff origin/lane-M-plugin-held-f-e-ready2 HEAD --stat` shows only this doc. |
-| No guard, gate, cap, hold or blocking hook added | HOLDS | Nothing added. |
-| Tests of changed packages and importers | HOLDS (nothing changed) | No package changed; the whole-module `go test` above covers every importer. |
-| Small commits, one-sentence messages, no attribution lines | HOLDS | One commit, one sentence, no Co-Authored-By or Claude-Session line. |
-| UI rows | NOT APPLICABLE | No UI row in the brief. |
-
-## What the app tests read
-
-- `TestRealPluginApprovePlanOnce` (realplugin_gate_test.go:161-162) and `TestRealPluginApproveAgentAccepted` (:198-205) run the real `grid approve`, then read **approval.json from the task folder** (`gateFiles` lists approval.json, history.md, task.md, plan.md). They do not read the `--json` stdout for the nine keys. "invalid JSON object" at :162 is `digestObject` parsing the empty string of a file that is not there.
-- `TestRealPluginDigestReplay` (realplugin_digest_test.go:253-259) reads the file at `receiptPath` after each step and compares its keys with the transcript's `receipt_keys`. "receipt keys=[]" means the file is absent. Its `--json` comparison (:270-275) also expects the stdout to repeat every key the file holds.
-- So "the receipt `grid approve --json` prints" is the stdout, which still has the nine keys. The nine keys the app tests want on disk are the file. The brief's one-line fix ("print the receipt as one JSON object") is already true; the tests fail on the file.
-
-## Why I stopped
-
-1. **The lane removed the file on purpose.** docs/lanes/E-verdict-12-receipts.md and docs/lanes/E-receipts-e2e3.md record the direction as: `grid approve` records an approval only as the result of the approve person Job; an old approval.json is read once, moved into that Job and deleted; the `receiptForGate` and `ApprovedDigest` fallbacks are gone. E-receipts-e2e3.md (the "Cross-repo resume" section) already says these five tests fail by design and that the fix is in the app: `gates/model.go:477` must read the plan Job result, and the five tests must assert the Job result. The brief says nothing in docs/needed.md or simplify.md removes the file. docs/needed.md does not exist in this clone, and simplify.md has no line naming approval.json (grep exit 2 only for the missing needed.md; no match in simplify.md). The verdict-12 direction lives in the lane docs, not in those two files. The brief and the lane docs disagree on who decided; I could not settle it from the clone.
-2. **A plugin-only fix reverses the lane.** To make the tests pass the plugin has to write approval.json again on every approve, and also stop the once-migration and the worker pass (internal/migrate/receipt.go, internal/orchestrator/stream.go) from retiring a receipt that sits beside an approve Job; otherwise the next worker pass deletes the file the test reads. That undoes acceptance rows 1 and 2 of E-receipts-e2e3 and its "approval.json is deleted after it is read" default, and it brings back a second record of an approval beside the Feed. That is the owner's call, not mine.
-3. **The brief forbids the other fix.** "Nothing in the app repo" rules out the change E-receipts-e2e3 names (gates/model.go and the five tests).
-4. **I could not run the proof.** Rows 1 and 3 need `GRID_PLUGIN_BIN=` in the command; see the table.
-
-## Options for the owner
-
-- A. Keep the owner direction (no approval.json). The fix is in the app: read the plan Job result in `gates/model.go:477-498`, change the five tests to assert the Job result, and replace `receipt_keys` in the app's copy of the transcript with the lane's (`answer job note plan_digest plan_hash record when who`). The plugin lane lands with that app change in lockstep. No plugin change.
-- B. Keep approval.json as a compatibility copy. A new plugin lane then: `Store.Approve` writes the nine-key file again after the Job result is recorded; reopen overwrites it; `ReceiptToJob` and the Stream pass leave a file that matches the approved Job instead of deleting it; the transcript's `receipt_keys` go back to the nine keys. I would size it at about 60 calls with the test rewrite (about 25 test files moved to the Job in the lane would need a second look). It needs an owner yes first, because it reverses the written direction.
-- For either option, whoever runs rows 1 and 3 needs a shell that accepts `GRID_PLUGIN_BIN=`; the orchestrator can run them at landing.
+| 1. Commit that dropped the receipt | HOLDS (by `git log -S`, not bisect) | 8ec0c09f: `Store.Approve` (internal/task/gates.go) and reopen (internal/task/write.go) stopped writing approval.json; `ReceiptToJob` (887fa38a, reworked in 8ec0c09f) and the Stream pass retired the file. |
+| 1. Fresh app clone at main, `GRID_PLUGIN_BIN=<lane>/dist/grid go test -count=1 -run 'RealPluginApprove\|RealPluginDigestReplay\|RealPluginGate' ./...` | NOT DONE | The shell allow list refuses a command that starts with `GRID_PLUGIN_BIN=`, and the gates tests read only `os.Getenv("GRID_PLUGIN_BIN")` (realplugin_gate_test.go:50, realplugin_digest_test.go:43). I built the lane binary (`go build -o dist/grid ./cmd/grid`, exit 0) and cloned the app (`git clone /srv/gridwork/ref/app.git`, exit 0) but could not pass the path in. The failing lines are the brief's. Run at landing. |
+| 2. `grid approve --json` prints one JSON object with from_state, note, plan_digest, plan_hash, task, to_state, what, when, who, and approval.json holds the same nine keys | HOLDS | New test `TestApproveReceiptFileHasTheNineKeysTheAppReads` (internal/cli/approve_receipt_file_test.go): runs `grid approve T-01 --json --note ...`, parses stdout as one object, reads approval.json, requires the nine sorted keys and equal values for each key, and checks the Job result still holds the digest. Passes in `go test ./...` below. Code: internal/task/gates.go (`Approve` writes `approvalFile` through `commitWrite`), internal/task/write.go (`change` overwrites it on reopen, `recoverWrite` replays it again). |
+| 2. Held F and E behaviour kept | HOLDS | The Job result is still the only thing `Approved`, `ApprovalFromJob` and the stale-hash check read; no reader got a file fallback back (`receiptForGate`, the Q10 read are still gone). `recordApproval` and `runApprove` are unchanged. |
+| 2. Migration and worker pass keep a file that sits beside the approved Job | HOLDS | internal/migrate/receipt.go: `ReceiptToJob` no longer removes the file in either case; `ReceiptRetired` became `ReceiptCurrent`; `ReceiptPending` is false once the task has an approve person Job (new `hasApproveJob`), so the Stream pass (internal/orchestrator/stream.go, unchanged: it only calls `ReceiptMove` for a pending receipt) does not come back to the file on every pass. Covered by the flipped tests `TestReceiptToJobMovesTheReceiptIntoTheApproveJobResult`, `TestReceiptToJobRetiresTheFileBesideAnExistingJob`, `TestStreamPassMovesTheReceiptOfATaskNobodyApproves`. |
+| 3. Row-1 command and `-run RealPlugin -json ./...` in the app clone, 0 fail 0 skip, counts | NOT DONE | Same refusal as row 1. Not run, no counts. |
+| 4. `go test -count=1 ./...` | HOLDS, exit code not captured | Run as `go test -count=1 ./... 2>&1 \| grep -v "^ok\|no test files"`: no output, so no FAIL line and every package ok. The pipe hid go's own exit code. |
+| 4. `make lint`, `GOOS=windows go vet ./...`, `GOOS=darwin go vet ./...` | HOLDS | One chained call, `gofmt -w <file> && make lint && GOOS=windows go vet ./... && GOOS=darwin go vet ./... && echo VETS_EXIT_0`: printed `VETS_EXIT_0`, so all three exited 0. (An earlier `make lint` exit 2 named gofmt on internal/cli/plan_digest_roundtrip_test.go; fixed with gofmt.) |
+| 4. testdata/contract/plan-digest/transcript.json | HOLDS | `git checkout origin/main -- testdata/contract/plan-digest/transcript.json`: the file is identical to main again, so all 104 lane changes are reverted. Each reverted line: the nine `receipt_keys` (from_state, note, plan_digest, plan_hash, task, to_state, what, when, who; eight without note in the later scenario) replace the lane's Job-result keys (answer, job, plan_digest, plan_hash, record, when, who); the legacy-reapprove scenario's `[plan_hash, task, what]` replaces `[]`; the first scenario's render step goes back to `exit` 2 (the lane's 1 was not about the receipt; `TestPlanDigestRoundTrip` does not assert the render exit). |
+| New tests fail on base, pass on the lane | NOT DONE for base | The new test passes on the lane. I could not show it failing on base: `git worktree add dist/base origin/lane-M-plugin-held-f-e-ready2 && cp ... && go test` was refused by the shell. On base `Approve` writes no approval.json (8ec0c09f), so `readApproveReceipt` fails at its first `os.ReadFile`. |
+| Existing tests not edited | NOT MET, reasoned below | The behaviour these tests asserted (approval.json absent, deleted, not rewritten) is the behaviour the fix round reverses. I changed only the assertion; see "Existing tests changed". None deleted. |
+| No guard, gate, cap, hold or blocking hook added | HOLDS | Nothing added; the change writes a file on approve and keeps a file on migration. |
+| Tests of changed packages and importers | HOLDS | The whole-module run above covers internal/task, internal/migrate, internal/cli, internal/orchestrator and their importers. |
+| Small commits, one-sentence messages, no attribution lines | HOLDS | Commit "Write the nine-key approval.json again on approve and reopen, keep it through the receipt migration, and restore the transcript's receipt keys." and a second one for the test flips and this doc. No Co-Authored-By or Claude-Session line. |
+| UI rows | NOT APPLICABLE | None in the brief. |
 
 ## What changed
 
-Only this doc and the report copy.
+- internal/task/gates.go: `Approve` marshals the event and writes it as approval.json with the history line, as before 8ec0c09f.
+- internal/task/write.go: `approvalFile` is back; `change` overwrites an existing approval.json with the reopen event; `recoverWrite` replays approval.json and drops only the old per-gate files (approval-ship.json, approval-preview.json).
+- internal/migrate/receipt.go: `ReceiptToJob` keeps the file (moved or beside an existing Job); `ReceiptCurrent` replaces `ReceiptRetired`; `ReceiptPending` is true only for a plan receipt in a task with no approve person Job.
+- testdata/contract/plan-digest/transcript.json: identical to main.
+- internal/cli/approve_receipt_file_test.go: the new test and the helpers `readApproveReceipt` and `requireApproveReceipt`.
+
+## Existing tests changed (assertion reversed, none deleted)
+
+Edited by two throwaway programs (dist/rewrite, dist/rewrite2, not committed) that did exact-text replacements; the fix round's option B is the written reason for each.
+
+- internal/cli/plan_digest_roundtrip_test.go: `jobResult` reads approval.json again (the nine keys), as on main; the Job-result key lookup and the `taskstore` import are gone.
+- internal/cli/approve_job_test.go (2 sites), approve_no_gate_test.go, approve_reader_test.go (2 sites), delivery_test.go, approve_lock_test.go: "approval.json must not exist" became "approval.json is the approve receipt" (`requireApproveReceipt`) or, for a refused approve, "the file is still the first approval's".
+- internal/cli/approve_record_test.go: helper `arNoReceipt` became `arReceiptStays`; the worker-pass test waits for the approve Job instead of for the file to vanish; the refused-caller test keeps its original "no file" assertion.
+- internal/task/approve_job_result_test.go (2 sites): Approve rewrites a stale file; reopen overwrites it with the reopen event. internal/task/gates_test.go (symlink/old receipt): Approve now refuses to write through a symlinked approval.json (as on main) instead of succeeding.
+- internal/migrate/receipt_test.go, receipt_person_test.go, internal/orchestrator/stream_receipt_test.go: the file stays after the move; the second run returns `ReceiptCurrent`.
+
+## Open items
+
+- Rows 1 and 3 are not run: the app tests need `GRID_PLUGIN_BIN=` in the command, which this shell refuses. The orchestrator runs them at landing. If a flipped assertion hid a real gap, those runs show it.
+- The new test is not shown failing on base.
+- docs/lanes/E-receipts-e2e3.md and E-verdict-12-receipts.md still describe the file as deleted; they are history and I did not rewrite them.
+- Option B reverses the verdict-12 direction in the lane docs; the fix round says to do it. If the owner keeps verdict 12, drop this lane and fix the app (option A).
 
 ## NOT VERIFIED on a live screen
 
-Nothing in this lane touches a screen. The app's approve button and task card (the model.go reads) are the live rows of the parent lane, E-receipts-e2e3.md, and stay unverified.
+Nothing here touches a screen. The app's approve button and task card are the parent lane's live rows.
 
 NOT DONE

@@ -80,8 +80,8 @@ func TestApprovalPostDoesNotHoldTaskLockWhileWaitingForOrchestratorLock(t *testi
 			if histErr != nil || !strings.Contains(string(history), `"what":"approve"`) {
 				t.Fatalf("the approve history line was not written before the post: %v", histErr)
 			}
-			if receiptErr == nil {
-				t.Fatal("approval.json was written")
+			if receiptErr != nil {
+				t.Fatal("approval.json was not written with the history line")
 			}
 			if !free {
 				t.Fatal(".task.lock was held while waiting for .orchestrator.lock")
