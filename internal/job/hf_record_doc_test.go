@@ -19,12 +19,7 @@ import (
 // gone (the entry is stale) and when the module has a writer of a retired field
 // that is not listed (the entry is missing).
 var hfJrKnownOpen = []struct{ file, text, why string }{
-	{"internal/cli/task_new_first_job.go", `"max_rounds": 1`, "writes retired review and max_rounds (job-contract.md says no Job declares them)"},
-	{"internal/cli/deliver_keeper_job.go", `"max_rounds": 1`, "writes retired review and max_rounds"},
-	{"internal/question/job.go", `"max_rounds": 1`, "writes retired review and max_rounds"},
-	{"internal/orchestrator/replan.go", `"max_rounds": 1`, "writes retired max_rounds"},
-	{"internal/approvefix/approvefix.go", `"max_rounds": 2`, "writes retired review and max_rounds"},
-	{"internal/migrate/receipt.go", `"max_rounds": 2`, "writes retired review and max_rounds"},
+	{"internal/migrate/receipt.go", `"max_rounds": 2`, "writes retired review and max_rounds (job-contract.md says no Job declares them)"},
 	{"internal/contract/fold.go", `j.ReviewRounds++`, "review_rounds counts worker exits with reason loop, not review rounds"},
 }
 

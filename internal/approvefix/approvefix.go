@@ -120,7 +120,7 @@ func JobBody(id string) map[string]any { return jobBody(id) }
 func jobBody(id string) map[string]any {
 	return map[string]any{
 		"id": id, "kind": "approve", "item": 1, "title": "Approve the plan", "role": "Person",
-		"skills": []string{}, "review": "L1", "risk": []string{}, "max_rounds": 2,
+		"skills": []string{}, "risk": []string{},
 		"intent":       map[string]any{"owner": "dana", "item": "plan.md#approve", "goal": "plan.md#approve"},
 		"links":        []any{},
 		"keep":         []string{},
