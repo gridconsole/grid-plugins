@@ -31,7 +31,11 @@ type Input struct {
 	Source   string `json:"source"`
 	SourceID string `json:"source_id"`
 	Title    string `json:"title"`
-	Body     string `json:"body"`
+	// Sender is who sent it, as the source names them; Recipient is the address or
+	// channel it came to. Both are optional one-line text.
+	Sender    string `json:"sender,omitempty"`
+	Recipient string `json:"recipient,omitempty"`
+	Body      string `json:"body"`
 }
 
 // Note's trust fields are assigned by code, never by source content.
@@ -40,14 +44,19 @@ type Note struct {
 	Source   string `yaml:"source"`
 	SourceID string `yaml:"source_id,omitempty"`
 	Title    string `yaml:"title,omitempty"`
-	Status   string `yaml:"status"`
-	Captured string `yaml:"captured"`
-	Updated  string `yaml:"updated"`
-	Tier     string `yaml:"tier"`
-	BodyKind string `yaml:"body_kind"`
-	Became   string `yaml:"became,omitempty"`
-	Until    string `yaml:"until,omitempty"`
-	Body     string `yaml:"-"`
+	// Sender and Recipient sit with the other source text and, like it, are data
+	// the source gave; absent, they write no key. Apply re-encodes this struct, so
+	// a key not carried here would be dropped on the first act.
+	Sender    string `yaml:"sender,omitempty"`
+	Recipient string `yaml:"recipient,omitempty"`
+	Status    string `yaml:"status"`
+	Captured  string `yaml:"captured"`
+	Updated   string `yaml:"updated"`
+	Tier      string `yaml:"tier"`
+	BodyKind  string `yaml:"body_kind"`
+	Became    string `yaml:"became,omitempty"`
+	Until     string `yaml:"until,omitempty"`
+	Body      string `yaml:"-"`
 }
 type Result struct {
 	From    string `json:"from,omitempty"`
@@ -91,6 +100,12 @@ func Validate(in Input) error {
 		return err
 	}
 	if err := textField("title", in.Title, 1024); err != nil {
+		return err
+	}
+	if err := textField("sender", in.Sender, 512); err != nil {
+		return err
+	}
+	if err := textField("recipient", in.Recipient, 512); err != nil {
 		return err
 	}
 	if strings.TrimSpace(in.Title) == "" && strings.TrimSpace(in.Body) == "" {
@@ -254,7 +269,7 @@ func (s Store) Add(in Input) (Result, error) {
 		return Result{}, err
 	}
 	now := contract.FormatTime(time.Now())
-	note := Note{ID: id, Source: in.Source, SourceID: in.SourceID, Title: in.Title, Status: "new", Captured: now, Updated: now, Tier: "external", BodyKind: "data", Body: in.Body}
+	note := Note{ID: id, Source: in.Source, SourceID: in.SourceID, Title: in.Title, Sender: in.Sender, Recipient: in.Recipient, Status: "new", Captured: now, Updated: now, Tier: "external", BodyKind: "data", Body: in.Body}
 	data, err := encode(note)
 	if err != nil {
 		return Result{}, err
