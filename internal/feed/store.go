@@ -27,6 +27,7 @@ var ErrStaleLease = errors.New("stale lease")
 type RecordIDUsedError struct{ ID string }
 
 func (e *RecordIDUsedError) Error() string { return "record id already used for a different post" }
+
 var ErrDiskFull = errors.New("disk full")
 
 // Store is one task's Feed. TaskID is the stable ULID, not its display number.
