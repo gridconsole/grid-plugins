@@ -113,7 +113,7 @@ the app and replay/audit consumers. Spec: review-F1 (`findings-concept.md:144`),
 
 The on-disk representation has two files, so a JSON Schema cannot validate the
 raw Markdown file and its sibling as one JSON document. Validation uses the
-existing `job.Rendered` shape (`internal/job/render.go:30-33`):
+existing `job.Rendered` shape (`internal/job/render.go:51-54`):
 `{"brief": <exact brief.md string>, "inputs": <decoded inputs.json>}`.
 This wrapper is a lossless validation projection, **not a new saved file**.
 The capture test reads the real files, keeps the complete `inputs.json` object
@@ -121,24 +121,31 @@ as `json.RawMessage`, and compares the result with the checked-in fixture.
 Consumers must keep both files; validating `inputs.json` alone cannot establish
 that the saved prompt exists. No hash is substituted for text.
 
-| Field in validation projection | On-disk meaning and constraints | Writer and spec |
-| --- | --- | --- |
-| `brief` | Complete nonempty UTF-8 prompt, including Job front matter and all rendered sections; exact contents of `brief.md`. | internal/job/jobcmd/save.go:36; findings-concept.md:144 |
-| `inputs` | Exact object stored as `inputs.json`; all five fields below are present. | internal/job/render.go:23-29; job-contract.md:80 |
-| `inputs.generation` | String containing the project generation map, such as `{"project":1}`, or `content:<sha256>` when no project index generation exists. | internal/job/jobcmd/command.go:119-122,451-467; job-contract.md:80 |
-| `inputs.sources` | Array of every resolved source, including candidates omitted from the prompt, sorted by pointer. | internal/job/render.go:41,281-289; findings-concept.md:144 |
-| `inputs.not_rendered` | Sorted pointer strings omitted by the brain budget; never null. | internal/job/render.go:204-207; job-contract.md:96 |
-| `inputs.brain_tokens` | Integer 0–2000; character-count estimate for the brain section, not a cap on the full prompt. | internal/job/render.go:208,290; job-contract.md:96,98 |
-| `inputs.disableSkillShellExecution` | Boolean set when guest/external non-personal sources were resolved, even when a candidate was later omitted. | internal/job/render.go:63-68; job-contract.md:89 |
-| `inputs.sources[].pointer` | Resolved source pointer, including any anchor or range. | internal/job/source.go:25; job-contract.md:80 |
-| `.summary`, `.text` | Source summary and pinned text, not only a digest. Empty for personal pointer-only sources. | internal/job/source.go:26-27,161-170; findings-concept.md:144 |
-| `.tier` | One of the four current trust tiers, taken from the source. | internal/job/source.go:28; job-contract.md:87 |
-| `.sha256` | Digest string: full file bytes for files, encoded note for project brain; empty for personal pointers. | internal/job/source.go:29,176-181,237-238; findings-concept.md:144 |
-| `.state`, `.topic`, `.updated` | Optional source lifecycle/topic/update strings; omitted when empty. `updated` is copied metadata, not constrained to a timestamp here. | internal/job/source.go:24,30-31,166,216-217; brain-feed.md:278 |
-| `.links` | Optional array of source links; each has string `to`, `rel`, `why`. | internal/job/source.go:32,167-168; brain-feed.md:278 |
-| `.pointer_only` | Optional boolean, emitted when true for home notes; text, summary, digest and links are not copied. | internal/job/source.go:33,161-164; brain-feed.md:285-286 |
-| `.shown` | Optional string, how the brief used the source: `text` (intent sources and the previous acceptance, pasted in full), `excerpt` (a brain note's text after its pointer line), `summary` (a pointer or read line shows the summary), `pointer` (the line names the path or id and nothing of the file). The strongest use wins when a source is used twice (text > excerpt > summary > pointer). Absent when the brief did not use the source, such as a brain note cut by the budget, and in files written before this field. `text` stays in every source whatever `shown` says, so replay rebuilds the same brief. | internal/job/render.go (`Shown*`, `Render`); internal/job/source.go (`Source.Shown`) |
-| `inputs.brief_bytes`, `inputs.pasted_chars` | Optional integers, absent in files written before them. `brief_bytes` is `len(brief)`; `pasted_chars` is the rune count of source text written into the brief (intent sources, excerpts, the previous acceptance), so it is below the summed `sources[].text` whenever a source was only summarised or named. | internal/job/render.go (`Inputs`, `Render`) |
+| Field in validation projection | Presence | On-disk meaning and constraints | Writer and spec |
+| --- | --- | --- | --- |
+| `brief` | required | Complete nonempty UTF-8 prompt, including Job front matter and all rendered sections; exact contents of `brief.md`. | internal/job/jobcmd/save.go:36; findings-concept.md:144 |
+| `inputs` | required | Exact object stored as `inputs.json`. The five required fields below are always present; `brief_bytes` and `pasted_chars` are optional. No other field is allowed. | internal/job/render.go:24-35; job-contract.md:80 |
+| `inputs.generation` | required | String containing the project generation map, such as `{"project":1}`, or `content:<sha256>` when no project index generation exists. | internal/job/jobcmd/command.go:119-122,451-467; job-contract.md:80 |
+| `inputs.sources` | required | Array of every resolved source, including candidates omitted from the prompt, sorted by pointer. | internal/job/render.go:41,281-289; findings-concept.md:144 |
+| `inputs.not_rendered` | required | Sorted pointer strings omitted by the brain budget; never null. | internal/job/render.go:204-207; job-contract.md:96 |
+| `inputs.brain_tokens` | required | Integer 0–2000; character-count estimate for the brain section, not a cap on the full prompt. | internal/job/render.go:208,290; job-contract.md:96,98 |
+| `inputs.disableSkillShellExecution` | required | Boolean set when guest/external non-personal sources were resolved, even when a candidate was later omitted. | internal/job/render.go:63-68; job-contract.md:89 |
+| `inputs.sources[].pointer` | required | Resolved source pointer, including any anchor or range. | internal/job/source.go:25; job-contract.md:80 |
+| `.summary`, `.text` | required | Source summary and pinned text, not only a digest. Empty for personal pointer-only sources. | internal/job/source.go:26-27,161-170; findings-concept.md:144 |
+| `.tier` | required | One of the four current trust tiers, taken from the source. | internal/job/source.go:28; job-contract.md:87 |
+| `.sha256` | required | Digest string: full file bytes for files, encoded note for project brain; empty for personal pointers. | internal/job/source.go:29,176-181,237-238; findings-concept.md:144 |
+| `.state`, `.topic`, `.updated` | optional | Optional source lifecycle/topic/update strings; omitted when empty. `updated` is copied metadata, not constrained to a timestamp here. | internal/job/source.go:24,30-31,166,216-217; brain-feed.md:278 |
+| `.links` | optional | Optional array of source links; each has string `to`, `rel`, `why`. | internal/job/source.go:32,167-168; brain-feed.md:278 |
+| `.pointer_only` | optional | Optional boolean, emitted when true for home notes; text, summary, digest and links are not copied. | internal/job/source.go:33,161-164; brain-feed.md:285-286 |
+| `.shown` | optional | Optional string, how the brief used the source: `text` (intent sources and the previous acceptance, pasted in full), `excerpt` (a brain note's text after its pointer line), `summary` (a pointer or read line shows the summary), `pointer` (the line names the path or id and nothing of the file). The strongest use wins when a source is used twice (text > excerpt > summary > pointer). Absent when the brief did not use the source, such as a brain note cut by the budget, and in files written before this field. `text` stays in every source whatever `shown` says, so replay rebuilds the same brief. | internal/job/render.go (`Shown*`, `Render`); internal/job/source.go (`Source.Shown`) |
+| `inputs.brief_bytes` | optional | Integer, at least 0; absent in files written before it. It is `len(brief)`. | internal/job/render.go (`Inputs`, `Render`) |
+| `inputs.pasted_chars` | optional | Integer, at least 0; absent in files written before it. It is the rune count of source text written into the brief (intent sources, excerpts, the previous acceptance), so it is below the summed `sources[].text` whenever a source was only summarised or named. | internal/job/render.go (`Inputs`, `Render`) |
+
+The plugin writes both optional fields on every render (`internal/job/render.go:33-34`
+has no `omitempty`); they are optional only so that older files stay valid.
+`contract/formats/hf_render_doc_test.go` checks the `inputs.*` rows, their
+presence column and the count above against the schema, and the json tags of
+`job.Inputs` against the schema's `inputs` properties.
 
 The source fields follow the writer's shape, including empty text/digest for
 personal pointers. The schema does not verify digests, pointer resolution or
