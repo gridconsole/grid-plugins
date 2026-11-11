@@ -113,12 +113,6 @@ type Checkpoint struct {
 	Commit string `json:"commit"`
 }
 
-type LevelRaised struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-	Why  string `json:"why"`
-}
-
 // Job is the materialized run state. Retries are explicit assignments; the fold
 // never spawns a worker, increments an attempt on its own, or consults a clock.
 type Job struct {
@@ -142,10 +136,7 @@ type Job struct {
 	Checkpoint      *Checkpoint     `json:"checkpoint"`
 	Exited          string          `json:"exited"`
 	ExitReason      string          `json:"exit_reason"`
-	Review          string          `json:"review"`
-	LevelRaised     *LevelRaised    `json:"level_raised"`
 	ReviewRounds    int             `json:"review_rounds"`
-	MaxRounds       int             `json:"max_rounds"`
 	Continues       *string         `json:"continues"`
 	DiscoveredFrom  *string         `json:"discovered_from"`
 	ProposedJobs    []ProposedJob   `json:"proposed_jobs"`

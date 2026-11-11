@@ -125,18 +125,19 @@ func Fold(posts []Post) State {
 		switch p.Type {
 		case "job":
 			var b struct {
-				ID, Title, Role, Kind, Review string
-				MaxRounds                     int     `json:"max_rounds"`
-				Continues                     *string `json:"continues"`
-				DiscoveredFrom                *string `json:"discovered_from"`
-				Order                         *int    `json:"order"`
+				ID, Title, Role, Kind string
+				Continues             *string `json:"continues"`
+				DiscoveredFrom        *string `json:"discovered_from"`
+				Order                 *int    `json:"order"`
 			}
+			// An old record may still carry review and max_rounds; they are not
+			// decoded, so they are ignored.
 			_ = json.Unmarshal(p.Body, &b)
 			if _, exists := out.Jobs[b.ID]; exists {
 				set(p, "ignored", "Job already exists; revisions need a new Job")
 				continue
 			}
-			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Status: Posted, Review: b.Review, MaxRounds: b.MaxRounds, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
+			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Status: Posted, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
 		case "question":
 			var b struct{ Who string }
 			_ = json.Unmarshal(p.Body, &b)
@@ -251,10 +252,6 @@ func Fold(posts []Post) State {
 			var b struct{ Job, Kind string }
 			_ = json.Unmarshal(p.Body, &b)
 			if j := out.Jobs[b.Job]; j != nil && b.Kind == "security" {
-				if j.Review != "L3" {
-					j.LevelRaised = &LevelRaised{From: j.Review, To: "L3", Why: "security finding " + p.ID}
-					j.Review = "L3"
-				}
 				j.NeedsLead = true
 			}
 		}
