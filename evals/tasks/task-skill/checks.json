@@ -1,0 +1,7 @@
+[
+  {"id":"task-made","type":"command_passes","gate":true,"command":["sh","-c","find \"$GRID_HOME\" -path '*/tasks/T-*/task.md' | grep -q ."]},
+  {"id":"words-verbatim","type":"command_passes","weight":3,"command":["sh","-c","find \"$GRID_HOME\" -path '*/tasks/T-*/intent.md' | xargs grep -qF 'add a tag filter to the notes list so I can find Groceries quikly'"]},
+  {"id":"made-by-the-verb","type":"command_passes","command":["sh","-c","find \"$GRID_HOME\" -path '*/tasks/T-*/intent.md' | xargs grep -q '^## Request {#request}$'"]},
+  {"id":"one-task","type":"command_passes","command":["sh","-c","test \"$(find \"$GRID_HOME\" -path '*/tasks/T-*/task.md' | wc -l)\" -eq 1"]},
+  {"id":"repo-untouched","type":"command_passes","command":["sh","-c","test \"$(find work -type f | wc -l)\" -eq 2 && grep -q 'return \\[...notes\\];' work/notes-app/src/store.js"]}
+]

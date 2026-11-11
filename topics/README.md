@@ -1,1 +1,1 @@
-One directory per brain topic: topics/<topic>/TOPIC.md holds the schema, triggers and brief cap, read by the CLI and the hooks.
+This folder holds no topics. The eight built-in brain topics are listed in internal/brain/topics.go:25. A custom knowledge topic is one file inside the brain, not in this repo: `knowledge/<topic>/TOPIC.md` (internal/brain/topics.go:66), with front matter `name`, `kind: knowledge`, `level` and `description`.

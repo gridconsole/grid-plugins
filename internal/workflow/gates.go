@@ -16,20 +16,31 @@ import (
 // set of author roles. The withdraw action uses the control schema instead.
 // Missing workflow files preserve older tasks' defaults.
 func GatePostRoles(taskDir string) (map[string][]string, error) {
-	roles := map[string][]string{
+	raw, err := readTaskPolicy(taskDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return defaultGatePostRoles(), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return gatePostRoles(raw)
+}
+
+// defaultGatePostRoles is the shipped default when no workflow sets a kind.
+func defaultGatePostRoles() map[string][]string {
+	return map[string][]string{
 		"person":   {"cli", "owner", "member", "lead"},
 		"timer":    {"cli", "owner", "member", "lead"},
 		"ci":       {"cli", "owner", "member", "lead", "agent", "worker"},
 		"job":      {"cli", "owner", "member", "lead", "agent", "worker"},
 		"withdraw": DefaultQuestionWithdrawRoles(),
 	}
-	raw, err := readTaskPolicy(taskDir)
-	if errors.Is(err, os.ErrNotExist) {
-		return roles, nil
-	}
-	if err != nil {
-		return nil, err
-	}
+}
+
+// gatePostRoles is the one front matter reader for gate_post_roles. A task's
+// workflow.md and a brain workflow note both go through it.
+func gatePostRoles(raw []byte) (map[string][]string, error) {
+	roles := defaultGatePostRoles()
 	front, err := parseFrontmatter(raw)
 	if err != nil {
 		return nil, err

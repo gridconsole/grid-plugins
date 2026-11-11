@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/fspath"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
@@ -36,8 +37,9 @@ func newContext(in hookio.Input, root string, env map[string]string) context {
 	c := context{in: in, env: env, root: root, home: env["GRID_HOME"], projects: env["GRID_PROJECTS"]}
 	c.set = c.home != "" || c.projects != ""
 	// The new CLI has one Grid home, independent of desktop workspace config.
-	if c.home == "" && c.projects == "" && env["HOME"] != "" {
-		c.home = filepath.Join(env["HOME"], ".grid")
+	// gridhome.Dir is the one place that reads GRID_HOME and spells the default.
+	if c.projects == "" {
+		c.home = gridhome.Dir(func(key string) string { return env[key] }, env["HOME"])
 	}
 	if c.projects == "" && c.home != "" {
 		c.projects = filepath.Join(c.home, "projects")
@@ -139,7 +141,6 @@ func taskAt(p, projects string) *task {
 	return &task{filepath.Join(resolve(".", projects), filepath.Join(parts[:3]...)), strings.Join(parts[3:], "/")}
 }
 
-const planAcceptedMark = "· plan accepted ·"
 const previewApproved = "· preview approved ·"
 const planReady = "· plan ready ·"
 
@@ -155,13 +156,11 @@ func stepsFor(env map[string]string, taskDir string) stepLookup {
 // planStage reads the inline list alone; it backs the PlanStage export the
 // session hooks use, which have no Grid home to resolve a named workflow from.
 func planStage(text, history string) string { return taskstore.PlanStage(text, history) }
-func planStageWith(lookup stepLookup, text, history string) string {
-	return taskstore.PlanStageWith(lookup, text, history)
-}
-func heldStage(stage string) bool { return taskstore.HeldStage(stage) }
 
-// held is the one answer to "does this task's plan still wait for a person?";
-// it lives in the task package so the writers ask the same question.
+// held reports that a task's plan is still being written (no plan accepted).
+// Two rules read it: the brain-recall check on plan.md and the grid-planner's
+// reach into a task folder. Neither blocks a repo write, and no rule blocks a
+// task's agents because its plan is not accepted.
 func held(lookup stepLookup, dir, text, history string) bool {
 	return taskstore.PlanHeldWith(lookup, dir, text, history)
 }
@@ -180,10 +179,6 @@ func inactive(text string) bool {
 		return true
 	}
 	return false
-}
-func (c context) isHeld(dir string) bool {
-	t := read(filepath.Join(dir, "task.md"))
-	return exists(dir) && !inactive(t) && held(stepsFor(c.env, dir), dir, t, read(filepath.Join(dir, "history.md")))
 }
 func gateLike(s string) bool {
 	s = strings.ToLower(strings.Join(strings.Fields(s), " "))

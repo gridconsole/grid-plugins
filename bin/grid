@@ -27,6 +27,12 @@ arch=$(uname -m)
 case $os in
 Darwin) platform=darwin ;;
 Linux) platform=linux ;;
+MINGW*|MSYS*|CYGWIN*)
+	# Git Bash, MSYS2 or Cygwin on Windows: run the shipped Windows binary when this tree has one.
+	if [ -f "$root/bin/grid-windows-amd64.exe" ]; then
+		exec "$root/bin/grid-windows-amd64.exe" "$@"
+	fi
+	echo "grid: unsupported operating system: $os (supported: Darwin, Linux, Windows with a release binary)" >&2; exit 1 ;;
 *) echo "grid: unsupported operating system: $os (supported: Darwin, Linux)" >&2; exit 1 ;;
 esac
 case $arch in

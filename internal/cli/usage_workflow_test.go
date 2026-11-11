@@ -89,7 +89,8 @@ func TestUsageWorkflowThresholds(t *testing.T) {
 func TestUsageWorkflowConfigure(t *testing.T) {
 	h, task := usageTask(t)
 	h.write(filepath.Join(task, "workflow.md"), "---\nusage_notice_thresholds: {tokens: [90, 100], minutes: [90, 100]}\n---\n")
-	if code := h.run(task, "usage", "budget", "set", "--dollars", "100", "--json"); code != 0 {
+	setTaskBudget(t, h, task, usage.Change{Dollars: []float64{100}})
+	if code := h.run(task, "usage", "threshold", "show", "--json"); code != 0 {
 		t.Fatal(code, h.errb)
 	}
 	var c usage.Configuration

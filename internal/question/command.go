@@ -20,6 +20,8 @@ type Env struct {
 	Stdout, Stderr  io.Writer
 	Now             func() time.Time
 	Writer          func(bool) (feed.Writer, error)
+	// Jobs posts and closes the person Job of `ask`; nil leaves a plain question.
+	Jobs JobPort
 }
 
 type options []string
@@ -61,9 +63,15 @@ func run(args []string, env Env) int {
 		return 2
 	}
 	action := args[0]
-	if action != "add" && action != "answer" && action != "withdraw" && action != "list" && action != "tick" && action != "sync" {
+	if action != "add" && action != "ask" && action != "answer" && action != "withdraw" && action != "list" && action != "tick" && action != "sync" {
 		fmt.Fprintf(env.Stderr, "question: unknown action %q\n", action)
 		return 2
+	}
+	// ask is add with a person Job behind the question: the Job is the question,
+	// and only a Job that lists it in its own after list waits for the answer.
+	asks := action == "ask"
+	if asks {
+		action = "add"
 	}
 	name := "grid question " + action
 	if action == "answer" {
@@ -187,7 +195,7 @@ func run(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "question:", err)
 		return 1
 	}
-	store := Store{TaskDir: scope.TaskPath, Now: env.Now, Warn: env.Stderr, WithdrawAllowed: env.WithdrawAllowed}
+	store := Store{TaskDir: scope.TaskPath, Now: env.Now, Warn: env.Stderr, WithdrawAllowed: env.WithdrawAllowed, Jobs: env.Jobs}
 
 	// Fail before writer identity setup, which may create local machine state.
 	if action != "list" {
@@ -198,7 +206,9 @@ func run(args []string, env Env) int {
 	}
 
 	if env.Writer != nil && action != "list" && action != "sync" {
-		writer, e := env.Writer(action == "withdraw" || action == "tick")
+		// ask reads the task lease from the environment too: a lease holder posts the
+		// person Job under it, a person of the team posts it without one.
+		writer, e := env.Writer(action == "withdraw" || action == "tick" || asks)
 		if e != nil {
 			fmt.Fprintln(env.Stderr, "question:", e)
 			return 1
@@ -209,7 +219,11 @@ func run(args []string, env Env) int {
 	var result any
 	switch action {
 	case "add":
-		result, err = store.Add(in)
+		if asks {
+			result, err = store.Ask(in)
+		} else {
+			result, err = store.Add(in)
+		}
 	case "answer":
 		result, err = store.Answer(id, text)
 	case "withdraw":
@@ -260,6 +274,9 @@ func run(args []string, env Env) int {
 		fmt.Fprintf(env.Stdout, "%s | %s | to: %s | %s | aging: %d\n%s\nRecommended: %s\nDefault: %s\nApplies: %s\n", r.ID, r.State, r.Who, block, r.Aging, r.Question, r.Recommended, r.Gate.Default, r.Gate.At.UTC().Format(FeedTime))
 		if r.Answer != "" {
 			fmt.Fprintf(env.Stdout, "Answer: %s\n", r.Answer)
+		}
+		if asks && r.Job != "" {
+			fmt.Fprintf(env.Stdout, "Job: %s (a Job that must wait for the answer lists %s, or gate:%s, in its after)\n", r.Job, r.Job, r.ID)
 		}
 	}
 	return 0

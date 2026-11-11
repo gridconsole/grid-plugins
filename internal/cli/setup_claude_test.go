@@ -13,6 +13,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
 func claudeHarness(t *testing.T) *harness {
@@ -181,6 +182,11 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 			rules := slices.DeleteFunc(doc.Permissions.Deny, func(rule string) bool {
 				return strings.Contains(rule, "~/.grid-person/**") || rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)"
 			})
+			// The generated deny rules are the block level of the guard; only-writer
+			// warns by default, so the comparison runs against the block level.
+			if err := (settings.Store{Home: h.gridHome}).SetHook("only-writer", "block"); err != nil {
+				t.Fatal(err)
+			}
 			env := map[string]string{"HOME": h.home, "GRID_HOME": h.gridHome, "GRID_PROJECTS": projects}
 			paths := []string{
 				"projects/p/tasks/T-01-work", "projects/p/tasks/T-01-work/task.md", "projects/p/tasks/T-1/sub/deep/file", "projects/p/TASKS/t-22-work/brief.md",
