@@ -75,14 +75,6 @@ func TestPlanWriteAndDiffGolden(t *testing.T) {
 			if err != nil || string(data) != planFixture(t, "plan.md") {
 				t.Fatal("previous revision not preserved")
 			}
-			args = []string{"plan", "diff", "3", "--task", task, "4"}
-			if format == "json" {
-				args = append(args, "--json")
-			}
-			if code := h.run(h.tmp, args...); code != 0 {
-				t.Fatalf("exit %d: %s", code, h.errb)
-			}
-			golden.Assert(t, "plan-cli-diff-"+format, h.out.String())
 		})
 	}
 }
@@ -122,13 +114,13 @@ func TestPlanUsageAndRefusals(t *testing.T) {
 	h := newHarness(t)
 	task := planTask(h)
 	for _, args := range [][]string{
-		{"plan"}, {"plan", "bogus"}, {"plan", "hash", "extra"}, {"plan", "write"}, {"plan", "diff", "1"}, {"plan", "diff", "1", "2", "3"}, {"plan", "items", "--unknown"}, {"plan", "hash", "--task"},
+		{"plan"}, {"plan", "bogus"}, {"plan", "hash", "extra"}, {"plan", "write"}, {"plan", "items", "--unknown"}, {"plan", "hash", "--task"},
 	} {
 		if code := h.run(task, args...); code != 2 {
 			t.Errorf("%v: %d %s", args, code, h.errb)
 		}
 	}
-	for _, args := range [][]string{{"plan", "--help"}, {"plan", "diff", "--help"}} {
+	for _, args := range [][]string{{"plan", "--help"}} {
 		if code := h.run(task, args...); code != 0 {
 			t.Errorf("help: %d", code)
 		}
@@ -143,9 +135,6 @@ func TestPlanUsageAndRefusals(t *testing.T) {
 	h.write(filepath.Join(task, "-draft.md"), "# Plan\nRecall: nothing found\n- [ ] 1 First\n  jobs: []\n")
 	if code := h.run(task, "plan", "write", "--", "-draft.md"); code != 0 {
 		t.Fatalf("literal filename: %d %s", code, h.errb)
-	}
-	if code := h.run(task, "plan", "diff", "3", "99"); code != 1 {
-		t.Fatalf("missing revision: %d", code)
 	}
 }
 
@@ -399,9 +388,6 @@ func TestPlanMigrateLegacyFrontmatterRevision(t *testing.T) {
 	}
 	if !strings.Contains(string(installed), converted) || plan.Hash(string(installed)) == plan.Hash(old) {
 		t.Fatal("migration lost converted content or kept the old approval hash")
-	}
-	if code := h.run(task, "plan", "diff", "1", "2"); code != 0 {
-		t.Fatalf("diff %d: %s", code, h.errb)
 	}
 	if code := h.run(task, "plan", "migrate"); code != 0 {
 		t.Fatalf("second migration %d: %s", code, h.errb)

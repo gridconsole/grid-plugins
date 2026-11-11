@@ -22,11 +22,11 @@ import (
 var ggTaskWalked = []string{
 	"where", "task attach", "task close", "task decline", "task delete", "task history",
 	"task lane", "task move", "task rename", "task reopen", "task show", "task status", "task stop",
-	"plan check", "plan diff", "plan hash", "plan items", "plan migrate", "plan write",
+	"plan check", "plan hash", "plan items", "plan migrate", "plan write",
 	"job ack", "job blocked", "job cancel", "job lint", "job next", "job order", "job post",
 	"job render", "job result", "job show", "job tree", "job verify",
 	"lease release", "lease status", "lease take",
-	"feed fold", "feed handover", "feed post", "feed read", "feed state", "feed tick", "feed types",
+	"feed handover", "feed post", "feed read", "feed state", "feed tick", "feed types",
 	"question add", "question ask", "question list", "question sync", "question tick", "question withdraw",
 	"answer", "approve", "deliver", "proof add", "proof index", "history add", "land",
 	"brain decide", "brain keep", "brain propose", "brain search", "brain show",

@@ -89,7 +89,6 @@ func TestFeedCommands(t *testing.T) {
 	}{
 		{"read", []string{"--type", "post"}, `"records"`},
 		{"state", nil, `"by_ref"`},
-		{"fold", nil, `"jobs"`},
 		{"types", nil, `"roles":["worker","agent","cli"]`},
 	} {
 		t.Run(tc.verb, func(t *testing.T) {
