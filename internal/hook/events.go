@@ -264,15 +264,18 @@ func heartbeat(o Options, in hookio.Input) {
 }
 
 // workerExit records how a Grid Worker's session ended. It acts only for a
-// Worker (GRID_FEED_TASK, GRID_JOB and GRID_WORKER set) whose Job has no result
-// yet, as the old hook did. Claude Code's own SessionEnd reasons are never a
+// Worker whose Job has no result yet: (GRID_FEED_TASK or GRID_TASK) and GRID_JOB
+// and (GRID_WORKER or GRID_WORKER_ID) set, the old names and the app worker's
+// names both. Claude Code's own SessionEnd reasons are never a
 // crash: only an explicit Grid reason of crash or loop ends the record Errored.
 func workerExit(o Options, in hookio.Input) {
 	if in.HookEventName != "SessionEnd" && in.HookEventName != "SubagentStop" {
 		return
 	}
 	jobID := o.Getenv("GRID_JOB")
-	if in.SessionID == "" || o.Getenv("GRID_FEED_TASK") == "" || jobID == "" || o.Getenv("GRID_WORKER") == "" {
+	hasTask := o.Getenv("GRID_FEED_TASK") != "" || o.Getenv("GRID_TASK") != ""
+	hasWorker := o.Getenv("GRID_WORKER") != "" || o.Getenv("GRID_WORKER_ID") != ""
+	if in.SessionID == "" || !hasTask || jobID == "" || !hasWorker {
 		return
 	}
 	if !o.hookEnabled("session-end", in) {
