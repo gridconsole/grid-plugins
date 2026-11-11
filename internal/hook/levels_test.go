@@ -68,7 +68,6 @@ func TestCatalogContextLevels(t *testing.T) {
 		text        string
 	}{
 		{"session-start", "SessionStart", hookio.Input{}, "Grid tracks tasks"},
-		{"precompact", "PreCompact", hookio.Input{}, "acceptance ids"},
 		{"user-prompt", "UserPromptSubmit", hookio.Input{Prompt: "/grid:plan"}, "Brain recall"},
 		{"subagent-start", "SubagentStart", hookio.Input{AgentType: "grid:grid-builder"}, "Brain recall"},
 	} {

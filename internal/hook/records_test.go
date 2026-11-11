@@ -128,7 +128,7 @@ func assertNoDecision(t *testing.T, out string) {
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		var v map[string]any
 		if err := json.Unmarshal([]byte(line), &v); err != nil {
-			// PreCompact prints plain-text guidance for the summary; text is context, not a decision.
+			// Plain text is context, not a decision.
 			continue
 		}
 		for _, k := range []string{"decision", "reason", "continue", "stopReason", "permissionDecision"} {
