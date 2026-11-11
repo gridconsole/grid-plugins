@@ -19,13 +19,16 @@ func roleRefusal(env Env, verb string, allowed []string, asJSON bool) int {
 	if len(allowed) > 0 {
 		roleRefusalHint += "; allowed: " + strings.Join(allowed, ", ")
 	}
-	fmt.Fprintf(env.Stderr, "grid %s: %s (reason: %s).\n", verb, roleRefusalHint, reason)
+	line := fmt.Sprintf("grid %s: %s (reason: %s).", verb, roleRefusalHint, reason)
+	fmt.Fprintln(env.Stderr, line)
 	if asJSON {
 		_ = writeJSON(env.Stdout, struct {
-			Error  string `json:"error"`
-			Reason string `json:"reason"`
-			Hint   string `json:"hint"`
-		}{"person_required", reason, roleRefusalHint})
+			Error   string `json:"error"`
+			Reason  string `json:"reason"`
+			Hint    string `json:"hint"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		}{"person_required", reason, roleRefusalHint, "person_required", line})
 	}
 	return 3
 }

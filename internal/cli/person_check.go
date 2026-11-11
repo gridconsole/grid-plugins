@@ -54,13 +54,16 @@ func runPersonCheck(args []string, env Env) int {
 		fmt.Fprintln(env.Stdout, "person check: ok")
 		return 0
 	}
-	fmt.Fprintf(env.Stderr, "grid person check: %s (reason: %s).\n", personCheckHint, reason)
+	line := fmt.Sprintf("grid person check: %s (reason: %s).", personCheckHint, reason)
+	fmt.Fprintln(env.Stderr, line)
 	if *asJSON {
 		_ = writeJSON(env.Stdout, struct {
-			Error  string `json:"error"`
-			Reason string `json:"reason"`
-			Hint   string `json:"hint"`
-		}{"person_required", reason, personCheckHint})
+			Error   string `json:"error"`
+			Reason  string `json:"reason"`
+			Hint    string `json:"hint"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		}{"person_required", reason, personCheckHint, "person_required", line})
 	}
 	return 3
 }
