@@ -1,53 +1,45 @@
-# C-hy-plugin-drop-restore: lane report
+# C-hy-plugin-drop-restore: lane report (fix round 1)
 
-Base: main 91fadeff (`git rev-parse origin/main` at the start of the lane; `drop` and `restore` were not in command.go).
-Stopped at the call budget: the store layer is done and tested; the CLI verbs, the shared tables, the goldens and the README are NOT DONE. Split below.
+Base: main 91fadeff (`drop` and `restore` were not in command.go there). This round adds what fix round 1 listed as missing: the CLI verbs, `Env.Member`, the shared tables, the goldens, the README, `make generate`, and the three braincmd tests. The store layer (internal/brain/hy_drop.go, Store.Drop, the read paths, the job source) is from the first round and is unchanged.
 
 ## Proof table
 
 | Row / rule | Result |
 |---|---|
-| 1. TestHyDrDropAndRestore in internal/braincmd (CLI, GRID_MEMBER/GRID_WHO/GRID_ACTOR origin, `--by` exits 2) | NOT DONE. No runDrop/runRestore, no `Env.Member`. Store-level equivalent HOLDS: `go test -count=1 -run HyDr ./internal/brain/ ./internal/job/` exit 0, TestHyDrDropAndRestore in internal/brain/hy_drop_test.go checks bytes unchanged, versions unchanged, search and index drop it, show has `Dropped`, changes lists `dropped` and `restored` with origin `person:ana`, and a drop-restore-drop writes two `dropped` lines. |
-| 2. TestHyDrRoles (exit 3 for guest, log byte-equal) | NOT DONE. The role check lives in the CLI verb, which is not written. |
-| 3. TestHyDrRefusals (exit codes 6, 8, 9, 2, 1) | NOT DONE as an exit-code test. The store half HOLDS: TestHyDrRefusals and TestHyDrDropTwiceIsRefused in internal/brain/hy_drop_test.go: stale rev gives `ErrConflict` carrying the rev, missing note `ErrNoSuchNote`, restore of a never-dropped note, `machines`, `skills`, `TOPIC`, a superseded note and a second drop give `ErrDropRefused`; note bytes and log.md are unchanged after each. |
-| 4. TestHyDrConcurrent (internal/brain/hy_drop_test.go) | HOLDS. Two `DropWith` calls released by a channel barrier (no sleep, no clock): one nil, one `ErrDropRefused`, one new `dropped` line. `go test -count=1 -run HyDr ./internal/brain/ ./internal/job/` exit 0. |
-| 4. TestHyDrJobSource (internal/job/hy_drop_source_test.go) | HOLDS. Resolve on a dropped note's pointer fails with `brain:project/deploy: note is dropped`, and succeeds after restore. Same command, exit 0. |
-| 5. `make generate` twice, `git diff --exit-code contract/commands.json` | NOT DONE (no verb, so no commands.json change). |
-| 5. `go test -count=1 ./internal/brain/ ./internal/braincmd/ ./internal/job/ ./internal/cli/` | HOLDS for the code on this head: `go test -count=1 ./internal/brain/... ./internal/job/... ./internal/braincmd/... ./internal/cli/...` exit 0 (cli 68.8s). The named inventory, parity, unknown-project-walk and help tests do not walk the new verbs, because there are none. |
-| 5. `make golden`, `make lint`, `make cross` | NOT DONE (not run). `gofmt -l internal` is empty. |
-| Importers of brain and job | HOLDS. `go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./... \| grep -E 'internal/(brain\|job)( \|$)'` lists braincmd, cli, hook, job, job/jobcmd, job/jobtest, job/lint, jobgraph, lease, migrate, orchestrator, people, ports, routine, task, workflow. `go test -count=1` on each: all ok, exit 0. |
-| New tests fail on base | NOT RUN. By construction they do not compile on base 91fadeff: `DropWith`, `Store.Drop`, `NoteRev`, `OpDrop`, `OpRestore`, `ErrConflict`, `ErrDropRefused`, `ErrNoSuchNote` and `Entry.Dropped` do not exist there. |
-| No existing test edited or deleted | HOLDS. `git diff --stat origin/main..HEAD` shows only the two edited read paths and three new test files. |
-| No guard, gate, cap or hold on agents | HOLDS. Nothing here blocks an agent; the role check is the owner's decision and sits in the CLI verb (not yet written). |
-| Commits | One sentence each, no attribution lines. No personal paths, hosts or emails. |
-| Windows and macOS builds | NOT DONE (`make cross` not run). |
+| 1. TestHyDrDropAndRestore (internal/braincmd/hy_drop_test.go, through `cli.Run` with GRID_MEMBER `ana`, GRID_ROLE `member`) | HOLDS. `go test -count=1 -run HyDr ./internal/braincmd/` exit 0. Drop exits 0; note bytes and versions folder are equal; search and the index entry count drop it; `show --json` has `"dropped":true`; `changes --json` has `dropped` then `restored` with origin `person:ana`. Origin: GRID_WHO `bo` beside GRID_MEMBER `ana` gives `person:bo`; GRID_ACTOR `cy` beside MEMBER gives `person:cy`; MEMBER alone gives `person:ana`; all three empty gives kind `session`. `--by ana` exits 2. |
+| 2. TestHyDrRoles (both verbs x owner, member, empty, guest) | HOLDS. Same command, exit 0. owner, member and empty exit 0; guest exits 3, stdout empty, stderr exactly `grid brain drop: caller role is not allowed to drop brain entries` (restore: `... to restore brain entries`), log.md byte-equal. |
+| 3. TestHyDrRefusals (18 cases) | HOLDS. Same command, exit 0. Stale rev exits 6 with stderr `{"error":"conflict","rev":"<current>"}` (drop and restore); missing note exits 8 `{"error":"no_such_note"}`; a dropped entry, restore of a never-dropped one, a superseded one, `machines` and `skills` exit 9 (`{"error":"refused","reason":...}` where the reason is checked); `../x`, no operand, no `--expect`, `--expect xyz` and a short hex exit 2 with the usage line; an unregistered `--project` exits 1. Each case compares the whole Grid home (notes, versions, log.md, index) before and after: no write. |
+| 4. TestHyDrConcurrent (internal/brain/hy_drop_test.go) | HOLDS (first round, unchanged). `go test -count=1 ./internal/brain/` ok. Two `DropWith` calls behind a channel barrier: one nil, one `ErrDropRefused`, one new `dropped` line. |
+| 4. TestHyDrJobSource (internal/job/hy_drop_source_test.go) | HOLDS (first round, unchanged). `go test -count=1 ./internal/job/` ok. Resolve on a dropped note fails with `note is dropped`, works after restore. |
+| 5. `make generate` twice, `git diff --exit-code contract/commands.json` | HOLDS. `make generate` exit 0 three times; after the last, `git diff --exit-code contract/commands.json` exit 0 and `git status --short` empty. commands.json gained `drop` and `restore` with `--expect` required. |
+| 5. `go test -count=1 ./internal/brain/ ./internal/braincmd/ ./internal/job/ ./internal/cli/` | HOLDS, exit 0 (brain, braincmd, job, cli ok). Verbose: TestContractCommandsParserInventory, TestGuestProjectParity (brain_drop and brain_restore, plain and json, both projects), TestGgUnknownProjectWalk, TestGgUnknownProjectWalkCoversTheContract, TestExHelpLinesFitOneLine, TestExHelpSummariesNameEveryVerb PASS. TestRemainingTaskOperandHelp passes in the full cli package run (the verbose filter cut its line off; the package is ok). |
+| 5. `make golden`, `make lint`, `make cross` | HOLDS. `make golden` exit 0 (`ok internal/golden`). `make lint` exit 0 after gofmt of my test file (the first run failed on gofmt, fixed in its own commit). `make cross` exit 0: darwin/arm64 and windows/amd64 vet and test compile. |
+| Importers of the changed packages | HOLDS. `go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./... \| grep -E 'internal/(brain\|braincmd\|job\|cli)( \|$)'` lists cmd/grid, braincmd, cli, hook, job, job/jobcmd, job/jobtest, job/lint, jobgraph, lease, migrate, orchestrator, people, ports, routine, task, workflow, lib. `go test -count=1` on all of them exit 0, all ok (cli 98s, orchestrator 116s). |
+| New tests fail on base | HOLDS. The three braincmd tests run in a worktree of 91fadeff fail: `TestHyDrDropAndRestore: hy_drop_test.go:183: drop: 2 brain: unknown command "drop". Run: grid brain help`; `TestHyDrRoles/drop/role=owner: exit 2, stderr "brain: unknown command \"drop\"..."`; `TestHyDrRefusals/stale_rev: exit 2, want 6`; `.../no_such_note: exit 2, want 8`. The store tests do not compile on base (`DropWith` is missing). |
+| No existing test edited or deleted | HOLDS. The only edits in existing tests are the two rows per verb in contract_inventory_test.go and guest_parity_test.go that the brief names. |
+| No guard, gate, cap or hold on agents | HOLDS. The role check is the owner's decision (`brain.RevertAllowed`, as `revert`); nothing else blocks. |
+| Exit codes | HOLDS. internal/braincmd/hy_drop.go returns 0, 1, 2, 3, 6, 8, 9 only; never 4, 5 or 7. |
+| Commits | One sentence each, no attribution lines, no personal paths, hosts or emails. |
 
-## What changed
+## What changed (this round)
 
-- `internal/brain/hy_drop.go` (new): `DropWith(root, topic, name, op, expect, origin, reason)` under `locked`; `NoteRev` (first 8 bytes of sha256, 16 lower hex); `Dropped(root)` (one log.md read, keyed `topic/name`); errors `ErrDropRefused` (`*RefusedError` with the reason), `ErrNoSuchNote`, `ErrConflict` (`*ConflictError` with the rev); `Store.Drop(level, ...)` which runs `DropWith` and then `RebuildIndex` after the lock.
-- `internal/brain/store.go`: `Entry.Dropped` (`json:"dropped,omitempty"`, so no other JSON changes).
-- `internal/brain/query.go`: `entries()` reads `Dropped` once per level; Show returns the entry with `Dropped` set; Search skips it.
-- `internal/brain/index.go`: the entry count skips a dropped entry, one `Dropped` read per `rows` call.
-- `internal/job/source.go`: a dropped note is refused with `<pointer>: note is dropped`.
-- Tests: `internal/brain/hy_drop_test.go`, `internal/job/hy_drop_source_test.go`.
+- `internal/braincmd/hy_drop.go` (new): `runDrop`, `runRestore` over `hyDrRun`, in the order of `runRevert`: parse, usage (operand, `ValidName`, 16 lower-case hex `--expect`), `brain.RevertAllowed(env.Role)`, `levelStore(..., true)`, then `store.Drop`. Failures 6, 8 and 9 print one JSON line on stderr with or without `--json`; other store errors go through `failWith` (exit 1). Origin is `person:<Member>` when `brain.ValidName(Member)`, else `brain.SessionOrigin()`. No flag names the person.
+- `internal/braincmd/command.go`: `Env.Member`, `drop|restore` in the verb list, two usage lines under revert with their exit lists, dispatch, Run's doc.
+- `internal/cli/brain.go`: `Member: brainMember(env)`, GRID_WHO, else GRID_ACTOR, else GRID_MEMBER.
+- `internal/cli/cli.go`: the brain summary now names `drop` and `restore`.
+- `contract/README.md`: a section per verb after `grid brain revert`; `contract/commands.json` by `make generate` only; both goldens edited.
+- `internal/cli/contract_inventory_test.go`, `guest_parity_test.go`: two rows per verb.
+- `internal/braincmd/hy_drop_test.go` (new): the three tests, in package `braincmd_test` so they can run through `cli.Run` and the real environment-to-person mapping.
 
 ## Decisions to check in review
 
-- `DropWith` has no level argument (the brief's signature), but `topicAt` needs one. `hyDrKnowledgeTopic` takes built-in topics by Kind, refuses the reserved names (`skills`, `workflows`, `design`, `research`, `incidents`, `versions`), and for a custom topic accepts a topic that is a knowledge topic at either level; a topic with no TOPIC.md is `ErrNoSuchNote`.
-- `logAudit` drops a line already present in the log tail as a retry. A drop, restore and drop of one entry in one millisecond would write an identical second `dropped` line and lose it, so `DropWith` stamps each line strictly after the entry's last accepted, dropped or restored line. TestHyDrDropAndRestore covers this.
-- State is the last `accepted`, `dropped` or `restored` line of the entry, in file order. NOT VERIFIED: whether a later `accepted` line written by a merge-into decision on a dropped entry un-drops it. That follows the brief's rule; I did not read `DecideTask` to check which status it logs.
-- `RebuildIndex` still lists a dropped entry's outgoing links in backlinks.json, as it does for a superseded one. The brief did not ask for a change.
-
-## Split for the rest (new lane, about 25 calls)
-
-1. `internal/braincmd/hy_drop.go`: `runDrop`, `runRestore` in the order of `runRevert`; `Env.Member`; origin `person:<member>` when `brain.ValidName`, else `brain.SessionOrigin()`; role check `brain.RevertAllowed`; exits 0, 2, 3, 6, 8, 9, 1 with the JSON on stderr; call `store.Drop(level, ...)`.
-2. `internal/braincmd/command.go` (verb list, two usage lines, dispatch, Run doc), `internal/cli/brain.go` (`Member` from GRID_WHO, else GRID_ACTOR, else GRID_MEMBER), `internal/cli/cli.go:121`, `contract/README.md`, both goldens, `make generate`.
-3. One row per verb in `contract_inventory_test.go` and `guest_parity_test.go`.
-4. `internal/braincmd/hy_drop_test.go`: TestHyDrDropAndRestore, TestHyDrRoles, TestHyDrRefusals as in the brief.
-5. `make golden`, `make lint`, `make cross`.
+- The summary line in `grid help` is joined with `/` (`show/search/.../revert/drop/restore`). With `, ` the line is 122 columns and the existing TestExHelpLinesFitOneLine requires under 120; every verb is still named, so TestExHelpSummariesNameEveryVerb holds. Other lanes that add a brain verb will hit the same limit.
+- 6, 8 and 9 print their JSON on stderr also without `--json`, because the brief gives the codes as a machine table and row 3 does not pass `--json`. Success prints the JSON only with `--json`, else `dropped decisions/checks v1 rev <rev>`.
+- `--expect` must be exactly 16 lower-case hex; anything else is a usage error (exit 2), so a short or upper-case rev is never reported as a stale rev.
+- Open from the first round: whether a merge-into decision on a dropped entry (a later `accepted` line) un-drops it was not checked.
 
 ## NOT VERIFIED on a live screen
 
-Nothing here touches a screen. The app's read of the `dropped` and `restored` audit statuses is not run from this repo.
+Nothing here touches a screen. The app's read of the `dropped` and `restored` audit statuses and its call of `grid brain drop` are not run from this repo.
 
-NOT DONE
+DONE
