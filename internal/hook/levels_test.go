@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/session"
@@ -191,7 +190,7 @@ func TestHistoryOffCoversEveryWriter(t *testing.T) {
 					t.Fatal(err)
 				}
 				store := brain.Store{GridHome: f.home}
-				origin := brain.Origin{Tier: contract.PersonTeam, Kind: "session", ID: "session-demo"}
+				origin := brain.Origin{Kind: "session", ID: "session-demo"}
 				_, err := store.Propose(brain.Note{Name: "cache", Topic: "decisions", Type: "convention", Description: "Cache configuration", Summary: "Keep configuration explicit.", Source: "task:T-01", Level: "home", Body: "Use explicit configuration.", Origin: origin}, origin)
 				if err != nil {
 					t.Fatal(err)

@@ -6,8 +6,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
 func chkStore(t *testing.T) Store {
@@ -31,7 +29,7 @@ func chkPut(t *testing.T, s Store, rel, data string, mode os.FileMode) {
 
 func chkProposal(t *testing.T, s Store, name, topic, status, body string) {
 	t.Helper()
-	b, err := Encode(Note{Name: name, Topic: topic, Type: "reference", Description: "When checking.", Summary: "A summary.", Source: "T-01", Level: "home", Status: status, Origin: Origin{Kind: "session", ID: "x", Tier: contract.Agent}, Body: body})
+	b, err := Encode(Note{Name: name, Topic: topic, Type: "reference", Description: "When checking.", Summary: "A summary.", Source: "T-01", Level: "home", Status: status, Origin: Origin{Kind: "session", ID: "x"}, Body: body})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,4 @@
 {
   "kind": "session",
-  "id": "synthetic-session",
-  "tier": "agent"
+  "id": "synthetic-session"
 }

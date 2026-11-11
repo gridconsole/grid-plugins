@@ -7,15 +7,49 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/gridconsole/grid-plugins/internal/contract"
+	"go.yaml.in/yaml/v4"
 )
 
-// Origin is supplied by the caller's session or authenticated source, never by
-// note text. Unknown imports must use external; local CLI sessions use agent.
+// Origin records who wrote a note as plain fields: ID is the author (the
+// session, Job or server that wrote it) and Kind says which of those it is. It
+// is supplied by the caller's session or source, never by note text. Imported
+// text uses the "import" kind.
 type Origin struct {
-	Kind string             `json:"kind" yaml:"kind"`
-	ID   string             `json:"id" yaml:"id"`
-	Tier contract.TrustTier `json:"tier" yaml:"tier"`
+	Kind string `json:"kind" yaml:"kind"`
+	ID   string `json:"id" yaml:"id"`
+}
+
+// UnmarshalYAML reads an origin block strictly. Notes written before the trust
+// tiers were dropped still carry a tier key; it is read and ignored, and every
+// other unknown or repeated key stays an error.
+func (o *Origin) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: origin must be a mapping", n.Line)
+	}
+	var out Origin
+	seen := map[string]bool{}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		key, val := n.Content[i], n.Content[i+1]
+		if seen[key.Value] {
+			return fmt.Errorf("line %d: mapping key %q already defined", key.Line, key.Value)
+		}
+		seen[key.Value] = true
+		switch key.Value {
+		case "kind":
+			if err := val.Decode(&out.Kind); err != nil {
+				return err
+			}
+		case "id":
+			if err := val.Decode(&out.ID); err != nil {
+				return err
+			}
+		case "tier": // retired: old notes still carry it
+		default:
+			return fmt.Errorf("line %d: field %s not found in type brain.Origin", key.Line, key.Value)
+		}
+	}
+	*o = out
+	return nil
 }
 
 // Link keeps the destination's summary with the reason to follow this edge.
@@ -85,11 +119,6 @@ func (n Note) Validate() error {
 	case "session", "job", "server", "import":
 	default:
 		return fmt.Errorf("origin kind must be session, job, server or import")
-	}
-	switch n.Origin.Tier {
-	case contract.PersonTeam, contract.PersonGuest, contract.Agent, contract.External:
-	default:
-		return fmt.Errorf("origin tier is required")
 	}
 	for _, l := range n.Links {
 		if err := l.Validate(); err != nil {

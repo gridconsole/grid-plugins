@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var keeper = Origin{Kind: "session", ID: "keeper-1", Tier: "agent"}
+var keeper = Origin{Kind: "session", ID: "keeper-1"}
 
 // threeVersions publishes v1, v2 and v3 of conventions/checks.
 func threeVersions(t *testing.T) Store {

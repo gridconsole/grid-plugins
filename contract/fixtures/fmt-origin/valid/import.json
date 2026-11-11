@@ -1,5 +1,4 @@
 {
   "kind": "import",
-  "id": "synthetic-session",
-  "tier": "external"
+  "id": "synthetic-session"
 }
