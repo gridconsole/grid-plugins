@@ -214,6 +214,29 @@ func TestContextCeiling(t *testing.T) {
 	}
 }
 
+// The agent routing line is gone from the session start text; the other lines stay.
+func TestSessionContextHasNoAgentRoutingLine(t *testing.T) {
+	r := where.Result{Project: "example"}
+	text := sessionContext(r, where.Resolver{GridHome: "/example"}, "")
+	for _, gone := range []string{"Grid agents cover", "grid-scout", "grid-builder", "Job briefs are rendered"} {
+		if strings.Contains(text, gone) {
+			t.Fatalf("session start text still carries %q:\n%s", gone, text)
+		}
+	}
+	for _, kept := range []string{
+		"Grid tracks tasks, Jobs and shared knowledge in one Grid home.",
+		"GRID_HOME is the Grid data folder",
+		ProjectLine(r, ""),
+		"Task files are written by grid under the Grid home.",
+		"The Grid brain holds shared topics, knowledge and decisions",
+		"Approvals come from a person through the Grid app",
+	} {
+		if !strings.Contains(text, kept) {
+			t.Fatalf("session start text lost %q:\n%s", kept, text)
+		}
+	}
+}
+
 func TestCwdFromInputAndNoProjectCreated(t *testing.T) {
 	o, out, root := fixture(t)
 	o.Cwd = ""
