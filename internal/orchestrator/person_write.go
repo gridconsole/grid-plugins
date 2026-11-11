@@ -15,7 +15,24 @@ func PersonWriter(w feed.Writer) bool {
 	return w.Lease == "" && contract.TierFor(w.Author.Role) == contract.PersonTeam
 }
 
-var errPersonOnly = &feed.InvalidRecordError{Err: errors.New("only a person of the team posts a Job without the task lease")}
+// guestAnswerer reports whether w is a guest writing without a lease: the one
+// writer outside the team that may answer a person Job, and only the Job that
+// names it (guestAddressed). PostPerson stays with PersonWriter.
+func guestAnswerer(w feed.Writer) bool {
+	return w.Lease == "" && w.Fence == 0 && contract.NormalizeRole(w.Author.Role) == "guest"
+}
+
+// guestAddressed reports whether Job id is a person Job whose intent.owner is w.
+func guestAddressed(snap Snapshot, w feed.Writer, id string) bool {
+	for _, it := range snap.Items {
+		if it.ID == id && it.IsPerson() {
+			return contract.GuestAddressee(w.Author.Role, w.Author.ID, w.Lease != "" || w.Fence != 0, it.Role, it.PersonName(), it.Kind)
+		}
+	}
+	return false
+}
+
+var errPersonOnly =&feed.InvalidRecordError{Err: errors.New("only a person of the team posts a Job without the task lease")}
 
 // PostPerson writes a person's Job post without a lease, at fence zero like an
 // answer to a question, so a held task lease does not stop it. The post is a

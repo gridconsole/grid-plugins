@@ -330,6 +330,11 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 				if q.ID == value(r.Re) && q.Type == "question" && entry.Verdict == "counted" && str(q.Body["who"]) == r.Author.ID {
 					addressed = true
 				}
+				// Or a person Job whose intent.owner is this guest, answered with no lease.
+				if q.ID == value(r.Re) && q.Type == "job" && entry.Verdict == "counted" {
+					intent, _ := q.Body["intent"].(map[string]any)
+					addressed = addressed || contract.GuestAddressee(r.Author.Role, r.Author.ID, r.Lease != nil || r.Fence != 0, str(q.Body["role"]), str(intent["owner"]), str(q.Body["kind"]))
+				}
 			}
 			if !addressed {
 				return Record{}, &InvalidRecordError{Err: fmt.Errorf("guest answer must name a question addressed to that guest")}
