@@ -73,6 +73,7 @@ during `task show` exits 1.
 | `person_required` | The existing person gate refused the request. |
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
 | `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
+| `workflow_file_changed` | A workflow file changed since its revision was read (`grid workflow write`); nothing was written and it exits 3. |
 | `job_waiting` | A person Job still waits for a Job in its after list (`grid approve`, `grid job result`); exits 3. |
 | `changed` | A settings file or preview changed since the person looked; nothing was written. |
 | `invalid_settings` | A settings value, key, preset or file is invalid; nothing was written. |
@@ -80,7 +81,7 @@ during `task show` exits 1.
 | `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
 
-The first five constants live in `internal/cli/error_codes.go` and the settings
+The first six constants live in `internal/cli/error_codes.go` and the settings
 codes in `internal/settings/claude_user.go`; `person_required` and `job_waiting` are
 written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
 and `internal/cli/task_write.go`. `TestHfFsCodeTable` keeps this table equal to that set.
@@ -504,11 +505,11 @@ filter; hidden and unknown project requests remain indistinguishable to guests.
 
 ### `grid workflow write [--project <name-or-id>] --rev <12-hex|none> --file <path|-> [--json]`
 
-Replaces one workspace file, or `projects/<name>/workflows.md` for exactly one registered project. Input comes from a file (relative to the current folder) or stdin with `--file -`; it must be UTF-8, at most 32 KiB, start with a workflows heading on the first line, and pass workflow parsing. `--rev none` requires absence; otherwise the revision must match under the destination's persistent lock. A mismatch exits 3 with `workflow changed since read`; invalid input exits 2 and parse diagnostics are listed. Refusals leave existing bytes unchanged.
+Replaces one workspace file, or `projects/<name>/workflows.md` for exactly one registered project. Input comes from a file (relative to the current folder) or stdin with `--file -`; it must be UTF-8, at most 32 KiB, start with a workflows heading on the first line, and pass workflow parsing. `--rev none` requires absence; otherwise the revision must match under the destination's persistent lock. A mismatch exits 3 with `workflow changed since read`; with `--json` stdout is the envelope `{"error":{"code":"workflow_file_changed","message":"grid workflow write: workflow changed since read"}}`. Invalid input exits 2 and parse diagnostics are listed. Refusals leave existing bytes unchanged.
 
 The project is selected as for `workflow show`. A selector that matches no visible project, or an ID shared by several, exits 1 with `grid workflow write: project "<selector>" is missing or ambiguous`; a caller that passes the role policy but is not allowed Personal access (a member) gets `grid workflow write: project is missing or ambiguous` instead.
 
-Writes use a synced temporary file in the destination folder and atomic rename, with symlinks refused and destination operations confined by `os.Root`. A linked or non-regular target exits 2. JSON is `{ "file": "workflows.md", "rev": "<12-hex>" }`, with `"<project>/workflows.md"` for a project; plain output is `<file> <rev>` on one line. Diagnostics do not expose absolute paths. The replaceable `WriteDefaultAllowed` host policy accepts an unset/empty `GRID_ROLE`, `owner`, or `member`; other roles exit 3 before reading input or writing files. Application authorization remains the caller's responsibility.
+Writes use a synced temporary file in the destination folder and atomic rename, with symlinks refused and destination operations confined by `os.Root`. A linked or non-regular target exits 2. JSON is `{ "file": "workflows.md", "rev": "<12-hex>" }`, with `"<project>/workflows.md"` for a project; plain output is `<file> <rev>` on one line. Diagnostics do not expose absolute paths. The replaceable `WriteDefaultAllowed` host policy accepts an unset/empty `GRID_ROLE`, `owner`, or `member`; other roles exit 3 before reading input or writing files, with stderr `grid workflow write: caller role is not allowed to write workflows`. With `--json` that refusal prints the person gate object `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to write workflows","code":"person_required","message":"grid workflow write: caller role is not allowed to write workflows"}`; it is the host policy, not a workflow's role list. Application authorization remains the caller's responsibility.
 
 ### `grid task new "<words>" [--project <name-or-id>] [--size <size>] [--workflow <name>] --json`
 
