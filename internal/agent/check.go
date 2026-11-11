@@ -49,6 +49,12 @@ func Check(ctx context.Context, env Env) []Report {
 	return reports
 }
 
+// probeContext gives each probe its Wait budget. Only tests assign it, so a
+// test can end a probe by an event instead of waiting out the budget.
+var probeContext = func(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, Wait)
+}
+
 func check(ctx context.Context, env Env, name string) Report {
 	min := ClaudeMin
 	if name == "codex" {
@@ -70,7 +76,7 @@ func check(ctx context.Context, env Env, name string) Report {
 		return r
 	}
 	probe := func(args ...string) (string, int) {
-		child, cancel := context.WithTimeout(ctx, Wait)
+		child, cancel := probeContext(ctx)
 		defer cancel()
 		if child.Err() != nil {
 			return "", -1
