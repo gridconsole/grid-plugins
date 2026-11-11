@@ -6,7 +6,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"path"
 	"runtime"
 	"strings"
 	"time"
@@ -43,33 +43,74 @@ func (e Env) childEnv(name, binary string) []string {
 	if base == nil {
 		base = os.Environ()
 	}
+	return childEnvFor(runtime.GOOS, string(os.PathListSeparator), base, e.Home, name, binary)
+}
+
+// childEnvFor builds the probe child's environment for goos from base. It reads
+// no host state, so every goos branch runs under any test host.
+//
+// On windows the PATH is the binary's folder, then <SYSTEMROOT>\System32 and
+// <SYSTEMROOT> from base (SYSTEMROOT matched case-insensitively; none when it is
+// absent or empty), so the child gets no Unix folder and keeps the system folder.
+// The folder names are plain string joins on a backslash, and the binary's folder
+// is cut at the last backslash or slash, because path/filepath on a non-Windows
+// host does not split on a backslash. Every other goos gets the binary's folder
+// followed by systemPath.
+func childEnvFor(goos, listSep string, base []string, home, name, binary string) []string {
+	windows := goos == "windows"
 	config := "CLAUDE_CONFIG_DIR"
 	if name == "codex" {
 		config = "CODEX_HOME"
 	}
 	env := []string{}
+	systemRoot := ""
 	for _, entry := range base {
-		key, _, _ := strings.Cut(entry, "=")
-		if key == "HOME" || (runtime.GOOS == "windows" && strings.EqualFold(key, "USERPROFILE")) {
+		key, value, _ := strings.Cut(entry, "=")
+		if key == "HOME" || (windows && strings.EqualFold(key, "USERPROFILE")) {
 			continue
 		}
 		pass := key == "USER" || key == "LOGNAME" || key == "LANG" || key == "TMPDIR" || key == "SHELL" || strings.HasPrefix(key, "LC_") || key == config
-		if runtime.GOOS == "windows" {
+		if windows {
 			switch strings.ToUpper(key) {
-			case "USERNAME", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "TEMP", "TMP":
+			case "USERNAME", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "TEMP", "TMP", "PATHEXT", "COMSPEC":
 				pass = true
+			}
+			if systemRoot == "" && strings.EqualFold(key, "SYSTEMROOT") {
+				systemRoot = value
 			}
 		}
 		if pass {
 			env = append(env, entry)
 		}
 	}
-	dirs := append([]string{filepath.Dir(binary)}, systemPath...)
-	env = append(env, "HOME="+e.Home, "PATH="+strings.Join(dirs, string(os.PathListSeparator)))
-	if runtime.GOOS == "windows" {
-		env = append(env, "USERPROFILE="+e.Home)
+	var dirs []string
+	if windows {
+		dirs = []string{windowsDir(binary)}
+		if systemRoot != "" {
+			dirs = append(dirs, strings.TrimSuffix(systemRoot, `\`)+`\System32`, systemRoot)
+		}
+	} else {
+		dirs = append([]string{path.Dir(binary)}, systemPath...)
+	}
+	env = append(env, "HOME="+home, "PATH="+strings.Join(dirs, listSep))
+	if windows {
+		env = append(env, "USERPROFILE="+home)
 	}
 	return env
+}
+
+// windowsDir is the folder of a Windows path: everything before the last
+// backslash or slash, the root kept whole (`C:\` and `\`), and "." when the path
+// has no separator.
+func windowsDir(binary string) string {
+	i := strings.LastIndexAny(binary, `\/`)
+	switch {
+	case i < 0:
+		return "."
+	case i == 0 || (i == 2 && binary[1] == ':'):
+		return binary[:i+1]
+	}
+	return binary[:i]
 }
 
 // Keep the first 64 KiB and drain the rest, matching Rust's MAX_OUTPUT.

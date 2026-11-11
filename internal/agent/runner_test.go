@@ -86,7 +86,7 @@ func TestRunnerEnvironment(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	out, code := e.run(ctx, "claude", []string{exe, "-test.run=^TestAgentProbeHelper$", "--", "--agent-probe-helper", "env"})
-	if code != 0 || out != strings.Join(append([]string{filepath.Dir(exe)}, systemPath...), string(os.PathListSeparator))+"\n"+e.Home {
+	if code != 0 || out != wantProbePath(exe)+"\n"+e.Home {
 		t.Fatalf("output %q, exit %d", out, code)
 	}
 }
