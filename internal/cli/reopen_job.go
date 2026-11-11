@@ -70,18 +70,94 @@ func reopenPlanJob(env Env, dir string) (func() error, error) {
 	next.Worktree = nil
 	return func() error {
 		next.Defaults()
-		data, err := next.Record()
-		if err != nil {
-			return err
+		// The id is picked now, not before the reopen: a Job posted since the first
+		// read, or one the fold holds out of the snapshot, may already carry it. The
+		// post is checked again under .orchestrator.lock, and a taken id is picked again.
+		for {
+			top, err := reopenJobTop(store, highest)
+			if err != nil {
+				return err
+			}
+			next.ID = "J-" + strconv.Itoa(top+1)
+			data, err := next.Record()
+			if err != nil {
+				return err
+			}
+			if err := contract.Validate("job-record", data); err != nil {
+				return err
+			}
+			var body map[string]any
+			if err := json.Unmarshal(data, &body); err != nil {
+				return err
+			}
+			skipped := false
+			var readErr error
+			_, err = orchestrator.WriteUnless(store, w, feed.Input{Type: "job", Job: next.ID, Body: body}, func() bool {
+				taken, e := reopenJobTaken(store, next.ID)
+				if e != nil {
+					// Nothing is written on a failed read; the error is returned below.
+					readErr = e
+					return true
+				}
+				skipped = taken
+				return taken
+			})
+			if err != nil {
+				return err
+			}
+			if readErr != nil {
+				return readErr
+			}
+			if !skipped {
+				return nil
+			}
 		}
-		if err := contract.Validate("job-record", data); err != nil {
-			return err
-		}
-		var body map[string]any
-		if err := json.Unmarshal(data, &body); err != nil {
-			return err
-		}
-		_, err = orchestrator.Write(store, w, feed.Input{Type: "job", Job: next.ID, Body: body})
-		return err
 	}, nil
+}
+
+// reopenJobNumber is the n of a J-<n> id; a dotted child id counts by its J-<n> part.
+// An id that is not of that form is 0.
+func reopenJobNumber(id string) int {
+	n, err := strconv.Atoi(strings.TrimPrefix(strings.SplitN(id, ".", 2)[0], "J-"))
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+// reopenJobTop is the highest J-<n> that floor or any `job` record of the Feed names,
+// whatever the record's verdict: a held, ignored or bad record still holds its id.
+func reopenJobTop(store feed.Store, floor int) (int, error) {
+	r, err := store.ReadOnly(feed.Filter{Type: "job"})
+	if err != nil {
+		return 0, err
+	}
+	top := floor
+	for _, e := range r.Records {
+		if e.Type != "job" {
+			continue
+		}
+		id, _ := e.Body["id"].(string)
+		if n := reopenJobNumber(id); n > top {
+			top = n
+		}
+	}
+	return top, nil
+}
+
+// reopenJobTaken reports whether a `job` record of the Feed already carries id.
+func reopenJobTaken(store feed.Store, id string) (bool, error) {
+	r, err := store.ReadOnly(feed.Filter{Type: "job"})
+	if err != nil {
+		return false, err
+	}
+	for _, e := range r.Records {
+		if e.Type != "job" {
+			continue
+		}
+		if got, _ := e.Body["id"].(string); got == id {
+			return true, nil
+		}
+	}
+	return false, nil
 }
