@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -167,32 +168,49 @@ func TestGgGuardedEventsMatchTheRegistration(t *testing.T) {
 	}
 }
 
-// Row 4: the walk is not vacuous. A well-formed Write to the task's task.md is
-// denied when host-guard blocks; the same input cut at 40 bytes is not.
-func TestGgGuardedContrastDenyWellFormedNotCut(t *testing.T) {
+// Row 4: the walk is not vacuous. A well-formed PreToolUse Bash event with a
+// session id and a tool use id leaves a history snapshot under that id (bashHistory);
+// the same input cut at 40 bytes leaves none and answers no decision.
+func TestGgGuardedContrastRecordWellFormedNotCut(t *testing.T) {
 	ggIsolate(t)
 	f := eventSetup(t)
-	if err := os.WriteFile(filepath.Join(f.home, "settings.json"), []byte(`{"hooks":{"host-guard":"block"}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	b, err := json.Marshal(hookio.Input{
-		HookEventName: "PermissionRequest", SessionID: "session-demo", Cwd: f.dir, ToolName: "Write",
-		ToolInput: map[string]any{"file_path": filepath.Join(f.dir, "task.md"), "content": "bad"},
+		HookEventName: "PreToolUse", SessionID: "session-demo", ToolUseID: "tu-contrast", Cwd: f.dir, ToolName: "Bash",
+		ToolInput: map[string]any{"command": "ls"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	well := string(b)
-	out, errOut, code := ggRun(t, "PermissionRequest", well, f.o.Resolver, f.dir)
-	if code != 0 || !strings.Contains(out, `"behavior":"deny"`) {
-		t.Fatalf("well formed write was not denied: out %q stderr %q exit %d", out, errOut, code)
+	snapshotted := func() bool {
+		rows, err := (session.Store{TaskDir: f.dir}).Activities()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, a := range rows {
+			if _, ok := a.Snapshots["tu-contrast"]; ok {
+				return true
+			}
+		}
+		return false
 	}
-	out, errOut, code = ggRun(t, "PermissionRequest", ggCut(well), f.o.Resolver, f.dir)
+	out, errOut, code := ggRun(t, "PreToolUse", ggCut(well), f.o.Resolver, f.dir)
 	if code != 0 {
 		t.Fatalf("cut input: exit %d, want 0; stderr %q", code, errOut)
 	}
 	assertNoDecision(t, out)
 	if strings.Contains(out, "deny") {
 		t.Fatalf("cut input answered with a decision: %q", out)
+	}
+	if snapshotted() {
+		t.Fatal("cut input left a history snapshot")
+	}
+	out, errOut, code = ggRun(t, "PreToolUse", well, f.o.Resolver, f.dir)
+	if code != 0 {
+		t.Fatalf("well formed input: exit %d, want 0; stderr %q", code, errOut)
+	}
+	assertNoDecision(t, out)
+	if !snapshotted() {
+		t.Fatalf("well formed input left no history snapshot under its tool use id: out %q stderr %q", out, errOut)
 	}
 }
