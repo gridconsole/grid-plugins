@@ -13,6 +13,14 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
+const (
+	// flakeCRMoves is how many successful moves each child must make.
+	flakeCRMoves = 25
+	// flakeCRDeadline bounds a child that cannot finish; it is not what makes
+	// the two children overlap.
+	flakeCRDeadline = 60 * time.Second
+)
+
 // flakeCRRun is the body of the two exec'd-writer tests. Run as the parent it
 // starts one child per action, in the order given, waiting gap between the
 // Start calls, and checks the receipts against the history. Run as a child
@@ -44,19 +52,24 @@ func flakeCRRun(t *testing.T, actions []string, gap time.Duration) {
 		}
 	}
 	receipts := map[string]int{}
-	for _, c := range children {
+	for i, c := range children {
 		if err := c.cmd.Wait(); err != nil {
 			t.Fatalf("%v: %s %s", err, c.out.String(), c.stderr.String())
 		}
+		printed := 0
 		for _, line := range strings.Split(c.out.String(), "\n") {
 			if strings.HasPrefix(line, "{") {
 				receipts[line]++
+				printed++
 			}
+		}
+		if printed != flakeCRMoves {
+			t.Fatalf("%s child printed %d receipts, want %d: %s", actions[i], printed, flakeCRMoves, c.out.String())
 		}
 	}
 	lines, err := s.History("", task.ID)
-	if err != nil || len(lines) < 2 {
-		t.Fatalf("history %v: %v", lines, err)
+	if err != nil || len(lines) != len(actions)*flakeCRMoves {
+		t.Fatalf("history has %d lines, want %d: %v: %v", len(lines), len(actions)*flakeCRMoves, lines, err)
 	}
 	state := "queued"
 	for _, line := range lines {
@@ -83,20 +96,38 @@ func flakeCRRun(t *testing.T, actions []string, gap time.Duration) {
 	if err != nil || got.State != state {
 		t.Fatalf("torn task: %+v %v", got, err)
 	}
+	// Close and reopen alternate from queued and the same number of each is
+	// made, so the reopen child makes the last move.
+	if state != "queued" {
+		t.Fatalf("final state %q, want queued", state)
+	}
 }
 
-// flakeCRChild is one writer: it repeats its action and prints a receipt for
-// each success. A move refused for the current state counts as an attempt.
+// flakeCRChild is one writer: it repeats its action until it has made
+// flakeCRMoves successful moves and prints a receipt for each. A move refused
+// for the current state is retried at once and is not counted. Close is only
+// allowed from queued and reopen only from closed, so the two moves strictly
+// alternate: a writer cannot finish before the other has made its moves too,
+// whatever the start order or delay. The deadline only bounds a failure.
 func flakeCRChild(t *testing.T) {
 	t.Helper()
 	s := Store{Resolver: where.Resolver{GridHome: os.Getenv("GRID_TASK_WRITE_HOME")}}
 	action := os.Getenv("GRID_TASK_WRITE_ACTION")
-	for range 100 {
+	deadline := time.Now().Add(flakeCRDeadline)
+	moves, refused := 0, 0
+	for moves < flakeCRMoves {
+		if time.Now().After(deadline) {
+			t.Fatalf("%s: deadline %v: %d of %d moves made, %d refused", action, flakeCRDeadline, moves, flakeCRMoves, refused)
+		}
 		event, err := s.Change(WriteOptions{ID: "T-01", Action: action})
-		if err == nil {
+		switch {
+		case err == nil:
 			data, _ := json.Marshal(event)
 			fmt.Println(string(data))
-		} else if !strings.Contains(err.Error(), "current state") {
+			moves++
+		case strings.Contains(err.Error(), "current state"):
+			refused++
+		default:
 			t.Fatal(err)
 		}
 	}
