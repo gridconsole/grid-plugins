@@ -3,6 +3,7 @@ package settings
 import (
 	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -79,16 +80,48 @@ func TestBudgetApplyUndoAndSetKeepTheAccountsKey(t *testing.T) {
 	}
 }
 
+// The input that TestUnknownSettingsKeysAreStillRefused once held as a refusal:
+// accountSelection is one of the seven app keys, so it is now read and kept.
+func TestAccountsWithAccountSelectionIsAcceptedAndKept(t *testing.T) {
+	const body = `{"accounts":[],"accountSelection":{"mode":"use","acct":"","fullAt":95}}`
+	o, _ := budgetFixture(t)
+	path := filepath.Join(o.GridHome, "settings.json")
+	put(t, path, []byte(body), 0o644)
+
+	if _, err := (Store{Home: o.GridHome}).Effective(); err != nil {
+		t.Fatalf("accounts with accountSelection must read: %v", err)
+	}
+	if _, err := BudgetShow(o); err != nil {
+		t.Fatalf("budget show must not refuse accountSelection: %v", err)
+	}
+	must(t, (Store{Home: o.GridHome}).SetSkill("browser", false))
+	want := ezKeysRead(t, []byte(body))["accountSelection"]
+	if got := ezKeysRead(t, contents(t, path))["accountSelection"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("a rewrite changed accountSelection:\n got  %#v\n want %#v", got, want)
+	}
+}
+
+func TestAccountSelectionBesideAnUnknownKeyIsRefused(t *testing.T) {
+	o, _ := budgetFixture(t)
+	path := filepath.Join(o.GridHome, "settings.json")
+	put(t, path, []byte(`{"accountSelection":{"mode":"use","acct":"","fullAt":95},"unknown":1}`), 0o644)
+	if _, err := (Store{Home: o.GridHome}).Effective(); err == nil || !strings.Contains(err.Error(), `unknown key "unknown"`) {
+		t.Fatalf("must be refused, naming unknown: %v", err)
+	}
+	if _, err := BudgetShow(o); err == nil {
+		t.Fatalf("budget show must refuse")
+	}
+}
+
 func TestUnknownSettingsKeysAreStillRefused(t *testing.T) {
 	o, _ := budgetFixture(t)
 	path := filepath.Join(o.GridHome, "settings.json")
 	for name, body := range map[string]string{
-		"unknown top key":          `{"surprise":1}`,
-		"app key with the records": `{"accounts":[],"accountSelection":{"mode":"use","acct":"","fullAt":95}}`,
-		"accounts not an array":    `{"accounts":{"id":"claude-ann"}}`,
-		"accounts null":            `{"accounts":null}`,
-		"accounts twice":           `{"accounts":[],"accounts":[]}`,
-		"unknown agent key":        `{"accounts":[],"agents":{"grid-nobody":{"model":"opus"}}}`,
+		"unknown top key":       `{"surprise":1}`,
+		"accounts not an array": `{"accounts":{"id":"claude-ann"}}`,
+		"accounts null":         `{"accounts":null}`,
+		"accounts twice":        `{"accounts":[],"accounts":[]}`,
+		"unknown agent key":     `{"accounts":[],"agents":{"grid-nobody":{"model":"opus"}}}`,
 	} {
 		put(t, path, []byte(body), 0o644)
 		if _, err := (Store{Home: o.GridHome}).Effective(); err == nil {
