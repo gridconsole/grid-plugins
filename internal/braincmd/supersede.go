@@ -58,7 +58,7 @@ func runSupersede(args []string, env Env) int {
 		}
 	}
 	if !brain.RevertAllowed(env.Role) {
-		fmt.Fprintln(env.Stderr, "grid brain supersede: caller role is not allowed to change brain entries")
+		fmt.Fprintln(env.Stderr, "grid brain supersede: caller role is not allowed to supersede brain entries")
 		return 3
 	}
 	store, _, err := levelStore(env, l.level, l.project, true)

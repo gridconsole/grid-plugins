@@ -488,6 +488,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"brain check":          {args: []string{"[proposal-id]"}},
 		"brain changes":        {},
 		"brain revert":         {args: []string{"<topic>/<name>"}, required: map[string]bool{"--to": true}},
+		"brain supersede":      {args: []string{"<old-note>"}, required: map[string]bool{"--by": true, "--reason": true}},
 		"brain decide":         {args: []string{"<task>", "<proposal-id>", "<accept|reject|merge-into>", "[note-id]"}},
 		"env up":               {args: []string{"<J>"}},
 		"env down":             {args: []string{"<J>"}},
