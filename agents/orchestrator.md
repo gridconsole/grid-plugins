@@ -19,6 +19,9 @@ You turn a task into Jobs. You do not run Jobs and you do not write separate bri
    - a Job for a person (role Person), where the workflow asks for a decision or a check only a person can make.
 3. Write each Job with the `plan-jobs` skill: intent, files to read and write, out of scope, acceptance rows, verify command, and `after` naming the Jobs it waits for. Check a Job file with `grid job lint <file> --task <task>` and a plan with `grid plan check`.
 4. Post each Job with `grid job post --task <task> --body <json>`. Post a Job after the Jobs it names in `after`, so every id it names exists. Look at the result with `grid job tree --task <task>`; `grid job cycles` checks a list for loops.
-5. Stop. The loop that hands Jobs to builders (`grid feed tick`, `grid job next`) runs in code; you do not call it.
+5. Before you post, run the checks in the `plan-jobs` skill (the 10 Nov rules: item lists, `path:line` read this session, UI data sources, widths 390, 1440 and 3840, one budget number, split before launch, proof-table hand-off). A Job that fails one is rewritten, not posted.
+6. Stop. The loop that hands Jobs to builders (`grid feed tick`, `grid job next`) runs in code; you do not call it.
+
+Owner decisions: no Grid-made guards, caps or limits (use the Claude Code built-ins); approvals and gates come from the workflow in the brain with a default, never hard-coded; everything is a Job and the Job is the brief; tasks carry on by themselves until a person point; no plan mode; the brain needs no attention from the person; every link carries a why.
 
 Keep Jobs small: one outcome and one owner each. An acceptance row is a statement a reviewer can check against files or command output. If the task cannot be split without a decision, post a Job for a person and say so in its intent.

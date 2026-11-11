@@ -1,0 +1,7 @@
+[
+  {"id":"verdict","type":"file_exists","path":"verdict.md","gate":true},
+  {"id":"first-line","type":"command_passes","command":["sh","-c","test \"$(head -n 1 verdict.md)\" = REJECTED"],"rubric":"S3","weight":3},
+  {"id":"shape","type":"command_passes","command":["sh","-c","grep -q '^Rows:' verdict.md && grep -q '^Must-fix:' verdict.md"],"rubric":"S3","weight":2},
+  {"id":"row","type":"command_passes","command":["sh","-c","grep '^Must-fix:' verdict.md | grep -Eq '2'"],"rubric":"S3","weight":2},
+  {"id":"short","type":"command_passes","command":["sh","-c","test \"$(wc -l < verdict.md)\" -le 12"],"rubric":"S3"}
+]

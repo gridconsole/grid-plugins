@@ -45,9 +45,11 @@ one of `--model` and `--effort`; supplying an empty value is an error.
 | grid-runner | haiku | low |
 | grid-scout | haiku | low |
 
-Supported skills are `brain-keeper`, `browser`, `deliver`, `job`, `orchestrate`,
-`plan`, `questions`, `research`, `setup`, `signals`, `task`, and
-`visual-design-review`. All default to enabled. These settings are configuration
+Supported skills are `brain-keeper`, `browser`, `deliver`, `plan-jobs`,
+`questions`, `research`, `review-job`, `run-job`, `setup`, `signals`, `task`,
+and `visual-design-review`. The names `plan-jobs`, `run-job` and `review-job`
+are the folder names under `skills/`; the catalog follows the folders because
+the agents and agent templates already load those names. All default to enabled. These settings are configuration
 for consumers of `settings.Store.Effective`; they do not rewrite installed skill
 files or change a running agent's model.
 

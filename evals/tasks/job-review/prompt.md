@@ -1,0 +1,1 @@
+You are the reviewer. Use the review-job skill to review the Job in job.md against the builder's result in result.md. There is no Grid task here, so write the verdict you would post to verdict.md instead of posting it.
