@@ -124,5 +124,12 @@ Nothing. There is no UI change.
 - The app rigs still move the task to running between approve and deliver
   (app realplugin_seed_test.go:67). That keeps working; dropping it is up to the
   app.
+- A deliver receipt in history.md can now say `from_state: waiting`,
+  `to_state: waiting`. Before this lane, a deliver came only from running,
+  queued, stuck or reworking. The brief's caller check searched the app for the
+  refusal text and for reads of the state after approve, not for history readers
+  that expect a deliver to come from `running`. Every plugin package that depends
+  on internal/task passes. This is a heads-up for app history readers; the app's
+  ey_history_event rig still goes through `running`.
 
 DONE
