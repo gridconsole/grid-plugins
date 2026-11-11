@@ -118,7 +118,7 @@ func TestSetupClaudeHelpAndProjectAnswersGolden(t *testing.T) {
 	if code := h.run(h.home, "setup", "--help"); code != 0 {
 		t.Fatalf("%d %s", code, h.errb)
 	}
-	want := "Usage: grid setup [--remove] [--yes] [--json]\n       grid setup <project> [--answers <file|->] [--json]\n"
+	want := "Usage: grid setup [--sandbox] [--remove] [--yes] [--json]\n       grid setup <project> [--answers <file|->] [--json]\n"
 	if h.out.String() != want {
 		t.Fatal(h.out)
 	}
@@ -178,9 +178,11 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 				t.Fatal(err)
 			}
 			// Setup-record defenses are additional to the writer guard and are tested
-			// through the CLI in settings.TestClaudeReworkCLIProjectAnchors.
+			// through the CLI in settings.TestClaudeReworkCLIProjectAnchors. So are
+			// the host-guard files, which TestSetupWritesDenyRulesForTheHostGuardFiles
+			// checks against EvaluateHost.
 			rules := slices.DeleteFunc(doc.Permissions.Deny, func(rule string) bool {
-				return strings.Contains(rule, "~/.grid-person/**") || rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)"
+				return strings.Contains(rule, "~/.grid-person/**") || rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)" || hostDeny(rule)
 			})
 			// The generated deny rules are the block level of the guard; only-writer
 			// warns by default, so the comparison runs against the block level.
