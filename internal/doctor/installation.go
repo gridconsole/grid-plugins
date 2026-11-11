@@ -21,6 +21,9 @@ func fixHint(name, detail string) string {
 		if strings.Contains(detail, "Update grid.") {
 			return "Update grid before opening this data."
 		}
+		if strings.HasPrefix(detail, "fresh home") {
+			return "Run grid setup"
+		}
 		return "Run grid migrate; if VERSION is missing or invalid, restore it from a known backup."
 	case "git":
 		return "Install git and add its executable directory to PATH."
