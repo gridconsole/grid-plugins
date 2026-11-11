@@ -102,7 +102,11 @@ func TestHookLevelAcceptsEveryLevelForTheFourGuards(t *testing.T) {
 			t.Run(name+"/"+level, func(t *testing.T) {
 				h := newHarness(t)
 				h.record(project.Record{Name: "example", Folders: []project.Folder{{Machine: h.env.Machine, Path: h.home}}})
-				if code := h.run(h.home, "hook", "levels", "--json"); code != 0 || !strings.Contains(h.out.String(), `"`+name+`":"block"`) {
+				def := "block"
+				if name == "only-writer" {
+					def = "warn" // verdicts-11nov v-4
+				}
+				if code := h.run(h.home, "hook", "levels", "--json"); code != 0 || !strings.Contains(h.out.String(), `"`+name+`":"`+def+`"`) {
 					t.Fatalf("default: %d %s %s", code, h.out, h.errb)
 				}
 				h.out.Reset()

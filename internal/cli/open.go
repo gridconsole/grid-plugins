@@ -122,6 +122,13 @@ func runOpen(args []string, env Env) int {
 	}
 	route := "#/t/" + url.PathEscape(t.Project) + "/" + url.PathEscape(linkID) + "/overview"
 	base := appBaseURL(env)
+	// GRID_APP_URL points at an app this machine does not run: open it as it is, start nothing.
+	if env.AppStart != nil && strings.TrimSpace(env.getenv("GRID_APP_URL")) == "" {
+		var code int
+		if base, code = env.AppStart.ensure(env); code != 0 {
+			return code
+		}
+	}
 	if base == "" {
 		if *asJSON {
 			return writeJSON(env.Stdout, struct {

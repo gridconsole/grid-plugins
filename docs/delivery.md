@@ -80,18 +80,19 @@ will read: an unknown field, an alias, a name that differs from the file name or
 a level that differs from the folder is an error. Only the older proposals in a
 task folder keep a lenient reader.
 
-Delivery blocks on waiting proposals of three kinds: the task's own folder, the
-whole project store, and home-level proposals whose `source` or `origin.id` names
-this task (`T-NN`, also as `T-NN/J-NN` or a `T-NN-title` folder name) or its
-project, as a whole word. The home store is shared by every project, so an
-unrelated proposal there does not stop this task; `brain keep` still lists it
-for the keeper. This narrows the design's "refuses while proposals wait" to the
-proposals that are this task's. A home-level proposal that names neither is not
-this task's to clear.
+A waiting proposal never stops a delivery. Delivery counts the proposals of three
+kinds: the task's own folder, the whole project store, and home-level proposals
+whose `source` or `origin.id` names this task (`T-NN`, also as `T-NN/J-NN` or a
+`T-NN-title` folder name) or its project, as a whole word. It goes ahead and
+returns them as `waiting_proposals` (`{id, path, topic, reason}` rows) in the
+`--json` result, and prints `N brain proposals wait for the curator` otherwise,
+so the orchestrator can start `grid-curator`. The home store is shared by every
+project, so an unrelated proposal there is not counted; `brain keep` still lists
+it. A proposal that cannot be read is still an error.
 
 Delivery refuses closed, stopped, or cancelled tasks, tasks whose state cannot
-move to `waiting`, waiting proposals, missing or invalid proof, empty plans, and
-unreadable deliverables. Refusals are one stderr line and a nonzero exit.
+move to `waiting`, missing or invalid proof, empty plans, and
+unreadable deliverables. Refusals are one stderr line, prefixed `deliver:`, and a nonzero exit.
 Preflight refusals and `--dry-run` write no files, including locks. A dry run
 checks the same inputs and prints each action.
 

@@ -28,13 +28,12 @@ type Event struct {
 }
 
 // This table is the source for dispatch, Handles and generated plugin hooks.
-// Timeouts are seconds: Stop and SubagentStop leave room for a bounded verify,
-// PermissionRequest for the 85 s answer wait.
+// Timeouts are seconds: Stop and SubagentStop leave room for a bounded verify.
 var events = []struct {
 	Event
 	run func(Options) int
 }{
-	{Event{"SessionStart", "startup|resume|clear|compact|fork", 10}, quiet(sessionStart)},
+	{Event{"SessionStart", "startup|resume|clear|compact|fork", 10}, quiet(func(o Options) { o.record("session start", func() { sessionStart(o) }) })},
 	{Event{"UserPromptSubmit", "", 10}, remaining},
 	{Event{"SubagentStart", "", 10}, remaining},
 	{Event{"PreToolUse", "", 10}, quiet(toolUse)},
@@ -44,7 +43,7 @@ var events = []struct {
 	{Event{"SubagentStop", "", 60}, remaining},
 	{Event{"SessionEnd", "", 10}, remaining},
 	{Event{"PostToolUseFailure", "", 10}, remaining},
-	{Event{"PermissionRequest", "", 100}, quiet(toolUse)},
+	{Event{"PermissionRequest", "", 10}, quiet(toolUse)},
 }
 
 // Events returns registration metadata without exposing the dispatcher table.
@@ -69,7 +68,7 @@ func quiet(f func(Options)) func(Options) int {
 	return func(o Options) int { f(o); return 0 }
 }
 
-var components = map[string]bool{"heartbeat": true, "stop-check": true, "worker-exit": true, "history-log": true, "usage-log": true, "brain-read": true, "brain-recall": true, "permission-forward": true,
+var components = map[string]bool{"heartbeat": true, "stop-check": true, "worker-exit": true, "history-log": true, "usage-log": true, "brain-read": true, "brain-recall": true,
 	"lib-agentname": true, "lib-gatelike": true, "lib-historyline": true, "lib-parsefrontmatter": true, "lib-workflowsteps": true, "lib-planstage": true}
 
 func componentEvent(event string) bool { return components[strings.ToLower(event)] }
@@ -102,41 +101,51 @@ func remaining(o Options) int {
 	}
 	switch name {
 	case "heartbeat":
-		heartbeat(o, *in)
+		o.record("heartbeat", func() { heartbeat(o, *in) })
 	case "worker-exit":
-		workerExit(o, *in)
+		o.record("worker exit", func() { workerExit(o, *in) })
 	case "history-log":
-		history(o, *in)
+		o.record("history", func() { history(o, *in) })
 	case "usage-log":
-		recordSession(o, *in)
+		o.record("session", func() { recordSession(o, *in) })
 	case "brain-read":
-		brainRead(o, *in)
+		o.record("brain read", func() { brainRead(o, *in) })
 	case "brain-recall":
-		recall(o, *in)
+		o.record("recall", func() { recall(o, *in) })
 	case "stop-check":
 		return stopCheck(o, *in)
-	case "permission-forward":
-		// Local guards arbitrate first; no bridge answer means the terminal asks.
-		toolUse(Options{Event: "permissionrequest", Stdin: reader(*in), Stdout: o.Stdout, Stderr: o.Stderr, Resolver: o.Resolver, Cwd: o.Cwd, Getenv: o.Getenv})
 	default:
 		if name == "precompact" && o.Stdout != nil && o.hookEnabled("precompact", *in) {
 			fmt.Fprintln(o.Stdout, "Keep the Job id, acceptance ids and open decisions in the summary.")
 		}
-		heartbeat(o, *in)
-		history(o, *in)
-		recordSession(o, *in)
-		brainRead(o, *in)
-		recall(o, *in)
+		o.record("heartbeat", func() { heartbeat(o, *in) })
+		o.record("history", func() { history(o, *in) })
+		o.record("session", func() { recordSession(o, *in) })
+		o.record("brain read", func() { brainRead(o, *in) })
+		o.record("recall", func() { recall(o, *in) })
 		if name == "stop" || name == "subagentstop" {
 			if code := stopCheck(o, *in); code != 0 {
 				return code
 			}
 		}
 		if name == "sessionend" || name == "subagentstop" {
-			workerExit(o, *in)
+			o.record("worker exit", func() { workerExit(o, *in) })
 		}
 	}
 	return 0
+}
+
+// record runs one function that only records (history, usage, heartbeat, brain
+// reads, session end). Verdict v-15: it never blocks or denies. A Go panic exits
+// the process with code 2, which Claude Code reads as a block, so a panic here
+// goes to the hook log and the hook carries on and exits 0.
+func (o Options) record(name string, f func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			o.log(name, fmt.Errorf("panic: %v", r))
+		}
+	}()
+	f()
 }
 func reader(in hookio.Input) *strings.Reader {
 	b, _ := json.Marshal(in)

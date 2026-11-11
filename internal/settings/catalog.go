@@ -77,7 +77,7 @@ func validateAgent(a Agent) error {
 }
 func defaultLevel(name string) string {
 	switch name {
-	case "host-guard", "job-lint", "only-writer", "plan-guard", "stop-check":
+	case "host-guard", "job-lint", "plan-guard", "stop-check":
 		return "block"
 	}
 	return "warn"

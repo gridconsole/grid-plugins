@@ -52,11 +52,7 @@ func runDeliver(args []string, env Env) int {
 			return 2
 		}
 		env.recordError(err)
-		line := strings.Join(strings.Fields(err.Error()), " ")
-		if !strings.HasPrefix(line, "Deliver blocked:") {
-			line = "Deliver blocked: " + line
-		}
-		fmt.Fprintln(env.Stderr, line)
+		fmt.Fprintln(env.Stderr, "deliver: "+strings.Join(strings.Fields(err.Error()), " "))
 		return 1
 	}
 	if *asJSON {
@@ -69,5 +65,8 @@ func runDeliver(args []string, env Env) int {
 		return 0
 	}
 	fmt.Fprintf(env.Stdout, "%s delivered; waiting for the person\n", result.Task)
+	if n := len(result.Waiting); n > 0 {
+		fmt.Fprintf(env.Stdout, "%d brain proposals wait for the curator\n", n)
+	}
 	return 0
 }

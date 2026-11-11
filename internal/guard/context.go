@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/fspath"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
@@ -36,8 +37,9 @@ func newContext(in hookio.Input, root string, env map[string]string) context {
 	c := context{in: in, env: env, root: root, home: env["GRID_HOME"], projects: env["GRID_PROJECTS"]}
 	c.set = c.home != "" || c.projects != ""
 	// The new CLI has one Grid home, independent of desktop workspace config.
-	if c.home == "" && c.projects == "" && env["HOME"] != "" {
-		c.home = filepath.Join(env["HOME"], ".grid")
+	// gridhome.Dir is the one place that reads GRID_HOME and spells the default.
+	if c.projects == "" {
+		c.home = gridhome.Dir(func(key string) string { return env[key] }, env["HOME"])
 	}
 	if c.projects == "" && c.home != "" {
 		c.projects = filepath.Join(c.home, "projects")
