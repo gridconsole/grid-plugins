@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/signal"
+	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
@@ -180,11 +181,43 @@ func runSignal(args []string, env Env) int {
 	if err != nil {
 		return signalFailure(env, err, *asJSON)
 	}
+	// A turn made a task through task.Store.New, as grid task new does, so it gets J-1
+	// the same way: a failure to post it is said out loud, never left as a task nothing starts.
+	var postErr error
+	if verb == "act" && act.Act == "turn" && got.Became != "" {
+		postErr = signalPostFirstJob(env, got.Became)
+	}
 	if *asJSON {
-		return writeJSON(env.Stdout, got)
+		code := writeJSON(env.Stdout, got)
+		if code == 0 && postErr != nil {
+			return failure(env, postErr)
+		}
+		return code
 	}
 	fmt.Fprintf(env.Stdout, "result: %s\nid: %s\nproject: %s\nnote: %s\nstatus: %s\n", got.Result, got.ID, got.Project, got.Note, got.Status)
+	if postErr != nil {
+		return failure(env, postErr)
+	}
 	return 0
+}
+
+// signalPostFirstJob reads the task a turn made and posts its first Job.
+func signalPostFirstJob(env Env, id string) error {
+	t, err := (task.Store{Resolver: resolver(env)}).Show(env.Cwd, id)
+	if err != nil {
+		return fmt.Errorf("%s was created but its first Job was not posted: %w", id, err)
+	}
+	// The Feed author roles are lead, owner, member and cli. A signal can be turned by
+	// an agent, whose role the Feed does not take, so the record is written by the CLI.
+	switch t.OwnerRole {
+	case "lead", "owner", "member", "cli":
+	default:
+		t.OwnerRole = "cli"
+	}
+	if err := postFirstJob(env, t, task.NewOptions{}); err != nil {
+		return fmt.Errorf("%s was created but its first Job was not posted: %w", id, err)
+	}
+	return nil
 }
 
 // signalFailure preserves the existing stderr prefix while classifying act errors.
