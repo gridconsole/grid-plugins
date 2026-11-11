@@ -123,17 +123,13 @@ func TestPlanDigestRoundTrip(t *testing.T) {
 						// The person has no lease: the holder's next pass accepts the answer.
 						holderPass(t, folder)
 					}
-					// Job render no longer depends on plan approval, so the recorded
-					// render exit and stderr (the removed refusal) are not asserted;
-					// the receipt checks below still run for those steps.
-					render := len(args) > 1 && args[0] == "job" && args[1] == "render"
-					if !update && !render && code != step.Exit {
+					if !update && code != step.Exit {
 						t.Errorf("exit = %d, want %d; stdout: %s; stderr: %s", code, step.Exit, h.out, h.errb)
 					}
 					if !strings.Contains(h.out.String(), step.StdoutContains) {
 						t.Errorf("stdout missing %q: %s", step.StdoutContains, h.out)
 					}
-					if !render && !strings.Contains(h.errb.String(), step.StderrContains) {
+					if !strings.Contains(h.errb.String(), step.StderrContains) {
 						t.Errorf("stderr missing %q: %s", step.StderrContains, h.errb)
 					}
 					stdout := map[string]any{}

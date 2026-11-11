@@ -152,7 +152,7 @@
             "$task",
             "1"
           ],
-          "exit": 2,
+          "exit": 1,
           "stdout_keys": [],
           "receipt_keys": [
             "from_state",
@@ -165,7 +165,7 @@
             "when",
             "who"
           ],
-          "stderr_contains": "plan needs approval: review and approve the current plan before rendering a Job"
+          "stderr_contains": "already has different saved inputs"
         }
       ]
     },
@@ -213,14 +213,13 @@
             "$task",
             "1"
           ],
-          "exit": 2,
+          "exit": 0,
           "stdout_keys": [],
           "receipt_keys": [
             "plan_hash",
             "task",
             "what"
-          ],
-          "stderr_contains": "plan needs approval: review and approve the current plan before rendering a Job"
+          ]
         },
         {
           "argv": [
