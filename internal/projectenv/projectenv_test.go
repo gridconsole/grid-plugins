@@ -375,6 +375,7 @@ func TestLnEnvIdsThatLookLikeYAMLScalars(t *testing.T) {
 		if !strings.HasPrefix(string(b), "---\nname: "+id+"\n---\n") && !strings.HasPrefix(string(b), "---\nname: \""+id+"\"\n---\n") && !strings.HasPrefix(string(b), "---\nname: '"+id+"'\n---\n") {
 			t.Fatalf("front matter for %s: %q", id, b)
 		}
+		t.Logf("%s -> %q", id, strings.SplitN(string(b), "\n", 3)[1])
 	}
 }
 
