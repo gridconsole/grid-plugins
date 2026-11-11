@@ -149,6 +149,8 @@ func splitTop(s string) []string {
 }
 
 // HistoryLine returns a line without a newline, escaping, or normalization.
+// The optional trailing arguments are the via (first) and the why (second): the
+// why is written last, as " · why <text>", and left out when it is empty.
 func HistoryLine(time, event, detail, who string, via ...string) string {
 	line := "- " + time + " · " + event
 	if detail != "" {
@@ -157,6 +159,9 @@ func HistoryLine(time, event, detail, who string, via ...string) string {
 	line += " · by " + who
 	if len(via) > 0 && via[0] != "" {
 		line += " · via " + via[0]
+	}
+	if len(via) > 1 && via[1] != "" {
+		line += " · why " + via[1]
 	}
 	return line
 }
