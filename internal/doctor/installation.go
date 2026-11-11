@@ -71,9 +71,9 @@ func checkDenyBlock(add func(string, bool, string), o Options) {
 func checkSandbox(add func(string, bool, string), o Options) {
 	status := settings.ReadClaudeSandbox(o.SettingsPath)
 	switch status.State {
-	case settings.ClaudeSandboxOn:
+	case "on":
 		add("sandbox", true, "on (grid setup --sandbox)")
-	case settings.ClaudeSandboxOff:
+	case "off":
 		add("sandbox", true, "off; grid setup --sandbox turns on Claude Code's sandbox")
 	default:
 		add("sandbox", true, "unknown: "+status.Reason)

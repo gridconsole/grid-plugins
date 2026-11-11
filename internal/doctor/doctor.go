@@ -34,7 +34,7 @@ type Options struct {
 	SettingsPath string // Claude settings file; supplied by the caller, never guessed
 	GridHome     string
 	Projects     string // absolute GRID_PROJECTS as setup resolves it; empty selects <GridHome>/projects
-	Label       string
+	Label        string
 	GitVersion   func() (string, error)
 	HooksFile    string
 	LookPath     func(string) (string, error)

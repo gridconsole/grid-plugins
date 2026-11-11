@@ -17,15 +17,8 @@ type ClaudeAllowStatus struct {
 // ClaudeDenyStatus is the same report for setup's permissions.deny rules.
 type ClaudeDenyStatus = ClaudeAllowStatus
 
-// The answers of ReadClaudeSandbox.
-const (
-	ClaudeSandboxOn      = "on"
-	ClaudeSandboxOff     = "off"
-	ClaudeSandboxUnknown = "unknown"
-)
-
-// ClaudeSandboxStatus is State (on, off or unknown) and, when unknown, a
-// path-free Reason.
+// ClaudeSandboxStatus is State, one of "on", "off" or "unknown", and, when
+// unknown, a path-free Reason.
 type ClaudeSandboxStatus struct {
 	State  string
 	Reason string
@@ -113,17 +106,17 @@ func claudeRuleStatus(doc claudeObject, rules []ClaudeRule) ClaudeAllowStatus {
 func ReadClaudeSandbox(path string) ClaudeSandboxStatus {
 	doc, reason, missing := readClaudeSettings(path)
 	if missing {
-		return ClaudeSandboxStatus{State: ClaudeSandboxOff}
+		return ClaudeSandboxStatus{State: "off"}
 	}
 	if reason != "" {
-		return ClaudeSandboxStatus{State: ClaudeSandboxUnknown, Reason: reason}
+		return ClaudeSandboxStatus{State: "unknown", Reason: reason}
 	}
 	on, err := claudeSandboxOn(doc)
 	switch {
 	case err != nil:
-		return ClaudeSandboxStatus{State: ClaudeSandboxUnknown, Reason: "Claude settings file has an invalid sandbox setting"}
+		return ClaudeSandboxStatus{State: "unknown", Reason: "Claude settings file has an invalid sandbox setting"}
 	case on:
-		return ClaudeSandboxStatus{State: ClaudeSandboxOn}
+		return ClaudeSandboxStatus{State: "on"}
 	}
-	return ClaudeSandboxStatus{State: ClaudeSandboxOff}
+	return ClaudeSandboxStatus{State: "off"}
 }
