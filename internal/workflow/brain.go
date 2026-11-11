@@ -122,7 +122,7 @@ func readFailure(label string, err error) Problem {
 
 // fromBrain finds the single workflow note at one brain level and takes it.
 func (a *Answer) fromBrain(home, level, folder, source, project string) bool {
-	notes, err := workflowNotes(home, folder)
+	notes, err := workflowNotes(home, folder, level, &a.Errors)
 	if err != nil {
 		a.Errors = append(a.Errors, readFailure("brain:"+level, err))
 		return false
@@ -148,7 +148,10 @@ type workflowNote struct{ name, text string }
 // requires. brain.Store itself parses front matter strictly and would refuse
 // the policy keys a workflow note carries, so this reads the files with the
 // same safefile and mdfile calls it uses and only looks at type, name and status.
-func workflowNotes(home, folder string) ([]workflowNote, error) {
+//
+// A note whose front matter is not valid YAML but has a `type: workflow` line
+// adds a Problem (labelled with level) to problems and is skipped alone.
+func workflowNotes(home, folder, level string, problems *[]Problem) ([]workflowNote, error) {
 	root, err := os.OpenRoot(home)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -203,14 +206,22 @@ func workflowNotes(home, folder string) ([]workflowNote, error) {
 			if err != nil {
 				return nil, err
 			}
-			head, ok := noteHead(data)
+			stem := strings.TrimSuffix(f.Name(), ".md")
+			head, ok, loadErr := noteHead(data)
+			if loadErr != nil {
+				// Front matter that is not YAML but says it is a workflow
+				// note: say so, and skip only this file.
+				if claimsWorkflow(data) {
+					*problems = append(*problems, readFailure("brain:"+level+"/"+stem, loadErr))
+				}
+				continue
+			}
 			if !ok || head.Type != NoteType {
 				continue
 			}
 			if head.Status != "" && head.Status != "accepted" {
 				continue
 			}
-			stem := strings.TrimSuffix(f.Name(), ".md")
 			if head.Name != stem || !brain.ValidName(stem) {
 				return nil, fmt.Errorf("workflow note %s: name must match its file", f.Name())
 			}
@@ -228,15 +239,35 @@ type noteFront struct {
 }
 
 // noteHead reads only the fields that pick a workflow note. A file that is not
-// a note at all is simply not a workflow.
-func noteHead(data []byte) (noteFront, bool) {
+// a note at all (no front matter) is simply not a workflow: ok is false. Front
+// matter that is present but not valid YAML comes back as the error.
+func noteHead(data []byte) (head noteFront, ok bool, err error) {
+	front, _, splitErr := mdfile.Split(data)
+	if splitErr != nil {
+		return noteFront{}, false, nil
+	}
+	if err := mdfile.Load(front, &head, false); err != nil {
+		return noteFront{}, false, err
+	}
+	return head, true, nil
+}
+
+// claimsWorkflow says whether unparseable front matter still has a
+// `type: workflow` line, so the note was meant as a workflow.
+func claimsWorkflow(data []byte) bool {
 	front, _, err := mdfile.Split(data)
 	if err != nil {
-		return noteFront{}, false
+		return false
 	}
-	var head noteFront
-	if err := mdfile.Load(front, &head, false); err != nil {
-		return noteFront{}, false
+	for _, line := range strings.Split(string(front), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "type:") {
+			continue
+		}
+		v := strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "type:")), `"'`)
+		if v == NoteType {
+			return true
+		}
 	}
-	return head, true
+	return false
 }

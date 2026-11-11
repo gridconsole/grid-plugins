@@ -108,6 +108,26 @@ func TestReadForBrokenNoteGivesTheDefaultAndAProblem(t *testing.T) {
 		t.Fatalf("errors = %+v", got.Errors)
 	}
 
+	// Front matter that is not valid YAML still gives the default and a problem line.
+	writeNote(t, home, "", "decisions", "bad", "---\ntype: workflow\nname: bad\ngate_post_roles: [unclosed\n---\n")
+	got = ReadFor(r, "", "")
+	if got.Source != SourceDefault || len(got.Errors) != 1 || got.Errors[0].File != "brain:home/bad" {
+		t.Fatalf("invalid yaml: source = %q errors = %+v", got.Source, got.Errors)
+	}
+	// ...and it skips only that file: a good note beside it still answers.
+	writeNote(t, home, "", "decisions", "good", noteText("good", "lead"))
+	got = ReadFor(r, "", "")
+	if got.Source != SourceHomeBrain || got.Note != "good" || len(got.Errors) != 1 || got.Errors[0].File != "brain:home/bad" {
+		t.Fatalf("invalid yaml beside a good note: source = %q note = %q errors = %+v", got.Source, got.Note, got.Errors)
+	}
+	// A non-workflow note with broken front matter stays silent.
+	quiet := t.TempDir()
+	writeNote(t, quiet, "", "decisions", "other", "---\ntype: decision\nname: other\nx: [unclosed\n---\n")
+	if got := ReadFor(where.Resolver{GridHome: quiet}, "", ""); got.Source != SourceDefault || len(got.Errors) != 0 {
+		t.Fatalf("non-workflow: source = %q errors = %+v", got.Source, got.Errors)
+	}
+	writeNote(t, home, "", "decisions", "good", "---\ntype: decision\nname: good\n---\n")
+
 	// A broken project note falls through to a good home note, with its line kept.
 	writeNote(t, home, "", "decisions", "bad", noteText("bad", "lead"))
 	writeNote(t, home, "notes-app", "conventions", "worse", strings.Replace(broken, "name: bad", "name: worse", 1))
