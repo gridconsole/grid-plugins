@@ -60,7 +60,7 @@ by message wording. Each example below is read by `TestHfFsShapes`.
 Other failures print nothing on stdout: with `--json`, an unclassified failure that
 exits 1 or 3 and is covered by none of the four shapes prints nothing on stdout, and
 only stderr carries it (`grid task show` with no operand outside a task folder is one).
-Some commands keep their own older JSON objects on failure; those carry no code.
+`job lint`, `job render`, `job show`, `job verify` and `job trace` keep their own objects (`ok`, `findings`, `error`; trace: `rows`, `problems`) and gain the top-level `code` on a classified refusal; a success and an unclassified failure print no `code`. Other commands that keep their own older JSON objects on failure carry no code.
 Plain output, successful JSON and streaming output are unchanged. A code does not
 imply an exit status: a missing project during `signal move` exits 3, a missing task
 during `task show` exits 1.
