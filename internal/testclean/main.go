@@ -22,6 +22,9 @@ var prefixes = []string{
 // settle is how long new entries may take to disappear before they are reported.
 var settle = 10 * time.Second
 
+// pause waits between scans of the settle loop; tests replace it.
+var pause = time.Sleep
+
 func snapshot(dir string) (map[string]bool, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -56,6 +59,9 @@ func check(dir string, run func() int, stderr io.Writer) int {
 	// window count as leaks.
 	deadline := time.Now().Add(settle)
 	var leaked []string
+	// An entry seen on a scan is reported only after at least one pause and
+	// rescan, whatever the clock says.
+	paused := false
 	for {
 		after, err := snapshot(dir)
 		if err != nil {
@@ -68,10 +74,11 @@ func check(dir string, run func() int, stderr io.Writer) int {
 				leaked = append(leaked, name)
 			}
 		}
-		if len(leaked) == 0 || !time.Now().Before(deadline) {
+		if len(leaked) == 0 || (paused && !time.Now().Before(deadline)) {
 			break
 		}
-		time.Sleep(50 * time.Millisecond)
+		pause(50 * time.Millisecond)
+		paused = true
 	}
 	slices.Sort(leaked)
 	for _, name := range leaked {
