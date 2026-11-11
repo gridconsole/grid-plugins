@@ -21,9 +21,11 @@ func usageOut(args []string, env Env) io.Writer {
 		if a == "--" {
 			break
 		}
-		switch a {
-		case "-h", "--h", "-help", "--help":
-			return env.Stdout
+		switch strings.TrimLeft(a, "-") {
+		case "h", "help":
+			if strings.HasPrefix(a, "-") {
+				return env.Stdout
+			}
 		}
 	}
 	return env.Stderr
