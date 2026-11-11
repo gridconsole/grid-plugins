@@ -4384,6 +4384,16 @@
               "name": "--json",
               "takes": "none",
               "required": false
+            },
+            {
+              "name": "--show",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--then",
+              "takes": "value",
+              "required": false
             }
           ],
           "json": true,
@@ -4432,6 +4442,19 @@
         },
         {
           "name": "status",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "statusline",
           "args": [],
           "flags": [
             {

@@ -434,6 +434,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"account windows":      {},
 		"account note":         {},
 		"account sign-in":      {},
+		"account statusline":   {},
 		"agent list":           {},
 		"agent set":            {args: []string{"<agent>"}},
 		"claude settings show": {},
