@@ -18,10 +18,10 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
-	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/settings"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
 	"github.com/gridconsole/grid-plugins/internal/worker"
 )
 
@@ -200,19 +200,15 @@ func workerSpawnModel(env Env, dir, role string) (string, string, error) {
 	if _, ok := settings.AgentForRole(role); !ok {
 		return "", "", nil
 	}
-	name := filepath.Base(filepath.Dir(filepath.Dir(dir)))
-	records, err := project.Load(gridhome.Real(env.GridHome))
+	// A read: settingsStore resolves the project folder and falls back to Personal for one with no record.
+	st, err := settingsStore(env, filepath.Base(filepath.Dir(filepath.Dir(dir))), true)
+	if errors.Is(err, where.ErrProjectUnregistered) {
+		st, err = settingsStore(env, gridhome.Personal, true)
+	}
 	if err != nil {
 		return "", "", err
 	}
-	registered := false
-	for _, rec := range records {
-		registered = registered || rec.Name == name || rec.ID == name
-	}
-	if !registered {
-		name = ""
-	}
-	return settings.Store{Home: env.GridHome, Project: name}.ModelFor(role)
+	return st.ModelFor(role)
 }
 
 type writerFunc func([]byte) (int, error)
