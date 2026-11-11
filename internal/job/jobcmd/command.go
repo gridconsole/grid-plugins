@@ -198,7 +198,13 @@ func Run(args []string, e Env) int {
 		if err != nil {
 			return fail(err, 1)
 		}
-		findings := lint.Check(string(b), lint.Options{Resolver: w.files, Repos: w.repos})
+		opts := lint.Options{Resolver: w.files, Repos: w.repos}
+		var findings []lint.Finding
+		if lint.IsJSON(path, b) {
+			findings = lint.CheckJSON(b, opts)
+		} else {
+			findings = lint.Check(string(b), opts)
+		}
 		ok := !lint.HasErrors(findings)
 		code := 0
 		if !ok {
