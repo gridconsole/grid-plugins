@@ -18,7 +18,7 @@ Merge commit: `a3d1fe0d388f012154fc70bfc6e5060870a675ff` (`git merge origin/main
 | 4. `make lint` | HOLDS | exit 0 (`go vet ./...`, no findings). |
 | 4. `make cross` | HOLDS | exit 0. A first run was stopped by the harness at its 10 minute background limit; the rerun with a longer limit ended `cross: windows/amd64 test compile` ... `ok .../lib 0.003s`, `[exited with code 0]`. Both darwin/arm64 and windows/amd64 vet and test compile passed. |
 | Rule: importers of the changed packages (go list) | HOLDS | `go list -f '{{.ImportPath}} {{join .Imports " "}}' ./...`: `internal/migrate` is imported only by `internal/cli`; `internal/cli` is imported by `cmd/grid` and `lib`. Tests run: migrate, cli, lib (above), cmd/grid (no test files). |
-| Rule: full `internal/cli` package | SEE BELOW | see "Open items". |
+| Rule: full `internal/cli` package | HOLDS | `go test -count=1 -timeout 30m ./internal/cli/` exit 0 on the merged head, run alone. The earlier four-package run timed out at the default 10m on an unrelated worker test under load (see "Open items"); that test passes alone: `go test -count=1 -run 'Migrate|Worker' ./internal/cli/` `ok ... 8.341s`. |
 | Rule: gofmt | HOLDS | `gofmt -l internal/ lib/` prints nothing. |
 | Rule: `go build ./...` | HOLDS | exit 0. |
 | Rule: no existing test edited to pass; nothing deleted | HOLDS | nothing removed by the merge. The lane's one edit of an existing file, `internal/migrate/recover_test.go` (the crash subprocess helper passes `WithPluginData`, no assertion changed), is explained in `docs/lanes/C-jz-migrate-plugin-data-from-call.md`. |
@@ -32,7 +32,9 @@ Nothing new beyond the merge: the lane's change (`plan.go` drops `os.Getenv`; `c
 
 ## Open items
 
-- `go test -count=1 ./internal/cli/` as part of one four-package command hit Go's default 10 minute test limit (`panic: test timed out after 10m0s`, running test `TestWorkerNextSpawnFollowsPersonalAndProjectSettings`, an unrelated worker test blocked reading its subprocess) while three heavy runs shared the machine. The result of the rerun alone with `-timeout 30m` is in the section below.
+- `go test -count=1 ./internal/cli/` as part of one four-package command hit Go's default 10 minute test limit (`panic: test timed out after 10m0s`, running test `TestWorkerNextSpawnFollowsPersonalAndProjectSettings`, an unrelated worker test blocked reading its subprocess) while three heavy runs shared the machine. The rerun alone with `-timeout 30m` exited 0 (row above), so this was machine load, not a failure of the merge. The default 10m limit is tight for this package when other heavy runs share the machine.
+
+Verdict: DONE
 
 ## NOT VERIFIED on a live screen
 
