@@ -2,21 +2,11 @@
 
 package migrate
 
-import (
-	"strconv"
-	"syscall"
-)
+import "github.com/gridconsole/grid-plugins/internal/processid"
 
-// pidStart names when the process started, so a reused pid is told from the original.
+// pidStart names when the process started, so a reused pid is told from the
+// original. It is the same token the Unix side writes through the shared
+// helper, and the one the session probe reads back.
 func pidStart(pid int) string {
-	h, err := syscall.OpenProcess(syscall.PROCESS_QUERY_INFORMATION, false, uint32(pid))
-	if err != nil {
-		return ""
-	}
-	defer syscall.CloseHandle(h)
-	var created, exited, kernel, user syscall.Filetime
-	if err := syscall.GetProcessTimes(h, &created, &exited, &kernel, &user); err != nil {
-		return ""
-	}
-	return strconv.FormatInt(created.Nanoseconds(), 10)
+	return processid.Start(pid)
 }
