@@ -95,7 +95,7 @@ func OSEnv() Env {
 type command struct {
 	name    string
 	summary string
-	run     func(args []string, env Env) int // nil: not built yet
+	run     func(args []string, env Env) int
 }
 
 func commands() []command {
@@ -107,13 +107,11 @@ func commands() []command {
 		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels", runHook},
 		{"task", "new, show, list, status, stop, close, reopen, history, attach, move", runTask},
 		{"plan", "write, check, items, hash, diff, migrate", runPlan},
-		{"views", "render the task pages", nil},
 		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor", runOrchestratorJob},
 		{"lease", "take, release, status (task lease)", runTaskLease},
 		{"feed", "tick, post, read, state, types, handover, fold", runOrchestratorFeed},
 		{"mcp", "stdio server with the Feed tools", runMCP},
 		{"question", "add, withdraw, list, tick and sync task questions", runQuestion},
-		{"ask", "ask a person a question", nil},
 		{"answer", "record a person's answer", runAnswer},
 		{"approve", "approve the plan or a later approve step (a person or the app only)", runApprove},
 		{"deliver", "write the outcome and wait for the person", runDeliver},
@@ -121,10 +119,7 @@ func commands() []command {
 		{"history", "append a dated task history line", runHistory},
 		{"land", "land a task per the deploy topic", runLand},
 		{"brain", "show, search, topics, index, propose, accept, keep, decide, check, changes, revert", runBrain},
-		{"machine", "machines topic", nil},
 		{"env", "up, down browser Job dev environments", runEnv},
-		{"ports", "claim, release, list, gc dev port blocks", runPorts},
-		{"deploy", "deploy topic", nil},
 		{"person", "check person access; list, show and find approvers", runPerson},
 		{"routine", "add, list, remove, run, schedule and unschedule routines", runRoutine},
 		{"worker", "list local grid-worker processes", runWorker},
@@ -143,7 +138,6 @@ func commands() []command {
 		{"artifact", "import, link, list and publish task artifacts", runArtifact},
 		{"eval", "list, run and show task evaluations", runEval},
 		{"migrate", "upgrade the Grid home to this format", runMigrate},
-		{"sync", "sync with a Grid server", nil},
 	}
 }
 
@@ -196,10 +190,6 @@ func Run(args []string, env Env) (exit int) {
 				fmt.Fprintln(env.Stderr, msg)
 				return 1
 			}
-		}
-		if c.run == nil {
-			fmt.Fprintf(env.Stderr, "%s: not built yet\n", name)
-			return 2
 		}
 		if guestWriteVerb(name, rest) && strings.ToLower(strings.TrimSpace(env.getenv("GRID_ROLE"))) == "guest" && env.getenv("GRID_LEASE") != "task" {
 			// A guest's role is refused before any project is resolved, so the
@@ -287,11 +277,7 @@ func printHelp(w io.Writer) {
 		width = max(width, len(c.name))
 	}
 	for _, c := range commands() {
-		note := ""
-		if c.run == nil {
-			note = " (not built yet)"
-		}
-		fmt.Fprintf(w, "  %-*s  %s%s\n", width, c.name, c.summary, note)
+		fmt.Fprintf(w, "  %-*s  %s\n", width, c.name, c.summary)
 	}
 	fmt.Fprint(w, "\nGlobal flags go before the command; each wins over its environment variable:\n"+
 		"  --grid-home DIR    the Grid home (GRID_HOME)\n"+

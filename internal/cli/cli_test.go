@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -315,10 +316,26 @@ func TestHelpListsEveryCommand(t *testing.T) {
 			}
 		}
 	}
-	h := newHarness(t)
-	h.run(h.tmp, "help")
-	if !strings.Contains(h.out.String(), "task") || !strings.Contains(h.out.String(), "(not built yet)") {
-		t.Error("help should mark commands that are not built")
+}
+
+// The stub verbs and the ports verb were removed by the owner's direction
+// ("remove, do not freeze", briefs/needed.md row 1): each now answers as any
+// unknown verb does, and help no longer lists it.
+func TestRemovedVerbsAreUnknown(t *testing.T) {
+	for _, name := range []string{"views", "ask", "machine", "deploy", "sync", "ports"} {
+		h := newHarness(t)
+		want := fmt.Sprintf("grid: unknown command %q. Run: grid help\n", name)
+		if code := h.run(h.tmp, name); code != 2 || h.errb.String() != want || h.out.Len() != 0 {
+			t.Errorf("grid %s: exit %d, stdout %q, stderr %q", name, code, h.out, h.errb)
+		}
+		if Implemented(name) {
+			t.Errorf("%s is still implemented", name)
+		}
+		h = newHarness(t)
+		h.run(h.tmp, "help")
+		if strings.Contains(h.out.String(), "\n  "+name+" ") || strings.Contains(h.out.String(), "not built yet") {
+			t.Errorf("help still lists %q", name)
+		}
 	}
 }
 
