@@ -2379,6 +2379,81 @@
           "output": ""
         },
         {
+          "name": "ask",
+          "args": [
+            "[question]"
+          ],
+          "flags": [
+            {
+              "name": "--age-after",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--applies",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--blocking",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--default",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--item",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--job",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--option",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--question",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--recommended",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--why",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
           "name": "list",
           "args": [],
           "flags": [

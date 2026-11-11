@@ -53,13 +53,13 @@ func RunAnswer(args []string, env Env) int {
 
 func run(args []string, env Env) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Fprintln(env.Stdout, "Usage: grid question add|withdraw|list|tick|sync [--task <path>] [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid question add|ask|withdraw|list|tick|sync [--task <path>] [--json]")
 		fmt.Fprintln(env.Stdout, "A person may withdraw without a lease; a task lease holder may also withdraw.")
 		fmt.Fprintln(env.Stdout, "tick requires a task lease: GRID_LEASE=task and GRID_LEASE_EPOCH.")
 		return 0
 	}
 	if len(args) == 0 {
-		fmt.Fprintln(env.Stderr, "Usage: grid question add|withdraw|list|tick|sync [--task <path>] [--json]")
+		fmt.Fprintln(env.Stderr, "Usage: grid question add|ask|withdraw|list|tick|sync [--task <path>] [--json]")
 		return 2
 	}
 	action := args[0]

@@ -86,6 +86,7 @@ var guestParityCommands = map[string][]string{
 	"proof add":          {"I-01", "--text", "parity"},
 	"proof index":        {},
 	"question add":       {"parity?", "--applies", "2030-01-01T00:00:00Z", "--default", "defer"},
+	"question ask":       {"parity?", "--applies", "2030-01-01T00:00:00Z", "--default", "defer"},
 	"question list":      {},
 	"question sync":      {},
 	"question tick":      {},

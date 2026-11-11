@@ -270,7 +270,7 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 	// runClaude has one level of its own ("settings") and a second of show and set.
 	paths["claude"] = []string{"settings set", "settings show"}
 	// "answer" is the top-level command; question.Run keeps no such route.
-	paths["question"] = []string{"add", "list", "sync", "tick", "withdraw"}
+	paths["question"] = []string{"add", "ask", "list", "sync", "tick", "withdraw"}
 	candidates := []string{"--__contract_unknown"}
 	for flag := range source.flags {
 		if flag != "--help" {
@@ -471,6 +471,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"feed fold":            {args: []string{"[task]"}},
 		"mcp":                  {},
 		"question add":         {args: []string{"[question]"}},
+		"question ask":         {args: []string{"[question]"}},
 		"question sync":        {args: []string{"[task]"}},
 		"answer":               {args: []string{"<task>", "<Q-N>", "<text>"}},
 		"question withdraw":    {args: []string{"<Q-id>"}},
