@@ -119,6 +119,7 @@ var guestParityCommands = map[string][]string{
 	"task decline":       {"{task}", "--reason", "parity"},
 	"task delete":        {"{task}"},
 	"task history":       {"{task}"},
+	"task lane":          {"{task}", "doing"},
 	"task list":          {},
 	"task move":          {"parity-worker"},
 	"task new":           {"parity"},
