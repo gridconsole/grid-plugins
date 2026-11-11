@@ -13,9 +13,7 @@ Values are for a question `Q-<n>` asked of person `<who>`.
 | `role` | `Person` | A person works this Job, no agent (`job.RolePerson`, `internal/job/job.go:171`). |
 | `kind` | `ask` | Marks the Job as the one a question posts (`question.JobKind`, `internal/question/job.go:14`). |
 | `skills` | `[]` | A person needs no skill. |
-| `review` | `L0` | Nobody reviews an answer. |
 | `risk` | `[]` | None named. |
-| `max_rounds` | `1` | One answer ends it; there is no review loop. |
 | `intent` | object: `owner` is `<who>`, `item` is `questions/Q-<n>.md`, `goal` is the question text | Says who is asked and what, and points at the question file. |
 | `links` | `[]` | None. |
 | `keep` | `[]` | None. |

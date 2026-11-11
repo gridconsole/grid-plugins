@@ -191,7 +191,7 @@ func TestT12PersonFixedValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"role", "kind", "review", "max_rounds", "on_blocked", "worktree"} {
+	for _, k := range []string{"role", "kind", "on_blocked", "worktree"} {
 		cell, ok := rows[k]
 		if !ok {
 			t.Errorf("no row for %q", k)
