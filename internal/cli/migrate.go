@@ -62,8 +62,14 @@ func runMigrate(args []string, env Env) int {
 		source = env.GridHome
 	}
 	opts := []migrate.Option{migrate.WithCeiling(env.Ceiling)}
-	if *pluginData != "" {
-		opts = append(opts, migrate.WithPluginData(absolute(*pluginData, env)))
+	// The flag wins; without it the folder is CLAUDE_PLUGIN_DATA of this call's
+	// environment, never the host process's when a lib call gave its own.
+	data := *pluginData
+	if data == "" {
+		data = env.getenv("CLAUDE_PLUGIN_DATA")
+	}
+	if data != "" {
+		opts = append(opts, migrate.WithPluginData(absolute(data, env)))
 	}
 	p, err := migrate.Scan(source, env.GridHome, opts...)
 	if err != nil {
