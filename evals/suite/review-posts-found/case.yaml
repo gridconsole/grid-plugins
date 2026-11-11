@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: review-posts-found
+description: A reviewer reads a finished builder Job whose changed file writes a session token to a log; it must post a `found` record for the hole before it posts its verdict.
+context:
+  scaffold_script: fixture.sh
