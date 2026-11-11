@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/land"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
@@ -202,9 +203,12 @@ func runTaskWrite(args []string, env Env) int {
 }
 
 const approveUsage = `Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--json]
+       grid approve <task> --plan-hash <hash> --send-back <words> [--json]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 --plan-hash accepts the 6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json.
 workflow.md with plan_hash_token: digest requires the 64-hex digest.
+--send-back sends the open plan approve Job back with your words instead of approving
+the plan; it needs the current --plan-hash and takes no --note.
 `
 
 func runApprove(args []string, env Env) int {
@@ -212,6 +216,7 @@ func runApprove(args []string, env Env) int {
 	fs.Usage = func() { fmt.Fprint(env.Stderr, approveUsage); fs.PrintDefaults() }
 	hash := fs.String("plan-hash", "", "6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json; workflow.md plan_hash_token: digest requires the digest")
 	note := fs.String("note", "", "approval note")
+	sendBack := fs.String("send-back", "", "send the open plan approve Job back with these words instead of approving; needs --plan-hash, takes no --note")
 	asJSON := fs.Bool("json", false, "print JSON")
 	pos, err := taskArgs(fs, args)
 	if errors.Is(err, flag.ErrHelp) {
@@ -223,6 +228,22 @@ func runApprove(args []string, env Env) int {
 	if len(pos) != 1 {
 		fmt.Fprint(env.Stderr, approveUsage)
 		return 2
+	}
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	if given["send-back"] {
+		var usage error
+		switch {
+		case strings.TrimSpace(*sendBack) == "":
+			usage = errors.New("--send-back needs the words that say why")
+		case *hash == "":
+			usage = errors.New("--send-back needs --plan-hash with the current plan hash")
+		case given["note"]:
+			usage = errors.New("--note is not taken with --send-back: the words are the answer")
+		}
+		if usage != nil {
+			return taskWriteResult(env, task.Event{}, fmt.Errorf("%w: %v", task.ErrEditUsage, usage), false, "")
+		}
 	}
 	resolved, err := resolveTaskOperand(env, pos[0])
 	if err != nil {
@@ -242,6 +263,9 @@ func runApprove(args []string, env Env) int {
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
 		return 3
+	}
+	if given["send-back"] {
+		return sendBackPlan(env, resolved.Path, o, w, *hash, *sendBack, *asJSON)
 	}
 	if _, _, err := migrate.ReceiptToJob(resolved.Path, w); err != nil {
 		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
@@ -270,6 +294,53 @@ func runApprove(args []string, env Env) int {
 		err = recordApproval(resolved.Path, store, w, job, "approved", event)
 	}
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
+}
+
+// sendBackPlan is grid approve --send-back (D-ig): it answers the open plan
+// approve Job of the task in dir with the person's words, send_back and the plan
+// hash they read, and the holder's pass rejects the Job with them; the plan is
+// not approved. It checks everything before it writes: the words fit an answer,
+// an open approve Job exists and may be answered, and hash is the current plan.
+// Then the answer goes to the Feed and the send_back line to history, which holds
+// who and the hash, never the words. o and w are those of the approval.
+func sendBackPlan(env Env, dir string, o task.WriteOptions, w feed.Writer, hash, words string, asJSON bool) int {
+	words = strings.TrimSpace(words)
+	if err := orchestrator.CheckPersonAnswer(words); err != nil {
+		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
+		return 3
+	}
+	store, job := planPersonJob(dir)
+	open := false
+	if job != "" {
+		snap, err := loadFeedSnapshot(store)
+		if err == nil {
+			if j := snap.State.Jobs[job]; j != nil && j.Status != contract.Accepted {
+				open = true
+				err = orchestrator.PersonReady(snap, job, time.Now())
+			}
+		}
+		if err != nil {
+			fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
+			if asJSON {
+				writeJobWaiting(env, err)
+			}
+			return 3
+		}
+	}
+	if !open {
+		fmt.Fprintf(env.Stderr, "grid approve: %v\n", fmt.Errorf("%w: no open plan approve Job to send back", task.ErrEditRejected))
+		return 3
+	}
+	current, err := task.SendBackHash(dir, o.PlanHashToken, hash)
+	if err != nil {
+		return taskWriteResult(env, task.Event{}, err, false, dir)
+	}
+	if _, err := orchestrator.AnswerPersonWith(store, w, job, words, map[string]any{"send_back": true, "sent_back_hash": current}, time.Now()); err != nil {
+		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
+		return 1
+	}
+	event, err := taskWriter(env).SendBack(o, current)
+	return taskWriteResult(env, event, err, asJSON, dir)
 }
 
 // workerMarked reports whether the environment names a worker.

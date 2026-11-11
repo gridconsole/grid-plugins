@@ -2433,6 +2433,11 @@
               "name": "--plan-hash",
               "takes": "value",
               "required": false
+            },
+            {
+              "name": "--send-back",
+              "takes": "value",
+              "required": false
             }
           ],
           "json": true,

@@ -154,14 +154,14 @@ are reference-document names and original line numbers, not machine paths.
 | Post envelope | [envelope.json](schemas/envelope.json) | feed-contract.md:36-90 |
 | Job post | [job.json](schemas/job.json) | feed-contract.md:65; job-contract.md:5-75 |
 | Job record | [job-record.json](schemas/job-record.json) | job-contract.md:5-76 |
-| Control, including assign | [control.json](schemas/control.json) | feed-contract.md:175-198; old-plugin/feed/types/control.md:5-23 |
+| Control, including assign; a move may carry optional `send_back` and `sent_back_hash` | [control.json](schemas/control.json) | feed-contract.md:175-198; old-plugin/feed/types/control.md:5-23 |
 | Ack | [ack.json](schemas/ack.json) | feed-contract.md:184-186 |
 | Submit | [submit.json](schemas/submit.json) | feed-contract.md:86; old-plugin/feed/types/submit.md:5-17 |
 | Result v2 | [result.json](schemas/result.json) | feed-contract.md:84; job-contract.md:112-120 |
 | Checkpoint | [checkpoint.json](schemas/checkpoint.json) | feed-contract.md:82; job-contract.md:141-144 |
 | Question and gate | [question.json](schemas/question.json) | feed-contract.md:188-197; old-plugin/feed/types/question.md:5-19 |
 | Task question file | [question-file.json](schemas/question-file.json) | internal/question/question.go:27; internal/question/files.go:145 |
-| Answer | [answer.json](schemas/answer.json) | feed-contract.md:177; old-plugin/feed/types/answer.md:5-11 |
+| Answer; may carry optional `send_back` and `sent_back_hash` | [answer.json](schemas/answer.json) | feed-contract.md:177; old-plugin/feed/types/answer.md:5-11 |
 | Handover | [handover.json](schemas/handover.json) | feed-contract.md:118-122; old-plugin/feed/types/handover.md:5-11 |
 | Worker exit | [worker-exit.json](schemas/worker-exit.json) | feed-contract.md:214-216 |
 | Loop detected | [loop-detected.json](schemas/loop-detected.json) | feed-contract.md:235-245 |
@@ -901,6 +901,14 @@ the file. Preview and ship receipts (`approval-preview.json`,
 `approval-ship.json`) are no longer written or read: an old journal replay drops
 them. Their names are still in the host guard's file list, which warns by
 default and denies only at level `block`.
+
+`grid approve <task> --plan-hash <hash> --send-back <words> [--json]` sends the
+open plan approve Job back: the holder rejects it with close reason `sent back
+by <who>` and the words; the plan is not approved. The answer and the control
+carry the optional `send_back` (always `true`) and `sent_back_hash` (the 6-hex
+plan hash the person read); `type_v` stays 1. History records `send_back`, the
+plan hash and who, never the words; `--note` is refused with `--send-back`; a
+guest cannot send back. The `--json` output has `what` `send_back`.
 
 The result and the copy retain `plan_hash`, the six lower-case hex digits used in the plan heading.
 New approvals also write `plan_digest`: all 64 lower-case hex digits of SHA-256
