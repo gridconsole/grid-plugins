@@ -7,14 +7,15 @@
 package approvefix
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
-	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/plan"
 )
 
@@ -41,12 +42,20 @@ func Lease(t testing.TB, dir string) (feed.Writer, feed.Store) {
 	if w, ok := writers[dir+"\x00"+id]; ok {
 		return w, store
 	}
-	w := feed.Writer{Author: feed.Author{ID: "dana", Role: "member"}, Worker: "dana@" + machine, Lease: "task"}
-	tenure, err := (lease.TaskStore{Feed: store}).TakeTask(w, os.Getpid(), "2026-01-02T03:04:05.000Z")
+	// The lease file is written here, not taken through internal/lease: lease
+	// imports job, which imports task, and tests of those packages use this helper.
+	worker := "dana@" + machine
+	w := feed.Writer{Author: feed.Author{ID: "dana", Role: "member"}, Worker: worker, Lease: "task", Gen: 0, Fence: 1}
+	data, err := json.Marshal(feed.Lease{Lease: "task", Holder: &worker, Gen: w.Gen, Fence: w.Fence})
 	if err != nil {
 		t.Fatal(err)
 	}
-	w.Gen, w.Fence = tenure.Gen, tenure.Fence
+	if err := os.MkdirAll(filepath.Join(store.Dir(), "lease"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store.Dir(), "lease", "task.json"), append(data, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.Handover(feed.Input{Body: map[string]any{}}, w); err != nil {
 		t.Fatal(err)
 	}
@@ -103,6 +112,10 @@ func Accept(t testing.TB, dir, job, planText, lands string) {
 		t.Fatal(err)
 	}
 }
+
+// JobBody is the record body of the approve person Job with the given id, for a
+// test that posts it with its own writer.
+func JobBody(id string) map[string]any { return jobBody(id) }
 
 func jobBody(id string) map[string]any {
 	return map[string]any{

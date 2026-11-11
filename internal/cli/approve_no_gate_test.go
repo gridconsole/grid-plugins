@@ -16,7 +16,7 @@ import (
 // still records the plan hash and digest.
 func TestApproveGateFlagIsUnknown(t *testing.T) {
 	h := newHarness(t)
-	h.env.Getenv = func(string) string { return "" }
+	h.person()
 	fixture := taskFixture(t, h)
 	if _, err := taskWriter(h.env).Change(task.WriteOptions{ID: fixture.ID, Action: "status", State: "waiting"}); err != nil {
 		t.Fatal(err)

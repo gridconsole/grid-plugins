@@ -3,8 +3,6 @@ package orchestrator
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -93,11 +91,8 @@ func TestForgedPlanDigest(t *testing.T) {
 	if _, err := store.Approve(task.WriteOptions{ID: "T-01"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	// Supply the new field explicitly so this regression also runs on the base.
-	receipt := fmt.Sprintf(`{"task":"T-01","what":"approve","plan_hash":%q,"plan_digest":%q}`, plan.Hash(original), digest)
-	if err := os.WriteFile(filepath.Join(dir, "approval.json"), []byte(receipt), 0600); err != nil {
-		t.Fatal(err)
-	}
+	// The approval is the result of the approve person Job, for the original revision.
+	approveRevision(t, f, original)
 	in := hookio.Input{Cwd: dir, ToolName: "Write", ToolInput: map[string]any{"file_path": filepath.Join(root, "result.go"), "content": "changed"}}
 	env := map[string]string{"GRID_HOME": home}
 	if got := guard.EvaluatePlan(in, root, env); got.Behavior != "" {
@@ -136,18 +131,12 @@ func TestForgedPlanDigest(t *testing.T) {
 		t.Error("implicit reapproval accepted a forged plan with a matching short hash")
 	}
 	// The person may explicitly reapprove after reviewing the changed plan.
-	if _, err := store.Approve(task.WriteOptions{ID: "T-01"}, plan.Hash(forged)); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(filepath.Join(dir, "approval.json"))
+	// Approve returns the approval its caller posts as the Job result.
+	renewed, err := store.Approve(task.WriteOptions{ID: "T-01"}, plan.Hash(forged))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var renewed map[string]any
-	if err := json.Unmarshal(data, &renewed); err != nil {
-		t.Fatal(err)
-	}
-	if value, ok := renewed["plan_digest"].(string); !ok || len(value) != 64 || value == digest {
+	if len(renewed.PlanDigest) != 64 || renewed.PlanDigest == digest || renewed.PlanDigest != plan.Digest(forged) {
 		t.Error("reapproval did not record the changed full digest")
 	}
 }

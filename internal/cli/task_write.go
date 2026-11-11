@@ -172,7 +172,7 @@ func runApprove(args []string, env Env) int {
 		return 3
 	}
 	// The approval is recorded only as the result of the approve person Job of the
-	// task. An old approval.json is moved into that Job first; with no Job, grid
+	// task. An old approval receipt file is moved into that Job first; with no Job, grid
 	// approve posts one.
 	w, err := approvalWriter(env)
 	if err != nil {

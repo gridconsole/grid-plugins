@@ -22,13 +22,19 @@ func approvalWriter(env Env) (feed.Writer, error) {
 		return orchestratorWriter(env, "task", epoch)
 	}
 	role := contract.NormalizeRole(env.getenv("GRID_ROLE"))
-	if role == "" {
+	switch role {
+	case "":
 		role = "member"
+	case "cli":
+		// The plain cli role is a person's shell; writeOptions records it as the owner.
+		role = "owner"
 	}
 	if env.getenv("GRID_MEMBER") == "" || contract.TierFor(role) != contract.PersonTeam {
 		return feed.Writer{}, errors.New("approving is for a person of the team: set GRID_MEMBER")
 	}
-	return feedWriter(env, "", "")
+	w, err := feedWriter(env, "", "")
+	w.Author.Role = role
+	return w, err
 }
 
 // recordApproval records e as the result of the task's approve person Job and

@@ -54,7 +54,9 @@ func TestTaskLeaseFreshHomeSequence(t *testing.T) {
 		t.Fatal(err)
 	}
 	epoch := fmt.Sprintf("%d.%d", grant.Gen, grant.Fence)
-	if code := h.run(created.Path, "job", "next", "--lease-epoch", epoch, "--json"); code != 0 || !strings.Contains(h.out.String(), `"id":"J-1"`) || !strings.Contains(h.out.String(), `"state":"assigned"`) {
+	// The person's approval is an answer on the plan Job; the holder's first pass
+	// takes it up and accepts J-1, which releases the Jobs behind it.
+	if code := h.run(created.Path, "job", "next", "--lease-epoch", epoch, "--json"); code != 0 || !strings.Contains(h.out.String(), `"id":"J-1"`) || !strings.Contains(h.out.String(), `"state":"accepted"`) {
 		t.Fatalf("job next: %d %s %s", code, h.out, h.errb)
 	}
 	id, err := feed.TaskID(created.Path)
@@ -65,7 +67,15 @@ func TestTaskLeaseFreshHomeSequence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(records.Records) < 2 || records.Records[0].Type != "handover" {
-		t.Fatalf("first record must be handover: %+v", records)
+	// The person's approval is posted before any worker holds the task, so the plan
+	// Job and its answer come first; the first record of the lease tenure is its handover.
+	handover := -1
+	for i, r := range records.Records {
+		if r.Type == "handover" && handover < 0 {
+			handover = i
+		}
+	}
+	if len(records.Records) < 2 || handover < 0 || records.Records[handover].Lease == nil {
+		t.Fatalf("no tenure handover: %+v", records)
 	}
 }

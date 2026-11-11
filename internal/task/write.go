@@ -77,7 +77,7 @@ type Event struct {
 	LandsHash  string          `json:"lands_hash,omitempty"`
 	PlanHash   string          `json:"plan_hash,omitempty"`
 	PlanDigest string          `json:"plan_digest,omitempty"`
-	// Gate is read from old receipts only: Grid writes none (an approval.json
+	// Gate is read from old history lines only: Grid writes none (a receipt
 	// that names a gate is not the plan approval).
 	Gate string `json:"gate,omitempty"`
 }

@@ -49,6 +49,8 @@ func TestTaskNoncharactersWriteNothing(t *testing.T) {
 				case "history":
 					args = []string{"history", "add", value, "--task", fixture.ID}
 				case "approval":
+					h.env.Getenv = memberShell
+					h.write(filepath.Join(h.gridHome, "machine"), feedMachine+"\n")
 					args = []string{"approve", fixture.ID, "--note", value}
 				case "outcome":
 					args = []string{"deliver", "--task", fixture.ID, "--outcome", value}
@@ -58,7 +60,7 @@ func TestTaskNoncharactersWriteNothing(t *testing.T) {
 				before := taskTestSnapshot(t, h.gridHome)
 				code := h.run(h.home, append(args, "--json")...)
 				if code != 2 {
-					t.Errorf("exit = %d, want 2", code)
+					t.Errorf("exit = %d, want 2: %s", code, h.errb)
 				}
 				assertErrorOutput(t, h.out.String(), h.errb.String(), CodeInvalidArgument)
 				if strings.Count(h.errb.String(), "\n") != 1 {

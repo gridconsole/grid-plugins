@@ -221,7 +221,7 @@ func attachSnapshot(t *testing.T, dir string) map[string][]byte {
 func TestAttachFacts(t *testing.T) {
 	s, task := waitingFixture(t)
 	hash := setPlan(t, task, planV1)
-	if _, err := s.Approve(WriteOptions{ID: task.ID}, hash); err != nil {
+	if _, err := approve(t, s, task, WriteOptions{ID: task.ID}, hash); err != nil {
 		t.Fatal(err)
 	}
 	feedID, _, err := FeedIdentity(task.Path)

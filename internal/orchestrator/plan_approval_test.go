@@ -91,9 +91,8 @@ func TestMalformedPlanDoesNotBlockOtherTasks(t *testing.T) {
 	if got := good.state(t); got == nil || got.Assign == nil {
 		t.Fatal("other task was not assigned")
 	}
-	records, err := bad.s.Feed.Read(feed.Filter{Type: "job"})
-	if err != nil || len(records.Records) != 0 {
-		t.Fatalf("malformed plan published: %+v %v", records, err)
+	if records := planJobRecords(t, bad); len(records) != 0 {
+		t.Fatalf("malformed plan published: %+v", records)
 	}
 	// Fixing the malformed task lets its next pass proceed independently too.
 	writePlan(t, bad, text)

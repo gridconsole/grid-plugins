@@ -395,7 +395,7 @@ func runOrchestrator(args []string, env Env) int {
 }
 
 // runPersonApproval answers the person Job of an approve step with the plan
-// hash the person saw. It moves an old approval.json into the Feed first, runs
+// hash the person saw. It moves an old approval receipt into the Feed first, runs
 // the compare-and-set of grid approve, and then posts the Job result once
 // Approve has released .task.lock and .plan.lock; a stale hash posts nothing.
 func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string, body map[string]any, hash string, asJSON bool) int {

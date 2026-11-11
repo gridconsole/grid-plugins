@@ -214,7 +214,7 @@ var errChangedSinceApproved = errors.New("Changed since you approved: plan hash 
 // planJobResult returns that newest result without comparing it to plan.md. It
 // returns ErrNoPlanJob when the task has no such Job, and the error "the plan
 // Job J-N has no result yet" when it has one that nobody has answered, which is
-// what is left when approval.json was written and the post of the result failed.
+// what is left when the Job was posted and the post of its result failed.
 // It reads the Feed read-only: no lock, no cache, no journal.
 func planJobResult(dir string) (JobApproval, error) {
 	var found JobApproval
