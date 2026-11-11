@@ -33,7 +33,13 @@ func TestCrashHelper(t *testing.T) {
 		}
 		return
 	}
-	p, err := Scan(os.Getenv("GRID_CRASH_FROM"), os.Getenv("GRID_CRASH_HOME"))
+	// Scan reads no process variable: this copy passes CLAUDE_PLUGIN_DATA the way
+	// grid migrate does, from the environment the test gave it.
+	var opts []Option
+	if data := os.Getenv("CLAUDE_PLUGIN_DATA"); data != "" {
+		opts = append(opts, WithPluginData(data))
+	}
+	p, err := Scan(os.Getenv("GRID_CRASH_FROM"), os.Getenv("GRID_CRASH_HOME"), opts...)
 	if err != nil {
 		t.Fatal(err)
 	}

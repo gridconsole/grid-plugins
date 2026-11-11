@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: release-notes
+description: changes.txt becomes RELEASE.md with a heading and one bullet per change, descriptions kept exactly.
+context:
+  scaffold_script: fixture.sh

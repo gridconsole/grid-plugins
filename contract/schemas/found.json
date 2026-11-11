@@ -20,6 +20,8 @@
               "enum": [
                 "reviewer",
                 "lead",
+                "worker",
+                "agent",
                 "cli"
               ]
             }
@@ -105,6 +107,8 @@
   "x-roles": [
     "reviewer",
     "lead",
+    "worker",
+    "agent",
     "cli"
   ]
 }

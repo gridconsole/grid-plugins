@@ -131,6 +131,8 @@ func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 			}
 			add("mixed case", filepath.Join(h.gridHome, "Settings.Json"), true)
 			add("PROJECTS folder", filepath.Join(h.gridHome, "PROJECTS", "p", "Workflows.md"), true)
+			add("home/notes/tasks approval", filepath.Join(h.gridHome, "notes", "tasks", "T-01-x", "approval.json"), true)
+			add("home/notes/tasks question", filepath.Join(h.gridHome, "notes", "tasks", "T-01-x", "questions", "q1.md"), true)
 			// The host folder in the Grid home and beside the projects folder (the
 			// same folder in the default layout).
 			for _, host := range []string{h.gridHome, filepath.Dir(projects)} {

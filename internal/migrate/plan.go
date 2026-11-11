@@ -66,7 +66,9 @@ type Option func(*Plan)
 // WithCeiling stops the walk for a project's git repo at dir, as grid where does.
 func WithCeiling(dir string) Option { return func(p *Plan) { p.ceiling = dir } }
 
-// WithPluginData selects the old hook data folder (defaults to CLAUDE_PLUGIN_DATA).
+// WithPluginData selects the old hook data folder. Without it the plan takes no
+// plugin data: Scan reads no process variable, so the caller passes the folder it
+// got from its own environment (grid migrate takes CLAUDE_PLUGIN_DATA from the call).
 func WithPluginData(dir string) Option { return func(p *Plan) { p.pluginData = dir } }
 
 // pendingMachine stands in for the machine id in a plan made before one exists.
@@ -83,7 +85,7 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 	if from != home && within(home, from) {
 		return nil, fmt.Errorf("destination must not be inside the source")
 	}
-	p := &Plan{From: from, Home: home, sums: map[string]string{}, pluginData: os.Getenv("CLAUDE_PLUGIN_DATA")}
+	p := &Plan{From: from, Home: home, sums: map[string]string{}}
 	for _, o := range opts {
 		o(p)
 	}

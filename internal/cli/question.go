@@ -21,11 +21,24 @@ func runQuestion(args []string, env Env) int {
 }
 
 func questionEnv(env Env) question.Env {
-	return question.Env{Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Jobs: questionJobs(), RecordError: env.recordError, Writer: func(control bool) (feed.Writer, error) {
+	writer := func(control bool) (feed.Writer, error) {
 		if control {
 			return feedWriter(env, env.getenv("GRID_LEASE"), env.getenv("GRID_LEASE_EPOCH"))
 		}
 		return feedWriter(env, "", "")
+	}
+	return question.Env{Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Jobs: questionJobs(), RecordError: env.recordError, Writer: writer, AskWriter: func() (feed.Writer, error) {
+		// A Job agent's GRID_LEASE names its own Job, but its question and person Job
+		// are task writes, so it asks as the task holder with GRID_TASK_EPOCH, as
+		// `job post` and postCuratorJob do; a typed global --lease-epoch is used instead.
+		if lease := env.getenv("GRID_LEASE"); lease != "" && lease != "task" && env.getenv("GRID_TASK_EPOCH") != "" {
+			epoch := env.getenv("GRID_TASK_EPOCH")
+			if env.typedGlobal["GRID_LEASE_EPOCH"] {
+				epoch = env.getenv("GRID_LEASE_EPOCH")
+			}
+			return orchestratorWriter(env, "task", epoch)
+		}
+		return writer(true)
 	}}
 }
 func runAnswer(args []string, env Env) int { return question.RunAnswer(args, questionEnv(env)) }

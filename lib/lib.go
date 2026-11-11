@@ -16,8 +16,10 @@
 // `git config user.email` runs in Dir with only the Call's HOME, USERPROFILE,
 // XDG_CONFIG_HOME, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, GIT_CONFIG_NOSYSTEM,
 // PATH, SystemRoot and APPDATA, then the Call's USER, then its USERNAME; the
-// host's git config and account are not read. Two calls with different Grid
-// homes can run at the same time and do not see each other.
+// host's git config and account are not read. `migrate` takes the old plugin
+// data folder from CLAUDE_PLUGIN_DATA in Environ, or from a typed
+// --plugin-data, which wins. Two calls with different Grid homes can run at the
+// same time and do not see each other.
 //
 // The Grid home is GridHome when set, else GRID_HOME in Environ, else .grid
 // under Home. Home is the field, else HOME in Environ (USERPROFILE on Windows).
@@ -29,9 +31,7 @@
 //   - the environment of the provider child that `account list`, `status` and
 //     `scan` start: internal/cli/account.go:30 gives internal/account no
 //     Environ, so the child takes os.Environ (internal/account/account.go:68,
-//     :216); the migrate plan reads CLAUDE_PLUGIN_DATA from the host when
-//     --plugin-data is not given (internal/migrate/plan.go:86,
-//     internal/cli/migrate.go:65);
+//     :216);
 //   - the process that `ports claim`, `env up` and the task lease record as
 //     their owner: the Call's OwnerPID (with OwnerStart, or its looked-up start)
 //     when set, else the host's own process id (os.Getpid for `task new` and
