@@ -19,7 +19,9 @@ Bash: send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and 
 
 The result is a proof table: one line per acceptance row, `HOLDS` with a command and exit code or a `path:line`, or `NOT DONE` with why. A row you could not prove is NOT DONE.
 
-To tell the task something during the Job (a question, a finding, a blocker), post it to the task's Feed with the feed_post tool; feed_types lists the record types. The result still goes with `grid job result`.
+To tell the task something during the Job (a question or a blocker), post it to the task's Feed with the feed_post tool; feed_types lists the record types. The result still goes with `grid job result`.
+
+A security problem you meet, in or outside your scope, is posted at once with `grid job post --task <task> --job <job> --type found --body <json>`, kind `security`, and its id goes in the result's `found`. The `run-job` skill has the detail.
 
 Owner decisions: no Grid-made guards, caps or limits; everything is a Job and the Job is the brief; carry on by yourself until a person point; no plan mode.
 

@@ -1,16 +1,24 @@
 package localdata
 
 import (
+	"bufio"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/testenv"
 )
+
+// koLkHeld is the line the helper child writes on stdout once it holds the lock.
+// The parent reads it through a pipe and goes on when it arrives.
+const koLkHeld = "KO-LOCK-HELD"
 
 // TestLockHelperProcess is the body of the child process the tests below start;
 // it does nothing in a normal run.
@@ -21,20 +29,76 @@ func TestLockHelperProcess(t *testing.T) {
 	if _, err := Lock(os.Getenv("LOCALDATA_HOME"), ".test.lock"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(os.Getenv("LOCALDATA_MARKER"), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	fmt.Println(koLkHeld)
 	time.Sleep(time.Hour) // hold the lock until the parent kills this process
 }
 
-func waitUntil(t *testing.T, what string, ok func() bool) {
+// koLkPipe is the stdout and stderr of the helper child, read line by line. It
+// keeps the text for failure messages and closes seen when the line the parent
+// waits for arrives.
+type koLkPipe struct {
+	want string
+	seen chan struct{} // closed at the first line equal to want
+	once sync.Once
+	mu   sync.Mutex
+	buf  strings.Builder
+}
+
+// koLkStart starts cmd with its output on a pipe that a goroutine reads, and
+// kills the child when the test ends.
+func koLkStart(t *testing.T, cmd *exec.Cmd, want string) *koLkPipe {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for !ok() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.Stdout, cmd.Stderr = pw, pw
+	err = cmd.Start()
+	_ = pw.Close() // the child has its own copy; this one would keep the pipe open
+	if err != nil {
+		_ = pr.Close()
+		t.Fatal(err)
+	}
+	p := &koLkPipe{want: want, seen: make(chan struct{})}
+	go p.read(pr)
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		_ = pr.Close()
+	})
+	return p
+}
+
+func (p *koLkPipe) read(r *os.File) {
+	br := bufio.NewReader(r)
+	for {
+		line, err := br.ReadString('\n')
+		p.mu.Lock()
+		p.buf.WriteString(line)
+		p.mu.Unlock()
+		if strings.TrimRight(line, "\r\n") == p.want {
+			p.once.Do(func() { close(p.seen) })
 		}
-		time.Sleep(5 * time.Millisecond)
+		if err != nil {
+			return
+		}
+	}
+}
+
+func (p *koLkPipe) text() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.buf.String()
+}
+
+// koLkWait goes on when the child has written its line. The 10 s is only the
+// failure bound; the message carries what the child wrote so far.
+func koLkWait(t *testing.T, what string, p *koLkPipe) {
+	t.Helper()
+	select {
+	case <-p.seen:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("timed out waiting for %s; the child wrote:\n%s", what, p.text())
 	}
 }
 
@@ -64,14 +128,10 @@ func lockWithin(t *testing.T, home string) func() {
 
 func TestKilledWriterDoesNotBlockTheNextWrite(t *testing.T) {
 	home := t.TempDir()
-	marker := filepath.Join(t.TempDir(), "marker")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestLockHelperProcess$")
-	cmd.Env = append(testenv.Temp(t, os.Environ()), "LOCALDATA_LOCK_HELPER=1", "LOCALDATA_HOME="+home, "LOCALDATA_MARKER="+marker)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
-	waitUntil(t, "the holder to take the lock", func() bool { _, err := os.Stat(marker); return err == nil })
+	cmd.Env = append(testenv.Temp(t, os.Environ()), "LOCALDATA_LOCK_HELPER=1", "LOCALDATA_HOME="+home)
+	holder := koLkStart(t, cmd, koLkHeld)
+	koLkWait(t, "the holder to take the lock", holder)
 	if err := cmd.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
@@ -92,9 +152,22 @@ func TestLeftoverLockFileDoesNotBlock(t *testing.T) {
 
 func TestLockSerializesWriters(t *testing.T) {
 	home := t.TempDir()
+	const writers = 8
+	// fslock calls this hook when a writer finds the lock held and is about to
+	// wait. The channel has a slot for every writer, so the hook never blocks.
+	blocked := make(chan struct{}, writers)
+	t.Cleanup(fslock.OnBlockForTest(func(path string) {
+		if strings.HasSuffix(path, ".test.lock") {
+			select {
+			case blocked <- struct{}{}:
+			default:
+			}
+		}
+	}))
 	var inside atomic.Int32
+	var first atomic.Bool
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for i := 0; i < writers; i++ {
 		wg.Go(func() {
 			unlock, err := Lock(home, ".test.lock")
 			if err != nil {
@@ -105,7 +178,16 @@ func TestLockSerializesWriters(t *testing.T) {
 			if inside.Add(1) != 1 {
 				t.Error("two writers hold the lock at once")
 			}
-			time.Sleep(2 * time.Millisecond) // long enough for a second writer to overlap
+			if first.CompareAndSwap(false, true) {
+				// The first writer to get the lock stays inside until another one
+				// is waiting for it, so the writers certainly overlap. The others
+				// leave at once. The 10 s is only the failure bound.
+				select {
+				case <-blocked:
+				case <-time.After(10 * time.Second):
+					t.Error("no other writer ever waited for the lock")
+				}
+			}
 			inside.Add(-1)
 		})
 	}

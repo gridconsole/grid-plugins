@@ -12,9 +12,14 @@
 // Stderr discard. The member, role and lease travel in Environ (GRID_MEMBER,
 // GRID_ROLE, GRID_LEASE, GRID_LEASE_EPOCH, GRID_JOB and the other GRID_* names)
 // or as the global flags at the front of Args (--member, --role, --lease-epoch,
-// --grid-home). `migrate` takes the old plugin data folder from CLAUDE_PLUGIN_DATA
-// in Environ, or from a typed --plugin-data, which wins. Two calls with different Grid homes can run at the same time and
-// do not see each other.
+// --grid-home). A Feed write with neither names its member from the Call alone:
+// `git config user.email` runs in Dir with only the Call's HOME, USERPROFILE,
+// XDG_CONFIG_HOME, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, GIT_CONFIG_NOSYSTEM,
+// PATH, SystemRoot and APPDATA, then the Call's USER, then its USERNAME; the
+// host's git config and account are not read. `migrate` takes the old plugin
+// data folder from CLAUDE_PLUGIN_DATA in Environ, or from a typed
+// --plugin-data, which wins. Two calls with different Grid homes can run at the
+// same time and do not see each other.
 //
 // The Grid home is GridHome when set, else GRID_HOME in Environ, else .grid
 // under Home. Home is the field, else HOME in Environ (USERPROFILE on Windows).
@@ -24,9 +29,7 @@
 // A call does not claim that nothing is ever read from the host. These stay
 // with the host process, as in the binary:
 //   - the user name (USER, and the system account) that names a new task's
-//     owner (internal/task) and, when Environ has no GRID_MEMBER and Args no
-//     --member, the member of a Feed write: that case also runs `git config
-//     user.email` in Dir with the host's environment;
+//     owner (internal/task);
 //   - internal/account has its own fallback to the host's environment when it
 //     is given no getenv;
 //   - the process that `ports claim`, `env up` and the task lease record as

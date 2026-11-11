@@ -153,7 +153,7 @@ func TestInvalidNewWritesNothing(t *testing.T) {
 	for _, tc := range []NewOptions{
 		{Words: " \n\t"}, {Words: "Fix", Size: "tiny"}, {Words: "Fix", Workflow: "\nrun"}, {Words: "Fix", Workflow: " "},
 	} {
-		t.Run(fmt.Sprintf("%q", tc), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%v", tc), func(t *testing.T) {
 			s, home := storeFor(t)
 			tc.Cwd = home
 			if _, err := s.New(tc); err == nil {

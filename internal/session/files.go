@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -94,6 +95,27 @@ func (s Store) locked(fn func() error) error {
 	if err := fslock.LockExclusive(f); err != nil {
 		return err
 	}
+	defer fslock.Unlock(f)
+	return fn()
+}
+
+// lockedContext is locked with a bound on the wait for the session lock: when
+// ctx ends first it returns ctx.Err() and fn does not run. fslock takes the
+// descriptor over for the wait, so f is closed here only once the lock is held;
+// a wait that was given up unlocks and closes it itself when it gets the lock.
+func (s Store) lockedContext(ctx context.Context, fn func() error) error {
+	dir, err := s.storageDir(true, "sessions")
+	if err != nil {
+		return err
+	}
+	f, err := fslock.OpenNoFollow(filepath.Join(dir, ".lock"), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	if err := fslock.LockExclusiveContext(ctx, f); err != nil {
+		return err
+	}
+	defer f.Close()
 	defer fslock.Unlock(f)
 	return fn()
 }

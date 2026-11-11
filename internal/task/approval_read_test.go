@@ -3,12 +3,14 @@ package task
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
 	"os"
 	"os/user"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -48,7 +50,7 @@ func approvalFeed(t *testing.T, task Task) (feed.Store, feed.Writer) {
 	if err := os.WriteFile(filepath.Join(dir, w.Lease+".json"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Handover(feed.Input{Body: map[string]any{}}, w); err != nil {
+	if _, err := store.Handover(feed.Input{ID: koTfID(), Body: map[string]any{}}, w); err != nil {
 		t.Fatal(err)
 	}
 	return store, w
@@ -85,19 +87,16 @@ func postJobRecord(t *testing.T, store feed.Store, w feed.Writer, job, role, kin
 	t.Helper()
 	body := approvalJobBody(role, kind, continues)
 	body["id"] = job
-	if _, err := store.Post(feed.Input{Type: "job", Job: job, Body: body}, w); err != nil {
+	if _, err := store.Post(feed.Input{ID: koTfID(), Type: "job", Job: job, Body: body}, w); err != nil {
 		t.Fatalf("post Job %s (%s/%s): %v", job, role, kind, err)
 	}
-	tick()
 }
 
 // acceptControl is the control the approve command posts: the Job accepted, with
 // the plan hash and digest of text and an answer that tells the results apart.
 func acceptControl(store feed.Store, w feed.Writer, job, text, answer string) (feed.Record, error) {
 	body := map[string]any{"target": job, "status": "accepted", "reason": "approved", "answer": answer, "plan_hash": plan.Hash(text), "plan_digest": plan.Digest(text)}
-	r, err := store.Post(feed.Input{Type: "control", Body: body}, w)
-	tick()
-	return r, err
+	return store.Post(feed.Input{ID: koTfID(), Type: "control", Body: body}, w)
 }
 
 func mustAccept(t *testing.T, store feed.Store, w feed.Writer, job, text, answer string) feed.Record {
@@ -109,9 +108,53 @@ func mustAccept(t *testing.T, store feed.Store, w feed.Writer, job, text, answer
 	return r
 }
 
-// tick keeps two posts out of one millisecond: a ULID is ordered by time first
-// and by random bits inside one millisecond, and the readers pick the greatest.
-func tick() { time.Sleep(3 * time.Millisecond) }
+// koTfMs is the millisecond part of the last id koTfID handed out. It starts at
+// a fixed instant, so no id here depends on the wall clock.
+var koTfMs struct {
+	sync.Mutex
+	last uint64
+}
+
+// koTfID hands out a ULID that is greater than every id it handed out before:
+// the millisecond part grows by one per call and the 80 low bits are fixed. A
+// ULID is ordered by time first and the readers pick the greatest, so a post
+// that passes this as feed.Input.ID is later than the post before it, however
+// fast the two are made. The Feed takes the id as it is (Store.record).
+func koTfID() string {
+	koTfMs.Lock()
+	defer koTfMs.Unlock()
+	if koTfMs.last == 0 {
+		koTfMs.last = uint64(time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC).UnixMilli())
+	}
+	koTfMs.last++
+	// A ULID is 128 bits: 48 of time, then 80 of randomness, written as 26
+	// characters of 5 bits each with the top 2 bits of the first one unused.
+	n := new(big.Int).Lsh(new(big.Int).SetUint64(koTfMs.last), 80)
+	n.Or(n, new(big.Int).SetUint64(0x1D1D1D1D1D1D1D1D)) // fixed low bits
+	const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	var out [26]byte
+	for i := 25; i >= 0; i-- {
+		out[i] = alphabet[new(big.Int).And(n, big.NewInt(31)).Int64()]
+		n.Rsh(n, 5)
+	}
+	return string(out[:])
+}
+
+// The ids the posts of this file carry are valid record ids and strictly
+// increasing in call order, with no pause between the calls.
+func TestKoTfIDIsStrictlyIncreasing(t *testing.T) {
+	prev := ""
+	for i := 0; i < 5000; i++ {
+		id := koTfID()
+		if !feed.IsID(id) {
+			t.Fatalf("call %d: %q is not a record id", i, id)
+		}
+		if id <= prev {
+			t.Fatalf("call %d: %s is not after %s", i, id, prev)
+		}
+		prev = id
+	}
+}
 
 func jobStatus(t *testing.T, store feed.Store, job string) string {
 	t.Helper()
@@ -288,7 +331,7 @@ func TestApprovalReadNotAPlanApproval(t *testing.T) {
 		store, w := approvalFeed(t, task)
 		postApproveJob(t, store, w, "J-1", "")
 		body := map[string]any{"target": "J-1", "status": "accepted", "reason": "answered", "answer": "yes"}
-		if _, err := store.Post(feed.Input{Type: "control", Body: body}, w); err != nil {
+		if _, err := store.Post(feed.Input{ID: koTfID(), Type: "control", Body: body}, w); err != nil {
 			t.Fatal(err)
 		}
 		if got := jobStatus(t, store, "J-1"); got != "accepted" {

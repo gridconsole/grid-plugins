@@ -11,7 +11,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
-// No guard is fixed at block. host-guard, only-writer and plan-guard
+// No guard is fixed at block. host-guard and plan-guard
 // default to warn (a warning, no refusal); a setting raises one to block or
 // lowers it to off, and a settings file that cannot be read keeps the refusal and reports why.
 func TestGuardsFollowTheirLevel(t *testing.T) {
@@ -24,7 +24,6 @@ func TestGuardsFollowTheirLevel(t *testing.T) {
 			return f.input("Write", filepath.Join(f.projects, "example", "tasks.", "T-03", "notes.md"))
 		}},
 		{"host-guard", EvaluateHost, func(f *fixture) hookio.Input { return f.input("Write", filepath.Join(f.grid, ".host", "approval")) }},
-		{"only-writer", EvaluateOnlyWriter, func(f *fixture) hookio.Input { return f.input("Write", filepath.Join(f.task, "notes.md")) }},
 	} {
 		for _, level := range []string{"none", "off", "warn", "block", "malformed"} {
 			t.Run(tc.name+"/"+level, func(t *testing.T) {
@@ -58,25 +57,6 @@ func TestGuardsFollowTheirLevel(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-// With no setting, a Write into a task folder is warned about and not refused:
-// the decision has no behavior, and its output is a systemMessage naming the rule.
-// A person who sets only-writer to block still gets the deny
-// (TestFourGuardsFollowTheirLevel/only-writer/block).
-func TestOnlyWriterDefaultWarnsAndDoesNotDeny(t *testing.T) {
-	f := setup(t)
-	d := EvaluateOnlyWriter(f.input("Write", filepath.Join(f.task, "notes.md")), f.root, f.env)
-	if d.Behavior != "" {
-		t.Fatalf("default only-writer refused the write: %+v", d)
-	}
-	if len(d.Warnings) != 1 || !strings.Contains(d.Warnings[0], "only-writer: Task folders and the brain are written only by grid") {
-		t.Fatalf("want the only-writer warning, got %+v", d)
-	}
-	out := string(d.Bytes())
-	if !strings.Contains(out, `"systemMessage":"only-writer: Task folders`) || strings.Contains(out, "permissionDecision") {
-		t.Fatalf("output must carry the warning and no decision: %s", out)
 	}
 }
 

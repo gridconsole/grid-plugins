@@ -10,10 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gridconsole/grid-plugins/internal/guard"
-	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/project"
-	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
 func claudeHarness(t *testing.T) *harness {
@@ -154,9 +151,9 @@ func TestSetupClaudeHelpAndProjectAnswersGolden(t *testing.T) {
 	}
 }
 
-// This compares the reserved kinds against the live guard, rather than a
-// second hand-written deny list. The settings test also pins writer.go's
-// source so adding a new kind requires consciously updating this coverage.
+// The deny rules `grid setup` writes are the only protection of the reserved
+// kinds (task folders, project.md and the brain; the hook guard that once
+// repeated them is gone). This checks them against a fixed table of paths.
 func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 	for _, location := range []string{"default", "outside home"} {
 		t.Run(location, func(t *testing.T) {
@@ -177,19 +174,23 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 			if err := json.Unmarshal(data, &doc); err != nil {
 				t.Fatal(err)
 			}
-			// Setup-record defenses are additional to the writer guard and are tested
+			// Setup-record defenses are additional to the reserved kinds and are tested
 			// through the CLI in settings.TestClaudeReworkCLIProjectAnchors. So are
 			// the host-guard files, which TestSetupWritesDenyRulesForTheHostGuardFiles
 			// checks against EvaluateHost.
 			rules := slices.DeleteFunc(doc.Permissions.Deny, func(rule string) bool {
 				return strings.Contains(rule, "~/.grid-person/**") || rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)" || hostDeny(rule)
 			})
-			// The generated deny rules are the block level of the guard; only-writer
-			// warns by default, so the comparison runs against the block level.
-			if err := (settings.Store{Home: h.gridHome}).SetHook("only-writer", "block"); err != nil {
-				t.Fatal(err)
+			// No Grid guard repeats these rules, so the expected answer for each path
+			// is written down here: the five reserved kinds are denied, each in the
+			// spellings Claude Code folds, and nothing near them is.
+			denied := map[string]bool{
+				"projects/p/tasks/T-01-work": true, "projects/p/tasks/T-01-work/task.md": true, "projects/p/tasks/T-1/sub/deep/file": true, "projects/p/TASKS/t-22-work/brief.md": true,
+				"personal/tasks/T-01-work": true, "personal/tasks/t-02/task.md": true, "personal/tasks/T-9/sub/file": true,
+				"projects/p/knowledge": true, "projects/p/knowledge/topics/x.md": true, "projects/p/KNOWLEDGE/file": true,
+				"knowledge": true, "knowledge/topics/x.md": true, "KNOWLEDGE/x": true,
+				"projects/p/project.md": true, "projects/p/PROJECT.MD": true,
 			}
-			env := map[string]string{"HOME": h.home, "GRID_HOME": h.gridHome, "GRID_PROJECTS": projects}
 			paths := []string{
 				"projects/p/tasks/T-01-work", "projects/p/tasks/T-01-work/task.md", "projects/p/tasks/T-1/sub/deep/file", "projects/p/TASKS/t-22-work/brief.md",
 				"personal/tasks/T-01-work", "personal/tasks/t-02/task.md", "personal/tasks/T-9/sub/file",
@@ -199,22 +200,27 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 				"projects/p/tasks/README.md", "projects/p/tasks/T-x/task.md", "projects/p/tasks/T-/task.md", "personal/tasks/T-x/task.md",
 				"projects/p/notes/x.md", "projects/p/nested/project.md", "projects/p/project.md/nested", "projects/p/project.md.bak", "projects/p/tasks", "settings.json", "personal/project.md", "personal/knowledge/x.md",
 			}
-			targets := make([]string, 0, len(paths)*2)
+			type probe struct {
+				path string
+				want bool
+			}
+			targets := make([]probe, 0, len(paths)*2)
 			for _, rel := range paths {
 				target := filepath.Join(h.gridHome, filepath.FromSlash(rel))
+				want := denied[rel]
 				if suffix, ok := strings.CutPrefix(rel, "projects/"); ok {
 					if location == "outside home" {
 						// Old default project paths must no longer match project denies.
-						targets = append(targets, target)
+						targets = append(targets, probe{target, false})
 					}
 					target = filepath.Join(projects, filepath.FromSlash(suffix))
 				}
-				targets = append(targets, target)
+				targets = append(targets, probe{target, want})
 			}
 			hits := map[string]bool{}
-			for _, target := range targets {
+			for _, p := range targets {
+				target := p.path
 				for _, tool := range []string{"Edit", "Write"} {
-					decision := guard.EvaluateOnlyWriter(hookio.Input{Cwd: h.home, ToolName: tool, ToolInput: map[string]any{"file_path": target}}, h.home, env)
 					matched := false
 					for _, rule := range rules {
 						if !strings.HasPrefix(rule, "Edit(") || !strings.HasSuffix(rule, ")") {
@@ -243,14 +249,14 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 							hits[rule] = true
 						}
 					}
-					if matched != (decision.Behavior == "deny") {
-						t.Errorf("%s %s: block=%v guard=%s", tool, h.norm(target), matched, decision.Behavior)
+					if matched != p.want {
+						t.Errorf("%s %s: deny rules match=%v, table says %v", tool, h.norm(target), matched, p.want)
 					}
 				}
 			}
 			for _, rule := range rules {
 				if !hits[rule] {
-					t.Errorf("deny has no guard counterpart: %s", rule)
+					t.Errorf("deny rule that no path of the table needs: %s", rule)
 				}
 			}
 		})

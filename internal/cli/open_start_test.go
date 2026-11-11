@@ -18,7 +18,8 @@ import (
 const workerStatusJSON = `{"pid":4242,"version":"0.0.0-test","started_at":"2026-11-08T09:00:00Z","uptime_seconds":10,"address":"127.0.0.1:43111","token":"not-for-the-list"}`
 
 // startFixture is an open fixture plus a folder of fake grid-server and grid-worker
-// scripts. Each start appends a line to <markers>/<name>.started. A worker that runs
+// scripts. Each start appends a line to <markers>/<name>.started, which the fake worker
+// below waits for; the tests count starts from the run's stderr (koSoStarted). A worker that runs
 // holds an empty worker.lock with an OS lock and has written worker-status.json: the
 // test process plays that part (a script cannot hold the lock), starting once the fake
 // grid-worker has been run. The fake server writes app-url with the address of a
@@ -123,27 +124,43 @@ func (f *startFixture) holdWorkerFiles() (*os.File, error) {
 	return lock, nil
 }
 
-// starts counts how often a fake program ran. A detached program is not waited for, so
-// this waits until the first run shows (when want says one is due), then a little longer
-// for a second run that should not come.
-func (f *startFixture) starts(name string, want int) int {
-	count := func() int {
-		b, err := os.ReadFile(filepath.Join(f.markers, name+".started"))
-		if err != nil {
-			return 0
+// koSoStarted counts the lines of a grid open stderr that say the named program was
+// started: "grid open: started grid-worker and grid-server." names both. Open prints
+// the line after it has started every program it starts and before it returns, so no
+// wait is needed once the run is over.
+func koSoStarted(stderr, name string) int {
+	n := 0
+	for _, line := range strings.Split(stderr, "\n") {
+		list, ok := strings.CutPrefix(line, "grid open: started ")
+		if !ok {
+			continue
 		}
-		return strings.Count(string(b), "started\n")
+		for _, program := range strings.Split(strings.TrimSuffix(list, "."), " and ") {
+			if program == name {
+				n++
+			}
+		}
 	}
-	for deadline := time.Now().Add(5 * time.Second); count() < want && time.Now().Before(deadline); {
-		time.Sleep(10 * time.Millisecond)
-	}
-	time.Sleep(300 * time.Millisecond)
-	return count()
+	return n
 }
 
-// startedOnce reports the worker and server start counts for a run that should start the given numbers.
-func (f *startFixture) counts(wantWorker, wantServer int) (worker, server int) {
-	return f.starts("grid-worker", wantWorker), f.starts("grid-server", wantServer)
+// starts counts how often the stderr of the given grid open runs says it started a
+// program. With no stderr given it reads the fixture's own run.
+func (f *startFixture) starts(name string, stderr ...string) int {
+	if len(stderr) == 0 {
+		stderr = []string{f.errb.String()}
+	}
+	n := 0
+	for _, s := range stderr {
+		n += koSoStarted(s, name)
+	}
+	return n
+}
+
+// counts reports the worker and server start counts of the given runs' stderr (the
+// fixture's own run when none is given).
+func (f *startFixture) counts(stderr ...string) (worker, server int) {
+	return f.starts("grid-worker", stderr...), f.starts("grid-server", stderr...)
 }
 
 func (f *startFixture) want() string {
@@ -157,7 +174,7 @@ func TestOpenStartsWorkerAndServerWhenNotRunning(t *testing.T) {
 	if code := f.run(f.home, "open", "T-01"); code != 0 {
 		t.Fatalf("open: %d %s", code, f.errb)
 	}
-	if w, s := f.counts(1, 1); w != 1 || s != 1 {
+	if w, s := f.counts(); w != 1 || s != 1 {
 		t.Fatalf("starts: worker %d, server %d, want 1 and 1", w, s)
 	}
 	if len(opened) != 1 || opened[0] != f.want() {
@@ -179,7 +196,7 @@ func TestOpenStartsNothingWhenTheAppRuns(t *testing.T) {
 	if code := f.run(f.home, "open", "T-01"); code != 0 {
 		t.Fatalf("open: %d %s", code, f.errb)
 	}
-	if w, s := f.counts(0, 0); w != 0 || s != 0 {
+	if w, s := f.counts(); w != 0 || s != 0 {
 		t.Fatalf("started with the app running: worker %d, server %d", w, s)
 	}
 	if len(opened) != 1 || opened[0] != f.want() {
@@ -217,7 +234,7 @@ func TestOpenParallelStartsEachProgramOnce(t *testing.T) {
 			t.Fatalf("open %d: exit %d %s", i, c, errs[i].String())
 		}
 	}
-	if w, s := f.counts(1, 1); w != 1 || s != 1 {
+	if w, s := f.counts(errs[0].String(), errs[1].String()); w != 1 || s != 1 {
 		t.Fatalf("two opens at once: worker started %d times, server %d, want 1 and 1", w, s)
 	}
 	if len(opened) != 2 || opened[0] != f.want() || opened[1] != f.want() {
@@ -241,7 +258,7 @@ func TestOpenReplacesAStaleAppURL(t *testing.T) {
 	if code := f.run(f.home, "open", "T-01"); code != 0 {
 		t.Fatalf("open: %d %s", code, f.errb)
 	}
-	if w, s := f.counts(0, 1); s != 1 || w != 0 {
+	if w, s := f.counts(); s != 1 || w != 0 {
 		t.Fatalf("starts: server %d, worker %d, want 1 and 0 (the worker ran)", s, w)
 	}
 	if len(opened) != 1 || opened[0] != f.want() {
@@ -265,7 +282,7 @@ func TestOpenMissingProgramExitsThreeAndStartsNothing(t *testing.T) {
 	if f.out.Len() != 0 {
 		t.Errorf("stdout %q, want nothing", f.out)
 	}
-	if w := f.starts("grid-worker", 0); w != 0 {
+	if w := f.starts("grid-worker"); w != 0 {
 		t.Errorf("the worker was started although the server is missing")
 	}
 }

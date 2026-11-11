@@ -60,6 +60,10 @@ type NewOptions struct {
 	// its base name. New fails before it writes anything when one is missing or
 	// is not a file.
 	Inputs []string
+	// Getenv reads the Call's own environment for the owner when Who is empty:
+	// USER, then USERNAME, else "owner"; the host's account is not read. Nil
+	// reads the host, as the binary does.
+	Getenv func(string) string
 }
 
 // IntentHead precedes the person's words in intent.md. The Request heading is

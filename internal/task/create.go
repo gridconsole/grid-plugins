@@ -174,7 +174,7 @@ func (s Store) taskFront(t *Task, project, stableID string) ([]byte, error) {
 func (o NewOptions) owner() (who, role string) {
 	who, role = strings.TrimSpace(o.Who), contract.NormalizeRole(o.Role)
 	if who == "" {
-		who = machineOwner()
+		who = o.ownerFromEnv()
 		if role == "" {
 			role = "owner"
 		}
@@ -183,6 +183,22 @@ func (o NewOptions) owner() (who, role string) {
 		role = "member"
 	}
 	return who, role
+}
+
+// ownerFromEnv names the owner of a task made with no Who. With Getenv set the
+// answer comes from that environment alone, so two calls in one process each
+// name their own person: USER, then USERNAME (the Windows name), trimmed, else
+// "owner". With Getenv nil it is machineOwner, the host's account, as the binary reads it.
+func (o NewOptions) ownerFromEnv() string {
+	if o.Getenv == nil {
+		return machineOwner()
+	}
+	for _, key := range []string{"USER", "USERNAME"} {
+		if name := strings.TrimSpace(o.Getenv(key)); name != "" {
+			return name
+		}
+	}
+	return "owner"
 }
 
 // machineOwner is the account that runs Grid on this computer; "owner" when the

@@ -51,6 +51,9 @@ type Store struct {
 	Timeout  time.Duration // zero uses ten minutes
 	Now      func() time.Time
 	Who      contract.Author // recorded on the history lines; empty is the local person
+	// Getenv answers the variables the deploy command may see (the allow list and
+	// the rule's env names). Nil reads the host, as the binary does.
+	Getenv func(string) string
 }
 
 func (s Store) tasks() task.Store { return task.Store{Resolver: s.Resolver, Now: s.Now} }
@@ -239,7 +242,7 @@ func (s Store) Run(ctx context.Context, cwd, id string, dry bool) (Result, error
 	if runtime.GOOS == "windows" {
 		argv = []string{"cmd.exe", "/d", "/s", "/c", p.Rule.Command}
 	}
-	execution := runProcess(ctx, argv, folder, landEnvironment(p))
+	execution := runProcess(ctx, argv, folder, landEnvironment(p, s.Getenv))
 	result.Execution = &execution
 	result.Status = "landed"
 	if execution.Status != "passed" {
