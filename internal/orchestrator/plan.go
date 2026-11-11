@@ -52,7 +52,7 @@ func (s Store) publishPlanWithReader(snap Snapshot, m *memory, read func() (stri
 		if err != nil {
 			// A fault of the plan text posts no Job and leaves the rest of the
 			// tick to run as on a task without plan.md.
-			return s.planUnpublishable(snap, m, err)
+			return s.planUnpublishable(snap, m, text, err)
 		}
 		if err := s.publicationBlocked(m, false); err != nil {
 			return err
@@ -111,18 +111,26 @@ func planJobTaken(snap Snapshot, j job.Job) (string, bool) {
 
 // planUnpublishable marks publication blocked and tells the task once why. The
 // notice text is its own durable deduplication marker, as in warnDuplicateGates.
-func (s Store) planUnpublishable(snap Snapshot, m *memory, cause error) error {
+// It then posts one re-plan Job to the orchestrator role with the cause, unless
+// one is still open (postPlanFaultJob).
+func (s Store) planUnpublishable(snap Snapshot, m *memory, planText string, cause error) error {
 	if err := s.publicationBlocked(m, true); err != nil {
 		return err
 	}
 	text := "plan.md cannot be published: " + oneLine(cause) + ". No Job from plan.md is posted until it is fixed."
+	found := false
 	for _, r := range snap.Records {
 		if r.Type == "post" && r.Lease != nil && *r.Lease == "task" && r.Body["kind"] == "message" && stringValue(r.Body["ref"]) == "task" && stringValue(r.Body["text"]) == text {
-			return nil
+			found = true
+			break
 		}
 	}
-	_, err := s.Feed.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, s.Writer)
-	return err
+	if !found {
+		if _, err := s.Feed.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, s.Writer); err != nil {
+			return err
+		}
+	}
+	return s.postPlanFaultJob(snap, planText, oneLine(cause))
 }
 
 // Persist transitions under the pass lock, including across CLI invocations.
