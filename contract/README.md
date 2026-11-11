@@ -6,33 +6,64 @@ The Feed contract: schemas, fixtures and the conformance suite.
 
 ## CLI JSON failures
 
-With `--json`, classified failures are written to **stdout**; the existing human
-diagnostic remains byte-for-byte identical on stderr. Exit statuses are unchanged.
-Failures that previously had no JSON output use this envelope (the message is
-stderr without its final newline, including any command prefix):
+With `--json`, a failure is written to **stdout** in one of four shapes; the human
+diagnostic stays byte-for-byte identical on stderr and exit statuses are unchanged.
+Read `code` (or `error.code` on the envelope) to classify a failure; never classify
+by message wording. Each example below is read by `TestHfFsShapes`.
 
+1. **Envelope**, for a failure that had no JSON output and has a known code, or exits 2
+   (then `invalid_argument`). `message` is stderr without its final newline, including
+   any command prefix. The exit status is the command's own (here 1).
+
+<!-- shape:envelope -->
 ```json
 {"error":{"code":"no_such_task","message":"grid task show: task T-99 not found in the Grid home"}}
 ```
 
-Existing failure objects gain a top-level `code` without replacing their fields.
-In particular, signal act/dismiss/move retain their string `error` category and
-their existing unprefixed, sometimes redacted `message`:
+2. **Signal object**, printed by `signal act`, `signal dismiss` and `signal move`.
+   `error` is a category string and `message` is unprefixed and sometimes redacted. The
+   category `refused` exits 3 and its `code` is present only when the refusal is
+   classified (`no_such_project`, `no_such_note`); a refusal such as "this note is not
+   snoozed" prints no `code`. The category `invalid` exits 2 and always carries
+   `code: "invalid_argument"`.
 
+<!-- shape:signal-refused -->
 ```json
-{"error":"refused","message":"no such project","code":"no_such_project"}
+{"error":"refused","message":"no such note","code":"no_such_note"}
 ```
 
-Person-gate refusals and `person check` retain `error: "person_required"`, `reason`,
-`hint`, and any decision fields. They gain `code: "person_required"` and a
-`message` matching stderr without its final newline. The reason remains the
-specific gate refusal reason; it is not replaced by the general code.
+<!-- shape:signal-invalid -->
+```json
+{"error":"invalid","message":"move requires --to <project|->","code":"invalid_argument"}
+```
 
-`grid approve --json` exits 3 with the one-line stdout body
-`{"error":"job_waiting","code":"job_waiting","job":"<approve Job>","waiting_for":"<Job it waits on>","reason":"<wait reason, unchanged>"}`
-when the approve person Job still waits for a Job in its after list; stderr keeps
-its `grid approve: <job> cannot be answered yet: <reason>` line, and without `--json` nothing changes.
-`grid job result <job> --json` on a person Job that still waits (with or without `--plan-hash`) prints the same object and exits 3 with its stderr unchanged.
+3. **Person gate object**, printed by every person-gate refusal and by `person check`;
+   it exits 3. `reason` is the specific gate refusal reason and `message` matches
+   stderr without its final newline; any decision fields of the gate come with them.
+
+<!-- shape:person-gate -->
+```json
+{"error":"person_required","reason":"agent_role","hint":"approvals need a person; this caller is an agent","code":"person_required","message":"grid person check: approvals need a person; this caller is an agent (reason: agent_role)."}
+```
+
+4. **job_waiting object**, printed by `grid approve --json` and by
+   `grid job result <job> --json` (with or without `--plan-hash`) on a person Job that
+   still waits for a Job in its after list. It exits 3; `waiting_for` is the Job it
+   waits on, `reason` is the wait reason unchanged, and stderr keeps its
+   `grid approve: <job> cannot be answered yet: <reason>` line.
+
+<!-- shape:job-waiting -->
+```json
+{"error":"job_waiting","code":"job_waiting","job":"J-04","waiting_for":"J-03","reason":"waiting for J-03"}
+```
+
+Other failures print nothing on stdout: with `--json`, an unclassified failure that
+exits 1 or 3 and is covered by none of the four shapes prints nothing on stdout, and
+only stderr carries it (`grid task show` with no operand outside a task folder is one).
+Some commands keep their own older JSON objects on failure; those carry no code.
+Plain output, successful JSON and streaming output are unchanged. A code does not
+imply an exit status: a missing project during `signal move` exits 3, a missing task
+during `task show` exits 1.
 
 | Stable code | Meaning |
 | --- | --- |
@@ -42,16 +73,17 @@ its `grid approve: <job> cannot be answered yet: <reason>` line, and without `--
 | `person_required` | The existing person gate refused the request. |
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
 | `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
-| `linked_file` | A protected file has more than one hard link. For a task's task.md, history.md, approval*.json or plan.md, Grid refuses to read or write the task and holds its gates. The workspace or a project's workflows.md and a task's workflow.md are unreadable: every command whose person gate reads the file refuses for a person and an agent alike (signal verbs, other verbs in a project scope with no task, and every verb in that task), `signal move --inbox` refuses. A linked workflows.md holds every named-workflow task in its scope, not only previews: a task whose workflow is a name or the default (not an inline list) and that has no plan approval is held by the guard, `grid deliver` exits 1, and no preview can be raised. Task creation in that scope refuses too: `grid task new` and `signal act --act turn` exit 1 with this code and make no task. The workspace file's scope is every project and Personal; a project file's scope is that project. Remove the other links to clear it. |
+| `job_waiting` | A person Job still waits for a Job in its after list (`grid approve`, `grid job result`); exits 3. |
+| `changed` | A settings file or preview changed since the person looked; nothing was written. |
+| `invalid_settings` | A settings value, key, preset or file is invalid; nothing was written. |
+| `write_failed` | Writing a settings file failed. |
+| `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
+| `nothing_to_undo` | `grid agent budget undo` found no Apply to undo. |
 
-The constants live in `internal/cli/error_codes.go`. Read `code` on existing
-failure objects, or `error.code` on new envelopes; never classify by message
-wording. Lookup identities travel through the existing resolver and stores.
-Unclassified failures retain their previous output and may have no code; state
-conflicts are not mislabeled as missing records. Plain output, successful JSON,
-and existing streaming output are unchanged. A code does not imply a new exit
-status: for example, a missing project during signal move still exits 3, while
-a missing task during task show still exits 1.
+The first five constants live in `internal/cli/error_codes.go` and the settings
+codes in `internal/settings/claude_user.go`; `person_required` and `job_waiting` are
+written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
+and `internal/cli/task_write.go`. `TestHfFsCodeTable` keeps this table equal to that set.
 
 ## Command inventory
 
