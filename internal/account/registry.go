@@ -65,7 +65,24 @@ func (e Env) expand(p string) string {
 	if strings.HasPrefix(p, "~/") {
 		return filepath.Join(e.Home, filepath.FromSlash(p[2:]))
 	}
+	if e.goos() == "windows" && strings.HasPrefix(p, `~\`) {
+		parts := strings.FieldsFunc(p[2:], func(r rune) bool { return r == '\\' || r == '/' })
+		return filepath.Join(append([]string{e.Home}, parts...)...)
+	}
 	return filepath.Clean(p)
+}
+
+// pathKey is the key two spellings of a folder are compared by: the cleaned
+// path, lower-cased on macOS and Windows, whose default volumes treat
+// ~/.Claude-ann and ~/.claude-ann as one folder. A case-sensitive APFS volume
+// would see two folders that differ only in case as one; that is accepted.
+// Linux compares the path as spelled.
+func (e Env) pathKey(p string) string {
+	p = filepath.Clean(p)
+	if g := e.goos(); g == "darwin" || g == "windows" {
+		return strings.ToLower(p)
+	}
+	return p
 }
 
 func registryPath(env Env) string {
@@ -172,7 +189,7 @@ func registerNew(env Env, recs []Record, folders []Folder) ([]Record, bool, erro
 		dir := f.Dir
 		used := false
 		for _, r := range recs {
-			used = used || env.expand(r.Dir) == filepath.Clean(f.Dir)
+			used = used || env.pathKey(env.expand(r.Dir)) == env.pathKey(f.Dir)
 		}
 		if f.Home || used {
 			res, err := MakeFolder(env, f.Kind, id)
@@ -194,7 +211,7 @@ func describe(env Env, recs []Record, folders []Folder) []Account {
 	byDir := map[string]Folder{}
 	home := map[string]Folder{}
 	for _, f := range folders {
-		byDir[f.Dir] = f
+		byDir[env.pathKey(f.Dir)] = f
 		if f.Home {
 			home[f.Kind] = f
 		}
@@ -205,7 +222,7 @@ func describe(env Env, recs []Record, folders []Folder) []Account {
 		a := Account{ID: r.ID, Kind: r.Kind, Name: r.Name, Email: r.Email, Dir: env.expand(r.Dir), Checked: checked, Added: r.Added}
 		h, hasHome := home[r.Kind]
 		a.Default = hasHome && h.Email != "" && strings.EqualFold(h.Email, r.Email)
-		own, ok := byDir[a.Dir]
+		own, ok := byDir[env.pathKey(a.Dir)]
 		switch {
 		case !ok:
 			a.SignedIn = boolPtr(false)
@@ -267,24 +284,33 @@ func Windows(env Env, id string) ([]AccountWindows, error) {
 	}
 	folders := Scan(env)
 	home := map[string]string{}
+	spelled := map[string]string{} // pathKey -> the scanned folder's own spelling
 	for _, f := range folders {
 		if f.Home {
 			home[f.Kind] = f.Dir
+		}
+		if _, ok := spelled[env.pathKey(f.Dir)]; !ok {
+			spelled[env.pathKey(f.Dir)] = f.Dir
 		}
 	}
 	covered := map[string]bool{}
 	out := []AccountWindows{}
 	for _, a := range describe(env, recs, folders) {
 		dirs := []string{a.Dir}
-		covered[a.Dir] = true
+		covered[env.pathKey(a.Dir)] = true
 		if a.Default {
 			dirs = []string{home[a.Kind], a.Dir}
-			covered[home[a.Kind]] = true
+			covered[env.pathKey(home[a.Kind])] = true
+		}
+		// The numbers are kept per spelling, so the scanned spelling of the
+		// account's folder is read too when it differs from the record's.
+		if s, ok := spelled[env.pathKey(a.Dir)]; ok && s != a.Dir {
+			dirs = append(dirs, s)
 		}
 		out = append(out, windowsFor(env, a.ID, a.Kind, dirs))
 	}
 	for _, f := range folders {
-		if !covered[f.Dir] {
+		if !covered[env.pathKey(f.Dir)] {
 			out = append(out, windowsFor(env, strings.TrimPrefix(filepath.Base(f.Dir), "."), f.Kind, []string{f.Dir}))
 		}
 	}
