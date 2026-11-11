@@ -49,18 +49,34 @@ func Real(path string) string {
 	}
 }
 
-// Tilde spells a path under home as ~/....
+// Tilde spells a path under home as ~/.... A path that is under home only through
+// a link (home is a link, path was resolved by Real) is spelled the same way: when
+// the literal prefix does not match, it tries again with Real(home). A path under
+// neither spelling stays as it is.
 func Tilde(path, home string) string {
 	if home == "" {
 		return path
 	}
-	if path == home {
-		return "~"
+	if s, ok := tildeUnder(path, home); ok {
+		return s
 	}
-	if strings.HasPrefix(path, home+string(filepath.Separator)) {
-		return "~" + path[len(home):]
+	if real := Real(home); real != home {
+		if s, ok := tildeUnder(path, real); ok {
+			return s
+		}
 	}
 	return path
+}
+
+// tildeUnder spells path as ~ or ~/... when it is home or under home, literally.
+func tildeUnder(path, home string) (string, bool) {
+	if path == home {
+		return "~", true
+	}
+	if strings.HasPrefix(path, home+string(filepath.Separator)) {
+		return "~" + path[len(home):], true
+	}
+	return "", false
 }
 
 // Machine reads this computer's id from <dir>/machine, or "" before it is made
