@@ -28,10 +28,10 @@ func TestPlanCheck(t *testing.T) {
 		{"unknown nested field", "turns_estimate: 8", "turnz_estimate: 8", "unknown field"},
 		{"unknown edge field", "after: []", "after: [{job: J-1, why: Needs another result, kinds: done}]", "unknown field"},
 		{"run field", "skills: []", "skills: []\n      status: running", "unknown planned field"},
-		{"below floor", "risk: []", "risk: [security]", "review_reason is required"},
+		{"below floor", "risk: []", "risk: [security]", ""},
 		{"override", "risk: []", "risk: [security]\n      review_reason: Owner accepts the review exception", ""},
 		{"small visible", "risk: []", "risk: []\n      visible: small", ""},
-		{"irreversible", "risk: []", "risk: []\n      irreversible: true", "below floor L2"},
+		{"irreversible", "risk: []", "risk: []\n      irreversible: true", ""},
 		{"zero tests", "verify: {kind: file-exists, path: docs/export.md}", "verify: {command: go test ./..., min_tests: 0}", "min_tests"},
 		{"positive tests", "verify: {kind: file-exists, path: docs/export.md}", "verify: {command: go test ./..., min_tests: 1}", ""},
 		{"missing target", "after: []", "after: [J-2]", "does not exist"},
@@ -87,7 +87,7 @@ func TestPlanCheckDuplicatesAndCycles(t *testing.T) {
 	text := strings.ReplaceAll(base, "skills: []", "skillz: []")
 	text = strings.Replace(text, "risk: []", "risk: [security]", 1)
 	h.write(filepath.Join(task, "plan.md"), text)
-	if code := h.run(task, "plan", "check"); code != 1 || !strings.Contains(h.out.String(), "review_reason") || !strings.Contains(h.out.String(), "missing required field skills") {
+	if code := h.run(task, "plan", "check"); code != 1 || !strings.Contains(h.out.String(), "missing required field skills") {
 		t.Fatalf("%d: %s", code, h.out)
 	}
 }

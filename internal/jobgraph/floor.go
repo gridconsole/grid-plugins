@@ -5,157 +5,35 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"path"
 	"regexp"
-	"sort"
 	"strings"
 )
 
-// Policy is the relevant projection of project brain path tags. No package
-// global or filesystem state supplies these lists. Built-in UI and low-risk
-// conventions supplement the lists; a project can tag additional paths.
-type Policy struct {
-	// Repo names the primary repo: "Repo:path" in a scope or tag then means the
-	// unprefixed "path". Empty leaves every prefix a different repo.
-	Repo             string   `json:"repo,omitempty"`
-	EnvironmentPaths []string `json:"environment_paths,omitempty"`
-	RiskPaths        []string `json:"risk_paths,omitempty"`
-	UIPaths          []string `json:"ui_paths,omitempty"`
-	GeneratedPaths   []string `json:"generated_paths,omitempty"`
-	TaskPaths        []string `json:"task_paths,omitempty"`
-}
-
-type Floor struct {
-	Job         string   `json:"job"`
-	Review      string   `json:"review"`
-	Floor       string   `json:"floor"`
-	Reason      string   `json:"reason"`
-	Classify    bool     `json:"classify"`
-	CaptureAtL3 bool     `json:"capture_at_l3"`
-	Override    bool     `json:"override"`
-	Errors      []string `json:"errors"`
-}
-
-func uiScope(write []string) bool {
-	for _, w := range write {
-		if i := strings.IndexByte(w, ':'); i >= 0 {
-			w = w[i+1:]
-		}
-		w = strings.ToLower(w) // raising path: Pages/ and .TSX count
-		parts := strings.Split(w, "/")
-		for _, part := range parts[:len(parts)-1] {
-			if part == "pages" || part == "ui" || part == "components" {
-				return true
-			}
-		}
-		for _, suffix := range []string{".tsx", ".jsx", ".vue", ".svelte"} {
-			if strings.HasSuffix(w, suffix) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// ReviewFloor computes first-match precedence from job-contract.md section 5.
-// It does not lower or mutate the requested review level. An exception reason
-// permits a lower request but does not remove classify or capture requirements.
-func ReviewFloor(item job.Job, policy Policy) (Floor, error) {
-	out := Floor{Job: item.ID, Review: item.Review, Errors: []string{}}
-	if strings.ContainsAny(policy.Repo, ":/*?[]\\") {
-		return out, fmt.Errorf("invalid policy repo %q", policy.Repo)
-	}
-	for _, patterns := range [][]string{item.Write, policy.EnvironmentPaths, policy.RiskPaths, policy.UIPaths, policy.GeneratedPaths, policy.TaskPaths} {
-		for _, pattern := range patterns {
-			if err := validatePattern(pattern); err != nil {
-				return out, err
-			}
+// CheckPlanJob is the static check every planned Job passes in a plan: its
+// write patterns, the plain values of risk, work kind and visible, and its
+// verify command. It reports the first refusal. The retired review field is
+// not read.
+func CheckPlanJob(item job.Job) error {
+	for _, pattern := range item.Write {
+		if err := validatePattern(pattern); err != nil {
+			return err
 		}
 	}
 	for _, risk := range item.Risk {
 		switch risk {
 		case "concurrency", "security", "data-format", "cross-platform":
 		default:
-			return out, fmt.Errorf("%s: unknown risk %q", item.ID, risk)
+			return fmt.Errorf("%s: unknown risk %q", item.ID, risk)
 		}
 	}
 	switch item.Kind {
 	case "", "build", "code", "non-code", "research", "scout", "rename", "generated":
 	default:
-		return out, fmt.Errorf("%s: unknown work kind %q", item.ID, item.Kind)
+		return fmt.Errorf("%s: unknown work kind %q", item.ID, item.Kind)
 	}
 	if item.Visible != "" && item.Visible != "big" && item.Visible != "small" {
-		return out, fmt.Errorf("%s: unknown visible value %q", item.ID, item.Visible)
+		return fmt.Errorf("%s: unknown visible value %q", item.ID, item.Visible)
 	}
-	// Lowering is exact: only the primary repo's own spelling reads as unprefixed.
-	generated, tasks := stripRepos(policy.GeneratedPaths, policy.Repo), stripRepos(policy.TaskPaths, policy.Repo)
-	lowRisk := len(item.Write) > 0
-	taskOnly := len(item.Write) > 0
-	for _, w := range item.Write {
-		w = stripRepo(w, policy.Repo, false)
-		lowRisk = lowRisk && (lowRiskPath(w) || covered(w, generated))
-		taskOnly = taskOnly && covered(w, tasks)
-	}
-	switch {
-	case item.Irreversible || anyScope(item.Write, policy.EnvironmentPaths, policy.Repo):
-		out.Floor, out.Reason, out.Classify = "L2", "environment scope or irreversible step", true
-	case len(item.Risk) > 0 || anyScope(item.Write, policy.RiskPaths, policy.Repo):
-		out.Floor, out.Reason = "L2", "declared risk or risk path"
-	case item.Visible == "big" || uiScope(item.Write) || anyScope(item.Write, policy.UIPaths, policy.Repo):
-		out.Floor, out.Reason, out.CaptureAtL3 = "L1", "visible change or UI scope", true
-	case lowRisk || item.Kind == "rename" || item.Kind == "generated" || (item.Kind == "research" || item.Kind == "scout") && taskOnly:
-		out.Floor, out.Reason = "L0", "tests, docs, renames, generated files, or task-only research"
-	default:
-		out.Floor, out.Reason = "L1", "ordinary work"
-	}
-	// A Job no longer needs a level: whether a review runs is judged per step,
-	// so none is the normal case and raises no error. A level that an old plan
-	// still declares is checked as before (follow-up lane F-review-floor-drop).
-	if level := reviewRank(item.Review); item.Review == "" {
-	} else if level < 0 {
-		out.Errors = append(out.Errors, "review must be L0, L1, L2 or L3")
-	} else if level < reviewRank(out.Floor) {
-		if strings.TrimSpace(item.ReviewReason) == "" {
-			out.Errors = append(out.Errors, "review "+item.Review+" is below floor "+out.Floor+"; review_reason is required")
-		} else {
-			out.Override = true
-		}
-	}
-	if err := ValidateVerify(item); err != nil {
-		out.Errors = append(out.Errors, err.Error())
-	}
-	return out, nil
-}
-
-func reviewRank(level string) int {
-	switch level {
-	case "L0":
-		return 0
-	case "L1":
-		return 1
-	case "L2":
-		return 2
-	case "L3":
-		return 3
-	default:
-		return -1
-	}
-}
-
-// Floors returns a stable report, including per-Job review and verify refusals.
-// Malformed ids, kinds, risks or patterns are errors instead of partial reports.
-func Floors(items []job.Job, policy Policy) ([]Floor, error) {
-	if _, err := New(items); err != nil {
-		return nil, err
-	}
-	out := make([]Floor, 0, len(items))
-	for _, item := range items {
-		floor, err := ReviewFloor(item, policy)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, floor)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Job < out[j].Job })
-	return out, nil
+	return ValidateVerify(item)
 }
 
 // ValidateVerify is a static plan check, not evidence of an executed test count.
