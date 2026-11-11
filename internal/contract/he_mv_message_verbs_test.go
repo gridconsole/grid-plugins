@@ -53,7 +53,6 @@ var heMvProse = map[string]string{
 	"internal/guard/host.go:task or":          "prose: \"the grid task or grid question command\"",
 	"internal/guard/host.go:question command": "prose: \"the grid task or grid question command\"",
 	"internal/guard/host.go:feed or":          "prose: \"post to it with grid feed or grid job\"",
-	"internal/guard/writer.go:project to":     "prose: \"Use grid project to make this change\"",
 }
 
 var (

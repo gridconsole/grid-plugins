@@ -1,9 +1,11 @@
 package task
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,11 +23,38 @@ const (
 	flakeCRDeadline = 60 * time.Second
 )
 
+// koTfRefused is the one line, and not a receipt, that a child prints on stdout
+// the first time a move is refused for the current state. The parent that
+// waits for it knows the child is running and has met the other writer's turn.
+const koTfRefused = "koTf refused"
+
+// koTfRead reads a child's stdout to its end and keeps all of it in out. It
+// closes refused at the first line that is koTfRefused, and done at the end of
+// the stream. Read out only after done is closed.
+func koTfRead(r io.Reader, out *bytes.Buffer, refused, done chan struct{}) {
+	defer close(done)
+	br := bufio.NewReader(r)
+	seen := false
+	for {
+		line, err := br.ReadString('\n')
+		out.WriteString(line)
+		if !seen && strings.TrimSpace(line) == koTfRefused {
+			seen = true
+			close(refused)
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
 // flakeCRRun is the body of the two exec'd-writer tests. Run as the parent it
-// starts one child per action, in the order given, waiting gap between the
-// Start calls, and checks the receipts against the history. Run as a child
-// (the parent re-execs this same test by name) it only drives one writer.
-func flakeCRRun(t *testing.T, actions []string, gap time.Duration) {
+// starts one child per action, in the order given, and checks the receipts
+// against the history. With waitRefused each child starts only after the child
+// before it has printed koTfRefused, its first refused move; without it all
+// children start at once. Run as a child (the parent re-execs this same test by
+// name) it only drives one writer.
+func flakeCRRun(t *testing.T, actions []string, waitRefused bool) {
 	t.Helper()
 	if os.Getenv("GRID_TASK_WRITE_CHILD") == "1" {
 		flakeCRChild(t)
@@ -33,26 +62,43 @@ func flakeCRRun(t *testing.T, actions []string, gap time.Duration) {
 	}
 	s, task := writeFixture(t)
 	type child struct {
-		cmd    *exec.Cmd
-		out    bytes.Buffer
-		stderr bytes.Buffer
+		cmd     *exec.Cmd
+		out     bytes.Buffer
+		stderr  bytes.Buffer
+		refused chan struct{}
+		done    chan struct{}
 	}
 	children := make([]*child, len(actions))
 	for i, action := range actions {
-		if i > 0 {
-			time.Sleep(gap)
+		if i > 0 && waitRefused {
+			// The event, not a delay: the child before is up and has been
+			// refused. It cannot end first, since its moves need this child.
+			prev := children[i-1]
+			select {
+			case <-prev.refused:
+			case <-prev.done:
+				t.Fatalf("%s child ended before it was refused a move: %s %s", actions[i-1], prev.out.String(), prev.stderr.String())
+			}
 		}
-		c := &child{}
+		c := &child{refused: make(chan struct{}), done: make(chan struct{})}
 		children[i] = c
 		c.cmd = exec.Command(os.Args[0], "-test.run=^"+t.Name()+"$")
 		c.cmd.Env = append(os.Environ(), "GRID_TASK_WRITE_CHILD=1", "GRID_TASK_WRITE_HOME="+s.Resolver.GridHome, "GRID_TASK_WRITE_ACTION="+action)
-		c.cmd.Stdout, c.cmd.Stderr = &c.out, &c.stderr
+		c.cmd.Stderr = &c.stderr
+		stdout, err := c.cmd.StdoutPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
 		if err := c.cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() { _ = c.cmd.Process.Kill() })
+		go koTfRead(stdout, &c.out, c.refused, c.done)
 	}
 	receipts := map[string]int{}
 	for i, c := range children {
+		// Wait must not run before the reads of the pipe are over.
+		<-c.done
 		if err := c.cmd.Wait(); err != nil {
 			t.Fatalf("%v: %s %s", err, c.out.String(), c.stderr.String())
 		}
@@ -126,6 +172,9 @@ func flakeCRChild(t *testing.T) {
 			fmt.Println(string(data))
 			moves++
 		case strings.Contains(err.Error(), "current state"):
+			if refused == 0 {
+				fmt.Println(koTfRefused)
+			}
 			refused++
 		default:
 			t.Fatal(err)
@@ -133,9 +182,11 @@ func flakeCRChild(t *testing.T) {
 	}
 }
 
-// The close child starts two seconds after the reopen child. The delay is the
-// stressor: on a loaded machine one process can start that late. The test must
-// still see both writers take turns.
+// The close child starts only after the reopen child has been refused its first
+// move: the state starts queued, so reopen is refused at once, and it keeps
+// retrying while close is not yet running. The late start is the stressor: on a
+// loaded machine one process can start that late. The test must still see both
+// writers take turns.
 func TestFlakeCRLateClose(t *testing.T) {
-	flakeCRRun(t, []string{"reopen", "close"}, 2*time.Second)
+	flakeCRRun(t, []string{"reopen", "close"}, true)
 }

@@ -41,6 +41,24 @@ func (f *eventFixture) start(t *testing.T, event string, in hookio.Input) <-chan
 	return done
 }
 
+// koHlOnTaskLock sets the fslock wait hook for the rest of the test and returns
+// a channel that gets one value when a lock call on a .task.lock file is about
+// to wait. The hook only compares the file's name and sends without blocking.
+func koHlOnTaskLock(t *testing.T) <-chan struct{} {
+	t.Helper()
+	queued := make(chan struct{}, 1)
+	t.Cleanup(fslock.OnBlockForTest(func(path string) {
+		if filepath.Base(path) != ".task.lock" {
+			return
+		}
+		select {
+		case queued <- struct{}{}:
+		default:
+		}
+	}))
+	return queued
+}
+
 // lockOrderFinishes is the review's P4 with the real hook. The test plays
 // attach's lock order: it holds .task.lock (attach.go withWrite), lets the hook
 // run, then takes the session lock the way sessions.Start does. A hook that
@@ -63,8 +81,25 @@ func lockOrderFinishes(t *testing.T, f *eventFixture, event string, in hookio.In
 		}
 	}
 	defer release()
+	queued := koHlOnTaskLock(t)
 	hookDone := f.start(t, event, in)
-	time.Sleep(500 * time.Millisecond)
+	// The hook has reached .task.lock when its lock call is about to wait. A hook
+	// that ended without waiting also passes this step; its log is kept for the
+	// check below.
+	var hookLog string
+	hookEnded := false
+	select {
+	case <-queued:
+	case hookLog = <-hookDone:
+		hookEnded = true
+	case <-time.After(10 * time.Second):
+		release()
+		select {
+		case <-hookDone:
+		case <-time.After(10 * time.Second):
+		}
+		t.Fatal("P4: the hook neither waited for .task.lock nor finished within 10 s")
+	}
 	attachDone := make(chan error, 1)
 	go func() {
 		key := session.Key{SessionID: "attach-demo", MachineID: "machine-demo"}
@@ -94,13 +129,15 @@ func lockOrderFinishes(t *testing.T, f *eventFixture, event string, in hookio.In
 		return
 	}
 	release()
-	select {
-	case log := <-hookDone:
-		if log != "" {
-			t.Errorf("hook log: %s", log)
+	if !hookEnded {
+		select {
+		case hookLog = <-hookDone:
+		case <-deadline:
+			t.Fatal("P4: the hook did not finish within 10 s")
 		}
-	case <-deadline:
-		t.Fatal("P4: the hook did not finish within 10 s")
+	}
+	if hookLog != "" {
+		t.Errorf("hook log: %s", hookLog)
 	}
 	b, _ := os.ReadFile(filepath.Join(f.dir, "history.md"))
 	if !strings.Contains(string(b), want) {

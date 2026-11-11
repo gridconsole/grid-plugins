@@ -15,6 +15,7 @@ func runMCP(args []string, env Env) int {
 	}
 	server := mcp.Server{
 		Version: version.Version,
+		Getenv:  env.getenv,
 		Resolve: func(task, project string) (feed.Store, error) { return sessionStore(env, task, project) },
 		Session: func(in feed.Input) (feed.Input, feed.Writer, error) {
 			in, err := sessionDefaults(env, in)

@@ -1,9 +1,11 @@
 package hook
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -11,11 +13,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
+
+// historyLockWait is how long the Bash history record waits for the session
+// lock before it skips the record.
+const historyLockWait = 2 * time.Second
 
 func history(o Options, in hookio.Input) {
 	if o.Resolver.GridHome == "" || !o.hookEnabled("history-log", in) {
@@ -97,7 +104,12 @@ func bashHistory(o Options, in hookio.Input) {
 	// released: .task.lock is never taken while the session lock is held.
 	type historyLine struct{ event, detail string }
 	var lines []historyLine
-	err = store.UpdateActivity(in.SessionID, func(a *session.Activity) error {
+	// Every hook of every session in the task takes this lock, so it can be
+	// busy for a long time. The record waits historyLockWait for it and then
+	// gives up: the hook is not held up for bookkeeping, and the guards'
+	// decision does not depend on it.
+	ctx, cancel := context.WithTimeout(context.Background(), historyLockWait)
+	err = store.UpdateActivityContext(ctx, in.SessionID, func(a *session.Activity) error {
 		lines = nil
 		if in.HookEventName == "PreToolUse" {
 			snap, err := snapshot(dir)
@@ -146,6 +158,13 @@ func bashHistory(o Options, in hookio.Input) {
 		delete(a.Snapshots, in.ToolUseID)
 		return nil
 	})
+	cancel()
+	if errors.Is(err, context.DeadlineExceeded) {
+		// No activity and no snapshot were written. A PostToolUse that finds no
+		// snapshot for its tool use records nothing and is no error.
+		o.log("history skipped", fmt.Errorf("session lock busy after %s", historyLockWait))
+		return
+	}
 	if err != nil {
 		o.log("history snapshot", err)
 		return
