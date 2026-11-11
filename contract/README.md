@@ -29,7 +29,7 @@ Person-gate refusals and `person check` retain `error: "person_required"`, `reas
 specific gate refusal reason; it is not replaced by the general code.
 
 `grid approve --json` exits 3 with the one-line stdout body
-`{"error":"job_waiting","job":"<approve Job>","waiting_for":"<Job it waits on>","reason":"<wait reason, unchanged>"}`
+`{"error":"job_waiting","code":"job_waiting","job":"<approve Job>","waiting_for":"<Job it waits on>","reason":"<wait reason, unchanged>"}`
 when the approve person Job still waits for a Job in its after list; stderr keeps
 its `grid approve: <job> cannot be answered yet: <reason>` line, and without `--json` nothing changes.
 

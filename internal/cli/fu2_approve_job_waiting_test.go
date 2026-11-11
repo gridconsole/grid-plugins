@@ -64,7 +64,7 @@ func requireNothingAnswered(t *testing.T, path string, store feed.Store) {
 	}
 }
 
-const fu2WaitingBody = `{"error":"job_waiting","job":"J-2","waiting_for":"J-1","reason":"waiting for J-1 to be accepted"}`
+const fu2WaitingBody = `{"error":"job_waiting","code":"job_waiting","job":"J-2","waiting_for":"J-1","reason":"waiting for J-1 to be accepted"}`
 
 func TestFu2ApproveJobWaitingJSON(t *testing.T) {
 	h, path, store, text := waitingApproveHarness(t)
