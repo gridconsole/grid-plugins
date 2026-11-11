@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/updates"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 // updateLines collects repeated --line values.
@@ -78,6 +79,11 @@ func runUpdate(args []string, env Env) int {
 	}
 	r := resolver(env)
 	if r.Caller.IsGuest() {
+		// Resolve first, so an unknown and an uninvited project answer alike
+		// (guest_parity_test.go); an invited one is refused. Nothing is written.
+		if _, err := r.Resolve(where.Query{Cwd: env.Cwd, Project: fs.Arg(0)}); err != nil {
+			return commandError(env, "update "+verb, err)
+		}
 		return failure(env, errors.New(guestSettingsRefusal))
 	}
 	res, err := updates.Do(r, updates.Act{Act: verb, Project: fs.Arg(0), Cwd: env.Cwd, Title: title, Lines: lines})

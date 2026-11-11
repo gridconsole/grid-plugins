@@ -274,6 +274,8 @@ func TestGrUpdateActRefusals(t *testing.T) {
 	if code := h.run(h.home, "update", "draft", "alpha"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.errb)
 	}
+	// The guest is invited, so the refusal is the guest rule and not a hidden project.
+	h.write(filepath.Join(h.gridHome, "projects", "alpha", "project-roles.json"), `{"people":[{"id":"gus","perm":"Client"}]}`)
 	before := guestSnapshot(t, h.gridHome)
 	owner := h.env.Getenv
 	h.env.Getenv = func(k string) string {
