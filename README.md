@@ -33,7 +33,7 @@ same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` thro
 - `grid feed`, `grid mcp`: the Feed and its stdio MCP server.
 - `grid question`, `grid answer`, `grid approve`, `grid deliver`, `grid proof`, `grid history`, `grid land`: questions, answers, gates, outcome, proof, history, landing.
 - `grid brain`: the brain notes and topics.
-- `grid env`, `grid ports`: dev environments and port blocks.
+- `grid env`: dev environments.
 - `grid person`, `grid routine`, `grid worker`, `grid session`, `grid intent`, `grid usage`, `grid account`: people, routines, workers, sessions, worker requests, usage, accounts.
 - `grid agent`, `grid claude`, `grid workflow`, `grid skill`, `grid setup`: agent, Claude, workflow and skill settings, and project setup.
 - `grid project`, `grid project-md`, `grid signal`, `grid artifact`, `grid eval`, `grid migrate`: projects, inbox signals, artifacts, evaluations, home upgrade.

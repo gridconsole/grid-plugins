@@ -128,7 +128,6 @@ are reference-document names and original line numbers, not machine paths.
 | grid intent list output | [cmd-intent-list.json](schemas/cmd-intent-list.json) | internal/cli/intent.go:247 |
 | grid job next output | [cmd-job-next.json](schemas/cmd-job-next.json) | internal/cli/orchestrator.go:175 and :228 |
 | grid plan hash output | [cmd-plan-hash.json](schemas/cmd-plan-hash.json) | internal/cli/plan.go:74 |
-| grid refusal decide output | [cmd-refusal-decide.json](schemas/cmd-refusal-decide.json) | internal/cli/task_write.go:161 |
 | grid session handback output | [cmd-session-handback.json](schemas/cmd-session-handback.json) | internal/cli/intent.go:140 |
 | grid session list output | [cmd-session-list.json](schemas/cmd-session-list.json) | internal/cli/liveness.go:142 |
 | grid session pause output | [cmd-session-pause.json](schemas/cmd-session-pause.json) | internal/cli/intent.go:140 |
@@ -485,7 +484,7 @@ The title is the first nonblank line of the request, trimmed and limited to 120 
 
 ### Task operands
 
-`task show`, `approve`, `refusal decide` (also `decide`), and `task close`,
+`task show`, `approve`, and `task close`,
 `stop`, `reopen`, `status`, `history`, `attach`, `rename` and `decline` share
 one CLI task resolver. The same resolver handles `deliver --task`,
 `proof add/index --task`, `history add --task`, `land <task>`,
@@ -506,7 +505,7 @@ ID, even if that folder does not exist. Approval and refusal decisions still
 require a person.
 
 `task show --json` reports `id`, absolute `path`, and `folder` (the resolved
-folder basename). Task write receipts from `approve`, `refusal decide`/`decide`,
+folder basename). Task write receipts from `approve`,
 `close`, `stop`, `reopen`, `status`, `rename` and `decline` retain their `task`
 display id and add `folder`. Persisted history receipts keep their existing
 shape. `task history` and `task attach` retain their existing JSON shapes.
@@ -516,8 +515,6 @@ write timestamps. For example:
 ```text
 grid task show T-01-renamed --json
 grid approve T-01-renamed --plan-hash <hash> --json
-grid refusal decide T-01-renamed R-1 allow --json
-grid decide T-01-renamed R-1 allow --json
 grid task close T-01-renamed --json
 ```
 
