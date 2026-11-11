@@ -99,7 +99,7 @@ func (s Store) park(snap Snapshot, j *contract.Job, m *jobMemory) error {
 			return s.control(j, contract.Parked, "needs_person", m.Failure)
 		}
 	}
-	err := (question.Store{TaskDir: s.Feed.TaskDir}).ReserveGate(gate, func(id string) error {
+	err := (question.Store{TaskDir: s.Feed.TaskDir, TaskID: s.Feed.TaskID}).ReserveGate(gate, func(id string) error {
 		_, err := s.Feed.Post(feed.Input{Type: "question", Job: j.ID, Wake: m.Failure + "/1", Body: map[string]any{
 			"question": "Three attempts made no progress. How should " + j.ID + " continue?",
 			"who":      owner, "blocking": true, "options": []string{"Keep parked", "Retry"}, "recommended": "Keep parked", "why": strings.Join(m.Failures, ", "),
