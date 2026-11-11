@@ -3,7 +3,9 @@ package contract
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 )
 
 type controlBody struct {
@@ -187,6 +189,7 @@ func Fold(posts []Post) State {
 			j.Assign, j.AssignPost, j.Generation = a, p.ID, p.Gen
 			j.Attempt, j.Status, j.LeaseExpires = a.Attempt, Assigned, a.Until
 			j.Exited, j.ExitReason, j.Reason = "", "", ""
+			j.ExitCode, j.ExitReasonMissing = nil, false
 			j.History = append(j.History, p.ID)
 			acknowledged := false
 			for _, side := range active {
@@ -357,12 +360,18 @@ func applySide(j *Job, p Post) {
 		_ = json.Unmarshal(p.Body, &b)
 		j.Checkpoint = &b
 	case "worker-exit":
-		var b struct{ Reason string }
+		var b struct {
+			Reason string
+			Code   json.RawMessage
+		}
 		_ = json.Unmarshal(p.Body, &b)
-		if b.Reason == "" {
+		// No reason still reads as crash; ExitReasonMissing keeps a writer that
+		// gave none apart from one that said crash.
+		j.ExitReasonMissing = b.Reason == ""
+		if j.ExitReasonMissing {
 			b.Reason = "crash"
 		}
-		j.Exited, j.ExitReason = p.ID, b.Reason
+		j.Exited, j.ExitReason, j.ExitCode = p.ID, b.Reason, exitCode(b.Code)
 		if b.Reason == "usage_limit" {
 			j.Reason = "usage_limit"
 		}
@@ -371,6 +380,30 @@ func applySide(j *Job, p Post) {
 			j.NeedsLead = true
 		}
 	}
+}
+
+// exitCode keeps a worker-exit code as the writer sent it when it is what the
+// schemas allow (an integer or a non-empty string); anything else is dropped so
+// state.json stays valid. A whole number written 2.0 reads as 2.
+func exitCode(raw json.RawMessage) json.RawMessage {
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		if text == "" {
+			return nil
+		}
+		return raw
+	}
+	var n json.Number
+	if len(raw) == 0 || raw[0] == '"' || json.Unmarshal(raw, &n) != nil {
+		return nil
+	}
+	if _, err := strconv.ParseInt(n.String(), 10, 64); err == nil {
+		return raw
+	}
+	if f, err := strconv.ParseFloat(n.String(), 64); err == nil && f == math.Trunc(f) && math.Abs(f) < 1<<53 {
+		return json.RawMessage(strconv.FormatInt(int64(f), 10))
+	}
+	return nil
 }
 
 func deref(s *string) string {
