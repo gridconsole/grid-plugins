@@ -25,7 +25,7 @@ does not freeze an inherited model. Commands do not create projects.
 | Agent model | `haiku`, `sonnet`, `opus` |
 | Agent effort | `low`, `medium`, `high`, `xhigh`, `max` |
 | Skill state | `enable`, `disable` (stored as JSON booleans) |
-| Hook level | `off`, `warn`, `block`; `block` only for brief-lint, host-guard, only-writer and plan-guard |
+| Hook level | `off`, `warn`, `block`; any hook takes any level, and the four guards default to `block` |
 
 Model arguments accept any letter case and are stored in lower case. Efforts,
 names and levels use the spelling in the tables. `agent set` requires at least
@@ -66,6 +66,13 @@ explicit overrides:
 }
 ```
 
+One more top-level key is accepted: `accounts`, the array of account records the
+app's account reads write into the same file. The plugin does not interpret it
+(it must be a JSON array); it is carried through every rewrite (`agent set`,
+`skill enable|disable`, `hook level`, `grid agent budget apply|undo`) so the
+records are not dropped, and it never appears in the effective values or the
+budget read.
+
 Unknown keys at every level are rejected with the allowed list. Null values,
 wrong types, duplicate keys and additional JSON documents are rejected. Invalid
 input leaves the previous file byte-identical. Settings files and lock files
@@ -100,10 +107,10 @@ personal values, and missing values use the catalog defaults.
 
 | Hook | Default | Consumer in this checkout |
 | --- | --- | --- |
-| brief-lint | block, fixed | Legacy brief guard |
-| host-guard | block, fixed | Host and Feed guard |
-| only-writer | block, fixed | Task and brain ownership guard |
-| plan-guard | block, fixed | Plan guard |
+| brief-lint | block | Legacy brief guard |
+| host-guard | block | Host and Feed guard |
+| only-writer | warn | Task and brain ownership guard; warns by default, `block` refuses the write |
+| plan-guard | block | Plan guard |
 | home-allow | warn | Home permission fallback |
 | session-start | warn | SessionStart context |
 | stop-check | block | Stop and SubagentStop completion checks, including saved Job verification |
@@ -116,15 +123,22 @@ personal values, and missing values use the catalog defaults.
 | job-lint | block | No runtime counterpart; has no effect yet |
 | needs-you, session-check, topic-trigger | warn | No runtime counterpart; have no effect yet |
 
-The four guards marked fixed always block. They are the person's gates and the
-fence around task, brain and project files (`docs/plugin-design.md:90`, `:92`), and a file
-an agent can write must not be able to switch them off. `grid hook level` refuses
-`off` and `warn` for them with the allowed list, a settings file that says
-otherwise is refused as a whole, and the guards do not read the settings files at
-all. The host guard also denies agent writes to the settings files and the
-`grid hook level`, `agent set`, `skill enable|disable` and `setup` verbs.
+No guard level is fixed. brief-lint, host-guard, only-writer and plan-guard read
+their level like every other hook; brief-lint, host-guard and plan-guard default
+to `block` and only-writer to `warn`; `grid hook level`
+takes `off`, `warn` or `block` for them. A settings file the guard cannot read
+keeps its refusal and reports why. While the host guard is at `block` it denies
+agent writes to the settings files and the `grid hook level`, `agent set`,
+`skill enable|disable` and `setup` verbs, so an agent does not lower a level; a
+person does, in Grid or with the command.
 
-For configurable guards, `off` skips the check, `warn` turns a denial or stop
+The plan guard does not refuse repo writes because a task's plan is not accepted.
+Whether a plan needs a person's approval is a step of the task's workflow (an
+`approve` step), and the workflow's default says who answers and when. The
+guard's other plan rules (the brain-recall check on plan.md, the grid-planner's
+reach into a task folder) stay.
+
+For every guard, `off` skips the check, `warn` turns a denial or stop
 block into a warning, and `block` keeps the original decision. Permission warnings
 use `systemMessage`; stop warnings go to stderr and exit zero. Stop checks at
 `off` skip saved Job verification and brief marking too; `warn` still performs

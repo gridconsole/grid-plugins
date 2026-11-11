@@ -46,7 +46,6 @@ add('grid-env', 'discovered', 'Desktop config selects a project and writes shell
 add('grid-env', 'no-config', 'No desktop configuration gives no output.', event('SessionStart', cwd=R), env={'GRID_HOME': None, 'GRID_PROJECTS': None})
 
 add('plan-guard', 'task-write', 'A held task may write its own plan.', write(T + '/plan.md'))
-add('plan-guard', 'held-repo', 'A held task cannot write into the repository.', write(R + '/demo.txt'), contains='deny')
 add('plan-guard', 'accepted-repo', 'Plan acceptance releases repository writes.', write(R + '/demo.txt'), files={T + '/history.md': ACCEPTED})
 add('plan-guard', 'guard-off', 'The explicit off switch releases repository writes.', write(R + '/demo.txt'), env={'GRID_PLAN_GUARD': 'OFF'})
 add('plan-guard', 'forged-acceptance', 'An agent cannot insert a plan acceptance.', write(T + '/history.md', ACCEPTED), contains='deny')

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -28,6 +29,10 @@ func TestGuardDispatch(t *testing.T) {
 				grid := filepath.Join(home, ".grid")
 				cwd := filepath.Join(root, "repo")
 				data := filepath.Join(root, "data")
+				// only-writer warns by default (verdicts-11nov v-4); these rows pin the deny it gives at block.
+				if err := (settings.Store{Home: grid}).SetHook("only-writer", "block"); err != nil {
+					t.Fatal(err)
+				}
 				in := hookio.Input{ToolName: tt.tool, Cwd: cwd, ToolInput: map[string]any{"file_path": filepath.Join(grid, tt.rel), "content": "text"}}
 				stdin, _ := json.Marshal(in)
 				var out bytes.Buffer
@@ -74,6 +79,36 @@ func TestGuardDispatch(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// With the default only-writer level, a task-folder write through the dispatcher
+// is not denied and the warning goes out as a systemMessage.
+func TestGuardDispatchOnlyWriterDefaultWarns(t *testing.T) {
+	for _, event := range []string{"pretooluse", "permissionrequest"} {
+		t.Run(event, func(t *testing.T) {
+			root := t.TempDir()
+			home := filepath.Join(root, "home")
+			grid := filepath.Join(home, ".grid")
+			cwd := filepath.Join(root, "repo")
+			in := hookio.Input{ToolName: "Write", Cwd: cwd, ToolInput: map[string]any{"file_path": filepath.Join(grid, "projects/example/tasks/T-01/notes.md"), "content": "text"}}
+			stdin, _ := json.Marshal(in)
+			var out bytes.Buffer
+			code := Run(Options{
+				Event: event, Stdin: bytes.NewReader(stdin), Stdout: &out, Cwd: cwd,
+				Resolver: where.Resolver{GridHome: grid, Home: home},
+				Getenv: func(k string) string {
+					return map[string]string{"GRID_PLAN_GUARD": "off", "CLAUDE_PLUGIN_DATA": filepath.Join(root, "data")}[k]
+				},
+			})
+			if code != 0 {
+				t.Fatal(code)
+			}
+			got := out.String()
+			if strings.Contains(got, `"deny"`) || !strings.Contains(got, `"systemMessage":"only-writer: Task folders and the brain are written only by grid`) {
+				t.Fatalf("want a warning and no deny: %s", got)
+			}
+		})
 	}
 }
 

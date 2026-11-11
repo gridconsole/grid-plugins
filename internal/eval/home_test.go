@@ -31,7 +31,7 @@ func tierB(t *testing.T) []Task {
 			out = append(out, task)
 		}
 	}
-	if len(out) != 20 {
+	if len(out) != 23 {
 		t.Fatalf("only %d tier-b cases", len(out))
 	}
 	return out
@@ -183,6 +183,39 @@ f="$GRID_HOME/projects/notes-app/tasks/T-01-sample/subagents/01-total.md"
 sed -e 's/^## Verdict$/## Verdict\nREJECTED\n\nMust fix:\n- A2 total([]) returns 1./' "$f" > "$f.new" && mv "$f.new" "$f"
 `,
 	"deliver-refuses-closed": ``,
+	"skill-brain-keeper": `
+f="$GRID_HOME/projects/notes-app/knowledge/conventions/tag-filter-ignores-case.md"
+cat > "$f" <<'X'
+---
+name: tag-filter-ignores-case
+topic: conventions
+status: accepted
+links:
+  - to: brain:project/tag-storage
+    rel: depends-on
+    summary: How notes store their tags
+    why: Read it first to know the tags array that this filter lowercases
+---
+The tag filter ignores case: work/notes-app/src/store.js:3 lowercases both sides.
+X
+`,
+	"skill-browser": `
+cat > verdict.md <<'X'
+| Row | Result | Evidence |
+| R1 heading reads Notes | NOT VERIFIED | No browser; widths 390, 1440, 3840 not captured |
+| R2 Delete all visible | NOT VERIFIED | No browser; widths 390, 1440, 3840 not captured |
+| R3 no sideways scroll | NOT VERIFIED | No browser; widths 390, 1440, 3840 not captured |
+X
+`,
+	"skill-visual-design-review": `
+cat > review.md <<'X'
+Screenshots at 390, 1440 and 3840: NOT VERIFIED, no browser.
+- Severity: high. Where: lede paragraph. What is wrong: low contrast. Fix: darken the colour.
+- Severity: medium. Where: sentence. What is wrong: a sentence set in monospace. Fix: use the body font.
+- Severity: medium. Where: meta line. What is wrong: 10px text. Fix: raise it to 12px.
+- Severity: medium. Where: the plus button. What is wrong: the tap target is under 44px. Fix: make it 44px.
+X
+`,
 }
 
 func TestGoodOutcomesPass(t *testing.T) {

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
 // foldsCase reports whether dir's filesystem treats two spellings of a name as
@@ -125,6 +127,9 @@ func TestBriefNamedInAnotherCaseIsStillLinted(t *testing.T) {
 
 func TestOnlyWriterBlocksTaskInputsAndAttachments(t *testing.T) {
 	f := setup(t)
+	if err := (settings.Store{Home: f.grid}).SetHook("only-writer", "block"); err != nil {
+		t.Fatal(err)
+	}
 	for _, folder := range []string{"inputs", "attachments"} {
 		t.Run(folder, func(t *testing.T) {
 			if got := f.onlyWriter(filepath.Join(f.task, folder, "example.txt")); got != "deny" {

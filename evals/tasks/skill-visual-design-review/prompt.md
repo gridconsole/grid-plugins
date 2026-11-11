@@ -1,0 +1,1 @@
+I just built the page ./site/index.html and want a design review before I call it done. Review it and write the findings to ./review.md. No browser is connected in this session, and nobody is here to answer questions.

@@ -11,16 +11,18 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
-// The guards that hold the gates read no level. A settings file that switches one
-// off or to warn, personal or project, neither silences nor softens it, and the
-// commands refuse to write such a level.
-func TestAlwaysBlockGuardsIgnoreHookLevels(t *testing.T) {
+// No guard is fixed at block. brief-lint, host-guard, only-writer and plan-guard
+// default to block; a setting lowers one to warn (a warning, no refusal) or off,
+// and a settings file that cannot be read keeps the refusal and reports why.
+func TestFourGuardsFollowTheirLevel(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		eval  func(hookio.Input, string, map[string]string) hookio.Decision
 		input func(*fixture) hookio.Input
 	}{
-		{"plan-guard", EvaluatePlan, func(f *fixture) hookio.Input { return f.input("Write", filepath.Join(f.repo, "code.go")) }},
+		{"plan-guard", EvaluatePlan, func(f *fixture) hookio.Input {
+			return f.input("Write", filepath.Join(f.projects, "example", "tasks.", "T-03", "notes.md"))
+		}},
 		{"host-guard", EvaluateHost, func(f *fixture) hookio.Input { return f.input("Write", filepath.Join(f.grid, ".host", "approval")) }},
 		{"only-writer", EvaluateOnlyWriter, func(f *fixture) hookio.Input { return f.input("Write", filepath.Join(f.task, "notes.md")) }},
 		{"brief-lint", EvaluateBrief, func(f *fixture) hookio.Input {
@@ -34,26 +36,51 @@ func TestAlwaysBlockGuardsIgnoreHookLevels(t *testing.T) {
 				if err := project.Write(f.grid, project.Record{Name: "example"}); err != nil {
 					t.Fatal(err)
 				}
-				if level == "off" || level == "warn" {
-					if err := (settings.Store{Home: f.grid}).SetHook(tc.name, level); err == nil {
-						t.Fatalf("the command accepted %s %s", tc.name, level)
-					}
+				want := "deny"
+				// only-writer warns by default (verdicts-11nov v-4); the other three block.
+				if tc.name == "only-writer" && level == "none" {
+					want = ""
 				}
-				if level != "none" {
-					doc := `{"hooks":{"` + tc.name + `":"` + level + `"}}`
-					if level == "malformed" {
-						doc = `{"hooks":`
+				switch level {
+				case "off", "warn", "block":
+					if err := (settings.Store{Home: f.grid}).SetHook(tc.name, level); err != nil {
+						t.Fatalf("the command refused %s %s: %v", tc.name, level, err)
 					}
-					f.write(filepath.Join(f.grid, "settings.json"), doc)
-					f.write(filepath.Join(f.grid, "projects", "example", "settings.json"), doc)
+					if level != "block" {
+						want = ""
+					}
+				case "malformed":
+					f.write(filepath.Join(f.grid, "settings.json"), `{"hooks":`)
 				}
 				d := tc.eval(tc.input(f), f.root, f.env)
-				expect(t, d, "deny")
-				if len(d.Warnings) > 0 || strings.Contains(d.Reason, "Cannot read hook settings") {
-					t.Fatalf("settings changed the decision: %+v", d)
+				expect(t, d, want)
+				if (level == "warn" || level == "malformed") && len(d.Warnings) != 1 {
+					t.Fatalf("%s %s: want one warning, got %+v", tc.name, level, d)
+				}
+				if level == "off" && len(d.Warnings) != 0 {
+					t.Fatalf("off must say nothing: %+v", d)
 				}
 			})
 		}
+	}
+}
+
+// With no setting, a Write into a task folder is warned about and not refused:
+// the decision has no behavior, and its output is a systemMessage naming the rule.
+// A person who sets only-writer to block still gets the deny
+// (TestFourGuardsFollowTheirLevel/only-writer/block).
+func TestOnlyWriterDefaultWarnsAndDoesNotDeny(t *testing.T) {
+	f := setup(t)
+	d := EvaluateOnlyWriter(f.input("Write", filepath.Join(f.task, "notes.md")), f.root, f.env)
+	if d.Behavior != "" {
+		t.Fatalf("default only-writer refused the write: %+v", d)
+	}
+	if len(d.Warnings) != 1 || !strings.Contains(d.Warnings[0], "only-writer: Task folders and the brain are written only by grid") {
+		t.Fatalf("want the only-writer warning, got %+v", d)
+	}
+	out := string(d.Bytes())
+	if !strings.Contains(out, `"systemMessage":"only-writer: Task folders`) || strings.Contains(out, "permissionDecision") {
+		t.Fatalf("output must carry the warning and no decision: %s", out)
 	}
 }
 

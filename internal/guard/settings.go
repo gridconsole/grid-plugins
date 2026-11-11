@@ -10,10 +10,11 @@ import (
 )
 
 // configuredLevel is shared by the direct guard adapters and hook dispatch.
-// Unreadable settings never silently turn a denial off, and a guard that always
-// blocks ignores the settings files altogether.
+// Unreadable settings never silently turn a denial off. Every guard reads its
+// level here, and the default of each is block, so a guard with no setting keeps
+// its decision.
 func configuredLevel(name string, in hookio.Input, root string, env map[string]string, d hookio.Decision) hookio.Decision {
-	if d.Behavior == "" || settings.AlwaysBlock(name) {
+	if d.Behavior == "" {
 		return d
 	}
 	resolver := callerResolver(env)

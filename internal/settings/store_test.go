@@ -10,6 +10,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 func fixture(t *testing.T) (Store, Store) {
@@ -84,8 +85,6 @@ func TestInvalidChangesLeaveBytes(t *testing.T) {
 		{"skill", func() error { return s.SetSkill("routing", false) }},
 		{"hook", func() error { return s.SetHook("unknown", "off") }},
 		{"level", func() error { return s.SetHook("plan-guard", "never") }},
-		{"host-guard off", func() error { return s.SetHook("host-guard", "off") }},
-		{"plan-guard warn", func() error { return s.SetHook("plan-guard", "warn") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.change()
@@ -105,7 +104,6 @@ func TestInvalidDocumentsWriteNothing(t *testing.T) {
 		`{"agents":{"grid-builder":{"model":"unknown"}}}`, `{"agents":{"grid-builder":{"model":""}}}`,
 		`{"agents":{"grid-builder":{"effort":null}}}`, `{"skills":{"research":"false"}}`,
 		`{"hooks":{"plan-guard":"never"}}`, `{"hooks":null}`, `{"hooks":{},"hooks":{}}`,
-		`{"hooks":{"host-guard":"off"}}`, `{"hooks":{"only-writer":"warn"}}`,
 		`{"agents":{"grid-builder":{"model":"opus","model":"haiku"}}}`, `null`, `{} {}`, `{`,
 	} {
 		t.Run(data, func(t *testing.T) {
@@ -137,9 +135,6 @@ func TestAllowedValues(t *testing.T) {
 	}
 	for _, name := range hooks {
 		for _, level := range levels {
-			if AlwaysBlock(name) && level != "block" {
-				continue
-			}
 			must(t, s.SetHook(name, level))
 		}
 	}
@@ -149,46 +144,60 @@ func TestAllowedValues(t *testing.T) {
 	}
 }
 
-// The guards that hold the gates stay on whoever writes the level: the commands
-// refuse off and warn, and a settings file that says so is refused as a whole.
-func TestAlwaysBlockHooksRefuseOffAndWarn(t *testing.T) {
+// No hook has a fixed level. The four guards (brief-lint, host-guard,
+// only-writer, plan-guard) default to block; off, warn and block are accepted
+// from the command and from a settings file, a project's level wins over the
+// personal one, and ResolveHookLevel returns the level that was set.
+func TestGuardLevelsAreSettableAndResolved(t *testing.T) {
 	personal, proj := fixture(t)
-	for _, name := range neverOff {
-		for _, s := range []Store{personal, proj} {
-			must(t, s.SetHook(name, "block"))
-			path := filepath.Join(s.Home, "settings.json")
-			if s.Project != "" {
-				path = filepath.Join(s.Home, "projects", s.Project, "settings.json")
-			}
-			before := contents(t, path)
-			for _, level := range []string{"off", "warn"} {
-				err := s.SetHook(name, level)
-				if err == nil || !strings.Contains(err.Error(), name) || !strings.Contains(err.Error(), "allowed: block") {
-					t.Fatalf("%s %s: %v", name, level, err)
-				}
-				if !bytes.Equal(before, contents(t, path)) {
-					t.Fatalf("%s %s changed bytes", name, level)
-				}
-				must(t, os.WriteFile(path, []byte(`{"hooks":{"`+name+`":"`+level+`"}}`), 0o600))
-				if _, err := s.Effective(); err == nil || !strings.Contains(err.Error(), "allowed: block") {
-					t.Fatalf("accepted %s %s from a file: %v", name, level, err)
-				}
-				if _, err := ReadHookLevels(s.Home, s.Project); err == nil {
-					t.Fatalf("read %s %s from a file", name, level)
-				}
-				must(t, os.WriteFile(path, before, 0o600))
-			}
-			d, err := s.Effective()
+	guards := []string{"brief-lint", "host-guard", "only-writer", "plan-guard"}
+	query := where.Query{Cwd: t.TempDir()}
+	resolver := where.Resolver{GridHome: personal.Home}
+	for _, name := range guards {
+		d, err := personal.Effective()
+		must(t, err)
+		def := "block"
+		if name == "only-writer" {
+			def = "warn" // verdicts-11nov v-4
+		}
+		if d.Hooks[name] != def {
+			t.Fatalf("%s defaults to %s, want %s", name, d.Hooks[name], def)
+		}
+		if got, err := ResolveHookLevel(name, resolver, query); err != nil || got != def {
+			t.Fatalf("%s default resolves to %q, %v", name, got, err)
+		}
+		for _, level := range levels {
+			must(t, personal.SetHook(name, level))
+			d, err := personal.Effective()
 			must(t, err)
-			if d.Hooks[name] != "block" {
-				t.Fatalf("%s is %s", name, d.Hooks[name])
+			if d.Hooks[name] != level {
+				t.Fatalf("%s set to %s reads back %s", name, level, d.Hooks[name])
+			}
+			if got, err := ResolveHookLevel(name, resolver, query); err != nil || got != level {
+				t.Fatalf("%s set to %s resolves to %q, %v", name, level, got, err)
+			}
+			// A settings file that names the level is read as it is, not refused.
+			path := filepath.Join(personal.Home, "settings.json")
+			must(t, os.WriteFile(path, []byte(`{"hooks":{"`+name+`":"`+level+`"}}`), 0o600))
+			if levels, err := ReadHookLevels(personal.Home, ""); err != nil || levels[name] != level {
+				t.Fatalf("file %s %s read as %q, %v", name, level, levels[name], err)
 			}
 		}
-	}
-	for _, name := range []string{"home-allow", "session-start", "stop-check"} {
-		if AlwaysBlock(name) {
-			t.Fatalf("%s must stay configurable", name)
+		// The project's level wins over the personal one.
+		must(t, personal.SetHook(name, "off"))
+		must(t, proj.SetHook(name, "warn"))
+		d, err = proj.Effective()
+		must(t, err)
+		if d.Hooks[name] != "warn" {
+			t.Fatalf("%s project level is %s, want warn", name, d.Hooks[name])
 		}
+		must(t, personal.SetHook(name, "block"))
+		must(t, proj.SetHook(name, "block"))
+	}
+	// A level outside off, warn and block is still refused, with the allowed list.
+	err := personal.SetHook("plan-guard", "never")
+	if err == nil || !strings.Contains(err.Error(), "allowed: off, warn, block") {
+		t.Fatalf("bad level: %v", err)
 	}
 }
 

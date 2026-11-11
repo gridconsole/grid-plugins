@@ -14,8 +14,6 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
-	"github.com/gridconsole/grid-plugins/internal/task"
-	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
 func readBounded(path string) (string, error) {
@@ -88,24 +86,6 @@ func briefName(in hookio.Input, dir string) string {
 	}
 	return ""
 }
-func section(body, name string) string {
-	lines := strings.Split(body, "\n")
-	on := false
-	var out []string
-	for _, line := range lines {
-		if strings.HasPrefix(line, "## ") {
-			if on {
-				break
-			}
-			on = strings.TrimSpace(strings.TrimPrefix(line, "## ")) == name
-			continue
-		}
-		if on {
-			out = append(out, line)
-		}
-	}
-	return strings.TrimSpace(strings.Join(out, "\n"))
-}
 func stopCheck(o Options, in hookio.Input) int {
 	if in.HookEventName != "Stop" && in.HookEventName != "SubagentStop" {
 		return 0
@@ -117,7 +97,7 @@ func stopCheck(o Options, in hookio.Input) int {
 	if level != "warn" {
 		return checkStop(o, in)
 	}
-	// Preserve the diagnostic while allowing the stop, including saved Job verification.
+	// Preserve the diagnostic while allowing the stop.
 	var warning bytes.Buffer
 	output := o.Stderr
 	o.Stderr = &warning
@@ -131,7 +111,18 @@ func stopCheck(o Options, in hookio.Input) int {
 	return 0
 }
 
+// checkStop is the one stop check: an agent that holds a Job has posted the
+// Job's result on the Feed (jobHasResult). If not, it is told once, in one
+// line, to post it; with stop_hook_active it stops. No Job (a plain session, a
+// scout) stops at once and prints nothing.
 func checkStop(o Options, in hookio.Input) int {
+	jobID := o.Getenv("GRID_JOB")
+	if jobID == "" {
+		return 0
+	}
+	if in.HookEventName == "SubagentStop" && contract.NormalizeRole(guard.AgentName(in.AgentType)) == "scout" {
+		return 0
+	}
 	dir, err := taskDir(o, in)
 	if err != nil {
 		o.log("stop check", err)
@@ -140,92 +131,16 @@ func checkStop(o Options, in hookio.Input) int {
 	if dir == "" {
 		return 0
 	}
-	if code, handled := verifyStop(o, in, dir); handled {
-		return code
+	posted, err := jobHasResult(dir, jobID, o.Getenv("GRID_ATTEMPT"))
+	if err != nil {
+		o.log("stop check", err)
+		return 0
 	}
-	var problems []string
-	if in.HookEventName == "SubagentStop" {
-		who := guard.AgentName(in.AgentType)
-		if contract.NormalizeRole(who) == "scout" {
-			return 0
-		}
-		name := briefName(in, dir)
-		if name == "" {
-			return 0
-		}
-		path := filepath.Join(dir, "subagents", name)
-		text, err := readBounded(path)
-		if err != nil {
-			o.log("stop check", err)
-			return 0
-		}
-		doc := taskfile.ParseFrontmatter(text)
-		if doc == nil || doc.Odd {
-			o.log("stop check", fmt.Errorf("invalid brief metadata"))
-			return 0
-		}
-		roleReviewer := strings.Contains(contract.NormalizeRole(str(doc.Data["role"])), "reviewer")
-		mark := contract.NormalizeRole(who) != "reviewer" || roleReviewer
-		field := "Outcome"
-		if contract.NormalizeRole(who) == "reviewer" || roleReviewer {
-			field = "Verdict"
-		}
-		if section(doc.Body, field) == "" {
-			problems = append(problems, name+": write the "+field+" section with what was checked and what remains.")
-			if in.StopHookActive && mark {
-				o.log("mark brief", task.MarkBrief(dir, name, "blocked"))
-			}
-		} else if mark {
-			o.log("mark brief", task.MarkBrief(dir, name, "done"))
-		}
-	} else {
-		doc, err := task.Document(dir)
-		if err != nil {
-			o.log("stop check", err)
-			return 0
-		}
-		// New tasks use title and intent; summary/next belong to the legacy contract.
-		if _, legacy := doc.Data["status"]; legacy {
-			for _, field := range []string{"summary", "next"} {
-				if strings.TrimSpace(str(doc.Data[field])) == "" {
-					problems = append(problems, "task.md: "+field+" is empty; record what was done and what happens next through grid.")
-				}
-			}
-		}
-		entries, err := os.ReadDir(filepath.Join(dir, "subagents"))
-		if err != nil && !os.IsNotExist(err) {
-			o.log("stop check", err)
-			return 0
-		}
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-				continue
-			}
-			text, err := readBounded(filepath.Join(dir, "subagents", e.Name()))
-			if err != nil {
-				o.log("stop check", err)
-				continue
-			}
-			d := taskfile.ParseFrontmatter(text)
-			if d == nil {
-				continue
-			}
-			if d.Data["status"] == "done" || d.Data["status"] == "blocked" {
-				field := "Outcome"
-				if strings.Contains(contract.NormalizeRole(str(d.Data["role"])), "reviewer") {
-					field = "Verdict"
-				}
-				if section(d.Body, field) == "" {
-					problems = append(problems, e.Name()+": write the "+field+" section.")
-				}
-			}
-		}
-	}
-	if in.StopHookActive || len(problems) == 0 {
+	if posted || in.StopHookActive {
 		return 0
 	}
 	if o.Stderr != nil {
-		fmt.Fprintf(o.Stderr, "Not finished yet:\n- %s\nFix this, then stop again.\n", strings.Join(problems, "\n- "))
+		fmt.Fprintf(o.Stderr, "Post the result of Job %s on the Feed, then stop.\n", jobID)
 	}
 	return 2
 }

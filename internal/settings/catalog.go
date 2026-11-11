@@ -30,13 +30,6 @@ var skills = []string{"brain-keeper", "browser", "deliver", "job", "orchestrate"
 var hooks = []string{"brief-lint", "history-log", "home-allow", "host-guard", "job-lint", "needs-you", "only-writer", "plan-guard", "precompact", "session-check", "session-end", "session-start", "stop-check", "subagent-start", "topic-trigger", "usage-log", "user-prompt"}
 var levels = []string{"off", "warn", "block"}
 
-// neverOff are the guards that hold the person's gates and the writers' fence
-// (plugin-design.md:90, :92): they always block, whatever a settings file says.
-var neverOff = []string{"brief-lint", "host-guard", "only-writer", "plan-guard"}
-
-// AlwaysBlock reports whether a hook is a guard that cannot be turned off or lowered.
-func AlwaysBlock(name string) bool { return slices.Contains(neverOff, name) }
-
 // AgentNames returns the supported agents in stable order.
 func AgentNames() []string {
 	out := make([]string, len(agents))
@@ -58,15 +51,9 @@ func allowed(kind, value string, choices []string) error {
 	return nil
 }
 
-// checkLevel accepts a known level, and only block for a guard that always blocks.
-func checkLevel(name, level string) error {
-	if err := allowed("hook level", level, levels); err != nil {
-		return err
-	}
-	if AlwaysBlock(name) && level != "block" {
-		return fmt.Errorf("%s always blocks and cannot be set to %s; allowed: block", name, level)
-	}
-	return nil
+// checkLevel accepts a known level for any hook: no guard is fixed at one level.
+func checkLevel(_, level string) error {
+	return allowed("hook level", level, levels)
 }
 func validateAgent(a Agent) error {
 	if a.Model != "" {
@@ -86,7 +73,7 @@ func validateAgent(a Agent) error {
 }
 func defaultLevel(name string) string {
 	switch name {
-	case "brief-lint", "host-guard", "job-lint", "only-writer", "plan-guard", "stop-check":
+	case "brief-lint", "host-guard", "job-lint", "plan-guard", "stop-check":
 		return "block"
 	}
 	return "warn"

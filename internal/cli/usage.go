@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"bytes"
-	"errors"
 	"flag"
 	"fmt"
 	"strconv"
@@ -19,24 +17,18 @@ const usageHelp = `Usage: grid usage [--task T-NN] [--json]
        grid usage show
        grid usage threshold set [--dollars PERCENT ...] [--minutes PERCENT ...] [--tokens PERCENT ...]
        grid usage threshold show | clear [--dollars] [--minutes] [--tokens]
-       grid usage budget set [--dollars N] [--minutes N] [--tokens N]
-       grid usage budget show | clear [--dollars] [--minutes] [--tokens]
+       grid usage budget show [--workspace]
 All commands accept --json; task-scoped commands accept --task T-NN.
 Flags alone fold the token totals observed by the session hooks; they are not Job usage posts.
 Posts are deltas; at least one amount is required. Thresholds are percentages (0-100).
 Units are dollars, minutes and tokens; token amounts are non-negative integers.
 Default thresholds: tokens 80%, 100%; dollars and minutes 50%, 80%, 100%.
 Per unit: a threshold set on the task wins, then the workflow's usage thresholds, then the default.
-A task token budget overrides the workspace
-default tokens_per_task in <GRID_HOME>/workspace.md front matter (positive digits).
-Without a budget no notice fires. The hold at the limit is not enforced yet;
-worker and session hooks will enforce it in a follow-up.
-Set replaces the supplied units. Clear without unit flags clears all three units.
-Clearing a task token budget restores the workspace default when present.
-Budget show|set|clear --workspace accesses that default without a task.
-Workspace set requires --tokens N (integer, at least 1); clear [--tokens] removes it.
-Workspace mode rejects --task, --dollars and --minutes. Show prints tokens_per_task.
-Workspace reads allow the local role, owner and member; writes allow local or owner.
+Usage is a number: nothing stops or holds work at a limit. Without a budget no notice fires.
+Budget show prints the budget a task already carries, or with --workspace the default
+tokens_per_task in <GRID_HOME>/workspace.md front matter; it takes no --task then.
+Threshold set replaces the supplied units. Clear without unit flags clears all three units.
+Workspace reads allow the local role, owner and member.
 `
 
 type usageNumbers struct {
@@ -188,7 +180,8 @@ func runUsageConfig(kind string, args []string, env Env) int {
 		return 0
 	}
 	op := args[0]
-	if op != "set" && op != "show" && op != "clear" {
+	// A budget is only read here; threshold has set and clear as well.
+	if op != "show" && (kind != "threshold" || op != "set" && op != "clear") {
 		fmt.Fprintf(env.Stderr, "usage %s: unknown command %q\n", kind, op)
 		return 2
 	}
@@ -197,48 +190,36 @@ func runUsageConfig(kind string, args []string, env Env) int {
 	asJSON := fs.Bool("json", false, "print JSON")
 	var workspace bool
 	if kind == "budget" {
-		fs.BoolVar(&workspace, "workspace", false, "show or change the workspace token budget without resolving a task")
+		fs.BoolVar(&workspace, "workspace", false, "show the workspace token budget without resolving a task")
 	}
-	dollars, minutes := usageNumbers{repeat: kind == "threshold"}, usageNumbers{repeat: kind == "threshold"}
-	var tokenBudget usageTokens
+	dollars, minutes := usageNumbers{repeat: true}, usageNumbers{repeat: true}
 	tokenThresholds := usageNumbers{repeat: true}
 	var clearDollars, clearMinutes, clearTokens bool
 	if op == "set" {
-		label := "positive budget amount"
-		if kind == "threshold" {
-			label = "percentage of budget, 0-100; may be repeated"
-		}
+		label := "percentage of budget, 0-100; may be repeated"
 		fs.Var(&dollars, "dollars", label)
 		fs.Var(&minutes, "minutes", label)
-		if kind == "budget" {
-			fs.Var(&tokenBudget, "tokens", "positive integer token budget")
-		} else {
-			fs.Var(&tokenThresholds, "tokens", label)
-		}
+		fs.Var(&tokenThresholds, "tokens", label)
 	} else if op == "clear" {
 		fs.BoolVar(&clearDollars, "dollars", false, "clear dollars only")
 		fs.BoolVar(&clearMinutes, "minutes", false, "clear minutes only")
-		fs.BoolVar(&clearTokens, "tokens", false, "clear tokens only; budget clear restores the workspace default")
+		fs.BoolVar(&clearTokens, "tokens", false, "clear tokens only")
 	}
-	if kind == "budget" && op != "show" {
-		if code, stop := parseBudgetWrite(fs, op, args[1:], &workspace, &env); stop {
-			return code
-		}
-	} else if code, stop := parse(fs, args[1:], env); stop {
+	if code, stop := parse(fs, args[1:], env); stop {
 		return code
 	}
 	if workspace {
 		invalid := false
 		fs.Visit(func(f *flag.Flag) {
-			if f.Name == "task" || f.Name == "dollars" || f.Name == "minutes" || op == "clear" && f.Name == "tokens" && !clearTokens {
+			if f.Name == "task" {
 				invalid = true
 			}
 		})
-		if invalid || op == "set" && (tokenBudget.amount() == nil || *tokenBudget.amount() == 0) {
-			fmt.Fprintln(env.Stderr, "usage budget: --workspace accepts only tokens; set requires --tokens of at least 1")
+		if invalid {
+			fmt.Fprintln(env.Stderr, "usage budget: --workspace takes no --task")
 			return 2
 		}
-		return runWorkspaceBudgetGated(op, tokenBudget.amount(), *asJSON, env)
+		return runWorkspaceBudgetShow(*asJSON, env)
 	}
 	res, err := taskFor(env, *task)
 	if err != nil {
@@ -249,7 +230,7 @@ func runUsageConfig(kind string, args []string, env Env) int {
 	if op == "show" {
 		config, err = s.Config()
 	} else {
-		change := usage.Change{Budget: kind == "budget", Dollars: dollars.values, Minutes: minutes.values, Tokens: tokenThresholds.values, BudgetTokens: tokenBudget.values}
+		change := usage.Change{Dollars: dollars.values, Minutes: minutes.values, Tokens: tokenThresholds.values}
 		if op == "clear" {
 			// With no selectors, clear all units. Explicit false is a usage error:
 			// it must not silently turn an intended single-unit clear into all units.
@@ -268,11 +249,7 @@ func runUsageConfig(kind string, args []string, env Env) int {
 				change.Dollars = []float64{}
 			}
 			if clearTokens {
-				if change.Budget {
-					change.BudgetTokens = []uint64{}
-				} else {
-					change.Tokens = []float64{}
-				}
+				change.Tokens = []float64{}
 			}
 			if clearMinutes {
 				change.Minutes = []float64{}
@@ -311,55 +288,13 @@ func runUsageConfig(kind string, args []string, env Env) int {
 	return 0
 }
 
-// usageBudgetWrite reports a budget write command, which the handler gates itself once it
-// knows whether --workspace was meant; Run skips the early gate for it.
-func usageBudgetWrite(name string, rest []string) bool {
-	return name == "usage" && len(rest) >= 2 && rest[0] == "budget" && (rest[1] == "set" || rest[1] == "clear")
-}
-
-// parseBudgetWrite is parse for budget set and clear with the person gate between the flag
-// parse and its diagnostics, so an agent is refused whatever else is wrong with the call.
-// A failed flag parse writes nothing, so it is not gated. A --workspace write is gated later,
-// after its flag diagnostics and its role check, which both keep their exit codes.
-func parseBudgetWrite(fs *flag.FlagSet, op string, args []string, workspace *bool, env *Env) (int, bool) {
-	held := &bytes.Buffer{}
-	fs.SetOutput(held)
-	err := fs.Parse(args)
-	fs.SetOutput(env.Stderr)
-	_, _ = env.Stderr.Write(held.Bytes())
-	if errors.Is(err, flag.ErrHelp) {
-		return 0, true
-	}
-	if err != nil {
-		return 2, true
-	}
-	if fs.NArg() > 0 {
-		fmt.Fprintf(env.Stderr, "%s: unexpected argument %q\n", fs.Name(), fs.Arg(0))
-		return 2, true
-	}
-	return 0, false
-}
-
-// runWorkspaceBudgetGated checks the caller role, then reads or writes the workspace budget.
-func runWorkspaceBudgetGated(op string, value *uint64, asJSON bool, env Env) int {
-	allowed := usage.WorkspaceBudgetReadAllowed
-	if op != "show" {
-		allowed = usage.WorkspaceBudgetWriteAllowed
-	}
-	if !allowed(env.getenv("GRID_ROLE")) {
+// runWorkspaceBudgetShow checks the caller role, then reads the workspace token default.
+func runWorkspaceBudgetShow(asJSON bool, env Env) int {
+	if !usage.WorkspaceBudgetReadAllowed(env.getenv("GRID_ROLE")) {
 		fmt.Fprintln(env.Stderr, "usage budget: caller role is not allowed to access the workspace budget")
 		return 3
 	}
-	s := usage.Store{GridHome: env.GridHome}
-	if op == "show" {
-		value = s.WorkspaceTokens()
-	} else if err := s.SetWorkspaceTokens(value); err != nil {
-		fmt.Fprintf(env.Stderr, "usage budget: %v\n", err)
-		if errors.Is(err, usage.ErrWorkspaceTokensInput) {
-			return 2
-		}
-		return 1
-	}
+	value := (usage.Store{GridHome: env.GridHome}).WorkspaceTokens()
 	if asJSON {
 		return writeJSON(env.Stdout, struct {
 			TokensPerTask *uint64 `json:"tokens_per_task"`

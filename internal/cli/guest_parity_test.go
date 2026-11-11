@@ -127,8 +127,6 @@ var guestParityCommands = map[string][]string{
 	"task status":           {"{task}", "waiting"},
 	"task stop":             {"{task}"},
 	"usage":                 {},
-	"usage budget clear":    {},
-	"usage budget set":      {"--tokens", "1"},
 	"usage budget show":     {},
 	"usage post":            {"--job", "J-01", "--tokens", "1"},
 	"usage show":            {},

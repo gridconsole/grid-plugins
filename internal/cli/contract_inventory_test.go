@@ -253,6 +253,9 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 			for _, route := range routes {
 				if route == "threshold" || route == "budget" {
 					for _, op := range operations {
+						if route == "budget" && op != "show" {
+							continue // a budget is only read; set and clear belong to threshold
+						}
 						nested = append(nested, route+" "+op)
 					}
 				} else {
@@ -559,8 +562,6 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"usage threshold set":   {},
 		"usage threshold show":  {},
 		"usage threshold clear": {},
-		"usage budget set":      {},
 		"usage budget show":     {},
-		"usage budget clear":    {},
 	}
 }
