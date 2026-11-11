@@ -55,14 +55,13 @@ type ggTaskOpen struct {
 //
 // Seen on base b87fc364. The first group prints its diagnostic on stderr and writes
 // nothing on stdout with --json (no envelope); the second prints a JSON object of
-// its own on stdout with an "error" string, and stderr stays empty; feed types and
-// signal act exit 0.
+// its own on stdout with an "error" string, and stderr stays empty; signal act
+// exits 0.
 var ggTaskKnownOpen = map[string]ggTaskOpen{
 	"job lint":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
 	"job render": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
 	"job show":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
 	"job verify": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
-	"feed types": {0, `stdout: {"types":[{"type":"ack","version":1,"class":"state","roles":["worker","agent","cli"]},{"type":"answer","versio...`},
 	"signal act": {0, `stdout: {"result":"updated","id":"S-01ARZ3NDEKTSV4RRFFQ69G5FAV","project":"example","note":"S-01ARZ3NDEKTSV4RRFFQ69G5F...`},
 }
 

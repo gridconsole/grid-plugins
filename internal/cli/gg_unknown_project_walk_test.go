@@ -38,8 +38,6 @@ var ggProjectKnownOpen = map[string]string{
 	"job verify": `exit 1; stderr "job: project \"absent\" is not registered" without --json, empty with --json`,
 	"job trace":  `exit 1; stderr "job trace: project not found" without --json, empty with --json`,
 	"job lint":   `exit 1; without --json stdout is the lint report "path: <file>\nok: false\n..." and stderr is empty`,
-
-	"feed types": `exit 0; stdout {"types":[{"type":"ack",...}]}, the public schema, whatever the project`,
 }
 
 type ggProjectOutcome struct {
