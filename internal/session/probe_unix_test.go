@@ -3,7 +3,6 @@
 package session
 
 import (
-	"context"
 	"errors"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"os"
@@ -12,16 +11,16 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 )
 
 func TestProbeLocal(t *testing.T) {
 	if ProbeLocal(Live{}) != Unknown {
 		t.Fatal("missing identity is not unknown")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "ps", "-o", "lstart=", "-p", strconv.Itoa(os.Getpid()))
+	// ps is the independent oracle, the format stored tokens were written with.
+	// It runs with no deadline: a slow ps makes this test slower, never wrong,
+	// and the go test timeout bounds a ps that hangs.
+	cmd := exec.Command("ps", "-o", "lstart=", "-p", strconv.Itoa(os.Getpid()))
 	cmd.Env = append(os.Environ(), "LC_ALL=C", "TZ=UTC")
 	b, err := cmd.Output()
 	if err != nil {
