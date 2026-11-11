@@ -242,13 +242,13 @@ func guestWriteVerb(name string, rest []string) bool {
 }
 
 // guestTaskMove is a task move a person makes: the owner's rule is that a guest
-// answers and comments, and does not close, reopen or stop a task.
+// answers and comments, and does not create, close, reopen or stop a task.
 func guestTaskMove(verb string) bool {
-	return verb == "close" || verb == "reopen" || verb == "stop"
+	return verb == "new" || verb == "close" || verb == "reopen" || verb == "stop"
 }
 
-// guestTaskMoveRefusal is the reason a guest's close, reopen or stop gives; it
-// names the role the way a guest's question withdrawal does.
+// guestTaskMoveRefusal is the reason a guest's new, close, reopen or stop gives;
+// it names the role the way a guest's question withdrawal does.
 func guestTaskMoveRefusal(verb string) string {
 	return fmt.Sprintf("role %q may not %s a task; a guest answers and comments", "guest", verb)
 }
