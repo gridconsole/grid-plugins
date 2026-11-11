@@ -121,6 +121,10 @@ func (f *Files) Resolve(pointer string) (Source, error) {
 			return Source{}, fmt.Errorf("%s: invalid Job id", pointer)
 		}
 		s, err = f.file(pointer, f.Task, filepath.Join("jobs", id, "brief.md"), anchor, false)
+		if errors.Is(err, fs.ErrNotExist) {
+			// A Job the plan names but has not posted says so, rather than showing the failed lstat.
+			return Source{}, fmt.Errorf("%s: Job %s is not posted yet: jobs/%s/brief.md does not exist: %w", pointer, id, id, fs.ErrNotExist)
+		}
 		s.Tier = contract.Agent // rendered by this CLI from the accepted plan
 	default:
 		rel = strings.TrimPrefix(rel, "task:")
