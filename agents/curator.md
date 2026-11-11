@@ -1,7 +1,7 @@
 ---
 name: curator
 description: Curates the brain proposals a Grid task holds into finished, linked notes and files the accepted ones. Use for a curator Job at deliver, before the ship gate and at an end review.
-model: sonnet
+model: opus
 effort: medium
 tools: Read, Grep, Glob, Bash, Edit, Write, Skill
 skills:

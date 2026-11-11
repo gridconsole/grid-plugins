@@ -40,6 +40,7 @@ type Spawn struct {
 	Fence   int64
 	Gen     int64
 	Assign  string
+	Role    string // the Job's role, from which a stream picks its model and effort
 }
 type Output struct {
 	Rows     []Row   `json:"jobs"`

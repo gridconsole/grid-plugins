@@ -56,6 +56,11 @@ type Stream struct {
 	// An error is one Diag line: the spawn line is still printed and the pass goes
 	// on, so a failed callback neither undoes nor blocks the assign.
 	Assigned func(taskDir, job string) error
+	// Model, when set, is called with the task folder and the role of a spawn the
+	// stream prints for the first time; what it answers goes on the spawn line as
+	// model and effort. Empty strings leave the keys out. An error is one Diag line:
+	// the spawn line is still printed without the two keys, never a skipped Job.
+	Model func(taskDir, role string) (model, effort string, err error)
 	// Probe judges whether a recorded holder process is gone; nil uses session.ProbeLocal.
 	Probe func(session.Live) session.ProcessState
 
@@ -81,6 +86,10 @@ type spawnLine struct {
 	Attempt   int    `json:"attempt"`
 	Assign    string `json:"assign"`
 	TaskEpoch string `json:"task_epoch"`
+	// Model and Effort are the keys the worker adds to the claude command; empty
+	// leaves them out and claude keeps its own default.
+	Model  string `json:"model,omitempty"`
+	Effort string `json:"effort,omitempty"`
 }
 type wakeLine struct {
 	Task   string   `json:"task"`
@@ -223,7 +232,16 @@ func (s *Stream) task(dir string) error {
 				s.diag("grid worker next: task %s: job %s assigned, the Assigned callback failed: %s\n", taskID, sp.Job, oneLine(err))
 			}
 		}
-		if err := s.emit("spawn", spawnLine{taskID, dir, sp.Job, sp.To, sp.Fence, sp.Gen, sp.Attempt, sp.Assign, epoch}); err != nil {
+		line := spawnLine{Task: taskID, TaskDir: dir, ID: sp.Job, Holder: sp.To, Fence: sp.Fence, Gen: sp.Gen, Attempt: sp.Attempt, Assign: sp.Assign, TaskEpoch: epoch}
+		if s.Model != nil {
+			var err error
+			line.Model, line.Effort, err = s.Model(dir, sp.Role)
+			if err != nil {
+				line.Model, line.Effort = "", ""
+				s.diag("grid worker next: task %s: job %s assigned, no model or effort for role %q: %s\n", taskID, sp.Job, sp.Role, oneLine(err))
+			}
+		}
+		if err := s.emit("spawn", line); err != nil {
 			return err
 		}
 		s.sent[key] = true

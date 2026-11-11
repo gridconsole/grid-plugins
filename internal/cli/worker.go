@@ -19,7 +19,9 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/session"
+	"github.com/gridconsole/grid-plugins/internal/settings"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
 	"github.com/gridconsole/grid-plugins/internal/worker"
 )
 
@@ -150,6 +152,7 @@ func runWorkerNext(args []string, env Env) int {
 		PID: *pid, PIDStart: *start,
 		Out: env.Stdout, Diag: diag,
 		Tasks: func() ([]string, error) { return workerTaskDirs(env) },
+		Model: func(dir, role string) (string, string, error) { return workerSpawnModel(env, dir, role) },
 	}
 	s.Configure = func(st *orchestrator.Store, taskID string) {
 		dir := st.Feed.TaskDir
@@ -186,6 +189,26 @@ func runWorkerNext(args []string, env Env) int {
 		return 1
 	}
 	return 1 // Run returns only an error
+}
+
+// workerSpawnModel is the model and effort a Job of the given role runs on, for the
+// task folder dir: the catalog default of the role's agent, then the personal
+// values, then those of the project the folder belongs to. A role with no catalog
+// agent answers two empty strings. A project folder with no registered record has
+// only the personal values, as settingsStore does for an unregistered folder.
+func workerSpawnModel(env Env, dir, role string) (string, string, error) {
+	if _, ok := settings.AgentForRole(role); !ok {
+		return "", "", nil
+	}
+	// A read: settingsStore resolves the project folder and falls back to Personal for one with no record.
+	st, err := settingsStore(env, filepath.Base(filepath.Dir(filepath.Dir(dir))), true)
+	if errors.Is(err, where.ErrProjectUnregistered) {
+		st, err = settingsStore(env, gridhome.Personal, true)
+	}
+	if err != nil {
+		return "", "", err
+	}
+	return st.ModelFor(role)
 }
 
 type writerFunc func([]byte) (int, error)
