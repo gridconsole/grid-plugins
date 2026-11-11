@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"kqrn-good"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Reading changes.txt."},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"changes.txt"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"1\tFix empty search results\n2\tAdd CSV export\n"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"Write","input":{"file_path":"RELEASE.md","content":"# Release notes\n\n- Fix empty search results\n- Add CSV export\n"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t2","content":"File created successfully at: RELEASE.md"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"RELEASE.md is written with both changes."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"RELEASE.md is written with both changes."}
