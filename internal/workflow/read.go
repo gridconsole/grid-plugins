@@ -41,7 +41,10 @@ func read(r where.Resolver, project string, withPolicy bool) (Answer, error) {
 	if err != nil {
 		return Answer{}, err
 	}
-	out := Answer{Files: files, Templates: []Template{}, Errors: []Problem{}}
+	// The brain workflow notes come first: a note's template wins over a
+	// workflows.md one of the same name (namedTemplate, defaultTemplate).
+	notes, noteProblems := lmSbBrainTemplates(r, lmSbNoteFolder(project, files))
+	out := Answer{Files: files, Templates: notes, Errors: noteProblems}
 	if withPolicy {
 		out.Policy, err = effectivePolicy(files, problems)
 		if err != nil {

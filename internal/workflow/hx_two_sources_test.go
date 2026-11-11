@@ -57,23 +57,31 @@ func hxTwoWantRoles(t *testing.T, taskDir string) {
 	}
 }
 
-// Two sources, two answers. The brain workflow note and workflows.md both hold
-// a template "Quick". The steps reader and the gate-roles reader read different
-// sources, and this test pins what each returns today.
-//
-// Known gap, not the intended answer: TaskSteps still reads workflows.md. The
-// owner decided on 10 Nov that workflows are brain notes (backlog-11nov-hx
-// INDEX.md, owner question 1, default: the brain note wins).
+// hxTwoWantNoteSteps fails unless the task's "Quick" resolves to the brain
+// note's template and its two steps. noteText's step names hold spaces, which
+// the steps reader refuses as it does in workflows.md (TestTaskSteps "step
+// name with a space"), so TaskSteps names the note's first step.
+func hxTwoWantNoteSteps(t *testing.T, r where.Resolver, text string) {
+	t.Helper()
+	tpl, _, err := TaskWorkflow(r, "alpha", text)
+	if tpl == nil || tpl.File != "brain:project/flow" || hxTwoSteps(*tpl) != "Do the work:run,Approve it:approve" {
+		t.Fatalf("TaskWorkflow = %+v, %v; want the brain note's Quick and its two steps (owner, 10 Nov: the brain note wins)", tpl, err)
+	}
+	steps, err := TaskSteps(r, "alpha", text)
+	if want := `workflow "Quick" step "Do the work" is not a usable step name`; err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("TaskSteps = %v, %v; want the note's step refused with %q", steps, err, want)
+	}
+}
+
+// Two sources, one answer. The brain workflow note and workflows.md both hold
+// a template "Quick". The steps reader and the gate-roles reader both answer
+// from the note: the owner decided on 10 Nov that workflows are brain notes
+// (backlog-11nov-hx INDEX.md, owner question 1, default: the brain note wins).
 func TestHxTwoSourcesDisagree(t *testing.T) {
 	r, taskDir := hxTwoHome(t, true, true)
 	text := stepsTask("normal", "Quick")
 
-	got, err := stepsString(t, r, "alpha", text)
-	if err != nil || got != "ship:run" {
-		t.Fatalf("known gap closed or moved: TaskSteps no longer answers from workflows.md when the brain note has the same template. "+
-			"If it now answers from the brain note, that is the intended source (owner, 10 Nov): replace this pin with the note's steps. "+
-			"Seen: %q, %v", got, err)
-	}
+	hxTwoWantNoteSteps(t, r, text)
 
 	hxTwoWantRoles(t, taskDir)
 
@@ -95,22 +103,14 @@ func TestHxTwoSourcesDisagree(t *testing.T) {
 	}
 }
 
-// The note holds "Quick" and workflows.md does not: the gate roles still come
-// from the note, the steps reader finds no such template.
+// The note holds "Quick" and workflows.md does not: the gate roles and the
+// steps both come from the note.
 func TestHxTwoNoteOnly(t *testing.T) {
 	r, taskDir := hxTwoHome(t, false, true)
 
 	hxTwoWantRoles(t, taskDir)
 
-	steps, err := TaskSteps(r, "alpha", stepsTask("normal", "Quick"))
-	if err == nil || len(steps) != 0 {
-		t.Fatalf("known gap closed or moved: TaskSteps found a template that only the brain note has; "+
-			"that is the intended source (owner, 10 Nov): replace this pin with the note's steps. Seen: %v, %v", steps, err)
-	}
-	// The error text is printed by namedTemplate (tasksteps.go:152).
-	if want := `no workflow is named "Quick"`; !strings.Contains(err.Error(), want) {
-		t.Fatalf("TaskSteps error = %v, want it to contain %q", err, want)
-	}
+	hxTwoWantNoteSteps(t, r, stepsTask("normal", "Quick"))
 }
 
 // workflows.md holds "Quick" and there is no brain note: the steps come from

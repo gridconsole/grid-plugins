@@ -84,8 +84,9 @@ func inlineSteps(taskText string) ([]taskfile.WorkflowStep, error) {
 	return steps, nil
 }
 
-// scopeTemplates reads the workspace file and the task's project file. Personal
-// tasks live outside projects/, so they read the workspace file alone.
+// scopeTemplates reads the brain workflow notes, the workspace file and the
+// task's project file. Personal tasks live outside projects/, so they read the
+// home note and the workspace file.
 func scopeTemplates(r where.Resolver, project string) (Answer, error) {
 	if !strings.EqualFold(project, where.Personal) {
 		return read(r, project, false)
@@ -96,13 +97,15 @@ func scopeTemplates(r where.Resolver, project string) (Answer, error) {
 	if r.GridHome == "" {
 		return Answer{}, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
-	out := Answer{Templates: []Template{}, Errors: []Problem{}}
+	notes, noteProblems := lmSbBrainTemplates(r, "")
+	out := Answer{Templates: notes, Errors: noteProblems}
 	text, rev, err := readFile(gridhome.Real(r.GridHome), "workflows.md")
 	if err != nil {
 		out.Errors = append(out.Errors, readProblem("", err))
 	} else if rev != nil {
 		parsed := Parse(text, "")
-		out.Templates, out.Errors = parsed.Templates, parsed.Errors
+		out.Templates = append(out.Templates, parsed.Templates...)
+		out.Errors = append(out.Errors, parsed.Errors...)
 	}
 	return out, nil
 }
@@ -168,6 +171,10 @@ func defaultTemplate(scope Answer) (*Template, error) {
 		if len(t.Applies) > 0 {
 			return nil, needChoice
 		}
+	}
+	// A brain note's default wins: the project note's, then the home note's.
+	if t := lmSbNoteDefault(scope); t != nil {
+		return t, nil
 	}
 	for i, t := range scope.Templates {
 		if t.Default && t.File == labelOf("") {
