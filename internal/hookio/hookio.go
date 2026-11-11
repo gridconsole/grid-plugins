@@ -74,6 +74,15 @@ const (
 // pipes should be closed by the caller.
 func Read(r io.Reader) (in *Input, tooLarge bool) { return read(r, InputTimeout, InputLimit) }
 func read(r io.Reader, cap time.Duration, limit int) (*Input, bool) {
+	timer := time.NewTimer(cap)
+	defer timer.Stop()
+	return readUntil(r, timer.C, limit)
+}
+
+// readUntil is read with the cap as a channel: it parses what stdin gave once
+// stdin ends or after fires, whichever comes first. A test drives it with its
+// own channel instead of racing a timer against the scheduler.
+func readUntil(r io.Reader, after <-chan time.Time, limit int) (*Input, bool) {
 	if r == nil {
 		return nil, false
 	}
@@ -95,14 +104,12 @@ func read(r io.Reader, cap time.Duration, limit int) (*Input, bool) {
 			}
 		}
 	}()
-	timer := time.NewTimer(cap)
-	defer timer.Stop()
 	select {
 	case ok := <-done:
 		if !ok {
 			return nil, false
 		}
-	case <-timer.C:
+	case <-after:
 	}
 	mu.Lock()
 	data := bytes.Clone(buf.Bytes())
