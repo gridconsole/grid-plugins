@@ -141,7 +141,7 @@ func commands() []command {
 		{"proof", "add evidence and rebuild the task proof index", runProof},
 		{"history", "add a dated line to the task history", runHistory},
 		{"land", "land a task per the deploy topic", runLand},
-		{"brain", "show, search, topics, index, propose, accept, keep, decide, supersede, check, changes, revert", runBrain},
+		{"brain", "show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore", runBrain},
 		{"env", "up, down browser Job dev environments", runEnv},
 		{"person", "check person access; list, show and find approvers", runPerson},
 		{"routine", "add, list, remove, run, schedule and unschedule routines", runRoutine},

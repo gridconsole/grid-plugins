@@ -177,6 +177,9 @@ func (f *Files) brain(pointer, rel, anchor string) (Source, error) {
 	if n.SupersededBy != "" {
 		return Source{}, fmt.Errorf("%s: note is superseded by %s", pointer, n.SupersededBy)
 	}
+	if e.Dropped {
+		return Source{}, fmt.Errorf("%s: note is dropped", pointer)
+	}
 	// A brain note no longer records a trust tier (verdicts-11nov v-7). Every note
 	// the brain store accepts was written by an agent (SessionOrigin) and passed the
 	// quarantine of imported text, so its text reads as the agent's own.

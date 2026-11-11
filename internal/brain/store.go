@@ -34,6 +34,9 @@ type Entry struct {
 	ID   string `json:"id"`
 	Path string `json:"path"` // relative to the Grid home, portable across machines
 	Note Note   `json:"note"`
+	// Dropped is set when a read finds the entry hidden by grid brain drop; it
+	// stays out of the JSON when false.
+	Dropped bool `json:"dropped,omitempty"`
 }
 
 func (s Store) stamp() string {
