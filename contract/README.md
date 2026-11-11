@@ -32,6 +32,7 @@ specific gate refusal reason; it is not replaced by the general code.
 `{"error":"job_waiting","code":"job_waiting","job":"<approve Job>","waiting_for":"<Job it waits on>","reason":"<wait reason, unchanged>"}`
 when the approve person Job still waits for a Job in its after list; stderr keeps
 its `grid approve: <job> cannot be answered yet: <reason>` line, and without `--json` nothing changes.
+`grid job result <job> --json` on a person Job that still waits (with or without `--plan-hash`) prints the same object and exits 3 with its stderr unchanged.
 
 | Stable code | Meaning |
 | --- | --- |

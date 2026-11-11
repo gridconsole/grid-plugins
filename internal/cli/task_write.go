@@ -18,6 +18,24 @@ import (
 
 func taskWriter(env Env) task.Store { return task.Store{Resolver: resolver(env)} }
 
+// writeJobWaiting prints the job_waiting object on stdout when err holds a
+// *orchestrator.WaitingError, and reports whether it did. grid approve --json and
+// grid job result --json on a person Job that still waits both use it.
+func writeJobWaiting(env Env, err error) bool {
+	var waiting *orchestrator.WaitingError
+	if !errors.As(err, &waiting) {
+		return false
+	}
+	_ = writeJSON(env.Stdout, struct {
+		Error      string `json:"error"`
+		Code       string `json:"code"`
+		Job        string `json:"job"`
+		WaitingFor string `json:"waiting_for"`
+		Reason     string `json:"reason"`
+	}{"job_waiting", "job_waiting", waiting.Job, waiting.Target, waiting.Reason})
+	return true
+}
+
 func writeOptions(env Env, id, action, note string) task.WriteOptions {
 	// A host can supply its authenticated member id; a terminal without an
 	// account records a local person without copying an OS login into task files.
@@ -192,15 +210,8 @@ func runApprove(args []string, env Env) int {
 		}
 		if err != nil {
 			fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
-			var waiting *orchestrator.WaitingError
-			if *asJSON && errors.As(err, &waiting) {
-				_ = writeJSON(env.Stdout, struct {
-					Error      string `json:"error"`
-					Code       string `json:"code"`
-					Job        string `json:"job"`
-					WaitingFor string `json:"waiting_for"`
-					Reason     string `json:"reason"`
-				}{"job_waiting", "job_waiting", waiting.Job, waiting.Target, waiting.Reason})
+			if *asJSON {
+				writeJobWaiting(env, err)
 			}
 			return 3
 		}
