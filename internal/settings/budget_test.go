@@ -518,3 +518,158 @@ func TestBudgetOverlayAndFilesLiveOutsideThePluginFolder(t *testing.T) {
 		t.Fatalf("the budget did not survive: %+v", show.Applied)
 	}
 }
+
+// ---- the budget across a plugin update ----
+
+// The plugin folder holds only the agent templates (agentsync.go:20). The overlay
+// is <grid home>/settings.json (store.go:40, budget.go:319), the preset note is
+// <grid home>/knowledge/budget/agent-budget.md (budget.go:60) and the rendered agent
+// files are <claude dir>/agents/*.md (budget.go:329); none of them sits in the
+// plugin folder, so replacing that folder cannot reach them.
+
+var budgetAgentDefaults = map[string][2]string{
+	"grid-planner": {"opus", "medium"}, "grid-reviewer": {"opus", "medium"}, "grid-researcher": {"opus", "medium"},
+	"grid-builder": {"sonnet", "medium"}, "grid-designer": {"sonnet", "medium"},
+}
+
+// writePluginVersion writes a fresh plugin folder with every agent template at its default model and effort.
+func writePluginVersion(t *testing.T, root, version string) {
+	t.Helper()
+	for name, d := range budgetAgentDefaults {
+		text := "---\nname: " + name + "\ndescription: Does the work.\nmodel: " + d[0] + "\neffort: " + d[1] + "\ntools: Read, Edit\n---\n\nBody " + version + " of " + name + ".\n"
+		put(t, filepath.Join(AgentTemplatesPath(root), name+".md"), []byte(text), 0o644)
+	}
+}
+
+// pluginUpdateFixture renders plugin 1.0 into the person's agents folder, the way the session hook does.
+func pluginUpdateFixture(t *testing.T) (o BudgetOptions, agents, plugins string, sync func(version string)) {
+	t.Helper()
+	o, agents = budgetFixture(t)
+	plugins = t.TempDir()
+	sync = func(version string) {
+		t.Helper()
+		_, err := SyncAgents(SyncOptions{Home: o.GridHome, TemplatesDir: AgentTemplatesPath(filepath.Join(plugins, version)), AgentsDir: agents})
+		must(t, err)
+	}
+	writePluginVersion(t, filepath.Join(plugins, "1.0"), "1.0")
+	sync("1.0")
+	return o, agents, plugins, sync
+}
+
+func wantAgentFile(t *testing.T, agents, name, model, effort, body string) {
+	t.Helper()
+	af, err := readAgentFile(filepath.Join(agents, name+".md"))
+	must(t, err)
+	if af.state != "grid" || af.model != model || af.effort != effort || !strings.Contains(string(af.file.data), "Body "+body+" of "+name+".") {
+		t.Fatalf("%s: want grid %s/%s body %s, got %s %s/%s:\n%s", name, model, effort, body, af.state, af.model, af.effort, af.file.data)
+	}
+}
+
+// updatePlugin replaces the versioned plugin folder with a fresh copy of 1.1.
+func updatePlugin(t *testing.T, plugins string) {
+	t.Helper()
+	must(t, os.RemoveAll(filepath.Join(plugins, "1.0")))
+	writePluginVersion(t, filepath.Join(plugins, "1.1"), "1.1")
+}
+
+func TestBudgetApplySurvivesPluginUpdate(t *testing.T) {
+	o, agents, plugins, sync := pluginUpdateFixture(t)
+	wantAgentFile(t, agents, "grid-builder", "sonnet", "medium", "1.0")
+	o.Preset = "balanced"
+	res, err := BudgetApply(o)
+	must(t, err)
+	if res.Files != 2 { // builder and designer go medium -> high; the other three already match
+		t.Fatalf("apply: %+v", res)
+	}
+	overlay := contents(t, filepath.Join(o.GridHome, "settings.json"))
+	wantAgentFile(t, agents, "grid-builder", "sonnet", "high", "1.0")
+
+	updatePlugin(t, plugins)
+
+	// Right after the update, before any sync: the overlay and the agent files are not in the
+	// plugin folder, so show still reports balanced with the preset's lines in the files.
+	show, err := BudgetShow(o)
+	must(t, err)
+	if show.Applied == nil || *show.Applied != "balanced" || show.Agents["grid-builder"].Effort != "high" || show.Agents["grid-builder"].ChangedByHand {
+		t.Fatalf("show after update: %v %+v", show.Applied, show.Agents["grid-builder"])
+	}
+	wantAgentFile(t, agents, "grid-builder", "sonnet", "high", "1.0")
+
+	// The re-apply path is the sync the session hook runs (hook.go:137): it takes the new template
+	// body and model and effort from the overlay (agentsync.go:86), so the preset is in effect again
+	// on the fresh files. It never writes the overlay.
+	sync("1.1")
+	if string(contents(t, filepath.Join(o.GridHome, "settings.json"))) != string(overlay) {
+		t.Fatal("sync changed the overlay")
+	}
+	for name, want := range map[string]Agent{"grid-planner": {"opus", "medium"}, "grid-reviewer": {"opus", "medium"}, "grid-researcher": {"opus", "medium"},
+		"grid-builder": {"sonnet", "high"}, "grid-designer": {"sonnet", "high"}} {
+		wantAgentFile(t, agents, name, want.Model, want.Effort, "1.1")
+	}
+	show, err = BudgetShow(o)
+	must(t, err)
+	if show.Applied == nil || *show.Applied != "balanced" || len(show.Custom) != 0 {
+		t.Fatalf("show after sync: %v %v", show.Applied, show.Custom)
+	}
+	for n, row := range show.Agents {
+		if row.State != "grid" || row.ChangedByHand {
+			t.Fatalf("%s after sync: %+v", n, row)
+		}
+	}
+	if show.Undo == nil || show.Undo.Preset != "balanced" {
+		t.Fatalf("the undo record must survive the update: %+v", show.Undo)
+	}
+}
+
+func TestBudgetUndoAfterPluginUpdateGivesFreshDefaults(t *testing.T) {
+	// the session hook ran the sync after the update: the files are the fresh plugin's, so Undo
+	// leaves them alone (they changed after Apply, budget.go:861), puts the overlay back, and
+	// the next sync renders the fresh plugin's body with the default lines.
+	t.Run("sync then undo", func(t *testing.T) {
+		o, agents, plugins, sync := pluginUpdateFixture(t)
+		o.Preset = "balanced"
+		_, err := BudgetApply(o)
+		must(t, err)
+		updatePlugin(t, plugins)
+		sync("1.1")
+		back, err := BudgetUndo(o)
+		must(t, err)
+		if len(back.Skipped) != 2 || back.Skipped[0].Reason != "changed after apply" || len(back.Restored) != 0 {
+			t.Fatalf("undo: %+v", back)
+		}
+		if _, err := os.Stat(filepath.Join(o.GridHome, "settings.json")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("the overlay did not exist before Apply and must be gone: %v", err)
+		}
+		show, err := BudgetShow(o)
+		must(t, err)
+		if show.Agents["grid-builder"].Effort != "medium" || show.Undo != nil {
+			t.Fatalf("overlay not back to defaults: %+v %+v", show.Agents["grid-builder"], show.Undo)
+		}
+		sync("1.1")
+		for name, d := range budgetAgentDefaults {
+			wantAgentFile(t, agents, name, d[0], d[1], "1.1")
+		}
+		if show, err = BudgetShow(o); err != nil || show.Agents["grid-builder"].ChangedByHand || show.Agents["grid-builder"].Effort != "medium" {
+			t.Fatalf("show after undo and sync: %+v %v", show.Agents["grid-builder"], err)
+		}
+	})
+	// no sync ran between the update and Undo: Undo puts back the bytes it saved (budget.go:853),
+	// which are the old copy's; the next sync replaces them with the fresh plugin's.
+	t.Run("undo then sync", func(t *testing.T) {
+		o, agents, plugins, sync := pluginUpdateFixture(t)
+		o.Preset = "balanced"
+		_, err := BudgetApply(o)
+		must(t, err)
+		updatePlugin(t, plugins)
+		back, err := BudgetUndo(o)
+		must(t, err)
+		if len(back.Restored) != 2 || len(back.Skipped) != 0 {
+			t.Fatalf("undo: %+v", back)
+		}
+		wantAgentFile(t, agents, "grid-builder", "sonnet", "medium", "1.0")
+		sync("1.1")
+		for name, d := range budgetAgentDefaults {
+			wantAgentFile(t, agents, name, d[0], d[1], "1.1")
+		}
+	})
+}
