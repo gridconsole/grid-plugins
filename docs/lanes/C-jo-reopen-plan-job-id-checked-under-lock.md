@@ -31,8 +31,13 @@ Base: plugin main 99c11b7a (every path:line below is read on the lane's head, wh
 
 Row 1 gives `feed post --type job --job J-3 --after <ULID> --body ...` with no `--lease`. On this base that exact command exits 3: `grid feed: $: oneOf matched 0 branches: $.lease: expected string` (the record has no lease). The brief said to stop on a refusal; the refusal is a missing flag, not a refusal of the scenario, so the test adds `--lease task`, as `internal/cli/contract_commands_test.go:373` does for a `feed post`. The planted record is then written and read back as `held` (the test checks the verdict).
 
-## NOT VERIFIED
+## Open items
 
 - The skip-and-pick-again loop (a post that lands between `reopenJobTop` and the lock) is not run by any test: the brief's rows make the order by calls, and a write that lands inside that window needs a goroutine or a hook in production code. Row 2 covers a write that lands before the closure's pick; the loop itself is read, not run.
 - A `feed post` job record does not take .orchestrator.lock (it goes through `Store.Post`), so a `feed post` of the same id in the window between the lock check and the append is not excluded by this lane; that is the `feed.ErrJobExists` lane's refusal.
-- No live screen is involved.
+
+## NOT VERIFIED on a live screen
+
+None; no live screen is involved.
+
+DONE
