@@ -167,7 +167,7 @@ func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
 	cmd.Dir = s.GridHome
 	cmd.Stdout, cmd.Stderr = p.Stdout, p.Stderr
 	cmd.Env = []string{"HOME=" + p.Home, "GRID_HOME=" + s.GridHome}
-	for _, key := range []string{"PATH", "USERPROFILE", "SystemRoot", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL"} {
+	for _, key := range []string{"PATH", "USERPROFILE", "SystemRoot", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "APPDATA", "LOCALAPPDATA", "USERNAME", "PATHEXT", "ComSpec"} {
 		if v := get(key); v != "" {
 			cmd.Env = append(cmd.Env, key+"="+v)
 		}
