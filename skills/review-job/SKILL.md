@@ -1,6 +1,7 @@
 ---
 name: review-job
 description: How a reviewer judges a finished Grid Job against the builder's proof table and posts the verdict. Use when reviewing a builder's result.
+topics: reviewing
 ---
 
 Read the Job with `grid job show <task> <job>` and the builder's result. Owner decisions that apply: no Grid-made guards, caps or limits; everything is a Job and the Job is the brief; the reviewer never edits the work; no plan mode.

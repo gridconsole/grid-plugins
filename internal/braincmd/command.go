@@ -37,6 +37,10 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
   index                      Rebuild the SessionStart index and backlinks.
   propose --name <id> --topic <topic> --description <when> --summary <what> --source <source> --body <text> [--task <task>]
   keep [--task <task>]         List waiting proposals without writing the brain.
+  keep --name <id> --topic <topic> --description <when> --summary <what> --source <source> --body <text> --link <JSON>
+                             Record a proposal (same flags as propose); the curator decides it.
+  keep accept <id>           File the proposal as a linked note (same as accept <id>).
+  keep refuse <id> [--why <reason>]  Record a refusal (same as accept <id> --reject).
   decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>]
   accept <id>                File a proposal through the keeper gates.
   accept <id> --reject <why>  Record a rejection.
@@ -112,6 +116,10 @@ func Run(args []string, env Env) int {
 	if verb == "revert" {
 		return runRevert(args[1:], env)
 	}
+	if verb == "keep" {
+		args = keepArgs(args)
+		verb = args[0]
+	}
 	switch verb {
 	case "show", "search", "topics", "index", "propose", "accept", "keep", "check":
 	default:
@@ -143,9 +151,22 @@ func Run(args []string, env Env) int {
 	var proposeTask task.Task // set when --task resolved
 	var proposal, external, readOnly bool
 	limit := 5
+	proposeFlags := func() {
+		f.StringVar(&name, "name", "", "note name")
+		f.StringVar(&topic, "topic", "", "topic")
+		f.StringVar(&description, "description", "", "when to read the note")
+		f.StringVar(&summary, "summary", "", "what the note contains")
+		f.StringVar(&source, "source", "", "source task, Job or person")
+		f.StringVar(&body, "body", "", "Markdown body (otherwise stdin)")
+		f.StringVar(&file, "file", "", "Markdown with front matter, or - for stdin")
+		f.BoolVar(&external, "external", false, "quarantine externally sourced text")
+		f.Var(&links, "link", "link object with to, rel, summary and why")
+	}
 	switch verb {
 	case "keep":
 		f.StringVar(&taskID, "task", "", "include proposals from this task")
+		// With --name or --file, keep records a proposal as propose does.
+		proposeFlags()
 	case "show":
 		f.StringVar(&taskID, "task", "", "resolve this task")
 		f.BoolVar(&proposal, "proposal", false, "show a proposal")
@@ -157,15 +178,7 @@ func Run(args []string, env Env) int {
 		f.BoolVar(&readOnly, "read-only", false, "do not write generated files")
 	case "propose":
 		f.StringVar(&taskID, "task", "", "write the proposal in this task's folder, where decide reads it")
-		f.StringVar(&name, "name", "", "note name")
-		f.StringVar(&topic, "topic", "", "topic")
-		f.StringVar(&description, "description", "", "when to read the note")
-		f.StringVar(&summary, "summary", "", "what the note contains")
-		f.StringVar(&source, "source", "", "source task, Job or person")
-		f.StringVar(&body, "body", "", "Markdown body (otherwise stdin)")
-		f.StringVar(&file, "file", "", "Markdown with front matter, or - for stdin")
-		f.BoolVar(&external, "external", false, "quarantine externally sourced text")
-		f.Var(&links, "link", "link object with to, rel, summary and why")
+		proposeFlags()
 	case "accept":
 		f.StringVar(&reject, "reject", "", "reject the proposal with a reason")
 	}
@@ -179,6 +192,9 @@ func Run(args []string, env Env) int {
 			return 0
 		}
 		return 2
+	}
+	if verb == "keep" && (name != "" || file != "") {
+		verb = "propose"
 	}
 	usageError := func(msg string) int {
 		fmt.Fprintf(env.Stderr, "brain %s: %s. Run: grid brain help\n", verb, msg)
@@ -411,6 +427,35 @@ func Run(args []string, env Env) int {
 		return fail(err)
 	}
 	return exit
+}
+
+// keepArgs maps the curator's two decisions onto accept: `keep accept <id>` is
+// accept, `keep refuse <id> [--why <reason>]` is accept --reject. `keep` with
+// --name or --file records a proposal as propose does (see Run); bare `keep`
+// lists.
+func keepArgs(args []string) []string {
+	rest := args[1:]
+	if len(rest) > 0 && rest[0] == "accept" {
+		return append([]string{"accept"}, rest[1:]...)
+	}
+	if len(rest) > 0 && rest[0] == "refuse" {
+		out := []string{"accept"}
+		why := false
+		for _, a := range rest[1:] {
+			switch {
+			case a == "--why" || a == "-why":
+				a, why = "--reject", true
+			case strings.HasPrefix(a, "--why=") || strings.HasPrefix(a, "-why="):
+				a, why = "--reject="+a[strings.Index(a, "=")+1:], true
+			}
+			out = append(out, a)
+		}
+		if !why {
+			out = append(out, "--reject", "Refused by the curator.")
+		}
+		return out
+	}
+	return args
 }
 
 func readInput(r io.Reader) ([]byte, error) {

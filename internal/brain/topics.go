@@ -63,7 +63,7 @@ func topicAt(root *os.Root, name, level string) (Topic, error) {
 	if name == "skills" || name == "workflows" || name == "design" || name == "research" || name == "incidents" {
 		return Topic{}, fmt.Errorf("topic %s is not in the first slice; use conventions or decisions for knowledge", name)
 	}
-	b, err := safefile.Read(root, filepath.Join("knowledge", name, "TOPIC.md"))
+	b, err := readTopicFile(root, name)
 	if err != nil {
 		return Topic{}, fmt.Errorf("topic %s needs a TOPIC.md definition: %w", name, err)
 	}
@@ -131,29 +131,35 @@ func scopeTopics(root *os.Root, level string) ([]Topic, error) {
 			topics = append(topics, t)
 		}
 	}
-	if err := safefile.NoSymlinks(root, "knowledge"); err != nil {
-		return nil, err
-	}
-	dirs, err := fs.ReadDir(root.FS(), "knowledge")
-	if errors.Is(err, fs.ErrNotExist) {
-		return topics, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	for _, dir := range dirs {
-		if dir.Type()&os.ModeSymlink != 0 {
-			return nil, fmt.Errorf("brain paths cannot be symbolic links")
+	// One definition path (topics/<topic>/TOPIC.md); the knowledge folder, where
+	// a topic's notes live, is still read for an older definition.
+	seen := map[string]bool{}
+	for _, base := range []string{TopicsDir, "knowledge"} {
+		if err := safefile.NoSymlinks(root, base); err != nil {
+			return nil, err
 		}
-		if !dir.IsDir() || known[dir.Name()] || dir.Name() == versionsTopic {
+		dirs, err := fs.ReadDir(root.FS(), base)
+		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
-		t, err := topicAt(root, dir.Name(), level)
 		if err != nil {
-			// Keep undiscovered or malformed topic folders visible as invalid.
-			t = Topic{Name: dir.Name(), Kind: "invalid", Levels: []string{level}, Description: "Invalid topic definition", Custom: true}
+			return nil, err
 		}
-		topics = append(topics, t)
+		for _, dir := range dirs {
+			if dir.Type()&os.ModeSymlink != 0 {
+				return nil, fmt.Errorf("brain paths cannot be symbolic links")
+			}
+			if !dir.IsDir() || known[dir.Name()] || seen[dir.Name()] || dir.Name() == versionsTopic {
+				continue
+			}
+			seen[dir.Name()] = true
+			t, err := topicAt(root, dir.Name(), level)
+			if err != nil {
+				// Keep undiscovered or malformed topic folders visible as invalid.
+				t = Topic{Name: dir.Name(), Kind: "invalid", Levels: []string{level}, Description: "Invalid topic definition", Custom: true}
+			}
+			topics = append(topics, t)
+		}
 	}
 	return topics, nil
 }

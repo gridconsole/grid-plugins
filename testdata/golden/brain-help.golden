@@ -5,6 +5,10 @@ Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|cha
   index                      Rebuild the SessionStart index and backlinks.
   propose --name <id> --topic <topic> --description <when> --summary <what> --source <source> --body <text> [--task <task>]
   keep [--task <task>]         List waiting proposals without writing the brain.
+  keep --name <id> --topic <topic> --description <when> --summary <what> --source <source> --body <text> --link <JSON>
+                             Record a proposal (same flags as propose); the curator decides it.
+  keep accept <id>           File the proposal as a linked note (same as accept <id>).
+  keep refuse <id> [--why <reason>]  Record a refusal (same as accept <id> --reject).
   decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>]
   accept <id>                File a proposal through the keeper gates.
   accept <id> --reject <why>  Record a rejection.

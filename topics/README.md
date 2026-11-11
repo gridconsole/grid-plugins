@@ -1,1 +1,12 @@
-This folder holds no topics. The eight built-in brain topics are listed in internal/brain/topics.go:25. A custom knowledge topic is one file inside the brain, not in this repo: `knowledge/<topic>/TOPIC.md` (internal/brain/topics.go:66), with front matter `name`, `kind: knowledge`, `level` and `description`.
+One directory per brain topic: topics/<topic>/TOPIC.md holds the topic's description and its pointers, read by the CLI and the hooks.
+
+The eight built-in brain topics are listed in internal/brain/topics.go:25; they need no file. A custom knowledge topic is one TOPIC.md, in the plugin folder (the topics the plugin ships), under a project's Grid folder or under the Grid home. The older knowledge/<topic>/TOPIC.md is still read when topics/<topic>/TOPIC.md is absent, so an existing definition keeps working; nothing writes it. A topic's notes stay in knowledge/<topic>/.
+
+TOPIC.md front matter: name, kind: knowledge, level, description. The description is the topic's summary. Each body line that starts with "- " is a pointer: what to open, then why.
+
+A hook puts the summary and the first six pointers in front of an agent (PreToolUse, once per session and agent) when:
+
+- the agent starts a skill whose SKILL.md front matter has `topics: <topic>` (a name, a list, or a comma list), or
+- the agent's file tool touches a path under topics/<topic>/ or knowledge/<topic>/.
+
+Shipped topics: delivering (named by skills/run-job) and reviewing (named by skills/review-job).

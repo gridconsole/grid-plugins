@@ -1,6 +1,7 @@
 ---
 name: run-job
 description: How a builder runs one Grid Job and hands off a proof table. Use when a Job is assigned to you.
+topics: delivering
 ---
 
 Read the Job with `grid job show <task> <job>`. It is your whole brief. Owner decisions that apply: no Grid-made guards, caps or limits (Claude Code built-ins only); everything is a Job and the Job is the brief; carry on by yourself until a person point; no plan mode.
