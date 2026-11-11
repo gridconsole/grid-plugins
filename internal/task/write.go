@@ -591,7 +591,7 @@ func recoverWrite(dir string) error {
 			delete(files, name)
 			continue
 		}
-		if name != "task.md" && name != "history.md" && name != approvalFile && !decisionFile.MatchString(name) {
+		if name != "task.md" && name != "history.md" && name != approvalFile && name != summaryFile && !decisionFile.MatchString(name) {
 			return fmt.Errorf("invalid journal file %q", name)
 		}
 		if err := writableFile(dir, name); err != nil {

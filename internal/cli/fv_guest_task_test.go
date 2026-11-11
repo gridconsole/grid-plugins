@@ -170,6 +170,7 @@ var fvGuestVerbs = []struct {
 	{"restore", []string{"task", "restore", "T-01", "--project", "example"}, 3, "grid task restore: task edit rejected: a person with an allowed role must perform this task move", false},
 	{"rename", []string{"task", "rename", "T-01", "--title", "A guest title", "--project", "example"}, 1, "grid task rename: scope: role cannot rename tasks", false},
 	{"decline", []string{"task", "decline", "T-01", "--reason", "a guest reason", "--project", "example"}, 1, "grid task decline: scope: role cannot decline tasks", false},
+	{"summary", []string{"task", "summary", "T-01", "--for", "customer", "--text", "a guest summary"}, 1, "grid task summary: scope: role cannot write task summaries", false},
 	{"move", []string{"task", "move", "laptop", "--task", "T-01", "--project", "example"}, 1, `grid task move: role "guest" may not move a task; a guest answers and comments`, false},
 	{"lane", []string{"task", "lane", "T-01", "doing", "--project", "example"}, 1, `grid task lane: role "guest" may not move a task to a lane; a guest answers and comments`, false},
 	{"attach", []string{"task", "attach", "T-01"}, 1, "grid task attach: agent cannot attach T-01 without its assigned task folder", false},

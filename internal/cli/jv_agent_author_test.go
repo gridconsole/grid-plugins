@@ -174,7 +174,7 @@ func TestJvAuthorEverySite(t *testing.T) {
 	calls, assigns := jvAuthorWalk(t)
 	wantCalls := []string{
 		"history.go:runHistory", "land.go:runLand", "orchestrator.go:runPersonApproval", "task.go:runTaskAttach",
-		"task_lane.go:runTaskLane", "task_write.go:runApprove", "task_write.go:runTaskTrash", "task_write.go:runTaskWrite",
+		"task.go:runTaskSummary", "task_lane.go:runTaskLane", "task_write.go:runApprove", "task_write.go:runTaskTrash", "task_write.go:runTaskWrite",
 	}
 	if strings.Join(calls, "\n") != strings.Join(wantCalls, "\n") {
 		t.Fatalf("writeOptions call sites:\n%s\nwant:\n%s", strings.Join(calls, "\n"), strings.Join(wantCalls, "\n"))

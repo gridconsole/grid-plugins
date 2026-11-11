@@ -168,7 +168,7 @@
     },
     {
       "name": "task",
-      "summary": "new, show, list, status, lane, stop|close|reopen, history, attach, move, decline, delete, rename, restore",
+      "summary": "new|show|list|status|lane, stop|close|reopen, history|attach|move, decline|delete|rename|restore|summary",
       "built": true,
       "subcommands": [
         {
@@ -501,6 +501,31 @@
               "name": "--reason",
               "takes": "value",
               "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "summary",
+          "args": [
+            "\u003ctask\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--for",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--text",
+              "takes": "value",
+              "required": true
             }
           ],
           "json": true,

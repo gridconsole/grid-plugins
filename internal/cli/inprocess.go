@@ -55,6 +55,7 @@ var hsIpTable = map[string]hsIpVerb{
 		"delete":  {},
 		"rename":  {},
 		"restore": {},
+		"summary": {},
 	}},
 	"plan": {},
 	"job": {subs: map[string]hsIpSub{

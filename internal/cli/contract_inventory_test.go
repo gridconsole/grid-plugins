@@ -464,6 +464,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"task reopen":          {args: []string{"<task>"}},
 		"task rename":          {args: []string{"<task>"}, required: map[string]bool{"--title": true}},
 		"task decline":         {args: []string{"<task>"}, required: map[string]bool{"--reason": true}},
+		"task summary":         {args: []string{"<task>"}, required: map[string]bool{"--for": true, "--text": true}},
 		"task delete":          {args: []string{"<task>"}},
 		"task restore":         {args: []string{"<T-NN>"}, required: map[string]bool{"--project": true}},
 		"task history":         {args: []string{"<task>"}},
