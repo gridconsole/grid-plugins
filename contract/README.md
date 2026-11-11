@@ -28,6 +28,11 @@ Person-gate refusals and `person check` retain `error: "person_required"`, `reas
 `message` matching stderr without its final newline. The reason remains the
 specific gate refusal reason; it is not replaced by the general code.
 
+`grid approve --json` exits 3 with the one-line stdout body
+`{"error":"job_waiting","job":"<approve Job>","waiting_for":"<Job it waits on>","reason":"<wait reason, unchanged>"}`
+when the approve person Job still waits for a Job in its after list; stderr keeps
+its `grid approve: <job> cannot be answered yet: <reason>` line, and without `--json` nothing changes.
+
 | Stable code | Meaning |
 | --- | --- |
 | `no_such_project` | A requested project is missing or inaccessible. |

@@ -16,6 +16,19 @@ const maxPersonAnswer = 3500
 // maxUnusedQuote is how much of an unused answer its notice quotes.
 const maxUnusedQuote = 3000
 
+// WaitingError is the refusal of an answer to a person Job that still waits for
+// another Job. Job is the person Job, Target the Job it waits for and Reason the
+// wait reason of Ready. PersonReady wraps it in a feed.InvalidRecordError.
+type WaitingError struct {
+	Job    string
+	Target string
+	Reason string
+}
+
+func (e *WaitingError) Error() string {
+	return fmt.Sprintf("%s cannot be answered yet: %s", e.Job, e.Reason)
+}
+
 // PersonReady refuses to answer a person Job while a Job it waits for is not
 // accepted: job next holds any other Job the same way, and an early answer would
 // release the Jobs behind it before the work they depend on exists.
@@ -26,7 +39,7 @@ func PersonReady(snap Snapshot, id string, now time.Time) error {
 	}
 	for _, w := range ready.Waiting {
 		if w.Job == id && w.Target != "" {
-			return &feed.InvalidRecordError{Err: fmt.Errorf("%s cannot be answered yet: %s", id, w.Reason)}
+			return &feed.InvalidRecordError{Err: &WaitingError{Job: id, Target: w.Target, Reason: w.Reason}}
 		}
 	}
 	return nil

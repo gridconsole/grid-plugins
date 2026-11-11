@@ -192,6 +192,15 @@ func runApprove(args []string, env Env) int {
 		}
 		if err != nil {
 			fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
+			var waiting *orchestrator.WaitingError
+			if *asJSON && errors.As(err, &waiting) {
+				_ = writeJSON(env.Stdout, struct {
+					Error      string `json:"error"`
+					Job        string `json:"job"`
+					WaitingFor string `json:"waiting_for"`
+					Reason     string `json:"reason"`
+				}{"job_waiting", waiting.Job, waiting.Target, waiting.Reason})
+			}
 			return 3
 		}
 	}
