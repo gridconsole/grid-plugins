@@ -58,3 +58,9 @@ The brief tests `rec.Job == ""` for "no Job was posted that names Q-n". But `rec
 ## NOT VERIFIED on a live screen
 
 The app's Files tab (gxfl_files_tab_realplugin_test.go in the app repo) was not run; it needs the app and a built plugin. No app caller reads a `.feed` marker (brief, `git grep` on app main), and the plugin side now leaves none.
+
+## Verdict
+
+Every acceptance row and every rule holds; the one open choice (`posted` against `rec.Job`) is stated above.
+
+DONE
