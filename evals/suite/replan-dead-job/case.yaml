@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: replan-dead-job
+description: After a Job is cancelled, the planner reads it, posts a replacement for the waiter it keeps and cancels the waiter whose plan step was dropped.
+context:
+  scaffold_script: fixture.sh
