@@ -46,12 +46,9 @@ func firstJob() map[string]any {
 // postFirstJob posts J-1 on the Feed of a task that was just made. The task has no
 // lease holder, so the owner takes the task lease for this one post and gives it
 // back: the worker's stream then finds an open Job and a free lease, takes the
-// lease itself and starts the Job. A task made with a workflow is left as it was;
-// the workflow decides its own first step.
+// lease itself and starts the Job. A task made with a workflow gets the same J-1:
+// the request is in intent.md for every task, and no workflow code posts a Job.
 func postFirstJob(env Env, t task.Task, o task.NewOptions) error {
-	if o.Workflow != "" {
-		return nil
-	}
 	machine := env.Machine
 	if home := resolver(env).GridHome; home != "" {
 		if m := gridhome.Machine(home); m != "" {
