@@ -125,6 +125,13 @@
                     "note": {
                       "type": "string",
                       "minLength": 1
+                    },
+                    "send_back": {
+                      "const": true
+                    },
+                    "sent_back_hash": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{6}$"
                     }
                   },
                   "required": [

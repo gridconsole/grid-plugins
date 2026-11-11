@@ -69,9 +69,9 @@ func claudeRuleMatches(t *testing.T, home, rule, target string) bool {
 	return false
 }
 
-// The deny rules cover every file EvaluateHost or EvaluateOnlyWriter refuses to
-// the file tools in the places setup covers, and nothing either lets through. The
-// levels are pinned to block, so the test holds whatever their defaults are.
+// The deny rules cover every file EvaluateHost refuses to the file tools in the
+// places setup covers, and the task-folder files the rules alone carry. The
+// host-guard level is pinned to block, so the test holds whatever its default is.
 // Every host rule must be the only rule that matches at least one path.
 func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 	for _, location := range []string{"default", "outside home"} {
@@ -83,10 +83,8 @@ func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 			}
 			t.Setenv("GRID_PROJECTS", projects)
 			store := settings.Store{Home: h.gridHome}
-			for _, name := range []string{"host-guard", "only-writer"} {
-				if err := store.SetHook(name, "block"); err != nil {
-					t.Fatal(err)
-				}
+			if err := store.SetHook("host-guard", "block"); err != nil {
+				t.Fatal(err)
 			}
 			if code := h.run(h.home, "setup", "--yes"); code != 0 {
 				t.Fatalf("code=%d: %s", code, h.errb)
@@ -104,9 +102,10 @@ func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 
 			type target struct {
 				path, label string
-				want        bool // refused by EvaluateHost or EvaluateOnlyWriter
+				want        bool // refused by EvaluateHost, or a task-folder file the deny rules carry
 			}
 			var targets []target
+			taskFolder := map[string]bool{} // paths under a task folder, which only the deny rules refuse
 			seen := map[string]bool{}
 			add := func(label, path string, want bool) {
 				if !seen[path] {
@@ -132,6 +131,8 @@ func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 			}
 			add("mixed case", filepath.Join(h.gridHome, "Settings.Json"), true)
 			add("PROJECTS folder", filepath.Join(h.gridHome, "PROJECTS", "p", "Workflows.md"), true)
+			add("home/notes/tasks approval", filepath.Join(h.gridHome, "notes", "tasks", "T-01-x", "approval.json"), true)
+			add("home/notes/tasks question", filepath.Join(h.gridHome, "notes", "tasks", "T-01-x", "questions", "q1.md"), true)
 			// The host folder in the Grid home and beside the projects folder (the
 			// same folder in the default layout).
 			for _, host := range []string{h.gridHome, filepath.Dir(projects)} {
@@ -143,6 +144,7 @@ func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 			for _, task := range []string{filepath.Join(projects, "p", "tasks", "T-01-work"), filepath.Join(h.gridHome, "personal", "tasks", "T-2")} {
 				for _, rel := range []string{"approval.json", "approval-ship.json", "approval-preview.json", "feed/0001.json", "questions/q1.md", "workflow.md", "workflows.md", "task.md", "refusal-R-1.json"} {
 					add("task "+rel, filepath.Join(task, filepath.FromSlash(rel)), true)
+					taskFolder[filepath.Join(task, filepath.FromSlash(rel))] = true
 				}
 			}
 			// Paths neither guard refuses.
@@ -170,9 +172,11 @@ func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 			for _, tg := range targets {
 				for _, tool := range []string{"Edit", "Write"} {
 					in := hookio.Input{Cwd: h.home, ToolName: tool, ToolInput: map[string]any{"file_path": tg.path}}
-					refused := guard.EvaluateHost(in, h.home, env).Behavior == "deny" || guard.EvaluateOnlyWriter(in, h.home, env).Behavior == "deny"
-					if refused != tg.want {
-						t.Fatalf("%s %s: table says refused=%v, the guards say %v", tool, tg.label, tg.want, refused)
+					// A task-folder file is refused by the deny rules alone (no Grid guard
+					// judges it any more); the rule check below proves it.
+					refused := guard.EvaluateHost(in, h.home, env).Behavior == "deny"
+					if !taskFolder[tg.path] && refused != tg.want {
+						t.Fatalf("%s %s: table says refused=%v, the host guard says %v", tool, tg.label, tg.want, refused)
 					}
 				}
 				var matching []string

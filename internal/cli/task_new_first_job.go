@@ -79,7 +79,7 @@ func postFirstJob(env Env, t task.Task, o task.NewOptions) error {
 	if err := json.Unmarshal(data, &body); err != nil {
 		return err
 	}
-	store := feed.Store{TaskDir: t.Path, TaskID: id}
+	store := feed.Store{TaskDir: t.Path, TaskID: id, Warn: env.Stderr}
 	w := feed.Writer{Author: feed.Author{ID: t.Owner, Role: t.OwnerRole}, Worker: worker, Lease: "task"}
 	pid, began := os.Getpid(), time.Time{}
 	if env.OwnerPID != 0 {

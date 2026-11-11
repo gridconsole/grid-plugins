@@ -27,7 +27,7 @@ func (s Store) Tick() (out Output, err error) {
 		// Reuse one policy for every projection in this pass, including the
 		// saved state. The value receiver keeps it local to this tick.
 		if s.Feed.WithdrawAllowed == nil {
-			s.Feed.WithdrawAllowed = feed.QuestionWithdrawReadPolicy(s.Feed.TaskDir)
+			s.Feed.WithdrawAllowed = feed.QuestionWithdrawReadPolicy(s.Feed.TaskDir, s.Feed.Warn)
 		}
 		snap, e := Load(s.Feed)
 		if e != nil {
@@ -101,6 +101,13 @@ func (s Store) Tick() (out Output, err error) {
 			return e
 		}
 		if e := s.guReplanPersonCancelled(snap); e != nil {
+			return e
+		}
+		snap, e = Load(s.Feed)
+		if e != nil {
+			return e
+		}
+		if e := s.kbSecurityFound(snap); e != nil {
 			return e
 		}
 		if e := s.proposals(snap); e != nil {

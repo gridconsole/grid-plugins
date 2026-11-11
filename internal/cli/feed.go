@@ -213,7 +213,7 @@ func feedStore(env Env, task, project string) (feed.Store, error) {
 	if err != nil && !errors.Is(err, feed.ErrNoTaskID) {
 		return feed.Store{}, err
 	}
-	return feed.Store{TaskDir: res.TaskPath, TaskID: taskID, Context: env.Context}, nil
+	return feed.Store{TaskDir: res.TaskPath, TaskID: taskID, Context: env.Context, Warn: env.Stderr}, nil
 }
 
 // feedDefaults supplies the supervised session's Job context for either front end.
@@ -313,12 +313,28 @@ func feedWriter(env Env, lease, epoch string) (feed.Writer, error) {
 	if member == "" {
 		cmd := exec.Command("git", "config", "user.email")
 		cmd.Dir = env.Cwd
+		if env.Getenv != nil {
+			// A lib call: git sees only the call's own settings, never the host process's.
+			// The slice is non-nil even when empty, so an empty Environ is an empty one.
+			cmd.Env = make([]string, 0, 9)
+			for _, name := range []string{"HOME", "USERPROFILE", "XDG_CONFIG_HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM", "PATH", "SystemRoot", "APPDATA"} {
+				if v := env.Getenv(name); v != "" {
+					cmd.Env = append(cmd.Env, name+"="+v)
+				}
+			}
+		}
 		if out, err := cmd.Output(); err == nil {
 			member = strings.TrimSpace(string(out))
 		}
 	}
 	if member == "" {
-		if u, err := user.Current(); err == nil {
+		if env.Getenv != nil {
+			// A lib call names the account from its own USER, then USERNAME; the host's is not asked.
+			member = env.Getenv("USER")
+			if member == "" {
+				member = env.Getenv("USERNAME")
+			}
+		} else if u, err := user.Current(); err == nil {
 			member = u.Username
 		}
 	}

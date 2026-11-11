@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -370,21 +371,45 @@ func TestStreamReleasesWhenLastJobCloses(t *testing.T) {
 	}
 }
 
+// koOtSpawnWatch passes every write on to w and, without blocking, sends on seen
+// when a written line holds "spawn". It keeps no copy of what was written.
+type koOtSpawnWatch struct {
+	w    io.Writer
+	seen chan struct{}
+}
+
+func (k *koOtSpawnWatch) Write(p []byte) (int, error) {
+	n, err := k.w.Write(p)
+	if bytes.Contains(p, []byte(`"spawn"`)) {
+		select {
+		case k.seen <- struct{}{}:
+		default:
+		}
+	}
+	return n, err
+}
+
 // Run ends with the context error and leaves the lease with its tenure: the supervisor's process owns it.
 func TestStreamRunKeepsLeaseOnCancel(t *testing.T) {
 	h := newStreamHome(t, 1)
 	h.post(0, "J-1")
 	s := h.stream(4242, nil)
 	s.Every = 5 * time.Millisecond
+	// Run prints the spawn line once it holds the lease and assigned the Job.
+	// h.out is read only after Run returned, so the watch never reads it.
+	spawned := &koOtSpawnWatch{w: s.Out, seen: make(chan struct{}, 1)}
+	s.Out = spawned
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- s.Run(ctx) }()
-	deadline := time.Now().Add(10 * time.Second)
-	for h.tenure(0).Holder == nil {
-		if time.Now().After(deadline) {
-			t.Fatal("stream never took the lease")
-		}
-		time.Sleep(5 * time.Millisecond)
+	select {
+	case <-spawned.seen:
+	case <-time.After(10 * time.Second):
+		t.Fatal("stream never printed a spawn line")
+	}
+	if h.tenure(0).Holder == nil {
+		t.Fatal("a spawn line was printed and the task lease has no holder")
 	}
 	cancel()
 	if err := <-done; err != context.Canceled {

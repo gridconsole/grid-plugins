@@ -124,6 +124,7 @@ func NoteThen(env Env, in io.Reader, dir, then string, stdout, stderr io.Writer)
 	}
 	cmd := exec.Command(name, flag, then)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(data), stdout, stderr
+	cmd.Env = env.environ()
 	err := cmd.Run()
 	var exit *exec.ExitError
 	switch {

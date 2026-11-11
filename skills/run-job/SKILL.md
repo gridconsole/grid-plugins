@@ -48,7 +48,9 @@ Post a result before you end, also when blocked or when nothing changed. A valid
 
 If blocked, post the result with the blocker named in `outcome` and the rows you could not finish as `not met`; follow the Job's `on_blocked`.
 
-To tell the task something during the Job (a question, a finding, a blocker), post it to the task's Feed with the feed_post tool; feed_types lists the record types. The result still goes with `grid job result`.
+To tell the task something during the Job, post it to the task's Feed with `grid job post`, which checks your Job lease: a message, or a blocker you are working around, with `grid job post --task <task> --job <job> --type post --body <json>` and a body such as `{"ref":"task","kind":"message","text":"<what>"}`. A question only a person can answer is a person Job: `grid job post --person <owner> --task <task> --body <json>`, as the `questions` skill says. A blocker that stops you goes in the result. The feed_post tool refuses every write under a Job lease, so it is not the way to post; feed_types lists the record types. The result still goes with `grid job result`.
+
+A security problem you meet, in or outside your scope, is posted at once as a `found` record, because the feed_post tool refuses every write under a Job lease: `grid job post --task <task> --job <job> --type found --body <json>`, with kind `security`. Put the id of that record in the result's `found`. Other things you notice stay in `proposed_jobs` or `decisions_needed`; the reviewer posts the other kinds of `found`.
 
 Done: every row has a line, the verify exit codes are pasted, and the result is posted.
 

@@ -2,6 +2,7 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
@@ -68,11 +69,20 @@ func (s Store) Activity(id string) (Activity, error) {
 	return a, err
 }
 
+// UpdateActivity waits for the session lock for as long as it takes.
 func (s Store) UpdateActivity(id string, change func(*Activity) error) error {
+	return s.UpdateActivityContext(context.Background(), id, change)
+}
+
+// UpdateActivityContext is UpdateActivity that stops waiting for the session
+// lock when ctx is done: it then returns ctx.Err(), runs no change and writes
+// nothing. The bound is on the wait only; once the lock is held the change and
+// the write run to the end.
+func (s Store) UpdateActivityContext(ctx context.Context, id string, change func(*Activity) error) error {
 	if !component.MatchString(id) {
 		return errors.New("invalid session id")
 	}
-	return s.locked(func() error {
+	return s.lockedContext(ctx, func() error {
 		a, err := s.Activity(id)
 		if err != nil {
 			return err

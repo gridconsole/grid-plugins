@@ -17,10 +17,9 @@ func TestGuardDispatch(t *testing.T) {
 	for _, event := range []string{"pretooluse", "permissionrequest"} {
 		for _, tt := range []struct{ name, tool, rel, want string }{
 			{"read home", "Read", "projects/example/notes.md", "allow"},
-			{"write own task", "Write", "projects/example/tasks/T-01/notes.md", "deny"},
-			{"write brain", "Edit", "knowledge/note.md", "deny"},
-			{"write feed", "Write", "projects/example/tasks/T-01/feed/record.jsonl", "deny"},
-			{"project record", "Write", "projects/example/project.md", "deny"},
+			{"write own task", "Write", "projects/example/tasks/T-01/notes.md", "allow"},
+			{"write brain", "Edit", "knowledge/note.md", "allow"},
+			{"project record", "Write", "projects/example/project.md", "allow"},
 			{"ordinary home write", "Write", "notes.md", "allow"},
 		} {
 			t.Run(event+"/"+tt.name, func(t *testing.T) {
@@ -29,10 +28,9 @@ func TestGuardDispatch(t *testing.T) {
 				grid := filepath.Join(home, ".grid")
 				cwd := filepath.Join(root, "repo")
 				data := filepath.Join(root, "data")
-				// only-writer warns by default (verdicts-11nov v-4); these rows pin the deny it gives at block.
-				if err := (settings.Store{Home: grid}).SetHook("only-writer", "block"); err != nil {
-					t.Fatal(err)
-				}
+				// A task folder, its Feed, the brain and a project record are not refused by a
+				// Grid guard: the deny rules `grid setup` writes carry them. The Feed is proven
+				// carried in TestLaHookFeedCarriedBySetupRule (la_hook_feed_rule_test.go).
 				in := hookio.Input{ToolName: tt.tool, Cwd: cwd, ToolInput: map[string]any{"file_path": filepath.Join(grid, tt.rel), "content": "text"}}
 				stdin, _ := json.Marshal(in)
 				var out bytes.Buffer
@@ -79,36 +77,6 @@ func TestGuardDispatch(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-// With the default only-writer level, a task-folder write through the dispatcher
-// is not denied and the warning goes out as a systemMessage.
-func TestGuardDispatchOnlyWriterDefaultWarns(t *testing.T) {
-	for _, event := range []string{"pretooluse", "permissionrequest"} {
-		t.Run(event, func(t *testing.T) {
-			root := t.TempDir()
-			home := filepath.Join(root, "home")
-			grid := filepath.Join(home, ".grid")
-			cwd := filepath.Join(root, "repo")
-			in := hookio.Input{ToolName: "Write", Cwd: cwd, ToolInput: map[string]any{"file_path": filepath.Join(grid, "projects/example/tasks/T-01/notes.md"), "content": "text"}}
-			stdin, _ := json.Marshal(in)
-			var out bytes.Buffer
-			code := Run(Options{
-				Event: event, Stdin: bytes.NewReader(stdin), Stdout: &out, Cwd: cwd,
-				Resolver: where.Resolver{GridHome: grid, Home: home},
-				Getenv: func(k string) string {
-					return map[string]string{"GRID_PLAN_GUARD": "off", "CLAUDE_PLUGIN_DATA": filepath.Join(root, "data")}[k]
-				},
-			})
-			if code != 0 {
-				t.Fatal(code)
-			}
-			got := out.String()
-			if strings.Contains(got, `"deny"`) || !strings.Contains(got, `"systemMessage":"only-writer: Task folders and the brain are written only by grid`) {
-				t.Fatalf("want a warning and no deny: %s", got)
-			}
-		})
 	}
 }
 
@@ -171,11 +139,9 @@ func TestCaseAliasesOfTheGridHomeAreDenied(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(grid, "projects", "example", "project.md"), []byte("---\nname: example\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// only-writer and plan-guard warn by default (verdicts-11nov v-4); these rows pin the deny each gives at block.
-	for _, name := range []string{"only-writer", "plan-guard"} {
-		if err := (settings.Store{Home: grid}).SetHook(name, "block"); err != nil {
-			t.Fatal(err)
-		}
+	// plan-guard warns by default (verdicts-11nov v-4); these rows pin the deny it gives at block.
+	if err := (settings.Store{Home: grid}).SetHook("plan-guard", "block"); err != nil {
+		t.Fatal(err)
 	}
 	for _, event := range []string{"pretooluse", "permissionrequest"} {
 		for _, tt := range []struct{ name, path string }{
@@ -246,7 +212,9 @@ func TestEventAtTheLimitIsStillGuarded(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(grid, "projects"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	head := `{"tool_name":"Write","tool_input":{"file_path":"` + filepath.Join(grid, "knowledge", "n.md") + `","content":"`
+	// The judged call is a role refusal of the home guard, which no setting turns off: a
+	// guest may not write into the Grid home's Personal scope.
+	head := `{"tool_name":"Write","tool_input":{"file_path":"` + filepath.Join(grid, "personal", "x") + `","content":"`
 	tail := `"}}`
 	stdin := head + strings.Repeat("x", hookio.InputLimit-len(head)-len(tail)) + tail
 	if len(stdin) != hookio.InputLimit {
@@ -254,8 +222,11 @@ func TestEventAtTheLimitIsStillGuarded(t *testing.T) {
 	}
 	var out bytes.Buffer
 	Run(Options{Event: "pretooluse", Stdin: strings.NewReader(stdin), Stdout: &out, Cwd: root,
-		Resolver: where.Resolver{GridHome: grid, Home: filepath.Join(root, "home")}, Getenv: func(string) string { return "" }})
-	if !strings.Contains(out.String(), "written only by grid") {
-		t.Fatalf("the brain write was not judged by the guards: %.300s", out.String())
+		Resolver: where.Resolver{GridHome: grid, Home: filepath.Join(root, "home")},
+		Getenv: func(k string) string {
+			return map[string]string{"GRID_ROLE": "guest", "GRID_MEMBER": "gus", "GRID_PROJECT": "example"}[k]
+		}})
+	if !strings.Contains(out.String(), `"deny"`) || !strings.Contains(out.String(), "This caller cannot access this Grid home scope.") {
+		t.Fatalf("the guest write into Personal was not judged by the guards: %.300s", out.String())
 	}
 }

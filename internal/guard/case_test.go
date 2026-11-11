@@ -66,12 +66,9 @@ func TestRealNativeReturnsOnDiskCase(t *testing.T) {
 func TestCaseAliasesAreJudgedLikeTheirTargets(t *testing.T) {
 	f := setup(t)
 	skipUnlessFolding(t, f)
-	f.write(filepath.Join(f.projects, "example", "project.md"), "---\nname: example\n---\n")
-	f.write(filepath.Join(f.projects, "example", "knowledge", "old.md"), "old\n")
-	f.write(filepath.Join(f.grid, "knowledge", "old.md"), "old\n")
 	f.write(filepath.Join(f.task, "feed", "000001.json"), "{}\n")
-	// only-writer, plan-guard and host-guard warn by default (verdicts-11nov v-4); these rows pin the deny each gives at block.
-	for _, name := range []string{"only-writer", "plan-guard", "host-guard"} {
+	// plan-guard and host-guard warn by default (verdicts-11nov v-4); these rows pin the deny each gives at block.
+	for _, name := range []string{"plan-guard", "host-guard"} {
 		if err := (settings.Store{Home: f.grid}).SetHook(name, "block"); err != nil {
 			t.Fatal(err)
 		}
@@ -81,13 +78,6 @@ func TestCaseAliasesAreJudgedLikeTheirTargets(t *testing.T) {
 		path  string
 		guard func(string) string
 	}{
-		{"project record", alias(filepath.Join(f.projects, "example", "project.md"), "projects"), f.onlyWriter},
-		{"project record, project folder spelled differently", alias(filepath.Join(f.projects, "example", "project.md"), "example"), f.onlyWriter},
-		{"project knowledge", alias(filepath.Join(f.projects, "example", "knowledge", "n.md"), "projects"), f.onlyWriter},
-		{"project knowledge, existing file", alias(filepath.Join(f.projects, "example", "knowledge", "old.md"), "projects", "knowledge"), f.onlyWriter},
-		{"home knowledge", alias(filepath.Join(f.grid, "knowledge", "n.md"), ".grid"), f.onlyWriter},
-		{"home knowledge, existing file", alias(filepath.Join(f.grid, "knowledge", "old.md"), ".grid", "knowledge"), f.onlyWriter},
-		{"task file", alias(filepath.Join(f.task, "notes.md"), "projects", "tasks"), f.onlyWriter},
 		{"feed", alias(filepath.Join(f.task, "feed", "000002.json"), "projects"), f.host},
 		{"brain from a builder", alias(filepath.Join(f.grid, "knowledge", "n.md"), ".grid"), f.planAs("grid:grid-builder")},
 		{"project knowledge from a builder", alias(filepath.Join(f.projects, "example", "knowledge", "n.md"), "projects"), f.planAs("grid:grid-builder")},
@@ -101,9 +91,6 @@ func TestCaseAliasesAreJudgedLikeTheirTargets(t *testing.T) {
 	}
 }
 
-func (f *fixture) onlyWriter(path string) string {
-	return EvaluateOnlyWriter(f.input("Write", path), f.root, f.env).Behavior
-}
 func (f *fixture) host(path string) string {
 	return EvaluateHost(f.input("Write", path), f.root, f.env).Behavior
 }
@@ -134,19 +121,5 @@ func (f *fixture) sameAsExactCwd(exact, aliased string) func(string) string {
 			return "deny"
 		}
 		return "alias cwd gave " + got + ", exact cwd gave " + want
-	}
-}
-
-func TestOnlyWriterBlocksTaskInputsAndAttachments(t *testing.T) {
-	f := setup(t)
-	if err := (settings.Store{Home: f.grid}).SetHook("only-writer", "block"); err != nil {
-		t.Fatal(err)
-	}
-	for _, folder := range []string{"inputs", "attachments"} {
-		t.Run(folder, func(t *testing.T) {
-			if got := f.onlyWriter(filepath.Join(f.task, folder, "example.txt")); got != "deny" {
-				t.Fatalf("got %q, want deny", got)
-			}
-		})
 	}
 }

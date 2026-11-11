@@ -8,6 +8,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -179,14 +180,36 @@ func (s Store) add(in Input, asJob bool) (rec Record, err error) {
 	if err != nil {
 		return
 	}
+	// A failed postJob keeps the marker: the Job may have reached the Feed before
+	// the error, and it names questions/Q-n.md.
 	job, err := s.postJob(f, rec.ID, in)
 	if err != nil {
 		return
 	}
-	if job != "" {
+	// posted is true only for a Job this ask posted, the one that names Q-n.md. A
+	// caller's own in.Job in rec.Job is another Job and names no question file.
+	posted := job != ""
+	if posted {
 		rec.Job = job
 	}
-	err = s.locked(true, func(dir string) error { return s.publishQuestion(dir, &rec) })
+	err = s.locked(true, func(dir string) error {
+		if e := s.publishQuestion(dir, &rec); e != nil {
+			if !posted {
+				// No Job names Q-n.md and the question post failed (the Feed refused
+				// it, as it does a worker's person gate), so the marker stands for
+				// nothing. The publish error is the answer; a marker that cannot be
+				// removed is only a gap in the ids.
+				_ = os.Remove(filepath.Join(dir, rec.ID+".feed"))
+			}
+			return e
+		}
+		// Q-n.md now holds the id on disk, so the marker has done its work and is
+		// not left for the task's Files tab to list.
+		if e := os.Remove(filepath.Join(dir, rec.ID+".feed")); e != nil && !errors.Is(e, os.ErrNotExist) {
+			return e
+		}
+		return nil
+	})
 	return
 }
 

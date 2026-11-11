@@ -42,7 +42,7 @@ type Snapshot struct {
 func Load(store feed.Store) (Snapshot, error) {
 	allowed := store.WithdrawAllowed
 	if allowed == nil {
-		allowed = feed.QuestionWithdrawReadPolicy(store.TaskDir)
+		allowed = feed.QuestionWithdrawReadPolicy(store.TaskDir, store.Warn)
 	}
 	r, err := store.Read(feed.Filter{})
 	if err != nil {

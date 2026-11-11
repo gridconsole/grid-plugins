@@ -11,7 +11,7 @@ import (
 // runAgentCommand adds readiness checks without changing the settings commands.
 func runAgentCommand(args []string, env Env) int {
 	if len(args) > 0 && args[0] == "check" {
-		return runAgentCheck(args[1:], env, agent.Env{PATH: env.getenv("PATH"), Home: env.Home})
+		return runAgentCheck(args[1:], env, agent.Env{PATH: env.getenv("PATH"), Home: env.Home, Getenv: env.Getenv})
 	}
 	if len(args) > 0 && args[0] == "sync" {
 		return runAgentSync(args[1:], env)

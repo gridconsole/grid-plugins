@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -20,11 +21,24 @@ func runQuestion(args []string, env Env) int {
 }
 
 func questionEnv(env Env) question.Env {
-	return question.Env{Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Jobs: questionJobs(), RecordError: env.recordError, Writer: func(control bool) (feed.Writer, error) {
+	writer := func(control bool) (feed.Writer, error) {
 		if control {
 			return feedWriter(env, env.getenv("GRID_LEASE"), env.getenv("GRID_LEASE_EPOCH"))
 		}
 		return feedWriter(env, "", "")
+	}
+	return question.Env{Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Jobs: questionJobs(), RecordError: env.recordError, Writer: writer, AskWriter: func() (feed.Writer, error) {
+		// A Job agent's GRID_LEASE names its own Job, but its question and person Job
+		// are task writes, so it asks as the task holder with GRID_TASK_EPOCH, as
+		// `job post` and postCuratorJob do; a typed global --lease-epoch is used instead.
+		if lease := env.getenv("GRID_LEASE"); lease != "" && lease != "task" && env.getenv("GRID_TASK_EPOCH") != "" {
+			epoch := env.getenv("GRID_TASK_EPOCH")
+			if env.typedGlobal["GRID_LEASE_EPOCH"] {
+				epoch = env.getenv("GRID_LEASE_EPOCH")
+			}
+			return orchestratorWriter(env, "task", epoch)
+		}
+		return writer(true)
 	}}
 }
 func runAnswer(args []string, env Env) int { return question.RunAnswer(args, questionEnv(env)) }
@@ -35,10 +49,28 @@ func questionJobs() question.JobPort {
 	return question.JobPort{Post: postQuestionJob, Close: closeQuestionJob}
 }
 
+// jwRpAfterPickForTest is nil outside tests; a test sets it to act between the pick of a Job id and its post.
+var jwRpAfterPickForTest func(f feed.Store, id string)
+
 // postQuestionJob posts the person Job under the task lease when the caller holds
 // it and without a lease when a person of the team asks. Any other writer (an
 // agent with no lease) gets no Job and no refusal: the question is still posted.
-func postQuestionJob(f feed.Store, lease, person feed.Writer, body map[string]any) (string, error) {
+// The pick and the post are not under .orchestrator.lock (the lock order stays as
+// ready.go says), so another writer can take the picked id in between and the
+// Feed then refuses this post with feed.ErrJobExists. The id is then picked again
+// from a fresh read, up to three times as postCuratorJob does; the last refusal
+// is returned.
+func postQuestionJob(f feed.Store, lease, person feed.Writer, body map[string]any) (id string, err error) {
+	for try := 0; try < 3; try++ {
+		id, err = postQuestionJobOnce(f, lease, person, body)
+		if !errors.Is(err, feed.ErrJobExists) {
+			return id, err
+		}
+	}
+	return "", err
+}
+
+func postQuestionJobOnce(f feed.Store, lease, person feed.Writer, body map[string]any) (string, error) {
 	// The id comes from every job record on the Feed, whatever its verdict: a held
 	// record keeps its id, and the fold would otherwise mark this Job "ignored"
 	// once the held record resolves. A broken record only skips a number.
@@ -54,6 +86,9 @@ func postQuestionJob(f feed.Store, lease, person feed.Writer, body map[string]an
 	}
 	id := fmt.Sprintf("J-%d", top+1)
 	body["id"] = id
+	if jwRpAfterPickForTest != nil {
+		jwRpAfterPickForTest(f, id)
+	}
 	in := feed.Input{Type: "job", Body: body, Job: id}
 	switch {
 	case lease.Lease == "task":

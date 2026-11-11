@@ -43,8 +43,15 @@ type Store struct {
 	// the call returns the context's error and writes nothing. Nil means
 	// context.Background, which waits as long as the holder keeps the lock.
 	Context context.Context
+	// Warn receives the warning a fold prints when workflow.md cannot be read
+	// ("cannot read task withdrawal policy (workflow.md); using withdraw: []"). A
+	// host that runs many calls in one process sets it to the call's own stderr.
+	// Nil is the process stderr, as before.
+	Warn io.Writer
 	// afterGateCheck is a test hook inside the gate lock, before the append.
 	afterGateCheck func()
+	// afterJobCheck is a test hook inside the job lock, before the append.
+	afterJobCheck func()
 }
 
 func (s Store) Dir() string { return filepath.Join(s.TaskDir, "feed") }
@@ -256,6 +263,23 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 		}
 		if s.afterGateCheck != nil {
 			s.afterGateCheck()
+		}
+	} else if jid := jobID(r); jid != "" {
+		// A Job id belongs to the task, not a writer tenure: the fold keeps the
+		// first record and ignores the rest. Hold job.lock across the check and the
+		// append (lock order at jobLock); a same-request retry falls through to the
+		// tenure scan, which returns the stored record.
+		guard, err := s.jobLock()
+		if err != nil {
+			return Record{}, err
+		}
+		defer guard.Close()
+		defer fslock.Unlock(guard)
+		if err := s.checkJobFree(r, jid); err != nil {
+			return Record{}, err
+		}
+		if s.afterJobCheck != nil {
+			s.afterJobCheck()
 		}
 	}
 	file := filepath.Join(s.Dir(), writerFile(w.Worker, w.Fence))

@@ -2433,6 +2433,11 @@
               "name": "--plan-hash",
               "takes": "value",
               "required": false
+            },
+            {
+              "name": "--send-back",
+              "takes": "value",
+              "required": false
             }
           ],
           "json": true,
@@ -2610,7 +2615,7 @@
     },
     {
       "name": "brain",
-      "summary": "show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore",
+      "summary": "show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore/rename",
       "built": true,
       "subcommands": [
         {
@@ -2926,6 +2931,42 @@
             },
             {
               "name": "--topic",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "rename",
+          "args": [
+            "\u003ctopic\u003e/\u003cname\u003e",
+            "\u003cnew-name\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--expect",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
               "takes": "value",
               "required": false
             }

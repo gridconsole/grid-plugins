@@ -34,6 +34,7 @@ var guestParityCommands = map[string][]string{
 	"brain revert":         {"parity/parity", "--to", "1"},
 	"brain drop":           {"parity/parity", "--expect", "0000000000000000"},
 	"brain restore":        {"parity/parity", "--expect", "0000000000000000"},
+	"brain rename":         {"parity/parity", "parity-new", "--expect", "0000000000000000"},
 	"brain supersede":      {"parity", "--by", "parity-v2", "--reason", "parity reason here"},
 	"brain propose":        {"--name", "parity", "--topic", "general", "--description", "parity", "--summary", "parity", "--body", "parity", "--external"},
 	"brain search":         {"parity"},
@@ -476,6 +477,11 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 			want = guestParityOutput{3, "", "grid brain restore: caller role is not allowed to restore brain entries\n"}
 			if mode == "json" {
 				want.Stdout = `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to restore brain entries","code":"person_required","message":"grid brain restore: caller role is not allowed to restore brain entries"}` + "\n"
+			}
+		case "brain rename":
+			want = guestParityOutput{3, "", "grid brain rename: caller role is not allowed to rename brain entries\n"}
+			if mode == "json" {
+				want.Stdout = `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to rename brain entries","code":"person_required","message":"grid brain rename: caller role is not allowed to rename brain entries"}` + "\n"
 			}
 		case "brain supersede":
 			want = guestParityOutput{3, "", "grid brain supersede: caller role is not allowed to supersede brain entries\n"}

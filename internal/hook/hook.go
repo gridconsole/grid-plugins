@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
@@ -45,13 +46,37 @@ func Run(o Options) int {
 	if o.Getenv == nil {
 		o.Getenv = os.Getenv
 	}
-	if run := handler(o.Event); run != nil {
-		return run(o)
+	run := handler(o.Event)
+	if run == nil && componentEvent(o.Event) {
+		run = remaining
 	}
-	if componentEvent(o.Event) {
-		return remaining(o)
+	if run == nil {
+		return 0
 	}
-	return 0
+	defer o.logSlow(time.Now())
+	return run(o)
+}
+
+// slowHook is the time from the start of a hook call to its output from which
+// the call leaves a line in the hook log. It limits nothing: the call runs to
+// its end either way.
+const slowHook = 2 * time.Second
+
+// logSlow writes `hook <event> slow: <ms> ms` when the call that began at start
+// has taken slowHook or more, so a hook that Claude Code cut off at its own limit
+// can be told from one that was never slow.
+func (o Options) logSlow(start time.Time) {
+	d := time.Since(start)
+	if d < slowHook {
+		return
+	}
+	name := o.Event
+	for _, e := range events {
+		if strings.EqualFold(name, e.Name) {
+			name = e.Name
+		}
+	}
+	o.log("hook "+name+" slow", fmt.Errorf("%d ms", d.Milliseconds()))
 }
 
 func sessionStart(o Options) {
@@ -331,7 +356,6 @@ func toolUse(o Options) {
 func evaluateGuards(o Options, in hookio.Input, env map[string]string) hookio.Decision {
 	return hookio.Strongest(
 		guard.EvaluateHost(in, o.Cwd, env),
-		guard.EvaluateOnlyWriter(in, o.Cwd, env),
 		guard.EvaluatePlan(in, o.Cwd, env),
 		guard.EvaluateHome(in, o.Cwd, env),
 	)

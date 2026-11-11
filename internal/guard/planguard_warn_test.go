@@ -80,7 +80,7 @@ func TestPlanGuardFencesWarnByDefaultAndDenyAtBlock(t *testing.T) {
 		{"reviewer outside the projects root", "grid:grid-reviewer",
 			func(f *fixture) string { return filepath.Join(f.repo, "file.go") },
 			func(f *fixture, given string) string {
-				return "A grid-reviewer writes only its Verdict inside a task folder; " + given + " is outside it."
+				return "A grid-reviewer writes only its Verdict inside a task folder; " + given + " is outside it." + off
 			}},
 		{"folder name beside tasks", "",
 			func(f *fixture) string { return filepath.Join(f.projects, "example", "tasks.", "T-03", "notes.md") },
@@ -90,7 +90,7 @@ func TestPlanGuardFencesWarnByDefaultAndDenyAtBlock(t *testing.T) {
 		{"builder writing the brain", "grid:grid-builder",
 			func(f *fixture) string { return filepath.Join(f.grid, "knowledge", "note.md") },
 			func(f *fixture, given string) string {
-				return "Only a grid-curator (or a grid-planner) writes the brain; a grid-builder writes a proposal in its task's brain-proposals/ folder instead of " + given + "."
+				return "Only a grid-curator (or a grid-planner) writes the brain; a grid-builder writes a proposal in its task's brain-proposals/ folder instead of " + given + "." + off
 			}},
 		{"curator outside the brain", "grid:grid-curator",
 			func(f *fixture) string { return filepath.Join(f.repo, "file.go") },
