@@ -213,7 +213,7 @@ func Ready(s Snapshot, now time.Time) (jobgraph.Readiness, error) {
 			}
 			if _, posted := s.State.Jobs[e.Job]; !posted {
 				out.Waiting = append(out.Waiting, jobgraph.Wait{Job: item.ID, Target: e.Job, Kind: jobgraph.Done, Reason: "waiting for " + e.Job + ", which is not posted"})
-			} else if input.Jobs[e.Job].Status != contract.Accepted {
+			} else if !jobgraph.Released(input.Jobs[e.Job]) {
 				out.Waiting = append(out.Waiting, jobgraph.Wait{Job: item.ID, Target: e.Job, Kind: jobgraph.Done, Reason: "waiting for " + e.Job + " to be accepted"})
 			}
 		}
