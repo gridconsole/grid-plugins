@@ -31,7 +31,7 @@ func tierB(t *testing.T) []Task {
 			out = append(out, task)
 		}
 	}
-	if len(out) != 16 {
+	if len(out) != 20 {
 		t.Fatalf("only %d tier-b cases", len(out))
 	}
 	return out

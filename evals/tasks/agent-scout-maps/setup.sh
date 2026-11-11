@@ -1,4 +1,8 @@
 set -eu
+: "${GRID_HOME:?}"
+mkdir -p "$GRID_HOME/projects/notes-app/tasks/T-01-sample"
+printf "1\n" > "$GRID_HOME/VERSION"
+printf 'map the notes app\n' > "$GRID_HOME/projects/notes-app/tasks/T-01-sample/intent.md"
 mkdir -p work/notes-app/src
 cat > work/notes-app/src/store.js <<'T'
 // The in-memory note store.
