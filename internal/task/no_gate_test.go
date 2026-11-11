@@ -31,7 +31,7 @@ func readFile(t *testing.T, path string) string {
 
 // An old gate: line in task.md is ignored (S6c3, Q1, Q10): Show reads the task
 // without an error, the task has no gate in its JSON, and approving it approves
-// the plan with the current hash in approval.json, never in a ship or preview receipt.
+// the plan with the current hash as the plan Job's result, never in a ship or preview receipt.
 func TestOldGateLineIsIgnored(t *testing.T) {
 	for _, gate := range []string{"ship", "preview"} {
 		s, task := waitingFixture(t)
@@ -45,7 +45,7 @@ func TestOldGateLineIsIgnored(t *testing.T) {
 		if err != nil || strings.Contains(string(data), `"gate"`) {
 			t.Fatalf("task JSON has a gate (%v): %s", err, data)
 		}
-		event, err := s.Approve(WriteOptions{ID: task.ID}, h)
+		event, err := approve(t, s, task, WriteOptions{ID: task.ID}, h)
 		if err != nil || event.Gate != "" || event.PlanHash != h {
 			t.Fatalf("approve at old gate %s: %+v %v", gate, event, err)
 		}

@@ -62,9 +62,14 @@ func TestLandRejectsChangedRuleWithExitThree(t *testing.T) {
 	}
 	var out, stderr bytes.Buffer
 	env.Stdout, env.Stderr = &out, &stderr
+	// The person approves holding the task lease, which posts the result at once;
+	// land then runs as before, with the machine of the fixture.
+	machine, getenv := env.Machine, env.Getenv
+	leasedEnv(t, &env, dir)
 	if code := Run([]string{"approve", "T-01"}, env); code != 0 {
 		t.Fatalf("approve: %d %s", code, &stderr)
 	}
+	env.Machine, env.Getenv = machine, getenv
 	path := filepath.Join(env.GridHome, "projects", "sample", "knowledge", "deploy", "lands.md")
 	b, _ = os.ReadFile(path)
 	if err := os.WriteFile(path, []byte(strings.Replace(string(b), "target: local", "target: production", 1)), 0600); err != nil {

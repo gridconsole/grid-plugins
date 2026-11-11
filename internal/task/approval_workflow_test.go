@@ -3,7 +3,6 @@ package task
 import (
 	"crypto/sha256"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestApprovalWorkflowEdits(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, task := waitingFixture(t)
 			setPlan(t, task, planV1)
-			if _, err := s.Approve(WriteOptions{ID: task.ID}, ""); err != nil {
+			if _, err := approve(t, s, task, WriteOptions{ID: task.ID}, ""); err != nil {
 				t.Fatal(err)
 			}
 			setPlan(t, task, tc.text)
@@ -52,7 +51,7 @@ func TestApprovalPriorDigestCompatibility(t *testing.T) {
 			s, task := waitingFixture(t)
 			hash := setPlan(t, task, tc.text)
 			digest := fmt.Sprintf("%x", sha256.Sum256([]byte(tc.oldInput)))
-			write(t, filepath.Join(task.Path, "approval.json"), fmt.Sprintf(`{"task":%q,"what":"approve","plan_hash":%q,"plan_digest":%q}`, task.ID, hash, digest))
+			postResult(t, task.Path, openJob(t, task.Path), map[string]any{"plan_hash": hash, "plan_digest": digest})
 			_, err := s.Approval("", task.ID)
 			if (err == nil) != tc.approved || Approved(task.Path) != tc.approved {
 				t.Fatalf("prior receipt approval = %t, want %t: %v", err == nil, tc.approved, err)
@@ -61,7 +60,7 @@ func TestApprovalPriorDigestCompatibility(t *testing.T) {
 				if _, err := s.Approve(WriteOptions{ID: task.ID}, ""); err == nil {
 					t.Fatal("implicit migration accepted")
 				}
-				event, err := s.Approve(WriteOptions{ID: task.ID}, hash)
+				event, err := approve(t, s, task, WriteOptions{ID: task.ID}, hash)
 				if err != nil || event.PlanDigest != plan.Digest(tc.text) || !Approved(task.Path) {
 					t.Fatalf("explicit reapproval: %v", err)
 				}

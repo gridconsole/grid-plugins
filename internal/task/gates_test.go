@@ -3,7 +3,7 @@ package task
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,7 +33,7 @@ func TestApprovalBindsStepMetadata(t *testing.T) {
 			s, task := waitingFixture(t)
 			text := strings.Replace(planV1, "Build it\n", "Build it\n  "+field+": original\n", 1)
 			hash := setPlan(t, task, text)
-			event, err := s.Approve(WriteOptions{ID: task.ID}, hash)
+			event, err := approve(t, s, task, WriteOptions{ID: task.ID}, hash)
 			if err != nil || event.PlanHash != hash || event.PlanDigest != plan.Digest(text) || !Approved(task.Path) {
 				t.Fatalf("metadata approval: %+v err=%v", event, err)
 			}
@@ -69,12 +69,12 @@ func TestApprovalTracksPlan(t *testing.T) {
 	h1 := setPlan(t, task, planV1)
 	// A stored plan.hash is not a source of truth and is never read.
 	write(t, filepath.Join(task.Path, "plan.hash"), "opaque:v1\n")
-	event, err := s.Approve(o, "")
+	event, err := approve(t, s, task, o, "")
 	if err != nil || event.PlanHash != h1 || event.PlanDigest != plan.Digest(planV1) || event.Note != "Reviewed" {
 		t.Fatalf("%+v: %v", event, err)
 	}
 	got, err := s.Approval("", task.ID)
-	if err != nil || got != event || !Approved(task.Path) {
+	if err != nil || !sameApproval(got, event) || !Approved(task.Path) {
 		t.Fatalf("%+v: %v", got, err)
 	}
 	// Ticking a step is not a plan change.
@@ -83,7 +83,7 @@ func TestApprovalTracksPlan(t *testing.T) {
 		t.Fatalf("tick lost the approval: %v", err)
 	}
 	before, _ := os.ReadFile(filepath.Join(task.Path, "history.md"))
-	oldApproval, _ := os.ReadFile(filepath.Join(task.Path, "approval.json"))
+	oldResult, _ := planJobResult(task.Path)
 	// An agent edits plan.md after the approval, and may rewrite plan.hash to match.
 	h2 := setPlan(t, task, planV2)
 	write(t, filepath.Join(task.Path, "plan.hash"), h1+"\n")
@@ -99,11 +99,12 @@ func TestApprovalTracksPlan(t *testing.T) {
 		}
 	}
 	after, _ := os.ReadFile(filepath.Join(task.Path, "history.md"))
-	approval, _ := os.ReadFile(filepath.Join(task.Path, "approval.json"))
-	if !bytes.Equal(before, after) || !bytes.Equal(oldApproval, approval) {
+	result, _ := planJobResult(task.Path)
+	if !bytes.Equal(before, after) || oldResult != result {
 		t.Fatal("refused approval wrote data")
 	}
-	if _, err := s.Approve(o, h2); err != nil {
+	noReceiptFile(t, task.Path)
+	if _, err := approve(t, s, task, o, h2); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Approval("", task.ID); err != nil || !Approved(task.Path) {
@@ -121,31 +122,43 @@ func TestApprovalTracksPlan(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// grid task reopen posts the new plan Job that continues the old one; the old
+	// result stops approving the plan with it (planJobResult).
+	postReopenJob(t, task.Path)
 	if _, err := s.Approval("", task.ID); err == nil || Approved(task.Path) {
 		t.Fatal("reopen reused an old approval")
 	}
 }
 
-func TestApprovedRejectsAnotherGate(t *testing.T) {
-	for _, gate := range []string{"ship", "unknown"} {
-		t.Run(gate, func(t *testing.T) {
+// Nothing in the task folder but the plan Job's result approves the plan: a file
+// named like an old receipt, for the plan or for another gate, authorizes
+// nothing, and a task with no plan Job is not approved. This replaces
+// TestApprovedRejectsAnotherGate, whose receipt files are no longer read.
+func TestAnApprovalFileApprovesNothing(t *testing.T) {
+	for _, gate := range []string{"", "ship", "unknown"} {
+		t.Run("gate="+gate, func(t *testing.T) {
 			s, task := waitingFixture(t)
 			setPlan(t, task, planV1)
-			event, err := s.Approve(WriteOptions{ID: task.ID}, "")
-			if err != nil {
-				t.Fatal(err)
+			receipt := `{"task":"` + task.ID + `","what":"approve","plan_hash":"` + plan.Hash(planV1) + `","plan_digest":"` + plan.Digest(planV1) + `"`
+			if gate != "" {
+				receipt += `,"gate":"` + gate + `"`
 			}
-			event.Gate = gate
-			data, err := json.Marshal(event)
-			if err != nil {
-				t.Fatal(err)
+			for _, name := range []string{"approval.json", "approval-ship.json", "approval-preview.json"} {
+				write(t, filepath.Join(task.Path, name), receipt+"}")
 			}
-			write(t, filepath.Join(task.Path, "approval.json"), string(data))
-			if _, err := s.Approval("", task.ID); err == nil {
-				t.Fatal("locked approval accepted another gate")
+			if _, err := s.Approval("", task.ID); !errors.Is(err, ErrNoPlanJob) {
+				t.Fatalf("a task with no plan Job and an approval file: %v", err)
 			}
-			if Approved(task.Path) {
-				t.Fatal("lock-free approval accepted another gate")
+			if _, err := s.ApprovalForGate("", task.ID, "ship"); !errors.Is(err, ErrNoPlanJob) {
+				t.Fatalf("another gate: %v", err)
+			}
+			if Approved(task.Path) || ApprovedDigest(task.Path, plan.Hash(planV1), plan.Digest(planV1)) {
+				t.Fatal("lock-free approval read a file")
+			}
+			// A plan Job nobody answered approves nothing either.
+			openJob(t, task.Path)
+			if _, err := s.Approval("", task.ID); !errors.Is(err, ErrPlanJobOpen) || Approved(task.Path) {
+				t.Fatalf("an open plan Job with an approval file: %v", err)
 			}
 		})
 	}
@@ -203,28 +216,48 @@ func TestApproveStateAndFiles(t *testing.T) {
 			}
 		})
 	}
-	for _, name := range []string{"plan.md", "approval.json"} {
-		t.Run("symlink/"+name, func(t *testing.T) {
-			s, task := waitingFixture(t)
-			hash := setPlan(t, task, planV1)
-			target := filepath.Join(filepath.Dir(task.Path), "outside")
-			write(t, target, planV1)
-			if name == "plan.md" {
-				if err := os.Remove(filepath.Join(task.Path, name)); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if err := os.Symlink(target, filepath.Join(task.Path, name)); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := s.Approve(WriteOptions{ID: task.ID}, hash); err == nil {
-				t.Fatal("followed symlink")
-			}
-			if Approved(task.Path) {
-				t.Fatal("hook predicate followed symlink")
-			}
-		})
-	}
+	t.Run("symlink/plan.md", func(t *testing.T) {
+		s, task := waitingFixture(t)
+		hash := setPlan(t, task, planV1)
+		target := filepath.Join(filepath.Dir(task.Path), "outside")
+		write(t, target, planV1)
+		if err := os.Remove(filepath.Join(task.Path, "plan.md")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(task.Path, "plan.md")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Approve(WriteOptions{ID: task.ID}, hash); err == nil {
+			t.Fatal("followed symlink")
+		}
+		if Approved(task.Path) {
+			t.Fatal("hook predicate followed symlink")
+		}
+	})
+	// A receipt name that is a symlink is neither read nor followed: Approve refuses to
+	// write through it, and it approves nothing.
+	t.Run("symlink/old receipt", func(t *testing.T) {
+		s, task := waitingFixture(t)
+		hash := setPlan(t, task, planV1)
+		target := filepath.Join(filepath.Dir(task.Path), "outside")
+		write(t, target, planV1)
+		link := filepath.Join(task.Path, "approval.json")
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Approve(WriteOptions{ID: task.ID}, hash); err == nil {
+			t.Fatal("Approve wrote over a symlinked approval.json")
+		}
+		if Approved(task.Path) {
+			t.Fatal("a symlink approved the plan")
+		}
+		if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("the symlink was replaced: %v", err)
+		}
+		if b, _ := os.ReadFile(target); string(b) != planV1 {
+			t.Fatal("Approve wrote through the symlink")
+		}
+	})
 }
 
 // Approve works through a symlinked Grid home and records the plan digest.
@@ -236,7 +269,7 @@ func TestApproveWithSymlinkedHome(t *testing.T) {
 	}
 	s.Resolver.GridHome = alias
 	hash := setPlan(t, task, planV1)
-	event, err := s.Approve(WriteOptions{ID: task.ID}, hash)
+	event, err := approve(t, s, task, WriteOptions{ID: task.ID}, hash)
 	if err != nil || event.Gate != "" || event.PlanHash != hash || event.PlanDigest != plan.Digest(planV1) {
 		t.Fatalf("%+v: %v", event, err)
 	}
@@ -245,19 +278,20 @@ func TestApproveWithSymlinkedHome(t *testing.T) {
 	}
 }
 
-// The plan receipt is the only receipt (S6c3). Reopening a task overwrites it
-// with the reopen event, so the plan is approved again.
-func TestReopenOverwritesPlanReceipt(t *testing.T) {
+// The plan Job's result is the only approval record and no receipt file is
+// written (S6c3, verdict 12). Reopening a task writes no file either; the new plan
+// Job that grid task reopen posts supersedes the old result, so the plan is
+// approved again.
+func TestReopenWritesNoReceiptAndTheNewPlanJobSupersedes(t *testing.T) {
 	s, task := waitingFixture(t)
 	setPlan(t, task, planV1)
-	planEvent, err := s.Approve(WriteOptions{ID: task.ID, Note: "Plan ok"}, "")
+	planEvent, err := approve(t, s, task, WriteOptions{ID: task.ID, Note: "Plan ok"}, "")
 	if err != nil || planEvent.Gate != "" {
 		t.Fatalf("%+v: %v", planEvent, err)
 	}
-	b, _ := os.ReadFile(filepath.Join(task.Path, "approval.json"))
-	var stored Event
-	if err := json.Unmarshal(b, &stored); err != nil || stored != planEvent {
-		t.Fatalf("%+v: %v", stored, err)
+	noReceiptFile(t, task.Path)
+	if found, err := planJobResult(task.Path); err != nil || found.Note != "Plan ok" || found.PlanHash != planEvent.PlanHash {
+		t.Fatalf("%+v: %v", found, err)
 	}
 	if !Approved(task.Path) {
 		t.Fatal("plan approval not valid")
@@ -268,47 +302,49 @@ func TestReopenOverwritesPlanReceipt(t *testing.T) {
 	if _, err := s.Change(WriteOptions{ID: task.ID, Action: "reopen"}); err != nil {
 		t.Fatal(err)
 	}
-	b, _ = os.ReadFile(filepath.Join(task.Path, "approval.json"))
-	var e Event
-	if err := json.Unmarshal(b, &e); err != nil || e.What != "reopen" {
-		t.Fatalf("approval.json survived reopen: %+v %v", e, err)
+	noReceiptFile(t, task.Path)
+	postReopenJob(t, task.Path)
+	if Approved(task.Path) {
+		t.Fatal("reopen kept the plan approved")
 	}
 }
 
 func TestApprovalDigestCompatibility(t *testing.T) {
 	// The old canonical digest omitted the revision and status heading.
 	legacyDigest := fmt.Sprintf("%x", sha256.Sum256([]byte("- [ ] 1 Build it\n## How we approach it\n\nUsed: brain:project/conventions/example\n")))
+	// The cases are results of the plan Job; a result with no plan_digest is not
+	// an approval at all, so there is nothing to replace and Approve needs no token.
 	for _, tc := range []struct {
-		name, digest string
-		want         bool
+		name          string
+		fields        func(hash string) map[string]any
+		want, refused bool // approved now; an implicit Approve is refused
 	}{
-		{"legacy short hash", "", false},
-		{"legacy canonical digest", `,"plan_digest":"` + legacyDigest + `"`, false},
-		{"full digest", `,"plan_digest":"` + plan.Digest(planV1) + `"`, true},
-		{"wrong digest", `,"plan_digest":"` + strings.Repeat("0", 64) + `"`, false},
-		{"empty digest", `,"plan_digest":""`, false},
-		{"null digest", `,"plan_digest":null`, false},
-		{"non-string digest", `,"plan_digest":123`, false},
-		{"short digest", `,"plan_digest":"abcdef"`, false},
+		{"result without a digest", func(h string) map[string]any { return map[string]any{"plan_hash": h} }, false, false},
+		{"legacy canonical digest", func(h string) map[string]any { return map[string]any{"plan_hash": h, "plan_digest": legacyDigest} }, false, true},
+		{"full digest", func(h string) map[string]any {
+			return map[string]any{"plan_hash": h, "plan_digest": plan.Digest(planV1)}
+		}, true, false},
+		{"wrong digest", func(h string) map[string]any {
+			return map[string]any{"plan_hash": h, "plan_digest": strings.Repeat("0", 64)}
+		}, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, task := waitingFixture(t)
 			hash := setPlan(t, task, planV1)
-			write(t, filepath.Join(task.Path, "approval.json"), `{"task":"`+task.ID+`","what":"approve","plan_hash":"`+hash+`"`+tc.digest+`}`)
+			postResult(t, task.Path, openJob(t, task.Path), tc.fields(hash))
 			_, err := s.Approval("", task.ID)
 			if (err == nil) != tc.want || Approved(task.Path) != tc.want || ApprovedDigest(task.Path, hash, plan.Digest(planV1)) != tc.want {
 				t.Fatalf("approval allowed = %t, want %t: %v", err == nil, tc.want, err)
 			}
-			if tc.want || strings.HasPrefix(tc.name, "legacy ") {
-				if !tc.want {
-					if _, err := s.Approve(WriteOptions{ID: task.ID}, ""); err == nil {
-						t.Fatal("legacy receipt upgraded without explicit reapproval")
-					}
+			if !tc.want {
+				_, err := s.Approve(WriteOptions{ID: task.ID}, "")
+				if (err != nil) != tc.refused {
+					t.Fatalf("implicit approve: refused = %t, want %t: %v", err != nil, tc.refused, err)
 				}
-				event, err := s.Approve(WriteOptions{ID: task.ID}, hash)
-				if err != nil || event.PlanDigest != plan.Digest(planV1) {
-					t.Fatalf("reapproval must upgrade legacy receipts: %+v %v", event, err)
-				}
+			}
+			event, err := approve(t, s, task, WriteOptions{ID: task.ID}, hash)
+			if err != nil || event.PlanDigest != plan.Digest(planV1) || !Approved(task.Path) {
+				t.Fatalf("explicit reapproval: %+v %v", event, err)
 			}
 		})
 	}

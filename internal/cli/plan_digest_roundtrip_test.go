@@ -3,10 +3,12 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -60,7 +62,7 @@ func TestPlanDigestRoundTrip(t *testing.T) {
 		scenario := &transcript.Scenarios[i]
 		t.Run(scenario.Name, func(t *testing.T) {
 			h := newHarness(t)
-			h.env.Getenv = func(string) string { return "" }
+			h.person()
 			if err := os.CopyFS(h.home, os.DirFS(filepath.Join(planDigestFixture(), "home"))); err != nil {
 				t.Fatal(err)
 			}
@@ -68,11 +70,26 @@ func TestPlanDigestRoundTrip(t *testing.T) {
 				t.Fatal("fixture folder must be relative to home")
 			}
 			folder := filepath.Join(h.home, filepath.FromSlash(transcript.Folder))
-			receiptPath := filepath.Join(folder, "approval.json")
 			if scenario.RemoveReceipt {
-				if err := os.Remove(receiptPath); err != nil {
+				if err := os.Remove(filepath.Join(folder, "approval.json")); err != nil {
 					t.Fatal(err)
 				}
+			}
+			// The receipt of a step is the approval.json that grid approve writes beside
+			// the plan Job result: the nine keys the app's replay of this transcript reads.
+			jobResult := func() map[string]any {
+				out := map[string]any{}
+				data, err := os.ReadFile(filepath.Join(folder, "approval.json"))
+				if errors.Is(err, fs.ErrNotExist) {
+					return out
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal(data, &out); err != nil {
+					t.Fatal(err)
+				}
+				return out
 			}
 			tokens := map[string]string{"$home": h.home, "$folder": folder, "$task": transcript.Task}
 			expand := func(value string) string {
@@ -100,11 +117,12 @@ func TestPlanDigestRoundTrip(t *testing.T) {
 					for i, arg := range step.Argv {
 						args[i] = expand(arg)
 					}
-					before, err := os.ReadFile(receiptPath)
-					if err != nil && !os.IsNotExist(err) {
-						t.Fatal(err)
-					}
+					before := jobResult()
 					code := h.run(expand(transcript.Cwd), args...)
+					if args[0] == "approve" && code == 0 {
+						// The person has no lease: the holder's next pass accepts the answer.
+						holderPass(t, folder)
+					}
 					// Job render no longer depends on plan approval, so the recorded
 					// render exit and stderr (the removed refusal) are not asserted;
 					// the receipt checks below still run for those steps.
@@ -133,17 +151,9 @@ func TestPlanDigestRoundTrip(t *testing.T) {
 							tokens["$"+key] = value
 						}
 					}
-					receipt := map[string]any{}
-					data, err := os.ReadFile(receiptPath)
-					if err == nil {
-						if err := json.Unmarshal(data, &receipt); err != nil {
-							t.Fatal(err)
-						}
-					} else if !os.IsNotExist(err) {
-						t.Fatal(err)
-					}
-					if (args[0] != "approve" || code != 0) && !bytes.Equal(before, data) {
-						t.Error("read or rejected approval changed the receipt")
+					receipt := jobResult()
+					if (args[0] != "approve" || code != 0) && !reflect.DeepEqual(before, receipt) {
+						t.Error("read or rejected approval changed the Job result")
 					}
 					if len(receipt) > 0 && receipt["plan_hash"] != tokens["$hash"] {
 						t.Errorf("receipt plan_hash = %v, want %s", receipt["plan_hash"], tokens["$hash"])
@@ -152,7 +162,8 @@ func TestPlanDigestRoundTrip(t *testing.T) {
 						if receipt["plan_digest"] != tokens["$digest"] {
 							t.Errorf("receipt plan_digest = %v, want captured digest", receipt["plan_digest"])
 						}
-						for _, key := range []string{"task", "what", "plan_hash", "plan_digest", "note"} {
+						// task and what are fields of the event, not of the Job result.
+						for _, key := range []string{"plan_hash", "plan_digest", "note"} {
 							if slices.Contains(args, "--json") && stdout[key] != receipt[key] {
 								t.Errorf("stdout %s = %v, receipt = %v", key, stdout[key], receipt[key])
 							}

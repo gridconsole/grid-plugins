@@ -87,7 +87,11 @@ func (h Home) Note(level, name, topic, summary, body string) brain.Entry {
 	return e
 }
 
-// Approve records a real receipt for the current fixture plan, including reapproval.
+// Approve runs the compare-and-set of grid approve on the current fixture plan,
+// including reapproval, and writes its history line. It writes no approval
+// record: that is the result of the approve person Job in the Feed, which these
+// tests do not read. (internal/approvefix posts it; jobtest cannot import it,
+// because it reaches package job, whose own tests use jobtest.)
 func (h Home) Approve(t *testing.T) {
 	t.Helper()
 	text, err := (plan.Store{TaskDir: h.Task}).Read()

@@ -3,7 +3,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"os/exec"
@@ -25,44 +24,17 @@ func environmentFixture(t *testing.T) (*harness, string, string) {
 	h.write(filepath.Join(h.gridHome, "projects", "example", "project.md"), fmt.Sprintf("---\nid: example\nfolders:\n  - machine: %s\n    path: %q\nenvironments:\n  port_range: [44000, 44199]\n---\n", h.env.Machine, dir))
 	return h, task, dir
 }
-func TestPortsCommands(t *testing.T) {
+
+// Outside a task, the saved Job identifies it; a Job id in two tasks is refused.
+// This was covered through `grid ports claim`, removed by the owner's direction.
+func TestEnvUpRefusesAJobInTwoTasks(t *testing.T) {
 	h, task, _ := environmentFixture(t)
-	if code := h.run(task, "ports", "claim", "J-1", "--json"); code != 0 {
-		t.Fatalf("claim %d: %s", code, h.errb)
-	}
-	var r ports.Record
-	if err := json.Unmarshal(h.out.Bytes(), &r); err != nil {
-		t.Fatal(err)
-	}
-	if r.Start != 44000 || r.End != 44009 || r.Job != "J-1" || r.PID <= 0 {
-		t.Fatalf("claim: %+v", r)
-	}
-	if code := h.run(h.home, "ports", "list", "--json"); code != 0 {
-		t.Fatal(h.errb)
-	}
-	var listed []ports.Record
-	if err := json.Unmarshal(h.out.Bytes(), &listed); err != nil || len(listed) != 1 || listed[0] != r {
-		t.Fatalf("list: %s %v", h.out, err)
-	}
-	if code := h.run(task, "ports", "release", "J-1"); code != 0 {
-		t.Fatal(h.errb)
-	}
-	if code := h.run(h.home, "ports", "list", "--json"); code != 0 || h.out.String() != "[]\n" {
-		t.Fatalf("empty list: %s %s", h.out, h.errb)
-	}
-	if code := h.run(h.home, "ports", "gc"); code != 0 {
-		t.Fatal(h.errb)
-	}
-	// Outside a task, the saved Job identifies it; duplicates must be refused.
 	h.mkdir(filepath.Join(task, "jobs", "J-2"))
-	if code := h.run(h.home, "ports", "claim", "J-2"); code != 0 {
-		t.Fatal(h.errb)
-	}
 	other := filepath.Join(filepath.Dir(task), "T-2-dev")
 	h.write(filepath.Join(other, "task.md"), "---\nid: T-02\ntitle: Other\nproject: example\nstate: running\ncreated: 2026-11-08T10:00:00Z\n---\n")
 	h.write(filepath.Join(other, "intent.md"), "Other task.\n")
 	h.mkdir(filepath.Join(other, "jobs", "J-2"))
-	if code := h.run(h.home, "ports", "claim", "J-2"); code != 1 || !strings.Contains(h.errb.String(), "multiple tasks") {
+	if code := h.run(h.home, "env", "up", "J-2"); code != 1 || !strings.Contains(h.errb.String(), "multiple tasks") {
 		t.Fatalf("ambiguous: %d %s", code, h.errb)
 	}
 }
@@ -107,18 +79,18 @@ func TestEnvironmentCLI(t *testing.T) {
 	if code := h.run(task, "env", "down", "J-1"); code != 0 {
 		t.Fatal(h.errb)
 	}
-	if code := h.run(task, "ports", "list", "--json"); code != 0 || h.out.String() != "[]\n" {
-		t.Fatalf("ports remain: %s %s", h.out, h.errb)
+	if left, err := (ports.Store{GridHome: h.gridHome}).List(); err != nil || len(left) != 0 {
+		t.Fatalf("ports remain: %v %v", left, err)
 	}
 }
 func TestEnvironmentUsage(t *testing.T) {
 	h, task, _ := environmentFixture(t)
-	for _, args := range [][]string{{"ports", "unknown"}, {"ports", "claim"}, {"ports", "list", "extra"}, {"ports", "gc", "--json"}, {"env", "unknown"}, {"env", "up"}, {"env", "down", "J-1", "--json"}} {
+	for _, args := range [][]string{{"env", "unknown"}, {"env", "up"}, {"env", "down", "J-1", "--json"}} {
 		if code := h.run(task, args...); code != 2 {
 			t.Fatalf("%v: code %d, %s", args, code, h.errb)
 		}
 	}
-	for _, args := range [][]string{{"ports", "--help"}, {"ports", "claim", "--help"}, {"env", "--help"}, {"env", "down", "--help"}} {
+	for _, args := range [][]string{{"env", "--help"}, {"env", "down", "--help"}} {
 		if code := h.run(task, args...); code != 0 {
 			t.Fatalf("%v: %d %s", args, code, h.errb)
 		}

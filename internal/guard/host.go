@@ -11,7 +11,7 @@ import (
 var settingsFile = regexp.MustCompile(`(?i)^(?:settings\.json|\.settings\.lock)$`)
 var gateFile = regexp.MustCompile(`(?i)^(?:task\.md|workflows?\.md|approval(?:-ship|-preview)?\.json|refusal-R-[1-9][0-9]*\.json|\.task-write\.json|\.task\.lock)$`)
 
-const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, history.md, workflow.md, workflows.md, approval.json, approval-preview.json, approval-ship.json, refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid; an agent cannot approve or answer its own gate with the Write or Edit tool. Reading is allowed."
+const gateReason = "Gates are released by the person or the app, never by an agent: questions/ and its answers, task.md, history.md, workflow.md, workflows.md, the approval receipt files (approval*.json), refusal-R-n.json, .task-write.json, .task.lock and plan-revisions/ are written only by Grid; an agent cannot approve or answer its own gate with the Write or Edit tool. Reading is allowed."
 
 const switchReason = "The guards and agent settings are the person's: <home>/settings.json, projects/<name>/settings.json and .settings.lock are written only by Grid; an agent cannot turn a guard off with the Write or Edit tool. Reading is allowed."
 

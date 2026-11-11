@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/approvefix"
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/plan"
+	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 )
 
 func planFixture(t *testing.T, name string) string {
@@ -243,8 +245,11 @@ func TestPlanMigrateDryRun(t *testing.T) {
 }
 
 func TestPlanMigrateApproval(t *testing.T) {
+	// The approval is the result of the plan Job (a person Job of kind approve); the
+	// approval-ship.json variant is gone with the ship receipt, which nothing wrote
+	// or read any more (verdict 12).
 	for _, fixture := range []string{"form-b", "form-c"} {
-		for _, approvalFile := range []string{"approval.json", "approval-ship.json"} {
+		for _, approvalFile := range []string{"plan Job result"} {
 			for _, tc := range []struct {
 				name, hash string
 				yes        bool
@@ -259,12 +264,12 @@ func TestPlanMigrateApproval(t *testing.T) {
 					task := planTask(h)
 					old := planFixture(t, "legacy/"+fixture+".md") + "\nRecall: nothing found\n"
 					h.write(filepath.Join(task, "plan.md"), old)
-					hash := tc.hash
-					if hash == "matching" {
-						hash = plan.Hash(old)
+					taskHeader(t, task)
+					approved := old
+					if tc.hash != "matching" {
+						approved = "# A plan the person approved before it changed\n"
 					}
-					approval := "{\"plan_hash\":\"" + hash + "\"}\n"
-					h.write(filepath.Join(task, approvalFile), approval)
+					approvefix.Approve(t, task, approved, "")
 					args := []string{"plan", "migrate"}
 					if tc.yes {
 						args = append(args, "--yes")
@@ -290,9 +295,8 @@ func TestPlanMigrateApproval(t *testing.T) {
 							t.Fatal("old approval still matches migrated plan")
 						}
 					}
-					data, err := os.ReadFile(filepath.Join(task, approvalFile))
-					if err != nil || string(data) != approval {
-						t.Fatal("approval changed")
+					if a, _ := taskstore.ApprovalFromJob(task); a.PlanHash != plan.Hash(approved) || a.PlanDigest != plan.Digest(approved) {
+						t.Fatalf("approval changed: %+v", a)
 					}
 				})
 			}
@@ -413,13 +417,15 @@ func TestPlanMigrateLegacyFrontmatterRevision(t *testing.T) {
 }
 
 func TestPlanMigrateApprovalLocked(t *testing.T) {
-	for _, name := range []string{"approval.json", "approval-ship.json"} {
+	// The approval is installed as the plan Job result while the plan lock is held
+	// (the approval-ship.json variant is gone: no ship receipt is written or read).
+	for _, name := range []string{"plan Job result"} {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness(t)
 			task := planTask(h)
 			old := planFixture(t, "legacy/form-b.md")
 			h.write(filepath.Join(task, "plan.md"), old)
-			h.write(filepath.Join(task, name), "incomplete JSON")
+			taskHeader(t, task)
 			done := make(chan int, 1)
 			var early, started bool
 			var code int
@@ -432,7 +438,8 @@ func TestPlanMigrateApprovalLocked(t *testing.T) {
 					early = true
 				case <-time.After(100 * time.Millisecond):
 				}
-				return os.WriteFile(filepath.Join(task, name), []byte(`{"plan_hash":"`+hash+`"}`), 0600)
+				approvefix.Approve(t, task, old, "")
+				return nil
 			})
 			if started && !early {
 				code = <-done

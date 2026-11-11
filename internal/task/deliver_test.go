@@ -47,8 +47,10 @@ func TestDeliverKeepsHeaderAndCommitsOnce(t *testing.T) {
 	path := filepath.Join(task.Path, "task.md")
 	before, _ := os.ReadFile(path)
 	beforeKeys := keyOrder(t, string(before))
-	approved, _ := os.ReadFile(filepath.Join(task.Path, "approval.json"))
-	receiptBefore := string(approved)
+	resultBefore, err := planJobResult(task.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	write(t, filepath.Join(task.Path, "history.md"), "- legacy entry\n")
 
 	summary := `Done: "ready" # not a comment`
@@ -104,9 +106,10 @@ func TestDeliverKeepsHeaderAndCommitsOnce(t *testing.T) {
 		t.Fatal("journal was not removed")
 	}
 	// The fixture's approval of the plan is the only one: delivery adds none.
-	if got, _ := os.ReadFile(filepath.Join(task.Path, "approval.json")); string(got) != receiptBefore {
-		t.Fatalf("delivery wrote approval.json: %s", got)
+	if got, err := planJobResult(task.Path); err != nil || got != resultBefore {
+		t.Fatalf("delivery changed the plan Job result: %+v -> %+v (%v)", resultBefore, got, err)
 	}
+	noReceiptFile(t, task.Path)
 	if _, err := os.Stat(filepath.Join(task.Path, "approval-ship.json")); !os.IsNotExist(err) {
 		t.Fatal("delivery wrote approval-ship.json")
 	}

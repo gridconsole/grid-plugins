@@ -212,7 +212,7 @@ func TestMigrateCurrentPlanIsNoOp(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := snapshot(t, s.TaskDir)
-	written, form, err := s.Migrate(false)
+	written, form, err := s.Migrate(false, nil)
 	if err != nil || form != "current" || written != (Written{}) {
 		t.Fatalf("got %+v %q %v", written, form, err)
 	}
@@ -233,7 +233,7 @@ func TestMigrateLegacyPlan(t *testing.T) {
 		s := testStore(t)
 		path := filepath.Join(s.TaskDir, "plan.md")
 		put(t, path, legacyText(t, "form-b"))
-		written, form, err := s.Migrate(false)
+		written, form, err := s.Migrate(false, nil)
 		if err != nil || form != "B" {
 			t.Fatalf("got %+v %q %v", written, form, err)
 		}
@@ -245,7 +245,7 @@ func TestMigrateLegacyPlan(t *testing.T) {
 			t.Fatalf("Written.Hash %q, want %q", written.Hash, Hash(now))
 		}
 		// A second run finds a current plan and does nothing.
-		again, form, err := s.Migrate(false)
+		again, form, err := s.Migrate(false, nil)
 		if err != nil || form != "current" || again != (Written{}) {
 			t.Fatalf("second run: %+v %q %v", again, form, err)
 		}
@@ -255,7 +255,7 @@ func TestMigrateLegacyPlan(t *testing.T) {
 		path := filepath.Join(s.TaskDir, "plan.md")
 		text := legacyText(t, "form-a")
 		put(t, path, text)
-		written, form, err := s.Migrate(false)
+		written, form, err := s.Migrate(false, nil)
 		want := "plan write requires Used: <note> or Recall: nothing found"
 		if err == nil || err.Error() != want || form != "A" || written != (Written{}) {
 			t.Fatalf("got %+v %q %v", written, form, err)
@@ -269,7 +269,7 @@ func TestMigrateLegacyPlan(t *testing.T) {
 		path := filepath.Join(s.TaskDir, "plan.md")
 		text := "---\nnot: a plan\n"
 		put(t, path, text)
-		written, _, err := s.Migrate(true)
+		written, _, err := s.Migrate(true, nil)
 		if err == nil || written != (Written{}) {
 			t.Fatalf("got %+v %v, want an Upgrade error", written, err)
 		}
@@ -282,7 +282,7 @@ func TestMigrateLegacyPlan(t *testing.T) {
 	})
 	t.Run("no plan", func(t *testing.T) {
 		s := testStore(t)
-		_, form, err := s.Migrate(false)
+		_, form, err := s.Migrate(false, nil)
 		if !errors.Is(err, os.ErrNotExist) || form != "" {
 			t.Fatalf("got %q %v", form, err)
 		}

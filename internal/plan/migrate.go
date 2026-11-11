@@ -1,17 +1,15 @@
 package plan
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
 	"path/filepath"
 )
 
 // Migrate upgrades the installed legacy plan under the same lock used by Write
-// and task approval. A matching plan or ship approval requires yes. Approval
-// records remain untouched and their old hashes no longer approve the new plan.
-func (s Store) Migrate(yes bool) (Written, string, error) {
+// and task approval. A plan that approved() names as approved requires yes. The
+// approval stays untouched and its old hash no longer approves the new plan.
+// approved returns the approved plan hash, or "" when there is none; nil means none.
+func (s Store) Migrate(yes bool, approved func() string) (Written, string, error) {
 	// Preserve the file-free no-op for current plans. The changing path reads
 	// and converts again under the lock, never installing this first snapshot.
 	text, err := s.Read()
@@ -41,27 +39,10 @@ func (s Store) Migrate(yes bool) (Written, string, error) {
 		if !HasRecall(converted) {
 			return errors.New("plan write requires Used: <note> or Recall: nothing found")
 		}
-		for _, name := range []string{"approval.json", "approval-preview.json", "approval-ship.json"} {
-			data, err := readRegular(filepath.Join(dir, name))
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			// Read only the hash projection: task owns the receipt schema and
-			// imports plan, so plan cannot depend on task.Event.
-			var receipt map[string]json.RawMessage
-			if err := json.Unmarshal(data, &receipt); err != nil {
-				return fmt.Errorf("%s: %w", name, err)
-			}
-			var hash string
-			if raw, ok := receipt["plan_hash"]; ok {
-				if err := json.Unmarshal(raw, &hash); err != nil {
-					return fmt.Errorf("%s: %w", name, err)
-				}
-			}
-			if hash == Hash(current) && !yes {
+		// The approved hash is the plan Job's result: task owns it and imports plan,
+		// so the caller supplies it.
+		if approved != nil && !yes {
+			if hash := approved(); hash != "" && hash == Hash(current) {
 				return errors.New("migration changes the approved plan; the plan will need approving again; use --yes to migrate")
 			}
 		}

@@ -11,11 +11,9 @@ import (
 // A task with no approved plan renders Jobs: the plan rule is gone.
 func TestJobsRenderWithoutApprovedPlan(t *testing.T) {
 	cases := map[string]func(t *testing.T, task string){
-		"unapproved plan": func(t *testing.T, task string) {
-			if err := os.Remove(filepath.Join(task, "approval.json")); err != nil {
-				t.Fatal(err)
-			}
-		},
+		// The fixture task has no approve person Job, which is the only approval
+		// record, so its plan is unapproved as it stands.
+		"unapproved plan": func(t *testing.T, task string) {},
 		"edited after approval": func(t *testing.T, task string) {
 			path := filepath.Join(task, "plan.md")
 			b, err := os.ReadFile(path)

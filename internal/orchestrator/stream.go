@@ -63,6 +63,14 @@ type Stream struct {
 	Model func(taskDir, role string) (model, effort string, err error)
 	// Probe judges whether a recorded holder process is gone; nil uses session.ProbeLocal.
 	Probe func(session.Live) session.ProcessState
+	// ReceiptPending and ReceiptMove move an old approval receipt of a task folder
+	// into its Feed, once, so a task that is only read still gets its approve
+	// person Job. The pass takes the task lease for it, so the move is a leased
+	// write and the approval takes effect at once. migrate imports this package, so
+	// the caller supplies them (migrate.ReceiptPending and migrate.ReceiptToJob).
+	// Both nil leaves receipts to grid approve.
+	ReceiptPending func(dir string) bool
+	ReceiptMove    func(dir string, w feed.Writer) error
 
 	Out  io.Writer // JSON lines
 	Diag io.Writer // one readable line per skip; nil discards
@@ -168,7 +176,12 @@ func (s *Stream) task(dir string) error {
 		s.skipped, s.sent, s.handed = map[string]string{}, map[string]bool{}, map[string]bool{}
 	}
 	name := filepath.Base(dir)
+	pending := s.ReceiptPending != nil && s.ReceiptMove != nil && s.ReceiptPending(dir)
 	taskID, err := feed.TaskID(dir)
+	if errors.Is(err, feed.ErrNoTaskID) && pending {
+		// An old task with a receipt gets its Feed here, as the move needs one.
+		taskID, err = feed.EnsureTaskID(dir)
+	}
 	if errors.Is(err, feed.ErrNoTaskID) {
 		delete(s.skipped, dir) // no Feed identity yet: nothing to schedule
 		return nil
@@ -184,7 +197,7 @@ func (s *Stream) task(dir string) error {
 	ts := lease.TaskStore{Feed: fs, Now: s.Now}
 	// A task whose Jobs are all closed is left alone unless this stream still
 	// holds its lease: then one more pass delivers the last wake and releases it.
-	if !hasOpenJob(snap) && !s.holds(ts) {
+	if !pending && !hasOpenJob(snap) && !s.holds(ts) {
 		delete(s.skipped, dir)
 		return nil
 	}
@@ -202,6 +215,11 @@ func (s *Stream) task(dir string) error {
 	w.Gen, w.Fence = got.Tenure.Gen, got.Tenure.Fence
 	if err := s.handover(fs, w, got); err != nil {
 		return s.skip(dir, taskID, SkipLeaseFailed, err)
+	}
+	if pending {
+		if err := s.ReceiptMove(dir, w); err != nil {
+			return s.skip(dir, taskID, SkipTickFailed, err)
+		}
 	}
 	// Capacity is confirmed for the holder, as job next --usage-ready does for its assignee, so a Job
 	// parked on usage_limit is offered again.
