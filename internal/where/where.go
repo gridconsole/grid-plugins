@@ -227,9 +227,12 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 			return "", "", ErrTaskNotFound
 		}
 		dir := filepath.Join(gridhome.TasksDir(gridHome, proj), task)
-		if _, err := os.Stat(dir); err != nil {
+		info, err := os.Stat(dir)
+		if err != nil || !info.IsDir() {
 			message := fmt.Sprintf("task folder %s does not exist", dir)
-			if os.IsNotExist(err) {
+			// A regular file where a task folder belongs is answered as a missing
+			// folder, as the id form does.
+			if err == nil || os.IsNotExist(err) {
 				return "", "", &LookupError{Kind: ErrTaskNotFound, Message: message}
 			}
 			return "", "", fmt.Errorf("%s", message)
