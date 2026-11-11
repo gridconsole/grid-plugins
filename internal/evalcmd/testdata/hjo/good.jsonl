@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"hjo-good","tools":["Read","Edit","Grep","Glob"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I read the file first, then change the constant."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"src/retry.go"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"1\tpackage retry\n2\t\n3\timport \"time\"\n4\t\n5\t// Delay is how long a caller waits between two tries.\n6\tconst Delay = 2 * time.Second\n7\t\n8\t// MaxTries is how many times a call is tried before it gives up.\n9\tconst MaxTries = 3\n"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_2","name":"Edit","input":{"file_path":"src/retry.go","old_string":"const MaxTries = 3","new_string":"const MaxTries = 5"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_2","content":"The file src/retry.go has been updated."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"MaxTries is now 5 at src/retry.go:9. I read the file before the edit; the Job's own line number was not used."}]}}
