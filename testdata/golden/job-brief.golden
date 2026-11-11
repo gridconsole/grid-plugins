@@ -52,9 +52,9 @@ follow_up: "none"
 
 ## Context
 
-- brain:project/export-format · uses · The export column order and compatibility rule. · Keep the documented column order stable for readers [person-team]
+- brain:project/export-format · uses · The export column order and compatibility rule. · Keep the documented column order stable for readers [agent]
 
-### Excerpt [person-team] (brain:project/export-format)
+### Excerpt [agent] (brain:project/export-format)
 
 > Keep the id column before the title column.
 > Changing the column order requires a recorded decision.

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/session"
@@ -139,7 +138,7 @@ func TestUsageHooksKeepNumbersAndFoldRetries(t *testing.T) {
 func TestRecallPointersReadDedupeAndPlanChange(t *testing.T) {
 	f := eventSetup(t)
 	s := brain.Store{GridHome: f.home}
-	n := brain.Note{Name: "cache", Topic: "decisions", Type: "convention", Description: "Use when changing cache configuration.", Summary: "Keep cache settings explicit.", Source: "task:T-01", Level: "home", Body: "PRIVATE BODY that must never be dumped.", Origin: brain.Origin{Tier: contract.PersonTeam, Kind: "session", ID: "session-demo"}}
+	n := brain.Note{Name: "cache", Topic: "decisions", Type: "convention", Description: "Use when changing cache configuration.", Summary: "Keep cache settings explicit.", Source: "task:T-01", Level: "home", Body: "PRIVATE BODY that must never be dumped.", Origin: brain.Origin{Kind: "session", ID: "session-demo"}}
 	if _, err := s.Propose(n, n.Origin); err != nil {
 		t.Fatal(err)
 	}

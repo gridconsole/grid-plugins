@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
@@ -58,7 +57,7 @@ func remainingTaskFixture(t *testing.T, command string) (*harness, task.Task, ta
 		addDeliveryProof(t, h, shared.Path)
 	}
 	if strings.HasPrefix(command, "brain ") {
-		n := brain.Note{Name: "lesson", Topic: "conventions", Type: "reference", Description: "When checking changes", Summary: "Run the checks", Source: shared.ID, Level: "project", Status: "accepted", Origin: brain.Origin{Kind: "session", ID: "example", Tier: contract.Agent}, Body: "Run checks before landing.\n"}
+		n := brain.Note{Name: "lesson", Topic: "conventions", Type: "reference", Description: "When checking changes", Summary: "Run the checks", Source: shared.ID, Level: "project", Status: "accepted", Origin: brain.Origin{Kind: "session", ID: "example"}, Body: "Run checks before landing.\n"}
 		b, err := brain.Encode(n)
 		if err != nil {
 			t.Fatal(err)

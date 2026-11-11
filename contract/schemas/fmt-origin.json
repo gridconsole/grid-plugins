@@ -20,21 +20,11 @@
       "not": {
         "pattern": "^[\t\n\u000b\f\r    -     　]*$"
       }
-    },
-    "tier": {
-      "type": "string",
-      "enum": [
-        "person-team",
-        "person-guest",
-        "agent",
-        "external"
-      ]
     }
   },
   "required": [
     "kind",
-    "id",
-    "tier"
+    "id"
   ],
   "additionalProperties": false
 }

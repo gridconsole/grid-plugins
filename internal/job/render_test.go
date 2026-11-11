@@ -192,7 +192,7 @@ func TestTiersFollowTheSource(t *testing.T) {
 	src := got.Inputs.Resolver()
 	want := map[string]contract.TrustTier{
 		"intent.md#request": contract.PersonTeam, "plan.md#step-1": contract.Agent,
-		"task:research.md#format": contract.External, "brain:project/export-format": contract.PersonTeam,
+		"task:research.md#format": contract.External, "brain:project/export-format": contract.Agent,
 	}
 	for p, tier := range want {
 		if s, ok := src[p]; !ok || s.Tier != tier || s.Text == "" || s.PointerOnly {
@@ -215,7 +215,7 @@ func TestTiersFollowTheSource(t *testing.T) {
 
 func TestPersonalNotesAreNeverCopied(t *testing.T) {
 	j, f, h := sample(t)
-	h.Note("home", "my-habits", "decisions", "HOME-SUMMARY-MARKER", "HOME-BODY-MARKER\n", contract.PersonTeam)
+	h.Note("home", "my-habits", "decisions", "HOME-SUMMARY-MARKER", "HOME-BODY-MARKER\n")
 	j.Keep = append(j.Keep, "brain:home/my-habits")
 	got, e := job.Render(j, job.RenderOptions{Resolver: f})
 	if e != nil {

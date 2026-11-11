@@ -518,7 +518,7 @@ func configureTickStore(env Env, s *orchestrator.Store, project, taskID string) 
 		if _, err := bs.Proposal("project", name); err == nil {
 			return nil
 		}
-		_, err := bs.Propose(brain.Note{Name: name, Topic: "incidents", Type: "incident", Level: "project", Description: "Three attempts made no progress", Summary: "Inspect the failed attempts before retrying this Job.", Source: taskID + "/" + job, Body: strings.Join(exits, "\n")}, brain.Origin{Kind: "job", ID: job, Tier: contract.Agent})
+		_, err := bs.Propose(brain.Note{Name: name, Topic: "incidents", Type: "incident", Level: "project", Description: "Three attempts made no progress", Summary: "Inspect the failed attempts before retrying this Job.", Source: taskID + "/" + job, Body: strings.Join(exits, "\n")}, brain.Origin{Kind: "job", ID: job})
 		return err
 	}
 }

@@ -106,9 +106,9 @@ func TestFormatOriginWriter(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := brain.Origin{Kind: "session", ID: n.Origin.ID, Tier: contract.Agent}
+			want := brain.Origin{Kind: "session", ID: n.Origin.ID}
 			if external {
-				want.Kind, want.Tier = "import", contract.External
+				want.Kind = "import"
 			}
 			if n.Origin != want || n.Origin.ID == "" || n.Origin.ID == "body-supplied" {
 				t.Fatalf("body selected origin: %+v", n.Origin)
@@ -180,7 +180,7 @@ func TestFormatOriginLegacyRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if upgraded.Origin.Kind != "import" || upgraded.Origin.Tier != contract.External || upgraded.Origin.ID == "" || upgraded.Body != n.Body {
+	if upgraded.Origin.Kind != "import" || upgraded.Origin.ID == "" || upgraded.Body != n.Body {
 		t.Fatalf("legacy import did not normalize provenance: %+v", upgraded)
 	}
 	if err := upgraded.Validate(); err != nil {

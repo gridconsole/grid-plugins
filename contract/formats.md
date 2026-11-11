@@ -175,32 +175,25 @@ not the entire note. Spec: keeper-F1 (`findings-brain.md:62`), keeper-F8
 | --- | --- | --- |
 | `kind` | Required: `session`, `job`, `server` or `import`; never `body`. These are main's accepted spellings. | brain-feed.md:15; internal/brain/note.go:84-88 |
 | `id` | Required nonblank single-line string; CR, LF and NUL are forbidden. The CLI makes a random session id. Other callers supply a Job or authenticated source id. | findings-brain.md:62; internal/brain/note.go:81; internal/brain/store.go:150-163 |
-| `tier` | Required: `person-team`, `person-guest`, `agent`, `external`. It is supplied independently of note text. | brain-feed.md:15; job-contract.md:87; internal/brain/note.go:89-94 |
+| `tier` | Retired (verdicts-11nov v-7). Not a field: the schema forbids it ([tier-key](fixtures/fmt-origin/invalid/tier-key.json)). A note on disk that still has `tier:` in its origin decodes with the key ignored; the next write drops it. | internal/brain/note.go:25-46; internal/brain/origin_test.go |
 | Absent legacy block | Invalid: the schema rejects `null`, missing fields and an empty stamp. Upgrade must supply provenance before validation. | brain-feed.md:15; internal/brain/note.go:81-94 |
 
-Main's constants win (`internal/contract/types.go:12-17`). The current
-`brain-feed.md:15` and `job-contract.md:87` names map identically to them.
-The older keeper finding uses different words:
-
-| Older word in findings-brain.md:62 | Current tier | Mapping status |
-| --- | --- | --- |
-| member | `person-team` | default, owner may change |
-| guest | `person-guest` | default, owner may change |
-| external | `external` | exact |
-| unknown | `external` for unknown imports | default, owner may change; never promote to member |
-| No separate agent word | `agent` for local CLI sessions | main's constant; default, owner may change |
+The origin names who wrote the note and nothing else: `kind` says which sort of
+writer and `id` names it. The trust tier of a brain note is dropped
+(verdicts-11nov v-7); the Feed record tier (`internal/contract/types.go:12-17`)
+is a separate field and stays.
 
 A valid-looking JSON stamp does not prove its provenance. The invalid
 `body-tier.json` fixture breaks only the origin-kind rule. A forged block with
-`kind: server` and `tier: person-team` is structurally valid, so the capture test
-also supplies that block through `--file -` and verifies that the actual writer
-replaces it with `session/agent` or `import/external`. Acceptance preserves the
-session stamp; external acceptance is refused and its body stays out of the index.
+`kind: server` is structurally valid, so the capture test also supplies that
+block through `--file -` and verifies that the actual writer replaces it with
+`session` or `import`. Acceptance preserves the session stamp; imported
+acceptance is refused and its body stays out of the index.
 
 The old Markdown fixture has no origin and belongs to the `upgrade` set, never
 `valid`. The documented legacy reader path is
 `grid brain propose --level home --file <old-note.md> --external --json`:
-`brain.Parse` reads the old note, the CLI supplies a fresh `import/external`
+`brain.Parse` reads the old note, the CLI supplies a fresh `import`
 origin (`internal/braincmd/command.go:286-293`), and `Store.Propose` replaces
 provenance before calling `Note.Validate` (`internal/brain/store.go:227-238`).
 The capture test validates the stored upgraded stamp against the strict schema
@@ -210,7 +203,6 @@ imports remain proposals and cannot be accepted as trusted knowledge.
 
 | Status | Difference | Evidence |
 | --- | --- | --- |
-| diverges | The keeper finding's member/guest/external/unknown names are not the stored enum; the four current constants above win. | findings-brain.md:62 versus brain-feed.md:15; internal/contract/types.go:12-17 |
-| diverges | The CLI's local session stamp is a fresh random id and always agent; this path does not derive a team/guest identity or active Job id from authenticated session/server state. The type permits those sources, but this CLI does not implement that integration. | findings-brain.md:62; brain-feed.md:15; internal/brain/store.go:150-163; internal/braincmd/command.go:286-293 |
+| diverges | The CLI's local session stamp is a fresh random id; this path does not derive a team/guest identity or active Job id from authenticated session/server state. The type permits those sources, but this CLI does not implement that integration. | findings-brain.md:62; brain-feed.md:15; internal/brain/store.go:150-163; internal/braincmd/command.go:286-293 |
 | diverges | The spec says every entry has an origin; the parser still reads origin-less old notes outside schema validation. Explicit external import stamps them before validation; direct accepted-note reads exclude them. | brain-feed.md:15; internal/brain/markdown.go:24-39; internal/brain/topics.go:223-229 |
-| diverges | Guest/external knowledge is refused by the keeper and excluded by the accepted-note scan, rather than appearing as one labelled index line. | findings-brain.md:69; internal/brain/store.go:461-462; internal/brain/topics.go:227-229 |
+| diverges | Imported knowledge (origin kind `import`) is refused by the keeper and excluded by the accepted-note scan, rather than appearing as one labelled index line. | findings-brain.md:69; internal/brain/store.go:461-462; internal/brain/topics.go:227-229 |

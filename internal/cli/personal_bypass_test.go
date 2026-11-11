@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/golden"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/task"
@@ -102,7 +101,7 @@ func TestPersonalBypassBrain(t *testing.T) {
 	for _, verb := range []string{"show", "search", "keep", "decide"} {
 		t.Run(verb, func(t *testing.T) {
 			h, cwd, personal := bypassFixture(t)
-			proposal, err := brain.Encode(brain.Note{Name: "P-1", Topic: "decisions", Type: "reference", Description: "When checking changes", Summary: "Run the checks", Source: "T-01", Level: "home", Status: "proposed", Origin: brain.Origin{Kind: "session", ID: "example", Tier: contract.Agent}, Body: "Run checks before landing.\n"})
+			proposal, err := brain.Encode(brain.Note{Name: "P-1", Topic: "decisions", Type: "reference", Description: "When checking changes", Summary: "Run the checks", Source: "T-01", Level: "home", Status: "proposed", Origin: brain.Origin{Kind: "session", ID: "example"}, Body: "Run checks before landing.\n"})
 			if err != nil {
 				t.Fatal(err)
 			}
