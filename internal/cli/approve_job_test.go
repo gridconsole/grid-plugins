@@ -140,9 +140,6 @@ func TestApproveWaitsForTheAfterJob(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(path, "task.md"), []byte(md), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code := h.run(path, "job", "post", "--type", "job", "--job", "J-1", "--body", personBody(t, "J-1", nil)); code != 0 {
-		t.Fatalf("%d %s", code, h.errb.String())
-	}
 	var body map[string]any
 	if err := json.Unmarshal([]byte(personBody(t, "J-2", []any{"J-1"})), &body); err != nil {
 		t.Fatal(err)

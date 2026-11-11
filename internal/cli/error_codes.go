@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/signal"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -29,6 +30,8 @@ const (
 	// CodeWorkflowFileChanged means a workflow file changed since the caller read
 	// its revision; nothing was written.
 	CodeWorkflowFileChanged = "workflow_file_changed"
+	// CodeJobExists means a Job post named a Job id the Feed already holds.
+	CodeJobExists = "job_exists"
 )
 
 func errorCode(err error) string {
@@ -47,6 +50,8 @@ func errorCode(err error) string {
 		return CodeInvalidArgument
 	case errors.Is(err, workflow.ErrChanged):
 		return CodeWorkflowFileChanged
+	case errors.Is(err, feed.ErrJobExists):
+		return CodeJobExists
 	default:
 		return ""
 	}
