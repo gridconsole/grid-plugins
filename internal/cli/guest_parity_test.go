@@ -429,7 +429,7 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 		case "signal act", "signal dismiss", "signal move":
 			want = guestParityOutput{3, "", "grid: guests cannot act on signals\n"}
 			if mode == "json" {
-				want.Stdout = "{\"error\":\"refused\",\"message\":\"guests cannot act on signals\"}\n"
+				want.Stdout = "{\"error\":\"refused\",\"message\":\"guests cannot act on signals\",\"code\":\"guest_refused\"}\n"
 			}
 		case "workflow write":
 			want = guestParityOutput{3, "", "grid workflow write: caller role is not allowed to write workflows\n"}

@@ -285,8 +285,8 @@ var hfFsRefusals = []struct {
 	open bool // known open: signal.go:238 passes errorCode(err), "" per error_codes.go:44-45
 }{
 	{"no-such-note", []string{"signal", "act", "S-01ARZ3NDEKTSV4RRFFQ69G5FAW", "--project", "example"}, false},
-	{"not-snoozed", []string{"signal", "act", actID, "--project", "example", "--act", "wake"}, true},
-	{"already-there", []string{"signal", "move", actID, "--project", "example", "--to", "example"}, true},
+	{"not-snoozed", []string{"signal", "act", actID, "--project", "example", "--act", "wake"}, false},
+	{"already-there", []string{"signal", "move", actID, "--project", "example", "--to", "example"}, false},
 }
 
 func TestHfFsKnownOpen(t *testing.T) {

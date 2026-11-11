@@ -22,9 +22,10 @@ by message wording. Each example below is read by `TestHfFsShapes`.
 
 2. **Signal object**, printed by `signal act`, `signal dismiss` and `signal move`.
    `error` is a category string and `message` is unprefixed and sometimes redacted. The
-   category `refused` exits 3 and its `code` is present only when the refusal is
-   classified (`no_such_project`, `no_such_note`); a refusal such as "this note is not
-   snoozed" prints no `code`. The category `invalid` exits 2 and always carries
+   category `refused` exits 3 and always carries a `code`: `no_such_project`,
+   `no_such_note`, `no_such_task`, `guest_refused`, `note_state` (the note's status
+   does not allow the act or move, such as "this note is not snoozed"), `note_exists`
+   or `notes_full`. The category `invalid` exits 2 and always carries
    `code: "invalid_argument"`.
 
 <!-- shape:signal-refused -->
@@ -70,6 +71,9 @@ during `task show` exits 1.
 | `no_such_project` | A requested project is missing or inaccessible. |
 | `no_such_task` | A requested task is missing or inaccessible. |
 | `no_such_note` | A signal/inbox note does not exist. |
+| `note_state` | A signal note's status does not allow the act or move (not snoozed, not decided, already decided); nothing was written and it exits 3. |
+| `note_exists` | A signal move found the note already in the target project; nothing was written and it exits 3. |
+| `notes_full` | A signal move found the target notes folder already holding 4000 files; nothing was written and it exits 3. |
 | `person_required` | The existing person gate refused the request. |
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
 | `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
@@ -80,8 +84,9 @@ during `task show` exits 1.
 | `write_failed` | Writing a settings file failed. |
 | `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
+| `guest_refused` | The caller is refused as a guest (role guest, external or an unknown role); nothing was written. |
 
-The first six constants live in `internal/cli/error_codes.go` and the settings
+The first ten constants live in `internal/cli/error_codes.go` and the settings
 codes in `internal/settings/claude_user.go`; `person_required` and `job_waiting` are
 written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
 and `internal/cli/task_write.go`. `TestHfFsCodeTable` keeps this table equal to that set.
