@@ -220,7 +220,9 @@ func TestUpHealthTimeoutHonorsStopGrace(t *testing.T) {
 	const timeout = 100 * time.Millisecond
 	port := freeBlock(t)
 	c := Config{
-		Command:   "trap '' INT TERM; : > helper.ready; exec sleep 60",
+		// The helper records each signal and survives it: the sleep child dies of
+		// the group signal, the loop starts the next one. Only SIGKILL ends it.
+		Command:   "trap 'echo INT >> signals.log' INT; trap 'echo TERM >> signals.log' TERM; : > helper.ready; while :; do sleep 1; done",
 		HealthURL: "http://127.0.0.1:{port}/health",
 		Timeout:   timeout.String(),
 		PortRange: []int{port, port + 9},
@@ -230,23 +232,18 @@ func TestUpHealthTimeoutHonorsStopGrace(t *testing.T) {
 			t.Error(err)
 		}
 	})
+	// helper.ready is a FIFO: the helper's open for writing blocks until the test
+	// opens it for reading, and the script reaches it only after both traps are set.
+	ready := filepath.Join(m.Dir, "helper.ready")
+	if err := syscall.Mkfifo(ready, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	// Start the helper before timing Up so startup cannot hide missing grace
-	// waits. It ignores both signals and never listens on the health port.
+	// waits. It records both signals and never listens on the health port.
 	if _, _, err := m.start("J-1", c); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if _, err := os.Stat(filepath.Join(m.Dir, "helper.ready")); err == nil {
-			break
-		} else if !errors.Is(err, os.ErrNotExist) {
-			t.Fatal(err)
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("helper did not install signal handlers")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	ksEgAwaitReady(t, ready)
 	started := time.Now()
 	_, err := m.Up(context.Background(), "J-1", c)
 	stopElapsed := time.Since(started) - timeout
@@ -257,7 +254,59 @@ func TestUpHealthTimeoutHonorsStopGrace(t *testing.T) {
 	if stopElapsed < 2*m.Grace {
 		t.Errorf("stop phase took %s, want at least %s (two grace periods)", stopElapsed, 2*m.Grace)
 	}
+	// Up has returned, so the group is gone and the log is complete.
+	const wantSignals = "INT\nTERM\n"
+	if got, err := os.ReadFile(filepath.Join(m.Dir, "signals.log")); err != nil || string(got) != wantSignals {
+		t.Errorf("signals.log = %q (read error %v), want %q", got, err, wantSignals)
+	}
 	assertEmpty(t, m.Ports)
+}
+
+// ksEgHangCtx is the only deadline on a wait whose event is a process action: it
+// ends just before the test would time out, so the test fails with its own
+// message instead of a go test timeout panic. It never ends sooner because the
+// machine is slow; the wait itself is the event.
+func ksEgHangCtx(t *testing.T) context.Context {
+	t.Helper()
+	deadline, ok := t.Deadline()
+	if !ok {
+		return context.Background()
+	}
+	end := deadline.Add(-time.Until(deadline) / 10)
+	if limit := time.Now().Add(time.Minute); end.After(limit) {
+		end = limit
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), end)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+// ksEgAwaitReady returns once the helper has opened the FIFO for writing, which
+// its script does only after the signal traps are in place.
+func ksEgAwaitReady(t *testing.T, fifo string) {
+	t.Helper()
+	opened := make(chan error, 1)
+	go func() {
+		f, err := os.Open(fifo)
+		if err == nil {
+			err = f.Close()
+		}
+		opened <- err
+	}()
+	// If the helper never opens, a non-blocking open for writing frees the reader.
+	t.Cleanup(func() {
+		if w, err := os.OpenFile(fifo, os.O_WRONLY|syscall.O_NONBLOCK, 0); err == nil {
+			_ = w.Close()
+		}
+	})
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ksEgHangCtx(t).Done():
+		t.Fatal("helper did not install signal handlers")
+	}
 }
 
 func TestBadConfigAndFailedStart(t *testing.T) {
