@@ -34,6 +34,11 @@ type Source struct {
 	Updated     string             `json:"updated,omitempty"`
 	Links       []Link             `json:"links,omitempty"`
 	PointerOnly bool               `json:"pointer_only,omitempty"`
+	// Shown is how the rendered brief used the source: text, excerpt, summary or
+	// pointer. Render sets it, the strongest use winning; a source the brief did
+	// not use at all has none. Text stays whatever the mode, so a replay rebuilds
+	// the same brief.
+	Shown string `json:"shown,omitempty"`
 }
 type Resolver interface {
 	Resolve(pointer string) (Source, error)

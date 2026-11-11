@@ -100,7 +100,8 @@ with the sync owner; the preservation rule above is frozen as the default.
 
 Schema: [fmt-job-render.json](schemas/fmt-job-render.json).
 Fixtures: [full](fixtures/fmt-job-render/valid/full.json),
-[elided](fixtures/fmt-job-render/valid/elided.json).
+[elided](fixtures/fmt-job-render/valid/elided.json),
+[written before `shown`](fixtures/fmt-job-render/valid/written-by-main.json).
 
 Files: `<task>/jobs/<job-id>/brief.md` and adjacent `inputs.json`. The same
 immutable bundle contains `job.yaml`, which currently contains JSON Job metadata;
@@ -136,6 +137,8 @@ that the saved prompt exists. No hash is substituted for text.
 | `.state`, `.topic`, `.updated` | Optional source lifecycle/topic/update strings; omitted when empty. `updated` is copied metadata, not constrained to a timestamp here. | internal/job/source.go:24,30-31,166,216-217; brain-feed.md:278 |
 | `.links` | Optional array of source links; each has string `to`, `rel`, `why`. | internal/job/source.go:32,167-168; brain-feed.md:278 |
 | `.pointer_only` | Optional boolean, emitted when true for home notes; text, summary, digest and links are not copied. | internal/job/source.go:33,161-164; brain-feed.md:285-286 |
+| `.shown` | Optional string, how the brief used the source: `text` (intent sources and the previous acceptance, pasted in full), `excerpt` (a brain note's text after its pointer line), `summary` (a pointer or read line shows the summary), `pointer` (the line names the path or id and nothing of the file). The strongest use wins when a source is used twice (text > excerpt > summary > pointer). Absent when the brief did not use the source, such as a brain note cut by the budget, and in files written before this field. `text` stays in every source whatever `shown` says, so replay rebuilds the same brief. | internal/job/render.go (`Shown*`, `Render`); internal/job/source.go (`Source.Shown`) |
+| `inputs.brief_bytes`, `inputs.pasted_chars` | Optional integers, absent in files written before them. `brief_bytes` is `len(brief)`; `pasted_chars` is the rune count of source text written into the brief (intent sources, excerpts, the previous acceptance), so it is below the summed `sources[].text` whenever a source was only summarised or named. | internal/job/render.go (`Inputs`, `Render`) |
 
 The source fields follow the writer's shape, including empty text/digest for
 personal pointers. The schema does not verify digests, pointer resolution or
