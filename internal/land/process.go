@@ -44,9 +44,9 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 
 // outputPipes are the stdout and stderr pipes of one deploy command. runProcess
 // owns both ends of each, so exec starts no copy goroutines and Wait returns
-// when the command exits, not when its output has been copied. There is no
-// WaitDelay: Cancel ends the whole group (Unix) or tree (Windows), and Wait has
-// no copy goroutine left to give up on.
+// when the command exits, not when its output has been copied. exec gets no
+// wait delay: Cancel ends the whole group (Unix) or tree (Windows), and Wait
+// has no copy goroutine left to give up on.
 type outputPipes struct {
 	outR, outW, errR, errW *os.File
 	readers                sync.WaitGroup
