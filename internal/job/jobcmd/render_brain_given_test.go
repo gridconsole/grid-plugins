@@ -84,20 +84,34 @@ func TestRenderLogsBrainGivenOnce(t *testing.T) {
 	})
 	out, errs := newBuffers()
 	e.Stdout, e.Stderr = out, errs
-	call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
+	r := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
+	carried := []string{"brain:project/deploy", "brain:project/export-format"}
+	brief, err := os.ReadFile(r.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Prove each logged note is really in the brief the agent gets.
+	for _, want := range []string{"Run the deploy script from the release branch.", "Keep the id column before the title column."} {
+		if !strings.Contains(string(brief), want) {
+			t.Fatalf("the brief does not carry %q; the given lines would not match it", want)
+		}
+	}
 	all := historyLines(t, hist)
 	got := given(all)
-	if len(got) != 1 {
-		t.Fatalf("want exactly one brain given line, got %d in %q", len(got), all)
+	// One line per note the brief carries: the linked deploy note, and the
+	// export-format note that recall adds because it matches the Job's title
+	// ("Export documentation"). Both are pasted into the brief, so both are given.
+	if len(got) != len(carried) {
+		t.Fatalf("want one brain given line per carried note (%d), got %d in %q", len(carried), len(got), all)
 	}
-	for _, want := range []string{" · brain given · brain:project/deploy · by grid job render · via J-1"} {
-		if !strings.HasSuffix(got[0], want) {
-			t.Errorf("line %q does not end with %q", got[0], want)
+	for i, want := range carried {
+		if !strings.HasSuffix(got[i], " · brain given · "+want+" · by grid job render · via J-1") {
+			t.Errorf("line %q does not end with the line for %s", got[i], want)
 		}
 	}
 	// The same Job rendered again with unchanged inputs adds nothing.
 	call(t, e, out, errs, 0, "render", "T-01", "J-1", "--json")
-	if again := given(historyLines(t, hist)); len(again) != 1 {
+	if again := given(historyLines(t, hist)); len(again) != len(carried) {
 		t.Fatalf("second render changed the brain given lines: %q", again)
 	}
 	_ = taskDir
@@ -218,8 +232,8 @@ func TestRenderBrainGivenAmongConcurrentHistoryAppends(t *testing.T) {
 	call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
 	wg.Wait()
 	lines := historyLines(t, hist)
-	if len(given(lines)) != 1 {
-		t.Fatalf("want one brain given line, got %q", given(lines))
+	if len(given(lines)) != 2 {
+		t.Fatalf("want one brain given line for deploy and one for the recalled export-format, got %q", given(lines))
 	}
 	for w := 0; w < writers; w++ {
 		for i := 0; i < each; i++ {
