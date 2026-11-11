@@ -124,6 +124,7 @@ type Attempt struct {
 	State  string `json:"state"`
 	Exit   string `json:"exit,omitempty"`
 }
+
 // Orphan kinds: a Job that nobody is working and nothing will move by itself.
 const (
 	OrphanNeverPickedUp = "never_picked_up"
