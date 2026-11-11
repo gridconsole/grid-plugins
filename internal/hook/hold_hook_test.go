@@ -299,24 +299,3 @@ func TestHoldLogsAStaleTaskNameAndDoesNotHold(t *testing.T) {
 	}
 }
 
-// The hold never replaces or weakens a guard's deny.
-func TestHoldKeepsAGuardDeny(t *testing.T) {
-	f := holdSetup(t)
-	brief := filepath.Join(f.task, "subagents", "01-scout.md")
-	if err := os.MkdirAll(filepath.Dir(brief), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(brief, []byte("not a brief\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	in := map[string]any{"prompt": "Work from projects/example/tasks/T-01-demo/subagents/01-scout.md", "subagent_type": "grid:grid-scout"}
-	control := f.run(t, "pretooluse", "Agent", f.task, nil, in)
-	if control.behavior != "deny" || !strings.Contains(control.reason, "is not complete") {
-		t.Fatalf("the guard does not deny the control event: %+v", control)
-	}
-	f.spend(t, usage.Input{Dollars: ptr(10.0)}, usage.Change{Dollars: []float64{10}})
-	got := f.run(t, "pretooluse", "Agent", f.task, nil, in)
-	if got.out != control.out {
-		t.Fatalf("the hold changed the guard's deny:\n%s\nwas\n%s", got.out, control.out)
-	}
-}

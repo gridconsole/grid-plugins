@@ -73,7 +73,7 @@ func TestSessionStartSourcesAndEnvironment(t *testing.T) {
 				t.Fatalf("exit %d", code)
 			}
 			context := contextFrom(t, out)
-			for _, want := range []string{"GRID_HOME", "GRID_PROJECTS", "Grid project: example", "Task files are written by grid", "grid-builder changes files", "terminal outside Claude Code or Codex"} {
+			for _, want := range []string{"GRID_HOME", "GRID_PROJECTS", "Grid project: example", "Task files are written by grid", "terminal outside Claude Code or Codex"} {
 				if !strings.Contains(context, want) {
 					t.Errorf("missing %q: %s", want, context)
 				}

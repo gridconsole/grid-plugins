@@ -68,15 +68,17 @@ func TestSessionStartSyncIdempotent(t *testing.T) {
 	}
 }
 
-func TestSessionStartNamesBareAgents(t *testing.T) {
+// The agent routing line was removed from the session start text (verdict v-2),
+// so a real session start names no agent at all, bare or plugin-qualified.
+func TestSessionStartNamesNoAgents(t *testing.T) {
 	run, _ := syncSession(t)
 	context := run()
 	if strings.Contains(context, "grid:grid-") {
 		t.Errorf("context names plugin-qualified agents, which sync does not write: %s", context)
 	}
 	for _, name := range []string{"scout", "researcher", "builder", "runner", "reviewer", "designer", "checker", "operator", "planner", "curator", "library"} {
-		if !strings.Contains(context, "grid-"+name+" ") {
-			t.Errorf("context lacks grid-%s: %s", name, context)
+		if strings.Contains(context, "grid-"+name) {
+			t.Errorf("context still names grid-%s: %s", name, context)
 		}
 	}
 }
