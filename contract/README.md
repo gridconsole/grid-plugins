@@ -181,7 +181,7 @@ id pattern and type registrations so no second copy is needed.
 
 The scheduler, lease writer and renderer remain separate responsibilities. They
 check pid/start-time liveness, unknown liveness, sleep/wake, crash-loop progress,
-ready dependencies and cycles, gate timers/CI, review floors, usage holds, wake
+ready dependencies and cycles, gate timers/CI, usage holds, wake
 idempotency, and filesystem/process durability. This package does not perform
 those operations or claim the multiprocess spike fixtures pass. The fold accepts
 already-authorized task tenures; schemas and stamped roles are not authentication.

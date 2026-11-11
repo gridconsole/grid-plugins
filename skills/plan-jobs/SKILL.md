@@ -100,7 +100,7 @@ after:
 Then run, in this order:
 
 - `grid job lint <file> --task <task>` for each Job file;
-- `grid job cycles <items.json>` and `grid job floor <items.json>` for a list;
+- `grid job cycles <items.json>` for a list;
 - `grid plan check` for a plan;
 - `grid job post --task <task> --body <json>` once each check exits 0, after the Jobs it names in `after`.
 

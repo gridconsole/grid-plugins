@@ -51,9 +51,8 @@ ids are parsed.
 Each Job carries the names in `job.PlannedFields`, even when a list is empty.
 When omitted, `item` is N, `title` is the checklist title, `intent.item` is
 `plan.md#step-N`, and `intent.goal` is `plan.md#verify`. Explicit values are
-preserved. `intent.owner` must still be supplied. The optional per-Job floor
+preserved. `intent.owner` must still be supplied. The optional per-Job
 fields are `visible: big|small`, `irreversible: true|false`, and `review_reason`.
-A review below its floor requires a nonempty `review_reason`.
 
 ```markdown
 # Plan, rev 1 · 000000
@@ -99,7 +98,7 @@ excluding the heading and later paragraphs. Old `Verify:` sentences and
 heading-based item anchors do not substitute for these forms.
 
 `grid plan check [T-NN]` checks planned-field presence after derivation, unknown
-fields (including nested fields), review floors and exceptions, positive
+fields (including nested fields), the plain values of `risk`, `kind` and `visible`, write patterns, positive
 `verify.min_tests` with a named test command, duplicate item numbers and Job ids,
 dependency targets, and cycles. Non-code Jobs can use `file-exists` or
 `reviewer-check`. It prints one line per reported problem and exits 1 when any
