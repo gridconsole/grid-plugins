@@ -42,3 +42,5 @@ A Job agent now tells the task something with `grid job post`, which takes its J
 ## Budget
 
 The 60-call budget was passed (about 66 calls, many of them parallel reads and one batched proof run). I finished all rows rather than hand off a NOT DONE row; no work-in-progress bundle was written at call 35.
+
+DONE
