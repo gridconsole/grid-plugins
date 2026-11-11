@@ -160,6 +160,19 @@ func runWorkerNext(args []string, env Env) int {
 			st.Owner = owner
 		}
 	}
+	// The first Job a task is assigned moves it from queued to running, written as the
+	// stream's own member and role. Any other state is left as it is.
+	s.Assigned = func(dir, job string) error {
+		resolved, err := resolveTaskOperand(env, dir)
+		if err != nil {
+			return err
+		}
+		_, _, err = taskWriter(env).RunningFromQueued(taskstore.WriteOptions{
+			Cwd: env.Cwd, ID: resolved.ID, Note: job + " assigned",
+			Who: contract.Author{ID: member, Role: role},
+		})
+		return err
+	}
 	// The stream runs until SIGINT. It does not release the task leases then: the
 	// tenure names the worker's process, and the worker's next stream reuses it.
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
