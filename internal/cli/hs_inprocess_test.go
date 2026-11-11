@@ -81,19 +81,17 @@ var hsIpBinaryOnly = [][]string{
 	{"job", "verify"},
 	{"eval", "run"},
 	{"env", "up"},
-	{"land"},
-	{"agent", "sync"},
 	{"task", "attach", "x"},
 	{"lease", "take", "task", "--hold"},
-	{"task", "new", "x"},
 	{"mcp"},
 	{"hook"},
 	{"open"},
-	{"routine", "run", "x"},
+	{"routine", "schedule"},
 	{"account", "sign-in"},
 }
 
-// hsIpSafe are argv that only read and write the Grid home.
+// hsIpSafe are argv that only read and write the Grid home, or whose signals,
+// children and owner follow the Call.
 var hsIpSafe = [][]string{
 	{"version"},
 	{"where", "--json"},
@@ -103,6 +101,10 @@ var hsIpSafe = [][]string{
 	{"question", "list"},
 	{"approve", "--help"},
 	{"task", "--help"},
+	{"routine", "run", "x"},
+	{"land"},
+	{"task", "new", "x"},
+	{"agent", "sync"},
 }
 
 // hsIpUnknown are argv the table cannot answer.
@@ -122,7 +124,7 @@ func TestHsIpBinaryOnly(t *testing.T) {
 	// The same calls behind global flags, and with --hold spelled as the flag package accepts it.
 	for _, args := range [][]string{
 		{"--member", "m", "worker", "next"},
-		{"--grid-home=/g", "--role", "member", "land"},
+		{"--grid-home=/g", "--role", "member", "mcp"},
 		{"lease", "take", "task", "--task", "T-01", "-hold"},
 		{"lease", "take", "task", "--hold=true"},
 		{"account", "note", "--then", "true"},

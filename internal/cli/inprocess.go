@@ -25,21 +25,22 @@ type hsIpSub struct {
 // hsIpTable answers, per verb of commands(), whether a call may run inside a host
 // process through lib.Run. A binary-only entry is one that waits on a signal of
 // the process, records the process id as an owner, serves or reads the host's
-// own streams, opens the host's browser, or starts a child with the host's
-// environment. Every other verb reads and writes the Grid home and answers yes.
+// own streams, opens the host's browser, starts a child with the host's
+// environment, or writes a system schedule for the host's executable. Every
+// other verb reads and writes the Grid home, or takes its signals, children and
+// owner from the Call, and answers yes.
 var hsIpTable = map[string]hsIpVerb{
 	"version": {},
 	"where":   {},
-	// cli.go:105 and open.go:67: opens the system browser and may start the app.
+	// cli.go:132 and open.go:67: opens the system browser and may start the app.
 	"open":   {why: "opens the browser and may start the app (open.go:67, open_start.go:216)"},
 	"doctor": {},
-	// cli.go:107: a hook answers a Claude Code or Codex event on the host's stdin.
-	"hook": {why: "answers a host hook event on stdin (cli.go:107)"},
+	// cli.go:134 and hook.go:19: a hook answers a Claude Code or Codex event on stdin.
+	"hook": {why: "answers a host hook event on stdin (cli.go:134, hook.go:19)"},
 	"task": {subs: map[string]hsIpSub{
-		// task_new_first_job.go:84 records os.Getpid as the first Job's owner. Kept
-		// binary-only even if C-hs-plib-call makes it owner-aware, until a later brief
-		// changes this answer.
-		"new":     {why: "records the process id as the first Job's owner (task_new_first_job.go:84)"},
+		// task_new_first_job.go:84-86 takes the Call's OwnerPID as the first Job's
+		// owner, and task.go:125 names the task's owner from the Call's Getenv.
+		"new":     {},
 		"show":    {},
 		"list":    {},
 		"status":  {},
@@ -47,8 +48,8 @@ var hsIpTable = map[string]hsIpVerb{
 		"close":   {},
 		"reopen":  {},
 		"history": {},
-		// task.go:235 records os.Getppid as the attached session.
-		"attach":  {why: "records the parent process id as the attached session (task.go:235)"},
+		// task.go:241 records os.Getppid as the attached session.
+		"attach":  {why: "records the parent process id as the attached session (task.go:241)"},
 		"move":    {},
 		"decline": {},
 		"delete":  {},
@@ -57,8 +58,8 @@ var hsIpTable = map[string]hsIpVerb{
 	}},
 	"plan": {},
 	"job": {subs: map[string]hsIpSub{
-		// orchestrator.go:300 waits on os.Interrupt.
-		"next":    {why: "waits on the process's interrupt signal (orchestrator.go:300)"},
+		// orchestrator.go:303 waits on os.Interrupt.
+		"next":    {why: "waits on the process's interrupt signal (orchestrator.go:303)"},
 		"post":    {},
 		"ack":     {},
 		"result":  {},
@@ -68,8 +69,8 @@ var hsIpTable = map[string]hsIpVerb{
 		"render":  {},
 		"lint":    {},
 		"show":    {},
-		// jobcmd/verify.go:31 runs the verify commands as children.
-		"verify": {why: "runs the verify commands as host children (job/jobcmd/verify.go:31)"},
+		// jobcmd/verify.go:38 waits on SIGINT and SIGTERM; :41 runs the verify commands as children.
+		"verify": {why: "runs the verify commands as host children (job/jobcmd/verify.go:38, :41)"},
 		"cycles": {},
 		"trace":  {},
 	}},
@@ -82,51 +83,53 @@ var hsIpTable = map[string]hsIpVerb{
 		"status":  {},
 	}},
 	"feed": {subs: map[string]hsIpSub{
-		// orchestrator.go:300 waits on os.Interrupt.
-		"tick":     {why: "waits on the process's interrupt signal (orchestrator.go:300)"},
+		// orchestrator.go:303 waits on os.Interrupt.
+		"tick":     {why: "waits on the process's interrupt signal (orchestrator.go:303)"},
 		"post":     {},
 		"read":     {},
 		"state":    {},
 		"types":    {},
 		"handover": {},
 	}},
-	// cli.go:113: a stdio MCP server on the host's own streams.
-	"mcp":      {why: "serves MCP on stdio (cli.go:113)"},
+	// cli.go:140 and mcp.go:35: a stdio MCP server on the process's streams.
+	"mcp":      {why: "serves MCP on stdio (cli.go:140, mcp.go:35)"},
 	"question": {},
 	"answer":   {},
 	"approve":  {},
 	"deliver":  {},
 	"proof":    {},
 	"history":  {},
-	// land.go:34 waits on os.Interrupt; its children take the host environment (lib.go:34).
-	"land":  {why: "waits on the process's interrupt signal and starts host-environment children (land.go:34)"},
+	// land.go:32 stops on the Call's Context; land.go:34 hands the Call's Getenv to
+	// the deploy child (land/land.go:245, land/environment.go:82-83).
+	"land":  {},
 	"brain": {},
 	"env": {subs: map[string]hsIpSub{
-		// environment.go:128 waits on SIGINT and SIGTERM; env/env.go:113 claims the
-		// port with os.Getpid and env.go:121 starts the server as a child.
-		"up":   {why: "waits on process signals and claims a port for the process id (environment.go:128, env/env.go:113)"},
+		// environment.go:126 waits on SIGINT and SIGTERM; env/env.go:117 claims the
+		// port with os.Getpid and env.go:127 starts the server as a child.
+		"up":   {why: "waits on process signals and claims a port for the process id (environment.go:126, env/env.go:117)"},
 		"down": {},
 	}},
 	"person": {},
 	"routine": {subs: map[string]hsIpSub{
 		"add":  {},
 		"list": {},
-		// routine.go:43 runs the routine's command as a host-environment child (lib.go:34).
-		"run":    {why: "runs the routine as a host-environment child (routine.go:43, routine/execute.go)"},
+		// routine.go:145-146 runs the routine on context.Background with the Call's
+		// getenv, which builds the child's environment (routine/execute.go:147-150, :169-174).
+		"run":    {},
 		"remove": {},
 		// routine.go:197 writes a system schedule that calls the host's executable.
-		"schedule":   {why: "writes a system schedule for the host's executable (routine.go:197, routine/schedule.go)"},
+		"schedule":   {why: "writes a system schedule for the host's executable (routine.go:197, routine/schedule.go:37)"},
 		"unschedule": {},
 	}},
 	"worker": {subs: map[string]hsIpSub{
 		"list": {},
-		// worker.go:189 waits on os.Interrupt.
-		"next": {why: "waits on the process's interrupt signal (worker.go:189)"},
+		// worker.go:188 waits on os.Interrupt.
+		"next": {why: "waits on the process's interrupt signal (worker.go:188)"},
 	}},
-	// agent.go:36 waits on signals while agent check probes host children
-	// (agent/runner.go:32); agent sync finds the plugin from the host's executable
-	// (agent_sync.go:17); the agent's runs take the host environment (lib.go:34).
-	"agent":    {why: "waits on process signals, probes host children and reads the host's executable (agent.go:36, agent_sync.go:17)"},
+	// agent.go:34 stops on the Call's Context; agent check probes with the Call's
+	// PATH and Getenv (agent.go:14, agent/runner.go:57-58); agent sync asks the
+	// Call's Executable (agent_sync.go:17); budget reads the Call's getenv (budget.go:19).
+	"agent":    {},
 	"claude":   {},
 	"workflow": {},
 	"skill":    {},
@@ -134,13 +137,13 @@ var hsIpTable = map[string]hsIpVerb{
 	"intent":   {},
 	"usage":    {},
 	"account": {subs: map[string]hsIpSub{
-		// account/account.go:183 runs the provider's status command with os.Environ
-		// (read from account.go:214 and :270 for every folder listed).
-		"list":   {why: "probes the provider's status command with the host environment (account/account.go:183)"},
-		"status": {why: "probes the provider's status command with the host environment (account/account.go:183)"},
-		"scan":   {why: "probes the provider's status command with the host environment (account/account.go:183)"},
-		// account.go:54 then account/account.go:385: the provider's sign-in waits on a person.
-		"sign-in":    {why: "runs the provider's sign-in as a host-environment child (account.go:54, account/account.go:385)"},
+		// account.go:30 gives account.Env no Environ, so account/account.go:216 runs
+		// the provider's status command with os.Environ (account/account.go:68).
+		"list":   {why: "probes the provider's status command with the host environment (account/account.go:216, :68)"},
+		"status": {why: "probes the provider's status command with the host environment (account/account.go:216, :68)"},
+		"scan":   {why: "probes the provider's status command with the host environment (account/account.go:216, :68)"},
+		// account.go:54 then account/account.go:388: the provider's sign-in waits on a person.
+		"sign-in":    {why: "runs the provider's sign-in as a host-environment child (account.go:54, account/account.go:388)"},
 		"statusline": {},
 		"windows":    {},
 		"folder":     {},
@@ -154,8 +157,8 @@ var hsIpTable = map[string]hsIpVerb{
 	"artifact":   {},
 	"eval": {subs: map[string]hsIpSub{
 		"list": {},
-		// evalcmd/command.go:155 runs the agent under evaluation as a child.
-		"run":  {why: "runs the evaluated agent as a host child (evalcmd/command.go:155)"},
+		// evalcmd/command.go:169 waits on os.Interrupt; :175 runs the agent under evaluation as a child.
+		"run":  {why: "runs the evaluated agent as a host child (evalcmd/command.go:169, :175)"},
 		"show": {},
 	}},
 	"migrate": {},
