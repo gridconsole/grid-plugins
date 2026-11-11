@@ -28,7 +28,7 @@ lint:
 	go vet ./...
 	@out="$$(gofmt -l .)"; if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 
-# Vets and compiles every package and test for the release OSes, so a per-OS file that breaks is found here and not on the owner's Mac.
+# Vets and compiles every package and test for the release OSes, so a per-OS file that breaks is found here and not on a Mac or a Windows machine.
 # -exec /bin/true compiles each test binary and does not run it (the binaries are not for the VM's OS).
 cross:
 	for target in darwin/arm64 windows/amd64; do \
