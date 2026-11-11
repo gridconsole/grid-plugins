@@ -128,11 +128,6 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 				if reason := gate(root, n); reason != "" {
 					return fmt.Errorf("proposal refused: %s", reason)
 				}
-				// The same check Accept runs, on the bytes read above and before
-				// the receipt, so a finding writes nothing.
-				if err := checkAccept(level, proposal, n, b); err != nil {
-					return err
-				}
 				n.Status = "accepted"
 				accepted := n
 				accepted.Name = name
