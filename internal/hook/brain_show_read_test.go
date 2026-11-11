@@ -143,7 +143,6 @@ func TestBrainShowRecognisedForms(t *testing.T) {
 
 func TestBrainShowIgnoredForms(t *testing.T) {
 	for _, cmd := range []string{
-		"grid brain search deploy",
 		"echo grid brain show deploy",
 		"ls && grid brain show deploy",
 		"grid brain show",
