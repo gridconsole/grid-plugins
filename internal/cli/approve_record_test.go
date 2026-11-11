@@ -389,11 +389,16 @@ func TestApproveRecordWorkerPassMovesTheReceiptOfATaskOnlyRead(t *testing.T) {
 	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		if len(arApproveJobs(t, store)) == 1 {
+		haveJob := len(arApproveJobs(t, store)) == 1
+		haveAccept := haveJob && len(arAccepts(t, store, "J-1")) == 1
+		if haveJob && haveAccept {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("the worker pass did not move approval.json into an approve Job within 30s")
+			if !haveJob {
+				t.Fatal("the worker pass did not move approval.json into an approve Job within 30s (missing: the approve Job)")
+			}
+			t.Fatal("the worker pass wrote the approve Job but not its accepting control within 30s (missing: the accept)")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
