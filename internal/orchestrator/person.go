@@ -86,7 +86,7 @@ func (s Store) personAnswers(snap Snapshot) error {
 				return err
 			}
 		}
-		body := map[string]any{"target": item.ID, "status": "accepted", "reason": "answered by " + first.Author.ID}
+		body := map[string]any{"target": item.ID, "status": "accepted", "reason": "answered by " + first.Author.ID, "answer": strings.TrimSpace(answer)}
 		// What the person's answer carried, such as the plan revision they approved,
 		// goes into the result the readers use.
 		for _, key := range answerFields {

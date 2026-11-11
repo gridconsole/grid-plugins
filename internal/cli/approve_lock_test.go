@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/fslock"
@@ -14,8 +15,8 @@ import (
 // .task.lock (publishPlan), so the opposite order could hang both for good.
 //
 // The test holds .orchestrator.lock and parks the command at the seam between
-// Approve and the post, where it checks that approval.json is written and
-// .task.lock is free. No time window is involved: the command and the test hand
+// Approve and the post, where it checks that the approve history line is written
+// (and no approval.json) and .task.lock is free. No time window is involved: the command and the test hand
 // over through channels. A command that holds .task.lock across the post, or
 // that never gets there, fails the check or stops the test at its go test timeout.
 func TestApprovalPostDoesNotHoldTaskLockWhileWaitingForOrchestratorLock(t *testing.T) {
@@ -63,7 +64,8 @@ func TestApprovalPostDoesNotHoldTaskLockWhileWaitingForOrchestratorLock(t *testi
 			}
 			// Approve has returned and the post has not started: the command is
 			// parked, and .orchestrator.lock is still held by this test.
-			_, statErr := os.Stat(filepath.Join(path, "approval.json"))
+			history, histErr := os.ReadFile(filepath.Join(path, "history.md"))
+			_, receiptErr := os.Stat(filepath.Join(path, "approval.json"))
 			free := fslock.TryLockExclusive(taskLock) == nil
 			if free {
 				fslock.Unlock(taskLock)
@@ -73,8 +75,13 @@ func TestApprovalPostDoesNotHoldTaskLockWhileWaitingForOrchestratorLock(t *testi
 			if code := <-done; code != 0 {
 				t.Fatalf("%d %s", code, h.errb.String())
 			}
-			if statErr != nil {
-				t.Fatalf("approval.json was not written before the post: %v", statErr)
+			// Approve writes the history line and no approval.json (verdict 12); the
+			// Job result is posted after the locks are released.
+			if histErr != nil || !strings.Contains(string(history), `"what":"approve"`) {
+				t.Fatalf("the approve history line was not written before the post: %v", histErr)
+			}
+			if receiptErr == nil {
+				t.Fatal("approval.json was written")
 			}
 			if !free {
 				t.Fatal(".task.lock was held while waiting for .orchestrator.lock")
