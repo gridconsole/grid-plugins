@@ -212,15 +212,8 @@ func (s Store) entry(n Note, proposal bool) Entry {
 // Propose stamps provenance and lifecycle fields rather than trusting incoming
 // front matter. Secret-shaped content is never persisted, even as a proposal.
 func (s Store) Propose(n Note, origin Origin) (Entry, error) {
-	n.Origin, n.Status, n.Reason, n.Updated = origin, "proposed", "", s.stamp()
-	n.SupersededBy = ""
-	if n.Type == "" {
-		n.Type = "reference"
-	}
-	if n.Links == nil {
-		n.Links = []Link{}
-	}
-	if err := n.Validate(); err != nil {
+	n, err := s.proposalNote(n, origin)
+	if err != nil {
 		return Entry{}, err
 	}
 	root, err := s.scope(n.Level, true)
@@ -256,6 +249,92 @@ func (s Store) Propose(n Note, origin Origin) (Entry, error) {
 		return s.entry(n, true), fmt.Errorf("proposal rejected: secret-shaped content was redacted")
 	}
 	return s.entry(n, true), nil
+}
+
+// proposalNote stamps the lifecycle fields and validates the note; it is the
+// part of Propose that does not depend on where the proposal is written.
+func (s Store) proposalNote(n Note, origin Origin) (Note, error) {
+	n.Origin, n.Status, n.Reason, n.Updated = origin, "proposed", "", s.stamp()
+	n.SupersededBy = ""
+	if n.Type == "" {
+		n.Type = "reference"
+	}
+	if n.Links == nil {
+		n.Links = []Link{}
+	}
+	return n, n.Validate()
+}
+
+// ProposeTask writes the proposal to <task folder>/brain-proposals/<name>.md,
+// where DecideTask and the task's ship gate read it, instead of under the
+// brain level. The note keeps its level, which is where a decision files it.
+// history appends the task's "brain proposed" line after the file is written
+// and the task's decide lock is released; if the line cannot be written the
+// proposal is removed again, so a failure leaves nothing behind. A
+// secret-shaped note is stored redacted and refused, with no history line.
+func (s Store) ProposeTask(t TaskRef, n Note, origin Origin, history func(string) error) (Entry, error) {
+	n, err := s.proposalNote(n, origin)
+	if err != nil {
+		return Entry{}, err
+	}
+	levelRoot, err := s.scope(n.Level, false)
+	if err != nil {
+		return Entry{}, err
+	}
+	_, err = topicAt(levelRoot, n.Topic, n.Level)
+	levelRoot.Close()
+	if err != nil {
+		return Entry{}, err
+	}
+	secret := hasSecret(n)
+	if secret {
+		n = redacted(n, "Secret-shaped content was redacted.")
+	}
+	path := filepath.Join("brain-proposals", n.Name+".md")
+	tr, err := os.OpenRoot(t.Path)
+	if err != nil {
+		return Entry{}, err
+	}
+	defer tr.Close()
+	err = func() error {
+		if err := safefile.NoSymlinks(tr, ".brain-decide.lock"); err != nil {
+			return err
+		}
+		lock, err := fslock.OpenNoFollow(filepath.Join(t.Path, ".brain-decide.lock"), os.O_CREATE|os.O_RDWR, 0600)
+		if err != nil {
+			return err
+		}
+		defer lock.Close()
+		if err := fslock.LockExclusive(lock); err != nil {
+			return err
+		}
+		if _, err := safefile.Read(tr, path); !errors.Is(err, fs.ErrNotExist) {
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("proposal %q already exists in task %s", n.Name, t.ID)
+		}
+		b, err := Encode(n)
+		if err != nil {
+			return err
+		}
+		return atomicWrite(tr, path, b)
+	}()
+	if err != nil {
+		return Entry{}, err
+	}
+	entry := s.entry(n, true)
+	entry.Path = "task:" + filepath.ToSlash(path)
+	if secret {
+		return entry, fmt.Errorf("proposal rejected: secret-shaped content was redacted")
+	}
+	if history != nil {
+		if err := history("brain proposed · " + n.Name); err != nil {
+			_ = tr.Remove(path)
+			return Entry{}, err
+		}
+	}
+	return entry, nil
 }
 
 func redacted(n Note, reason string) Note {
