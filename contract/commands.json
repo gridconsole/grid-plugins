@@ -4787,6 +4787,98 @@
       ]
     },
     {
+      "name": "update",
+      "summary": "draft, edit, discard, skip and send a project's update",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "discard",
+          "args": [
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "draft",
+          "args": [
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--title",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "edit",
+          "args": [
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--line",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "send",
+          "args": [
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "skip",
+          "args": [
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
       "name": "setup",
       "summary": "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)",
       "built": true,
