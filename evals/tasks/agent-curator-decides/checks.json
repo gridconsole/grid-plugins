@@ -1,5 +1,5 @@
 [
-  {"id":"all-decided","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-*; [ -f \"$1/brain-proposals/csv-semicolons.md\" ] && [ -f \"$1/brain-proposals/ran-go-test.md\" ] && ! grep -q '^status: proposed' \"$1\"/brain-proposals/*.md"],"gate":true},
+  {"id":"all-decided","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-*; [ -f \"$1/brain-proposals/csv-semicolons.md\" ] && [ -f \"$1/brain-proposals/ran-go-test.md\" ] && ! grep -q '^status: proposed' \"$1/brain-proposals\"/*.md"],"gate":true},
   {"id":"lesson-accepted","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-*; grep -q '^status: accepted' \"$1/brain-proposals/csv-semicolons.md\""],"weight":2},
   {"id":"noise-rejected","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-*; grep -q '^status: rejected' \"$1/brain-proposals/ran-go-test.md\""],"weight":2},
   {"id":"accept-reason-in-history","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-*; grep -Eq 'brain decided: csv-semicolons accept [^;]*; [^\"]{8,}' \"$1/history.md\""],"weight":2},
