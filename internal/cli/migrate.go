@@ -53,8 +53,9 @@ func runMigrate(args []string, env Env) int {
 	}
 	source := absolute(*from, env)
 	if source == "" {
-		// No --from: a Grid home that is missing or empty is a fresh one.
-		if entries, err := os.ReadDir(env.GridHome); os.IsNotExist(err) || (err == nil && len(entries) == 0) {
+		// No --from: a Grid home that is missing, empty, or holds only what
+		// grid-worker start writes is a fresh one.
+		if entries, err := os.ReadDir(env.GridHome); os.IsNotExist(err) || (err == nil && onlyWorkerFiles(entries)) {
 			fmt.Fprintln(env.Stdout, "migrate: nothing to migrate")
 			return 0
 		}
@@ -91,6 +92,17 @@ func runMigrate(args []string, env Env) int {
 		return 1
 	}
 	return 0
+}
+
+// onlyWorkerFiles reports whether every entry is a file the worker writes on start
+// (worker.lock, worker-status.json); an empty list counts.
+func onlyWorkerFiles(entries []os.DirEntry) bool {
+	for _, e := range entries {
+		if n := e.Name(); (n != "worker.lock" && n != "worker-status.json") || e.IsDir() {
+			return false
+		}
+	}
+	return true
 }
 
 // absolute resolves a path given on the command line against the working folder.
