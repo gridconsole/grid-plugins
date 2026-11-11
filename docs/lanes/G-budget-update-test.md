@@ -1,0 +1,24 @@
+# G-budget-update-test (plugin repo): a committed test that the agent budget survives a plugin update
+
+Changed: `internal/settings/budget_test.go` only (two new tests and four fixture helpers). No change to `budget.go` or any other non-test file.
+
+| Row | Status | Proof |
+|---|---|---|
+| 1 Where things live | HOLDS | Preset note: `budgetNotePath` budget.go:60-62, `<grid home>/knowledge/budget/agent-budget.md`. Overlay: `<grid home>/settings.json`, read at budget.go:319 via `Store.directory` store.go:40-47 and `readDocument` store.go:74. Agent files: `<claude dir>/agents/<name>.md`, budget.go:322-329 (`ClaudeSettingsPath`, then `agents`); undo snapshot `<grid home>/setup/agent-budget-undo.json` at budget.go:693-695. The only thing inside the plugin folder is the agent templates, `agentTemplatesDir = "agent-templates"` agentsync.go:17-23. So the note, overlay, agent files and snapshot are all outside the plugin folder; only the templates are inside. |
+| 2 TestBudgetApplySurvivesPluginUpdate | HOLDS | budget_test.go (`TestBudgetApplySurvivesPluginUpdate`): render plugin 1.0 with sync, apply balanced (2 files go effort medium to high), delete folder 1.0, write fresh 1.1 (same names, default model lines, new body). Right after the update, before any sync, `budget show` reports `applied=balanced`, builder `high`, no `changedByHand`. The re-apply path is the sync the session hook runs, `syncAgents` hook.go:137-151 and `grid agent sync`; it takes model and effort from the overlay (agentsync.go:86, `doc.Agents[name]`) and does not write the overlay. After `sync("1.1")` all five files have body 1.1, builder and designer `sonnet/high`, show says balanced, none changed by hand, undo record still present. `go test ./internal/settings/ -run PluginUpdate -v` exit 0. |
+| 3 Undo after the update | HOLDS | `TestBudgetUndoAfterPluginUpdateGivesFreshDefaults`, two orders. (a) sync, then undo: the files changed after Apply, so undo skips them ("changed after apply", budget.go:861-863), removes the overlay (it did not exist before Apply); show then reads the built-in defaults; the next sync renders body 1.1 with default model and effort lines (opus/sonnet, medium) and no 1.0 text. (b) undo, then sync: undo puts back the bytes it saved (budget.go:853), which are the old 1.0 copy's; the next sync replaces them with 1.1. Both end at the fresh plugin's body and the default lines. exit 0. |
+| 4 go test and lint | HOLDS | `go test ./internal/settings/...` exit 0 (`ok ... 0.638s`); `make lint` (go vet ./...) exit 0. Importers of settings (go list): cli, doctor, guard, hook (and settings itself); `go test ./internal/cli/ ./internal/doctor/ ./internal/guard/ ./internal/hook/ ./internal/settings/` exit 0, all `ok`. |
+| New test fails when the behaviour is broken | HOLDS | The lane is test-only, so on base the tests pass. To show they bite, I temporarily made `SyncAgents` ignore the overlay (agentsync.go:86 `renderAgent(name, raw, Agent{})`): `--- FAIL: TestBudgetApplySurvivesPluginUpdate` `budget_test.go:607: grid-builder: want grid sonnet/high body 1.1, got grid sonnet/medium`. Reverted with `git checkout internal/settings/agentsync.go`; `git status` showed only budget_test.go. |
+| Windows and macOS builds | HOLDS | `GOOS=windows CGO_ENABLED=0 go build ./...` exit 0; `GOOS=darwin CGO_ENABLED=0 go build ./...` exit 0 |
+| No guard, gate, cap, hold | HOLDS | test file only |
+| Existing tests | HOLDS | none edited or deleted; the stand-in `TestBudgetOverlayAndFilesLiveOutsideThePluginFolder` stays |
+| Commits | HOLDS | one commit, one-sentence message, no attribution lines, no personal paths or emails |
+
+## What the code says (so a reader need not re-derive it)
+- A plugin update replaces only `agent-templates/`. The rendered files, overlay, note and undo snapshot stay, so `budget show` reports the preset at once, with the old body in the files until the next sync.
+- The documented re-apply path is the sync, not another Apply. It runs on session start (hook.go:137) and by `grid agent sync`, and gives the new body with the overlay's model and effort.
+- The template's own model/effort lines are always overridden for the eleven built-in agent names, because `Effective` fills every built-in name with defaults (catalog.go:19-26, store.go:96-98) and `renderAgent` replaces the line when the value is not empty (agentsync.go:170-179). So "the fresh plugin's default model lines" in practice means the built-in defaults.
+- Observation, not a bug: Undo after a sync skips the agent files (they changed after Apply), so the files keep the preset's lines until the next sync, which the session hook runs. Test (a) pins this.
+
+## NOT VERIFIED on a live screen
+A real plugin update in Claude Code, the session hook firing on the real `CLAUDE_PLUGIN_ROOT`, and the Settings > Agents screen. No bug found in budget.go; no NOT DONE row.
