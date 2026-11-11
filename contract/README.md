@@ -689,9 +689,10 @@ read or write. The replaceable `brain.ChangesReadAllowed` (host key
 `grid brain <changes|revert>: caller role is not allowed to <read brain changes|revert brain entries>`.
 `grid brain supersede` checks `brain.RevertAllowed` at the same point and exits 3
 with `grid brain supersede: caller role is not allowed to supersede brain entries`.
-With `--json` each of the three refusals keeps that stderr line and exit 3 and
+With `--json` each of the five refusals (changes, revert, supersede, drop,
+restore) keeps that stderr line and exit 3 and
 also prints one stdout object, the person-gate refusal shape:
-`{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to <read brain changes|revert brain entries|supersede brain entries>","code":"person_required","message":"<the stderr line without its newline>"}`.
+`{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to <read brain changes|revert brain entries|supersede brain entries|drop brain entries|restore brain entries>","code":"person_required","message":"<the stderr line without its newline>"}`.
 Without `--json` stdout stays empty.
 The CLI does not read a workflow file to configure them.
 
