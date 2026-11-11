@@ -20,7 +20,8 @@ func TestSampleSuite(t *testing.T) {
 		"task-skill", "setup-skill", "signals-skill",
 		"skill-brain-keeper", "skill-browser", "skill-visual-design-review",
 		"plan-quality-small", "plan-quality-normal",
-		"job-plan", "job-run", "job-review"}
+		"job-plan", "job-run", "job-review",
+		"skill-deliver", "skill-questions", "skill-research"}
 	got := map[string]bool{}
 	for _, task := range tasks {
 		got[task.ID] = true

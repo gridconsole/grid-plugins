@@ -1,0 +1,1 @@
+I'm Alex. My Grid home is the one in GRID_HOME and the notes-app project folder is ./work/notes-app. On task T-01 in the notes-app project, ask Sam whether the tag box should show the last five recent tags or the last ten. The mock in work/notes-app/docs/mock.md shows five.

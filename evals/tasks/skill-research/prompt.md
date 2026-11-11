@@ -1,0 +1,1 @@
+I'm Alex. My Grid home is the one in GRID_HOME and the notes-app project folder is ./work/notes-app. Task T-01 in the notes-app project needs facts before it is planned: find out how notes-app checks a tag before a note is saved, and where. Research it for me.

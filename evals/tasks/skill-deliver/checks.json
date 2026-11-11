@@ -1,0 +1,8 @@
+[
+  {"id":"proof-item-1","type":"command_passes","command":["sh","-c","test -s \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/proof/i-1/proof.json"],"weight":2},
+  {"id":"proof-item-2","type":"command_passes","command":["sh","-c","test -s \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/proof/i-2/proof.json"],"weight":2},
+  {"id":"brain-proposal","type":"command_passes","command":["sh","-c","grep -rIl 'label' \"$GRID_HOME\" | grep -i proposal | grep -q ."],"weight":3},
+  {"id":"no-ship-approval","type":"command_passes","command":["sh","-c","test ! -e \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/approval-ship.json"]},
+  {"id":"not-closed","type":"command_passes","command":["sh","-c","test -f \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md && ! grep -Eq '^(status|state): closed$' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/task.md"]},
+  {"id":"intent-untouched","type":"command_passes","command":["sh","-c","printf '%s\\n' 'write a two-line release note for the new tag search' | cmp - \"$GRID_HOME\"/projects/notes-app/tasks/T-01-release-note/intent.md"]}
+]
