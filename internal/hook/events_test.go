@@ -180,11 +180,10 @@ func TestInternalErrorsAllowAndGuardStillDenies(t *testing.T) {
 	if code != 0 || out != "" || !strings.Contains(log, "grid hook:") {
 		t.Fatalf("error was not logged and allowed: %q %q %d", out, log, code)
 	}
-	// host-guard warns by default; set to block it keeps the deny this test covers.
-	if err := os.WriteFile(filepath.Join(f.home, "settings.json"), []byte(`{"hooks":{"host-guard":"block"}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	out, _, code = f.run(t, "PermissionRequest", hookio.Input{ToolName: "Write", ToolInput: map[string]any{"file_path": filepath.Join(f.dir, "task.md"), "content": "bad"}})
+	// The deny is the home guard's role refusal, which no setting turns off: a guest
+	// may not write into the Grid home's Personal scope.
+	f.env["GRID_ROLE"], f.env["GRID_MEMBER"], f.env["GRID_PROJECT"] = "guest", "gus", "example"
+	out, _, code = f.run(t, "PermissionRequest", hookio.Input{ToolName: "Write", ToolInput: map[string]any{"file_path": filepath.Join(f.home, "personal", "notes.md"), "content": "bad"}})
 	if code != 0 || !strings.Contains(out, `"behavior":"deny"`) {
 		t.Fatalf("guard lost priority: %s %d", out, code)
 	}

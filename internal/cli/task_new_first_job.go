@@ -29,7 +29,7 @@ func firstJob() map[string]any {
 		"title":  "Read the task and post the Jobs it needs",
 		"role":   "orchestrator",
 		"skills": []string{"plan-jobs"},
-		"review": "L0", "risk": []string{}, "max_rounds": 1,
+		"risk":   []string{},
 		"intent": map[string]any{"owner": request, "item": request, "goal": request},
 		"links":  []any{}, "keep": []string{}, "decisions": []string{},
 		"read": []string{request}, "write": []string{"plan.md"}, "out_of_scope": []string{},

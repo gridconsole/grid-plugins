@@ -159,7 +159,7 @@ func ReplanJobBody(id, cancelled, cause string, waiting []string) map[string]any
 		"title":  fmt.Sprintf("Re-plan after %s was cancelled: %s wait on it", cancelled, list),
 		"role":   gkReplanRole,
 		"skills": []string{"plan-jobs"},
-		"risk":   []string{}, "max_rounds": 1,
+		"risk":   []string{},
 		"intent": map[string]any{"owner": request, "item": request, "goal": request},
 		"links":  []any{}, "keep": []string{}, "decisions": []string{},
 		"read": []string{request}, "write": []string{}, "out_of_scope": []string{},

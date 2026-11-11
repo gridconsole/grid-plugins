@@ -84,7 +84,7 @@ func TestDeliverPostsOneCuratorJobForWaitingProposals(t *testing.T) {
 		t.Fatalf("want one curator Job on the Feed, got %d (stdout %q)", len(jobs), h.out.String())
 	}
 	j := jobs[0]
-	if j.ID != "J-1" || len(j.Skills) != 1 || j.Skills[0] != "brain-keeper" || j.Review != "L0" || len(j.After) != 0 {
+	if j.ID != "J-1" || len(j.Skills) != 1 || j.Skills[0] != "brain-keeper" || len(j.After) != 0 {
 		t.Fatalf("job fields: %+v", j)
 	}
 	if !strings.Contains(j.Title, "2") || !strings.HasPrefix(j.Intent.Item, "task.md#") {

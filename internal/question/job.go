@@ -41,7 +41,7 @@ func jobBody(qid string, in Input) map[string]any {
 	}
 	return map[string]any{
 		"item": item, "title": title, "role": "Person", "kind": JobKind,
-		"skills": []any{}, "review": "L0", "risk": []any{}, "max_rounds": 1,
+		"skills": []any{}, "risk": []any{},
 		"intent": map[string]any{"owner": in.Who, "item": "questions/" + qid + ".md", "goal": strings.TrimSpace(in.Question)},
 		"links":  []any{}, "keep": []any{}, "decisions": []any{}, "read": []any{}, "write": []any{}, "out_of_scope": []any{},
 		"acceptance": []any{map[string]any{"id": "A1", "text": fmt.Sprintf("%s answers %s", in.Who, qid), "traces": "item"}},

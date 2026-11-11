@@ -28,8 +28,6 @@
 //
 // A call does not claim that nothing is ever read from the host. These stay
 // with the host process, as in the binary:
-//   - the user name (USER, and the system account) that names a new task's
-//     owner (internal/task);
 //   - the environment of the provider child that `account list`, `status` and
 //     `scan` start: internal/cli/account.go:30 gives internal/account no
 //     Environ, so the child takes os.Environ (internal/account/account.go:68,
