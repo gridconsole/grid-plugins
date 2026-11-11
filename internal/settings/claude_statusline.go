@@ -31,9 +31,23 @@ func EditClaudeStatusLine(path string, change ClaudeStatusLineChange) (bool, err
 			return false, claudeInvalid{path}
 		}
 	}
-	cmd, line, present, err := claudeStatusLineOf(doc)
-	if err != nil {
-		return false, err
+	var cmd string
+	var line claudeObject
+	raw := doc.get("statusLine")
+	present := raw != nil
+	if present {
+		if line, err = parseClaudeObject(raw); err != nil {
+			return false, errors.New("statusLine is not an object; left alone")
+		}
+		if t := line.get("type"); t != nil {
+			var typ string
+			if json.Unmarshal(t, &typ) != nil || typ != "command" {
+				return false, errors.New("statusLine is not a command status line; left alone")
+			}
+		}
+		if json.Unmarshal(line.get("command"), &cmd) != nil {
+			return false, errors.New("statusLine has no command string; left alone")
+		}
 	}
 	next, remove := change(cmd, present)
 	switch {
@@ -73,52 +87,6 @@ func EditClaudeStatusLine(path string, change ClaudeStatusLineChange) (bool, err
 		return false, err
 	}
 	return true, nil
-}
-
-// claudeStatusLineOf answers the command, the parsed object and whether the
-// document has a statusLine. A statusLine that is not a command status line is
-// refused. EditClaudeStatusLine and ReadClaudeStatusLine share it.
-func claudeStatusLineOf(doc claudeObject) (cmd string, line claudeObject, present bool, err error) {
-	raw := doc.get("statusLine")
-	if raw == nil {
-		return "", nil, false, nil
-	}
-	if line, err = parseClaudeObject(raw); err != nil {
-		return "", nil, true, errors.New("statusLine is not an object; left alone")
-	}
-	if t := line.get("type"); t != nil {
-		var typ string
-		if json.Unmarshal(t, &typ) != nil || typ != "command" {
-			return "", nil, true, errors.New("statusLine is not a command status line; left alone")
-		}
-	}
-	if json.Unmarshal(line.get("command"), &cmd) != nil {
-		return "", nil, true, errors.New("statusLine has no command string; left alone")
-	}
-	return cmd, line, true, nil
-}
-
-// ReadClaudeStatusLine answers the statusLine command of the Claude settings
-// file at path and whether the file has a statusLine. It writes nothing and
-// creates nothing: no file, or a file with no statusLine, answers "", false. It
-// refuses what EditClaudeStatusLine refuses, with the same reasons.
-func ReadClaudeStatusLine(path string) (cmd string, present bool, err error) {
-	file, err := readClaudeFile(path)
-	if err != nil {
-		return "", false, err
-	}
-	if !file.exists {
-		return "", false, nil
-	}
-	doc, err := parseClaudeObject(file.data)
-	if err != nil {
-		return "", false, claudeInvalid{path}
-	}
-	cmd, _, present, err = claudeStatusLineOf(doc)
-	if err != nil {
-		return "", false, err
-	}
-	return cmd, present, nil
 }
 
 func deleteClaudeKey(doc claudeObject, key string) claudeObject {

@@ -74,13 +74,19 @@ func StatusLineRead(env Env) (StatusLineResult, error) {
 	if err != nil {
 		return StatusLineResult{}, err
 	}
-	cmd, present, err := settings.ReadClaudeStatusLine(path)
+	res := StatusLineResult{Path: path}
+	// An edit that answers the command it was given writes nothing (and a
+	// missing statusLine is "removed" from nothing), so this shares the parse
+	// and the refusals of StatusLineSet without a second reader.
+	_, err = settings.EditClaudeStatusLine(path, func(cmd string, present bool) (string, bool) {
+		if !present {
+			return "", true
+		}
+		res.Kept, res.On = unwrapNote(cmd)
+		return cmd, false
+	})
 	if err != nil {
 		return StatusLineResult{}, err
-	}
-	res := StatusLineResult{Path: path}
-	if present {
-		res.Kept, res.On = unwrapNote(cmd)
 	}
 	return res, nil
 }
