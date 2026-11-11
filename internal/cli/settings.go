@@ -18,9 +18,9 @@ func runSkill(args []string, env Env) int { return runSettings("skill", args, en
 func settingsUsage(kind string, env Env) {
 	switch kind {
 	case "agent":
-		fmt.Fprintln(env.Stdout, "Usage: grid agent set <agent> [--model M] [--effort E] [--project P]\n       grid agent unset <agent> [--project P]\n       grid agent list [--json]\nField   Allowed values\nmodel   haiku, sonnet, opus\neffort  low, medium, high, xhigh, max")
+		fmt.Fprintln(env.Stdout, "Usage: grid agent set <agent> [--model M] [--effort E] [--project P]\n       grid agent unset <agent> [--project P]\n       grid agent list [--project P] [--json]\nField   Allowed values\nmodel   haiku, sonnet, opus\neffort  low, medium, high, xhigh, max")
 	case "skill":
-		fmt.Fprintln(env.Stdout, "Usage: grid skill enable|disable <skill> [--project P]\n       grid skill list [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid skill enable|disable <skill> [--project P]\n       grid skill list [--project P] [--json]")
 	case "hook":
 		fmt.Fprintln(env.Stdout, "Usage: grid hook level <hook> off|warn|block [--project P]\n       grid hook levels [--json]\nEvery hook takes any level; host-guard, only-writer and plan-guard default to warn.")
 	}
@@ -65,8 +65,10 @@ func runSettings(kind string, args []string, env Env) int {
 	project := new(string)
 	asJSON := fs.Bool("json", false, "print JSON")
 	model, effort := new(string), new(string)
-	if listing {
-
+	if listing && kind == "hook" {
+		// hook levels answers for the current project only.
+	} else if listing {
+		project = fs.String("project", "", "registered project name or id; defaults to the current project")
 	} else {
 		project = fs.String("project", "", "registered project name or id; defaults to personal")
 	}
