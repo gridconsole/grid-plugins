@@ -2610,7 +2610,7 @@
     },
     {
       "name": "brain",
-      "summary": "show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore",
+      "summary": "show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore/rename",
       "built": true,
       "subcommands": [
         {
