@@ -20,7 +20,7 @@ func runQuestion(args []string, env Env) int {
 }
 
 func questionEnv(env Env) question.Env {
-	return question.Env{Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Jobs: questionJobs(), Writer: func(control bool) (feed.Writer, error) {
+	return question.Env{Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Jobs: questionJobs(), RecordError: env.recordError, Writer: func(control bool) (feed.Writer, error) {
 		if control {
 			return feedWriter(env, env.getenv("GRID_LEASE"), env.getenv("GRID_LEASE_EPOCH"))
 		}
