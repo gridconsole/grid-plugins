@@ -16,7 +16,7 @@ field, `childEnvOn`, `baseFromGetenv`) and `internal/cli/agent.go:14` (passes `e
 | 5a. `go test -count=1 ./internal/agent/` | HOLDS | exit 0: `ok  github.com/gridconsole/grid-plugins/internal/agent 0.613s` (existing `childenv_lane_test.go` tests unchanged and passing). |
 | 5b. `go test -count=1 -run 'Agent' ./internal/cli/` | HOLDS | exit 0: `ok  github.com/gridconsole/grid-plugins/internal/cli 1.799s`. |
 | 6a. `make lint` | HOLDS | exit 0 (`go vet ./...`, no output). `gofmt -l internal/agent internal/cli` printed nothing. |
-| 6b. `make cross` | CROSS_ROW | see the last line of this table's note below |
+| 6b. `make cross` | HOLDS | exit 0 on the second run, started in the background with a 30-minute limit. The first run was stopped by the 10-minute background cap before it finished; I do not count it. The second run's output has `cross: darwin/arm64 vet`, `cross: darwin/arm64 test compile`, `cross: windows/amd64 vet`, `cross: windows/amd64 test compile`, 125 `ok` lines, no `FAIL` and no error line; per target `ok internal/agent`, `ok internal/cli`, `ok lib` (darwin: 0.033s, 0.168s, 0.065s; windows: 0.748s, 0.030s, 0.008s). The tests are compiled with `-exec /bin/true` and not run on those systems. |
 | Importers of the changed packages tested | HOLDS | `go list -f '{{.ImportPath}} {{join .Imports " "}}' ./...` filtered for a direct import of `internal/agent` or `internal/cli`: `cmd/grid`, `internal/cli`, `lib`. `go test -count=1 ./internal/cli/` exit 0 `ok internal/cli 74.425s` (the whole package, not only `Agent`); `go test -count=1 ./cmd/grid/ ./lib/` exit 0: `?   cmd/grid [no test files]`, `ok lib 19.701s`. |
 | Walk tests (plugin) | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` (the `\|` is only the table escape; the command had a plain `|`) exit 0 `ok internal/cli 0.125s`; `go test -count=1 ./internal/job/lint/` exit 0 `ok internal/job/lint 0.310s`. The app-side walk tests (`make webui-test`, `TestFvArgvCollects`, ...) are for the app repo; this is the plugin repo. |
 | `*RealPlugin*` tests | n/a | None named by the brief, none run, none counted as proof. |
@@ -43,3 +43,5 @@ field, `childEnvOn`, `baseFromGetenv`) and `internal/cli/agent.go:14` (passes `e
 ## NOT VERIFIED on a live screen
 
 Nothing in this lane has a screen. No real `claude` or `codex` was started (the brief forbids it), so what a real probed agent does with the Call's environment is not seen; the tests assert the environment slice `childEnv` returns. Windows and macOS were built and test-compiled by `make cross`; no test ran on those systems, so the windows case is proved through the goos parameter on a Linux host.
+
+DONE
