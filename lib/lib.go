@@ -26,9 +26,9 @@
 //     owner (internal/task) and, when Environ has no GRID_MEMBER and Args no
 //     --member, the member of a Feed write: that case also runs `git config
 //     user.email` in Dir with the host's environment;
-//   - the agent account settings fall back to the host's environment when no
-//     getenv is passed (internal/account), and the migrate plan reads
-//     CLAUDE_PLUGIN_DATA (internal/migrate);
+//   - internal/account has its own fallback to the host's environment when it
+//     is given no getenv, and the migrate plan reads CLAUDE_PLUGIN_DATA from
+//     the host (internal/migrate);
 //   - the process id of the caller (os.Getppid) that `ports claim`, `env up`
 //     and the task lease record as their owner;
 //   - the children that land, agent and routine runs start, which take the
