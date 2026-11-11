@@ -37,6 +37,26 @@ func approvalWriter(env Env) (feed.Writer, error) {
 	return w, err
 }
 
+// answered reports whether the Feed already holds a person's answer to the Job j
+// that carries the plan_hash, plan_digest and lands_hash of the approval e.
+func answered(snap orchestrator.Snapshot, j *contract.Job, e taskstore.Event) bool {
+	if len(j.History) == 0 {
+		return false
+	}
+	for _, r := range snap.Records {
+		if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] {
+			continue
+		}
+		hash, _ := r.Body["plan_hash"].(string)
+		digest, _ := r.Body["plan_digest"].(string)
+		lands, _ := r.Body["lands_hash"].(string)
+		if hash == e.PlanHash && digest == e.PlanDigest && lands == e.LandsHash {
+			return true
+		}
+	}
+	return false
+}
+
 // recordApproval records e as the result of the task's approve person Job and
 // nothing else: the Feed is the only record of an approval. With no Job yet (job
 // is ""), or only an accepted one that a person without a lease cannot answer
@@ -60,6 +80,10 @@ func recordApproval(dir string, store feed.Store, w feed.Writer, job, answer str
 				return nil
 			}
 			job = ""
+		} else if j != nil && answered(snap, j, e) {
+			// The person's answer for this plan is in the Feed and waits for the
+			// holder's pass: a repeat press posts a second one for nothing.
+			return nil
 		}
 	}
 	if job == "" {

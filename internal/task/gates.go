@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -57,6 +58,14 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 		if jobErr != nil && !errors.Is(jobErr, ErrNoPlanJob) && !errors.Is(jobErr, ErrPlanJobOpen) {
 			return jobErr
 		}
+		// A person with no lease only answers the plan Job; the answer is accepted
+		// by the holder's next pass. Until then the Job has no result to read
+		// (ErrPlanJobOpen), and the approval that a repeat press must find is the
+		// receipt this function wrote beside the plan.
+		var kept *Event
+		if errors.Is(jobErr, ErrPlanJobOpen) {
+			kept = keptApproval(t)
+		}
 		err := plan.Store{TaskDir: t.Path}.WithDigest(func(current, digest string) error {
 			want := hash
 			if want == "" {
@@ -79,6 +88,11 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 				event = previous.event(t)
 				return nil
 			}
+			// The same repeat, when the Job result cannot be read yet: nothing is written.
+			if kept != nil && kept.PlanHash == current && kept.PlanDigest == digest && kept.LandsHash == o.LandsHash {
+				event = *kept
+				return nil
+			}
 			// The history line and the approval.json receipt are written here: the caller
 			// records the approval as the result of the plan Job, once this has released
 			// the task and plan locks. The receipt file is a copy for readers of the
@@ -98,6 +112,21 @@ func (s Store) Approve(o WriteOptions, hash string) (Event, error) {
 		return err
 	})
 	return event, err
+}
+
+// keptApproval is the plan approval that approval.json holds, or nil: the file
+// is missing or unreadable, is not an approve receipt of this task (a reopen
+// overwrites it with its own event), names a gate, or has no full plan_digest.
+func keptApproval(t Task) *Event {
+	data, err := readOptional(filepath.Join(t.Path, approvalFile))
+	if err != nil || len(data) == 0 {
+		return nil
+	}
+	var e Event
+	if json.Unmarshal(data, &e) != nil || e.Task != t.ID || e.What != "approve" || e.Gate != "" || e.PlanHash == "" || len(e.PlanDigest) != 64 {
+		return nil
+	}
+	return &e
 }
 
 // Approval answers whether the plan is approved, from the result of the plan
