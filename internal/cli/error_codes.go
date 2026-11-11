@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/signal"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -29,14 +30,20 @@ const (
 	// CodeWorkflowFileChanged means a workflow file changed since the caller read
 	// its revision; nothing was written.
 	CodeWorkflowFileChanged = "workflow_file_changed"
+	// CodeRecordIDUsed means a record of another writer tenure on the Feed
+	// already has the record id of the post; nothing was written.
+	CodeRecordIDUsed = "record_id_used"
 )
 
 func errorCode(err error) string {
 	var bad *signal.BadInputError
 	var coded *settings.CodedError
+	var used *feed.RecordIDUsedError
 	switch {
 	case errors.As(err, &coded):
 		return coded.Code
+	case errors.As(err, &used):
+		return CodeRecordIDUsed
 	case errors.Is(err, where.ErrProjectUnregistered):
 		return CodeNoSuchProject
 	case errors.Is(err, where.ErrTaskNotFound):

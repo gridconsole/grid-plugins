@@ -74,6 +74,7 @@ during `task show` exits 1.
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
 | `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
 | `workflow_file_changed` | A workflow file changed since its revision was read (`grid workflow write`); nothing was written and it exits 3. |
+| `record_id_used` | A record of another writer tenure on the Feed already has the record id of the post (`grid feed post`, `grid job post` with `--id`); nothing was written and it exits 3. A repeat of the same post by the same writer tenure still returns the stored record. |
 | `job_waiting` | A person Job still waits for a Job in its after list (`grid approve`, `grid job result`); exits 3. |
 | `changed` | A settings file or preview changed since the person looked; nothing was written. |
 | `invalid_settings` | A settings value, key, preset or file is invalid; nothing was written. |
@@ -81,7 +82,8 @@ during `task show` exits 1.
 | `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
 
-The first six constants live in `internal/cli/error_codes.go` and the settings
+The seven constants `no_such_project`, `no_such_task`, `no_such_note`, `invalid_argument`,
+`invalid_policy`, `workflow_file_changed` and `record_id_used` live in `internal/cli/error_codes.go` and the settings
 codes in `internal/settings/claude_user.go`; `person_required` and `job_waiting` are
 written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
 and `internal/cli/task_write.go`. `TestHfFsCodeTable` keeps this table equal to that set.
