@@ -280,6 +280,15 @@ func (f *Files) file(pointer, root, rel, anchor string, project bool) (Source, e
 		} else {
 			var first, last int
 			first, last, err = selectRange(text, anchor)
+			if err == nil && !lineAnchor.MatchString(anchor) {
+				// A heading section may end in blank lines the digest trims
+				// (before a "Where it stands" section or at the end of the
+				// file). They carry no approval content.
+				lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
+				for last > first+1 && strings.TrimSpace(lines[last-1]) == "" {
+					last--
+				}
+			}
 			if err == nil {
 				if isPlan && !plan.DigestCoversLines(text, first+1, last) {
 					return s, fmt.Errorf("%s: anchor selects lines outside the approval digest", pointer)
