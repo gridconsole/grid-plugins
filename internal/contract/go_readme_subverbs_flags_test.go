@@ -25,11 +25,11 @@ type cmdsDoc struct {
 // srfKnown is the known list: README spans that start with `grid ` but are not
 // a command line the walk can check. Each entry is matched by the span's text.
 var srfKnown = []struct{ text, reason string }{
-	{"grid approve: <job> cannot", "error line, `approve:` is the message prefix"},
-	{"grid workflow show: invalid", "error line, `show:` is the message prefix"},
-	{"grid workflow write: project \"<selector>\"", "error line, `write:` is the message prefix"},
-	{"grid workflow write: project is missing", "error line, `write:` is the message prefix"},
-	{"grid brain <changes|revert>: caller role", "error line, `<changes|revert>:` is the message prefix"},
+	{"grid approve: <job> cannot be answered yet: <reason>", "error line, `approve:` is the message prefix"},
+	{"grid workflow show: invalid <key> in <workspace|project> workflow", "error line, `show:` is the message prefix"},
+	{"grid workflow write: project \"<selector>\" is missing or ambiguous", "error line, `write:` is the message prefix"},
+	{"grid workflow write: project is missing or ambiguous", "error line, `write:` is the message prefix"},
+	{"grid brain <changes|revert>: caller role is not allowed to <read brain changes|revert brain entries>", "error line, `<changes|revert>:` is the message prefix"},
 	{"grid usage threshold ...", "removed usage verb, stated gone on purpose"},
 	{"grid usage budget ...", "removed usage verb, stated gone on purpose"},
 	{"grid <version>", "placeholder in the version output line, not a command"},
@@ -167,7 +167,7 @@ func srfLoad(t *testing.T) (cmdsDoc, string) {
 
 func srfIsKnown(text string) bool {
 	for _, k := range srfKnown {
-		if strings.HasPrefix(text, k.text) {
+		if text == k.text {
 			return true
 		}
 	}
@@ -191,7 +191,7 @@ func TestGoReadmeSubverbsInCommandsJSON(t *testing.T) {
 			}
 			found := false
 			for _, s := range spans {
-				if strings.HasPrefix(s.text, k.text) {
+				if s.text == k.text {
 					found = true
 				}
 			}
@@ -205,7 +205,7 @@ func TestGoReadmeSubverbsInCommandsJSON(t *testing.T) {
 		for _, s := range spans {
 			if srfIsKnown(s.text) {
 				// Alternations on the list are still checked part by part.
-				if strings.HasPrefix(s.text, "grid job post|") {
+				if s.text == "grid job post|ack|result|cancel" {
 					for _, p := range srfCheck(cmds, s.text) {
 						t.Errorf("contract/README.md:%d: %s", s.line, p)
 					}
@@ -222,17 +222,22 @@ func TestGoReadmeSubverbsInCommandsJSON(t *testing.T) {
 	t.Run("edited copy reports unknown sub-verb and flag", func(t *testing.T) {
 		edited := "ok line\n" +
 			"Run `grid workflow frobnicate --json` here.\n" +
-			"Run `grid workflow show --no-such-flag` here.\n"
+			"Run `grid workflow show --no-such-flag` here.\n" +
+			"Exit codes of `grid feed frobnicate` here.\n"
 		var got []string
 		for _, s := range srfSpans(edited) {
+			if srfIsKnown(s.text) {
+				continue
+			}
 			for _, p := range srfCheck(cmds, s.text) {
 				got = append(got, s.text+" => "+p)
 			}
 		}
 		sort.Strings(got)
-		if len(got) != 2 ||
-			!strings.Contains(got[0], "`frobnicate` is not a sub-verb") ||
-			!strings.Contains(got[1], "flag --no-such-flag") {
+		if len(got) != 3 ||
+			!strings.Contains(got[0], "`frobnicate` is not a sub-verb of `grid feed`") ||
+			!strings.Contains(got[1], "`frobnicate` is not a sub-verb of `grid workflow`") ||
+			!strings.Contains(got[2], "flag --no-such-flag") {
 			t.Fatalf("edited copy: got %q", got)
 		}
 		if l := srfSpans(edited)[1].line; l != 3 {
