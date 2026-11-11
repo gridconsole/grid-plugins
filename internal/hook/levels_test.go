@@ -1,7 +1,6 @@
 package hook
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
-	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/settings"
@@ -151,39 +149,16 @@ func TestCatalogLogLevels(t *testing.T) {
 }
 
 func TestCatalogStopLevels(t *testing.T) {
-	for _, kind := range []string{"Stop", "SubagentStop", "stop-check", "verify"} {
+	// The one stop check is that the Job's result is posted; every level case
+	// runs with a Job that has no result yet.
+	for _, kind := range []string{"Stop", "SubagentStop", "stop-check"} {
 		t.Run(kind, func(t *testing.T) {
 			levelCases(t, "stop-check", func(t *testing.T, f *eventFixture, on, warn, broken bool) {
-				dir := filepath.Join(f.dir, "subagents")
-				if err := os.MkdirAll(dir, 0700); err != nil {
-					t.Fatal(err)
-				}
-				brief := filepath.Join(dir, "01-build.md")
-				if err := os.WriteFile(brief, []byte("---\nrole: builder\nstatus: done\n---\n## Outcome\n"), 0600); err != nil {
-					t.Fatal(err)
-				}
+				f.env["GRID_JOB"] = "J-1"
 				event := kind
 				in := hookio.Input{HookEventName: "Stop"}
 				if kind == "SubagentStop" {
-					transcript := filepath.Join(f.home, "transcript.jsonl")
-					b, _ := json.Marshal(map[string]any{"message": map[string]any{"content": "Use " + brief}})
-					if err := os.WriteFile(transcript, b, 0600); err != nil {
-						t.Fatal(err)
-					}
-					in = hookio.Input{HookEventName: kind, AgentType: "grid:grid-builder", AgentTranscriptPath: transcript}
-				}
-				if kind == "verify" {
-					event = "Stop"
-					f.env["GRID_JOB"] = "J-1"
-					f.env["PATH"] = os.Getenv("PATH")
-					dir := filepath.Join(f.dir, "jobs", "J-1")
-					if err := os.MkdirAll(dir, 0700); err != nil {
-						t.Fatal(err)
-					}
-					b, _ := json.Marshal(job.Job{ID: "J-1", Verify: job.Verify{Command: "exit 1"}})
-					if err := os.WriteFile(filepath.Join(dir, "job.yaml"), b, 0600); err != nil {
-						t.Fatal(err)
-					}
+					in = hookio.Input{HookEventName: kind, AgentType: "grid:grid-builder"}
 				}
 				_, log, code := f.run(t, event, in)
 				want := 0
