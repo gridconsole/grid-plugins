@@ -1,0 +1,10 @@
+[
+  {"id":"all-decided","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-*; [ -f \"$1/brain-proposals/csv-semicolons.md\" ] && [ -f \"$1/brain-proposals/ran-go-test.md\" ] && ! grep -q '^status: proposed' \"$1/brain-proposals\"/*.md"],"gate":true},
+  {"id":"lesson-accepted","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-*; grep -q '^status: accepted' \"$1/brain-proposals/csv-semicolons.md\""],"weight":2},
+  {"id":"noise-rejected","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-*; grep -q '^status: rejected' \"$1/brain-proposals/ran-go-test.md\""],"weight":2},
+  {"id":"accept-reason-in-history","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-*; grep -Eq 'brain decided: csv-semicolons accept [^;]*; [^\"]{8,}' \"$1/history.md\""],"weight":2},
+  {"id":"reject-reason-in-history","type":"command_passes","command":["sh","-c","set -- \"$GRID_HOME\"/projects/notes-app/tasks/T-01-*; grep -Eq 'brain decided: ran-go-test reject [^;]*; [^\"]{8,}' \"$1/history.md\""],"weight":2},
+  {"id":"note-filed","type":"command_passes","command":["sh","-c","grep -q '^status: accepted' \"$GRID_HOME/projects/notes-app/knowledge/decisions/csv-semicolons.md\" && grep -q 'semicolons' \"$GRID_HOME/projects/notes-app/knowledge/decisions/csv-semicolons.md\" && [ ! -e \"$GRID_HOME/projects/notes-app/knowledge/conventions/ran-go-test.md\" ]"]},
+  {"id":"no-brain-file-written-by-hand","type":"command_passes","command":["sh","-c","k=\"$GRID_HOME/projects/notes-app/knowledge\"; [ \"$(cd \"$k\" && find . -type f ! -name index.md ! -name backlinks.json ! -name log.md | sort | tr '\\n' ' ')\" = './decisions/csv-semicolons.md ./versions/decisions/csv-semicolons/1.md ' ] && [ ! -e \"$GRID_HOME/knowledge/decisions\" ] && [ ! -e \"$GRID_HOME/brain-proposals\" ]"],"weight":2},
+  {"id":"workspace-unchanged","type":"command_passes","command":["sh","-c","[ \"$(find . -type f ! -path './.claude/*' ! -path './.git/*' | wc -l | tr -d ' ')\" = '0' ]"]}
+]
