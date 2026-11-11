@@ -33,7 +33,9 @@ func openCuratorJob(snap orchestrator.Snapshot) string {
 	return ""
 }
 
-// nextJobID is the next free top-level J-<n>, counting the Jobs of the fold too.
+// nextJobID is the next free top-level J-<n>, counting the Jobs of the fold and
+// the id of every job record the Feed holds, even one the fold holds out of State
+// (snap.JobIDs). It is the rule of gkNextJobID in internal/orchestrator.
 func nextJobID(snap orchestrator.Snapshot) string {
 	highest := 0
 	count := func(id string) {
@@ -45,6 +47,9 @@ func nextJobID(snap orchestrator.Snapshot) string {
 		count(it.ID)
 	}
 	for id := range snap.State.Jobs {
+		count(id)
+	}
+	for _, id := range snap.JobIDs {
 		count(id)
 	}
 	return "J-" + strconv.Itoa(highest+1)
