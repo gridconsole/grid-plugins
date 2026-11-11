@@ -13,10 +13,8 @@ import (
 
 const usageHelp = `Usage: grid usage [--task T-NN] [--json]
        grid usage post --job J-N|lead [--dollars N] [--minutes N] [--tokens N] [--session ID] [--model NAME]
-       grid usage post --job J-N|lead --result ATTEMPT_LOG [--session ID] [--model NAME]
        grid usage show
 All commands accept --json; task-scoped commands accept --task T-NN.
---result books the cost, time and tokens of the last result line of a Claude run's log, once per session.
 Flags alone fold the token totals observed by the session hooks; they are not Job usage posts.
 Posts are deltas; at least one amount is required.
 Units are dollars, minutes and tokens; token amounts are non-negative integers.
@@ -92,7 +90,7 @@ func runUsage(args []string, env Env) int {
 	var in usage.Input
 	var result string
 	if op == "post" {
-		fs.StringVar(&result, "result", "", "Claude stream-json attempt log whose result line is booked once")
+		fs.StringVar(&result, "result", "", "book the cost, minutes and tokens of the last result line of this Claude attempt log, once per session; not with --dollars, --minutes or --tokens")
 		fs.StringVar(&in.Job, "job", "", "Job id or lead")
 		fs.StringVar(&in.Session, "session", "", "optional session identifier")
 		fs.StringVar(&in.Model, "model", "", "optional model name")
