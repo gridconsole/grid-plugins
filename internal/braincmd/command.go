@@ -39,7 +39,7 @@ type Env struct {
 	RecordError func(error)
 }
 
-const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|rename|supersede> [flags]
+const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|write|rename|supersede> [flags]
   show <id> [--task <task>]  Show an accepted note and its links.
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
@@ -62,6 +62,8 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
                              Exit 0 done, 1 store error, 2 usage, 3 role refused, 6 stale rev, 8 no such note, 9 refused.
   restore <topic>/<name> --expect <rev> [--reason <why>]  Bring a dropped entry back.
                              Exit 0 done, 1 store error, 2 usage, 3 role refused, 6 stale rev, 8 no such note, 9 refused.
+  write <topic>/<name> --expect <16hex|none> --file <path|-> [--reason <why>]  Create or replace a knowledge entry as a new version; none means it must not exist.
+                             Exit 0 done, 1 store error, 2 usage or a bad note, 3 role refused, 6 stale rev, 7 not versioned, 9 refused.
   rename <topic>/<name> <new-name> --expect <rev> [--reason <why>]  Rename a versioned knowledge entry and relink the entries of its level that name it.
                              Exit 0 done (entries whose relink failed are listed as kept), 1 store error, 2 usage, 3 role refused, 6 stale rev, 7 not versioned, 8 no such note, 9 refused.
   supersede <old> --by <new> --reason <why>  Mark an accepted note replaced by another, after the fact.
@@ -101,9 +103,11 @@ func (l *linkFlags) Set(raw string) error {
 
 // Run returns 0 on success, 1 for a store/gate error, 2 for usage errors and 3
 // when check finds something, changes and revert refuse the caller's role, or the
-// accept-time check refuses a proposal. drop and restore also return 6 for a
-// stale --expect rev, 8 for no such note and 9 when the note's state refuses the
-// operation, with the failure as JSON on stderr; they never return 4, 5 or 7.
+// accept-time check refuses a proposal. drop, restore, write and rename also
+// return 6 for a stale --expect rev and 9 when the note's state refuses the
+// operation, drop, restore and rename 8 for no such note, and write and rename 7
+// when the note has no stored version, with the failure as JSON on stderr. None
+// of them returns 4 or 5; drop and restore never return 7, write never 8.
 func Run(args []string, env Env) int {
 	if env.Resolver.GridHome == "" {
 		env.Resolver.GridHome = env.GridHome
@@ -140,6 +144,9 @@ func Run(args []string, env Env) int {
 	}
 	if verb == "restore" {
 		return runRestore(args[1:], env)
+	}
+	if verb == "write" {
+		return runWrite(args[1:], env)
 	}
 	if verb == "rename" {
 		return runRename(args[1:], env)

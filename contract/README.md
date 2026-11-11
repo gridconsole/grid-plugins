@@ -704,10 +704,10 @@ read or write. The replaceable `brain.ChangesReadAllowed` (host key
 `grid brain <changes|revert>: caller role is not allowed to <read brain changes|revert brain entries>`.
 `grid brain supersede` checks `brain.RevertAllowed` at the same point and exits 3
 with `grid brain supersede: caller role is not allowed to supersede brain entries`.
-With `--json` each of the five refusals (changes, revert, supersede, drop,
-restore) keeps that stderr line and exit 3 and
+With `--json` each of the seven refusals (changes, revert, supersede, drop,
+restore, write, rename) keeps that stderr line and exit 3 and
 also prints one stdout object, the person-gate refusal shape:
-`{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to <read brain changes|revert brain entries|supersede brain entries|drop brain entries|restore brain entries>","code":"person_required","message":"<the stderr line without its newline>"}`.
+`{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to <read brain changes|revert brain entries|supersede brain entries|drop brain entries|restore brain entries|write brain entries|rename brain entries>","code":"person_required","message":"<the stderr line without its newline>"}`.
 Without `--json` stdout stays empty.
 The CLI does not read a workflow file to configure them.
 
@@ -734,7 +734,7 @@ unknown flag (exit 2).
 is `dropped <topic>/<name> v<n> rev <rev>`. When the line is written but the index
 rebuild fails, the result is printed first, then the error, and the exit is 1.
 
-Exit codes (the table of every brain write verb): 0 done, 1 a store error (a full
+Exit codes of drop and restore: 0 done, 1 a store error (a full
 disk included), 2 usage (a missing operand, a topic or name that is not a plain
 name, a missing or non-hex `--expect`, an unknown flag), 3 role refused, 6 stale
 `--expect`, 8 no such note, 9 refused by the note's state. Never 4, 5 or 7. A
@@ -757,6 +757,79 @@ rev check, origin, output and exit codes as `brain drop`, with the audit status
 `grid brain restore: caller role is not allowed to restore brain entries` for exit
 3. A restore needs an entry whose newest state line is `dropped`; any other entry
 is refused (exit 9). The note file and its versions are not written.
+
+### `grid brain write <topic>/<name> --expect <16hex|none> --file <path|-> [--reason <why>] [--level home|project] [--project <p>] [--json]`
+
+Publishes the caller's Markdown as the knowledge note `<topic>/<name>` of one
+level: a new note with `--expect none`, or a replace at the note's current rev
+(the rev of `brain drop`). `--file -` reads stdin. The bytes must be an accepted
+note that names the same topic, name and level and passes the keeper gate, at
+most 1 MiB. Under the level's brain lock it checks the rev, checks that the note
+on disk has a stored copy of its exact bytes, stores the new bytes as the next
+version, publishes the note atomically and appends one audit line with status
+`created` or `edited` (the version, the hash, the origin and the reason,
+whitespace folded), then rebuilds that level's index after the lock. The origin
+is the person from the session, as for `brain drop`; no flag names the person.
+A refusal writes nothing.
+
+`--json` prints `{"status":"created|edited","version":<n>,"rev":"<rev>"}`; plain
+output is `<created|edited> <topic>/<name> v<n> rev <rev>`. When the note and its
+line are written but the index rebuild fails, the result is printed first, then
+the error, and the exit is 1.
+
+Exit codes: 0 done, 1 a store error (a project without a Grid record included;
+use `--level home`), 2 usage (a missing operand or `--file`, a topic or name that
+is not a plain name, an `--expect` that is neither 16 hex digits nor `none`, an
+unknown flag, input that is not such a note, a linked topic folder or note file),
+3 role refused, 6 stale `--expect` (`{"error":"conflict","rev":"<current rev or none>"}`),
+7 not versioned (`{"error":"not_versioned"}`: the topic holds settings or has no
+definition, or the note on disk has no stored copy of its bytes, a note placed by
+hand), 9 refused (`{"error":"refused","reason":"<why>"}`: the `TOPIC` file, a name
+another topic of the level holds). Never 4, 5 or 8. The JSON line of 6, 7 and 9
+goes to stderr with or without `--json`. The role check (`brain.RevertAllowed`,
+the empty local role, `owner` and `member`) runs after the usage check and before
+any resolution, read or write: any other role, including `guest`, exits 3 with
+`grid brain write: caller role is not allowed to write brain entries`. A note of
+`type: workflow`, in the input or on disk, is written only by the empty local
+role and `owner`; `member` exits 3 with
+`grid brain write: caller role is not allowed to write workflow notes`.
+
+### `grid brain rename <topic>/<name> <new-name> --expect <16hex> [--reason <why>] [--level home|project] [--project <p>] [--json]`
+
+Renames one accepted, versioned knowledge note within its topic and level, if
+`--expect` is its current rev, and relinks the notes that name it. Under the
+level's brain lock the note's bytes with the new name are stored as a version of
+the new name, written as the new file, the old file is removed and one audit
+line with status `renamed` is appended; a failure before that line puts the old
+file back. Then every other accepted note of the same level whose links or
+`superseded_by` name `brain:<level>/<name>` gets `brain:<level>/<new-name>` as a
+new version with a `linked` audit line. A dropped note that links to the old name
+is skipped and keeps its link. A note whose relink fails is left as it was and
+listed as `kept`; the exit stays 0. Notes of the other level are not relinked.
+The old name's stored versions stay where they are. The index is rebuilt after
+the lock. The origin is the person from the session, as for `brain drop`.
+
+`--json` prints `{"status":"renamed","from":"<topic>/<name>","to":"<topic>/<new-name>","version":<n>,"rev":"<rev>","linked":[...],"kept":[...],"skipped":[...]}`;
+plain output is `renamed <topic>/<name> -> <topic>/<new-name> v<n> rev <rev>`,
+then one `linked <topic>/<name>`, `kept <topic>/<name>` or
+`skipped <topic>/<name>` line per note. When the rename is applied but a later
+step fails (listing the notes to relink, or the index rebuild), the result is
+printed first, then the error, and the exit is 1.
+
+Exit codes: 0 done, 1 a store error (a project without a Grid record included;
+use `--level home`), 2 usage (a missing operand, a topic, name or new name that is
+not a plain name, a missing or non-hex `--expect`, an unknown flag), 3 role
+refused, 6 stale `--expect` (`{"error":"conflict","rev":"<current rev>"}`), 7 not
+versioned (`{"error":"not_versioned","reason":"<why>"}`: the topic holds
+settings, the note has no stored version, or the newest stored version is not the
+note on disk), 8 no such note or topic (`{"error":"no_such_note"}`), 9 refused
+(`{"error":"refused","reason":"<why>"}`: the `TOPIC` file or `TOPIC` as the new
+name, a note that is not accepted, superseded or dropped, a workflow note, the
+same name, a new name the topic or another topic of the level already holds).
+Never 4 or 5. The JSON line of 6 to 9 goes to stderr with or without `--json`.
+The role check is that of `brain write`: any role but the empty local role,
+`owner` and `member`, including `guest`, exits 3 with
+`grid brain rename: caller role is not allowed to rename brain entries`.
 
 ## Task intent files
 

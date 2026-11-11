@@ -1,4 +1,4 @@
-Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|rename|supersede> [flags]
+Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|write|rename|supersede> [flags]
   show <id> [--task <task>]  Show an accepted note and its links.
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
@@ -21,6 +21,8 @@ Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|cha
                              Exit 0 done, 1 store error, 2 usage, 3 role refused, 6 stale rev, 8 no such note, 9 refused.
   restore <topic>/<name> --expect <rev> [--reason <why>]  Bring a dropped entry back.
                              Exit 0 done, 1 store error, 2 usage, 3 role refused, 6 stale rev, 8 no such note, 9 refused.
+  write <topic>/<name> --expect <16hex|none> --file <path|-> [--reason <why>]  Create or replace a knowledge entry as a new version; none means it must not exist.
+                             Exit 0 done, 1 store error, 2 usage or a bad note, 3 role refused, 6 stale rev, 7 not versioned, 9 refused.
   rename <topic>/<name> <new-name> --expect <rev> [--reason <why>]  Rename a versioned knowledge entry and relink the entries of its level that name it.
                              Exit 0 done (entries whose relink failed are listed as kept), 1 store error, 2 usage, 3 role refused, 6 stale rev, 7 not versioned, 8 no such note, 9 refused.
   supersede <old> --by <new> --reason <why>  Mark an accepted note replaced by another, after the fact.
