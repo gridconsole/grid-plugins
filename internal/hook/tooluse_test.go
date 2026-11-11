@@ -171,6 +171,12 @@ func TestCaseAliasesOfTheGridHomeAreDenied(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(grid, "projects", "example", "project.md"), []byte("---\nname: example\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// only-writer and plan-guard warn by default (verdicts-11nov v-4); these rows pin the deny each gives at block.
+	for _, name := range []string{"only-writer", "plan-guard"} {
+		if err := (settings.Store{Home: grid}).SetHook(name, "block"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, event := range []string{"pretooluse", "permissionrequest"} {
 		for _, tt := range []struct{ name, path string }{
 			{"project knowledge", filepath.Join(grid, "PROJECTS", "example", "knowledge", "n.md")},
