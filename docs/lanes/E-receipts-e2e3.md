@@ -57,3 +57,22 @@ Starts at lane-E-verdict-12-receipts (5d1291d3, E1: `migrate.ReceiptToJob`). Thi
 
 - The dev UI approve button against a real worker: the app's approve route runs `grid approve` as a person with no lease; the approval shows after the holder's next tick. Tests prove the Feed records, not the screen.
 - The app's replay of the regenerated plan-digest transcript.
+
+## Cross-repo resume (11 Nov 04:20): five app real-plugin tests fail by design
+
+Done: `origin/main` (fd9a5324) merged into the lane (5f21556c), no conflicts. After the merge `go build ./...`, `go vet ./...` and `go test ./...` exit 0 with no failing package, and the row 2 grep still lists only `internal/migrate`.
+
+What the five tests drive (app tree in tmp/r18-B-E-receipts-e2e3/app, internal/slices/gates):
+
+- `TestRealPluginApprovePlanOnce` (realplugin_gate_test.go:162) and `TestRealPluginApproveAgentAccepted` (:199) run the real `grid approve`, then read `approval.json` from the task folder and fail with "no approval.json". Lane rows 1 and 2 are exactly that: approve writes no file.
+- `TestRealPluginDigestReplay` replays plugin-digest/transcript.json: the fixture home holds an `approval.json`, and each step asserts the file's keys (`receipt_keys`, realplugin_digest_test.go:253-286). The plugin now moves that file into the plan Job and deletes it (owner default), so the file is gone or never written.
+- `TestRealPluginTaskCardPlanApprovalAndHash` and the card reads: the app closes an approval item only when `approval.json` holds the matching plan_hash and plan_digest (gates/model.go:477-498). With no file the item stays open after a real approve, so the card shows "needs-you approval" for a plan that was approved. (`TestRealPluginWorkerSpawnsPostedJob` passed on the r18 log.)
+
+So the cause is the one row 6 names: the app reads the file this lane removes. No plugin-only change fixes the five without writing approval.json again (and a written copy would be deleted by the once-migration on the next worker pass, because a receipt beside an approve Job is retired). That would reverse acceptance rows 1 and 2 and the owner default "approval.json is deleted after it is read", so I did not do it.
+
+The fix is in the app, to land with this lane (lockstep):
+
+1. `gates/model.go:477`: read the approval from the plan Job result (plan_hash, plan_digest, who, when; the same fields `ApprovalForGate` returns) instead of `approval.json`; the app already reads Job results through the Feed read shapes.
+2. The five tests: assert the Job result (or `grid task` / `grid job show` output) instead of the file; `testdata/plugin-digest` keeps `approval.json` only as the legacy fixture and expects it gone after the first approve or tick; regenerate transcript `receipt_keys` from testdata/contract/plan-digest/transcript.json (now `answer job note plan_digest plan_hash record when who`).
+
+Until that lands, run the cross-repo set with the app change, not against the plugin alone.
