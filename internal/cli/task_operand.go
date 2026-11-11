@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -63,6 +64,35 @@ func resolveTaskOperand(env Env, operand string) (task.Task, error) {
 				return task.Task{}, errors.New("task has more than one folder in the Grid home")
 			}
 			path = candidate
+		}
+		if path == "" {
+			return task.Task{}, where.ErrTaskNotFound
+		}
+	case feed.IsID(operand):
+		// A task's stable id (GRID_TASK) names the child folder of an accessible
+		// tasks directory whose task.md holds it. The folder then goes through the
+		// same parent checks below as a folder operand does, so a link in one
+		// project cannot reach a task in another.
+		for _, dir := range dirs {
+			entries, err := os.ReadDir(dir)
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			} else if err != nil {
+				return task.Task{}, err
+			}
+			for _, entry := range entries {
+				if !taskOperandName.MatchString(entry.Name()) {
+					continue
+				}
+				candidate := filepath.Join(dir, entry.Name())
+				if id, err := feed.TaskID(candidate); err != nil || id != operand {
+					continue
+				}
+				if path != "" {
+					return task.Task{}, errors.New("task has more than one folder in the Grid home")
+				}
+				path = candidate
+			}
 		}
 		if path == "" {
 			return task.Task{}, where.ErrTaskNotFound
