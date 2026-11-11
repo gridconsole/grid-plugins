@@ -46,8 +46,9 @@ type appPlan struct {
 }
 
 // state reads the two signs of a running app. The server runs when app-url holds an
-// address something listens on. The worker runs when its presence file is fresh
-// (internal/worker, presence "reported"). Neither is a PID probe.
+// address something listens on. The worker runs when another handle holds its
+// worker.lock (internal/worker, presence "reported"), as the app decides it.
+// Neither is a PID probe.
 func (a *AppStart) state(env Env) appPlan {
 	p := appPlan{server: true, work: true}
 	if base := appBaseURL(env); base != "" {

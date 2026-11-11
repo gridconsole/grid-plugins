@@ -1,65 +1,63 @@
-// Package worker reads the app-owned local grid-worker presence files. It never
-// starts workers or takes their lifetime lock, so listing cannot block a worker.
+// Package worker reads the two files the app's grid-worker writes in the Grid
+// home. It never starts workers and never keeps the worker lock: the probe takes
+// it for an instant and drops it, so listing cannot block a worker.
 package worker
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 )
 
-// Status is the proposed v1 app/CLI presence format. The architecture specifies
-// one process and one OS lock per machine, but no filenames or JSON schema.
-// The worker writes worker.json atomically, refreshing UpdatedAt every 30s, and
-// holds worker.lock for its lifetime. Both carry the same process identity.
-// Keep this provisional type here while internal/contract is frozen.
-type Status struct {
-	Version   int       `json:"version"`
-	Machine   string    `json:"machine"`
+const (
+	// lockFile is the app's lifetime lock: empty, and held with an OS lock for as
+	// long as a worker runs. The app decides "running" by trying this lock, and so
+	// does List.
+	lockFile = "worker.lock"
+	// statusFile is what the app writes while it runs and removes when it stops
+	// cleanly; a crash leaves it behind.
+	statusFile = "worker-status.json"
+)
+
+// appStatus is the part of worker-status.json that List shows. The file holds
+// more (uptime_seconds, and the control token); nothing is decoded for those, so
+// the token never reaches an Entry.
+type appStatus struct {
 	PID       int       `json:"pid"`
+	Version   string    `json:"version"`
 	StartedAt time.Time `json:"started_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	State     string    `json:"state"`
+	Address   string    `json:"address"`
 }
 
-// Lock is JSON written to the stable, OS-locked worker.lock inode by the app.
-type Lock struct {
-	Version   int       `json:"version"`
-	Machine   string    `json:"machine"`
-	PID       int       `json:"pid"`
-	StartedAt time.Time `json:"started_at"`
-}
-
-func (l Lock) Validate() error {
-	if l.Version != 1 || !gridhome.ValidID(l.Machine) || l.PID <= 0 || l.StartedAt.IsZero() {
-		return fmt.Errorf("invalid worker lock identity")
-	}
-	return nil
-}
-func (s Status) Validate() error {
-	if err := (Lock{Version: s.Version, Machine: s.Machine, PID: s.PID, StartedAt: s.StartedAt}).Validate(); err != nil {
-		return err
-	}
-	if s.UpdatedAt.Before(s.StartedAt) || (s.State != "running" && s.State != "stopped") {
-		return fmt.Errorf("invalid worker status")
-	}
-	return nil
-}
-
+// Entry is one worker of this Grid home as `grid worker list` shows it.
+// State is "running" while another handle holds worker.lock and "stopped" when
+// only a status file is left; Presence is "reported" for the first and "stale"
+// for the second. The fields from the status file are zero when the lock is held
+// before the worker has written the file.
 type Entry struct {
-	Status
-	Presence string `json:"presence"` // reported, stale, or unknown; never a PID probe
+	Machine   string    `json:"machine"`
+	PID       int       `json:"pid"`
+	Version   string    `json:"version"`
+	StartedAt time.Time `json:"started_at"`
+	Address   string    `json:"address"`
+	State     string    `json:"state"`
+	Presence  string    `json:"presence"`
 }
+
 type Store struct {
 	GridHome string
-	Now      func() time.Time
 }
 
+// read decodes a small regular file of the Grid home into out. A missing or empty
+// file is "not there" (false, nil); a symlink, a directory, a big file or bad JSON
+// is an error.
 func (s Store) read(name string, out any) (bool, error) {
 	path, err := localdata.Safe(s.GridHome, name)
 	if err != nil {
@@ -82,56 +80,85 @@ func (s Store) read(name string, out any) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if len(bytes.TrimSpace(b)) == 0 {
+		return false, nil
+	}
 	if err = json.Unmarshal(b, out); err != nil {
 		return false, fmt.Errorf("%s: %w", name, err)
 	}
 	return true, nil
 }
+
+// lockHeld tries the worker lock the way the app does: it opens worker.lock
+// (never creating it), takes the exclusive lock without waiting and gives it back
+// at once. Another handle holding it means a worker runs.
+func (s Store) lockHeld() (bool, error) {
+	path, err := localdata.Safe(s.GridHome, lockFile)
+	if err != nil {
+		return false, err
+	}
+	st, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !st.Mode().IsRegular() {
+		return false, fmt.Errorf("%s must be a regular file", lockFile)
+	}
+	f, err := fslock.OpenNoFollow(path, os.O_RDONLY, 0)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	if err := fslock.TryLockExclusive(f); err != nil {
+		if errors.Is(err, fslock.ErrLocked) {
+			return true, nil
+		}
+		return false, err
+	}
+	fslock.Unlock(f)
+	return false, nil
+}
+
+// List returns the worker of this Grid home: none when there is no lock held and
+// no status file, "running"/"reported" when the lock is held, "stopped"/"stale"
+// when the lock is free and a status file is left behind.
 func (s Store) List() ([]Entry, error) {
 	entries := []Entry{}
 	if s.GridHome == "" {
 		return entries, nil
 	}
-	var status Status
-	var lock Lock
-	hasStatus, err := s.read("worker.json", &status)
+	// Read the status first: the app writes it after it takes the lock and removes
+	// it before it drops the lock, so a file read here was written under the lock
+	// and the probe after it says whether that lock is still held.
+	var status appStatus
+	hasStatus, err := s.read(statusFile, &status)
 	if err != nil {
 		return nil, err
 	}
-	hasLock, err := s.read("worker.lock", &lock)
+	held, err := s.lockHeld()
 	if err != nil {
 		return nil, err
 	}
-	if !hasStatus && !hasLock {
+	if !held && !hasStatus {
 		return entries, nil
 	}
-	machine := gridhome.Machine(s.GridHome)
-	if hasLock {
-		if err := lock.Validate(); err != nil {
-			return nil, err
-		}
+	entry := Entry{
+		Machine:   gridhome.Machine(s.GridHome),
+		PID:       status.PID,
+		Version:   status.Version,
+		StartedAt: status.StartedAt,
+		Address:   status.Address,
+		State:     "stopped",
+		Presence:  "stale",
 	}
-	if hasStatus {
-		if err := status.Validate(); err != nil {
-			return nil, err
-		}
+	if held {
+		entry.State, entry.Presence = "running", "reported"
 	}
-	if !hasStatus {
-		if lock.Machine != machine {
-			return entries, nil
-		}
-		return append(entries, Entry{Status: Status{Version: lock.Version, Machine: lock.Machine, PID: lock.PID, StartedAt: lock.StartedAt, State: "unknown"}, Presence: "unknown"}), nil
-	}
-	if status.Machine != machine {
-		return entries, nil
-	}
-	presence := "stale"
-	now := time.Now()
-	if s.Now != nil {
-		now = s.Now()
-	}
-	if hasLock && lock.Machine == status.Machine && lock.PID == status.PID && lock.StartedAt.Equal(status.StartedAt) && status.State == "running" && !status.UpdatedAt.After(now) && now.Sub(status.UpdatedAt) <= 90*time.Second {
-		presence = "reported"
-	}
-	return append(entries, Entry{Status: status, Presence: presence}), nil
+	return append(entries, entry), nil
 }

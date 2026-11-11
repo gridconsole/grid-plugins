@@ -1,10 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/grid/contract/cmd-worker-list.json",
-  "description": "JSON output of grid worker list --json; internal/cli/worker.go:44.",
+  "description": "JSON output of grid worker list --json; internal/cli/worker.go:57. One entry for the worker of this Grid home: state running with presence reported while the worker holds worker.lock, state stopped with presence stale when only a worker-status.json is left. pid, version, started_at and address come from worker-status.json and are zero when the worker holds the lock before it wrote the file. The control token in that file is never listed.",
   "items": {
     "additionalProperties": false,
     "properties": {
+      "address": {
+        "type": "string"
+      },
       "machine": {
         "type": "string"
       },
@@ -21,20 +24,16 @@
       "state": {
         "type": "string"
       },
-      "updated_at": {
-        "format": "date-time",
-        "type": "string"
-      },
       "version": {
-        "type": "integer"
+        "type": "string"
       }
     },
     "required": [
-      "version",
       "machine",
       "pid",
+      "version",
       "started_at",
-      "updated_at",
+      "address",
       "state",
       "presence"
     ],
