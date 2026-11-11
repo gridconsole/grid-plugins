@@ -33,7 +33,7 @@ func firstJob() map[string]any {
 		"intent": map[string]any{"owner": request, "item": request, "goal": request},
 		"links":  []any{}, "keep": []string{}, "decisions": []string{},
 		"read": []string{request}, "write": []string{"plan.md"}, "out_of_scope": []string{},
-		"acceptance": []map[string]any{{"id": "A1", "text": "The Jobs the task needs are posted with `grid job post`, each with its `after` list.", "traces": "owner"}},
+		"acceptance": []map[string]any{{"id": "A1", "text": "The Jobs the task needs are posted with `grid job post`, each with its `after` list, plan.md is stored with `grid plan write`, and a result is posted with `grid job result`.", "traces": "owner"}},
 		"verify":     map[string]any{"kind": "file-exists", "path": "plan.md"},
 		"budget":     map[string]any{"turns_estimate": 10, "reads_before_first_edit": 3},
 		"on_blocked": "ask-and-continue",

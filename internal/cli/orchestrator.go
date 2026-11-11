@@ -197,6 +197,9 @@ func runOrchestrator(args []string, env Env) int {
 					if a.ReasonMissing {
 						line += " (no reason given)"
 					}
+					if a.NoResult {
+						line += " no result posted"
+					}
 					fmt.Fprintln(env.Stdout, line)
 				}
 				if o := r.Orphan; o != nil {

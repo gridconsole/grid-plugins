@@ -129,6 +129,9 @@ type Attempt struct {
 	// gave no reason, so Exit reads crash only by default.
 	Code          string `json:"code,omitempty"`
 	ReasonMissing bool   `json:"reason_missing,omitempty"`
+	// NoResult says the agent ended with exit done and no result record came for
+	// this attempt: an empty finish. It is shown, never acted on.
+	NoResult bool `json:"no_result,omitempty"`
 	// The record times of the assign, the ack and the worker-exit. They come from
 	// the Feed records, never from the clock.
 	AssignedAt string `json:"assigned_at,omitempty"`
@@ -227,6 +230,7 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 				switch r.Type {
 				case "result":
 					hasResult = true
+					a.NoResult = false
 				case "ack":
 					a.State, a.AckedAt = "running", recordTime(r.At)
 				case "worker-exit":
@@ -236,6 +240,8 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 						a.Exit, a.ReasonMissing = "crash", true
 					}
 					a.State, a.Code = "exited", exitCodeText(r.Body["code"])
+					// An empty finish: the agent ended done and this attempt posted no result.
+					a.NoResult = a.Exit == "done" && !a.ReasonMissing && !hasResult
 				case "control":
 					if status := stringValue(r.Body["status"]); status != "" {
 						a.State = status
