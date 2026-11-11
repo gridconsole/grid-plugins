@@ -134,6 +134,9 @@ func runFeed(args []string, env Env) int {
 		if err := refuseJobSide(kind, lease); err != nil {
 			return fail(err)
 		}
+		if err := refuseGuestPostKind(env.getenv("GRID_ROLE"), kind, obj); err != nil {
+			return fail(err)
+		}
 	}
 	if reason != "" {
 		obj["reason"] = reason
@@ -247,6 +250,22 @@ func sessionStore(env Env, task, project string) (feed.Store, error) {
 // win over the arguments, and a differing argument is refused.
 // refuseJobSide keeps Job-side records and Job-lease writes on grid job post,
 // which checks the Job's lifecycle; feed post and the MCP feed_post must not.
+// refuseGuestPostKind holds a guest's post to a comment: the body's kind is
+// message. The other kinds (close, reopen, pickup, ask-pickup, ship) are a
+// person's moves on the task, as the app's post policy has it. This reads the
+// kind itself and does not leave it to the record schema, which a body that is
+// only a body reference does not reach. Answers are another type and are not
+// touched here.
+func refuseGuestPostKind(role, kind string, body map[string]any) error {
+	if kind != "post" || contract.NormalizeRole(role) != "guest" {
+		return nil
+	}
+	if k, ok := body["kind"].(string); ok && k == "message" {
+		return nil
+	}
+	return &feed.InvalidRecordError{Err: fmt.Errorf("role guest may post a message only, not kind %v", body["kind"])}
+}
+
 func refuseJobSide(kind, lease string) error {
 	switch kind {
 	case "ack", "submit", "result", "checkpoint", "worker-exit", "integrate":

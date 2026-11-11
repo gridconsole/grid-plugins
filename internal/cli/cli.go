@@ -213,6 +213,12 @@ func Run(args []string, env Env) (exit int) {
 				return 3
 			}
 			if name == "task" {
+				if guestTaskMove(rest[0]) {
+					// Exit 1, as a hidden task answers a guest's stop
+					// (TestPersonalBypassTaskCommands); delete and restore exit 3.
+					fmt.Fprintf(env.Stderr, "grid task %s: %s\n", rest[0], guestTaskMoveRefusal(rest[0]))
+					return 1
+				}
 				fmt.Fprintf(env.Stderr, "grid task %s: %v\n", rest[0], fmt.Errorf("%w: %s", task.ErrEditRejected, task.MoveRefusal))
 				return 3
 			}
@@ -238,11 +244,23 @@ func guestWriteVerb(name string, rest []string) bool {
 	case "setup":
 		return true
 	case "task":
-		return len(rest) > 0 && (rest[0] == "delete" || rest[0] == "restore")
+		return len(rest) > 0 && (rest[0] == "delete" || rest[0] == "restore" || guestTaskMove(rest[0]))
 	case "question":
 		return len(rest) > 0 && rest[0] == "withdraw"
 	}
 	return false
+}
+
+// guestTaskMove is a task move a person makes: the owner's rule is that a guest
+// answers and comments, and does not close, reopen or stop a task.
+func guestTaskMove(verb string) bool {
+	return verb == "close" || verb == "reopen" || verb == "stop"
+}
+
+// guestTaskMoveRefusal is the reason a guest's close, reopen or stop gives; it
+// names the role the way a guest's question withdrawal does.
+func guestTaskMoveRefusal(verb string) string {
+	return fmt.Sprintf("role %q may not %s a task; a guest answers and comments", "guest", verb)
 }
 
 // formatRefusal says why this grid must not read the Grid home, or "" when it may.
