@@ -4156,7 +4156,7 @@
     },
     {
       "name": "usage",
-      "summary": "post and show usage, set budgets and notice thresholds, fold observed session totals",
+      "summary": "post and show usage, fold observed session totals",
       "built": true,
       "subcommands": [
         {
@@ -4171,29 +4171,6 @@
             {
               "name": "--task",
               "takes": "value",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
-        {
-          "name": "budget show",
-          "args": [],
-          "flags": [
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--task",
-              "takes": "value",
-              "required": false
-            },
-            {
-              "name": "--workspace",
-              "takes": "none",
               "required": false
             }
           ],
@@ -4250,90 +4227,6 @@
         },
         {
           "name": "show",
-          "args": [],
-          "flags": [
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--task",
-              "takes": "value",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
-        {
-          "name": "threshold clear",
-          "args": [],
-          "flags": [
-            {
-              "name": "--dollars",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--minutes",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--task",
-              "takes": "value",
-              "required": false
-            },
-            {
-              "name": "--tokens",
-              "takes": "none",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
-        {
-          "name": "threshold set",
-          "args": [],
-          "flags": [
-            {
-              "name": "--dollars",
-              "takes": "value",
-              "required": false
-            },
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            },
-            {
-              "name": "--minutes",
-              "takes": "value",
-              "required": false
-            },
-            {
-              "name": "--task",
-              "takes": "value",
-              "required": false
-            },
-            {
-              "name": "--tokens",
-              "takes": "value",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
-        {
-          "name": "threshold show",
           "args": [],
           "flags": [
             {

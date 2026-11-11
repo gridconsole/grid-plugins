@@ -31,7 +31,8 @@ func TestSpentBudgetDoesNotDenyAnAgentStart(t *testing.T) {
 	if _, err := s.Post(usage.Input{Job: "lead", Dollars: &dollars}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Configure(usage.Change{Budget: true, Dollars: []float64{10}}); err != nil {
+	// An old home may still carry a budget; nothing reads it any more.
+	if err := os.WriteFile(filepath.Join(task, "usage", "thresholds.json"), []byte(`{"v":1,"dollars":[50,80,100],"minutes":[50,80,100],"tokens":[80,100],"budget":{"dollars":10},"baseline":{"dollars":0,"minutes":0,"tokens":0},"fired":{}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	resolver := where.Resolver{GridHome: home, Home: root, Ceiling: root, Machine: "machine-demo"}

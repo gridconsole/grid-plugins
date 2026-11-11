@@ -134,7 +134,7 @@ func commands() []command {
 		{"skill", "enable, disable and list skills", runSkill},
 		{"session", "list, show, start, stop, send, pause, resume, handback, switch", runSessionCommand},
 		{"intent", "list, claim, done (worker requests)", runIntent},
-		{"usage", "post and show usage, set budgets and notice thresholds, fold observed session totals", runUsage},
+		{"usage", "post and show usage, fold observed session totals", runUsage},
 		{"account", "agent accounts", runAccount},
 		{"project", "add, remove, list, scan and relink projects", runProject},
 		{"project-md", "get or set a project front-matter key", runProjectMD},
