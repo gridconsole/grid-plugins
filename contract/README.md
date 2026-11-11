@@ -145,6 +145,7 @@ are reference-document names and original line numbers, not machine paths.
 | Result v2 | [result.json](schemas/result.json) | feed-contract.md:84; job-contract.md:112-120 |
 | Checkpoint | [checkpoint.json](schemas/checkpoint.json) | feed-contract.md:82; job-contract.md:141-144 |
 | Question and gate | [question.json](schemas/question.json) | feed-contract.md:188-197; old-plugin/feed/types/question.md:5-19 |
+| Task question file | [question-file.json](schemas/question-file.json) | internal/question/question.go:27; internal/question/files.go:145 |
 | Answer | [answer.json](schemas/answer.json) | feed-contract.md:177; old-plugin/feed/types/answer.md:5-11 |
 | Handover | [handover.json](schemas/handover.json) | feed-contract.md:118-122; old-plugin/feed/types/handover.md:5-11 |
 | Worker exit | [worker-exit.json](schemas/worker-exit.json) | feed-contract.md:214-216 |
