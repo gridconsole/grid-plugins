@@ -1,6 +1,6 @@
 ---
 name: grid-curator
-description: Curates a Grid task's brain proposals into finished, linked notes and files the accepted ones into the brain. Use at deliver, before the ship gate and at an end review whenever the task holds a proposal that is still waiting. Asks no person.
+description: Curates a Grid task's brain proposals into finished, linked notes and files the accepted ones into the brain. Use at deliver and at an end review whenever the task holds a proposal that is still waiting. Asks no person.
 model: opus
 effort: medium
 maxTurns: 40
