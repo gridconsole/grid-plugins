@@ -15,7 +15,7 @@ import (
 )
 
 const taskUsage = `Usage:
-  grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--json]
+  grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--input <file>]... [--json]
   grid task show [<task>] [--json]
   grid task attach <task> [--session ID] [--runtime claude] [--json]
   grid task list [--project <name-or-id>] [--state <state>] [--json]
@@ -30,6 +30,16 @@ const taskUsage = `Usage:
 
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 `
+
+// inputList is a repeatable string flag: each --input adds one path.
+type inputList []string
+
+func (l *inputList) String() string { return strings.Join(*l, ",") }
+
+func (l *inputList) Set(v string) error {
+	*l = append(*l, v)
+	return nil
+}
 
 func runTask(args []string, env Env) int {
 	if len(args) == 0 {
@@ -65,12 +75,14 @@ func runTask(args []string, env Env) int {
 	fs := newFlags("task "+sub, env)
 	asJSON := fs.Bool("json", false, "print JSON")
 	var proj, size, workflow, state string
+	var inputs inputList
 	if sub == "new" || sub == "list" {
 		fs.StringVar(&proj, "project", "", "project name or id; personal selects Personal")
 	}
 	if sub == "new" {
 		fs.StringVar(&size, "size", "auto", "auto, small, normal or large")
 		fs.StringVar(&workflow, "workflow", "", "workflow name; omitted leaves selection to the rules")
+		fs.Var(&inputs, "input", "file to copy into the task's inputs folder; repeat for more files")
 	}
 	if sub == "list" {
 		fs.StringVar(&state, "state", "", "include only tasks in this state")
@@ -105,6 +117,12 @@ func runTask(args []string, env Env) int {
 		}
 		o := task.NewOptions{Cwd: env.Cwd, Words: pos[0], Project: proj, Size: size, Workflow: workflow,
 			Who: who, Role: env.getenv("GRID_ROLE")}
+		for _, in := range inputs {
+			if !filepath.IsAbs(in) {
+				in = filepath.Join(env.Cwd, in)
+			}
+			o.Inputs = append(o.Inputs, in)
+		}
 		if err := o.Validate(); err != nil {
 			fmt.Fprintf(env.Stderr, "grid task new: %v\n", err)
 			return 2

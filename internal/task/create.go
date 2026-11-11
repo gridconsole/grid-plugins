@@ -32,6 +32,9 @@ func (s Store) New(o NewOptions) (Task, error) {
 	if err := o.Validate(); err != nil {
 		return Task{}, err
 	}
+	if err := checkInputs(o.Inputs); err != nil {
+		return Task{}, err
+	}
 	if s.Resolver.GridHome == "" {
 		return Task{}, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
@@ -107,6 +110,9 @@ func (s Store) New(o NewOptions) (Task, error) {
 	}
 	defer os.RemoveAll(stage)
 	if err := writeSynced(filepath.Join(stage, "intent.md"), []byte(IntentHead+o.Words)); err != nil {
+		return Task{}, err
+	}
+	if err := copyInputs(stage, o.Inputs); err != nil {
 		return Task{}, err
 	}
 	if err := atomicWrite(filepath.Join(home, "VERSION"), []byte(fmt.Sprintf("%d\n", gridhome.FormatVersion))); err != nil {
