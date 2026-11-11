@@ -138,9 +138,6 @@ func TestReadsCreateNothing(t *testing.T) {
 	if _, err := s.Show(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Config(); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := os.Stat(filepath.Join(s.TaskPath, "usage")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("read created usage folder: %v", err)
 	}
@@ -153,10 +150,7 @@ func TestReadsCreateNothing(t *testing.T) {
 	if _, err := s.Show(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Config(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(s.TaskPath, "usage", ".lock")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(s.TaskPath, "usage", ".lock"));!errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("read created lock: %v", err)
 	}
 }

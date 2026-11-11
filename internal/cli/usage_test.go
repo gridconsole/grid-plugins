@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -39,20 +40,9 @@ func TestUsageGolden(t *testing.T) {
 		args []string
 	}{
 		{"usage-show-empty", []string{"show"}},
-		{"usage-threshold-defaults", []string{"threshold", "show"}},
-		{"usage-budget-setup", nil},
-		{"usage-threshold-set", []string{"threshold", "set", "--dollars", "80", "--dollars", "50"}},
 		{"usage-post-lead", []string{"post", "--job", "lead", "--dollars", "20", "--minutes", "10", "--session", "session-1", "--model", "example-model"}},
-		{"usage-post-notices", []string{"post", "--job", "J-1.2", "--dollars", "80", "--minutes", "50"}},
 		{"usage-show-totals", []string{"show"}},
-		{"usage-threshold-fired", []string{"threshold", "show"}},
-		{"usage-threshold-clear", []string{"threshold", "clear", "--dollars"}},
 	} {
-		if tc.args == nil {
-			// The budget verbs are gone; a budget a task already carries is set through the store.
-			setTaskBudget(t, h, task, usage.Change{Dollars: []float64{200}, Minutes: []float64{120}})
-			continue
-		}
 		if code := h.run(task, append(append([]string{"usage"}, tc.args...), "--json")...); code != 0 {
 			t.Fatalf("%s: exit %d: %s", tc.name, code, h.errb)
 		}
@@ -91,13 +81,6 @@ func TestUsageCLI(t *testing.T) {
 		{"extra-operand", []string{"show", "extra"}, 2, "unexpected argument"},
 		{"end-flags", []string{"show", "--", "--json"}, 2, "unexpected argument"},
 		{"unknown-task", []string{"show", "--task", "T-999"}, 1, "T-999"},
-		{"cap", []string{"threshold", "set", "--dollars", "101"}, 1, "schema limit is 100 percent"},
-		{"budget-set-removed", []string{"budget", "set", "--dollars", "200"}, 2, `unknown command "set"`},
-		{"budget-clear-removed", []string{"budget", "clear"}, 2, `unknown command "clear"`},
-		{"empty-set", []string{"threshold", "set"}, 1, "supply --dollars"},
-		{"clear-false", []string{"threshold", "clear", "--dollars=false"}, 1, "cannot be false"},
-		{"clear-value", []string{"threshold", "clear", "--dollars", "50"}, 2, "unexpected argument"},
-		{"unknown-config-command", []string{"threshold", "other"}, 2, "unknown"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, task := usageTask(t)
@@ -110,46 +93,17 @@ func TestUsageCLI(t *testing.T) {
 	}
 }
 
-func TestUsageTaskResolutionAndWarnings(t *testing.T) {
+func TestUsageTaskResolution(t *testing.T) {
 	h, task := usageTask(t)
-	setTaskBudget(t, h, task, usage.Change{Dollars: []float64{200}})
-	for _, args := range [][]string{
-		{"post", "--job", "lead", "--dollars", "100", "--json"},
-	} {
-		if code := h.run(h.home, append(append([]string{"usage"}, args...), "--task", task)...); code != 0 {
-			t.Fatal(code, h.errb)
-		}
+	if code := h.run(h.home, "usage", "post", "--job", "lead", "--dollars", "100", "--json", "--task", task); code != 0 {
+		t.Fatal(code, h.errb)
 	}
 	var out usage.PostResult
 	if err := json.Unmarshal(h.out.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	if len(out.Notices) != 1 || out.Notices[0].Author.Role != "cli" {
+	if out.Totals.Dollars != 100 || len(out.Notices) != 0 || len(out.Warnings) != 0 {
 		t.Fatal(out)
-	}
-	// Make the Feed unavailable only after the log has been initialized.
-	if err := os.RemoveAll(filepath.Join(task, "feed")); err != nil {
-		t.Fatal(err)
-	}
-	h.write(filepath.Join(task, "feed"), "unavailable")
-	if code := h.run(task, "usage", "post", "--job", "lead", "--dollars", "60", "--json"); code != 0 {
-		t.Fatal(code, h.errb)
-	}
-	if err := json.Unmarshal(h.out.Bytes(), &out); err != nil {
-		t.Fatal(err)
-	}
-	if out.Totals.Dollars != 160 || len(out.Warnings) != 1 || !strings.Contains(h.errb.String(), "warning") {
-		t.Fatalf("%+v %s", out, h.errb)
-	}
-	if err := os.Remove(filepath.Join(task, "feed")); err != nil {
-		t.Fatal(err)
-	}
-	if code := h.run(task, "usage", "post", "--job", "lead", "--dollars", "0"); code != 0 || !strings.Contains(h.out.String(), "80% of dollars budget") {
-		t.Fatal(code, h.out, h.errb)
-	}
-	read, err := (feed.Store{TaskDir: task, TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}).Read(feed.Filter{Type: "usage-notice"})
-	if err != nil || len(read.Records) != 1 {
-		t.Fatalf("%+v %v", read, err)
 	}
 	if code := h.run(h.home, "usage", "show"); code != 1 {
 		t.Fatal("task required", code)
@@ -213,228 +167,130 @@ func TestTokenInvalidCLI(t *testing.T) {
 	}
 }
 
-func TestTokenBudgetCLI(t *testing.T) {
-	h, task := usageTask(t)
-	h.write(filepath.Join(h.gridHome, "workspace.md"), "---\ntokens_per_task: 100\n---\n")
-	check := func(args []string, budget, source string) {
-		t.Helper()
-		if code := h.run(task, append(append([]string{"usage", "budget"}, args...), "--json")...); code != 0 {
-			t.Fatalf("token budget: exit %d: %s", code, h.errb)
-		}
-		want := `{"v":1,"dollars":[50,80,100],"minutes":[50,80,100],"tokens":[80,100],"budget":{"tokens":` + budget + `},"baseline":{"dollars":0,"minutes":0,"tokens":0},"fired":{},"token_budget_source":"` + source + `"}` + "\n"
-		if h.out.String() != want {
-			t.Fatalf("token budget JSON: %s", h.out)
-		}
-	}
-	check([]string{"show"}, "100", "workspace")
-	if code := h.run(task, "usage", "budget", "show"); code != 0 || !strings.Contains(h.out.String(), "tokens  budget 100") || !strings.Contains(h.out.String(), "source workspace") {
-		t.Fatalf("token budget text: exit %d: %s %s", code, h.out, h.errb)
-	}
-	if _, err := os.Stat(filepath.Join(task, "usage")); !os.IsNotExist(err) {
-		t.Fatal("budget show wrote data")
-	}
-	setTaskBudget(t, h, task, usage.Change{BudgetTokens: []uint64{200}})
-	check([]string{"show"}, "200", "task")
-}
-
-func TestTokenWorkspaceInvalidCLI(t *testing.T) {
-	for _, value := range []string{"0", "-5", "1.5", "lots", "+5", "1e3", "[100]", "18446744073709551616", "missing", "linked", "oversized", "directory", "unreadable", "invalid-utf8"} {
-		t.Run(value, func(t *testing.T) {
-			h, task := usageTask(t)
-			path := filepath.Join(h.gridHome, "workspace.md")
-			switch value {
-			case "missing":
-			case "linked":
-				h.write(filepath.Join(h.gridHome, "other.md"), "---\ntokens_per_task: 100\n---\n")
-				if err := os.Symlink("other.md", path); err != nil {
-					t.Fatal(err)
-				}
-			case "oversized":
-				h.write(path, "---\ntokens_per_task: 100\n---\n"+strings.Repeat("x", 64*1024+1))
-			case "directory":
-				if err := os.Mkdir(path, 0700); err != nil {
-					t.Fatal(err)
-				}
-			case "unreadable":
-				h.write(path, "---\ntokens_per_task: 100\n---\n")
-				if err := os.Chmod(path, 0000); err != nil {
-					t.Fatal(err)
-				}
-				defer func() { _ = os.Chmod(path, 0600) }()
-				if _, err := os.ReadFile(path); err == nil {
-					t.Skip("filesystem does not enforce read permissions")
-				}
-			case "invalid-utf8":
-				h.write(path, "---\ntokens_per_task: 100\n---\n\xff")
-			default:
-				h.write(path, "---\ntokens_per_task: "+value+"\n---\n")
-			}
-			if code := h.run(task, "usage", "budget", "show", "--json"); code != 0 || !strings.Contains(h.out.String(), `"budget":{}`) || !strings.Contains(h.out.String(), `"token_budget_source":"none"`) {
-				t.Fatalf("invalid workspace limit: exit %d: %s %s", code, h.out, h.errb)
-			}
-			if _, err := os.Stat(filepath.Join(task, "usage")); !os.IsNotExist(err) {
-				t.Fatal("budget show wrote data")
-			}
-		})
-	}
-}
-
-func TestTokenNoticeCLI(t *testing.T) {
-	for _, source := range []string{"workspace", "task"} {
-		t.Run(source, func(t *testing.T) {
-			h, task := usageTask(t)
-			if source == "workspace" {
-				h.write(filepath.Join(h.gridHome, "workspace.md"), "---\ntokens_per_task: 100\n---\n")
-			} else {
-				setTaskBudget(t, h, task, usage.Change{BudgetTokens: []uint64{100}})
-			}
-			if code := h.run(task, "usage", "threshold", "set", "--tokens", "80"); code != 0 {
-				t.Fatalf("set token threshold: exit %d: %s", code, h.errb)
-			}
-			for i, amount := range []string{"79", "1", "1", "19", "1"} {
-				if code := h.run(task, "usage", "post", "--job", "lead", "--tokens", amount, "--json"); code != 0 || h.errb.Len() != 0 {
-					t.Fatalf("token notice post: exit %d: %s", code, h.errb)
-				}
-				var result struct {
-					Notices []feed.Record `json:"notices"`
-				}
-				if err := json.Unmarshal(h.out.Bytes(), &result); err != nil {
-					t.Fatal(err)
-				}
-				if i == 1 {
-					if len(result.Notices) != 1 || result.Notices[0].Body["threshold"] != float64(80) || result.Notices[0].Body["tokens"] != json.Number("80") {
-						t.Fatalf("80%% notice: %s", h.out)
-					}
-				} else if len(result.Notices) != 0 {
-					t.Fatalf("duplicate or early notice: %s", h.out)
-				}
-			}
-			rows, err := (feed.Store{TaskDir: task, TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}).Read(feed.Filter{Type: "usage-notice"})
-			if err != nil || len(rows.Records) != 1 || rows.Records[0].Verdict != "counted" {
-				t.Fatalf("token notice admission: %+v %v", rows, err)
-			}
-		})
-	}
-}
-
-func TestTokenConfigurationSelectors(t *testing.T) {
-	h, task := usageTask(t)
-	if code := h.run(task, "usage", "threshold", "clear", "--tokens", "--json"); code != 0 || !strings.Contains(h.out.String(), `"tokens":[]`) {
-		t.Fatal(code, h.out, h.errb)
-	}
-}
-
 func TestTokenHelp(t *testing.T) {
 	h, task := usageTask(t)
 	if code := h.run(task, "usage", "--help"); code != 0 {
 		t.Fatal(code, h.errb)
 	}
-	for _, text := range []string{"--tokens N", "--tokens PERCENT", "tokens_per_task", "workspace.md", "nothing stops or holds work", "tokens 80%, 100%; dollars and minutes 50%, 80%, 100%"} {
+	for _, text := range []string{"--tokens N", "nothing stops, holds or warns"} {
 		if !strings.Contains(h.out.String(), text) {
 			t.Fatalf("help omits %q", text)
+		}
+	}
+	for _, text := range []string{"threshold", "budget", "PERCENT", "notice", "tokens_per_task", "workspace.md"} {
+		if strings.Contains(h.out.String(), text) {
+			t.Fatalf("help still names %q:\n%s", text, h.out)
 		}
 	}
 	golden.Assert(t, "usage-help", h.out.String())
 }
 
-func TestWorkspaceBudgetShowCLI(t *testing.T) {
-	for _, tc := range []struct{ name, data, want string }{
-		{"missing", "", "null"},
-		{"no-key", "---\nname: workspace\n---\n", "null"},
-		{"valid", "---\ntokens_per_task: 100\n---\n", "100"},
-		{"zero", "---\ntokens_per_task: 0\n---\n", "null"},
-		{"negative", "---\ntokens_per_task: -1\n---\n", "null"},
-		{"exponent", "---\ntokens_per_task: 1e3\n---\n", "null"},
-		{"linked", "---\ntokens_per_task: 100\n---\n", "null"},
-		{"oversized", "---\ntokens_per_task: 100\n---\n" + strings.Repeat("x", 65537), "null"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			h := newHarness(t)
-			t.Setenv("GRID_ROLE", "")
-			path := filepath.Join(h.gridHome, "workspace.md")
-			if tc.name == "linked" {
-				h.write(filepath.Join(h.gridHome, "other.md"), tc.data)
-				if err := os.Symlink("other.md", path); err != nil {
-					t.Fatal(err)
-				}
-			} else if tc.name != "missing" {
-				h.write(path, tc.data)
-			}
-			if code := h.run(h.home, "usage", "budget", "show", "--workspace", "--json"); code != 0 || h.out.String() != "{\"tokens_per_task\":"+tc.want+"}\n" {
-				t.Fatalf("workspace show: exit %d, stdout %q, stderr %q", code, h.out, h.errb)
-			}
-			want := tc.want
-			if want == "null" {
-				want = "none"
-			}
-			if code := h.run(h.home, "usage", "budget", "show", "--workspace"); code != 0 || h.out.String() != "tokens_per_task "+want+"\n" {
-				t.Fatalf("plain workspace show: exit %d, %s", code, h.out)
-			}
-		})
-	}
-}
-
-func TestWorkspaceBudgetFlagsCLI(t *testing.T) {
+// The threshold and budget verbs are removed (owner's direction: usage is a number the
+// window shows). They answer the unknown-command error, exit 2, and write nothing.
+func TestUsageThresholdAndBudgetVerbsRemoved(t *testing.T) {
 	for _, args := range [][]string{
-		{"show", "--task", "T-01"}, {"show", "--task="},
-		{"set", "--tokens", "100", "--task", "T-01"},
-		{"set", "--dollars", "1"}, {"set", "--minutes", "1"}, {"set"},
-		{"set", "--tokens", "0"}, {"set", "--tokens", "-1"}, {"set", "--tokens", "1e3"},
-		{"set", "--tokens", "1", "--tokens", "2"},
-		{"clear", "--dollars"}, {"clear", "--minutes=false"}, {"clear", "--tokens=false"},
+		{"threshold"}, {"threshold", "show"}, {"threshold", "set", "--dollars", "80"}, {"threshold", "clear"},
+		{"threshold", "clear", "--tokens", "--json"},
+		{"budget"}, {"budget", "show"}, {"budget", "show", "--workspace"}, {"budget", "show", "--json"},
+		{"budget", "set", "--dollars", "200"}, {"budget", "clear"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			h := newHarness(t)
-			t.Setenv("GRID_ROLE", "guest") // Syntax errors precede authorization and I/O.
-			argv := append([]string{"usage", "budget"}, args...)
-			argv = append(argv, "--workspace", "--json")
-			if code := h.run(h.home, argv...); code != 2 {
-				t.Fatalf("invalid workspace flags: exit %d: %s", code, h.errb)
+			h, task := usageTask(t)
+			if code := h.run(task, append([]string{"usage"}, args...)...); code != 2 || !strings.Contains(h.errb.String(), `unknown command "`+args[0]+`"`) || h.out.Len() != 0 {
+				t.Fatalf("exit %d, stdout %s, stderr %s", code, h.out, h.errb)
 			}
-			entries, err := os.ReadDir(h.gridHome)
-			if err != nil || len(entries) != 0 {
-				t.Fatalf("invalid flags touched home: %v %v", entries, err)
+			if _, err := os.Stat(filepath.Join(task, "usage")); !os.IsNotExist(err) {
+				t.Fatal("removed verb wrote data")
 			}
 		})
 	}
 }
 
-func TestWorkspaceBudgetRolesCLI(t *testing.T) {
-	for _, role := range []string{"guest", "unknown", "member", "owner", "", " owner "} {
-		for _, op := range []string{"show"} {
-			t.Run(role+"/"+op, func(t *testing.T) {
-				h := newHarness(t)
-				t.Setenv("GRID_ROLE", role)
-				args := []string{"usage", "budget", op, "--workspace", "--json"}
-				want := 0
-				if role == "guest" || role == "unknown" {
-					want = 3
+// Old homes carry budgets, so the old 50/80/100 crossing points are exercised against a
+// budget in the old thresholds.json and in workspace.md: a post still records the delta
+// and writes no notice event and prints no usage-notice line.
+func TestUsagePostAtOldThresholdsWritesNoNotice(t *testing.T) {
+	for _, unit := range []string{"dollars", "minutes", "tokens"} {
+		for _, source := range []string{"task", "workspace"} {
+			if source == "workspace" && unit != "tokens" {
+				continue
+			}
+			t.Run(unit+"/"+source, func(t *testing.T) {
+				h, task := usageTask(t)
+				if source == "task" {
+					h.write(filepath.Join(task, "usage", "thresholds.json"), `{"v":1,"dollars":[50,80,100],"minutes":[50,80,100],"tokens":[50,80,100],"budget":{"`+unit+`":100},"baseline":{"dollars":0,"minutes":0,"tokens":0},"fired":{}}`)
+				} else {
+					h.write(filepath.Join(h.gridHome, "workspace.md"), "---\ntokens_per_task: 100\n---\n")
 				}
-				if code := h.run(h.home, args...); code != want {
-					t.Fatalf("role %q %s: exit %d, want %d: %s", role, op, code, want, h.errb)
-				}
-				if want == 3 {
-					entries, err := os.ReadDir(h.gridHome)
-					if err != nil || len(entries) != 0 || h.out.Len() != 0 {
-						t.Fatalf("denied role touched home: %v %v", entries, err)
+				total := 0
+				for _, step := range []int{49, 1, 29, 1, 19, 1, 50} { // 49, 50, 79, 80, 99, 100, 150 percent
+					total += step
+					if code := h.run(task, "usage", "post", "--job", "lead", "--"+unit, strconv.Itoa(step)); code != 0 {
+						t.Fatalf("post at %d: exit %d: %s", total, code, h.errb)
 					}
+					if strings.Contains(h.out.String(), "usage-notice") || strings.Contains(h.out.String()+h.errb.String(), "budget") || h.errb.Len() != 0 {
+						t.Fatalf("post at %d printed a notice: stdout %s stderr %s", total, h.out, h.errb)
+					}
+				}
+				if code := h.run(task, "usage", "post", "--job", "lead", "--"+unit, "0", "--json"); code != 0 {
+					t.Fatal(code, h.errb)
+				}
+				var out usage.PostResult
+				if err := json.Unmarshal(h.out.Bytes(), &out); err != nil {
+					t.Fatal(err)
+				}
+				if len(out.Notices) != 0 || len(out.Warnings) != 0 {
+					t.Fatalf("post result carries notices: %+v", out)
+				}
+				var got float64
+				switch unit {
+				case "dollars":
+					got = out.Totals.Dollars
+				case "minutes":
+					got = out.Totals.Minutes
+				default:
+					got = float64(out.Totals.Tokens)
+				}
+				if got != float64(total) || out.Totals.Posts != 8 {
+					t.Fatalf("usage was not recorded as a number: %+v", out.Summary)
+				}
+				read, err := (feed.Store{TaskDir: task, TaskID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}).Read(feed.Filter{Type: "usage-notice"})
+				if err == nil && len(read.Records) != 0 {
+					t.Fatalf("notice events written: %+v", read.Records)
 				}
 			})
 		}
 	}
 }
 
-func TestWorkspaceBudgetReplaceablePolicyCLI(t *testing.T) {
-	h := newHarness(t)
-	t.Setenv("GRID_ROLE", "member")
-	read := usage.WorkspaceBudgetReadAllowed
-	t.Cleanup(func() { usage.WorkspaceBudgetReadAllowed = read })
-	readCalls := 0
-	usage.WorkspaceBudgetReadAllowed = func(role string) bool { readCalls++; return role == "member" }
-	if code := h.run(h.home, "usage", "budget", "show", "--workspace", "--json"); code != 0 {
-		t.Fatalf("replacement policy: exit %d: %s", code, h.errb)
-	}
-	if readCalls != 1 {
-		t.Fatalf("policy calls: read %d", readCalls)
+// A task from an old home keeps a budget in usage/thresholds.json (even one the old reader
+// refused), a usage_notice_thresholds key in workflow.md (even an invalid one) and a
+// tokens_per_task default. Reads and posts ignore all of it and succeed without a warning.
+func TestUsageIgnoresOldBudgetsAndThresholds(t *testing.T) {
+	for _, tc := range []struct{ name, thresholds, workflow string }{
+		{"valid-budget", `{"v":1,"dollars":[50,80,100],"minutes":[50,80,100],"tokens":[80,100],"budget":{"dollars":10,"tokens":5},"baseline":{"dollars":0,"minutes":0,"tokens":0},"fired":{}}`, "---\nusage_notice_thresholds: {tokens: [90, 100]}\n---\n"},
+		{"sparse-v2", `{"v":2,"tokens":[],"budget":{"minutes":3},"baseline":{"dollars":0,"minutes":0,"tokens":0},"fired":{"tokens:80":"01ARZ3NDEKTSV4RRFFQ69G5FAV"}}`, "---\nusage_notice_thresholds: {dollars: [10, 100], minutes: [100]}\n---\n"},
+		{"unreadable-config", `not json`, "---\nusage_notice_thresholds: {dollars: [0, 7], rubbish: [1]}\n---\n"},
+		{"invalid-key", `{"v":9,"budget":{"dollars":"x"}}`, "---\nusage_notice_thresholds: nonsense\n---\n"},
+		{"no-front-matter", `{}`, "usage_notice_thresholds: {tokens: [90, 100]}\n"},
+		{"unclosed-front-matter", ``, "---\nusage_notice_thresholds: {tokens: [90, 100]}\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, task := usageTask(t)
+			h.write(filepath.Join(task, "usage", "thresholds.json"), tc.thresholds)
+			h.write(filepath.Join(task, "workflow.md"), tc.workflow)
+			h.write(filepath.Join(h.gridHome, "workspace.md"), "---\ntokens_per_task: 1\n---\n")
+			h.write(filepath.Join(task, "usage", "usage.jsonl"), `{"v":1,"at":"2026-01-02T03:04:05.678Z","job":"lead","session":"","model":"","dollars":1,"minutes":2,"tokens":3}`+"\n")
+			if code := h.run(task, "usage", "show", "--json"); code != 0 || h.errb.Len() != 0 || !strings.Contains(h.out.String(), `"totals":{"dollars":1,"minutes":2,"tokens":3,"posts":1}`) {
+				t.Fatalf("show: exit %d, stdout %s, stderr %s", code, h.out, h.errb)
+			}
+			if code := h.run(task, "usage", "post", "--job", "lead", "--dollars", "20", "--minutes", "20", "--tokens", "20"); code != 0 || h.errb.Len() != 0 || strings.Contains(h.out.String(), "usage-notice") || !strings.Contains(h.out.String(), "total  dollars 21  minutes 22  tokens 23  posts 2") {
+				t.Fatalf("post: exit %d, stdout %s, stderr %s", code, h.out, h.errb)
+			}
+			after, err := os.ReadFile(filepath.Join(task, "usage", "thresholds.json"))
+			if err != nil || string(after) != tc.thresholds {
+				t.Fatalf("old config was rewritten: %q %v", after, err)
+			}
+		})
 	}
 }

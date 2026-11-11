@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
@@ -43,16 +45,27 @@ type Store struct {
 	TaskPath string
 	GridHome string
 	Now      func() time.Time
-	// Writer is resolved lazily, only when a notice needs posting.
-	Writer func() (feed.Writer, error)
-	// UsageNoticeThresholds overrides task workflow defaults when non-nil.
-	// Set it before concurrent Store calls.
-	UsageNoticeThresholds *NoticeThresholds
-	// WorkflowWarning reports invalid workflow units once per configuration read;
-	// valid units still apply and invalid units retain built-in defaults.
-	WorkflowWarning func(error)
-	// beforeSave simulates a failure after a Feed post but before saving fired.
-	beforeSave func() error
+}
+
+// PostResult is the usage log after one post. Usage is a number: a post never
+// writes a notice and nothing is compared with a limit. Notices and Warnings stay
+// in the answer, always empty, so readers of the post JSON keep their shape.
+type PostResult struct {
+	Summary
+	Notices  []feed.Record `json:"notices"`
+	Warnings []string      `json:"warnings"`
+}
+
+// ParseTokens accepts only ASCII decimal digits in the uint64 range.
+func ParseTokens(value string) (uint64, error) {
+	if value == "" || strings.IndexFunc(value, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+		return 0, errors.New("tokens must be a non-negative integer in the uint64 range")
+	}
+	n, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, errors.New("tokens must be a non-negative integer in the uint64 range")
+	}
+	return n, nil
 }
 
 var jobPattern = regexp.MustCompile(`^(lead|J-[1-9][0-9]*(\.[1-9][0-9]*)*)$`)
@@ -198,7 +211,6 @@ func (s Store) Post(in Input) (PostResult, error) {
 			return err
 		}
 		out.Summary = before
-		s.notices(dir, &out)
 		return nil
 	})
 	return out, err
