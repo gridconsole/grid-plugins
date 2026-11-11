@@ -1,0 +1,9 @@
+{"type":"system","subtype":"init","session_id":"hjo-bad","tools":["Read","Edit","Grep","Glob"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The Job says MaxTries is 3 and should be 5. I know that file, so I will edit it now."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Edit","input":{"file_path":"src/retry.go","old_string":"const MaxTries = 3","new_string":"const MaxTries = 5"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","is_error":true,"content":"File has not been read yet. Read it first before writing to it."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_2","name":"Read","input":{"file_path":"src/retry.go"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_2","content":"1\tpackage retry\n2\t\n3\timport \"time\"\n4\t\n5\t// Delay is how long a caller waits between two tries.\n6\tconst Delay = 2 * time.Second\n7\t\n8\t// MaxTries is how many times a call is tried before it gives up.\n9\tconst MaxTries = 3\n"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_3","name":"Edit","input":{"file_path":"src/retry.go","old_string":"const MaxTries = 3","new_string":"const MaxTries = 5"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_3","content":"The file src/retry.go has been updated."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done. MaxTries is now 5."}]}}

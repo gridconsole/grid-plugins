@@ -258,8 +258,6 @@ func TestHistoryLineVia(t *testing.T) {
 		{"via given", "d", []string{"app"}, "- t · ev · d · by who · via app"},
 		{"via given, no detail", "", []string{"app"}, "- t · ev · by who · via app"},
 		{"empty via is left out", "d", []string{""}, "- t · ev · d · by who"},
-		{"only the first via is used", "d", []string{"app", "cli"}, "- t · ev · d · by who · via app"},
-		{"empty first via hides a later one", "d", []string{"", "cli"}, "- t · ev · d · by who"},
 		{"via is not trimmed or escaped", "", []string{" a\nb "}, "- t · ev · by who · via  a\nb "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -78,6 +78,7 @@ var guestParityCommands = map[string][]string{
 	"plan write":         {"{file}"},
 	"project relink":     {"{project}", "{cwd}"},
 	"project remove":     {"{project}"},
+	"project repo":       {"add", "{project}", "--where", "/parity/app"},
 	"project-md get":     {"{project}", "id"},
 	"project-md set":     {"{project}", "title", "parity"},
 	"proof add":          {"I-01", "--text", "parity"},
@@ -115,6 +116,7 @@ var guestParityCommands = map[string][]string{
 	"task decline":       {"{task}", "--reason", "parity"},
 	"task delete":        {"{task}"},
 	"task history":       {"{task}"},
+	"task lane":          {"{task}", "doing"},
 	"task list":          {},
 	"task move":          {"parity-worker"},
 	"task new":           {"parity"},
@@ -407,13 +409,15 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 	{
 		switch command {
 		case "routine add", "routine remove", "routine run", "routine schedule", "routine unschedule",
-			"project relink", "project remove", "signal add",
+			"project relink", "project remove", "project repo", "signal add",
 			"setup":
 			want = guestParityOutput{1, "", "grid: guests cannot change project settings\n"}
 		case "task delete", "task restore":
 			want = guestParityOutput{3, "", "grid " + command + ": task edit rejected: a person with an allowed role must perform this task move\n"}
 		case "task new", "task close", "task reopen", "task stop", "task move":
 			want = guestParityOutput{1, "", "grid " + command + ": role \"guest\" may not " + strings.TrimPrefix(command, "task ") + " a task; a guest answers and comments\n"}
+		case "task lane":
+			want = guestParityOutput{1, "", "grid task lane: role \"guest\" may not move a task to a lane; a guest answers and comments\n"}
 		case "session start", "session stop", "session send", "session pause", "session resume", "session handback", "session switch":
 			want = guestParityOutput{1, "", "grid " + command + ": role \"guest\" may not " + strings.TrimPrefix(command, "session ") + " a session; a guest answers and comments\n"}
 		case "question withdraw":

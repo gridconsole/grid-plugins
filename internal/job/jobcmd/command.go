@@ -156,7 +156,7 @@ func Run(args []string, e Env) int {
 			// save has returned and holds no lock; AppendHistory takes .task.lock itself.
 			// A history failure never fails the render.
 			for _, id := range brainGiven(j, rendered.Inputs) {
-				if err := taskstore.AppendHistory(task, "brain given", id, "grid job render", j.ID); err != nil {
+				if err := taskstore.AppendHistoryWhy(task, "brain given", id, "grid job render", j.ID, givenWhy(j, id)); err != nil {
 					fmt.Fprintf(e.Stderr, "grid job render: history: %v\n", err)
 				}
 			}
@@ -337,6 +337,22 @@ func brainGiven(j job.Job, in job.Inputs) []string {
 		}
 	}
 	return ids
+}
+
+// givenWhy is the why of the first Job link that names the note id, with an anchor
+// after # cut from the link as brainGiven cuts it from the source. A note the Job
+// carries through keep: or decisions: with no link has no why.
+func givenWhy(j job.Job, id string) string {
+	for _, l := range j.Links {
+		to := l.To
+		if i := strings.IndexByte(to, '#'); i >= 0 {
+			to = to[:i]
+		}
+		if to == id && strings.TrimSpace(l.Why) != "" {
+			return l.Why
+		}
+	}
+	return ""
 }
 
 func output(e Env, f flags, r report, code int) int {

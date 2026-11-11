@@ -105,7 +105,7 @@ func commands() []command {
 		{"open", "open the task page in the browser", runOpen},
 		{"doctor", "check machine health and collect a support bundle", runDoctor},
 		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels", runHook},
-		{"task", "new, show, list, status, stop, close, reopen, history, attach, move, decline, delete, rename, restore", runTask},
+		{"task", "new, show, list, status, lane, stop|close|reopen, history, attach, move, decline, delete, rename, restore", runTask},
 		{"plan", "write, check, items, hash, diff, migrate", runPlan},
 		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace", runOrchestratorJob},
 		{"lease", "take, release, status (task lease)", runTaskLease},
@@ -131,7 +131,7 @@ func commands() []command {
 		{"intent", "list, claim, done, release, renew (worker requests)", runIntent},
 		{"usage", "post and show usage, fold observed session totals", runUsage},
 		{"account", "list, status, statusline, scan, sign-in, windows, folder and note for agent accounts", runAccount},
-		{"project", "add, remove, list, scan and relink projects", runProject},
+		{"project", "add, remove, list, scan and relink projects; repo edits a project's repos", runProject},
 		{"project-md", "get or set a project front-matter key", runProjectMD},
 		{"setup", "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)", runSetup},
 		{"signal", "add, act on, dismiss and move inbox signals", runSignal},
@@ -267,12 +267,15 @@ func guestSessionRefusal(verb string) string {
 // guestTaskMove is a task move a person makes: the owner's rule is that a guest
 // answers and comments, and does not create, close, reopen, stop or move a task.
 func guestTaskMove(verb string) bool {
-	return verb == "new" || verb == "close" || verb == "reopen" || verb == "stop" || verb == "move"
+	return verb == "new" || verb == "close" || verb == "reopen" || verb == "stop" || verb == "move" || verb == "lane"
 }
 
 // guestTaskMoveRefusal is the reason a guest's new, close, reopen, stop or move
 // gives; it names the role the way a guest's question withdrawal does.
 func guestTaskMoveRefusal(verb string) string {
+	if verb == "lane" {
+		return fmt.Sprintf("role %q may not move a task to a lane; a guest answers and comments", "guest")
+	}
 	return fmt.Sprintf("role %q may not %s a task; a guest answers and comments", "guest", verb)
 }
 

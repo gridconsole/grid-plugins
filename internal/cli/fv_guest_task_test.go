@@ -171,6 +171,7 @@ var fvGuestVerbs = []struct {
 	{"rename", []string{"task", "rename", "T-01", "--title", "A guest title", "--project", "example"}, 1, "grid task rename: scope: role cannot rename tasks", false},
 	{"decline", []string{"task", "decline", "T-01", "--reason", "a guest reason", "--project", "example"}, 1, "grid task decline: scope: role cannot decline tasks", false},
 	{"move", []string{"task", "move", "laptop", "--task", "T-01", "--project", "example"}, 1, `grid task move: role "guest" may not move a task; a guest answers and comments`, false},
+	{"lane", []string{"task", "lane", "T-01", "doing", "--project", "example"}, 1, `grid task lane: role "guest" may not move a task to a lane; a guest answers and comments`, false},
 	{"attach", []string{"task", "attach", "T-01"}, 1, "grid task attach: agent cannot attach T-01 without its assigned task folder", false},
 	{"status", []string{"task", "status", "T-01", "running"}, 0, "", true},
 }

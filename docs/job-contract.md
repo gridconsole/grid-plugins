@@ -11,10 +11,12 @@ uses `job.Job` for dependencies and the plan check.
 Every entry supplies `id`, `item`, `title`, `role`, `skills`, `risk`, `intent`,
 `links`, `keep`, `decisions`, `read`, `write`, `out_of_scope`, `acceptance`,
 `verify`, `budget`, `on_blocked`, and `after`.
-These are `job.PlannedFields`; empty lists remain explicit lists. A Job names
+These are `job.PlannedFields`; empty lists remain explicit lists. A plan names
 no review level and no round count: whether a review runs is judged per step by
-the orchestrator. A plan or record that still carries `review` or `max_rounds`
-reads without error and the value is ignored.
+the orchestrator. The record the run keeps does carry `review_rounds` (see
+[Job record fields](#job-record-fields)); the plan never sets it. A plan or
+record that still carries `review` or `max_rounds` reads without error and the
+value is ignored.
 The parser derives omitted `item`, `title`, `intent.item`, and `intent.goal`
 from the enclosing checklist item. `intent.owner` is required. The step's
 `kind` applies to its Jobs and is not repeated inside a Job entry.
@@ -35,6 +37,60 @@ ambiguous when it has more than one Job; select the Job id in that case.
 quotes the first paragraph under `## Verify`.
 
 A `read` path renders as `- Read <path> · <summary> · <why> [tier]`, where `<why>` is the reason of a `links` entry with the same `to` (left out when there is none); a guest or external file shows its summary inside the data fence instead of on the line, a personal note shows the id only, and a file with no summary keeps the bare `- Read <path> [tier]`.
+
+## Job record fields
+
+`contract/schemas/job-record.json` is the shape of a Job record on the Feed. It
+has 37 properties; 27 are required. The table has one row per property.
+`Written by` is `plan` (the plan is published as Job records: decoded in
+`internal/job/planned.go`, encoded by `Record` in `internal/job/record.go`,
+posted by `internal/orchestrator/plan.go`), `run` (a later post or control
+changes the record, folded in `internal/contract/fold.go`), or `none` (no code
+writes it). `grid job render` writes no record field; it prints the record in
+the brief metadata (`Metadata` in `internal/job/source.go`) and reads
+`continues` (`internal/job/render.go`). A Job record with a field outside this
+table is refused. `internal/job/hf_record_doc_test.go` keeps the table equal to
+the schema.
+
+| Field | Required | Written by | Meaning |
+| --- | --- | --- | --- |
+| `id` | required | plan `internal/job/planned.go` | The Job id, `J-N` or `J-N.M`; a proposed child takes `<parent>.<n>` (`internal/orchestrator/events.go`). |
+| `item` | required | plan `internal/job/planned.go` | The number of the plan checklist item the Job belongs to. |
+| `title` | required | plan `internal/job/planned.go` | One-line title; omitted, it comes from the checklist item. |
+| `role` | required | plan `internal/job/planned.go` | The worker role; `Person` marks a step a person answers (`internal/job/job.go`). |
+| `skills` | required | plan `internal/job/planned.go` | Skill names the worker loads; may be empty. |
+| `risk` | required | plan `internal/job/planned.go` | Risk tags: `concurrency`, `security`, `data-format`, `cross-platform`. |
+| `intent` | required | plan `internal/job/planned.go` | `owner`, `item` and `goal`: where the owner's request is quoted. |
+| `links` | required | plan `internal/job/planned.go` | Typed links to other files or Jobs, each with a `rel` and a `why`. |
+| `keep` | required | plan `internal/job/planned.go` | `brain:` ids of knowledge the Job must keep. |
+| `decisions` | required | plan `internal/job/planned.go` | `brain:` ids of decisions that bind the Job. |
+| `read` | required | plan `internal/job/planned.go` | Paths the brief shows the worker (`internal/job/render.go`). |
+| `write` | required | plan `internal/job/planned.go` | Relative slash paths the Job may change. |
+| `out_of_scope` | required | plan `internal/job/planned.go` | What the Job must not do. |
+| `acceptance` | required | plan `internal/job/planned.go` | The acceptance rows (`A1`...), each with text and what it `traces` to; at least one. |
+| `verify` | required | plan `internal/job/planned.go` | The check: a command with `min_tests`, or `kind` `file-exists` or `reviewer-check`. |
+| `budget` | required | plan `internal/job/planned.go` | `turns_estimate` and `reads_before_first_edit`. |
+| `on_blocked` | required | plan `internal/job/planned.go` | `ask-and-continue` or `exit`: what the worker does when blocked. |
+| `after` | required | plan `internal/job/planned.go` | Dependencies: Job ids, `gate:Q-N` person questions, or `job`/`kind`/`why` objects. |
+| `attempt` | required | plan `internal/job/job.go`; run `internal/contract/fold.go` | Starts at 1 (`Defaults`); an assignment post for a later attempt raises it. |
+| `continues` | required | plan `internal/orchestrator/events.go`; run `internal/cli/reopen_job.go` | `null`, or the Job this one carries on: a proposed child names its parent, a reopened plan Job names the earlier one. |
+| `discovered_from` | required | plan `internal/orchestrator/events.go`, `internal/orchestrator/replan.go` | `null`, or the Job whose result proposed this one, or the cancelled Job a replan replaces. |
+| `close_reason` | required | run `internal/contract/fold.go` | `null` until a Job is `rejected` or `cancelled`; those two need a nonempty reason. |
+| `checkpoint` | required | run `internal/contract/fold.go` | `null`, or the latest checkpoint post: `job`, `step` and a `commit` hash. |
+| `review_rounds` | required | run `internal/contract/fold.go` | Counter, starts at 0; the fold adds 1 when a worker exits with reason `loop`. |
+| `level_raised` | required | plan `internal/job/record.go` | `null`, or `from`, `to` and `why`; every writer in the module writes `null`. |
+| `worktree` | required | plan `internal/job/record.go`; run `internal/question/job.go` | `null`, a string or a list of strings; a person's question Job writes `none`. |
+| `posts_back` | required | plan `internal/job/record.go` | What the worker may post: `result`, `question`, `knowledge`, `checkpoint`; `[]` when unset. |
+| `kind` | optional | plan `internal/job/planned.go` | The step's work kind (`^[a-z][a-z-]*$`), taken from the checklist item. |
+| `visible` | optional | plan `internal/job/planned.go` | `big` or `small`. |
+| `irreversible` | optional | plan `internal/job/planned.go` | Boolean; the Job does something that cannot be undone. |
+| `review_reason` | optional | plan `internal/job/planned.go` | A nonempty sentence, at most 500 characters, saying why a review is wanted. |
+| `order` | optional | run `internal/cli/orchestrator.go`, `internal/contract/fold.go` | Queue position, lowest first; changes only a Job that has not started. |
+| `review` | optional | plan `internal/job/planned.go`, `internal/cli/task_new_first_job.go`, `internal/cli/deliver_keeper_job.go`, `internal/question/job.go`, `internal/approvefix/approvefix.go`, `internal/migrate/receipt.go` | Retired review level `L0` to `L3`; an old plan still carries it and the five builders of a Job record outside the plan still write it; nothing reads it. |
+| `max_rounds` | optional | plan `internal/cli/task_new_first_job.go`, `internal/cli/deliver_keeper_job.go`, `internal/question/job.go`, `internal/orchestrator/replan.go`, `internal/approvefix/approvefix.go`, `internal/migrate/receipt.go` | Retired round count; the same builders still write it; nothing reads it. |
+| `created_at` | optional | none | UTC time with milliseconds; no code writes it. The ready order reads it and falls back to the post time (`internal/orchestrator/ready.go`). |
+| `status` | optional | run `internal/contract/fold.go` | The lifecycle status; `Record` drops the brief-only `briefed`, `done` and `blocked` (`internal/job/record.go`). |
+| `review_override` | optional | none | `level` and `reason`; the schema allows it, no code writes or reads it. |
 
 ## Dependencies and review
 

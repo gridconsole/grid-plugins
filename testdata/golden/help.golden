@@ -8,7 +8,7 @@ Commands:
   open        open the task page in the browser
   doctor      check machine health and collect a support bundle
   hook        answer a Claude Code or Codex hook event; set and list hook levels
-  task        new, show, list, status, stop, close, reopen, history, attach, move, decline, delete, rename, restore
+  task        new, show, list, status, lane, stop|close|reopen, history, attach, move, decline, delete, rename, restore
   plan        write, check, items, hash, diff, migrate
   job         next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace
   lease       take, release, status (task lease)
@@ -34,7 +34,7 @@ Commands:
   intent      list, claim, done, release, renew (worker requests)
   usage       post and show usage, fold observed session totals
   account     list, status, statusline, scan, sign-in, windows, folder and note for agent accounts
-  project     add, remove, list, scan and relink projects
+  project     add, remove, list, scan and relink projects; repo edits a project's repos
   project-md  get or set a project front-matter key
   setup       record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)
   signal      add, act on, dismiss and move inbox signals

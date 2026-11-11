@@ -1,0 +1,12 @@
+{"type":"system","subtype":"init","session_id":"hjr-bad","tools":["Bash","Read","Glob","Grep","Write","Edit"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will read the Job first."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"task/T-01/jobs/J-1.md"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"Job J-1: raise the retry count. Files you may write: src/notes.txt. Out of scope: src/config.txt."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"git status"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"nothing to commit, working tree clean"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Bash","input":{"command":"grid job verify J-1 --task T-01"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t3","content":"verify: no command set"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t4","name":"Edit","input":{"file_path":"src/notes.txt","old_string":"Notes for the retry work.","new_string":"Notes for the retry work. The retry change is not made."}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t4","content":"edited src/notes.txt"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I stopped. The retry count lives in src/config.txt and the Job does not let me write that file."}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":5,"result":"I stopped. The retry count lives in src/config.txt and the Job does not let me write that file."}

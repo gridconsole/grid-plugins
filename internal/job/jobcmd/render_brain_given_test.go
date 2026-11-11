@@ -104,8 +104,11 @@ func TestRenderLogsBrainGivenOnce(t *testing.T) {
 	if len(got) != len(carried) {
 		t.Fatalf("want one brain given line per carried note (%d), got %d in %q", len(carried), len(got), all)
 	}
+	// The deploy note is linked, so its line ends with the link's why; the recalled
+	// export-format note has no link and no why.
+	whys := map[string]string{"brain:project/deploy": " · why Carry this note into the Job"}
 	for i, want := range carried {
-		if !strings.HasSuffix(got[i], " · brain given · "+want+" · by grid job render · via J-1") {
+		if !strings.HasSuffix(got[i], " · brain given · "+want+" · by grid job render · via J-1"+whys[want]) {
 			t.Errorf("line %q does not end with the line for %s", got[i], want)
 		}
 	}

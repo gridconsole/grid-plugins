@@ -230,13 +230,16 @@ func runOrchestrator(args []string, env Env) int {
 	}
 	// A person's Job is never assigned, so its result is written under the task lease.
 	personResult := false
+	var personJobRole, personOwner, personKind string
 	if verb == "result" && *job != "" {
 		snap, err := orchestrator.Load(store)
 		if err != nil {
 			return fail(err)
 		}
 		for _, it := range snap.Items {
-			personResult = personResult || it.ID == *job && it.IsPerson()
+			if it.ID == *job && it.IsPerson() && !personResult {
+				personResult, personJobRole, personOwner, personKind = true, it.Role, it.PersonName(), it.Kind
+			}
 		}
 	}
 	leaseName := "task"
@@ -278,6 +281,11 @@ func runOrchestrator(args []string, env Env) int {
 		personRole = "member"
 	}
 	unleased := *epoch == "" && contract.TierFor(personRole) == contract.PersonTeam && (verb == "post" && *kind == "job" || personResult)
+	// A guest the person Job names answers it the same way; every other guest, and a
+	// guest with any lease, keeps the lease path and its refusal.
+	if !unleased && personResult && *planHash == "" && *epoch == "" && *leaseFlag == "" && env.getenv("GRID_LEASE") == "" {
+		unleased = contract.GuestAddressee(personRole, env.getenv("GRID_MEMBER"), false, personJobRole, personOwner, personKind)
+	}
 	var writer feed.Writer
 	if unleased {
 		writer, err = feedWriter(env, "", "")
@@ -339,6 +347,10 @@ func runOrchestrator(args []string, env Env) int {
 		answer, _ := obj["answer"].(string)
 		record, err := orchestrator.AnswerPerson(store, writer, *job, answer, time.Now())
 		if err != nil {
+			if *asJSON {
+				// A Job that still waits also prints the job_waiting object, as grid approve does.
+				writeJobWaiting(env, err)
+			}
 			return fail(err)
 		}
 		// An unleased answer closes nothing by itself: the Job stays open until the
@@ -472,6 +484,9 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	}
 	if err != nil {
 		fmt.Fprintln(env.Stderr, err)
+		if asJSON {
+			writeJobWaiting(env, err)
+		}
 		recordLookupError(env, err)
 		return exitCode(err)
 	}

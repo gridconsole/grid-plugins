@@ -61,7 +61,7 @@ func (s Store) personAnswers(snap Snapshot) error {
 		}
 		var answers []feed.Record
 		for _, r := range snap.Records {
-			if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] || r.Lease != nil || r.Fence != 0 || contract.TierFor(r.Author.Role) != contract.PersonTeam {
+			if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] || r.Lease != nil || r.Fence != 0 || contract.TierFor(r.Author.Role) != contract.PersonTeam && !contract.GuestAddressee(r.Author.Role, r.Author.ID, false, item.Role, item.PersonName(), item.Kind) {
 				continue
 			}
 			if text, _ := r.Body["answer"].(string); strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > maxPersonAnswer {
@@ -164,7 +164,10 @@ var answerFields = []string{"plan_hash", "plan_digest", "lands_hash", "note", "r
 // puts them in the accepting control; an unleased person puts them in the answer,
 // and the holder's next pass copies them into the control (personAnswers).
 func AnswerPersonWith(store feed.Store, w feed.Writer, id, answer string, fields map[string]any, now time.Time) (record feed.Record, err error) {
-	unleased := PersonWriter(w)
+	// A guest with no lease is taken only for the Job that names it (checked below
+	// against the Feed); every other writer needs the task lease or the team role.
+	guest := guestAnswerer(w)
+	unleased := PersonWriter(w) || guest
 	if w.Lease != "task" && !unleased {
 		return record, feed.ErrStaleLease
 	}
@@ -183,6 +186,9 @@ func AnswerPersonWith(store feed.Store, w feed.Writer, id, answer string, fields
 		snap, e := Load(store)
 		if e != nil {
 			return e
+		}
+		if guest && !guestAddressed(snap, w, id) {
+			return feed.ErrStaleLease
 		}
 		if e := PersonOpen(snap, id, now); e != nil {
 			return e
@@ -205,7 +211,7 @@ func AnswerPersonWith(store feed.Store, w feed.Writer, id, answer string, fields
 		if e != nil {
 			return e
 		}
-		body := map[string]any{"target": id, "status": "accepted", "reason": "answered by " + w.Author.ID}
+		body := map[string]any{"target": id, "status": "accepted", "reason": "answered by " + w.Author.ID, "answer": answer}
 		for _, key := range answerFields {
 			if v, ok := fields[key]; ok {
 				body[key] = v
