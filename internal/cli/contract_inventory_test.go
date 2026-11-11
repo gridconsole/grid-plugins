@@ -459,6 +459,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"task show":            {args: []string{"[<task>]"}, output: "cmd-task-show.json"},
 		"task list":            {output: "cmd-task-list.json"},
 		"task status":          {args: []string{"<task>", "<state>"}},
+		"task lane":            {args: []string{"<task>", "<lane>"}},
 		"task stop":            {args: []string{"<task>"}},
 		"task close":           {args: []string{"<task>"}},
 		"task reopen":          {args: []string{"<task>"}},

@@ -26,6 +26,7 @@ const taskUsage = `Usage:
   grid task delete <task> [--project <p>] [--json]
   grid task restore <T-NN> --project <p> [--json]
   grid task status <task> <state> [--json]
+  grid task lane <task> <inbox|planning|doing|delivering> [--project <p>] [--json]
   grid task history <task> [--json]
 
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
@@ -67,6 +68,8 @@ func runTask(args []string, env Env) int {
 		return runTaskWrite(args, env)
 	case "stop", "close", "reopen", "status", "history":
 		return runTaskWrite(args, env)
+	case "lane":
+		return runTaskLane(args[1:], env)
 	}
 	if sub != "new" && sub != "show" && sub != "list" {
 		fmt.Fprintf(env.Stderr, "grid task: unknown command %q\n%s", sub, taskUsage)
