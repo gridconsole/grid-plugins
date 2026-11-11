@@ -76,3 +76,5 @@ Nothing here is a screen. Not run: the Windows and macOS test binaries (they com
 vet through `make cross`, but `-exec /bin/true` does not run them), so the
 lock-contention behaviour of `fslock` on those systems is not exercised by this test.
 Whole-module test and the cross-repo set are the orchestrator's at landing.
+
+DONE
