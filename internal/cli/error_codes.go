@@ -29,6 +29,8 @@ const (
 	// CodeWorkflowFileChanged means a workflow file changed since the caller read
 	// its revision; nothing was written.
 	CodeWorkflowFileChanged = "workflow_file_changed"
+	// CodeGuestRefused means the caller's guest role may not make this write.
+	CodeGuestRefused = "guest_refused"
 )
 
 func errorCode(err error) string {
@@ -47,6 +49,8 @@ func errorCode(err error) string {
 		return CodeInvalidArgument
 	case errors.Is(err, workflow.ErrChanged):
 		return CodeWorkflowFileChanged
+	case errors.Is(err, ilGuestRefused):
+		return CodeGuestRefused
 	default:
 		return ""
 	}
