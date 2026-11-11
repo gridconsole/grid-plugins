@@ -131,13 +131,23 @@ func runTask(args []string, env Env) int {
 		if err != nil {
 			return fail(err)
 		}
+		// The task exists once New returns; its first Job is posted after, and a
+		// failure to post it is said out loud, never left as a task nothing starts.
+		postErr := postFirstJob(env, t, o)
 		if *asJSON {
-			return writeJSON(env.Stdout, struct {
+			code := writeJSON(env.Stdout, struct {
 				ID   string `json:"id"`
 				Path string `json:"path"`
 			}{t.ID, t.Path})
+			if code == 0 && postErr != nil {
+				return fail(fmt.Errorf("%s was created but its first Job was not posted: %w", t.ID, postErr))
+			}
+			return code
 		}
 		fmt.Fprintf(env.Stdout, "%s created\n%s\n", t.ID, gridhome.Tilde(t.Path, env.Home))
+		if postErr != nil {
+			return fail(fmt.Errorf("%s was created but its first Job was not posted: %w", t.ID, postErr))
+		}
 	case "show":
 		id := ""
 		if len(pos) == 1 {
