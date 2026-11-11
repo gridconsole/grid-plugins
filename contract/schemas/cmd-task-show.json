@@ -20,6 +20,10 @@
     "intent": {
       "type": "string"
     },
+    "kind": {
+      "type": "string",
+      "description": "Task kind from task.md front matter; grid task new --kind setup writes setup. Absent when the task has none."
+    },
     "owner": {
       "type": "string"
     },

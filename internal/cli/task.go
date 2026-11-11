@@ -16,7 +16,7 @@ import (
 )
 
 const taskUsage = `Usage:
-  grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--input <file>]... [--json]
+  grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--kind setup] [--input <file>]... [--json]
   grid task show [<task>] [--json]
   grid task attach <task> [--session ID] [--runtime claude] [--json]
   grid task list [--project <name-or-id>] [--state <state>] [--json]
@@ -122,7 +122,7 @@ func runTask(args []string, env Env) int {
 	}
 	fs := newFlags("task "+sub, env)
 	asJSON := fs.Bool("json", false, "print JSON")
-	var proj, size, workflow, state string
+	var proj, size, workflow, state, kind string
 	var inputs inputList
 	if sub == "new" || sub == "list" {
 		fs.StringVar(&proj, "project", "", "project name or id; personal selects Personal")
@@ -130,6 +130,7 @@ func runTask(args []string, env Env) int {
 	if sub == "new" {
 		fs.StringVar(&size, "size", "auto", "auto, small, normal or large")
 		fs.StringVar(&workflow, "workflow", "", "workflow name; omitted leaves selection to the rules")
+		fs.StringVar(&kind, "kind", "", "setup marks the project's setup task and gives its first Job the setup skill; omitted makes a plain task")
 		fs.Var(&inputs, "input", "file to copy into the task's inputs folder; repeat for more files")
 	}
 	if sub == "list" {
@@ -163,7 +164,7 @@ func runTask(args []string, env Env) int {
 		if who == "" {
 			who = env.getenv("GRID_ACTOR")
 		}
-		o := task.NewOptions{Cwd: env.Cwd, Words: pos[0], Project: proj, Size: size, Workflow: workflow,
+		o := task.NewOptions{Cwd: env.Cwd, Words: pos[0], Project: proj, Size: size, Workflow: workflow, Kind: kind,
 			Who: who, Role: env.getenv("GRID_ROLE"),
 			// The raw field, not env.getenv: nil keeps the host read of the binary, a lib Call reads its Environ alone.
 			Getenv: env.Getenv}
