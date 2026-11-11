@@ -2615,7 +2615,7 @@
     },
     {
       "name": "brain",
-      "summary": "show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore/write/rename",
+      "summary": "show/search/topics/index/propose/accept/keep/decide/check/write (grid brain help lists all)",
       "built": true,
       "subcommands": [
         {

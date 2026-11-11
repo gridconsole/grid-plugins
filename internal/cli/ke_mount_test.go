@@ -135,7 +135,7 @@ func TestKeMtGridHelpExits(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("grid help: %d %q", code, errb)
 	}
-	for _, want := range []string{"show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore/write/rename", "6 stale rev (read again)", "7 not versioned (nothing written)"} {
+	for _, want := range []string{"show/search/topics/index/propose/accept/keep/decide/check/write (grid brain help lists all)", "6 stale rev (read again)", "7 not versioned (nothing written)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("grid help lacks %q", want)
 		}
