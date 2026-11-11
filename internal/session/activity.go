@@ -34,6 +34,10 @@ type Activity struct {
 	Seen         map[string]bool              `json:"seen,omitempty"`
 	Snapshots    map[string]map[string]string `json:"snapshots,omitempty"`
 	ExitReason   string                       `json:"exit_reason,omitempty"`
+	// ExitCodes and ExitCode keep the raw end reason next to the mapped one,
+	// under the same key as Exits, so an unknown end is never read as a clean one.
+	ExitCodes map[string]string `json:"exit_codes,omitempty"`
+	ExitCode  string            `json:"exit_code,omitempty"`
 }
 
 // Activity is hook evidence, separate from the supervisor's process record.
