@@ -29,9 +29,14 @@ func TestWorkflowShowPersonalVisibility(t *testing.T) {
 					h.write(filepath.Join(h.gridHome, "projects", name, "workflows.md"), privateText)
 					missingCode := h.run(h.root, append(args, "--project", "unknown")...)
 					missingOut, missingErr := h.out.String(), h.errb.String()
-					if missingCode != 1 || missingOut != "" || missingErr == "" {
+					if missingCode != 1 || missingErr == "" {
 						t.Fatalf("unknown: exit %d stdout=%q stderr=%q", missingCode, missingOut, missingErr)
 					}
+					wantCode := ""
+					if mode == "json" {
+						wantCode = CodeNoSuchProject
+					}
+					assertErrorOutput(t, missingOut, missingErr, wantCode)
 					for _, selector := range []string{name, "id-personal"} {
 						code := h.run(h.root, append(args, "--project", selector)...)
 						if role == "owner" {

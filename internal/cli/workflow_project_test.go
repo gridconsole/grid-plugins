@@ -45,9 +45,10 @@ func TestWorkflowProjectSelection(t *testing.T) {
 						prefix = "grid workflow write: "
 					}
 					wantErr := fmt.Sprintf("%sproject %q is missing or ambiguous\n", prefix, tc.selector)
-					if code != 1 || h.out.Len() != 0 || h.errb.String() != wantErr {
+					if code != 1 || h.errb.String() != wantErr {
 						t.Errorf("exit %d: out=%q err=%q, want exit 1 and %q", code, h.out, h.errb, wantErr)
 					}
+					assertErrorOutput(t, h.out.String(), h.errb.String(), CodeNoSuchProject)
 				} else {
 					if code != 0 || h.errb.Len() != 0 {
 						t.Fatalf("--project %s: exit %d: %s", tc.selector, code, h.errb)

@@ -106,9 +106,10 @@ func TestWorkflowShowJSON(t *testing.T) {
 		if policy {
 			args = append(args, "--policy")
 		}
-		if code := h.run(h.root, args...); code != exitCode(os.ErrNotExist) || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "missing or ambiguous") {
+		if code := h.run(h.root, args...); code != exitCode(os.ErrNotExist) || !strings.Contains(h.errb.String(), "missing or ambiguous") {
 			t.Fatalf("exit %d: %s %s", code, h.out, h.errb)
 		}
+		assertErrorOutput(t, h.out.String(), h.errb.String(), CodeNoSuchProject)
 	}
 }
 
