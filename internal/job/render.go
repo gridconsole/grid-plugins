@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	gridplugins "github.com/gridconsole/grid-plugins"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
@@ -251,6 +252,10 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	}
 	b.WriteString("## Job\n\n")
 	fmt.Fprintf(&b, "%s\n\n", j.Title)
+	if md, ok := gridplugins.AgentFor(contract.NormalizeRole(j.Role)); ok {
+		// The worker starts claude without --agent, so the Job carries the role's own instructions.
+		b.WriteString("### Instructions\n\n" + agentBody(md) + "\n\n")
+	}
 	if j.Checkpoint != nil {
 		fmt.Fprintf(&b, "Checkpoint: %s (%s)\n\n", j.Checkpoint.Step, j.Checkpoint.Commit)
 	}
@@ -286,6 +291,16 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		r.Inputs.Sources = append(r.Inputs.Sources, seen[k])
 	}
 	return r, nil
+}
+
+// agentBody is an agent file without its front matter.
+func agentBody(md string) string {
+	if rest, ok := strings.CutPrefix(md, "---\n"); ok {
+		if _, body, ok := strings.Cut(rest, "\n---\n"); ok {
+			return strings.TrimSpace(body)
+		}
+	}
+	return strings.TrimSpace(md)
 }
 func tokens(s string) int     { return (utf8.RuneCountInString(s) + 3) / 4 }
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }

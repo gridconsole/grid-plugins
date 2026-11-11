@@ -31,8 +31,15 @@ func TestTaskNewThenQuestionAdd(t *testing.T) {
 	}
 	q := questionAdd(t, h, created.Path, "member")
 	read, err := (feed.Store{TaskDir: created.Path, TaskID: id}).ReadOnly(feed.Filter{})
-	if err != nil || len(read.Records) != 1 || read.Records[0].ID != q.Post || read.Records[0].Task != id {
+	// `task new` now posts the owner's handover and J-1 first, so the question is the third record.
+	if err != nil || len(read.Records) != 3 {
 		t.Fatalf("question Feed: %+v, %v", read, err)
+	}
+	if read.Records[0].Type != "handover" || read.Records[1].Type != "job" || read.Records[1].Job == nil || *read.Records[1].Job != "J-1" {
+		t.Fatalf("records before the question: %+v", read.Records[:2])
+	}
+	if last := read.Records[2]; last.Type != "question" || last.ID != q.Post || last.Task != id {
+		t.Fatalf("question record: %+v", last)
 	}
 }
 
