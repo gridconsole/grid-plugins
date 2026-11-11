@@ -57,7 +57,7 @@ Nothing. The change is CLI-only, and every row was proved with go test and make.
 
 ## Open items
 
-- `agent budget apply` and personal `agent set` / `skill` / `hook` without `--project` give a guest `no_such_project`, not `guest_refused`, because the Personal resolve fails before the guest check. This is for the owner to decide. A fix would change stderr, which this brief rules out.
+- `agent budget apply` gives a guest `no_such_project`, not `guest_refused`, because the Personal resolve fails before the guest check (tested). Personal `agent set` / `skill` / `hook` without `--project` take the same resolve path; I did not test them. This is for the owner to decide. A fix would change stderr, which this brief rules out.
 - signal.go:65 stays known open, waiting for C-iy-signal-refusal-codes (il_guest_refusal_code_test.go:183 and guest_parity_test.go:422).
 
 DONE
