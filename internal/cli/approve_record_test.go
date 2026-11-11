@@ -1,15 +1,13 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/plan"
@@ -378,30 +376,20 @@ func TestApproveRecordWorkerPassMovesTheReceiptOfATaskOnlyRead(t *testing.T) {
 	arTaskFiles(t, path, true)
 	arWriteReceipt(t, path)
 	store := feed.Store{TaskDir: path, TaskID: feedTaskID}
+	// A second task with a posted Job gives the pass an event to wait on: one pass walks the task
+	// folders in name order, so T-08-second is handled, and its spawn line printed, after T-07-example.
+	second := filepath.Join(h.gridHome, "projects", "example", "tasks", "T-08-second")
+	h.write(filepath.Join(second, "task.md"), "---\nid: "+secondTaskID+"\n---\n")
+	ownerPost(t, second, secondTaskID, "J-1")
 	pid, start := taskLeaseIdentity(t)
 
-	cmd := exec.Command(os.Args[0], "-test.run=^TestWorkerNextProcess$")
-	cmd.Env = append(os.Environ(), "GRID_TEST_WORKER_NEXT=1", "GRID_TEST_HOME="+h.gridHome,
-		"GRID_TEST_PID="+strconv.Itoa(pid), "GRID_TEST_PID_START="+start)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
+	var stderr bytes.Buffer
+	cmd, lines := koWnStart(t, h.gridHome, pid, start, &stderr)
 	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
-	deadline := time.Now().Add(30 * time.Second)
-	for {
-		haveJob := len(arApproveJobs(t, store)) == 1
-		haveAccept := haveJob && len(arAccepts(t, store, "J-1")) == 1
-		if haveJob && haveAccept {
-			break
-		}
-		if time.Now().After(deadline) {
-			if !haveJob {
-				t.Fatal("the worker pass did not move approval.json into an approve Job within 30s (missing: the approve Job)")
-			}
-			t.Fatal("the worker pass wrote the approve Job but not its accepting control within 30s (missing: the accept)")
-		}
-		time.Sleep(100 * time.Millisecond)
+	if sp := koWnSpawn(t, lines, &stderr); sp["task"] != secondTaskID {
+		t.Fatalf("the first spawn line is not T-08-second's: %v\nstderr: %s", sp, &stderr)
 	}
+	// The pass has moved the receipt of T-07-example, so one read of the Feed is enough.
 	jobs := arApproveJobs(t, store)
 	if len(jobs) != 1 || jobs["J-1"] == nil {
 		t.Fatalf("approve Jobs %v", jobs)
