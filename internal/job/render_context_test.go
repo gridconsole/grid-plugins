@@ -106,7 +106,7 @@ func TestRenderCutBannerNamesAllWhenNoCutNoteHasATopic(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			for _, want := range []string{"entries cut; ", "grid brain topic all"} {
+			for _, want := range []string{"entries cut (inputs.json not_rendered); ", "`grid brain show <id>` reads one"} {
 				if !strings.Contains(got.Brief, want) {
 					t.Errorf("brief lacks %q", want)
 				}
