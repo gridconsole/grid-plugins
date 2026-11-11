@@ -63,6 +63,34 @@ func StatusLineSet(env Env, on bool) (StatusLineResult, error) {
 	return res, err
 }
 
+// StatusLineRead answers whether Grid's status line is on in the Claude
+// settings file of CLAUDE_CONFIG_DIR (or ~/.claude), and changes nothing. On is
+// true only when the file's statusLine command is Grid's own; Kept is the
+// command it wraps, or the person's own command when the line is not Grid's.
+// No file, or a file with no statusLine, is off. A file StatusLineSet would
+// refuse is refused here with the same error.
+func StatusLineRead(env Env) (StatusLineResult, error) {
+	path, err := settings.ClaudeSettingsPath(env.Home, env.getenv(dirVars[Claude]))
+	if err != nil {
+		return StatusLineResult{}, err
+	}
+	res := StatusLineResult{Path: path}
+	// An edit that answers the command it was given writes nothing (and a
+	// missing statusLine is "removed" from nothing), so this shares the parse
+	// and the refusals of StatusLineSet without a second reader.
+	_, err = settings.EditClaudeStatusLine(path, func(cmd string, present bool) (string, bool) {
+		if !present {
+			return "", true
+		}
+		res.Kept, res.On = unwrapNote(cmd)
+		return cmd, false
+	})
+	if err != nil {
+		return StatusLineResult{}, err
+	}
+	return res, nil
+}
+
 // unwrapNote answers the command a Grid status line command wraps ("" for
 // --show) and whether cmd is one.
 func unwrapNote(cmd string) (string, bool) {

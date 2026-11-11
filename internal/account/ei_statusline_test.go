@@ -288,8 +288,9 @@ func TestStatusLineRefusals(t *testing.T) {
 	if string(mustRead(t, h.settingsPath())) != `{not json` || len(before) == 0 {
 		t.Fatal("a refused run wrote the file")
 	}
-	if code := h.run("account", "statusline"); code != 2 {
-		t.Fatalf("no on|off: exit %d", code)
+	h.writeSettings(`{}`)
+	if code := h.run("account", "statusline", "--json"); code != 0 || h.answer().On {
+		t.Fatalf("no word reads: exit %d: %s", code, h.out)
 	}
 	if code := h.run("account", "statusline", "maybe"); code != 2 {
 		t.Fatalf("bad word: exit %d", code)

@@ -19,8 +19,9 @@ const accountHelp = `usage: grid account <command> [flags]
   windows [--id ID] [--json]           5-hour and weekly use; "no data" when no source has any
   note [--dir D] [--then CMD | --show] read status line JSON on stdin and keep its rate_limits;
                                        --then runs CMD after, --show prints "5h 42% · 7d 18%"
-  statusline on|off [--json]           install (or take out) the status line that feeds the windows,
-                                       keeping the person's own status line command
+  statusline [on|off] [--json]         install (or take out) the status line that feeds the windows,
+                                       keeping the person's own status line command;
+                                       with no word it reads whether it is on and changes nothing
   sign-in (--id ID | --dir D --kind K) run the provider's login with that folder's environment
 
 Credentials stay where the provider keeps them. Grid files hold emails, folders and use numbers only.
@@ -218,12 +219,17 @@ func accountStatusLine(args []string, env Env) int {
 	if code, stop := parse(fs, args, env); stop {
 		return code
 	}
-	if word != "on" && word != "off" {
-		fmt.Fprintln(env.Stderr, "usage: grid account statusline on|off [--json]")
+	if word != "" && word != "on" && word != "off" {
+		fmt.Fprintln(env.Stderr, "usage: grid account statusline [on|off] [--json]")
 		return 2
 	}
-	on := word == "on"
-	res, err := account.StatusLineSet(accountCoreEnv(env), on)
+	var res account.StatusLineResult
+	var err error
+	if word == "" {
+		res, err = account.StatusLineRead(accountCoreEnv(env))
+	} else {
+		res, err = account.StatusLineSet(accountCoreEnv(env), word == "on")
+	}
 	if err != nil {
 		return accountFail(env, "statusline", err)
 	}
