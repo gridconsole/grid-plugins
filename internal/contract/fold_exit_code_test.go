@@ -41,9 +41,19 @@ func TestFoldKeepsWorkerExitCode(t *testing.T) {
 		t.Fatalf("a body with a reason must not set exit_reason_missing: %s", data)
 	}
 	row, data = foldExit(t, map[string]any{"reason": "crash", "code": 1})
-	if row["exit_reason"] != "crash" || !bytes.Contains(data, []byte(`"exit_code":1,`)) {
+	if row["exit_reason"] != "crash" || exitCodeBytes(t, data) != "1" {
 		t.Fatalf("integer code 1 must round-trip as 1 in state.json: %s", data)
 	}
+}
+
+// exitCodeBytes returns the exact bytes state.json holds under exit_code.
+func exitCodeBytes(t *testing.T, state []byte) string {
+	t.Helper()
+	var row map[string]json.RawMessage
+	if err := json.Unmarshal(state, &row); err != nil {
+		t.Fatal(err)
+	}
+	return string(row["exit_code"])
 }
 
 // Row 3: an empty body still reads as crash, and now says the reason was missing.
@@ -82,7 +92,7 @@ func TestFoldDropsAnExitCodeThatIsNotIntegerOrText(t *testing.T) {
 	}
 	x := side(t, "worker-exit", 4)
 	x.Body = json.RawMessage(`{"reason":"cancelled","code":2.0}`)
-	if data, _ := json.Marshal(Fold(append(base(t), x)).Jobs["J-1"]); !bytes.Contains(data, []byte(`"exit_code":2,`)) {
+	if data, _ := json.Marshal(Fold(append(base(t), x)).Jobs["J-1"]); exitCodeBytes(t, data) != "2" {
 		t.Fatalf("a whole-number code 2.0 reads as the integer 2: %s", data)
 	}
 }
