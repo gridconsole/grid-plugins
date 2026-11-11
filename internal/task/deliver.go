@@ -149,8 +149,9 @@ func (d delivery) check(t Task) ([]brain.WaitingProposal, error) {
 		return nil, errors.New("task is closed or stopped; delivery cannot reopen it")
 	}
 	// The state table decides which states may reach waiting; delivery from
-	// paused, or from a task already at a gate, is refused like a status move.
-	if _, err = NextState(t.State, "status", "waiting"); err != nil {
+	// paused, or from a task already at a gate, is refused like a status move,
+	// except a plan gate whose approval is current (nextState).
+	if _, err = d.nextState(t, data); err != nil {
 		return nil, err
 	}
 	// Waiting proposals never stop a delivery: they are read and returned so the
@@ -223,16 +224,16 @@ func (d delivery) write(t Task) ([]artifact.Record, error) {
 	for _, item := range idx.Items {
 		outcome += fmt.Sprintf("- %s: %s proof saved in proof/%s/\n", item.ID, item.Level, item.ID)
 	}
-	next, err := NextState(t.State, "status", "waiting")
+	data, err := os.ReadFile(filepath.Join(t.Path, "task.md"))
+	if err != nil {
+		return imported, err
+	}
+	next, err := d.nextState(t, data)
 	if err != nil {
 		return imported, err
 	}
 	// Delivery asks for approval; it writes no approval and never closes the task.
 	event := d.s.event(t, WriteOptions{Action: "deliver", Note: summary, Who: contract.Author{ID: d.o.By, Role: "agent"}}, next)
-	data, err := os.ReadFile(filepath.Join(t.Path, "task.md"))
-	if err != nil {
-		return imported, err
-	}
 	updated, err := rewriteTask(data, func(mapping *yaml.Node) error {
 		setScalar(mapping, "state", next, true)
 		// A legacy status field mirrors state only where the task already has one.
@@ -250,6 +251,34 @@ func (d delivery) write(t Task) ([]artifact.Record, error) {
 		return imported, err
 	}
 	return imported, commitWrite(t.Path, event, map[string][]byte{"task.md": updated})
+}
+
+// nextState is the state a delivery moves t to; data is its task.md. The state
+// table decides, as grid task status would, with one addition: grid approve keeps
+// a task waiting at its plan gate (Approve in gates.go), so a waiting task whose
+// approval receipt holds the plan's current hash moves on to waiting at step
+// ship. Only the hash is compared, as this move was decided; the digest also
+// binds step metadata (plan.Digest). A task already at step ship, a task with no
+// approval and an approval of an older plan get the state table's refusal.
+func (d delivery) nextState(t Task, data []byte) (string, error) {
+	next, err := NextState(t.State, "status", "waiting")
+	if err == nil || t.State != "waiting" {
+		return next, err
+	}
+	var doc yaml.Node
+	if yaml.NewDecoder(bytes.NewReader(data)).Decode(&doc) != nil || len(doc.Content) == 0 || scalar(doc.Content[0], "step") == "ship" {
+		return next, err
+	}
+	kept := keptApproval(t)
+	if kept == nil {
+		return next, err
+	}
+	// Read takes no lock: write already holds .plan.lock (Deliver, WithHash).
+	current, readErr := plan.Store{TaskDir: d.dir}.Read()
+	if readErr != nil || kept.PlanHash != plan.Hash(current) {
+		return next, err
+	}
+	return "waiting", nil
 }
 
 // Replace only Outcome, preserving later peer sections and all earlier notes.
