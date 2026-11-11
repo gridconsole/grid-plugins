@@ -31,7 +31,7 @@ func TestFoldDescribeMatchesTheFolderWhateverItsCase(t *testing.T) {
 			env, _ := foldFixture(t, goos)
 			a := byID(t, status(t, env, false), "claude-ann")
 			if a.SignedIn == nil || *a.SignedIn != want {
-				t.Fatalf("signedIn on %s: want %v, got %v", goos, want, a.SignedIn)
+				t.Fatalf("signedIn on %s: want %v, got %+v", goos, want, a)
 			}
 			if a.Dir != filepath.Join(env.Home, ".claude-ann") {
 				t.Fatalf("the account keeps the record's own spelling: %q", a.Dir)
@@ -141,4 +141,3 @@ func TestFoldWindowsReadsTheScannedSpellingUnderTheAccount(t *testing.T) {
 		})
 	}
 }
-
