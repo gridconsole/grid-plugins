@@ -16,6 +16,7 @@ func TestSampleSuite(t *testing.T) {
 		"execute-check-after-make-together", "execute-check-fails", "execute-check-fails-out-of-scope", "execute-review-changes-rework",
 		"execute-review-changes-past-limit", "deliver-refuses-closed", "preview-skill", "agent-reviewer-read-only",
 		"agent-checker-read-only", "agent-designer-spec", "agent-operator-no-browser", "agent-library-answers", "agent-explore-finds",
+		"agent-planner-delegates", "agent-scout-maps", "agent-researcher-sources", "agent-runner-runs-once",
 		"task-skill", "setup-skill", "signals-skill",
 		"skill-brain-keeper", "skill-browser", "skill-visual-design-review",
 		"plan-quality-small", "plan-quality-normal"}

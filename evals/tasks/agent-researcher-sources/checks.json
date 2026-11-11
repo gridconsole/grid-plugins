@@ -1,0 +1,6 @@
+[
+  {"id":"research-written","type":"command_passes","command":["sh","-c","test -s \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/research.md"],"gate":true},
+  {"id":"answer","type":"command_passes","command":["sh","-c","f=\"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/research.md; test -f \"$f\" && grep -q '90' \"$f\" && grep -q 'ttlSeconds' \"$f\""]},
+  {"id":"source-with-line","type":"command_passes","command":["sh","-c","f=\"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/research.md; test -f \"$f\" && grep -Eq 'vendor/fastcache/README.md:[0-9]+' \"$f\""]},
+  {"id":"code-untouched","type":"text_contains","path":"work/notes-app/package.json","text":"\"fastcache\": \"2.4.1\""}
+]
