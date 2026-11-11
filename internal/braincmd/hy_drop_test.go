@@ -330,9 +330,13 @@ func TestHyDrRefusals(t *testing.T) {
 	current := func(f *hyDrFixture) string { return f.rev("checks") }
 	for _, c := range []refusal{
 		{name: "stale rev", verb: "drop", args: target(func(*hyDrFixture) string { return zero }), code: 6,
-			stderr: func(f *hyDrFixture) map[string]string { return map[string]string{"error": "conflict", "rev": f.rev("checks")} }},
+			stderr: func(f *hyDrFixture) map[string]string {
+				return map[string]string{"error": "conflict", "rev": f.rev("checks")}
+			}},
 		{name: "stale rev on restore", verb: "restore", args: target(func(*hyDrFixture) string { return zero }), code: 6,
-			stderr: func(f *hyDrFixture) map[string]string { return map[string]string{"error": "conflict", "rev": f.rev("checks")} }},
+			stderr: func(f *hyDrFixture) map[string]string {
+				return map[string]string{"error": "conflict", "rev": f.rev("checks")}
+			}},
 		{name: "no such note", verb: "drop", args: func(*hyDrFixture) []string { return append([]string{"decisions/nosuch", "--expect", zero}, level...) }, code: 8,
 			stderr: func(*hyDrFixture) map[string]string { return map[string]string{"error": "no_such_note"} }},
 		{name: "no such note on restore", verb: "restore", args: func(*hyDrFixture) []string { return append([]string{"decisions/nosuch", "--expect", zero}, level...) }, code: 8,
@@ -367,7 +371,9 @@ func TestHyDrRefusals(t *testing.T) {
 		{name: "no operand", verb: "drop", args: func(*hyDrFixture) []string { return append([]string{"--expect", zero}, level...) }, code: 2},
 		{name: "no expect", verb: "drop", args: func(*hyDrFixture) []string { return append([]string{"decisions/checks"}, level...) }, code: 2},
 		{name: "expect not hex", verb: "drop", args: func(*hyDrFixture) []string { return append([]string{"decisions/checks", "--expect", "xyz"}, level...) }, code: 2},
-		{name: "expect too short", verb: "restore", args: func(*hyDrFixture) []string { return append([]string{"decisions/checks", "--expect", "abc123"}, level...) }, code: 2},
+		{name: "expect too short", verb: "restore", args: func(*hyDrFixture) []string {
+			return append([]string{"decisions/checks", "--expect", "abc123"}, level...)
+		}, code: 2},
 		{name: "unregistered project", verb: "drop", args: func(*hyDrFixture) []string {
 			return []string{"decisions/checks", "--expect", zero, "--project", "no-such-project"}
 		}, code: 1},
