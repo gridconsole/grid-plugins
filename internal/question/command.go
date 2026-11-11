@@ -20,6 +20,9 @@ type Env struct {
 	Stdout, Stderr  io.Writer
 	Now             func() time.Time
 	Writer          func(bool) (feed.Writer, error)
+	// AskWriter, when set, is the writer of `ask`; nil leaves ask on Writer(true).
+	// withdraw and tick keep Writer(true).
+	AskWriter func() (feed.Writer, error)
 	// Jobs posts and closes the person Job of `ask`; nil leaves a plain question.
 	Jobs JobPort
 	// RecordError, when set, is told of the error that stops a command before it
@@ -214,7 +217,11 @@ func run(args []string, env Env) int {
 	if env.Writer != nil && action != "list" && action != "sync" {
 		// ask reads the task lease from the environment too: a lease holder posts the
 		// person Job under it, a person of the team posts it without one.
-		writer, e := env.Writer(action == "withdraw" || action == "tick" || asks)
+		pick := func() (feed.Writer, error) { return env.Writer(action == "withdraw" || action == "tick" || asks) }
+		if asks && env.AskWriter != nil {
+			pick = env.AskWriter
+		}
+		writer, e := pick()
 		if e != nil {
 			fmt.Fprintln(env.Stderr, "question:", e)
 			return 1
