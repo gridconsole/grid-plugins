@@ -43,4 +43,6 @@ Base check: `account.Env` on the base has Home, GridHome, Getenv, Now, GOOS and 
 
 - Windows case folding runs only as the pure function `providerEnv` (and through `Env.GOOS = "windows"` on Linux); no Windows machine ran the child.
 - The fake providers are shell scripts, so TestKkProbe tests that start a child skip on Windows (via installFakeClaude); the pure `providerEnv` test runs everywhere.
-- `-race` was not run.
+- `-race` on the whole package was not run. `go test -count=1 -race -run 'TestKkProbeTwoEnvsDoNotSeeEachOther' ./internal/account/` on the concurrency test: exit 0, `ok internal/account 1.176s`, no data race reported.
+
+DONE
