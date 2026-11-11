@@ -1,0 +1,6 @@
+[
+  {"id":"work-not-done","type":"text_contains","path":"work/notes-app/src/store.js","text":"export function addNote(note) { notes.push(note); }","gate":true},
+  {"id":"no-filter-written","type":"command_passes","command":["sh","-c","! grep -rq filterByTag work"]},
+  {"id":"job-posted","type":"command_passes","command":["sh","-c","grep -rIlq 'store.js' \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/feed"]},
+  {"id":"no-brief-file","type":"command_passes","command":["sh","-c","! test -e \"$GRID_HOME\"/projects/notes-app/tasks/T-01-sample/subagents"]}
+]

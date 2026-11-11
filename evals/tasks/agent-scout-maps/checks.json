@@ -1,0 +1,7 @@
+[
+  {"id":"map-written","type":"file_exists","path":"map.txt","gate":true},
+  {"id":"add-note-line","type":"text_contains","path":"map.txt","text":"src/store.js:5"},
+  {"id":"pdf-not-found","type":"text_contains","path":"map.txt","text":"not found"},
+  {"id":"code-untouched","type":"text_contains","path":"work/notes-app/src/store.js","text":"notes.push({ id: notes.length + 1, ...note });"},
+  {"id":"no-new-files","type":"command_passes","command":["sh","-c","test \"$(find work -type f | wc -l)\" -eq 3"]}
+]

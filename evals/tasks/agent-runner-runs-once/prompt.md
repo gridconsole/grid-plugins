@@ -1,0 +1,1 @@
+I am Alex. Use the grid-runner agent to run `sh check.sh` in ./work/notes-app once, as a check. It fails; that is expected. Write the exit status and the failing line it saw to ./result.txt. Do not fix anything and do not run it again.
