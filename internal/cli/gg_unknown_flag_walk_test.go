@@ -42,11 +42,11 @@ var ggFlagSkip = map[string]string{
 // when that is not the contract shape (exit 2, one invalid_argument object, no file
 // written). Production code is left alone; shorten this map when a verb is fixed.
 var ggFlagKnownOpen = map[string]string{
-	"job lint":    `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
-	"job render":  `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
-	"job show":    `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
-	"job verify":  `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
-	"job trace":   `exit 2; stdout {"rows":[],"problems":[{"task":"","job":"","text":"unknown flag --gg-no-such-flag"}]} (own shape, no code); stderr empty`,
+	"job lint":   `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
+	"job render": `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
+	"job show":   `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
+	"job verify": `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
+	"job trace":  `exit 2; stdout {"rows":[],"problems":[{"task":"","job":"","text":"unknown flag --gg-no-such-flag"}]} (own shape, no code); stderr empty`,
 }
 
 func ggFlagMembers(t *testing.T) []ggFlagMember {
