@@ -256,9 +256,6 @@ func toolUse(o Options) {
 	if decision.Behavior == "allow" {
 		CountHomeAllow(env, *in)
 	}
-	if in.HookEventName == "PermissionRequest" && decision.Behavior == "" {
-		decision = forwardPermission(o, *in)
-	}
 	if in.HookEventName == "PermissionRequest" && decision.Behavior != "" {
 		decision.Event = "PermissionRequest"
 	}

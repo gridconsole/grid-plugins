@@ -28,8 +28,7 @@ type Event struct {
 }
 
 // This table is the source for dispatch, Handles and generated plugin hooks.
-// Timeouts are seconds: Stop and SubagentStop leave room for a bounded verify,
-// PermissionRequest for the 85 s answer wait.
+// Timeouts are seconds: Stop and SubagentStop leave room for a bounded verify.
 var events = []struct {
 	Event
 	run func(Options) int
@@ -44,7 +43,7 @@ var events = []struct {
 	{Event{"SubagentStop", "", 60}, remaining},
 	{Event{"SessionEnd", "", 10}, remaining},
 	{Event{"PostToolUseFailure", "", 10}, remaining},
-	{Event{"PermissionRequest", "", 100}, quiet(toolUse)},
+	{Event{"PermissionRequest", "", 10}, quiet(toolUse)},
 }
 
 // Events returns registration metadata without exposing the dispatcher table.
@@ -69,7 +68,7 @@ func quiet(f func(Options)) func(Options) int {
 	return func(o Options) int { f(o); return 0 }
 }
 
-var components = map[string]bool{"heartbeat": true, "stop-check": true, "worker-exit": true, "history-log": true, "usage-log": true, "brain-read": true, "brain-recall": true, "permission-forward": true,
+var components = map[string]bool{"heartbeat": true, "stop-check": true, "worker-exit": true, "history-log": true, "usage-log": true, "brain-read": true, "brain-recall": true,
 	"lib-agentname": true, "lib-gatelike": true, "lib-historyline": true, "lib-parsefrontmatter": true, "lib-workflowsteps": true, "lib-planstage": true}
 
 func componentEvent(event string) bool { return components[strings.ToLower(event)] }
@@ -115,9 +114,6 @@ func remaining(o Options) int {
 		o.record("recall", func() { recall(o, *in) })
 	case "stop-check":
 		return stopCheck(o, *in)
-	case "permission-forward":
-		// Local guards arbitrate first; no bridge answer means the terminal asks.
-		toolUse(Options{Event: "permissionrequest", Stdin: reader(*in), Stdout: o.Stdout, Stderr: o.Stderr, Resolver: o.Resolver, Cwd: o.Cwd, Getenv: o.Getenv})
 	default:
 		if name == "precompact" && o.Stdout != nil && o.hookEnabled("precompact", *in) {
 			fmt.Fprintln(o.Stdout, "Keep the Job id, acceptance ids and open decisions in the summary.")

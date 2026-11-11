@@ -46,7 +46,7 @@ func cliDriver(t *testing.T) golden.Driver {
 			// runtime events compose these same handlers with the guards.
 			if cli.Implemented("hook") {
 				event := strings.ToLower(c.Hook)
-				components := map[string]bool{"heartbeat": true, "stop-check": true, "worker-exit": true, "history-log": true, "usage-log": true, "brain-read": true, "brain-recall": true, "permission-forward": true}
+				components := map[string]bool{"heartbeat": true, "stop-check": true, "worker-exit": true, "history-log": true, "usage-log": true, "brain-read": true, "brain-recall": true}
 				helper := strings.HasPrefix(event, "lib-") && strings.EqualFold(strings.TrimPrefix(event, "lib-"), c.Call)
 				if (components[event] && c.Call == "" || helper) && hook.Handles(event) {
 					return []string{"hook", event}, true
