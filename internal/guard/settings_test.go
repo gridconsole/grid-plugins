@@ -33,8 +33,8 @@ func TestGuardsFollowTheirLevel(t *testing.T) {
 					t.Fatal(err)
 				}
 				want := "deny"
-				// only-writer warns by default (verdicts-11nov v-4); the other three block.
-				if tc.name == "only-writer" && level == "none" {
+				// only-writer (verdicts-11nov v-4) and plan-guard warn by default; host-guard blocks.
+				if (tc.name == "only-writer" || tc.name == "plan-guard") && level == "none" {
 					want = ""
 				}
 				switch level {
