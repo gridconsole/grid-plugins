@@ -41,7 +41,16 @@ Behaviour change to know: a Store whose Context is already done now fails its `P
 ## Open items and the split
 
 1. Open item, not wired: `internal/cli/orchestrator.go:176` and `:554` and the other `feed.Store{...}` constructors leave `Context` nil, so `exclusive` honours a Context only on a Store built by `feedStore`. Not in Touches; I did not change it.
-2. Part 2 (small): fix the feed draft so it posts a type that may carry `wake`, add `internal/orchestrator/jw_lock_context_test.go` for `.orchestrator.lock`, run the race test, `make cross`, the importer list, `git fetch origin` and `git merge origin/main`, then the post-merge `git grep` and the base-failing run.
+2. Part 2 is done in lane C-jw-feed-lock-context-tests: see `docs/lanes/C-jw-feed-lock-context-tests.md` for the feed and orchestrator tests, the merge of `origin/main`, the race run, `make cross`, the importer tests, the post-merge `git grep` and the base-failing run. The rows above that read NOT DONE are closed there.
+
+## Open
+
+- `feed.Store` is built with `Context` nil at `internal/cli/orchestrator.go:176` and `:554` (and by any other `feed.Store{...}` literal outside `feedStore` in `internal/cli/feed.go`). A call that goes through those Stores waits on the Feed locks and on `.orchestrator.lock` with no way out, as before this lane. Not fixed here: it is outside the lane's Touches and the brief of the tests lane says to write it down, not to fix it.
+- Four plain `fslock.LockExclusive` calls remain in `internal/feed`: `cache.go:52` (`reader.lock`), `fold.go:71` (`fold.lock`), `identity.go:27` (`MachineID`) and `identity.go:126` (`EnsureTaskID`); and one in `internal/orchestrator/plan.go:42`. None is on the wait path of `Store.Post` for a task that already has an id, and none has a Store Context to pass; a stuck holder would still block them.
+
+## Descriptor ownership
+
+A descriptor closed while a flock blocks on it can have its number reused: the blocked call, or the waiter's later unlock, then runs against whatever file the kernel handed that number to. This lane does not let a cancelled caller close the descriptor a waiter is blocked on. `LockExclusiveContext` and `LockSharedContext` take the `*os.File` over (`internal/fslock/jw_context.go`): on `nil` the lock is held and the file is the caller's again; on any error, `ctx.Err()` included, the package closes it, at once when the lock failed, or by the abandoned waiter, which unlocks before it closes once it gets the lock. The `defer f.Close()` that sat before the lock on these paths (`internal/orchestrator/store.go:145`, the tenure lock in `internal/feed/store.go`) now follows a successful lock.
 
 ## NOT VERIFIED on a live screen
 
