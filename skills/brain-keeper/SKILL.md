@@ -14,8 +14,10 @@ Owner decision: the brain needs no attention from the person. A subagent curates
 3. Write it:
 
 ```
-grid brain propose --name <id> --topic <topic> --description "<when to read it>" --summary "<what it holds>" --source <task, Job or person> --body "<text>" --link '{"to":"brain:project/<note>","rel":"explains","summary":"<what that note holds>","why":"<what the reader gains by following it>"}'
+grid brain propose --project <project> --name <id> --topic <topic> --description "<when to read it>" --summary "<what it holds>" --source <task, Job or person> --body "<text>" --link '{"to":"brain:project/<note>","rel":"explains","summary":"<what that note holds>","why":"<what the reader gains by following it>"}'
 ```
+
+Always pass `--project <project>` when the person or routine names one: from a folder that is not that project the proposal resolves to home and a `conventions` note fails with `topic conventions is not available at home level`. `grid brain accept` and `grid brain check` take `--project` too. A proposal made this way waits in the project's `brain-proposals`: file it with `grid brain accept --project <project> <id>`; `grid brain decide` is for a proposal in a task's own folder.
 
 `--file <path|->` takes Markdown with front matter instead of `--body`. `--level home` is for what is true in every project; without `--level` a resolved project is used, else home. `--external` quarantines text that came from outside.
 
