@@ -120,7 +120,9 @@ func runTask(args []string, env Env) int {
 			who = env.getenv("GRID_ACTOR")
 		}
 		o := task.NewOptions{Cwd: env.Cwd, Words: pos[0], Project: proj, Size: size, Workflow: workflow,
-			Who: who, Role: env.getenv("GRID_ROLE")}
+			Who: who, Role: env.getenv("GRID_ROLE"),
+			// The raw field, not env.getenv: nil keeps the host read of the binary, a lib Call reads its Environ alone.
+			Getenv: env.Getenv}
 		for _, in := range inputs {
 			if !filepath.IsAbs(in) {
 				in = filepath.Join(env.Cwd, in)
