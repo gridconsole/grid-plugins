@@ -51,7 +51,7 @@ func keWrOrder(f *flag.FlagSet, args []string) []string {
 // runWrite is `grid brain write <topic>/<name> --expect <rev|none> --file <path|->`,
 // in the order of hyDrRun: flags and operand, role, input, store, then the write
 // under the brain lock. Exits: 0 done, 1 store error, 2 usage, a bad note or a
-// linked target, 3 role refused (the verb, or a workflow note), 6 stale rev, 7
+// linked target, 3 role refused (the verb), 6 stale rev, 7
 // not versioned, 9 refused (the name is held by another topic). Never 4 or 5.
 // No flag names the actor: the audit line names env.Member, else the session.
 func runWrite(args []string, env Env) int {
@@ -118,24 +118,18 @@ func runWrite(args []string, env Env) int {
 	if err != nil {
 		return usageError(err.Error())
 	}
-	// Only the empty role (a person's own terminal) and the owner write workflow
-	// notes; the store checks the note on disk the same way.
-	allowWorkflow := env.Role == "" || env.Role == "owner"
-	if brain.IsWorkflowNote(n) && !allowWorkflow {
-		return roleRefused(env, "write", "write workflow notes", l.asJSON)
-	}
 	origin, err := hyDrOrigin(env)
 	if err != nil {
 		return failWith(env, l.asJSON, err)
 	}
 	why := strings.Join(strings.Fields(*reason), " ")
-	res, err := store.Write(level, topic, name, *expect, data, origin, why, allowWorkflow)
+	// Anyone the verb lets in writes a workflow note too (owner answer 3, 11 Nov);
+	// the author is in the audit line.
+	res, err := store.Write(level, topic, name, *expect, data, origin, why, true)
 	if err != nil && res.Status == "" {
 		var conflict *brain.ConflictError
 		var refused *brain.RefusedError
 		switch {
-		case errors.Is(err, brain.ErrWorkflowNote):
-			return roleRefused(env, "write", "write workflow notes", l.asJSON)
 		case errors.As(err, &conflict):
 			return hyDrFail(env, 6, hyDrFailure{Error: "conflict", Rev: conflict.Rev})
 		case errors.Is(err, brain.ErrNotVersioned):
