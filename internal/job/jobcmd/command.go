@@ -24,6 +24,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -150,9 +151,18 @@ func Run(args []string, e Env) int {
 			sum := sha256.Sum256(b)
 			rendered.Inputs.Generation = "content:" + hex.EncodeToString(sum[:])
 		}
-		path, err := save(task, j, rendered)
+		path, wrote, err := saveReport(task, j, rendered)
 		if err != nil {
 			return fail(err, 1)
+		}
+		if wrote {
+			// save has returned and holds no lock; AppendHistory takes .task.lock itself.
+			// A history failure never fails the render.
+			for _, id := range brainGiven(j, rendered.Inputs) {
+				if err := taskstore.AppendHistory(task, "brain given", id, "grid job render", j.ID); err != nil {
+					fmt.Fprintf(e.Stderr, "grid job render: history: %v\n", err)
+				}
+			}
 		}
 		return output(e, f, report{OK: true, ID: j.ID, Path: display(path, e), Inputs: display(filepath.Join(filepath.Dir(path), "inputs.json"), e), Findings: findings}, 0)
 	case "lint":
@@ -291,6 +301,45 @@ func parse(args []string) (flags, error) {
 	}
 	return f, nil
 }
+
+// brainGiven lists the project brain notes whose text the render pasted into the
+// brief: a brain pointer that is not personal (PointerOnly) and was not cut by the
+// budget. An anchor or line range names the same note, so each note appears once.
+func brainGiven(j job.Job, in job.Inputs) []string {
+	cut := map[string]bool{}
+	for _, id := range in.NotRendered {
+		cut[id] = true
+	}
+	// A brain pointer the Job only lists under read: or in its intent is named in
+	// the brief, not pasted into it, so it is not given.
+	listedOnly := map[string]bool{j.Intent.Owner: true, j.Intent.Item: true, j.Intent.Goal: true}
+	for _, p := range j.Read {
+		listedOnly[p] = true
+	}
+	for _, p := range append(append([]string{}, j.Keep...), j.Decisions...) {
+		delete(listedOnly, p)
+	}
+	for _, l := range j.Links {
+		delete(listedOnly, l.To)
+	}
+	seen := map[string]bool{}
+	ids := []string{}
+	for _, s := range in.Sources {
+		if !strings.HasPrefix(s.Pointer, "brain:") || s.PointerOnly || cut[s.Pointer] || listedOnly[s.Pointer] {
+			continue
+		}
+		id := s.Pointer
+		if i := strings.IndexByte(id, '#'); i >= 0 {
+			id = id[:i]
+		}
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 func output(e Env, f flags, r report, code int) int {
 	if r.Findings == nil {
 		r.Findings = []lint.Finding{}
