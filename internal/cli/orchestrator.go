@@ -343,6 +343,10 @@ func runOrchestrator(args []string, env Env) int {
 		answer, _ := obj["answer"].(string)
 		record, err := orchestrator.AnswerPerson(store, writer, *job, answer, time.Now())
 		if err != nil {
+			if *asJSON {
+				// A Job that still waits also prints the job_waiting object, as grid approve does.
+				writeJobWaiting(env, err)
+			}
 			return fail(err)
 		}
 		// An unleased answer closes nothing by itself: the Job stays open until the
@@ -499,6 +503,9 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	}
 	if err != nil {
 		fmt.Fprintln(env.Stderr, err)
+		if asJSON {
+			writeJobWaiting(env, err)
+		}
 		recordLookupError(env, err)
 		return exitCode(err)
 	}
