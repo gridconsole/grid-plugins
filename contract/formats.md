@@ -216,3 +216,44 @@ imports remain proposals and cannot be accepted as trusted knowledge.
 | diverges | The CLI's local session stamp is a fresh random id; this path does not derive a team/guest identity or active Job id from authenticated session/server state. The type permits those sources, but this CLI does not implement that integration. | findings-brain.md:62; brain-feed.md:15; internal/brain/store.go:150-163; internal/braincmd/command.go:286-293 |
 | diverges | The spec says every entry has an origin; the parser still reads origin-less old notes outside schema validation. Explicit external import stamps them before validation; direct accepted-note reads exclude them. | brain-feed.md:15; internal/brain/markdown.go:24-39; internal/brain/topics.go:223-229 |
 | diverges | Imported knowledge (origin kind `import`) is refused by the keeper and excluded by the accepted-note scan, rather than appearing as one labelled index line. | findings-brain.md:69; internal/brain/store.go:461-462; internal/brain/topics.go:227-229 |
+
+## Task summary (summary.md)
+
+Status: **written by the plugin, read by the app**. Path: `summary.md` in the task
+folder, beside `task.md` and `history.md`. The task page shows one text per reader
+level (owner, developer, customer); this file holds them. The only writer is
+`grid task summary <task> --for owner|developer|customer --text <words>`; the
+reader is the app's task view (`internal/slices/taskview/view_steps.go`, `summaries`).
+There is no schema: the file is Markdown with exactly this shape.
+
+```
+## Owner
+
+<owner text>
+
+## Developer
+
+<developer text>
+
+## Customer
+
+<customer text>
+```
+
+- One blank line between sections and one trailing newline. A fresh file holds the
+  three headings in that order, the sections not yet written with empty bodies.
+- A write replaces the body of one section and keeps every other byte of the file,
+  including line ends and any line before the first heading.
+- Text is trimmed and may span lines. A write is refused (exit 2, nothing written)
+  for an unknown reader word (case-insensitive), empty text, text that fails the
+  task text check (control, bidi override/isolate and noncharacter code points), and
+  text with a line that starts with `## `, which the reader would take as a new section.
+- Reader rules (the app): a line `## <Heading>` opens a section; the heading is
+  lowercased and trimmed; CRLF is folded; each section is trimmed. `owner` overrides
+  the owner text of the task, `developer` falls back to the owner text, and a
+  `customer` with no section stays empty.
+- Each write appends one history receipt (action `summary`, note `summary · <reader>`).
+  The role rule is the one of `grid task rename`: an owner, a member or no role writes;
+  any other role is refused with `scope: role cannot write task summaries`.
+- The customer text is plain words with no Job ids; the owner text can name agents,
+  which is why the reader never copies it into the customer level.

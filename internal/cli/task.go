@@ -24,6 +24,7 @@ const taskUsage = `Usage:
   grid task stop|close|reopen <task> [--reason <text>] [--json]
   grid task rename <task> --title <text> [--project <p>] [--json]
   grid task decline <task> --reason <text> [--project <p>] [--json]
+  grid task summary <task> --for owner|developer|customer --text <words> [--json]
   grid task delete <task> [--project <p>] [--json]
   grid task restore <T-NN> --project <p> [--json]
   grid task status <task> <state> [--json]
@@ -32,6 +33,47 @@ const taskUsage = `Usage:
 
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 `
+
+// runTaskSummary is grid task summary: it writes one reader level's words into the
+// task's summary.md, which the task page reads. It resolves the task as rename does
+// and answers with the same exit codes: usage 2, rejected 3, anything else 1.
+func runTaskSummary(args []string, env Env) int {
+	fs := newFlags("task summary", env)
+	asJSON := fs.Bool("json", false, "print JSON")
+	reader := fs.String("for", "", "reader level: owner, developer or customer")
+	text := fs.String("text", "", "the summary words; customer words are plain, with no Job ids")
+	pos, err := taskArgs(fs, args[1:])
+	if errors.Is(err, flag.ErrHelp) {
+		return 0
+	}
+	if err != nil {
+		return 2
+	}
+	if len(pos) != 1 {
+		fmt.Fprint(env.Stderr, taskUsage)
+		return 2
+	}
+	resolved, err := resolveTaskOperand(env, pos[0])
+	if err != nil {
+		return taskOperandError(env, "grid task summary", fmt.Errorf("scope: %w", err))
+	}
+	o := task.SummaryOptions{WriteOptions: writeOptions(env, resolved.ID, "summary", ""), Reader: *reader, Text: *text,
+		Role: strings.TrimSpace(env.getenv("GRID_ROLE"))}
+	event, err := taskWriter(env).Summary(o)
+	if err != nil {
+		env.recordError(err)
+		fmt.Fprintf(env.Stderr, "grid task summary: %v\n", err)
+		switch {
+		case errors.Is(err, task.ErrEditUsage):
+			return 2
+		case errors.Is(err, task.ErrEditRejected):
+			return 3
+		default:
+			return 1
+		}
+	}
+	return taskWriteResult(env, event, nil, *asJSON, resolved.Path)
+}
 
 // inputList is a repeatable string flag: each --input adds one path.
 type inputList []string
@@ -67,6 +109,8 @@ func runTask(args []string, env Env) int {
 		return runTaskWrite(args, env)
 	case "decline":
 		return runTaskWrite(args, env)
+	case "summary":
+		return runTaskSummary(args, env)
 	case "stop", "close", "reopen", "status", "history":
 		return runTaskWrite(args, env)
 	case "lane":

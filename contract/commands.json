@@ -505,6 +505,31 @@
           ],
           "json": true,
           "output": ""
+        },
+        {
+          "name": "summary",
+          "args": [
+            "<task>"
+          ],
+          "flags": [
+            {
+              "name": "--for",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--text",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": ""
         }
       ]
     },
