@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/proctree"
 )
 
 // VerifyResult is the evidence for the L0 check. Tests is nil when output did
@@ -123,7 +125,7 @@ func RunVerify(ctx context.Context, j Job, dir string, options ...VerifyOptions)
 	output := &verifyOutput{}
 	// exec serializes writes when stdout and stderr share the same writer.
 	cmd.Stdout, cmd.Stderr = output, output
-	err = cmd.Run()
+	err = proctree.Run(cmd)
 	cleanupVerifyProcess(cmd)
 	output.finish()
 	r.Tests, r.Output, r.OutputTruncated = output.tests(), output.output.String(), output.truncated

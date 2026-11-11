@@ -1,0 +1,48 @@
+# C-fix-win-job-object-verify-land: job verify and land run their commands through proctree on Windows, so descendants of an exited command are ended
+
+Base: main cd84f424 plus the merged lane C-fix-win-job-object-eval-routine (head 42513250, it adds internal/proctree); the brief was written on 3a3d99ea. The lane is stacked on 42513250 because the eval-routine lane has not landed on main. `git diff --stat 3a3d99ea 42513250 -- internal/job internal/land` lists only `render.go` and `render_intent_once_test.go`, so `verify.go`, `process.go` and both Windows process files did not move. The Why lines read again on 42513250, before my edit: `internal/job/verify.go:126-127` (`err = cmd.Run()` then `cleanupVerifyProcess(cmd)`), `internal/land/process.go:55-56` (`err := cmd.Run()` then `cleanupProcess(cmd)`), `internal/job/verify_process_windows.go:31-35` and `internal/land/process_windows.go:28-32` (cleanup acts only while `cmd.ProcessState == nil`), `docs/lanes/A-win-verify-land-tree.md` and `internal/proctree/` are present. All still show the cause.
+
+## Proof table
+
+| Row | Status | Evidence |
+|---|---|---|
+| 1. Call sites (no row can fail on the base in a Linux sandbox; the behaviour differs only on Windows, so no "fails on main" claim is made) | HOLDS | Lane: `git grep -n "proctree.Run(cmd)" -- internal/job/verify.go internal/land/process.go` prints `internal/job/verify.go:128:	err = proctree.Run(cmd)` and `internal/land/process.go:56:	err := proctree.Run(cmd)`. Base (main cd84f424): `git grep -n "proctree.Run(cmd)" main -- internal/job/verify.go internal/land/process.go` prints nothing (exit 1). The base failure is row 3's two Windows tests run on a Windows host on the base; not run here. |
+| 2. Unix unchanged | HOLDS | `go test ./internal/job/ ./internal/land/ -count=1`: `ok job 3.829s`, `ok land 3.665s`, exit 0. No existing test file is edited (`git diff --stat 42513250 HEAD` lists four files: `verify.go`, `process.go`, and two new test files). `go test -count=1 -v -run 'TestVerifyCancelKillsChild\|TestVerifyExitedShellKillsDescendants\|TestTimeoutKillsDescendants\|TestFailureTimeoutAndEnvironment'` printed `--- PASS: TestVerifyCancelKillsChild (1.24s)` (verify_test.go:140), `--- PASS: TestVerifyExitedShellKillsDescendants (1.48s)` (:182), `--- PASS: TestTimeoutKillsDescendants (3.13s)` (land/process_unix_test.go:14), `--- PASS: TestFailureTimeoutAndEnvironment (0.05s)` (land/land_test.go:159). On Unix `proctree.Run` is `cmd.Start` then `cmd.Wait` (`internal/proctree/proctree_other.go:9-16`), the same as `cmd.Run`. |
+| 3a. Job Windows test, compiled | HOLDS (compiled, internal/job/verify_proctree_windows_test.go) | `TestWindowsRunVerifyEndsDescendantsOfExitedParent` (:50) runs `RunVerify` (so `verifyShell` and the verify run path) on a cmd.exe command that starts the helper parent `TestWindowsVerifyExitedParentHelper` (:26, own variable `verifyExitedParentHelperEnv` :15). The parent waits 500 ms, starts a leaf grandchild, prints both pids and exits at once (:28-35). The test asserts the shell exited 0 (:59), reads both pids from `r.Output` and fails if none were reported (:62-70), and `requireGone(t, "grandchild", grandchild)` (:71) waits up to 10 s for the grandchild to be gone. `GOOS=windows go test -c -o /dev/null ./internal/job/`: exit 0 (`JOB_WIN_TEST_COMPILE_EXIT=0`). |
+| 3b. Land Windows test, compiled | HOLDS (compiled, internal/land/process_proctree_windows_test.go) | `TestWindowsRunProcessEndsDescendantsOfExitedParent` (:49) calls `runProcess` (:53) on the helper `TestWindowsLandExitedParentHelper` (:26, own variable `landExitedParentHelperEnv` :15), which has the same shape. It asserts exit 0 (:54), reads both pids from `result.Stdout` (:57-65; the command is over when `runProcess` returns, so no pid file is needed) and `requireGone` (:66) waits up to 10 s for the grandchild. `GOOS=windows go test -c -o /dev/null ./internal/land/`: exit 0 (`LAND_WIN_TEST_COMPILE_EXIT=0`). |
+| 3c. Windows vet | HOLDS | `GOOS=windows go vet ./internal/job/ ./internal/land/`: exit 0 (`WIN_VET_EXIT=0`). |
+| 4a. eval, routine, proctree untouched | HOLDS | `git diff 42513250 --stat -- internal/eval internal/routine internal/proctree` prints nothing. The literal `git diff main --stat -- internal/eval internal/routine internal/proctree` prints 9 files, all from the merged eval-routine lane (it is not on main yet, so main lacks proctree); none is from this lane. |
+| 4b. darwin vet | HOLDS | `GOOS=darwin go vet ./internal/job/ ./internal/land/`: exit 0 (`DARWIN_VET_EXIT=0`). |
+| 4c. lint | HOLDS | `make lint` (`go vet ./...`, gofmt): exit 0 (`LINT_EXIT=0`). `gofmt -l internal/job internal/land` printed nothing. |
+| 4d. Windows build | HOLDS | `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...`: exit 0 (`WIN_BUILD_EXIT=0`). |
+| Packages that import the changed ones, tested | HOLDS | `go list -f '{{.ImportPath}} {{join .Imports " "}} {{join .TestImports " "}} {{join .XTestImports " "}}' ./... \| grep -E "internal/(job\|land)( \|$)"` lists contract/formats, cli, hook, job, job/jobcmd, job/lint, jobgraph, land, lease, orchestrator, plan, ports; `go list -f '{{.ImportPath}} {{join .Deps " "}}' ./...` with the same filter adds cmd/grid, env, packaging, packaging/cmd. `go test -count=1` on all of them plus job/frontmatter and job/jobtest: all `ok` (cli 35.676s, orchestrator 33.989s, env 10.028s, packaging 5.220s, job 4.474s, land 3.905s, the rest under 5 s), cmd/grid and job/jobtest have no test files; exit 0. The whole-module test and the cross-repo set are the orchestrator's. |
+| New tests fail on base and pass on the lane | NOT VERIFIED (needs a Windows host) | Both new tests are `//go:build windows`, so a Linux sandbox cannot run them on base or lane; on base they fail only by behaviour, with `grandchild (pid N) is still running`, on a Windows host. Compiled on the lane only (rows 3a, 3b). |
+| No existing test edited or deleted | HOLDS | `git diff --stat 42513250 HEAD` shows two caller edits and two new files; `verify_process_windows_test.go` and `process_windows_test.go` are untouched, and their `requireGone` is reused, not redefined (no `newPidSink` is needed). |
+| No guard, gate, cap, hold or blocking hook on agents | HOLDS | The change swaps `cmd.Run()` for `proctree.Run(cmd)` at two lines. `proctree_windows.go:107` sets only KILL_ON_JOB_CLOSE; the job is ended after the command is over, and nothing runs before a command starts. |
+| Small commits, one sentence, no attribution lines | HOLDS | Two code commits and the doc commit, each one sentence, no trailer of any kind. |
+| No personal paths, hosts or emails | HOLDS | None in the changed files or in this doc. |
+| Nothing pushed | HOLDS | Bundle only. |
+
+Windows host run: for the orchestrator (not a row): `go test ./internal/job/ ./internal/land/ -run 'Windows' -count=1 -v`. And the two new tests alone on the base, where they must fail: check out main with the eval-routine lane's `internal/proctree` absent (so `proctree.Run` is not called), copy the two new test files onto it, and run `go test ./internal/job/ -run 'TestWindowsRunVerifyEndsDescendantsOfExitedParent' -count=1 -v` and `go test ./internal/land/ -run 'TestWindowsRunProcessEndsDescendantsOfExitedParent' -count=1 -v`; each needs only `RunVerify` or `runProcess` and `requireGone`, which main has, and each ends with `grandchild (pid N) is still running`.
+
+## What changed
+
+- `internal/job/verify.go`: import of `internal/proctree`; the run line is `err = proctree.Run(cmd)` (:128). `cleanupVerifyProcess(cmd)` stays on the next line and is a no-op once Wait has returned.
+- `internal/land/process.go`: import of `internal/proctree`; the run line is `err := proctree.Run(cmd)` (:56). `cleanupProcess(cmd)` stays and is a no-op once Wait has returned.
+- New `internal/job/verify_proctree_windows_test.go` and `internal/land/process_proctree_windows_test.go` (`//go:build windows`), each with its own helper test and variable.
+- Not touched: `internal/proctree`, the Windows `Cancel` and cleanup functions, eval, routine.
+
+Behaviour: the error `RunVerify` and `runProcess` see is Start's or Wait's, unchanged (`proctree.Run` guarantees it), so the existing result handling (`ErrWaitDelay`, `*exec.ExitError`, context cancel) is as before. Cancellation still goes through the taskkill `Cancel`; the job is ended after Wait returns, which also ends what taskkill could not reach.
+
+Known gaps, stated and not claimed away:
+
+- The job is assigned after the shell or process has been created, so a descendant started before that is outside the job (see `internal/proctree/proctree.go` header). The two helper parents wait 500 ms before starting their leaf, so the tests are about the exited-parent case and not about this gap. An assignment failure leaves the run exactly as before and is not the run's error.
+- The job test passes `-test.run=TestWindowsVerifyExitedParentHelper` to cmd.exe without `^...$`, because `^` is cmd.exe's escape character; the name matches no other test in the package.
+- The job test does not assert `RunVerify`'s error: with the shell gone, a handle held open by a descendant can make Wait report `ErrWaitDelay`, which is not what the test is about; it asserts the shell's exit code instead.
+
+## NOT VERIFIED on a live screen
+
+- No Windows process was started. Both new tests compile and vet for windows/amd64 only.
+- That the grandchild is gone within 10 s after `RunVerify` and after `runProcess` on a real Windows host.
+- That the job assignment wins the race against the 500 ms wait in the helper parent on a loaded host.
+- Nothing here is a UI row.
