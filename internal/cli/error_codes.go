@@ -12,6 +12,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/signal"
 	"github.com/gridconsole/grid-plugins/internal/where"
+	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
 const (
@@ -25,6 +26,9 @@ const (
 	CodeInvalidArgument = "invalid_argument"
 	// CodeInvalidPolicy means a workflow policy value the command depends on is invalid.
 	CodeInvalidPolicy = "invalid_policy"
+	// CodeWorkflowFileChanged means a workflow file changed since the caller read
+	// its revision; nothing was written.
+	CodeWorkflowFileChanged = "workflow_file_changed"
 	// CodeGuestRefused means the caller's guest role may not make this write.
 	CodeGuestRefused = "guest_refused"
 )
@@ -43,6 +47,8 @@ func errorCode(err error) string {
 		return CodeNoSuchNote
 	case errors.As(err, &bad), errors.Is(err, errTaskOperand):
 		return CodeInvalidArgument
+	case errors.Is(err, workflow.ErrChanged):
+		return CodeWorkflowFileChanged
 	case errors.Is(err, ilGuestRefused):
 		return CodeGuestRefused
 	default:

@@ -131,7 +131,18 @@ func runWorkflowWrite(args []string, env Env) int {
 		return 2
 	}
 	if !workflow.WriteDefaultAllowed(env.getenv("GRID_ROLE")) {
-		fmt.Fprintln(env.Stderr, "grid workflow write: caller role is not allowed to write workflows")
+		const hint = "caller role is not allowed to write workflows"
+		line := "grid workflow write: " + hint
+		fmt.Fprintln(env.Stderr, line)
+		if *asJSON {
+			_ = writeJSON(env.Stdout, struct {
+				Error   string `json:"error"`
+				Reason  string `json:"reason"`
+				Hint    string `json:"hint"`
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			}{"person_required", "role_not_allowed", hint, "person_required", line})
+		}
 		return 3
 	}
 	input := env.Stdin
