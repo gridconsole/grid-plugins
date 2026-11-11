@@ -101,8 +101,8 @@ var hsIpTable = map[string]hsIpVerb{
 	"proof":    {},
 	"history":  {},
 	// land.go:34 waits on os.Interrupt; its children take the host environment (lib.go:34).
-	"land":   {why: "waits on the process's interrupt signal and starts host-environment children (land.go:34)"},
-	"brain":  {},
+	"land":  {why: "waits on the process's interrupt signal and starts host-environment children (land.go:34)"},
+	"brain": {},
 	"env": {subs: map[string]hsIpSub{
 		// environment.go:128 waits on SIGINT and SIGTERM; env/env.go:113 claims the
 		// port with os.Getpid and env.go:121 starts the server as a child.
