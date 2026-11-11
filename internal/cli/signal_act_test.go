@@ -187,6 +187,9 @@ func TestSignalActMatrix(t *testing.T) {
 					wantCode = 3
 					message = "grid: " + message + "\n"
 				}
+				if act == "add" { // add links to a task that must already exist
+					h.mkdir(filepath.Join(h.gridHome, "projects", "example", "tasks", "T-12"))
+				}
 				code := h.run(h.root, actArgs(act)...)
 				if code != wantCode || h.errb.String() != message {
 					t.Fatalf("exit %d, stderr %q; want %d, %q", code, h.errb.String(), wantCode, message)
@@ -245,7 +248,7 @@ func TestSignalActMatrix(t *testing.T) {
 					t.Fatal(err)
 				}
 				wantTasks := 0
-				if act == "turn" {
+				if act == "turn" || act == "add" { // add's T-12 was made before the run
 					wantTasks = 1
 				}
 				if len(tasks) != wantTasks {

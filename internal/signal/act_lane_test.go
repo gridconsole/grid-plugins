@@ -213,6 +213,9 @@ func TestActTransitions(t *testing.T) {
 		t.Fatalf("reopen left became %q until %q", n.Became, n.Until)
 	}
 	// Reopen clears became on a note that an add had linked to a task.
+	if err := os.MkdirAll(filepath.Join(s.GridHome, "projects", s.Project, "tasks", "T-7"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	step(ActOptions{Act: "add", Task: "T-7"}, "updated", "done")
 	if n, _ = read(path); n.Became != "T-7" {
 		t.Fatalf("became %q", n.Became)
