@@ -131,6 +131,21 @@ func TestHdSSearchRecordsTheNotesTheCLIPrinted(t *testing.T) {
 	}
 }
 
+// --task and --project are read as the CLI reads them: a search of another task's
+// project is not a search of the notes the hook reads.
+func TestHdSSearchTaskFlag(t *testing.T) {
+	f, _ := showFixture(t)
+	hdSQuiet(t, f, "grid brain search deploy --task "+f.dir)
+	if n := len(hdSReadLines(t, f)); n != 2 {
+		t.Fatalf("--task naming this task: %s", historyOf(t, f))
+	}
+	g, _ := showFixture(t)
+	hdSQuiet(t, g, "grid brain search deploy --task no-such-task")
+	if h := historyOf(t, g); h != "" {
+		t.Fatalf("--task naming no task wrote: %s", h)
+	}
+}
+
 func TestHdSSearchWhyIsTheWords(t *testing.T) {
 	f, _ := showFixture(t)
 	hdSQuiet(t, f, `grid brain search "how to deploy" --limit 1`)
