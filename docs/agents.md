@@ -2,7 +2,7 @@
 
 Two folders hold agents. They are not the same thing.
 
-- `agent-templates/` (12 files, `grid-*` and `Explore`). SessionStart copies them to `~/.claude/agents/` with the person's model and effort (`internal/hook/hook.go`, `docs/lanes/D-agents-sync.md`). A session's context names these bare names: `grid-planner`, `grid-scout`, `grid-researcher`, `grid-runner` and the rest. This is the scheme a session uses to start work.
+- `agent-templates/` (12 files, `grid-*` and `Explore`). SessionStart copies them to `~/.claude/agents/` with the person's model and effort (`internal/hook/hook.go`, `docs/lanes/D-agents-sync.md`). The session's context names no agent (`TestSessionStartNamesNoAgents` in `internal/hook/agentsync_test.go` pins this). `assembleContext` in `internal/hook/hook.go` builds it from the session lines (`sessionContext`), the Job lines (`jobContext`, only for a worker-started Job) and the brain index.
 - `agents/` (`builder`, `orchestrator`, `reviewer`). Claude loads these from the plugin folder as plugin agents. They carry the Job skills `run-job`, `plan-jobs` and `review-job`.
 
 `builder` and `reviewer` do the same work as `grid-builder` and `grid-reviewer`, and `orchestrator` the same as `grid-planner`'s Job posting. Nothing in `internal/hook` names the `agents/` files, so the session context never points at them. Which of the two sets goes is the owner's decision; this lane removed neither, and did not check what else reads the `agents/` files.
