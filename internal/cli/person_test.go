@@ -166,7 +166,7 @@ func TestPersonLegacyTaskWithoutOwner(t *testing.T) {
 func TestPersonEmptyCacheAndOwnerMatch(t *testing.T) {
 	h := newHarness(t)
 	before := personSnapshot(t, h.gridHome)
-	if code := h.run(h.home, "person", "list", "--json"); code != 0 || h.out.String() != "{\"people\":[],\"problems\":[]}\n" {
+	if code := h.run(h.home, "person", "show", "nobody", "--json"); code != 1 || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "nobody") {
 		t.Fatalf("empty cache: %d %s %s", code, h.out, h.errb)
 	}
 	if after := personSnapshot(t, h.gridHome); !reflect.DeepEqual(before, after) {
