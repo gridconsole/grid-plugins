@@ -25,6 +25,10 @@ type Env struct {
 	Stderr   io.Writer
 }
 
+// defaultTimeout is the timeout per task of eval run; export-suite writes it as
+// timeout_seconds.
+const defaultTimeout = 5 * time.Minute
+
 // stringList collects a repeated flag.
 type stringList []string
 
@@ -35,13 +39,16 @@ func (l *stringList) Set(v string) error { *l = append(*l, v); return nil }
 // and 2 for invalid command usage. Reading a failed run with show returns 0.
 func Run(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid eval list [flags]\n       grid eval run [task] [flags]\n       grid eval show <run-id> [flags]\n\nRun defaults to all tasks and the fake agent. Use --agent with a JSON argv array for a real agent; the agent sees only a minimal environment plus variables named with --env.")
+		fmt.Fprintln(env.Stdout, "Usage: grid eval list [flags]\n       grid eval run [task] [flags]\n       grid eval show <run-id> [flags]\n       grid eval export-suite --out <dir> [--suite <dir>] [--json]\n\nRun defaults to all tasks and the fake agent. Use --agent with a JSON argv array for a real agent; the agent sees only a minimal environment plus variables named with --env.\nExport-suite writes the suite as claude plugin eval cases and names every check it cannot carry.")
 		return 0
 	}
 	verb := args[0]
-	if verb != "list" && verb != "run" && verb != "show" {
+	if verb != "list" && verb != "run" && verb != "show" && verb != "export-suite" {
 		fmt.Fprintf(env.Stderr, "eval: unknown command %q\n", verb)
 		return 2
+	}
+	if verb == "export-suite" {
+		return runExportSuite(args[1:], env)
 	}
 	fs := flag.NewFlagSet("grid eval "+verb, flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
@@ -60,7 +67,7 @@ func Run(args []string, env Env) int {
 	if verb == "run" {
 		fs.Var(&allowEnv, "env", "name of a login variable to pass to the agent, such as ANTHROPIC_API_KEY (repeatable)")
 		fs.StringVar(&agent, "agent", "", `agent argv as JSON, for example '["claude","-p"]' (default: fake)`)
-		fs.DurationVar(&timeout, "timeout", 5*time.Minute, "timeout per task, including setup and checks")
+		fs.DurationVar(&timeout, "timeout", defaultTimeout, "timeout per task, including setup and checks")
 	}
 	// Accept either task/id before flags or a final positional after flags.
 	positional := ""

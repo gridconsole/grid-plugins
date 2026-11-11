@@ -565,6 +565,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"eval list":            {},
 		"eval run":             {args: []string{"[task]"}},
 		"eval show":            {args: []string{"<run-id>"}},
+		"eval export-suite":    {},
 		"migrate":              {},
 		"job verify":           {args: []string{"<job>"}},
 		"job trace":            {args: []string{"<pointer>"}},
