@@ -19,20 +19,8 @@ const ljAllTranscript = `{"type":"assistant","message":{"content":[{"type":"text
 // ljAllKnownOpen lists the cases GradeCase refuses today, each with the substring
 // its error must contain.
 var ljAllKnownOpen = map[string]string{
-	// graders/*.md carry `name:` (graderKeys, suitegrade.go:59-64); found-before-result.md also uses before_tool/before_match/after_tool/after_match.
+	// found-before-result.md uses before_tool/before_match/after_tool/after_match, not the before/after maps (graderKeys, suitegrade.go:59-64).
 	"review-posts-found": "unknown key",
-	// graders/*.md carry `name:`, e.g. graders/result-posted.md:2.
-	"job-result-posted": "unknown key",
-	// graders/*.md carry `name:`.
-	"bash-one-command": "unknown key",
-	// graders/*.md carry `name:`.
-	"builder-not-done": "unknown key",
-	// graders/*.md carry `name:`.
-	"plan-step-anchor": "unknown key",
-	// graders/*.md carry `name:`.
-	"replan-dead-job": "unknown key",
-	// graders/*.md carry `name:`.
-	"research-unverified": "unknown key",
 }
 
 // ljAllWalk grades every case folder of suiteDir; nil means the case grades clean.
