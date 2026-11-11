@@ -214,4 +214,3 @@ func parseBrainShow(command string) (string, bool) {
 	}
 	return id, true
 }
-
