@@ -15,7 +15,7 @@ const gyJwBody = `{"error":"job_waiting","code":"job_waiting","job":"J-2","waiti
 // gyJwEpoch is the task holder's lease epoch, read before the run turns into a person.
 var gyJwEpoch string
 
-const gyJwStderr ="J-2 cannot be answered yet: waiting for J-1 to be accepted\n"
+const gyJwStderr = "J-2 cannot be answered yet: waiting for J-1 to be accepted\n"
 
 // gyJwHarness posts person Job J-2 of the given kind after the agent Job J-1
 // (not accepted), then runs the next commands as an unleased owner.
