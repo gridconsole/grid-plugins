@@ -1,6 +1,7 @@
 ---
 name: review-job
 description: How a reviewer checks a finished Grid Job against its acceptance rows and writes the verdict. Use when reviewing a builder's result.
+topics: reviewing
 ---
 
 Read with `grid job show <task> <job>`. Post with `grid job result --task <task> --job <job> --body <json>`.

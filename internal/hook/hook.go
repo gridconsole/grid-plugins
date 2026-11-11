@@ -255,6 +255,9 @@ func toolUse(o Options) {
 		if decision = usageHold(o, *in, decision); decision.Behavior != "deny" {
 			history(o, *in)
 			recall(o, *in)
+			// Topic text rides on the verdict envelope, so a call with or without a
+			// guard verdict writes one JSON object.
+			decision.Context = topicContext(o, *in)
 		}
 	}
 	if decision.Behavior == "allow" {

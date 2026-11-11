@@ -1,6 +1,7 @@
 ---
 name: run-job
 description: How a builder reads one Grid Job, stays in its scope, and posts a result with evidence. Use when running an assigned Job.
+topics: delivering
 ---
 
 Read with `grid job show <task> <job>`. Post with `grid job result --task <task> --job <job> --body <json>`.
