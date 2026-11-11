@@ -21,6 +21,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/job/jobcmd"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
 	"github.com/gridconsole/grid-plugins/internal/land"
+	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
@@ -272,12 +273,12 @@ func runOrchestrator(args []string, env Env) int {
 	}
 	// A person of the team with no lease epoch posts a Job or answers a person Job
 	// as an unleased record, so the worker holding the task lease does not stop it.
-	// A plan-hash approval keeps the lease path, and so does every other role.
+	// A plan-hash approval is answered the same way, and every other role keeps the lease path.
 	personRole := contract.NormalizeRole(env.getenv("GRID_ROLE"))
 	if personRole == "" {
 		personRole = "member"
 	}
-	unleased := *epoch == "" && contract.TierFor(personRole) == contract.PersonTeam && (verb == "post" && *kind == "job" || personResult && *planHash == "")
+	unleased := *epoch == "" && contract.TierFor(personRole) == contract.PersonTeam && (verb == "post" && *kind == "job" || personResult)
 	var writer feed.Writer
 	if unleased {
 		writer, err = feedWriter(env, "", "")
@@ -459,12 +460,16 @@ func printPostFindings(w io.Writer, job string, findings []lint.Finding, err err
 }
 
 // runPersonApproval answers the person Job of an approve step with the plan
-// hash the person saw. It runs the compare-and-set of grid approve, which
-// writes approval.json as before, and then posts the Job result once Approve
-// has released .task.lock and .plan.lock; a stale hash writes neither.
+// hash the person saw. It moves an old approval receipt into the Feed first, runs
+// the compare-and-set of grid approve, and then posts the Job result once
+// Approve has released .task.lock and .plan.lock; a stale hash posts nothing.
 func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string, body map[string]any, hash string, asJSON bool) int {
 	answer, _ := body["answer"].(string)
 	note, _ := body["note"].(string)
+	if _, _, err := migrate.ReceiptToJob(store.TaskDir, w); err != nil {
+		fmt.Fprintln(env.Stderr, err)
+		return 1
+	}
 	// The same refusals AnswerPerson gives, before anything is written: an answer
 	// over the cap, and a Job that is not a person's or is already closed.
 	if answer = strings.TrimSpace(answer); answer == "" {
@@ -497,7 +502,7 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	// waits for .orchestrator.lock, which a tick holds before .task.lock.
 	if err == nil {
 		env.afterApproveHook()
-		err = personApproval(store, w, job, answer, event)
+		err = recordApproval(resolved.Path, store, w, job, answer, event)
 	}
 	return taskWriteResult(env, event, err, asJSON, resolved.Path)
 }

@@ -41,6 +41,26 @@
                 "answer": {
                   "type": "string",
                   "minLength": 1
+                },
+                "plan_hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{6}$"
+                },
+                "plan_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "lands_hash": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "note": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
                 }
               },
               "required": [

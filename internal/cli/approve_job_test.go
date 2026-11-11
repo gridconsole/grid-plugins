@@ -72,16 +72,12 @@ func TestApprovePostsPersonJobResultWithPlanDigest(t *testing.T) {
 	if st, _ := store.State(); string(st.Jobs["J-2"].Status) != "accepted" {
 		t.Fatalf("J-2 is %s", st.Jobs["J-2"].Status)
 	}
-	b, err := os.ReadFile(filepath.Join(path, "approval.json"))
-	if err != nil {
-		t.Fatal(err)
+	// The Job result is the only approval record: no approval.json (verdict 12).
+	if _, err := os.Stat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("approval.json was written: %v", err)
 	}
-	var receipt taskstore.Event
-	if err := json.Unmarshal(b, &receipt); err != nil {
-		t.Fatal(err)
-	}
-	if receipt.What != "approve" || receipt.PlanHash != plan.Hash(text) || receipt.PlanDigest != plan.Digest(text) {
-		t.Fatalf("approval.json %s", b)
+	if a, err := taskstore.ApprovalFromJob(path); err != nil || a.PlanHash != plan.Hash(text) || a.PlanDigest != plan.Digest(text) {
+		t.Fatalf("%+v %v", a, err)
 	}
 }
 
@@ -120,8 +116,8 @@ func TestJobResultPlanHashAndApprovalFromJob(t *testing.T) {
 	if err != nil || a.Job != "J-2" || a.PlanHash != plan.Hash(text) || a.PlanDigest != plan.Digest(text) || a.Answer != "Go ahead." || a.Note != "checked" {
 		t.Fatalf("%+v %v", a, err)
 	}
-	if _, err := os.Stat(filepath.Join(path, "approval.json")); err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("approval.json was written: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(path, "plan.md"), []byte(text+"\nOne more step.\n"), 0o644); err != nil {
 		t.Fatal(err)

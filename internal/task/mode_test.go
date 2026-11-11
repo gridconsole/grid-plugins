@@ -107,21 +107,22 @@ func TestRewriteOverASymlinkKeepsNoMode(t *testing.T) {
 }
 
 // Control: a file Grid creates keeps the mode main gave it. A journal write
-// creates history.md and a receipt 0600, AppendHistory keeps that, and the task
-// lock it takes is 0600.
+// creates history.md and a decision file 0600 (it wrote a receipt too, until the
+// plan Job's result became the approval record), AppendHistory keeps that, and the
+// task lock it takes is 0600.
 func TestNewFilesKeepTheirMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows file modes carry only a read-only bit")
 	}
 	_, tk := writeFixture(t)
 	history := filepath.Join(tk.Path, "history.md")
-	receipt := filepath.Join(tk.Path, approvalFile)
+	receipt := filepath.Join(tk.Path, "refusal-R-1.json")
 	for _, path := range []string{history, receipt} {
 		if _, err := os.Lstat(path); !os.IsNotExist(err) {
 			t.Fatalf("fixture already has %s: %v", filepath.Base(path), err)
 		}
 	}
-	if err := commitWrite(tk.Path, Event{Task: tk.ID, What: "note", Note: "x"}, map[string][]byte{approvalFile: []byte("{}\n")}); err != nil {
+	if err := commitWrite(tk.Path, Event{Task: tk.ID, What: "note", Note: "x"}, map[string][]byte{"refusal-R-1.json": []byte("{}\n")}); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{history, receipt} {

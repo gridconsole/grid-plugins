@@ -650,12 +650,6 @@
       ]
     },
     {
-      "name": "views",
-      "summary": "render the task pages",
-      "built": false,
-      "subcommands": []
-    },
-    {
       "name": "job",
       "summary": "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, floor",
       "built": true,
@@ -2462,12 +2456,6 @@
       ]
     },
     {
-      "name": "ask",
-      "summary": "ask a person a question",
-      "built": false,
-      "subcommands": []
-    },
-    {
       "name": "answer",
       "summary": "record a person's answer",
       "built": true,
@@ -3152,12 +3140,6 @@
       ]
     },
     {
-      "name": "machine",
-      "summary": "machines topic",
-      "built": false,
-      "subcommands": []
-    },
-    {
       "name": "env",
       "summary": "up, down browser Job dev environments",
       "built": true,
@@ -3181,63 +3163,6 @@
           "output": ""
         }
       ]
-    },
-    {
-      "name": "ports",
-      "summary": "claim, release, list, gc dev port blocks",
-      "built": true,
-      "subcommands": [
-        {
-          "name": "claim",
-          "args": [
-            "\u003cJ\u003e"
-          ],
-          "flags": [
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
-        {
-          "name": "gc",
-          "args": [],
-          "flags": [],
-          "json": false,
-          "output": ""
-        },
-        {
-          "name": "list",
-          "args": [],
-          "flags": [
-            {
-              "name": "--json",
-              "takes": "none",
-              "required": false
-            }
-          ],
-          "json": true,
-          "output": ""
-        },
-        {
-          "name": "release",
-          "args": [
-            "\u003cJ\u003e"
-          ],
-          "flags": [],
-          "json": false,
-          "output": ""
-        }
-      ]
-    },
-    {
-      "name": "deploy",
-      "summary": "deploy topic",
-      "built": false,
-      "subcommands": []
     },
     {
       "name": "person",
@@ -4998,12 +4923,6 @@
           "output": ""
         }
       ]
-    },
-    {
-      "name": "sync",
-      "summary": "sync with a Grid server",
-      "built": false,
-      "subcommands": []
     }
   ]
 }
