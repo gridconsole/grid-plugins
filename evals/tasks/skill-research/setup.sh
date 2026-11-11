@@ -5,6 +5,7 @@ mkdir -p "$GRID_HOME/projects"
 printf "1\n" > "$GRID_HOME/VERSION"
 t="$GRID_HOME"/projects/notes-app/tasks/T-01-tag-rules
 mkdir -p work/notes-app/src "$t"
+printf -- '---\n---\n' > "$GRID_HOME/projects/notes-app/project.md"
 cat > work/notes-app/src/store.js <<'S'
 const notes = [];
 const MAX_TAGS = 5;
@@ -35,7 +36,8 @@ size: small
 workflow:
   - {step: research, kind: run}
 step: research
-status: running
+state: running
+created: 2026-03-04T09:00:00Z
 updated: 2026-03-04T10:00
 summary: Find the tag rules before planning the tag search.
 next: Research the tag rules.

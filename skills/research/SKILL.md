@@ -13,13 +13,13 @@ Rules that apply here:
 - "Split a step before launch if it will not fit in about 60 calls."
 - "Every link carries a why."
 
-Steps:
+Steps (all use `--task <task>`). Pass the task folder path `$GRID_HOME/projects/<project>/tasks/<folder>` as `<task>`; `grid where` prints the project and the folder. The folder path works for every verb below. A bare id such as `T-01` works only for `proof`, `brain`, `task history` and `deliver`; `where`, `job show` and `job result` answer "needs --project" to a bare id:
 
-1. Write the question as one sentence, from `grid job show` or the task intent. If it holds two questions, split it.
-2. Look in the brain first: `grid brain search <words> --task <task>` and `grid brain show <id>`. Cite a note by id.
+1. Write the question as one sentence, from `grid job show --task <task> <job>` or the task intent. If it holds two questions, split it.
+2. Look in the brain first: `grid brain search <words> --task <task>` and `grid brain show <id> --task <task>`. Cite a note by id; a search with no hits means the brain holds nothing, so go on to the sources.
 3. Read the sources. For code, read the file and note `path:line`. For a Grid verb, run `grid <verb> --help` and cite what it printed. For the web, name the URL and the date you read it.
-4. Write `research.md` in the task folder (`grid where` shows it), one section per question: the answer in one line, then each fact with its source, then what you could not find. A fact with no source is marked UNVERIFIED.
+4. Write `research.md` in the task folder (`grid where --task <task>` shows it), one section per question: the answer in one line, then each fact with its source, then what you could not find. A fact with no source is marked UNVERIFIED.
 5. If a finding makes the ask unclear, put one question through the questions skill; otherwise carry on.
-6. Post the result: `grid job result --task <task> --job <job> --body <json>` naming `research.md` and listing what is UNVERIFIED. If a fact would help other tasks, say so in the result; the deliver step proposes brain notes.
+6. Post the result: `grid job result --task <task> --job <job> --body <json>` naming `research.md` and listing what is UNVERIFIED. `grid job result` needs `GRID_MEMBER` set and a saved Job; without them it answers "GRID_MEMBER is required" or "specify a Job id", and you put the result in your final message instead. If a fact would help other tasks, say so in the result; the deliver step proposes brain notes.
 
 Done looks like: `research.md` exists, every code fact has a `path:line`, every unverified fact is marked, and no project file changed.
