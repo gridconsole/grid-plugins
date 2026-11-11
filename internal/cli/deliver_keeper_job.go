@@ -105,7 +105,7 @@ func postCuratorJob(env Env, dir, taskID string, ids []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	store := feed.Store{TaskDir: dir, TaskID: fid}
+	store := feed.Store{TaskDir: dir, TaskID: fid, Warn: env.Stderr}
 	for try := 0; try < 3; try++ {
 		snap, err := orchestrator.Load(store)
 		if err != nil {
@@ -155,12 +155,12 @@ func postCuratorJob(env Env, dir, taskID string, ids []string) (string, error) {
 
 // curatorJobOpen reports whether a curator Job of the task is open, for the dry
 // run: it reads the Feed and posts nothing.
-func curatorJobOpen(dir string) (bool, error) {
+func curatorJobOpen(env Env, dir string) (bool, error) {
 	fid, _, err := taskstore.FeedIdentity(dir)
 	if err != nil {
 		return false, err
 	}
-	snap, err := orchestrator.Load(feed.Store{TaskDir: dir, TaskID: fid})
+	snap, err := orchestrator.Load(feed.Store{TaskDir: dir, TaskID: fid, Warn: env.Stderr})
 	if err != nil {
 		return false, err
 	}

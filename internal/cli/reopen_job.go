@@ -25,7 +25,7 @@ func reopenPlanJob(env Env, dir string) (func() error, error) {
 	if err != nil {
 		return nil, nil
 	}
-	store := feed.Store{TaskDir: dir, TaskID: id}
+	store := feed.Store{TaskDir: dir, TaskID: id, Warn: env.Stderr}
 	snap, err := orchestrator.Load(store)
 	if err != nil {
 		return nil, nil

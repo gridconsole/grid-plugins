@@ -43,6 +43,11 @@ type Store struct {
 	// the call returns the context's error and writes nothing. Nil means
 	// context.Background, which waits as long as the holder keeps the lock.
 	Context context.Context
+	// Warn receives the warning a fold prints when workflow.md cannot be read
+	// ("cannot read task withdrawal policy (workflow.md); using withdraw: []"). A
+	// host that runs many calls in one process sets it to the call's own stderr.
+	// Nil is the process stderr, as before.
+	Warn io.Writer
 	// afterGateCheck is a test hook inside the gate lock, before the append.
 	afterGateCheck func()
 }
