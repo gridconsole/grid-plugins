@@ -97,7 +97,7 @@ func hfFsDocCodes(t *testing.T) []string {
 var hfFsCodeLiterals = []string{"role_policy.go", "person_check.go", "task_write.go"}
 
 // hfFsSourceCodes collects the codes the plugin can print: Code*/code* string
-// constants in packages cli and settings, and the Code value of the anonymous
+// constants in packages cli, settings and braincmd, and the Code value of the anonymous
 // struct written in each of hfFsCodeLiterals.
 func hfFsSourceCodes(t *testing.T) map[string]string {
 	t.Helper()
@@ -115,7 +115,7 @@ func hfFsSourceCodes(t *testing.T) map[string]string {
 		}
 		pkg := file.Name.Name
 		dir := filepath.Base(filepath.Dir(path))
-		if pkg == "cli" || pkg == "settings" {
+		if pkg == "cli" || pkg == "settings" || pkg == "braincmd" {
 			for _, decl := range file.Decls {
 				gen, ok := decl.(*ast.GenDecl)
 				if !ok || gen.Tok != token.CONST {
