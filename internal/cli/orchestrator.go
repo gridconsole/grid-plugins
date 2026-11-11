@@ -254,9 +254,11 @@ func runOrchestrator(args []string, env Env) int {
 	// A Job agent's GRID_LEASE names its own Job, but posting a Job is a task
 	// write. The worker gives every agent the task epoch it is holding as
 	// GRID_TASK_EPOCH, so a Job post uses that, unless --lease or --lease-epoch
-	// was typed. The global --lease-epoch, which goes before the command, counts as typed:
-	// env.getenv shows it as GRID_LEASE_EPOCH, so the flag set alone cannot tell.
-	if verb == "post" && *kind == "job" && env.getenv("GRID_TASK_EPOCH") != "" {
+	// was typed. Cancelling a Job is the same task write, so `cancel` takes the
+	// same rule; `post --kind control` does not. The global --lease-epoch, which goes
+	// before the command, counts as typed: env.getenv shows it as GRID_LEASE_EPOCH,
+	// so the flag set alone cannot tell.
+	if (verb == "post" && *kind == "job" || verb == "cancel") && env.getenv("GRID_TASK_EPOCH") != "" {
 		typed := map[string]bool{}
 		fs.Visit(func(f *flag.Flag) { typed[f.Name] = true })
 		typed["lease-epoch"] = typed["lease-epoch"] || env.typedGlobal["GRID_LEASE_EPOCH"]
