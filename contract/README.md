@@ -840,6 +840,14 @@ the file. Preview and ship receipts (`approval-preview.json`,
 them. Their names are still in the host guard's file list, which warns by
 default and denies only at level `block`.
 
+`grid approve <task> --plan-hash <hash> --send-back <words> [--json]` sends the
+open plan approve Job back: the holder rejects it with close reason `sent back
+by <who>` and the words; the plan is not approved. The answer and the control
+carry the optional `send_back` (always `true`) and `sent_back_hash` (the 6-hex
+plan hash the person read); `type_v` stays 1. History records `send_back`, the
+plan hash and who, never the words; `--note` is refused with `--send-back`; a
+guest cannot send back. The `--json` output has `what` `send_back`.
+
 The result and the copy retain `plan_hash`, the six lower-case hex digits used in the plan heading.
 New approvals also write `plan_digest`: all 64 lower-case hex digits of SHA-256
 of canonical plan bytes, including step `evidence:` and `needs:` lines that the
