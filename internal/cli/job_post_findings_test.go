@@ -180,6 +180,15 @@ func TestJobPostCleanRecordMatchesJobLint(t *testing.T) {
 	}
 }
 
+func TestJobPostWarningHasNoRefusalText(t *testing.T) {
+	var b strings.Builder
+	printPostFindings(&b, "J-2", []lint.Finding{{Rule: "job.x", Severity: "warning", Message: "careful"}, {Rule: "job.y", Severity: "error", Message: "bad"}}, nil)
+	want := "grid job post: J-2: job.x: careful\ngrid job post: J-2: job.y: bad (render will refuse this Job)\n"
+	if b.String() != want {
+		t.Fatalf("got %q want %q", b.String(), want)
+	}
+}
+
 func TestJobPostPersonJobIsNotLinted(t *testing.T) {
 	h, path, _ := findingsTask(t)
 	body := findingsJob("J-2", findingsBadRead)
