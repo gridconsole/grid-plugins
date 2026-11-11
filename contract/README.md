@@ -80,8 +80,9 @@ during `task show` exits 1.
 | `write_failed` | Writing a settings file failed. |
 | `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
+| `job_exists` | A Job post (`grid job post`, `grid feed post --type job`) named a Job id the Feed already holds; nothing was written. A repeat of the same request (same `--id`, same body) exits 0 instead. Exits 3. |
 
-The first six constants live in `internal/cli/error_codes.go` and the settings
+The first seven constants live in `internal/cli/error_codes.go` and the settings
 codes in `internal/settings/claude_user.go`; `person_required` and `job_waiting` are
 written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
 and `internal/cli/task_write.go`. `TestHfFsCodeTable` keeps this table equal to that set.
