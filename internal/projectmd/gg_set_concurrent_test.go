@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/localdata"
+	"github.com/gridconsole/grid-plugins/internal/projects"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -172,6 +173,13 @@ func TestGgProjectmdConcurrentChild(t *testing.T) {
 // test with what it printed.
 func ggRunChildren(t *testing.T, children []ggChild) {
 	t.Helper()
+	ggRunChildrenDuring(t, children, nil)
+}
+
+// ggRunChildrenDuring is ggRunChildren with a step for the parent: during runs
+// after every child is released and before the parent waits on any of them.
+func ggRunChildrenDuring(t *testing.T, children []ggChild, during func()) {
+	t.Helper()
 	cmds := make([]*exec.Cmd, 0, len(children))
 	pipes := make([]io.WriteCloser, 0, len(children))
 	outs := make([]*bytes.Buffer, len(children))
@@ -204,6 +212,9 @@ func ggRunChildren(t *testing.T, children []ggChild) {
 			cmd.Wait()
 		}
 		t.Fatal(startErr)
+	}
+	if during != nil {
+		during()
 	}
 	for i, cmd := range cmds {
 		err := cmd.Wait()
@@ -304,6 +315,49 @@ func TestGgProjectmdConcurrentProcesses(t *testing.T) {
 		t.Fatalf("the fixture sets %d keys; want 20", len(lines))
 	}
 	ggCheckFile(t, home, lines)
+	ggNothingBeside(t, home)
+}
+
+// Two child processes set 5 keys each while the parent relinks the project 5
+// times under the same lock. A relink rewrites the front matter from the
+// project record, so it must keep every key it does not own: all 10 keys read
+// back, the keys that were there before are still there, and the body is byte
+// equal. The children wait on stdin until all have started; nothing sleeps.
+func TestGgSetBesideRelink(t *testing.T) {
+	root, home := ggSetup(t)
+	linked := filepath.Join(root, "work", "linked")
+	if err := os.MkdirAll(linked, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store := projects.Store{Resolver: where.Resolver{GridHome: home, Home: os.Getenv("HOME"), Ceiling: root, TempRoots: []string{filepath.Join(root, "tmp")}}}
+	children, lines := ggFiveKeys(2)
+	ggRunChildrenDuring(t, children, func() {
+		for i := 1; i <= 5; i++ {
+			if _, err := store.Relink(ggProject, linked); err != nil {
+				t.Errorf("relink %d: %v", i, err)
+				return
+			}
+		}
+	})
+	r := where.Resolver{GridHome: home}
+	for _, line := range lines {
+		key, value, _ := strings.Cut(line, ": ")
+		if got := ggGet(t, r, key); got != value {
+			t.Errorf("%s reads %#v; want %q", key, got, value)
+		}
+	}
+	for key, value := range map[string]string{"id": "gg-project", "lands": "reviewed", "owner": "someone"} {
+		if got := ggGet(t, r, key); got != value {
+			t.Errorf("old key %s reads %#v; want %q", key, got, value)
+		}
+	}
+	b, err := os.ReadFile(ggPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := string(b); !strings.Contains(text, "\nfolders:\n") || !strings.HasSuffix(text, "---\n"+ggBody) {
+		t.Errorf("the relink is not in the file, or the body changed:\n%q", text)
+	}
 	ggNothingBeside(t, home)
 }
 
