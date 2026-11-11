@@ -12,7 +12,8 @@
 // Stderr discard. The member, role and lease travel in Environ (GRID_MEMBER,
 // GRID_ROLE, GRID_LEASE, GRID_LEASE_EPOCH, GRID_JOB and the other GRID_* names)
 // or as the global flags at the front of Args (--member, --role, --lease-epoch,
-// --grid-home). Two calls with different Grid homes can run at the same time and
+// --grid-home). `migrate` takes the old plugin data folder from CLAUDE_PLUGIN_DATA
+// in Environ, or from a typed --plugin-data, which wins. Two calls with different Grid homes can run at the same time and
 // do not see each other.
 //
 // The Grid home is GridHome when set, else GRID_HOME in Environ, else .grid
@@ -27,8 +28,7 @@
 //     --member, the member of a Feed write: that case also runs `git config
 //     user.email` in Dir with the host's environment;
 //   - internal/account has its own fallback to the host's environment when it
-//     is given no getenv, and the migrate plan reads CLAUDE_PLUGIN_DATA from
-//     the host (internal/migrate);
+//     is given no getenv;
 //   - the process that `ports claim`, `env up` and the task lease record as
 //     their owner: the Call's OwnerPID (with OwnerStart, or its looked-up start)
 //     when set, else the host's own process id (os.Getpid for `task new` and
