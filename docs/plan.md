@@ -67,9 +67,7 @@ Used: brain:project/conventions/task-page
     - id: J-14
       role: builder
       skills: []
-      review: L1
       risk: []
-      max_rounds: 2
       intent: {owner: intent.md#request}
       links: []
       keep: []
