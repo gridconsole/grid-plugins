@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -261,10 +262,29 @@ func liveTaskProcess(t *testing.T) (int, string) {
 	return cmd.Process.Pid, contract.FormatTime(mustTaskStart(t, cmd.Process.Pid))
 }
 
-// unknownProbe puts a ps first on PATH whose answer for pid does not parse, so
+// unknownProbe makes pid probe unknown while the taker's own process still probes
+// alive. The Linux probe reads /proc and forks no ps, so no ps stub reaches it; a
+// live process this user may not signal (kill answers EPERM, which ProbeLocal
+// leaves unknown) is what it cannot decide, and pid 1 is that for a user who is
+// not root. A lease cannot hold a raw lstart line instead: the lease contract
+// takes an RFC3339 pid_start only. The test skips when pid 1 can be signalled.
+// Elsewhere it puts a ps first on PATH whose answer for pid does not parse, so
 // that pid probes unknown while every other process is still probed by the real ps.
 func unknownProbe(t *testing.T, pid int) {
 	t.Helper()
+	if runtime.GOOS == "linux" {
+		if pid != 1 {
+			t.Fatalf("pid %d is not the pid 1 that unknownProbe leaves unknown on Linux", pid)
+		}
+		first, err := os.FindProcess(1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := first.Signal(syscall.Signal(0)); !errors.Is(err, syscall.EPERM) {
+			t.Skipf("pid 1 can be signalled by this user (%v), so its probe is not unknown", err)
+		}
+		return
+	}
 	ps, err := exec.LookPath("ps")
 	if err != nil {
 		t.Fatal(err)
@@ -281,6 +301,13 @@ func TestTaskLeaseAdoptionAndStatus(t *testing.T) {
 	pid, start := taskLeaseIdentity(t)
 	deadPID, deadStart := deadTaskProcess(t)
 	livePID, liveStart := liveTaskProcess(t)
+	// The probe of this holder answers unknown (see unknownProbe). The start is
+	// the live child's: the Linux probe stops at the permission error before it
+	// compares a start.
+	unknownPID := livePID
+	if runtime.GOOS == "linux" {
+		unknownPID = 1
+	}
 	for _, tc := range []struct {
 		name, machine, state string
 		pid                  int
@@ -291,7 +318,7 @@ func TestTaskLeaseAdoptionAndStatus(t *testing.T) {
 		{"local dead", feedMachine, "dead", deadPID, deadStart, false, 0},
 		{"local alive", feedMachine, "alive", pid, start, false, 1},
 		{"remote dead", "01ARZ3NDEKTSV4RRFFQ69G5FAX", "remote", deadPID, deadStart, false, 1},
-		{"local unknown", feedMachine, "unknown", livePID, liveStart, true, 1},
+		{"local unknown", feedMachine, "unknown", unknownPID, liveStart, true, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, path := feedHarness(t)
