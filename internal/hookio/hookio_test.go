@@ -22,17 +22,63 @@ func TestDecode(t *testing.T) {
 	}
 }
 func TestReadCap(t *testing.T) {
-	r, w := io.Pipe()
-	defer r.Close()
-	defer w.Close()
-	go func() { _, _ = w.Write([]byte(`{"tool_name":"Read"}`)) }()
-	start := time.Now()
-	got, large := read(r, 25*time.Millisecond, InputLimit)
-	if got == nil || got.ToolName != "Read" || large {
-		t.Fatal(got, large)
+	// The reader holds still after its data until t.Cleanup lets it end, so the
+	// cap is the only thing that can end a read.
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+
+	// readUntil with the test's own cap: the reader gives the JSON on its first
+	// Read and, on its second, says so and blocks. readUntil makes that second
+	// Read only after the first chunk is in the buffer, so closing after then
+	// is the cap firing with the JSON read and stdin still open.
+	second := make(chan struct{})
+	reads := 0
+	r := readerFunc(func(p []byte) (int, error) {
+		reads++
+		if reads == 1 {
+			return copy(p, `{"tool_name":"Read"}`), nil
+		}
+		close(second)
+		<-release
+		return 0, io.EOF
+	})
+	after := make(chan time.Time)
+	result := make(chan struct {
+		in    *Input
+		large bool
+	}, 1)
+	go func() {
+		in, large := readUntil(r, after, InputLimit)
+		result <- struct {
+			in    *Input
+			large bool
+		}{in, large}
+	}()
+	select {
+	case <-second:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the reader's second Read never came")
 	}
-	if time.Since(start) > time.Second {
-		t.Fatal("read exceeded cap")
+	close(after)
+	select {
+	case res := <-result:
+		if res.in == nil || res.in.ToolName != "Read" || res.large {
+			t.Fatal(res.in, res.large)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("readUntil did not return after its cap fired")
+	}
+
+	// read itself: the timer made from cap ends a read of a silent stdin. The
+	// buffer is empty, so the answer is nothing, not too large. This returns
+	// whenever the timer fires, however late, and hangs if read stops waiting
+	// on its timer.
+	silent := readerFunc(func(p []byte) (int, error) {
+		<-release
+		return 0, io.EOF
+	})
+	if got, large := read(silent, time.Millisecond, InputLimit); got != nil || large {
+		t.Fatal(got, large)
 	}
 }
 func TestDecisions(t *testing.T) {
