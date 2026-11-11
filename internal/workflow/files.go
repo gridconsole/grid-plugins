@@ -181,9 +181,18 @@ func readFiles(r where.Resolver, selector string) ([]File, []fileProblem, error)
 	if selector != "" {
 		selected, ok := selectProject(entries, selector)
 		if !ok {
-			return nil, nil, projectSelectionError(r, selector)
+			// Personal tasks live outside projects/, so no registered folder
+			// matches; the workspace file alone is their workflow, as in
+			// scopeTemplates. Guests and callers without Personal access keep
+			// the same refusal as every other unavailable selector.
+			if strings.EqualFold(selector, where.Personal) && !r.Caller.IsGuest() && r.PersonalOK() {
+				entries = nil
+			} else {
+				return nil, nil, projectSelectionError(r, selector)
+			}
+		} else {
+			entries = []workflowProject{selected}
 		}
-		entries = []workflowProject{selected}
 	}
 	files := []File{{Scope: "workspace"}}
 	paths := []string{"workflows.md"}
