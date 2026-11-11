@@ -53,12 +53,20 @@ func checkAllowBlock(add func(string, bool, string), o Options) {
 }
 
 // checkDenyBlock reports whether setup's deny rules are in the Claude settings.
-// It only reports; it changes nothing.
+// It only reports; it changes nothing. One cause is one failing check: when the
+// settings cannot be read, or hold none of setup's rules at all, the allow block
+// already fails for that cause, so this check says it was not checked and why.
+// A deny rule missing from a settings file that does hold setup rules still fails.
 func checkDenyBlock(add func(string, bool, string), o Options) {
+	allow := settings.ReadClaudeAllowStatus(o.SettingsPath, o.Home, o.GridHome)
 	status := settings.ReadClaudeDenyStatus(o.SettingsPath, o.Home, o.GridHome, o.Projects)
 	switch {
+	case allow.Reason != "":
+		add("deny block", true, "not checked: "+allow.Reason+"; the allow block reports it")
 	case status.Reason != "":
 		add("deny block", false, status.Reason)
+	case len(allow.Present) == 0 && len(status.Present) == 0:
+		add("deny block", true, "not checked: the Claude settings hold none of setup's rules; the allow block reports it")
 	case len(status.Missing) > 0:
 		add("deny block", false, "missing rules: "+strings.Join(status.Missing, ", "))
 	default:

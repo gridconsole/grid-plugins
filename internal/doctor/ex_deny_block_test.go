@@ -158,11 +158,23 @@ func TestExDenyBlockSameReasonsAsAllow(t *testing.T) {
 			before := exDenyTake(t, o.SettingsPath)
 			rep := Run(o)
 			allow, deny := exDenyCheck(t, rep, "allow block"), exDenyCheck(t, rep, "deny block")
-			if allow.OK || deny.OK || allow.Detail == "" {
-				t.Fatalf("both checks should fail with a reason: allow %+v deny %+v", allow, deny)
+			// One cause, one failing check: the allow block fails with the
+			// reason; the deny block carries the same reason but is not a
+			// second failure.
+			if allow.OK || allow.Detail == "" || allow.Fix == "" || !deny.OK || deny.Fix != "" {
+				t.Fatalf("allow should fail with a reason and deny should not: allow %+v deny %+v", allow, deny)
 			}
-			if deny.Detail != allow.Detail || deny.Fix != allow.Fix || deny.Fix == "" {
-				t.Fatalf("deny %+v differs from allow %+v", deny, allow)
+			if deny.Detail != "not checked: "+allow.Detail+"; the allow block reports it" {
+				t.Fatalf("deny %+v does not carry the allow reason %+v", deny, allow)
+			}
+			failures := 0
+			for _, c := range rep.Checks {
+				if !c.OK {
+					failures++
+				}
+			}
+			if failures != 1 || rep.OK {
+				t.Fatalf("one broken settings file gave %d failing checks: %+v", failures, rep.Checks)
 			}
 			if strings.Contains(deny.Detail, o.SettingsPath) {
 				t.Fatal("settings path leaked into report")
@@ -246,6 +258,54 @@ func TestExDenySandboxNeverFailsReport(t *testing.T) {
 	o.SettingsPath = exDenySettings(t, o, `{"enabled":true}`)
 	if rep := Run(o); !rep.OK {
 		t.Fatalf("a healthy report with the sandbox on should be ok: %+v", rep.Checks)
+	}
+}
+
+// A readable settings file with none of setup's rules is one cause: the allow
+// block fails and the deny block says it was not checked.
+func TestExDenyBlockNoSetupRulesIsOneFailure(t *testing.T) {
+	o := exDenyEnv(t)
+	o.SettingsPath = exDenyWrite(t, []byte("{}"))
+	before := exDenyTake(t, o.SettingsPath)
+	rep := Run(o)
+	allow, deny := exDenyCheck(t, rep, "allow block"), exDenyCheck(t, rep, "deny block")
+	if allow.OK || !deny.OK || !strings.HasPrefix(deny.Detail, "not checked: ") {
+		t.Fatalf("allow %+v deny %+v", allow, deny)
+	}
+	failures := 0
+	for _, c := range rep.Checks {
+		if !c.OK {
+			failures++
+		}
+	}
+	if failures != 1 {
+		t.Fatalf("%d failing checks: %+v", failures, rep.Checks)
+	}
+	exDenyUnchanged(t, o.SettingsPath, before)
+}
+
+// Setup's allow rules are in a readable file but every deny rule was removed:
+// the deny block still fails, and the allow block does not.
+func TestExDenyBlockAllDenyRulesRemovedFails(t *testing.T) {
+	o := exDenyEnv(t)
+	rules, err := settings.ClaudeBlock(o.Home, o.GridHome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var deny []string
+	for _, r := range rules {
+		if r.Section == "permissions" && r.Key == "deny" {
+			deny = append(deny, r.Value)
+		}
+	}
+	o.SettingsPath = exDenySettings(t, o, "", deny...)
+	rep := Run(o)
+	check := exDenyCheck(t, rep, "deny block")
+	if rep.OK || check.OK || !strings.HasPrefix(check.Detail, "missing rules: ") || check.Fix != "Run grid setup" {
+		t.Fatalf("deny block %+v, report ok %v", check, rep.OK)
+	}
+	if allow := exDenyCheck(t, rep, "allow block"); !allow.OK {
+		t.Fatalf("allow block %+v", allow)
 	}
 }
 
