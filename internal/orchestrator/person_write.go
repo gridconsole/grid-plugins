@@ -40,10 +40,25 @@ var errPersonOnly = &feed.InvalidRecordError{Err: errors.New("only a person of t
 // It takes the lock a tick takes, so the after-targets are checked against the
 // Feed that pass will read.
 func PostPerson(store feed.Store, w feed.Writer, in feed.Input) (record feed.Record, err error) {
+	record, _, err = PostPersonUnless(store, w, in, nil)
+	return record, err
+}
+
+// PostPersonUnless is PostPerson with a check made under .orchestrator.lock, in
+// the same pass as the write, as WriteUnless makes it for a leased write: when
+// done returns true nothing is written, the record is empty and the bool is
+// true. A check made before the lock could be overtaken by a write from another
+// process, so a caller that must not write twice asks here. A nil done never
+// stops the post.
+func PostPersonUnless(store feed.Store, w feed.Writer, in feed.Input, done func() bool) (record feed.Record, skipped bool, err error) {
 	if !PersonWriter(w) || in.Type != "job" {
-		return record, errPersonOnly
+		return record, false, errPersonOnly
 	}
 	err = (Store{Feed: store, Writer: w}).exclusive(func() error {
+		if done != nil && done() {
+			skipped = true
+			return nil
+		}
 		snap, e := Load(store)
 		if e != nil {
 			return e

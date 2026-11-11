@@ -197,25 +197,111 @@ func hasApproveJob(store feed.Store) (bool, error) {
 // free Job number, and returns its id. A person of the team with no lease posts it
 // unleased; every other writer posts it under the task lease. owner is the person
 // the Job is for.
+//
+// The number is one above the highest J-<n> of any `job` record on the Feed,
+// whatever the fold made of it (counted, held, ignored or bad), and of the Jobs
+// the snapshot counts: a held record's id is still its own, and the fold keeps
+// the first record of an id in its order, so a held one that resolves later could
+// take the id of this Job. The Feed is read again under .orchestrator.lock,
+// which the post holds, and a writer that took the id in between makes this one
+// pick again; each round sees one more taken id, so the loop ends.
 func PostPlanJob(store feed.Store, w feed.Writer, owner string) (string, error) {
+	for {
+		id, err := nextPlanJobID(store)
+		if err != nil {
+			return "", err
+		}
+		in := feed.Input{Type: "job", Job: id, Body: PlanJobBody(id, owner)}
+		var checkErr error
+		taken := func() bool {
+			held, err := planJobIDTaken(store, id)
+			if err != nil {
+				// done cannot return an error: stop the post and report it below.
+				checkErr = err
+				return true
+			}
+			return held
+		}
+		skipped := false
+		if orchestrator.PersonWriter(w) {
+			_, skipped, err = orchestrator.PostPersonUnless(store, w, in, taken)
+		} else {
+			_, err = orchestrator.WriteUnless(store, w, in, func() bool {
+				skipped = taken()
+				return skipped
+			})
+		}
+		if checkErr != nil {
+			return "", checkErr
+		}
+		if err != nil || !skipped {
+			return id, err
+		}
+	}
+}
+
+// jobNumber is the J-<n> number of a Job id; a dotted child id counts by the
+// part before the dot. ok is false for an id that is not of that form.
+func jobNumber(id string) (int, bool) {
+	n, err := strconv.Atoi(strings.TrimPrefix(strings.SplitN(id, ".", 2)[0], "J-"))
+	return n, err == nil
+}
+
+// planJobIDs is the body id of every `job` entry of the Feed, whatever its
+// verdict.
+func planJobIDs(store feed.Store) ([]string, error) {
+	read, err := store.ReadOnly(feed.Filter{Type: "job"})
+	if err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	for _, e := range read.Records {
+		if e.Type != "job" {
+			continue
+		}
+		if id, ok := e.Body["id"].(string); ok {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+// nextPlanJobID is one above the highest J-<n> of the Feed's `job` records and
+// of the Jobs the snapshot counts.
+func nextPlanJobID(store feed.Store) (string, error) {
 	snap, err := orchestrator.Load(store)
 	if err != nil {
 		return "", err
 	}
-	highest := 0
+	ids, err := planJobIDs(store)
+	if err != nil {
+		return "", err
+	}
 	for _, it := range snap.Items {
-		if n, err := strconv.Atoi(strings.TrimPrefix(strings.SplitN(it.ID, ".", 2)[0], "J-")); err == nil && n > highest {
+		ids = append(ids, it.ID)
+	}
+	highest := 0
+	for _, id := range ids {
+		if n, ok := jobNumber(id); ok && n > highest {
 			highest = n
 		}
 	}
-	id := "J-" + strconv.Itoa(highest+1)
-	in := feed.Input{Type: "job", Job: id, Body: PlanJobBody(id, owner)}
-	if orchestrator.PersonWriter(w) {
-		_, err = orchestrator.PostPerson(store, w, in)
-	} else {
-		_, err = orchestrator.Write(store, w, in)
+	return "J-" + strconv.Itoa(highest+1), nil
+}
+
+// planJobIDTaken reports whether a `job` entry of the Feed, with any verdict,
+// carries id.
+func planJobIDTaken(store feed.Store, id string) (bool, error) {
+	ids, err := planJobIDs(store)
+	if err != nil {
+		return false, err
 	}
-	return id, err
+	for _, have := range ids {
+		if have == id {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // PlanJobBody is the record of a person Job of kind approve for the plan: the
