@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -12,8 +13,10 @@ import (
 
 const usageHelp = `Usage: grid usage [--task T-NN] [--json]
        grid usage post --job J-N|lead [--dollars N] [--minutes N] [--tokens N] [--session ID] [--model NAME]
+       grid usage post --job J-N|lead --result ATTEMPT_LOG [--session ID] [--model NAME]
        grid usage show
 All commands accept --json; task-scoped commands accept --task T-NN.
+--result books the cost, time and tokens of the last result line of a Claude run's log, once per session.
 Flags alone fold the token totals observed by the session hooks; they are not Job usage posts.
 Posts are deltas; at least one amount is required.
 Units are dollars, minutes and tokens; token amounts are non-negative integers.
@@ -87,7 +90,9 @@ func runUsage(args []string, env Env) int {
 	var dollars, minutes usageNumbers
 	var tokens usageTokens
 	var in usage.Input
+	var result string
 	if op == "post" {
+		fs.StringVar(&result, "result", "", "Claude stream-json attempt log whose result line is booked once")
 		fs.StringVar(&in.Job, "job", "", "Job id or lead")
 		fs.StringVar(&in.Session, "session", "", "optional session identifier")
 		fs.StringVar(&in.Model, "model", "", "optional model name")
@@ -97,6 +102,17 @@ func runUsage(args []string, env Env) int {
 	}
 	if code, stop := parse(fs, args[1:], env); stop {
 		return code
+	}
+	var parsed usage.Input
+	if result != "" {
+		if dollars.amount() != nil || minutes.amount() != nil || tokens.amount() != nil {
+			fmt.Fprintln(env.Stderr, "usage: --result books the amounts in the log; do not combine it with --dollars, --minutes or --tokens")
+			return 2
+		}
+		var err error
+		if parsed, err = readResultLog(result); err != nil {
+			return commandError(env, "usage", err)
+		}
 	}
 	res, err := taskFor(env, *task)
 	if err != nil {
@@ -115,6 +131,16 @@ func runUsage(args []string, env Env) int {
 		return 0
 	}
 	in.Dollars, in.Minutes, in.Tokens = dollars.amount(), minutes.amount(), tokens.amount()
+	if result != "" {
+		// Typed --session and --model override what the log says; the key stays the log's own.
+		in.Dollars, in.Minutes, in.Tokens, in.Key = parsed.Dollars, parsed.Minutes, parsed.Tokens, parsed.Key
+		if in.Session == "" {
+			in.Session = parsed.Session
+		}
+		if in.Model == "" {
+			in.Model = parsed.Model
+		}
+	}
 	out, err := s.Post(in)
 	if err != nil {
 		return commandError(env, "usage", err)
@@ -122,8 +148,25 @@ func runUsage(args []string, env Env) int {
 	if *asJSON {
 		return writeJSON(env.Stdout, out)
 	}
+	if out.AlreadyBooked {
+		fmt.Fprintf(env.Stdout, "already booked: %s\n", in.Key)
+	}
 	printUsage(env, out.Summary)
 	return 0
+}
+
+// readResultLog parses the attempt log at path; every error names the file.
+func readResultLog(path string) (usage.Input, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return usage.Input{}, err
+	}
+	defer f.Close()
+	in, _, err := usage.ParseResult(f)
+	if err != nil {
+		return usage.Input{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return in, nil
 }
 
 func printUsage(env Env, summary usage.Summary) {
