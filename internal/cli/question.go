@@ -39,13 +39,17 @@ func questionJobs() question.JobPort {
 // it and without a lease when a person of the team asks. Any other writer (an
 // agent with no lease) gets no Job and no refusal: the question is still posted.
 func postQuestionJob(f feed.Store, lease, person feed.Writer, body map[string]any) (string, error) {
-	snap, err := orchestrator.Load(f)
+	// The id comes from every job record on the Feed, whatever its verdict: a held
+	// record keeps its id, and the fold would otherwise mark this Job "ignored"
+	// once the held record resolves. A broken record only skips a number.
+	read, err := f.ReadOnly(feed.Filter{Type: "job"})
 	if err != nil {
 		return "", err
 	}
 	top := 0
-	for id := range snap.State.Jobs {
-		n, _ := strconv.Atoi(strings.TrimPrefix(strings.SplitN(id, ".", 2)[0], "J-"))
+	for _, e := range read.Records {
+		jobID, _ := e.Body["id"].(string)
+		n, _ := strconv.Atoi(strings.TrimPrefix(strings.SplitN(jobID, ".", 2)[0], "J-"))
 		top = max(top, n)
 	}
 	id := fmt.Sprintf("J-%d", top+1)
