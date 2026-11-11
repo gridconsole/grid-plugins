@@ -81,7 +81,7 @@ func TestSetupBuildsGridHomeAtGridHome(t *testing.T) {
 		t.Run(task.ID, func(t *testing.T) {
 			_, workspace, env := attemptDirs(t, task.ID)
 			if r := setup(t, task, workspace, env); r.Status != "passed" {
-				t.Fatalf("setup %s: %+v", r.Status, r)
+				t.Fatalf("setup %s: error %q, stderr %q, result %+v", r.Status, r.Error, r.Stderr, r)
 			}
 			gridHome := envValue(env, "GRID_HOME")
 			tasks := filepath.Join(gridHome, "projects", projectOf(task.ID), "tasks")

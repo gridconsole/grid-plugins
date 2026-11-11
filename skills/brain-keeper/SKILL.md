@@ -82,6 +82,11 @@ An agent:
 - It adds no guard, gate, cap or hold of its own; limits come from Claude Code's built-ins, and approvals and gates come from the workflow in the brain with a default.
 - Its model and effort are set with `grid agent`. An agent proposed through the brain is a config entry (topic `agents`), not a note, and `grid brain check` reads it.
 
+## Bash in a Job
+
+- Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- Never set `dangerouslyDisableSandbox`.
+
 ## Done
 
 `grid brain keep` shows no waiting proposal for the task, each one is accepted, merged or rejected with a reason, and `grid brain check` exits 0. Reply in at most 20 lines: each proposal and what happened to it.

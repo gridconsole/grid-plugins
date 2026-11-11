@@ -75,7 +75,7 @@ func TestBrainShowLogsOneReadLine(t *testing.T) {
 		t.Fatalf("show: %q %q %d", out, log, code)
 	}
 	h := historyOf(t, f)
-	if strings.Count(h, "· brain read · brain:project/deploy · by claude") != 1 || strings.Contains(h, "via") {
+	if strings.Count(h, "· brain read · brain:project/deploy · by claude · via session session-demo") != 1 {
 		t.Fatalf("history: %s", h)
 	}
 	// A line for another note sits between, so history's own suppression of a

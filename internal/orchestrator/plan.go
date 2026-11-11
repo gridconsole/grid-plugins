@@ -48,11 +48,33 @@ func (s Store) publishPlanWithReader(snap Snapshot, m *memory, read func() (stri
 		if err != nil {
 			return err
 		}
+		pending, err := s.planJobInputs(snap, text)
+		if err != nil {
+			// A fault of the plan text posts no Job and leaves the rest of the
+			// tick to run as on a task without plan.md.
+			return s.planUnpublishable(snap, m, err)
+		}
 		if err := s.publicationBlocked(m, false); err != nil {
 			return err
 		}
-		return s.publishPlanText(snap, text)
+		return s.postPlanJobs(pending)
 	})
+}
+
+// planUnpublishable marks publication blocked and tells the task once why. The
+// notice text is its own durable deduplication marker, as in warnDuplicateGates.
+func (s Store) planUnpublishable(snap Snapshot, m *memory, cause error) error {
+	if err := s.publicationBlocked(m, true); err != nil {
+		return err
+	}
+	text := "plan.md cannot be published: " + oneLine(cause) + ". No Job from plan.md is posted until it is fixed."
+	for _, r := range snap.Records {
+		if r.Type == "post" && r.Lease != nil && *r.Lease == "task" && r.Body["kind"] == "message" && stringValue(r.Body["ref"]) == "task" && stringValue(r.Body["text"]) == text {
+			return nil
+		}
+	}
+	_, err := s.Feed.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, s.Writer)
+	return err
 }
 
 // Persist transitions under the pass lock, including across CLI invocations.
@@ -68,10 +90,12 @@ func (s Store) publicationBlocked(m *memory, blocked bool) error {
 	return nil
 }
 
-func (s Store) publishPlanText(snap Snapshot, text string) error {
+// planJobInputs checks the plan text and the whole graph and returns the Job
+// records still to post. Any error is a fault of the plan text.
+func (s Store) planJobInputs(snap Snapshot, text string) ([]feed.Input, error) {
 	items, err := plan.Items(text)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	pending := []feed.Input{}
 	jobs := append([]job.Job{}, snap.Items...)
@@ -80,29 +104,29 @@ func (s Store) publishPlanText(snap Snapshot, text string) error {
 		for _, raw := range item.Jobs {
 			j, problems := job.DecodePlanned(raw, item.Kind)
 			if seen[j.ID] {
-				return fmt.Errorf("plan.md: duplicate Job %s", j.ID)
+				return nil, fmt.Errorf("plan.md: duplicate Job %s", j.ID)
 			}
 			seen[j.ID] = true
 			if snap.State.Jobs[j.ID] != nil {
 				continue
 			}
 			if len(problems) > 0 {
-				return fmt.Errorf("plan.md Job %s: %s", j.ID, strings.Join(problems, "; "))
+				return nil, fmt.Errorf("plan.md Job %s: %s", j.ID, strings.Join(problems, "; "))
 			}
 			j.Defaults()
 			data, err := j.Record()
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if err := contract.Validate("job-record", data); err != nil {
-				return fmt.Errorf("plan.md Job %s: %w", j.ID, err)
+				return nil, fmt.Errorf("plan.md Job %s: %w", j.ID, err)
 			}
 			if err := jobgraph.CheckPlanJob(j); err != nil {
-				return fmt.Errorf("plan.md Job %s: %w", j.ID, err)
+				return nil, fmt.Errorf("plan.md Job %s: %w", j.ID, err)
 			}
 			var body map[string]any
 			if err := json.Unmarshal(data, &body); err != nil {
-				return err
+				return nil, err
 			}
 			pending = append(pending, feed.Input{Type: "job", Job: j.ID, Body: body})
 			jobs = append(jobs, j)
@@ -111,11 +135,15 @@ func (s Store) publishPlanText(snap Snapshot, text string) error {
 	// Validate the complete graph before publishing any part of it.
 	graph, err := jobgraph.New(jobs)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if cycle := graph.Cycle(); len(cycle) > 0 {
-		return &jobgraph.CycleError{Path: cycle}
+		return nil, &jobgraph.CycleError{Path: cycle}
 	}
+	return pending, nil
+}
+
+func (s Store) postPlanJobs(pending []feed.Input) error {
 	for _, in := range pending {
 		if _, err := s.Feed.Post(in, s.Writer); err != nil {
 			return err

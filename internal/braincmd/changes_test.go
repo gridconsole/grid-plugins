@@ -421,8 +421,16 @@ func TestRoleRefusalComesBeforeAnyReadOrWrite(t *testing.T) {
 		{"changes", "--json"},
 		{"revert", "decisions/checks", "--to", "1", "--json"},
 	} {
-		if code := h.run(args...); code != 3 || !strings.HasPrefix(h.err.String(), "grid brain "+args[0]+": caller role is not allowed to ") || h.out.Len() != 0 {
+		if code := h.run(args...); code != 3 || !strings.HasPrefix(h.err.String(), "grid brain "+args[0]+": caller role is not allowed to ") {
 			t.Errorf("%v: %d %q %q", args, code, &h.out, &h.err)
+		}
+		// With --json the refusal also prints the person_required object on stdout.
+		want := ""
+		if args[len(args)-1] == "--json" {
+			want = `{"error":"person_required","reason":"role_not_allowed","hint":"` + strings.TrimSuffix(strings.TrimPrefix(h.err.String(), "grid brain "+args[0]+": "), "\n") + `","code":"person_required","message":"` + strings.TrimSuffix(h.err.String(), "\n") + "\"}\n"
+		}
+		if h.out.String() != want {
+			t.Errorf("%v: stdout %q, want %q", args, &h.out, want)
 		}
 	}
 	if _, err := os.Stat(h.env.GridHome); !os.IsNotExist(err) {

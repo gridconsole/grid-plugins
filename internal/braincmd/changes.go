@@ -150,8 +150,7 @@ func runChanges(args []string, env Env) int {
 		}
 	}
 	if !brain.ChangesReadAllowed(env.Role) {
-		fmt.Fprintln(env.Stderr, "grid brain changes: caller role is not allowed to read brain changes")
-		return 3
+		return roleRefused(env, "changes", "read brain changes", l.asJSON)
 	}
 	store, level, err := levelStore(env, l.level, l.project, false)
 	if err != nil {
@@ -234,8 +233,7 @@ func runRevert(args []string, env Env) int {
 		return usageError("--to must be a version number, 1 or more")
 	}
 	if !brain.RevertAllowed(env.Role) {
-		fmt.Fprintln(env.Stderr, "grid brain revert: caller role is not allowed to revert brain entries")
-		return 3
+		return roleRefused(env, "revert", "revert brain entries", l.asJSON)
 	}
 	store, level, err := levelStore(env, l.level, l.project, true)
 	if err != nil {

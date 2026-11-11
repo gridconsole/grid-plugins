@@ -87,7 +87,7 @@ func TestGrBrainEnvelopeGuestHiddenProject(t *testing.T) {
 				args := append(append([]string{}, argv...), "--project", asked)
 				if name == "revert" || name == "changes" {
 					exit, out, stderr := grBrainRun(h, cwd, append(args, "--json")...)
-					if exit != 3 || out != "" || !strings.Contains(stderr, "caller role is not allowed") {
+					if exit != 3 || out != `{"error":"person_required","reason":"role_not_allowed","hint":"`+strings.TrimPrefix(strings.TrimSuffix(stderr, "\n"), "grid brain "+name+": ")+`","code":"person_required","message":"`+strings.TrimSuffix(stderr, "\n")+"\"}\n" || !strings.Contains(stderr, "caller role is not allowed") {
 						t.Fatalf("%s --project %s: exit=%d stdout=%q stderr=%q, want the role refusal, exit 3", name, asked, exit, out, stderr)
 					}
 					continue
