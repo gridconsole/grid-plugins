@@ -20,12 +20,14 @@ func runProof(args []string, env Env) int {
 	}
 	fs := newFlags("proof "+op, env)
 	fs.Usage = func() {
+		out := usageOut(args, env)
 		if op == "add" {
-			fmt.Fprintln(env.Stdout, "Usage: grid proof add <item> <file|--text text> [--kind screenshot|video|log|check] [--by agent] [--note text] [--task <task>] [--json]")
+			fmt.Fprintln(out, "Usage: grid proof add <item> <file|--text text> [--kind screenshot|video|log|check] [--by agent] [--note text] [--task <task>] [--json]")
 		} else {
-			fmt.Fprintln(env.Stdout, "Usage: grid proof index [--task <task>] [--json]")
+			fmt.Fprintln(out, "Usage: grid proof index [--task <task>] [--json]")
 		}
-		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		fmt.Fprintln(out, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		fs.SetOutput(out)
 		fs.PrintDefaults()
 	}
 	id := fs.String("task", "", "task id or folder; defaults to the current task")

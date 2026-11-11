@@ -47,10 +47,6 @@ var ggFlagKnownOpen = map[string]string{
 	"job show":    `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
 	"job verify":  `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
 	"job trace":   `exit 2; stdout {"rows":[],"problems":[{"task":"","job":"","text":"unknown flag --gg-no-such-flag"}]} (own shape, no code); stderr empty`,
-	"deliver":     `exit 2; stdout "Usage: grid deliver --outcome <text> [files...] ..." (usage on stdout, no envelope); stderr "flag provided but not defined: -gg-no-such-flag"`,
-	"proof add":   `exit 2; stdout "Usage: grid proof add <item> <file|--text text> ..." (usage on stdout, no envelope); stderr "flag provided but not defined: -gg-no-such-flag -by string ..."`,
-	"proof index": `exit 2; stdout "Usage: grid proof index [--task <task>] [--json] ..." (usage on stdout, no envelope); stderr "flag provided but not defined: -gg-no-such-flag -json print JSON ..."`,
-	"history add": `exit 2; stdout "Usage: grid history add <line> [--task <task>] [--json] ..." (usage on stdout, no envelope); stderr "flag provided but not defined: -gg-no-such-flag -json print JSON ..."`,
 }
 
 func ggFlagMembers(t *testing.T) []ggFlagMember {
