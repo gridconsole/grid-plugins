@@ -80,9 +80,9 @@ func TestIcxExportMaps(t *testing.T) {
 	}
 	caseDir := filepath.Join(dst, "maps")
 	want := map[string]string{
-		"prompt.md":  "---\nruns: 1\ntimeout_seconds: 300\n---\n\nWrite the note for sam.\n",
-		"case.yaml":  "schema_version: \"1.1\"\nname: maps\ncontext:\n  scaffold_script: fixture.sh\n",
-		"fixture.sh": setup,
+		"prompt.md":              "---\nruns: 1\ntimeout_seconds: 300\n---\n\nWrite the note for sam.\n",
+		"case.yaml":              "schema_version: \"1.1\"\nname: maps\ncontext:\n  scaffold_script: fixture.sh\n",
+		"fixture.sh":             setup,
 		"graders/note-exists.md": "---\ntype: file_exists\npath: \"notes/today.md\"\n---\n",
 		"graders/note-text.md":   "---\ntype: regex\ntarget: {source: file, path: \"notes/today.md\"}\npattern: \"Done \\\\(alex\\\\)\\\\.\"\n---\n",
 		"graders/judge.md":       "---\ntype: llm\n---\n\nThe note thanks sam.\n",
