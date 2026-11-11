@@ -5,6 +5,8 @@ set -eu
 mkdir -p .claude/agents "$GRID_HOME/knowledge/decisions"
 printf "1\n" > "$GRID_HOME/VERSION"
 # claude -p cannot ask for approval, so it refuses every Bash call. Allow only the read-only brain verbs the template names.
+# Claude Code ignores this file in a workspace it has not been told to trust (the stored run says so on stderr), so the
+# agent command must also pass the same list with --allowedTools; the lane report gives the command.
 cat > .claude/settings.json <<'T'
 {"permissions":{"allow":["Bash(grid brain index --read-only:*)","Bash(grid brain topics:*)","Bash(grid brain search:*)","Bash(grid brain show:*)"]}}
 T
