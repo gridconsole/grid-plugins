@@ -118,7 +118,7 @@ var hsIpTable = map[string]hsIpVerb{
 		"run":    {},
 		"remove": {},
 		// routine.go:197 writes a system schedule that calls the host's executable.
-		"schedule":   {why: "writes a system schedule for the host's executable (routine.go:197, routine/schedule.go)"},
+		"schedule":   {why: "writes a system schedule for the host's executable (routine.go:197, routine/schedule.go:37)"},
 		"unschedule": {},
 	}},
 	"worker": {subs: map[string]hsIpSub{
