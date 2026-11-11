@@ -46,7 +46,7 @@ func TestBuilderBriefCarriesItsResultStep(t *testing.T) {
 }
 
 func TestRoleInstructionsSection(t *testing.T) {
-	for _, role := range []string{"builder", "reviewer", "orchestrator", "curator"} {
+	for _, role := range []string{"builder", "reviewer", "orchestrator", "curator", "checker"} {
 		body := agentFileBody(t, role)
 		for _, spelling := range []string{role, "grid-" + role, strings.ToUpper(role[:1]) + role[1:]} {
 			got := renderRole(t, spelling)
@@ -65,7 +65,7 @@ func TestRoleInstructionsSection(t *testing.T) {
 
 func TestRoleWithoutAgentFileGetsNoSection(t *testing.T) {
 	base := renderRole(t, "writer")
-	for _, role := range []string{"person", "researcher", "scout", "checker", "operator", "designer"} {
+	for _, role := range []string{"person", "researcher", "scout", "operator", "designer"} {
 		got := renderRole(t, role)
 		if strings.Contains(got.Brief, "### Instructions") {
 			t.Fatalf("%s got an Instructions section", role)
@@ -83,7 +83,7 @@ func TestInstructionsAreNotASourceOrBrainText(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, role := range []string{"builder", "reviewer", "orchestrator", "curator"} {
+	for _, role := range []string{"builder", "reviewer", "orchestrator", "curator", "checker"} {
 		got := renderRole(t, role)
 		got.Inputs.BriefBytes = 0 // see above
 		gj, e := got.Inputs.JSON()

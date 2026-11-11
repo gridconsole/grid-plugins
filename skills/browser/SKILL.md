@@ -23,6 +23,13 @@ grid proof add <item> <file> --kind screenshot --note "<row, width, what it show
 6. Write one table, `Row | Result | Evidence`. Result is PASS, FAIL or NOT VERIFIED. Evidence is what you saw: the URL, the element, the console line, the proof file.
 7. Post it: `grid job result --task <task> --job <job> --body <json>`.
 
+Bash:
+
+- Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- Put no `VAR=value` in front of a command; use the command's own flags.
+- Use Read, Glob and Grep instead of ls, cat, find and grep.
+- Never set `dangerouslyDisableSandbox`.
+
 ## NOT VERIFIED is never a pass
 
 Use NOT VERIFIED, with the reason, for: no browser, no login, a state change the mode does not allow, a width not captured, a field whose data source you could not read. It is listed in the result and a reviewer counts it as not done. Never write PASS for what you did not see.
