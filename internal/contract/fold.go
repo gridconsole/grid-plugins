@@ -123,6 +123,10 @@ func Fold(posts []Post) State {
 	}
 
 	questions := map[string]*question{}
+	// personJobs holds, by the id of its first job record, each Job's role, owner
+	// and kind: what GuestAddressee reads for a guest's answer to a person Job.
+	type personJob struct{ role, owner, kind string }
+	personJobs := map[string]personJob{}
 	for _, p := range active {
 		switch p.Type {
 		case "job":
@@ -131,6 +135,7 @@ func Fold(posts []Post) State {
 				Continues             *string `json:"continues"`
 				DiscoveredFrom        *string `json:"discovered_from"`
 				Order                 *int    `json:"order"`
+				Intent                struct{ Owner string }
 			}
 			// An old record may still carry review and max_rounds; they are not
 			// decoded, so they are ignored.
@@ -140,6 +145,7 @@ func Fold(posts []Post) State {
 				continue
 			}
 			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Status: Posted, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
+			personJobs[p.ID] = personJob{b.Role, b.Intent.Owner, b.Kind}
 		case "question":
 			var b struct{ Who string }
 			_ = json.Unmarshal(p.Body, &b)
@@ -247,7 +253,8 @@ func Fold(posts []Post) State {
 		}
 		if p.Type == "answer" && NormalizeRole(p.Author.Role) == "guest" {
 			q := questions[*p.Re]
-			if q == nil || q.who != p.Author.ID {
+			pj := personJobs[*p.Re]
+			if (q == nil || q.who != p.Author.ID) && !GuestAddressee(p.Author.Role, p.Author.ID, p.Lease != nil || p.Fence != 0, pj.role, pj.owner, pj.kind) {
 				set(p, "ignored", "question is not addressed to this guest")
 			}
 		}

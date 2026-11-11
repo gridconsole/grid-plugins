@@ -106,6 +106,10 @@ func TestUnleasedPersonWritesRefuseAgents(t *testing.T) {
 		t.Run(role, func(t *testing.T) {
 			f := personFixture(t)
 			w := personWriterOf(role)
+			if role == "guest" {
+				// dana is the addressee of J-1 and may answer it (gy_guest_person_answer_test.go).
+				w.Author.ID, w.Worker = "eve", "eve@"+machine
+			}
 			before := recordCount(t, f)
 			if PersonWriter(w) {
 				t.Fatalf("%s is a person writer", role)
