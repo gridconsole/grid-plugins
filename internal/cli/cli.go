@@ -213,11 +213,13 @@ func Run(args []string, env Env) (exit int) {
 				return 3
 			}
 			if name == "task" {
-				reason := task.MoveRefusal
 				if guestTaskMove(rest[0]) {
-					reason = guestTaskMoveRefusal(rest[0])
+					// Exit 1, as a hidden task answers a guest's stop
+					// (TestPersonalBypassTaskCommands); delete and restore exit 3.
+					fmt.Fprintf(env.Stderr, "grid task %s: %s\n", rest[0], guestTaskMoveRefusal(rest[0]))
+					return 1
 				}
-				fmt.Fprintf(env.Stderr, "grid task %s: %v\n", rest[0], fmt.Errorf("%w: %s", task.ErrEditRejected, reason))
+				fmt.Fprintf(env.Stderr, "grid task %s: %v\n", rest[0], fmt.Errorf("%w: %s", task.ErrEditRejected, task.MoveRefusal))
 				return 3
 			}
 			fmt.Fprintln(env.Stderr, "grid: "+guestSettingsRefusal)

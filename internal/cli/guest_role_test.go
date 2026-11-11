@@ -89,8 +89,8 @@ func TestGuestTaskMoveRoles(t *testing.T) {
 					}
 					return
 				}
-				if code != 3 {
-					t.Fatalf("guest task %s: exit %d, want 3: %s", verb, code, h.errb)
+				if code != 1 {
+					t.Fatalf("guest task %s: exit %d, want 1: %s", verb, code, h.errb)
 				}
 				if !strings.Contains(h.errb.String(), "guest") {
 					t.Fatalf("guest task %s: refusal does not name the guest role: %q", verb, h.errb.String())
@@ -115,7 +115,7 @@ func TestGuestTaskMoveRefusalIsEarly(t *testing.T) {
 				}
 				return ""
 			}
-			if code := h.run(h.home, "task", verb, "T-999"); code != 3 || !strings.Contains(h.errb.String(), "guest") {
+			if code := h.run(h.home, "task", verb, "T-999"); code != 1 || !strings.Contains(h.errb.String(), "guest") {
 				t.Fatalf("exit %d: %q", code, h.errb.String())
 			}
 		})
