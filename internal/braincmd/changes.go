@@ -15,7 +15,7 @@ import (
 
 const (
 	changesUsage = "Usage: grid brain changes [--level home|project] [--project <p>] [--since <RFC3339>] [--limit <n>] [--json]"
-	revertUsage  = "Usage: grid brain revert <topic>/<name> --to <n> [--level home|project] [--project <p>] [--json]"
+	revertUsage  = "Usage: grid brain revert <topic>/<name> --to <n> [--reason <why>] [--level home|project] [--project <p>] [--json]"
 )
 
 // failWith prints a store error the way every brain verb does.
@@ -197,11 +197,12 @@ func runRevert(args []string, env Env) int {
 	var l leveled
 	l.add(f)
 	to := f.Int("to", 0, "version to publish again (1 or more)")
+	reason := f.String("reason", "", "why the entry is put back; logged as \"revert to v<n>: <why>\"")
 	if code, done := parseVerb(f, args, env); done {
 		return code
 	}
 	usageError := func(msg string) int {
-		fmt.Fprintf(env.Stderr, "brain revert: %s. Run: grid brain help\n", msg)
+		fmt.Fprintf(env.Stderr, "brain revert:%s. Run: grid brain help\n", msg)
 		return 2
 	}
 	if code, done := l.check("revert", env); done {
@@ -230,7 +231,8 @@ func runRevert(args []string, env Env) int {
 		return failWith(env, l.asJSON, err)
 	}
 	// The store says whether it wrote, under the level lock; noop means it did not.
-	res, err := store.RevertTo(level, topic, name, *to, origin)
+	why := strings.Join(strings.Fields(*reason), " ")
+	res, err := store.RevertWith(level, topic, name, *to, origin, brain.RevertOptions{Reason: why})
 	if err != nil && !res.Wrote {
 		return failWith(env, l.asJSON, err)
 	}
@@ -241,8 +243,9 @@ func runRevert(args []string, env Env) int {
 		out := struct {
 			Version int    `json:"version"`
 			Noop    bool   `json:"noop"`
+			Reason  string `json:"reason,omitempty"`
 			Error   string `json:"error,omitempty"`
-		}{Version: version, Noop: noop}
+		}{Version: version, Noop: noop, Reason: why}
 		if err != nil {
 			out.Error = err.Error()
 		}
@@ -264,6 +267,8 @@ func runRevert(args []string, env Env) int {
 	text := fmt.Sprintf("v%d", version)
 	if noop {
 		text = fmt.Sprintf("already at v%d", version)
+	} else if why != "" {
+		text += " (reason: " + why + ")"
 	}
 	if _, err := fmt.Fprintln(env.Stdout, text); err != nil {
 		return failWith(env, l.asJSON, err)

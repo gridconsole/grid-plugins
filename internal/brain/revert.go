@@ -54,6 +54,29 @@ func (s Store) Revert(level, topic, name string, to int, origin Origin) (Entry, 
 // current version in Version. Wrote is decided under the level lock. An error
 // after the publication (the index rebuild) still returns the result.
 func (s Store) RevertTo(level, topic, name string, to int, origin Origin) (RevertResult, error) {
+	return s.RevertWith(level, topic, name, to, origin, RevertOptions{})
+}
+
+// RevertOptions are the optional parts of a revert.
+type RevertOptions struct {
+	// Reason says why the entry is put back. The audit line reads
+	// "revert to vN: <Reason>"; an empty or blank Reason leaves "revert to vN".
+	// auditLine folds whitespace and turns "|" into "/" when it is written.
+	Reason string
+}
+
+// revertReason is the reason logged for a revert to version to.
+func (o RevertOptions) revertReason(to int) string {
+	why := strings.Join(strings.Fields(o.Reason), " ")
+	if why == "" {
+		return fmt.Sprintf("revert to v%d", to)
+	}
+	return fmt.Sprintf("revert to v%d: %s", to, why)
+}
+
+// RevertWith is RevertTo with options. A no-op revert writes no audit line,
+// whatever the reason.
+func (s Store) RevertWith(level, topic, name string, to int, origin Origin, opts RevertOptions) (RevertResult, error) {
 	if !ValidName(topic) || !ValidName(name) {
 		return RevertResult{}, fmt.Errorf("topic and name must be plain names")
 	}
@@ -139,7 +162,7 @@ func (s Store) RevertTo(level, topic, name string, to int, origin Origin) (Rever
 			}
 		}
 		err = logAudit(root, Change{At: s.stamp(), Status: "reverted", Topic: topic, Name: name,
-			Version: v, Hash: hash, OriginKind: origin.Kind, OriginID: origin.ID, Reason: fmt.Sprintf("revert to v%d", to)})
+			Version: v, Hash: hash, OriginKind: origin.Kind, OriginID: origin.ID, Reason: opts.revertReason(to)})
 		if err != nil {
 			return err
 		}

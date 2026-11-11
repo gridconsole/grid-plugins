@@ -230,6 +230,15 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 		if err := logDecision(root, logged, version, hash); err != nil {
 			return err
 		}
+		if action != "reject" {
+			// The proposal's own links and origin: a merge appends the links to the
+			// target note, and the log names who decided, as logDecision does.
+			by := w.Entry
+			by.Origin = w.ProposalNote.Origin
+			if err := supersede(root, level, by, w.ProposalNote.Links); err != nil {
+				return err
+			}
+		}
 		b, err = Encode(w.ProposalNote)
 		if err != nil {
 			return err

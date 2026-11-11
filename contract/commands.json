@@ -2973,6 +2973,11 @@
               "required": false
             },
             {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--to",
               "takes": "value",
               "required": true
@@ -3051,6 +3056,41 @@
               "name": "--task",
               "takes": "value",
               "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "supersede",
+          "args": [
+            "\u003cold-note\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--by",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
+              "takes": "value",
+              "required": true
             }
           ],
           "json": true,

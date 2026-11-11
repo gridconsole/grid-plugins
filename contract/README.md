@@ -635,13 +635,15 @@ is one line per change, `<at> <status> <topic>/<name> v<n> <hash> <reason>`
 (`-` for an empty hash, no reason field when empty, control characters shown as
 `?`). A missing log is an empty list: `{"changes":[]}` or no output, exit 0.
 
-### `grid brain revert <topic>/<name> --to <n> [--level home|project] [--project <p>] [--json]`
+### `grid brain revert <topic>/<name> --to <n> [--reason <why>] [--level home|project] [--project <p>] [--json]`
 
 Publishes stored version `n` of a knowledge entry again, as a new version, so the
 history only grows: after versions 1 to 3, `--to 1` makes version 4 with version
 1's bytes. Under the level lock it stores the copy, publishes the entry
 atomically, appends an audit line with status `reverted`, reason `revert to v<n>`
-and the new version and hash, then rebuilds that level's index. When the entry
+(`revert to v<n>: <why>` when `--reason` is given; the audit line folds whitespace
+and writes `|` as `/`) and the new version and hash, then rebuilds that level's
+index. `--json` adds `reason` when given. When the entry
 already holds those bytes (and the newest stored copy does too) nothing is written
 and the current version is reported (`noop` means nothing was written). A stale
 or missing entry is written again, so it is not a no-op even when the newest

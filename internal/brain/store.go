@@ -1,6 +1,7 @@
 package brain
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -494,6 +496,10 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 		if err := logDecision(root, n, version, hash); err != nil {
 			return err
 		}
+		// Before the proposal is marked accepted, so a stop here is retried.
+		if err := supersede(root, level, n, n.Links); err != nil {
+			return err
+		}
 		if err := atomicWrite(root, filepath.Join("brain-proposals", name+".md"), b); err != nil {
 			return err
 		}
@@ -511,6 +517,98 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 func logDecision(root *os.Root, n Note, version int, hash string) error {
 	return logAudit(root, Change{At: n.Updated, Status: n.Status, Topic: n.Topic, Name: n.Name,
 		Version: version, Hash: hash, OriginKind: n.Origin.Kind, OriginID: n.Origin.ID, Reason: n.Reason})
+}
+
+// supersede marks the notes that the published note n replaces, under the level
+// lock and after n is published and logged. A link with rel "supersedes" to
+// brain:<level>/<name> (an #anchor is ignored) names an accepted note at this
+// level; that note gets superseded_by brain:<level>/<n.Name> as a new version
+// with an audit line, and no other field changes. A target that is missing, at
+// the other level, not a note, n itself or already superseded is left as it is
+// and the accept does not refuse for it. A superseded n takes no note over, so
+// two notes never replace each other. Nothing is deleted. links are the links
+// this decision adds: the proposal's, which a merge appends to its target.
+func supersede(root *os.Root, level string, n Note, links []Link) error {
+	if n.SupersededBy != "" {
+		return nil
+	}
+	var names []string
+	for _, l := range links {
+		to, _, _ := strings.Cut(l.To, "#")
+		name, ok := strings.CutPrefix(to, "brain:"+level+"/")
+		if l.Rel == "supersedes" && ok && name != n.Name && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	notes, _, err := scan(root, level)
+	if err != nil {
+		return err
+	}
+	for _, old := range notes {
+		if slices.Contains(names, old.Name) {
+			if err := markSuperseded(root, old, n, ""); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// markSuperseded writes old with superseded_by naming by: the version first,
+// then the note, then the audit line, as a decision does. A note already marked
+// by another note is not marked again. A note already marked by by is a retry:
+// only the audit line may be missing, and logAudit drops a line already there.
+// A non-empty why is added to the audit reason after "superseded by <id>"; the
+// accept path passes none.
+func markSuperseded(root *os.Root, old, by Note, why string) error {
+	id := "brain:" + by.Level + "/" + by.Name
+	if old.SupersededBy != "" && old.SupersededBy != id {
+		return nil
+	}
+	path := filepath.Join("knowledge", old.Topic, old.Name+".md")
+	var version int
+	var hash string
+	if old.SupersededBy == id {
+		current, err := safefile.Read(root, path)
+		if err != nil {
+			return err
+		}
+		dir := versionDir(old.Topic, old.Name)
+		numbers, err := versionNumbers(root, dir)
+		if err != nil || len(numbers) == 0 {
+			return err
+		}
+		newest := numbers[len(numbers)-1]
+		stored, err := safefile.Read(root, filepath.Join(dir, versionName(newest)))
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(stored, current) {
+			return nil // edited since; the mark was logged with the version it made
+		}
+		version, hash = newest, auditHash(current)
+	} else {
+		old.SupersededBy = id
+		data, err := Encode(old)
+		if err != nil {
+			return err
+		}
+		if version, hash, err = recordVersion(root, old.Topic, old.Name, data); err != nil {
+			return err
+		}
+		if err := atomicWrite(root, path, data); err != nil {
+			return err
+		}
+	}
+	reason := "superseded by " + id
+	if why != "" {
+		reason += ": " + why
+	}
+	return logAudit(root, Change{At: by.Updated, Status: "superseded", Topic: old.Topic, Name: old.Name,
+		Version: version, Hash: hash, OriginKind: by.Origin.Kind, OriginID: by.Origin.ID, Reason: reason})
 }
 
 func normalized(n Note) Note {
