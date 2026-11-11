@@ -40,19 +40,6 @@ var ggProjectKnownOpen = map[string]string{
 	"job lint":   `exit 1; without --json stdout is the lint report "path: <file>\nok: false\n..." and stderr is empty`,
 
 	"feed types": `exit 0; stdout {"types":[{"type":"ack",...}]}, the public schema, whatever the project`,
-
-	// With --json brain writes {"error":"project \"absent\" is not registered"} to stderr.
-	"brain accept":    `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-	"brain changes":   `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-	"brain check":     `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-	"brain index":     `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-	"brain keep":      `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-	"brain propose":   `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-	"brain revert":    `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-	"brain search":    `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-	"brain show":      `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-	"brain supersede": `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
-	"brain topics":    `exit 1; stderr "brain: project \"absent\" is not registered" without --json, {"error":"project \"absent\" is not registered"} with --json`,
 }
 
 type ggProjectOutcome struct {
