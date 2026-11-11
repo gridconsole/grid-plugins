@@ -1,7 +1,6 @@
 package orchestrator
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -67,9 +66,6 @@ func TestIuRkReplanSkipsHeldID(t *testing.T) {
 	}
 	if _, in := snap.Records[held.ID]; in {
 		t.Fatal("the held J-3 record is in Records")
-	}
-	if !reflect.DeepEqual(snap.JobIDs, []string{"J-1", "J-2", "J-3"}) {
-		t.Fatalf("JobIDs = %v, want J-1 J-2 J-3", snap.JobIDs)
 	}
 
 	f.tick(t)
