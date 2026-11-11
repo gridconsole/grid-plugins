@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: orchestrator-asks-question
+description: The orchestrator Job of a task meets a choice only the owner can make; it asks with `grid question ask` and posts no hand-made person Job.
+context:
+  scaffold_script: fixture.sh
