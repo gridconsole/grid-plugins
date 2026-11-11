@@ -28,7 +28,7 @@ func fixHint(name, detail string) string {
 		return "Reinstall the Grid plugin, or pass --hooks-file with its hooks/hooks.json path."
 	case "grid on PATH":
 		return "Run grid setup and add the directory containing the grid launcher to PATH."
-	case "allow block":
+	case "allow block", "deny block":
 		if strings.HasPrefix(detail, "missing rules: ") || detail == "Claude settings file is missing" {
 			return "Run grid setup"
 		}
@@ -49,6 +49,34 @@ func checkAllowBlock(add func(string, bool, string), o Options) {
 		add("allow block", false, "missing rules: "+strings.Join(status.Missing, ", "))
 	default:
 		add("allow block", true, "all setup allow rules are present")
+	}
+}
+
+// checkDenyBlock reports whether setup's deny rules are in the Claude settings.
+// It only reports; it changes nothing.
+func checkDenyBlock(add func(string, bool, string), o Options) {
+	status := settings.ReadClaudeDenyStatus(o.SettingsPath, o.Home, o.GridHome, o.Projects)
+	switch {
+	case status.Reason != "":
+		add("deny block", false, status.Reason)
+	case len(status.Missing) > 0:
+		add("deny block", false, "missing rules: "+strings.Join(status.Missing, ", "))
+	default:
+		add("deny block", true, "all setup deny rules are present")
+	}
+}
+
+// checkSandbox says whether Claude Code's sandbox is on. It is always ok: the
+// sandbox is optional, so it never fails the report.
+func checkSandbox(add func(string, bool, string), o Options) {
+	status := settings.ReadClaudeSandbox(o.SettingsPath)
+	switch status.State {
+	case settings.ClaudeSandboxOn:
+		add("sandbox", true, "on (grid setup --sandbox)")
+	case settings.ClaudeSandboxOff:
+		add("sandbox", true, "off; grid setup --sandbox turns on Claude Code's sandbox")
+	default:
+		add("sandbox", true, "unknown: "+status.Reason)
 	}
 }
 

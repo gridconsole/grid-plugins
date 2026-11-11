@@ -30,7 +30,11 @@ func runDoctor(args []string, env Env) int {
 		*hooks = defaultHooksFile(env)
 	}
 	settingsPath, _ := settings.ClaudeSettingsPath(env.Home, env.getenv("CLAUDE_CONFIG_DIR"))
-	rep := doctor.Run(doctor.Options{Home: env.Home, SettingsPath: settingsPath, GridHome: env.GridHome, Label: gridhome.Tilde(env.GridHome, env.Home), GitVersion: env.GitVersion, HooksFile: *hooks})
+	projects := env.getenv("GRID_PROJECTS")
+	if projects != "" && !filepath.IsAbs(projects) {
+		projects = filepath.Join(env.Cwd, projects)
+	}
+	rep := doctor.Run(doctor.Options{Home: env.Home, SettingsPath: settingsPath, GridHome: env.GridHome, Projects: projects, Label: gridhome.Tilde(env.GridHome, env.Home), GitVersion: env.GitVersion, HooksFile: *hooks})
 	if *bundle {
 		path := *out
 		if path != "" && !filepath.IsAbs(path) {

@@ -33,7 +33,8 @@ type Options struct {
 	Home         string // user home for the same permission anchors as setup
 	SettingsPath string // Claude settings file; supplied by the caller, never guessed
 	GridHome     string
-	Label        string
+	Projects     string // absolute GRID_PROJECTS as setup resolves it; empty selects <GridHome>/projects
+	Label       string
 	GitVersion   func() (string, error)
 	HooksFile    string
 	LookPath     func(string) (string, error)
@@ -87,9 +88,12 @@ func Run(o Options) Report {
 	checkInstallation(add, o)
 	if homeAvailable {
 		checkAllowBlock(add, o)
+		checkDenyBlock(add, o)
 	} else {
 		add("allow block", true, "skipped: Grid home is unavailable")
+		add("deny block", true, "skipped: Grid home is unavailable")
 	}
+	checkSandbox(add, o)
 	return rep
 }
 
