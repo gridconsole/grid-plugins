@@ -31,7 +31,8 @@ type hjnGrader struct {
 	body   string
 }
 
-func (g hjnGrader) name() string { return g.fields["name"] }
+// name is the file name without ".md": a grader file carries no name: key.
+func (g hjnGrader) name() string { return strings.TrimSuffix(g.file, ".md") }
 func (g hjnGrader) kind() string { return g.fields["type"] }
 
 // hjnFrontMatter splits a file into its "key: value" front matter and its body.
@@ -363,6 +364,9 @@ func TestHjnShape(t *testing.T) {
 	for _, g := range hjnLoadGraders(t) {
 		if !known[g.kind()] {
 			t.Errorf("%s: unknown grader type %q", g.file, g.kind())
+		}
+		if _, has := g.fields["name"]; has {
+			t.Errorf("%s: front matter has a name: key, the file name is the grader name", g.file)
 		}
 		names[g.name()] = true
 	}

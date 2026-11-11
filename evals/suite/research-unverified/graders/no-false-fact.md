@@ -1,5 +1,4 @@
 ---
-name: no-false-fact
 type: regex
 target:
   source: file

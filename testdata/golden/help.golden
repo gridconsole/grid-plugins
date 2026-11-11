@@ -21,7 +21,7 @@ Commands:
   proof       add evidence and rebuild the task proof index
   history     add a dated line to the task history
   land        land a task per the deploy topic
-  brain       show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore/rename
+  brain       show/search/topics/index/propose/accept/keep/decide/check/write (grid brain help lists all)
   env         up, down browser Job dev environments
   person      check person access; list, show and find approvers
   routine     add, list, remove, run, schedule and unschedule routines
@@ -49,4 +49,4 @@ Global flags go before the command; each wins over its environment variable:
   --role ROLE        the caller's role (GRID_ROLE)
   --lease-epoch G.F  the lease generation.fence (GRID_LEASE_EPOCH)
 
-Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip).
+Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip), 6 stale rev (read again), 7 not versioned (nothing written).

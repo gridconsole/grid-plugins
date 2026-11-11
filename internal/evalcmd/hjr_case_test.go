@@ -29,7 +29,8 @@ type hjrGrader struct {
 	body string
 }
 
-func (g hjrGrader) name() string { return g.meta["name"] }
+// name is the file name without ".md": a grader file carries no name: key.
+func (g hjrGrader) name() string { return strings.TrimSuffix(filepath.Base(g.file), ".md") }
 func (g hjrGrader) kind() string { return g.meta["type"] }
 
 // hjrFrontMatter reads the flat `key: value` lines between the leading ---
@@ -301,8 +302,8 @@ func TestHjrShape(t *testing.T) {
 		if !hjrKnownTypes[g.kind()] {
 			t.Errorf("%s: unknown grader type %q", g.file, g.kind())
 		}
-		if g.name() != strings.TrimSuffix(filepath.Base(g.file), ".md") {
-			t.Errorf("%s: name %q does not match the file", g.file, g.name())
+		if _, has := g.meta["name"]; has {
+			t.Errorf("%s: front matter has a name: key, the file name is the grader name", g.file)
 		}
 	}
 	if g := hjrGrader1(t, graders, "criteria"); g.kind() != "llm" || g.meta["weight"] != "1" {

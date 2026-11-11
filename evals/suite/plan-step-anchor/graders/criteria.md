@@ -1,5 +1,4 @@
 ---
-name: criteria
 type: llm
 weight: 1
 ---

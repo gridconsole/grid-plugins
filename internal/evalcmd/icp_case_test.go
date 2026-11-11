@@ -30,7 +30,8 @@ type icpGrader struct {
 	body string
 }
 
-func (g icpGrader) name() string { return g.meta["name"] }
+// name is the file name without ".md": a grader file carries no name: key.
+func (g icpGrader) name() string { return strings.TrimSuffix(filepath.Base(g.file), ".md") }
 func (g icpGrader) kind() string { return g.meta["type"] }
 
 // icpFrontMatter reads the flat `key: value` lines between the leading ---
@@ -299,8 +300,8 @@ func TestIcpShape(t *testing.T) {
 		if !icpKnownTypes[g.kind()] {
 			t.Errorf("%s: unknown grader type %q", g.file, g.kind())
 		}
-		if g.name() != strings.TrimSuffix(filepath.Base(g.file), ".md") {
-			t.Errorf("%s: name %q does not match the file", g.file, g.name())
+		if _, has := g.meta["name"]; has {
+			t.Errorf("%s: front matter has a name: key, the file name is the grader name", g.file)
 		}
 	}
 	for name, match := range map[string]string{"showed": "grid job show", "cancelled": "grid job cancel", "replaced": "grid job post"} {

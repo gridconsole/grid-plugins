@@ -1,5 +1,4 @@
 ---
-name: no-test-edit
 type: tool_used
 tool: Edit
 input_match: '_test\.go'

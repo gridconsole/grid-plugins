@@ -1,5 +1,4 @@
 ---
-name: marks-unverified
 type: regex
 target:
   source: file

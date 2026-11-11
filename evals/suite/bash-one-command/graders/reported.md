@@ -1,5 +1,4 @@
 ---
-name: reported
 type: llm
 ---
 The last message states in one line whether the tests of `calc` pass, and names

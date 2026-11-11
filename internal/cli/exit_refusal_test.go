@@ -181,7 +181,7 @@ func TestExitRefusalJobSide(t *testing.T) {
 
 func TestExitRefusalHelpGolden(t *testing.T) {
 	// Inline golden keeps this narrow help contract in the lane's test file.
-	const want = "Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip)."
+	const want = "Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip), 6 stale rev (read again), 7 not versioned (nothing written)."
 	h := newHarness(t)
 	if code := h.run(h.tmp, "help"); code != 0 {
 		t.Fatal(code, h.errb)

@@ -34,7 +34,8 @@ type hjaGrader struct {
 	Body   string
 }
 
-func (g hjaGrader) name() string { return g.Fields["name"] }
+// name is the file name without ".md": a grader file carries no name: key.
+func (g hjaGrader) name() string { return strings.TrimSuffix(filepath.Base(g.File), ".md") }
 func (g hjaGrader) kind() string { return g.Fields["type"] }
 
 // count reads an integer field; ok is false when the field is absent.
@@ -399,8 +400,8 @@ func TestHjaShape(t *testing.T) {
 		if !hjaKnownTypes[g.kind()] {
 			t.Errorf("%s: unknown type %q", g.File, g.kind())
 		}
-		if want := strings.TrimSuffix(filepath.Base(g.File), ".md"); g.name() != want {
-			t.Errorf("%s: name %q does not match the file name", g.File, g.name())
+		if _, has := g.Fields["name"]; has {
+			t.Errorf("%s: front matter has a name: key, the file name is the grader name", g.File)
 		}
 		if g.Body == "" {
 			t.Errorf("%s: empty body", g.File)
