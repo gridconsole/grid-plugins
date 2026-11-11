@@ -1,0 +1,5 @@
+# Git for Windows (core.autocrlf=true) must not turn embedded and golden files into CRLF: the code reads them as LF.
+* text=auto eol=lf
+# cmd and bat files are kept byte for byte as stored (bin/grid.cmd is CRLF on purpose, the others are LF).
+*.cmd -text
+*.bat -text
