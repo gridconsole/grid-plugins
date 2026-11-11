@@ -242,6 +242,18 @@ func run(args []string, env Env) int {
 		}
 		return 1
 	}
+	// The write is done. The plugin owns needs-you.json, so refold it here: a
+	// person who answers or withdraws must leave Needs you without another fold.
+	// A fold error does not undo the write; the next fold repairs the projection.
+	if action != "list" {
+		f, err := store.feed()
+		if err == nil {
+			_, err = f.SaveState()
+		}
+		if err != nil {
+			fmt.Fprintln(env.Stderr, "question: refold:", err)
+		}
+	}
 	if *asJSON {
 		enc := json.NewEncoder(env.Stdout)
 		enc.SetEscapeHTML(false)
