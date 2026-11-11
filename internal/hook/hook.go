@@ -8,12 +8,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -102,18 +104,19 @@ func sessionStart(o Options) {
 	if level != "off" {
 		syncAgents(o)
 	}
-	context := sessionContext(res, o.Resolver, note)
 	brainProject := res.Project
 	if brainProject == where.Personal {
 		brainProject = ""
 	}
+	var brainText *string
 	if idx, err := (brain.Store{GridHome: o.Resolver.GridHome, Project: brainProject}).Index(); err == nil {
-		context += "\n" + idx.Text
+		brainText = &idx.Text
 	} else {
 		o.log("brain index", err)
 	}
+	context := assembleContext(sessionContext(res, o.Resolver, note), jobContext(o, res), brainText)
 	out := map[string]any{"hookSpecificOutput": map[string]string{
-		"hookEventName": "SessionStart", "additionalContext": boundContext(context),
+		"hookEventName": "SessionStart", "additionalContext": context,
 	}}
 	b, err := json.Marshal(out)
 	if err != nil {
@@ -181,6 +184,46 @@ func sessionContext(r where.Result, resolver where.Resolver, note string) string
 		"Approvals come from a person through the Grid app or grid approve in a terminal outside Claude Code or Codex.",
 	}, "\n")
 	return boundContext(text)
+}
+
+// assembleContext joins the session text, the Job lines and the brain index in
+// that order and bounds the whole, so a long index is what gets cut.
+func assembleContext(session, jobLines string, brainText *string) string {
+	context := session
+	if jobLines != "" {
+		context += "\n" + jobLines
+	}
+	if brainText != nil {
+		context += "\n" + *brainText
+	}
+	return boundContext(context)
+}
+
+// jobContext names the Job a worker started this session for, where its brief is
+// and the command that posts its result. It is empty for a session that has no
+// valid GRID_JOB or no resolved task.
+func jobContext(o Options, res where.Result) string {
+	id := o.Getenv("GRID_JOB")
+	if res.Task == "" || !job.ValidID(id) || strings.Trim(strings.SplitN(id[2:], ".", 2)[0], "0") == "" {
+		return ""
+	}
+	first := "You run Job " + id + " of task " + res.Task
+	if n, err := strconv.Atoi(o.Getenv("GRID_ATTEMPT")); err == nil && n > 0 {
+		first += " (attempt " + strconv.Itoa(n) + ")"
+	}
+	show := "grid job show " + res.Task + " " + id
+	brief := "Your brief: " + show + "."
+	if res.TaskPath != "" {
+		path := filepath.Join(res.TaskPath, "jobs", id, "brief.md")
+		if st, err := os.Stat(path); err == nil && st.Mode().IsRegular() {
+			brief = "Your brief: " + gridhome.Tilde(path, o.Resolver.Home) + " (or: " + show + ")."
+		}
+	}
+	return strings.Join([]string{
+		first + ".",
+		brief,
+		"Post your result with grid job result --task " + res.Task + " --job " + id + " --body <json> before you end, also when blocked.",
+	}, "\n")
 }
 
 func boundContext(text string) string {
