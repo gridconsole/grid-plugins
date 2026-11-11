@@ -109,11 +109,11 @@ func postCuratorJob(env Env, dir, taskID string, ids []string) (string, error) {
 			return "", nil
 		}
 		epoch := env.getenv("GRID_LEASE_EPOCH")
-			if te := env.getenv("GRID_TASK_EPOCH"); te != "" && !env.typedGlobal["GRID_LEASE_EPOCH"] {
-				// A Job agent's GRID_LEASE_EPOCH is its Job's; the curator Job is a task write, so it takes the task epoch, as `job post` does.
-				epoch = te
-			}
-			w, err := orchestratorWriter(env, "task", epoch)
+		if te := env.getenv("GRID_TASK_EPOCH"); te != "" && !env.typedGlobal["GRID_LEASE_EPOCH"] {
+			// A Job agent's GRID_LEASE_EPOCH is its Job's; the curator Job is a task write, so it takes the task epoch, as `job post` does.
+			epoch = te
+		}
+		w, err := orchestratorWriter(env, "task", epoch)
 		if err != nil {
 			return "", err
 		}
