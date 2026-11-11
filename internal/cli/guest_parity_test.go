@@ -16,6 +16,7 @@ import (
 // Arguments are explicit so a new inventory route cannot silently get a vacuous
 // usage-error check. Selectors are added separately for every supported form.
 var guestParityCommands = map[string][]string{
+	"agent list":           {},
 	"agent set":            {"grid-builder", "--model", "opus"},
 	"agent unset":          {"grid-builder"},
 	"claude settings show": {},
@@ -119,6 +120,7 @@ var guestParityCommands = map[string][]string{
 	"signal move":        {"S-01ARZ3NDEKTSV4RRFFQ69G5FAV", "--to", "alpha"},
 	"skill disable":      {"research"},
 	"skill enable":       {"research"},
+	"skill list":         {},
 	"task attach":        {"{task}", "--session", "parity", "--runtime", "claude"},
 	"task close":         {"{task}"},
 	"task decline":       {"{task}", "--reason", "parity"},
