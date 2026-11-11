@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -34,7 +35,7 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
   index                      Rebuild the SessionStart index and backlinks.
-  propose --name <id> --topic <topic> --description <when> --summary <what> --source <source> --body <text>
+  propose --name <id> --topic <topic> --description <when> --summary <what> --source <source> --body <text> [--task <task>]
   keep [--task <task>]         List waiting proposals without writing the brain.
   decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>]
   accept <id>                File a proposal through the keeper gates.
@@ -54,6 +55,7 @@ Propose: --file <Markdown|->, --link <JSON> (repeatable), --external
 Index: --read-only           Render without updating generated files.
 Unqualified note ids prefer the project; brain:home/<id> selects a personal note.
 Proposals use the project level when a project is resolved, otherwise home.
+With --task, propose writes <task folder>/brain-proposals/<name>.md, where decide reads it, and adds a history line.
 `
 
 type linkFlags []brain.Link
@@ -138,6 +140,7 @@ func Run(args []string, env Env) int {
 	level := f.String("level", "", "home or project")
 	var topic, name, description, summary, source, body, file, reject, taskID, taskDir string
 	var links linkFlags
+	var proposeTask task.Task // set when --task resolved
 	var proposal, external, readOnly bool
 	limit := 5
 	switch verb {
@@ -153,6 +156,7 @@ func Run(args []string, env Env) int {
 	case "index":
 		f.BoolVar(&readOnly, "read-only", false, "do not write generated files")
 	case "propose":
+		f.StringVar(&taskID, "task", "", "write the proposal in this task's folder, where decide reads it")
 		f.StringVar(&name, "name", "", "note name")
 		f.StringVar(&topic, "topic", "", "topic")
 		f.StringVar(&description, "description", "", "when to read the note")
@@ -232,7 +236,7 @@ func Run(args []string, env Env) int {
 			if err != nil {
 				return env.TaskOperandError("brain", err)
 			}
-			taskID = t.Path
+			proposeTask, taskID = t, t.Path
 		}
 		res, err := resolver.Resolve(where.Query{Cwd: env.Cwd, Project: *project, Task: taskID})
 		if err != nil {
@@ -358,7 +362,15 @@ func Run(args []string, env Env) int {
 		if external {
 			origin.Kind = "import"
 		}
-		if err == nil {
+		if err == nil && proposeTask.Path != "" {
+			// The task's own folder is where decide and the ship gate look.
+			tasks := task.Store{Resolver: env.Resolver}
+			history := func(text string) error {
+				_, err := tasks.Note(task.WriteOptions{Cwd: proposeTask.Path, ID: proposeTask.ID, Note: text, Who: contract.Author{ID: "grid-brain", Role: "agent"}})
+				return err
+			}
+			result, err = store.ProposeTask(brain.TaskRef{ID: proposeTask.ID, Path: proposeTask.Path}, n, origin, history)
+		} else if err == nil {
 			result, err = store.Propose(n, origin)
 		}
 	case "accept":

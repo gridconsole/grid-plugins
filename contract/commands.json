@@ -2933,6 +2933,11 @@
               "required": false
             },
             {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--topic",
               "takes": "value",
               "required": false
