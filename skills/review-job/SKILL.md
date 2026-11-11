@@ -15,6 +15,14 @@ Steps:
 5. A change outside the Job's write list, a failing or skipped verify, or an existing test edited to pass breaks the Job: must-fix.
 6. Anything else is a one-line note. A note never blocks and nobody starts work on it unless a person asks.
 
+Bash:
+
+- Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- `grid` and `git` are pre-approved. The Job's verify command is still run, as the Job writes it, in a call of its own (step 3).
+- Put no `VAR=value` in front of a command; use the command's own flags.
+- Use Read, Glob and Grep instead of ls, cat, find and grep.
+- Never set `dangerouslyDisableSandbox`.
+
 Post with `grid job result --task <task> --job <review-job> --body <json>`. The first line is exactly `ACCEPTED` or `REJECTED`:
 
 ```

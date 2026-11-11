@@ -50,6 +50,14 @@ If blocked, post the result with the blocker named in `outcome` and the rows you
 
 Done: every row has a line, the verify exit codes are pasted, and the result is posted.
 
+## Bash
+
+- Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- `grid` and `git` are pre-approved. The Job's verify command is still run, as the Job writes it, in a call of its own (step 7).
+- Put no `VAR=value` in front of a command; use the command's own flags.
+- Use Read, Glob and Grep instead of ls, cat, find and grep. Use Write and Edit instead of sed, cp and heredocs.
+- Never set `dangerouslyDisableSandbox`.
+
 ## Brain
 
 - Read the notes the Job's Context names: `grid brain show <note> --task <task>`.
