@@ -67,7 +67,9 @@ func postFirstJob(env Env, t task.Task, o task.NewOptions) error {
 	}
 	worker := t.Owner + "@" + machine
 	if !contract.ValidWorker(worker) {
-		return fmt.Errorf("owner %q cannot hold a task lease: the holder must be <member>@<machine> with no slash or whitespace", t.Owner)
+		// A real Grid home always has a ULID machine id; with another value the Feed takes no writer, so say so and keep the task.
+		fmt.Fprintf(env.Stderr, "grid task new: %s has no first Job: %q is not a valid <member>@<machine ULID> writer id\n", t.ID, worker)
+		return nil
 	}
 	data, err := json.Marshal(firstJob())
 	if err != nil {
