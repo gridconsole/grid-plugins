@@ -61,9 +61,13 @@ func (s Store) postsJob() bool {
 		return false
 	}
 	// The Feed refuses an agent a person gate; post no Job the question post
-	// would then leave without its question.
+	// would then leave without its question. A cli writer posts one only as the
+	// task holder: its ControlWriter holds lease "task".
 	role := contract.NormalizeRole(s.Writer.Author.Role)
-	return role != "agent" && role != "cli"
+	if role == "cli" {
+		return s.ControlWriter.Lease == "task"
+	}
+	return role != "agent"
 }
 
 // postJob posts the person Job of a new question and returns its id, or "" when
