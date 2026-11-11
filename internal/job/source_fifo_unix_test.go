@@ -38,7 +38,7 @@ func TestSourceFIFORefused(t *testing.T) {
 				case <-iqFifoHangCtx(t).Done():
 					t.Error("reader did not exit after cleanup")
 				}
-				t.Fatal("Resolve blocked on FIFO for more than 1s")
+				t.Fatal("Resolve blocked on FIFO")
 			}
 		})
 	}
