@@ -309,7 +309,7 @@ func sendBackPlan(env Env, dir string, o task.WriteOptions, w feed.Writer, hash,
 		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
 		return 3
 	}
-	store, job := planPersonJob(dir)
+	store, job := planPersonJob(env, dir)
 	open := false
 	if job != "" {
 		snap, err := loadFeedSnapshot(store)
