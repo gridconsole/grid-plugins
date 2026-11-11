@@ -27,7 +27,27 @@ type Inputs struct {
 	NotRendered                []string `json:"not_rendered"`
 	BrainTokens                int      `json:"brain_tokens"`
 	DisableSkillShellExecution bool     `json:"disableSkillShellExecution"`
+	// BriefBytes is len(Rendered.Brief). PastedChars is the rune count of the
+	// source text the brief carries: each Source.Text written by sourceBlock, as
+	// an intent source, an excerpt or the previous acceptance.
+	BriefBytes  int `json:"brief_bytes"`
+	PastedChars int `json:"pasted_chars"`
 }
+
+// How a brief used a source, weakest first. The strongest use of a source wins.
+const (
+	ShownPointer = "pointer"
+	ShownSummary = "summary"
+	ShownExcerpt = "excerpt"
+	ShownText    = "text"
+)
+
+var shownRank = map[string]int{"": 0, ShownPointer: 1, ShownSummary: 2, ShownExcerpt: 3, ShownText: 4}
+
+// excerpted reports whether a brain candidate's text is pasted after its pointer
+// line: marked and personal sources never are.
+func excerpted(s Source) bool { return !s.PointerOnly && !marked(s.Tier) }
+
 type Rendered struct {
 	Brief  string `json:"brief"`
 	Inputs Inputs `json:"inputs"`
@@ -52,6 +72,28 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		o.BrainTokens = 2000
 	}
 	seen := map[string]Source{}
+	shown := map[string]string{}
+	pasted := 0
+	use := func(p, mode string) {
+		if shownRank[mode] > shownRank[shown[p]] {
+			shown[p] = mode
+		}
+	}
+	// paste writes a source's text into the brief, so it counts as pasted.
+	paste := func(label string, s Source) string {
+		use(s.Pointer, ShownText)
+		pasted += utf8.RuneCountInString(s.Text)
+		return sourceBlock(label, s)
+	}
+	// named marks a pointer line: a personal note shows only its id, any other
+	// source its summary.
+	named := func(s Source) {
+		if s.PointerOnly {
+			use(s.Pointer, ShownPointer)
+		} else {
+			use(s.Pointer, ShownSummary)
+		}
+	}
 	resolve := func(p string) (Source, error) {
 		if s, ok := seen[p]; ok {
 			return s, nil
@@ -61,6 +103,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 			return s, e
 		}
 		s.Pointer = p
+		s.Shown = "" // a replayed snapshot's mode is rebuilt from this render's uses
 		if s.Tier != contract.PersonTeam && s.Tier != contract.Agent && s.Tier != contract.PersonGuest {
 			s.Tier = contract.External
 		}
@@ -202,6 +245,13 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	if tokens(brain) > o.BrainTokens {
 		return r, fmt.Errorf("brain budget too small for the elision banner")
 	}
+	for _, c := range kept {
+		named(c.source)
+		if excerpted(c.source) {
+			use(c.source.Pointer, ShownExcerpt)
+			pasted += utf8.RuneCountInString(c.source.Text)
+		}
+	}
 	for _, c := range cut {
 		r.Inputs.NotRendered = append(r.Inputs.NotRendered, c.link.To)
 	}
@@ -214,9 +264,9 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	}
 	b.WriteString(meta)
 	b.WriteString("\n## Intent\n\n")
-	b.WriteString(sourceBlock("Owner", owner))
-	b.WriteString(sourceBlock("Item", item))
-	b.WriteString(sourceBlock("Goal", goal))
+	b.WriteString(paste("Owner", owner))
+	b.WriteString(paste("Item", item))
+	b.WriteString(paste("Goal", goal))
 	b.WriteString("## Context\n\n")
 	b.WriteString(brain)
 	sort.Slice(relations, func(a, b int) bool {
@@ -231,6 +281,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		if e != nil {
 			return r, e
 		}
+		named(s)
 		b.WriteString(pointerBlock(l, s))
 	}
 	if j.Continues != nil && *j.Continues != "" {
@@ -238,7 +289,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		if e != nil {
 			return r, e
 		}
-		b.WriteString(sourceBlock("Previous acceptance", s))
+		b.WriteString(paste("Previous acceptance", s))
 	}
 	reads := ""
 	for _, p := range j.Read {
@@ -249,6 +300,11 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		var l *Link
 		if x, ok := explicit[p]; ok {
 			l = &x
+		}
+		if s.PointerOnly || strings.TrimSpace(s.Summary) == "" {
+			use(s.Pointer, ShownPointer) // the line names the path and nothing of the file
+		} else {
+			use(s.Pointer, ShownSummary)
 		}
 		reads += readBlock(p, l, s)
 	}
@@ -289,13 +345,17 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	fmt.Fprintf(&b, "On blocked: %s\n", j.OnBlocked)
 	b.WriteString("\n## Outcome\n\n## Verdict\n\n## Follow-up\n")
 	r.Brief = b.String()
+	r.Inputs.BriefBytes = len(r.Brief)
+	r.Inputs.PastedChars = pasted
 	keys := []string{}
 	for k := range seen {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		r.Inputs.Sources = append(r.Inputs.Sources, seen[k])
+		s := seen[k]
+		s.Shown = shown[k]
+		r.Inputs.Sources = append(r.Inputs.Sources, s)
 	}
 	return r, nil
 }
