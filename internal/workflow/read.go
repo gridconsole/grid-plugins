@@ -14,6 +14,12 @@ type Answer struct {
 	Templates []Template    `json:"templates"`
 	Errors    []Problem     `json:"errors"`
 	Policy    []PolicyEntry `json:"policy,omitempty"`
+	// Source, Note and GatePostRoles are set only by ReadFor: which source
+	// answered (task, project-brain, home-brain or default), the brain note's
+	// name when one did, and the gate roles that workflow sets.
+	Source        string              `json:"source,omitempty"`
+	Note          string              `json:"note,omitempty"`
+	GatePostRoles map[string][]string `json:"gate_post_roles,omitempty"`
 }
 
 // Read returns the workspace file and registered project files, or just the
