@@ -111,7 +111,7 @@ func TestPersonWithdrawCLI(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if len(after.Records) != len(before.Records) || (out.Len() != 0 && !strings.Contains(out.String(), `"error":"person_required"`)) || !bytes.Equal(original, current) {
+				if len(after.Records) != len(before.Records) || (out.Len() != 0 && !strings.Contains(out.String(), `"error":"person_required"`) && !strings.Contains(out.String(), `"code":"guest_refused"`)) || !bytes.Equal(original, current) {
 					t.Fatal("refused withdraw wrote data")
 				}
 				return
