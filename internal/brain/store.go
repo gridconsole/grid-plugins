@@ -549,7 +549,7 @@ func supersede(root *os.Root, level string, n Note, links []Link) error {
 	}
 	for _, old := range notes {
 		if slices.Contains(names, old.Name) {
-			if err := markSuperseded(root, old, n); err != nil {
+			if err := markSuperseded(root, old, n, ""); err != nil {
 				return err
 			}
 		}
@@ -561,7 +561,9 @@ func supersede(root *os.Root, level string, n Note, links []Link) error {
 // then the note, then the audit line, as a decision does. A note already marked
 // by another note is not marked again. A note already marked by by is a retry:
 // only the audit line may be missing, and logAudit drops a line already there.
-func markSuperseded(root *os.Root, old, by Note) error {
+// A non-empty why is added to the audit reason after "superseded by <id>"; the
+// accept path passes none.
+func markSuperseded(root *os.Root, old, by Note, why string) error {
 	id := "brain:" + by.Level + "/" + by.Name
 	if old.SupersededBy != "" && old.SupersededBy != id {
 		return nil
@@ -601,8 +603,12 @@ func markSuperseded(root *os.Root, old, by Note) error {
 			return err
 		}
 	}
+	reason := "superseded by " + id
+	if why != "" {
+		reason += ": " + why
+	}
 	return logAudit(root, Change{At: by.Updated, Status: "superseded", Topic: old.Topic, Name: old.Name,
-		Version: version, Hash: hash, OriginKind: by.Origin.Kind, OriginID: by.Origin.ID, Reason: "superseded by " + id})
+		Version: version, Hash: hash, OriginKind: by.Origin.Kind, OriginID: by.Origin.ID, Reason: reason})
 }
 
 func normalized(n Note) Note {
