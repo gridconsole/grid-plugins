@@ -372,6 +372,11 @@
               "required": false
             },
             {
+              "name": "--kind",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
