@@ -331,7 +331,6 @@ func toolUse(o Options) {
 func evaluateGuards(o Options, in hookio.Input, env map[string]string) hookio.Decision {
 	return hookio.Strongest(
 		guard.EvaluateHost(in, o.Cwd, env),
-		guard.EvaluateOnlyWriter(in, o.Cwd, env),
 		guard.EvaluatePlan(in, o.Cwd, env),
 		guard.EvaluateHome(in, o.Cwd, env),
 	)

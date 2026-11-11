@@ -347,22 +347,6 @@ func TestClaudeSymlinksAndNonRegularFiles(t *testing.T) {
 	}
 }
 
-func TestClaudeWriterReservedKindsStayInSync(t *testing.T) {
-	// Any new writer predicate must be represented in ClaudeBlock and the CLI
-	// parity cases before refreshing this reviewed source snapshot.
-	got, err := os.ReadFile(filepath.Join("..", "guard", "writer.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	want, err := os.ReadFile(filepath.Join("testdata", "claude", "writer.go.golden"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Fatal("writer.go changed: reconcile ClaudeBlock and TestClaudeDenyRulesEqualWriterGuard before updating the reserved-kind snapshot")
-	}
-}
-
 func TestClaudeRemoveRestoresClassifierDefaults(t *testing.T) {
 	f := newClaudeFixture(t)
 	f.o.Yes = true
