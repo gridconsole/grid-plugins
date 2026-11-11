@@ -12,7 +12,7 @@ func TestGaFeedPostLine(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s brief has no Instructions section", role)
 		}
-		for _, want := range []string{"feed_post", "grid job result"} {
+		for _, want := range []string{"grid job post", "--type post", "grid job result"} {
 			if !strings.Contains(after, want) {
 				t.Fatalf("%s: Instructions do not name %s", role, want)
 			}

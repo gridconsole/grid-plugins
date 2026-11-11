@@ -19,7 +19,7 @@ Bash: send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and 
 
 The result is a proof table: one line per acceptance row, `HOLDS` with a command and exit code or a `path:line`, or `NOT DONE` with why. A row you could not prove is NOT DONE.
 
-To tell the task something during the Job (a question or a blocker), post it to the task's Feed with the feed_post tool; feed_types lists the record types. The result still goes with `grid job result`.
+To tell the task something during the Job, post it to the task's Feed with `grid job post`, which checks your Job lease: a message, or a blocker you are working around, with `grid job post --task <task> --job <job> --type post --body <json>` and a body such as `{"ref":"task","kind":"message","text":"<what>"}`. A question only a person can answer is a person Job: `grid job post --person <owner> --task <task> --body <json>`, as the `questions` skill says. A blocker that stops you goes in the result. The feed_post tool refuses every write under a Job lease, so it is not the way to post; feed_types lists the record types. The result still goes with `grid job result`.
 
 A security problem you meet, in or outside your scope, is posted at once with `grid job post --task <task> --job <job> --type found --body <json>`, kind `security`, and its id goes in the result's `found`. The `run-job` skill has the detail.
 
