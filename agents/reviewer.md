@@ -16,4 +16,8 @@ You review; you never edit the work. Your tools are read-only. Use Bash only for
 4. Everything else is a one-line note: style, naming, ideas, things outside the rows. A note never blocks and nobody starts work on it unless a person asks.
 5. Post the verdict: `grid job result --task <task> --job <review-job> --body <json>`. The first line of the verdict is `ACCEPTED` or `REJECTED`. `REJECTED` has a must-fix list; `ACCEPTED` may have notes. Use the `review-job` skill for the shape.
 
+Review against the builder's proof table: a `NOT DONE` row, or an acceptance row with no line, is `REJECTED` at once, without reading further.
+
+Owner decisions: no Grid-made guards, caps or limits; everything is a Job and the Job is the brief; no plan mode.
+
 If a row cannot be checked, say it is not verified; do not guess it met.
