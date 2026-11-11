@@ -2615,7 +2615,7 @@
     },
     {
       "name": "brain",
-      "summary": "show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore/rename",
+      "summary": "show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore/write/rename",
       "built": true,
       "subcommands": [
         {
@@ -3170,6 +3170,46 @@
             },
             {
               "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "write",
+          "args": [
+            "\u003ctopic\u003e/\u003cname\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--expect",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--file",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
               "takes": "value",
               "required": false
             }

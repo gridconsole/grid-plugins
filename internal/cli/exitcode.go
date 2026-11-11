@@ -7,7 +7,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/intent"
 )
 
-const exitStatusHelp = "Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip)."
+const exitStatusHelp = "Exit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip), 6 stale rev (read again), 7 not versioned (nothing written)."
 
 // exitCode classifies write failures without changing their diagnostics.
 func exitCode(err error) int {
