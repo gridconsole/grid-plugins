@@ -133,7 +133,7 @@ func TestProbeOutputTimeout(t *testing.T) {
 			_, _ = cmd.Process.Wait()
 		}
 	})
-	out, code := probeOutput(cmd)
+	out, code := probeOutput(ctx, cmd)
 	if code == 0 || !errors.Is(ctx.Err(), context.Canceled) {
 		t.Fatalf("output %q, exit %d, context %v", out, code, ctx.Err())
 	}

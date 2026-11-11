@@ -9,7 +9,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
-	"time"
+	"sync"
 )
 
 // Runner runs argv without a shell and returns stdout and the exit status.
@@ -33,7 +33,7 @@ func (e Env) run(ctx context.Context, name string, argv []string) (string, int) 
 	cmd.Dir = e.Home
 	cmd.Env = e.childEnv(name, argv[0])
 	// Nil stdin/stderr connect to the null device; stdout is captured below.
-	return probeOutput(cmd)
+	return probeOutput(ctx, cmd)
 }
 
 var systemPath = []string{"/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin"}
@@ -127,13 +127,46 @@ func (b *probeBuffer) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func probeOutput(cmd *exec.Cmd) (string, int) {
-	var stdout probeBuffer
-	cmd.Stdout = &stdout
-	// Also bound pipe draining if a descendant holds stdout open after the
-	// direct child has exited. Run always waits for and reaps the direct child.
-	cmd.WaitDelay = 100 * time.Millisecond
-	if err := cmd.Run(); err != nil {
+// probeOutput runs cmd and returns its stdout and exit status. Stdout is a pipe
+// this function owns, so os/exec starts no copy goroutine and Wait returns as
+// soon as the direct child has exited, however long a descendant keeps the pipe.
+// The child runs in its own group (iuApRun); once it has exited the group is
+// ended, the write end is closed, and the read end is read to EOF. If ctx ends
+// before that, the read end is closed and what was read so far returns with -1.
+// No timer is involved: only the child's exit, the EOF and ctx end the wait.
+func probeOutput(ctx context.Context, cmd *exec.Cmd) (string, int) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		return "", -1
+	}
+	cmd.Stdout = w
+	var stdout iuApSink
+	copied := make(chan struct{})
+	go func() {
+		defer close(copied)
+		chunk := make([]byte, 32*1024)
+		for {
+			n, err := r.Read(chunk)
+			_, _ = stdout.Write(chunk[:n])
+			if err != nil {
+				return
+			}
+		}
+	}()
+	runErr := iuApRun(cmd)
+	// The child holds its own copy of the write end; ours must go for EOF.
+	_ = w.Close()
+	select {
+	case <-copied:
+	case <-ctx.Done():
+		// A process that left the group still holds the pipe. Closing the read
+		// end ends the copy; it runs in its own goroutine because on some systems
+		// Close waits for a Read that is blocked.
+		go func() { _ = r.Close() }()
+		return stdout.String(), -1
+	}
+	_ = r.Close()
+	if runErr != nil {
 		if cmd.ProcessState != nil && cmd.ProcessState.ExitCode() != 0 {
 			code := cmd.ProcessState.ExitCode()
 			if code < 0 {
@@ -146,4 +179,23 @@ func probeOutput(cmd *exec.Cmd) (string, int) {
 		return stdout.String(), -1
 	}
 	return stdout.String(), 0
+}
+
+// iuApSink is probeBuffer made safe to read while the copy goroutine still
+// writes, which can happen when ctx ends before the pipe reaches EOF.
+type iuApSink struct {
+	mu     sync.Mutex
+	buffer probeBuffer
+}
+
+func (s *iuApSink) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buffer.Write(p)
+}
+
+func (s *iuApSink) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buffer.String()
 }
