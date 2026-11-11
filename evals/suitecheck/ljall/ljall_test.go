@@ -18,8 +18,7 @@ const ljAllTranscript = `{"type":"assistant","message":{"content":[{"type":"text
 
 // ljAllKnownOpen lists the cases GradeCase refuses today, each with the substring
 // its error must contain.
-var ljAllKnownOpen = map[string]string{
-}
+var ljAllKnownOpen = map[string]string{}
 
 // ljAllWalk grades every case folder of suiteDir; nil means the case grades clean.
 func ljAllWalk(suiteDir string) map[string]error {
