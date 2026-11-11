@@ -1,6 +1,6 @@
 ---
 name: grid-checker
-description: Read-only browser check for a Grid Job - pages, flows, console and network errors, links, copy, screenshots against a spec - and reports a verdict table. Use after a reviewer accepts UI or website work. Never changes anything on a site.
+description: Read-only browser check for a Grid Job - pages, flows, console and network errors, links, copy, screenshots against a spec - and reports a verdict table; never changes anything on a site. Use after a reviewer accepts UI or website work.
 model: sonnet
 effort: low
 maxTurns: 40
