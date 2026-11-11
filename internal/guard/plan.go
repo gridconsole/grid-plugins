@@ -53,7 +53,7 @@ func evaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 	}
 	agent := agentName(in.AgentType)
 	if c.set && (contract.NormalizeRole(agent) == "reviewer" || contract.NormalizeRole(agent) == "checker") && !inside(projects, target) {
-		return hookio.Deny("A " + agent + " writes only its Verdict inside a task folder; " + target + " is outside it.")
+		return hookio.Deny("A " + agent + " writes only its Verdict inside a task folder; " + target + " is outside it." + off)
 	}
 	role := ""
 	switch strings.TrimSpace(in.AgentType) {
@@ -63,7 +63,7 @@ func evaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 		role = "planner"
 	}
 	if strings.TrimSpace(in.AgentType) != "" && role == "" && c.brain(target) {
-		return hookio.Deny("Only a grid-curator (or a grid-planner) writes the brain; a " + agent + " writes a proposal in its task's brain-proposals/ folder instead of " + given + ".")
+		return hookio.Deny("Only a grid-curator (or a grid-planner) writes the brain; a " + agent + " writes a proposal in its task's brain-proposals/ folder instead of " + given + "." + off)
 	}
 	tasks := []string{}
 	if t := taskAt(c.path(in.Cwd), projects); t != nil {
