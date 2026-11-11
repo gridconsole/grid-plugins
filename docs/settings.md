@@ -92,10 +92,10 @@ have level strings. Setup returns `{"project":"example","answers":{...}}`.
 Usage errors exit 2; validation and I/O errors exit 1; success exits 0. Hook event
 calls exit zero except when an enabled stop guard blocks completion (exit 2).
 
-`internal/fslock` has no Windows lock yet, so on Windows every settings write
-(`agent set`, `skill enable|disable`, `hook level`, `setup`) fails with its
-unsupported-platform error before anything is written. Lists and hook events only
-read, and work.
+Settings writes (`agent set`, `skill enable|disable`, `hook level`, `setup`) take
+the same lock on every platform; on Windows it is the lock in
+`internal/fslock/fslock_windows.go`. Lists and hook events only read, and take no
+lock.
 
 ## Hook behavior
 
