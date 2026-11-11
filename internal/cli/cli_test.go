@@ -404,6 +404,11 @@ func TestHookPreToolUse(t *testing.T) {
 	h.env.Cwd = filepath.Join(h.root, "repo")
 	h.mkdir(h.env.Cwd)
 	path := filepath.Join(h.gridHome, "projects", "example", "tasks", "T-01", "task.md")
+	// host-guard warns by default; set to block it keeps the deny this test covers.
+	h.mkdir(h.gridHome)
+	if err := os.WriteFile(filepath.Join(h.gridHome, "settings.json"), []byte(`{"hooks":{"host-guard":"block"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	b, _ := json.Marshal(map[string]any{"tool_name": "Write", "tool_input": map[string]any{"file_path": path, "content": "text"}})
 	h.env.Stdin = bytes.NewReader(b)
 	if code := Run([]string{"hook", "pretooluse"}, h.env); code != 0 {

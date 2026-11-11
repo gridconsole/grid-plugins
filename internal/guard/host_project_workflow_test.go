@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 )
@@ -8,7 +9,7 @@ import (
 func TestHostAgentProjectWorkflows(t *testing.T) {
 	for _, scope := range []string{"workspace", "project"} {
 		t.Run(scope, func(t *testing.T) {
-			f := setup(t)
+			f := hostSetup(t)
 			f.env["GRID_PLAN_GUARD"] = "off"
 			dir := f.grid
 			if scope == "project" {
@@ -25,7 +26,7 @@ func TestHostAgentProjectWorkflows(t *testing.T) {
 							in := f.input(tool, target.path)
 							in.AgentType = "grid-builder"
 							got := EvaluateHost(in, f.root, f.env)
-							if got.Behavior != "deny" || got.Reason != gateReason {
+							if got.Behavior != "deny" || got.Reason != fmt.Sprintf(gateReason, target.path) {
 								t.Fatalf("want gate denial; behavior=%q", got.Behavior)
 							}
 						})

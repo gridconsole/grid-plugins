@@ -12,8 +12,8 @@ import (
 )
 
 // No guard is fixed at block. host-guard, only-writer and plan-guard
-// default to block; a setting lowers one to warn (a warning, no refusal) or off,
-// and a settings file that cannot be read keeps the refusal and reports why.
+// default to warn (a warning, no refusal); a setting raises one to block or
+// lowers it to off, and a settings file that cannot be read keeps the refusal and reports why.
 func TestGuardsFollowTheirLevel(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -33,8 +33,8 @@ func TestGuardsFollowTheirLevel(t *testing.T) {
 					t.Fatal(err)
 				}
 				want := "deny"
-				// only-writer (verdicts-11nov v-4) and plan-guard warn by default; host-guard blocks.
-				if (tc.name == "only-writer" || tc.name == "plan-guard") && level == "none" {
+				// All three guards warn by default (verdicts-11nov v-4; needed.md:47; host-guard: v-enforce).
+				if level == "none" {
 					want = ""
 				}
 				switch level {
