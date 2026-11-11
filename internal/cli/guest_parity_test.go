@@ -418,11 +418,11 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 	{
 		switch command {
 		case "routine add", "routine remove", "routine run", "routine schedule", "routine unschedule",
-			"project relink", "project remove",
+			"project relink", "project remove", "project repo",
 			"setup":
 			want = guestParityOutput{1, "", "grid: guests cannot change project settings\n"}
 			guestRefused = true
-		case "project repo", "signal add":
+		case "signal add":
 			// Known open (TestIlGuestSiteList): no code, so no stdout.
 			want = guestParityOutput{1, "", "grid: guests cannot change project settings\n"}
 		case "task delete", "task restore":

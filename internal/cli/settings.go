@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -45,7 +44,7 @@ func settingsStore(env Env, project string, listing bool) (settings.Store, error
 		}
 	}
 	if !listing && resolver(env).Caller.IsGuest() {
-		return settings.Store{}, errors.New(guestSettingsRefusal)
+		return settings.Store{}, ilGuestRefused
 	}
 	return settings.Store{Home: env.GridHome, Project: r.Project}, nil
 }

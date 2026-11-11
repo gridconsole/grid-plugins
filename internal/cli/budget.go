@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"strings"
@@ -134,7 +133,7 @@ func runClaude(args []string, env Env) int {
 		return writeJSON(env.Stdout, res)
 	}
 	if resolver(env).Caller.IsGuest() {
-		return commandError(env, "claude", errors.New(guestSettingsRefusal))
+		return commandError(env, "claude", ilGuestRefused)
 	}
 	o := settings.ClaudeSetOptions{Home: env.Home, ConfigDir: configDir, Key: operands[0], Value: jsonOrText(operands[1]), HasExpect: hasExpect, Expect: jsonOrText(*expect)}
 	res, err := settings.ClaudeSet(o)
