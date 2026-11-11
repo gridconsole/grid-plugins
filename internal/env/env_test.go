@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -533,11 +534,56 @@ func TestDevCommandEnvironmentAllowlist(t *testing.T) {
 	}
 }
 
+// ifErReadLines opens the fifo and sends each line the child writes. The open
+// blocks until the child opens its end, so it runs here; the channel closes on EOF.
+func ifErReadLines(path string) <-chan string {
+	lines := make(chan string, 16)
+	go func() {
+		defer close(lines)
+		f, err := os.Open(path)
+		if err != nil {
+			lines <- "open error: " + err.Error()
+			return
+		}
+		defer f.Close()
+		sc := bufio.NewScanner(f)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+	}()
+	return lines
+}
+
+// ifErNext waits for the next child line; ok is false on EOF. The deadline
+// only bounds the wait and fails by name with what it waited for.
+func ifErNext(t *testing.T, lines <-chan string, what string) (string, bool) {
+	t.Helper()
+	timer := time.NewTimer(10 * time.Second)
+	defer timer.Stop()
+	select {
+	case line, ok := <-lines:
+		return line, ok
+	case <-timer.C:
+		t.Fatalf("timed out waiting for %s", what)
+		return "", false
+	}
+}
+
 func TestDownDoesNotSignalReusedPID(t *testing.T) {
 	m := Manager{Ports: ports.Store{GridHome: t.TempDir()}, Dir: t.TempDir(), Grace: 10 * time.Millisecond}
 	m.TaskDir = filepath.Join(m.Ports.GridHome, "tasks", "T-1")
 	port := freeBlock(t)
-	r, done, err := m.start("J-1", Config{Command: "exec sleep 60", PortRange: []int{port, port + 9}})
+	fifo := filepath.Join(m.Dir, "child.fifo")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The child holds one write end open, so EOF means the child is gone. Each
+	// trap reports its signal; sleep runs in the background so traps fire at once.
+	command := "exec 3>'" + fifo + "'; " +
+		"trap 'echo INT >&3' INT; trap 'echo TERM >&3' TERM; trap 'echo WINCH >&3' WINCH; " +
+		"echo ready >&3; while :; do sleep 60 3>&- & wait $!; done"
+	lines := ifErReadLines(fifo)
+	r, done, err := m.start("J-1", Config{Command: command, PortRange: []int{port, port + 9}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -546,6 +592,9 @@ func TestDownDoesNotSignalReusedPID(t *testing.T) {
 			t.Error(err)
 		}
 	}()
+	if line, ok := ifErNext(t, lines, "child ready line"); !ok || line != "ready" {
+		t.Fatalf("child did not report ready: %q, eof=%v", line, !ok)
+	}
 	stale := r
 	stale.PIDStart = "previous-process-start"
 	data, err := json.Marshal(stale)
@@ -560,10 +609,25 @@ func TestDownDoesNotSignalReusedPID(t *testing.T) {
 	if err := m.Down("J-1"); err != nil {
 		t.Fatal(err)
 	}
+	// Down is synchronous, so any signal it sent is already pending. The shell
+	// runs pending traps in signal order, so WINCH (highest number) comes last.
+	if err := syscall.Kill(r.PID, syscall.SIGWINCH); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		line, ok := ifErNext(t, lines, "child never answered the barrier signal")
+		if !ok {
+			t.Fatal("down signalled reused PID: EOF")
+		}
+		if line == "WINCH" {
+			break
+		}
+		t.Fatalf("down signalled reused PID: %s", line)
+	}
 	select {
 	case <-done:
-		t.Fatal("down signalled reused PID")
-	case <-time.After(50 * time.Millisecond):
+		t.Fatal("down signalled reused PID: child exited")
+	default:
 	}
 	assertEmpty(t, m.Ports)
 }
