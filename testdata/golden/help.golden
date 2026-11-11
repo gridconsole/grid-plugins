@@ -21,7 +21,7 @@ Commands:
   proof       add evidence and rebuild the task proof index
   history     add a dated line to the task history
   land        land a task per the deploy topic
-  brain       show, search, topics, index, propose, accept, keep, decide, supersede, check, changes, revert
+  brain       show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore
   env         up, down browser Job dev environments
   person      check person access; list, show and find approvers
   routine     add, list, remove, run, schedule and unschedule routines
@@ -36,10 +36,11 @@ Commands:
   account     list, status, statusline, scan, sign-in, windows, folder and note for agent accounts
   project     add, remove, list, scan and relink projects; repo edits a project's repos
   project-md  get or set a project front-matter key
+  update      draft, edit, discard, skip and send a project's update
   setup       record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)
   signal      add, act on, dismiss and move inbox signals
   artifact    import, link, list and publish task artifacts
-  eval        list, run and show task evaluations
+  eval        list, run and show task evaluations; export-suite writes plugin eval cases
   migrate     upgrade the Grid home to this format
 
 Global flags go before the command; each wins over its environment variable:

@@ -22,11 +22,11 @@ import (
 var ggTaskWalked = []string{
 	"where", "task attach", "task close", "task decline", "task delete", "task history",
 	"task lane", "task move", "task rename", "task reopen", "task show", "task status", "task stop",
-	"plan check", "plan diff", "plan hash", "plan items", "plan migrate", "plan write",
+	"plan check", "plan hash", "plan items", "plan migrate", "plan write",
 	"job ack", "job blocked", "job cancel", "job lint", "job next", "job order", "job post",
 	"job render", "job result", "job show", "job tree", "job verify",
 	"lease release", "lease status", "lease take",
-	"feed fold", "feed handover", "feed post", "feed read", "feed state", "feed tick", "feed types",
+	"feed handover", "feed post", "feed read", "feed state", "feed tick", "feed types",
 	"question add", "question ask", "question list", "question sync", "question tick", "question withdraw",
 	"answer", "approve", "deliver", "proof add", "proof index", "history add", "land",
 	"brain decide", "brain keep", "brain propose", "brain search", "brain show",
@@ -55,14 +55,12 @@ type ggTaskOpen struct {
 //
 // Seen on base b87fc364. The first group prints its diagnostic on stderr and writes
 // nothing on stdout with --json (no envelope); the second prints a JSON object of
-// its own on stdout with an "error" string, and stderr stays empty; feed types
-// exits 0.
+// its own on stdout with an "error" string, and stderr stays empty.
 var ggTaskKnownOpen = map[string]ggTaskOpen{
-	"job lint":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
-	"job render": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
-	"job show":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
-	"job verify": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
-	"feed types": {0, `stdout: {"types":[{"type":"ack","version":1,"class":"state","roles":["worker","agent","cli"]},{"type":"answer","versio...`},
+	"job lint":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
+	"job render": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
+	"job show":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
+	"job verify": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
 }
 
 // ggTaskMembers reads the member set from contract/commands.json.

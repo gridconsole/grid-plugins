@@ -22,8 +22,9 @@ func verifyShell(ctx context.Context, command string) *exec.Cmd {
 	return cmd
 }
 
-// The shell may exit while descendants still hold the output pipe. Clean up
-// that group after WaitDelay as well as when context cancellation kills it.
+// The shell may exit while descendants still hold the output pipe. End that
+// group once the shell has been waited for, so the pipe can reach EOF; context
+// cancellation kills it through Cancel as well.
 func cleanupVerifyProcess(cmd *exec.Cmd) {
 	if cmd.Process != nil {
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

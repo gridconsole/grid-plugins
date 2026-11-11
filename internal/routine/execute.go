@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -165,23 +166,140 @@ func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
 	}
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Dir = s.GridHome
-	cmd.Stdout, cmd.Stderr = p.Stdout, p.Stderr
 	cmd.Env = []string{"HOME=" + p.Home, "GRID_HOME=" + s.GridHome}
 	for _, key := range []string{"PATH", "USERPROFILE", "SystemRoot", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "APPDATA", "LOCALAPPDATA", "USERNAME", "PATHEXT", "ComSpec"} {
 		if v := get(key); v != "" {
 			cmd.Env = append(cmd.Env, key+"="+v)
 		}
 	}
-	cmd.WaitDelay = 2 * time.Second
 	configureProcess(cmd)
-	defer cleanupProcess(cmd)
+	output, err := startRoutineOutput(cmd, p.Stdout, p.Stderr)
+	if err != nil {
+		return err
+	}
 	runCommand := p.runCommand
 	if runCommand == nil {
 		runCommand = proctree.Run
 	}
 	err = runCommand(cmd)
+	// The result follows the child's exit. Its group is ended first, so a
+	// background process that still holds the output cannot hold the result back,
+	// and only then is the output read to its end.
+	cleanupProcess(cmd)
+	output.finish(ctx)
 	if ctx.Err() != nil {
 		return fmt.Errorf("routine timed out or was cancelled: %w", ctx.Err())
 	}
 	return err
+}
+
+// routineOutput owns the pipes that carry a command's output to a Go writer.
+// When a writer is not an *os.File, exec would copy the output itself, in a
+// goroutine that Wait waits for, so a descendant holding the pipe would keep Wait
+// from returning. Here the command gets the write end of a pipe this file owns,
+// so exec starts no copy and Wait returns when the child exits; the copies run
+// from the read ends, and finish reads them to the end after the group is gone.
+// There is no timer: only the routine's own context cuts a drain short.
+type routineOutput struct {
+	copies  sync.WaitGroup
+	readers []*os.File
+	writers []*os.File
+}
+
+// startRoutineOutput sets cmd.Stdout and cmd.Stderr. A writer that is nil or an
+// *os.File goes to the command unchanged, as exec takes it: nothing is copied,
+// so nothing is waited for. Any other writer gets a pipe and one copy goroutine.
+// The same writer for both gets one pipe and one goroutine, as exec does, so its
+// Write is never called from two goroutines.
+func startRoutineOutput(cmd *exec.Cmd, stdout, stderr io.Writer) (*routineOutput, error) {
+	o := &routineOutput{}
+	cmd.Stdout, cmd.Stderr = stdout, stderr
+	owned := func(w io.Writer) bool {
+		if w == nil {
+			return false
+		}
+		_, isFile := w.(*os.File)
+		return !isFile
+	}
+	var outWrite *os.File
+	if owned(stdout) {
+		w, err := o.pipe(stdout)
+		if err != nil {
+			o.finish(nil)
+			return nil, fmt.Errorf("routine output: %w", err)
+		}
+		cmd.Stdout, outWrite = w, w
+	}
+	if owned(stderr) {
+		if outWrite != nil && routineSameWriter(stdout, stderr) {
+			cmd.Stderr = outWrite
+		} else {
+			w, err := o.pipe(stderr)
+			if err != nil {
+				o.finish(nil)
+				return nil, fmt.Errorf("routine output: %w", err)
+			}
+			cmd.Stderr = w
+		}
+	}
+	return o, nil
+}
+
+// routineSameWriter is exec's own test for one writer given twice. A writer
+// whose type cannot be compared counts as different.
+func routineSameWriter(a, b io.Writer) (same bool) {
+	defer func() {
+		if recover() != nil {
+			same = false
+		}
+	}()
+	return a == b
+}
+
+// pipe starts the copy of a new pipe into w and returns the end for the command.
+func (o *routineOutput) pipe(w io.Writer) (*os.File, error) {
+	r, pw, err := os.Pipe()
+	if err != nil {
+		return nil, err
+	}
+	o.readers = append(o.readers, r)
+	o.writers = append(o.writers, pw)
+	o.copies.Add(1)
+	go func() {
+		defer o.copies.Done()
+		_, _ = io.Copy(w, r)
+	}()
+	return pw, nil
+}
+
+// finish is called once the command is over and its group is gone. It closes the
+// write ends this side holds, so the copies see EOF as soon as nothing else holds
+// a pipe, and waits for them. A process that left the group and still holds a
+// pipe is cut off when ctx ends: the read ends are closed then, and what was not
+// read yet is dropped. A nil ctx never ends. finish also serves a command that
+// never started: the copies then end at once.
+func (o *routineOutput) finish(ctx context.Context) {
+	for _, f := range o.writers {
+		_ = f.Close()
+	}
+	drained := make(chan struct{})
+	go func() {
+		o.copies.Wait()
+		close(drained)
+	}()
+	var ended <-chan struct{}
+	if ctx != nil {
+		ended = ctx.Done()
+	}
+	select {
+	case <-drained:
+	case <-ended:
+		for _, f := range o.readers {
+			_ = f.Close()
+		}
+		<-drained
+	}
+	for _, f := range o.readers {
+		_ = f.Close()
+	}
 }

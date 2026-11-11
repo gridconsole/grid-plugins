@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 )
 
 func asSecondPerson(t *testing.T) {
@@ -48,10 +51,15 @@ func TestSecondPersonSeesTheUnusedAnswerInFeedRead(t *testing.T) {
 	if code := h.run(path, "job", "post", "--person", "dana", "--job", "J-2", "--body", personBody(t, "J-2", nil)); code != 0 {
 		t.Fatalf("%d %s", code, h.errb)
 	}
-	if code := h.run(path, "job", "result", "J-2", "--body", `{"answer":"Call it Lark."}`); code != 0 {
-		t.Fatalf("%d %s", code, h.errb)
+	// dana's answer is written as the CLI writes an unleased member answer
+	// (feedWriter, internal/cli/feed.go:337; used at internal/cli/orchestrator.go:295),
+	// stamped one minute before the real clock the CLI uses for sam's.
+	early := store
+	early.Now = func() time.Time { return time.Now().Add(-time.Minute) }
+	dana := feed.Writer{Author: feed.Author{ID: "dana", Role: "member"}, Worker: "dana@" + feedMachine}
+	if _, err := orchestrator.AnswerPerson(early, dana, "J-2", "Call it Lark.", time.Now()); err != nil {
+		t.Fatal(err)
 	}
-	time.Sleep(1100 * time.Millisecond)
 	asSecondPerson(t)
 	if code := h.run(path, "job", "result", "J-2", "--body", `{"answer":"Call it Wren."}`); code != 0 {
 		t.Fatalf("the second answer exited %d: %s", code, h.errb)

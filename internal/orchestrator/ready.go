@@ -33,6 +33,10 @@ type Snapshot struct {
 	Items    []job.Job
 	Bodies   map[string]map[string]any
 	Created  map[string]time.Time
+	// JobIDs is the Job id of every job record Load read, whatever its verdict:
+	// a record the fold holds (its after or re target is not here yet) is in
+	// neither State nor Items, but its id is taken. Only the next-id rule reads it.
+	JobIDs []string
 }
 
 func Load(store feed.Store) (Snapshot, error) {
@@ -56,6 +60,17 @@ func Load(store feed.Store) (Snapshot, error) {
 		counted[v.ID] = v.Kind == "counted"
 	}
 	for _, e := range r.Records {
+		if e.Type == "job" {
+			// The body id, as the fold reads it; a record whose body is not here
+			// yet (a ref) has none, so its job field names the id.
+			id := stringValue(e.Body["id"])
+			if id == "" && e.Job != nil {
+				id = *e.Job
+			}
+			if id != "" {
+				s.JobIDs = append(s.JobIDs, id)
+			}
+		}
 		if !counted[e.ID] {
 			continue
 		}

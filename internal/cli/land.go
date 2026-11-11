@@ -1,11 +1,9 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/signal"
 
 	"github.com/gridconsole/grid-plugins/internal/land"
 )
@@ -31,7 +29,7 @@ func runLand(args []string, env Env) int {
 	if err != nil {
 		return taskOperandError(env, "land", err)
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancel := env.signalContext(os.Interrupt)
 	defer cancel()
 	result, err := (land.Store{Resolver: resolver(env), Who: writeOptions(env, "", "", "").Who}).Run(ctx, env.Cwd, t.ID, *dry)
 	if err != nil && result.Execution == nil {

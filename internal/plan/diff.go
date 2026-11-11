@@ -1,11 +1,5 @@
 package plan
 
-import (
-	"fmt"
-	"path/filepath"
-	"strconv"
-)
-
 type Change struct {
 	Before         Item   `json:"before"`
 	After          Item   `json:"after"`
@@ -61,83 +55,4 @@ func Compare(before, after string) (Diff, error) {
 		}
 	}
 	return d, nil
-}
-
-// Diff accepts positive integer revision numbers only, never paths. The current
-// plan is read once; older revisions are immutable files under plan-revisions.
-func (s Store) Diff(from, to string) (Diff, error) {
-	parse := func(arg string) (uint64, error) {
-		n, err := strconv.ParseUint(arg, 10, 64)
-		if err != nil || n == 0 || !itemNumber.MatchString(arg) {
-			return 0, fmt.Errorf("invalid revision %q; use a positive integer", arg)
-		}
-		return n, nil
-	}
-	a, err := parse(from)
-	if err != nil {
-		return Diff{}, err
-	}
-	b, err := parse(to)
-	if err != nil {
-		return Diff{}, err
-	}
-	current, err := s.Read()
-	if err != nil {
-		return Diff{}, err
-	}
-	rev, err := Revision(current)
-	if err != nil {
-		return Diff{}, err
-	}
-	dir, err := s.directory()
-	if err != nil {
-		return Diff{}, err
-	}
-	read := func(n uint64) (string, error) {
-		if n == rev {
-			return current, nil
-		}
-		archiveDir, err := childDirectory(dir, "plan-revisions", false)
-		if err != nil {
-			return "", fmt.Errorf("revision %d: %w", n, err)
-		}
-		data, err := readRegular(filepath.Join(archiveDir, fmt.Sprintf("%d.md", n)))
-		if err != nil {
-			return "", fmt.Errorf("revision %d: %w", n, err)
-		}
-		found, err := Revision(string(data))
-		if err != nil && n == 1 {
-			// Explicit form C migration archives the unnumbered source as 1.
-			if _, form, upgradeErr := Upgrade(string(data)); upgradeErr == nil && form == "C" {
-				return string(data), nil
-			}
-		}
-		if err != nil || found != n {
-			return "", fmt.Errorf("revision %d archive has an invalid or mismatched heading", n)
-		}
-		return string(data), nil
-	}
-	before, err := read(a)
-	if err != nil {
-		return Diff{}, err
-	}
-	after, err := read(b)
-	if err != nil {
-		return Diff{}, err
-	}
-	if _, err := Items(before); err != nil {
-		before, _, err = Upgrade(before)
-		if err != nil {
-			return Diff{}, fmt.Errorf("revision %d: %w", a, err)
-		}
-	}
-	if _, err := Items(after); err != nil {
-		after, _, err = Upgrade(after)
-		if err != nil {
-			return Diff{}, fmt.Errorf("revision %d: %w", b, err)
-		}
-	}
-	d, err := Compare(before, after)
-	d.From, d.To = a, b
-	return d, err
 }

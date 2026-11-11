@@ -33,13 +33,11 @@ var ggProjectKnownOpen = map[string]string{
 	"task rename":  `exit 1; stderr "grid task rename: scope: task T-99 not found in the Grid home"; stdout code no_such_task (the task is checked before the project)`,
 
 	// These print their own JSON failure and leave stderr empty with --json.
-	"job render": `exit 1; stderr "job: project \"absent\" is not registered" without --json, empty with --json`,
-	"job show":   `exit 1; stderr "job: project \"absent\" is not registered" without --json, empty with --json`,
-	"job verify": `exit 1; stderr "job: project \"absent\" is not registered" without --json, empty with --json`,
-	"job trace":  `exit 1; stderr "job trace: project not found" without --json, empty with --json`,
+	"job render": `exit 1; stderr "job: project \"absent\" is not registered" without --json, empty with --json; stdout code no_such_project`,
+	"job show":   `exit 1; stderr "job: project \"absent\" is not registered" without --json, empty with --json; stdout code no_such_project`,
+	"job verify": `exit 1; stderr "job: project \"absent\" is not registered" without --json, empty with --json; stdout code no_such_project`,
+	"job trace":  `exit 1; stderr "job trace: project not found" without --json, empty with --json; stdout code no_such_project`,
 	"job lint":   `exit 1; without --json stdout is the lint report "path: <file>\nok: false\n..." and stderr is empty`,
-
-	"feed types": `exit 0; stdout {"types":[{"type":"ack",...}]}, the public schema, whatever the project`,
 }
 
 type ggProjectOutcome struct {

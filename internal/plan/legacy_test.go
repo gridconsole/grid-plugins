@@ -134,35 +134,6 @@ func TestUpgradeLegacyJobFields(t *testing.T) {
 	}
 }
 
-func TestLegacyDiffArchiveImmutable(t *testing.T) {
-	dir := t.TempDir()
-	archiveDir := filepath.Join(dir, "plan-revisions")
-	if err := os.Mkdir(archiveDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	before := legacyFixture(t, "form-b")
-	after := legacyFixture(t, "form-b-revised.expected")
-	archive := filepath.Join(archiveDir, "3.md")
-	writeLegacyFile(t, archive, before)
-	writeLegacyFile(t, filepath.Join(dir, "plan.md"), after)
-	store := plan.Store{TaskDir: dir}
-	for _, tc := range []struct{ from, to string }{{"3", "4"}, {"4", "3"}, {"3", "3"}} {
-		t.Run(tc.from+" to "+tc.to, func(t *testing.T) {
-			diff, err := store.Diff(tc.from, tc.to)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if tc.from != tc.to && len(diff.Changed) == 0 {
-				t.Fatal("missing changes")
-			}
-			data, err := os.ReadFile(archive)
-			if err != nil || string(data) != before {
-				t.Fatal("archive changed")
-			}
-		})
-	}
-}
-
 func TestLegacyWithHash(t *testing.T) {
 	data, err := os.ReadFile("testdata/hashes.json")
 	if err != nil {
@@ -252,42 +223,5 @@ func TestUpgradeLegacyCRLF(t *testing.T) {
 		if err != nil || out != legacyFixture(t, name+".expected") {
 			t.Fatalf("%s: %v\n%s", name, err, out)
 		}
-	}
-}
-
-func TestDiffUnnumberedLegacyArchive(t *testing.T) {
-	for _, tc := range []struct {
-		name, revision, archive string
-		valid                   bool
-	}{
-		{"original C", "1", legacyFixture(t, "form-c"), true},
-		{"C at wrong revision", "2", legacyFixture(t, "form-c"), false},
-		{"invalid C", "1", strings.Replace(legacyFixture(t, "form-c"), "item: 1", "item: 2", 1), false},
-		{"unnumbered A", "1", strings.Replace(legacyFixture(t, "form-a"), "# Plan, rev 1 · 3f9a1c", "# Plan", 1), false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			archiveDir := filepath.Join(dir, "plan-revisions")
-			if err := os.Mkdir(archiveDir, 0700); err != nil {
-				t.Fatal(err)
-			}
-			archive := filepath.Join(archiveDir, tc.revision+".md")
-			writeLegacyFile(t, archive, tc.archive)
-			writeLegacyFile(t, filepath.Join(dir, "plan.md"), "# Plan, rev 3 · 000000\n\n"+legacyFixture(t, "form-c.expected"))
-			store := plan.Store{TaskDir: dir}
-			for _, pair := range [][2]string{{tc.revision, "3"}, {"3", tc.revision}} {
-				diff, err := store.Diff(pair[0], pair[1])
-				if (err == nil) != tc.valid {
-					t.Fatalf("%v: %v", pair, err)
-				}
-				if tc.valid && len(diff.Added)+len(diff.Removed)+len(diff.Changed) != 0 {
-					t.Fatalf("unexpected diff: %+v", diff)
-				}
-			}
-			data, err := os.ReadFile(archive)
-			if err != nil || string(data) != tc.archive {
-				t.Fatal("diff changed archive")
-			}
-		})
 	}
 }

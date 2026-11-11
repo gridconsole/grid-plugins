@@ -20,16 +20,16 @@ import (
 
 func runFeed(args []string, env Env) int {
 	if len(args) == 0 {
-		fmt.Fprintln(env.Stderr, "usage: grid feed post|read|state|types|handover|fold [flags]")
+		fmt.Fprintln(env.Stderr, "usage: grid feed post|read|state|types|handover [flags]")
 		return 2
 	}
 	verb := args[0]
 	if verb == "--help" || verb == "-h" {
-		fmt.Fprintln(env.Stdout, "usage: grid feed post|read|state|types|handover|fold [flags]\n"+exitStatusHelp)
+		fmt.Fprintln(env.Stdout, "usage: grid feed post|read|state|types|handover [flags]\n"+exitStatusHelp)
 		return 0
 	}
 	switch verb {
-	case "post", "read", "state", "types", "handover", "fold":
+	case "post", "read", "state", "types", "handover":
 	default:
 		fmt.Fprintf(env.Stderr, "grid feed: unknown command %q\n", verb)
 		return 2
@@ -85,15 +85,20 @@ func runFeed(args []string, env Env) int {
 		}
 		return 0
 	}
-	if verb == "types" {
-		return output(struct {
-			Types []contract.PostType `json:"types"`
-		}{contract.PostTypes()})
-	}
 	fail := func(err error) int {
 		env.recordError(err)
 		fmt.Fprintf(env.Stderr, "grid feed: %v\n", err)
 		return exitCode(err)
+	}
+	if verb == "types" {
+		if *task != "" || *project != "" {
+			if _, err := feedStore(env, *task, *project); err != nil {
+				return fail(err)
+			}
+		}
+		return output(struct {
+			Types []contract.PostType `json:"types"`
+		}{contract.PostTypes()})
 	}
 	store, err := feedStore(env, *task, *project)
 	if err != nil {
@@ -109,7 +114,7 @@ func runFeed(args []string, env Env) int {
 			return fail(err)
 		}
 		return output(result)
-	case "state", "fold":
+	case "state":
 		state, err := store.SaveState()
 		if err != nil {
 			return fail(err)

@@ -19,6 +19,10 @@ func configureProcess(cmd *exec.Cmd) {
 		return err
 	}
 }
+
+// cleanupProcess ends the group once the command is over. Execute calls it
+// before it reads the command's output to the end, so a background process that
+// still holds the output pipe is gone and the drain sees EOF.
 func cleanupProcess(cmd *exec.Cmd) {
 	if cmd.Process != nil {
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

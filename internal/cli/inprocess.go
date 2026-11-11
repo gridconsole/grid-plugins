@@ -161,6 +161,9 @@ var hsIpTable = map[string]hsIpVerb{
 		"show": {},
 	}},
 	"migrate": {},
+	// update.go:25 acts on a project's update file in the Grid home; it mails nothing
+	// and uses no process id, signal or child (internal/updates holds none).
+	"update": {},
 }
 
 // InProcess reports whether lib.Run may run args inside a host process, with the

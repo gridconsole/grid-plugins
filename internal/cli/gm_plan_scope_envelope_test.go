@@ -44,7 +44,6 @@ func TestGmPlanUnknownScope(t *testing.T) {
 		args []string // {file} is a plan file
 	}{
 		{"plan check", []string{"plan", "check"}},
-		{"plan diff", []string{"plan", "diff", "1", "2"}},
 		{"plan hash", []string{"plan", "hash"}},
 		{"plan items", []string{"plan", "items"}},
 		{"plan migrate", []string{"plan", "migrate", "--dry-run"}},

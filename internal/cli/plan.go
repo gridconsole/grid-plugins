@@ -13,7 +13,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
-const planUsage = "Usage: grid plan check [T-NN] [--json]\n       grid plan hash|items [--json] [--task <task>]\n       grid plan write <file> [--json] [--task <task>]\n       grid plan diff <rev-a> <rev-b> [--json] [--task <task>]\n       grid plan migrate [--task <task>] [--dry-run] [--yes] [--json]"
+const planUsage = "Usage: grid plan check [T-NN] [--json]\n       grid plan hash|items [--json] [--task <task>]\n       grid plan write <file> [--json] [--task <task>]\n       grid plan migrate [--task <task>] [--dry-run] [--yes] [--json]"
 
 func runPlan(args []string, env Env) int {
 	if len(args) == 0 {
@@ -25,9 +25,9 @@ func runPlan(args []string, env Env) int {
 		return 0
 	}
 	action := args[0]
-	want, ok := map[string]int{"check": 0, "hash": 0, "items": 0, "write": 1, "diff": 2, "migrate": 0}[action]
+	want, ok := map[string]int{"check": 0, "hash": 0, "items": 0, "write": 1, "migrate": 0}[action]
 	if !ok {
-		fmt.Fprintf(env.Stderr, "plan: unknown action %q; use check, hash, items, write, diff or migrate\n", action)
+		fmt.Fprintf(env.Stderr, "plan: unknown action %q; use check, hash, items, write or migrate\n", action)
 		return 2
 	}
 	fs := newFlags("plan "+action, env)
@@ -124,31 +124,6 @@ func runPlan(args []string, env Env) int {
 			return writeJSON(env.Stdout, written)
 		}
 		if _, err := fmt.Fprintf(env.Stdout, "plan.md: revision %d, hash %s\n", written.Revision, written.Hash); err != nil {
-			return 1
-		}
-	case "diff":
-		diff, err := store.Diff(operands[0], operands[1])
-		if err != nil {
-			return planError(env, err)
-		}
-		if *asJSON {
-			return writeJSON(env.Stdout, diff)
-		}
-		var out strings.Builder
-		fmt.Fprintf(&out, "Plan revisions %d to %d\n", diff.From, diff.To)
-		for _, item := range diff.Added {
-			fmt.Fprintf(&out, "added: %s: %s\n", item.ID, item.Title)
-		}
-		for _, item := range diff.Removed {
-			fmt.Fprintf(&out, "removed: %s: %s\n", item.ID, item.Title)
-		}
-		for _, change := range diff.Changed {
-			fmt.Fprintf(&out, "changed: %s: %s (position %d to %d)\nbefore:\n%safter:\n%s", change.After.ID, change.After.Title, change.BeforePosition, change.AfterPosition, change.BeforeText, change.AfterText)
-		}
-		if len(diff.Added)+len(diff.Removed)+len(diff.Changed) == 0 {
-			out.WriteString("No item changes.\n")
-		}
-		if _, err := fmt.Fprint(env.Stdout, out.String()); err != nil {
 			return 1
 		}
 	}
