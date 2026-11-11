@@ -32,16 +32,6 @@ var ggProjectKnownOpen = map[string]string{
 	"task decline": `exit 1; stderr "grid task decline: scope: task T-99 not found in the Grid home"; stdout code no_such_task (the task is checked before the project)`,
 	"task rename":  `exit 1; stderr "grid task rename: scope: task T-99 not found in the Grid home"; stdout code no_such_task (the task is checked before the project)`,
 
-	"job ack":     `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
-	"job blocked": `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
-	"job cancel":  `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
-	"job next":    `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
-	"job order":   `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
-	"job post":    `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
-	"job result":  `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
-	"job tree":    `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
-	"feed tick":   `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
-
 	// These print their own JSON failure and leave stderr empty with --json.
 	"job render": `exit 1; stderr "job: project \"absent\" is not registered" without --json, empty with --json`,
 	"job show":   `exit 1; stderr "job: project \"absent\" is not registered" without --json, empty with --json`,
