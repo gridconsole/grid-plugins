@@ -24,9 +24,10 @@ func fakeEnv(t *testing.T, runner Runner) Env {
 func TestAgentCheckBothFound(t *testing.T) {
 	var mu sync.Mutex
 	calls := map[string][]string{}
+	before := time.Now()
 	env := fakeEnv(t, func(ctx context.Context, argv []string) (string, int) {
 		deadline, ok := ctx.Deadline()
-		if !ok || time.Until(deadline) <= 4*time.Second || time.Until(deadline) > Wait {
+		if !ok || deadline.Before(before.Add(Wait)) || deadline.After(time.Now().Add(Wait)) {
 			t.Errorf("deadline %v, %v", deadline, ok)
 		}
 		name := filepath.Base(argv[0])
@@ -190,28 +191,32 @@ func TestAgentCheckOddVersionOutput(t *testing.T) {
 func TestAgentCheckTimeout(t *testing.T) {
 	// Both agents must reach their blocking probe concurrently. Claude blocks on
 	// version; Codex blocks on status after receiving a fresh five-second budget.
+	// The probes end by an event the test gives, not by the wall clock.
+	endProbes := iqAcProbeEnd(t)
+	hang := iqAcHangCtx(t)
+	before := time.Now()
 	entered := make(chan struct{}, 2)
 	env := fakeEnv(t, func(ctx context.Context, argv []string) (string, int) {
 		if filepath.Base(argv[0]) == "codex" && argv[1] == "--version" {
 			return "0.162.0", 0
 		}
 		deadline, ok := ctx.Deadline()
-		if !ok || time.Until(deadline) < 4*time.Second || time.Until(deadline) > Wait {
+		if !ok || deadline.Before(before.Add(Wait)) || deadline.After(time.Now().Add(Wait)) {
 			t.Errorf("wrong probe deadline: %v", deadline)
 		}
 		entered <- struct{}{}
 		<-ctx.Done()
 		return "3.0.0", 0 // A late answer must not be accepted.
 	})
-	done := make(chan []Report, 1)
-	go func() { done <- Check(context.Background(), env) }()
+	done := iqAcRunCheck(t, env)
 	for i := 0; i < 2; i++ {
 		select {
 		case <-entered:
-		case <-time.After(2 * time.Second):
+		case <-hang.Done():
 			t.Fatal("probes did not run concurrently")
 		}
 	}
+	endProbes()
 	select {
 	case reports := <-done:
 		if reports[0].Version != "" || reports[1].Version != "0.162.0" {
@@ -222,7 +227,7 @@ func TestAgentCheckTimeout(t *testing.T) {
 				t.Fatalf("%+v", r)
 			}
 		}
-	case <-time.After(Wait + time.Second):
+	case <-hang.Done():
 		t.Fatal("probe timeout did not stop check")
 	}
 }

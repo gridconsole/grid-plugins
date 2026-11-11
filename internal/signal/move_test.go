@@ -10,10 +10,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
+
+// ifLwDeadline bounds the wait for a lock-wait event; it proves nothing and its
+// failure names what was awaited.
+const ifLwDeadline = 30 * time.Second
 
 func moveFixture(t *testing.T) (Store, Result, string, []byte) {
 	t.Helper()
@@ -83,6 +88,22 @@ func TestMoveWaitsForAddLock(t *testing.T) {
 			unlock()
 		}
 	}()
+	lockPath, err := localdata.Safe(s.GridHome, ".signals.lock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The hook says Move's lock call is about to wait; it only compares the path
+	// and sends without blocking.
+	waiting := make(chan struct{}, 1)
+	t.Cleanup(fslock.OnBlockForTest(func(path string) {
+		if path != lockPath {
+			return
+		}
+		select {
+		case waiting <- struct{}{}:
+		default:
+		}
+	}))
 	done := make(chan error, 1)
 	started := make(chan struct{})
 	go func() { close(started); _, err := s.Move(r.ID, "example", "second"); done <- err }()
@@ -90,7 +111,9 @@ func TestMoveWaitsForAddLock(t *testing.T) {
 	select {
 	case err := <-done:
 		t.Fatalf("move bypassed signals lock: %v", err)
-	case <-time.After(150 * time.Millisecond):
+	case <-waiting:
+	case <-time.After(ifLwDeadline):
+		t.Fatal("timed out waiting for Move to reach the signals lock")
 	}
 	after, err := os.ReadFile(source)
 	if err != nil || !bytes.Equal(before, after) {

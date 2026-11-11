@@ -32,6 +32,8 @@ var guestParityCommands = map[string][]string{
 	"brain index":          {"--read-only"},
 	"brain keep":           {},
 	"brain revert":         {"parity/parity", "--to", "1"},
+	"brain drop":           {"parity/parity", "--expect", "0000000000000000"},
+	"brain restore":        {"parity/parity", "--expect", "0000000000000000"},
 	"brain supersede":      {"parity", "--by", "parity-v2", "--reason", "parity reason here"},
 	"brain propose":        {"--name", "parity", "--topic", "general", "--description", "parity", "--summary", "parity", "--body", "parity", "--external"},
 	"brain search":         {"parity"},
@@ -81,6 +83,11 @@ var guestParityCommands = map[string][]string{
 	"project repo":       {"add", "{project}", "--where", "/parity/app"},
 	"project-md get":     {"{project}", "id"},
 	"project-md set":     {"{project}", "title", "parity"},
+	"update draft":       {"{project}"},
+	"update edit":        {"{project}", "--line", "T-01 · parity"},
+	"update discard":     {"{project}"},
+	"update skip":        {"{project}"},
+	"update send":        {"{project}"},
 	"proof add":          {"I-01", "--text", "parity"},
 	"proof index":        {},
 	"question add":       {"parity?", "--applies", "2030-01-01T00:00:00Z", "--default", "defer"},
@@ -429,19 +436,41 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 			}
 		case "workflow write":
 			want = guestParityOutput{3, "", "grid workflow write: caller role is not allowed to write workflows\n"}
+			if mode == "json" {
+				want.Stdout = "{\"error\":\"person_required\",\"reason\":\"role_not_allowed\",\"hint\":\"caller role is not allowed to write workflows\",\"code\":\"person_required\",\"message\":\"grid workflow write: caller role is not allowed to write workflows\"}\n"
+			}
 		case "job lint":
 			// The row lints a file outside the Grid home with --task: the by-path
 			// gate answers as an unknown task whatever the invitation.
 			want = guestParityOutput{1, "", "job: task not found\n"}
 			if mode == "json" {
-				want = guestParityOutput{1, "{\"ok\":false,\"findings\":[],\"error\":\"task not found\"}\n", ""}
+				want = guestParityOutput{1, "{\"ok\":false,\"findings\":[],\"error\":\"task not found\",\"code\":\"no_such_task\"}\n", ""}
 			}
 		case "brain changes":
 			want = guestParityOutput{3, "", "grid brain changes: caller role is not allowed to read brain changes\n"}
+			if mode == "json" {
+				want.Stdout = `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to read brain changes","code":"person_required","message":"grid brain changes: caller role is not allowed to read brain changes"}` + "\n"
+			}
 		case "brain revert":
 			want = guestParityOutput{3, "", "grid brain revert: caller role is not allowed to revert brain entries\n"}
+			if mode == "json" {
+				want.Stdout = `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to revert brain entries","code":"person_required","message":"grid brain revert: caller role is not allowed to revert brain entries"}` + "\n"
+			}
+		case "brain drop":
+			want = guestParityOutput{3, "", "grid brain drop: caller role is not allowed to drop brain entries\n"}
+			if mode == "json" {
+				want.Stdout = `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to drop brain entries","code":"person_required","message":"grid brain drop: caller role is not allowed to drop brain entries"}` + "\n"
+			}
+		case "brain restore":
+			want = guestParityOutput{3, "", "grid brain restore: caller role is not allowed to restore brain entries\n"}
+			if mode == "json" {
+				want.Stdout = `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to restore brain entries","code":"person_required","message":"grid brain restore: caller role is not allowed to restore brain entries"}` + "\n"
+			}
 		case "brain supersede":
 			want = guestParityOutput{3, "", "grid brain supersede: caller role is not allowed to supersede brain entries\n"}
+			if mode == "json" {
+				want.Stdout = `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to supersede brain entries","code":"person_required","message":"grid brain supersede: caller role is not allowed to supersede brain entries"}` + "\n"
+			}
 		case "feed types":
 			// This command returns the public schema without resolving any scope.
 			return out.Code == 0 && out.Stderr == "" && strings.Contains(out.Stdout, "knowledge")

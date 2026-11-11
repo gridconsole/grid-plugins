@@ -90,6 +90,14 @@ func TestPlanPublicationRetriesWithoutResettingJobs(t *testing.T) {
 
 func TestPlanPublicationValidatesBeforeWriting(t *testing.T) {
 	text := plannedText(t)
+	// causes names a part of the one-line cause each case's notice must carry.
+	causes := map[string]string{
+		"missing field":      "plan.md Job J-2: missing required field skills",
+		"invalid contract":   "plan.md Job J-2: $.review: value outside enum",
+		"missing dependency": `after target "J-9" does not exist`,
+		"cycle":              "Job cycle: J-2 -> J-2",
+		"duplicate":          "plan.md: duplicate Job J-1",
+	}
 	for name, bad := range map[string]string{
 		"missing field":      strings.Replace(text, "      skills: []\n", "", 1),
 		"invalid contract":   strings.Replace(text, "review: L0", "review: L99", 1),
@@ -104,11 +112,16 @@ func TestPlanPublicationValidatesBeforeWriting(t *testing.T) {
 			}
 			writePlan(t, f, bad)
 			approvePlan(t, f)
-			if _, err := f.s.Tick(); err == nil {
-				t.Fatal("accepted invalid plan")
+			// An invalid plan no longer stops the tick; the Feed says why once.
+			if _, err := f.s.Tick(); err != nil {
+				t.Fatalf("invalid plan stopped the tick: %v", err)
 			}
 			if records := planJobRecords(t, f); len(records) != 0 {
 				t.Fatalf("invalid plan published Jobs: %+v", records)
+			}
+			notices := hvPlanNotices(t, f)
+			if len(notices) != 1 || !strings.Contains(notices[0], causes[name]) {
+				t.Fatalf("want one notice naming %q, got %q", causes[name], notices)
 			}
 		})
 	}
@@ -164,7 +177,8 @@ func approveRevision(t *testing.T, f *fixture, text string) {
 }
 
 // planJobRecords are the job records of the plan's own Jobs, without the approve
-// person Job that approvePlan posts.
+// person Job that approvePlan posts and without the re-plan Job the tick posts
+// when plan.md cannot be published.
 func planJobRecords(t *testing.T, f *fixture) []feed.Entry {
 	t.Helper()
 	records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
@@ -173,7 +187,7 @@ func planJobRecords(t *testing.T, f *fixture) []feed.Entry {
 	}
 	var out []feed.Entry
 	for _, r := range records.Records {
-		if r.Body["kind"] != "approve" {
+		if r.Body["kind"] != "approve" && r.Body["title"] != jiPlanFaultTitle {
 			out = append(out, r)
 		}
 	}

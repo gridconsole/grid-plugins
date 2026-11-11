@@ -63,6 +63,10 @@ func rows(root *os.Root, level string) ([]TopicRow, []Note, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	dropped, err := Dropped(root) // one read of the level's log
+	if err != nil {
+		return nil, nil, err
+	}
 	result := []TopicRow{}
 	seen := map[string]bool{}
 	for _, t := range topics {
@@ -94,8 +98,8 @@ func rows(root *os.Root, level string) ([]TopicRow, []Note, error) {
 		}
 		for _, n := range notes {
 			if n.Topic == t.Name {
-				// A superseded note leaves the count and stays on disk.
-				if n.SupersededBy == "" {
+				// A superseded or dropped note leaves the count and stays on disk.
+				if n.SupersededBy == "" && !dropped[n.Topic+"/"+n.Name] {
 					r.Entries++
 				}
 				if n.Updated > r.LastChange {

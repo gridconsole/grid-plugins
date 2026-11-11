@@ -85,15 +85,20 @@ func runFeed(args []string, env Env) int {
 		}
 		return 0
 	}
-	if verb == "types" {
-		return output(struct {
-			Types []contract.PostType `json:"types"`
-		}{contract.PostTypes()})
-	}
 	fail := func(err error) int {
 		env.recordError(err)
 		fmt.Fprintf(env.Stderr, "grid feed: %v\n", err)
 		return exitCode(err)
+	}
+	if verb == "types" {
+		if *task != "" || *project != "" {
+			if _, err := feedStore(env, *task, *project); err != nil {
+				return fail(err)
+			}
+		}
+		return output(struct {
+			Types []contract.PostType `json:"types"`
+		}{contract.PostTypes()})
 	}
 	store, err := feedStore(env, *task, *project)
 	if err != nil {

@@ -2610,7 +2610,7 @@
     },
     {
       "name": "brain",
-      "summary": "show, search, topics, index, propose, accept, keep, decide, supersede, check, changes, revert",
+      "summary": "show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore",
       "built": true,
       "subcommands": [
         {
@@ -2717,6 +2717,41 @@
             },
             {
               "name": "--note",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "drop",
+          "args": [
+            "\u003ctopic\u003e/\u003cname\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--expect",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
               "takes": "value",
               "required": false
             }
@@ -2891,6 +2926,41 @@
             },
             {
               "name": "--topic",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "restore",
+          "args": [
+            "\u003ctopic\u003e/\u003cname\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--expect",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--reason",
               "takes": "value",
               "required": false
             }
@@ -4602,6 +4672,98 @@
       ]
     },
     {
+      "name": "update",
+      "summary": "draft, edit, discard, skip and send a project's update",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "discard",
+          "args": [
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "draft",
+          "args": [
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--title",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "edit",
+          "args": [
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--line",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "send",
+          "args": [
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "skip",
+          "args": [
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
       "name": "setup",
       "summary": "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)",
       "built": true,
@@ -4870,9 +5032,32 @@
     },
     {
       "name": "eval",
-      "summary": "list, run and show task evaluations",
+      "summary": "list, run and show task evaluations; export-suite writes plugin eval cases",
       "built": true,
       "subcommands": [
+        {
+          "name": "export-suite",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--out",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--suite",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
         {
           "name": "list",
           "args": [],

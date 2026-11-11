@@ -20,6 +20,9 @@ func configureProcess(cmd *exec.Cmd) {
 	}
 }
 
+// cleanupProcess ends whatever the command left in its group. runProcess calls
+// it right after Wait and before it reads the output pipes to EOF, so a
+// background child of the command cannot keep the pipes open.
 func cleanupProcess(cmd *exec.Cmd) {
 	if cmd.Process != nil {
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

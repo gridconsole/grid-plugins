@@ -24,7 +24,17 @@ func (s Store) ReserveGate(minimum int, publish func(string) error) error {
 		if err := atomicfile.Write(filepath.Join(dir, id+".feed"), nil, 0600); err != nil {
 			return err
 		}
-		return publish(id)
+		if err := publish(id); err != nil {
+			return err
+		}
+		// The app finds questions/Q-n.md by its post field, so the published
+		// question needs its file now. Without a TaskID project would first take the
+		// task-identity lock under this one, so such callers keep the marker alone.
+		if s.TaskID == "" {
+			return nil
+		}
+		_, err = s.project(dir, true)
+		return err
 	})
 }
 

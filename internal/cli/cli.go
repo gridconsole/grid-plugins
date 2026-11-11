@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -10,8 +11,10 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/question"
@@ -46,6 +49,26 @@ type Env struct {
 	// typedGlobal names the variables a global flag was typed for (GRID_LEASE_EPOCH for --lease-epoch):
 	// getenv shows the flag's value either way, and this tells a typed flag from an inherited variable.
 	typedGlobal map[string]bool
+	// Context stops the commands that run until interrupted (agent, env, land, job next
+	// and feed tick, worker next, eval, job verify) in place of their own SIGINT handler.
+	// Nil installs the handler, as the binary does; OSEnv leaves it nil.
+	Context context.Context
+	// OwnerPID is the process task new, task attach, lease take --hold and env up record
+	// as the owner. Zero keeps the binary's own read (os.Getpid or os.Getppid); OSEnv
+	// leaves it zero. OwnerStart is that process's start time; zero looks it up for
+	// OwnerPID. OwnerStart is read only when OwnerPID is set.
+	OwnerPID   int
+	OwnerStart time.Time
+}
+
+// signalContext is the context of a command that runs until it is interrupted: a
+// cancellable child of Context when the caller gave one, so no signal handler is
+// installed in the host, else one that ends on the given signals.
+func (e Env) signalContext(sigs ...os.Signal) (context.Context, context.CancelFunc) {
+	if e.Context != nil {
+		return context.WithCancel(e.Context)
+	}
+	return signal.NotifyContext(context.Background(), sigs...)
 }
 
 func (e Env) afterApproveHook() {
@@ -118,7 +141,7 @@ func commands() []command {
 		{"proof", "add evidence and rebuild the task proof index", runProof},
 		{"history", "add a dated line to the task history", runHistory},
 		{"land", "land a task per the deploy topic", runLand},
-		{"brain", "show, search, topics, index, propose, accept, keep, decide, supersede, check, changes, revert", runBrain},
+		{"brain", "show/search/topics/index/propose/accept/keep/decide/supersede/check/changes/revert/drop/restore", runBrain},
 		{"env", "up, down browser Job dev environments", runEnv},
 		{"person", "check person access; list, show and find approvers", runPerson},
 		{"routine", "add, list, remove, run, schedule and unschedule routines", runRoutine},
@@ -133,10 +156,11 @@ func commands() []command {
 		{"account", "list, status, statusline, scan, sign-in, windows, folder and note for agent accounts", runAccount},
 		{"project", "add, remove, list, scan and relink projects; repo edits a project's repos", runProject},
 		{"project-md", "get or set a project front-matter key", runProjectMD},
+		{"update", "draft, edit, discard, skip and send a project's update", runUpdate},
 		{"setup", "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)", runSetup},
 		{"signal", "add, act on, dismiss and move inbox signals", runSignal},
 		{"artifact", "import, link, list and publish task artifacts", runArtifact},
-		{"eval", "list, run and show task evaluations", runEval},
+		{"eval", "list, run and show task evaluations; export-suite writes plugin eval cases", runEval},
 		{"migrate", "upgrade the Grid home to this format", runMigrate},
 	}
 }

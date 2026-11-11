@@ -24,14 +24,26 @@ var (
 )
 
 // LockShared blocks until f holds a shared lock.
-func LockShared(f *os.File) error { return lockFile(f, 0, false) }
+func LockShared(f *os.File) error { return lockWait(f, 0) }
 
 // LockExclusive blocks until f holds an exclusive lock.
-func LockExclusive(f *os.File) error { return lockFile(f, lockfileExclusiveLock, false) }
+func LockExclusive(f *os.File) error { return lockWait(f, lockfileExclusiveLock) }
 
 // TryLockExclusive takes an exclusive lock without waiting.
-func TryLockExclusive(f *os.File) error {
-	err := lockFile(f, lockfileExclusiveLock|lockfileFailImmediately, false)
+func TryLockExclusive(f *os.File) error { return tryLockFile(f, lockfileExclusiveLock) }
+
+// lockWait is the blocking lock behind LockShared and LockExclusive, with the
+// wait hook of fslock.go in front of it.
+func lockWait(f *os.File, flags uint32) error {
+	return lockWaiting(f,
+		func() error { return tryLockFile(f, flags) },
+		func() error { return lockFile(f, flags, false) })
+}
+
+// tryLockFile is lockFile without waiting; ErrLocked says that another handle
+// holds the lock.
+func tryLockFile(f *os.File, flags uint32) error {
+	err := lockFile(f, flags|lockfileFailImmediately, false)
 	if errors.Is(err, errorLockViolation) {
 		return ErrLocked
 	}

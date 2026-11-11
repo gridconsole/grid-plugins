@@ -60,7 +60,7 @@ by message wording. Each example below is read by `TestHfFsShapes`.
 Other failures print nothing on stdout: with `--json`, an unclassified failure that
 exits 1 or 3 and is covered by none of the four shapes prints nothing on stdout, and
 only stderr carries it (`grid task show` with no operand outside a task folder is one).
-Some commands keep their own older JSON objects on failure; those carry no code.
+`job lint`, `job render`, `job show`, `job verify` and `job trace` keep their own objects (`ok`, `findings`, `error`; trace: `rows`, `problems`) and gain the top-level `code` on a classified refusal; a success and an unclassified failure print no `code`. Other commands that keep their own older JSON objects on failure carry no code.
 Plain output, successful JSON and streaming output are unchanged. A code does not
 imply an exit status: a missing project during `signal move` exits 3, a missing task
 during `task show` exits 1.
@@ -73,6 +73,7 @@ during `task show` exits 1.
 | `person_required` | The existing person gate refused the request. |
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
 | `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
+| `workflow_file_changed` | A workflow file changed since its revision was read (`grid workflow write`); nothing was written and it exits 3. |
 | `job_waiting` | A person Job still waits for a Job in its after list (`grid approve`, `grid job result`); exits 3. |
 | `changed` | A settings file or preview changed since the person looked; nothing was written. |
 | `invalid_settings` | A settings value, key, preset or file is invalid; nothing was written. |
@@ -80,7 +81,7 @@ during `task show` exits 1.
 | `unconfirmed_key` | A Codex settings key is read-only until its name is checked on a real install. |
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
 
-The first five constants live in `internal/cli/error_codes.go` and the settings
+The first six constants live in `internal/cli/error_codes.go` and the settings
 codes in `internal/settings/claude_user.go`; `person_required` and `job_waiting` are
 written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
 and `internal/cli/task_write.go`. `TestHfFsCodeTable` keeps this table equal to that set.
@@ -144,6 +145,7 @@ are reference-document names and original line numbers, not machine paths.
 | Result v2 | [result.json](schemas/result.json) | feed-contract.md:84; job-contract.md:112-120 |
 | Checkpoint | [checkpoint.json](schemas/checkpoint.json) | feed-contract.md:82; job-contract.md:141-144 |
 | Question and gate | [question.json](schemas/question.json) | feed-contract.md:188-197; old-plugin/feed/types/question.md:5-19 |
+| Task question file | [question-file.json](schemas/question-file.json) | internal/question/question.go:27; internal/question/files.go:145 |
 | Answer | [answer.json](schemas/answer.json) | feed-contract.md:177; old-plugin/feed/types/answer.md:5-11 |
 | Handover | [handover.json](schemas/handover.json) | feed-contract.md:118-122; old-plugin/feed/types/handover.md:5-11 |
 | Worker exit | [worker-exit.json](schemas/worker-exit.json) | feed-contract.md:214-216 |
@@ -504,11 +506,11 @@ filter; hidden and unknown project requests remain indistinguishable to guests.
 
 ### `grid workflow write [--project <name-or-id>] --rev <12-hex|none> --file <path|-> [--json]`
 
-Replaces one workspace file, or `projects/<name>/workflows.md` for exactly one registered project. Input comes from a file (relative to the current folder) or stdin with `--file -`; it must be UTF-8, at most 32 KiB, start with a workflows heading on the first line, and pass workflow parsing. `--rev none` requires absence; otherwise the revision must match under the destination's persistent lock. A mismatch exits 3 with `workflow changed since read`; invalid input exits 2 and parse diagnostics are listed. Refusals leave existing bytes unchanged.
+Replaces one workspace file, or `projects/<name>/workflows.md` for exactly one registered project. Input comes from a file (relative to the current folder) or stdin with `--file -`; it must be UTF-8, at most 32 KiB, start with a workflows heading on the first line, and pass workflow parsing. `--rev none` requires absence; otherwise the revision must match under the destination's persistent lock. A mismatch exits 3 with `workflow changed since read`; with `--json` stdout is the envelope `{"error":{"code":"workflow_file_changed","message":"grid workflow write: workflow changed since read"}}`. Invalid input exits 2 and parse diagnostics are listed. Refusals leave existing bytes unchanged.
 
 The project is selected as for `workflow show`. A selector that matches no visible project, or an ID shared by several, exits 1 with `grid workflow write: project "<selector>" is missing or ambiguous`; a caller that passes the role policy but is not allowed Personal access (a member) gets `grid workflow write: project is missing or ambiguous` instead.
 
-Writes use a synced temporary file in the destination folder and atomic rename, with symlinks refused and destination operations confined by `os.Root`. A linked or non-regular target exits 2. JSON is `{ "file": "workflows.md", "rev": "<12-hex>" }`, with `"<project>/workflows.md"` for a project; plain output is `<file> <rev>` on one line. Diagnostics do not expose absolute paths. The replaceable `WriteDefaultAllowed` host policy accepts an unset/empty `GRID_ROLE`, `owner`, or `member`; other roles exit 3 before reading input or writing files. Application authorization remains the caller's responsibility.
+Writes use a synced temporary file in the destination folder and atomic rename, with symlinks refused and destination operations confined by `os.Root`. A linked or non-regular target exits 2. JSON is `{ "file": "workflows.md", "rev": "<12-hex>" }`, with `"<project>/workflows.md"` for a project; plain output is `<file> <rev>` on one line. Diagnostics do not expose absolute paths. The replaceable `WriteDefaultAllowed` host policy accepts an unset/empty `GRID_ROLE`, `owner`, or `member`; other roles exit 3 before reading input or writing files, with stderr `grid workflow write: caller role is not allowed to write workflows`. With `--json` that refusal prints the person gate object `{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to write workflows","code":"person_required","message":"grid workflow write: caller role is not allowed to write workflows"}`; it is the host policy, not a workflow's role list. Application authorization remains the caller's responsibility.
 
 ### `grid task new "<words>" [--project <name-or-id>] [--size <size>] [--workflow <name>] --json`
 
@@ -518,7 +520,7 @@ The path is absolute. Plain output is two lines: `T-NN created`, then the task f
 
 Project defaults to the existing folder resolver's answer. `--project` selects a registered name or id; `personal` and `Personal` select the Personal project without requiring a record. Personal tasks live under `<GRID_HOME>/personal/tasks/` and use `project: personal`. Other tasks live under `<GRID_HOME>/projects/<project>/tasks/`. A first write creates the project record, machine identity and format version as needed.
 
-The title is the first nonblank line of the request, trimmed and limited to 120 Unicode characters. The folder slug uses lowercase ASCII letters and digits, separated by hyphens, limited to 60 characters, with `task` as the fallback. These transformations never change `intent.md`.
+The title comes from the request in four steps. When the request, after leading spaces, tabs and newlines, starts with a front matter block whose `title` is a string that is not blank, the title is that value with each run of whitespace folded to one space. When the block has no such `title`, the title is the first nonblank line of the text after the block, trimmed. A request without a front matter block keeps the first nonblank line of the request, trimmed. A request whose block has no such `title` and nothing but whitespace after it is refused with exit 2 and `task words hold only front matter and no title`, and nothing is written. Every title is limited to 120 Unicode characters. The folder slug uses lowercase ASCII letters and digits, separated by hyphens, limited to 60 characters, with `task` as the fallback. These transformations never change `intent.md`.
 
 ### Task operands
 
@@ -685,7 +687,61 @@ read or write. The replaceable `brain.ChangesReadAllowed` (host key
 `brain_revert_roles`) policies default to the empty local role, `owner` and
 `member`; any other role, including `guest`, exits 3 with
 `grid brain <changes|revert>: caller role is not allowed to <read brain changes|revert brain entries>`.
+`grid brain supersede` checks `brain.RevertAllowed` at the same point and exits 3
+with `grid brain supersede: caller role is not allowed to supersede brain entries`.
+With `--json` each of the five refusals (changes, revert, supersede, drop,
+restore) keeps that stderr line and exit 3 and
+also prints one stdout object, the person-gate refusal shape:
+`{"error":"person_required","reason":"role_not_allowed","hint":"caller role is not allowed to <read brain changes|revert brain entries|supersede brain entries|drop brain entries|restore brain entries>","code":"person_required","message":"<the stderr line without its newline>"}`.
+Without `--json` stdout stays empty.
 The CLI does not read a workflow file to configure them.
+
+### `grid brain drop <topic>/<name> --expect <16hex> [--reason <why>] [--level home|project] [--project <p>] [--json]`
+
+Hides a knowledge entry from `brain search`, the SessionStart index (and its
+entry count) and job sources. Nothing is deleted: the note file and its stored
+versions are never written, and `brain show` still returns the entry, now with
+`"dropped": true`. Under the level's brain lock it checks `--expect` against the
+note's current rev, appends one audit line with status `dropped` (the current
+version and hash, the origin and the reason, whitespace folded), then rebuilds
+that level's index after the lock. The rev is the first 8 bytes of the SHA-256 of
+the note file as 16 lower-case hex digits (the app's `vaultRev`). The newest
+`accepted`, `dropped` or `restored` line of the entry is its state: a drop needs
+an accepted note that is not superseded and not already dropped. Two drops with
+one rev at once write one line; the second is refused (exit 9).
+
+The origin of the line is the person from the session: `person:<id>` where `<id>`
+is `GRID_WHO`, else `GRID_ACTOR`, else `GRID_MEMBER` (a plain name), else a
+random `session` origin as for `revert`. No flag names the person; `--by` is an
+unknown flag (exit 2).
+
+`--json` prints `{"status":"dropped","version":<n>,"rev":"<rev>"}`; plain output
+is `dropped <topic>/<name> v<n> rev <rev>`. When the line is written but the index
+rebuild fails, the result is printed first, then the error, and the exit is 1.
+
+Exit codes (the table of every brain write verb): 0 done, 1 a store error (a full
+disk included), 2 usage (a missing operand, a topic or name that is not a plain
+name, a missing or non-hex `--expect`, an unknown flag), 3 role refused, 6 stale
+`--expect`, 8 no such note, 9 refused by the note's state. Never 4, 5 or 7. A
+failure with 6, 8 or 9 prints one JSON line on stderr, with or without `--json`:
+`{"error":"conflict","rev":"<current rev>"}`, `{"error":"no_such_note"}` or
+`{"error":"refused","reason":"<why>"}`. Refused (9): a topic that holds settings
+(`machines`, `skills`, `agents` and the like), the `TOPIC` file, a note that is
+not accepted or is superseded, an entry already dropped. The role check
+(`brain.RevertAllowed`, the empty local role, `owner` and `member`) runs after the
+usage check and before any resolution, read or write: any other role, including
+`guest`, exits 3 with
+`grid brain drop: caller role is not allowed to drop brain entries`. A project
+without a Grid record is refused as for `propose` (exit 1); use `--level home`.
+
+### `grid brain restore <topic>/<name> --expect <16hex> [--reason <why>] [--level home|project] [--project <p>] [--json]`
+
+Brings a dropped entry back to search, the index and job sources. Same flags,
+rev check, origin, output and exit codes as `brain drop`, with the audit status
+`restored` and the stderr line
+`grid brain restore: caller role is not allowed to restore brain entries` for exit
+3. A restore needs an entry whose newest state line is `dropped`; any other entry
+is refused (exit 9). The note file and its versions are not written.
 
 ## Task intent files
 

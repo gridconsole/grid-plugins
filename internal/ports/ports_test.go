@@ -360,14 +360,8 @@ func TestDamagedPortFilesAreSkippedThenCollected(t *testing.T) {
 }
 
 func TestReusedPIDIsNotSignalled(t *testing.T) {
-	cmd := exec.Command("sleep", "60")
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	exited := make(chan struct{})
-	go func() { _ = cmd.Wait(); close(exited) }()
-	defer func() { _ = cmd.Process.Kill(); <-exited }()
+	child := ifPrStartChild(t)
+	cmd := child.cmd
 	s := Store{GridHome: t.TempDir()}
 	task := filepath.Join(s.GridHome, "tasks", "T-1")
 	r, err := s.Claim(task, "J-1", os.Getpid(), Range{})
@@ -406,11 +400,7 @@ func TestReusedPIDIsNotSignalled(t *testing.T) {
 	if err != nil || len(removed) != 1 {
 		t.Fatalf("gc: %+v %v", removed, err)
 	}
-	select {
-	case <-exited:
-		t.Fatal("gc signalled reused PID")
-	case <-time.After(50 * time.Millisecond):
-	}
+	child.assertNoSignal(t)
 }
 
 func TestLegacyRecordStopsGroup(t *testing.T) {

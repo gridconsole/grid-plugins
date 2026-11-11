@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/proctree"
 )
@@ -121,12 +121,33 @@ func RunVerify(ctx context.Context, j Job, dir string, options ...VerifyOptions)
 	}
 	cmd := verifyShell(ctx, v.Command)
 	cmd.Dir = dir
-	cmd.WaitDelay = 250 * time.Millisecond
 	output := &verifyOutput{}
-	// exec serializes writes when stdout and stderr share the same writer.
-	cmd.Stdout, cmd.Stderr = output, output
+	// Stdout and stderr share one pipe RunVerify owns, so exec starts no copy of
+	// its own and Run returns when the shell exits, even while a process it left
+	// behind still holds the pipe. That process is ended with the tree below.
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return fail(err)
+	}
+	cmd.Stdout, cmd.Stderr = pw, pw
+	copied := make(chan struct{})
+	go func() {
+		defer close(copied)
+		_, _ = io.Copy(output, pr)
+	}()
 	err = proctree.Run(cmd)
 	cleanupVerifyProcess(cmd)
+	// With the tree ended, the pipe reaches EOF once its last writer is gone. A
+	// process outside the tree may hold it open until ctx ends; closing the read
+	// end then ends the copy.
+	_ = pw.Close()
+	select {
+	case <-copied:
+	case <-ctx.Done():
+		_ = pr.Close()
+		<-copied
+	}
+	_ = pr.Close()
 	output.finish()
 	r.Tests, r.Output, r.OutputTruncated = output.tests(), output.output.String(), output.truncated
 	if cmd.ProcessState != nil {

@@ -81,11 +81,17 @@ func postFirstJob(env Env, t task.Task, o task.NewOptions) error {
 	}
 	store := feed.Store{TaskDir: t.Path, TaskID: id}
 	w := feed.Writer{Author: feed.Author{ID: t.Owner, Role: t.OwnerRole}, Worker: worker, Lease: "task"}
-	pid := os.Getpid()
+	pid, began := os.Getpid(), time.Time{}
+	if env.OwnerPID != 0 {
+		pid, began = env.OwnerPID, env.OwnerStart
+	}
 	// The lease names the process by its start time, in the contract's time shape.
-	began, err := time.Parse(time.RFC3339Nano, migrate.ProcessStart(pid))
-	if err != nil {
-		began = time.Now()
+	if began.IsZero() {
+		var err error
+		began, err = time.Parse(time.RFC3339Nano, migrate.ProcessStart(pid))
+		if err != nil {
+			began = time.Now()
+		}
 	}
 	start := contract.FormatTime(began)
 	ts := lease.TaskStore{Feed: store}

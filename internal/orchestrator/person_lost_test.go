@@ -80,12 +80,14 @@ func TestSecondPersonAnswerIsNamedNotUsed(t *testing.T) {
 	f := personFixture(t)
 	f.tick(t)
 	sam := feed.Writer{Author: feed.Author{ID: "sam", Role: "owner"}, Worker: "sam@" + machine}
-	if _, err := AnswerPerson(f.s.Feed, personWriterOf("member"), "J-1", "Call it Lark.", f.now); err != nil {
+	t0 := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	first, second := f.s.Feed, f.s.Feed
+	first.Now = func() time.Time { return t0 }
+	second.Now = func() time.Time { return t0.Add(time.Second) }
+	if _, err := AnswerPerson(first, personWriterOf("member"), "J-1", "Call it Lark.", f.now); err != nil {
 		t.Fatal(err)
 	}
-	// Records are stamped to the second; the second answer must come after it.
-	time.Sleep(1100 * time.Millisecond)
-	late, err := AnswerPerson(f.s.Feed, sam, "J-1", "Call it Wren.", f.now)
+	late, err := AnswerPerson(second, sam, "J-1", "Call it Wren.", f.now)
 	if err != nil {
 		t.Fatal(err)
 	}

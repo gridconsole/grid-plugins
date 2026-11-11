@@ -24,7 +24,9 @@ func configureProcess(cmd *exec.Cmd) {
 
 // cleanupProcess ends the tree of a command that is still running. Once Wait has
 // returned the process handle is closed and the pid may belong to an unrelated
-// process, so it is never used for a kill after that.
+// process, so it is never used for a kill after that. After Wait the tree is
+// ended by the job proctree.Run closes before it returns, which is before
+// runProcess reads the output pipes to EOF.
 func cleanupProcess(cmd *exec.Cmd) {
 	if cmd.Process != nil && cmd.ProcessState == nil {
 		_ = killProcessTree(cmd)

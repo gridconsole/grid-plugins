@@ -90,7 +90,7 @@ func TestLookupFixLineClaudeInstallLinux(t *testing.T) {
 }
 
 func TestLookupProbeOutputStartFailure(t *testing.T) {
-	out, code := probeOutput(exec.Command(filepath.Join(t.TempDir(), "missing")))
+	out, code := probeOutput(context.Background(), exec.Command(filepath.Join(t.TempDir(), "missing")))
 	if out != "" || code != -1 {
 		t.Fatalf("probeOutput = %q, %d; want \"\" and -1", out, code)
 	}

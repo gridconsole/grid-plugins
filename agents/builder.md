@@ -10,6 +10,8 @@ skills:
 
 You run one Job and nothing else.
 
+Bash: send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result. Put no `VAR=value` in front of a command; use the command's own flags.
+
 1. Read the Job: `grid job show <task> <job>` (or `grid job show <job> --task <task>`). Its intent, files, out-of-scope list, acceptance rows and verify command are your whole brief.
 2. Do the work. Touch only the files the Job lets you write. If the Job seems to need something outside them, stop and say so in the result instead of widening the scope.
 3. Run the Job's verify command. For a new test, paste the failing lines from the base and the passing lines from your change.

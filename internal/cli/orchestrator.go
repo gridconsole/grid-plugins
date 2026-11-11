@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -301,7 +300,7 @@ func runOrchestrator(args []string, env Env) int {
 		if *usageReady {
 			s.UsageReady = func(worker string) bool { return worker == *to || *to == "" && worker == writer.Worker }
 		}
-		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		ctx, cancel := env.signalContext(os.Interrupt)
 		defer cancel()
 		out, err := s.Next(ctx, *wait && verb == "next")
 		if errors.Is(err, context.Canceled) {

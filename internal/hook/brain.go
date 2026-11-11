@@ -71,15 +71,17 @@ func brainRead(o Options, in hookio.Input) {
 }
 
 // recordBrainRead logs one `brain read` line per note and session. The Read and
-// the `grid brain show` paths share the read:<id> key. The Job id, when the
-// agent runs inside one, goes in the via field.
+// the `grid brain show` paths share the read:<id> key. The via field names the
+// Job when the agent runs inside one, otherwise the session.
 func recordBrainRead(o Options, in hookio.Input, dir, id string) error {
 	return recordBrainReadWhy(o, in, dir, id, "")
 }
 
 // recordBrainReadWhy is recordBrainRead with a reason that ends the line, as
-// `grid brain search` gives the words it searched for.
+// `grid brain search` gives the words it searched for. Inside a Job, the why
+// of that Job's link to the note wins over the given reason.
 func recordBrainReadWhy(o Options, in hookio.Input, dir, id, why string) error {
+	jobID := o.Getenv("GRID_JOB")
 	// Decide and mark under the session lock, then append once it is
 	// released: .task.lock is never taken while the session lock is held.
 	s := session.Store{TaskDir: dir}
@@ -91,7 +93,10 @@ func recordBrainReadWhy(o Options, in hookio.Input, dir, id, why string) error {
 		return nil
 	})
 	if err == nil && first {
-		err = task.AppendHistoryWhy(dir, "brain read", id, writer(in), o.Getenv("GRID_JOB"), why)
+		if w := brainLinkWhy(dir, jobID, id); w != "" {
+			why = w
+		}
+		err = task.AppendHistoryWhy(dir, "brain read", id, writer(in), brainReadVia(jobID, in.SessionID), why)
 	}
 	return err
 }

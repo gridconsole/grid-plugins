@@ -16,7 +16,9 @@ import (
 )
 
 func runVerify(args []string, f flags, e Env) int {
-	fail := func(err error, code int) int { return output(e, f, report{Error: err.Error()}, code) }
+	fail := func(err error, code int) int {
+		return output(e, f, report{Error: err.Error(), Code: refusalCode(err, code)}, code)
+	}
 	if len(args) != 1 || !job.ValidID(args[0]) || f.budget != 0 {
 		return fail(errors.New("verify requires J-N [--task T-NN] [--dir path] [--json]"), 2)
 	}
@@ -28,7 +30,13 @@ func runVerify(args []string, f flags, e Env) int {
 	if err != nil {
 		return fail(err, 1)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	var ctx context.Context
+	var stop context.CancelFunc
+	if e.Context != nil {
+		ctx, stop = context.WithCancel(e.Context)
+	} else {
+		ctx, stop = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	}
 	defer stop()
 	r, err := job.RunVerify(ctx, j, f.dir, job.VerifyOptions{GridHome: e.GridHome, TaskPath: taskPath, Cwd: e.Cwd})
 	code := 0
