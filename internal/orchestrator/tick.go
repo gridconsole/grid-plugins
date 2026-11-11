@@ -95,6 +95,9 @@ func (s Store) Tick() (out Output, err error) {
 		if e != nil {
 			return e
 		}
+		if e := s.noteStartedDependents(snap, ready.Notes); e != nil {
+			return e
+		}
 		waits := map[string]string{}
 		for _, w := range ready.Waiting {
 			if waits[w.Job] == "" {

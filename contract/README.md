@@ -280,6 +280,12 @@ Disagreements and defaults chosen:
   Exit alone does not manufacture a retry/control; a missing reason means crash.
   Loop increments review_rounds and requests a lead wake; usage_limit sets a hold
   reason. The scheduler decides retry limits and posts the resulting controls.
+- A `done` after edge (and a bare Job id) is met by `accepted`, or by `submitted`
+  when the Job's latest result has `verified.pass` true or `"pass"`; no verify,
+  false and `"unsure"` do not meet it. A later `rejected` puts a dependent that
+  has not started back to waiting; a started dependent is neither held nor
+  stopped and gets one message post carrying its `job` that names the
+  rejection. `failed` and `children-done` edges still wait for their own states.
 - Result arrival alone is not acceptance. Control posts decide acceptance,
   rejection and stale status. Proposed Jobs remain typed proposals with their
   discovered_from edge; the fold never turns a worker proposal into a Job.
