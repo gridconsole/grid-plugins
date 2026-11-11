@@ -36,6 +36,21 @@ Point, do not paste. A pasted block goes stale, fills the worker's context and h
 - Keep a Job small: one outcome, one owner, a read list of a few ranges. If it needs more, split it into Jobs joined by `after`.
 - The last Job of a task is the deliver Job: title "Deliver the task", role orchestrator, `after` names every other Job (each with a why), and it runs `grid deliver --task <task> --outcome <text> --json`.
 
+## Pointers into plan.md
+
+`plan.md#step-N` resolves only a checklist line `- [ ] N title` (under `## Steps`); a `### Step 1: ...` heading gives `anchor "step-1" not found`. `plan.md#verify` needs a `## Verify` heading with a paragraph under it. plan.md has no other anchors: a slug such as `plan.md#update-install-md` fails. In other files a heading anchor is the heading's slug or its `{#id}`. `## Where it stands` is never a source for `intent` or `read`.
+
+```markdown
+## Steps
+- [ ] 1 Update install.md
+  jobs: []
+## Verify
+go test ./internal/plan/
+## Where it stands
+```
+
+Run `grid job lint <file> --task <task>` and post only a Job with no errors. A post that prints "render will refuse this Job" is fixed and posted again as a new Job.
+
 One full example. It lints clean once the note and file it points at exist:
 
 ```yaml
