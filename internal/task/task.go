@@ -82,6 +82,9 @@ func (o NewOptions) Validate() error {
 	if strings.TrimSpace(o.Words) == "" {
 		return errors.New("task words must not be empty")
 	}
+	if _, err := titleOf(o.Words); err != nil {
+		return err
+	}
 	switch o.Size {
 	case "", "auto", "small", "normal", "large":
 	default:

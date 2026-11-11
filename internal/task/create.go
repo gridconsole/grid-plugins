@@ -90,9 +90,9 @@ func (s Store) New(o NewOptions) (Task, error) {
 	if o.Size == "" {
 		o.Size = "auto"
 	}
-	title := strings.TrimSpace(strings.SplitN(strings.TrimSpace(o.Words), "\n", 2)[0])
-	if chars := []rune(title); len(chars) > 120 {
-		title = string(chars[:120])
+	title, err := titleOf(o.Words)
+	if err != nil {
+		return Task{}, err
 	}
 	owner, role := o.owner()
 	t := Task{Record: Record{ID: id, Title: title, Project: r.Project, Owner: owner, OwnerRole: role,
