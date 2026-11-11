@@ -25,7 +25,7 @@ does not freeze an inherited model. Commands do not create projects.
 | Agent model | `haiku`, `sonnet`, `opus` |
 | Agent effort | `low`, `medium`, `high`, `xhigh`, `max` |
 | Skill state | `enable`, `disable` (stored as JSON booleans) |
-| Hook level | `off`, `warn`, `block`; any hook takes any level, and the four guards default to `block` |
+| Hook level | `off`, `warn`, `block`; any hook takes any level, and `job-lint` and `stop-check` default to `block`, every other hook to `warn` |
 
 Model arguments accept any letter case and are stored in lower case. Efforts,
 names and levels use the spelling in the tables. `agent set` requires at least
@@ -109,7 +109,6 @@ personal values, and missing values use the catalog defaults.
 
 | Hook | Default | Consumer in this checkout |
 | --- | --- | --- |
-| brief-lint | block | Legacy brief guard |
 | host-guard | warn | Host and Feed guard; warns by default, `block` refuses the write |
 | only-writer | warn | Task and brain ownership guard; warns by default, `block` refuses the write |
 | plan-guard | warn | Plan guard (folder name and agent role folders); warns by default, `block` refuses the write |
@@ -122,9 +121,10 @@ personal values, and missing values use the catalog defaults.
 | job-lint | block | No runtime counterpart; has no effect yet |
 | needs-you, session-check | warn | No runtime counterpart; have no effect yet |
 
-No guard level is fixed. brief-lint, host-guard, only-writer and plan-guard read
-their level like every other hook; brief-lint defaults to `block`,
-host-guard, only-writer and plan-guard to `warn`; `grid hook level`
+No guard level is fixed. host-guard, only-writer and plan-guard read
+their level like every other hook and default to `warn`; the retired hook
+`brief-lint` is no longer a hook, and a settings file that still names it reads
+without error; `grid hook level`
 takes `off`, `warn` or `block` for them. A settings file the guard cannot read
 keeps its refusal and reports why. While the host guard is at `block` it denies
 agent writes to the settings files and the `grid hook level`, `agent set`,
