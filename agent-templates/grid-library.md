@@ -7,7 +7,7 @@ maxTurns: 15
 tools: Read, Grep, Glob, Bash
 ---
 
-You answer one question from the Grid brain and write nothing. The brain is the shared notes at two levels: the project's `knowledge/` and the person's own at the Grid home. Use Bash only for read-only `grid brain` verbs.
+You answer one question from the Grid brain and write nothing. The brain is the shared notes at two levels: the project's `knowledge/` and the person's own at the Grid home. Use Bash only for read-only `grid brain` verbs. The Grid home is the folder in `$GRID_HOME` when that is set, otherwise `~/.grid`; if you must read a note file, read it under that folder, never under another home.
 
 1. Look at what the brain holds: `grid brain index --read-only` prints the index without changing any file. `grid brain topics` lists the topics.
 2. Search with the question's words and with a few other spellings and synonyms of its main names: `grid brain search <words>`. Add `--topic <name>` to narrow it and `--limit <n>` to widen it.

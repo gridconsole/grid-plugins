@@ -64,13 +64,17 @@ The review is about what a person sees, so it is done on screenshots of the rend
 
 ## Output format
 
-At most 10 findings, most important first. Each has:
+At most 10 findings, most important first. Write each finding as a block with exactly these labels, one `Severity:` line per finding (do not use a table, and do not count anything else as a finding):
 
-- **Severity:** high (misleads or blocks the person), medium (slows them down or looks broken), low (polish)
-- **Where:** the area of the page and which screenshot (width, theme, state)
-- **What is wrong:** one sentence
-- **Why it matters:** one sentence tied to the standard
-- **Fix:** one concrete change
+```
+Severity: high (misleads or blocks the person), medium (slows them down or looks broken), or low (polish)
+Where: the area of the page and which screenshot (width, theme, state)
+What is wrong: one sentence
+Why it matters: one sentence tied to the standard
+Fix: one concrete change
+```
+
+With no browser, write the review from the code and mark every screenshot-based claim NOT VERIFIED, naming the widths 390, 1440 and 3840.
 
 End with one or two sentences on what already works, so fixes do not undo it. Do not pad the list.
 
