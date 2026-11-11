@@ -72,13 +72,14 @@ func TestIbFspathTwoCaseSpellings(t *testing.T) {
 }
 
 // TestIbFspathTwoUnicodeForms pins what the code does today: on a volume that
-// stores names as given, café in NFC and in NFD are two folders and, with the
+// stores names as given, cafe with an acute accent in NFC and in NFD (the
+// escapes "caf\u00e9" and "cafe\u0301" below) are two folders and, with the
 // EqualFold filter off for a non-ASCII name, only os.SameFile keeps them apart.
 // Whether two such folders are two projects on Linux is an open owner question
 // with default yes (backlog-11nov-ib/INDEX.md, Owner questions).
 func TestIbFspathTwoUnicodeForms(t *testing.T) {
 	root := ibFsRoot(t)
-	nfc, nfd := "café", "café"
+	nfc, nfd := "caf\u00e9", "cafe\u0301"
 	ibFsTwoFolders(t, root, nfc, nfd)
 	for _, name := range []string{nfc, nfd} {
 		for _, p := range []string{filepath.Join(root, name), filepath.Join(root, name, "x")} {
