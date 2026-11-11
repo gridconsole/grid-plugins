@@ -498,7 +498,10 @@ func Metadata(j Job) (string, error) {
 			fmt.Fprintf(&out, "%s: %s\n", key, value)
 		}
 	}
-	for _, key := range []string{"id", "item", "title", "role", "skills", "review", "risk", "max_rounds", "intent", "links", "keep", "decisions", "read", "write", "out_of_scope", "acceptance", "verify", "budget", "on_blocked", "after", "attempt", "continues", "discovered_from", "close_reason", "checkpoint", "review_rounds", "level_raised", "worktree", "posts_back", "status", "follow_up"} {
+	for _, key := range []string{"id", "item", "title", "role", "skills", "review", "risk", "intent", "links", "keep", "decisions", "read", "write", "out_of_scope", "acceptance", "verify", "budget", "on_blocked", "after", "attempt", "continues", "discovered_from", "close_reason", "checkpoint", "review_rounds", "level_raised", "worktree", "posts_back", "status", "follow_up"} {
+		if _, ok := m[key]; !ok && key == "review" {
+			continue // retired: written only when an old plan still carries it
+		}
 		fmt.Fprintf(&out, "%s: %s\n", key, m[key])
 	}
 	out.WriteString("---\n")

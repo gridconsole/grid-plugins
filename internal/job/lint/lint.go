@@ -134,12 +134,6 @@ func (c *checker) validate(j job.Job, o Options) {
 			c.add("job.required", key, "Empty "+key, "Fill in "+key+" from the plan item.")
 		}
 	}
-	if !wordSet("L0 L1 L2 L3")[j.Review] {
-		c.add("job.review", "review", "Invalid review level", "Use L0, L1, L2 or L3.")
-	}
-	if j.MaxRounds < 1 {
-		c.add("job.max-rounds", "max_rounds", "max_rounds must be positive", "Set a positive number of rework rounds.")
-	}
 	for _, risk := range j.Risk {
 		if !wordSet("concurrency security data-format cross-platform")[risk] {
 			c.add("job.risk", "risk", "Unknown risk "+risk, "Use a risk named in the Job contract.")
