@@ -216,7 +216,7 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 		if !within(gridHome, real) {
 			// A guest gets the unknown-task answer, not the host's Grid home path.
 			if r.guest() {
-				return "", "", fmt.Errorf("task not found")
+				return "", "", ErrTaskNotFound
 			}
 			return "", "", fmt.Errorf("task path %s is outside the Grid home %s", real, gridHome)
 		}

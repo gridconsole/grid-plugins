@@ -196,7 +196,7 @@ func Run(args []string, e Env) int {
 					return fail(err, 1)
 				}
 				if named != guestTask {
-					return fail(errors.New("task not found"), 1)
+					return fail(where.ErrTaskNotFound, 1)
 				}
 			}
 		}
@@ -508,7 +508,7 @@ func guestFile(path string, e Env) (string, error) {
 		return task, nil // the read reports a file that is not there
 	}
 	if rel, err := filepath.Rel(task, real); err != nil || !filepath.IsLocal(rel) {
-		return "", errors.New("task not found")
+		return "", where.ErrTaskNotFound
 	}
 	return task, nil
 }
