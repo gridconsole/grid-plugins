@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/settings"
@@ -153,6 +155,12 @@ func runWorkerNext(args []string, env Env) int {
 		Out: env.Stdout, Diag: diag,
 		Tasks: func() ([]string, error) { return workerTaskDirs(env) },
 		Model: func(dir, role string) (string, string, error) { return workerSpawnModel(env, dir, role) },
+		// The pass moves an old approval receipt into the task's Feed once, under the task lease.
+		ReceiptPending: migrate.ReceiptPending,
+		ReceiptMove: func(dir string, w feed.Writer) error {
+			_, _, err := migrate.ReceiptToJob(dir, w)
+			return err
+		},
 	}
 	s.Configure = func(st *orchestrator.Store, taskID string) {
 		dir := st.Feed.TaskDir

@@ -16,8 +16,8 @@ import (
 // still records the plan hash and digest.
 func TestApproveGateFlagIsUnknown(t *testing.T) {
 	h := newHarness(t)
-	h.env.Getenv = func(string) string { return "" }
 	fixture := taskFixture(t, h)
+	h.leased(fixture.Path)
 	if _, err := taskWriter(h.env).Change(task.WriteOptions{ID: fixture.ID, Action: "status", State: "waiting"}); err != nil {
 		t.Fatal(err)
 	}
@@ -50,13 +50,10 @@ func TestApproveGateFlagIsUnknown(t *testing.T) {
 	if got["plan_hash"] != plan.Hash(approvedPlan) || got["plan_digest"] != plan.Digest(approvedPlan) {
 		t.Fatalf("approve output does not carry the plan hash and digest: %s", h.out)
 	}
-	data, err := os.ReadFile(filepath.Join(fixture.Path, "approval.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var receipt task.Event
-	if err := json.Unmarshal(data, &receipt); err != nil || receipt.PlanDigest != plan.Digest(approvedPlan) || receipt.Gate != "" {
-		t.Fatalf("receipt %s: %v", data, err)
+	// The approval is the plan Job result; approval.json is the copy beside it.
+	requireApproveReceipt(t, fixture.Path)
+	if a, err := task.ApprovalFromJob(fixture.Path); err != nil || a.PlanDigest != plan.Digest(approvedPlan) || a.PlanHash != plan.Hash(approvedPlan) {
+		t.Fatalf("Job result %+v: %v", a, err)
 	}
 	if !task.Approved(fixture.Path) {
 		t.Fatal("plain approve did not approve the plan")

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/approvefix"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/plan"
 	"github.com/gridconsole/grid-plugins/internal/project"
@@ -45,12 +46,30 @@ func write(t *testing.T, path, content string) {
 	}
 }
 
-// approve records the plan approval the way a person does, through grid approve's writer.
+// approve records the plan approval the way a person does through grid approve:
+// Store.Approve (the stale-hash check and the history line), then the result of the
+// approve person Job, which is the only approval record.
 func approve(t *testing.T, s Store) {
 	t.Helper()
-	if _, err := s.Approve(task.WriteOptions{ID: "T-01"}, ""); err != nil {
+	event, err := s.Approve(task.WriteOptions{ID: "T-01"}, "")
+	if err != nil {
 		t.Fatal(err)
 	}
+	postApproval(t, s, event)
+}
+
+// postApproval posts event as the accepting result of a new approve person Job.
+func postApproval(t *testing.T, s Store, event task.Event) {
+	t.Helper()
+	tk, err := s.tasks().Show("", "T-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := plan.Store{TaskDir: tk.Path}.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvefix.Approve(t, tk.Path, text, event.LandsHash)
 }
 
 // landJSON is the record the first L27 branch trusted; any agent could write it.
@@ -231,18 +250,69 @@ func TestInvalidDeployAndHash(t *testing.T) {
 	}
 }
 
-func TestLandRefusesSymlinkedApproval(t *testing.T) {
+// Land reads no approval file: a task whose folder holds an approval.json that
+// names the current plan, as a regular file or as a symlink, but has no approve
+// person Job is not approved. (The old test of a symlinked approval.json asserted
+// the file reader refused a symlink; that reader is removed by the owner's
+// direction, verdict 12, docs/lanes/E-verdict-12-receipts.md.)
+func TestLandIgnoresAnApprovalFile(t *testing.T) {
+	for _, symlink := range []bool{false, true} {
+		t.Run(fmt.Sprint(symlink), func(t *testing.T) {
+			s, dir, repo := fixture(t)
+			text, err := plan.Store{TaskDir: dir}.Read()
+			if err != nil {
+				t.Fatal(err)
+			}
+			receipt := fmt.Sprintf(`{"task":"T-01","what":"approve","plan_hash":%q,"plan_digest":%q}`+"\n", plan.Hash(text), plan.Digest(text))
+			if symlink {
+				elsewhere := filepath.Join(s.Resolver.GridHome, "approval.json")
+				write(t, elsewhere, receipt)
+				if err := os.Symlink(elsewhere, filepath.Join(dir, "approval.json")); err != nil {
+					t.Skipf("symlinks unavailable: %v", err)
+				}
+			} else {
+				write(t, filepath.Join(dir, "approval.json"), receipt)
+			}
+			_, err = s.Run(context.Background(), repo, "T-01", false)
+			if !errors.Is(err, ErrRejected) || !strings.Contains(err.Error(), "the task has no plan Job") {
+				t.Fatalf("an approval file approved the plan: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(repo, "outcome")); !os.IsNotExist(err) {
+				t.Fatal("command ran")
+			}
+		})
+	}
+}
+
+// The result of the approve person Job is the whole approval: a task with only
+// that (posted without Store.Approve, no file anywhere) lands, and the lands hash
+// it carries must be the rule's.
+func TestLandsOnTheJobResultAlone(t *testing.T) {
 	s, dir, repo := fixture(t)
-	approve(t, s)
-	elsewhere := filepath.Join(s.Resolver.GridHome, "approval.json")
-	if err := os.Rename(filepath.Join(dir, "approval.json"), elsewhere); err != nil {
+	text, err := plan.Store{TaskDir: dir}.Read()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(elsewhere, filepath.Join(dir, "approval.json")); err != nil {
-		t.Skipf("symlinks unavailable: %v", err)
+	rule, err := s.rule("sample")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := s.Run(context.Background(), repo, "T-01", false); err == nil {
-		t.Fatal("followed approval symlink")
+	approvefix.Approve(t, dir, text, ruleHash(rule))
+	if _, err := os.Stat(filepath.Join(dir, "approval.json")); !os.IsNotExist(err) {
+		t.Fatalf("approval.json exists: %v", err)
+	}
+	r, err := s.Run(context.Background(), repo, "T-01", false)
+	if err != nil || r.Status != "landed" {
+		t.Fatalf("result %+v, error %v", r, err)
+	}
+}
+
+// A task with no approve person Job is not approved, whatever else is in its folder.
+func TestLandWithNoPlanJobIsRefusedWithThatText(t *testing.T) {
+	s, _, repo := fixture(t)
+	_, err := s.Run(context.Background(), repo, "T-01", false)
+	if !errors.Is(err, ErrRejected) || !strings.Contains(err.Error(), "plan has not been approved: the task has no plan Job") {
+		t.Fatalf("error %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(repo, "outcome")); !os.IsNotExist(err) {
 		t.Fatal("command ran")
@@ -264,10 +334,14 @@ func TestWorkflowApproval(t *testing.T) {
 		gate, approval string
 		allow          bool
 	}{
-		// No ship receipt exists any more (S6c3): a plan approval never releases a
-		// ship land, and a ship land with no plan Job has nothing that releases it.
+		// No ship receipt exists any more (S6c3), and since the approval is only the
+		// result of the plan Job, whose reader ignores the gate name, a plan approval
+		// releases a ship land as it already did for a task with a Job; the old
+		// {"ship","plan"} refusal came from the approval.json reader (receiptForGate),
+		// removed with the file (verdict 12). A ship land with no plan Job has
+		// nothing that releases it.
 		{"plan", "plan", true},
-		{"ship", "plan", false},
+		{"ship", "plan", true},
 		{"none", "", true}, {"ship", "", false}, {"typo", "plan", false},
 	} {
 		t.Run(tc.gate+"/"+tc.approval, func(t *testing.T) {
@@ -367,9 +441,11 @@ func TestWorkflowDefaultAndInvalidDocuments(t *testing.T) {
 func TestUnboundApprovalCannotLand(t *testing.T) {
 	s, _, repo := fixture(t)
 	// A pre-L61 approval has a correct plan hash but no lands binding.
-	if _, err := s.tasks().Approve(task.WriteOptions{ID: "T-01"}, ""); err != nil {
+	event, err := s.tasks().Approve(task.WriteOptions{ID: "T-01"}, "")
+	if err != nil {
 		t.Fatal(err)
 	}
+	postApproval(t, s, event)
 	if _, err := s.Run(context.Background(), repo, "T-01", false); !errors.Is(err, ErrRejected) {
 		t.Fatalf("unbound receipt: %v", err)
 	}

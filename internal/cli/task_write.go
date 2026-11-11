@@ -10,6 +10,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/land"
+	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/workflow"
@@ -170,11 +171,20 @@ func runApprove(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
 		return 3
 	}
-	// The approval is also the result of the open person Job of the approve
-	// step, when the task has one. Without a Feed writer it stays open and
-	// approval.json is written as before.
-	var post func(task.Event) error
-	if store, job := planPersonJob(resolved.Path); job != "" {
+	// The approval is recorded only as the result of the approve person Job of the
+	// task. An old approval receipt file is moved into that Job first; with no Job, grid
+	// approve posts one.
+	w, err := approvalWriter(env)
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
+		return 3
+	}
+	if _, _, err := migrate.ReceiptToJob(resolved.Path, w); err != nil {
+		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
+		return 1
+	}
+	store, job := planPersonJob(resolved.Path)
+	if job != "" {
 		// The person Job waits for its after list like any other answer.
 		snap, err := loadFeedSnapshot(store)
 		if err == nil {
@@ -184,18 +194,13 @@ func runApprove(args []string, env Env) int {
 			fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
 			return 3
 		}
-		if w, err := orchestratorWriter(env, "task", env.getenv("GRID_LEASE_EPOCH")); err != nil {
-			fmt.Fprintf(env.Stderr, "grid approve: %s stays open: %v\n", job, err)
-		} else {
-			post = func(e task.Event) error { return personApproval(store, w, job, "approved", e) }
-		}
 	}
 	event, err := (land.Store{Resolver: resolver(env)}).Approve(o, *hash)
 	// Approve has returned, so .task.lock and .plan.lock are released before
 	// the post takes .orchestrator.lock. A stale hash posts nothing.
-	if err == nil && post != nil {
+	if err == nil {
 		env.afterApproveHook()
-		err = post(event)
+		err = recordApproval(resolved.Path, store, w, job, "approved", event)
 	}
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }

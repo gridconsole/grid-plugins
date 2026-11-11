@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/approvefix"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/job"
@@ -77,9 +79,8 @@ func TestPlanPublicationRetriesWithoutResettingJobs(t *testing.T) {
 	if after.Assign.Fence != fence || after.Role != "writer" {
 		t.Fatalf("plan reset published Job: %+v", after)
 	}
-	records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
-	if err != nil || len(records.Records) != 2 {
-		t.Fatalf("duplicate or missing publication: %+v %v", records, err)
+	if records := planJobRecords(t, f); len(records) != 2 {
+		t.Fatalf("duplicate or missing publication: %+v", records)
 	}
 	snap, err := Load(f.s.Feed)
 	if err != nil || snap.State.Jobs["J-2"] == nil || snap.State.Jobs["J-2"].Assign != nil {
@@ -106,9 +107,8 @@ func TestPlanPublicationValidatesBeforeWriting(t *testing.T) {
 			if _, err := f.s.Tick(); err == nil {
 				t.Fatal("accepted invalid plan")
 			}
-			records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
-			if err != nil || len(records.Records) != 0 {
-				t.Fatalf("invalid plan published Jobs: %+v %v", records, err)
+			if records := planJobRecords(t, f); len(records) != 0 {
+				t.Fatalf("invalid plan published Jobs: %+v", records)
 			}
 		})
 	}
@@ -122,7 +122,7 @@ func setupPlan(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	f.s.Feed.TaskDir = dir
-	text := "---\nid: T-01\ntitle: Example\nproject: example\nsize: normal\nworkflow: ''\nstate: waiting\ncreated: 2026-01-01T00:00:00Z\n---\n"
+	text := "---\nid: T-01\nulid: " + taskID + "\ntitle: Example\nproject: example\nsize: normal\nworkflow: ''\nstate: waiting\ncreated: 2026-01-01T00:00:00Z\n---\n"
 	for name, body := range map[string]string{"task.md": text, "intent.md": "Example"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0600); err != nil {
 			t.Fatal(err)
@@ -137,14 +137,45 @@ func approvePlan(t *testing.T, f *fixture) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := json.Marshal(task.Event{Task: "T-01", What: "approve", PlanHash: plan.Hash(text), PlanDigest: plan.Digest(text)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "approval.json"), b, 0600); err != nil {
-		t.Fatal(err)
-	}
+	approveRevision(t, f, text)
 	if !task.Approved(f.s.Feed.TaskDir) {
 		t.Fatal("invalid approval fixture")
 	}
+}
+
+// approveRevision posts the approve person Job of the plan and its accepting
+// result for the plan revision text, the only approval record. The Job is J-90
+// (J-91 for a second approval), beside the plan's own Jobs.
+func approveRevision(t *testing.T, f *fixture, text string) {
+	t.Helper()
+	all, err := f.s.Feed.Read(feed.Filter{Type: "job"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved := 0
+	for _, r := range all.Records {
+		if r.Body["kind"] == "approve" {
+			approved++
+		}
+	}
+	id := "J-" + strconv.Itoa(90+approved)
+	f.post(t, feed.Input{Type: "job", Job: id, Body: approvefix.JobBody(id)}, f.s.Writer)
+	f.post(t, feed.Input{Type: "control", Body: map[string]any{"target": id, "status": "accepted", "reason": "answered by dana", "answer": "approved", "plan_hash": plan.Hash(text), "plan_digest": plan.Digest(text)}}, f.s.Writer)
+}
+
+// planJobRecords are the job records of the plan's own Jobs, without the approve
+// person Job that approvePlan posts.
+func planJobRecords(t *testing.T, f *fixture) []feed.Entry {
+	t.Helper()
+	records, err := f.s.Feed.Read(feed.Filter{Type: "job"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []feed.Entry
+	for _, r := range records.Records {
+		if r.Body["kind"] != "approve" {
+			out = append(out, r)
+		}
+	}
+	return out
 }

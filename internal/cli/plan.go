@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/plan"
+	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
@@ -206,7 +207,13 @@ func runPlanMigrate(store plan.Store, dryRun, yes, asJSON bool, env Env) int {
 			converted, form, err = plan.Upgrade(text)
 		}
 	} else {
-		written, form, err = store.Migrate(yes)
+		// The plan Job's result tells whether the installed plan is approved; task
+		// imports plan, so the CLI hands the approved hash in.
+		approved := func() string {
+			a, _ := taskstore.ApprovalFromJob(store.TaskDir)
+			return a.PlanHash
+		}
+		written, form, err = store.Migrate(yes, approved)
 	}
 	if err != nil {
 		return planError(env, err)

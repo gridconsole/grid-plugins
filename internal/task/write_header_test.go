@@ -168,11 +168,22 @@ func TestApproveStillWritesAnOrdinaryTask(t *testing.T) {
 	s, task := writeFixture(t)
 	path := headerTask(t, task, ordinaryHeader, "waiting")
 	before := taskText(t, path)
-	if _, err := s.Approve(WriteOptions{ID: task.ID}, setPlan(t, task, planV1)); err != nil {
+	event, err := s.Approve(WriteOptions{ID: task.ID}, setPlan(t, task, planV1))
+	if err != nil {
 		t.Fatal(err)
 	}
 	if after := taskText(t, path); after != before {
 		t.Fatalf("approve changed task.md:\n%s", after)
+	}
+	// The result is posted after Approve; a task with no Feed identity gets its ulid
+	// line when its Job is posted, and nothing else in the header changes.
+	postApprovalResult(t, task.Path, event)
+	id, _, err := FeedIdentity(task.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after := strings.Replace(taskText(t, path), "ulid: "+id+"\n", "", 1); after != before {
+		t.Fatalf("posting the result changed task.md beyond the ulid line:\n%s", after)
 	}
 	if !Approved(task.Path) {
 		t.Fatal("not approved")

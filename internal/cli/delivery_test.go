@@ -485,6 +485,7 @@ func TestApproveAfterDeliveryRecordsPlanApproval(t *testing.T) {
 	if code := h.run(dir, "deliver", "Ready"); code != 0 {
 		t.Fatal(h.errb)
 	}
+	h.leased(dir)
 	if code := h.run(dir, "approve", "T-01", "--json"); code != 0 {
 		t.Fatal(h.errb)
 	}
@@ -492,9 +493,8 @@ func TestApproveAfterDeliveryRecordsPlanApproval(t *testing.T) {
 	if err := json.Unmarshal(h.out.Bytes(), &event); err != nil || event.What != "approve" || event.Gate != "" || event.PlanHash == "" {
 		t.Fatalf("%+v %v", event, err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "approval.json")); err != nil {
-		t.Fatal(err)
-	}
+	// The approval is the plan Job result; approval.json is the copy beside it.
+	requireApproveReceipt(t, dir)
 	if _, err := os.Stat(filepath.Join(dir, "approval-ship.json")); !os.IsNotExist(err) {
 		t.Fatal("approve wrote a ship receipt", err)
 	}
