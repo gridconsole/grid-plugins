@@ -36,7 +36,6 @@ specific gate refusal reason; it is not replaced by the general code.
 | `person_required` | The existing person gate refused the request. |
 | `invalid_argument` | Invalid arguments or a usage/validation failure. |
 | `invalid_policy` | A workflow policy value the command depends on is invalid (signal move to the inbox: `inbox_workspace`); the object also carries `key` and exits 1. |
-| `workflow_changed` | The task's workflow is now defined otherwise than when `grid task new` wrote the `workflow_digest` in its `task.md` (a project folder renamed or rebuilt around it, or a `workflows.md` changed); the task is held, and `grid deliver` exits 1 with this code in its `--json` envelope. |
 | `linked_file` | A protected file has more than one hard link. For a task's task.md, history.md, approval*.json or plan.md, Grid refuses to read or write the task and holds its gates. The workspace or a project's workflows.md and a task's workflow.md are unreadable: every command whose person gate reads the file refuses for a person and an agent alike (signal verbs, other verbs in a project scope with no task, and every verb in that task), `signal move --inbox` refuses. A linked workflows.md holds every named-workflow task in its scope, not only previews: a task whose workflow is a name or the default (not an inline list) and that has no plan approval is held by the guard, `grid deliver` exits 1, and no preview can be raised. Task creation in that scope refuses too: `grid task new` and `signal act --act turn` exit 1 with this code and make no task. The workspace file's scope is every project and Personal; a project file's scope is that project. Remove the other links to clear it. |
 
 The constants live in `internal/cli/error_codes.go`. Read `code` on existing
@@ -785,8 +784,20 @@ no task or Feed record shapes.
 
 ## Plan approval receipts
 
-Local task receipts in `approval.json` (plan), `approval-preview.json` (preview)
-and `approval-ship.json` (ship) retain `plan_hash`, the six lower-case hex digits used in the plan heading.
+The plan Job's accepted result is the only approval of a plan: `grid approve`
+answers the task's plan Job, and the approval counts only while the `plan_hash`
+and `plan_digest` in that result match `plan.md`. `grid approve` also writes
+`approval.json` in the task folder, a copy for readers of the task folder (the
+app reads it). The copy is not a fallback: a task with no plan Job has no
+approval, and nothing reads `approval.json` to approve a plan. It is read only
+by a repeat `grid approve` while the plan Job is still open, and by the
+migration that moves an old plan receipt into the plan Job's result and removes
+the file. Preview and ship receipts (`approval-preview.json`,
+`approval-ship.json`) are no longer written or read: an old journal replay drops
+them. Their names are still in the host guard's file list, which warns by
+default and denies only at level `block`.
+
+The result and the copy retain `plan_hash`, the six lower-case hex digits used in the plan heading.
 New approvals also write `plan_digest`: all 64 lower-case hex digits of SHA-256
 of canonical plan bytes, including step `evidence:` and `needs:` lines that the
 legacy short hash omits. The short hash is therefore not necessarily a prefix
@@ -816,85 +827,53 @@ empty, null, non-string or incorrect digest is also refused. Explicitly
 reapproving with either token writes a digest receipt (subject to the workflow
 token policy). An implicit reapproval also
 checks the previous digest, so a short-hash collision requires an explicit
-review and `--plan-hash` to replace the receipt. Plan receipts still have no
-`gate` field; ship receipts carry `gate: ship` and cannot release the plan gate.
+review and `--plan-hash` to replace the approval. `approval.json` carries no
+`gate` field.
 
-The preview receipt mirrors the ship one. While `task.md` has `gate: preview` and
-the task is `waiting`, `grid approve` writes `approval-preview.json` (the same
-event with `gate: preview`, the same hash, digest and `--plan-hash` compare-and-set
-rules) instead of `approval.json`, and appends the prose history line
-`- <time> · preview approved · <plan_hash> · by <who>` (`· via <via>` when the
-entry point is known) after the JSON event in the same journal write. Only Grid
-writes that line; the plan guard refuses an agent's attempt to add it, and the host
-guard fences `approval-preview.json` like the other receipts. A preview approval never
-touches `approval.json`, so the plan approval stays valid, and it cannot release the
-plan or ship gate. Reopening a task invalidates all three receipt files, and
-`grid plan migrate` treats a matching preview receipt like a matching plan or ship one.
+`grid approve` takes `--plan-hash`, `--note` and `--json`, and no flag names a
+step: the approval is the plan Job's result whatever the step is called.
+Without `--plan-hash` it approves the current plan, and refuses with `Changed
+since you approved` when the result it finds no longer matches. The person
+check still comes first: an agent gets exit 3. A repeat approve whose result
+already matches the current hash, digest and lands hash (and the `--plan-hash`
+token, when one is given) writes nothing: no rewrite of `approval.json` and no
+second history line. It exits 0 and prints the stored approval. While the plan
+Job is still open, the repeat finds the approval in `approval.json` instead.
+Reopening a task writes a reopen event over `approval.json`, so the copy no
+longer matches, and the task's new plan Job needs its own approval.
 
-`grid approve --gate plan|preview|ship` names the gate the person approved. Under
-`.task.lock`, before the plan is read, it is compared with the task's gate (`ship`,
-`preview`, and `plan` for any other `gate` value in `task.md`); a mismatch exits 1
-with `Changed since you approved: the task is at gate <g>, not <want>` and writes
-nothing. Any other `--gate` value exits 2 before a lock is taken. Without `--gate`
-the task's gate decides, as before. The person check still comes first: an agent
-gets exit 3 with or without `--gate`. A repeat approve whose receipt for that gate
-already matches the current hash, digest and deploy rule (and the `--plan-hash`
-token, when one is given) writes nothing: no receipt rewrite and no second history
-line. It exits 0 and prints the stored receipt.
-
-`grid preview` raises the preview gate (agent-callable, like `deliver`): it sets
-`state: waiting`, `step: preview`, `gate: preview` and appends one `what: preview`
-event, after checking that the task's steps (the inline `workflow:` list, else the
-named template, filtered by size; unresolvable steps fail closed) hold a plan
-approval before a `preview` approve step, that the plan receipt matches, and that
-the spec is a nonblank regular file inside the task folder.
+`grid plan migrate` reads no receipt file: it asks for the approved plan hash,
+which is the plan Job's result. If that hash is the plan being migrated, the
+migration changes an approved plan and needs `--yes`.
 
 Rust's existing history receipt remains readable by the legacy guard path:
 `- <time> · plan accepted · rev <n> · <hash> · by <person>`.
-An existing JSON approval takes precedence over that prose receipt, including
-when its digest has become stale. Legacy approvals remain weak until reapproved;
-this extension does not retroactively strengthen receipts or change Rust readers.
+It counts only for a task with no plan Job; a task with a plan Job is answered by
+the Job's result, which takes precedence over that prose receipt, including when
+its digest has become stale. Legacy approvals remain weak until reapproved;
+this extension does not retroactively strengthen approvals or change Rust readers.
 
-The host guard protects `task.md` under the same write rule as approval files,
-including when the plan guard is disabled, because its `workflow` selects the
-gates. Reads remain allowed. An `approve` step whose name contains `plan` is a
-plan gate, as in Rust; an `approve` step before the first `run` or `work` also
-requires plan approval, regardless of its name (for example, `sign-off`). A later
-approval without `plan` in its name remains a delivery gate.
+The host guard protects `task.md` under the same write rule as the approval
+file, including when the plan guard is disabled, because its `workflow` selects
+the approval steps. The guard warns by default and denies only at level
+`block`. Reads remain allowed. An `approve` step whose name
+contains `plan` is the plan approval, as in Rust; an `approve` step before the
+first `run` or `work` also requires plan approval, regardless of its name (for
+example, `sign-off`). A later approval without `plan` in its name remains a
+delivery approval.
 
-`grid task new` binds a task to its workflow: once the project is registered it
-writes `workflow_digest:` in `task.md`, the hex sha256 of the workflow's whole
-step list as its template defines it (each step's name, kind, whether it is the
-plan gate, and the sizes it runs for, in order), whatever the task's size. A
-task made with size `auto` carries it too, and keeps it when a person sizes it
-later. Only Grid writes the field, and `grid task show --json` does not include
-it. The guard and `grid deliver` find the template again and compare as soon as
-it is found, before its steps resolve for the size: a different digest is code
-`workflow_changed`, which holds the task as a folder under another project than
-its `project:` does, and no receipt releases it. `grid deliver` refuses it with
-exit 1, `Deliver blocked: plan not approved: <id>: workflow_changed: ...` on
-stderr and, with `--json`, the envelope
-`{"error":{"code":"workflow_changed","message":"Deliver blocked: ..."}}` on
-stdout. Any change to the template's steps, or another template under the same
-name, is a change; a project folder renamed away and back, or rebuilt with
-identical files, keeps the digest and changes nothing. An inline `workflow:`
-list is not compared: its steps live in `task.md`, which agents cannot write,
-so nothing outside the task can change them. A person who rewrites `task.md`'s
-`workflow:` line as an inline list acts outside the digest: the task runs those
-steps and is not held for the rewrite. A workflow with no
-template to find at creation (a name no `workflows.md` holds, an unreadable
-`workflows.md`, or no default for a task that names none) leaves the field out.
-Tasks without the field (made before it, or migrated) stay on the folder-name
-check alone until a person re-creates them. A person who changes a project's
-`workflows.md` on purpose holds each open task of that project whose workflow
-is that template, with `workflow_changed`; the person clears one by re-creating
-the task, or by deleting the `workflow_digest:` line from its `task.md` by hand,
-which puts it back on the folder-name check. No `grid task rebind` verb exists yet.
+A task is bound to its workflow by its project: `task.md` must name the project
+whose `tasks/` folder it sits in. A task whose `task.md` names another project
+than its folder is held, and no approval releases it. An inline `workflow:` list
+needs no project and is read as it is. Grid does not write a digest of the
+workflow into `task.md`, and nothing holds a task because a `workflows.md`
+changed after the task was made.
 
 The task's `workflow.md` snapshot and workspace/project `workflows.md` files
-are protected by the host guard against Write, Edit, MultiEdit and literal
-Bash writes, including symlink aliases for workspace/project policy, even with
-the plan guard disabled. Reads remain allowed. The generated Claude permission
+are protected by the host guard against the Write, Edit, MultiEdit and
+NotebookEdit file tools, including symlink aliases for workspace/project policy,
+even with the plan guard disabled. The host guard reads no shell text: a Bash
+command is never answered by it. Reads remain allowed. The generated Claude permission
 rules already protect every file in task folders. Task snapshots supply
 additional `person_verbs` and gate posting roles; signal verbs also apply the
 project/workspace person policy described below.
