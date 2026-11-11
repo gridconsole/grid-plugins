@@ -252,9 +252,9 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	}
 	b.WriteString("## Job\n\n")
 	fmt.Fprintf(&b, "%s\n\n", j.Title)
-	if strings.EqualFold(strings.TrimSpace(j.Role), "orchestrator") {
-		// The worker starts claude without --agent, so the Job carries the agent's own instructions.
-		b.WriteString("### Instructions\n\n" + agentBody(gridplugins.OrchestratorAgent) + "\n\n")
+	if md, ok := gridplugins.AgentFor(contract.NormalizeRole(j.Role)); ok {
+		// The worker starts claude without --agent, so the Job carries the role's own instructions.
+		b.WriteString("### Instructions\n\n" + agentBody(md) + "\n\n")
 	}
 	if j.Checkpoint != nil {
 		fmt.Fprintf(&b, "Checkpoint: %s (%s)\n\n", j.Checkpoint.Step, j.Checkpoint.Commit)
