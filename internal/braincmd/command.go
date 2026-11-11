@@ -43,7 +43,7 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
   check [<proposal-id>]      Read-only gate: flag proposals, skills and agents that change what runs.
                              Exit 0 clean, 3 findings, 1 unreadable brain.
   changes [--since <RFC3339>] [--limit <n>]  List what changed in the brain, newest first.
-  revert <topic>/<name> --to <n>  Publish version n of an entry again as a new version.
+  revert <topic>/<name> --to <n> [--reason <why>]  Publish version n of an entry again as a new version; the reason shows in changes.
                              Exit 0 done, 1 store error or no such version, 3 role refused.
   supersede <old> --by <new> --reason <why>  Mark an accepted note replaced by another, after the fact.
                              Exit 0 done or already done, 1 refused or store error, 2 usage, 3 role refused.

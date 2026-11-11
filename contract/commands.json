@@ -2973,6 +2973,11 @@
               "required": false
             },
             {
+              "name": "--reason",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--to",
               "takes": "value",
               "required": true
