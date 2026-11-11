@@ -18,7 +18,7 @@ Base: main at 0e60a23a (the clone's main; the brief named d0400870).
 | 8. Suites and lint | HOLDS | Package list below, all ok, exit 0. `make lint` (go vet ./...) exit 0. |
 | Windows build | HOLDS | `GOOS=windows CGO_ENABLED=0 go build ./...` exit 0. |
 | macOS build | HOLDS | `GOOS=darwin CGO_ENABLED=0 go build ./...` exit 0. |
-| Small commits, no attribution | HOLDS | `git log origin/main..HEAD`: one commit, one sentence, no trailers. |
+| Small commits, no attribution | HOLDS | `git log origin/main..HEAD`: two commits (the change, then this report), each one sentence, no trailers. |
 | No guard, gate, cap or hold on agents | HOLDS | Only text, usage string, test tables and generated contract changed. |
 | Existing tests not edited to pass | HOLDS | Existing tests only gained table rows the brief names (contract_inventory_test.go:273 and one annotation, guest_parity_test.go:89). No test deleted. |
 
