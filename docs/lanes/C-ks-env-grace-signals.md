@@ -46,7 +46,13 @@ Code head: a808ee9e3fa9aeb3f55ed120a6d794f050437e4d (one commit, `internal/env/e
 - The `signals.log` check needs the shell to run each trap within one Grace (100 ms) of its signal. The FIFO handshake guarantees the traps are installed first, so the residual risk is only scheduling. The comment at env_test.go:181-183 says an earlier signal-log assertion in `TestDevServerLifecycle` was dropped for that reason; that one had no handshake. 40 repeated runs, 3 package runs and the importer run all passed here.
 - Failure path: if the helper never opens the FIFO, `ksEgAwaitReady` fails with its own message at the hang bound, and its cleanup opens the FIFO non-blocking for writing so the reader goroutine does not leak.
 
+## Diff scope
+
+`git diff main --stat` on the code head a808ee9e names only `internal/env/env_test.go` (row 3). The lane head adds one more file, this lane report `docs/lanes/C-ks-env-grace-signals.md`, which the runbook requires; no product file is in the diff (`env.go` is clean after the row 3 mutation).
+
 ## NOT VERIFIED
 
 - The test has not run on macOS; there `/bin/sh` is bash in POSIX mode, and only the compile (`make cross`) was checked. The traps use the same POSIX syntax.
 - No live screen is involved; there is no UI row.
+
+Verdict: DONE
