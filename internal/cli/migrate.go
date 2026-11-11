@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/gridconsole/grid-plugins/internal/migrate"
@@ -52,6 +53,11 @@ func runMigrate(args []string, env Env) int {
 	}
 	source := absolute(*from, env)
 	if source == "" {
+		// No --from: a Grid home that is missing or empty is a fresh one.
+		if entries, err := os.ReadDir(env.GridHome); os.IsNotExist(err) || (err == nil && len(entries) == 0) {
+			fmt.Fprintln(env.Stdout, "migrate: nothing to migrate")
+			return 0
+		}
 		source = env.GridHome
 	}
 	opts := []migrate.Option{migrate.WithCeiling(env.Ceiling)}
