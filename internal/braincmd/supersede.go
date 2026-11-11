@@ -83,8 +83,7 @@ func runSupersede(args []string, env Env) int {
 			return failWith(env, l.asJSON, errors.Join(encErr, err))
 		}
 		if err != nil {
-			_ = json.NewEncoder(env.Stderr).Encode(map[string]string{"error": err.Error()})
-			return 1
+			return partialFailure(env, err)
 		}
 		return 0
 	}
