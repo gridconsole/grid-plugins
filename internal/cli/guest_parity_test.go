@@ -441,7 +441,7 @@ func guestParityEarlyAnswer(command, mode string, out guestParityOutput) bool {
 			// gate answers as an unknown task whatever the invitation.
 			want = guestParityOutput{1, "", "job: task not found\n"}
 			if mode == "json" {
-				want = guestParityOutput{1, "{\"ok\":false,\"findings\":[],\"error\":\"task not found\"}\n", ""}
+				want = guestParityOutput{1, "{\"ok\":false,\"findings\":[],\"error\":\"task not found\",\"code\":\"no_such_task\"}\n", ""}
 			}
 		case "brain changes":
 			want = guestParityOutput{3, "", "grid brain changes: caller role is not allowed to read brain changes\n"}
