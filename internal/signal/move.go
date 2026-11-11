@@ -154,6 +154,16 @@ func relocateStatus(data []byte, old, status string) ([]byte, error) {
 	if old == status {
 		return data, nil
 	}
+	// A CRLF note becomes an LF note when its status changes: the front matter
+	// is rewritten with LF, the body bytes after the closing line stay as they are.
+	if bytes.HasPrefix(data, []byte("---\r\n")) {
+		head, body, ok := bytes.Cut(data[5:], []byte("\r\n---\r\n"))
+		if !ok {
+			return nil, fmt.Errorf("signal has no closing front matter")
+		}
+		lf := append([]byte("---\n"), bytes.ReplaceAll(head, []byte("\r\n"), []byte("\n"))...)
+		data = append(append(lf, []byte("\n---\n")...), body...)
+	}
 	head, _, ok := bytes.Cut(data[4:], []byte("\n---\n"))
 	if !ok {
 		return nil, fmt.Errorf("signal has no closing front matter")
