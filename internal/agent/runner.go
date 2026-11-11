@@ -20,12 +20,19 @@ type Runner func(ctx context.Context, argv []string) (stdout string, exit int)
 // Env supplies the launch PATH, user home, and optional process probe.
 // A nil Runner uses exec.CommandContext. Lookup and Base are optional test seams;
 // nil uses the standard resolver and process environment respectively.
+//
+// Getenv is the caller's own variable lookup. When Base is nil and Getenv is set,
+// the probe child's base environment is built from Getenv over the names
+// childEnvFor passes (probeNames), so the child sees the caller's variables and
+// not the host process's. Base wins over Getenv; with both nil the base is
+// os.Environ.
 type Env struct {
 	PATH   string
 	Home   string
 	Runner Runner
 	Lookup func(name string) (string, error)
 	Base   []string
+	Getenv func(name string) string
 }
 
 func (e Env) run(ctx context.Context, name string, argv []string) (string, int) {
@@ -39,11 +46,45 @@ func (e Env) run(ctx context.Context, name string, argv []string) (string, int) 
 var systemPath = []string{"/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin"}
 
 func (e Env) childEnv(name, binary string) []string {
+	return e.childEnvOn(runtime.GOOS, string(os.PathListSeparator), name, binary)
+}
+
+// childEnvOn is childEnv for goos: Base when set, else the names childEnvFor
+// passes read through Getenv when set, else os.Environ.
+func (e Env) childEnvOn(goos, listSep, name, binary string) []string {
 	base := e.Base
 	if base == nil {
-		base = os.Environ()
+		if e.Getenv != nil {
+			base = baseFromGetenv(goos, e.Getenv)
+		} else {
+			base = os.Environ()
+		}
 	}
-	return childEnvFor(runtime.GOOS, string(os.PathListSeparator), base, e.Home, name, binary)
+	return childEnvFor(goos, listSep, base, e.Home, name, binary)
+}
+
+// probeNames are the variables childEnvFor can pass on every goos, and
+// probeNamesWindows the ones it also passes on windows. Of the LC_ names only
+// these three are asked for; childEnvFor passes any LC_ name it is given.
+var (
+	probeNames        = []string{"USER", "LOGNAME", "LANG", "TMPDIR", "SHELL", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "CLAUDE_CONFIG_DIR", "CODEX_HOME"}
+	probeNamesWindows = []string{"USERNAME", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "TEMP", "TMP", "PATHEXT", "COMSPEC"}
+)
+
+// baseFromGetenv reads probeNames (and probeNamesWindows on windows) through
+// getenv and returns NAME=value for each non-empty answer, in that order.
+func baseFromGetenv(goos string, getenv func(string) string) []string {
+	names := probeNames
+	if goos == "windows" {
+		names = append(append([]string{}, probeNames...), probeNamesWindows...)
+	}
+	base := []string{}
+	for _, name := range names {
+		if value := getenv(name); value != "" {
+			base = append(base, name+"="+value)
+		}
+	}
+	return base
 }
 
 // childEnvFor builds the probe child's environment for goos from base. It reads

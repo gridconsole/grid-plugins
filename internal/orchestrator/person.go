@@ -80,7 +80,11 @@ func (s Store) personAnswers(snap Snapshot) error {
 		})
 		first := answers[0]
 		answer, _ := first.Body["answer"].(string)
+		back := sendsBack(first.Body, first.Author.Role, item.Kind)
 		text := fmt.Sprintf("%s answered %s at %s: %s", first.Author.ID, item.ID, first.At, strings.TrimSpace(answer))
+		if back {
+			text = fmt.Sprintf("%s sent %s back at %s: %s", first.Author.ID, item.ID, first.At, strings.TrimSpace(answer))
+		}
 		said, err := s.Feed.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, s.Writer)
 		if err != nil {
 			return err
@@ -102,10 +106,9 @@ func (s Store) personAnswers(snap Snapshot) error {
 		body := map[string]any{"target": item.ID, "status": "accepted", "reason": "answered by " + first.Author.ID, "answer": strings.TrimSpace(answer)}
 		// What the person's answer carried, such as the plan revision they approved,
 		// goes into the result the readers use.
-		for _, key := range answerFields {
-			if v, ok := first.Body[key]; ok {
-				body[key] = v
-			}
+		copyAnswerFields(body, first.Body)
+		if back {
+			body = sentBackControl(item.ID, first.Author.ID, strings.TrimSpace(answer), first.Body["sent_back_hash"])
 		}
 		if _, err := s.Feed.Post(feed.Input{Type: "control", Re: said.ID, Body: body}, s.Writer); err != nil {
 			return err
@@ -157,7 +160,43 @@ func AnswerPerson(store feed.Store, w feed.Writer, id, answer string, now time.T
 // answerFields are the keys of an answer, besides the text, that reach the
 // accepting control of a person Job: the plan revision an approval was made on,
 // the lands hash, the person's note, and the reason when it is not "answered by".
-var answerFields = []string{"plan_hash", "plan_digest", "lands_hash", "note", "reason"}
+// send_back and sent_back_hash send the plan of an approve Job back instead; they
+// act only through sentBackControl and copyAnswerFields never copies them.
+var answerFields = []string{"plan_hash", "plan_digest", "lands_hash", "note", "reason", "send_back", "sent_back_hash"}
+
+// sendBackKey names the answerFields of a plan sent back.
+var sendBackKey = map[string]bool{"send_back": true, "sent_back_hash": true}
+
+// copyAnswerFields copies the answerFields that src holds into dst, except the
+// send-back keys: on a Job they do not send back they are dropped.
+func copyAnswerFields(dst, src map[string]any) {
+	for _, key := range answerFields {
+		if v, ok := src[key]; ok && !sendBackKey[key] {
+			dst[key] = v
+		}
+	}
+}
+
+// sendsBack reports whether an answer sends the plan back (D-ig): it says
+// send_back true, a person of the team wrote it and the Job is an approve Job.
+// Who may answer the approve Job at all comes from the contract tier, as for an
+// approval.
+func sendsBack(fields map[string]any, role, kind string) bool {
+	back, _ := fields["send_back"].(bool)
+	return back && kind == "approve" && contract.TierFor(role) == contract.PersonTeam
+}
+
+// sentBackControl closes the approve Job id rejected with the person's words: the
+// plan is not approved, and the re-plan keeper (guReplanRejected) posts the
+// re-plan Job for the Jobs that wait on it. It carries no plan_hash, so no reader
+// takes it for an approval.
+func sentBackControl(id, who, answer string, hash any) map[string]any {
+	body := map[string]any{"target": id, "status": "rejected", "reason": "sent back by " + who, "close_reason": "sent back by " + who, "answer": answer, "send_back": true}
+	if h, ok := hash.(string); ok && h != "" {
+		body["sent_back_hash"] = h
+	}
+	return body
+}
 
 // AnswerPersonWith is AnswerPerson with fields that become part of the result:
 // the plan_hash, plan_digest, lands_hash and note of an approval. A leased writer
@@ -182,6 +221,11 @@ func AnswerPersonWith(store feed.Store, w feed.Writer, id, answer string, fields
 	if err := CheckPersonAnswer(answer); err != nil {
 		return record, err
 	}
+	// Only a person of the team sends a plan back (D-ig, owner question 3): a guest
+	// or a writer of another tier that asks for it gets nothing written.
+	if wants, _ := fields["send_back"].(bool); wants && (guest || contract.TierFor(w.Author.Role) != contract.PersonTeam) {
+		return record, &feed.InvalidRecordError{Err: fmt.Errorf("only a person of the team sends a plan back")}
+	}
 	err = lock(func() error {
 		snap, e := Load(store)
 		if e != nil {
@@ -194,28 +238,40 @@ func AnswerPersonWith(store feed.Store, w feed.Writer, id, answer string, fields
 			return e
 		}
 		j := snap.State.Jobs[id]
+		kind := ""
+		for _, item := range snap.Items {
+			if item.ID == id {
+				kind = item.Kind
+			}
+		}
+		back := sendsBack(fields, w.Author.Role, kind)
 		if unleased {
 			// A person writes no closing control without the lease; the answer waits
-			// for the holder's next pass, which accepts the Job (personAnswers).
+			// for the holder's next pass, which accepts the Job (personAnswers) or,
+			// for a plan sent back, rejects it.
 			body := map[string]any{"answer": answer}
-			for _, key := range answerFields {
-				if v, ok := fields[key]; ok {
-					body[key] = v
+			copyAnswerFields(body, fields)
+			if back {
+				body["send_back"] = true
+				if h, ok := fields["sent_back_hash"].(string); ok && h != "" {
+					body["sent_back_hash"] = h
 				}
 			}
 			record, e = store.Post(feed.Input{Type: "answer", Re: j.History[0], Body: body}, w)
 			return e
 		}
 		text := fmt.Sprintf("%s answered %s at %s: %s", w.Author.ID, id, contract.FormatTime(now), answer)
+		if back {
+			text = fmt.Sprintf("%s sent %s back at %s: %s", w.Author.ID, id, contract.FormatTime(now), answer)
+		}
 		said, e := store.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, w)
 		if e != nil {
 			return e
 		}
 		body := map[string]any{"target": id, "status": "accepted", "reason": "answered by " + w.Author.ID, "answer": answer}
-		for _, key := range answerFields {
-			if v, ok := fields[key]; ok {
-				body[key] = v
-			}
+		copyAnswerFields(body, fields)
+		if back {
+			body = sentBackControl(id, w.Author.ID, answer, fields["sent_back_hash"])
 		}
 		record, e = store.Post(feed.Input{Type: "control", Re: said.ID, Body: body}, w)
 		return e

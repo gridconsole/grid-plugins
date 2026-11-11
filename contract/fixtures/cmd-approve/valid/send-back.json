@@ -1,0 +1,13 @@
+{
+  "folder": "T-01-example-task",
+  "from_state": "waiting",
+  "plan_hash": "0be2f7",
+  "task": "T-01",
+  "to_state": "waiting",
+  "what": "send_back",
+  "when": "2026-11-08T17:32:15.053831519Z",
+  "who": {
+    "id": "member",
+    "role": "member"
+  }
+}
