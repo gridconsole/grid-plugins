@@ -200,6 +200,12 @@ make lint
 go test ./internal/eval ./internal/evalcmd ./internal/cli -run Eval
 ```
 
+Plan-quality cases: `plan-quality-small` (a one-file change; the plan must have no
+research step) and `plan-quality-normal` (a change over a scouted repo; the plan must
+cite `research.md`, give options and a `Chosen:` line, list risks, and put a `needs:` line
+on every step). Both read the plan file the agent writes; no check calls a model or the network.
+Their own test is `go test ./internal/eval -run PlanQuality`.
+
 `make test` includes every sample with the fake agent plus isolation, failures,
 timeouts, scoring, judge hooks, persistence, output limits and CLI tests. The
 optional final command selects the CLI integration test; use

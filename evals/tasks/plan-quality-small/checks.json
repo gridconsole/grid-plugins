@@ -1,0 +1,8 @@
+[
+  {"id":"plan-file","type":"command_passes","command":["sh","-c","test -s \"$GRID_HOME\"/projects/notes-app/tasks/T-02-fix-title/plan.md"],"gate":true},
+  {"id":"sections","type":"command_passes","command":["sh","-c","f=\"$GRID_HOME\"/projects/notes-app/tasks/T-02-fix-title/plan.md; test -f \"$f\" || exit 1; grep -q '^## Where it stands' \"$f\" && grep -q '^## How we approach it' \"$f\" && grep -q '^## Risks' \"$f\" && grep -q '^## Steps' \"$f\" && grep -q '^## Verify' \"$f\""],"rubric":"S3","weight":2},
+  {"id":"needs-lines","type":"command_passes","command":["sh","-c","f=\"$GRID_HOME\"/projects/notes-app/tasks/T-02-fix-title/plan.md; test -f \"$f\" || exit 1; s=$(grep -Ec '^- \\[[ x]\\] [0-9]+ ' \"$f\"); n=$(grep -Ec '^  needs: (none|[0-9]+(, ?[0-9]+)*)$' \"$f\"); test \"$s\" -ge 1 && test \"$s\" = \"$n\""],"rubric":"S3","weight":2},
+  {"id":"recall-line","type":"command_passes","command":["sh","-c","f=\"$GRID_HOME\"/projects/notes-app/tasks/T-02-fix-title/plan.md; test -f \"$f\" || exit 1; grep -Eq '^(Recall: nothing found|Used: .+)$' \"$f\""],"rubric":"S3"},
+  {"id":"no-research-step","type":"command_passes","command":["sh","-c","f=\"$GRID_HOME\"/projects/notes-app/tasks/T-02-fix-title/plan.md; test -f \"$f\" && ! grep -Eiq 'research\\.md|grid-researcher|grid-scout|kind: research' \"$f\" && test ! -e \"$GRID_HOME\"/projects/notes-app/tasks/T-02-fix-title/research.md"],"rubric":"S3","weight":2},
+  {"id":"repo-untouched","type":"command_passes","command":["sh","-c","test \"$(ls work/notes-app/src)\" = title.js && test \"$(grep -c '' work/notes-app/src/title.js)\" = 3"],"rubric":"S3"}
+]
