@@ -37,24 +37,34 @@ func appBaseURL(env Env) string {
 	return strings.TrimRight(raw, "/")
 }
 
+// openCommand is the argv that opens target on the given OS. It is pure: the environment
+// and the executable lookup come in as arguments. On windows the target is one argv item
+// after the handler and no shell is involved, so a space or & in it needs no quoting.
+func openCommand(goos, target string, getenv func(string) string, lookPath func(string) (string, error)) ([]string, error) {
+	switch goos {
+	case "darwin":
+		return []string{"open", target}, nil
+	case "windows":
+		return []string{"rundll32", "url.dll,FileProtocolHandler", target}, nil
+	default:
+		if getenv("DISPLAY") == "" && getenv("WAYLAND_DISPLAY") == "" {
+			return nil, errors.New("no display")
+		}
+		path, err := lookPath("xdg-open")
+		if err != nil {
+			return nil, err
+		}
+		return []string{path, target}, nil
+	}
+}
+
 // openBrowser opens a URL in the person's browser; it fails when there is none to open.
 func openBrowser(target string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", target)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", target)
-	default:
-		if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
-			return errors.New("no display")
-		}
-		path, err := exec.LookPath("xdg-open")
-		if err != nil {
-			return err
-		}
-		cmd = exec.Command(path, target)
+	argv, err := openCommand(runtime.GOOS, target, os.Getenv, exec.LookPath)
+	if err != nil {
+		return err
 	}
+	cmd := exec.Command(argv[0], argv[1:]...)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
