@@ -16,6 +16,22 @@ var OrchestratorAgent string
 //go:embed agents/*.md
 var agents embed.FS
 
+//go:embed skills/*/SKILL.md
+var skills embed.FS
+
+// SkillFor is the text of skills/<name>/SKILL.md, and false when the plugin
+// carries no skill of that name. A name is a plain directory name, never a path.
+func SkillFor(name string) (string, bool) {
+	if name == "" || strings.ContainsAny(name, "/\\.") {
+		return "", false
+	}
+	b, err := skills.ReadFile("skills/" + name + "/SKILL.md")
+	if err != nil {
+		return "", false
+	}
+	return string(b), true
+}
+
 // AgentFor is the text of agents/<role>.md for a normalized role, and false when
 // the role has no agent file. A role is a plain name, never a path.
 func AgentFor(role string) (string, bool) {

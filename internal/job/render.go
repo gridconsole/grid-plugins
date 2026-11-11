@@ -340,6 +340,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		// The worker starts claude without --agent, so the Job carries the role's own instructions.
 		b.WriteString("### Instructions\n\n" + agentBody(md) + "\n\n")
 	}
+	b.WriteString(skillsBlock(j.Skills))
 	if j.Checkpoint != nil {
 		fmt.Fprintf(&b, "Checkpoint: %s (%s)\n\n", j.Checkpoint.Step, j.Checkpoint.Commit)
 	}
@@ -407,6 +408,51 @@ func SourceKey(p string) string {
 		return rel
 	}
 	return rel + "#" + anchor
+}
+
+// skillsBlock names each skill of a Job as grid:<name>, the name the plugin's
+// skills load under, so the agent knows what to pass to the Skill tool. A name
+// the plugin does not carry is listed and marked, never refused. A Job with no
+// skills gets no block.
+func skillsBlock(names []string) string {
+	var lines []string
+	listed := map[string]bool{}
+	for _, raw := range names {
+		name := strings.TrimPrefix(oneLine(raw), "grid:")
+		if name == "" || listed[name] {
+			continue
+		}
+		listed[name] = true
+		md, ok := gridplugins.SkillFor(name)
+		if !ok {
+			lines = append(lines, fmt.Sprintf("- grid:%s (not in this plugin): load it with the Skill tool before you start\n", name))
+			continue
+		}
+		line := fmt.Sprintf("- grid:%s: load it with the Skill tool before you start", name)
+		if d := skillDescription(md); d != "" {
+			line += ". " + d
+		}
+		lines = append(lines, line+"\n")
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "### Skills\n\n" + strings.Join(lines, "") + "\n"
+}
+
+// skillDescription is the description: line of a SKILL.md front matter, on one line.
+func skillDescription(md string) string {
+	rest, ok := strings.CutPrefix(md, "---\n")
+	if !ok {
+		return ""
+	}
+	head, _, _ := strings.Cut(rest, "\n---\n")
+	for _, line := range strings.Split(head, "\n") {
+		if v, ok := strings.CutPrefix(line, "description:"); ok {
+			return strings.Trim(oneLine(v), `"'`)
+		}
+	}
+	return ""
 }
 
 // agentBody is an agent file without its front matter.
