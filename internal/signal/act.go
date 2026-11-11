@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 // BadInputError identifies an invalid act request before any note is opened.
@@ -129,6 +132,10 @@ func (s Store) Apply(id string, o ActOptions) (Result, error) {
 	case o.Act != "wake" && o.Act != "reopen" && !open:
 		return Result{}, &RefusedError{Message: fmt.Sprintf("this note is already decided (%s)", n.Status)}
 	}
+	// An add links to a task that must exist; refuse before anything is written.
+	if o.Act == "add" && !s.taskExists(o.Task) {
+		return Result{}, &RefusedError{Message: "no task " + o.Task, Cause: where.ErrTaskNotFound}
+	}
 	if _, err := localdata.Machine(s.GridHome); err != nil {
 		return Result{}, err
 	}
@@ -177,6 +184,21 @@ func (s Store) Apply(id string, o ActOptions) (Result, error) {
 		return Result{}, err
 	}
 	return result(s, n, "updated"), nil
+}
+
+// taskExists reports whether the project has a task folder for id: the folder
+// is named id or id followed by "-" and a slug, as where resolves an id.
+func (s Store) taskExists(id string) bool {
+	entries, err := os.ReadDir(gridhome.TasksDir(s.GridHome, s.Project))
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() && (e.Name() == id || strings.HasPrefix(e.Name(), id+"-")) {
+			return true
+		}
+	}
+	return false
 }
 
 func openStatus(status string) bool {

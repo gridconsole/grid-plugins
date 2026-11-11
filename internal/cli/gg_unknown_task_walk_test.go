@@ -55,15 +55,14 @@ type ggTaskOpen struct {
 //
 // Seen on base b87fc364. The first group prints its diagnostic on stderr and writes
 // nothing on stdout with --json (no envelope); the second prints a JSON object of
-// its own on stdout with an "error" string, and stderr stays empty; feed types and
-// signal act exit 0.
+// its own on stdout with an "error" string, and stderr stays empty; feed types
+// exits 0.
 var ggTaskKnownOpen = map[string]ggTaskOpen{
 	"job lint":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
 	"job render": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
 	"job show":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
 	"job verify": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example"}`},
 	"feed types": {0, `stdout: {"types":[{"type":"ack","version":1,"class":"state","roles":["worker","agent","cli"]},{"type":"answer","versio...`},
-	"signal act": {0, `stdout: {"result":"updated","id":"S-01ARZ3NDEKTSV4RRFFQ69G5FAV","project":"example","note":"S-01ARZ3NDEKTSV4RRFFQ69G5F...`},
 }
 
 // ggTaskMembers reads the member set from contract/commands.json.
@@ -228,7 +227,8 @@ func ggTaskAnswer(h *harness, cwd string, argv []string) (problem string, exit i
 	switch {
 	case code != CodeNoSuchTask:
 		return "code is " + code + ", not no_such_task", exit, "stdout: " + head(out)
-	case message != strings.TrimSuffix(stderr, "\n"):
+	// The signal act envelope carries the message without the "grid: " prefix of stderr.
+	case message != strings.TrimSuffix(stderr, "\n") && "grid: "+message != strings.TrimSuffix(stderr, "\n"):
 		return "message differs from stderr", exit, "stdout: " + head(out)
 	}
 	return "", exit, seen

@@ -246,6 +246,10 @@ func TestActSnoozeStoresLocalMinute(t *testing.T) {
 func TestActAddLinksTaskWithoutCreatingOne(t *testing.T) {
 	s := fixture(t)
 	r, path := actNote(t, s, "add")
+	tasks := filepath.Join(s.GridHome, "projects", s.Project, "tasks")
+	if err := os.MkdirAll(filepath.Join(tasks, "T-7"), 0o700); err != nil { // add needs T-7 to exist
+		t.Fatal(err)
+	}
 	got, err := s.Apply(r.ID, ActOptions{Act: "add", Task: "T-7"}) // act.go:138
 	if err != nil || got.Status != "done" || got.Became != "T-7" || got.Result != "updated" {
 		t.Fatalf("%+v %v", got, err)
@@ -254,7 +258,8 @@ func TestActAddLinksTaskWithoutCreatingOne(t *testing.T) {
 	if err != nil || n.Status != "done" || n.Became != "T-7" {
 		t.Fatalf("%+v %v", n, err)
 	}
-	if _, err := os.Stat(filepath.Join(s.GridHome, "projects", s.Project, "tasks")); !os.IsNotExist(err) {
-		t.Fatalf("add created task state: %v", err)
+	entries, err := os.ReadDir(tasks)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "T-7" {
+		t.Fatalf("add created task state: %v %v", entries, err)
 	}
 }
