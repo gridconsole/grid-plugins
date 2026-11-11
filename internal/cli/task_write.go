@@ -196,10 +196,11 @@ func runApprove(args []string, env Env) int {
 			if *asJSON && errors.As(err, &waiting) {
 				_ = writeJSON(env.Stdout, struct {
 					Error      string `json:"error"`
+					Code       string `json:"code"`
 					Job        string `json:"job"`
 					WaitingFor string `json:"waiting_for"`
 					Reason     string `json:"reason"`
-				}{"job_waiting", waiting.Job, waiting.Target, waiting.Reason})
+				}{"job_waiting", "job_waiting", waiting.Job, waiting.Target, waiting.Reason})
 			}
 			return 3
 		}
