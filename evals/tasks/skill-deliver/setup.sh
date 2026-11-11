@@ -5,6 +5,7 @@ mkdir -p "$GRID_HOME/projects"
 printf "1\n" > "$GRID_HOME/VERSION"
 t="$GRID_HOME"/projects/notes-app/tasks/T-01-release-note
 mkdir -p work/notes-app/docs "$t"
+printf -- '---\n---\n' > "$GRID_HOME/projects/notes-app/project.md"
 cat > work/notes-app/docs/release-note.md <<'N'
 Notes can now be searched by tag.
 Type a tag in the search box to filter the list.
@@ -22,7 +23,8 @@ workflow:
   - {step: draft, kind: run}
   - {step: ship, kind: approve}
 step: draft
-status: running
+state: running
+created: 2026-03-04T09:00:00Z
 updated: 2026-03-04T10:00
 summary: Release note drafted.
 next: Deliver the note.
