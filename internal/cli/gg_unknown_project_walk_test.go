@@ -32,13 +32,6 @@ var ggProjectKnownOpen = map[string]string{
 	"task decline": `exit 1; stderr "grid task decline: scope: task T-99 not found in the Grid home"; stdout code no_such_task (the task is checked before the project)`,
 	"task rename":  `exit 1; stderr "grid task rename: scope: task T-99 not found in the Grid home"; stdout code no_such_task (the task is checked before the project)`,
 
-	"plan check":   `exit 1; stderr "plan: project \"absent\" is not registered"; stdout empty`,
-	"plan diff":    `exit 1; stderr "plan: project \"absent\" is not registered"; stdout empty`,
-	"plan hash":    `exit 1; stderr "plan: project \"absent\" is not registered"; stdout empty`,
-	"plan items":   `exit 1; stderr "plan: project \"absent\" is not registered"; stdout empty`,
-	"plan migrate": `exit 1; stderr "plan: project \"absent\" is not registered"; stdout empty`,
-	"plan write":   `exit 1; stderr "plan: project \"absent\" is not registered"; stdout empty`,
-
 	"job ack":     `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
 	"job blocked": `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,
 	"job cancel":  `exit 1; stderr "project \"absent\" is not registered"; stdout empty`,

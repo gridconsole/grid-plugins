@@ -179,7 +179,13 @@ func planArguments(fs *flag.FlagSet, args []string) ([]string, error) {
 	return operands, fs.Parse(options)
 }
 
+// planError prints the failure. A lookup refusal (an unregistered project, an
+// unknown task) is recorded so --json also gets the error envelope; any other
+// plan failure keeps its stderr line and empty stdout.
 func planError(env Env, err error) int {
+	if errorCode(err) != "" {
+		env.recordError(err)
+	}
 	fmt.Fprintf(env.Stderr, "plan: %v\n", err)
 	return 1
 }
