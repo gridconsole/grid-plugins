@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 )
 
@@ -379,5 +380,5 @@ func save(dir string, r Record) error {
 	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
 		return err
 	}
-	return os.Rename(f.Name(), filepath.Join(dir, r.ID+".json"))
+	return atomicfile.Rename(f.Name(), filepath.Join(dir, r.ID+".json"))
 }
