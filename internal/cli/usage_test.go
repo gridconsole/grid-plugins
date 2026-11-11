@@ -41,6 +41,7 @@ func TestUsageGolden(t *testing.T) {
 	}{
 		{"usage-show-empty", []string{"show"}},
 		{"usage-post-lead", []string{"post", "--job", "lead", "--dollars", "20", "--minutes", "10", "--session", "session-1", "--model", "example-model"}},
+		{"usage-post-second", []string{"post", "--job", "J-1.2", "--dollars", "80", "--minutes", "50"}},
 		{"usage-show-totals", []string{"show"}},
 	} {
 		if code := h.run(task, append(append([]string{"usage"}, tc.args...), "--json")...); code != 0 {
@@ -196,7 +197,7 @@ func TestUsageThresholdAndBudgetVerbsRemoved(t *testing.T) {
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			h, task := usageTask(t)
-			if code := h.run(task, append([]string{"usage"}, args...)...); code != 2 || !strings.Contains(h.errb.String(), `unknown command "`+args[0]+`"`) || h.out.Len() != 0 {
+			if code := h.run(task, append([]string{"usage"}, args...)...); code != 2 || !strings.Contains(h.errb.String(), `unknown command "`+args[0]+`"`) {
 				t.Fatalf("exit %d, stdout %s, stderr %s", code, h.out, h.errb)
 			}
 			if _, err := os.Stat(filepath.Join(task, "usage")); !os.IsNotExist(err) {

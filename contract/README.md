@@ -311,66 +311,15 @@ Disagreements and defaults chosen:
   CI, job/state for Job gates, and optional default/at for person gates. Exact
   payload names were unspecified. The fold exposes unanswered questions and
   applies selected answers, but scheduling gate readiness needs external facts.
-- Usage thresholds are numeric percentages from 0 through 100, defaulting to
-  80 and 100 for tokens, and 50, 80 and 100 for dollars and minutes. Task
-  `thresholds.json` values override per-unit `usage_notice_thresholds` workflow
-  defaults, which override the built-in defaults. Existing explicit token
-  thresholds, including 50, and previously written notices are preserved. Dollars
-  and minutes are nonnegative numbers; tokens are nonnegative integers. Exactly one unit is
-  present in a usage-notice, and its
-  body task must equal the envelope task. `grid usage post --tokens N` adds a
-  delta; `usage show` includes token totals. `usage budget set --tokens N` sets
-  a positive task budget, overriding the replaceable `tokens_per_task` default
-  in `<GRID_HOME>/workspace.md` front matter (digits only, at least 1; missing,
-  linked, unreadable, invalid or oversized files give no default). Budget show
-  reports the effective token budget and source: task, workspace or none.
-  `usage budget clear --tokens` restores that default. `usage budget set` and `usage
-  budget clear` are person-only writes on the person-gate floor, with `--workspace`
-  or without: an agent context exits 3 with the usual `person_required` refusal and
-  nothing changes, so a held session cannot lift its own hold or the workspace
-  default. The gate runs after the flags parse (a syntax error still exits 2); a
-  `--workspace` write also checks the caller role below first, which keeps its own
-  exit 3. `usage budget show` stays open to every caller.
-
-  Task `workflow.md` front matter may set `usage_notice_thresholds` to a map of
-  `tokens`, `dollars`, and/or `minutes` to percentage lists, for example
-  `usage_notice_thresholds: {tokens: [90, 100]}`. Each supplied list must contain
-  at most eight positive finite numbers in strictly increasing order and end
-  at 100. Per unit, explicit task `thresholds.json` settings win, then this
-  workflow key, then the default (tokens 80/100; dollars and minutes 50/80/100); omitted units retain
-  their own settings or defaults. Invalid units fall back while valid units
-  still apply, with one diagnostic per command; usage recording and
-  notices continue, and existing fired notice files are never rewritten.
-
-  `grid usage budget show|set|clear --workspace` accesses the workspace default
-  without resolving a task: show returns `{"tokens_per_task":100}` or
-  `{"tokens_per_task":null}` with `--json`, and `tokens_per_task 100` or
-  `tokens_per_task none` as plain text. Set requires `--tokens N`, a positive
-  integer; clear accepts optional `--tokens` and removes the key. Invalid flags
-  and amounts exit 2; all three reject `--task`, `--dollars` and `--minutes`.
-  Workspace writes preserve every byte outside the token-key lines, add an absent
-  key last in the front matter, and create front matter or the file when needed.
-  They use an exclusive
-  `.workspace.lock` and atomic replacement. An unsafe, oversized, non-UTF-8 or
-  unparsable workspace file, a lock failure or a write failure exits 1, leaving
-  the file unchanged. Clearing an absent key does not rewrite the file.
-  Replaceable `WorkspaceBudgetReadAllowed` and
-  `WorkspaceBudgetWriteAllowed` policies use `GRID_ROLE`: reads default to the
-  empty local role, owner and member; writes default to the empty role and owner.
-  Other roles are refused with exit 3 before workspace access, and a write that passes
-  the role check still needs a person: an agent ancestor or agent environment marker is
-  refused with `person_required`, even with an empty role. A replaced
-  `WorkspaceBudgetWriteAllowed` cannot admit a role the person gate refuses: the
-  gate allows only the empty role, `owner`, `member` and `cli`
-  (`internal/persongate/gate.go:132`), so any other role still exits 3 with
-  `role_not_allowed`. A `person_verbs` entry for `usage budget set|clear` in a task
-  `workflow.md`, or, with no task, in the project's `workflows.md`, applies to the
-  `--workspace` form as to the task form; a project with no policy of its own falls
-  back to `$GRID_HOME/workflows.md` (`internal/workflow/project_person.go:19`).
-  Workflow keys are
-  `token_limit_read_roles` and `token_limit_write_roles`; the CLI does not read a
-  workflow file to configure these policies. Notices are chatter;
-  the hold at the limit is not enforced yet and requires worker/session hooks.
+- Usage is a number the window shows. Dollars and minutes are nonnegative
+  numbers; tokens are nonnegative integers. `grid usage post --tokens N` adds a
+  delta; `usage show` includes token totals. The CLI has no threshold or budget
+  verbs: `grid usage threshold ...` and `grid usage budget ...` answer the
+  unknown-command error with exit 2, a post writes no usage-notice and prints no
+  usage-notice line, and the workflow key `usage_notice_thresholds`, a budget in
+  a task's `usage/thresholds.json` and `tokens_per_task` in `workspace.md` are
+  ignored when present in an old home. The `usage-notice` feed type stays in the
+  schema so notices already written to old feeds still read.
 - The task-local lease path table conflicts with the per-project merge rule.
   Merge leases explicitly require project and are stored by their caller at
   project scope. The merge wire format is otherwise unspecified: choose lease,

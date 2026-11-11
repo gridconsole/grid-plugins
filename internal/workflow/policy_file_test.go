@@ -33,7 +33,7 @@ func TestTaskPolicyFileLimits(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-						roles, gateErr := GatePostRoles(dir)
+			roles, gateErr := GatePostRoles(dir)
 			if kind == "at limit" {
 				if gateErr != nil || len(roles["person"]) != 1 || roles["person"][0] != "agent" {
 					t.Fatalf("valid file refused: %v %v", roles, gateErr)
