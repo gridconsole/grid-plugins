@@ -45,7 +45,7 @@ func TestRequestShownOnceWhenAllIntentSlotsAgree(t *testing.T) {
 		}
 	}
 	// the Context list still names the duplicate read pointer
-	if !strings.Contains(got.Brief, "- Read task:intent.md#request [person-team]\n") {
+	if !strings.Contains(got.Brief, "- Read task:intent.md#request · Request {#request} [person-team]\n") {
 		t.Fatal("the Read line for the second spelling is gone")
 	}
 }

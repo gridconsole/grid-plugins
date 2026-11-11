@@ -375,7 +375,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	sort.Strings(keys)
 	for _, k := range keys {
 		s := seen[k]
-		s.Shown = shown[k]
+		s.Shown = shown[s.Pointer] // shown is keyed by the pointer spelling the source kept
 		r.Inputs.Sources = append(r.Inputs.Sources, s)
 	}
 	return r, nil
