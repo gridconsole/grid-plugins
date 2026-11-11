@@ -30,6 +30,16 @@ Base: 01bd2ee4 (lane-M-ho-feed-types-scope-onto-main stacked). `git merge-base -
 - Split needed for row 5. Either (a) Touches gains `internal/where/where.go:219`, returning `ErrTaskNotFound` (same text), plus `internal/cli/guest_parity_test.go:437`, whose literal gains `,"code":"no_such_task"`; or (b) the owner rules that the guest by-path gate stays unclassified, and `guestFile` drops the sentinel. This is the same class of gap as the three walk files the brief did list.
 - Unclassified guest refusals in jobcmd (`errors.New("task not found")` at command.go lint same-task check and guestFile) carry no code; a follow-up may move them to the sentinel together with (a).
 
+## Fix round 1
+- Reproduced on head d2be3cc3: `go test -count=1 -run TestGuestProjectParity ./internal/cli/` exit 1. The same 3 rows fail at `guest_parity_test.go:393`, and invited prints `{"ok":false,"findings":[],"error":"task not found"}` with no code.
+- No code was changed in this round. Both fixes are outside Touches (where/where.go, cli/guest_parity_test.go) or need an owner ruling (option b), so the brief must be amended first.
+- Recommended amendment, option (a): Touches gains `internal/where/where.go` and `internal/cli/guest_parity_test.go`, the :437 JSON literal only.
+  - where.go:219 returns `ErrTaskNotFound`. The text stays the same: `internal/where/errors.go:6` is `errors.New("task not found")`.
+  - command.go:199 and :495 return `where.ErrTaskNotFound` too (already in Touches).
+  - The :437 literal gains `,"code":"no_such_task"`.
+  - Then every guest by-path refusal is one classified not-found, as contract/README.md asks.
+- Option (b) would fit inside command.go but needs an owner ruling. All guest by-path refusals would get an unclassified error, so both outputs would match the code-free :437 literal. It hides a classified not-found and goes against refusalCode as the brief defines it.
+
 ## NOT VERIFIED
 Nothing needs a live screen. RealPlugin tests were not part of this brief.
 
