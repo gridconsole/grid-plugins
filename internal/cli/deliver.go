@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/task"
@@ -13,11 +14,29 @@ type deliveryFiles []string
 func (f *deliveryFiles) String() string         { return strings.Join(*f, ", ") }
 func (f *deliveryFiles) Set(value string) error { *f = append(*f, value); return nil }
 
+// usageOut is where a flag set prints its usage: stdout when the arguments ask
+// for help, stderr on any other parse error so --json gets its error envelope.
+func usageOut(args []string, env Env) io.Writer {
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		switch strings.TrimLeft(a, "-") {
+		case "h", "help":
+			if strings.HasPrefix(a, "-") {
+				return env.Stdout
+			}
+		}
+	}
+	return env.Stderr
+}
+
 func runDeliver(args []string, env Env) int {
 	fs := newFlags("deliver", env)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stdout, "Usage: grid deliver --outcome <text> [files...] [--file path] [--task <task>] [--by agent] [--dry-run] [--json]")
-		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		out := usageOut(args, env)
+		fmt.Fprintln(out, "Usage: grid deliver --outcome <text> [files...] [--file path] [--task <task>] [--by agent] [--dry-run] [--json]")
+		fmt.Fprintln(out, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
 	}
 	o := task.DeliverOptions{Cwd: env.Cwd}
 	var files deliveryFiles

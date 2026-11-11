@@ -19,8 +19,10 @@ func runHistory(args []string, env Env) int {
 	}
 	fs := newFlags("history add", env)
 	fs.Usage = func() {
-		fmt.Fprintln(env.Stdout, "Usage: grid history add <line> [--task <task>] [--json]")
-		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		out := usageOut(args, env)
+		fmt.Fprintln(out, "Usage: grid history add <line> [--task <task>] [--json]")
+		fmt.Fprintln(out, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		fs.SetOutput(out)
 		fs.PrintDefaults()
 	}
 	id := fs.String("task", "", "task id or folder; defaults to the current task")

@@ -42,15 +42,11 @@ var ggFlagSkip = map[string]string{
 // when that is not the contract shape (exit 2, one invalid_argument object, no file
 // written). Production code is left alone; shorten this map when a verb is fixed.
 var ggFlagKnownOpen = map[string]string{
-	"job lint":    `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
-	"job render":  `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
-	"job show":    `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
-	"job verify":  `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
-	"job trace":   `exit 2; stdout {"rows":[],"problems":[{"task":"","job":"","text":"unknown flag --gg-no-such-flag"}]} (own shape, no code); stderr empty`,
-	"deliver":     `exit 2; stdout "Usage: grid deliver --outcome <text> [files...] ..." (usage on stdout, no envelope); stderr "flag provided but not defined: -gg-no-such-flag"`,
-	"proof add":   `exit 2; stdout "Usage: grid proof add <item> <file|--text text> ..." (usage on stdout, no envelope); stderr "flag provided but not defined: -gg-no-such-flag -by string ..."`,
-	"proof index": `exit 2; stdout "Usage: grid proof index [--task <task>] [--json] ..." (usage on stdout, no envelope); stderr "flag provided but not defined: -gg-no-such-flag -json print JSON ..."`,
-	"history add": `exit 2; stdout "Usage: grid history add <line> [--task <task>] [--json] ..." (usage on stdout, no envelope); stderr "flag provided but not defined: -gg-no-such-flag -json print JSON ..."`,
+	"job lint":   `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
+	"job render": `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
+	"job show":   `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
+	"job verify": `exit 2; stdout {"ok":false,"findings":[],"error":"unknown flag --gg-no-such-flag"} (own envelope, no code); stderr empty`,
+	"job trace":  `exit 2; stdout {"rows":[],"problems":[{"task":"","job":"","text":"unknown flag --gg-no-such-flag"}]} (own shape, no code); stderr empty`,
 }
 
 func ggFlagMembers(t *testing.T) []ggFlagMember {
