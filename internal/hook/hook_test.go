@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -203,6 +204,58 @@ func TestEnvironmentShellQuoting(t *testing.T) {
 	}
 	want := home + "\n" + filepath.Join(home, "projects") + "\nT-07"
 	if string(b) != want {
+		t.Fatalf("got %q want %q", b, want)
+	}
+}
+
+func pluginRootWithGrid(t *testing.T, name string) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), name)
+	if err := os.MkdirAll(filepath.Join(root, "bin"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "bin", "grid"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func TestPluginPathLine(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("posix path line")
+	}
+	root := pluginRootWithGrid(t, "plug")
+	bin := filepath.Join(root, "bin")
+	if got := pluginPathLine(root, "/usr/bin"); got != "export PATH='"+bin+"':\"$PATH\"\n" {
+		t.Fatalf("A1 got %q", got)
+	}
+	if got := pluginPathLine(root, "/usr/bin:"+bin+"/"); got != "" {
+		t.Fatalf("already on PATH, got %q", got)
+	}
+	if got := pluginPathLine("", "/usr/bin"); got != "" {
+		t.Fatalf("A2 unset root, got %q", got)
+	}
+	if got := pluginPathLine(t.TempDir(), "/usr/bin"); got != "" {
+		t.Fatalf("A2 missing bin/grid, got %q", got)
+	}
+}
+
+func TestPluginPathLineResolvesWithSpaceAndQuote(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh unavailable")
+	}
+	root := pluginRootWithGrid(t, "my plug'in")
+	file := filepath.Join(t.TempDir(), "env")
+	if err := writeEnv(file, "/example", "", pluginPathLine(root, "/usr/bin")); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "-c", `. "$1"; command -v grid`, "sh", file)
+	cmd.Env = testenv.Temp(t, append(cmd.Environ(), "PATH=/usr/bin:/bin"))
+	b, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("grid not resolved: %v", err)
+	}
+	if want := filepath.Join(root, "bin", "grid"); strings.TrimSpace(string(b)) != want {
 		t.Fatalf("got %q want %q", b, want)
 	}
 }
