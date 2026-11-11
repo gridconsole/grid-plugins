@@ -15,5 +15,8 @@ Base sha: cfc06ff41c6d029a43884418471436a6d2579e75. Test is in internal/contract
 
 Note: docs/lanes report is the runbook's required file, in addition to the test file.
 
+## Fix round 1
+Known entries now match the span exactly (`s.text == k.text`, in srfIsKnown, the known-list subtest and the alternation check); the five error-line entries hold the full span text. A bare `grid feed` no longer hides `grid feed post` or any longer span. The edited-copy subtest gains `grid feed frobnicate` and expects 3 reports (feed sub-verb, workflow sub-verb, flag). Proof: `go test -count=1 ./internal/contract/ ./internal/cli/` exit 0; `make lint` exit 0; `GOOS=windows`/`darwin` `go vet ./internal/contract/` exit 0. Commit 743e764c.
+
 ## NOT VERIFIED
-No live screen involved. No *RealPlugin* test needed. Alternation `grid job post|ack|result|cancel` is checked part by part; `grid feed` on the known list is a bare name that also passes the walk.
+No live screen involved. No *RealPlugin* test needed. Alternation `grid job post|ack|result|cancel` is checked part by part; `grid feed` on the known list is matched exactly and hides nothing longer.
