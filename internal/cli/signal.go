@@ -42,6 +42,8 @@ func runSignal(args []string, env Env) int {
 		fs.StringVar(&in.Source, "source", "typed", "source name")
 		fs.StringVar(&in.SourceID, "source-id", "", "stable id in this source for deduplication")
 		fs.StringVar(&in.Title, "title", "", "signal title")
+		fs.StringVar(&in.Sender, "sender", "", "who sent it, as the source names them")
+		fs.StringVar(&in.Recipient, "recipient", "", "the address or channel it came to")
 		fs.StringVar(&in.Body, "body", "", "external text, or - to read stdin")
 	}
 	if err := parsePositionals(fs, args[1:]); err != nil {

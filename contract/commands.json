@@ -4921,6 +4921,16 @@
               "required": false
             },
             {
+              "name": "--recipient",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--sender",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--source",
               "takes": "value",
               "required": false
