@@ -106,6 +106,14 @@ func CleanHistory(s string) string {
 // Otherwise the line lands by renaming a new file into place under .task.lock.
 // Callers must not hold a session lock: .task.lock is always taken first.
 func AppendHistory(dir, event, detail, who, via string) error {
+	return AppendHistoryWhy(dir, event, detail, who, via, "")
+}
+
+// AppendHistoryWhy is AppendHistory with a reason: a non-empty why ends the line
+// as " · why <text>". The why goes through CleanHistory like every other field, so
+// it never adds a separator, and it is part of the repeat suppression: the same
+// line with another why is a new line.
+func AppendHistoryWhy(dir, event, detail, who, via, why string) error {
 	path := filepath.Join(dir, "history.md")
 	isTask := func() bool {
 		info, err := os.Lstat(filepath.Join(dir, "task.md"))
@@ -151,12 +159,12 @@ func AppendHistory(dir, event, detail, who, via string) error {
 			return err
 		}
 	}
-	event, detail, who, via = CleanHistory(event), CleanHistory(detail), CleanHistory(who), CleanHistory(via)
+	event, detail, who, via, why = CleanHistory(event), CleanHistory(detail), CleanHistory(who), CleanHistory(via), CleanHistory(why)
 	switch strings.ToLower(detail) {
 	case "plan accepted", "preview approved", "ship approved":
 		detail = fmt.Sprintf("%q", detail)
 	}
-	line := taskfile.HistoryLine(time.Now().UTC().Format("2006-01-02T15:04"), event, detail, who, via)
+	line := taskfile.HistoryLine(time.Now().UTC().Format("2006-01-02T15:04"), event, detail, who, via, why)
 	tail := strings.TrimRight(string(b), "\r\n")
 	if i := strings.LastIndexByte(tail, '\n'); i >= 0 {
 		tail = tail[i+1:]
