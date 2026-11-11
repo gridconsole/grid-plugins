@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Managed by grid routine: {{LABEL}} -->
+<plist version="1.0"><dict><key>Label</key><string>{{LABEL}}</string><key>ProgramArguments</key><array><string>{{HOME}}/bin &amp; space/grid</string><string>routine</string><string>run</string><string>daily</string><string>--due</string></array><key>WorkingDirectory</key><string>{{GRID_HOME}}</string><key>EnvironmentVariables</key><dict><key>GRID_HOME</key><string>{{GRID_HOME}}</string><key>PATH</key><string>/usr/local/bin:/usr/bin:/bin</string></dict><key>StandardOutPath</key><string>{{GRID_HOME}}/logs/routines/{{LABEL}}/stdout.log</string><key>StandardErrorPath</key><string>{{GRID_HOME}}/logs/routines/{{LABEL}}/stderr.log</string><key>StartInterval</key><integer>60</integer></dict></plist>
