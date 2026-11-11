@@ -2503,7 +2503,7 @@
     },
     {
       "name": "approve",
-      "summary": "approve a gate (a person or the app only)",
+      "summary": "approve the plan or a later approve step (a person or the app only)",
       "built": true,
       "subcommands": [
         {

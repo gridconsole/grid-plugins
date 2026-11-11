@@ -110,7 +110,7 @@ comments and unknown keys survive; new keys go at the end.
 
 The state moves through `task.NextState`: delivery is refused from `paused` and
 `closed`, and from a task that is already `waiting`, as `grid task status` would
-refuse the same move. To deliver again after the ship gate was raised, send the
+refuse the same move. To deliver again after the ship approve step began waiting for the person, send the
 task back first (`grid task status T-NN running`); delivery then replaces the
 Outcome and appends another receipt. A journal left by a crashed writer is
 replayed before delivery reads the task, so it cannot overwrite the delivery
@@ -120,7 +120,7 @@ The history receipt is a task event like the others (`what: deliver`, the
 Outcome's first line as `note`, `--by` as the author). Artifacts and the proof
 index are written before the commit and are not part of it: a failure after
 the import and before the commit can leave copied artifacts or a rebuilt index,
-and the gate is not raised. Repeated delivery imports listed files again under new
+and the ship approve step does not start waiting. Repeated delivery imports listed files again under new
 artifact IDs.
 
 Lock order: `.task.lock`, then `.plan.lock`, then the brain levels' locks
@@ -134,7 +134,7 @@ Once delivery has set `gate: ship`, `grid approve T-NN` records a ship approval 
 `gate: ship` and the plan hash the person saw, under the same stale-hash rule as
 the plan approval. `approval.json` is not touched, so the plan approval stays
 valid. Reopening a task invalidates all three receipt files (plan, ship and
-preview). `gate` stays in `task.md` until a later writer replaces it, including
+preview). The `gate` key stays in `task.md` until a later writer replaces it, including
 after the task is sent back.
 
 ### Preview approval
@@ -145,7 +145,7 @@ A task whose `task.md` has `gate: preview` records the same way in
 `approval-ship.json` are not touched.
 
 `grid preview [--task <task>] [--spec spec.md] [--by agent] [--dry-run] [--json]`
-raises that gate. It is agent-callable like `deliver`; approving the preview stays
+makes the preview approve step wait for the person. It is agent-callable like `deliver`; approving the preview stays
 person-only. Under `.task.lock`, then `.plan.lock`, it sets `state: waiting` (the
 legacy `status` only where present), `step: preview`, `gate: preview`, `next` and
 `updated`, and appends one `what: preview` event whose note is the spec's first
@@ -167,15 +167,16 @@ code `workflow_changed`, and `grid deliver` refuses it with `plan not approved`
 (with `--json`, the `workflow_changed` error envelope). Tasks without the field
 keep the folder-name check alone (contract/README.md).
 
-### The gate a person saw
+### The approve step a person saw
 
-`grid approve --gate plan|preview|ship` names the gate on the card the person
-pressed. Under `.task.lock` it is compared with the task's gate (`ship`, `preview`,
-and `plan` for any other `gate` value); when the task has moved on, for example
-delivery raised `ship` after the person pressed Approve on the plan, the approval
-is refused with exit 1 and `Changed since you approved: the task is at gate <g>,
-not <want>`, and nothing is written. Another value exits 2 before any lock. Without
-`--gate` the task's gate decides. Approving again while the receipt for that gate
+`grid approve --gate plan|preview|ship` (the flag name is fixed) names the approve
+step on the card the person pressed. Under `.task.lock` it is compared with the
+task's approve step (`ship`, `preview`, and `plan` for any other `gate` value);
+when the task has moved on, for example delivery moved it to `ship` after the
+person pressed Approve on the plan, the approval is refused with exit 1 and
+`Changed since you approved: the task is at the <g> approve step, not <want>`, and
+nothing is written. Another value exits 2 before any lock. Without
+`--gate` the task's own approve step decides. Approving again while the receipt for that step
 still matches the plan's hash and digest (and the deploy rule) writes nothing: the
 receipt is not rewritten and no second `preview approved` line or approve event is
 added; the stored receipt is printed.
@@ -194,5 +195,5 @@ existing unsupported-platform error.
 Person-only commands, including `grid approve` and `grid task status`, refuse
 with exit **3** when called from an agent environment or process ancestry. Run
 them from the Grid app or a separate person terminal. `grid person check --json`
-reports whether that entry point is available. `grid deliver` still raises the
-ship gate in-process and does not require the person gate.
+reports whether that entry point is available. `grid deliver` still moves the
+task to the ship approve step in-process and does not require a person.

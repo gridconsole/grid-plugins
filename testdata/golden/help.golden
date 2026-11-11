@@ -17,7 +17,7 @@ Commands:
   question    add, withdraw, list, tick and sync task questions
   ask         ask a person a question (not built yet)
   answer      record a person's answer
-  approve     approve a gate (a person or the app only)
+  approve     approve the plan or a later approve step (a person or the app only)
   refusal     decide a refused command (a person or the app only)
   decide      alias for refusal decide
   deliver     write the outcome and raise the ship gate

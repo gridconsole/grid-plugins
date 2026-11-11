@@ -33,12 +33,12 @@ quotes the first paragraph under `## Verify`.
 
 ## Dependencies and review
 
-`after` is a list of bare Job ids, gate ids, or objects with `job`, `kind`, and
+`after` is a list of bare Job ids, person-question ids, or objects with `job`, `kind`, and
 `why`. A bare Job id means `done`. An object uses `done`, `failed`, or
-`children-done` and explains the link in 8 to 160 characters. Gate ids have
-the form `gate:Q-7` and no edge kind. Unknown targets, duplicate Job ids, and
+`children-done` and explains the link in 8 to 160 characters. A person
+question id has the form `gate:Q-7` (the token is fixed) and no edge kind. Unknown targets, duplicate Job ids, and
 cycles are errors; `children-done` also includes the target's children when
-checking cycles. Gate state is supplied by the Feed, never by a checkbox.
+checking cycles. Whether the person has answered is supplied by the Feed, never by a checkbox.
 
 The first applicable review rule sets the floor: irreversible or environment
 work is L2; declared risk or a tagged risk path is L2; a big visible change or

@@ -152,7 +152,7 @@ func (s Store) ApprovalForGate(cwd, id, gate string) (Event, error) {
 func receiptForGate(t Task, gate string) (Event, error) {
 	var event Event
 	if gate != "plan" {
-		return event, fmt.Errorf("no approval for gate %q: only the plan is approved", gate)
+		return event, fmt.Errorf("no approval for the %q approve step: only the plan is approved", gate)
 	}
 	data, err := readOptional(filepath.Join(t.Path, approvalFile))
 	if err != nil {
@@ -161,7 +161,7 @@ func receiptForGate(t Task, gate string) (Event, error) {
 	err = plan.Store{TaskDir: t.Path}.WithDigest(func(hash, digest string) (err error) {
 		event, err = checkApproval(t, data, hash, digest)
 		if err == nil && event.Gate != "" {
-			return errors.New("approval is for another gate")
+			return errors.New("approval is for another approve step")
 		}
 		return err
 	})
