@@ -55,7 +55,84 @@ func CheckPlanReport(text string) PlanReport {
 		problems = append(problems, (&CycleError{Path: cycle}).Error())
 	}
 	report.Problems = problems
+	report.Warnings = append(report.Warnings, nqNeedsWarnings(items)...)
 	return report
+}
+
+// nqNeedsWarnings checks each step's prose `needs:` line. None of these is a
+// problem. A missing line is reported only when some step of the plan has one.
+func nqNeedsWarnings(items []plan.Item) []string {
+	type step struct {
+		needs  []int
+		value  string
+		found  bool
+		parsed bool
+	}
+	steps := map[int]step{}
+	anyLine := false
+	for _, item := range items {
+		needs, value, found := plan.NqNeedsRead(item.Prose)
+		steps[item.N] = step{needs: needs, value: value, found: found, parsed: needs != nil}
+		anyLine = anyLine || found
+	}
+	warnings := []string{}
+	for _, item := range items {
+		s := steps[item.N]
+		switch {
+		case !s.found:
+			if anyLine {
+				warnings = append(warnings, fmt.Sprintf("item %d: no needs: line", item.N))
+			}
+		case !s.parsed:
+			warnings = append(warnings, fmt.Sprintf("item %d: needs: %s is not step numbers or none", item.N, s.value))
+		}
+		for _, n := range s.needs {
+			if n == item.N {
+				warnings = append(warnings, fmt.Sprintf("item %d: needs itself", item.N))
+			} else if _, ok := steps[n]; !ok {
+				warnings = append(warnings, fmt.Sprintf("item %d: needs step %d, which is not in the plan", item.N, n))
+			}
+		}
+	}
+	// Cycles over the edges that name another step of the plan.
+	const (
+		onPath = 1
+		done   = 2
+	)
+	mark := map[int]int{}
+	path := []int{}
+	var visit func(n int)
+	visit = func(n int) {
+		mark[n] = onPath
+		path = append(path, n)
+		for _, m := range steps[n].needs {
+			if _, ok := steps[m]; !ok || m == n {
+				continue
+			}
+			switch mark[m] {
+			case onPath:
+				from := 0
+				for path[from] != m {
+					from++
+				}
+				parts := []string{}
+				for _, p := range append(append([]int{}, path[from:]...), m) {
+					parts = append(parts, fmt.Sprint(p))
+				}
+				warnings = append(warnings, fmt.Sprintf("item %d: needs cycle %s", m, strings.Join(parts, " -> ")))
+			case 0:
+				visit(m)
+			}
+		}
+		path = path[:len(path)-1]
+		mark[n] = done
+	}
+	for _, item := range items {
+		if mark[item.N] == 0 {
+			visit(item.N)
+		}
+	}
+	return warnings
 }
 
 func verifyCountWarning(j job.Job) string {

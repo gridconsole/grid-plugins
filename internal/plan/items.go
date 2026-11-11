@@ -20,7 +20,11 @@ type Item struct {
 	Kind  string `json:"kind,omitempty"`
 	// Proof is the evidence level a step needs (check, log, screenshot or video).
 	// The key is provisional until the owner confirms it; see docs/plan.md.
-	Proof string           `json:"proof,omitempty"`
+	Proof string `json:"proof,omitempty"`
+	// Needs is read from the step's prose `needs:` line: [] for none, the step
+	// numbers in order, nil (JSON null) when the line is missing or malformed.
+	// The line itself stays in Prose.
+	Needs []int            `json:"needs"`
 	Jobs  []map[string]any `json:"jobs"`
 	State string           `json:"state"`
 	text  string
@@ -99,6 +103,7 @@ func Items(text string) ([]Item, error) {
 			prose = append(prose, strings.TrimPrefix(l, "  "))
 		}
 		item.Prose = strings.Join(prose, "\n")
+		item.Needs, _, _ = NqNeedsRead(item.Prose)
 		if start == end {
 			return nil, fmt.Errorf("plan line %d: item %d missing jobs list", i+1, n)
 		}
@@ -162,6 +167,36 @@ func Items(text string) ([]Item, error) {
 		i = end - 1
 	}
 	return items, nil
+}
+
+var nqNeedsValue = regexp.MustCompile(`^(none|[0-9]+(, ?[0-9]+)*)$`)
+
+// NqNeedsRead reads the first `needs:` line of a step's prose. found is whether
+// the line exists, value its text after `needs:`, needs the step numbers ([] for
+// none, nil when the value is outside the grammar). It never fails.
+func NqNeedsRead(prose string) (needs []int, value string, found bool) {
+	for _, l := range strings.Split(prose, "\n") {
+		rest, ok := strings.CutPrefix(l, "needs:")
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(rest)
+		if !nqNeedsValue.MatchString(value) {
+			return nil, value, true
+		}
+		needs = []int{}
+		if value != "none" {
+			for _, part := range strings.Split(value, ",") {
+				n, err := strconv.Atoi(strings.TrimSpace(part))
+				if err != nil {
+					return nil, value, true
+				}
+				needs = append(needs, n)
+			}
+		}
+		return needs, value, true
+	}
+	return nil, "", false
 }
 
 // Anchor returns the checklist line and prose, or the first Verify paragraph.
