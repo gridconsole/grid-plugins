@@ -111,6 +111,9 @@ func jwRpJobTitles(t *testing.T, store feed.Store) map[string]string {
 
 // jwRpQuestionFiles lists questions/ as the ask left it, without .lock: the
 // question store creates that lock file on any ask, and it holds no question.
+// A zero-byte Q-n.feed is the durable id marker an ask that posts a Job writes
+// before the post (question.ReserveGate, kept on a failed post by design); it
+// holds no question either, so it is not listed. A file with content is.
 func jwRpQuestionFiles(t *testing.T, task string) []string {
 	t.Helper()
 	entries, err := os.ReadDir(filepath.Join(task, "questions"))
@@ -122,9 +125,13 @@ func jwRpQuestionFiles(t *testing.T, task string) []string {
 	}
 	var names []string
 	for _, e := range entries {
-		if e.Name() != ".lock" {
-			names = append(names, e.Name())
+		if e.Name() == ".lock" {
+			continue
 		}
+		if info, err := e.Info(); err == nil && info.Size() == 0 {
+			continue
+		}
+		names = append(names, e.Name())
 	}
 	return names
 }
