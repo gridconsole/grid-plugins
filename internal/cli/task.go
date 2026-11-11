@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/plan"
@@ -235,10 +236,19 @@ func runTaskAttach(args []string, env Env) int {
 	if err != nil {
 		return taskOperandError(env, "grid task attach", err)
 	}
-	pid := os.Getppid()
+	pid, pidStart := os.Getppid(), ""
+	if env.OwnerPID != 0 {
+		pid = env.OwnerPID
+		if !env.OwnerStart.IsZero() {
+			pidStart = contract.FormatTime(env.OwnerStart)
+		}
+	}
+	if pidStart == "" {
+		pidStart = migrate.ProcessStart(pid)
+	}
 	result, err := taskWriter(env).Attach(task.AttachOptions{
 		Cwd: env.Cwd, ID: resolved.ID, SessionID: *id, Runtime: *runtime,
-		PID: pid, PIDStart: migrate.ProcessStart(pid), Who: writeOptions(env, pos[0], "attach", "").Who,
+		PID: pid, PIDStart: pidStart, Who: writeOptions(env, pos[0], "attach", "").Who,
 		Agent: agentShell(env), BoundTask: env.getenv("GRID_TASK"),
 	})
 	if err != nil {

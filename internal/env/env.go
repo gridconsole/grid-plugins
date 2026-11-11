@@ -24,6 +24,8 @@ type Manager struct {
 	TaskDir string
 	Dir     string
 	Grace   time.Duration
+	// OwnerPID is the process the port claim names as its owner; zero is this process.
+	OwnerPID int
 }
 
 func (m Manager) grace() time.Duration {
@@ -110,7 +112,11 @@ func (m Manager) start(id string, c Config) (ports.Record, <-chan error, error) 
 		}
 	}
 	rnge, _ := c.Ports()
-	r, err := l.Claim(m.TaskDir, id, os.Getpid(), rnge)
+	owner := m.OwnerPID
+	if owner == 0 {
+		owner = os.Getpid()
+	}
+	r, err := l.Claim(m.TaskDir, id, owner, rnge)
 	if err != nil {
 		return r, nil, err
 	}

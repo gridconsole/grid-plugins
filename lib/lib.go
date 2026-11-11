@@ -29,8 +29,12 @@
 //   - internal/account has its own fallback to the host's environment when it
 //     is given no getenv, and the migrate plan reads CLAUDE_PLUGIN_DATA from
 //     the host (internal/migrate);
-//   - the process id of the caller (os.Getppid) that `ports claim`, `env up`
-//     and the task lease record as their owner;
+//   - the process that `ports claim`, `env up` and the task lease record as
+//     their owner: the Call's OwnerPID (with OwnerStart, or its looked-up start)
+//     when set, else the host's own process id (os.Getpid for `task new` and
+//     `env up`, os.Getppid for `task attach` and `lease take --hold`). Off Linux
+//     and macOS `lease take` is refused before --hold is read, so there the owner
+//     reaches only `task new`, `task attach` and `env up`;
 //   - the children that land, agent and routine runs start, which take the
 //     host's environment, not Environ.
 //
@@ -45,15 +49,20 @@
 // # Exit codes
 //
 // The codes are the binary's: 0 done, 1 failed, 2 usage, 3 rejected (stale
-// lease or invalid record; do not retry), 4 disk full. A panic inside the
-// command is 2 and one line, "grid: internal error", on Stderr.
+// lease, invalid record or intent claim token; do not retry), 4 disk full,
+// 5 taken (intent already claimed or done; skip). `worker next`, `job next` and
+// `feed tick` stopped by the Call's Context exit 130, as the binary on Ctrl-C;
+// the other runs Context stops exit with their own failure code. A panic inside
+// the command is 2 and one line, "grid: internal error", on Stderr.
 package lib
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/cli"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
@@ -90,10 +99,26 @@ type Call struct {
 	Executable string
 	// OpenURL opens an address for `grid open`. Nil does nothing and returns nil.
 	OpenURL func(string) error
+
+	// Context stops the commands that the binary stops on SIGINT: the streams
+	// and runs of agent, env, land, job next and feed tick, worker next, eval and
+	// job verify. When it is set no signal handler is installed in the host; nil
+	// installs the binary's handler. Every other verb runs to its end whatever
+	// the context, and a call waiting on a Feed lock is not stopped by it.
+	Context context.Context
+
+	// OwnerPID is the process that `task new`, `task attach`, `lease take --hold`
+	// and `env up` record as the owner of the task lease or port claim, in place
+	// of the host's own process id. Zero keeps the host's. OwnerStart is that
+	// process's start time; zero looks it up for OwnerPID (`env up` always looks
+	// it up). OwnerStart is read only when OwnerPID is set.
+	OwnerPID   int
+	OwnerStart time.Time
 }
 
 // Run executes the call and returns the exit code the binary would: 0 done,
-// 1 failed, 2 usage, 3 rejected, 4 disk full. A panic inside the command is
+// 1 failed, 2 usage, 3 rejected, 4 disk full, 5 taken (intent already claimed
+// or done; skip), and 130 for a stream stopped by Context. A panic inside the command is
 // reported like a crashed binary: the line "grid: internal error" on Stderr and
 // exit 2.
 func Run(c Call) (code int) {
@@ -159,6 +184,11 @@ func (c Call) env(stderr io.Writer) cli.Env {
 		Machine:   machine,
 		Getenv:    getenv,
 		OpenURL:   openURL,
+		Context:   c.Context,
+		OwnerPID:  c.OwnerPID,
+	}
+	if c.OwnerPID != 0 {
+		e.OwnerStart = c.OwnerStart
 	}
 	if c.Executable != "" {
 		path := c.Executable

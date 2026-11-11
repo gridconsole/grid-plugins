@@ -83,9 +83,15 @@ func runTaskLeaseAction(action string, args []string, env Env) int {
 				return usage("--hold cannot be combined with --session, --pid or --pid-start")
 			}
 			pid = os.Getppid()
-			started, err := session.ProcessStart(pid)
-			if err != nil {
-				return livenessError(env, err)
+			started := time.Time{}
+			if env.OwnerPID != 0 {
+				pid, started = env.OwnerPID, env.OwnerStart
+			}
+			if started.IsZero() {
+				var err error
+				if started, err = session.ProcessStart(pid); err != nil {
+					return livenessError(env, err)
+				}
 			}
 			start = contract.FormatTime(started)
 		}

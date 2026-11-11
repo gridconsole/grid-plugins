@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -186,7 +185,7 @@ func runWorkerNext(args []string, env Env) int {
 	}
 	// The stream runs until SIGINT. It does not release the task leases then: the
 	// tenure names the worker's process, and the worker's next stream reuses it.
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancel := env.signalContext(os.Interrupt)
 	defer cancel()
 	err = s.Run(ctx)
 	if errors.Is(err, context.Canceled) {

@@ -1,11 +1,9 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"syscall"
 
@@ -104,7 +102,7 @@ func runEnv(args []string, e Env) int {
 	if err != nil {
 		return commandError(e, "env", err)
 	}
-	m := devenv.Manager{Ports: ports.Store{GridHome: e.GridHome}, TaskDir: t.Path}
+	m := devenv.Manager{Ports: ports.Store{GridHome: e.GridHome}, TaskDir: t.Path, OwnerPID: e.OwnerPID}
 	if op == "down" {
 		if err := m.Down(operands[0]); err != nil {
 			return commandError(e, "env", err)
@@ -125,7 +123,7 @@ func runEnv(args []string, e Env) int {
 	}
 	m.Dir = folders[0]
 	// An interrupted health wait must stop the server it started, not orphan it.
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := e.signalContext(os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	r, err := m.Up(ctx, operands[0], cfg)
 	if err != nil {
