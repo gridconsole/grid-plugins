@@ -166,6 +166,11 @@ func probeOutput(ctx context.Context, cmd *exec.Cmd) (string, int) {
 		return stdout.String(), -1
 	}
 	_ = r.Close()
+	if runErr != nil && ctx.Err() != nil {
+		// The context ended the child, or ended as it failed: the status is
+		// unknown, the same -1 as when it ends the wait for the pipe.
+		return stdout.String(), -1
+	}
 	if runErr != nil {
 		if cmd.ProcessState != nil && cmd.ProcessState.ExitCode() != 0 {
 			code := cmd.ProcessState.ExitCode()
