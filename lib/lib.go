@@ -104,7 +104,8 @@ type Call struct {
 	// and runs of agent, env, land, job next and feed tick, worker next, eval and
 	// job verify. When it is set no signal handler is installed in the host; nil
 	// installs the binary's handler. Every other verb runs to its end whatever
-	// the context, and a call waiting on a Feed lock is not stopped by it.
+	// the context. A `feed post` or `feed handover` waiting on a Feed file lock
+	// stops with the context's error and writes nothing.
 	Context context.Context
 
 	// OwnerPID is the process that `task new`, `task attach`, `lease take --hold`

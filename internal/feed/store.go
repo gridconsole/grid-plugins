@@ -2,6 +2,7 @@ package feed
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,10 @@ type Store struct {
 	// WithdrawAllowed overrides person withdrawal roles for projections only.
 	// Nil reads workflow.md. Writes always check the current policy separately.
 	WithdrawAllowed func(string) bool
+	// Context stops a Post or a lease check that is waiting on a Feed file lock:
+	// the call returns the context's error and writes nothing. Nil means
+	// context.Background, which waits as long as the holder keeps the lock.
+	Context context.Context
 	// afterGateCheck is a test hook inside the gate lock, before the append.
 	afterGateCheck func()
 }
@@ -110,8 +115,8 @@ func (s Store) leaseLock(w Writer, attempt *int) (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: cannot read lease: %v", ErrStaleLease, err)
 	}
-	if err := fslock.LockShared(f); err != nil {
-		f.Close()
+	// The wait owns f from here: a failed or cancelled lock closes it, not us.
+	if err := fslock.LockSharedContext(s.Context, f); err != nil {
 		return nil, err
 	}
 	fail := func(err error) (*os.File, error) { fslock.Unlock(f); f.Close(); return nil, err }
@@ -249,10 +254,12 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	if err != nil {
 		return Record{}, diskError(err)
 	}
-	defer f.Close()
-	if err := fslock.LockExclusive(f); err != nil {
+	// The wait owns f from here: a failed or cancelled lock closes it, so the
+	// close is deferred only once the lock is held.
+	if err := fslock.LockExclusiveContext(s.Context, f); err != nil {
 		return Record{}, err
 	}
+	defer f.Close()
 	defer fslock.Unlock(f)
 	// Repair on open: a writer that died mid-line left a fragment, and an empty
 	// file is new, so its name is made durable before any record in it is acked.
@@ -559,8 +566,8 @@ func (s Store) wakeLock() (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := fslock.LockExclusive(f); err != nil {
-		f.Close()
+	// The wait owns f from here: a failed or cancelled lock closes it, not us.
+	if err := fslock.LockExclusiveContext(s.Context, f); err != nil {
 		return nil, err
 	}
 	return f, nil

@@ -210,7 +210,7 @@ func feedStore(env Env, task, project string) (feed.Store, error) {
 	if err != nil && !errors.Is(err, feed.ErrNoTaskID) {
 		return feed.Store{}, err
 	}
-	return feed.Store{TaskDir: res.TaskPath, TaskID: taskID}, nil
+	return feed.Store{TaskDir: res.TaskPath, TaskID: taskID, Context: env.Context}, nil
 }
 
 // feedDefaults supplies the supervised session's Job context for either front end.
