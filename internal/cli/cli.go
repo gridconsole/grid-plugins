@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -10,8 +11,10 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/question"
@@ -46,6 +49,26 @@ type Env struct {
 	// typedGlobal names the variables a global flag was typed for (GRID_LEASE_EPOCH for --lease-epoch):
 	// getenv shows the flag's value either way, and this tells a typed flag from an inherited variable.
 	typedGlobal map[string]bool
+	// Context stops the commands that run until interrupted (agent, env, land, job next
+	// and feed tick, worker next, eval, job verify) in place of their own SIGINT handler.
+	// Nil installs the handler, as the binary does; OSEnv leaves it nil.
+	Context context.Context
+	// OwnerPID is the process task new, task attach, lease take --hold and env up record
+	// as the owner. Zero keeps the binary's own read (os.Getpid or os.Getppid); OSEnv
+	// leaves it zero. OwnerStart is that process's start time; zero looks it up for
+	// OwnerPID. OwnerStart is read only when OwnerPID is set.
+	OwnerPID   int
+	OwnerStart time.Time
+}
+
+// signalContext is the context of a command that runs until it is interrupted: a
+// cancellable child of Context when the caller gave one, so no signal handler is
+// installed in the host, else one that ends on the given signals.
+func (e Env) signalContext(sigs ...os.Signal) (context.Context, context.CancelFunc) {
+	if e.Context != nil {
+		return context.WithCancel(e.Context)
+	}
+	return signal.NotifyContext(context.Background(), sigs...)
 }
 
 func (e Env) afterApproveHook() {

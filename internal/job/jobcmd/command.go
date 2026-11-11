@@ -3,6 +3,7 @@
 package jobcmd
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -29,6 +30,8 @@ import (
 )
 
 type Env struct {
+	// Context stops job verify in place of its SIGINT handler; nil installs the handler.
+	Context     context.Context
 	Resolver    where.Resolver
 	Cwd         string
 	Home        string

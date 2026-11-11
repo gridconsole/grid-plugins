@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"os/signal"
 	"syscall"
 
 	"github.com/gridconsole/grid-plugins/internal/agent"
@@ -33,7 +31,7 @@ func runAgentCheck(args []string, env Env, probe agent.Env) int {
 	if code, stop := parse(fs, args, env); stop {
 		return code
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := env.signalContext(os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	reports := agent.Check(ctx, probe)
 	if *asJSON {

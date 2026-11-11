@@ -19,6 +19,8 @@ import (
 )
 
 type Env struct {
+	// Context stops a run in place of the SIGINT handler; nil installs the handler.
+	Context  context.Context
 	Cwd      string
 	GridHome string // "" when unknown; the default results folder then falls back to evals/runs under Cwd
 	Stdout   io.Writer
@@ -152,7 +154,13 @@ func Run(args []string, env Env) int {
 		return fail(env, errors.New("no tasks match the selection"))
 	}
 	runner := eval.Runner{Agent: argv, ResultsDir: resolve(env.Cwd, results), Timeout: timeout, AllowEnv: allowEnv}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if env.Context != nil {
+		ctx, cancel = context.WithCancel(env.Context)
+	} else {
+		ctx, cancel = signal.NotifyContext(context.Background(), os.Interrupt)
+	}
 	defer cancel()
 	records := []eval.Result{}
 	code := 0
