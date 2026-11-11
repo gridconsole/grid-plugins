@@ -486,7 +486,10 @@ func (s Store) write(rec project.Record) error {
 	if err != nil {
 		return err
 	}
-	// project.Parse has already validated the existing front matter on reads.
+	// Record models four keys; every other key of the existing front matter stays, in its order.
+	if data, err = project.KeepOtherKeys(data, string(old)); err != nil {
+		return err
+	}
 	lines := bytes.SplitAfter(old, []byte("\n"))
 	for i := 1; i < len(lines); i++ {
 		if strings.TrimSpace(string(lines[i])) == "---" {

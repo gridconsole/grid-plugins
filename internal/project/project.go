@@ -26,6 +26,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
@@ -165,6 +166,112 @@ func Format(rec Record) ([]byte, error) {
 		front = nil
 	}
 	return append(append([]byte("---\n"), front...), "---\n"...), nil
+}
+
+// owned lists the front-matter keys Record models, in the order Format writes them.
+var owned = func() (names []string) {
+	t := reflect.TypeOf(Record{})
+	for i := 0; i < t.NumField(); i++ {
+		if name, _, _ := strings.Cut(t.Field(i).Tag.Get("yaml"), ","); name != "" && name != "-" {
+			names = append(names, name)
+		}
+	}
+	return names
+}()
+
+// KeepOtherKeys returns canonical, the front matter Format wrote, with every key
+// of old that Record does not model added back with its value, in the order old
+// had them. A key of Record keeps the value canonical has, and a key canonical
+// lacks stays out; a key canonical adds goes after the nearest key of Record
+// before it, or before the first one after it. old is the whole project.md
+// text. With no other key in old, canonical is returned as it is.
+func KeepOtherKeys(canonical []byte, old string) ([]byte, error) {
+	oldFront, ok := frontmatter(old)
+	if !ok || strings.TrimSpace(oldFront) == "" {
+		return canonical, nil
+	}
+	var oldDoc yaml.Node
+	if err := yaml.Load([]byte(oldFront), &oldDoc); err != nil {
+		return nil, fmt.Errorf("front matter: %w", err)
+	}
+	oldMap := mappingOf(&oldDoc)
+	if oldMap == nil {
+		return canonical, nil
+	}
+	rank := map[string]int{}
+	for i, name := range owned {
+		rank[name] = i
+	}
+	other := false
+	for i := 0; i+1 < len(oldMap.Content); i += 2 {
+		if _, own := rank[oldMap.Content[i].Value]; !own {
+			other = true
+		}
+	}
+	if !other {
+		return canonical, nil
+	}
+	canonFront, _ := frontmatter(string(canonical))
+	var canonDoc yaml.Node
+	if err := yaml.Load([]byte(canonFront), &canonDoc); err != nil {
+		return nil, err
+	}
+	type pair struct{ key, value *yaml.Node }
+	canonPairs := map[string]pair{}
+	if m := mappingOf(&canonDoc); m != nil {
+		for i := 0; i+1 < len(m.Content); i += 2 {
+			canonPairs[m.Content[i].Value] = pair{m.Content[i], m.Content[i+1]}
+		}
+	}
+	var out []pair
+	placed := map[string]bool{}
+	for i := 0; i+1 < len(oldMap.Content); i += 2 {
+		k, v := oldMap.Content[i], oldMap.Content[i+1]
+		if _, own := rank[k.Value]; !own {
+			out = append(out, pair{k, v})
+		} else if p, ok := canonPairs[k.Value]; ok && !placed[k.Value] {
+			out, placed[k.Value] = append(out, p), true
+		}
+	}
+	for _, name := range owned {
+		p, ok := canonPairs[name]
+		if !ok || placed[name] {
+			continue
+		}
+		at := -1
+		for j, o := range out {
+			if r, own := rank[o.key.Value]; own && r < rank[name] {
+				at = j + 1
+			}
+		}
+		if at < 0 {
+			at = 0
+			for j, o := range out {
+				if _, own := rank[o.key.Value]; own {
+					at = j
+					break
+				}
+			}
+		}
+		out = append(out[:at], append([]pair{p}, out[at:]...)...)
+	}
+	oldMap.Content = oldMap.Content[:0]
+	for _, p := range out {
+		oldMap.Content = append(oldMap.Content, p.key, p.value)
+	}
+	front, err := yaml.Dump(&oldDoc, yaml.WithIndent(2), yaml.WithLineWidth(-1))
+	if err != nil {
+		return nil, err
+	}
+	return append(append([]byte("---\n"), front...), "---\n"...), nil
+}
+
+// mappingOf returns the top-level mapping of a loaded document, or nil.
+func mappingOf(doc *yaml.Node) *yaml.Node {
+	if len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil
+	}
+	return doc.Content[0]
 }
 
 // Write writes rec to <gridHome>/projects/<rec.Name>/project.md.
