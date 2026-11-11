@@ -24,7 +24,11 @@ func IsJSON(name string, text []byte) bool {
 func CheckJSON(data []byte, o Options) []Finding {
 	c := checker{findings: []Finding{}}
 	if err := contract.Validate("job-record", data); err != nil {
-		c.add("job.record", "", err.Error(), "Fix the field the error names so the record matches the job-record schema.")
+		fix := contract.Hint("job-record", err)
+		if fix == "" {
+			fix = "Fix the field the error names so the record matches the job-record schema."
+		}
+		c.add("job.record", "", err.Error(), fix)
 		return c.finish()
 	}
 	var j job.Job
