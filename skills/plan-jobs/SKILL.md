@@ -103,6 +103,17 @@ after:
   - J-3
 ```
 
+## Re-plan Job
+
+A Job with role orchestrator and skills plan-jobs, titled "Re-plan after <cancelled> was cancelled", means a Job was cancelled and the Jobs after it may no longer run. Steps:
+
+1. Read the cancelled Job and why it stopped: `grid job show <job> --task <task>` (its `exit_code` and result), then `grid job tree --task <task>` for the Jobs that wait on it.
+2. Decide for each waiter, by the task's goal: keep it, or cancel it.
+3. Keep: post a replacement for the cancelled Job (`grid job post --task <task> --body <json>`, lint first) and point the waiter's `after` at it, so the waiter can still run.
+4. Cancel: a waiter that can no longer run or no longer matters is stopped with `grid job cancel --task <task> --job <job> --reason <why>`.
+5. A step only a person can do is a person Job (`grid job post --task <task> --person <name>`), as in the owner decisions above.
+6. Post each replacement by the checks above, then read `grid job tree --task <task>`: no waiter is left waiting on the cancelled Job.
+
 ## Run
 
 Then run, in this order:
