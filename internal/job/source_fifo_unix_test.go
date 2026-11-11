@@ -8,7 +8,6 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 )
 
 func TestSourceFIFORefused(t *testing.T) {
@@ -20,6 +19,7 @@ func TestSourceFIFORefused(t *testing.T) {
 				t.Fatal(err)
 			}
 			f := &Files{Task: root, Repo: root, Prototype: root, Folders: []string{root}}
+			hang := iqFifoHangCtx(t)
 			done := make(chan error, 1)
 			go func() { _, err := f.Resolve(kind + "pipe.md#L1"); done <- err }()
 			select {
@@ -27,7 +27,7 @@ func TestSourceFIFORefused(t *testing.T) {
 				if err == nil || !strings.Contains(err.Error(), "not a regular file") {
 					t.Fatalf("want regular-file refusal, got %v", err)
 				}
-			case <-time.After(time.Second):
+			case <-hang.Done():
 				// Release the old blocking reader so a failing test leaves no goroutine behind.
 				writer, err := os.OpenFile(path, os.O_WRONLY|syscall.O_NONBLOCK, 0)
 				if err == nil {
@@ -35,7 +35,7 @@ func TestSourceFIFORefused(t *testing.T) {
 				}
 				select {
 				case <-done:
-				case <-time.After(time.Second):
+				case <-iqFifoHangCtx(t).Done():
 					t.Error("reader did not exit after cleanup")
 				}
 				t.Fatal("Resolve blocked on FIFO for more than 1s")
