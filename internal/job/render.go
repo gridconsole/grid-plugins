@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -220,21 +219,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		if len(cut) == 0 {
 			return ""
 		}
-		topics := map[string]bool{}
-		for _, c := range cut {
-			if topicName.MatchString(c.source.Topic) {
-				topics[c.source.Topic] = true
-			}
-		}
-		ts := []string{}
-		for t := range topics {
-			ts = append(ts, t)
-		}
-		sort.Strings(ts)
-		if len(ts) == 0 {
-			ts = []string{"all"}
-		}
-		return fmt.Sprintf("%d entries cut; `grid brain topic %s` lists them\n\n", len(cut), strings.Join(ts, ","))
+		return fmt.Sprintf("%d entries cut (inputs.json not_rendered); `grid brain show <id>` reads one\n\n", len(cut))
 	}
 	for len(blocks) > 0 && tokens(strings.Join(blocks, "")+banner()) > o.BrainTokens {
 		last := len(blocks) - 1
@@ -466,8 +451,6 @@ func agentBody(md string) string {
 }
 func tokens(s string) int     { return (utf8.RuneCountInString(s) + 3) / 4 }
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
-
-var topicName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // marked tiers hold text a Job must treat as data, never as instructions.
 func marked(t contract.TrustTier) bool {

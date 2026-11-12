@@ -71,7 +71,7 @@ func TestBrainBudgetAndTrust(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(got.Inputs.NotRendered) != 1 || got.Inputs.NotRendered[0] != "brain:project/topic-09" || !strings.Contains(got.Brief, "1 entries cut;") {
+	if len(got.Inputs.NotRendered) != 1 || got.Inputs.NotRendered[0] != "brain:project/topic-09" || !strings.Contains(got.Brief, "1 entries cut (inputs.json not_rendered);") {
 		t.Fatalf("wrong cuts: %+v", got.Inputs)
 	}
 	if got.Inputs.BrainTokens > 2000 {

@@ -4,9 +4,13 @@ The eight built-in brain topics are listed in internal/brain/topics.go:25; they 
 
 TOPIC.md front matter: name, kind: knowledge, level, description. The description is the topic's summary. Each body line that starts with "- " is a pointer: what to open, then why.
 
-A hook puts the summary and the first six pointers in front of an agent (PreToolUse, once per session and agent) when:
+No hook puts a topic in front of an agent. A topic reaches an agent in these ways:
 
-- the agent starts a skill whose SKILL.md front matter has `topics: <topic>` (a name, a list, or a comma list), or
-- the agent's file tool touches a path under topics/<topic>/ or knowledge/<topic>/.
+- the SessionStart index (internal/hook/hook.go) lists each topic with its description and entry count;
+- `grid brain search --topic <t> <words>` finds notes in a topic (it needs search words), and `grid brain show <id>` reads one;
+- a skill's front-matter description says when to read a note;
+- the brain links of a Job name the notes that Job uses, and the Job's inputs.json `not_rendered` lists the ones its brief cut.
+
+A skill's `topics: <topic>` front matter names the topic the skill belongs to; it does not start a hook.
 
 Shipped topics: delivering (named by skills/run-job) and reviewing (named by skills/review-job).
