@@ -60,6 +60,7 @@ type report struct {
 	State    string         `json:"state,omitempty"`
 	Reason   string         `json:"state_reason,omitempty"`
 	Brief    string         `json:"brief,omitempty"`
+	Record   string         `json:"record,omitempty"` // id of the Job's job record on the task's Feed; the `re` of a found body
 	Findings []lint.Finding `json:"findings"`
 	Error    string         `json:"error,omitempty"`
 	Code     string         `json:"code,omitempty"`
@@ -256,6 +257,7 @@ func Run(args []string, e Env) int {
 		// A saved brief carries no run record; the task's Feed does. A Job that was
 		// never posted falls back to the brief, which reads Not started.
 		state, why := contract.StateOf(contract.Status(j.Status))
+		record := ""
 		if taskDir != "" {
 			read, err := readFeed(taskDir, feed.Filter{})
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -265,12 +267,29 @@ func Run(args []string, e Env) int {
 				if posted := feed.FoldRead(read).Jobs[j.ID]; posted != nil {
 					state, why = posted.State, posted.StateReason
 				}
+				record = jobRecordID(read.Records, j.ID)
 			}
 		}
-		return output(e, f, report{OK: true, ID: j.ID, Path: display(path, e), Job: &j, State: state, Reason: why, fromFeed: taskDir != "", Brief: string(b), Findings: []lint.Finding{}}, 0)
+		return output(e, f, report{OK: true, ID: j.ID, Path: display(path, e), Job: &j, State: state, Reason: why, Record: record, fromFeed: taskDir != "", Brief: string(b), Findings: []lint.Finding{}}, 0)
 	default:
 		return fail(fmt.Errorf("unknown job command %q; use render, lint or show", action), 2)
 	}
+}
+
+// jobRecordID is the id of the newest non-stale job record the Feed holds for the
+// Job id, the record pickJob chooses; "" when the Job was never posted. A found
+// body names it as its re.
+func jobRecordID(records []feed.Entry, id string) string {
+	record := ""
+	for _, e := range records {
+		if e.Type != "job" || e.Verdict == "stale" {
+			continue
+		}
+		if jobID, _ := identity(e); jobID == id {
+			record = e.ID
+		}
+	}
+	return record
 }
 
 func memberContext(resolver where.Resolver) error {
