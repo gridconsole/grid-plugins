@@ -4,6 +4,7 @@ package hook
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -200,25 +201,104 @@ func pluginPathLine(root, pathEnv string) string {
 	return "export PATH=" + shellQuote(bin) + ":\"$PATH\"\n"
 }
 
+// The Grid lines in the session env file sit between these two marker lines, so a
+// later SessionStart replaces them instead of adding another copy.
+const (
+	envBlockStart = "# >>> grid session env >>>"
+	envBlockEnd   = "# <<< grid session env <<<"
+)
+
+// writeEnv puts the Grid block in the env file. A block from an earlier run is
+// replaced in place; every line outside it is kept. The file is written to a temp
+// file next to it and renamed over it.
 func writeEnv(path, home, task string, extra ...string) error {
 	q := shellQuote
-	text := "\nexport GRID_HOME=" + q(home) + "\nexport GRID_PROJECTS=" + q(filepath.Join(home, "projects")) + "\n"
+	block := envBlockStart + "\nexport GRID_HOME=" + q(home) + "\nexport GRID_PROJECTS=" + q(filepath.Join(home, "projects")) + "\n"
 	if task != "" {
-		text += "export GRID_TASK=" + q(task) + "\n"
+		block += "export GRID_TASK=" + q(task) + "\n"
 	} else {
-		text += "unset GRID_TASK\n"
+		block += "unset GRID_TASK\n"
 	}
-	text += strings.Join(extra, "")
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	block += strings.Join(extra, "") + envBlockEnd + "\n"
+
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	mode := os.FileMode(0o600)
+	old, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		if st, serr := os.Stat(path); serr == nil {
+			mode = st.Mode().Perm()
+		}
+	case errors.Is(err, os.ErrNotExist):
+		old = nil
+	default:
+		return err
+	}
+	text, replaced := replaceEnvBlock(string(old), block)
+	if !replaced {
+		if text != "" && !strings.HasSuffix(text, "\n") {
+			text += "\n"
+		}
+		text += "\n" + block
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".grid-env-*")
 	if err != nil {
 		return err
 	}
-	_, err = f.WriteString(text)
-	closeErr := f.Close()
-	if err != nil {
-		return err
+	name := tmp.Name()
+	_, err = tmp.WriteString(text)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
 	}
-	return closeErr
+	if err == nil {
+		err = os.Chmod(name, mode)
+	}
+	if err == nil {
+		err = os.Rename(name, path)
+	}
+	if err != nil {
+		os.Remove(name)
+	}
+	return err
+}
+
+// replaceEnvBlock swaps the first marked block in text for block and drops any
+// later marked block. A start marker with no end marker after it is an ordinary
+// line. It reports whether a block was found.
+func replaceEnvBlock(text, block string) (string, bool) {
+	lines := strings.SplitAfter(text, "\n")
+	var out strings.Builder
+	found := false
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimRight(lines[i], "\r\n")
+		if line == envBlockStart {
+			// The block runs to the next end marker unless another start comes first.
+			end := -1
+			for j := i + 1; j < len(lines); j++ {
+				l := strings.TrimRight(lines[j], "\r\n")
+				if l == envBlockEnd {
+					end = j
+					break
+				}
+				if l == envBlockStart {
+					break
+				}
+			}
+			if end >= 0 {
+				if !found {
+					out.WriteString(block)
+				}
+				found = true
+				i = end
+				continue
+			}
+		}
+		out.WriteString(lines[i])
+	}
+	return out.String(), found
 }
 
 func sessionContext(r where.Result, resolver where.Resolver, note string) string {
