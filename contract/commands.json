@@ -3443,7 +3443,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-routine-add.json"
         },
         {
           "name": "list",
@@ -3461,7 +3461,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-routine-list.json"
         },
         {
           "name": "remove",
