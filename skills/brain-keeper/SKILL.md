@@ -26,10 +26,10 @@ Always pass `--project <project>` when the person or routine names one: from a f
 - A choice and its reason: topic `decisions` (home or project).
 - A project practice or a lesson: topic `conventions` (project).
 - A kind of knowledge that repeats and fits neither: a custom topic, defined by `knowledge/<topic>/TOPIC.md` in the brain with `name`, `kind: knowledge`, `level` and `description` (internal/brain/topics.go:66).
-- `environments`, `machines`, `deploy`, `people`, `agents`, `routines` are config topics, not notes. `grid brain check` flags a proposal there as `config: run grid <topic>`; use that command.
+- `environments`, `machines`, `deploy`, `people`, `agents`, `routines` are config topics, not notes. `grid brain check` flags a proposal there as `config: <step>`, and the finding names the step to take.
 - `skills`, `workflows`, `design`, `research`, `incidents` are not topics (internal/brain/topics.go:63). A skill lives at `knowledge/skills/<name>/SKILL.md`.
 
-Topics are hooked, not dumped (owner decision): the CLI (`grid brain search --topic`, `grid brain show`), a skill's front-matter description, PreToolUse hooks and the SessionStart index, which carries one line per note (internal/hook/hook.go:111). So the `description` is the hook: it says when to read the note. Never paste one note's body into another; link to it.
+Topics are hooked, not dumped (owner decision): the SessionStart index, which carries one line per note (internal/hook/hook.go), the CLI (`grid brain search --topic <t> <words>`, `grid brain show <id>`), a skill's front-matter description and the brain links of a Job. No hook puts a topic in front of an agent when it starts a skill or touches a file. So the `description` is the hook: it says when to read the note. Never paste one note's body into another; link to it.
 
 ## Keep
 

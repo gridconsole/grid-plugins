@@ -22,7 +22,7 @@ does not freeze an inherited model. Commands do not create projects.
 
 | Field | Allowed values |
 | --- | --- |
-| Agent model | `haiku`, `sonnet`, `opus` |
+| Agent model | `haiku`, `sonnet`, `opus`, `fable`, `<name>[1m]` or a `claude-` model id |
 | Agent effort | `low`, `medium`, `high`, `xhigh`, `max` |
 | Skill state | `enable`, `disable` (stored as JSON booleans) |
 | Hook level | `off`, `warn`, `block`; any hook takes any level, and `job-lint` and `stop-check` default to `block`, every other hook to `warn` |
@@ -182,7 +182,7 @@ using the old skill's setting keys:
 
 | Key | Allowed values |
 | --- | --- |
-| model | `haiku`, `sonnet`, `opus` (letter case normalized) |
+| model | `haiku`, `sonnet`, `opus`, `fable`, `<name>[1m]` or a `claude-` model id (letter case of the names normalized) |
 | effort | `low`, `medium`, `high`, `xhigh`, `max` |
 | lands | `Open a pull request`, `Draft pull request`, `Push the branch`, `Merge, don't push`, `Merge, then push`, `Ask each time` |
 | deploys | `Don't deploy`, `Deploy from this machine`, `CI/CD deploys` |

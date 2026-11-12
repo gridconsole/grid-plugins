@@ -14,9 +14,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/mdfile"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/session"
@@ -199,23 +201,38 @@ func runWorkerNext(args []string, env Env) int {
 }
 
 // workerSpawnModel is the model and effort a Job of the given role runs on, for the
-// task folder dir: the catalog default of the role's agent, then the personal
-// values, then those of the project the folder belongs to. A role with no catalog
-// agent answers two empty strings. A project folder with no registered record has
-// only the personal values, as settingsStore does for an unregistered folder.
+// task folder dir: the catalog default of the role's agent, then the `model:` and
+// `effort:` of the brain agent the project or the home holds for the role (passed
+// through as written), then the personal values, then those of the project the
+// folder belongs to. A role with no catalog agent answers the brain agent's values,
+// or two empty strings when the brain holds none. A project folder with no
+// registered record has only the personal values, as settingsStore does for an
+// unregistered folder.
 func workerSpawnModel(env Env, dir, role string) (string, string, error) {
+	project := filepath.Base(filepath.Dir(filepath.Dir(dir)))
+	var fm struct {
+		Model  string `yaml:"model"`
+		Effort string `yaml:"effort"`
+	}
+	if md, _, ok := (brain.Store{GridHome: env.GridHome, Project: project}).AgentFor(role); ok {
+		// AgentFor has parsed this front matter already; a value that is not a plain string is no value.
+		front, _, err := mdfile.Split([]byte(md))
+		if err != nil || mdfile.Load(front, &fm, false) != nil {
+			fm.Model, fm.Effort = "", ""
+		}
+	}
 	if _, ok := settings.AgentForRole(role); !ok {
-		return "", "", nil
+		return fm.Model, fm.Effort, nil
 	}
 	// A read: settingsStore resolves the project folder and falls back to Personal for one with no record.
-	st, err := settingsStore(env, filepath.Base(filepath.Dir(filepath.Dir(dir))), true)
+	st, err := settingsStore(env, project, true)
 	if errors.Is(err, where.ErrProjectUnregistered) {
 		st, err = settingsStore(env, gridhome.Personal, true)
 	}
 	if err != nil {
 		return "", "", err
 	}
-	return st.ModelFor(role)
+	return st.ModelForWith(role, settings.Agent{Model: fm.Model, Effort: fm.Effort})
 }
 
 type writerFunc func([]byte) (int, error)

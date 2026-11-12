@@ -18,7 +18,7 @@ func runSkill(args []string, env Env) int { return runSettings("skill", args, en
 func settingsUsage(kind string, env Env) {
 	switch kind {
 	case "agent":
-		fmt.Fprintln(env.Stdout, "Usage: grid agent set <agent> [--model M] [--effort E] [--project P]\n       grid agent unset <agent> [--project P]\n       grid agent list [--project P] [--json]\nField   Allowed values\nmodel   haiku, sonnet, opus\neffort  low, medium, high, xhigh, max")
+		fmt.Fprintln(env.Stdout, "Usage: grid agent set <agent> [--model M] [--effort E] [--project P]\n       grid agent unset <agent> [--project P]\n       grid agent list [--project P] [--json]\nField   Allowed values\nmodel   haiku, sonnet, opus, fable, <name>[1m] or a claude- model id\neffort  low, medium, high, xhigh, max")
 	case "skill":
 		fmt.Fprintln(env.Stdout, "Usage: grid skill enable|disable <skill> [--project P]\n       grid skill list [--project P] [--json]")
 	case "hook":
@@ -73,7 +73,7 @@ func runSettings(kind string, args []string, env Env) int {
 		project = fs.String("project", "", "registered project name or id; defaults to personal")
 	}
 	if kind == "agent" && !listing && op == "set" {
-		model = fs.String("model", "", "haiku, sonnet, opus")
+		model = fs.String("model", "", "haiku, sonnet, opus, fable, <name>[1m] or a claude- model id")
 		effort = fs.String("effort", "", "low, medium, high, xhigh, max")
 	}
 	operands, code, stop := parseMixed(fs, args[1:])

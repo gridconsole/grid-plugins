@@ -259,7 +259,7 @@ Disagreements and defaults chosen:
 - Each type has `x-class` and `x-roles` annotations plus enforced role constraints.
   The exact role matrix is absent from the current docs: lead, owner, member and
   cli may plan/control; worker, agent and cli may write leased Job evidence;
-  reviewers may post found; host, cli and lead may post host; only cli posts
+  reviewer, lead, cli, worker and agent may post found; host, cli and lead may post host; only cli posts
   usage notices. Guest/external authors may answer, post messages or submit
   knowledge marked `external: true`, never Jobs or proposed work. A guest answer
   also requires a question addressed to its author ID, checked by the fold.
@@ -351,6 +351,7 @@ Disagreements and defaults chosen:
 - Found security raises review immediately. The target level is unspecified;
   choose L3 and request a lead wake. Other findings change no Job state. Unknown
   found kinds fail current-version validation and remain visible as bad records.
+  A Job agent posts found under its own Job with `grid job post --job <its Job> --type found`.
 - The Job record requires the planned and run fields shown in the example;
   created_at and status are optional because the example omits them. New posts
   start posted with no granted attempt; the plan's attempt does not grant a lease.
@@ -627,7 +628,7 @@ selected levels. It writes nothing. Findings carry `code`, `file`, `line` (when
 there is one), `message` and `text`, the quoted source, which is data:
 
 - `config_topic`: a proposal aimed at workflows, environments, machines, deploy,
-  people, routines or agents (`config: run grid <topic>`).
+  people, routines or agents (`config: <step>`, the step to take for that topic).
 - `skill_field`: skill front matter key outside `name, description, when_to_use,
   metadata` (`allowed-tools`, `hooks`, `shell`, `context`, `agent`, `model`).
 - `skill_shell`: a line starting with `` !` `` or a fence opening with ```` ```! ````.

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
@@ -192,10 +191,10 @@ func (s Store) SetAgents(set map[string]Agent, budget string) error {
 		if err := allowed("agent", name, AgentNames()); err != nil {
 			return err
 		}
-		a.Model = strings.ToLower(a.Model)
 		if err := validateAgent(a); err != nil {
 			return err
 		}
+		a.Model, _ = sdNormalizeModel(a.Model)
 		set[name] = a
 	}
 	if budget != "" {
@@ -247,10 +246,10 @@ func (s Store) SetAgent(name string, a Agent) error {
 	if err := allowed("agent", name, AgentNames()); err != nil {
 		return err
 	}
-	a.Model = strings.ToLower(a.Model)
 	if err := validateAgent(a); err != nil {
 		return err
 	}
+	a.Model, _ = sdNormalizeModel(a.Model)
 	return s.update(func(d *Document) { merge(d, Document{Agents: map[string]Agent{name: a}}) })
 }
 
