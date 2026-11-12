@@ -64,7 +64,7 @@ func runSupersede(args []string, env Env) int {
 	if err != nil {
 		return failWith(env, l.asJSON, err)
 	}
-	origin, err := brain.SessionOrigin()
+	origin, err := hyDrOrigin(env)
 	if err != nil {
 		return failWith(env, l.asJSON, err)
 	}
