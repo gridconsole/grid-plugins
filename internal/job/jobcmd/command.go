@@ -634,6 +634,11 @@ func sources(task string, e Env) (*world, error) {
 			role, _ = d.Data["owner"].(string)
 		}
 		f.Owner = ownerTier(role)
+		// A task turned from an outside signal holds the sender's subject, not the
+		// owner's words, whoever pressed Turn.
+		if from, _ := d.Data["intent_from"].(string); from == "signal" {
+			f.Owner = contract.External
+		}
 		prototype, _ = d.Data["prototype"].(string)
 	}
 	if w.project != "" {

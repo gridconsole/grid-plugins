@@ -183,9 +183,16 @@ func (s Store) Apply(id string, o ActOptions) (Result, error) {
 		}
 		r := s.Resolver
 		r.GridHome = s.GridHome
+		// A line the person typed in the inbox stays theirs. Any other source is an
+		// outside sender's subject, which job render must show as data.
+		intentFrom := "signal"
+		if n.Source == "typed" {
+			intentFrom = ""
+		}
 		made, err := (task.Store{Resolver: r}).New(task.NewOptions{
 			Cwd: o.Cwd, Project: s.Project, Who: o.Who, Role: o.Role,
-			Words: n.Title + "\n\nSignal: projects/" + s.Project + "/notes/" + id + ".md",
+			Words:      n.Title + "\n\nSignal: projects/" + s.Project + "/notes/" + id + ".md",
+			IntentFrom: intentFrom,
 		})
 		if err != nil {
 			return Result{}, err

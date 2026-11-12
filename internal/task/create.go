@@ -96,7 +96,8 @@ func (s Store) New(o NewOptions) (Task, error) {
 	}
 	owner, role := o.owner()
 	t := Task{Record: Record{ID: id, Title: title, Project: r.Project, Owner: owner, OwnerRole: role,
-		Size: o.Size, Workflow: o.Workflow, Kind: o.Kind, State: "queued", Created: contract.FormatTime(now)},
+		Size: o.Size, Workflow: o.Workflow, Kind: o.Kind, State: "queued", Created: contract.FormatTime(now),
+		IntentFrom: o.IntentFrom},
 		Path: filepath.Join(dir, id+"-"+slug(title)), Intent: o.Words}
 	stableID, err := feed.NewID()
 	if err != nil {
