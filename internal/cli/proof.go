@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
 	"path/filepath"
 
@@ -42,6 +43,17 @@ func runProof(args []string, env Env) int {
 	args, code, stop := parseMixed(fs, args[1:])
 	if stop {
 		return code
+	}
+	if op == "add" {
+		byGiven := false
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name == "by" {
+				byGiven = true
+			}
+		})
+		if job := env.getenv("GRID_JOB"); !byGiven && job != "" {
+			in.By = job
+		}
 	}
 	if op == "index" && len(args) != 0 || op == "add" && (len(args) < 1 || len(args) > 2) {
 		fmt.Fprintln(env.Stderr, "proof: unexpected operands")
