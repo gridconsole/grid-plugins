@@ -168,7 +168,7 @@
     },
     {
       "name": "task",
-      "summary": "new|show|list|status|lane, stop|close|reopen, history|attach|move, decline|delete|rename|restore|summary",
+      "summary": "new|show|list|status|lane|merge, stop|close|reopen, history|attach|move (grid task help lists all)",
       "built": true,
       "subcommands": [
         {
@@ -319,6 +319,29 @@
           ],
           "json": true,
           "output": "cmd-task-list.json"
+        },
+        {
+          "name": "merge",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": ""
         },
         {
           "name": "move",
