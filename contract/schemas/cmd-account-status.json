@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-account-status.json",
+  "title": "grid account status output",
+  "description": "JSON output of grid account status --json and of grid account list --json, which runs the same writer (internal/cli/account.go:47 and :87) and differs only in that list registers nothing. Every account carries all ten keys; the app reads id, kind, name, dir, default and signedIn (worker account.go:71-80).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "accounts"
+  ],
+  "properties": {
+    "accounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "email",
+          "dir",
+          "default",
+          "signedIn",
+          "checked",
+          "plan",
+          "added"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "<kind>-<name>, for example claude-ann."
+          },
+          "kind": {
+            "type": "string",
+            "description": "claude or codex."
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "dir": {
+            "type": "string",
+            "description": "The account's config folder as an absolute path."
+          },
+          "default": {
+            "type": "boolean",
+            "description": "True when this account's email is the one signed in on ~/.claude (or ~/.codex)."
+          },
+          "signedIn": {
+            "description": "null when the scan could not tell, for example when the provider's program is not installed.",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checked": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the scan ran, UTC."
+          },
+          "plan": {
+            "type": "string",
+            "description": "The login's plan, or the empty string when unknown."
+          },
+          "added": {
+            "type": "string",
+            "description": "auto when Grid saw the email, person when the person added it."
+          }
+        }
+      }
+    }
+  }
+}

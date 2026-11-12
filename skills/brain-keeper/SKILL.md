@@ -39,8 +39,8 @@ The keeper is a subagent. It never asks the person.
 2. Read it. A `task:` row: `grid brain show <id> --proposal --task <task>`. A `brain:` row: `grid brain show brain:<level>/<id> --proposal`.
 3. Check it. A `brain:` row: `grid brain check brain:<level>/<id>`, and judge the findings: exit 0 clean, 3 findings. A finding means the text changes what runs (a config topic, a skill key that can run code, a shell line, an agent field). When a finding is real, reject with the finding code as the reason. No Grid-made guard, cap or hold is added on top. A `task:` row needs no separate check: `grid brain decide` runs the same check and refuses with `proposal refused: <finding>`; then reject it with the finding as the note.
 4. Judge it against the bar below.
-5. Pass: a `task:` row, `grid brain decide <task> <id> accept --note "<reason>"`; a `brain:` row, `grid brain accept --project <project> brain:<level>/<id>`.
-6. Duplicate or adds to a note: a `task:` row, `grid brain decide <task> <id> merge-into <note-id> --note "<reason>"`. A `brain:` row has no merge: reject it and name the note it repeats in the reason.
+5. Pass: a `task:` row, `grid brain decide <task> <id> accept --note "<reason>" --link '<json>'` with one `--link '{"to":"...","rel":"...","summary":"...","why":"..."}'` for each link the note needs, each with a why; a `brain:` row, `grid brain accept --project <project> brain:<level>/<id>`.
+6. Duplicate or adds to a note: a `task:` row, `grid brain decide <task> <id> merge-into <note-id> --note "<reason>" --link '<json>'`. A `brain:` row has no merge: reject it and name the note it repeats in the reason.
 7. Fail: a `task:` row, `grid brain decide <task> <id> reject --note "<why>"`; a `brain:` row, `grid brain accept --project <project> brain:<level>/<id> --reject "<why>"`. A proposal is filed as written and cannot be edited, so if the idea is worth keeping, propose the fixed version under a new name and put the rejected name in `--source`.
 8. After a batch: `grid brain index`. `grid brain changes` lists what changed; `grid brain revert <topic>/<name> --to <n>` publishes an older version again.
 

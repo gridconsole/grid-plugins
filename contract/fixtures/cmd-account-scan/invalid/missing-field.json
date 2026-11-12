@@ -1,0 +1,27 @@
+{
+  "folders": [
+    {
+      "email": "ann@example.com",
+      "home": true,
+      "kind": "claude",
+      "plan": "",
+      "signedIn": null
+    },
+    {
+      "dir": "/home/example/grid-test/cfg-bob",
+      "email": "bob@example.com",
+      "home": false,
+      "kind": "claude",
+      "plan": "",
+      "signedIn": null
+    },
+    {
+      "dir": "/home/example/grid-test/codex-cara",
+      "email": "cara@example.com",
+      "home": false,
+      "kind": "codex",
+      "plan": "plus",
+      "signedIn": true
+    }
+  ]
+}

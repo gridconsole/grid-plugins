@@ -16,11 +16,13 @@ func runDecide(args []string, env Env) int {
 	f := flag.NewFlagSet("grid brain decide", flag.ContinueOnError)
 	f.SetOutput(env.Stderr)
 	f.Usage = func() {
-		fmt.Fprintln(env.Stdout, "Usage: grid brain decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid brain decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--link <json>]... [--json]")
 		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
 		f.PrintDefaults()
 	}
 	note := f.String("note", "", "reason for the decision")
+	var links linkFlags
+	f.Var(&links, "link", "link JSON {to,rel,summary,why} added to the filed note (repeatable; ignored by reject)")
 	asJSON := f.Bool("json", false, "print JSON")
 	ordered, err := interspersed(f, args)
 	if err != nil {
@@ -34,7 +36,7 @@ func runDecide(args []string, env Env) int {
 		return 2
 	}
 	if f.NArg() < 3 || f.NArg() > 4 || (f.Arg(2) == "merge-into" && f.NArg() != 4) {
-		fmt.Fprintln(env.Stderr, "Usage: grid brain decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--json]")
+		fmt.Fprintln(env.Stderr, "Usage: grid brain decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--link <json>]... [--json]")
 		return 2
 	}
 	action := f.Arg(2)
@@ -60,7 +62,7 @@ func runDecide(args []string, env Env) int {
 		_, err := tasks.Note(task.WriteOptions{Cwd: env.Cwd, ID: t.ID, Note: text, Who: contract.Author{ID: "grid-curator", Role: "agent"}})
 		return err
 	}
-	result, err := s.DecideTask(brain.TaskRef{ID: t.ID, Path: t.Path}, f.Arg(1), action, target, *note, history)
+	result, err := s.DecideTask(brain.TaskRef{ID: t.ID, Path: t.Path}, f.Arg(1), action, target, *note, history, links...)
 	if err != nil {
 		return fail(err)
 	}

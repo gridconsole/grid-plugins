@@ -1,0 +1,32 @@
+[
+  {
+    "every": "1h",
+    "limits": {
+      "routine_budget": 1,
+      "routine_max_turns": 10,
+      "routine_timeout": "10m"
+    },
+    "machine": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+    "name": "morning",
+    "next": null,
+    "run": "grid version",
+    "scheduled": false
+  },
+  {
+    "every": "30 2 * * *",
+    "last_run": "2026-11-10T02:30:00Z",
+    "last_task": "T-07",
+    "limits": {
+      "routine_budget": 2.5,
+      "routine_max_turns": 25,
+      "routine_timeout": "20m"
+    },
+    "machine": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+    "name": "nightly",
+    "next": null,
+    "outcome": "success",
+    "run": "",
+    "scheduled": false,
+    "workflow": "bugfix"
+  }
+]

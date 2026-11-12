@@ -1,0 +1,73 @@
+{
+  "errors": [
+    {
+      "file": "example/workflows.md",
+      "line": 20,
+      "message": "\"dance\" is not a step kind",
+      "section": "Broken"
+    }
+  ],
+  "files": [
+    {
+      "project": null,
+      "rev": null,
+      "scope": "workspace",
+      "text": ""
+    },
+    {
+      "project": "example",
+      "rev": "d07398aa1668",
+      "scope": "project",
+      "text": "# Workflows\n\n## Rate change\napplies when: the title has rates\napprovers: sam\nreview rounds: 2\n\n| # | step | kind | who | on reject, back to |\n|---|---|---|---|---|\n| 1 | Do the work | run | grid-builder |  |\n| 2 | Approve the result | approve | sam | Do the work |\n\n## Broken\napplies when: label broken\napprovers: sam\nreview rounds: 2\n\n| # | step | kind | who | on reject, back to |\n|---|---|---|---|---|\n| 1 | Do it | dance | grid-builder |  |\n"
+    }
+  ],
+  "templates": [
+    {
+      "applies": [
+        {
+          "by": "title",
+          "v": "rates"
+        }
+      ],
+      "approvers": [
+        "sam"
+      ],
+      "batch": null,
+      "default": false,
+      "file": "example/workflows.md",
+      "lead": null,
+      "name": "Rate change",
+      "only": null,
+      "openTasks": [],
+      "overrides": null,
+      "repeat": null,
+      "research": false,
+      "rounds": 2,
+      "steps": [
+        {
+          "agent": "grid-builder",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "run",
+          "name": "Do the work",
+          "runs": null,
+          "sizes": "SNL"
+        },
+        {
+          "agent": null,
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "back": "Do the work",
+          "kind": "approve",
+          "name": "Approve the result",
+          "runs": null,
+          "sizes": "SNL"
+        }
+      ],
+      "usedIn": []
+    }
+  ]
+}

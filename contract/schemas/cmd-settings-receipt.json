@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-settings-receipt.json",
+  "title": "grid settings write receipt",
+  "description": "JSON output of grid skill enable and grid agent set with --json; internal/cli/settings.go:169 (runSettings writes the same receipt for every write, so skill disable, agent unset and hook level share it). The app runs both writes and uses the exit status only (internal/slices/settings/skill_enable.go:106-111, save_agent.go:82-97, internal/slices/agentaccounts/override.go:46); the object is the plugin's receipt.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {"type": "string", "enum": ["agent", "skill", "hook"]},
+    "name": {"type": "string", "minLength": 1, "description": "The skill or agent that was written."},
+    "project": {"type": "string", "minLength": 1, "description": "The scope written to; personal when no --project was given."}
+  },
+  "required": ["kind", "name", "project"]
+}

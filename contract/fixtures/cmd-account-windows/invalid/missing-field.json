@@ -1,0 +1,35 @@
+{
+  "accounts": [
+    {
+      "id": "claude-ann",
+      "kind": "claude",
+      "note": "No use reported for this folder yet",
+      "windows": []
+    },
+    {
+      "asOf": "2026-11-12T10:00:00Z",
+      "id": "claude-bob",
+      "kind": "claude",
+      "source": "statusline",
+      "windows": [
+        {
+          "label": "5h",
+          "resetsAt": 4102444800,
+          "used": 42
+        },
+        {
+          "label": "7d",
+          "resetsAt": 4102444800,
+          "used": 18.5
+        }
+      ]
+    },
+    {
+      "id": "codex-cara",
+      "kind": "codex",
+      "note": "Codex use is not read yet",
+      "source": "none",
+      "windows": []
+    }
+  ]
+}

@@ -114,6 +114,7 @@ func TestGoldenCorpus(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			xsRrApply(t, r.name, dir, &result)
 			if result.Skip != "" {
 				r.status = "skip"
 				t.Skip(result.Skip)
