@@ -1,0 +1,36 @@
+{
+  "id": "Q-1",
+  "question": "Connect the browser",
+  "who": "owner",
+  "blocking": false,
+  "options": [
+    "Done, carry on",
+    "Not yet"
+  ],
+  "recommended": "Done, carry on",
+  "waits_on": [
+    "Not yet"
+  ],
+  "gate": {
+    "default": "Done, carry on",
+    "at": "2026-11-09T10:00:00.000Z",
+    "id": "Q-1",
+    "kind": "person"
+  },
+  "asked": "2026-11-08T10:00:00.000Z",
+  "state": "open",
+  "answer": "",
+  "age_after_seconds": 28800,
+  "aging": 0,
+  "history": [
+    {
+      "post": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+      "role": "owner",
+      "kind": "waiting",
+      "at": "2026-11-08T11:00:00.000Z",
+      "who": "owner",
+      "text": "Not yet"
+    }
+  ],
+  "post": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+}

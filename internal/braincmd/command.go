@@ -8,11 +8,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/safefile"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -325,6 +328,21 @@ func Run(args []string, env Env) int {
 	case "show":
 		id := f.Arg(0)
 		if proposal {
+			// With --task, a plain id or task:brain-proposals/<name>.md is a
+			// proposal in the task's own folder, where decide reads it. A brain:
+			// id is always a level proposal, and a plain id the task folder lacks
+			// is read from the level store as before.
+			if name, prefixed, ok := taskProposalName(id); ok && taskID != "" && taskDir != "" {
+				var entry brain.Entry
+				entry, err = taskProposal(taskDir, name)
+				if err == nil {
+					result = entry
+					break
+				}
+				if prefixed || !errors.Is(err, fs.ErrNotExist) {
+					break
+				}
+			}
 			id, writeLevel, err = proposalID(id, writeLevel, *level)
 			if err == nil {
 				result, err = store.Proposal(writeLevel, id)
@@ -494,6 +512,47 @@ func readInput(r io.Reader) ([]byte, error) {
 		err = fmt.Errorf("input exceeds 1 MiB")
 	}
 	return b, err
+}
+
+// taskProposalName names the task-folder proposal an id can mean: the plain id,
+// or task:brain-proposals/<name>.md as keep prints it (prefixed). A brain: id is
+// never one. The name is checked when the proposal is read.
+func taskProposalName(id string) (name string, prefixed, ok bool) {
+	if rest, found := strings.CutPrefix(id, "task:brain-proposals/"); found {
+		name, found = strings.CutSuffix(rest, ".md")
+		return name, true, found
+	}
+	if strings.Contains(id, ":") {
+		return "", false, false
+	}
+	return id, false, true
+}
+
+// taskProposal reads <task folder>/brain-proposals/<name>.md as decide does:
+// through the task folder's root, parsed strictly. The entry has the id and the
+// task: path that propose --task prints for the same proposal.
+func taskProposal(taskDir, name string) (brain.Entry, error) {
+	if !brain.ValidName(name) {
+		return brain.Entry{}, fmt.Errorf("proposal id must be a plain name")
+	}
+	root, err := os.OpenRoot(taskDir)
+	if err != nil {
+		return brain.Entry{}, err
+	}
+	defer root.Close()
+	rel := filepath.Join("brain-proposals", name+".md")
+	b, err := safefile.Read(root, rel)
+	if err != nil {
+		return brain.Entry{}, err
+	}
+	n, err := brain.Parse(b)
+	if err != nil {
+		return brain.Entry{}, err
+	}
+	if n.Name != name {
+		return brain.Entry{}, fmt.Errorf("proposal name does not match its location")
+	}
+	return brain.Entry{ID: "brain:" + n.Level + "/" + n.Name, Path: "task:" + filepath.ToSlash(rel), Note: n}, nil
 }
 
 func proposalID(id, fallback, explicit string) (string, string, error) {

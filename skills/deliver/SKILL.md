@@ -12,7 +12,7 @@ Rules that apply here:
 - "Every link carries a why."
 - "A row you could not prove is NOT DONE": never write an Outcome that claims it.
 
-Steps (all use `--task <task>`). Pass the task folder path `$GRID_HOME/projects/<project>/tasks/<folder>` as `<task>`; `grid where` prints the project and the folder. The folder path works for every verb below. A bare id such as `T-01` works only for `proof`, `brain`, `task history` and `deliver`; `plan items` and `question list` answer "needs --project" to a bare id:
+Steps (all use `--task <task>`). Pass the task folder path `$GRID_HOME/projects/<project>/tasks/<folder>` as `<task>`; `grid where` prints the project and the folder. The folder path works for every verb below. A bare id such as `T-01` works for every verb below when you run it inside the task's project folder; from a folder in no project, `proof`, `brain`, `task history` and `deliver` still find it, and `plan items` and `question list` answer "needs --project" (a role with no Personal scope gets "task not found"); the folder path works from anywhere:
 
 1. Read the plan: `grid plan items --task <task> --json`. Each item names the evidence kind it needs (`proof: check|log|screenshot|video`; none means check).
 2. For each item, run the check yourself and record it: `grid proof add <n> --text '<command and exit code>' --kind check --by <you> --task <task>`, or `grid proof add <n> <file> --kind screenshot --note '<size or page>' --task <task>`. Code facts carry a `path:line` read in this session; UI evidence names its data source and the widths 390, 1440 and 3840.
