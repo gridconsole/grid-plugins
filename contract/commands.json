@@ -259,7 +259,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-task-trash.json"
         },
         {
           "name": "history",
@@ -416,7 +416,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-task-new.json"
         },
         {
           "name": "rename",
@@ -481,7 +481,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-task-trash.json"
         },
         {
           "name": "show",
