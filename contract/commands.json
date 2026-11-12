@@ -4694,7 +4694,7 @@
     },
     {
       "name": "project",
-      "summary": "add, remove, list, scan and relink projects; repo edits a project's repos",
+      "summary": "add, remove, list, scan and relink projects; repo and env edit a project's repos and environments",
       "built": true,
       "subcommands": [
         {
