@@ -30,7 +30,9 @@ type Event struct {
 // This table is the source for dispatch, Handles and generated plugin hooks.
 // Timeouts are seconds: Stop and SubagentStop leave room for a bounded verify;
 // the guard events (PreToolUse, PermissionRequest, UserPromptSubmit) get 30 so a
-// loaded machine does not time out and let Claude Code skip them.
+// loaded machine does not time out and let Claude Code skip them. PostToolUse
+// gets 30 too: it carries a person's message to the Job's agent, and a hook cut
+// off late loses it.
 var events = []struct {
 	Event
 	run func(Options) int
@@ -39,7 +41,7 @@ var events = []struct {
 	{Event{"UserPromptSubmit", "", 30}, remaining},
 	{Event{"SubagentStart", "", 10}, remaining},
 	{Event{"PreToolUse", "", 30}, quiet(toolUse)},
-	{Event{"PostToolUse", "", 10}, remaining},
+	{Event{"PostToolUse", "", 30}, remaining},
 	{Event{"PreCompact", "", 10}, remaining},
 	{Event{"Stop", "", 60}, remaining},
 	{Event{"SubagentStop", "", 60}, remaining},
@@ -115,13 +117,15 @@ func remaining(o Options) int {
 	case "stop-check":
 		return stopCheck(o, *in)
 	default:
+		// The job message goes first: it marks a message Seen and then writes it,
+		// so the slower records must not be able to cut the hook off before it.
+		if name == "posttooluse" {
+			o.record("job message", func() { peMsgDeliver(o, *in) })
+		}
 		o.record("heartbeat", func() { heartbeat(o, *in) })
 		o.record("history", func() { history(o, *in) })
 		o.record("session", func() { recordSession(o, *in) })
 		o.record("brain read", func() { brainRead(o, *in) })
-		if name == "posttooluse" {
-			o.record("job message", func() { peMsgDeliver(o, *in) })
-		}
 		if name == "stop" || name == "subagentstop" {
 			if code := stopCheck(o, *in); code != 0 {
 				return code
@@ -134,11 +138,18 @@ func remaining(o Options) int {
 	return 0
 }
 
+// oiRecordSeenForTest is nil in production. A test sets it to see the names
+// record is called with, in order; the fslock test seam is used the same way.
+var oiRecordSeenForTest func(name string)
+
 // record runs one function that only records (history, usage, heartbeat, brain
 // reads, session end). Verdict v-15: it never blocks or denies. A Go panic exits
 // the process with code 2, which Claude Code reads as a block, so a panic here
 // goes to the hook log and the hook carries on and exits 0.
 func (o Options) record(name string, f func()) {
+	if oiRecordSeenForTest != nil {
+		oiRecordSeenForTest(name)
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			o.log(name, fmt.Errorf("panic: %v", r))
@@ -375,7 +386,7 @@ func jobHasResult(dir, jobID, attempt string) (bool, error) {
 	if err != nil {
 		return false, nil
 	}
-	read, err := feed.Store{TaskDir: dir, TaskID: id}.Read(feed.Filter{Job: jobID})
+	read, err := feed.Store{TaskDir: dir, TaskID: id}.ReadOnly(feed.Filter{Job: jobID})
 	if err != nil {
 		return false, err
 	}

@@ -124,6 +124,7 @@ type Job struct {
 	Title           string          `json:"title"`
 	Role            string          `json:"role"`
 	Kind            string          `json:"kind,omitempty"`
+	Repo            string          `json:"repo,omitempty"` // the repo path the Job names; empty is the project's first repo
 	Status          Status          `json:"status"`
 	Attempt         int             `json:"attempt"`
 	Assign          *Assignment     `json:"assign"`

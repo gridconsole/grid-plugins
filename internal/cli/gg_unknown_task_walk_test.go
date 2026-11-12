@@ -37,6 +37,7 @@ var ggTaskWalked = []string{
 	"usage", "usage post", "usage show",
 	"signal act",
 	"artifact import", "artifact link", "artifact list", "artifact publish",
+	"workflow show",
 }
 
 // ggTaskSkipped holds members that cannot run without touching the machine; each

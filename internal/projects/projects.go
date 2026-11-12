@@ -78,7 +78,8 @@ func (s Store) records() ([]project.Record, error) {
 		return nil, err
 	}
 	for _, e := range entries {
-		if !s.Resolver.GuestProjectAllowed(e.Name()) {
+		// A file is no record (project.Load skips it too); a link still goes to Safe, which refuses it.
+		if e.Type().IsRegular() || !s.Resolver.GuestProjectAllowed(e.Name()) {
 			continue
 		}
 		if _, err := localdata.Safe(home, "projects", e.Name(), "project.md"); err != nil {
@@ -394,7 +395,12 @@ func find(records []project.Record, name string) (project.Record, error) {
 	return found[0], nil
 }
 
-// Remove unlinks this machine, retaining project identity and all project data.
+// Remove unregisters the project and deletes nothing: one rename moves its data
+// folder, project.md and all, to projects/.removed/<name>, or <name>-2, <name>-3
+// when that is taken, and nothing in the folder is rewritten. It answers the
+// record with this machine's folders and keys dropped. When the rename fails
+// (on Windows a file held open inside the folder fails it), the folder and the
+// registration stay as they were.
 func (s Store) Remove(name string) (Entry, error) { return s.change(name, "") }
 
 // Relink replaces this machine's folder bindings, retaining the stable project id.
@@ -436,6 +442,38 @@ func (s Store) change(name, path string) (Entry, error) {
 		}
 	}
 	rec.Keys = keys
+	if path == "" {
+		home := s.Resolver.GridHome
+		src, err := localdata.Safe(home, "projects", rec.Name)
+		if err != nil {
+			return Entry{}, err
+		}
+		removed, err := localdata.Safe(home, "projects", ".removed")
+		if err != nil {
+			return Entry{}, err
+		}
+		if err := os.MkdirAll(removed, 0o755); err != nil {
+			return Entry{}, err
+		}
+		target := rec.Name
+		for n := 2; ; n++ {
+			dst, err := localdata.Safe(home, "projects", ".removed", target)
+			if err != nil {
+				return Entry{}, err
+			}
+			_, err = os.Lstat(dst)
+			if errors.Is(err, os.ErrNotExist) {
+				if err := os.Rename(src, dst); err != nil {
+					return Entry{}, err
+				}
+				return entry(rec), nil
+			}
+			if err != nil {
+				return Entry{}, err
+			}
+			target = fmt.Sprintf("%s-%d", rec.Name, n)
+		}
+	}
 	if path != "" {
 		if rec.Name == where.Personal {
 			return Entry{}, fmt.Errorf("Personal has no folder to relink")

@@ -18,6 +18,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/job/jobcmd"
 	"github.com/gridconsole/grid-plugins/internal/mdfile"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
@@ -156,6 +157,10 @@ func runWorkerNext(args []string, env Env) int {
 		Out: env.Stdout, Diag: diag,
 		Tasks: func() ([]string, error) { return workerTaskDirs(env) },
 		Model: func(dir, role string) (string, string, error) { return workerSpawnModel(env, dir, role) },
+		// The folder of the repo the Job names, so a project of several repos can run a code Job.
+		Repo: func(dir, repo string) (string, error) {
+			return jobcmd.RepoFolder(dir, repo, jobcmdEnv(env, resolver(env)))
+		},
 		// A task whose first Job was never posted gets the same J-1 grid task new posts.
 		FirstJob: firstJobOf,
 		// The pass moves an old approval receipt into the task's Feed once, under the task lease.

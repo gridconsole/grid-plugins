@@ -21,6 +21,10 @@
         "small"
       ]
     },
+    "repo": {
+      "type": "string",
+      "minLength": 1
+    },
     "irreversible": {
       "type": "boolean"
     },

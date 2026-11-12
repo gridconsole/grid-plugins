@@ -1,4 +1,4 @@
-# C-pf-message-orchestrator-job: NOT DONE (STUCK)
+# C-pf-message-orchestrator-job: CLOSED BY C-pf2-marker-lead-text: the message Job carries its post id as A1 lead text with discovered_from null (split b below)
 
 The brief cannot be met on this base. Two of its requirements contradict each other, and the schema that decides is outside Touches. I stopped at call ~15 and did not build around it.
 
@@ -27,12 +27,12 @@ go test -count=1 ./internal/orchestrator/ -run 'TestPfMsg' -v
 | Row | Result |
 |---|---|
 | Base check: no replan on 00413d82 reads a post of kind message | HOLDS. `git grep -n 'gkReplanRole' -- internal/orchestrator/` answers replan.go:16, :71, :160, replan_owner.go:30, replan_plan_fault.go:44, found_security.go:65 and ji_plan_fault_replan_test.go:49, all Job-to-Job. tick.go:82-105 calls gkReplan, guReplanRejected, guReplanAskOwner and guReplanPersonCancelled, none of which reads a message. |
-| 1. Job per owner message, passes `job-record` | NOT DONE. The schema refuses `discovered_from` = post id (above). Base Job list and the `--- PASS` line were not produced. |
-| 2. Not-a-request table | NOT DONE. The guest, `To J-1`, `Lease: "task"` and close cases PASS, but the answer-notice case fails to rig (see open items). I did not re-run the table to a full pass. |
-| 3. Two messages, two Jobs, third pass none | NOT DONE, same cause as row 1. |
-| 4. New Job sets off no other replan | NOT DONE, same cause. Reading replan_owner.go:30 shows it acts only on a cancelled or rejected orchestrator Job, and found_security.go:65 reads only the A1 text, so I expect it to hold once row 1 is settled. |
-| 5. `go test ./internal/orchestrator/ -run 'TestPfMsg\|Replan\|Gk'` and the walk tests | NOT DONE. Not run. |
-| 6. `make lint`, `make cross`, `git diff main --stat` | NOT DONE. Not run. The diff touches only the three files in Touches. |
+| 1. Job per owner message, passes `job-record` | CLOSED BY C-pf2-marker-lead-text: one Job per owner message with discovered_from null, passing job-record. At C-pf: the schema refuses `discovered_from` = post id (above). Base Job list and the `--- PASS` line were not produced. |
+| 2. Not-a-request table | CLOSED BY C-pf2-marker-lead-text: the answer-notice case now answers a real person Job through AnswerPersonWith and the table passes. At C-pf: the guest, `To J-1`, `Lease: "task"` and close cases PASS, but the answer-notice case fails to rig (see open items). I did not re-run the table to a full pass. |
+| 3. Two messages, two Jobs, third pass none | CLOSED BY C-pf2-marker-lead-text: pfMsgPosted reads the A1 lead, so the third pass posts none. At C-pf: same cause as row 1. |
+| 4. New Job sets off no other replan | CLOSED BY C-pf2-marker-lead-text: TestPfMsgJobSetsOffNoOtherReplan passes. At C-pf: same cause. Reading replan_owner.go:30 shows it acts only on a cancelled or rejected orchestrator Job, and found_security.go:65 reads only the A1 text, so I expect it to hold once row 1 is settled. |
+| 5. `go test ./internal/orchestrator/ -run 'TestPfMsg\|Replan\|Gk'` and the walk tests | CLOSED BY C-pf2-marker-lead-text: run there, exit 0. At C-pf: not run. |
+| 6. `make lint`, `make cross`, `git diff main --stat` | CLOSED BY C-pf2-marker-lead-text: lint and cross run there, exit 0. At C-pf: not run. The diff touches only the three files in Touches. |
 
 Rules: no guard, gate or cap was added. No existing test was edited or deleted. The Windows and macOS builds, lint and the walk tests were not run.
 
@@ -54,4 +54,4 @@ Landing this as it stands would put schema-invalid Jobs on the Feed.
 - The answer-notice case of row 2 fails to rig. A hand-built control (`status: accepted`, `target: J-1`) is refused by the control schema: `$: oneOf matched 0 branches: $.body: missing required question_event`. The faithful rig makes J-1 a person Job and answers it through the real answer path in person.go (around :255-280). `person_fields_test.go:68` already drives that path.
 - NOT VERIFIED: nothing on a live screen. This lane has no UI.
 
-NOT DONE
+CLOSED BY C-pf2-marker-lead-text: the message Job carries its post id as A1 lead text, discovered_from null

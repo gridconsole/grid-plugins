@@ -7,7 +7,7 @@ import "testing"
 func TestGuardHookTimeoutsSurviveLoad(t *testing.T) {
 	want := map[string]int{
 		"SessionStart": 10, "UserPromptSubmit": 30, "SubagentStart": 10,
-		"PreToolUse": 30, "PostToolUse": 10, "PreCompact": 10,
+		"PreToolUse": 30, "PostToolUse": 30, "PreCompact": 10,
 		"Stop": 60, "SubagentStop": 60, "SessionEnd": 10,
 		"PostToolUseFailure": 10, "PermissionRequest": 30,
 	}
