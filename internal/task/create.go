@@ -427,7 +427,17 @@ func (s Store) register(r where.Result, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	return atomicWrite(filepath.Join(s.Resolver.GridHome, "projects", rec.Name, "project.md"), data)
+	// Record models four keys; every other key of project.md and the text after
+	// the front matter stay as they are, as projects.Store.write keeps them.
+	path := filepath.Join(s.Resolver.GridHome, "projects", rec.Name, "project.md")
+	old, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if data, err = project.KeepOldText(data, string(old)); err != nil {
+		return err
+	}
+	return atomicWrite(path, data)
 }
 
 func addKey(rec *project.Record, key project.Key) {

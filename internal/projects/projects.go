@@ -2,7 +2,6 @@
 package projects
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -524,16 +523,9 @@ func (s Store) write(rec project.Record) error {
 	if err != nil {
 		return err
 	}
-	// Record models four keys; every other key of the existing front matter stays, in its order.
-	if data, err = project.KeepOtherKeys(data, string(old)); err != nil {
+	// Record models four keys; every other key of the existing front matter stays, in its order, and so does the text after it.
+	if data, err = project.KeepOldText(data, string(old)); err != nil {
 		return err
-	}
-	lines := bytes.SplitAfter(old, []byte("\n"))
-	for i := 1; i < len(lines); i++ {
-		if strings.TrimSpace(string(lines[i])) == "---" {
-			data = append(data, bytes.Join(lines[i+1:], nil)...)
-			break
-		}
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err

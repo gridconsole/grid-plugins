@@ -266,6 +266,28 @@ func KeepOtherKeys(canonical []byte, old string) ([]byte, error) {
 	return append(append([]byte("---\n"), front...), "---\n"...), nil
 }
 
+// KeepOldText returns canonical, the front matter Format wrote, with what the
+// existing project.md text old holds besides the four keys of Record put back:
+// every other front-matter key (see KeepOtherKeys) and every byte after the
+// closing "---" line. An old with no front matter adds nothing.
+func KeepOldText(canonical []byte, old string) ([]byte, error) {
+	data, err := KeepOtherKeys(canonical, old)
+	if err != nil {
+		return nil, err
+	}
+	lines := bytes.SplitAfter([]byte(old), []byte("\n"))
+	if strings.TrimSpace(string(lines[0])) != "---" {
+		return data, nil
+	}
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(string(lines[i])) == "---" {
+			data = append(data, bytes.Join(lines[i+1:], nil)...)
+			break
+		}
+	}
+	return data, nil
+}
+
 // mappingOf returns the top-level mapping of a loaded document, or nil.
 func mappingOf(doc *yaml.Node) *yaml.Node {
 	if len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
