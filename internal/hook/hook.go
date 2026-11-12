@@ -240,7 +240,7 @@ func writeEnv(path, home, task string, extra ...string) error {
 	default:
 		return err
 	}
-	text, replaced := replaceEnvBlock(string(old), block)
+	text, replaced := replaceEnvBlock(string(old), block, home)
 	if !replaced {
 		if text != "" && !strings.HasSuffix(text, "\n") {
 			text += "\n"
@@ -276,14 +276,40 @@ func writeEnv(path, home, task string, extra ...string) error {
 // Builds from before the markers wrote the same export lines with no markers
 // around them. Outside the marked block, a line byte-equal to a line of block is
 // one of those old copies and is dropped, with the blank lines that separate the
-// copies. Every other line is kept, and a text with no old copy comes back as it was.
-func replaceEnvBlock(text, block string) (string, bool) {
+// copies. An old build may have put a different bin folder on PATH, so a line
+// `export PATH='<dir>/bin':"$PATH"` with <dir> a plugin-dist folder, a .grid folder or
+// home counts as one too. Every other line is kept, and a text with no old copy comes
+// back as it was.
+// isGridPathLine reports whether line is `export PATH='<dir>/bin':"$PATH"` with <dir>
+// a plugin-dist folder, a .grid folder or the Grid home. Any other PATH line is the
+// person's.
+func isGridPathLine(line, home string) bool {
+	const pre, post = "export PATH='", `/bin':"$PATH"`
+	if !strings.HasPrefix(line, pre) || !strings.HasSuffix(line, post) {
+		return false
+	}
+	dir := strings.TrimSuffix(strings.TrimPrefix(line, pre), post)
+	if dir == "" || strings.Contains(dir, "'") {
+		return false
+	}
+	if home != "" && dir == home {
+		return true
+	}
+	switch filepath.Base(dir) {
+	case "plugin-dist", ".grid":
+		return true
+	}
+	return false
+}
+
+func replaceEnvBlock(text, block, home string) (string, bool) {
 	legacy := map[string]bool{}
 	for _, l := range strings.Split(block, "\n") {
 		if l != "" && l != envBlockStart && l != envBlockEnd {
 			legacy[l] = true
 		}
 	}
+	isLegacy := func(l string) bool { return legacy[l] || isGridPathLine(l, home) }
 	lines := strings.SplitAfter(text, "\n")
 	var out strings.Builder
 	found := false
@@ -295,7 +321,7 @@ func replaceEnvBlock(text, block string) (string, bool) {
 			pending += lines[i]
 			continue
 		}
-		if legacy[strings.TrimSuffix(lines[i], "\n")] {
+		if isLegacy(strings.TrimSuffix(lines[i], "\n")) {
 			pending, dropped = "", true
 			continue
 		}
