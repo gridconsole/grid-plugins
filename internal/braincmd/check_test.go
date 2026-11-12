@@ -56,7 +56,7 @@ func TestCheckExitCodes(t *testing.T) {
 func TestCheckProposalByID(t *testing.T) {
 	h := newHarness(t)
 	h.put(t, "brain-proposals/dep.md", "---\nname: dep\ntopic: deploy\ntype: reference\ndescription: d\nsummary: s\nupdated: \"\"\nsource: T-01\nsuperseded_by: \"\"\nlinks: []\nlevel: home\nstatus: proposed\nreason: \"\"\norigin:\n  kind: session\n  id: x\n  tier: agent\n---\nBody\n")
-	if code := h.run("check", "brain:home/dep"); code != 3 || !strings.Contains(h.out.String(), "config: run grid deploy") {
+	if code := h.run("check", "brain:home/dep"); code != 3 || !strings.Contains(h.out.String(), "config: set it with grid setup <project> --answers <file>") {
 		t.Fatalf("%d %s %s", code, &h.out, &h.err)
 	}
 	if code := h.run("check", "--level", "home", "dep"); code != 3 {

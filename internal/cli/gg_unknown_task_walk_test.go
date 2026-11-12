@@ -53,15 +53,10 @@ type ggTaskOpen struct {
 // the brief ask. Shorten it when the product is fixed: the walk fails for a member
 // that is listed and now answers well.
 //
-// Seen on base b87fc364. The first group prints its diagnostic on stderr and writes
-// nothing on stdout with --json (no envelope); the second prints a JSON object of
-// its own on stdout with an "error" string, and stderr stays empty.
-var ggTaskKnownOpen = map[string]ggTaskOpen{
-	"job lint":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
-	"job render": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
-	"job show":   {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
-	"job verify": {1, `stdout: {"ok":false,"findings":[],"error":"task T-99 not found in project example","code":"no_such_task"}`},
-}
+// Empty: job lint, render, show and verify keep their own object (ok, findings,
+// error, code; contract/README.md:66) and print the same stderr line with and
+// without --json, which the check reads as the answer asked for.
+var ggTaskKnownOpen = map[string]ggTaskOpen{}
 
 // ggTaskMembers reads the member set from contract/commands.json.
 func ggTaskMembers(t *testing.T) map[string]contractCommandSub {
@@ -217,6 +212,13 @@ func ggTaskAnswer(h *harness, cwd string, argv []string) (problem string, exit i
 	var code, message string
 	_ = json.Unmarshal(got["code"], &code)
 	_ = json.Unmarshal(got["message"], &message)
+	// The five job verbs keep their own object (contract/README.md:66): ok, findings
+	// and an "error" string, with the top-level code; stderr names the verb.
+	jobPrefix := ""
+	if argv[0] == "job" && code != "" && message == "" {
+		_ = json.Unmarshal(got["error"], &message)
+		jobPrefix = "job: "
+	}
 	if code == "" {
 		var failure struct{ Code, Message string }
 		_ = json.Unmarshal(got["error"], &failure)
@@ -226,7 +228,8 @@ func ggTaskAnswer(h *harness, cwd string, argv []string) (problem string, exit i
 	case code != CodeNoSuchTask:
 		return "code is " + code + ", not no_such_task", exit, "stdout: " + head(out)
 	// The signal act envelope carries the message without the "grid: " prefix of stderr.
-	case message != strings.TrimSuffix(stderr, "\n") && "grid: "+message != strings.TrimSuffix(stderr, "\n"):
+	case message != strings.TrimSuffix(stderr, "\n") && "grid: "+message != strings.TrimSuffix(stderr, "\n") &&
+		(jobPrefix == "" || jobPrefix+message != strings.TrimSuffix(stderr, "\n")):
 		return "message differs from stderr", exit, "stdout: " + head(out)
 	}
 	return "", exit, seen
