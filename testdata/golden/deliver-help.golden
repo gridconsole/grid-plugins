@@ -1,2 +1,3 @@
-Usage: grid deliver --outcome <text> [files...] [--file path] [--task <task>] [--by agent] [--dry-run] [--json]
+Usage: grid deliver --outcome <text> [files...] [--file path] [--task <task>] [--by agent] [--branch name] [--base sha-or-ref] [--dry-run] [--json]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
+The task's branch and base are recorded in task.md; they default to the current branch and its merge-base with main or master.

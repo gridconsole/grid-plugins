@@ -372,6 +372,11 @@
               "required": false
             },
             {
+              "name": "--kind",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--project",
               "takes": "value",
               "required": false
@@ -2483,6 +2488,16 @@
           ],
           "flags": [
             {
+              "name": "--base",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--branch",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--by",
               "takes": "value",
               "required": false
@@ -3457,7 +3472,9 @@
         },
         {
           "name": "schedule",
-          "args": [],
+          "args": [
+            "[\u003cname\u003e]"
+          ],
           "flags": [
             {
               "name": "--json",
@@ -3475,7 +3492,9 @@
         },
         {
           "name": "unschedule",
-          "args": [],
+          "args": [
+            "[\u003cname\u003e]"
+          ],
           "flags": [
             {
               "name": "--json",
@@ -4522,6 +4541,11 @@
             {
               "name": "--show",
               "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--stream",
+              "takes": "value",
               "required": false
             },
             {

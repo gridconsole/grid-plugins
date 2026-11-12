@@ -577,6 +577,7 @@ func personApproval(store feed.Store, w feed.Writer, job, answer string, e tasks
 func configureTickStore(env Env, s *orchestrator.Store, project, taskID string) {
 	s.WorktreesDir = filepath.Join(env.GridHome, "projects", project, "worktrees")
 	s.Diagnostics = env.Stderr
+	s.AccountRoom = yaAccountRoomFor(env)
 	s.Probe = func(live session.Live) session.ProcessState {
 		local := s.Writer.Worker[strings.LastIndexByte(s.Writer.Worker, '@'):]
 		if !strings.HasSuffix(live.Holder, local) {

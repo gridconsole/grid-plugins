@@ -236,6 +236,9 @@ func (s *Stream) task(dir string) error {
 	if s.Configure != nil {
 		s.Configure(&st, taskID)
 	}
+	if closed, err := s.pgClosedTask(dir, taskID, ts, w, st); closed {
+		return err
+	}
 	out, err := st.Tick()
 	if err != nil {
 		if errors.Is(err, feed.ErrStaleLease) {

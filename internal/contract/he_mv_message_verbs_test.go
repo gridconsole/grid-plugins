@@ -47,9 +47,6 @@ var heMvProse = map[string]string{
 	"internal/cli/agent.go:agent budget":        "dispatched at cli/agent.go:21, commands.json lists no budget sub",
 	"internal/cli/budget.go:agent budget":       "dispatched at cli/agent.go:21, commands.json lists no budget sub",
 	"internal/cli/budget.go:claude settings":    "dispatched at cli/budget.go:90, commands.json lists no settings sub",
-	// A message names a sub no dispatcher has and commands.json lists none.
-	"internal/cli/task.go:lease take-over": "advice text names a command with no dispatcher; message left as is by this lane",
-	"internal/job/render.go:brain topic":   "cut-notice names `grid brain topic`, a sub no dispatcher has; `--topic` is a flag of other subs",
 	// Plain English after a verb name.
 	"internal/guard/host.go:task or":          "prose: \"the grid task or grid question command\"",
 	"internal/guard/host.go:question command": "prose: \"the grid task or grid question command\"",

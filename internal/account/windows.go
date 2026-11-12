@@ -28,6 +28,9 @@ type Snapshot struct {
 	FiveHour  *Reading `json:"five_hour,omitempty"`
 	SevenDay  *Reading `json:"seven_day,omitempty"`
 	At        string   `json:"at"`
+	// Source is "stream" for numbers read from an attempt log; empty (every
+	// snapshot written before the key existed) means the status line.
+	Source string `json:"source,omitempty"`
 }
 
 // Window is one row of the account_windows shape.
@@ -165,7 +168,10 @@ func windowsFor(env Env, id, kind string, dirs []string) AccountWindows {
 		}
 		add("5h", s.FiveHour)
 		add("7d", s.SevenDay)
-		res.AsOf, res.Source = s.At, "statusline"
+		res.AsOf, res.Source = s.At, s.Source
+		if res.Source == "" {
+			res.Source = "statusline"
+		}
 		return res
 	}
 	res.Note = "No use reported for this folder yet"

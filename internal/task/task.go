@@ -32,8 +32,11 @@ type Record struct {
 	OwnerRole string `yaml:"owner_role,omitempty" json:"owner_role,omitempty"`
 	Size      string `yaml:"size" json:"size"`
 	Workflow  string `yaml:"workflow" json:"workflow"`
-	State     string `yaml:"state" json:"state"`
-	Created   string `yaml:"created" json:"created"`
+	// Kind names a task the app finds by its kind. New writes only "setup"; a
+	// home may hold older kinds (planner) that are read and never written here.
+	Kind    string `yaml:"kind,omitempty" json:"kind,omitempty"`
+	State   string `yaml:"state" json:"state"`
+	Created string `yaml:"created" json:"created"`
 }
 
 // Task folds the task record and the person's unmodified words into one view.
@@ -56,6 +59,9 @@ type Store struct {
 // owner, so a new task never has an empty owner.
 type NewOptions struct {
 	Cwd, Words, Project, Size, Workflow, Who, Role string
+	// Kind is empty or "setup": a setup task is the one the app finds by
+	// `kind: setup` in task.md. Validate refuses any other value.
+	Kind string
 	// Inputs are files copied into the new task's inputs/ folder, each under
 	// its base name. New fails before it writes anything when one is missing or
 	// is not a file.
@@ -96,6 +102,11 @@ func (o NewOptions) Validate() error {
 	}
 	if o.Workflow != "" && strings.TrimSpace(o.Workflow) == "" {
 		return errors.New("workflow must be a nonempty name on one line")
+	}
+	switch o.Kind {
+	case "", "setup":
+	default:
+		return fmt.Errorf("invalid kind %q: use setup", o.Kind)
 	}
 	return nil
 }

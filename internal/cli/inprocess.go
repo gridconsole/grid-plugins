@@ -114,12 +114,12 @@ var hsIpTable = map[string]hsIpVerb{
 	"routine": {subs: map[string]hsIpSub{
 		"add":  {},
 		"list": {},
-		// routine.go:145-146 runs the routine on context.Background with the Call's
+		// routine.go:159-160 runs the routine on context.Background with the Call's
 		// getenv, which builds the child's environment (routine/execute.go:147-150, :169-174).
 		"run":    {},
 		"remove": {},
-		// routine.go:197 writes a system schedule that calls the host's executable.
-		"schedule":   {why: "writes a system schedule for the host's executable (routine.go:197, routine/schedule.go:37)"},
+		// routine.go:222-224 writes a system schedule that calls the host's executable.
+		"schedule":   {why: "writes a system schedule for the host's executable (routine.go:222-224, routine/schedule.go:37)"},
 		"unschedule": {},
 	}},
 	"worker": {subs: map[string]hsIpSub{

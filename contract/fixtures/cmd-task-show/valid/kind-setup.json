@@ -1,0 +1,15 @@
+{
+  "created": "2026-11-08T17:32:14Z",
+  "folder": "T-01-set-up-example",
+  "id": "T-01",
+  "intent": "Set up Example",
+  "kind": "setup",
+  "owner": "member",
+  "owner_role": "member",
+  "path": "<ROOT>/home/.grid/projects/example/tasks/T-01-set-up-example",
+  "project": "example",
+  "size": "auto",
+  "state": "queued",
+  "title": "Set up Example",
+  "workflow": ""
+}
