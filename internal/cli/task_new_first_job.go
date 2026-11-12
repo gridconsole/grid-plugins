@@ -22,13 +22,22 @@ const firstJobID = "J-1"
 // worker has something to start: the orchestrator reads intent.md#request, decides
 // the Jobs and posts them. The owner wrote the request, so the Job's intent points
 // at it; the Job's role carries agents/orchestrator.md into its rendered prompt.
-func firstJob() map[string]any {
+func firstJob() map[string]any { return firstJobOf("") }
+
+// firstJobOf is firstJob for a task of the given kind. A setup task's J-1 also
+// loads the setup skill, so the first Job of a project's setup task reads
+// skills/setup/SKILL.md; with no kind the record is the same as firstJob's.
+func firstJobOf(kind string) map[string]any {
 	request := "intent.md#request"
+	skills := []string{"plan-jobs"}
+	if kind == "setup" {
+		skills = append(skills, "setup")
+	}
 	return map[string]any{
 		"id": firstJobID, "item": 1,
 		"title":  "Read the task and post the Jobs it needs",
 		"role":   "orchestrator",
-		"skills": []string{"plan-jobs"},
+		"skills": skills,
 		"risk":   []string{},
 		"intent": map[string]any{"owner": request, "item": request, "goal": request},
 		"links":  []any{}, "keep": []string{}, "decisions": []string{},
@@ -68,7 +77,7 @@ func postFirstJob(env Env, t task.Task, o task.NewOptions) error {
 		fmt.Fprintf(env.Stderr, "grid task new: %s has no first Job: %q is not a valid <member>@<machine ULID> writer id\n", t.ID, worker)
 		return nil
 	}
-	data, err := json.Marshal(firstJob())
+	data, err := json.Marshal(firstJobOf(o.Kind))
 	if err != nil {
 		return err
 	}
