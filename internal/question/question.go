@@ -40,10 +40,8 @@ type Record struct {
 	Blocking        bool     `json:"blocking"`
 	Options         []string `json:"options,omitempty"`
 	Recommended     string   `json:"recommended,omitempty"`
-	// WaitsOn names the options that keep the question open: such an answer is
-	// recorded as a waiting event and the person Job stays open ("Not yet").
-	WaitsOn []string `json:"waits_on,omitempty"`
-	Gate    Gate     `json:"gate"`
+	WaitsOn         []string `json:"waits_on,omitempty"` // options recorded as waiting: question and Job stay open
+	Gate            Gate     `json:"gate"`
 	Asked           Stamp    `json:"asked"`
 	State           string   `json:"state"`
 	Answer          string   `json:"answer"`
