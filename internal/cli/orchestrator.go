@@ -408,7 +408,7 @@ func runOrchestrator(args []string, env Env) int {
 	// warning for this operation already, so the refold does not say it again.
 	refold := store
 	refold.Warn = io.Discard
-	if _, err := refold.SaveState(); err != nil {
+	if _, err := refold.RefoldPublished(); err != nil {
 		fmt.Fprintln(env.Stderr, "refold:", err)
 	}
 	if checked {

@@ -175,7 +175,7 @@ func runFeed(args []string, env Env) int {
 	// needs-you.json and the app reads it as authoritative, so refold it now: an
 	// answer, a Job or a result that opens or closes a question must show without
 	// a tick. A fold error does not undo the post; the next fold repairs the files.
-	if _, err := store.SaveState(); err != nil {
+	if _, err := store.RefoldPublished(); err != nil {
 		fmt.Fprintln(env.Stderr, "refold:", err)
 	}
 	return output(struct {
