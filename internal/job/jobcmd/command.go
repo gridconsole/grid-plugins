@@ -81,6 +81,14 @@ func refusalCode(err error, exit int) string {
 	return ""
 }
 
+// stderrWithJSON reports whether a refusal with code also prints its stderr line
+// under --json: the unknown task and unknown project refusals the walks read
+// (internal/cli/gg_unknown_task_walk_test.go). Other refusals, and any refusal
+// to a guest, keep an empty stderr under --json as their tests pin.
+func stderrWithJSON(e Env, code string) bool {
+	return (code == "no_such_task" || code == "no_such_project") && !e.Resolver.Caller.IsGuest()
+}
+
 const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--project <name>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--project <name>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--project <name>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\nExit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip), 6 stale rev (read again), 7 not versioned (nothing written).\n"
 
 func Run(args []string, e Env) int {
@@ -391,8 +399,8 @@ func output(e Env, f flags, r report, code int) int {
 		if err := enc.Encode(r); err != nil {
 			return 1
 		}
-		// A refusal reads the same on stderr with and without --json.
-		if r.Error != "" {
+		// An unknown task or project reads the same on stderr with and without --json.
+		if r.Error != "" && stderrWithJSON(e, r.Code) {
 			if _, err := fmt.Fprintf(e.Stderr, "job: %s\n", r.Error); err != nil {
 				return 1
 			}

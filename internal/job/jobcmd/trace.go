@@ -305,10 +305,13 @@ func runTrace(args []string, e Env) int {
 	}
 	fail := func(err error, code int) int {
 		if asJSON {
-			status := traceOutput(e, TraceResult{Rows: []TraceRow{}, Problems: []TraceProblem{{Text: err.Error()}}, Code: refusalCode(err, code)}, true, code)
-			// The refusal reads the same on stderr with and without --json.
-			if _, writeErr := fmt.Fprintf(e.Stderr, "job trace: %s\n", err); writeErr != nil {
-				return traceExitFailed
+			refusal := refusalCode(err, code)
+			status := traceOutput(e, TraceResult{Rows: []TraceRow{}, Problems: []TraceProblem{{Text: err.Error()}}, Code: refusal}, true, code)
+			// An unknown project reads the same on stderr with and without --json.
+			if stderrWithJSON(e, refusal) {
+				if _, writeErr := fmt.Fprintf(e.Stderr, "job trace: %s\n", err); writeErr != nil {
+					return traceExitFailed
+				}
 			}
 			return status
 		}
