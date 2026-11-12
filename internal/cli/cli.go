@@ -158,7 +158,7 @@ func commands() []command {
 		{"intent", "list, claim, done, release, renew (worker requests)", runIntent},
 		{"usage", "post and show usage, fold observed session totals", runUsage},
 		{"account", "list, status, statusline, scan, sign-in, windows, folder and note for agent accounts", runAccount},
-		{"project", "add, remove, list, scan and relink projects; repo edits a project's repos", runProject},
+		{"project", "add, remove, list, scan and relink projects; repo and env edit a project's repos and environments", runProject},
 		{"project-md", "get or set a project front-matter key", runProjectMD},
 		{"update", "draft, edit, discard, skip and send a project's update", runUpdate},
 		{"setup", "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)", runSetup},
