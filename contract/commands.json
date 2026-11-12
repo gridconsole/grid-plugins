@@ -2729,7 +2729,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-brain-changes.json"
         },
         {
           "name": "check",
@@ -2812,7 +2812,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-brain-drop.json"
         },
         {
           "name": "index",
@@ -3132,7 +3132,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-brain-search.json"
         },
         {
           "name": "show",
@@ -3265,7 +3265,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-brain-write.json"
         }
       ]
     },
