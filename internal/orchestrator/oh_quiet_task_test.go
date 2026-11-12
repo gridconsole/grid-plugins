@@ -103,6 +103,7 @@ func (l *ohSqLocks) pass(s *Stream, allow ...int) []int {
 	for {
 		select {
 		case err := <-done:
+			l.unlockAll() // the next hold of these locks must not wait for this one
 			if err != nil {
 				l.t.Fatal(err)
 			}
@@ -271,7 +272,6 @@ func TestOhSqPendingAlwaysRead(t *testing.T) {
 		if st.read != (len(read) == 1) {
 			t.Fatalf("step %d (%s): read %v", n+1, st.why, read)
 		}
-		l.unlockAll()
 	}
 	if moved != 3 {
 		t.Errorf("ReceiptMove ran %d times, want once per pending pass (3)", moved)
