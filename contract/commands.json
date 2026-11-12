@@ -2483,6 +2483,16 @@
           ],
           "flags": [
             {
+              "name": "--base",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--branch",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--by",
               "takes": "value",
               "required": false
