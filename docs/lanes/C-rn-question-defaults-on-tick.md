@@ -1,0 +1,51 @@
+# C-rn-question-defaults-on-tick: the worker's pass applies a question's default at its deadline, so the Jobs after its person Job carry on
+
+Base: main 792b8d6e. Lane commits: 2ff7d998 (new file and shared close func), 285f2a32 (the stream.go call and the tests), and the report commit.
+
+Base check: `git grep -n '\.Tick()' HEAD -- '*.go' | grep -v _test` lists only internal/orchestrator/store.go:206, internal/orchestrator/stream.go:248 (the orchestrator's own Tick) and internal/question/command.go:251 (the verb). No other production caller of question Store.Tick, so the lane went on.
+
+## Proof table
+
+| Row | Verdict | Proof |
+|---|---|---|
+| 1 Pass defaults a due question and the Job after its person Job carries on | HOLDS | `go test -count=1 -v -run 'TestRnQd' ./internal/orchestrator/` exit 0, `--- PASS:` for all five tests, the first being `TestRnQdPassDefaultsDueQuestionAndReleasesJobAfterPerson` (rn_question_defaults_test.go:213). Task from newStreamHome, Q-1 asked as a person with a JobPort (so J-1 is its person Job), default "Keep parked", `at` one hour in the past; J-2 lists J-1 in `after` (a `job` edge, not `gate:Q-1`). Before the pass `Ready` holds J-2 back for J-1. After one `h.pass`: Q-1 history is `[defaulted]` and questions/Q-1.md holds `"kind": "defaulted"`; J-1 is accepted by a control whose answer is the default; J-2 is **assigned in the same pass** (it was Ready inside that pass's Tick) and the pass printed one spawn line for J-2. Red without the stream.go call (lane code with only that one call removed, the behaviour of main): `Q-1 history = [], want [defaulted]` / `person Job J-1 is posted, want accepted` / `J-1 accepted with answer "" (accepted false), want the default "Keep parked"` / `J-2 is posted, want assigned in the same pass` / `want one spawn line for J-2, got []` (rn_question_defaults_test.go:227,233,236,240,244). The new test file does not compile on main itself (it names CloseQuestionJob), so the red run is the lane with the call line absent. |
+| 2 A second pass records nothing new | HOLDS | `--- PASS: TestRnQdSecondPassRecordsNothingNew` (rn_question_defaults_test.go:249). After the second pass the history is still `[defaulted]`, questions/Q-1.md is byte-identical, the number of Feed records that target the question post or J-1 (or carry its Job id) is unchanged, and the number of question records is unchanged. Red on base: `after the first pass Q-1 history = [], want [defaulted]`. |
+| 3 Aging 1, 2, then stays 2 | HOLDS | `--- PASS: TestRnQdPassRaisesAgingTwiceThenStops` (rn_question_defaults_test.go:284). Blocking Q-1, deadline in 72 h, age step 1 h, `Stream.Now` set from the question's asked time: +0 gives aging 0, +61 min gives 1 (`[aged]`), +121 min gives 2 (`[aged aged]`), +181 min stays 2 with no third event; the person Job is not closed by aging. Red on base: `at +1h1m0s aging = 0, want 1 (history [])`, `at +2h1m0s aging = 0, want 2`, `at +3h1m0s aging = 0, want 2`. |
+| 4 Answered, withdrawn and unposted questions untouched | HOLDS | `--- PASS: TestRnQdPassLeavesDecidedAndUnpostedQuestionsAlone` (rn_question_defaults_test.go:315). Q-1 answered "Retry" and Q-2 withdrawn before their deadline, a questions/Q-9.md the Feed does not know, clock past every deadline, two passes: Q-1 and Q-2 keep their history, state and Feed record count; Q-9.md is byte-identical. Q-3 of the same task is due and is `[defaulted]` after the pass, so the pass did run (the test cannot pass on base: `Q-3 is due but its history is [], want [defaulted]: the pass did not run`). |
+| 5 Lock order | HOLDS | `go test -count=1 -race -run 'TestRnQd\|TestJwLo' ./internal/orchestrator/ ./internal/question/` exit 0 (`ok .../internal/orchestrator 9.301s`, `ok .../internal/question 1.307s`). `--- PASS: TestRnQdCloseRunsWithBothLocksFree` (rn_question_defaults_test.go:423): through `h.pass`, the real Close is wrapped (test hook rnQdPortForTest, nil outside tests) by a probe in the shape of jwLoPort (question/jw_lock_order_test.go:20-61) that tries `questions/.lock` and `.orchestrator.lock` on a new descriptor without waiting; Close is called once, for J-1, with both free, and then closes J-1. The same probe is shown to report a lock held on another descriptor. The question package's own `TestJwLoJobPortRunsWithQuestionsLockFree` (tick default) passes in the same run. Call site: internal/orchestrator/stream.go:251 `s.rnQuestionDefaults(dir, taskID, snap, w)`, after the `pgClosedTask` return (:245-247) and before `st.Tick()` (:252). Store.Tick takes `.orchestrator.lock` only inside its own `s.locked` (tick.go:23), which starts at :252, so the call is outside it; it also runs under the task lease (AcquireTask :222) and after a closed task is left. |
+| 6 Package tests, lint, cross, diff | HOLDS | `go test -count=1 ./internal/orchestrator/ ./internal/question/ ./internal/cli/` exit 0 (orchestrator 142.061s, question 3.649s, cli 55.440s). `make lint` exit 0 (go vet ./...). `make cross` exit 0 (darwin/arm64 and windows/amd64: vet and test compile of every package). `git diff main --stat` names internal/cli/question.go, internal/orchestrator/rn_question_defaults.go, rn_question_defaults_test.go, stream.go, plus this report. |
+
+| Rule | Verdict | Proof |
+|---|---|---|
+| Small commits, one sentence, no attribution | HOLDS | `git log main..HEAD`: 2ff7d998, 285f2a32 and the report commit; no trailer lines |
+| New tests fail on base, pass on lane | HOLDS | red lines in rows 1-4; passing run in row 1 |
+| No existing test edited or deleted | HOLDS | `git diff main --stat` lists only the new test file among tests; cli/question.go lost `closeQuestionJob`, which no test named (`grep -rn closeQuestionJob internal cmd` found only its definition and its one use) |
+| No guard, gate, cap, hold or blocking hook | HOLDS | The step adds no wait, refusal or limit. A question error is one diag line (again only when its words change) and the pass goes on to `st.Tick()`, so a broken question file never stops the Jobs of a task. A task with no question on its Feed skips the step. |
+| Tests of changed packages and importers | HOLDS | Packages that import internal/orchestrator or internal/cli, from `go list -f '{{.ImportPath}} {{join .Deps " "}}' ./...`: cmd/grid, internal/cli, internal/mcp, internal/migrate, internal/orchestrator, lib. `go test -count=1 ./cmd/grid/ ./internal/mcp/ ./internal/migrate/ ./internal/cli/ ./internal/orchestrator/ ./lib/` all `ok` (cmd/grid has no test files). internal/question is unchanged; its tests are in row 6. |
+| Lint, Windows and macOS builds | HOLDS | row 6 |
+| Walk tests (plugin) | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` exit 0 (`ok .../internal/cli 0.092s`); `go test -count=1 ./internal/job/lint/` exit 0 (`ok .../internal/job/lint 0.192s`) |
+| Race | HOLDS | row 5, `-race` |
+| Helpers `rnQd*`, tests `TestRnQd*`, new tests only in the new file | HOLDS | rn_question_defaults_test.go |
+| Hook restored, not parallel | HOLDS | rnQdPortForTest is restored by `t.Cleanup` (rn_question_defaults_test.go:429); no `t.Parallel` in the file |
+| UI rows / RealPlugin | n/a | The brief has no UI row and no RealPlugin test |
+
+## What changed
+
+- `internal/orchestrator/rn_question_defaults.go` (new):
+  - `CloseQuestionJob` is the body of cli's `closeQuestionJob`, moved here and exported, so there is one copy; `internal/cli/question.go` now wires `Close: orchestrator.CloseQuestionJob` and lost its own copy and the `time` and `contract` imports it no longer needs. One difference: the time handed to `AnswerPerson` is `f.Now()` when the Feed store has a clock, else `time.Now()`. The verb's Feed store has no clock, so its behaviour is unchanged; the worker's pass hands the stream's clock through the question store.
+  - `(*Stream).rnQuestionDefaults` builds `question.Store{TaskDir, TaskID, Writer: w, ControlWriter: w, Jobs: {Close: CloseQuestionJob}, Now: s.Now}` with the pass's task-lease writer and calls `Tick`. Post is nil: the pass asks nothing.
+  - `rnQdPortForTest` is nil outside tests (the shape of `jwRpAfterPickForTest`).
+- `internal/orchestrator/stream.go:249-251`: one call, between the `pgClosedTask` return and `st.Tick()`.
+- `internal/orchestrator/rn_question_defaults_test.go` (new): the five tests of rows 1-5.
+
+Lock order (C-jw), in the code comment of rnQuestionDefaults: `Tick` holds `questions/.lock` for the Feed read, the control posts and the question files, and lets it go before it settles the person Jobs (question.go:416-419); `CloseQuestionJob` then takes `.orchestrator.lock` inside `AnswerPerson`. The pass never holds `.orchestrator.lock` at the call, so it never takes `questions/.lock` while holding it, which is the order `ReserveGate` (inside a pass) needs. The Feed posts `Tick` makes under `questions/.lock` take the Feed's own locks only (feed/jobid.go:37: `.orchestrator.lock` is taken by callers, outside Post), as the `question tick` verb already does.
+
+## Open items
+
+- Crash or failure between the default and the Job: `Store.Tick` (question.go:392) skips a record whose history already holds `defaulted`, and settles only the records it changed in that call (:407-411, :418). If the control posts but `CloseQuestionJob` then fails (a lease lost at that moment, a crash), no later pass closes the person Job; the verb `question answer` repairs this by running `settleJobs` again, `Tick` does not. question.go is outside this brief's Touches, so it is not fixed here. A fix would let `Tick` also settle records that hold `defaulted` whose Job is still open (`CloseQuestionJob` already leaves a closed Job alone).
+- Each pass of a task with a question on its Feed now reads the Feed once more (and `Tick` rewrites question files from it, as the verb does). A task with no question on its Feed skips the step, so it makes no `questions/` folder.
+- The app rigs that run `feed tick` are not touched, as the brief says; the whole-module test and the cross-repo set are the orchestrator's at landing.
+
+## NOT VERIFIED on a live screen
+
+Nothing in this lane has a screen. Not run: a real worker supervisor against a real Grid home with a person-facing app; the tests drive `Stream.Pass` on temporary task folders.
