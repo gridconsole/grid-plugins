@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -34,6 +35,9 @@ var taskMergeGit = func(dir string, args ...string) (string, error) {
 // branch of the checkout, in the order grid deliver takes the merge-base from
 // (internal/task/deliver.go, recordBranch).
 var taskMergeBases = []string{"main", "master"}
+
+// taskMergeID is the T-NN id at the front of a task folder's name.
+var taskMergeID = regexp.MustCompile(`^T-\d+`)
 
 // runTaskMerge is grid task merge --task <task>: in the project's checkout it
 // merges the branch grid deliver recorded in task.md (branch:) into its base
@@ -89,12 +93,16 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	if res.TaskPath == "" {
 		return "", fmt.Errorf("task %s not found", id)
 	}
+	name := res.Task
+	if n := taskMergeID.FindString(name); n != "" {
+		name = n
+	}
 	branch, base, err := taskMergeKeys(res.TaskPath)
 	if err != nil {
 		return "", err
 	}
 	if branch == "" {
-		return "", fmt.Errorf("task %s has no branch in task.md; run grid deliver in the task's checkout to record it, then run grid task merge again", res.Task)
+		return "", fmt.Errorf("task %s has no branch in task.md; run grid deliver in the task's checkout to record it, then run grid task merge again", name)
 	}
 	repo, err := taskMergeRepo(res, branch)
 	if err != nil {
@@ -134,7 +142,7 @@ func taskMerge(env Env, id, proj string) (string, error) {
 			return "", fmt.Errorf("cannot check out %s in %s (%v); the checkout is as it was", target, repo, err)
 		}
 	}
-	msg := fmt.Sprintf("Merge branch '%s' (%s)", branch, res.Task)
+	msg := fmt.Sprintf("Merge branch '%s' (%s)", branch, name)
 	if _, mergeErr := taskMergeGit(repo, "merge", "--no-ff", "--no-edit", "-m", msg, "refs/heads/"+branch); mergeErr != nil {
 		conflicts, _ := taskMergeGit(repo, "diff", "--name-only", "--diff-filter=U")
 		if _, err := taskMergeGit(repo, "rev-parse", "-q", "--verify", "MERGE_HEAD"); err == nil {

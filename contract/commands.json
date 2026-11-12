@@ -168,7 +168,7 @@
     },
     {
       "name": "task",
-      "summary": "new|show|list|status|lane, stop|close|reopen, history|attach|move, decline|delete|rename|restore|summary",
+      "summary": "new|show|list|status|lane|merge, stop|close|reopen, history|attach|move (grid task help lists all)",
       "built": true,
       "subcommands": [
         {
