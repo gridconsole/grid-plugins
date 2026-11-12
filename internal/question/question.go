@@ -376,6 +376,7 @@ func (s Store) change(id string, fn func(*Record) error) (rec Record, err error)
 // audit history. The returned slice contains only newly recorded events.
 func (s Store) Tick() (changed []Record, err error) {
 	changed = []Record{}
+	stranded := []Record{}
 	if err = s.requireWritePolicy(); err != nil {
 		return
 	}
@@ -390,6 +391,11 @@ func (s Store) Tick() (changed []Record, err error) {
 				continue
 			}
 			if slices.ContainsFunc(r.History, func(e Event) bool { return e.Kind == "defaulted" }) {
+				// Defaulted by an earlier pass: record nothing new, but settle its
+				// Job below, in case that pass stopped before the Job closed.
+				if r.State == "defaulted" && r.Job != "" {
+					stranded = append(stranded, r)
+				}
 				continue
 			}
 			before := len(r.History)
@@ -414,8 +420,9 @@ func (s Store) Tick() (changed []Record, err error) {
 		return nil
 	})
 	// Each record decided here gets its Job's result once questions/.lock is let
-	// go (postJob says why), also when a later record failed.
-	if e := s.settleJobs(changed...); e != nil {
+	// go (postJob says why), also when a later record failed. Records defaulted by
+	// an earlier pass are settled too, but not returned in changed.
+	if e := s.settleJobs(append(slices.Clone(stranded), changed...)...); e != nil {
 		err = errors.Join(err, e)
 	}
 	return
