@@ -6,7 +6,7 @@ Base: the lane branch is cut from main at `103b9157` (the brief names main `44c7
 - `internal/settings/store.go:353`  `if err := atomicfile.Write(filepath.Join(home, "VERSION"), []byte(fmt.Sprintf("%d\n", gridhome.FormatVersion)), 0o644); err != nil {`
 - `internal/task/create.go:119`  `if err := atomicWrite(filepath.Join(home, "VERSION"), []byte(fmt.Sprintf("%d\n", gridhome.FormatVersion))); err != nil {`
 
-Verdict: NOT DONE. One existing test outside Touches asserts the old stamping (row N1). Every other row holds.
+Verdict: DONE. Row N1 was NOT DONE here and is CLOSED BY C-xc2-legacy-test-version (report: docs/lanes/C-xc2-legacy-test-version.md). Every other row holds.
 
 ## Proof table
 
@@ -22,7 +22,7 @@ Verdict: NOT DONE. One existing test outside Touches asserts the old stamping (r
 | 6a make lint | HOLDS | `make lint` ran `go vet ./...`, no output, exit 0. |
 | 6b make cross | HOLDS | `make cross` exit 0; it printed `cross: darwin/arm64 vet`, `cross: darwin/arm64 test compile`, `cross: windows/amd64 vet`, `cross: windows/amd64 test compile`, every package `ok`. |
 | 6c diff stat | HOLDS | `git diff main --stat` names the Touches files (`internal/gridhome/gridhome.go`, `internal/localdata/localdata.go`, `internal/settings/store.go`, `internal/task/create.go`, `internal/cli/cli.go` comment only, the four new `xc_legacy*_test.go` files), one fixture helper (`setup` in `internal/guard/guard_test.go`, 3 lines), and this report in `docs/lanes/`, where every lane keeps its report. |
-| Tests of importers | HOLDS except N1 | `go list` importers of localdata, settings, task or gridhome: contract/formats, internal/account, agent, brain, braincmd, cli, doctor, gitx, golden, guard, hook, job, job/jobcmd, job/jobtest, land, localdata, mcp, migrate, orchestrator, ports, project, projectmd, projects, proof, routine, settings, signal, task, updates, usage, where, worker, workflow, lib, plus gridhome itself. `go test -count=1` on all: every package `ok` except `internal/cli`, red only on N1. Before the guard fixture fix `internal/guard` was red; before the dot-folder skip `internal/task` `TestNewSweepsOnlyStaleStagingFolders` was red; both are green now. |
+| Tests of importers | HOLDS (N1 CLOSED BY C-xc2-legacy-test-version) | `go list` importers of localdata, settings, task or gridhome: contract/formats, internal/account, agent, brain, braincmd, cli, doctor, gitx, golden, guard, hook, job, job/jobcmd, job/jobtest, land, localdata, mcp, migrate, orchestrator, ports, project, projectmd, projects, proof, routine, settings, signal, task, updates, usage, where, worker, workflow, lib, plus gridhome itself. `go test -count=1` on all: every package `ok` except `internal/cli`, red only on N1. Before the guard fixture fix `internal/guard` was red; before the dot-folder skip `internal/task` `TestNewSweepsOnlyStaleStagingFolders` was red; both are green now. |
 | `grid migrate` still reaches an old home | HOLDS (not by the brief's grep) | I did not run the brief's `git grep` on the ref repo. What I saw: `go test ./internal/migrate` is `ok`, the cli suite is green except N1 (no migrate command test is red), and in `internal/cli` the lane changes only a comment in `cli.go`. |
 | New tests fail on base, pass on lane | HOLDS | "Failing on base" below, and the `--- PASS` lines in row 5a. |
 | No guard, gate, cap, hold or blocking hook on agents | HOLDS | The change refuses a write to a data folder of an old format with the existing `FormatProblem(0)` text, as `FormatProblem` already does for VERSION 2. No agent, tool or hook is gated. |
@@ -30,9 +30,9 @@ Verdict: NOT DONE. One existing test outside Touches asserts the old stamping (r
 | RealPlugin tests, UI rows, mismatch proof | N/A | No row names them. |
 | Budget | NOT MET | About 70 calls used against 55. The importer run found 2 reds that needed fixing and the cross build outran its first timeout. |
 | Shas | | The checks ran on `52699469`; the later commits add only this report. |
-| N1 `internal/cli` `TestTaskCommandsMigratedAndLegacyShape/legacy` | NOT DONE | See below. |
+| N1 `internal/cli` `TestTaskCommandsMigratedAndLegacyShape/legacy` | CLOSED BY C-xc2-legacy-test-version | The legacy case now writes VERSION `"1\n"` before `task new`; `go test -count=1 ./internal/cli -run TestTaskCommandsMigratedAndLegacyShape` and `go test -count=1 ./internal/cli/ ./internal/gridhome/` pass (exit 0). See below. |
 
-### N1: an existing test outside Touches asserts the old stamping
+### N1: an existing test outside Touches asserts the old stamping (CLOSED BY C-xc2-legacy-test-version)
 
 `internal/cli/task_shape_test.go:28-31` removes VERSION from a home that holds a legacy-shape task, then `:52` runs `grid task new` and expects it to succeed. That is the old stamping on an old home, which this brief removes: `task new` now returns `grid task new: This data is format 0; this grid reads 1. Run: grid migrate`.
 
@@ -123,4 +123,4 @@ Run once more after this file was on disk: `go test -count=1 ./internal/cli -run
 
 Nothing here is UI. Not run: a real `grid` binary against a real old home; the tests use a copy of the migrate fixture, and `claude`, `curl` and servers are outside this lane.
 
-NOT DONE
+DONE (N1 CLOSED BY C-xc2-legacy-test-version)
