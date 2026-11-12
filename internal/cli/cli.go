@@ -195,7 +195,11 @@ func Run(args []string, env Env) (exit int) {
 		env.failure = f
 		env.Stdout = &f.stdout
 		env.Stderr = io.MultiWriter(env.Stderr, &f.stderr)
-		defer func() { f.finish(args, exit) }()
+		defer func() {
+			// A write that met a full disk leaves with 4, as the Feed append does.
+			exit = qwEnFinishExit(exit, f.err)
+			f.finish(args, exit)
+		}()
 	}
 	if len(args) == 0 {
 		printHelp(env.Stdout)
