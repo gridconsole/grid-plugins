@@ -1,0 +1,100 @@
+{
+  "errors": [],
+  "files": [
+    {
+      "project": null,
+      "rev": "9d4de6cc771c",
+      "scope": "workspace",
+      "text": "# Workflows\n\n## Standard\napplies when: nothing else matches\nreview rounds: 2\n\n| # | step | kind | who | sizes | on reject, back to |\n|---|------|------|-----|-------|--------------------|\n| 1 | build | run | grid-builder | all | |\n| 2 | review | check | grid-reviewer | all | |\n\n"
+    },
+    {
+      "project": "example",
+      "rev": "fb3a8c29f05a",
+      "scope": "project",
+      "text": "# Workflows\n\n## Standard\napplies when: as in the workspace Standard\nreview rounds: 5\n\n| # | step | kind | who | sizes | on reject, back to |\n|---|------|------|-----|-------|--------------------|\n| 1 | ship | run | grid-builder | all | |\n\n"
+    }
+  ],
+  "task": {
+    "file": "example/workflows.md",
+    "id": "T-1",
+    "rounds": 5,
+    "source": "project",
+    "steps": [
+      {
+        "agent": "grid-builder",
+        "approvers": null,
+        "kind": "run",
+        "name": "ship"
+      }
+    ],
+    "workflow": "Standard"
+  },
+  "templates": [
+    {
+      "applies": [],
+      "approvers": [],
+      "batch": null,
+      "default": true,
+      "file": "workflows.md",
+      "lead": null,
+      "name": "Standard",
+      "only": null,
+      "openTasks": [],
+      "overrides": null,
+      "repeat": null,
+      "research": false,
+      "rounds": 2,
+      "steps": [
+        {
+          "agent": "grid-builder",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "run",
+          "name": "build",
+          "runs": null,
+          "sizes": "SNL"
+        },
+        {
+          "agent": "grid-reviewer",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "check",
+          "name": "review",
+          "runs": null,
+          "sizes": "SNL"
+        }
+      ],
+      "usedIn": []
+    },
+    {
+      "applies": [],
+      "approvers": [],
+      "batch": null,
+      "default": false,
+      "file": "example/workflows.md",
+      "lead": null,
+      "name": "Standard",
+      "only": null,
+      "openTasks": [],
+      "overrides": "Standard",
+      "repeat": null,
+      "research": false,
+      "rounds": 5,
+      "steps": [
+        {
+          "agent": "grid-builder",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "run",
+          "name": "ship",
+          "runs": null,
+          "sizes": "SNL"
+        }
+      ],
+      "usedIn": []
+    }
+  ]
+}

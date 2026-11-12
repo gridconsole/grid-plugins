@@ -1,0 +1,128 @@
+{
+  "errors": [],
+  "files": [
+    {
+      "project": null,
+      "rev": "9d4de6cc771c",
+      "scope": "workspace",
+      "text": "# Workflows\n\n## Standard\napplies when: nothing else matches\nreview rounds: 2\n\n| # | step | kind | who | sizes | on reject, back to |\n|---|------|------|-----|-------|--------------------|\n| 1 | build | run | grid-builder | all | |\n| 2 | review | check | grid-reviewer | all | |\n\n"
+    },
+    {
+      "project": "example",
+      "rev": null,
+      "scope": "project",
+      "text": ""
+    }
+  ],
+  "task": {
+    "file": "brain:project/flow",
+    "id": "T-1",
+    "rounds": 3,
+    "source": "brain:project",
+    "steps": [
+      {
+        "agent": "grid-builder",
+        "approvers": null,
+        "kind": "run",
+        "name": "note-step"
+      }
+    ],
+    "workflow": "Noted"
+  },
+  "templates": [
+    {
+      "applies": [],
+      "approvers": [],
+      "batch": null,
+      "default": true,
+      "file": "brain:project/flow",
+      "lead": null,
+      "name": "Noted",
+      "only": null,
+      "openTasks": [],
+      "overrides": null,
+      "repeat": null,
+      "research": false,
+      "rounds": 3,
+      "steps": [
+        {
+          "agent": "grid-builder",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "run",
+          "name": "note-step",
+          "runs": null,
+          "sizes": "SNL"
+        }
+      ],
+      "usedIn": []
+    },
+    {
+      "applies": [],
+      "approvers": [],
+      "batch": null,
+      "default": true,
+      "file": "brain:home/hflow",
+      "lead": null,
+      "name": "Homed",
+      "only": null,
+      "openTasks": [],
+      "overrides": null,
+      "repeat": null,
+      "research": false,
+      "rounds": 3,
+      "steps": [
+        {
+          "agent": "grid-builder",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "run",
+          "name": "home-step",
+          "runs": null,
+          "sizes": "SNL"
+        }
+      ],
+      "usedIn": []
+    },
+    {
+      "applies": [],
+      "approvers": [],
+      "batch": null,
+      "default": true,
+      "file": "workflows.md",
+      "lead": null,
+      "name": "Standard",
+      "only": null,
+      "openTasks": [],
+      "overrides": null,
+      "repeat": null,
+      "research": false,
+      "rounds": 2,
+      "steps": [
+        {
+          "agent": "grid-builder",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "run",
+          "name": "build",
+          "runs": null,
+          "sizes": "SNL"
+        },
+        {
+          "agent": "grid-reviewer",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "check",
+          "name": "review",
+          "runs": null,
+          "sizes": "SNL"
+        }
+      ],
+      "usedIn": []
+    }
+  ]
+}

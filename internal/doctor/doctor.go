@@ -39,6 +39,9 @@ type Options struct {
 	GitVersion   func() (string, error)
 	HooksFile    string
 	LookPath     func(string) (string, error)
+	// GridVersion answers the version of the grid at path; nil means the version
+	// is not read, which never fails a check on its own.
+	GridVersion func(path string) (string, error)
 }
 
 // Run runs the checks. The home checks that depend on the folder are skipped

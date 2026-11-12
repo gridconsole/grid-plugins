@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 )
 
@@ -81,6 +82,12 @@ func runMigrate(args []string, env Env) int {
 		return 1
 	}
 	if *apply {
+		// Apply swaps the Grid home: an app that runs on it keeps its open files in the
+		// moved-aside home, and what it writes after is lost.
+		if vqAppRunning(env) {
+			fmt.Fprintf(env.Stderr, "grid migrate: The Grid app is running on %s. Quit the Grid app, then run grid migrate --apply again.\n", gridhome.Tilde(env.GridHome, env.Home))
+			return 1
+		}
 		res, err := p.Apply()
 		if err != nil {
 			fmt.Fprintf(env.Stderr, "grid migrate: %v\n", err)

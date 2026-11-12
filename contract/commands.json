@@ -3840,6 +3840,11 @@
               "name": "--project",
               "takes": "value",
               "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
             }
           ],
           "json": true,
@@ -4694,7 +4699,7 @@
     },
     {
       "name": "project",
-      "summary": "add, remove, list, scan and relink projects; repo edits a project's repos",
+      "summary": "add, remove, list, scan and relink projects; repo and env edit a project's repos and environments",
       "built": true,
       "subcommands": [
         {
@@ -4716,6 +4721,77 @@
           ],
           "json": true,
           "output": "cmd-project-add.json"
+        },
+        {
+          "name": "env",
+          "args": [
+            "\u003clist|add|edit|remove\u003e",
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--approval",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--from",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--how",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--kind",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--name",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--runs",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--secret",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--test",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--where",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-project-env.json"
         },
         {
           "name": "list",

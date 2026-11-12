@@ -1,8 +1,13 @@
 package cli
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/doctor"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
@@ -34,7 +39,7 @@ func runDoctor(args []string, env Env) int {
 	if projects != "" && !filepath.IsAbs(projects) {
 		projects = filepath.Join(env.Cwd, projects)
 	}
-	rep := doctor.Run(doctor.Options{Home: env.Home, SettingsPath: settingsPath, GridHome: env.GridHome, Projects: projects, Label: gridhome.Tilde(env.GridHome, env.Home), GitVersion: env.GitVersion, HooksFile: *hooks})
+	rep := doctor.Run(doctor.Options{Home: env.Home, SettingsPath: settingsPath, GridHome: env.GridHome, Projects: projects, Label: gridhome.Tilde(env.GridHome, env.Home), GitVersion: env.GitVersion, HooksFile: *hooks, GridVersion: gridVersionAt})
 	if *bundle {
 		path := *out
 		if path != "" && !filepath.IsAbs(path) {
@@ -69,6 +74,27 @@ func runDoctor(args []string, env Env) int {
 		return 1
 	}
 	return 0
+}
+
+// gridVersionAt runs `<path> version --json` (no shell, no network) and returns
+// its `version`. Any failure is an error: doctor then says the version was not read.
+func gridVersionAt(path string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, path, "version", "--json").Output()
+	if err != nil {
+		return "", err
+	}
+	var doc struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(out, &doc); err != nil {
+		return "", err
+	}
+	if doc.Version == "" {
+		return "", errors.New("no version in the answer")
+	}
+	return doc.Version, nil
 }
 
 // defaultHooksFile finds the plugin's hooks.json from the plugin root, never from

@@ -80,7 +80,26 @@ func (s Store) ConfigNames(level, topic string) ([]string, error) {
 
 // EditConfig serializes read/modify/write with all brain writers. Missing input
 // is nil; nil output deletes the entry. Callback errors never change the file.
+// A change's audit line names the CLI session with the "config" kind; a delete
+// writes no audit line.
 func (s Store) EditConfig(level, topic, name string, edit func([]byte) ([]byte, error)) error {
+	return s.editConfig(level, topic, name, nil, edit)
+}
+
+// EditConfigBy is EditConfig with the author given by the caller: the audit
+// line of a change carries origin's kind and id, and a delete of an entry that
+// exists writes one line with the drop path's status, "dropped", the entry's
+// last stored version and the hash of the bytes it removed.
+func (s Store) EditConfigBy(level, topic, name string, origin Origin, edit func([]byte) ([]byte, error)) error {
+	if !ValidName(origin.Kind) || strings.TrimSpace(origin.ID) == "" || !line(origin.ID) {
+		return fmt.Errorf("config author needs a plain kind and a one-line id")
+	}
+	return s.editConfig(level, topic, name, &origin, edit)
+}
+
+// editConfig is the body of EditConfig and EditConfigBy. by is nil for
+// EditConfig, which keeps its audit lines as they were.
+func (s Store) editConfig(level, topic, name string, by *Origin, edit func([]byte) ([]byte, error)) error {
 	if err := localdata.Init(s.GridHome); err != nil {
 		return err
 	}
@@ -106,7 +125,19 @@ func (s Store) EditConfig(level, topic, name string, edit func([]byte) ([]byte, 
 			if err := root.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
-			return nil
+			if by == nil || old == nil {
+				return nil
+			}
+			version := 0
+			numbers, err := versionNumbers(root, versionDir(topic, name))
+			if err != nil {
+				return err
+			}
+			if len(numbers) > 0 {
+				version = numbers[len(numbers)-1]
+			}
+			return logAudit(root, Change{At: s.stamp(), Status: "dropped", Topic: topic, Name: name,
+				Version: version, Hash: auditHash(old), OriginKind: by.Kind, OriginID: by.ID})
 		}
 		if len(data) > 1<<20 {
 			return fmt.Errorf("config entry exceeds 1 MiB")
@@ -128,12 +159,18 @@ func (s Store) EditConfig(level, topic, name string, edit func([]byte) ([]byte, 
 		if !changed {
 			return nil
 		}
-		origin, err := SessionOrigin()
-		if err != nil {
-			return err
+		kind, id := "", ""
+		if by != nil {
+			kind, id = by.Kind, by.ID
+		} else {
+			origin, err := SessionOrigin()
+			if err != nil {
+				return err
+			}
+			kind, id = "config", origin.ID
 		}
 		return logAudit(root, Change{At: s.stamp(), Status: "accepted", Topic: topic, Name: name,
-			Version: version, Hash: hash, OriginKind: "config", OriginID: origin.ID})
+			Version: version, Hash: hash, OriginKind: kind, OriginID: id})
 	})
 }
 

@@ -149,7 +149,11 @@ func sessionStart(o Options) {
 		return
 	}
 	if envFile := o.Getenv("CLAUDE_ENV_FILE"); envFile != "" {
-		if err := writeEnv(envFile, o.Resolver.GridHome, res.Task, pluginPathLine(o.Getenv("CLAUDE_PLUGIN_ROOT"), o.Getenv("PATH"))); err != nil {
+		pathLine := voLauncherPathLine(o.Resolver.GridHome, o.Getenv("PATH"))
+		if pathLine == "" {
+			pathLine = pluginPathLine(o.Getenv("CLAUDE_PLUGIN_ROOT"), o.Getenv("PATH"))
+		}
+		if err := writeEnv(envFile, o.Resolver.GridHome, res.Task, pathLine); err != nil {
 			o.log("session environment", err)
 			return
 		}

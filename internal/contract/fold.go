@@ -132,6 +132,7 @@ func Fold(posts []Post) State {
 		case "job":
 			var b struct {
 				ID, Title, Role, Kind string
+				Repo                  string
 				Continues             *string `json:"continues"`
 				DiscoveredFrom        *string `json:"discovered_from"`
 				Order                 *int    `json:"order"`
@@ -144,7 +145,7 @@ func Fold(posts []Post) State {
 				set(p, "ignored", "Job already exists; revisions need a new Job")
 				continue
 			}
-			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Status: Posted, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
+			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Repo: b.Repo, Status: Posted, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
 			personJobs[p.ID] = personJob{b.Role, b.Intent.Owner, b.Kind}
 		case "question":
 			var b struct{ Who string }

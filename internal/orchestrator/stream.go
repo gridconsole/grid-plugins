@@ -63,6 +63,11 @@ type Stream struct {
 	// model and effort. Empty strings leave the keys out. An error is one Diag line:
 	// the spawn line is still printed without the two keys, never a skipped Job.
 	Model func(taskDir, role string) (model, effort string, err error)
+	// Repo, when set, is called with the task folder and the repo the Job of a spawn
+	// names ("" when it names none) the first time the stream prints that spawn; the
+	// folder it answers goes on the spawn line as repo, and empty leaves the key out.
+	// An error is one Diag line: the spawn line is still printed without the key.
+	Repo func(taskDir, repo string) (string, error)
 	// Probe judges whether a recorded holder process is gone; nil uses session.ProbeLocal.
 	Probe func(session.Live) session.ProcessState
 	// ReceiptPending and ReceiptMove move an old approval receipt of a task folder
@@ -90,6 +95,8 @@ type Stream struct {
 	skipped map[string]string // task folder to the last reason printed
 	handed  map[string]bool   // task folder and task epoch whose handover is known posted
 	listErr string
+
+	ohSqMemo map[string]ohSqKey // task folder to the Feed key of the pass that dropped it as quiet
 }
 
 type spawnLine struct {
@@ -106,6 +113,9 @@ type spawnLine struct {
 	// leaves them out and claude keeps its own default.
 	Model  string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
+	// Repo is the folder of the repo the Job works in, which the worker runs it in;
+	// empty leaves it out and the worker finds the repo itself.
+	Repo string `json:"repo,omitempty"`
 }
 type wakeLine struct {
 	Task   string   `json:"task"`
@@ -198,6 +208,14 @@ func (s *Stream) task(dir string) error {
 		return s.skip(dir, name, SkipFeedInvalid, err)
 	}
 	fs := feed.Store{TaskDir: dir, TaskID: taskID}
+	// A task dropped as quiet on a pass whose Feed folder looked the same is dropped
+	// again without a Load. The key is taken here, before Load, so a write that lands
+	// after it shows in the next key.
+	key, quiet := s.ohSqCheck(dir, fs, pending)
+	if quiet {
+		delete(s.skipped, dir)
+		return nil
+	}
 	snap, err := Load(fs)
 	if err != nil {
 		return s.skip(dir, taskID, SkipFeedInvalid, err)
@@ -212,6 +230,7 @@ func (s *Stream) task(dir string) error {
 	// A task whose Jobs are all closed is left alone unless this stream still
 	// holds its lease: then one more pass delivers the last wake and releases it.
 	if !pending && !hasOpenJob(snap) && !s.holds(ts) {
+		s.ohSqStore(dir, key, snap)
 		delete(s.skipped, dir)
 		return nil
 	}
@@ -245,6 +264,10 @@ func (s *Stream) task(dir string) error {
 	if closed, err := s.pgClosedTask(dir, taskID, ts, w, st); closed {
 		return err
 	}
+	// A question that is due gets its default now, under the task lease and before
+	// Store.Tick takes .orchestrator.lock, so the Jobs behind its person Job are
+	// ready in this same Tick (rnQuestionDefaults says why this is the place).
+	s.rnQuestionDefaults(dir, taskID, snap, w)
 	out, err := st.Tick()
 	if err != nil {
 		if errors.Is(err, feed.ErrStaleLease) {
@@ -274,6 +297,14 @@ func (s *Stream) task(dir string) error {
 			if err != nil {
 				line.Model, line.Effort = "", ""
 				s.diag("grid worker next: task %s: job %s assigned, no model or effort for role %q: %s\n", taskID, sp.Job, sp.Role, oneLine(err))
+			}
+		}
+		if s.Repo != nil {
+			var err error
+			line.Repo, err = s.Repo(dir, sp.Repo)
+			if err != nil {
+				line.Repo = ""
+				s.diag("grid worker next: task %s: job %s assigned, no folder for repo %q: %s\n", taskID, sp.Job, sp.Repo, oneLine(err))
 			}
 		}
 		if err := s.emit("spawn", line); err != nil {
