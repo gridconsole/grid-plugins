@@ -10,6 +10,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/gitx"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/migrate"
 )
 
 // Check is one fact: its name, whether it passes, and one line of detail.
@@ -78,6 +79,14 @@ func Run(o Options) Report {
 			add("grid home writable", false, "cannot write in "+label)
 		}
 		checkFormat(add, o.GridHome, label)
+	}
+
+	// The journal sits beside the home, so this row shows when the home is absent too:
+	// between migrate's two renames the home does not exist, and grid migrate puts it back.
+	if migrate.Pending(o.GridHome) {
+		add("migration", false, "a migration of "+label+" stopped part way")
+	} else {
+		add("migration", true, "no interrupted migration")
 	}
 
 	if v, err := gitVersion(); err != nil {

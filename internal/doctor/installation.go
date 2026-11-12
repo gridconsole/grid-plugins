@@ -25,6 +25,8 @@ func fixHint(name, detail string) string {
 			return "Run grid setup"
 		}
 		return "Run grid migrate; if VERSION is missing or invalid, restore it from a known backup."
+	case "migration":
+		return "Run grid migrate --apply"
 	case "git":
 		return "Install git and add its executable directory to PATH."
 	case "plugin hooks":
