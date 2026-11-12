@@ -2,7 +2,7 @@
 
 Output schemas for `grid lease status task --json` and `grid where --json`.
 
-Verdict: NOT DONE. Rows 1 to 4 hold. Row 5 holds except one test, `TestIySchemaRows` in `./internal/contract/`: the two new schemas need a link each in `contract/README.md`, which is outside the brief's Touches and which row 4 forbids. The fix is two lines, below under Open items.
+Verdict: CLOSED BY C-yg2-schema-readme-rows (was NOT DONE). Rows 1 to 4 hold. Row 5 held except one test, `TestIySchemaRows` in `./internal/contract/`: the two new schemas needed a link each in `contract/README.md`, outside this brief's Touches. C-yg2-schema-readme-rows added the rows (commit `21a4cda8`); `go test -count=1 ./internal/contract/` now exits 0. See docs/lanes/C-yg2-schema-readme-rows.md.
 
 Base: plugin main `103b915799ce05bb20c8d92fbf823650b37c5c25`. Code head: `9ecfcb05` (test commit `f3de5028`, then schemas `9ecfcb05`); this report is committed after it.
 
@@ -28,10 +28,10 @@ Base: plugin main `103b915799ce05bb20c8d92fbf823650b37c5c25`. Code head: `9ecfcb
 | 2 required holds the app's fields | HOLDS | Same run: `--- PASS: TestYgLeaseStatus/app_fields/rename_holder`, `/rename_gen`, `/rename_fence`; `--- PASS: TestYgWhere/app_fields/rename_folder`, `/rename_task_path`. Each subtest first checks the unrenamed copy validates, so it fails on base (it did). `/every_field/rename_*` passes for all nine lease fields and all nine where fields. |
 | 3 fixtures, unknown fields, inventory | HOLDS | `go test -count=1 -v -run 'TestFixtures\|TestContractCommandsRejectUnknownFields\|TestContractCommandsParserInventory' ./internal/contract/ ./internal/cli/` exit 0: `--- PASS: TestFixtures` (cmd-lease-status 3 valid and 3 invalid, cmd-where 2 and 3), `--- PASS: TestContractCommandsRejectUnknownFields` with `/cmd-lease-status` and `/cmd-where`, `--- PASS: TestContractCommandsParserInventory`. |
 | 4 no product change | HOLDS | `git diff main --stat`: 16 files, all in Touches (commands.json, 11 fixtures, 2 schemas, contract_inventory_test.go, yg_lease_where_schema_test.go), plus this report. `git diff main -- contract/commands.json`: two hunks, `"output": ""` to `"output": "cmd-where.json"` (:75) and to `"output": "cmd-lease-status.json"` (:1729), nothing else. No production file. `make generate` changed no file besides commands.json (`git status --short` after it). |
-| 5 cli and contract tests | NOT DONE for one test | `go test -count=1 ./internal/cli/` `ok` (294s). `go test -count=1 ./internal/contract/` exit 1: `--- FAIL: TestIySchemaRows`: `schema cmd-lease-status.json has no row in the contract docs`, `schema cmd-where.json has no row in the contract docs`. Every other test in the package passes. The test is `internal/contract/iy_schema_rows_test.go:36`; it needs `](schemas/<name>)` in `contract/README.md`. |
+| 5 cli and contract tests | CLOSED BY C-yg2-schema-readme-rows (was NOT DONE for one test) | `go test -count=1 ./internal/cli/` `ok` (294s). `go test -count=1 ./internal/contract/` exit 1: `--- FAIL: TestIySchemaRows`: `schema cmd-lease-status.json has no row in the contract docs`, `schema cmd-where.json has no row in the contract docs`. Every other test in the package passes. The test is `internal/contract/iy_schema_rows_test.go:36`; it needs `](schemas/<name>)` in `contract/README.md`. |
 | 5 lint | HOLDS | `make lint` exit 0 (`go vet ./...`, `gofmt -l .` empty). |
 | 5 cross | HOLDS | `make cross` exit 0: `cross: darwin/arm64 vet`, `test compile`, `cross: windows/amd64 vet`, `test compile`, no FAIL. |
-| Importers | HOLDS except the one test | `go list` of importers of `internal/cli`, `contract` and `internal/contract` (29 packages): cmd/grid, artifact, brain, braincmd, cli, contract, feed, guard, hook, intent, job, job/jobcmd, job/lint, jobgraph, land, lease, mcp, migrate, orchestrator, question, session, settings, signal, task, updates, usage, where, workflow, lib. `go test -count=1` on all: `ok` for each except `internal/contract` (the one test above); cmd/grid and updates have no test files. |
+| Importers | HOLDS; the one red test is CLOSED BY C-yg2-schema-readme-rows | `go list` of importers of `internal/cli`, `contract` and `internal/contract` (29 packages): cmd/grid, artifact, brain, braincmd, cli, contract, feed, guard, hook, intent, job, job/jobcmd, job/lint, jobgraph, land, lease, mcp, migrate, orchestrator, question, session, settings, signal, task, updates, usage, where, workflow, lib. `go test -count=1` on all: `ok` for each except `internal/contract` (the one test above); cmd/grid and updates have no test files. |
 | Walk tests | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` `ok`; `go test -count=1 ./internal/job/lint/` `ok`. The app walk tests are not this repo's. |
 | RealPlugin tests | not named by a row | None run; no test of this lane needs the built plugin. |
 | Attribution, paths | HOLDS | Commit messages carry no attribution lines. Fixtures use `/work/example` and `/grid/...`, no host paths, hosts or emails. |
@@ -45,7 +45,7 @@ Base: plugin main `103b915799ce05bb20c8d92fbf823650b37c5c25`. Code head: `9ecfcb
 
 ## Open items
 
-1. **NOT DONE: `TestIySchemaRows`.** Add these two rows to the cmd- table of `contract/README.md` (next to the rows at :185-198), and add `contract/README.md` to the Touches of this brief:
+1. **CLOSED BY C-yg2-schema-readme-rows: `TestIySchemaRows`.** Add these two rows to the cmd- table of `contract/README.md` (next to the rows at :185-198), and add `contract/README.md` to the Touches of this brief:
    `| grid lease status output | [cmd-lease-status.json](schemas/cmd-lease-status.json) | internal/cli/task_lease.go:145 |`
    `| grid where output | [cmd-where.json](schemas/cmd-where.json) | internal/cli/cli.go:403 |`
    I did not edit the file: it is not in Touches and row 4 names the Touches list. The test reads only for the `](schemas/<name>)` text (iy_schema_rows_test.go:29), so those two lines are enough; I did not run it with them. The other lanes that add a `cmd-` schema (C-yh, C-yi, C-yj to C-yn) meet the same test.
@@ -55,4 +55,4 @@ Base: plugin main `103b915799ce05bb20c8d92fbf823650b37c5c25`. Code head: `9ecfcb
 
 Nothing here is a screen. No live check needed.
 
-NOT DONE
+DONE (all rows closed by C-yg2-schema-readme-rows)
