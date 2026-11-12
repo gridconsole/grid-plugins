@@ -280,10 +280,26 @@ func safeDir(home, dir string) error {
 
 // nextID counts all project tasks and Personal tasks, including incomplete task
 // folders from older writers. Hidden staging folders are never display ids.
+// It also counts the tasks of removed projects (projects/.removed/<name>/tasks),
+// so a restore cannot bring back a second task with an id in use. The removed
+// folders are read after the live ones: Remove (under .projects.lock, not the
+// lock New holds) may rename projects/<name> to projects/.removed/<name> during
+// this read, and the rename only goes that way, so a folder that moves after
+// the live read is found in the removed read.
 func nextID(home string) (string, error) {
 	dirs, err := gridhome.TasksDirs(home)
 	if err != nil {
 		return "", err
+	}
+	removed := filepath.Join(home, "projects", ".removed")
+	entries, err := os.ReadDir(removed)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs = append(dirs, filepath.Join(removed, e.Name(), "tasks"))
+		}
 	}
 	var maxID uint64
 	for _, dir := range dirs {
