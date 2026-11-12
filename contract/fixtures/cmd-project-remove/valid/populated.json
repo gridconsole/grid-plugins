@@ -12,5 +12,6 @@
       "path": ".",
       "remote": "example.com/org/example"
     }
-  ]
+  ],
+  "unscheduled": []
 }

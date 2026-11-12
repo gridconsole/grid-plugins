@@ -19,6 +19,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/question"
+	"github.com/gridconsole/grid-plugins/internal/routine"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -51,6 +52,10 @@ type Env struct {
 	// afterApprove is a test seam: it runs once Approve has returned and before
 	// the person Job result is posted, so a test can look at the locks there.
 	afterApprove func()
+	// timerOS is a test seam: it supplies the Backend and OSRunner grid project remove
+	// takes the project's timers down with, so a test never calls the OS scheduler.
+	// Nil uses the native backend and ExecOSRunner.
+	timerOS func() (routine.Backend, routine.OSRunner)
 	// typedGlobal names the variables a global flag was typed for (GRID_LEASE_EPOCH for --lease-epoch):
 	// getenv shows the flag's value either way, and this tells a typed flag from an inherited variable.
 	typedGlobal map[string]bool
