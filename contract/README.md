@@ -628,7 +628,7 @@ selected levels. It writes nothing. Findings carry `code`, `file`, `line` (when
 there is one), `message` and `text`, the quoted source, which is data:
 
 - `config_topic`: a proposal aimed at workflows, environments, machines, deploy,
-  people, routines or agents (`config: run grid <topic>`).
+  people, routines or agents (`config: <step>`, the step to take for that topic).
 - `skill_field`: skill front matter key outside `name, description, when_to_use,
   metadata` (`allowed-tools`, `hooks`, `shell`, `context`, `agent`, `model`).
 - `skill_shell`: a line starting with `` !` `` or a fence opening with ```` ```! ````.

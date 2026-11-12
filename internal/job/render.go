@@ -19,6 +19,10 @@ type RenderOptions struct {
 	Generation  string
 	BrainTokens int // zero means the contract cap of 2,000; may only lower it
 	Recall      []Link
+	// Agent is the markdown of the brain agent for the Job's role. When it is not
+	// empty its body is the Instructions section, in place of the plugin's own
+	// agents/<role>.md.
+	Agent string
 }
 type Inputs struct {
 	Generation                 string   `json:"generation"`
@@ -321,7 +325,11 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 	}
 	b.WriteString("## Job\n\n")
 	fmt.Fprintf(&b, "%s\n\n", j.Title)
-	if md, ok := gridplugins.AgentFor(contract.NormalizeRole(j.Role)); ok {
+	md, ok := o.Agent, o.Agent != ""
+	if !ok {
+		md, ok = gridplugins.AgentFor(contract.NormalizeRole(j.Role))
+	}
+	if ok {
 		// The worker starts claude without --agent, so the Job carries the role's own instructions.
 		b.WriteString("### Instructions\n\n" + agentBody(md) + "\n\n")
 	}
