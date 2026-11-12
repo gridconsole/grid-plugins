@@ -156,6 +156,8 @@ func runWorkerNext(args []string, env Env) int {
 		Out: env.Stdout, Diag: diag,
 		Tasks: func() ([]string, error) { return workerTaskDirs(env) },
 		Model: func(dir, role string) (string, string, error) { return workerSpawnModel(env, dir, role) },
+		// A task whose first Job was never posted gets the same J-1 grid task new posts.
+		FirstJob: firstJobOf,
 		// The pass moves an old approval receipt into the task's Feed once, under the task lease.
 		ReceiptPending: migrate.ReceiptPending,
 		ReceiptMove: func(dir string, w feed.Writer) error {
