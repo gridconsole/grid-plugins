@@ -65,7 +65,11 @@ type Store struct {
 	Now          func() time.Time
 	Probe        func(session.Live) session.ProcessState
 	UsageReady   func(string) bool
-	Incident     func(string, []string) error
+	// AccountRoom, when set, says whether an account has room and whether the
+	// account numbers are known at all; a Job parked on usage_limit is offered
+	// again by yaUsageReady only when its reset time has passed or there is room.
+	AccountRoom func() (room, known bool)
+	Incident    func(string, []string) error
 	// Diagnostics receives publication notices; nil discards them.
 	Diagnostics io.Writer
 	// pause is the wait between two passes of Next; nil means the one-second tick.

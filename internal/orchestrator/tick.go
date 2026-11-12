@@ -261,7 +261,7 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 		return nil
 	}
 	if j.Status == contract.Parked {
-		if j.Reason == "usage_limit" && s.UsageReady != nil && s.UsageReady(j.Assign.To) {
+		if j.Reason == "usage_limit" && s.yaUsageReady(j) {
 			return s.control(j, contract.Ready, "usage capacity restored", j.Exited)
 		}
 		if j.Reason == "needs_person" {
