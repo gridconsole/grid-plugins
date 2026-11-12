@@ -282,13 +282,34 @@ func safeDir(home, dir string) error {
 // folders from older writers. Hidden staging folders are never display ids.
 // It also counts the tasks of removed projects (projects/.removed/<name>/tasks),
 // so a restore cannot bring back a second task with an id in use. The removed
-// folders are read after the live ones: Remove (under .projects.lock, not the
-// lock New holds) may rename projects/<name> to projects/.removed/<name> during
-// this read, and the rename only goes that way, so a folder that moves after
-// the live read is found in the removed read.
+// folders are listed and read only after the live tasks folders have all been
+// read: Remove (under .projects.lock, not the lock New holds) may rename
+// projects/<name> to projects/.removed/<name> at any time during this read, and
+// the rename only goes that way, so a folder that moves after the live tasks
+// folders are read is found when .removed is listed afterwards.
 func nextID(home string) (string, error) {
 	dirs, err := gridhome.TasksDirs(home)
 	if err != nil {
+		return "", err
+	}
+	var maxID uint64
+	scan := func(dirs []string) error {
+		for _, dir := range dirs {
+			paths, err := folders(dir)
+			if err != nil {
+				return err
+			}
+			for _, path := range paths {
+				n, err := number(filepath.Base(path))
+				if err != nil {
+					return err
+				}
+				maxID = max(maxID, n)
+			}
+		}
+		return nil
+	}
+	if err := scan(dirs); err != nil {
 		return "", err
 	}
 	removed := filepath.Join(home, "projects", ".removed")
@@ -296,24 +317,14 @@ func nextID(home string) (string, error) {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return "", err
 	}
+	var gone []string
 	for _, e := range entries {
 		if e.IsDir() {
-			dirs = append(dirs, filepath.Join(removed, e.Name(), "tasks"))
+			gone = append(gone, filepath.Join(removed, e.Name(), "tasks"))
 		}
 	}
-	var maxID uint64
-	for _, dir := range dirs {
-		paths, err := folders(dir)
-		if err != nil {
-			return "", err
-		}
-		for _, path := range paths {
-			n, err := number(filepath.Base(path))
-			if err != nil {
-				return "", err
-			}
-			maxID = max(maxID, n)
-		}
+	if err := scan(gone); err != nil {
+		return "", err
 	}
 	if maxID == math.MaxUint64 {
 		return "", errors.New("task ids exhausted")

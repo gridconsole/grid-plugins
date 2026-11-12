@@ -24,13 +24,13 @@ Base check: `nextID` at internal/task/create.go:284 (base) was `dirs, err := gri
 
 ## What changed
 
-`nextID` (create.go) now also reads `projects/.removed/<each folder>/tasks` with the same `folders` and `number` helpers, so an invalid or overflowing number there fails like a live one. A missing `projects/.removed` is no error. Hidden staging folders stay skipped by `folderPattern`. The removed folders are read after the live ones, and the comment says why: Create holds `.task-alloc.lock` and Remove holds `.projects.lock`, so a remove can run during `nextID`. The rename only goes from `projects/<name>` to `projects/.removed/<name>`, so a folder that moves after the live read is found in the removed read.
+`nextID` (create.go) now also reads `projects/.removed/<each folder>/tasks` with the same `folders` and `number` helpers, so an invalid or overflowing number there fails like a live one. A missing `projects/.removed` is no error. Hidden staging folders stay skipped by `folderPattern`. Fix round 1: `.removed` is now listed and read only after the loop over every live tasks folder from `TasksDirs` has finished (a `scan` closure called twice), and the comment says why: Create holds `.task-alloc.lock` and Remove holds `.projects.lock`, so a remove can run during `nextID`. The rename only goes from `projects/<name>` to `projects/.removed/<name>`, so a folder that moves after the live tasks folders are read is found when `.removed` is listed afterwards. Before the fix the `.removed` listing was taken before the live tasks folders were read, so a rename in between lost the folder.
 
 `gridhome.TasksDirs` and every other reader are unchanged: removed tasks do not show in lists, Home or the worker.
 
 ## Notes
 
-- A remove that runs between the `TasksDirs` read and the `.removed` read is covered. A remove that renames a folder while `ReadDir` of `projects` is in progress is also covered: the folder is either listed live or already in `.removed`. The `.removed` read is a single `ReadDir`, then the `tasks` folders one by one; a rename into `.removed` after that `ReadDir` can only be a folder the live read already saw.
+- Order in `nextID`: (1) `TasksDirs` lists `projects/`; (2) every live tasks folder is read; (3) `projects/.removed` is listed; (4) each `.removed/<name>/tasks` is read. A rename of `projects/<name>` to `projects/.removed/<name>` before step 2 reaches that folder makes `folders` return empty there, but the folder is then already in `.removed` at step 3. A rename after step 2 has read it: the live read counted it. A rename after step 3: the live read counted it (step 3 comes after step 2). So no folder is missed.
 - No concurrent-rename test was written; the concurrency argument is by read order only.
 
 ## NOT VERIFIED on a live screen
