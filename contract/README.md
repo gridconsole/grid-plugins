@@ -177,6 +177,11 @@ are reference-document names and original line numbers, not machine paths.
 | Heartbeat file, not a post | [heartbeat.json](schemas/heartbeat.json) | feed-contract.md:200-218 |
 | Takeover log entry | [takeover.json](schemas/takeover.json) | feed-contract.md:105-111 |
 | Trust tier field | [trust-tier.json](schemas/trust-tier.json) | feed-contract.md:90; job-contract.md:87-91 |
+| grid account folder output | [cmd-account-folder.json](schemas/cmd-account-folder.json) | internal/cli/account.go:143 |
+| grid account scan output | [cmd-account-scan.json](schemas/cmd-account-scan.json) | internal/cli/account.go:112 |
+| grid account status output; also grid account list, the same writer | [cmd-account-status.json](schemas/cmd-account-status.json) | internal/cli/account.go:87 |
+| grid account statusline output | [cmd-account-statusline.json](schemas/cmd-account-statusline.json) | internal/cli/account.go:250 |
+| grid account windows output | [cmd-account-windows.json](schemas/cmd-account-windows.json) | internal/cli/account.go:165 |
 | grid approve output | [cmd-approve.json](schemas/cmd-approve.json) | internal/cli/task_write.go:164 |
 | grid feed post output | [cmd-feed-post.json](schemas/cmd-feed-post.json) | internal/cli/feed.go:168 |
 | grid feed state output | [cmd-feed-state.json](schemas/cmd-feed-state.json) | internal/cli/feed.go:131 |

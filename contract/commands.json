@@ -4552,7 +4552,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-folder.json"
         },
         {
           "name": "list",
@@ -4565,7 +4565,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-status.json"
         },
         {
           "name": "note",
@@ -4611,7 +4611,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-scan.json"
         },
         {
           "name": "sign-in",
@@ -4652,7 +4652,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-status.json"
         },
         {
           "name": "statusline",
@@ -4665,7 +4665,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-statusline.json"
         },
         {
           "name": "windows",
@@ -4683,7 +4683,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-windows.json"
         }
       ]
     },
