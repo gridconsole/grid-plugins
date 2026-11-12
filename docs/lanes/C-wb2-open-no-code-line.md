@@ -26,6 +26,8 @@ Stacked on lane-C-wb-open-launch-url-plugin (not landed; in this branch).
 - internal/cli/open.go: one `Fprintln` to stderr in the else branch where no launch code was read (local app only; with GRID_APP_URL set nothing is printed, as before this lane).
 - internal/cli/open_start_test.go: TestOpenStartsNothingWhenTheAppRuns now expects that line, and only that line, on stderr.
 
+- internal/cli/wb_open_launch_url_test.go (fix round 1): TestWbOpenNoCodeFileOpensPlainURL now asserts stderr is exactly the no-launch-code line after the --json run and after the browser run (row 2). `go test -count=1 -v ./internal/cli/ -run 'TestOpen|TestWbOpen|TestWaOpen'` exit 0, all PASS incl. TestWbOpenNoCodeFileOpensPlainURL.
+
 ## NOT VERIFIED on a live screen
 
 Nothing here needs a live screen. No real browser was opened.
