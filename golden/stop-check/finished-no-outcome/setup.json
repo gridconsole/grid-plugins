@@ -6,5 +6,5 @@
   },
   "hook": "stop-check",
   "name": "finished-no-outcome",
-  "proves": "A finished brief needs an Outcome."
+  "proves": "With no GRID_JOB the shrunk Stop check exits 0 silently, even for a done brief with an empty Outcome (docs/lanes/E-verdict-5-stop.md:10); the old brief check is gone."
 }

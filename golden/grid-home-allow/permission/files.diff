@@ -1,0 +1,6 @@
+diff --grid a/demo/plugin-data/home-allow.jsonl b/demo/plugin-data/home-allow.jsonl
+new file mode 0600
+--- /dev/null
++++ b/demo/plugin-data/home-allow.jsonl
+@@ -0,0 +1 @@
++{"event":"PermissionRequest","tool":"Write"}

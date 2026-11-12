@@ -1,27 +1,5 @@
-diff --grid a/demo/plugin-data/sessions/session-demo b/demo/plugin-data/sessions/session-demo
-new file mode 0644
---- /dev/null
-+++ b/demo/plugin-data/sessions/session-demo
-@@ -0,0 +1 @@
-+$GRID_HOME/projects/demo/tasks/T-1-demo
-diff --grid a/demo/plugin-data/sessions/session-demo.briefs b/demo/plugin-data/sessions/session-demo.briefs
-new file mode 0644
---- /dev/null
-+++ b/demo/plugin-data/sessions/session-demo.briefs
-@@ -0,0 +1 @@
-+{"agent_id":"agent-demo","dir":"$GRID_HOME/projects/demo/tasks/T-1-demo","brief":"01-build"}
-diff --grid a/demo/plugin-data/sessions/session-demo.tasks b/demo/plugin-data/sessions/session-demo.tasks
-new file mode 0644
---- /dev/null
-+++ b/demo/plugin-data/sessions/session-demo.tasks
-@@ -0,0 +1 @@
-+
-diff --grid a/demo/plugin-data/sessions/session-demo.tasks-agent-demo b/demo/plugin-data/sessions/session-demo.tasks-agent-demo
-new file mode 0644
---- /dev/null
-+++ b/demo/plugin-data/sessions/session-demo.tasks-agent-demo
-@@ -0,0 +1 @@
-+$GRID_HOME/projects/demo/tasks/T-1-demo
+diff --grid a/demo/projects/demo/tasks/T-1-demo/.task.lock b/demo/projects/demo/tasks/T-1-demo/.task.lock
+new file mode 0600
 diff --grid a/demo/projects/demo/tasks/T-1-demo/history.md b/demo/projects/demo/tasks/T-1-demo/history.md
 --- a/demo/projects/demo/tasks/T-1-demo/history.md
 +++ b/demo/projects/demo/tasks/T-1-demo/history.md

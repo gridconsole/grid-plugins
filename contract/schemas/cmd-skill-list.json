@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-skill-list.json",
+  "title": "grid skill list output",
+  "description": "JSON output of grid skill list --json; internal/cli/settings.go:137 writes doc.Skills, one boolean per skill in the catalog (internal/settings/catalog.go:30). The app decodes it as a name-to-boolean map and reads skills[name] (internal/slices/settings/skill_usage.go:102-107 on app 8f9b806d).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "brain-keeper": {"type": "boolean"},
+    "browser": {"type": "boolean"},
+    "deliver": {"type": "boolean"},
+    "plan-jobs": {"type": "boolean"},
+    "questions": {"type": "boolean"},
+    "research": {"type": "boolean"},
+    "review-job": {"type": "boolean"},
+    "run-job": {"type": "boolean"},
+    "setup": {"type": "boolean"},
+    "signals": {"type": "boolean"},
+    "task": {"type": "boolean"},
+    "visual-design-review": {"type": "boolean"}
+  },
+  "required": ["brain-keeper", "browser", "deliver", "plan-jobs", "questions", "research", "review-job", "run-job", "setup", "signals", "task", "visual-design-review"]
+}

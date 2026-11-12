@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-brain-drop.json",
+  "description": "JSON output of grid brain drop --json; internal/braincmd/hy_drop.go:127-129, internal/brain/hy_drop.go DropResult. The app runs the verb and keeps only the exit code (internal/slices/brain/hy_knowledge_drop.go); its own answer to the page carries state, path and rev.",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "dropped",
+        "restored"
+      ],
+      "description": "The entry's new status; drop writes dropped, restore (same writer) restored."
+    },
+    "version": {
+      "type": "integer",
+      "description": "The newest stored version of the entry."
+    },
+    "rev": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "The rev of the entry's bytes, which neither operation changes."
+    }
+  },
+  "required": [
+    "status",
+    "version",
+    "rev"
+  ],
+  "title": "grid brain drop output",
+  "type": "object"
+}

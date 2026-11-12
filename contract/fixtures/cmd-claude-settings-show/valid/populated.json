@@ -1,0 +1,63 @@
+{
+  "codex": {
+    "confirmed": false,
+    "exists": false,
+    "path": "\u003cROOT\u003e/home/.codex/config.toml",
+    "rows": {
+      "agents.default_subagent_model": null,
+      "agents.default_subagent_reasoning_effort": null,
+      "model_auto_compact_token_limit": null
+    }
+  },
+  "env": {
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": null,
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": null,
+    "CLAUDE_CODE_EFFORT_LEVEL": null,
+    "CLAUDE_CODE_SUBAGENT_MODEL": null,
+    "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": null,
+    "CLAUDE_CODE_USE_BEDROCK": null,
+    "CLAUDE_CODE_USE_VERTEX": null,
+    "DISABLE_GROWTHBOOK": null,
+    "DISABLE_TELEMETRY": "1",
+    "DO_NOT_TRACK": null
+  },
+  "error": null,
+  "mainModel": {
+    "from": "default",
+    "value": null,
+    "window": 200000
+  },
+  "path": "\u003cROOT\u003e/home/.claude/settings.json",
+  "readAt": "2026-11-12T02:32:28Z",
+  "rows": {
+    "advisorModel": {
+      "blocked": [
+        "telemetry"
+      ],
+      "inForce": "off",
+      "now": "opus",
+      "setBy": "user"
+    },
+    "autoCompactEnabled": {
+      "inForce": true,
+      "now": null,
+      "setBy": null
+    },
+    "autoCompactWindow": {
+      "inForce": 200000,
+      "now": 200000,
+      "setBy": "user"
+    },
+    "permissions.defaultMode": {
+      "inForce": "auto",
+      "now": "auto",
+      "setBy": "user"
+    },
+    "remoteControlAtStartup": {
+      "inForce": null,
+      "now": null,
+      "setBy": null
+    }
+  },
+  "state": "ok"
+}

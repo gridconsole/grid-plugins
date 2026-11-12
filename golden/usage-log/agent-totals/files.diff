@@ -1,6 +1,8 @@
-diff --grid a/demo/plugin-data/sessions/session-demo.usage b/demo/plugin-data/sessions/session-demo.usage
-new file mode 0644
+diff --grid a/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json b/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json
+new file mode 0600
 --- /dev/null
-+++ b/demo/plugin-data/sessions/session-demo.usage
++++ b/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json
 @@ -0,0 +1 @@
-+{"event":"PostToolUse","time":"<TIME>","tool_use_id":"tool-demo","type":"grid-builder","brief":"01-build","agent_id":"agent-demo","response":{"status":"done","totalTokens":42,"totalDurationMs":25,"usage":{"input_tokens":30,"output_tokens":12}},"response_keys":["agentId","totalTokens","totalDurationMs","usage","status","result"]}
++{"session_id":"session-demo","last":"<TIME>","usage":{"tool-demo":{"input_tokens":30,"output_tokens":12,"total_tokens":42,"duration_ms":25}}}
+diff --grid a/demo/projects/demo/tasks/T-1-demo/sessions/.lock b/demo/projects/demo/tasks/T-1-demo/sessions/.lock
+new file mode 0600

@@ -1,0 +1,37 @@
+{
+  "changes": [
+    {
+      "at": "2026-11-12T02:23:02.085Z",
+      "status": "dropped",
+      "topic": "decisions",
+      "name": "harbour",
+      "version": 1,
+      "hash": "sha256:65b16bb40ffb41e0",
+      "origin_kind": "person",
+      "origin_id": "member",
+      "reason": ""
+    },
+    {
+      "at": "2026-11-12T02:23:02.081Z",
+      "status": "created",
+      "topic": "decisions",
+      "name": "harbour",
+      "version": 1,
+      "hash": "sha256:65b16bb40ffb41e0",
+      "origin_kind": "person",
+      "origin_id": "member",
+      "reason": ""
+    },
+    {
+      "at": "2026-11-12T02:23:02.076Z",
+      "status": "created",
+      "topic": "decisions",
+      "name": "ferry",
+      "version": 1,
+      "hash": "sha256:76d41c859c2a8514",
+      "origin_kind": "person",
+      "origin_id": "member",
+      "reason": "Agreed at the planning review."
+    }
+  ]
+}

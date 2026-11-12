@@ -23,6 +23,18 @@ type RenderOptions struct {
 	// empty its body is the Instructions section, in place of the plugin's own
 	// agents/<role>.md.
 	Agent string
+	// Answers are the decisions the Job waited for, one per after edge that is a
+	// person Job or a gate:Q-<n> question, in the order of its edges.
+	Answers []Answer
+}
+
+// Answer is what a person decided on an edge the Job waited for. Kind is
+// answered, sent back or default; Tier is the answerer's, and a marked tier
+// reaches the brief only through fenced.
+type Answer struct {
+	Edge, Who, At, Text string
+	Tier                contract.TrustTier
+	Kind                string
 }
 type Inputs struct {
 	Generation                 string   `json:"generation"`
@@ -278,6 +290,11 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		}
 	}
 	b.WriteString("## Context\n\n")
+	answers, fencedAnswer := answersBlock(o.Answers)
+	if fencedAnswer {
+		r.Inputs.DisableSkillShellExecution = true
+	}
+	b.WriteString(answers)
 	b.WriteString(brain)
 	sort.Slice(relations, func(a, b int) bool {
 		x, y := relations[a], relations[b]
@@ -469,6 +486,37 @@ func marked(t contract.TrustTier) bool {
 // notice, inside a data block, with markup escaped so the block cannot be closed.
 func fenced(s Source, text string) string {
 	return DataNotice + "\n<data tier=\"" + string(s.Tier) + "\" from=\"" + html.EscapeString(s.Pointer) + "\">\n" + html.EscapeString(text) + "\n</data>\n\n"
+}
+
+// answersBlock writes the answers a Job waited for: one line per edge naming
+// who decided, how and when, then the text. A team or agent answer is quoted as
+// a source is; any other tier is guest or external text and goes only through
+// fenced. It reports whether it fenced any text. No answers write nothing.
+func answersBlock(as []Answer) (string, bool) {
+	if len(as) == 0 {
+		return "", false
+	}
+	var b strings.Builder
+	b.WriteString("### Answers this Job waited for\n\n")
+	anyFenced := false
+	for _, a := range as {
+		tier := a.Tier
+		if tier != contract.PersonTeam && tier != contract.Agent && tier != contract.PersonGuest {
+			tier = contract.External
+		}
+		b.WriteString(oneLine(a.Edge) + ": ")
+		if who := oneLine(a.Who); who != "" {
+			b.WriteString(who + " ")
+		}
+		fmt.Fprintf(&b, "%s at %s\n\n", oneLine(a.Kind), oneLine(a.At))
+		if marked(tier) {
+			anyFenced = true
+			b.WriteString(fenced(Source{Tier: tier, Pointer: a.Edge}, a.Text))
+			continue
+		}
+		b.WriteString("> " + strings.ReplaceAll(strings.TrimSpace(a.Text), "\n", "\n> ") + "\n\n")
+	}
+	return b.String(), anyFenced
 }
 func sourceBlock(label string, s Source) string {
 	header := fmt.Sprintf("### %s [%s] (%s)\n\n", label, s.Tier, s.Pointer)

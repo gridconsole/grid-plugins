@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-account-statusline.json",
+  "title": "grid account statusline output",
+  "description": "JSON output of grid account statusline [on|off] --json; internal/cli/account.go:250. With no word it reads and changes nothing. The app relays it to the page as it is (agentaccounts statusline.go:28-44).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "on",
+    "path",
+    "kept"
+  ],
+  "properties": {
+    "on": {
+      "type": "boolean",
+      "description": "True when the status line command in the settings file is Grid's own."
+    },
+    "path": {
+      "type": "string",
+      "description": "The Claude settings file read or changed."
+    },
+    "kept": {
+      "type": "string",
+      "description": "The person's own status line command that Grid runs after it notes the numbers; the empty string when they had none."
+    }
+  }
+}

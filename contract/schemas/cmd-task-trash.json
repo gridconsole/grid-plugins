@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-task-trash.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid task delete --json and grid task restore --json; task.TrashResult, internal/task/trash.go:37, written by internal/cli/task_write.go:438. folder is the task folder name, never a path.",
+  "properties": {
+    "folder": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "project": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "id",
+    "folder"
+  ],
+  "title": "grid task delete and restore output",
+  "type": "object"
+}

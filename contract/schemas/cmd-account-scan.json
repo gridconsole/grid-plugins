@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-account-scan.json",
+  "title": "grid account scan output",
+  "description": "JSON output of grid account scan --json; internal/cli/account.go:112. One entry per provider config folder with its login email. The app decodes kind, dir, home, signedIn, email and plan (agentaccounts http.go:187-194); the account id, name, default, checked and added of its page rows come from its own records, not from this answer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "folders"
+  ],
+  "properties": {
+    "folders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "dir",
+          "home",
+          "signedIn",
+          "email",
+          "plan"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "claude",
+              "codex"
+            ]
+          },
+          "dir": {
+            "type": "string",
+            "description": "The folder as an absolute path."
+          },
+          "home": {
+            "type": "boolean",
+            "description": "True for ~/.claude or ~/.codex itself."
+          },
+          "signedIn": {
+            "description": "null when the scan could not tell, for example when the provider's program is not installed.",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "type": "string",
+            "description": "The login email, or the empty string when the folder has none."
+          },
+          "plan": {
+            "type": "string",
+            "description": "The login's plan, or the empty string when unknown."
+          }
+        }
+      }
+    }
+  }
+}

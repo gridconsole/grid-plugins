@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-account-folder.json",
+  "title": "grid account folder output",
+  "description": "JSON output of grid account folder --kind K --id ID --json; internal/cli/account.go:143. The app runs it to make a folder and reads only the exit code (agentaccounts http.go:254 and :382).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "dir",
+    "created"
+  ],
+  "properties": {
+    "dir": {
+      "type": "string",
+      "description": "The folder ~/.<id> as an absolute path."
+    },
+    "created": {
+      "type": "boolean",
+      "description": "False when the folder was already there."
+    }
+  }
+}
