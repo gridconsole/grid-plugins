@@ -316,6 +316,44 @@ func SaveBy(s brain.Store, e Entry, origin brain.Origin) error {
 	return save(editBy(s, origin), e)
 }
 
+// EditBy reads the entry stored under id, hands it to change and stores what
+// change gives back, all inside one EditConfigBy call, so two writers of one id
+// take turns and the second one's change sees the first one's result. exists is
+// false when no entry is stored (old is then the zero Entry with ID set). An
+// error from change, or an entry that cannot be rendered, writes nothing. The
+// answer is the stored entry as Parse reads it back.
+func EditBy(s brain.Store, id string, origin brain.Origin, change func(old Entry, exists bool) (Entry, error)) (Entry, error) {
+	var stored Entry
+	err := s.EditConfigBy(level, topic, id, origin, func(old []byte) ([]byte, error) {
+		cur := Entry{ID: id}
+		if old != nil {
+			var err error
+			if cur, err = Parse(id, old); err != nil {
+				return nil, fmt.Errorf("environment %s: %w", id, err)
+			}
+		}
+		next, err := change(cur, old != nil)
+		if err != nil {
+			return nil, err
+		}
+		if next.ID != id {
+			return nil, fmt.Errorf("environment %s: change gave the entry id %q", id, next.ID)
+		}
+		data, err := Render(next)
+		if err != nil {
+			return nil, err
+		}
+		if stored, err = Parse(id, data); err != nil {
+			return nil, err
+		}
+		return data, nil
+	})
+	if err != nil {
+		return Entry{}, err
+	}
+	return stored, nil
+}
+
 // Remove deletes the entry. An id with no entry answers an error that wraps
 // fs.ErrNotExist; no entry file is written or removed.
 func Remove(s brain.Store, id string) error {
