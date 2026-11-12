@@ -68,6 +68,15 @@ func New(t *testing.T, testdata string) Home {
 	if err := os.WriteFile(filepath.Join(gh, "projects", Project, "project.md"), []byte(record), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// The fixture plan's Jobs have role writer; this home's brain holds the agent that
+	// runs it, so grid job lint's job.role-agent warning stays quiet on the fixture.
+	agents := filepath.Join(gh, "knowledge", "agents")
+	if err := os.MkdirAll(agents, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agents, "grid-writer.md"), []byte("---\nname: grid-writer\ndescription: Writes documentation.\n---\nWrites documentation.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	h.Store = brain.Store{GridHome: gh, Project: Project, Now: func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) }}
 	h.Note("project", "export-format", "conventions", "The export column order and compatibility rule.",
 		"Keep the id column before the title column.\nChanging the column order requires a recorded decision.\n")

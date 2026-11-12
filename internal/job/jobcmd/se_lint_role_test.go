@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/job/jobtest"
 )
 
@@ -48,6 +49,28 @@ func seLintRole(t *testing.T, env Env, file, role string) (int, []string) {
 		}
 	}
 	return code, rules
+}
+
+// A world with no project has no project brain; knownRole skips it and still reads the home brain.
+func TestSeKnownRoleNoProject(t *testing.T) {
+	gh := t.TempDir()
+	w := &world{store: brain.Store{GridHome: gh}}
+	if w.knownRole("nobody") {
+		t.Fatal("role nobody known with no project and no brain agent")
+	}
+	if !w.knownRole("builder") {
+		t.Fatal("plugin agent builder unknown with no project")
+	}
+	dir := filepath.Join(gh, "knowledge", "agents")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "grid-auditor.md"), []byte("---\nname: grid-auditor\ndescription: Audits.\n---\nAudits.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !w.knownRole("auditor") {
+		t.Fatal("home brain agent grid-auditor unknown with no project")
+	}
 }
 
 func TestSeLintBrainAgent(t *testing.T) {

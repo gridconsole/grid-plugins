@@ -624,6 +624,9 @@ func (w *world) knownRole(role string) bool {
 		return true
 	}
 	for _, level := range []string{"project", "home"} {
+		if level == "project" && w.project == "" {
+			continue // no project, no project brain: the brain's prefix refuses an empty one
+		}
 		names, err := w.store.ConfigNames(level, "agents")
 		if err != nil {
 			continue
