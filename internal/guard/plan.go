@@ -52,7 +52,9 @@ func evaluatePlan(in hookio.Input, root string, env map[string]string) hookio.De
 		return hookio.Deny("A folder beside a project's tasks folder keeps a plain name (printable ASCII, no colon, no dot or space at the end, not tasks in other letters): on macOS or Windows it can be the tasks folder under another spelling, so " + given + " is not written." + off)
 	}
 	agent := agentName(in.AgentType)
-	if c.set && (contract.NormalizeRole(agent) == "reviewer" || contract.NormalizeRole(agent) == "checker") && !inside(projects, target) {
+	// A file the caller's own Job names is its to write: the fence reads the Job
+	// only where it would fire, and the other fences below still answer for it.
+	if c.set && (contract.NormalizeRole(agent) == "reviewer" || contract.NormalizeRole(agent) == "checker") && !inside(projects, target) && !c.jobNames(given, target) {
 		return hookio.Deny("A " + agent + " writes only its Verdict inside a task folder; " + target + " is outside it." + off)
 	}
 	role := ""
