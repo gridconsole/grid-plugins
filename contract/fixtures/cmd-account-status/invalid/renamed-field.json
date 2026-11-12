@@ -1,0 +1,40 @@
+{
+  "accounts": [
+    {
+      "accountId": "claude-ann",
+      "added": "auto",
+      "checked": "2026-11-12T10:00:00Z",
+      "default": true,
+      "dir": "/home/example/grid-test/home/.claude-ann",
+      "email": "ann@example.com",
+      "kind": "claude",
+      "name": "ann@example.com",
+      "plan": "",
+      "signedIn": false
+    },
+    {
+      "added": "auto",
+      "checked": "2026-11-12T10:00:00Z",
+      "default": false,
+      "dir": "/home/example/grid-test/cfg-bob",
+      "email": "bob@example.com",
+      "id": "claude-bob",
+      "kind": "claude",
+      "name": "bob@example.com",
+      "plan": "",
+      "signedIn": null
+    },
+    {
+      "added": "auto",
+      "checked": "2026-11-12T10:00:00Z",
+      "default": false,
+      "dir": "/home/example/grid-test/codex-cara",
+      "email": "cara@example.com",
+      "id": "codex-cara",
+      "kind": "codex",
+      "name": "cara@example.com",
+      "plan": "plus",
+      "signedIn": true
+    }
+  ]
+}
