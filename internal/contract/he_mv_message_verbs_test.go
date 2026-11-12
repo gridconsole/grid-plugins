@@ -48,10 +48,6 @@ var heMvProse = map[string]string{
 	"internal/cli/agent.go:agent budget":        "dispatched at cli/agent.go:21, commands.json lists no budget sub",
 	"internal/cli/budget.go:agent budget":       "dispatched at cli/agent.go:21, commands.json lists no budget sub",
 	"internal/cli/budget.go:claude settings":    "dispatched at cli/budget.go:90, commands.json lists no settings sub",
-	// Plain English after a verb name.
-	"internal/guard/host.go:task or":          "prose: \"the grid task or grid question command\"",
-	"internal/guard/host.go:question command": "prose: \"the grid task or grid question command\"",
-	"internal/guard/host.go:feed or":          "prose: \"post to it with grid feed or grid job\"",
 }
 
 var (

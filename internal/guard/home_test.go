@@ -174,7 +174,7 @@ func TestHomeScripts(t *testing.T) {
 	}
 }
 func TestBadInputAdapters(t *testing.T) {
-	for name, fn := range map[string]Adapter{"plan": PlanGuard, "host": HostGuard, "home": HomeAllow} {
+	for name, fn := range map[string]Adapter{"plan": PlanGuard, "home": HomeAllow} {
 		for _, data := range []string{"", "null", "[]", "{", `{"tool_input":false}`, `{"tool_name":"Write","tool_input":{"file_path":7}}`} {
 			t.Run(name+"/"+data, func(t *testing.T) {
 				out, code := fn([]byte(data), nil)
