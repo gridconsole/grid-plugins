@@ -514,11 +514,15 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 var loadFeedSnapshot = orchestrator.Load
 
 // planPersonJob is the plan Job a grid approve answers: the open person Job of
-// the task's approve step, the first in Feed order. When every such Job is
-// already accepted (the plan changed since and is approved again), it is the
-// last accepted one, which takes a new result: the readers use the newest
-// result, so a changed plan can be approved again. It is "" when the task has
-// no approve Job.
+// the task's approve step that has no answer yet and is ready for a person, the
+// first such in Feed order. An earlier open approve Job that already holds a
+// person's answer waits for the holder's next tick, and a press for a later step
+// must not name it again. When no open Job meets both, it is the first open one
+// (a repeat press of it posts nothing, and a Job that still waits for another
+// Job is refused by the caller), else the last accepted one, which takes a new
+// result when every such Job is already accepted (the plan changed since and is
+// approved again): the readers use the newest result, so a changed plan can be
+// approved again. It is "" when the task has no approve Job.
 func planPersonJob(env Env, dir string) (feed.Store, string) {
 	id, _, err := taskstore.FeedIdentity(dir)
 	if err != nil {
@@ -529,18 +533,42 @@ func planPersonJob(env Env, dir string) (feed.Store, string) {
 	if err != nil {
 		return store, ""
 	}
-	accepted := ""
+	accepted, open := "", ""
 	for _, it := range snap.Items {
 		j := snap.State.Jobs[it.ID]
 		if !it.IsPerson() || it.Kind != "approve" || j == nil || j.Status == contract.Cancelled || j.Status == contract.Rejected {
 			continue
 		}
-		if j.Status != contract.Accepted {
+		if j.Status == contract.Accepted {
+			accepted = it.ID
+			continue
+		}
+		if open == "" {
+			open = it.ID
+		}
+		if !personJobAnswered(snap, j) && orchestrator.PersonReady(snap, it.ID, time.Now()) == nil {
 			return store, it.ID
 		}
-		accepted = it.ID
+	}
+	if open != "" {
+		return store, open
 	}
 	return store, accepted
+}
+
+// personJobAnswered reports whether the Feed holds an answer to the person Job j:
+// a record of type answer whose re is the Job's first history record, whoever
+// wrote it and whatever plan it carries.
+func personJobAnswered(snap orchestrator.Snapshot, j *contract.Job) bool {
+	if len(j.History) == 0 {
+		return false
+	}
+	for _, r := range snap.Records {
+		if r.Type == "answer" && r.Re != nil && *r.Re == j.History[0] {
+			return true
+		}
+	}
+	return false
 }
 
 // personApproval posts an approval as the result of the person Job: one
