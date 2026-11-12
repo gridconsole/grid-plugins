@@ -4720,8 +4720,8 @@
         {
           "name": "env",
           "args": [
-            "<list|add|edit|remove>",
-            "<project>"
+            "\u003clist|add|edit|remove\u003e",
+            "\u003cproject\u003e"
           ],
           "flags": [
             {
