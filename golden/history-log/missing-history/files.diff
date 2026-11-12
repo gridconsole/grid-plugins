@@ -1,12 +1,8 @@
-diff --grid a/demo/plugin-data/sessions/session-demo b/demo/plugin-data/sessions/session-demo
-new file mode 0644
+diff --grid a/demo/projects/demo/tasks/T-1-demo/.task.lock b/demo/projects/demo/tasks/T-1-demo/.task.lock
+new file mode 0600
+diff --grid a/demo/projects/demo/tasks/T-1-demo/history.md b/demo/projects/demo/tasks/T-1-demo/history.md
+new file mode 0600
 --- /dev/null
-+++ b/demo/plugin-data/sessions/session-demo
++++ b/demo/projects/demo/tasks/T-1-demo/history.md
 @@ -0,0 +1 @@
-+$GRID_HOME/projects/demo/tasks/T-1-demo
-diff --grid a/demo/plugin-data/sessions/session-demo.tasks b/demo/plugin-data/sessions/session-demo.tasks
-new file mode 0644
---- /dev/null
-+++ b/demo/plugin-data/sessions/session-demo.tasks
-@@ -0,0 +1 @@
-+$GRID_HOME/projects/demo/tasks/T-1-demo
++- <TIME> · file written · notes.md · by claude

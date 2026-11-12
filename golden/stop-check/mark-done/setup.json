@@ -8,5 +8,5 @@
   },
   "hook": "stop-check",
   "name": "mark-done",
-  "proves": "A completed Outcome marks the brief done."
+  "proves": "With no GRID_JOB the shrunk Stop check exits 0 silently and no longer marks the brief done, so files.diff is empty (docs/lanes/E-verdict-5-stop.md:10)."
 }
