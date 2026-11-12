@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -334,26 +335,56 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 // Unschedule removes only entries with a local ownership record and our marker.
 // An empty name removes all schedules in this scope, even for deleted entries.
 func (s Scheduler) Unschedule(ctx context.Context, project, name string) error {
+	if name == "" {
+		_, err := s.UnscheduleProject(ctx, project)
+		var te *TimerError
+		if errors.As(err, &te) {
+			err = te.Err
+		}
+		return err
+	}
 	unlock, err := localdata.Lock(s.GridHome, ".routine-timers.lock")
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	if name != "" {
-		return s.remove(ctx, project, name)
+	return s.remove(ctx, project, name)
+}
+
+// TimerError says which routine's timer UnscheduleProject could not take down. Its
+// text is the cause's text; Err is the cause.
+type TimerError struct {
+	Name string
+	Err  error
+}
+
+func (e *TimerError) Error() string { return e.Err.Error() }
+func (e *TimerError) Unwrap() error { return e.Err }
+
+// UnscheduleProject takes down every timer of the project on this machine, even for
+// routines whose definition is gone, and returns the routine names it took down,
+// sorted (an empty list when there was none). A timer already gone is no error. On a
+// failure it returns the names done so far; a failed timer comes back as a *TimerError.
+func (s Scheduler) UnscheduleProject(ctx context.Context, project string) ([]string, error) {
+	unlock, err := localdata.Lock(s.GridHome, ".routine-timers.lock")
+	if err != nil {
+		return nil, err
 	}
+	defer unlock()
+	names := []string{}
+	done := func() []string { sort.Strings(names); return names }
 	// The manifest stores the scope/name separately to permit cleanup after a
 	// definition disappears.
 	dir, err := localdata.Safe(s.GridHome, "local", "routine-timers")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return names, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, entry := range entries {
 		if !strings.HasPrefix(entry.Name(), LabelPrefix) || !strings.HasSuffix(entry.Name(), ".json") {
@@ -361,65 +392,78 @@ func (s Scheduler) Unschedule(ctx context.Context, project, name string) error {
 		}
 		path, err := localdata.Safe(dir, entry.Name())
 		if err != nil {
-			return err
+			return done(), err
 		}
 		b, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return done(), err
 		}
 		var state timerState
 		if err = json.Unmarshal(b, &state); err != nil {
-			return err
+			return done(), err
 		}
 		if state.Project != project {
 			continue
 		}
 		if state.Name == "" {
-			return fmt.Errorf("timer manifest has no routine name")
+			return done(), fmt.Errorf("timer manifest has no routine name")
 		}
-		if err = s.remove(ctx, project, state.Name); err != nil {
-			return err
+		removed, err := s.removeTimer(ctx, project, state.Name)
+		if err != nil {
+			return done(), &TimerError{Name: state.Name, Err: err}
+		}
+		if removed {
+			names = append(names, state.Name)
 		}
 	}
-	return nil
+	return done(), nil
 }
 func (s Scheduler) remove(ctx context.Context, project, name string) error {
+	_, err := s.removeTimer(ctx, project, name)
+	return err
+}
+
+// removeTimer reports whether it found the timer's record and took it down.
+func (s Scheduler) removeTimer(ctx context.Context, project, name string) (bool, error) {
 	p, err := s.plan(project, name)
 	if err != nil {
-		return err
+		return false, err
 	}
 	state, err := s.readState(p)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if state.Label == "" {
-		return nil
+		return false, nil
 	}
 	if err = s.checkFiles(p); err != nil {
-		return err
+		return false, err
 	}
 	// A failed registration can mean the OS already had someone else's label.
 	// Only a confirmed installation authorizes removing an OS registration.
 	if state.Installed {
 		if err = s.commands(ctx, p.Remove); err != nil {
-			return err
+			return false, err
 		}
 	}
 	for _, f := range p.Files {
 		if err = os.Remove(f.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+			return false, err
 		}
 	}
 	if state.Installed {
 		if err = s.commands(ctx, p.AfterRemove); err != nil {
-			return err
+			return false, err
 		}
 	}
 	path, err := s.statePath(p.Label)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return os.Remove(path)
+	if err = os.Remove(path); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // RemoveRoutine closes the install/delete race by holding the timer lock through
