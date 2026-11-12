@@ -56,6 +56,9 @@ var hsIpTable = map[string]hsIpVerb{
 		"rename":  {},
 		"restore": {},
 		"summary": {},
+		// task.go (taskMergeGit) runs git as a child, as deliver does through gitx;
+		// it takes no signal, owner or stream of the host.
+		"merge": {},
 	}},
 	"plan": {},
 	"job": {subs: map[string]hsIpSub{

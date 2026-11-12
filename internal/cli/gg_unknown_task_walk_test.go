@@ -21,7 +21,7 @@ import (
 // ggTaskSkipped, with the set read from contract/commands.json at test time.
 var ggTaskWalked = []string{
 	"where", "task attach", "task close", "task decline", "task delete", "task history",
-	"task lane", "task move", "task rename", "task reopen", "task show", "task status", "task stop", "task summary",
+	"task lane", "task merge", "task move", "task rename", "task reopen", "task show", "task status", "task stop", "task summary",
 	"plan check", "plan hash", "plan items", "plan migrate", "plan write",
 	"job ack", "job blocked", "job cancel", "job lint", "job next", "job post",
 	"job render", "job result", "job show", "job tree", "job verify",

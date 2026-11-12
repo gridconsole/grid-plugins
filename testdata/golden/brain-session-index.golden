@@ -8,3 +8,4 @@ deploy | Delivery targets and steps | 0 | - | 0
 people | Members and approvers | 0 | - | 0
 agents | Agent settings | 0 | - | 0
 routines | Scheduled work | 0 | - | 0
+Read a note: grid brain search --topic <topic> <words>, then grid brain show <id>.

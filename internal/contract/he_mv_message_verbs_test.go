@@ -43,6 +43,7 @@ var heMvProse = map[string]string{
 	"internal/braincmd/changes.go:brain help":   "answered at braincmd/command.go:112, commands.json lists no help sub",
 	"internal/braincmd/command.go:brain help":   "answered at braincmd/command.go:112, commands.json lists no help sub",
 	"internal/braincmd/supersede.go:brain help": "answered at braincmd/command.go:112, commands.json lists no help sub",
+	"internal/cli/cli.go:task help":             "answered by runTask in cli/task.go (args[0] == \"help\"), commands.json lists no help sub",
 	"internal/cli/cli.go:brain help":            "the brain summary points at the dispatcher's help answered at braincmd/command.go:128, commands.json lists no help sub",
 	"internal/cli/agent.go:agent budget":        "dispatched at cli/agent.go:21, commands.json lists no budget sub",
 	"internal/cli/budget.go:agent budget":       "dispatched at cli/agent.go:21, commands.json lists no budget sub",
