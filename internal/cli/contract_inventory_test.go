@@ -580,8 +580,8 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"project-md get":       {args: []string{"<project>", "<key>"}},
 		"project-md set":       {args: []string{"<project>", "<key>", "<value>"}, output: "cmd-project-md-set.json"},
 		"setup":                {args: []string{"[project]"}, output: "cmd-setup.json"},
-		"workflow show":        {},
-		"workflow write":       {required: map[string]bool{"--file": true, "--rev": true}},
+		"workflow show":        {output: "cmd-workflow-show.json"},
+		"workflow write":       {required: map[string]bool{"--file": true, "--rev": true}, output: "cmd-workflow-write.json"},
 		"usage post":           {required: map[string]bool{"--job": true}},
 		"usage show":           {},
 	}

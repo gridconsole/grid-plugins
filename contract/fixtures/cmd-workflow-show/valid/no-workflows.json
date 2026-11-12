@@ -1,0 +1,18 @@
+{
+  "errors": [],
+  "files": [
+    {
+      "project": null,
+      "rev": null,
+      "scope": "workspace",
+      "text": ""
+    },
+    {
+      "project": "example",
+      "rev": null,
+      "scope": "project",
+      "text": ""
+    }
+  ],
+  "templates": []
+}
