@@ -228,3 +228,29 @@ func TestVoPathHomeWithSpaceAndQuoteResolvesGrid(t *testing.T) {
 		t.Fatalf("A3 got %q want %q", out, want)
 	}
 }
+
+func TestVoPathLineDirect(t *testing.T) {
+	if got := voLauncherPathLine("", "/usr/bin"); got != "" {
+		t.Fatalf("empty home, got %q", got)
+	}
+	if runtime.GOOS == "windows" {
+		s := voPathSession{home: t.TempDir()}
+		voPathLauncher(t, s)
+		if got := voLauncherPathLine(s.home, "/usr/bin"); got != "" {
+			t.Fatalf("windows, got %q", got)
+		}
+		return
+	}
+	s := voPathNew(t, "data")
+	if got := voLauncherPathLine(s.home, "/usr/bin"); got != "" {
+		t.Fatalf("no launcher, got %q", got)
+	}
+	voPathLauncher(t, s)
+	bin := filepath.Join(s.home, "bin")
+	if got := voLauncherPathLine(s.home, "/usr/bin"); got != voPathQuoted(bin) {
+		t.Fatalf("got %q", got)
+	}
+	if got := voLauncherPathLine(s.home, "/usr/bin::"+bin+"/"); got != "" {
+		t.Fatalf("already on PATH, got %q", got)
+	}
+}
