@@ -41,6 +41,7 @@ Point, do not paste. A pasted block goes stale, fills the worker's context and h
 - `read`: name the lines, not the file: `repo:path/file.go:40-95`, or a heading anchor such as `task:research.md#format`. A bare file name makes the worker read all of it.
 - `intent` and `acceptance` state the goal and the check in your own words. If you are about to copy a paragraph from a file or a note, link or read it instead.
 - `after`: bare Job ids that must be done first, or objects with `job`, `kind` (`done`, `failed`, `children-done`) and `why` (8 to 160 characters). A gate is `gate:Q-7`. A review Job names the build Job it checks.
+- `repo`: in a project with more than one repo, a code Job names its `repo` (one of the project's repos); with none named the Job runs in the first repo of project.md.
 - Keep a Job small: one outcome, one owner, a read list of a few ranges. If it needs more, split it into Jobs joined by `after`.
 - The last Job of a task is the deliver Job: title "Deliver the task", role orchestrator, `after` names every other Job (each with a why), and it runs `grid deliver --task <task> --outcome <text> --json`.
 

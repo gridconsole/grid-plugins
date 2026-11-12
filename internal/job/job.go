@@ -12,15 +12,18 @@ import (
 // Job contains the planned fields and the run fields of job-contract.md section 1.
 // Status and FollowUp retain compatibility with the old brief reader.
 type Job struct {
-	Kind         string   `json:"kind,omitempty"`
-	Visible      string   `json:"visible,omitempty"`
-	Irreversible bool     `json:"irreversible,omitempty"`
-	ReviewReason string   `json:"review_reason,omitempty"`
-	ID           string   `json:"id"`
-	Item         int      `json:"item"`
-	Title        string   `json:"title"`
-	Role         string   `json:"role"`
-	Skills       []string `json:"skills"`
+	Kind         string `json:"kind,omitempty"`
+	Visible      string `json:"visible,omitempty"`
+	Irreversible bool   `json:"irreversible,omitempty"`
+	ReviewReason string `json:"review_reason,omitempty"`
+	// Repo names the project repo a code Job works in, by its path in project.md;
+	// empty is the project's first repo.
+	Repo   string   `json:"repo,omitempty"`
+	ID     string   `json:"id"`
+	Item   int      `json:"item"`
+	Title  string   `json:"title"`
+	Role   string   `json:"role"`
+	Skills []string `json:"skills"`
 	// Review is a retired level; old plans and records may still carry it. It is
 	// read and ignored: nothing validates it and new Jobs do not set it.
 	Review         string       `json:"review,omitempty"`
