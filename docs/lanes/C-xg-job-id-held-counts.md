@@ -1,6 +1,6 @@
 # C-xg-job-id-held-counts
 
-Verdict: NOT DONE. The change is built and rows 1 to 4 and 6 hold. One row is NOT DONE: `TestIoqOldFeedPairFoldsAsToday` in `internal/cli` goes red on this lane and is green on base. Fixing it means editing an existing test outside the brief's Touches line, which the rules forbid, so I stopped and name it here.
+Verdict: CLOSED BY C-xg2-ioq-fixture-raw-append: the fixture of `TestIoqOldFeedPairFoldsAsToday` is rebuilt with a raw append and the change carried unchanged. At C-xg: the change is built and rows 1 to 4 and 6 hold. One row was open: `TestIoqOldFeedPairFoldsAsToday` in `internal/cli` goes red on this lane and is green on base. Fixing it means editing an existing test outside the brief's Touches line, which the rules forbid, so I stopped and name it here.
 
 Base: lane branched from main at 103b9157 (the brief quotes 44c7de5b; main moved). `checkJobFree` (jobid.go:55-73 on base) skipped every entry whose Verdict is not "counted": `if entry.Verdict != "counted" || jobID(entry.Record) != id { continue }`. read.go:75 (`e.Verdict = "held"`, "waiting for body") and read.go:127 (`e.Verdict = "held"`, "waiting for record") are unchanged. The base check did not already count held entries, so the lane applies.
 
@@ -19,7 +19,7 @@ Base: lane branched from main at 103b9157 (the brief quotes 44c7de5b; main moved
 | 6a. `make lint` | HOLDS | exit 0 (`go vet ./...`, no output). |
 | 6b. `make cross` | HOLDS | exit 0: darwin/arm64 and windows/amd64 vet and test compile, every package `ok`. |
 | 6c. `git diff main --stat` names only jobid.go and the new test file | HOLDS | Run before this doc was added: `internal/feed/jobid.go \| 12 ++--` and `internal/feed/xg_held_job_id_test.go \| 131 +++`, 2 files changed. This doc is added in a later commit, as the runbook asks. |
-| Tests of the packages that import feed | NOT DONE | `TestIoqOldFeedPairFoldsAsToday` in `internal/cli` is red on the lane (details below). Every other package in the list is ok. |
+| Tests of the packages that import feed | CLOSED BY C-xg2-ioq-fixture-raw-append: the fixture is rebuilt with a raw append | `TestIoqOldFeedPairFoldsAsToday` in `internal/cli` is red on the lane (details below). Every other package in the list is ok. |
 | Walk tests: plugin set | HOLDS | 5c and 5d. The app-only walk tests do not apply to this repo. |
 | New tests fail on base and pass on lane | HOLDS | Base failures below; lane passes in rows 1 to 4. |
 | `*RealPlugin*` tests | not applicable | The lane touches `internal/feed` only and the brief names no RealPlugin rig. |
