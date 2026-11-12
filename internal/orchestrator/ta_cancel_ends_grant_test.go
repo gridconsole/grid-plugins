@@ -125,6 +125,25 @@ func TestTaCancelOnce(t *testing.T) {
 	taCancelWant(t, f, g, true)
 }
 
+// EndJob ends a Job grant only: the task lease and a name that is no Job id are
+// refused, and the task holder is untouched.
+func TestTaCancelEndJobRefusesTaskLease(t *testing.T) {
+	f, _ := taCancelRig(t)
+	ts := lease.TaskStore{Feed: f.s.Feed}
+	for _, name := range []string{"task", "../task", ""} {
+		if err := ts.EndJob(f.s.Writer, name); err == nil {
+			t.Fatalf("EndJob(%q) ended a lease that is not a Job grant", name)
+		}
+	}
+	held, err := ts.Read("task")
+	if err != nil || held.Holder == nil || *held.Holder != f.s.Writer.Worker {
+		t.Fatalf("the task lease is %+v (%v), want it still held by %s", held, err, f.s.Writer.Worker)
+	}
+	if files := taCancelTakeovers(t, f); len(files) != 0 {
+		t.Fatalf("takeovers.jsonl holds %v, want no line", files)
+	}
+}
+
 // A Job that was cancelled before it was ever granted has no lease file, and the
 // pass leaves it alone.
 func TestTaCancelNeverGranted(t *testing.T) {
