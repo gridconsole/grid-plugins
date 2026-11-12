@@ -198,7 +198,7 @@ func bashHistory(o Options, in hookio.Input) {
 }
 
 // ojSnapshotForTest is nil in production. A test sets it to stop at the start of
-// a walk, as fslock.OnBlockForTest does for a lock wait, and to put it back when
+// a walk, as the fslock test hook does for a lock wait, and to put it back when
 // the test ends; no file outside tests sets it.
 var ojSnapshotForTest func()
 
