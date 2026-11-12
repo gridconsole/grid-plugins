@@ -509,6 +509,10 @@ func answersBlock(as []Answer) (string, bool) {
 			b.WriteString(who + " ")
 		}
 		fmt.Fprintf(&b, "%s at %s\n\n", oneLine(a.Kind), oneLine(a.At))
+		if a.Kind == "withdrawn" && strings.TrimSpace(a.Text) == "" {
+			// A withdrawal may give no reason: the line says it all.
+			continue
+		}
 		if marked(tier) {
 			anyFenced = true
 			b.WriteString(fenced(Source{Tier: tier, Pointer: a.Edge}, a.Text))
