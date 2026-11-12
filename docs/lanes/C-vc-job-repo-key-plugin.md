@@ -27,16 +27,16 @@ Main refuses `repo` (planned.go:31 and the job-record schema); it does not accep
 | 1 decode + lint | HOLDS | `go test -count=1 -v -run TestVcRepo ./internal/job/ ./internal/job/lint/` exit 0: PASS TestVcRepoPlannedJobNamesItsRepo, TestVcRepoPlannedJobWithoutRepo, TestVcRepoBriefMetadataKeepsTheRepo, TestVcRepoLintUnknownRepo (one `job.repo` error naming nope, app, plugin), TestVcRepoLintKnownRepo, TestVcRepoLintNoRepoRecord |
 | 2 spawn line | HOLDS | `go test -count=1 -v -run TestVcRepo ./internal/orchestrator/` exit 0: PASS TestVcRepoSpawnLineCarriesTheRepoFolder (`"repo":"/abs/plugin"`, func got `plugin`; Job naming none asks with ""), TestVcRepoNilRepoFuncPrintsNoRepoKey, TestVcRepoFuncErrorIsOneDiagLine |
 | 3 grid worker next | HOLDS | `go test -count=1 -v -run TestVcRepo ./internal/cli/` exit 0: PASS TestVcRepoWorkerNextSpawnCarriesTheRepoFolder (plugin folder for a Job naming plugin, app folder for a Job naming none, the project folder for a one-repo project with repo `.`; the two-repo folder is a temp dir, not a git repo) |
-| 4 contract doc + skill text | NOT DONE (part) | `go test -count=1 ./internal/job/...` exit 0 (TestHfJr* included); `repo` is in contract/schemas/job-record.json (beside `visible`) and docs/job-contract.md (optional-field sentences and table row). The sentences in skills/plan-jobs/SKILL.md and agents/orchestrator.md are NOT DONE: the 60-call budget ran out |
+| 4 contract doc + skill text | HOLDS (finished by C-vc2-job-repo-key-text) | `go test -count=1 -run TestHfJr ./internal/job/` exit 0; `repo` is in contract/schemas/job-record.json and docs/job-contract.md; the sentence is at skills/plan-jobs/SKILL.md:44 and agents/orchestrator.md:25 ("a code Job names its `repo`") |
 | 5 package tests | HOLDS | `go test -count=1 ./internal/job/... ./internal/contract/ ./internal/orchestrator/` exit 0; `go test -count=1 -run 'TestWorkerNext\|TestHsIpWalksEveryCommand\|TestIlGuestSiteList' ./internal/cli` exit 0 |
-| 6 lint, cross, diff | HOLDS if the lane commit exists | `gofmt -w internal/cli/vc_worker_repo_test.go && make lint && make cross && git add -A && git commit`: the commit is made only when lint and cross exit 0. `git diff main --stat` names the Touches plus this file; skills/agents files are absent (row 4) |
+| 6 lint, cross, diff | HOLDS | re-run on the C-vc2 head: `make lint` exit 0 (go vet), `make cross` exit 0 (darwin/arm64 and windows/amd64 vet and test compile); diff names the Touches plus this file |
 | New tests fail on base | HOLDS | base output above |
 | No existing test edited | HOLDS | only new files vc_repo_key_test.go, vc_repo_lint_test.go, vc_spawn_repo_test.go, vc_worker_repo_test.go |
 | No guard, gate, cap or hold | HOLDS | the Repo func error is one diag line and the spawn line still prints (stream.go Repo branch) |
 | Walk tests (plugin) | HOLDS | `./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` exit 0; `./internal/job/lint/` exit 0 (in `./internal/job/...`) |
-| Importers of changed packages (go list) | NOT DONE | not listed for lack of budget; internal/cli (the main importer of orchestrator and jobcmd) ran `TestWorkerNext*` and the walk tests only. The whole-module run is at landing |
-| Runbook-reviewer check | NOT DONE | /srv/gridwork/tmp/hand/runbook-reviewer.txt not read: budget |
-| Small commits | NOT DONE | one commit: budget |
+| Importers of changed packages (go list) | HOLDS | `go list` importers of internal/job, contract, orchestrator, jobcmd: artifact brain braincmd cli feed guard hook intent jobgraph land lease mcp migrate ports question session settings signal task updates usage where workflow (+ job/lint). `go test -count=1` on all exit 0, including full `./internal/cli` (ok 78.9s) |
+| Runbook-reviewer check | HOLDS | read in C-vc2; walk tests `./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` ok, `./internal/job/lint/` ok |
+| Small commits | NOT DONE | the C-vc commit is one; C-vc2 adds a second |
 | Budget | overrun | about 62 tool calls of 60; no work-in-progress bundle at call 35 |
 
 ## What changed
@@ -51,7 +51,6 @@ Main refuses `repo` (planned.go:31 and the job-record schema); it does not accep
 
 ## Open items
 
-- skills/plan-jobs/SKILL.md and agents/orchestrator.md sentence (row 4) still to write.
 - `repo: "."` passes RepoFolder but lint refuses it when the project lists named repos, because roots never puts `.` in f.Repos. The brief does not cover this case.
 
 NOT VERIFIED on a live screen: nothing (no UI).
