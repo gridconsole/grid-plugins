@@ -154,7 +154,7 @@ func TestQhPersonalFlagRefusedEverywhere(t *testing.T) {
 	if strings.Contains(line, "from any other folder") {
 		t.Errorf("the personal line still limits the refusal to other folders: %q", line)
 	}
-	exit := regexp.MustCompile(`fails with `+"`([^`]+)`"+` \(exit ([0-9]+)\)`).FindStringSubmatch(line)
+	exit := regexp.MustCompile(`fails with ` + "`([^`]+)`" + ` \(exit ([0-9]+)\)`).FindStringSubmatch(line)
 	if exit == nil {
 		t.Fatalf("the personal line names no refusal text and exit: %q", line)
 	}
