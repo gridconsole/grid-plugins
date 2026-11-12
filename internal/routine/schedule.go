@@ -244,6 +244,21 @@ func (s Scheduler) Schedule(ctx context.Context, store Store) error {
 	}
 	return nil
 }
+
+// ScheduleOne installs the timer of one routine of this machine and nothing
+// else. It takes the same timer lock as Schedule; a name that is not a routine of
+// the scope fails with the store's own not-found error before any OS call.
+func (s Scheduler) ScheduleOne(ctx context.Context, store Store, name string) error {
+	if err := s.checkGridHome(); err != nil {
+		return err
+	}
+	unlock, err := localdata.Lock(s.GridHome, ".routine-timers.lock")
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return s.install(ctx, store, name)
+}
 func (s Scheduler) install(ctx context.Context, store Store, name string) error {
 	unlock, err := store.lock(name)
 	if err != nil {
@@ -457,4 +472,33 @@ func (s Scheduler) Preview(store Store, remove bool) ([]TimerPlan, error) {
 		plans = append(plans, p)
 	}
 	return plans, nil
+}
+
+// PreviewOne is Preview for one routine name. Scheduling needs the routine to
+// exist on this machine, as ScheduleOne does; removal only needs a valid name, as
+// Unschedule with a name does.
+func (s Scheduler) PreviewOne(store Store, name string, remove bool) ([]TimerPlan, error) {
+	if !remove {
+		if err := s.checkGridHome(); err != nil {
+			return nil, err
+		}
+		e, err := store.Get(name)
+		if err != nil {
+			return nil, err
+		}
+		if e.Machine != gridhome.Machine(s.GridHome) {
+			return nil, fmt.Errorf("routine belongs to another machine")
+		}
+	}
+	p, err := s.plan(store.Project, name)
+	if err != nil {
+		return nil, err
+	}
+	if remove {
+		p.Install = nil
+	} else {
+		p.Remove = nil
+		p.AfterRemove = nil
+	}
+	return []TimerPlan{p}, nil
 }

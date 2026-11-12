@@ -168,7 +168,7 @@
     },
     {
       "name": "task",
-      "summary": "new|show|list|status|lane, stop|close|reopen, history|attach|move, decline|delete|rename|restore|summary",
+      "summary": "new|show|list|status|lane|merge, stop|close|reopen, history|attach|move (grid task help lists all)",
       "built": true,
       "subcommands": [
         {
@@ -321,6 +321,29 @@
           "output": "cmd-task-list.json"
         },
         {
+          "name": "merge",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
           "name": "move",
           "args": [
             "[machine-or-task]"
@@ -369,6 +392,11 @@
             {
               "name": "--json",
               "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--kind",
+              "takes": "value",
               "required": false
             },
             {
@@ -2238,6 +2266,11 @@
               "required": false
             },
             {
+              "name": "--waits-on",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--who",
               "takes": "value",
               "required": false
@@ -2309,6 +2342,11 @@
             },
             {
               "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--waits-on",
               "takes": "value",
               "required": false
             },
@@ -2482,6 +2520,16 @@
             "[files...]"
           ],
           "flags": [
+            {
+              "name": "--base",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--branch",
+              "takes": "value",
+              "required": false
+            },
             {
               "name": "--by",
               "takes": "value",
@@ -3364,6 +3412,11 @@
               "required": false
             },
             {
+              "name": "--replace",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--routine-budget",
               "takes": "value",
               "required": false
@@ -3381,7 +3434,12 @@
             {
               "name": "--run",
               "takes": "value",
-              "required": true
+              "required": false
+            },
+            {
+              "name": "--workflow",
+              "takes": "value",
+              "required": false
             }
           ],
           "json": true,
@@ -3457,7 +3515,9 @@
         },
         {
           "name": "schedule",
-          "args": [],
+          "args": [
+            "[\u003cname\u003e]"
+          ],
           "flags": [
             {
               "name": "--json",
@@ -3475,7 +3535,9 @@
         },
         {
           "name": "unschedule",
-          "args": [],
+          "args": [
+            "[\u003cname\u003e]"
+          ],
           "flags": [
             {
               "name": "--json",
@@ -4522,6 +4584,11 @@
             {
               "name": "--show",
               "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--stream",
+              "takes": "value",
               "required": false
             },
             {

@@ -84,10 +84,64 @@ func (s Interval) Due(now, last time.Time) bool {
 	if !last.IsZero() && !now.Truncate(time.Minute).After(last.UTC().Truncate(time.Minute)) {
 		return false
 	}
-	day, week := s.fields[2][now.Day()], s.fields[4][int(now.Weekday())]
-	dayMatch := day && week
+	return s.matches(now)
+}
+
+// matches reports whether the UTC minute of t satisfies the five cron fields.
+// Due and Next both decide with it, so they cannot drift apart.
+func (s Interval) matches(t time.Time) bool {
+	return s.fields[0][t.Minute()] && s.fields[1][t.Hour()] && s.fields[3][int(t.Month())] && s.dayMatches(t)
+}
+
+// dayMatches is the usual day-of-month/day-of-week OR: when both fields are
+// restricted either may match, otherwise both must.
+func (s Interval) dayMatches(t time.Time) bool {
+	day, week := s.fields[2][t.Day()], s.fields[4][int(t.Weekday())]
 	if !s.wildcard[2] && !s.wildcard[4] {
-		dayMatch = day || week
+		return day || week
 	}
-	return s.fields[0][now.Minute()] && s.fields[1][now.Hour()] && s.fields[3][int(now.Month())] && dayMatch
+	return day && week
+}
+
+// nextWindow is how far Next looks for a minute that matches.
+const nextWindow = 366 * 24 * time.Hour
+
+// Next is the next time the OS timer would start the routine after the instant
+// after, given the last run. A duration counts from last (or is due now when it
+// never ran or is overdue). A cron expression is walked minute by minute with the
+// rules of Due: the minute must be later than the minute of last. It reports false
+// when no minute matches within 366 days of after.
+func (s Interval) Next(after, last time.Time) (time.Time, bool) {
+	after = after.UTC()
+	if s.Duration != 0 {
+		if last.IsZero() {
+			return after, true
+		}
+		if next := last.UTC().Add(s.Duration); next.After(after) {
+			return next, true
+		}
+		return after, true
+	}
+	start := after.Truncate(time.Minute).Add(time.Minute)
+	if !last.IsZero() {
+		if first := last.UTC().Truncate(time.Minute).Add(time.Minute); first.After(start) {
+			start = first
+		}
+	}
+	end := after.Add(nextWindow)
+	for t := start; !t.After(end); {
+		switch {
+		case !s.fields[3][int(t.Month())]:
+			t = time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+		case !s.dayMatches(t):
+			t = time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, time.UTC)
+		case !s.fields[1][t.Hour()]:
+			t = t.Truncate(time.Hour).Add(time.Hour)
+		case s.matches(t):
+			return t, true
+		default:
+			t = t.Add(time.Minute)
+		}
+	}
+	return time.Time{}, false
 }

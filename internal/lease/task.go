@@ -306,6 +306,56 @@ func (s TaskStore) ReleaseTask(w feed.Writer) error {
 	return rewriteTenure(f, append(b, '\n'))
 }
 
+// EndJob ends the grant of Job id: the takeover line is written by end, then the
+// holder is cleared and the file rewritten as ReleaseTask does, all under the
+// exclusive lock of lease/<id>.json and with the task holder required throughout,
+// as GrantJob does. A worker reads the same file and takeovers.jsonl under a
+// shared lock before it lets a child run on, so it sees the end whole or not at
+// all. A Job with no lease file or no holder has nothing to end and is nil; the
+// fence and attempt stay on the file, so a later grant of the same name still
+// takes a higher fence.
+func (s TaskStore) EndJob(task feed.Writer, id string) error {
+	if id == "task" || !job.ValidID(id) {
+		return errors.New("invalid lease name")
+	}
+	return s.Feed.WithLease(task, nil, func() error {
+		f, err := s.open(id, os.O_RDWR)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		if err := fslock.LockExclusive(f); err != nil {
+			return err
+		}
+		defer fslock.Unlock(f)
+		old, err := readTenure(f)
+		if err != nil {
+			return err
+		}
+		if old.Holder == nil {
+			return nil
+		}
+		if old.Lease.Lease != id {
+			return errors.New("lease identity mismatch")
+		}
+		if err := s.end(old); err != nil {
+			return err
+		}
+		old.Holder, old.PID, old.PIDStart = nil, nil, nil
+		b, err := json.Marshal(old)
+		if err == nil {
+			err = contract.Validate("lease", b)
+		}
+		if err != nil {
+			return err
+		}
+		return rewriteTenure(f, append(b, '\n'))
+	})
+}
+
 // GrantJob requires the current task holder throughout the grant and snapshot.
 func (s TaskStore) GrantJob(task feed.Writer, id, to string, attempt int) (t Tenure, err error) {
 	err = s.Feed.WithLease(task, nil, func() error {

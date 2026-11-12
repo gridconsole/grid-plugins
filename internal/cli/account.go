@@ -17,8 +17,10 @@ const accountHelp = `usage: grid account <command> [flags]
   scan [--json]                        the config folders with their login email
   folder --kind K --id ID [--json]     make ~/.<id> and link the person's config into it
   windows [--id ID] [--json]           5-hour and weekly use; "no data" when no source has any
-  note [--dir D] [--then CMD | --show] read status line JSON on stdin and keep its rate_limits;
-                                       --then runs CMD after, --show prints "5h 42% · 7d 18%"
+  note [--dir D] [--then CMD | --show | --stream LOG]
+                                       read status line JSON on stdin and keep its rate_limits;
+                                       --then runs CMD after, --show prints "5h 42% · 7d 18%",
+                                       --stream keeps the rate_limit_event lines of an attempt log
   statusline [on|off] [--json]         install (or take out) the status line that feeds the windows,
                                        keeping the person's own status line command;
                                        with no word it reads whether it is on and changes nothing
@@ -185,12 +187,23 @@ func accountNote(args []string, env Env) int {
 	fs.Bool("json", false, "accepted for uniformity; note prints nothing")
 	then := fs.String("then", "", "keep the numbers, then run this command with the same stdin and pass its stdout through")
 	show := fs.Bool("show", false, "keep the numbers, then print one short line such as `5h 42% · 7d 18%`")
+	stream := fs.String("stream", "", "keep the rate-limit windows from this attempt log (stream-json) instead of reading stdin")
 	if code, stop := parse(fs, args, env); stop {
 		return code
 	}
 	core := accountCoreEnv(env)
 	if *dir == "" {
 		*dir = account.ConfigDir(core)
+	}
+	if *stream != "" {
+		if *then != "" || *show {
+			fmt.Fprintln(env.Stderr, "account note: --stream reads a file and cannot be combined with --then or --show")
+			return 2
+		}
+		if err := account.NoteStream(core, *stream, *dir); err != nil {
+			return accountFail(env, "note", err)
+		}
+		return 0
 	}
 	var in io.Reader = env.Stdin
 	if in == nil {

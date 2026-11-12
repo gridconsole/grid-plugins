@@ -1,0 +1,41 @@
+# C-ta-cancel-ends-grant: a Job cancelled by a control ends its grant
+
+Base: c7c10553 (the clone's main). The base check holds: `git grep -n "func (s TaskStore) end" main -- internal/lease/task.go` shows the private `end` at :406 and no pass that ends a Cancelled Job's grant exists (`grep -rn "Cancelled" internal/lease internal/feed --include=*.go` finds only feed/questions.go:155, a question about a cancelled Job, so nothing in lease or feed reads the status to end a grant; the private `end` is not exported and had two callers, ReleaseTask and grant).
+Code head: 71be2a9c (lane-C-ta-cancel-ends-grant). The docs commit after it adds only this file.
+
+## Proof table
+
+| Row | Result | Proof |
+|---|---|---|
+| 1 `TestTaCancelEndsGrant` | HOLDS | `go test -count=1 -v -run 'TestTaCancel' ./internal/orchestrator/` exit 0: `--- PASS: TestTaCancelEndsGrant (0.29s)`. After ack and the control, `Read("J-1")` has a nil Holder, fence kept, and takeovers.jsonl holds exactly one line whose `file` is `worker@01ARZ3NDEKTSV4RRFFQ69G5FAW.2.jsonl` (`<holder>.<fence>.jsonl`, the grant's own holder and fence read before the cancel). Test: ta_cancel_ends_grant_test.go:`TestTaCancelEndsGrant`. |
+| 1 red on base | HOLDS | With base tick.go (`git checkout c7c10553 -- internal/orchestrator/tick.go`, then restored with `git checkout HEAD -- ...`, `git status --short` clean): `ta_cancel_ends_grant_test.go:106: grant of J-1 still names worker@01ARZ3NDEKTSV4RRFFQ69G5FAW (fence 2), want no holder` / `--- FAIL: TestTaCancelEndsGrant (0.24s)`; same line and `--- FAIL: TestTaCancelOnce (0.20s)`; exit 1. |
+| 2 `TestTaCancelRunningKeepsGrant` | HOLDS | Same run: `--- PASS: TestTaCancelRunningKeepsGrant (0.23s)`. After the second tick J-1 is not Cancelled, the holder and fence are unchanged and takeovers.jsonl has no line. It passes on base too (it guards the lane against ending a running Job's grant). |
+| 3 `TestTaCancelOnce` | HOLDS | Same run: `--- PASS: TestTaCancelOnce (0.62s)`. After the ending tick, two more ticks leave exactly one line for that file name; `f.tick` fails the test on any tick error. |
+| 4 lease and orchestrator tests | HOLDS | `go test -count=1 ./internal/lease/... ./internal/orchestrator/...` exit 0: `ok .../internal/lease 0.104s`, `ok .../internal/orchestrator 133.225s`. TestGkReplanNotForControlCancel passes (named run: 6 `--- PASS` for the five TestTaCancel tests plus it). |
+| 5 `make lint` | HOLDS | exit 0 (`go vet ./...`, no output after it). `gofmt -l internal/lease internal/orchestrator` printed nothing. |
+| 5 `make cross` | HOLDS | exit 0: `cross: darwin/arm64 vet`, `test compile`, `cross: windows/amd64 vet`, `test compile`, every package `ok` or `no test files`. |
+| Importers of the changed packages | HOLDS | `go list -f '{{.ImportPath}} {{join .Imports " "}} {{join .TestImports " "}} {{join .XTestImports " "}}' ./...` filtered on lease or orchestrator gives: internal/cli, internal/hook, internal/job/jobcmd, internal/lease, internal/mcp, internal/migrate, internal/orchestrator, internal/ports. `go test -count=1 ./internal/cli/... ./internal/hook/... ./internal/job/jobcmd/... ./internal/mcp/... ./internal/migrate/... ./internal/ports/...` exit 0: cli 68.4s, hook 14.4s, jobcmd 4.9s, mcp 0.5s, migrate 17.6s, ports 3.8s, all `ok`. |
+| Walk tests (plugin) | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` exit 0 `ok .../internal/cli 0.182s`; `go test -count=1 ./internal/job/lint/` exit 0 `ok .../internal/job/lint 0.155s`. The app-only walk tests (`make webui-test`, TestFvArgvCollects, TestEveryWiredMount, slices Imports) are for the app repo and do not apply here. |
+| Edits only inside Touches | HOLDS | `git diff --stat c7c10553..HEAD` names internal/lease/task.go, internal/orchestrator/ta_cancel_grant.go, internal/orchestrator/tick.go (3 lines), internal/orchestrator/ta_cancel_ends_grant_test.go, and this doc. No change to internal/feed, stream.go or write.go. |
+| Helper names | HOLDS | Every package-level name in the two new files starts with `taCancel`; tests start with `TestTaCancel`. The exported method is `TaskStore.EndJob`. |
+| Tests new, none edited or deleted | HOLDS | Only the new test file was added; no existing test touched. |
+| No guard, gate, cap, hold or blocking hook | HOLDS | The pass ends a grant and posts nothing: it refuses, holds and counts nothing, and no agent is blocked. |
+| Needs the built plugin (`*RealPlugin*`) | n/a | No row names one. |
+
+## What changed
+
+- internal/lease/task.go:309 `TaskStore.EndJob(task feed.Writer, id string) error`: inside `Feed.WithLease(task, ...)` (the task holder is required throughout, as in GrantJob) it opens lease/<id>.json, takes the exclusive lock, reads the tenure, and when a Holder is set calls `end(old)` (the takeovers.jsonl line `<holder>.<fence>.jsonl`), clears Holder, PID and PIDStart and rewrites the file, as ReleaseTask does at :295-306. No file or no holder is nil (nothing to end), so the pass is idempotent. `task` and a name that is no Job id are refused, so it cannot end the task lease.
+- internal/orchestrator/ta_cancel_grant.go: `Store.taCancelEndGrants(snap)` reads each Job of the snapshot with Status Cancelled, `TaskStore.Read(id)`, and ends it with EndJob when the tenure has a Holder. A Job with no lease file (never granted, a person Job) is skipped. Accepted and Rejected Jobs are not touched.
+- internal/orchestrator/tick.go: one call after the `guReplanPersonCancelled` block, inside the tick that holds the task lease and the orchestrator lock.
+- internal/orchestrator/ta_cancel_ends_grant_test.go: TestTaCancelEndsGrant, TestTaCancelRunningKeepsGrant, TestTaCancelOnce, plus TestTaCancelEndJobRefusesTaskLease and TestTaCancelNeverGranted (a Job cancelled before its grant has no lease file; the tick ends nothing and returns no error).
+
+Concurrency, for the review: EndJob takes lease/<id>.json exclusively, then takeovers.jsonl (inside `end`), the order `grant` uses (it then takes seq). A worker's post holds the same file shared through `leaseLock` (feed/store.go:126-157) and reads takeovers.jsonl inside that lock, so an in-flight post finishes before the end, and a post after it sees both the cleared holder and the takeover line: ErrStaleLease. The orchestrator lock is taken before the Job lease in tick (assign → GrantJob) and in write.go (Write → Post), and EndJob follows that order. A crash between the takeover line and the rewrite leaves the line without the cleared holder; the next tick's `end` returns early on the line and the holder is cleared then. After the end the lease file keeps its fence, so a later grant of the same name takes a higher fence from lease/seq.
+
+## Open items and NOT VERIFIED
+
+- Closed task path not covered: `Store.pgClosedCancel` (pg_closed_task.go:70, the path that raised the open item) posts the cancels and the stream then gives the task lease back without ticking (:98-124), so it never reaches this pass. A child of a Job cancelled by `grid task stop` keeps running until a tick ends its grant (a reopen's next tick would). One call to `s.taCancelEndGrants(snap)` after the cancel loop at pg_closed_task.go:92, inside the lock it already holds, covers it; that file is outside this brief's Touches, so it is a follow-up.
+- A worker-cancelled Job (exit reason cancelled, tick.go:290) is also a Cancelled Job, so its grant is ended too. Its child has already exited, so the only change is a takeover line and a cleared holder. No existing test reads lease/J-1.json after that path (the orchestrator suite is green).
+- A corrupt lease file of a Cancelled Job makes `taCancelEndGrants` return an error and the tick fail until it is repaired. `Read` validates the file against the lease schema, the same read GrantJob and WithLease do, so a Job with such a file cannot be granted or posted to either. Not changed: the brief asks for no skip, and a silent skip would hide a child that runs on.
+- NOT VERIFIED on a live screen or with the app worker: that the app worker then stops the child. The plugin side writes what the app reads (the takeover line `file` of the form `<holder>.<fence>.jsonl` and a lease with no holder; app job.go:126-134 per the brief). That read is in the app repo and was not run here.
+
+Verdict: DONE

@@ -223,7 +223,8 @@
                       "enum": [
                         "withdrawn",
                         "aged",
-                        "defaulted"
+                        "defaulted",
+                        "waiting"
                       ]
                     },
                     "text": {
@@ -304,6 +305,18 @@
             "fence": {
               "type": "integer",
               "minimum": 1
+            },
+            "body": {
+              "not": {
+                "required": [
+                  "question_event"
+                ],
+                "properties": {
+                  "question_event": {
+                    "const": "waiting"
+                  }
+                }
+              }
             }
           }
         },
@@ -342,7 +355,10 @@
                   "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
                 },
                 "question_event": {
-                  "const": "withdrawn"
+                  "enum": [
+                    "withdrawn",
+                    "waiting"
+                  ]
                 },
                 "text": {
                   "type": "string"

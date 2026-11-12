@@ -454,7 +454,7 @@ func TestTaskAttachTakeoverAdvice(t *testing.T) {
 				}
 				advice = h.errb.String()
 			}
-			if !strings.Contains(advice, "grid lease take-over") || !strings.Contains(advice, rec.Holder) {
+			if !strings.Contains(advice, "grid lease take <task> --takeover") || !strings.Contains(advice, rec.Holder) {
 				t.Fatalf("missing advice: %s", advice)
 			}
 			after, err := sessions.ReadHeartbeat(rec)

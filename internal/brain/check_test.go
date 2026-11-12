@@ -53,6 +53,15 @@ func chkWant(t *testing.T, r CheckResult, want ...string) {
 }
 
 func TestCheckConfigTopic(t *testing.T) {
+	step := map[string]string{
+		"workflows":    "run grid workflow write",
+		"environments": "set it with grid setup <project> --answers <file>",
+		"machines":     "machines join from the Grid app's Devices page",
+		"deploy":       "set it with grid setup <project> --answers <file>",
+		"people":       "people join through the Grid app; grid person show lists them",
+		"routines":     "run grid routine add",
+		"agents":       "run grid agent set",
+	}
 	for _, topic := range []string{"workflows", "environments", "machines", "deploy", "people", "routines", "agents"} {
 		s := chkStore(t)
 		chkProposal(t, s, "p1", topic, "proposed", "x\n")
@@ -62,7 +71,7 @@ func TestCheckConfigTopic(t *testing.T) {
 		}
 		chkWant(t, r, CheckConfigTopic)
 		f := r.Findings[0]
-		if f.Message != "config: run grid "+topic || f.Line == 0 || f.File != "brain:home/brain-proposals/p1.md" {
+		if f.Message != "config: "+step[topic] || f.Line == 0 || f.File != "brain:home/brain-proposals/p1.md" {
 			t.Fatalf("finding: %+v", f)
 		}
 	}

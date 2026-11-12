@@ -174,6 +174,8 @@ func (s Store) Index() (Index, error) {
 // remain available in Index.Topics; topics lists every definition.
 func SessionStartText(rows []TopicRow) string {
 	const budget = 1200
+	const readStep = "Read a note: grid brain search --topic <topic> <words>, then grid brain show <id>.\n"
+	const reserve = 60 + len(readStep)
 	var b strings.Builder
 	b.WriteString("Brain: project knowledge first, then home knowledge.\n")
 	b.WriteString("topic | description | entries | last_change | invalid\n")
@@ -191,12 +193,14 @@ func SessionStartText(rows []TopicRow) string {
 			desc = truncate(desc, 77) + "..."
 		}
 		line := fmt.Sprintf("%s | %s | %d | %s | %d\n", row.Topic, desc, row.Entries, date, row.Invalid)
-		if b.Len()+len(line)+80 > budget {
+		// The reserve holds the cut banner (under 60 bytes) and the closing line.
+		if b.Len()+len(line)+reserve > budget {
 			fmt.Fprintf(&b, "%d topics cut; grid brain topics lists them.\n", len(rows)-i)
 			break
 		}
 		b.WriteString(line)
 	}
+	b.WriteString(readStep)
 	return b.String()
 }
 
