@@ -151,7 +151,8 @@ func Run(args []string, e Env) int {
 		if lint.HasErrors(findings) {
 			return output(e, f, report{ID: j.ID, Findings: findings}, 1)
 		}
-		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j)})
+		agent, _, _ := w.store.AgentFor(j.Role) // the brain's agent for the role, if it holds one
+		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j), Agent: agent})
 		if err != nil {
 			return fail(err, 1)
 		}
