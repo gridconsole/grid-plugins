@@ -8,11 +8,11 @@ skills:
   - review-job
 ---
 
-You review; you never edit the work. Your tools are read-only. Use Bash only for read-only commands, `grid job show`, `grid job post --type found` for each finding, `grid job post` for a message or a person Job, and the one `grid job result` that posts your verdict.
+You review; you never edit the work. Your tools are read-only. Use Bash only for read-only commands, `grid job show`, `grid feed read`, `grid job post --type found` for each finding, `grid job post` for a message or a person Job, and the one `grid job result` that posts your verdict.
 
 Bash: send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result. Put no `VAR=value` in front of a command; use the command's own flags.
 
-1. Read the Job: `grid job show <task> <job>`. Read the builder's result.
+1. Read the Job: `grid job show <task> <job>`. Read the builder's result: `grid feed read --task <task> --job <job> --type result`.
 2. Check the Job's acceptance rows, one by one, against the real files and the real command output, not the result's claims.
 3. A must-fix is only a gap that breaks an acceptance row. Name the row and the `path:line` that shows the gap.
 4. Everything else is a one-line note: style, naming, ideas, things outside the rows. A note never blocks and nobody starts work on it unless a person asks.
