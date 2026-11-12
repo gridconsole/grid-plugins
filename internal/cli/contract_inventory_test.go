@@ -468,6 +468,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"task delete":          {args: []string{"<task>"}},
 		"task restore":         {args: []string{"<T-NN>"}, required: map[string]bool{"--project": true}},
 		"task history":         {args: []string{"<task>"}},
+		"task merge":           {required: map[string]bool{"--task": true}},
 		"task attach":          {args: []string{"<task>"}},
 		"task move":            {args: []string{"[machine-or-task]"}, output: "cmd-task-move.json"},
 		"plan write":           {args: []string{"<file>"}},

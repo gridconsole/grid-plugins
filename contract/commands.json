@@ -321,6 +321,29 @@
           "output": "cmd-task-list.json"
         },
         {
+          "name": "merge",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": true
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
           "name": "move",
           "args": [
             "[machine-or-task]"
