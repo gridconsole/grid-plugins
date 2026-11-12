@@ -132,7 +132,7 @@ func commands() []command {
 		{"open", "open the task page in the browser", runOpen},
 		{"doctor", "check machine health and collect a support bundle", runDoctor},
 		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels", runHook},
-		{"task", "new|show|list|status|lane, stop|close|reopen, history|attach|move, decline|delete|rename|restore|summary", runTask},
+		{"task", "new|show|list|status|lane|merge, stop|close|reopen, history|attach|move (grid task help lists all)", runTask},
 		{"plan", "write, check, items, hash, diff, migrate", runPlan},
 		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace", runOrchestratorJob},
 		{"lease", "take, release, status (task lease)", runTaskLease},
@@ -195,7 +195,11 @@ func Run(args []string, env Env) (exit int) {
 		env.failure = f
 		env.Stdout = &f.stdout
 		env.Stderr = io.MultiWriter(env.Stderr, &f.stderr)
-		defer func() { f.finish(args, exit) }()
+		defer func() {
+			// A write that met a full disk leaves with 4, as the Feed append does.
+			exit = qwEnFinishExit(exit, f.err)
+			f.finish(args, exit)
+		}()
 	}
 	if len(args) == 0 {
 		printHelp(env.Stdout)

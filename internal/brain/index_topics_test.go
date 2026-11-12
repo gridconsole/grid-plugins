@@ -206,7 +206,7 @@ func TestSessionStartTextCutsLongDescription(t *testing.T) {
 	line := func(desc string) string {
 		text := SessionStartText([]TopicRow{{Topic: "x", Description: desc}})
 		lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
-		return lines[len(lines)-1]
+		return lines[len(lines)-2] // the last line is the closing read step
 	}
 	if got, want := line(strings.Repeat("a", 200)), "x | "+strings.Repeat("a", 77)+"... | 0 | - | 0"; got != want {
 		t.Fatalf("200 bytes: %q", got)
@@ -220,7 +220,7 @@ func TestSessionStartTextCutsLongDescription(t *testing.T) {
 	}
 	// Pipes cannot break the table, white space collapses, a date keeps 10 bytes.
 	text := SessionStartText([]TopicRow{{Topic: "x", Description: "a|b  \n c", LastChange: "2026-03-02T08:30:00Z", Entries: 3, Invalid: 1}})
-	if !strings.HasSuffix(text, "x | a/b c | 3 | 2026-03-02 | 1\n") {
+	if !strings.Contains(text, "x | a/b c | 3 | 2026-03-02 | 1\nRead a note: ") {
 		t.Fatalf("row format: %q", text)
 	}
 }
@@ -239,8 +239,11 @@ func TestSessionStartTextElidesOverflowWithinBudget(t *testing.T) {
 		t.Fatalf("%d rows shown", shown)
 	}
 	banner := fmt.Sprintf("%d topics cut; grid brain topics lists them.\n", 40-shown)
-	if !strings.HasSuffix(text, banner) {
+	if !strings.Contains(text, banner) {
 		t.Fatalf("banner %q missing: %s", banner, text)
+	}
+	if !strings.HasSuffix(text, "then grid brain show <id>.\n") {
+		t.Fatalf("closing line is not last: %s", text)
 	}
 	// A short table needs no banner.
 	if short := SessionStartText(rs[:3]); strings.Contains(short, "cut") {
@@ -259,7 +262,7 @@ func TestSessionStartTextCutsMultibyteOnRuneBoundary(t *testing.T) {
 				t.Fatalf("invalid UTF-8: %q", text)
 			}
 			want := "x | " + strings.Repeat(tc.unit, tc.keep) + "... | 0 | - | 0\n"
-			if !strings.HasSuffix(text, want) {
+			if !strings.Contains(text, want+"Read a note: ") {
 				t.Fatalf("cut: %q", text)
 			}
 		})
