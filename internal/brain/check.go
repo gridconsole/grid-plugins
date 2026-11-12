@@ -47,6 +47,18 @@ var (
 	runningSkillFields   = map[string]bool{"allowed-tools": true, "hooks": true, "shell": true, "context": true, "agent": true, "model": true}
 )
 
+// configTopicSteps is the step the config_topic finding names for each config
+// topic: a command the plugin has, or where in the Grid app the change is made.
+var configTopicSteps = map[string]string{
+	"workflows":    "run grid workflow write",
+	"environments": "set it with grid setup <project> --answers <file>",
+	"deploy":       "set it with grid setup <project> --answers <file>",
+	"agents":       "run grid agent set",
+	"routines":     "run grid routine add",
+	"people":       "people join through the Grid app; grid person show lists them",
+	"machines":     "machines join from the Grid app's Devices page",
+}
+
 // CheckProposal checks one proposal, whatever its status. It writes nothing.
 func (s Store) CheckProposal(level, name string) (CheckResult, error) {
 	if !ValidName(name) {
@@ -188,7 +200,7 @@ func checkProposalBytes(level, name string, n Note, b []byte, res *CheckResult) 
 				break
 			}
 		}
-		res.add(CheckConfigTopic, scoped(level, "brain-proposals/"+name+".md"), line, "config: run grid "+topic, topic)
+		res.add(CheckConfigTopic, scoped(level, "brain-proposals/"+name+".md"), line, "config: "+configTopicSteps[topic], topic)
 	}
 	return nil
 }
