@@ -53,7 +53,7 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
                              Record a proposal (same flags as propose); the curator decides it.
   keep accept <id>           File the proposal as a linked note (same as accept <id>).
   keep refuse <id> [--why <reason>]  Record a refusal (same as accept <id> --reject).
-  decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>]
+  decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--link <json>]...
   accept <id>                File a proposal through the keeper gates.
   accept <id> --reject <why>  Record a rejection.
   check [<proposal-id>]      Read-only gate: flag proposals, skills and agents that change what runs.
