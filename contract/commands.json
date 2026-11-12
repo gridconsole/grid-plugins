@@ -2243,6 +2243,11 @@
               "required": false
             },
             {
+              "name": "--waits-on",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--who",
               "takes": "value",
               "required": false
@@ -2314,6 +2319,11 @@
             },
             {
               "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--waits-on",
               "takes": "value",
               "required": false
             },
