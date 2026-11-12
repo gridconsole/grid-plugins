@@ -1,0 +1,158 @@
+{
+  "errors_renamed": [],
+  "files": [
+    {
+      "project": null,
+      "rev": null,
+      "scope": "workspace",
+      "text": ""
+    },
+    {
+      "project": "example",
+      "rev": "aa63318bcaf7",
+      "scope": "project",
+      "text": "# Workflows\n\n## Social post\napplies when: project example, or label social\napprovers: sam, robin\nrepeat: Mondays at 09:00\nreview rounds: 2\n\n| # | step | kind | who | on reject, back to |\n|---|---|---|---|---|\n| 1 | Write the posts together | make-together | you and grid-designer |  |\n| 2 | Check the copy | check | grid-runner | Write the posts together |\n| 3 | Robin approves the posts | approve | robin | Write the posts together |\n| 4 | Post on schedule | schedule | the scheduler |  |\n\n## Rate change\napplies when: the title has rates\nonly for project: example\napprovers: sam\nlead time: a week ahead\nbatch: One task holds the whole week\nreview rounds: 3\nresearch: first\n\n| # | step | kind | who | runs | sizes | on reject, back to |\n|---|---|---|---|---|---|---|\n| 1 | Accept the plan | ask | grid-planner asks, you answer |  | N L |  |\n| 2 | Do the work | run | grid-builder | /grid:worker | all |  |\n| 3 | Approve the result | approve | sam |  | all | Do the work |\n| 4 | Ship | schedule | the scheduler |  | all |  |\n"
+    }
+  ],
+  "templates": [
+    {
+      "applies": [
+        {
+          "by": "project",
+          "v": "example"
+        },
+        {
+          "by": "label",
+          "v": "social"
+        }
+      ],
+      "approvers": [
+        "sam",
+        "robin"
+      ],
+      "batch": null,
+      "default": false,
+      "file": "example/workflows.md",
+      "lead": null,
+      "name": "Social post",
+      "only": null,
+      "openTasks": [],
+      "overrides": null,
+      "repeat": "Mondays at 09:00",
+      "research": false,
+      "rounds": 2,
+      "steps": [
+        {
+          "agent": "grid-designer",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "make-together",
+          "name": "Write the posts together",
+          "runs": null,
+          "sizes": "SNL"
+        },
+        {
+          "agent": "grid-runner",
+          "approver": null,
+          "approvers": null,
+          "back": "Write the posts together",
+          "kind": "check",
+          "name": "Check the copy",
+          "runs": null,
+          "sizes": "SNL"
+        },
+        {
+          "agent": null,
+          "approver": "robin",
+          "approvers": [
+            "robin"
+          ],
+          "back": "Write the posts together",
+          "kind": "approve",
+          "name": "Robin approves the posts",
+          "runs": null,
+          "sizes": "SNL"
+        },
+        {
+          "agent": null,
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "schedule",
+          "name": "Post on schedule",
+          "runs": null,
+          "sizes": "SNL"
+        }
+      ],
+      "usedIn": []
+    },
+    {
+      "applies": [
+        {
+          "by": "title",
+          "v": "rates"
+        }
+      ],
+      "approvers": [
+        "sam"
+      ],
+      "batch": "One task holds the whole week",
+      "default": false,
+      "file": "example/workflows.md",
+      "lead": "a week ahead",
+      "name": "Rate change",
+      "only": "example",
+      "openTasks": [],
+      "overrides": null,
+      "repeat": null,
+      "research": true,
+      "rounds": 3,
+      "steps": [
+        {
+          "agent": "grid-planner",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "ask",
+          "name": "Accept the plan",
+          "runs": null,
+          "sizes": "NL"
+        },
+        {
+          "agent": "grid-builder",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "run",
+          "name": "Do the work",
+          "runs": "/grid:worker",
+          "sizes": "SNL"
+        },
+        {
+          "agent": null,
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "back": "Do the work",
+          "kind": "approve",
+          "name": "Approve the result",
+          "runs": null,
+          "sizes": "SNL"
+        },
+        {
+          "agent": null,
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "schedule",
+          "name": "Ship",
+          "runs": null,
+          "sizes": "SNL"
+        }
+      ],
+      "usedIn": []
+    }
+  ]
+}

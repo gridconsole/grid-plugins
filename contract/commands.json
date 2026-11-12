@@ -3815,7 +3815,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-workflow-show.json"
         },
         {
           "name": "write",
@@ -3843,7 +3843,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-workflow-write.json"
         }
       ]
     },
