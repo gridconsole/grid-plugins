@@ -109,7 +109,7 @@ A Job with role orchestrator and skills plan-jobs, titled "Re-plan after <cancel
 
 1. Read the cancelled Job and why it stopped: `grid job show <job> --task <task>` (its `exit_code` and result), then `grid job tree --task <task>` for the Jobs that wait on it.
 2. Decide for each waiter, by the task's goal: keep it, or cancel it.
-3. Keep: post a replacement for the cancelled Job (`grid job post --task <task> --body <json>`, lint first) and point the waiter's `after` at it, so the waiter can still run.
+3. Keep: post the cancelled Job's work again as a new Job with a new id (`grid job post --task <task> --type job --body <json>`, lint first), and cancel each waiter on the dead Job and post it again as a new Job whose `after` names the replacement; a posted Job is never edited.
 4. Cancel: a waiter that can no longer run or no longer matters is stopped with `grid job cancel --task <task> --job <job> --reason <why>`.
 5. A step only a person can do is a person Job (`grid job post --task <task> --person <name>`), as in the owner decisions above.
 6. Post each replacement by the checks above, then read `grid job tree --task <task>`: no waiter is left waiting on the cancelled Job.
@@ -121,6 +121,6 @@ Then run, in this order:
 - `grid job lint <file> --task <task>` for each Job file;
 - `grid job cycles <items.json>` for a list;
 - `grid plan check` for a plan;
-- `grid job post --task <task> --body <json>` once each check exits 0, after the Jobs it names in `after`.
+- `grid job post --task <task> --type job --body <json>` once each check exits 0, after the Jobs it names in `after`.
 
 Done: every Job posted passed the seven checks and `grid job tree --task <task>` shows it.
