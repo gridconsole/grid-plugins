@@ -230,6 +230,11 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
+		// The post is written and every lock Post took is released. Refold so
+		// Needs you is current without a tick. A fold error leaves the answer as
+		// it is: the post stands and the next fold repairs the files. The server
+		// has no stderr (stdout carries the protocol), so the error is not shown.
+		_, _ = store.SaveState()
 		return render(map[string]any{"post": post, "tier": post.Tier, "data": post.Data()}, []feed.Record{post})
 	}
 }

@@ -53,10 +53,21 @@ func posts(read ReadResult) []contract.Post {
 // SaveState serializes concurrent folds and atomically publishes each projection.
 // Readers needing an indivisible snapshot should use State or state.json, which
 // includes needs_you as well as the separately published needs-you.json.
-func (s Store) SaveState() (contract.State, error) { return s.SaveStateLiveness(nil) }
+//
+// SaveState carries no observations of its own, so it keeps the ones the last
+// tick wrote: for each Job whose assign_post and status are unchanged, the
+// "liveness" already in state.json stays. A post front end refolds through here
+// and must not blank the Agents view until the next tick.
+func (s Store) SaveState() (contract.State, error) { return s.saveState(nil, true) }
 
 // SaveStateLiveness overlays holder observations for display only, never for folding.
+// The map is the whole overlay: an empty one says nothing is observed and drops
+// what state.json held, so a tick that sees no holder clears the old values.
 func (s Store) SaveStateLiveness(liveness map[string]string) (contract.State, error) {
+	return s.saveState(liveness, false)
+}
+
+func (s Store) saveState(liveness map[string]string, keep bool) (contract.State, error) {
 	if err := s.prepare(); err != nil {
 		return contract.State{}, err
 	}
@@ -75,6 +86,10 @@ func (s Store) SaveStateLiveness(liveness map[string]string) (contract.State, er
 	state, err := s.State()
 	if err != nil {
 		return contract.State{}, err
+	}
+	if keep && len(liveness) == 0 {
+		// Still under fold.lock, the only lock any writer of state.json takes.
+		liveness = keptLiveness(s.Dir(), state)
 	}
 	var projection any = state
 	if len(liveness) > 0 {
@@ -102,6 +117,37 @@ func (s Store) SaveStateLiveness(liveness map[string]string) (contract.State, er
 	}
 	return state, nil
 }
+
+// keptLiveness returns the "liveness" values state.json holds for Jobs that are
+// the same in state: same assign_post (the same assignment, so the same holder)
+// and same status. A Job that was reassigned or moved on is not listed, so an
+// observation of its old holder does not outlive it. A missing or undecodable
+// file keeps nothing; it is not an error, the next tick writes the values again.
+func keptLiveness(dir string, state contract.State) map[string]string {
+	data, err := os.ReadFile(filepath.Join(dir, "state.json"))
+	if err != nil {
+		return nil
+	}
+	var old struct {
+		Jobs map[string]struct {
+			Liveness   string `json:"liveness"`
+			AssignPost string `json:"assign_post"`
+			Status     string `json:"status"`
+		} `json:"jobs"`
+	}
+	if json.Unmarshal(data, &old) != nil {
+		return nil
+	}
+	kept := map[string]string{}
+	for id, was := range old.Jobs {
+		now, ok := state.Jobs[id]
+		if ok && was.Liveness != "" && was.AssignPost == now.AssignPost && was.Status == string(now.Status) {
+			kept[id] = was.Liveness
+		}
+	}
+	return kept
+}
+
 func writeProjection(dir, name string, v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
