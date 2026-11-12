@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	gridplugins "github.com/gridconsole/grid-plugins"
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -156,6 +157,7 @@ func runWorkerNext(args []string, env Env) int {
 		Out: env.Stdout, Diag: diag,
 		Tasks: func() ([]string, error) { return workerTaskDirs(env) },
 		Model: func(dir, role string) (string, string, error) { return workerSpawnModel(env, dir, role) },
+		Tools: func(dir, role string) ([]string, error) { return workerSpawnTools(env, dir, role) },
 		// A task whose first Job was never posted gets the same J-1 grid task new posts.
 		FirstJob: firstJobOf,
 		// The pass moves an old approval receipt into the task's Feed once, under the task lease.
@@ -235,6 +237,95 @@ func workerSpawnModel(env Env, dir, role string) (string, string, error) {
 		return "", "", err
 	}
 	return st.ModelForWith(role, settings.Agent{Model: fm.Model, Effort: fm.Effort})
+}
+
+// workerSpawnTools is the tool names the agent that runs a Job of the given role names
+// in its `tools:` front matter, for the task folder dir, in the order the file gives
+// them. The agent is the one the Job's Instructions come from: the brain agent the
+// project or the home holds for the role, else the plugin's own agents/<role>.md. The
+// two are never merged: a brain agent with no `tools:` answers nil, as does a role with
+// no agent file. Nothing is added, removed or checked here; the worker decides what to
+// do with the names.
+func workerSpawnTools(env Env, dir, role string) ([]string, error) {
+	project := filepath.Base(filepath.Dir(filepath.Dir(dir))) // the project workerSpawnModel reads
+	md, _, ok := (brain.Store{GridHome: env.GridHome, Project: project}).AgentFor(role)
+	if !ok {
+		md, ok = gridplugins.AgentFor(contract.NormalizeRole(role))
+	}
+	if !ok {
+		return nil, nil
+	}
+	return beAgentTools(md), nil
+}
+
+// beToolsFragment is the lines of the one top-level `tools:` key of a front matter: the
+// key line and the indented or `- ` lines under it. Only these lines are parsed, so a
+// description elsewhere in the file that is not strict YAML (agents/builder.md has a
+// ": " in its description) does not hide the tools. No `tools:` key, or two, is no
+// fragment.
+func beToolsFragment(front []byte) ([]byte, bool) {
+	var frag []string
+	keys := 0
+	in := false
+	for _, l := range strings.Split(string(front), "\n") {
+		trimmed := strings.TrimSpace(l)
+		switch {
+		case strings.HasPrefix(l, "tools:"):
+			keys++
+			in = true
+			frag = append(frag, l)
+		case in && (trimmed == "" || l[0] == ' ' || l[0] == '\t' || l[0] == '-' || l[0] == '#'):
+			frag = append(frag, l)
+		default:
+			in = false
+		}
+	}
+	return []byte(strings.Join(frag, "\n")), keys == 1
+}
+
+// beAgentTools is the `tools:` of an agent file's front matter, read as a
+// comma-separated string or as a list. Each entry is trimmed; empty entries and
+// repeats are dropped and the order is kept. A file with no `tools:`, a `tools:`
+// that does not parse, and a value of any other shape (a map, a number, a list that
+// holds a non-string) give nil, as workerSpawnModel treats a model that is not a
+// plain string.
+func beAgentTools(md string) []string {
+	front, _, err := mdfile.Split([]byte(md))
+	if err != nil {
+		return nil
+	}
+	frag, ok := beToolsFragment(front)
+	if !ok {
+		return nil
+	}
+	var fm struct {
+		Tools any `yaml:"tools"`
+	}
+	if mdfile.Load(frag, &fm, false) != nil {
+		return nil
+	}
+	var raw []string
+	switch v := fm.Tools.(type) {
+	case string:
+		raw = strings.Split(v, ",")
+	case []any:
+		for _, e := range v {
+			s, ok := e.(string)
+			if !ok {
+				return nil
+			}
+			raw = append(raw, s)
+		}
+	default:
+		return nil
+	}
+	var tools []string
+	for _, r := range raw {
+		if r = strings.TrimSpace(r); r != "" && !slices.Contains(tools, r) {
+			tools = append(tools, r)
+		}
+	}
+	return tools
 }
 
 type writerFunc func([]byte) (int, error)
