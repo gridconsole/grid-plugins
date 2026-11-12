@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -198,6 +199,14 @@ func runRoutine(args []string, env Env) int {
 		name := ""
 		if named {
 			name = fs.Arg(0)
+		}
+		// Timers start the launcher in the Grid home, which survives a plugin update, when it is there.
+		if env.GridHome != "" {
+			// Stat follows the link: one whose target an update removed falls back to the executable.
+			launcher := routine.LauncherPath(env.GridHome)
+			if info, statErr := os.Stat(launcher); statErr == nil && info.Mode().IsRegular() {
+				binary = launcher
+			}
 		}
 		scheduler := routine.Scheduler{Home: env.Home, GridHome: env.GridHome, Binary: binary, Path: env.getenv("PATH"), Backend: routine.NativeBackend(), Runner: routine.ExecOSRunner{}}
 		if routine.NativePreviewOnly() && (verb == "schedule" || verb == "unschedule") {
