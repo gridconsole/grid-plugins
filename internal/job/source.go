@@ -517,7 +517,7 @@ func Metadata(j Job) (string, error) {
 	// Struct field order, rather than map iteration, fixes the display order.
 	var out strings.Builder
 	out.WriteString("---\n")
-	for _, key := range []string{"kind", "visible", "irreversible", "review_reason"} {
+	for _, key := range []string{"kind", "visible", "irreversible", "review_reason", "repo"} {
 		if value, ok := m[key]; ok {
 			fmt.Fprintf(&out, "%s: %s\n", key, value)
 		}

@@ -63,6 +63,11 @@ type Stream struct {
 	// model and effort. Empty strings leave the keys out. An error is one Diag line:
 	// the spawn line is still printed without the two keys, never a skipped Job.
 	Model func(taskDir, role string) (model, effort string, err error)
+	// Repo, when set, is called with the task folder and the repo the Job of a spawn
+	// names ("" when it names none) the first time the stream prints that spawn; the
+	// folder it answers goes on the spawn line as repo, and empty leaves the key out.
+	// An error is one Diag line: the spawn line is still printed without the key.
+	Repo func(taskDir, repo string) (string, error)
 	// Probe judges whether a recorded holder process is gone; nil uses session.ProbeLocal.
 	Probe func(session.Live) session.ProcessState
 	// ReceiptPending and ReceiptMove move an old approval receipt of a task folder
@@ -108,6 +113,9 @@ type spawnLine struct {
 	// leaves them out and claude keeps its own default.
 	Model  string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
+	// Repo is the folder of the repo the Job works in, which the worker runs it in;
+	// empty leaves it out and the worker finds the repo itself.
+	Repo string `json:"repo,omitempty"`
 }
 type wakeLine struct {
 	Task   string   `json:"task"`
@@ -289,6 +297,14 @@ func (s *Stream) task(dir string) error {
 			if err != nil {
 				line.Model, line.Effort = "", ""
 				s.diag("grid worker next: task %s: job %s assigned, no model or effort for role %q: %s\n", taskID, sp.Job, sp.Role, oneLine(err))
+			}
+		}
+		if s.Repo != nil {
+			var err error
+			line.Repo, err = s.Repo(dir, sp.Repo)
+			if err != nil {
+				line.Repo = ""
+				s.diag("grid worker next: task %s: job %s assigned, no folder for repo %q: %s\n", taskID, sp.Job, sp.Repo, oneLine(err))
 			}
 		}
 		if err := s.emit("spawn", line); err != nil {

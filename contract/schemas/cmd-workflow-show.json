@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/grid/contract/cmd-workflow-show.json",
   "additionalProperties": false,
-  "description": "JSON output of grid workflow show --json, with or without --policy; internal/cli/workflow.go:74, internal/workflow/read.go:13. One schema for both: policy is present only for --policy (one entry per file of files, in order). The app reads templates and errors (judge, task page) and the whole envelope with policy (write policy).",
+  "description": "JSON output of grid workflow show --json, with or without --policy; internal/cli/workflow.go:74, internal/workflow/read.go:13. One schema for both: policy is present only for --policy (one entry per file of files, in order); task is present only for --task, and the rest is then the read of the task's project. The app reads templates and errors (judge, task page) and the whole envelope with policy (write policy).",
   "properties": {
     "errors": {
       "type": "array",
@@ -216,6 +216,125 @@
           "keys"
         ]
       }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Only with --task: the workflow that task runs, as the plugin resolves it (internal/workflow/tasksteps.go TaskWorkflow); internal/cli/nh_workflow_show_task.go. A home with no default workflow answers the built-in flow: Run, then Check by grid-reviewer, 2 rounds.",
+      "properties": {
+        "file": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Label of the file or brain note the template came from, as templates[].file; null for inline and built-in."
+        },
+        "id": {
+          "type": "string",
+          "description": "The id task.md names, else the task folder name."
+        },
+        "rounds": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The workflow's review rounds; null for an inline list, which sets none."
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "inline",
+            "brain:project",
+            "brain:home",
+            "project",
+            "workspace",
+            "built-in"
+          ]
+        },
+        "steps": {
+          "type": "array",
+          "description": "The steps the task runs, for its size, in order.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "agent": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "approvers": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Null for a step that is not an approve step."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "check",
+                  "ask",
+                  "approve",
+                  "make-together",
+                  "run",
+                  "schedule"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "agent",
+              "approvers"
+            ]
+          }
+        },
+        "workflow": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The template's name; null for an inline list and for the built-in flow."
+        }
+      },
+      "required": [
+        "id",
+        "workflow",
+        "source",
+        "file",
+        "rounds",
+        "steps"
+      ]
     },
     "templates": {
       "type": "array",
