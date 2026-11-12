@@ -11,16 +11,21 @@ import (
 // pfMsgTitleRunes is the most runes of a message the Job title quotes.
 const pfMsgTitleRunes = 80
 
+// pfMsgA1Lead begins A1 of every Job that reads a person's message, and the post
+// id follows it. discovered_from takes only a Job id (job-record), so the post id
+// is held in A1, as kbSfA1Lead holds a found record id.
+const pfMsgA1Lead = "Person message post "
+
 // pfMsgReplan posts one orchestrator Job for each message a person typed to the
 // task with no Job named (`grid feed post <task> --type post`: kind message, ref
 // task, no job field). Nothing else reads such a post, so without it the message
 // stays unread. The Job is posted once: the orchestrator Job already on the Feed
-// (discovered_from the post id) is the record that says so, read from the
-// snapshot under the task lock (gkReplanned). It posts a Job and nothing more: it
+// that holds the post id in A1 (pfMsgPosted) is the record that says so, read
+// from the snapshot under the task lock. It posts a Job and nothing more: it
 // refuses, cancels and counts nothing.
 func (s Store) pfMsgReplan(snap Snapshot) error {
 	for _, id := range pfMsgRequests(snap) {
-		if gkReplanned(snap, id) {
+		if pfMsgPosted(snap, id) {
 			continue
 		}
 		next := gkNextJobID(snap)
@@ -96,13 +101,33 @@ func pfMsgTitle(text string) string {
 	return "Read the person's message: " + string(line)
 }
 
+// pfMsgPosted reports whether the Feed holds the Job of a message: an
+// orchestrator Job whose A1 begins with pfMsgA1Lead and the post id. It does not
+// read discovered_from, which belongs to the re-plan of a Job (gkReplanned).
+func pfMsgPosted(snap Snapshot, post string) bool {
+	lead := pfMsgA1Lead + post + " ("
+	for _, it := range snap.Items {
+		if !strings.EqualFold(strings.TrimSpace(it.Role), gkReplanRole) {
+			continue
+		}
+		for _, a := range it.Acceptance {
+			if a.ID == "A1" && strings.HasPrefix(a.Text, lead) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // PfMsgJobBody is the job-record of the orchestrator Job that reads a person's
-// message to the task. It has the field set of ReplanJobBody; the Job is
-// discovered_from the post id.
+// message to the task. It has the field set of ReplanJobBody, with
+// discovered_from null (job-record takes only a Job id there, and gkReplanned
+// reads an orchestrator Job's discovered_from as the Job being re-planned). The
+// post id is the lead of A1 (pfMsgA1Lead).
 func PfMsgJobBody(id, post, text string) map[string]any {
 	body := ReplanJobBody(id, post, "", nil)
 	body["title"] = pfMsgTitle(text)
-	body["discovered_from"] = post
-	body["acceptance"] = []map[string]any{{"id": "A1", "text": fmt.Sprintf("A person wrote to the task (post %s): %q. The next Jobs it needs are posted as new Jobs that `grid job lint` passes, or a question is asked of the person with `grid question`; a result is posted with `grid job result`.", post, text), "traces": "owner"}}
+	body["discovered_from"] = nil
+	body["acceptance"] = []map[string]any{{"id": "A1", "text": fmt.Sprintf("%s%s (a message to the task) reads: %q. The next Jobs it needs are posted as new Jobs that `grid job lint` passes, or a question is asked of the person with `grid question`; a result is posted with `grid job result`.", pfMsgA1Lead, post, text), "traces": "owner"}}
 	return body
 }
