@@ -18,7 +18,8 @@ Verdict: DONE. Every row holds. No product code changed.
 | A2.6 | C-xn2 row 6: files | HOLDS | `git diff --stat main..HEAD`: docs/lanes/C-xn2-project-remove-moves.md, internal/projects/gk_keys_survive_test.go, internal/projects/projects.go, internal/projects/projects_test.go, internal/projects/xn_remove_move_test.go, plus this report. projects_test.go is the file this brief adds to C-xn2's Touches. This report is the one the builder runbook requires. |
 | A3 | `go test ./internal/projects/ ./internal/cli/ -count=1` | HOLDS | exit 0, the same run as A2.4. |
 | A4 | `make lint` and `make cross` | HOLDS | Both exit 0, the same runs as A2.5. |
-| R | Changed test fails on base | HOLDS | With main's projects.go (`git checkout origin/main -- internal/projects/projects.go`, then `git checkout HEAD --` it back), `go test ./internal/projects/ -run TestRelinkAndRemoveKeepData -count=1 -v` exit 1: `projects_test.go:135: lost body:  open .../home/.grid/projects/.removed/example/project.md: no such file or directory` / `--- FAIL: TestRelinkAndRemoveKeepData`. Before the edit, on the merged lane head: `projects_test.go:134: lost body:  open .../home/.grid/projects/example/project.md: no such file or directory` / `--- FAIL: TestRelinkAndRemoveKeepData`. `git status --short` was clean after the restore. |
+| R | Changed test fails on base | HOLDS | With main's projects.go (`git checkout origin/main -- internal/projects/projects.go`, then `git checkout HEAD --` it back), `go test ./internal/projects/ -run TestRelinkAndRemoveKeepData -count=1 -v` exit 1: `projects_test.go:135: lost body:  open .../home/.grid/projects/.removed/example/project.md: no such file or directory` / `--- FAIL: TestRelinkAndRemoveKeepData`. Before the edit, on the merged lane head: `projects_test.go:134: lost body:  open .../home/.grid/projects/example/project.md: no such file or directory` / `--- FAIL: TestRelinkAndRemoveKeepData`. After the restore, `git status --short` showed only ` M internal/projects/projects_test.go`, the test edit then still uncommitted. projects.go was clean. |
+| R | Golden recordings | HOLDS | `go test -count=1 ./internal/golden/` exit 0 (`ok 0.653s`). It does not import internal/projects; I ran it because the recordings pin command file effects. |
 | R | Existing test edited | HOLDS, by direction | This brief's Do item 2 changes the after-Remove assertions of TestRelinkAndRemoveKeepData. The owner decision is that removed project data moves to `<home>/projects/.removed/<name>` and nothing is deleted. No other test was edited. |
 | R | Deleted test | n/a | No test or assertion was deleted. The new assertions check the same data (body and note) in its new place. |
 | R | No guard, gate, cap, hold or hook | HOLDS | Only a test changed. |
@@ -45,6 +46,6 @@ The C-xn2 rows come from the C-xn2 brief as it was handed to its builder. The `b
 - Windows rename with a file held open inside the folder. `make cross` proves only that the code compiles for Windows.
 - The app side (remove_project.go against the new plugin), which is WAIT-C-xn3 in the app repo.
 
-Head: the commit adding this report, on top of fc08584a.
+Head: the commit that last changed this report. The proof runs were on the tree of fc08584a. The commits after it change docs only (c4f67996 the C-xn2 report, then this report).
 
 DONE
