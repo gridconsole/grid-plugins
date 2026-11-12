@@ -122,7 +122,7 @@ func TestKeysSurviveRelinkAfterKeySet(t *testing.T) {
 		run  func() error
 	}{
 		{"relink", func() error { _, err := s.Relink("alpha", mkdir(t, filepath.Join(root, "work", "alpha2"))); return err }},
-		{"add",func() error { _, err := s.Add(folder, "alpha"); return err }},
+		{"add", func() error { _, err := s.Add(folder, "alpha"); return err }},
 	}
 	for _, step := range steps {
 		if err := step.run(); err != nil {
