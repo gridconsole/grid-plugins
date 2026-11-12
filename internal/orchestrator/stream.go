@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/session"
+	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
 
 // Skip reasons are fixed codes: a reader branches on them, so they never carry
@@ -76,6 +78,12 @@ type Stream struct {
 	// Both nil leaves receipts to grid approve.
 	ReceiptPending func(dir string) bool
 	ReceiptMove    func(dir string, w feed.Writer) error
+	// FirstJob, when set, makes the pass post J-1 on an open task whose Feed holds no
+	// Job record at all, so a task whose first Job was never posted (a killed or failed
+	// `grid task new`) still starts. It answers the J-1 record for a task of the given
+	// kind, the kind written in task.md ("" when none). A closed task, a task waiting
+	// on a person and a task with any Job record are left alone. Nil posts nothing.
+	FirstJob func(kind string) map[string]any
 
 	Out  io.Writer // JSON lines
 	Diag io.Writer // one readable line per skip; nil discards
@@ -203,6 +211,12 @@ func (s *Stream) task(dir string) error {
 		return s.skip(dir, taskID, SkipFeedInvalid, err)
 	}
 	ts := lease.TaskStore{Feed: fs, Now: s.Now}
+	if !pending {
+		var done bool
+		if snap, done, err = s.wlFirstJob(dir, taskID, fs, ts, snap); done || err != nil {
+			return err
+		}
+	}
 	// A task whose Jobs are all closed is left alone unless this stream still
 	// holds its lease: then one more pass delivers the last wake and releases it.
 	if !pending && !hasOpenJob(snap) && !s.holds(ts) {
@@ -298,6 +312,100 @@ func (s *Stream) task(dir string) error {
 		delete(s.handed, fmt.Sprintf("%s %s", dir, epoch))
 	}
 	return nil
+}
+
+// wlFirstJobID is the id of the Job a task starts with, as `grid task new` posts it.
+const wlFirstJobID = "J-1"
+
+// wlFirstJobKind reads task.md the way pgClosedRead does and answers the task's kind
+// and whether it may get a first Job: a task whose state is closed or waiting, and a
+// task.md that cannot be read, are left alone.
+func wlFirstJobKind(dir string) (kind string, ok bool) {
+	b, err := os.ReadFile(filepath.Join(dir, "task.md"))
+	if err != nil {
+		return "", false
+	}
+	fm := taskfile.ScalarFrontmatter(string(b))
+	if fm == nil {
+		return "", false
+	}
+	if state, _ := fm.Data["state"].(string); state == "closed" || state == "waiting" {
+		return "", false
+	}
+	kind, _ = fm.Data["kind"].(string)
+	return kind, true
+}
+
+// wlFirstJob posts J-1 on an open task whose Feed holds no Job record, under the task
+// lease, so a task whose first Job was never posted (`grid task new` killed or failed
+// between its two writes) still starts: the same pass goes on and assigns it. It
+// returns the snapshot to go on with. done is true when the pass is over for the task:
+// the lease is held by someone else (the task has no Job, so there is nothing to
+// schedule and the next pass looks again), a skip line was printed, or the Feed holds
+// Jobs and none is open. Everything else, a task with any Job record included, is
+// left to the pass as it is today.
+func (s *Stream) wlFirstJob(dir, taskID string, fs feed.Store, ts lease.TaskStore, snap Snapshot) (_ Snapshot, done bool, err error) {
+	if s.FirstJob == nil || len(snap.State.Jobs) != 0 {
+		return snap, false, nil
+	}
+	kind, ok := wlFirstJobKind(dir)
+	if !ok {
+		return snap, false, nil
+	}
+	body := s.FirstJob(kind)
+	data, err := json.Marshal(body)
+	if err == nil {
+		err = contract.Validate("job-record", data)
+	}
+	if err != nil {
+		return snap, true, s.skip(dir, taskID, SkipTickFailed, fmt.Errorf("first Job record: %w", err))
+	}
+	w := feed.Writer{Author: feed.Author{ID: s.Member, Role: s.Role}, Worker: s.Holder(), Lease: "task"}
+	got, err := ts.AcquireTask(w, s.PID, s.PIDStart, s.probe())
+	if err != nil {
+		if errors.Is(err, lease.ErrTaskHeld) {
+			delete(s.skipped, dir)
+			return snap, true, nil
+		}
+		return snap, true, s.skip(dir, taskID, SkipLeaseFailed, err)
+	}
+	w.Gen, w.Fence = got.Tenure.Gen, got.Tenure.Fence
+	release := func() {
+		if rerr := ts.ReleaseTask(w); rerr != nil && !errors.Is(rerr, lease.ErrTaskFree) && !errors.Is(rerr, lease.ErrTaskHeld) {
+			s.diag("grid worker next: task %s: release: %s\n", taskID, oneLine(rerr))
+		}
+		delete(s.handed, fmt.Sprintf("%s %d.%d", dir, w.Gen, w.Fence))
+	}
+	if err := s.handover(fs, w, got); err != nil {
+		return snap, true, s.skip(dir, taskID, SkipLeaseFailed, err)
+	}
+	// Read again under the lease: another pass, or an owner's post, may have been first.
+	again, err := Load(fs)
+	if err != nil {
+		release()
+		return snap, true, s.skip(dir, taskID, SkipFeedInvalid, err)
+	}
+	if len(again.State.Jobs) == 0 {
+		_, err := Write(fs, w, feed.Input{Type: "job", Job: wlFirstJobID, Body: body})
+		switch {
+		case err == nil, errors.Is(err, feed.ErrJobExists):
+		case errors.Is(err, feed.ErrStaleLease):
+			release()
+			return snap, true, s.skip(dir, taskID, SkipTaskHeld, err)
+		default:
+			release()
+			return snap, true, s.skip(dir, taskID, SkipTickFailed, err)
+		}
+		if again, err = Load(fs); err != nil {
+			return snap, true, s.skip(dir, taskID, SkipFeedInvalid, err)
+		}
+	}
+	if !hasOpenJob(again) {
+		release()
+		delete(s.skipped, dir)
+		return again, true, nil
+	}
+	return again, false, nil
 }
 
 func (s *Stream) probe() func(session.Live) session.ProcessState {

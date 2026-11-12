@@ -39,6 +39,9 @@ func setup(t *testing.T) *fixture {
 			t.Fatal(err)
 		}
 	}
+	// A home with a task folder and no VERSION is an older build's; its first
+	// settings write is refused, so the fixture home carries the marker.
+	f.write(filepath.Join(f.grid, "VERSION"), "1\n")
 	f.write(filepath.Join(f.task, "task.md"), pendingTask)
 	return f
 }

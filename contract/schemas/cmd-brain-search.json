@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-brain-search.json",
+  "description": "JSON output of grid brain search --json; internal/braincmd/command.go:345-349 wraps the hits of internal/brain/query.go Hit. The app reads hits[].path, description and summary (internal/slices/brain/vault_more.go).",
+  "additionalProperties": false,
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "The search words, joined with single spaces."
+    },
+    "hits": {
+      "type": "array",
+      "description": "Matching notes, best first; an empty array when none match. No note body.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "brain:<home|project>/<name>."
+          },
+          "path": {
+            "type": "string",
+            "description": "The note's path below the Grid home, for example projects/<project>/knowledge/<topic>/<name>.md."
+          },
+          "topic": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "home",
+              "project"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "topic",
+          "level",
+          "description",
+          "summary",
+          "score"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "query",
+    "hits"
+  ],
+  "title": "grid brain search output",
+  "type": "object"
+}

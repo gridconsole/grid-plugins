@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-workflow-write.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid workflow write --json on success; internal/cli/workflow.go:176, internal/workflow/write.go:32. The failure objects (workflow_file_changed, person_required) are not covered.",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "workflows.md for the workspace file, <project>/workflows.md for a project file."
+    },
+    "rev": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$",
+      "description": "First 12 hex characters of the stored file's SHA-256."
+    }
+  },
+  "required": [
+    "file",
+    "rev"
+  ],
+  "title": "grid workflow write output",
+  "type": "object"
+}

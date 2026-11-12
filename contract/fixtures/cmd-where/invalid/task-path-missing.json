@@ -1,0 +1,10 @@
+{
+  "project": "example",
+  "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "rule": "explicit",
+  "folder": "/work/example",
+  "record": true,
+  "repos": [],
+  "keys": [],
+  "task": "T-01-example-task"
+}

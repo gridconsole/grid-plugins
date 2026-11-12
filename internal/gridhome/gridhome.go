@@ -185,6 +185,45 @@ func TasksDir(home, proj string) string {
 	return filepath.Join(home, "projects", proj, "tasks")
 }
 
+// Legacy reports whether home, which has no VERSION, was written by an older
+// build: it holds a task folder (<tasks dir>/<task>/task.md). Only a task
+// creation makes a task folder, and it writes VERSION in the same call, so a task
+// folder without VERSION is an older build's (a hidden staging folder, .new-*,
+// is not a task folder). The app writes project-roles.json,
+// docs/ and brain/ under projects/ before any plugin write, so those say nothing.
+// Callers ask only when VERSION is missing; Legacy does not read it. An old home
+// with projects but no task is not caught: it holds no task to rewrite, and its
+// first write stamps it (a known edge).
+func Legacy(home string) (bool, error) {
+	dirs, err := TasksDirs(home)
+	if err != nil {
+		return false, err
+	}
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		for _, e := range entries {
+			// A hidden folder is a staging folder (.new-*), never a task.
+			if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			_, err := os.Stat(filepath.Join(dir, e.Name(), "task.md"))
+			if err == nil {
+				return true, nil
+			}
+			if !errors.Is(err, fs.ErrNotExist) {
+				return false, err
+			}
+		}
+	}
+	return false, nil
+}
+
 // TasksDirs lists the task folders of Personal and of every project folder
 // under home, whether or not they exist yet.
 func TasksDirs(home string) ([]string, error) {

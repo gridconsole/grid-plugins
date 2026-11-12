@@ -208,6 +208,11 @@ func runTaskWrite(args []string, env Env) int {
 	if err == nil && postPlanJob != nil {
 		err = postPlanJob()
 	}
+	// Only this path records the code: taskWriteResult is also the exit of
+	// grid approve, which keeps what it printed before.
+	if errors.Is(err, task.ErrStateMove) {
+		env.recordError(err)
+	}
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 

@@ -6,5 +6,5 @@
   },
   "hook": "stop-check",
   "name": "reviewer",
-  "proves": "A reviewer must write Verdict even on a builder brief."
+  "proves": "With no GRID_JOB the shrunk Stop check exits 0 silently for a reviewer with no Verdict (docs/lanes/E-verdict-5-stop.md:10); the old Verdict demand is gone."
 }

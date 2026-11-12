@@ -6,5 +6,5 @@
   },
   "hook": "stop-check",
   "name": "empty-next",
-  "proves": "Empty task next blocks Stop with exit 2."
+  "proves": "With no GRID_JOB the shrunk Stop check exits 0 silently, even with an empty task next (docs/lanes/E-verdict-5-stop.md:10); the old exit 2 is gone."
 }

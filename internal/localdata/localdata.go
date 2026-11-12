@@ -78,6 +78,15 @@ func Init(home string) error {
 	if err != nil {
 		return err
 	}
+	// A home an older build wrote has tasks but no VERSION; stamping it would
+	// hide it from grid migrate, so refuse and leave the home as it is.
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		if old, err := gridhome.Legacy(home); err != nil {
+			return err
+		} else if old {
+			return errors.New(gridhome.FormatProblem(0))
+		}
+	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if errors.Is(err, os.ErrExist) {
 		// An exclusive creator may not have written the marker yet.

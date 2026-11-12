@@ -7,5 +7,5 @@
   },
   "hook": "stop-check",
   "name": "mark-blocked",
-  "proves": "A repeated stop with no Outcome marks the brief blocked."
+  "proves": "With no GRID_JOB the shrunk Stop check exits 0 silently and no longer marks the brief blocked, so files.diff is empty (docs/lanes/E-verdict-5-stop.md:10)."
 }

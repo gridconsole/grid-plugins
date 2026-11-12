@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-brain-changes.json",
+  "description": "JSON output of grid brain changes --json; internal/braincmd/changes.go:188-190, rows of internal/brain/changes.go Change, newest first. The app reads every field (internal/slices/brainchanges/http.go, internal/slices/brain/vault_more.go).",
+  "additionalProperties": false,
+  "properties": {
+    "changes": {
+      "type": "array",
+      "description": "The brain's audit rows, newest first; an empty array when the brain has none.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "type": "string",
+            "description": "When the change was logged, in the contract time layout."
+          },
+          "status": {
+            "type": "string",
+            "description": "What was done to the note, for example created, edited or dropped."
+          },
+          "topic": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "hash": {
+            "type": "string",
+            "description": "sha256: and the 16 hex digits of the note's rev."
+          },
+          "origin_kind": {
+            "type": "string",
+            "description": "Who made the change: person or session."
+          },
+          "origin_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "The reason given for the change; empty when none."
+          }
+        },
+        "required": [
+          "at",
+          "status",
+          "topic",
+          "name",
+          "version",
+          "hash",
+          "origin_kind",
+          "origin_id",
+          "reason"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "changes"
+  ],
+  "title": "grid brain changes output",
+  "type": "object"
+}

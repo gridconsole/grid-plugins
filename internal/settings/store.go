@@ -331,6 +331,16 @@ func (s Store) locked(write func() error) error {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		return err
 	}
+	// A home an older build wrote has tasks but no VERSION; stamping it would hide
+	// it from grid migrate. Refuse before the lock file is made, so the home stays
+	// as it was.
+	if _, err := gridhome.ReadFormat(home); errors.Is(err, os.ErrNotExist) {
+		if old, err := gridhome.Legacy(home); err != nil {
+			return err
+		} else if old {
+			return errors.New(gridhome.FormatProblem(0))
+		}
+	}
 	lock, err := fslock.OpenNoFollow(filepath.Join(home, ".settings.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return err

@@ -1,0 +1,13 @@
+{
+  "every": "1h",
+  "limits": {
+    "routine_budget": 1,
+    "routine_max_turns": 10,
+    "routine_timeout": "10m"
+  },
+  "machine": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+  "name": "morning",
+  "next": null,
+  "run": "grid version",
+  "scheduled": false
+}

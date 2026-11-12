@@ -256,14 +256,14 @@ func runRevert(args []string, env Env) int {
 	if *to < 1 {
 		return usageError("--to must be a version number, 1 or more")
 	}
-	if !brain.RevertAllowed(env.Role) {
+	if !brain.CurateAllowed(env.Role) {
 		return roleRefused(env, "revert", "revert brain entries", l.asJSON)
 	}
 	store, level, err := levelStore(env, l.level, l.project, true)
 	if err != nil {
 		return failWith(env, l.asJSON, err)
 	}
-	origin, err := brain.SessionOrigin()
+	origin, err := hyDrOrigin(env)
 	if err != nil {
 		return failWith(env, l.asJSON, err)
 	}

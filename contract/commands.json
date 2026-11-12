@@ -72,7 +72,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-where.json"
         }
       ]
     },
@@ -259,7 +259,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-task-trash.json"
         },
         {
           "name": "history",
@@ -416,7 +416,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-task-new.json"
         },
         {
           "name": "rename",
@@ -481,7 +481,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-task-trash.json"
         },
         {
           "name": "show",
@@ -1749,7 +1749,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-lease-status.json"
         },
         {
           "name": "take",
@@ -2752,7 +2752,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-brain-changes.json"
         },
         {
           "name": "check",
@@ -2791,6 +2791,11 @@
             {
               "name": "--json",
               "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--link",
+              "takes": "value",
               "required": false
             },
             {
@@ -2835,7 +2840,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-brain-drop.json"
         },
         {
           "name": "index",
@@ -3155,7 +3160,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-brain-search.json"
         },
         {
           "name": "show",
@@ -3288,7 +3293,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-brain-write.json"
         }
       ]
     },
@@ -3443,7 +3448,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-routine-add.json"
         },
         {
           "name": "list",
@@ -3461,7 +3466,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-routine-list.json"
         },
         {
           "name": "remove",
@@ -3645,7 +3650,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-agent-budget-show.json"
         },
         {
           "name": "budget undo",
@@ -3719,7 +3724,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-settings-receipt.json"
         },
         {
           "name": "sync",
@@ -3790,7 +3795,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-claude-settings-set.json"
         },
         {
           "name": "settings show",
@@ -3808,7 +3813,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-claude-settings-show.json"
         }
       ]
     },
@@ -3838,7 +3843,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-workflow-show.json"
         },
         {
           "name": "write",
@@ -3866,7 +3871,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-workflow-write.json"
         }
       ]
     },
@@ -3913,7 +3918,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-settings-receipt.json"
         },
         {
           "name": "list",
@@ -3931,7 +3936,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-skill-list.json"
         }
       ]
     },
@@ -4552,7 +4557,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-folder.json"
         },
         {
           "name": "list",
@@ -4565,7 +4570,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-status.json"
         },
         {
           "name": "note",
@@ -4611,7 +4616,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-scan.json"
         },
         {
           "name": "sign-in",
@@ -4652,7 +4657,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-status.json"
         },
         {
           "name": "statusline",
@@ -4665,7 +4670,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-statusline.json"
         },
         {
           "name": "windows",
@@ -4683,7 +4688,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-account-windows.json"
         }
       ]
     },
@@ -4710,7 +4715,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-project-add.json"
         },
         {
           "name": "list",
@@ -4754,7 +4759,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-project-remove.json"
         },
         {
           "name": "repo",
@@ -4790,7 +4795,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-project-repo.json"
         },
         {
           "name": "scan",
@@ -4810,7 +4815,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-project-scan.json"
         }
       ]
     },
@@ -4850,7 +4855,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-project-md-set.json"
         }
       ]
     },
@@ -4984,7 +4989,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-setup.json"
         }
       ]
     },

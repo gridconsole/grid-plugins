@@ -1,0 +1,15 @@
+{
+  "project": "example",
+  "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "rule": "record",
+  "folder": "/work/example",
+  "record": true,
+  "repos": [],
+  "keys": [
+    "folder:/work/example",
+    "common:/work/example/.git",
+    "remote:example.com/org/example"
+  ],
+  "task": "",
+  "task_path": ""
+}

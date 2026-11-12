@@ -32,6 +32,11 @@ type Env struct {
 	// GRID_ACTOR, else GRID_MEMBER, read by the CLI. drop and restore name this
 	// person in the audit line; no flag lets a caller name someone else.
 	Member string
+	// Task, Job and Session are the caller's GRID_TASK, GRID_JOB and session id
+	// (GRID_SESSION_ID, else CLAUDE_SESSION_ID), read by the CLI. propose names
+	// the Job as its author when it runs in one, else the session; see
+	// cbAuProposeOrigin. braincmd reads no environment variable itself.
+	Task, Job, Session string
 	// The CLI supplies its shared folder resolver and refusal contract.
 	ResolveTask      func(string) (task.Task, error)
 	TaskOperandError func(string, error) int
@@ -53,7 +58,7 @@ const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|d
                              Record a proposal (same flags as propose); the curator decides it.
   keep accept <id>           File the proposal as a linked note (same as accept <id>).
   keep refuse <id> [--why <reason>]  Record a refusal (same as accept <id> --reject).
-  decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>]
+  decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--link <json>]...
   accept <id>                File a proposal through the keeper gates.
   accept <id> --reject <why>  Record a rejection.
   check [<proposal-id>]      Read-only gate: flag proposals, skills and agents that change what runs.
@@ -423,7 +428,7 @@ func Run(args []string, env Env) int {
 			n.Links = links
 		}
 		var origin brain.Origin
-		origin, err = brain.SessionOrigin()
+		origin, err = cbAuProposeOrigin(env)
 		if external {
 			origin.Kind = "import"
 		}

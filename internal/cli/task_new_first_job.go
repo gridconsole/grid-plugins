@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -106,6 +107,11 @@ func postFirstJob(env Env, t task.Task, o task.NewOptions) error {
 	ts := lease.TaskStore{Feed: store}
 	grant, err := ts.TakeTask(w, pid, start)
 	if err != nil {
+		// A worker pass that found the task with no Job holds the lease and posts J-1
+		// itself: the task has its first Job, so there is nothing to report.
+		if errors.Is(err, lease.ErrTaskHeld) && wlFirstJobPosted(store) {
+			return nil
+		}
 		return err
 	}
 	w.Gen, w.Fence = grant.Gen, grant.Fence
@@ -114,5 +120,22 @@ func postFirstJob(env Env, t task.Task, o task.NewOptions) error {
 		return err
 	}
 	_, err = orchestrator.Write(store, w, feed.Input{Type: "job", Job: firstJobID, Body: body})
+	if errors.Is(err, feed.ErrJobExists) && wlFirstJobPosted(store) {
+		return nil // a worker pass posted J-1 first
+	}
 	return err
+}
+
+// wlFirstJobPosted reports whether the Feed of the task holds a job record for J-1.
+func wlFirstJobPosted(store feed.Store) bool {
+	read, err := store.Read(feed.Filter{Type: "job"})
+	if err != nil {
+		return false
+	}
+	for _, r := range read.Records {
+		if r.Job != nil && *r.Job == firstJobID {
+			return true
+		}
+	}
+	return false
 }

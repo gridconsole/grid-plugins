@@ -139,6 +139,15 @@ func AppendHistoryWhy(dir, event, detail, who, via, why string) error {
 		return err
 	}
 	defer fslock.Unlock(lock)
+	// A task writer that died after writing its journal leaves a whole history
+	// image behind. Replay it first, under this same lock, so the next task write
+	// cannot replace history.md with that older image and drop the line added
+	// here. A journal that cannot be replayed is an error and nothing is appended.
+	if isTask() {
+		if err = recoverWrite(dir); err != nil {
+			return err
+		}
+	}
 	// Under the lock, the file is read again: another writer may have created
 	// it since the check above. A missing file starts empty in a task folder.
 	var b []byte

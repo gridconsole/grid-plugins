@@ -1,0 +1,14 @@
+[
+  {
+    "name": "fresh",
+    "path": "/home/example/work/fresh",
+    "registered": 7,
+    "rule": "git"
+  },
+  {
+    "name": "registered",
+    "path": "/home/example/work/registered",
+    "registered": 7,
+    "rule": "record"
+  }
+]

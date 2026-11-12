@@ -1,0 +1,14 @@
+{
+  "query": "ferry",
+  "hits": [
+    {
+      "id": "brain:project/ferry",
+      "path": "projects/example/knowledge/decisions/ferry.md",
+      "topic": "decisions",
+      "level": "project",
+      "description": "Read before changing the ferry schedule.",
+      "summary": "What the ferry note says.",
+      "score": "7"
+    }
+  ]
+}

@@ -44,6 +44,16 @@ func (s Store) New(o NewOptions) (Task, error) {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		return Task{}, err
 	}
+	// A home an older build wrote has tasks but no VERSION; stamping it below would
+	// hide it from grid migrate. Refuse before the lock file is made, so the home
+	// stays as it was. Only New stamps; the writers of an existing task do not.
+	if _, err := gridhome.ReadFormat(home); errors.Is(err, fs.ErrNotExist) {
+		if old, err := gridhome.Legacy(home); err != nil {
+			return Task{}, err
+		} else if old {
+			return Task{}, errors.New(gridhome.FormatProblem(0))
+		}
+	}
 	lock, err := fslock.OpenNoFollow(filepath.Join(home, ".task-alloc.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return Task{}, fmt.Errorf("open task allocation lock: %w", err)
@@ -96,7 +106,8 @@ func (s Store) New(o NewOptions) (Task, error) {
 	}
 	owner, role := o.owner()
 	t := Task{Record: Record{ID: id, Title: title, Project: r.Project, Owner: owner, OwnerRole: role,
-		Size: o.Size, Workflow: o.Workflow, Kind: o.Kind, State: "queued", Created: contract.FormatTime(now)},
+		Size: o.Size, Workflow: o.Workflow, Kind: o.Kind, State: "queued", Created: contract.FormatTime(now),
+		IntentFrom: o.IntentFrom},
 		Path: filepath.Join(dir, id+"-"+slug(title)), Intent: o.Words}
 	stableID, err := feed.NewID()
 	if err != nil {

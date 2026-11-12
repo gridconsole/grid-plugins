@@ -1,0 +1,11 @@
+{
+  "lease": "task",
+  "holder": "member@01ARZ3NDEKTSV4RRFFQ69G5FAW",
+  "fence": 1,
+  "gen": 0,
+  "attempt": null,
+  "since": "2026-01-01T00:00:00.000Z",
+  "pid": 4242,
+  "pid_start": "2026-01-01T00:00:00.000Z",
+  "process": "alive"
+}

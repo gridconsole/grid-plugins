@@ -1,0 +1,15 @@
+{
+  "project": "example",
+  "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "rule": "explicit",
+  "folder": "/work/example",
+  "record": true,
+  "repos": [],
+  "keys": [
+    "folder:/work/example",
+    "common:/work/example/.git",
+    "remote:example.com/org/example"
+  ],
+  "task": "T-01-example-task",
+  "task_path": "/grid/projects/example/tasks/T-01-example-task"
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/settings"
 	"github.com/gridconsole/grid-plugins/internal/signal"
+	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
@@ -43,6 +44,9 @@ const (
 	CodeGuestRefused = "guest_refused"
 	// CodeJobExists means a Job post named a Job id the Feed already holds.
 	CodeJobExists = "job_exists"
+	// CodeTaskState means the task's state does not allow the move (task stop,
+	// close, reopen, status and deliver); nothing was written.
+	CodeTaskState = "task_state"
 )
 
 func errorCode(err error) string {
@@ -67,6 +71,8 @@ func errorCode(err error) string {
 		return CodeWorkflowFileChanged
 	case errors.Is(err, feed.ErrJobExists):
 		return CodeJobExists
+	case errors.Is(err, task.ErrStateMove):
+		return CodeTaskState
 	case errors.Is(err, ilGuestRefused):
 		return CodeGuestRefused
 	case errors.As(err, &refused) && refused.Code != "":
