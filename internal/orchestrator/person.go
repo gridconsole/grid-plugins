@@ -54,6 +54,7 @@ func PersonReady(snap Snapshot, id string, now time.Time) error {
 // so the person who wrote it can read that in feed read. A Job still waiting for
 // another Job keeps its answers for a later pass.
 func (s Store) personAnswers(snap Snapshot) error {
+	moved := map[string]bool{}
 	for _, item := range snap.Items {
 		j := snap.State.Jobs[item.ID]
 		if !item.IsPerson() || j == nil || len(j.History) == 0 || j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected {
@@ -103,6 +104,12 @@ func (s Store) personAnswers(snap Snapshot) error {
 				return err
 			}
 		}
+		// The builder Job the person Job was raised for moves first (yvPamControl).
+		if move := yvPamControl(snap, moved, item.ID, first.Author.ID, strings.TrimSpace(answer), back); move != nil {
+			if _, err := s.Feed.Post(feed.Input{Type: "control", Re: said.ID, Body: move}, s.Writer); err != nil {
+				return err
+			}
+		}
 		body := map[string]any{"target": item.ID, "status": "accepted", "reason": "answered by " + first.Author.ID, "answer": strings.TrimSpace(answer)}
 		// What the person's answer carried, such as the plan revision they approved,
 		// goes into the result the readers use.
@@ -115,6 +122,51 @@ func (s Store) personAnswers(snap Snapshot) error {
 		}
 	}
 	return nil
+}
+
+// yvPamControl is the control that moves the builder Job a person Job was raised
+// for, or nil when there is none to move. The person Job names it in
+// discovered_from, or names a review of it (role reviewer or checker, the Judge's
+// review roles), which hands on to its own discovered_from; the first Job that is
+// not a review is the builder b. Only a Submitted b moves: an answer accepts it, a
+// plan sent back rejects it with the person's words. A review Job is never moved,
+// and a b the Feed does not hold, or that is no longer Submitted (the verdict came
+// first, or it was cancelled or rejected), gets nothing. moved holds the builders
+// an earlier answer of the same pass already moved, since the pass reads one
+// snapshot; it may be nil.
+//
+// The caller posts the control before the person Job's own, so a pass that stops
+// between the two repeats the person Job's part and finds b already moved.
+func yvPamControl(snap Snapshot, moved map[string]bool, personID, who, answer string, back bool) map[string]any {
+	p := snap.State.Jobs[personID]
+	if p == nil {
+		return nil
+	}
+	seen := map[string]bool{personID: true}
+	var b *contract.Job
+	for from := p.DiscoveredFrom; from != nil && b == nil; {
+		next := snap.State.Jobs[*from]
+		if next == nil || seen[next.ID] {
+			return nil
+		}
+		seen[next.ID] = true
+		if role := contract.NormalizeRole(next.Role); role == "reviewer" || role == "checker" {
+			from = next.DiscoveredFrom
+			continue
+		}
+		b = next
+	}
+	if b == nil || b.Status != contract.Submitted || moved[b.ID] {
+		return nil
+	}
+	if moved != nil {
+		moved[b.ID] = true
+	}
+	through := " by " + who + " through " + personID
+	if back {
+		return map[string]any{"target": b.ID, "status": "rejected", "reason": "sent back" + through, "close_reason": "sent back" + through, "answer": answer}
+	}
+	return map[string]any{"target": b.ID, "status": "accepted", "reason": "answered" + through, "answer": answer}
 }
 
 // CheckPersonAnswer refuses an answer, already trimmed, longer than the cap. The
@@ -267,6 +319,12 @@ func AnswerPersonWith(store feed.Store, w feed.Writer, id, answer string, fields
 		said, e := store.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, w)
 		if e != nil {
 			return e
+		}
+		// The builder Job the person Job was raised for moves first (yvPamControl).
+		if move := yvPamControl(snap, nil, id, w.Author.ID, answer, back); move != nil {
+			if _, e := store.Post(feed.Input{Type: "control", Re: said.ID, Body: move}, w); e != nil {
+				return e
+			}
 		}
 		body := map[string]any{"target": id, "status": "accepted", "reason": "answered by " + w.Author.ID, "answer": answer}
 		copyAnswerFields(body, fields)

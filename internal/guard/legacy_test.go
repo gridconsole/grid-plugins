@@ -26,8 +26,6 @@ func legacyCompare(t *testing.T, fn Adapter, in hookio.Input, env map[string]str
 	switch reflect.ValueOf(fn).Pointer() {
 	case reflect.ValueOf(PlanGuard).Pointer():
 		script = "plan-guard"
-	case reflect.ValueOf(HostGuard).Pointer():
-		script = "host-guard"
 	case reflect.ValueOf(HomeAllow).Pointer():
 		script = "grid-home-allow"
 	}

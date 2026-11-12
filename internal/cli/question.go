@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/question"
@@ -46,7 +44,7 @@ func runAnswer(args []string, env Env) int { return question.RunAnswer(args, que
 // questionJobs wires the question store to the orchestrator's person Job: ask
 // posts the Job, and an answer, a default or a withdrawal closes it.
 func questionJobs() question.JobPort {
-	return question.JobPort{Post: postQuestionJob, Close: closeQuestionJob}
+	return question.JobPort{Post: postQuestionJob, Close: orchestrator.CloseQuestionJob}
 }
 
 // jwRpAfterPickForTest is nil outside tests; a test sets it to act between the pick of a Job id and its post.
@@ -102,34 +100,4 @@ func postQuestionJobOnce(f feed.Store, lease, person feed.Writer, body map[strin
 		return "", err
 	}
 	return id, nil
-}
-
-// closeQuestionJob gives a question's person Job its result. A Job that is not a
-// question Job, is closed already, or has no writer that may close it is left alone.
-func closeQuestionJob(f feed.Store, lease, person feed.Writer, id, result string) error {
-	snap, err := orchestrator.Load(f)
-	if err != nil {
-		return err
-	}
-	j := snap.State.Jobs[id]
-	ask := false
-	for _, it := range snap.Items {
-		ask = ask || it.ID == id && it.IsPerson() && it.Kind == question.JobKind
-	}
-	if j == nil || !ask || j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected {
-		return nil
-	}
-	w := person
-	if lease.Lease == "task" {
-		w = lease
-	}
-	if w.Lease != "task" && !orchestrator.PersonWriter(w) {
-		return nil
-	}
-	result = strings.TrimSpace(result)
-	if orchestrator.CheckPersonAnswer(result) != nil {
-		result = string([]rune(result)[:200]) + "…"
-	}
-	_, err = orchestrator.AnswerPerson(f, w, id, result, time.Now())
-	return err
 }

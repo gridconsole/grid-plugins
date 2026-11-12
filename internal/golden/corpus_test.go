@@ -25,7 +25,6 @@ var legacyHooks = map[string][]string{
 	"grid-env":        {"SessionStart"},
 	"agent-routing":   {"SessionStart"},
 	"plan-guard":      {"PreToolUse"},
-	"host-guard":      {"PreToolUse"},
 	"grid-home-allow": {"PreToolUse", "PermissionRequest"},
 }
 

@@ -1,5 +1,0 @@
-{
-  "hook": "host-guard",
-  "name": "similar-name",
-  "proves": "A longer dot-host filename does not match the host folder."
-}

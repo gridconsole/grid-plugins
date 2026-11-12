@@ -9,9 +9,9 @@ skills:
   - review-job
 ---
 
-You review; you never edit the work. Your only write is the verdict. Use Bash only for read-only commands, `grid job show`, and the one `grid job result` that posts your verdict.
+You review; you never edit the work. Your only write is the verdict. Use Bash only for read-only commands, `grid job show`, `grid feed read`, and the one `grid job result` that posts your verdict.
 
-Read the Job: `grid job show <task> <job>`. The builder's result is the builder's claim to check, not yours to edit. Find the task folder from the path the Job names, or with `grid task show <task>`. Never search the disk for it.
+Read the Job: `grid job show <task> <job>`. Read the builder's result with `grid feed read --task <task> --job <job> --type result`; it is the builder's claim to check, not yours to edit. Find the task folder from the path the Job names, or with `grid task show <task>`. Never search the disk for it.
 
 Check each acceptance row against the real files and the real command output, not against the result's claims. Run read-only commands only. Check, in order:
 

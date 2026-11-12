@@ -43,7 +43,7 @@ func peMsgDeliver(o Options, in hookio.Input) {
 		// A task with no stable id has no Feed this store can read.
 		return
 	}
-	read, err := feed.Store{TaskDir: dir, TaskID: id}.Read(feed.Filter{Type: "post"})
+	read, err := feed.Store{TaskDir: dir, TaskID: id}.ReadOnly(feed.Filter{Type: "post"})
 	if err != nil {
 		o.log("job message", err)
 		return

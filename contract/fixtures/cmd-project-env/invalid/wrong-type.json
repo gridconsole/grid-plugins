@@ -1,0 +1,11 @@
+{
+  "item": {
+    "approval": "yes",
+    "id": "dev",
+    "kind": "local",
+    "name": "Development",
+    "runs": "app",
+    "where": "this computer"
+  },
+  "state": "applied"
+}

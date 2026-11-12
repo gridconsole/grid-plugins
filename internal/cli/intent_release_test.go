@@ -124,6 +124,10 @@ func intentFiles(t *testing.T, dir string) []byte {
 	}
 	files := map[string]string{}
 	for _, entry := range entries {
+		// feed/.cache holds fold.lock once a post refolds; only record files are compared.
+		if entry.IsDir() {
+			continue
+		}
 		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
 			t.Fatal(err)

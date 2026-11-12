@@ -17,6 +17,7 @@ func runWorkflow(args []string, env Env) int {
 	const usage = "usage: grid workflow show [--project <name-or-id>] [--json] [--policy]"
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(env.Stdout, usage)
+		fmt.Fprintln(env.Stdout, nhWfUsage)
 		fmt.Fprintln(env.Stdout, workflowWriteUsage)
 		return 0
 	}
@@ -32,6 +33,7 @@ func runWorkflow(args []string, env Env) int {
 	project := fs.String("project", "", "project name or ID")
 	asJSON := fs.Bool("json", false, "print JSON")
 	withPolicy := fs.Bool("policy", false, "include effective app policy (requires --json)")
+	task := fs.String("task", "", "task folder or id: answer the workflow that task runs")
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -42,15 +44,25 @@ func runWorkflow(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, usage)
 		return 2
 	}
-	emptyProject := false
+	emptyProject, taskSet := false, false
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "project" && *project == "" {
 			emptyProject = true
+		}
+		if f.Name == "task" {
+			taskSet = true
 		}
 	})
 	if emptyProject {
 		fmt.Fprintln(env.Stderr, "grid workflow show: --project requires a name or ID")
 		return 2
+	}
+	if taskSet {
+		if *task == "" {
+			fmt.Fprintln(env.Stderr, "grid workflow show: --task requires a task folder or ID")
+			return 2
+		}
+		return nhWfShowTask(env, *task, *project, *asJSON, *withPolicy)
 	}
 	read := workflow.Read
 	if *withPolicy {

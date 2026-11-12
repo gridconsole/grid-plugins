@@ -66,19 +66,15 @@ func TestRealNativeReturnsOnDiskCase(t *testing.T) {
 func TestCaseAliasesAreJudgedLikeTheirTargets(t *testing.T) {
 	f := setup(t)
 	skipUnlessFolding(t, f)
-	f.write(filepath.Join(f.task, "feed", "000001.json"), "{}\n")
-	// plan-guard and host-guard warn by default (verdicts-11nov v-4); these rows pin the deny each gives at block.
-	for _, name := range []string{"plan-guard", "host-guard"} {
-		if err := (settings.Store{Home: f.grid}).SetHook(name, "block"); err != nil {
-			t.Fatal(err)
-		}
+	// plan-guard warns by default (verdicts-11nov v-4); these rows pin the deny it gives at block.
+	if err := (settings.Store{Home: f.grid}).SetHook("plan-guard", "block"); err != nil {
+		t.Fatal(err)
 	}
 	for _, tt := range []struct {
 		name  string
 		path  string
 		guard func(string) string
 	}{
-		{"feed", alias(filepath.Join(f.task, "feed", "000002.json"), "projects"), f.host},
 		{"brain from a builder", alias(filepath.Join(f.grid, "knowledge", "n.md"), ".grid"), f.planAs("grid:grid-builder")},
 		{"project knowledge from a builder", alias(filepath.Join(f.projects, "example", "knowledge", "n.md"), "projects"), f.planAs("grid:grid-builder")},
 		{"repo write from a held task, cwd spelled differently", filepath.Join(f.repo, "file.go"), f.sameAsExactCwd(f.task, alias(f.task, "projects"))},
@@ -91,9 +87,6 @@ func TestCaseAliasesAreJudgedLikeTheirTargets(t *testing.T) {
 	}
 }
 
-func (f *fixture) host(path string) string {
-	return EvaluateHost(f.input("Write", path), f.root, f.env).Behavior
-}
 func (f *fixture) planAs(agent string) func(string) string {
 	return func(path string) string {
 		i := f.input("Write", path)

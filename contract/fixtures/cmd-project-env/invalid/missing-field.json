@@ -1,0 +1,9 @@
+{
+  "item": {
+    "id": "dev",
+    "kind": "local",
+    "runs": "app",
+    "where": "this computer"
+  },
+  "state": "applied"
+}

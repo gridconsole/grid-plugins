@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/settings"
+	"github.com/gridconsole/grid-plugins/internal/version"
 )
 
 func fixHint(name, detail string) string {
@@ -25,12 +26,21 @@ func fixHint(name, detail string) string {
 			return "Run grid setup"
 		}
 		return "Run grid migrate; if VERSION is missing or invalid, restore it from a known backup."
+	case "migration":
+		return "Run grid migrate --apply"
 	case "git":
 		return "Install git and add its executable directory to PATH."
 	case "plugin hooks":
 		return "Reinstall the Grid plugin, or pass --hooks-file with its hooks/hooks.json path."
 	case "grid on PATH":
+		if strings.HasPrefix(detail, "grid on PATH (") {
+			return "Update or remove the grid at the path above, or put the current plugin's bin folder first on PATH."
+		}
 		return "Run grid setup and add the directory containing the grid launcher to PATH."
+	case "launcher":
+		return "Run any grid command from the current plugin to repoint the launcher."
+	case "worker":
+		return "Update the Grid app, then start it again."
 	case "allow block", "deny block":
 		if strings.HasPrefix(detail, "missing rules: ") || detail == "Claude settings file is missing" {
 			return "Run grid setup"
@@ -96,11 +106,17 @@ func checkInstallation(add func(string, bool, string), o Options) {
 	if lookPath == nil {
 		lookPath = exec.LookPath
 	}
-	if _, err := lookPath("grid"); err != nil {
+	if path, err := lookPath("grid"); err != nil {
 		add("grid on PATH", false, "grid was not found on PATH")
+	} else if v, ok := gridVersionAt(o, path); !ok {
+		add("grid on PATH", true, "grid is on PATH; version not read")
+	} else if v != version.Version {
+		add("grid on PATH", false, fmt.Sprintf("grid on PATH (%s) is version %s; this grid is %s", path, v, version.Version))
 	} else {
-		add("grid on PATH", true, "grid is on PATH")
+		add("grid on PATH", true, "grid is on PATH; version "+v)
 	}
+	checkLauncher(add, o)
+	checkWorker(add, o)
 	if o.HooksFile == "" {
 		add("plugin hooks", false, "cannot locate the plugin hooks file")
 		return

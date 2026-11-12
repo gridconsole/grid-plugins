@@ -17,7 +17,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook posttooluse",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }

@@ -8,7 +8,7 @@ A Job is the brief. A builder or reviewer reads only the Job, so it stands alone
 Owner decisions that apply here:
 
 - "No Grid-made guards, caps or limits": use the Claude Code built-ins. Add no hook, hold or cap to a Job.
-- Approvals and gates come from the workflow in the brain with a default: read it with `grid workflow show`, never hard-code one. A step only a person can do is a Job with role Person (`grid job post --person`).
+- Approvals and gates come from the workflow in the brain with a default: read the workflow this task runs with `grid workflow show --task <task> --json` and use its `task.steps` (kind, agent, approvers) and `task.rounds`, never hard-code one. A step only a person can do is a Job with role Person (`grid job post --person`).
 - Everything is a Job and the Job is the brief. Tasks carry on by themselves until a person point. No plan mode.
 - The brain needs no attention from the person: a subagent curates proposals (`grid brain propose`), nobody asks the person to review one.
 - Every link carries a why: each `links` entry and each `after` object has a `why` of 8 to 160 characters.
@@ -41,6 +41,7 @@ Point, do not paste. A pasted block goes stale, fills the worker's context and h
 - `read`: name the lines, not the file: `repo:path/file.go:40-95`, or a heading anchor such as `task:research.md#format`. A bare file name makes the worker read all of it.
 - `intent` and `acceptance` state the goal and the check in your own words. If you are about to copy a paragraph from a file or a note, link or read it instead.
 - `after`: bare Job ids that must be done first, or objects with `job`, `kind` (`done`, `failed`, `children-done`) and `why` (8 to 160 characters). A gate is `gate:Q-7`. A review Job names the build Job it checks.
+- `repo`: in a project with more than one repo, a code Job names its `repo` (one of the project's repos); with none named the Job runs in the first repo of project.md.
 - Keep a Job small: one outcome, one owner, a read list of a few ranges. If it needs more, split it into Jobs joined by `after`.
 - The last Job of a task is the deliver Job: title "Deliver the task", role orchestrator, `after` names every other Job (each with a why), and it runs `grid deliver --task <task> --outcome <text> --json`.
 

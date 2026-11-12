@@ -1,0 +1,135 @@
+{
+  "errors": [],
+  "files": [
+    {
+      "project": null,
+      "rev": "8cc89525858b",
+      "scope": "workspace",
+      "text": "# Workflows\n\n## Standard\napplies when: nothing else matches\nreview rounds: 2\n\n| # | step | kind | who | sizes | on reject, back to |\n|---|------|------|-----|-------|--------------------|\n| 1 | build | run | grid-builder | all | |\n| 2 | review | check | grid-reviewer | all | |\n\n## Review\napplies when: label review\nreview rounds: 3\n\n| # | step | kind | who | sizes | on reject, back to |\n|---|------|------|-----|-------|--------------------|\n| 1 | check-it | check | grid-runner | all | |\n| 2 | deep-check | check | grid-reviewer | L | |\n| 3 | sign-off | approve | sam | all | |\n\n"
+    },
+    {
+      "project": "example",
+      "rev": null,
+      "scope": "project",
+      "text": ""
+    }
+  ],
+  "task": {
+    "file": "workflows.md",
+    "id": "T-1",
+    "rounds": 3,
+    "source": "workspace",
+    "steps": [
+      {
+        "agent": "grid-runner",
+        "approvers": null,
+        "kind": "check",
+        "name": "check-it"
+      },
+      {
+        "agent": null,
+        "approvers": [
+          "sam"
+        ],
+        "kind": "approve",
+        "name": "sign-off"
+      }
+    ],
+    "workflow": "Review"
+  },
+  "templates": [
+    {
+      "applies": [],
+      "approvers": [],
+      "batch": null,
+      "default": true,
+      "file": "workflows.md",
+      "lead": null,
+      "name": "Standard",
+      "only": null,
+      "openTasks": [],
+      "overrides": null,
+      "repeat": null,
+      "research": false,
+      "rounds": 2,
+      "steps": [
+        {
+          "agent": "grid-builder",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "run",
+          "name": "build",
+          "runs": null,
+          "sizes": "SNL"
+        },
+        {
+          "agent": "grid-reviewer",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "check",
+          "name": "review",
+          "runs": null,
+          "sizes": "SNL"
+        }
+      ],
+      "usedIn": []
+    },
+    {
+      "applies": [
+        {
+          "by": "label",
+          "v": "review"
+        }
+      ],
+      "approvers": [],
+      "batch": null,
+      "default": false,
+      "file": "workflows.md",
+      "lead": null,
+      "name": "Review",
+      "only": null,
+      "openTasks": [],
+      "overrides": null,
+      "repeat": null,
+      "research": false,
+      "rounds": 3,
+      "steps": [
+        {
+          "agent": "grid-runner",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "check",
+          "name": "check-it",
+          "runs": null,
+          "sizes": "SNL"
+        },
+        {
+          "agent": "grid-reviewer",
+          "approver": null,
+          "approvers": null,
+          "back": null,
+          "kind": "check",
+          "name": "deep-check",
+          "runs": null,
+          "sizes": "L"
+        },
+        {
+          "agent": null,
+          "approver": "sam",
+          "approvers": [
+            "sam"
+          ],
+          "back": null,
+          "kind": "approve",
+          "name": "sign-off",
+          "runs": null,
+          "sizes": "SNL"
+        }
+      ],
+      "usedIn": []
+    }
+  ]
+}

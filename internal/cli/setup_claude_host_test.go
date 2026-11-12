@@ -8,16 +8,12 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/gridconsole/grid-plugins/internal/guard"
-	"github.com/gridconsole/grid-plugins/internal/hookio"
-	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
 var foldedLetter = regexp.MustCompile(`\[([a-z])[A-Z]\]`)
 
-// hostDeny reports a rule written for the files EvaluateHost refuses to the file
-// tools (settings, workflows, the host folder), as opposed to the writer guard's.
+// hostDeny reports a rule written for the Grid settings, lock and workflows files
+// and the host folder, as opposed to the task, knowledge and writer rules.
 func hostDeny(rule string) bool {
 	plain := foldedLetter.ReplaceAllString(rule, "$1")
 	for _, suffix := range []string{"/settings.json)", "/.settings.lock)", "/workflows.md)", "/.host/**)"} {
@@ -69,9 +65,9 @@ func claudeRuleMatches(t *testing.T, home, rule, target string) bool {
 	return false
 }
 
-// The deny rules cover every file EvaluateHost refuses to the file tools in the
-// places setup covers, and the task-folder files the rules alone carry. The
-// host-guard level is pinned to block, so the test holds whatever its default is.
+// The deny rules cover the settings, lock and workflows files, the host folder
+// and the task-folder files in the places setup covers, and no ordinary file.
+// Grid runs no hook guard on these paths; the rules are the only protection.
 // Every host rule must be the only rule that matches at least one path.
 func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 	for _, location := range []string{"default", "outside home"} {
@@ -82,10 +78,6 @@ func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 				projects = filepath.Join(h.root, "work")
 			}
 			t.Setenv("GRID_PROJECTS", projects)
-			store := settings.Store{Home: h.gridHome}
-			if err := store.SetHook("host-guard", "block"); err != nil {
-				t.Fatal(err)
-			}
 			if code := h.run(h.home, "setup", "--yes"); code != 0 {
 				t.Fatalf("code=%d: %s", code, h.errb)
 			}
@@ -98,14 +90,12 @@ func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 			if !slices.ContainsFunc(edit, hostDeny) {
 				t.Error("no host rules written")
 			}
-			env := map[string]string{"HOME": h.home, "GRID_HOME": h.gridHome, "GRID_PROJECTS": projects}
 
 			type target struct {
 				path, label string
-				want        bool // refused by EvaluateHost, or a task-folder file the deny rules carry
+				want        bool // a deny rule must match this path (true), or none may (false)
 			}
 			var targets []target
-			taskFolder := map[string]bool{} // paths under a task folder, which only the deny rules refuse
 			seen := map[string]bool{}
 			add := func(label, path string, want bool) {
 				if !seen[path] {
@@ -144,7 +134,6 @@ func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 			for _, task := range []string{filepath.Join(projects, "p", "tasks", "T-01-work"), filepath.Join(h.gridHome, "personal", "tasks", "T-2")} {
 				for _, rel := range []string{"approval.json", "approval-ship.json", "approval-preview.json", "feed/0001.json", "questions/q1.md", "workflow.md", "workflows.md", "task.md", "refusal-R-1.json"} {
 					add("task "+rel, filepath.Join(task, filepath.FromSlash(rel)), true)
-					taskFolder[filepath.Join(task, filepath.FromSlash(rel))] = true
 				}
 			}
 			// Paths neither guard refuses.
@@ -170,15 +159,7 @@ func TestSetupWritesDenyRulesForTheHostGuardFiles(t *testing.T) {
 
 			hits := map[string]bool{} // host rules that are the only match for some path
 			for _, tg := range targets {
-				for _, tool := range []string{"Edit", "Write"} {
-					in := hookio.Input{Cwd: h.home, ToolName: tool, ToolInput: map[string]any{"file_path": tg.path}}
-					// A task-folder file is refused by the deny rules alone (no Grid guard
-					// judges it any more); the rule check below proves it.
-					refused := guard.EvaluateHost(in, h.home, env).Behavior == "deny"
-					if !taskFolder[tg.path] && refused != tg.want {
-						t.Fatalf("%s %s: table says refused=%v, the host guard says %v", tool, tg.label, tg.want, refused)
-					}
-				}
+				// The table's want is the expectation; the rule check below proves it.
 				var matching []string
 				for _, rule := range edit {
 					if claudeRuleMatches(t, h.home, rule, tg.path) {

@@ -17,7 +17,9 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/question"
+	"github.com/gridconsole/grid-plugins/internal/routine"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -50,6 +52,10 @@ type Env struct {
 	// afterApprove is a test seam: it runs once Approve has returned and before
 	// the person Job result is posted, so a test can look at the locks there.
 	afterApprove func()
+	// timerOS is a test seam: it supplies the Backend and OSRunner grid project remove
+	// takes the project's timers down with, so a test never calls the OS scheduler.
+	// Nil uses the native backend and ExecOSRunner.
+	timerOS func() (routine.Backend, routine.OSRunner)
 	// typedGlobal names the variables a global flag was typed for (GRID_LEASE_EPOCH for --lease-epoch):
 	// getenv shows the flag's value either way, and this tells a typed flag from an inherited variable.
 	typedGlobal map[string]bool
@@ -158,7 +164,7 @@ func commands() []command {
 		{"intent", "list, claim, done, release, renew (worker requests)", runIntent},
 		{"usage", "post and show usage, fold observed session totals", runUsage},
 		{"account", "list, status, statusline, scan, sign-in, windows, folder and note for agent accounts", runAccount},
-		{"project", "add, remove, list, scan and relink projects; repo edits a project's repos", runProject},
+		{"project", "add, remove, list, scan and relink projects; repo and env edit a project's repos and environments", runProject},
 		{"project-md", "get or set a project front-matter key", runProjectMD},
 		{"update", "draft, edit, discard, skip and send a project's update", runUpdate},
 		{"setup", "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)", runSetup},
@@ -317,9 +323,15 @@ func guestTaskMoveRefusal(verb string) string {
 // A home without VERSION is new, or an older build's: a fresh one holds no task
 // yet and its first write makes the file; one with a task folder is format 0, and
 // the writers refuse it (gridhome.Legacy) so that grid migrate still runs on it.
+// An open migration journal comes first: between migrate's two renames there is no
+// home, and any command that made one would leave recovery with folders that match
+// no step, so every command but version, doctor and migrate leaves the home alone.
 func formatRefusal(env Env) string {
 	if env.GridHome == "" {
 		return ""
+	}
+	if migrate.Pending(env.GridHome) {
+		return fmt.Sprintf("A migration of %s stopped part way. Run: grid migrate --apply", gridhome.Tilde(env.GridHome, env.Home))
 	}
 	n, err := gridhome.ReadFormat(env.GridHome)
 	if errors.Is(err, fs.ErrNotExist) {

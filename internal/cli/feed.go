@@ -171,6 +171,13 @@ func runFeed(args []string, env Env) int {
 	if err != nil {
 		return fail(err)
 	}
+	// The post is written and every lock Post took is released. The plugin owns
+	// needs-you.json and the app reads it as authoritative, so refold it now: an
+	// answer, a Job or a result that opens or closes a question must show without
+	// a tick. A fold error does not undo the post; the next fold repairs the files.
+	if _, err := store.RefoldPublished(); err != nil {
+		fmt.Fprintln(env.Stderr, "refold:", err)
+	}
 	return output(struct {
 		Post feed.Record `json:"post"`
 		Tier string      `json:"tier"`

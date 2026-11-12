@@ -1,0 +1,35 @@
+{
+  "item": {
+    "approval": true,
+    "from": "template",
+    "how": "Run locally",
+    "id": "dev",
+    "kind": "local",
+    "name": "Development",
+    "runs": "app",
+    "secrets": [
+      {
+        "name": "API_TOKEN",
+        "set": true
+      },
+      {
+        "name": "DB_URL",
+        "set": false
+      }
+    ],
+    "steps": [
+      {
+        "step": "test",
+        "text": "Check",
+        "wf": "build"
+      }
+    ],
+    "test": "make test",
+    "where": "this computer",
+    "who": [
+      "ann",
+      "bo"
+    ]
+  },
+  "state": "applied"
+}

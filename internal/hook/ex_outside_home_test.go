@@ -220,12 +220,13 @@ func TestExHomeEnvFileGetsItsLinesAtEveryLevel(t *testing.T) {
 				r.task = task
 				before := exHomeSnapshot(t, r)
 				out := exHomeRun(t, r, level, true, false)
-				want := "\nexport GRID_HOME='" + r.gridHome + "'\nexport GRID_PROJECTS='" + filepath.Join(r.gridHome, "projects") + "'\n"
+				want := "\n" + envBlockStart + "\nexport GRID_HOME='" + r.gridHome + "'\nexport GRID_PROJECTS='" + filepath.Join(r.gridHome, "projects") + "'\n"
 				if task != "" {
 					want += "export GRID_TASK='T-07-example'\n"
 				} else {
 					want += "unset GRID_TASK\n"
 				}
+				want += envBlockEnd + "\n"
 				got, err := os.ReadFile(r.envFile)
 				if err != nil {
 					t.Fatal(err)

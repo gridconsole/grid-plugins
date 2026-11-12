@@ -11,8 +11,8 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
-// No guard is fixed at block. host-guard and plan-guard
-// default to warn (a warning, no refusal); a setting raises one to block or
+// No guard is fixed at block. plan-guard
+// defaults to warn (a warning, no refusal); a setting raises it to block or
 // lowers it to off, and a settings file that cannot be read keeps the refusal and reports why.
 func TestGuardsFollowTheirLevel(t *testing.T) {
 	for _, tc := range []struct {
@@ -23,7 +23,6 @@ func TestGuardsFollowTheirLevel(t *testing.T) {
 		{"plan-guard", EvaluatePlan, func(f *fixture) hookio.Input {
 			return f.input("Write", filepath.Join(f.projects, "example", "tasks.", "T-03", "notes.md"))
 		}},
-		{"host-guard", EvaluateHost, func(f *fixture) hookio.Input { return f.input("Write", filepath.Join(f.grid, ".host", "approval")) }},
 	} {
 		for _, level := range []string{"none", "off", "warn", "block", "malformed"} {
 			t.Run(tc.name+"/"+level, func(t *testing.T) {
@@ -32,7 +31,7 @@ func TestGuardsFollowTheirLevel(t *testing.T) {
 					t.Fatal(err)
 				}
 				want := "deny"
-				// All three guards warn by default (verdicts-11nov v-4; needed.md:47; host-guard: v-enforce).
+				// plan-guard warns by default (verdicts-11nov v-4; needed.md:47).
 				if level == "none" {
 					want = ""
 				}
