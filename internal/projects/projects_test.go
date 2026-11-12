@@ -129,12 +129,18 @@ func TestRelinkAndRemoveKeepData(t *testing.T) {
 	if len(removed.Folders) != 1 || removed.Folders[0].Machine != "other" {
 		t.Fatalf("%+v", removed)
 	}
-	data, err := os.ReadFile(file)
+	kept := filepath.Join(s.Resolver.GridHome, "projects", ".removed", got.Name)
+	data, err := os.ReadFile(filepath.Join(kept, "project.md"))
 	if err != nil || !strings.Contains(string(data), "Project prose.") {
 		t.Fatalf("lost body: %s %v", data, err)
 	}
-	if _, err := os.Stat(note); err != nil {
+	if _, err := os.Stat(filepath.Join(kept, "notes", "keep.md")); err != nil {
 		t.Fatal(err)
+	}
+	for _, old := range []string{file, note, filepath.Dir(file)} {
+		if _, err := os.Lstat(old); !os.IsNotExist(err) {
+			t.Fatalf("%s still there after Remove: %v", old, err)
+		}
 	}
 }
 
