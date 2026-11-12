@@ -637,7 +637,9 @@ func waitedAnswers(task string, j job.Job) ([]job.Answer, error) {
 	} else if err != nil {
 		return nil, err
 	}
-	state, decisions := feed.FoldReadAt(read, time.Now())
+	// The task's withdrawal policy decides which person withdrawals count, as it
+	// does for the gate itself (orchestrator ready.go).
+	state, decisions := feed.FoldReadAt(read, time.Now(), feed.QuestionWithdrawReadPolicy(task, io.Discard))
 	text := func(v any) string { s, _ := v.(string); return s }
 	records := map[string]feed.Record{}
 	order := []feed.Record{}
@@ -701,9 +703,10 @@ func waitedAnswers(task string, j job.Job) ([]job.Answer, error) {
 	return out, nil
 }
 
-// gateAnswer is the decision of the question whose gate id is qid: the answer
-// record the newest answered control names, else the answer the person layer
-// applied, else the default the question opened on (ready.go).
+// gateAnswer is the decision of the question whose gate id is qid: the
+// withdrawal if the question was withdrawn, else the answer record the newest
+// answered control names, else the answer the person layer applied, else the
+// default the question opened on (ready.go).
 func gateAnswer(edge, qid string, state contract.State, decisions map[string]feed.QuestionDecision, records map[string]feed.Record, order []feed.Record) (job.Answer, bool) {
 	text := func(v any) string { s, _ := v.(string); return s }
 	ids := []string{}
@@ -714,6 +717,15 @@ func gateAnswer(edge, qid string, state contract.State, decisions map[string]fee
 	}
 	sort.Strings(ids)
 	for _, id := range ids {
+		// A withdrawn question opens its gate and will never be answered: the Job
+		// is told so, with the reason the last withdrawing event gave.
+		if d := decisions[id]; d.State == "withdrawn" {
+			for i := len(d.Events) - 1; i >= 0; i-- {
+				if e := d.Events[i]; e.Type == "control" && text(e.Body["question_event"]) == "withdrawn" {
+					return job.Answer{Edge: edge, Who: e.Author.ID, At: e.At, Text: strings.TrimSpace(text(e.Body["text"])), Tier: contract.TierFor(e.Author.Role), Kind: "withdrawn"}, true
+				}
+			}
+		}
 		aid := ""
 		for _, r := range order {
 			if r.Type == "control" && text(r.Body["target"]) == id && text(r.Body["status"]) == "answered" && text(r.Body["answer"]) != "" {
