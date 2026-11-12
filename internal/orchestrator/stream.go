@@ -90,6 +90,8 @@ type Stream struct {
 	skipped map[string]string // task folder to the last reason printed
 	handed  map[string]bool   // task folder and task epoch whose handover is known posted
 	listErr string
+
+	ohSqMemo map[string]ohSqKey // task folder to the Feed key of the pass that dropped it as quiet
 }
 
 type spawnLine struct {
@@ -198,6 +200,14 @@ func (s *Stream) task(dir string) error {
 		return s.skip(dir, name, SkipFeedInvalid, err)
 	}
 	fs := feed.Store{TaskDir: dir, TaskID: taskID}
+	// A task dropped as quiet on a pass whose Feed folder looked the same is dropped
+	// again without a Load. The key is taken here, before Load, so a write that lands
+	// after it shows in the next key.
+	key, quiet := s.ohSqCheck(dir, fs, pending)
+	if quiet {
+		delete(s.skipped, dir)
+		return nil
+	}
 	snap, err := Load(fs)
 	if err != nil {
 		return s.skip(dir, taskID, SkipFeedInvalid, err)
@@ -212,6 +222,7 @@ func (s *Stream) task(dir string) error {
 	// A task whose Jobs are all closed is left alone unless this stream still
 	// holds its lease: then one more pass delivers the last wake and releases it.
 	if !pending && !hasOpenJob(snap) && !s.holds(ts) {
+		s.ohSqStore(dir, key, snap)
 		delete(s.skipped, dir)
 		return nil
 	}
