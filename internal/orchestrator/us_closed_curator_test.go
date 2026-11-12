@@ -207,7 +207,9 @@ func TestUsClosedDeclinedTaskGetsOneCuratorJob(t *testing.T) {
 // Row 4 (hook side): a closed task whose hook answers nil, errors, or answers a record the Job schema
 // refuses behaves as today: the open Job is cancelled, nothing spawns, nothing is posted and the lease is free.
 func TestUsClosedNoCuratorBodyBehavesAsToday(t *testing.T) {
-	invalid := func(string, string, string) (map[string]any, error) { return map[string]any{"id": "J-2", "role": "curator"}, nil }
+	invalid := func(string, string, string) (map[string]any, error) {
+		return map[string]any{"id": "J-2", "role": "curator"}, nil
+	}
 	for name, tc := range map[string]struct {
 		hook func(dir, taskID, id string) (map[string]any, error)
 		diag string
