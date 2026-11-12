@@ -284,9 +284,6 @@ func invoke(data []byte, env map[string]string, eval func(hookio.Input, string, 
 func PlanGuard(stdin []byte, env map[string]string) ([]byte, int) {
 	return invoke(stdin, env, EvaluatePlan)
 }
-func HostGuard(stdin []byte, env map[string]string) ([]byte, int) {
-	return invoke(stdin, env, EvaluateHost)
-}
 func HomeAllow(stdin []byte, env map[string]string) ([]byte, int) {
 	return invoke(stdin, env, EvaluateHome)
 }

@@ -69,28 +69,31 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 		ClaudeRule{"autoMode", "environment", "The Grid home at " + anchor + " is trusted for Grid operations."}), nil
 }
 
-// claudeHostPaths lists the files EvaluateHost (internal/guard/host.go) refuses
-// to the file tools, as Claude Code deny patterns, so that they stay protected
-// when that guard is set to warn. Edit rules cover Write, MultiEdit and
-// NotebookEdit too. The task gate files (approval*.json, questions/, task.md,
-// workflow.md) and the task Feed sit under the task-folder deny rules in
-// claudeBlock and are not repeated; that includes the gate files one level
-// below the Grid home, <home>/<any>/tasks/T-n/, which the rule
-// <home>/*/tasks/T-n/** in claudeBlock carries. What is left: the settings,
-// lock and workflows files of the Grid home and of a project, and the host
-// folder. Claude Code enforces these; Grid adds no hook and refuses nothing
-// itself.
+// claudeHostPaths lists the Grid settings, lock and workflows files and the host
+// folder as Claude Code deny patterns. Edit rules cover Write, MultiEdit and
+// NotebookEdit too. Claude Code enforces them; Grid runs no hook on these paths
+// and refuses nothing itself. Each pattern carries:
+//   - settings.json, .settings.lock and workflows.md in the Grid home, one folder
+//     below it, at <home>/projects/<name>/, in <projects>/ and in
+//     <projects>/<name>/, in lower and upper case;
+//   - the host folder: <home>/.host/** and .host beside the projects folder (the
+//     same folder in the default layout).
 //
-// Not carried, by decision (owner question Q4, default: not carried), though
-// the guard also refuses them: the legacy .host two levels above the projects
-// folder (~/.host in the default layout, outside the Grid home); settings.json,
-// .settings.lock and workflows.md directly in, or one folder below, the parent
-// of a projects folder that sits outside the Grid home; the same three at
-// <projects>/projects/<name>/; and gate files under <parent>/<any>/tasks/T-n/
-// for a projects folder outside the Grid home. Grid reads nothing there (no Go
-// file outside internal/guard names .host but ports.go and this comment; the
-// only reader of a projects folder's parent, internal/workflow/gates.go, reads
-// the Grid home layout only), and those are the person's own folders.
+// The task gate files (approval*.json, questions/, task.md, workflow.md) and the
+// task Feed sit under the task-folder deny rules in claudeBlock and are not
+// repeated; that includes the gate files one level below the Grid home,
+// <home>/<any>/tasks/T-n/, which the rule <home>/*/tasks/T-n/** in claudeBlock
+// carries.
+//
+// Not carried, by decision (owner question Q4, default: not carried): the legacy
+// .host two levels above the projects folder (~/.host in the default layout,
+// outside the Grid home); settings.json, .settings.lock and workflows.md
+// directly in, or one folder below, the parent of a projects folder that sits
+// outside the Grid home; the same three at <projects>/projects/<name>/; and gate
+// files under <parent>/<any>/tasks/T-n/ for a projects folder outside the Grid
+// home. Grid reads nothing there (no Go file but this one names .host; the only
+// reader of a projects folder's parent, internal/workflow/gates.go, reads the
+// Grid home layout only), and those are the person's own folders.
 func claudeHostPaths(anchor, projectAnchor string) []string {
 	var paths []string
 	add := func(p string) {

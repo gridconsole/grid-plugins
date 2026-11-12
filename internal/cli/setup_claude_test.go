@@ -176,8 +176,8 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 			}
 			// Setup-record defenses are additional to the reserved kinds and are tested
 			// through the CLI in settings.TestClaudeReworkCLIProjectAnchors. So are
-			// the host-guard files, which TestSetupWritesDenyRulesForTheHostGuardFiles
-			// checks against EvaluateHost.
+			// the settings, lock, workflows and host-folder rules, which
+			// TestSetupWritesDenyRulesForTheHostGuardFiles checks path by path.
 			rules := slices.DeleteFunc(doc.Permissions.Deny, func(rule string) bool {
 				return strings.Contains(rule, "~/.grid-person/**") || rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)" || hostDeny(rule)
 			})

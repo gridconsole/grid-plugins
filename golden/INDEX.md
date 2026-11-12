@@ -28,10 +28,6 @@ Every case has input.json, setup.json, env.txt, stdout, stderr, exit and files.d
 - `plan-guard/unmatched-edit`: An edit with an unknown result cannot change task metadata.
 - `plan-guard/bash-recall`: Bash cannot write plan ready without recall.
 - `plan-guard/invalid-json`: Malformed input fails open.
-- `host-guard/ordinary-write`: Ordinary task files pass.
-- `host-guard/host-write`: Host approval files are denied even with plan guard off.
-- `host-guard/bash-uppercase`: Bash host-name matching is case insensitive.
-- `host-guard/similar-name`: A longer dot-host filename does not match the host folder.
 - `brief-lint/complete`: A complete brief passes and records dispatch.
 - `brief-lint/missing-field`: An empty verify field denies dispatch.
 - `brief-lint/missing-section`: A missing Outcome heading denies dispatch.
@@ -162,7 +158,6 @@ SHA-256 of reference files read by these cases (paths relative to the old plugin
 - `hooks/heartbeat.mjs`: `490bc051edc913e158bb854f3ef937aee3e761df5d6558434209d0b4987650e1`
 - `hooks/history-log.mjs`: `086e50d883439c1182042c6cb93b3318cac2ea27a6a3ad167264070f7e7f2b47`
 - `hooks/hooks.json`: `9a7149a4d3425a78d8bc3dd15533d8e9df0d6939b0acebe85bcafc1ccf35372d`
-- `hooks/host-guard.mjs`: `b00b3f4347e1305266b31efe6f741d6a612d0797e1114cc460be5e1d10e477a9`
 - `hooks/lib.mjs`: `8e472ba77ce1c02a69161bca6c83e3ae8e110d36802819e162adc73614590557`
 - `hooks/needs-you.mjs`: `acc74825540eab2ee8508ec3ded78d8858a6d618473885eebe91a86ae321e6a7`
 - `hooks/permission-forward.mjs`: `c2c5c68dd8459dccd9d14b10eecd97d4208b6bd7681bbb3be23a8ede533d5156`
