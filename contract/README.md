@@ -178,6 +178,10 @@ are reference-document names and original line numbers, not machine paths.
 | Takeover log entry | [takeover.json](schemas/takeover.json) | feed-contract.md:105-111 |
 | Trust tier field | [trust-tier.json](schemas/trust-tier.json) | feed-contract.md:90; job-contract.md:87-91 |
 | grid approve output | [cmd-approve.json](schemas/cmd-approve.json) | internal/cli/task_write.go:164 |
+| grid brain changes output | [cmd-brain-changes.json](schemas/cmd-brain-changes.json) | internal/braincmd/changes.go:188 |
+| grid brain drop output | [cmd-brain-drop.json](schemas/cmd-brain-drop.json) | internal/braincmd/hy_drop.go:127 |
+| grid brain search output | [cmd-brain-search.json](schemas/cmd-brain-search.json) | internal/braincmd/command.go:345 |
+| grid brain write output | [cmd-brain-write.json](schemas/cmd-brain-write.json) | internal/braincmd/ke_write.go:147 |
 | grid feed post output | [cmd-feed-post.json](schemas/cmd-feed-post.json) | internal/cli/feed.go:168 |
 | grid feed state output | [cmd-feed-state.json](schemas/cmd-feed-state.json) | internal/cli/feed.go:131 |
 | grid intent list output | [cmd-intent-list.json](schemas/cmd-intent-list.json) | internal/cli/intent.go:247 |
