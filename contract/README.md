@@ -198,7 +198,7 @@ are reference-document names and original line numbers, not machine paths.
 | grid lease status output | [cmd-lease-status.json](schemas/cmd-lease-status.json) | internal/cli/task_lease.go:146 |
 | grid plan hash output | [cmd-plan-hash.json](schemas/cmd-plan-hash.json) | internal/cli/plan.go:74 |
 | grid project add output | [cmd-project-add.json](schemas/cmd-project-add.json) | internal/cli/projects.go:172 |
-| grid project env output | [cmd-project-env.json](schemas/cmd-project-env.json) | internal/cli/ln_project_env.go:184, :264 |
+| grid project env output | [cmd-project-env.json](schemas/cmd-project-env.json) | internal/cli/ln_project_env.go:184, :268 |
 | grid project-md set output | [cmd-project-md-set.json](schemas/cmd-project-md-set.json) | internal/cli/projectmd.go:41 |
 | grid project remove output | [cmd-project-remove.json](schemas/cmd-project-remove.json) | internal/cli/projects.go:172 |
 | grid project repo output | [cmd-project-repo.json](schemas/cmd-project-repo.json) | internal/cli/project_repo.go:110 |

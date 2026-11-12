@@ -215,34 +215,38 @@ func projectEnv(args []string, env Env) int {
 		default:
 			return commandError(env, "grid project env", err)
 		}
-		for _, f := range []struct {
-			flag string
-			in   *string
-			out  *string
-		}{{"name", name, &e.Name}, {"kind", kind, &e.Kind}, {"where", place, &e.Where}, {"runs", runs, &e.Runs}, {"test", test, &e.Test}, {"how", how, &e.How}, {"from", from, &e.From}} {
-			if given[f.flag] {
-				*f.out = *f.in
+		// A flag that is given replaces its field; every other field, the steps
+		// included, keeps what is stored. who is the environment's people list,
+		// not an author.
+		pick := func(flag string, value *string, kept string) string {
+			if given[flag] {
+				return *value
 			}
+			return kept
 		}
+		people, named, approve := e.Who, e.Secrets, e.Approval
 		if given["who"] {
-			e.Who = lnEnvClearable(who)
+			people = lnEnvClearable(who)
 		}
 		if given["secret"] {
-			e.Secrets = secrets
+			named = secrets
 		}
 		if given["approval"] {
-			e.Approval = nil
+			approve = nil
 			if *approval != "" {
 				v := *approval == "yes"
-				e.Approval = &v
+				approve = &v
 			}
 		}
-		data, err := projectenv.Render(e)
+		next := projectenv.Entry{ID: e.ID, Name: pick("name", name, e.Name), Kind: pick("kind", kind, e.Kind),
+			Where: pick("where", place, e.Where), Runs: pick("runs", runs, e.Runs), Test: pick("test", test, e.Test),
+			How: pick("how", how, e.How), From: pick("from", from, e.From), Who: people, Secrets: named, Steps: e.Steps, Approval: approve}
+		data, err := projectenv.Render(next)
 		if err == nil {
-			stored, err = projectenv.Parse(e.ID, data)
+			stored, err = projectenv.Parse(next.ID, data)
 		}
 		if err == nil {
-			err = projectenv.SaveBy(store, e, origin)
+			err = projectenv.SaveBy(store, next, origin)
 		}
 		if err != nil {
 			return commandError(env, "grid project env", err)
