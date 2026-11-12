@@ -20,7 +20,7 @@ Base check: HOLDS. On the base, `case "cancelled":` (internal/orchestrator/tick.
 | 5c | `make lint` | HOLDS | exit 0 (`go vet ./...`, no output). `gofmt -l internal/orchestrator` prints nothing. |
 | 5d | `make cross` (darwin/arm64 and windows/amd64 vet and test compile) | HOLDS | exit 0, every package `ok` on both targets |
 | 5e | `git diff main --stat` names only the Touches | HOLDS | contract/docs/feed-posts.md, internal/orchestrator/tick.go, internal/orchestrator/yc_worker_stopped.go, internal/orchestrator/yc_worker_stopped_test.go. This report (docs/lanes/C-yc-worker-stopped-requeue.md) is the runbook's required file and is the one addition. |
-| R1 | packages that import what I changed, tested | HOLDS | `go list` shows internal/mcp, internal/migrate and internal/cli import internal/orchestrator (cmd/grid and lib only through cli). `go test -count=1 ./internal/orchestrator/ ./internal/contract/ ./contract/... ./internal/mcp/ ./internal/migrate/` exit 0. `go test -count=1 ./internal/cli ./internal/job/lint/ -run '.'` exit 0 (`ok internal/cli 55.773s`). cmd/grid and lib have no code of mine and compile in `make cross`. |
+| R1 | packages that import what I changed, tested | HOLDS | `go list` shows internal/mcp, internal/migrate and internal/cli import internal/orchestrator (cmd/grid and lib only through cli). `go test -count=1 ./internal/orchestrator/ ./internal/contract/ ./contract/... ./internal/mcp/ ./internal/migrate/` exit 0. The whole cli package ran as `go test -count=1 ./internal/cli ./internal/job/lint/ -run 'TestHsIpWalksEveryCommand|TestIlGuestSiteList|.' -skip 'XXXNONE' 2>&1 | tail -5`: `ok internal/cli 55.773s`, `ok internal/job/lint 0.468s` (the exit code seen there was tail's, the `ok` lines are the evidence). cmd/grid and lib have no code of mine and compile in `make cross`. |
 | R2 | repo-wide walk tests, plugin set | HOLDS | 5a and 5b above. The app-only walks (`make webui-test`, TestFvArgvCollects, TestEveryWiredMount, slices Imports) do not exist in this repo. |
 | R3 | new tests fail on base | HOLDS | row 1b |
 | R4 | no existing test edited or deleted | HOLDS | `git diff main --stat` shows no existing test file |
@@ -50,3 +50,5 @@ Row 1 says "tick: J-1 is Ready". After one tick J-1 is not left Ready, because t
 ## NOT VERIFIED on a live screen
 
 Nothing here is a UI change. Not run: a real `grid-worker stop` against a running Job, which needs the app worker from C-yc2-worker-posts-stopped.
+
+Verdict: DONE
