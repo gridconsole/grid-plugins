@@ -163,7 +163,16 @@ func Run(args []string, e Env) int {
 			return output(e, f, report{ID: j.ID, Findings: findings}, 1)
 		}
 		agent, _, _ := w.store.AgentFor(j.Role) // the brain's agent for the role, if it holds one
-		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j), Agent: agent})
+		// A skill the person turned off (grid skill disable) is left out of the Skills block.
+		prefs, err := settings.Store{Home: e.GridHome, Project: w.project}.Effective()
+		if err != nil && w.project != "" && strings.HasPrefix(err.Error(), "unknown project") {
+			prefs, err = settings.Store{Home: e.GridHome}.Effective() // a folder with no record: the personal level
+		}
+		if err != nil {
+			return fail(err, 1)
+		}
+		skillOff := func(name string) bool { on, present := prefs.Skills[name]; return present && !on }
+		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j), Agent: agent, BrainSkill: w.store.SkillFor, SkillOff: skillOff})
 		if err != nil {
 			return fail(err, 1)
 		}
