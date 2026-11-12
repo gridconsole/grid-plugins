@@ -196,7 +196,7 @@ func (s Store) Tick() (out Output, err error) {
 					return e
 				}
 				if j.Assign != nil {
-					out.Spawns = append(out.Spawns, Spawn{j.ID, j.Assign.Attempt, j.Assign.To, j.Assign.Fence, j.Generation, j.AssignPost, j.Role})
+					out.Spawns = append(out.Spawns, Spawn{j.ID, j.Assign.Attempt, j.Assign.To, j.Assign.Fence, j.Generation, j.AssignPost, j.Role, j.Repo})
 				}
 			} else if e := os.Remove(filepath.Join(s.Feed.TaskDir, "spawned", j.ID+".json")); e != nil && !errors.Is(e, os.ErrNotExist) {
 				return e

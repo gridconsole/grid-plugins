@@ -555,6 +555,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"project list":         {},
 		"project scan":         {args: []string{"<root>"}, output: "cmd-project-scan.json"},
 		"project relink":       {args: []string{"<name-or-id>", "<path>"}},
+		"project env":          {args: []string{"<list|add|edit|remove>", "<project>"}, output: "cmd-project-env.json"},
 		"project repo":         {args: []string{"<add|edit|remove>", "<project>"}, output: "cmd-project-repo.json"},
 		"update draft":         {args: []string{"<project>"}},
 		"update edit":          {args: []string{"<project>"}, required: map[string]bool{"--line": true}},

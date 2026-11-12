@@ -11,7 +11,7 @@ import (
 // Kind belongs to the step; the remaining floor inputs belong to each Job.
 func DecodePlanned(raw map[string]any, kind string) (Job, []string) {
 	problems := []string{}
-	allowed := map[string]bool{"visible": true, "irreversible": true, "review_reason": true, "review": true}
+	allowed := map[string]bool{"visible": true, "irreversible": true, "review_reason": true, "review": true, "repo": true}
 	for _, key := range RetiredFields {
 		allowed[key] = true
 	}

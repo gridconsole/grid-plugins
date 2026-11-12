@@ -95,7 +95,8 @@ func (e Env) openURL(target string) error {
 }
 
 // runOpen opens the task page: grid open [T-NN | folder] [--json]. The task is found as
-// grid where --task finds it, from the folder when none is given.
+// grid where --task finds it, from the folder when none is given. With no operand and a
+// folder in no task it opens Home (#/).
 func runOpen(args []string, env Env) int {
 	fs := newFlags("open", env)
 	asJSON := fs.Bool("json", false, "print JSON")
@@ -119,7 +120,16 @@ func runOpen(args []string, env Env) int {
 		operand = pos[0]
 	}
 	var t task.Task
-	if feed.IsID(operand) {
+	// No operand and a folder in no task (no error, no task): open Home. A resolve error, or
+	// a folder inside a task, goes on below exactly as before.
+	home := false
+	if operand == "" {
+		res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd})
+		home = err == nil && res.TaskPath == ""
+	}
+	if home {
+		// Home needs no task.
+	} else if feed.IsID(operand) {
 		// A task ULID is unique in the home; grid where finds it without a project.
 		res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: operand})
 		if err == nil && res.TaskPath == "" {
@@ -141,11 +151,14 @@ func runOpen(args []string, env Env) int {
 	}
 	// The route links by the task's ULID; T-NN is only what the page shows. A task that
 	// has no ULID yet (an old home before its first Feed write) links by T-NN.
-	linkID := t.ID
-	if stable, err := feed.TaskID(t.Path); err == nil && feed.IsID(stable) {
-		linkID = stable
+	route := "#/"
+	if !home {
+		linkID := t.ID
+		if stable, err := feed.TaskID(t.Path); err == nil && feed.IsID(stable) {
+			linkID = stable
+		}
+		route = "#/t/" + url.PathEscape(t.Project) + "/" + url.PathEscape(linkID) + "/overview"
 	}
-	route := "#/t/" + url.PathEscape(t.Project) + "/" + url.PathEscape(linkID) + "/overview"
 	base := appBaseURL(env)
 	// GRID_APP_URL points at an app this machine does not run: open it as it is, start
 	// nothing, and never hand it this home's launch code.

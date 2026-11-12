@@ -2,7 +2,7 @@ ok grid home: ~/.grid
 ok grid home writable: ~/.grid
 ok format version: 1
 ok git: git version 2.0.0-test
-ok grid on PATH: grid is on PATH
+ok grid on PATH: grid is on PATH; version not read
 ok plugin hooks: plugin hooks file is valid
 ok allow block: all setup allow rules are present
 ok deny block: all setup deny rules are present

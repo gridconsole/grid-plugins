@@ -15,6 +15,7 @@ package where
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -476,7 +477,29 @@ func (r Resolver) gitProject(gridHome string, records []project.Record, root str
 	return res
 }
 
+// hasGitMarker decides a repo by a stat of <dir>/.git, with no git process: a folder,
+// or a file whose first line starts "gitdir:" (a worktree or submodule pointer).
+func hasGitMarker(dir string) bool {
+	p := filepath.Join(dir, ".git")
+	info, err := os.Stat(p)
+	if err != nil {
+		return false
+	}
+	if info.IsDir() {
+		return true
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	buf := make([]byte, len("gitdir:"))
+	n, _ := io.ReadFull(f, buf)
+	return string(buf[:n]) == "gitdir:"
+}
+
 // childRepos lists git repos one or two levels below dir, never entering a repo.
+// A repo is found by a stat, not by one git process per folder.
 func childRepos(dir string) []string {
 	var repos []string
 	var walk func(d string, depth int)
@@ -490,7 +513,7 @@ func childRepos(dir string) []string {
 				continue
 			}
 			p := filepath.Join(d, e.Name())
-			if gitx.IsRepoRoot(p) {
+			if hasGitMarker(p) {
 				repos = append(repos, p)
 			} else if depth < 2 {
 				walk(p, depth+1)

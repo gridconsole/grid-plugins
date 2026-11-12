@@ -22,13 +22,17 @@ from the enclosing checklist item. `intent.owner` is required. The step's
 `kind` applies to its Jobs and is not repeated inside a Job entry.
 
 Optional Job fields are `visible` (`big` or `small`), `irreversible` (boolean),
-and `review_reason` (text). Run fields such as `status`, `attempt`, and
+`review_reason` (text) and `repo` (the path of one of the project's repos in
+project.md; a Job without it works in the first repo). Run fields such as `status`, `attempt`, and
 `worktree` do not belong in the plan and are refused there. Rendered brief
 metadata retains the step kind and the supplied optional fields for later readers.
+A code Job names its repo in the Job record as `"repo": "<path>"`, for example
+`{"id": "J1", "title": "Fix the parser", "repo": "plugin"}`.
 
 Job-record contract version 1 also accepts these optional fields: `kind` matches
 `^[a-z][a-z-]*$` (1–40 characters), `visible` is `big` or `small`, `irreversible`
-is boolean, and `review_reason` is a nonempty sentence (at most 500 characters).
+is boolean, `review_reason` is a nonempty sentence (at most 500 characters), and
+`repo` is a nonempty repo path.
 Adding optional fields does not change the contract version.
 
 `grid job render` selects a Job by its id or an item number. An item number is
@@ -83,6 +87,7 @@ the schema.
 | `posts_back` | required | plan `internal/job/record.go` | What the worker may post: `result`, `question`, `knowledge`, `checkpoint`; `[]` when unset. |
 | `kind` | optional | plan `internal/job/planned.go` | The step's work kind (`^[a-z][a-z-]*$`), taken from the checklist item. |
 | `visible` | optional | plan `internal/job/planned.go` | `big` or `small`. |
+| `repo` | optional | plan `internal/job/planned.go` | The project repo a code Job works in, by its path in project.md; lint refuses a path the project does not list (rule `job.repo`); none is the first repo. `grid worker next` puts that repo's folder on the spawn line as `repo`. |
 | `irreversible` | optional | plan `internal/job/planned.go` | Boolean; the Job does something that cannot be undone. |
 | `review_reason` | optional | plan `internal/job/planned.go` | A nonempty sentence, at most 500 characters, saying why a review is wanted. |
 | `order` | optional | run `internal/cli/orchestrator.go`, `internal/contract/fold.go` | Queue position, lowest first; changes only a Job that has not started. |
