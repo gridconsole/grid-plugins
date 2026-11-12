@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	gridplugins "github.com/gridconsole/grid-plugins"
 	"github.com/gridconsole/grid-plugins/internal/brain"
@@ -163,7 +164,11 @@ func Run(args []string, e Env) int {
 			return output(e, f, report{ID: j.ID, Findings: findings}, 1)
 		}
 		agent, _, _ := w.store.AgentFor(j.Role) // the brain's agent for the role, if it holds one
-		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j), Agent: agent})
+		answers, err := waitedAnswers(task, j)
+		if err != nil {
+			return fail(err, 1)
+		}
+		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j), Agent: agent, Answers: answers})
 		if err != nil {
 			return fail(err, 1)
 		}
@@ -615,6 +620,120 @@ type world struct {
 // sources never takes a root from the task folder, which syncs to every member.
 // The project's folders and repos come from its record in the Grid home, and the
 // owner's role in task.md decides how intent.md is treated.
+// waitedAnswers reads the task's Feed for the decisions j waited for, one per
+// after edge, in edge order: the answer of a person Job from the control that
+// closed it (accepted, or rejected and sent back, person.go), and the answer of
+// a gate:Q-<n> question from the answered control that names the answer record
+// (orchestrator events.go), or the default the question opened on. Only counted
+// records are read. The tier is the answerer's, from contract.TierFor of the
+// role on the answer record; a Feed this store cannot read gives no answers.
+func waitedAnswers(task string, j job.Job) ([]job.Answer, error) {
+	if len(j.After) == 0 {
+		return nil, nil
+	}
+	read, err := readFeed(task, feed.Filter{})
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	state, decisions := feed.FoldReadAt(read, time.Now())
+	text := func(v any) string { s, _ := v.(string); return s }
+	records := map[string]feed.Record{}
+	order := []feed.Record{}
+	person := map[string]bool{}
+	for _, e := range read.Records {
+		if e.Verdict != "counted" {
+			continue
+		}
+		records[e.ID] = e.Record
+		order = append(order, e.Record)
+		if e.Type == "job" {
+			id, _ := identity(e)
+			person[id] = strings.EqualFold(strings.TrimSpace(text(e.Body["role"])), job.RolePerson)
+		}
+	}
+	var out []job.Answer
+	for _, edge := range j.After {
+		if qid, ok := strings.CutPrefix(edge.Job, "gate:"); ok {
+			if a, ok := gateAnswer(edge.Job, qid, state, decisions, records, order); ok {
+				out = append(out, a)
+			}
+			continue
+		}
+		sj := state.Jobs[edge.Job]
+		if sj == nil || !person[edge.Job] || len(sj.History) == 0 {
+			continue
+		}
+		kind := ""
+		var closing feed.Record
+		for _, rid := range sj.History {
+			r, ok := records[rid]
+			if !ok || r.Type != "control" || text(r.Body["status"]) != string(sj.Status) {
+				continue
+			}
+			if _, ok := r.Body["answer"].(string); !ok {
+				continue
+			}
+			switch {
+			case sj.Status == contract.Accepted:
+				kind, closing = "answered", r
+			case sj.Status == contract.Rejected && r.Body["send_back"] == true:
+				kind, closing = "sent back", r
+			}
+		}
+		if kind == "" {
+			continue
+		}
+		said := strings.TrimSpace(text(closing.Body["answer"]))
+		a := job.Answer{Edge: edge.Job, Who: closing.Author.ID, At: closing.At, Text: said, Tier: contract.TierFor(closing.Author.Role), Kind: kind}
+		// An unleased answer is posted by the person and closed by the lease holder,
+		// who copies its text: the person who wrote the earliest such answer is who
+		// answered, and their role gives the tier.
+		for _, r := range order {
+			if r.Type == "answer" && r.Re != nil && *r.Re == sj.History[0] && r.Lease == nil && r.Fence == 0 && strings.TrimSpace(text(r.Body["answer"])) == said {
+				a.Who, a.At, a.Tier = r.Author.ID, r.At, contract.TierFor(r.Author.Role)
+				break
+			}
+		}
+		out = append(out, a)
+	}
+	return out, nil
+}
+
+// gateAnswer is the decision of the question whose gate id is qid: the answer
+// record the newest answered control names, else the answer the person layer
+// applied, else the default the question opened on (ready.go).
+func gateAnswer(edge, qid string, state contract.State, decisions map[string]feed.QuestionDecision, records map[string]feed.Record, order []feed.Record) (job.Answer, bool) {
+	text := func(v any) string { s, _ := v.(string); return s }
+	ids := []string{}
+	for id := range state.Questions {
+		if gate, _ := records[id].Body["gate"].(map[string]any); text(gate["id"]) == qid {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		aid := ""
+		for _, r := range order {
+			if r.Type == "control" && text(r.Body["target"]) == id && text(r.Body["status"]) == "answered" && text(r.Body["answer"]) != "" {
+				aid = text(r.Body["answer"])
+			}
+		}
+		if q := state.Questions[id]; aid == "" && q.Applied != nil {
+			aid = *q.Applied
+		}
+		if r, ok := records[aid]; ok && r.Type == "answer" {
+			return job.Answer{Edge: edge, Who: r.Author.ID, At: r.At, Text: strings.TrimSpace(text(r.Body["answer"])), Tier: contract.TierFor(r.Author.Role), Kind: "answered"}, true
+		}
+		if d := decisions[id]; d.State == "defaulted" {
+			gate, _ := records[id].Body["gate"].(map[string]any)
+			return job.Answer{Edge: edge, At: text(gate["at"]), Text: d.Answer, Tier: contract.TierFor(records[id].Author.Role), Kind: "default"}, true
+		}
+	}
+	return job.Answer{}, false
+}
+
 func sources(task string, e Env) (*world, error) {
 	w := &world{project: projectOf(task, e.GridHome)}
 	w.store = brain.Store{GridHome: e.GridHome, Project: w.project}
