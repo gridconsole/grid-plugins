@@ -97,6 +97,30 @@ func (f vuRmFixture) manifests(t *testing.T) []string {
 	return names
 }
 
+// removedFolderMentions reports whether a file under projects/.removed/<project> contains text.
+func (f vuRmFixture) removedFolderMentions(t *testing.T, project, text string) bool {
+	t.Helper()
+	root := filepath.Join(f.h.gridHome, "projects", ".removed", project)
+	found := false
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(raw), text) {
+			found = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("projects/.removed/%s: %v", project, err)
+	}
+	return found
+}
+
 func (f vuRmFixture) wantCalls(t *testing.T, want ...string) {
 	t.Helper()
 	if strings.Join(f.runner.calls, "\n") != strings.Join(want, "\n") {
@@ -143,9 +167,10 @@ func TestVuRmRemoveTakesDownTheProjectsTimer(t *testing.T) {
 	if got := f.manifests(t); len(got) != 1 {
 		t.Fatalf("manifests after remove = %v, want only beta's", got)
 	}
-	// The definition stays in the project's brain config, so a restore can schedule it again.
-	if _, err := (routine.Store{GridHome: f.h.gridHome, Project: "alpha"}).Get("daily"); err != nil {
-		t.Fatalf("alpha's routine definition is gone: %v", err)
+	// Main moves the project's data folder whole to projects/.removed/alpha, so the
+	// definition travels with it and a restore can schedule it again.
+	if !f.removedFolderMentions(t, "alpha", "daily") {
+		t.Fatalf("alpha's routine definition is not in projects/.removed/alpha")
 	}
 	if strings.Contains(f.h.errb.String(), "grid:") {
 		t.Fatalf("stderr: %s", f.h.errb)
@@ -198,15 +223,19 @@ func TestVuRmRemoveKeepsTheProjectRemovedWhenTheOSRefuses(t *testing.T) {
 	if code := f.h.run(f.h.root, "project", "list", "--json"); code != 0 {
 		t.Fatalf("list exit %d: %s", code, f.h.errb)
 	}
+	// Main's remove has already moved the folder to projects/.removed/alpha, so the
+	// project is unlisted whatever the OS answered; the refusal does not undo that.
 	var list []struct {
-		Name    string `json:"name"`
-		Folders []any  `json:"folders"`
+		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(f.h.out.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 || list[0].Name != "alpha" || len(list[0].Folders) != 0 {
-		t.Fatalf("project list = %s, want alpha still listed with no folder on this machine", f.h.out)
+	if len(list) != 0 {
+		t.Fatalf("project list = %s, want alpha unlisted: the remove completed", f.h.out)
+	}
+	if !f.removedFolderMentions(t, "alpha", "daily") {
+		t.Fatalf("alpha's routine definition is not in projects/.removed/alpha")
 	}
 
 	// The manifest is kept, so running remove's unschedule again finishes the job.
