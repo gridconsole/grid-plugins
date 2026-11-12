@@ -63,6 +63,12 @@ type Stream struct {
 	// model and effort. Empty strings leave the keys out. An error is one Diag line:
 	// the spawn line is still printed without the two keys, never a skipped Job.
 	Model func(taskDir, role string) (model, effort string, err error)
+	// Tools, when set, is called the same way as Model; the tool names it answers go on
+	// the spawn line as tools, in order. Nothing is answered for a role whose agent names
+	// none, and the key is left out. The stream reports what the callback answers and does
+	// not filter, add or cap it. An error is one Diag line: the spawn line is still
+	// printed without the key, never a skipped Job.
+	Tools func(taskDir, role string) ([]string, error)
 	// Probe judges whether a recorded holder process is gone; nil uses session.ProbeLocal.
 	Probe func(session.Live) session.ProcessState
 	// ReceiptPending and ReceiptMove move an old approval receipt of a task folder
@@ -106,6 +112,9 @@ type spawnLine struct {
 	// leaves them out and claude keeps its own default.
 	Model  string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
+	// Tools are the tool names the role's agent file names, as the worker may add them
+	// to the claude command; empty leaves the key out.
+	Tools []string `json:"tools,omitempty"`
 }
 type wakeLine struct {
 	Task   string   `json:"task"`
@@ -274,6 +283,14 @@ func (s *Stream) task(dir string) error {
 			if err != nil {
 				line.Model, line.Effort = "", ""
 				s.diag("grid worker next: task %s: job %s assigned, no model or effort for role %q: %s\n", taskID, sp.Job, sp.Role, oneLine(err))
+			}
+		}
+		if s.Tools != nil {
+			tools, err := s.Tools(dir, sp.Role)
+			if err != nil {
+				s.diag("grid worker next: task %s: job %s assigned, no tools for role %q: %s\n", taskID, sp.Job, sp.Role, oneLine(err))
+			} else {
+				line.Tools = tools
 			}
 		}
 		if err := s.emit("spawn", line); err != nil {
