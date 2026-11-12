@@ -12,9 +12,10 @@ import (
 )
 
 // project.md is a file people and agents edit, so a writer of the projects store
-// (Relink, Remove, Add, Apply: all go through Store.write) keeps every front-matter
+// (Relink, Add, Apply: all go through Store.write) keeps every front-matter
 // key it does not own, with its value, in the order the file had them, and keeps
 // the body byte for byte. The keys it owns are id, folders, repos and keys.
+// Remove writes nothing: it moves the file, unchanged, to projects/.removed/<name>.
 
 const (
 	gkLands = "lands: reviewed\n"
@@ -99,7 +100,9 @@ func gkSetup(t *testing.T) (s Store, root, folder string) {
 }
 
 // TestKeysSurviveRelinkAfterKeySet: a key set with projectmd.Key is still there
-// after a relink, a remove and an add, and the keys that were there before are too.
+// after a relink and an add, and the keys that were there before are too. Remove
+// is no step here: it moves the project to projects/.removed, so the add after it
+// would make a fresh record; TestKeysSurviveWriters/remove covers keys across Remove.
 func TestKeysSurviveRelinkAfterKeySet(t *testing.T) {
 	s, root, folder := gkSetup(t)
 	value := "value-01"
@@ -119,8 +122,7 @@ func TestKeysSurviveRelinkAfterKeySet(t *testing.T) {
 		run  func() error
 	}{
 		{"relink", func() error { _, err := s.Relink("alpha", mkdir(t, filepath.Join(root, "work", "alpha2"))); return err }},
-		{"remove", func() error { _, err := s.Remove("alpha"); return err }},
-		{"add", func() error { _, err := s.Add(folder, "alpha"); return err }},
+		{"add",func() error { _, err := s.Add(folder, "alpha"); return err }},
 	}
 	for _, step := range steps {
 		if err := step.run(); err != nil {
@@ -148,8 +150,9 @@ func TestKeysSurviveWriters(t *testing.T) {
 				t.Fatalf("Relink = %+v, %v", e, err)
 			}
 		}},
-		// Remove drops folders and keys: the keys that stay keep their order.
-		{"remove", []string{"id", "lands", "owner", "note", "tags"}, func(t *testing.T, s Store, root, folder string) {
+		// Remove moves the file to projects/.removed/alpha and writes nothing: it is
+		// the start file, folders and keys included, byte for byte.
+		{"remove", []string{"id", "lands", "owner", "folders", "note", "keys", "tags"}, func(t *testing.T, s Store, root, folder string) {
 			if e, err := s.Remove("alpha"); err != nil || len(e.Folders) != 0 {
 				t.Fatalf("Remove = %+v, %v", e, err)
 			}
@@ -173,7 +176,11 @@ func TestKeysSurviveWriters(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, root, folder := gkSetup(t)
 			tc.run(t, s, root, folder)
-			b, err := os.ReadFile(gkPath(s, "alpha"))
+			path := gkPath(s, "alpha")
+			if tc.name == "remove" {
+				path = gkPath(s, filepath.Join(".removed", "alpha"))
+			}
+			b, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatal(err)
 			}
