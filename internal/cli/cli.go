@@ -310,7 +310,9 @@ func guestTaskMoveRefusal(verb string) string {
 }
 
 // formatRefusal says why this grid must not read the Grid home, or "" when it may.
-// A home without VERSION holds nothing yet; its first write makes the file.
+// A home without VERSION is new, or an older build's: a fresh one holds no task
+// yet and its first write makes the file; one with a task folder is format 0, and
+// the writers refuse it (gridhome.Legacy) so that grid migrate still runs on it.
 func formatRefusal(env Env) string {
 	if env.GridHome == "" {
 		return ""
