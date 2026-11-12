@@ -400,6 +400,17 @@ func runOrchestrator(args []string, env Env) int {
 	if err != nil {
 		return fail(err)
 	}
+	// The post is written and write has released every lock it took. The plugin
+	// owns needs-you.json and the app reads it as authoritative, so refold it now,
+	// as grid feed post does: an answer, Job or result that opens or closes a
+	// question shows without a tick. A fold error does not undo the post; the next
+	// fold repairs the files. The write's own fold has said any withdrawal-policy
+	// warning for this operation already, so the refold does not say it again.
+	refold := store
+	refold.Warn = io.Discard
+	if _, err := refold.RefoldPublished(); err != nil {
+		fmt.Fprintln(env.Stderr, "refold:", err)
+	}
 	if checked {
 		printPostFindings(env.Stderr, *job, findings, findingsErr)
 		if *asJSON {
