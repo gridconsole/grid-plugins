@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/question"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
@@ -317,9 +318,15 @@ func guestTaskMoveRefusal(verb string) string {
 // A home without VERSION is new, or an older build's: a fresh one holds no task
 // yet and its first write makes the file; one with a task folder is format 0, and
 // the writers refuse it (gridhome.Legacy) so that grid migrate still runs on it.
+// An open migration journal comes first: between migrate's two renames there is no
+// home, and any command that made one would leave recovery with folders that match
+// no step, so every command but version, doctor and migrate leaves the home alone.
 func formatRefusal(env Env) string {
 	if env.GridHome == "" {
 		return ""
+	}
+	if migrate.Pending(env.GridHome) {
+		return fmt.Sprintf("A migration of %s stopped part way. Run: grid migrate --apply", gridhome.Tilde(env.GridHome, env.Home))
 	}
 	n, err := gridhome.ReadFormat(env.GridHome)
 	if errors.Is(err, fs.ErrNotExist) {
