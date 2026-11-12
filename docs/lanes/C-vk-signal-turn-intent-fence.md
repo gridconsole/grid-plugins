@@ -3,7 +3,26 @@
 A task turned from an outside signal now renders its intent.md to J-1 as external data, not as the owner's own words.
 
 Base: lane branch `lane-C-vk-signal-turn-intent-fence` from sha `103b915799ce05bb20c8d92fbf823650b37c5c25` (the brief's 44c7de5b is older; main has moved, line numbers below are of this base).
-Base check: a turned task's intent.md did NOT render as external on this base. `internal/signal/act.go:186-189` (before the lane) made the task with `Words: n.Title + "\n\nSignal: ..."` and no flag; `internal/job/source.go:147-151` `taskTier("intent.md")` returns `f.Owner`, set from `owner_role` at `internal/job/jobcmd/command.go:636`. Red proof below.
+Base check: a turned task's intent.md did NOT render as external on this base, so the lane goes on. Quoted from the base:
+
+`internal/signal/act.go:186-189`:
+```
+made, err := (task.Store{Resolver: r}).New(task.NewOptions{
+	Cwd: o.Cwd, Project: s.Project, Who: o.Who, Role: o.Role,
+	Words: n.Title + "\n\nSignal: projects/" + s.Project + "/notes/" + id + ".md",
+})
+```
+`internal/job/source.go:147-151`:
+```
+func (f *Files) taskTier(rel string) contract.TrustTier {
+	switch filepath.ToSlash(filepath.Clean(rel)) {
+	case "intent.md":
+		if f.Owner != "" {
+			return f.Owner
+```
+`f.Owner` is set from `owner_role` at `internal/job/jobcmd/command.go:636` (`f.Owner = ownerTier(role)`). Red proof below.
+
+Budget: the brief said about 50 calls; this lane used about 80 (the module-wide importer test run, the red-on-base stash run and a second look at the app's turn walkers took the extra).
 
 ## Proof table
 
@@ -17,7 +36,7 @@ Base check: a turned task's intent.md did NOT render as external on this base. `
 | 5 walk rows | HOLDS | `go test -count=1 -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList' ./internal/cli/` exit 0 (`ok ... 0.106s`); `go test -count=1 ./internal/job/lint/` exit 0 (`ok ... 0.105s`). |
 | 6 lint, cross | HOLDS | `make lint` exit 0 (`go vet ./...`); `make cross` exit 0 (darwin/arm64 and windows/amd64 vet and test compile, all ok); `gofmt -l internal/` prints nothing. |
 | 6 diff names only Touches | HOLDS | `git diff main --stat`: internal/cli/vk_turn_fence_test.go, internal/job/jobcmd/command.go, internal/signal/act.go, internal/task/create.go, internal/task/task.go; plus this proof file docs/lanes/C-vk-signal-turn-intent-fence.md (the runbook's Definition of Done). Nothing under contract/. |
-| 6 contract | HOLDS | `go test -count=1 ./contract/...` exit 0 (`ok .../contract`, `ok .../contract/formats`). The cmd-task-show fixtures are checked by `contract` and by `contract.Validate("cmd-task-show", ...)` inside TestVkTurnTitleFenced (task show of a turned task, key absent). |
+| 6 contract | HOLDS | `go test -count=1 ./contract/...` exit 0 (`ok .../contract`, `ok .../contract/formats`). The cmd-task-show fixtures are checked by `contract` and by `contract.Validate("cmd-task-show", ...)` inside TestVkTurnTitleFenced (task show of a turned task, key absent). `grep -rln -E "task\.md\|owner_role" contract/schemas` finds only cmd-task-show.json and cmd-task-list.json (the JSON outputs); no schema validates task.md's own front-matter keys, so the new key needs no contract change. |
 | Rule: new tests fail on base, pass on lane | HOLDS | Row 1 red line above; rows 2-4 are "as on base" guards and pass on both (stated in the brief). |
 | Rule: no guard, gate, cap, hold, hook | HOLDS | The change adds no refusal and no limit; the turn result, the task and J-1 are unchanged apart from one task.md key and the tier of intent.md in the render. |
 | Rule: no existing test edited or deleted | HOLDS | `git diff main --stat` lists no existing test file. |
@@ -35,9 +54,17 @@ Base check: a turned task's intent.md did NOT render as external on this base. `
 ## Notes for the reviewer
 
 - The `typed` exemption trusts the `source` label the capturing path wrote on the note; it is the brief's design (inbox add uses `--source typed`).
+- The `IntentFrom` value check in `NewOptions.Validate` is not reachable from argv (no flag sets it); it only guards Go callers and is not a refusal on agents.
 - `intent_from` sits in task.md next to `owner_role`, with the same trust (task.md syncs to every member).
 - Tasks turned before this lane have no key and keep rendering as the owner's words; the brief names no migration.
 
 ## NOT VERIFIED on a live screen
 
 Nothing in this lane has a screen. The app's "Turn into a task" act was not run against a built plugin (no *RealPlugin* row; the app tests above only read the note and the existence of task.md).
+
+## Open items
+
+- The brief named one app walker of `turn`; a second exists, `internal/slices/inbox/realplugin_test.go:58`. It reads no task.md key and no brief, so the lane still lands alone.
+- `internal/land TestFailureTimeoutAndEnvironment/environment` timed out once under parallel load and passed alone (row 5).
+
+Verdict: DONE
