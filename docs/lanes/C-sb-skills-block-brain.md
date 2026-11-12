@@ -2,7 +2,7 @@
 
 Base: 7a4bc0c2d6c9a1ef1c7bec89e38f9bca07767c29 (lane branch before this work). Base check: `skillsBlock(names []string)` at internal/job/render.go:410 knew only `gridplugins.SkillFor`; the Render call is internal/job/jobcmd/command.go:166; RenderOptions at render.go:17-26 had no brain or settings field. Nothing to stop on.
 
-Verdict: NOT DONE (one row, see row 7). The feature works; the wiring the brief names trips an existing test that the Touches list does not let me fix.
+Verdict: CLOSED BY C-sb2-skill-state-reader: accepted 04:40 UTC (one row, see row 7). The feature works; the wiring the brief names trips an existing test that the Touches list does not let me fix.
 
 ## Proof table
 
