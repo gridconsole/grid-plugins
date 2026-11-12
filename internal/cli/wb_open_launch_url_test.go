@@ -83,8 +83,16 @@ func TestWbOpenNoCodeFileOpensPlainURL(t *testing.T) {
 	if got := wbOpenJSONURL(t, h); got != plain {
 		t.Fatalf("--json url %q, want %q", got, plain)
 	}
+	noCodeLine := "grid open: no launch code was found; the page opens without one.\n"
+	if got := h.errb.String(); got != noCodeLine {
+		t.Fatalf("--json stderr %q, want %q", got, noCodeLine)
+	}
+	h.errb.Reset()
 	if got := wbOpenBrowse(t, h, opened); got != plain {
 		t.Fatalf("browser got %q, want %q", got, plain)
+	}
+	if got := h.errb.String(); got != noCodeLine {
+		t.Fatalf("browser stderr %q, want %q", got, noCodeLine)
 	}
 
 	// GRID_APP_URL names an app this machine does not run: it never gets this home's code.
