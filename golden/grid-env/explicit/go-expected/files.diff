@@ -7,3 +7,11 @@ new file mode 0600
 +export GRID_HOME='$GRID_HOME'
 +export GRID_PROJECTS='$GRID_HOME/projects'
 +unset GRID_TASK
+diff --grid a/demo/sessions/.hooks/session-demo.json b/demo/sessions/.hooks/session-demo.json
+new file mode 0600
+--- /dev/null
++++ b/demo/sessions/.hooks/session-demo.json
+@@ -0,0 +1 @@
++{"session_id":"session-demo","last":"<TIME>"}
+diff --grid a/demo/sessions/.lock b/demo/sessions/.lock
+new file mode 0600

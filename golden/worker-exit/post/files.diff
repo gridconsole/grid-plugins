@@ -1,6 +1,8 @@
-diff --grid a/demo/projects/demo/tasks/T-1-demo/feed/member@example~worker-demo.jsonl b/demo/projects/demo/tasks/T-1-demo/feed/member@example~worker-demo.jsonl
-new file mode 0644
+diff --grid a/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json b/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json
+new file mode 0600
 --- /dev/null
-+++ b/demo/projects/demo/tasks/T-1-demo/feed/member@example~worker-demo.jsonl
++++ b/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json
 @@ -0,0 +1 @@
-+{"id":"<ID-1>","task":"T-1","type":"worker-exit","type_v":1,"author":{"member":"member","host":"example","role":"builder"},"worker":"worker-demo","at":"<TIME>-0000","re":null,"job":"J-1","epoch":0,"body":{"reason":"the session ended (clear) without a result"}}
++{"exits":{"exit::J-1::":"cancelled"},"session_id":"session-demo","last":"<TIME>","seen":{"exit::J-1::":true},"exit_reason":"cancelled","exit_codes":{"exit::J-1::":"clear"},"exit_code":"clear"}
+diff --grid a/demo/projects/demo/tasks/T-1-demo/sessions/.lock b/demo/projects/demo/tasks/T-1-demo/sessions/.lock
+new file mode 0600
