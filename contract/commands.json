@@ -4530,6 +4530,11 @@
               "required": false
             },
             {
+              "name": "--stream",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--then",
               "takes": "value",
               "required": false
