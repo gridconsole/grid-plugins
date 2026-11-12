@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-project-add.json",
+  "description": "JSON output of grid project add [path] --json: the project entry; internal/cli/projects.go:172, internal/projects/projects.go:26. The app reads name and refuses an empty one (app internal/slices/setup/http.go:266-272).",
+  "additionalProperties": false,
+  "properties": {
+    "folders": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "machine": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "machine",
+          "path"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "keys": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "machine": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "repos": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "remote": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "remote"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "id",
+    "folders",
+    "repos",
+    "keys"
+  ],
+  "title": "grid project add output",
+  "type": "object"
+}

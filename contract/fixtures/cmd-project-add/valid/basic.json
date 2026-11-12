@@ -1,0 +1,29 @@
+{
+  "folders": [
+    {
+      "machine": "01HZX3EXAMPLE000000000000",
+      "path": "/home/example/work/bare"
+    }
+  ],
+  "id": "01HZX3EXAMPLE000000000000",
+  "keys": [
+    {
+      "key": "folder:/home/example/work/bare",
+      "machine": "01HZX3EXAMPLE000000000000"
+    },
+    {
+      "key": "common:/home/example/work/bare/.git",
+      "machine": "01HZX3EXAMPLE000000000000"
+    },
+    {
+      "key": "root:e3b0c44298fc1c149afbf4c8996fb92427ae41e4"
+    }
+  ],
+  "name": "bare",
+  "repos": [
+    {
+      "path": ".",
+      "remote": ""
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "folders": [
+    {
+      "machine": "01HZX3EXAMPLE000000000000",
+      "path": "/home/example/work/example"
+    }
+  ],
+  "id": "01HZX3EXAMPLE000000000000",
+  "keys": [
+    {
+      "key": "folder:/home/example/work/example",
+      "machine": "01HZX3EXAMPLE000000000000"
+    },
+    {
+      "key": "common:/home/example/work/example/.git",
+      "machine": "01HZX3EXAMPLE000000000000"
+    },
+    {
+      "key": "remote:example.com/org/example"
+    }
+  ],
+  "name": 7,
+  "repos": [
+    {
+      "path": ".",
+      "remote": "example.com/org/example"
+    }
+  ]
+}

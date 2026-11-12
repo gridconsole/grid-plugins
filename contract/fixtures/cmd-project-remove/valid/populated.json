@@ -1,0 +1,16 @@
+{
+  "folders": [],
+  "id": "01HZX3EXAMPLE000000000000",
+  "keys": [
+    {
+      "key": "remote:example.com/org/example"
+    }
+  ],
+  "name": "example",
+  "repos": [
+    {
+      "path": ".",
+      "remote": "example.com/org/example"
+    }
+  ]
+}
