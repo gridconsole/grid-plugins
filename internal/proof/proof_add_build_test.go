@@ -118,8 +118,8 @@ func TestProofAddBuildKindAndType(t *testing.T) {
 	for _, tc := range []struct {
 		name, kind, file, message string
 	}{
-		{"screenshot with txt", "screenshot", "shot.txt", "screenshot file must be png, jpg or webp"},
-		{"video with png", "video", "clip.png", "video file must be mp4 or webm"},
+		{"screenshot with txt", "screenshot", "shot.txt", "screenshot file must be png, jpg, webp or gif"},
+		{"video with png", "video", "clip.png", "video file must be mp4, webm or gif"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := fixture(t)

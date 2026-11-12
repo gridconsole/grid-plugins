@@ -126,7 +126,7 @@ func (s Store) Add(in Input) (Record, error) {
 			return zero, err
 		}
 		switch strings.ToLower(filepath.Ext(in.File)) {
-		case ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm", ".txt", ".log", ".json":
+		case ".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".txt", ".log", ".json":
 			ext = strings.ToLower(filepath.Ext(in.File))
 		default:
 			ext = ".bin"
@@ -135,11 +135,11 @@ func (s Store) Add(in Input) (Record, error) {
 	if len(data) == 0 || len(data) > MaxBytes {
 		return zero, errors.New("proof must contain 1 byte to 20 MiB")
 	}
-	if in.Kind == "screenshot" && ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".webp" {
-		return zero, errors.New("screenshot file must be png, jpg or webp")
+	if in.Kind == "screenshot" && ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".webp" && ext != ".gif" {
+		return zero, errors.New("screenshot file must be png, jpg, webp or gif")
 	}
-	if in.Kind == "video" && ext != ".mp4" && ext != ".webm" {
-		return zero, errors.New("video file must be mp4 or webm")
+	if in.Kind == "video" && ext != ".mp4" && ext != ".webm" && ext != ".gif" {
+		return zero, errors.New("video file must be mp4, webm or gif")
 	}
 	folder, err := localdata.Safe(dir, "proof", id)
 	if err != nil {
@@ -175,6 +175,14 @@ func (s Store) Add(in Input) (Record, error) {
 	}
 	if err = atomicfile.Write(metadata, append(b, '\n'), 0644); err != nil {
 		return zero, err
+	}
+	// Refresh proof/index.json before the lock is released, so the app, which
+	// reads only that file, sees this record. The evidence is already stored, so
+	// a Build that refuses (a broken record on another item) or a failed write
+	// does not fail the add: the caller would add the same proof again. The
+	// stale index is as it was before this call; grid proof index reports why.
+	if idx, err := s.Build(); err == nil {
+		_, _ = thIdxWrite(dir, idx)
 	}
 	return r, nil
 }
@@ -309,6 +317,12 @@ func (s Store) Rebuild() (Index, error) {
 	if err != nil {
 		return out, err
 	}
+	return thIdxWrite(dir, out)
+}
+
+// thIdxWrite writes the built index to proof/index.json. It takes no lock: the
+// caller holds .proof.lock and passes the resolved task folder.
+func thIdxWrite(dir string, out Index) (Index, error) {
 	path, err := localdata.Safe(dir, "proof", "index.json")
 	if err != nil {
 		return out, err
