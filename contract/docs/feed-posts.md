@@ -732,7 +732,7 @@ Read: contract/schemas/usage-notice.json:96; internal/contract/fold.go:292-319 (
 ## worker-exit
 Version 1. Class state. Written by worker, agent, cli.
 
-A worker-exit post says an attempt ended and why: `reason` is done, crash, usage_limit, cancelled or loop, with an optional `code`. A missing reason reads as crash. A usage_limit exit lets the same attempt be granted again with a higher fence; a loop exit counts a review round and marks the Job as needing the lead.
+A worker-exit post says an attempt ended and why: `reason` is done, crash, usage_limit, cancelled or loop, with an optional `code`. A missing reason reads as crash. A cancelled exit with code `worker_stopped` means the worker stopped or restarted, not that anyone cancelled the Job: the Job goes back to Ready and is offered again, and no re-plan Job is posted; every other cancelled exit ends the Job. A usage_limit exit lets the same attempt be granted again with a higher fence; a loop exit counts a review round and marks the Job as needing the lead.
 
 ```json
 {
