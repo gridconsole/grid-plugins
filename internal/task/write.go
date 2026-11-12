@@ -37,9 +37,10 @@ func StateMoves() map[string][]string {
 	}
 }
 
-// ErrStateMove marks a move the state table refuses. NextState wraps it with %w
-// and adds no words of its own, so the refusal text is the same as before and a
-// caller classifies the refusal with errors.Is.
+// ErrStateMove marks a move the state table refuses. NextState returns a
+// stateMoveError that unwraps to it. A plain %w would add the sentinel's words to
+// the refusal; this keeps the text as it was, and a caller classifies the
+// refusal with errors.Is.
 var ErrStateMove = errors.New("state move refused")
 
 // stateMoveError is the refusal of NextState: its text is the sentence alone and
