@@ -55,7 +55,8 @@ func TestBlLaunchTimerFilesNameTheLauncher(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			launcher := blLaunchPath(gridHome, tc.goos)
-			plan, err := tc.backend.Plan(TimerSpec{Home: home, GridHome: gridHome, Binary: launcher, Name: "daily", Path: path})
+			scheduler := Scheduler{Home: home, GridHome: gridHome, Binary: launcher, Path: path, Backend: tc.backend, Runner: &fakeOS{}}
+			plan, err := scheduler.plan("", "daily")
 			if err != nil {
 				t.Fatal(err)
 			}
