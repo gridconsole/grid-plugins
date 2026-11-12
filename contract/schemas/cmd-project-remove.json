@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/grid/contract/cmd-project-remove.json",
-  "description": "JSON output of grid project remove <name-or-id> --json: the project entry after this machine's folder and keys are unbound; internal/cli/projects.go:172, internal/projects/projects.go:398. The app runs the command and reads no field of the answer, only the exit code (app internal/slices/setup/remove_project.go:91). The shape is the project add entry.",
+  "description": "JSON output of grid project remove <name-or-id> --json: the project entry after this machine's folder and keys are unbound, plus unscheduled, the names of the project's routines whose timers on this machine the command took down (an empty array when there was none; the routine definitions stay in the project's brain config); internal/cli/projects.go projectRemoved, internal/projects/projects.go Store.Remove, internal/routine/schedule.go UnscheduleProject. A timer that could not be taken down is an exit 1 with the reason on stderr; the project stays removed. The app runs the command and reads no field of the answer, only the exit code (app internal/slices/setup/remove_project.go:91). The shape is the project add entry and unscheduled.",
   "additionalProperties": false,
   "properties": {
     "folders": {
@@ -67,6 +67,12 @@
         "type": "object"
       },
       "type": "array"
+    },
+    "unscheduled": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     }
   },
   "required": [
@@ -74,7 +80,8 @@
     "id",
     "folders",
     "repos",
-    "keys"
+    "keys",
+    "unscheduled"
   ],
   "title": "grid project remove output",
   "type": "object"
