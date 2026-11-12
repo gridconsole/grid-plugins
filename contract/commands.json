@@ -72,7 +72,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-where.json"
         }
       ]
     },
@@ -1726,7 +1726,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-lease-status.json"
         },
         {
           "name": "take",

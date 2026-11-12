@@ -424,7 +424,7 @@ type contractCommandAnnotation struct {
 func contractCommandAnnotations() map[string]contractCommandAnnotation {
 	return map[string]contractCommandAnnotation{
 		"version":              {output: "cmd-version.json"},
-		"where":                {},
+		"where":                {output: "cmd-where.json"},
 		"open":                 {args: []string{"[task]"}},
 		"doctor":               {},
 		"hook":                 {args: []string{"<event>"}},
@@ -488,7 +488,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"job cycles":           {args: []string{"<items.json>"}},
 		"lease take":           {args: []string{"task"}},
 		"lease release":        {args: []string{"task"}},
-		"lease status":         {args: []string{"task"}},
+		"lease status":         {args: []string{"task"}, output: "cmd-lease-status.json"},
 		"feed tick":            {args: []string{"[job]"}},
 		"feed post":            {args: []string{"[task]"}, required: map[string]bool{"--body": true, "--type": true}, output: "cmd-feed-post.json"},
 		"feed read":            {args: []string{"[task]"}},

@@ -1,0 +1,11 @@
+{
+  "lease": "task",
+  "holder": null,
+  "fence": 3,
+  "gen": 2,
+  "attempt": null,
+  "since": "2026-01-01T00:00:00.000Z",
+  "pid": null,
+  "pid_start": null,
+  "process": "free"
+}
