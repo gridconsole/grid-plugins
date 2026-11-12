@@ -340,7 +340,11 @@ func runOrchestrator(args []string, env Env) int {
 	}
 
 	if personResult && *planHash != "" {
-		return runPersonApproval(env, store, writer, scope.TaskPath, *job, obj, *planHash, *asJSON)
+		code := runPersonApproval(env, store, writer, scope.TaskPath, *job, obj, *planHash, *asJSON)
+		if code == 0 {
+			refoldAfterWrite(env, store)
+		}
+		return code
 	}
 	if personResult {
 		answer, _ := obj["answer"].(string)
@@ -352,6 +356,7 @@ func runOrchestrator(args []string, env Env) int {
 			}
 			return fail(err)
 		}
+		refoldAfterWrite(env, store)
 		// An unleased answer closes nothing by itself: the Job stays open until the
 		// next pass of whoever holds the task lease, and with nobody holding it that
 		// pass waits for the next tick. Say so, so the answer is not mistaken for done.
@@ -406,11 +411,7 @@ func runOrchestrator(args []string, env Env) int {
 	// question shows without a tick. A fold error does not undo the post; the next
 	// fold repairs the files. The write's own fold has said any withdrawal-policy
 	// warning for this operation already, so the refold does not say it again.
-	refold := store
-	refold.Warn = io.Discard
-	if _, err := refold.RefoldPublished(); err != nil {
-		fmt.Fprintln(env.Stderr, "refold:", err)
-	}
+	refoldAfterWrite(env, store)
 	if checked {
 		printPostFindings(env.Stderr, *job, findings, findingsErr)
 		if *asJSON {
@@ -425,6 +426,18 @@ func runOrchestrator(args []string, env Env) int {
 	}
 	fmt.Fprintln(env.Stdout, record.ID)
 	return 0
+}
+
+// refoldAfterWrite refolds the published state after a write that is already
+// done and has released its locks. A fold error does not undo the write: it is
+// said on stderr and the next fold repairs the files. The write's own fold has
+// said any withdrawal-policy warning already, so this one does not say it again.
+func refoldAfterWrite(env Env, store feed.Store) {
+	refold := store
+	refold.Warn = io.Discard
+	if _, err := refold.RefoldPublished(); err != nil {
+		fmt.Fprintln(env.Stderr, "refold:", err)
+	}
 }
 
 // postFindings lints a Job body with the options grid job render uses. It is told
