@@ -194,7 +194,9 @@ are reference-document names and original line numbers, not machine paths.
 | grid session switch output | [cmd-session-switch.json](schemas/cmd-session-switch.json) | internal/cli/intent.go:140 |
 | grid task list output | [cmd-task-list.json](schemas/cmd-task-list.json) | internal/cli/task.go:142 |
 | grid task move output | [cmd-task-move.json](schemas/cmd-task-move.json) | internal/cli/intent.go:140 |
+| grid task new output | [cmd-task-new.json](schemas/cmd-task-new.json) | internal/cli/task.go:189 |
 | grid task show output | [cmd-task-show.json](schemas/cmd-task-show.json) | internal/cli/task.go:122 |
+| grid task delete and restore output | [cmd-task-trash.json](schemas/cmd-task-trash.json) | internal/cli/task_write.go:438 |
 | grid version output | [cmd-version.json](schemas/cmd-version.json) | internal/cli/version.go:54 |
 | grid worker list output | [cmd-worker-list.json](schemas/cmd-worker-list.json) | internal/cli/worker.go:57 |
 
