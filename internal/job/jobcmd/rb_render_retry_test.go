@@ -13,8 +13,9 @@ import (
 )
 
 // A failed attempt is made Ready again under the same Job id and renders again.
-// An unchanged Job reuses its first saved render and keeps the brain it was
-// first given; a changed Job is still refused and needs a new Job id.
+// An unchanged Job whose brain alone changed reuses its first saved render and
+// keeps the brain it was first given; a changed Job, plan or file is still
+// refused and needs a new Job id.
 
 const (
 	rbRetryChangedLine = "A constraint added after the first attempt."
@@ -142,6 +143,31 @@ func TestRbRetryChangedJobStillRefused(t *testing.T) {
 	got, err := save(task, revised, job.Rendered{Brief: "brief"})
 	if err == nil || got != "" || err.Error() != rbRetryRefusal {
 		t.Fatalf("save of a changed Job = %q, %v; want %q", got, err, rbRetryRefusal)
+	}
+	rbRetryUnchanged(t, dir, before)
+}
+
+// A person revises the plan after the first render: the Job's own fields stay as
+// they were, so job.yaml is equal, but the plan text the Job points at changed.
+// The render is refused, so a builder never works on the old plan unaware.
+func TestRbRetryPlanChangeStillRefused(t *testing.T) {
+	e, out, errs := fixture(t)
+	first := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
+	dir := filepath.Dir(first.Path)
+	before := rbRetryRead(t, dir)
+	f, err := os.OpenFile(filepath.Join(e.Cwd, "T-01", "plan.md"), os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.WriteString("\nThe export also documents compatibility.\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	second := call(t, e, out, errs, 1, "render", "T-01", "1", "--json")
+	if second.OK || second.Error != rbRetryRefusal {
+		t.Fatalf("render after a plan edit %+v; want the refusal %q", second, rbRetryRefusal)
 	}
 	rbRetryUnchanged(t, dir, before)
 }
