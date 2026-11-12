@@ -204,8 +204,8 @@ func pluginPathLine(root, pathEnv string) string {
 // The Grid lines in the session env file sit between these two marker lines, so a
 // later SessionStart replaces them instead of adding another copy.
 const (
-	envBlockStart = "# >>> grid session env >>>"
-	envBlockEnd   = "# <<< grid session env <<<"
+	envBlockStart = "# >>> grid-session-env >>>"
+	envBlockEnd   = "# <<< grid-session-env <<<"
 )
 
 // writeEnv puts the Grid block in the env file. A block from an earlier run is
