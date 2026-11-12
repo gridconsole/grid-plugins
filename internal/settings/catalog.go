@@ -3,6 +3,7 @@ package settings
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -24,7 +25,7 @@ var agents = []agentDefault{
 	{"grid-reviewer", "opus", "medium"}, {"grid-runner", "haiku", "low"},
 	{"grid-scout", "haiku", "low"},
 }
-var models = []string{"haiku", "sonnet", "opus"}
+var models = []string{"haiku", "sonnet", "opus", "fable"}
 var efforts = []string{"low", "medium", "high", "xhigh", "max"}
 var skills = []string{"brain-keeper", "browser", "deliver", "plan-jobs", "questions", "research", "review-job", "run-job", "setup", "signals", "task", "visual-design-review"}
 var hooks = []string{"history-log", "home-allow", "host-guard", "job-lint", "needs-you", "only-writer", "plan-guard", "session-check", "session-end", "session-start", "stop-check", "usage-log"}
@@ -59,10 +60,28 @@ func allowed(kind, value string, choices []string) error {
 func checkLevel(_, level string) error {
 	return allowed("hook level", level, levels)
 }
+
+// sdModelID is the shape of a full Claude model id; the check after it is Claude Code's own.
+var sdModelID = regexp.MustCompile(`^claude-[a-z0-9.-]+$`)
+
+// sdModelAllowed is the allowed list shown when a model is refused.
+const sdModelAllowed = "haiku, sonnet, opus, fable, <name>[1m] or a claude- model id"
+
+// sdNormalizeModel returns the model as stored and whether it is accepted: the
+// four names (with an optional [1m]) match in any case and store lower-case; a
+// claude- id stores as given, with an optional [1m].
+func sdNormalizeModel(m string) (string, bool) {
+	base := strings.TrimSuffix(m, "[1m]")
+	if lower := strings.ToLower(base); slices.Contains(models, lower) {
+		return lower + m[len(base):], true
+	}
+	return m, sdModelID.MatchString(base)
+}
+
 func validateAgent(a Agent) error {
 	if a.Model != "" {
-		if err := allowed("model", a.Model, models); err != nil {
-			return err
+		if _, ok := sdNormalizeModel(a.Model); !ok {
+			return fmt.Errorf("unknown model %q; allowed: %s", a.Model, sdModelAllowed)
 		}
 	}
 	if a.Effort != "" {
