@@ -223,7 +223,16 @@ func Run(args []string, env Env) (exit int) {
 		if !anyFormat[name] {
 			if msg := formatRefusal(env); msg != "" {
 				if name == "hook" {
-					return 0 // a hook never speaks into a session
+					// A hook never speaks into a session, except that a session
+					// start says a migration is open, so the person is told.
+					if len(rest) == 1 && strings.EqualFold(rest[0], "SessionStart") && migrate.Pending(env.GridHome) {
+						if b, err := json.Marshal(map[string]any{"hookSpecificOutput": map[string]string{
+							"hookEventName": "SessionStart", "additionalContext": msg,
+						}}); err == nil {
+							fmt.Fprintln(env.Stdout, string(b))
+						}
+					}
+					return 0
 				}
 				fmt.Fprintln(env.Stderr, msg)
 				return 1

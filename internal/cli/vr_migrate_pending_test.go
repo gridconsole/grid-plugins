@@ -52,13 +52,14 @@ func TestVrPendGridLeavesTheHomeAloneWhileAJournalIsOpen(t *testing.T) {
 		vrPendHomeAbsent(t, h, "task new")
 	})
 
-	t.Run("a hook exits 0 without a word and makes no home", func(t *testing.T) {
+	t.Run("a session start hook exits 0 with the one context line and makes no home", func(t *testing.T) {
 		h := vrPendHarness(t, true)
 		h.env.Stdin = strings.NewReader(`{"cwd":"` + h.tmp + `"}`)
 		code := h.run(h.tmp, "hook", "sessionstart")
 		t.Logf("grid hook sessionstart: exit %d, stdout %q, stderr %q", code, h.out, h.errb)
-		if code != 0 || h.out.Len() != 0 || h.errb.Len() != 0 {
-			t.Errorf("exit %d, stdout %q, stderr %q; want 0 and nothing printed", code, h.out, h.errb)
+		want := `{"hookSpecificOutput":{"additionalContext":"` + vrPendWant + `","hookEventName":"SessionStart"}}` + "\n"
+		if code != 0 || h.out.String() != want || h.errb.Len() != 0 {
+			t.Errorf("exit %d, stdout %q, stderr %q; want 0, %q and nothing on stderr", code, h.out, h.errb, want)
 		}
 		vrPendHomeAbsent(t, h, "hook sessionstart")
 	})
