@@ -1,0 +1,47 @@
+# C-yk-task-write-schemas: output schemas for task new, task delete and task restore with --json
+
+Base: plugin main 103b915799ce05bb20c8d92fbf823650b37c5c25. Code head: 3c4c6789 (the report commit follows it; no code after).
+
+Base check: `internal/cli/task.go:188-192` writes `{id, path}`; `internal/task/trash.go:37-41` is `TrashResult {project, id, folder}`. On base `task new`, `task delete` and `task restore` had `output: ""` in contract/commands.json and no annotation (contract_inventory_test.go:457, :468, :469). Not stopped.
+
+## Proof table
+
+| Row | State | Command / place | Result |
+|---|---|---|---|
+| 1 red on base | HOLDS | `go test -count=1 -v -run 'TestYk' ./internal/cli/` on base (test file only, no schema), exit 1 | `yk_task_write_schema_test.go:111: unknown schema "cmd-task-new"` ; `:129: unknown schema "cmd-task-trash"` (delete) ; `:142: unknown schema "cmd-task-trash"` (restore) ; `--- FAIL: TestYkTaskWriteSchemas/task_new`, `/task_delete`, `/task_restore` |
+| 1 green | HOLDS | same command on the lane, exit 0 | `--- PASS: TestYkTaskWriteSchemas/task_new`, `/task_delete`, `/task_restore`, `/required_holds_the_fields_the_app_reads`, `--- PASS: TestYkTaskWriteSchemas`. Delete is run with GRID_ROLE owner (as contract_commands_test.go:149), restore with `--project <project from the delete stdout>`; each real stdout passes `contract.Validate`. |
+| 2 required | HOLDS | subtest `required_holds_the_fields_the_app_reads`, exit 0 | Renaming `id` and `path` in the task new stdout, and `project`, `id`, `folder` in the delete and the restore stdout, makes Validate fail. The real stdout is validated first, so the failure is the rename. |
+| 3 | HOLDS | `go test -count=1 -v -run 'TestFixtures\|TestContractCommandsRejectUnknownFields\|TestContractCommandsParserInventory' ./internal/contract/ ./internal/cli/`, exit 0 | `--- PASS: TestFixtures`, `--- PASS: TestContractCommandsRejectUnknownFields` (subtests cmd-task-new, cmd-task-trash), `--- PASS: TestContractCommandsParserInventory` |
+| 4 no product change | HOLDS with one extra file | `git diff main --stat`: 14 files, all in Touches except `contract/README.md` (2 added table rows) | `git diff main -- contract/commands.json` adds only three `"output"` values (`""` to `cmd-task-trash.json`, `cmd-task-new.json`, `cmd-task-trash.json`). No production Go file changed. See the deviation below. |
+| 5 tests | HOLDS | `go test -count=1 ./cmd/grid ./internal/artifact ./internal/brain ./internal/braincmd ./internal/cli ./internal/contract ./internal/feed ./internal/guard ./internal/hook ./internal/intent ./internal/job ./internal/job/jobcmd ./internal/job/lint ./internal/jobgraph ./internal/land ./internal/lease ./internal/mcp ./internal/migrate ./internal/orchestrator ./internal/question ./internal/session ./internal/settings ./internal/signal ./internal/task ./internal/updates ./internal/usage ./internal/where ./internal/workflow ./lib` | That list is `go list` of every package that imports contract, internal/contract or internal/cli. First run: all ok except `internal/contract` (`TestIySchemaRows`, fixed below). After the README rows: `go test -count=1 ./internal/cli ./internal/contract ./internal/where ./internal/fslock ./internal/braincmd ./internal/packaging/...` exit 0 (every package that reads contract/README.md). |
+| 5 lint | HOLDS | `make lint`, exit 0 | `go vet ./...`, no gofmt output |
+| 5 cross | HOLDS | `make cross`, exit 0 | `cross: darwin/arm64` and `cross: windows/amd64` vet and test compile, every package ok |
+| `make generate` | HOLDS | `make generate`, exit 0 | Only contract/commands.json changed (the three `output` values) |
+| Plugin walk tests | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` exit 0 (`ok internal/cli 0.542s`); `go test -count=1 ./internal/job/lint/` exit 0 | App walk tests do not apply (plugin repo). |
+| *RealPlugin* tests | not asked | none named by the brief | |
+| New tests fail on base | HOLDS | row 1 red lines above | |
+| No existing test edited | HOLDS | `git diff main -- internal/cli/contract_inventory_test.go` changes only the three `output:` values at the annotation lines; no test deleted | |
+| No guard, gate, cap | HOLDS | no production file touched | |
+| Commit rules | HOLDS | 3 commits, one sentence each, no attribution lines | |
+
+## What changed
+
+- `contract/schemas/cmd-task-new.json`: `{id, path}`, both required non-empty strings, `additionalProperties: false`.
+- `contract/schemas/cmd-task-trash.json`: `{project, id, folder}`, all required non-empty strings, `additionalProperties: false`. Serves `task delete` and `task restore`, which share `task.TrashResult`.
+- `contract/fixtures/cmd-task-new/` and `cmd-task-trash/`: two valid (basic, populated) and two invalid (missing-field, wrong-type) each.
+- `internal/cli/contract_inventory_test.go`: `output:` on `task new`, `task delete`, `task restore`; `contract/commands.json` regenerated by `make generate`.
+- `internal/cli/yk_task_write_schema_test.go`: `TestYkTaskWriteSchemas` (helpers `ykTw*`).
+- `contract/README.md`: two rows linking the new schemas (see below).
+
+## Deviation from Touches
+
+`contract/README.md` is not in the brief's Touches list. It had to change: `TestIySchemaRows` (internal/contract/iy_schema_rows_test.go:47) fails with `schema cmd-task-new.json has no row in the contract docs` and the same for `cmd-task-trash.json` until the README links each schema, and acceptance row 5 needs `go test ./internal/contract/` to have 0 fail. The change is two table rows (`contract/README.md:197` and `:199`) and no product file. The row 4 wording "only the files in Touches" is therefore met except for this file. The orchestrator can drop the file only by also dropping TestIySchemaRows or the schemas; I kept the rows.
+
+Not in the brief: the fixtures use `<ROOT>` placeholders in `path`, as the other cmd-* fixtures do; the task new `path` is a machine-local folder, so the schema only requires a non-empty string. The delete `folder` carries an `@<timestamp>` suffix, so the schema does not pin a pattern (the app's `trashSafeFolder` stays the check).
+
+## NOT VERIFIED
+
+- The app side (app main 8f9b806d, newtask.go:183-189 and trash.go:145-155) was not opened; the field names `id`, `project`, `folder` come from the brief and match what the plugin writes. Nothing was run against the app.
+- No live screen; no UI in this lane.
+
+Verdict: DONE
