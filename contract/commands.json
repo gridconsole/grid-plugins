@@ -3840,6 +3840,11 @@
               "name": "--project",
               "takes": "value",
               "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
             }
           ],
           "json": true,
