@@ -307,20 +307,48 @@ func (e *Entry) addItem(list, item string) error {
 // one EditConfig call: one stored version and one audit line per change. A
 // refused entry writes nothing.
 func Save(s brain.Store, e Entry) error {
-	data, err := Render(e)
-	if err != nil {
-		return err
-	}
-	return s.EditConfig(level, topic, e.ID, func([]byte) ([]byte, error) { return data, nil })
+	return save(s.EditConfig, e)
+}
+
+// SaveBy is Save with the author named: the audit line carries origin, as
+// brain.Store.EditConfigBy writes it.
+func SaveBy(s brain.Store, e Entry, origin brain.Origin) error {
+	return save(editBy(s, origin), e)
 }
 
 // Remove deletes the entry. An id with no entry answers an error that wraps
 // fs.ErrNotExist; no entry file is written or removed.
 func Remove(s brain.Store, id string) error {
+	return remove(s.EditConfig, id)
+}
+
+// RemoveBy is Remove with the author named: removing an entry writes one
+// "dropped" audit line carrying origin. A missing id writes no line.
+func RemoveBy(s brain.Store, id string, origin brain.Origin) error {
+	return remove(editBy(s, origin), id)
+}
+
+type editFunc func(level, topic, name string, edit func([]byte) ([]byte, error)) error
+
+func editBy(s brain.Store, origin brain.Origin) editFunc {
+	return func(level, topic, name string, edit func([]byte) ([]byte, error)) error {
+		return s.EditConfigBy(level, topic, name, origin, edit)
+	}
+}
+
+func save(edit editFunc, e Entry) error {
+	data, err := Render(e)
+	if err != nil {
+		return err
+	}
+	return edit(level, topic, e.ID, func([]byte) ([]byte, error) { return data, nil })
+}
+
+func remove(edit editFunc, id string) error {
 	if err := validID(id); err != nil {
 		return err
 	}
-	return s.EditConfig(level, topic, id, func(old []byte) ([]byte, error) {
+	return edit(level, topic, id, func(old []byte) ([]byte, error) {
 		if old == nil {
 			return nil, fmt.Errorf("environment %s: %w", id, fs.ErrNotExist)
 		}
