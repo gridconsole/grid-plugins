@@ -36,7 +36,7 @@ Main refuses `repo` (planned.go:31 and the job-record schema); it does not accep
 | Walk tests (plugin) | HOLDS | `./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` exit 0; `./internal/job/lint/` exit 0 (in `./internal/job/...`) |
 | Importers of changed packages (go list) | HOLDS | `go list` importers of internal/job, contract, orchestrator, jobcmd: artifact brain braincmd cli feed guard hook intent jobgraph land lease mcp migrate ports question session settings signal task updates usage where workflow (+ job/lint). `go test -count=1` on all exit 0, including full `./internal/cli` (ok 78.9s) |
 | Runbook-reviewer check | HOLDS | read in C-vc2; walk tests `./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` ok, `./internal/job/lint/` ok |
-| Small commits | NOT DONE | the C-vc commit is one; C-vc2 adds a second |
+| Small commits | Partly: each commit is one sentence, but the first holds the whole feature | 85bfcaa5 (code, tests, contract), f06d6c0d (skill and orchestrator text, proof table), the C-vc3 doc line commit, and merges of origin/main; the feature was not split into smaller commits |
 | Budget | overrun | about 62 tool calls of 60; no work-in-progress bundle at call 35 |
 
 ## What changed

@@ -26,6 +26,8 @@ Optional Job fields are `visible` (`big` or `small`), `irreversible` (boolean),
 project.md; a Job without it works in the first repo). Run fields such as `status`, `attempt`, and
 `worktree` do not belong in the plan and are refused there. Rendered brief
 metadata retains the step kind and the supplied optional fields for later readers.
+A code Job names its repo in the Job record as `"repo": "<path>"`, for example
+`{"id": "J1", "title": "Fix the parser", "repo": "plugin"}`.
 
 Job-record contract version 1 also accepts these optional fields: `kind` matches
 `^[a-z][a-z-]*$` (1–40 characters), `visible` is `big` or `small`, `irreversible`
