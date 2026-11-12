@@ -14,19 +14,114 @@ const jobTextLimit = 64 << 10
 
 // jobNames reports that the calling agent's own Job spells the target path: the
 // path as the call gave it, as the absolute path it names, or as the real path it
-// resolves to. The reviewer and checker fence stays silent for such a write. Every
-// failure to read the Job answers false, which is the fence's answer without it.
+// resolves to. The reviewer and checker fence stays silent for such a write. A Job
+// that points at a brief file (an absolute path ending in .md) also speaks through
+// that file's text, read once and not followed further (hopText); a folder that
+// text names with a trailing slash covers the files directly in it. Every failure
+// to read the Job or the file answers as the fence does without it.
 func (c context) jobNames(given, target string) bool {
 	text := jobText(c.in.TranscriptPath, c.in.AgentTranscriptPath, c.in.AgentID)
 	if text == "" {
 		return false
 	}
-	for _, p := range unique([]string{given, resolve(c.in.Cwd, c.expand(given)), target}) {
+	paths := unique([]string{given, resolve(c.in.Cwd, c.expand(given)), target})
+	if namesAny(text, paths) {
+		return true
+	}
+	hop := hopText(text)
+	if hop == "" {
+		return false
+	}
+	if namesAny(hop, paths) {
+		return true
+	}
+	for _, p := range paths {
+		if !filepath.IsAbs(p) {
+			continue
+		}
+		dir := filepath.Dir(p)
+		if filepath.Dir(dir) == dir {
+			continue // a lone slash in prose is not the root folder
+		}
+		if namesPath(hop, dir+string(filepath.Separator)) || namesPath(hop, filepath.ToSlash(dir)+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// namesAny reports that text names one of paths, as written or with slashes.
+func namesAny(text string, paths []string) bool {
+	for _, p := range paths {
 		if namesPath(text, p) || namesPath(text, filepath.ToSlash(p)) {
 			return true
 		}
 	}
 	return false
+}
+
+// hopText is the text of the brief files the Job names: each absolute path in job
+// that ends in .md and is a regular file (a symlink is not) of fewer than
+// jobTextLimit bytes, once each and in the order the Job names them. It reads those
+// files only; a path inside one is not followed. A file that cannot be read adds
+// nothing.
+func hopText(job string) string {
+	var parts []string
+	seen := map[string]bool{}
+	for _, p := range hopPaths(job) {
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		if s, ok := hopRead(p); ok {
+			parts = append(parts, s)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+// hopPaths lists the absolute paths in text that end in .md. A path is a run of
+// path characters that does not start inside a longer one, so zz/a/b.md names no
+// /a/b.md; a full stop that ends a sentence is not part of the name.
+func hopPaths(text string) []string {
+	var out []string
+	for i := 0; i < len(text); {
+		if !pathChar(text[i]) {
+			i++
+			continue
+		}
+		j := i + 1
+		if drive := text[i] | 0x20; drive >= 'a' && drive <= 'z' && j+1 < len(text) && text[j] == ':' && (text[j+1] == '\\' || text[j+1] == '/') {
+			j++ // C:\dir\brief.md
+		}
+		for j < len(text) && pathChar(text[j]) {
+			j++
+		}
+		p := strings.TrimRight(text[i:j], ".")
+		if strings.HasSuffix(p, ".md") && len(p) <= 1000 && filepath.IsAbs(p) {
+			out = append(out, p)
+		}
+		i = j
+	}
+	return out
+}
+
+// hopRead returns the text of the regular file at path when it is under
+// jobTextLimit bytes.
+func hopRead(path string) (string, bool) {
+	if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() || info.Size() >= jobTextLimit {
+		return "", false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, jobTextLimit))
+	if err != nil || len(b) >= jobTextLimit {
+		return "", false
+	}
+	return string(b), true
 }
 
 // jobTranscript names the file that holds the caller's Job as its first message.
