@@ -184,7 +184,7 @@ func TestRenderChangedSavedInputsLogsNoBrainGiven(t *testing.T) {
 	out, errs := newBuffers()
 	e.Stdout, e.Stderr = out, errs
 	call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
-	if err := os.WriteFile(filepath.Join(taskDir, "jobs", "J-1", "inputs.json"), []byte("{}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(taskDir, "jobs", "J-1", "job.yaml"), []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(hist, nil, 0o644); err != nil {

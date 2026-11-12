@@ -203,6 +203,7 @@ func TestSaveRefusesAChangedRenderAndKeepsTheFirstFiles(t *testing.T) {
 		before[name] = string(b)
 	}
 	_, r2 := saveFixture("changed brief")
+	j.Title = "changed title"
 	if _, err := save(task, j, r2); err == nil || !strings.Contains(err.Error(), "create a new Job for revised work") {
 		t.Fatalf("changed save: %v; want a refusal to create a new Job", err)
 	}
