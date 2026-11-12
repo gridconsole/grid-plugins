@@ -171,6 +171,8 @@ func runOpen(args []string, env Env) int {
 		if code := wbOpenLaunchCode(env); code != "" {
 			// The app answers 303 to / with the cookie; the browser keeps the #route.
 			target = base + "/api/launch?code=" + url.QueryEscape(code) + route
+		} else {
+			fmt.Fprintln(env.Stderr, "grid open: no launch code was found; the page opens without one.")
 		}
 	}
 	openErr := env.openURL(target)
