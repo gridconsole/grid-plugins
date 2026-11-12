@@ -32,6 +32,24 @@ type decisionWrite struct {
 	Done         bool   `json:"done"`
 }
 
+// withLinks returns have followed by each of add that is not already there.
+func withLinks(have, add []Link) []Link {
+	out := append([]Link(nil), have...)
+	for _, l := range add {
+		dup := false
+		for _, h := range out {
+			if h == l {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
 // TaskRef names a resolved task folder; brain cannot import internal/task,
 // which reads brain proposals at delivery.
 type TaskRef struct{ ID, Path string }
@@ -42,7 +60,10 @@ type TaskRef struct{ ID, Path string }
 // overwrite an intervening edit. Completed proposals remain as audit records.
 // history appends the task's history line through the task writer; it runs
 // after the level lock is released, since delivery takes .task.lock first.
-func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, history func(string) error) (TaskDecision, error) {
+// links are the curator's own links: accept and merge-into append them after
+// the proposal's and the target's links, an exact duplicate once; reject
+// ignores them.
+func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, history func(string) error, links ...Link) (TaskDecision, error) {
 	if !ValidName(proposal) {
 		return TaskDecision{}, fmt.Errorf("proposal id must be a plain name")
 	}
@@ -51,6 +72,13 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 	}
 	if !line(note) || size(note) > 300 {
 		return TaskDecision{}, fmt.Errorf("note must be at most 300 characters on one line")
+	}
+	if action != "reject" {
+		for _, l := range links {
+			if err := l.Validate(); err != nil {
+				return TaskDecision{}, err
+			}
+		}
 	}
 	level, name, err := splitID(target)
 	if err != nil {
@@ -162,6 +190,7 @@ func (s Store) DecideTask(t TaskRef, proposal, action, target, note string, hist
 				} else if existing != nil {
 					return fmt.Errorf("note %s already exists; use merge-into", target)
 				}
+				accepted.Links = withLinks(accepted.Links, links)
 				accepted.Updated = w.At
 				dest := filepath.Join(s.GridHome, "knowledge", accepted.Topic)
 				if level == "project" {

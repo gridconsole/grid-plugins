@@ -2794,6 +2794,11 @@
               "required": false
             },
             {
+              "name": "--link",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--note",
               "takes": "value",
               "required": false
