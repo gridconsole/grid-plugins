@@ -17,7 +17,6 @@ Base: main 2221cb86 (the Render call is at internal/job/jobcmd/command.go:166 on
 | Walk tests (plugin) | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` ok; `go test -count=1 ./internal/job/lint/` ok. |
 | No guard, gate, cap or hold | HOLDS | The change only adds text to the brief. It refuses nothing and holds no agent. |
 | Commits, no attribution | HOLDS | One-sentence messages with no trailers (`git log origin/main..`). |
-| Re-render after an answer | NOT DONE (outside Touches) | If a brief was saved before the answer, a later render keeps it: save.go:47-78 reuses a saved bundle when job.yaml and the non-brain sources are the same, and answers are not sources. A Job is normally rendered once it is ready, after its edges are accepted, so this only bites a manual render made before the answer. The fix belongs in jobcmd/save.go, which this lane may not touch. I proved this case red during the build and then took it out of the test. |
 
 ## What changed
 
@@ -41,4 +40,8 @@ Nothing in this lane is UI. Not run here: the app's agent build reading the new 
 
 ## Open items
 
-- The stale brief on a re-render after an answer (save.go, above).
+- Outside this brief's Touches, for the backlog: if a brief was saved before the answer, a later render keeps it.
+  - Why: save.go:47-78 reuses a saved bundle when job.yaml and the non-brain sources are the same, and answers are not sources.
+  - When it matters: a Job is normally rendered once it is ready, after its edges are accepted, so this only bites a manual `grid job render` made before the answer.
+  - Evidence: during the build, a render before AnswerPerson followed by a render after it still lacked the block. I took that case out of TestAdRaPersonAnswer because the fix belongs in jobcmd/save.go.
+  - Fix: a follow-up brief on save.go that treats a change in the answers as a reason to write the bundle again.
