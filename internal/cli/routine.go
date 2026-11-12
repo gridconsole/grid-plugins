@@ -18,7 +18,7 @@ const routineLockHelp = "Runs hold the entry lock until execution finishes; anot
 
 func runRoutine(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid routine add <name> --every <cron or duration> --run <grid command or skill> [--project p]\n       grid routine list|schedule|unschedule [--project p] [--json]\n       grid routine remove|run <name> [--project p] [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid routine add <name> --every <cron or duration> --run <grid command or skill> [--project p]\n       grid routine list [--project p] [--json]\n       grid routine schedule|unschedule [<name>] [--project p] [--json]\n       grid routine remove|run <name> [--project p] [--json]")
 		fmt.Fprintln(env.Stdout, "\n"+routineLockHelp+"\n"+routine.LimitsHelp())
 		return 0
 	}
@@ -58,8 +58,17 @@ func runRoutine(args []string, env Env) int {
 	if verb == "add" || verb == "remove" || verb == "run" {
 		count = 1
 	}
+	// schedule and unschedule act on one routine when given its name, else on all.
+	named := (verb == "schedule" || verb == "unschedule") && fs.NArg() == 1
+	if named {
+		count = 1
+	}
 	if fs.NArg() != count {
-		fmt.Fprintf(env.Stderr, "grid routine %s: expected %d arguments\n", verb, count)
+		if verb == "schedule" || verb == "unschedule" {
+			fmt.Fprintf(env.Stderr, "grid routine %s: expected at most 1 argument, a routine name\n", verb)
+		} else {
+			fmt.Fprintf(env.Stderr, "grid routine %s: expected %d arguments\n", verb, count)
+		}
 		return 2
 	}
 	if verb != "list" && resolver(env).Caller.IsGuest() {
@@ -96,6 +105,11 @@ func runRoutine(args []string, env Env) int {
 		}
 		for _, entry := range entries {
 			printRoutine(env, entry)
+			next := "none"
+			if entry.Next != nil {
+				next = entry.Next.UTC().Format(time.RFC3339)
+			}
+			fmt.Fprintf(env.Stdout, "scheduled: %t\nnext: %s\n", entry.Scheduled, next)
 		}
 		return 0
 	case "add":
@@ -165,9 +179,18 @@ func runRoutine(args []string, env Env) int {
 		if err != nil {
 			return routineError(env, err)
 		}
+		name := ""
+		if named {
+			name = fs.Arg(0)
+		}
 		scheduler := routine.Scheduler{Home: env.Home, GridHome: env.GridHome, Binary: binary, Path: env.getenv("PATH"), Backend: routine.NativeBackend(), Runner: routine.ExecOSRunner{}}
 		if routine.NativePreviewOnly() && (verb == "schedule" || verb == "unschedule") {
-			plans, err := scheduler.Preview(store, verb == "unschedule")
+			var plans []routine.TimerPlan
+			if named {
+				plans, err = scheduler.PreviewOne(store, name, verb == "unschedule")
+			} else {
+				plans, err = scheduler.Preview(store, verb == "unschedule")
+			}
 			if err != nil {
 				return routineError(env, err)
 			}
@@ -195,9 +218,13 @@ func runRoutine(args []string, env Env) int {
 
 		switch verb {
 		case "schedule":
-			err = scheduler.Schedule(context.Background(), store)
+			if named {
+				err = scheduler.ScheduleOne(context.Background(), store, name)
+			} else {
+				err = scheduler.Schedule(context.Background(), store)
+			}
 		case "unschedule":
-			err = scheduler.Unschedule(context.Background(), store.Project, "")
+			err = scheduler.Unschedule(context.Background(), store.Project, name)
 		case "remove":
 			// Unregister before deleting config so failed OS removal is retryable.
 			err = scheduler.RemoveRoutine(context.Background(), store, fs.Arg(0))
@@ -205,10 +232,13 @@ func runRoutine(args []string, env Env) int {
 		if err != nil {
 			return routineError(env, err)
 		}
+		// Name is set only when schedule or unschedule was given one; without it the
+		// reply keeps its two keys byte for byte.
 		result := struct {
 			Result  string `json:"result"`
 			Project string `json:"project"`
-		}{Result: verb, Project: store.Project}
+			Name    string `json:"name,omitempty"`
+		}{Result: verb, Project: store.Project, Name: name}
 		if *asJSON {
 			return writeJSON(env.Stdout, result)
 		}
