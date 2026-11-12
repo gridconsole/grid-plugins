@@ -186,6 +186,13 @@ func Run(args []string, e Env) int {
 			return fail(errors.New("lint requires <file>"), 2)
 		}
 		path := absolute(e.Cwd, args[0])
+		// An unregistered --project is refused before the file is read, as the
+		// other verbs refuse it; a guest keeps the answer it gets without the flag.
+		if f.project != "" && !e.Resolver.Caller.IsGuest() {
+			if _, err := e.Resolver.Resolve(where.Query{Cwd: e.Cwd, Project: f.project}); errors.Is(err, where.ErrProjectUnregistered) {
+				return fail(err, 1)
+			}
+		}
 		// A guest is admitted through the task the file lies in, before the file is
 		// read, and --task must name that same task.
 		guestTask := ""
@@ -383,6 +390,12 @@ func output(e Env, f flags, r report, code int) int {
 		enc.SetEscapeHTML(false)
 		if err := enc.Encode(r); err != nil {
 			return 1
+		}
+		// A refusal reads the same on stderr with and without --json.
+		if r.Error != "" {
+			if _, err := fmt.Fprintf(e.Stderr, "job: %s\n", r.Error); err != nil {
+				return 1
+			}
 		}
 		return code
 	}

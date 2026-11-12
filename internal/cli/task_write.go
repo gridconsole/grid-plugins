@@ -14,6 +14,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/task"
+	"github.com/gridconsole/grid-plugins/internal/where"
 	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
@@ -124,6 +125,14 @@ func runTaskWrite(args []string, env Env) int {
 	if len(pos) != count {
 		fmt.Fprint(env.Stderr, taskUsage)
 		return 2
+	}
+	// The project named by --project is resolved before the task operand, so an
+	// unregistered project answers no_such_project, not no_such_task. A guest keeps
+	// the answer it gets without the flag.
+	if (sub == "rename" || sub == "decline") && project != "" && env.GridHome != "" && !resolver(env).Caller.IsGuest() {
+		if _, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Project: project}); errors.Is(err, where.ErrProjectUnregistered) {
+			return taskOperandError(env, "grid task "+sub, fmt.Errorf("scope: %w", err))
+		}
 	}
 	resolved, err := resolveTaskOperand(env, pos[0])
 	if err != nil {
