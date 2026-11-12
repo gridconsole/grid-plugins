@@ -12,7 +12,17 @@ func runBrain(args []string, env Env) int {
 		Resolver:         resolver(env), Stdin: env.Stdin, Stdout: env.Stdout, Stderr: env.Stderr,
 		Cwd: env.Cwd, Home: env.Home, GridHome: env.GridHome, TempRoots: env.TempRoots,
 		Role: env.getenv("GRID_ROLE"), Member: brainMember(env), RecordError: env.recordError,
+		Task: env.getenv("GRID_TASK"), Job: env.getenv("GRID_JOB"), Session: brainSession(env),
 	})
+}
+
+// brainSession is the session id in the order grid task attach reads it:
+// GRID_SESSION_ID, else CLAUDE_SESSION_ID.
+func brainSession(env Env) string {
+	if v := env.getenv("GRID_SESSION_ID"); v != "" {
+		return v
+	}
+	return env.getenv("CLAUDE_SESSION_ID")
 }
 
 // brainMember is the person the host runs the plugin for, in the order grid task
