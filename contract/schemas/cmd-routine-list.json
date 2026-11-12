@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-routine-list.json",
+  "description": "JSON output of grid routine list --json; internal/cli/routine.go:120. A top-level array of routine entries, empty when the project or home has none, in the order of the routine names. Each entry is the routine as stored plus three read-time fields: limits (the effective routine_timeout, routine_max_turns and routine_budget), scheduled and next (from this machine's timer record; false and null for a routine of another machine, an unscheduled or a changed one). run is empty for a workflow routine. workflow, last_run, outcome and last_task are left out until they have a value.",
+  "items": {
+    "additionalProperties": false,
+    "properties": {
+      "every": {
+        "type": "string"
+      },
+      "last_run": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "last_task": {
+        "type": "string"
+      },
+      "limits": {
+        "additionalProperties": false,
+        "properties": {
+          "routine_budget": {
+            "type": "number"
+          },
+          "routine_max_turns": {
+            "type": "integer"
+          },
+          "routine_timeout": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "routine_timeout",
+          "routine_max_turns",
+          "routine_budget"
+        ],
+        "type": "object"
+      },
+      "machine": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "next": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "outcome": {
+        "enum": [
+          "running",
+          "success",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "run": {
+        "type": "string"
+      },
+      "scheduled": {
+        "type": "boolean"
+      },
+      "workflow": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "name",
+      "every",
+      "run",
+      "machine",
+      "limits",
+      "scheduled",
+      "next"
+    ],
+    "type": "object"
+  },
+  "title": "grid routine list output",
+  "type": "array"
+}

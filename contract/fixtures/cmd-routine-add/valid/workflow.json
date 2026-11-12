@@ -1,0 +1,14 @@
+{
+  "every": "30 2 * * *",
+  "limits": {
+    "routine_budget": 2.5,
+    "routine_max_turns": 25,
+    "routine_timeout": "20m"
+  },
+  "machine": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+  "name": "nightly",
+  "next": null,
+  "run": "",
+  "scheduled": false,
+  "workflow": "bugfix"
+}

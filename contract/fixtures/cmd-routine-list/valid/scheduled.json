@@ -1,0 +1,17 @@
+[
+  {
+    "every": "1h",
+    "last_run": "2026-11-10T02:30:00Z",
+    "limits": {
+      "routine_budget": 1,
+      "routine_max_turns": 10,
+      "routine_timeout": "10m"
+    },
+    "machine": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+    "name": "morning",
+    "next": "2026-11-10T03:30:00Z",
+    "outcome": "running",
+    "run": "grid version",
+    "scheduled": true
+  }
+]
