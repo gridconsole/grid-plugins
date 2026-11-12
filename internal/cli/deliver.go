@@ -35,14 +35,17 @@ func runDeliver(args []string, env Env) int {
 	fs := newFlags("deliver", env)
 	fs.Usage = func() {
 		out := usageOut(args, env)
-		fmt.Fprintln(out, "Usage: grid deliver --outcome <text> [files...] [--file path] [--task <task>] [--by agent] [--dry-run] [--json]")
+		fmt.Fprintln(out, "Usage: grid deliver --outcome <text> [files...] [--file path] [--task <task>] [--by agent] [--branch name] [--base sha-or-ref] [--dry-run] [--json]")
 		fmt.Fprintln(out, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		fmt.Fprintln(out, "The task's branch and base are recorded in task.md; they default to the current branch and its merge-base with main or master.")
 	}
 	o := task.DeliverOptions{Cwd: env.Cwd}
 	var files deliveryFiles
 	fs.StringVar(&o.Task, "task", "", "task id or folder; defaults to the current task")
 	fs.StringVar(&o.Outcome, "outcome", "", "Outcome text")
 	fs.StringVar(&o.By, "by", "grid", "delivery author")
+	fs.StringVar(&o.Branch, "branch", "", "task branch to record in task.md; defaults to the current git branch")
+	fs.StringVar(&o.Base, "base", "", "base sha or ref to record in task.md; defaults to the merge-base with main or master")
 	fs.BoolVar(&o.DryRun, "dry-run", false, "print actions without writing")
 	fs.Var(&files, "file", "deliverable file to copy; repeatable")
 	asJSON := fs.Bool("json", false, "print JSON")

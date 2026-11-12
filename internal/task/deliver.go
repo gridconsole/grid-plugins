@@ -12,6 +12,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/artifact"
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/gitx"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
 	"github.com/gridconsole/grid-plugins/internal/plan"
 	"github.com/gridconsole/grid-plugins/internal/proof"
@@ -25,6 +26,10 @@ type DeliverOptions struct {
 	Cwd, Task, Outcome, By string
 	Files                  []string
 	DryRun                 bool
+	// Branch and Base are the task's branch and the commit or ref it branched
+	// from, written to task.md for the Code tab. Empty means the git repo holding
+	// Cwd answers (see recordBranch); no answer writes no key.
+	Branch, Base string
 }
 
 // Delivery describes performed or proposed actions, not a persisted task record.
@@ -232,6 +237,7 @@ func (d delivery) write(t Task) ([]artifact.Record, error) {
 	if err != nil {
 		return imported, err
 	}
+	branch, base := recordBranch(d.o)
 	// Delivery asks for approval; it writes no approval and never closes the task.
 	event := d.s.event(t, WriteOptions{Action: "deliver", Note: summary, Who: contract.Author{ID: d.o.By, Role: "agent"}}, next)
 	updated, err := rewriteTask(data, func(mapping *yaml.Node) error {
@@ -242,6 +248,12 @@ func (d delivery) write(t Task) ([]artifact.Record, error) {
 		setScalar(mapping, "next", "Review the Outcome", true)
 		setScalar(mapping, "outcome", summary, true)
 		setScalar(mapping, "updated", d.s.clock().UTC().Format(time.RFC3339), true)
+		if branch != "" {
+			setScalar(mapping, "branch", branch, true)
+		}
+		if base != "" {
+			setScalar(mapping, "base", base, true)
+		}
 		return nil
 	}, func(body string) string { return replaceOutcome(body, outcome) })
 	if err != nil {
@@ -251,6 +263,26 @@ func (d delivery) write(t Task) ([]artifact.Record, error) {
 		return imported, err
 	}
 	return imported, commitWrite(t.Path, event, map[string][]byte{"task.md": updated})
+}
+
+// recordBranch is the branch and base a delivery writes to task.md. A value the
+// caller gave wins; otherwise the branch is the one checked out in the git repo
+// holding Cwd, and the base is where HEAD left the first of main and master that
+// exists there. A missing answer is "" and writes no key.
+func recordBranch(o DeliverOptions) (branch, base string) {
+	branch, base = strings.TrimSpace(o.Branch), strings.TrimSpace(o.Base)
+	if branch == "" {
+		branch, _ = gitx.CurrentBranch(o.Cwd)
+	}
+	if base == "" {
+		for _, def := range []string{"main", "master"} {
+			if sha, ok := gitx.MergeBase(o.Cwd, "HEAD", def); ok {
+				base = sha
+				break
+			}
+		}
+	}
+	return branch, base
 }
 
 // nextState is the state a delivery moves t to; data is its task.md. The state
