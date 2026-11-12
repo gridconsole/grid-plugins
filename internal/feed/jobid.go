@@ -52,16 +52,20 @@ func (s Store) jobLock() (*os.File, error) {
 	return f, nil
 }
 
-// checkJobFree refuses r when a counted Job record already holds its Job id,
-// unless it is the same request (same record id and body) retried. Read puts a
-// spilled body back, so the comparison sees the whole stored record.
+// checkJobFree refuses r when a counted or held Job record already holds its Job
+// id, unless it is the same request (same record id and body) retried. A held
+// record (its after or re target has not arrived, for example a dependency still
+// syncing from another machine) counts: it becomes the record the fold keeps once
+// its target lands, so a second writer must not post the same Job id beside it.
+// Read puts a spilled body back, so the comparison sees the whole stored record;
+// a record held for its spilled body has no Job id to read yet and cannot match.
 func (s Store) checkJobFree(r Record, id string) error {
 	existing, err := s.ReadOnly(Filter{Type: "job"})
 	if err != nil {
 		return err
 	}
 	for _, entry := range existing.Records {
-		if entry.Verdict != "counted" || jobID(entry.Record) != id {
+		if (entry.Verdict != "counted" && entry.Verdict != "held") || jobID(entry.Record) != id {
 			continue
 		}
 		if entry.ID == r.ID && sameRequest(entry.Record, r) {
