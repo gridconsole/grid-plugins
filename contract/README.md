@@ -86,6 +86,7 @@ during `task show` exits 1.
 | `notes_full` | A signal move found the target notes folder already holding 4000 files; nothing was written and it exits 3. |
 | `guest_refused` | The caller is refused as a guest (role guest, external or an unknown role); nothing was written. |
 | `job_exists` | A Job post (`grid job post`, `grid feed post --type job`) named a Job id the Feed already holds; nothing was written. A repeat of the same request (same `--id`, same body) exits 0 instead. Exits 3. |
+| `task_state` | The task's state does not allow the move (`task stop`, `task close`, `task reopen`, `task status`, and `deliver`, which the same state table can refuse); nothing was written and it exits 1. |
 | `person_required` | The existing person gate refused the request. |
 | `job_waiting` | A person Job still waits for a Job in its after list (`grid approve`, `grid job result`); exits 3. |
 | `changed` | A settings file or preview changed since the person looked; nothing was written. |
@@ -95,7 +96,7 @@ during `task show` exits 1.
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
 | `index_rebuild_failed` | The change was written; rebuilding index.md failed; the stdout object holds the result (`grid brain revert`, `grid brain supersede`); exits 1. |
 
-The first twelve constants live in `internal/cli/error_codes.go`, the settings
+The first thirteen constants live in `internal/cli/error_codes.go`, the settings
 codes in `internal/settings/claude_user.go` and `index_rebuild_failed` in
 `internal/braincmd/changes.go`; `person_required` and `job_waiting` are
 written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
