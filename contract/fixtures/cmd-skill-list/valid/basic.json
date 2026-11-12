@@ -1,0 +1,14 @@
+{
+  "brain-keeper": true,
+  "browser": true,
+  "deliver": true,
+  "plan-jobs": true,
+  "questions": true,
+  "research": true,
+  "review-job": true,
+  "run-job": true,
+  "setup": true,
+  "signals": true,
+  "task": true,
+  "visual-design-review": true
+}

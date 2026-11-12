@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-brain-write.json",
+  "description": "JSON output of grid brain write --json; internal/braincmd/ke_write.go:147-149, internal/brain/ke_write.go WriteResult. The app runs the verb and keeps only the exit code (internal/slices/brain/qa_brain_write.go); its own answer to the page carries rev.",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "created",
+        "edited"
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "description": "The stored version number of the new bytes."
+    },
+    "rev": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "The rev of the new bytes: 16 lower-case hex digits, the value a later --expect takes."
+    }
+  },
+  "required": [
+    "status",
+    "version",
+    "rev"
+  ],
+  "title": "grid brain write output",
+  "type": "object"
+}
