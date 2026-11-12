@@ -103,7 +103,8 @@ func (s Store) settleJobs(records ...Record) error {
 // settleJob closes the question's person Job from the last answer, default or
 // withdrawal in the history, so the Feed holds one decision and the Job follows
 // it. It runs again on a repeated command, so a crash between the two posts is
-// repaired by the retry.
+// repaired by the retry. A waiting event ("Not yet") decides nothing: the Job
+// stays open, and so do the Jobs that list it in their after list.
 func (s Store) settleJob(f feed.Store, r Record) error {
 	if s.Jobs.Close == nil || r.Job == "" {
 		return nil
@@ -115,6 +116,8 @@ func (s Store) settleJob(f feed.Store, r Record) error {
 			return s.Jobs.Close(f, s.ControlWriter, s.Writer, r.Job, e.Text)
 		case "withdrawn":
 			return s.Jobs.Close(f, s.ControlWriter, s.Writer, r.Job, "withdrawn: "+e.Text)
+		case "waiting":
+			continue
 		}
 	}
 	return nil

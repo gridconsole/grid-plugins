@@ -3,6 +3,7 @@
 package eval
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -60,13 +61,82 @@ func TestIfEdHelperProcess(t *testing.T) {
 			fmt.Fprintln(os.Stderr, "holder failed:", err)
 			os.Exit(3)
 		}
-		fmt.Println("started")
+		fmt.Println("started", holder.Process.Pid)
 		os.Exit(0)
 	case "holder":
-		if f, err := os.Open(os.Getenv(ifEdFifoEnv)); err == nil {
-			_, _ = io.Copy(io.Discard, f)
+		// Open without waiting for a writer, then read blocking: with no writer
+		// left the read gives EOF at once, so the holder ends in every order of
+		// events, also when the test closed its end before this open.
+		fd, err := syscall.Open(os.Getenv(ifEdFifoEnv), syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
+		if err == nil {
+			if syscall.SetNonblock(fd, false) == nil {
+				buf := make([]byte, 4096)
+				for {
+					n, err := syscall.Read(fd, buf)
+					if err == syscall.EINTR {
+						continue
+					}
+					if n <= 0 || err != nil {
+						break
+					}
+				}
+			}
+			_ = syscall.Close(fd)
 		}
 		os.Exit(0)
+	}
+}
+
+// ifEdPidGone reports that no live process has the pid (a zombie counts as
+// gone: it only waits for its reaper).
+func ifEdPidGone(pid int) bool {
+	if err := syscall.Kill(pid, 0); err == syscall.ESRCH {
+		return true
+	}
+	if data, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat"); err == nil {
+		return bytes.Contains(data, []byte(") Z"))
+	}
+	return false
+}
+
+// The holder of TestIfEdContextEnds must end by itself when the FIFO has no
+// writer any more before it opens it (a test that failed or ended early). This
+// runs the "parent" helper with the FIFO never opened, reads the holder's pid
+// from the line beside "started" and waits for that process to be gone.
+func TestIfEdHolderEndsWithoutWriter(t *testing.T) {
+	fifo := ifEdMakeFIFO(t)
+	cmd := exec.Command(os.Args[0], "-test.run=^TestIfEdHelperProcess$")
+	cmd.Env = append(os.Environ(), ifEdHelperEnv+"=parent", ifEdFifoEnv+"="+fifo)
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	var pid int
+	lineCh := make(chan string, 1)
+	go func() {
+		line, _ := bufio.NewReader(out).ReadString('\n')
+		lineCh <- line
+	}()
+	select {
+	case line := <-lineCh:
+		if _, err := fmt.Sscanf(line, "started %d", &pid); err != nil || pid <= 0 {
+			t.Fatalf("first line %q is not %q", line, "started <pid>")
+		}
+	case <-time.After(ifEdWait):
+		_ = cmd.Process.Kill()
+		t.Fatalf("no first line from the parent within %v", ifEdWait)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
+	defer func() { _ = cmd.Wait() }()
+	deadline := time.Now().Add(ifEdWait)
+	for !ifEdPidGone(pid) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the holder (pid %d) was still alive %v after its FIFO had no writer", pid, ifEdWait)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 

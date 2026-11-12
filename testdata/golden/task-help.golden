@@ -1,5 +1,5 @@
 Usage:
-  grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--input <file>]... [--json]
+  grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--kind setup] [--input <file>]... [--json]
   grid task show [<task>] [--json]
   grid task attach <task> [--session ID] [--runtime claude] [--json]
   grid task list [--project <name-or-id>] [--state <state>] [--json]
@@ -13,5 +13,6 @@ Usage:
   grid task status <task> <state> [--json]
   grid task lane <task> <inbox|planning|doing|delivering> [--project <p>] [--json]
   grid task history <task> [--json]
+  grid task merge --task <task> [--project <p>] [--json]
 
 <task> is an id, exact folder name, or folder path inside a project tasks directory.

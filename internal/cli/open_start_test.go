@@ -202,8 +202,8 @@ func TestOpenStartsNothingWhenTheAppRuns(t *testing.T) {
 	if len(opened) != 1 || opened[0] != f.want() {
 		t.Fatalf("opened %v, want %s", opened, f.want())
 	}
-	if f.errb.Len() != 0 {
-		t.Errorf("stderr %q, want nothing", f.errb)
+	if want := "grid open: no launch code was found; the page opens without one.\n"; f.errb.String() != want {
+		t.Errorf("stderr %q, want %q", f.errb, want)
 	}
 }
 

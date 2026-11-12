@@ -19,8 +19,8 @@ The routine names the project and the source. If either is missing, say so and s
 
    Always give `--source-id` when the source has one: it is how a message is never saved twice. The body is the message as it is, not a summary. Use a quoted here-document when the body holds quotes. Give `--sender` and `--recipient` when the source shows them, each as one line of at most 512 bytes; leave a flag out when the source does not say, and the note then has no such line.
 
-   Personal is the project for messages that belong to no project. `--project personal` from any other folder fails with `project is not registered` (exit 1), because Personal is only set up when the command runs from the Grid home. So when the routine names Personal, leave `--project` out and run from the Grid home, in the same command: `cd "$GRID_HOME" && printf '%s' "<body>" | grid signal add --source mail --source-id <id> --title "<phrase>" --body -`. Do not hand-write a note, and do not run `grid project add` for it.
-4. Read the answer: `result: written` or a duplicate are both fine. If the command exits 2 or 3, fix the field it names and call once more; if it fails again, skip that message and name it in your last line.
+   Personal is the project for messages that belong to no project. `--project personal` fails with `project is not registered` (exit 1) from every folder, because `--project` names a registered project and Personal has no record; Personal is chosen by the folder, so when the routine names Personal, leave `--project` out and run from the Grid home, in the same command: `cd "$GRID_HOME" && printf '%s' "<body>" | grid signal add --source mail --source-id <id> --title "<phrase>" --body -`. Do not hand-write a note, and do not run `grid project add` for it.
+4. Read the answer: `result: written` or a duplicate are both fine. If the command exits 1 with `grid: <field> ...` on stderr, fix the field it names and call once more; if it fails again, skip that message and name it in your last line.
 5. Finish with one line: how many were written, how many duplicates, how many skipped.
 
 ## Act, only when the person asks

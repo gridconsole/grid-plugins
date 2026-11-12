@@ -173,6 +173,7 @@ var fvGuestVerbs = []struct {
 	{"summary", []string{"task", "summary", "T-01", "--for", "customer", "--text", "a guest summary"}, 1, "grid task summary: scope: role cannot write task summaries", false},
 	{"move", []string{"task", "move", "laptop", "--task", "T-01", "--project", "example"}, 1, `grid task move: role "guest" may not move a task; a guest answers and comments`, false},
 	{"lane", []string{"task", "lane", "T-01", "doing", "--project", "example"}, 1, `grid task lane: role "guest" may not move a task to a lane; a guest answers and comments`, false},
+	{"merge", []string{"task", "merge", "--task", "T-01", "--project", "example"}, 1, "grid task merge: task T-01 has no branch in task.md; run grid deliver in the task's checkout to record it, then run grid task merge again", false},
 	{"attach", []string{"task", "attach", "T-01"}, 1, "grid task attach: agent cannot attach T-01 without its assigned task folder", false},
 	{"status", []string{"task", "status", "T-01", "running"}, 0, "", true},
 }

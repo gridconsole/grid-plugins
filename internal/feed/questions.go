@@ -102,7 +102,7 @@ func foldQuestions(read ReadResult, state *contract.State, now time.Time, allowe
 			if p.Type == "control" && p.Lease != nil && *p.Lease == "task" && p.Fence > 0 && str(p.Body["target"]) == id && value(p.Re) == id && str(p.Body["question_event"]) != "" {
 				events = append(events, controls[nextControl])
 				nextControl++
-			} else if p.ID == selected || (personWithdraw(p, allowed) && value(p.Re) == id && str(p.Body["target"]) == id) {
+			} else if p.ID == selected || ((personWithdraw(p, allowed) || personWaiting(p, q.Who)) && value(p.Re) == id && str(p.Body["target"]) == id) {
 				events = append(events, p)
 			}
 		}
@@ -118,7 +118,7 @@ func foldQuestions(read ReadResult, state *contract.State, now time.Time, allowe
 				}
 				continue
 			}
-			if personWithdraw(p, allowed) {
+			if personWithdraw(p, allowed) || personWaiting(p, q.Who) {
 				at, err := time.Parse(time.RFC3339Nano, p.At)
 				if d.State == "open" && deadlineErr == nil && err == nil && !at.Before(deadline) && str(gate["default"]) != "" {
 					d.State, d.Answer = "defaulted", str(gate["default"])
@@ -142,6 +142,12 @@ func foldQuestions(read ReadResult, state *contract.State, now time.Time, allowe
 				d.State, d.Answer = "defaulted", str(p.Body["text"])
 			case "withdrawn":
 				d.State = "withdrawn"
+			case "waiting":
+				// A person's "not yet" is kept in the history; the question, its
+				// answer and the Jobs behind it stay as they are.
+				if !personWaiting(p, q.Who) || !waitsOn(post.Body, str(p.Body["text"])) {
+					continue
+				}
 			default:
 				continue
 			}
@@ -223,6 +229,27 @@ func personWithdraw(p Record, allowed func(string) bool) bool {
 	return p.Type == "control" && p.Lease == nil && p.Fence == 0 && p.Gen == 0 &&
 		str(p.Body["question_event"]) == "withdrawn" &&
 		(p.Author.Role == "owner" || p.Author.Role == "member" || p.Author.Role == "lead" || p.Author.Role == "guest") && allowed(p.Author.Role)
+}
+
+// personWaiting reports whether p is a person's leaseless waiting control, from
+// someone who may answer a question addressed to who (as PersonAnswer admits).
+func personWaiting(p Record, who string) bool {
+	if p.Type != "control" || p.Lease != nil || p.Fence != 0 || p.Gen != 0 || str(p.Body["question_event"]) != "waiting" {
+		return false
+	}
+	switch p.Author.Role {
+	case "owner", "member", "lead":
+		return true
+	case "guest":
+		return p.Author.ID == who
+	}
+	return false
+}
+
+// waitsOn reports whether the question body names text in its waits_on labels.
+func waitsOn(body map[string]any, text string) bool {
+	labels, _ := body["waits_on"].([]any)
+	return slices.ContainsFunc(labels, func(label any) bool { return label == text })
 }
 
 // QuestionWithdrawReadPolicy resolves withdrawal roles for projections. An

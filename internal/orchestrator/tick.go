@@ -103,6 +103,16 @@ func (s Store) Tick() (out Output, err error) {
 		if e := s.guReplanPersonCancelled(snap); e != nil {
 			return e
 		}
+		if e := s.taCancelEndGrants(snap); e != nil {
+			return e
+		}
+		snap, e = Load(s.Feed)
+		if e != nil {
+			return e
+		}
+		if e := s.pfMsgReplan(snap); e != nil {
+			return e
+		}
 		snap, e = Load(s.Feed)
 		if e != nil {
 			return e
@@ -254,7 +264,7 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 		return nil
 	}
 	if j.Status == contract.Parked {
-		if j.Reason == "usage_limit" && s.UsageReady != nil && s.UsageReady(j.Assign.To) {
+		if j.Reason == "usage_limit" && s.yaUsageReady(j) {
 			return s.control(j, contract.Ready, "usage capacity restored", j.Exited)
 		}
 		if j.Reason == "needs_person" {

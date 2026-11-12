@@ -17,7 +17,7 @@ Owner decision: the brain needs no attention from the person. A subagent curates
 grid brain propose --project <project> --name <id> --topic <topic> --description "<when to read it>" --summary "<what it holds>" --source <task, Job or person> --body "<text>" --link '{"to":"brain:project/<note>","rel":"explains","summary":"<what that note holds>","why":"<what the reader gains by following it>"}'
 ```
 
-Always pass `--project <project>` when the person or routine names one: from a folder that is not that project the proposal resolves to home and a `conventions` note fails with `topic conventions is not available at home level`. `grid brain accept` and `grid brain check` take `--project` too. A proposal made this way waits in the project's `brain-proposals`: file it with `grid brain accept --project <project> <id>`; `grid brain decide` is for a proposal in a task's own folder.
+Always pass `--project <project>` when the person or routine names one: without it a proposal goes to the project of the folder it runs in: from another registered project's folder it lands in that project, from a repo with no Grid record it refuses with `project "<name>" has no Grid record; create its first task or use --level home`, and only a Personal folder gives home, where a `conventions` note fails with `topic conventions is not available at home level`. `grid brain accept` and `grid brain check` take `--project` too. A proposal made this way waits in the project's `brain-proposals`: file it with `grid brain accept --project <project> <id>`; `grid brain decide` is for a proposal in a task's own folder.
 
 `--file <path|->` takes Markdown with front matter instead of `--body`. `--level home` is for what is true in every project; without `--level` a resolved project is used, else home. `--external` quarantines text that came from outside.
 
@@ -25,23 +25,23 @@ Always pass `--project <project>` when the person or routine names one: from a f
 
 - A choice and its reason: topic `decisions` (home or project).
 - A project practice or a lesson: topic `conventions` (project).
-- A kind of knowledge that repeats and fits neither: a custom topic, defined by `knowledge/<topic>/TOPIC.md` in the brain with `name`, `kind: knowledge`, `level` and `description` (internal/brain/topics.go:66).
-- `environments`, `machines`, `deploy`, `people`, `agents`, `routines` are config topics, not notes. `grid brain check` flags a proposal there as `config: run grid <topic>`; use that command.
+- A kind of knowledge that repeats and fits neither: a custom topic, defined by `topics/<topic>/TOPIC.md` in the brain with `name`, `kind: knowledge`, `level` and `description` (internal/brain/topics.go:66).
+- `environments`, `machines`, `deploy`, `people`, `agents`, `routines` are config topics, not notes. `grid brain check` flags a proposal there as `config: <step>`, and the finding names the step to take.
 - `skills`, `workflows`, `design`, `research`, `incidents` are not topics (internal/brain/topics.go:63). A skill lives at `knowledge/skills/<name>/SKILL.md`.
 
-Topics are hooked, not dumped (owner decision): the CLI (`grid brain search --topic`, `grid brain show`), a skill's front-matter description, PreToolUse hooks and the SessionStart index, which carries one line per note (internal/hook/hook.go:111). So the `description` is the hook: it says when to read the note. Never paste one note's body into another; link to it.
+Topics are hooked, not dumped (owner decision): the SessionStart index, which carries one line per topic (internal/brain/index.go) and ends with the read step (`grid brain search --topic <topic> <words>`, then `grid brain show <id>`), the CLI (`grid brain search --topic <t> <words>`, `grid brain show <id>`), a skill's front-matter description and the brain links of a Job. No hook puts a topic in front of an agent when it starts a skill or touches a file. So the `description` is the hook: it says when to read the note. Never paste one note's body into another; link to it.
 
 ## Keep
 
 The keeper is a subagent. It never asks the person.
 
-1. `grid brain keep --task <task>` lists the waiting proposals and writes nothing.
-2. `grid brain show <id> --proposal` reads one.
-3. Run `grid brain check <id>` and judge the findings: exit 0 clean, 3 findings. A finding means the text changes what runs (a config topic, a skill key that can run code, a shell line, an agent field). When a finding is real, reject with the finding code as the reason. No Grid-made guard, cap or hold is added on top.
+1. `grid brain keep --task <task> --json` lists the waiting proposals and writes nothing. Each row has an `id` and a `path`. A path that starts `task:` is a proposal in the task's own folder; a path that starts `brain:` is a project or home proposal, and `<level>` is the word after `brain:` (`project` or `home`).
+2. Read it. A `task:` row: `grid brain show <id> --proposal --task <task>`. A `brain:` row: `grid brain show brain:<level>/<id> --proposal`.
+3. Check it. A `brain:` row: `grid brain check brain:<level>/<id>`, and judge the findings: exit 0 clean, 3 findings. A finding means the text changes what runs (a config topic, a skill key that can run code, a shell line, an agent field). When a finding is real, reject with the finding code as the reason. No Grid-made guard, cap or hold is added on top. A `task:` row needs no separate check: `grid brain decide` runs the same check and refuses with `proposal refused: <finding>`; then reject it with the finding as the note.
 4. Judge it against the bar below.
-5. Pass: `grid brain accept <id>`. For a task's proposal: `grid brain decide <task> <id> accept --note "<reason>"`.
-6. Duplicate or adds to a note: `grid brain decide <task> <id> merge-into <note-id> --note "<reason>"`.
-7. Fail: `grid brain accept <id> --reject "<why>"`. A proposal is filed as written and cannot be edited, so if the idea is worth keeping, propose the fixed version under a new name and put the rejected name in `--source`.
+5. Pass: a `task:` row, `grid brain decide <task> <id> accept --note "<reason>"`; a `brain:` row, `grid brain accept --project <project> brain:<level>/<id>`.
+6. Duplicate or adds to a note: a `task:` row, `grid brain decide <task> <id> merge-into <note-id> --note "<reason>"`. A `brain:` row has no merge: reject it and name the note it repeats in the reason.
+7. Fail: a `task:` row, `grid brain decide <task> <id> reject --note "<why>"`; a `brain:` row, `grid brain accept --project <project> brain:<level>/<id> --reject "<why>"`. A proposal is filed as written and cannot be edited, so if the idea is worth keeping, propose the fixed version under a new name and put the rejected name in `--source`.
 8. After a batch: `grid brain index`. `grid brain changes` lists what changed; `grid brain revert <topic>/<name> --to <n>` publishes an older version again.
 
 ## Prune

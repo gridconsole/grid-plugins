@@ -98,7 +98,7 @@ func run(args []string, env Env) int {
 	task := fs.String("task", "", "task folder or id; otherwise the enclosing task")
 	asJSON := fs.Bool("json", false, "print JSON")
 	var in Input
-	var opts options
+	var opts, waits options
 	var applies, reason string
 	if action == "add" {
 		fs.StringVar(&in.Job, "job", "", "related Job id")
@@ -108,6 +108,7 @@ func run(args []string, env Env) int {
 		fs.StringVar(&in.Why, "why", "", "why the answer matters (optional)")
 		fs.Var(&opts, "option", "option label; repeat for each option")
 		fs.StringVar(&in.Recommended, "recommended", "", "recommended option label")
+		fs.Var(&waits, "waits-on", "option label whose answer keeps the question and its Job open (\"Not yet\"); repeat for each")
 		fs.StringVar(&in.Default, "default", "", "answer to apply at the deadline")
 		fs.StringVar(&applies, "applies", "", "deadline in RFC3339 with timezone")
 		fs.BoolVar(&in.Blocking, "blocking", false, "whether this question blocks work")
@@ -163,6 +164,7 @@ func run(args []string, env Env) int {
 			return usage("--applies must be an RFC3339 time with timezone")
 		}
 		in.Options = opts
+		in.WaitsOn = waits
 		if in.AgeAfter <= 0 {
 			return usage("--age-after must be positive")
 		}

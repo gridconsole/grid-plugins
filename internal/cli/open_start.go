@@ -173,8 +173,13 @@ func (a *AppStart) ensure(env Env) (string, int) {
 		// The file holds the address of a server that is gone; the new server writes its own.
 		_ = os.Remove(filepath.Join(env.GridHome, AppURLFile))
 	}
+	home, err := filepath.Abs(env.GridHome)
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "grid open: cannot resolve the Grid home %s: %v\n", env.GridHome, err)
+		return "", 1
+	}
 	for _, pr := range progs {
-		if err := startDetached(env, pr.name, pr.path); err != nil {
+		if err := startDetached(env, pr.name, pr.path, appStartArgs(pr.name, home)); err != nil {
 			fmt.Fprintf(env.Stderr, "grid open: could not start %s: %v\n", pr.name, err)
 			return "", 1
 		}
@@ -200,10 +205,21 @@ func (a *AppStart) ensure(env Env) (string, int) {
 	return "", 1
 }
 
+// appStartArgs is the command line each app program needs to run on its own: the
+// app's contract, the same one the desktop uses for its server. grid-server runs only
+// with the serve command and, with --home, a --who and a --role; grid-worker runs only
+// with a command, and takes -home after it. home is an absolute path.
+func appStartArgs(name, home string) []string {
+	if name == AppServerBin {
+		return []string{"serve", "--addr", "127.0.0.1:0", "--home", home, "--who", "local", "--role", "owner"}
+	}
+	return []string{"start", "-home", home}
+}
+
 // startDetached starts a program that outlives grid open: its own session or process
-// group, no terminal, output in <Grid home>/logs/<name>.log. The app finds the Grid
-// home through GRID_HOME.
-func startDetached(env Env, name, path string) error {
+// group, no terminal, output in <Grid home>/logs/<name>.log. It runs with args, and
+// the app finds the Grid home through GRID_HOME as well.
+func startDetached(env Env, name, path string, args []string) error {
 	logDir := filepath.Join(env.GridHome, "logs")
 	if err := os.MkdirAll(logDir, 0o700); err != nil {
 		return err
@@ -213,7 +229,7 @@ func startDetached(env Env, name, path string) error {
 		return err
 	}
 	defer logf.Close()
-	cmd := exec.Command(path)
+	cmd := exec.Command(path, args...)
 	cmd.Dir = env.GridHome
 	cmd.Env = append(os.Environ(), "GRID_HOME="+env.GridHome)
 	cmd.Stdout, cmd.Stderr = logf, logf

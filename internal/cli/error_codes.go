@@ -83,6 +83,11 @@ type commandFailure struct {
 	stdout outputCount
 	flags  *flag.FlagSet
 	code   string
+	// err is the error the command last recorded; Run's deferred finish reads it to
+	// leave with exit 4 when it is a full disk. homeLine is set once the unwritable
+	// home line has been printed, so the call prints it once.
+	err      error
+	homeLine bool
 }
 
 type outputCount struct {
@@ -96,9 +101,19 @@ func (w *outputCount) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// recordError keeps the error a command is about to report. Every command calls it
+// before its own stderr line, so when err says the Grid home cannot be written
+// (the write was refused by permission or a read-only mount) the fixed first line
+// with no path goes out ahead of the command's own line, which keeps its text.
 func (e Env) recordError(err error) {
-	if e.failure != nil {
-		e.failure.code = errorCode(err)
+	if e.failure == nil {
+		return
+	}
+	e.failure.code = errorCode(err)
+	e.failure.err = err
+	if !e.failure.homeLine && qwEnUnwritable(err) {
+		e.failure.homeLine = true
+		io.WriteString(e.Stderr, qwEnHomeLine+"\n")
 	}
 }
 
