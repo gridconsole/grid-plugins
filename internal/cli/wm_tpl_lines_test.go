@@ -50,7 +50,9 @@ func wmTplArgv(t *testing.T, span string, vals map[string]string) []string {
 	sort.Strings(keys)
 	line := span
 	for _, k := range keys {
-		line = strings.ReplaceAll(line, k, vals[k])
+		if k != "<json>" { // a body has spaces: it replaces its argument after the split
+			line = strings.ReplaceAll(line, k, vals[k])
+		}
 	}
 	var args []string
 	var cur strings.Builder
@@ -76,7 +78,12 @@ func wmTplArgv(t *testing.T, span string, vals map[string]string) []string {
 	if has {
 		args = append(args, cur.String())
 	}
-	for _, a := range args {
+	for i, a := range args {
+		if a == "<json>" {
+			if body, ok := vals["<json>"]; ok {
+				args[i], a = body, body
+			}
+		}
 		if strings.Contains(a, "<") && strings.Contains(a, ">") && !strings.HasPrefix(a, "{") {
 			t.Fatalf("%q: placeholder left unfilled in argument %q", span, a)
 		}
