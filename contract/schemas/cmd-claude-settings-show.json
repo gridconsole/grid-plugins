@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-claude-settings-show.json",
+  "title": "grid claude settings show output",
+  "description": "JSON output of grid claude settings show; internal/cli/budget.go:133 writes settings.ClaudeShowResult (internal/settings/claude_user.go:305). The app relays it unchanged (internal/slices/claudesettings/http.go:94) and the Settings page reads path, state, readAt, mainModel.value and window, rows.<key>.now, inForce, setBy and blocked, and codex.exists and path (internal/kernel/webui/app/pages/settings/agents-settings-json.mjs:33-110, agents.mjs:90 on app 8f9b806d).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "path": {"type": "string", "description": "The user settings.json that was read."},
+    "state": {"type": "string", "enum": ["ok", "missing", "invalid", "unreadable"]},
+    "error": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    "readAt": {"type": "string"},
+    "mainModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "window": {"type": "integer"},
+        "from": {"type": "string"}
+      },
+      "required": ["value", "window", "from"]
+    },
+    "rows": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "autoCompactWindow": {"type": "object", "additionalProperties": false, "properties": {"now": {}, "inForce": {}, "setBy": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "shadowedBy": {"type": "string"}, "blocked": {"type": "array", "items": {"type": "string"}}}, "required": ["now", "inForce", "setBy"]},
+        "autoCompactEnabled": {"type": "object", "additionalProperties": false, "properties": {"now": {}, "inForce": {}, "setBy": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "shadowedBy": {"type": "string"}, "blocked": {"type": "array", "items": {"type": "string"}}}, "required": ["now", "inForce", "setBy"]},
+        "advisorModel": {"type": "object", "additionalProperties": false, "properties": {"now": {}, "inForce": {}, "setBy": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "shadowedBy": {"type": "string"}, "blocked": {"type": "array", "items": {"type": "string"}}}, "required": ["now", "inForce", "setBy"]},
+        "permissions.defaultMode": {"type": "object", "additionalProperties": false, "properties": {"now": {}, "inForce": {}, "setBy": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "shadowedBy": {"type": "string"}, "blocked": {"type": "array", "items": {"type": "string"}}}, "required": ["now", "inForce", "setBy"]},
+        "remoteControlAtStartup": {"type": "object", "additionalProperties": false, "properties": {"now": {}, "inForce": {}, "setBy": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "shadowedBy": {"type": "string"}, "blocked": {"type": "array", "items": {"type": "string"}}}, "required": ["now", "inForce", "setBy"]}
+      },
+      "required": ["autoCompactWindow", "autoCompactEnabled", "advisorModel", "permissions.defaultMode", "remoteControlAtStartup"]
+    },
+    "env": {
+      "type": "object",
+      "description": "The environment names Grid starts agents from, each the value or null when unset.",
+      "additionalProperties": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+    },
+    "codex": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": "string"},
+        "exists": {"type": "boolean"},
+        "confirmed": {"type": "boolean"},
+        "rows": {"type": "object", "description": "Codex config rows by key; the values are whatever the file holds."}
+      },
+      "required": ["path", "exists", "confirmed", "rows"]
+    }
+  },
+  "required": ["path", "state", "error", "readAt", "mainModel", "rows", "env", "codex"]
+}

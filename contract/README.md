@@ -182,11 +182,14 @@ are reference-document names and original line numbers, not machine paths.
 | grid account status output; also grid account list, the same writer | [cmd-account-status.json](schemas/cmd-account-status.json) | internal/cli/account.go:87 |
 | grid account statusline output | [cmd-account-statusline.json](schemas/cmd-account-statusline.json) | internal/cli/account.go:250 |
 | grid account windows output | [cmd-account-windows.json](schemas/cmd-account-windows.json) | internal/cli/account.go:165 |
+| grid agent budget show output | [cmd-agent-budget-show.json](schemas/cmd-agent-budget-show.json) | internal/cli/budget.go:83 |
 | grid approve output | [cmd-approve.json](schemas/cmd-approve.json) | internal/cli/task_write.go:164 |
 | grid brain changes output | [cmd-brain-changes.json](schemas/cmd-brain-changes.json) | internal/braincmd/changes.go:188 |
 | grid brain drop output | [cmd-brain-drop.json](schemas/cmd-brain-drop.json) | internal/braincmd/hy_drop.go:127 |
 | grid brain search output | [cmd-brain-search.json](schemas/cmd-brain-search.json) | internal/braincmd/command.go:345 |
 | grid brain write output | [cmd-brain-write.json](schemas/cmd-brain-write.json) | internal/braincmd/ke_write.go:147 |
+| grid claude settings set output | [cmd-claude-settings-set.json](schemas/cmd-claude-settings-set.json) | internal/cli/budget.go:143 |
+| grid claude settings show output | [cmd-claude-settings-show.json](schemas/cmd-claude-settings-show.json) | internal/cli/budget.go:133 |
 | grid feed post output | [cmd-feed-post.json](schemas/cmd-feed-post.json) | internal/cli/feed.go:168 |
 | grid feed state output | [cmd-feed-state.json](schemas/cmd-feed-state.json) | internal/cli/feed.go:131 |
 | grid intent list output | [cmd-intent-list.json](schemas/cmd-intent-list.json) | internal/cli/intent.go:247 |
@@ -198,6 +201,8 @@ are reference-document names and original line numbers, not machine paths.
 | grid project remove output | [cmd-project-remove.json](schemas/cmd-project-remove.json) | internal/cli/projects.go:172 |
 | grid project repo output | [cmd-project-repo.json](schemas/cmd-project-repo.json) | internal/cli/project_repo.go:110 |
 | grid project scan output | [cmd-project-scan.json](schemas/cmd-project-scan.json) | internal/cli/projects.go:143 |
+| grid routine add output | [cmd-routine-add.json](schemas/cmd-routine-add.json) | internal/cli/routine.go:158 |
+| grid routine list output | [cmd-routine-list.json](schemas/cmd-routine-list.json) | internal/cli/routine.go:120 |
 | grid session handback output | [cmd-session-handback.json](schemas/cmd-session-handback.json) | internal/cli/intent.go:140 |
 | grid session list output | [cmd-session-list.json](schemas/cmd-session-list.json) | internal/cli/liveness.go:142 |
 | grid session pause output | [cmd-session-pause.json](schemas/cmd-session-pause.json) | internal/cli/intent.go:140 |
@@ -208,12 +213,16 @@ are reference-document names and original line numbers, not machine paths.
 | grid session stop output | [cmd-session-stop.json](schemas/cmd-session-stop.json) | internal/cli/intent.go:140 |
 | grid session switch output | [cmd-session-switch.json](schemas/cmd-session-switch.json) | internal/cli/intent.go:140 |
 | grid setup output | [cmd-setup.json](schemas/cmd-setup.json) | internal/cli/settings.go:257; internal/settings/claude.go:306 |
+| grid skill enable and agent set output | [cmd-settings-receipt.json](schemas/cmd-settings-receipt.json) | internal/cli/settings.go:169 |
+| grid skill list output | [cmd-skill-list.json](schemas/cmd-skill-list.json) | internal/cli/settings.go:137 |
 | grid task list output | [cmd-task-list.json](schemas/cmd-task-list.json) | internal/cli/task.go:142 |
 | grid task move output | [cmd-task-move.json](schemas/cmd-task-move.json) | internal/cli/intent.go:140 |
 | grid task new output | [cmd-task-new.json](schemas/cmd-task-new.json) | internal/cli/task.go:189 |
 | grid task show output | [cmd-task-show.json](schemas/cmd-task-show.json) | internal/cli/task.go:122 |
 | grid task delete and restore output | [cmd-task-trash.json](schemas/cmd-task-trash.json) | internal/cli/task_write.go:438 |
 | grid version output | [cmd-version.json](schemas/cmd-version.json) | internal/cli/version.go:54 |
+| grid workflow show output | [cmd-workflow-show.json](schemas/cmd-workflow-show.json) | internal/cli/workflow.go:74 |
+| grid workflow write output | [cmd-workflow-write.json](schemas/cmd-workflow-write.json) | internal/cli/workflow.go:176 |
 | grid where output | [cmd-where.json](schemas/cmd-where.json) | internal/cli/cli.go:407 |
 | grid worker list output | [cmd-worker-list.json](schemas/cmd-worker-list.json) | internal/cli/worker.go:57 |
 

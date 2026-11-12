@@ -3645,7 +3645,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-agent-budget-show.json"
         },
         {
           "name": "budget undo",
@@ -3719,7 +3719,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-settings-receipt.json"
         },
         {
           "name": "sync",
@@ -3790,7 +3790,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-claude-settings-set.json"
         },
         {
           "name": "settings show",
@@ -3808,7 +3808,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-claude-settings-show.json"
         }
       ]
     },
@@ -3913,7 +3913,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-settings-receipt.json"
         },
         {
           "name": "list",
@@ -3931,7 +3931,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-skill-list.json"
         }
       ]
     },
