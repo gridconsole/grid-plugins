@@ -23,6 +23,13 @@ type RenderOptions struct {
 	// empty its body is the Instructions section, in place of the plugin's own
 	// agents/<role>.md.
 	Agent string
+	// BrainSkill finds a skill the brain holds: the text of its SKILL.md and the
+	// absolute path of that file. The Skills block points at the path, it never
+	// pastes the text. Nil means the brain holds none.
+	BrainSkill func(name string) (md, path string, ok bool)
+	// SkillOff reports a skill the person turned off; the Skills block leaves it
+	// out. Nil means nothing is off.
+	SkillOff func(name string) bool
 	// Answers are the decisions the Job waited for, one per after edge that is a
 	// person Job or a gate:Q-<n> question, in the order of its edges.
 	Answers []Answer
@@ -350,7 +357,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		// The worker starts claude without --agent, so the Job carries the role's own instructions.
 		b.WriteString("### Instructions\n\n" + agentBody(md) + "\n\n")
 	}
-	b.WriteString(skillsBlock(j.Skills))
+	b.WriteString(skillsBlock(j.Skills, o.BrainSkill, o.SkillOff))
 	if j.Checkpoint != nil {
 		fmt.Fprintf(&b, "Checkpoint: %s (%s)\n\n", j.Checkpoint.Step, j.Checkpoint.Commit)
 	}
@@ -422,9 +429,10 @@ func SourceKey(p string) string {
 
 // skillsBlock names each skill of a Job as grid:<name>, the name the plugin's
 // skills load under, so the agent knows what to pass to the Skill tool. A name
-// the plugin does not carry is listed and marked, never refused. A Job with no
-// skills gets no block.
-func skillsBlock(names []string) string {
+// the plugin does not carry but the brain does is a pointer to its SKILL.md; one
+// neither holds is listed and marked, never refused. A skill the person turned
+// off is left out. A Job with no skills left gets no block.
+func skillsBlock(names []string, brainSkill func(string) (string, string, bool), off func(string) bool) string {
 	var lines []string
 	listed := map[string]bool{}
 	for _, raw := range names {
@@ -433,7 +441,20 @@ func skillsBlock(names []string) string {
 			continue
 		}
 		listed[name] = true
+		if off != nil && off(name) {
+			continue
+		}
 		md, ok := gridplugins.SkillFor(name)
+		if !ok && brainSkill != nil {
+			if bmd, path, found := brainSkill(name); found {
+				line := fmt.Sprintf("- %s (brain skill): read %s before you start", name, path)
+				if d := skillDescription(bmd); d != "" {
+					line += ". " + d
+				}
+				lines = append(lines, line+"\n")
+				continue
+			}
+		}
 		if !ok {
 			lines = append(lines, fmt.Sprintf("- grid:%s (not in this plugin): load it with the Skill tool before you start\n", name))
 			continue

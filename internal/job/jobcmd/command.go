@@ -164,11 +164,25 @@ func Run(args []string, e Env) int {
 			return output(e, f, report{ID: j.ID, Findings: findings}, 1)
 		}
 		agent, _, _ := w.store.AgentFor(j.Role) // the brain's agent for the role, if it holds one
+		// A skill the person turned off (grid skill disable) is left out of the Skills block.
+		// A folder with no project record reads the personal level.
+		turnedOff, err := settings.ReadSkillsOff(e.GridHome, w.project)
+		if err != nil {
+			return fail(err, 1)
+		}
+		skillOff := func(name string) bool {
+			for _, off := range turnedOff {
+				if off == name {
+					return true
+				}
+			}
+			return false
+		}
 		answers, err := waitedAnswers(task, j)
 		if err != nil {
 			return fail(err, 1)
 		}
-		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j), Agent: agent, Answers: answers})
+		rendered, err := job.Render(j, job.RenderOptions{Resolver: w.files, Generation: generation, BrainTokens: f.budget, Recall: w.recall(j), Agent: agent, Answers: answers, BrainSkill: w.store.SkillFor, SkillOff: skillOff})
 		if err != nil {
 			return fail(err, 1)
 		}
