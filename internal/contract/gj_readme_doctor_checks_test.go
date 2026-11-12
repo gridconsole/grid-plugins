@@ -77,8 +77,8 @@ func TestGjReadmeDoctorChecksMatch(t *testing.T) {
 	}
 	readme := string(data)
 	want := gjDoctorNames(t)
-	if len(want) != 9 {
-		t.Fatalf("doctor reports %d checks %q, want 9", len(want), want)
+	if len(want) != 10 {
+		t.Fatalf("doctor reports %d checks %q, want 10", len(want), want)
 	}
 	if got := gjReadmeCheckNames(t, readme); !reflect.DeepEqual(got, want) {
 		t.Fatalf("README names %q, doctor reports %q", got, want)
