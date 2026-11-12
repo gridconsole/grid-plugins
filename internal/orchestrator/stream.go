@@ -256,6 +256,10 @@ func (s *Stream) task(dir string) error {
 	if closed, err := s.pgClosedTask(dir, taskID, ts, w, st); closed {
 		return err
 	}
+	// A question that is due gets its default now, under the task lease and before
+	// Store.Tick takes .orchestrator.lock, so the Jobs behind its person Job are
+	// ready in this same Tick (rnQuestionDefaults says why this is the place).
+	s.rnQuestionDefaults(dir, taskID, snap, w)
 	out, err := st.Tick()
 	if err != nil {
 		if errors.Is(err, feed.ErrStaleLease) {
