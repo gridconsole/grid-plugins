@@ -91,6 +91,7 @@ func ymStMutate(t *testing.T, out []byte, path []string, f func(m map[string]any
 }
 
 func ymStRename(m map[string]any, key string) { m[key+"Renamed"] = m[key]; delete(m, key) }
+
 // ymStRetype swaps the value for one of another JSON type: a string for a number, a number otherwise.
 func ymStRetype(m map[string]any, key string) {
 	if _, number := m[key].(float64); number {

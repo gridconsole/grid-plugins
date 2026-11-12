@@ -177,7 +177,10 @@ are reference-document names and original line numbers, not machine paths.
 | Heartbeat file, not a post | [heartbeat.json](schemas/heartbeat.json) | feed-contract.md:200-218 |
 | Takeover log entry | [takeover.json](schemas/takeover.json) | feed-contract.md:105-111 |
 | Trust tier field | [trust-tier.json](schemas/trust-tier.json) | feed-contract.md:90; job-contract.md:87-91 |
+| grid agent budget show output | [cmd-agent-budget-show.json](schemas/cmd-agent-budget-show.json) | internal/cli/budget.go:83 |
 | grid approve output | [cmd-approve.json](schemas/cmd-approve.json) | internal/cli/task_write.go:164 |
+| grid claude settings set output | [cmd-claude-settings-set.json](schemas/cmd-claude-settings-set.json) | internal/cli/budget.go:143 |
+| grid claude settings show output | [cmd-claude-settings-show.json](schemas/cmd-claude-settings-show.json) | internal/cli/budget.go:133 |
 | grid feed post output | [cmd-feed-post.json](schemas/cmd-feed-post.json) | internal/cli/feed.go:168 |
 | grid feed state output | [cmd-feed-state.json](schemas/cmd-feed-state.json) | internal/cli/feed.go:131 |
 | grid intent list output | [cmd-intent-list.json](schemas/cmd-intent-list.json) | internal/cli/intent.go:247 |
@@ -192,6 +195,8 @@ are reference-document names and original line numbers, not machine paths.
 | grid session start output | [cmd-session-start.json](schemas/cmd-session-start.json) | internal/cli/intent.go:140 |
 | grid session stop output | [cmd-session-stop.json](schemas/cmd-session-stop.json) | internal/cli/intent.go:140 |
 | grid session switch output | [cmd-session-switch.json](schemas/cmd-session-switch.json) | internal/cli/intent.go:140 |
+| grid skill enable and agent set output | [cmd-settings-receipt.json](schemas/cmd-settings-receipt.json) | internal/cli/settings.go:169 |
+| grid skill list output | [cmd-skill-list.json](schemas/cmd-skill-list.json) | internal/cli/settings.go:137 |
 | grid task list output | [cmd-task-list.json](schemas/cmd-task-list.json) | internal/cli/task.go:142 |
 | grid task move output | [cmd-task-move.json](schemas/cmd-task-move.json) | internal/cli/intent.go:140 |
 | grid task show output | [cmd-task-show.json](schemas/cmd-task-show.json) | internal/cli/task.go:122 |
