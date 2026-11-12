@@ -85,6 +85,17 @@ type Stream struct {
 	// kind, the kind written in task.md ("" when none). A closed task, a task waiting
 	// on a person and a task with any Job record are left alone. Nil posts nothing.
 	FirstJob func(kind string) map[string]any
+	// ClosedCurator, when set, is asked for the curator Job of a task whose task.md
+	// says state: closed, inside the pass that cancels that task's open Jobs, when no
+	// curator Job of the task is open. dir is the task folder, taskID the task's Feed
+	// id, id the Job id the record will be posted with. It answers the job-record body
+	// of a curator Job for the brain proposals waiting for the task, or nil when none
+	// waits. A body is posted under the task lease, the task is not left alone while
+	// that Job is open, and the Job is assigned and spawned like any Job; every other
+	// Job of the closed task is cancelled as before. An error is one Diag line and
+	// posts nothing. Nil posts nothing, and a curator Job already open is still left
+	// alone.
+	ClosedCurator func(dir, taskID, id string) (map[string]any, error)
 
 	Out  io.Writer // JSON lines
 	Diag io.Writer // one readable line per skip; nil discards
