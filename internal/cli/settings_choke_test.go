@@ -111,7 +111,7 @@ func settingsPackageBypasses(file string, f *ast.File) []string {
 		"BudgetShow": "budget.go", "BudgetPreviewFor": "budget.go", "BudgetApply": "budget.go", "BudgetUndo": "budget.go",
 		"ClaudeShow": "claude_user.go", "ClaudeSet": "claude_user.go", "ClaudeRowNames": "claude_user.go", "AdvisorBlocked": "claude_user.go",
 		"CodedError.Error": "claude_user.go", "CodedError.Unwrap": "claude_user.go",
-		"AgentForRole": "role.go", "Store.ModelFor": "role.go", // Read-only: the model and effort a spawned Job of a role runs on.
+		"AgentForRole": "role.go", "Store.ModelFor": "role.go", "Store.ModelForWith": "role.go", // Read-only: the model and effort a spawned Job of a role runs on, with a brain agent's values under the personal ones.
 		"Store.Effective": "store.go", "Store.SetAgent": "store.go", "Store.UnsetAgent": "store.go", "Store.SetSkill": "store.go", "Store.SetHook": "store.go", "Store.RecordSetup": "setup.go",
 	}
 	for _, decl := range f.Decls {
