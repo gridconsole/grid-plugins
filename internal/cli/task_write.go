@@ -306,6 +306,9 @@ func runApprove(args []string, env Env) int {
 	if err == nil {
 		env.afterApproveHook()
 		err = recordApproval(env, resolved.Path, store, w, job, "approved", event)
+		if err == nil && store.TaskDir != "" {
+			refoldAfterWrite(env, store)
+		}
 	}
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
