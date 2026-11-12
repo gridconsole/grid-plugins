@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-project-env.json",
+  "description": "JSON output of grid project env list|add|edit|remove <project> --json; internal/cli/ln_project_env.go. list answers items, every environment of the project in id order. add, edit and remove answer state, always applied; item is the environment as stored, written for add and edit and absent for remove. An item uses the field names of the app's project_environments read (app internal/slices/projectsettings/read.go environmentOf): id, name, kind, where and runs always; test, how and from when set; who, secrets and steps when they have items; approval when the environment says. A secret is a name and whether it is set, never a value.",
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "required": [
+        "items"
+      ]
+    },
+    {
+      "required": [
+        "state"
+      ]
+    }
+  ],
+  "if": {
+    "required": [
+      "item"
+    ]
+  },
+  "then": {
+    "required": [
+      "state"
+    ]
+  },
+  "properties": {
+    "item": {
+      "additionalProperties": false,
+      "properties": {
+        "approval": {
+          "type": "boolean"
+        },
+        "from": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "how": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "",
+            "local",
+            "remote",
+            "cloud"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "runs": {
+          "type": "string"
+        },
+        "secrets": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "type": "string"
+              },
+              "set": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "set"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "step": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "text": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "wf": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "wf",
+              "step"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "test": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "where": {
+          "type": "string"
+        },
+        "who": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "where",
+        "runs"
+      ],
+      "type": "object"
+    },
+    "items": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "type": "boolean"
+          },
+          "from": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "how": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "id": {
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "",
+              "local",
+              "remote",
+              "cloud"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "runs": {
+            "type": "string"
+          },
+          "secrets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                  "type": "string"
+                },
+                "set": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "set"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "step": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "wf": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "wf",
+                "step"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "test": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "where": {
+            "type": "string"
+          },
+          "who": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "where",
+          "runs"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "state": {
+      "enum": [
+        "applied"
+      ],
+      "type": "string"
+    }
+  },
+  "title": "grid project env output",
+  "type": "object"
+}

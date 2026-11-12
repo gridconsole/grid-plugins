@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "id": "dev",
+      "kind": "local",
+      "name": "Development",
+      "runs": "",
+      "where": ""
+    },
+    {
+      "approval": false,
+      "id": "staging",
+      "kind": "remote",
+      "name": "Staging",
+      "runs": "api",
+      "secrets": [
+        {
+          "name": "DEPLOY_KEY",
+          "set": false
+        }
+      ],
+      "where": "staging host"
+    }
+  ]
+}

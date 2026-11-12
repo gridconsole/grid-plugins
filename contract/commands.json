@@ -4718,6 +4718,77 @@
           "output": "cmd-project-add.json"
         },
         {
+          "name": "env",
+          "args": [
+            "<list|add|edit|remove>",
+            "<project>"
+          ],
+          "flags": [
+            {
+              "name": "--approval",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--from",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--how",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--id",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--kind",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--name",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--runs",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--secret",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--test",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--where",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--who",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-project-env.json"
+        },
+        {
           "name": "list",
           "args": [],
           "flags": [
