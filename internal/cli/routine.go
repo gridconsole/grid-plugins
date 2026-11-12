@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
@@ -18,7 +19,7 @@ const routineLockHelp = "Runs hold the entry lock until execution finishes; anot
 
 func runRoutine(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(env.Stdout, "Usage: grid routine add <name> --every <cron or duration> --run <grid command or skill> [--project p]\n       grid routine list [--project p] [--json]\n       grid routine schedule|unschedule [<name>] [--project p] [--json]\n       grid routine remove|run <name> [--project p] [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid routine add <name> --every <cron or duration> (--run <grid command or skill> | --workflow <workflow>) [--replace] [--project p]\n       grid routine list [--project p] [--json]\n       grid routine schedule|unschedule [<name>] [--project p] [--json]\n       grid routine remove|run <name> [--project p] [--json]")
 		fmt.Fprintln(env.Stdout, "\n"+routineLockHelp+"\n"+routine.LimitsHelp())
 		return 0
 	}
@@ -30,8 +31,8 @@ func runRoutine(args []string, env Env) int {
 	}
 	project := fs.String("project", "", "project name or id; defaults to home")
 	asJSON := fs.Bool("json", false, "print JSON")
-	var every, run, homeOverride string
-	var due bool
+	var every, run, workflow, homeOverride string
+	var due, replace bool
 	var timeout, turns, budget string
 	switch verb {
 	case "add":
@@ -39,7 +40,9 @@ func runRoutine(args []string, env Env) int {
 		fs.StringVar(&turns, "routine-max-turns", "", "routine_max_turns override; see policy defaults above")
 		fs.StringVar(&budget, "routine-budget", "", "routine_budget override; see policy defaults above")
 		fs.StringVar(&every, "every", "", "duration of at least one minute or numeric five-field UTC cron")
-		fs.StringVar(&run, "run", "", "grid command or skill")
+		fs.StringVar(&run, "run", "", "grid command or skill; or give --workflow")
+		fs.StringVar(&workflow, "workflow", "", "workflow each run starts a new task with, named after the routine; or give --run")
+		fs.BoolVar(&replace, "replace", false, "rewrite the routine of this name, keeping last_run, outcome and last_task; schedule it again after")
 	case "run":
 		fs.BoolVar(&due, "due", false, "run only when due (used by OS timers)")
 		fs.StringVar(&homeOverride, "grid-home", "", "Grid home for Task Scheduler")
@@ -70,6 +73,19 @@ func runRoutine(args []string, env Env) int {
 			fmt.Fprintf(env.Stderr, "grid routine %s: expected %d arguments\n", verb, count)
 		}
 		return 2
+	}
+	if verb == "add" {
+		// --run and --workflow are exclusive and one is required. A missing --every
+		// is left to the store's interval error, exit 1, as before workflows.
+		hasRun, hasWorkflow := strings.TrimSpace(run) != "", strings.TrimSpace(workflow) != ""
+		if hasRun && hasWorkflow {
+			fmt.Fprintln(env.Stderr, "grid routine add: give --run or --workflow, not both")
+			return 2
+		}
+		if !hasRun && !hasWorkflow && strings.TrimSpace(every) != "" {
+			fmt.Fprintln(env.Stderr, "grid routine add: --run or --workflow is required")
+			return 2
+		}
 	}
 	if verb != "list" && resolver(env).Caller.IsGuest() {
 		return failure(env, ilGuestRefused)
@@ -134,7 +150,7 @@ func runRoutine(args []string, env Env) int {
 		if policyErr != nil {
 			return routineError(env, policyErr)
 		}
-		entry, err := store.Add(fs.Arg(0), every, run, policy)
+		entry, err := store.AddWith(fs.Arg(0), every, run, routine.AddOptions{Workflow: workflow, Replace: replace, Policy: policy})
 		if err != nil {
 			return routineError(env, err)
 		}
@@ -248,9 +264,18 @@ func runRoutine(args []string, env Env) int {
 }
 
 func printRoutine(env Env, e routine.Entry) {
-	fmt.Fprintf(env.Stdout, "name: %s\nevery: %s\nrun: %s\nmachine: %s\n", e.Name, e.Every, e.Run, e.Machine)
+	fmt.Fprintf(env.Stdout, "name: %s\nevery: %s\n", e.Name, e.Every)
+	if e.Workflow == "" {
+		fmt.Fprintf(env.Stdout, "run: %s\n", e.Run)
+	} else {
+		fmt.Fprintf(env.Stdout, "workflow: %s\n", e.Workflow)
+	}
+	fmt.Fprintf(env.Stdout, "machine: %s\n", e.Machine)
 	if !e.LastRun.IsZero() {
 		fmt.Fprintf(env.Stdout, "last_run: %s\noutcome: %s\n", e.LastRun.Format(time.RFC3339), e.Outcome)
+	}
+	if e.LastTask != "" {
+		fmt.Fprintf(env.Stdout, "last_task: %s\n", e.LastTask)
 	}
 }
 

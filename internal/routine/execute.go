@@ -1,9 +1,11 @@
 package routine
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +18,7 @@ import (
 	"unicode"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/proctree"
 )
 
@@ -121,13 +124,37 @@ type ProcessExecutor struct {
 }
 
 func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
-	argv, err := ParseRun(e.Run)
-	if err != nil {
-		return err
+	_, err := p.execute(ctx, s, e)
+	return err
+}
+
+// ExecuteTask runs a routine and, for a workflow routine, returns the id of the
+// task it started. That task posts its own first Job and carries on by itself.
+func (p ProcessExecutor) ExecuteTask(ctx context.Context, s Store, e Entry) (string, error) {
+	return p.execute(ctx, s, e)
+}
+
+// workflowArgv is the grid command a workflow routine runs: one new task named
+// after the routine, in the routine's project, or Personal for a home routine.
+func workflowArgv(s Store, e Entry) []string {
+	project := s.Project
+	if project == "" {
+		project = gridhome.Personal
+	}
+	return []string{"grid", "task", "new", e.Name, "--workflow", e.Workflow, "--project", project, "--json"}
+}
+
+func (p ProcessExecutor) execute(ctx context.Context, s Store, e Entry) (string, error) {
+	var argv []string
+	var err error
+	if e.Workflow != "" {
+		argv = workflowArgv(s, e)
+	} else if argv, err = ParseRun(e.Run); err != nil {
+		return "", err
 	}
 	limits, err := e.EffectiveLimits()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if p.Timeout == 0 {
 		p.Timeout, _ = time.ParseDuration(limits.Timeout)
@@ -154,7 +181,7 @@ func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
 		program = p.GridBinary
 		args = argv[1:]
 		if program == "" {
-			return fmt.Errorf("grid executable is required")
+			return "", fmt.Errorf("grid executable is required")
 		}
 	} else {
 		program = "claude"
@@ -173,9 +200,15 @@ func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
 		}
 	}
 	configureProcess(cmd)
-	output, err := startRoutineOutput(cmd, p.Stdout, p.Stderr)
+	stdout, stderr := p.Stdout, p.Stderr
+	var printed *bytes.Buffer
+	if e.Workflow != "" {
+		printed = &bytes.Buffer{}
+		stdout, stderr = keepStdout(printed, stdout, stderr)
+	}
+	output, err := startRoutineOutput(cmd, stdout, stderr)
 	if err != nil {
-		return err
+		return "", err
 	}
 	runCommand := p.runCommand
 	if runCommand == nil {
@@ -188,9 +221,58 @@ func (p ProcessExecutor) Execute(ctx context.Context, s Store, e Entry) error {
 	cleanupProcess(cmd)
 	output.finish(ctx)
 	if ctx.Err() != nil {
-		return fmt.Errorf("routine timed out or was cancelled: %w", ctx.Err())
+		return "", fmt.Errorf("routine timed out or was cancelled: %w", ctx.Err())
 	}
-	return err
+	if err != nil || printed == nil {
+		return "", err
+	}
+	id := printedTaskID(printed.Bytes())
+	if id == "" {
+		return "", fmt.Errorf("grid task new printed no task id")
+	}
+	return id, nil
+}
+
+// keepStdout copies the child's stdout into kept as well as to stdout. When one
+// writer takes both streams, a shared lock keeps its Write to one goroutine at a
+// time, as exec does for one writer given twice.
+func keepStdout(kept *bytes.Buffer, stdout, stderr io.Writer) (io.Writer, io.Writer) {
+	if stdout == nil {
+		return kept, stderr
+	}
+	both := io.MultiWriter(kept, stdout)
+	if stderr != nil && routineSameWriter(stdout, stderr) {
+		mu := &sync.Mutex{}
+		return lockedWriter{mu, both}, lockedWriter{mu, stderr}
+	}
+	return both, stderr
+}
+
+type lockedWriter struct {
+	mu *sync.Mutex
+	w  io.Writer
+}
+
+func (l lockedWriter) Write(b []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(b)
+}
+
+// printedTaskID reads the id of the JSON object `grid task new --json` prints.
+func printedTaskID(b []byte) string {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	for {
+		var v struct {
+			ID string `json:"id"`
+		}
+		if dec.Decode(&v) != nil {
+			return ""
+		}
+		if v.ID != "" {
+			return v.ID
+		}
+	}
 }
 
 // routineOutput owns the pipes that carry a command's output to a Go writer.

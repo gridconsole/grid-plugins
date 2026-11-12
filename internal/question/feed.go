@@ -41,6 +41,9 @@ func (s Store) publishQuestion(dir string, r *Record) error {
 	if r.Recommended != "" {
 		body["recommended"] = r.Recommended
 	}
+	if len(r.WaitsOn) > 0 {
+		body["waits_on"] = r.WaitsOn
+	}
 	if r.Why != "" {
 		body["why"] = r.Why
 	}
@@ -81,7 +84,11 @@ func (s Store) publishEvents(dir string, r *Record, before int) error {
 			in.Type, in.Body = "answer", map[string]any{"answer": e.Text}
 		} else {
 			w = s.ControlWriter
-			if e.Kind == "withdrawn" && w.Lease != "task" {
+			if e.Kind == "waiting" {
+				// A person's "not yet" is theirs, as an answer is: posted with no lease.
+				w = s.Writer
+				w.Lease, w.Fence, w.Gen = "", 0, 0
+			} else if e.Kind == "withdrawn" && w.Lease != "task" {
 				w = s.Writer
 				w.Lease, w.Fence, w.Gen = "", 0, 0
 			} else if w.Lease != "task" || w.Fence <= 0 {
