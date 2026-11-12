@@ -272,12 +272,39 @@ func writeEnv(path, home, task string, extra ...string) error {
 // replaceEnvBlock swaps the first marked block in text for block and drops any
 // later marked block. A start marker with no end marker after it is an ordinary
 // line. It reports whether a block was found.
+//
+// Builds from before the markers wrote the same export lines with no markers
+// around them. Outside the marked block, a line byte-equal to a line of block is
+// one of those old copies and is dropped, with the blank lines that separate the
+// copies. Every other line is kept, and a text with no old copy comes back as it was.
 func replaceEnvBlock(text, block string) (string, bool) {
+	legacy := map[string]bool{}
+	for _, l := range strings.Split(block, "\n") {
+		if l != "" && l != envBlockStart && l != envBlockEnd {
+			legacy[l] = true
+		}
+	}
 	lines := strings.SplitAfter(text, "\n")
 	var out strings.Builder
 	found := false
+	pending := "" // blank lines seen since the last kept line
+	dropped := false
 	for i := 0; i < len(lines); i++ {
 		line := strings.TrimRight(lines[i], "\r\n")
+		if lines[i] == "\n" {
+			pending += lines[i]
+			continue
+		}
+		if legacy[strings.TrimSuffix(lines[i], "\n")] {
+			pending, dropped = "", true
+			continue
+		}
+		if !dropped {
+			out.WriteString(pending)
+		}
+		pending = ""
+		afterDropped := dropped
+		dropped = false
 		if line == envBlockStart {
 			// The block runs to the next end marker unless another start comes first.
 			end := -1
@@ -293,6 +320,10 @@ func replaceEnvBlock(text, block string) (string, bool) {
 			}
 			if end >= 0 {
 				if !found {
+					// Keep the blank line that set the old copies apart from the lines before.
+					if s := out.String(); afterDropped && s != "" && !strings.HasSuffix(s, "\n\n") {
+						out.WriteString("\n")
+					}
 					out.WriteString(block)
 				}
 				found = true
@@ -301,6 +332,9 @@ func replaceEnvBlock(text, block string) (string, bool) {
 			}
 		}
 		out.WriteString(lines[i])
+	}
+	if !dropped {
+		out.WriteString(pending)
 	}
 	return out.String(), found
 }
