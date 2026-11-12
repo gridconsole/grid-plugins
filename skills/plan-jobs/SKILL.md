@@ -8,7 +8,7 @@ A Job is the brief. A builder or reviewer reads only the Job, so it stands alone
 Owner decisions that apply here:
 
 - "No Grid-made guards, caps or limits": use the Claude Code built-ins. Add no hook, hold or cap to a Job.
-- Approvals and gates come from the workflow in the brain with a default: read it with `grid workflow show`, never hard-code one. A step only a person can do is a Job with role Person (`grid job post --person`).
+- Approvals and gates come from the workflow in the brain with a default: read the workflow this task runs with `grid workflow show --task <task> --json` and use its `task.steps` (kind, agent, approvers) and `task.rounds`, never hard-code one. A step only a person can do is a Job with role Person (`grid job post --person`).
 - Everything is a Job and the Job is the brief. Tasks carry on by themselves until a person point. No plan mode.
 - The brain needs no attention from the person: a subagent curates proposals (`grid brain propose`), nobody asks the person to review one.
 - Every link carries a why: each `links` entry and each `after` object has a `why` of 8 to 160 characters.
