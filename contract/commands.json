@@ -3462,7 +3462,9 @@
         },
         {
           "name": "schedule",
-          "args": [],
+          "args": [
+            "[\u003cname\u003e]"
+          ],
           "flags": [
             {
               "name": "--json",
@@ -3480,7 +3482,9 @@
         },
         {
           "name": "unschedule",
-          "args": [],
+          "args": [
+            "[\u003cname\u003e]"
+          ],
           "flags": [
             {
               "name": "--json",

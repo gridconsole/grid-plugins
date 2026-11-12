@@ -24,7 +24,11 @@ type Entry struct {
 	Machine     string    `json:"machine" yaml:"machine"`
 	LastRun     time.Time `json:"last_run,omitzero" yaml:"last_run,omitempty"`
 	Outcome     string    `json:"outcome,omitempty" yaml:"outcome,omitempty"`
-	Body        string    `json:"-" yaml:"-"`
+	// Scheduled and Next are read from this machine's timer ownership record when
+	// an entry is listed or run; they are never stored in the routine's config.
+	Scheduled bool       `json:"scheduled" yaml:"-"`
+	Next      *time.Time `json:"next" yaml:"-"`
+	Body      string     `json:"-" yaml:"-"`
 
 	workflowPolicy LimitPolicy // snapshot read with the entry; never persisted
 }
@@ -93,6 +97,32 @@ func (s Store) checkScheduled(e Entry) error {
 		return nil
 	}
 	return fmt.Errorf("%w: %s; run grid routine schedule again to approve it", ErrScheduleChanged, e.Name)
+}
+
+// annotate fills Scheduled and Next. A routine is scheduled here only when this
+// machine's ownership record says installed and holds the entry's fingerprint, the
+// same comparison checkScheduled makes for a timer run; a routine of another
+// machine, a missing or unreadable record and a changed routine all read false.
+func (s Store) annotate(e Entry) Entry {
+	e.Scheduled, e.Next = false, nil
+	if e.Machine != gridhome.Machine(s.GridHome) {
+		return e
+	}
+	p := TimerPlan{Label: timerLabel(s.GridHome, s.Project, e.Name), Project: s.Project, Name: e.Name}
+	state, err := Scheduler{GridHome: s.GridHome}.readState(p)
+	if err != nil || state.Label == "" || !state.Installed {
+		return e
+	}
+	if hash, err := e.Fingerprint(); err != nil || state.Hash != hash {
+		return e
+	}
+	e.Scheduled = true
+	if interval, err := ParseInterval(e.Every); err == nil {
+		if next, ok := interval.Next(s.now(), e.LastRun); ok {
+			e.Next = &next
+		}
+	}
+	return e
 }
 
 func (e Entry) Validate() error {
@@ -167,7 +197,7 @@ func (s Store) List() ([]Entry, error) {
 			}
 			return nil, fmt.Errorf("routine %s: %w", name, err)
 		}
-		entries = append(entries, e)
+		entries = append(entries, s.annotate(e))
 	}
 	return entries, nil
 }
@@ -267,7 +297,7 @@ func (s Store) Execute(ctx context.Context, name string, due bool, runner Execut
 	if err != nil {
 		return RunResult{}, err
 	}
-	result := RunResult{Entry: e}
+	result := RunResult{Entry: s.annotate(e)}
 	if e.Machine != gridhome.Machine(s.GridHome) {
 		return result, fmt.Errorf("routine belongs to another machine")
 	}
@@ -298,7 +328,7 @@ func (s Store) Execute(ctx context.Context, name string, due bool, runner Execut
 	if runErr != nil {
 		e.Outcome = "failed"
 	}
-	result.Entry = e
+	result.Entry = s.annotate(e)
 	saveErr := s.save(e)
 	var signalErr error
 	if runErr != nil && onFailure != nil {
