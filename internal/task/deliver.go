@@ -227,7 +227,12 @@ func (d delivery) write(t Task) ([]artifact.Record, error) {
 	}
 	outcome += "\n\n### Proof\n\n"
 	for _, item := range idx.Items {
-		outcome += fmt.Sprintf("- %s: %s proof saved in proof/%s/\n", item.ID, item.Level, item.ID)
+		outcome += tiOutcomeProofLine(item) + "\n"
+	}
+	branch, base := recordBranch(d.o)
+	head, _ := gitx.HeadSHA(d.o.Cwd)
+	if line := tiOutcomeDelivered(branch, head); line != "" {
+		outcome += "\n" + line + "\n"
 	}
 	data, err := os.ReadFile(filepath.Join(t.Path, "task.md"))
 	if err != nil {
@@ -237,7 +242,6 @@ func (d delivery) write(t Task) ([]artifact.Record, error) {
 	if err != nil {
 		return imported, err
 	}
-	branch, base := recordBranch(d.o)
 	// Delivery asks for approval; it writes no approval and never closes the task.
 	event := d.s.event(t, WriteOptions{Action: "deliver", Note: summary, Who: contract.Author{ID: d.o.By, Role: "agent"}}, next)
 	updated, err := rewriteTask(data, func(mapping *yaml.Node) error {
@@ -253,6 +257,9 @@ func (d delivery) write(t Task) ([]artifact.Record, error) {
 		}
 		if base != "" {
 			setScalar(mapping, "base", base, true)
+		}
+		if head != "" {
+			setScalar(mapping, "head", head, true)
 		}
 		return nil
 	}, func(body string) string { return replaceOutcome(body, outcome) })
@@ -283,6 +290,33 @@ func recordBranch(o DeliverOptions) (branch, base string) {
 		}
 	}
 	return branch, base
+}
+
+// tiOutcomeProofLine is one line of the Outcome's Proof list: the plan item's
+// title with its id, its proof level and how many files its evidence holds. An
+// item with no title keeps the id alone.
+func tiOutcomeProofLine(item proof.Item) string {
+	files := fmt.Sprintf("%d files", len(item.Evidence))
+	if len(item.Evidence) == 1 {
+		files = "1 file"
+	}
+	name := item.ID
+	if title := strings.TrimSpace(item.Title); title != "" {
+		name = title + " (" + item.ID + ")"
+	}
+	return fmt.Sprintf("- %s: %s, %s in proof/%s/", name, item.Level, files, item.ID)
+}
+
+// tiOutcomeDelivered is the line that names the commit a delivery was made from.
+// It is "" unless both the branch and the head are known.
+func tiOutcomeDelivered(branch, head string) string {
+	if branch == "" || head == "" {
+		return ""
+	}
+	if len(head) > 12 {
+		head = head[:12]
+	}
+	return "Delivered from " + branch + " at " + head + "."
 }
 
 // nextState is the state a delivery moves t to; data is its task.md. The state
