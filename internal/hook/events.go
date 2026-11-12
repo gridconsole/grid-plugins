@@ -117,6 +117,9 @@ func remaining(o Options) int {
 		o.record("history", func() { history(o, *in) })
 		o.record("session", func() { recordSession(o, *in) })
 		o.record("brain read", func() { brainRead(o, *in) })
+		if name == "posttooluse" {
+			o.record("job message", func() { peMsgDeliver(o, *in) })
+		}
 		if name == "stop" || name == "subagentstop" {
 			if code := stopCheck(o, *in); code != 0 {
 				return code
