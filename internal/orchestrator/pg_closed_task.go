@@ -1,10 +1,12 @@
 package orchestrator
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -61,13 +63,67 @@ func pgClosedRead(dir string) bool {
 	return state == "closed"
 }
 
+// One exception to "a closed task gets nothing more spawned": the curator.
+//
+// The brain needs no attention: a curator Job files the proposals a task left
+// waiting and asks nobody (owner decision, SCOPES-11nov-0455c, owner question 4).
+// `grid deliver` posts that Job, but a task a person declined, stopped or closed
+// does not pass through deliver, and a curator Job deliver did post would be
+// cancelled by the pass above, so the proposals would wait for ever. So, in the
+// same locked pass: a Job of role curator is left alone (every other open Job is
+// cancelled as before); a closed task with no open curator Job that has
+// proposals waiting gets one, posted under the task lease; and the pass goes on
+// to the tick while a curator Job is the only open Job, so it is assigned and
+// spawned like any Job. The role is read the way openCuratorJob in internal/cli
+// reads it. Nothing here caps, delays or refuses: the open-curator check under
+// the task lock is what keeps a second pass from posting a second Job.
+
+// usCuratorRole is the role of the Job that keeps a task's brain proposals.
+const usCuratorRole = "curator"
+
+// usCuratorJobs is the id of every Job of the snapshot whose role is curator, read
+// case-insensitively as openCuratorJob reads it.
+func usCuratorJobs(snap Snapshot) map[string]bool {
+	out := map[string]bool{}
+	for _, it := range snap.Items {
+		if strings.EqualFold(strings.TrimSpace(it.Role), usCuratorRole) {
+			out[it.ID] = true
+		}
+	}
+	return out
+}
+
+// usOpenJobs counts the Jobs that are not Accepted, Cancelled or Rejected, and how
+// many of them are curator Jobs.
+func usOpenJobs(snap Snapshot) (open, curators int) {
+	curator := usCuratorJobs(snap)
+	for id, j := range snap.State.Jobs {
+		switch j.Status {
+		case contract.Accepted, contract.Cancelled, contract.Rejected:
+			continue
+		}
+		open++
+		if curator[id] {
+			curators++
+		}
+	}
+	return open, curators
+}
+
 // pgClosedCancel posts a cancelled control for every Job that is not Accepted,
-// Cancelled or Rejected, under the task lock and the task lease of s.Writer, the
-// way `grid job cancel` writes it. The state is read again inside the lock: a
-// person's unleased write (a reopen's plan Job) takes the same lock, so a Job
-// posted after a reopen is never cancelled by a pass that read the old state.
-// closed is false when the task is no longer closed by then; nothing is written.
-func (s Store) pgClosedCancel(dir string) (closed bool, err error) {
+// Cancelled or Rejected and is not a curator Job, under the task lock and the task
+// lease of s.Writer, the way `grid job cancel` writes it. The state is read again
+// inside the lock: a person's unleased write (a reopen's plan Job) takes the same
+// lock, so a Job posted after a reopen is never cancelled by a pass that read the
+// old state. closed is false when the task is no longer closed by then; nothing
+// is written.
+//
+// curator, when set, is asked for the body of a curator Job once the other Jobs
+// are cancelled and no curator Job is open; it answers nil when no proposal waits
+// for the task. A body is posted under the same lock and lease, with the next free
+// Job id. An error from curator, or a body the Job schema refuses, is one
+// Diagnostics line and posts nothing: the cancels stand.
+func (s Store) pgClosedCancel(dir, taskID string, curator func(dir, taskID, id string) (map[string]any, error)) (closed bool, err error) {
 	err = s.locked(func() error {
 		if s.Writer.Lease != "task" {
 			return feed.ErrStaleLease
@@ -80,19 +136,59 @@ func (s Store) pgClosedCancel(dir string) (closed bool, err error) {
 		if e != nil {
 			return e
 		}
+		keep := usCuratorJobs(snap)
 		for _, id := range ids(snap) {
 			j := snap.State.Jobs[id]
 			switch j.Status {
 			case contract.Accepted, contract.Cancelled, contract.Rejected:
 				continue
 			}
+			if keep[id] {
+				continue
+			}
 			if e := s.control(j, contract.Cancelled, pgClosedReason, ""); e != nil {
 				return e
 			}
 		}
-		return nil
+		if curator == nil {
+			return nil
+		}
+		if _, curators := usOpenJobs(snap); curators > 0 {
+			return nil // a curator Job is open already: one is enough
+		}
+		return s.usPostCurator(snap, dir, taskID, curator)
 	})
 	return closed, err
+}
+
+// usPostCurator asks curator for the body of the curator Job of a closed task and
+// posts it. The caller holds the task lock and lease and has seen no open curator Job.
+func (s Store) usPostCurator(snap Snapshot, dir, taskID string, curator func(dir, taskID, id string) (map[string]any, error)) error {
+	id := gkNextJobID(snap)
+	body, err := curator(dir, taskID, id)
+	if err != nil {
+		s.usDiag("grid worker next: task %s: no curator Job for the waiting proposals: %s\n", taskID, oneLine(err))
+		return nil
+	}
+	if body == nil {
+		return nil
+	}
+	data, err := json.Marshal(body)
+	if err == nil {
+		err = contract.Validate("job-record", data)
+	}
+	if err != nil {
+		s.usDiag("grid worker next: task %s: the curator Job record is not valid: %s\n", taskID, oneLine(err))
+		return nil
+	}
+	_, err = s.Feed.Post(feed.Input{Type: "job", Job: id, Body: body}, s.Writer)
+	return err
+}
+
+func (s Store) usDiag(format string, args ...any) {
+	if s.Diagnostics != nil {
+		fmt.Fprintf(s.Diagnostics, format, args...)
+	}
 }
 
 // pgClosedTask is Stream.task's step for a closed task, after the task lease is
@@ -102,7 +198,7 @@ func (s *Stream) pgClosedTask(dir, taskID string, ts lease.TaskStore, w feed.Wri
 	if !pgClosedRead(dir) {
 		return false, nil
 	}
-	closed, cerr := st.pgClosedCancel(dir)
+	closed, cerr := st.pgClosedCancel(dir, taskID, s.ClosedCurator)
 	if cerr != nil {
 		if errors.Is(cerr, feed.ErrStaleLease) {
 			return true, s.skip(dir, taskID, SkipTaskHeld, cerr)
@@ -113,9 +209,19 @@ func (s *Stream) pgClosedTask(dir, taskID string, ts lease.TaskStore, w feed.Wri
 		return false, nil // reopened since the read: the path of today
 	}
 	delete(s.skipped, dir)
+	after, lerr := Load(ts.Feed)
+	if lerr != nil {
+		return true, nil
+	}
+	// The only open Jobs are curator Jobs: the pass goes on to the tick, which
+	// assigns and spawns them like any Job. The task still holds its lease; the end
+	// of task() gives it back once the last Job has closed.
+	if open, curators := usOpenJobs(after); open > 0 && open == curators {
+		return false, nil
+	}
 	// Every Job is closed now: give the lease back, as the end of task() does. A
 	// Job a person posted since keeps it until the next pass cancels that too.
-	if after, lerr := Load(ts.Feed); lerr == nil && !hasOpenJob(after) {
+	if !hasOpenJob(after) {
 		if rerr := ts.ReleaseTask(w); rerr != nil && !errors.Is(rerr, lease.ErrTaskFree) && !errors.Is(rerr, lease.ErrTaskHeld) {
 			s.diag("grid worker next: task %s: release: %s\n", taskID, oneLine(rerr))
 		}

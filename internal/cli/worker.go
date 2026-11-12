@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	gridplugins "github.com/gridconsole/grid-plugins"
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -157,12 +158,15 @@ func runWorkerNext(args []string, env Env) int {
 		Out: env.Stdout, Diag: diag,
 		Tasks: func() ([]string, error) { return workerTaskDirs(env) },
 		Model: func(dir, role string) (string, string, error) { return workerSpawnModel(env, dir, role) },
+		Tools: func(dir, role string) ([]string, error) { return workerSpawnTools(env, dir, role) },
 		// The folder of the repo the Job names, so a project of several repos can run a code Job.
 		Repo: func(dir, repo string) (string, error) {
 			return jobcmd.RepoFolder(dir, repo, jobcmdEnv(env, resolver(env)))
 		},
 		// A task whose first Job was never posted gets the same J-1 grid task new posts.
 		FirstJob: firstJobOf,
+		// A closed task whose brain proposals still wait gets the curator Job deliver would post.
+		ClosedCurator: workerClosedCurator(env),
 		// The pass moves an old approval receipt into the task's Feed once, under the task lease.
 		ReceiptPending: migrate.ReceiptPending,
 		ReceiptMove: func(dir string, w feed.Writer) error {
@@ -207,6 +211,43 @@ func runWorkerNext(args []string, env Env) int {
 	return 1 // Run returns only an error
 }
 
+// workerClosedCurator answers the stream's ClosedCurator: the curator Job body, with
+// the given Job id, for the brain proposals waiting for the task in dir, or nil when
+// none waits. It reads the queue as deliver does (task.Store.Deliver: the project's
+// brain store, the task folder with links resolved, WaitingForTask with the T-NN id)
+// and names the proposals the way deliver's curator Job does, with curatorJobBody. The
+// task id the stream passes is the Feed id; the Job and its `grid brain keep --task`
+// line name the T-NN id, so the folder is resolved the way the Assigned callback does.
+// It reads and writes nothing else and asks nobody.
+func workerClosedCurator(env Env) func(dir, taskID, id string) (map[string]any, error) {
+	return func(dir, _, id string) (map[string]any, error) {
+		t, err := resolveTaskOperand(env, dir)
+		if err != nil {
+			return nil, err
+		}
+		real, err := filepath.EvalSymlinks(t.Path)
+		if err != nil {
+			return nil, err
+		}
+		project := t.Project
+		if project == where.Personal {
+			project = ""
+		}
+		rows, err := (brain.Store{GridHome: env.GridHome, Project: project}).WaitingForTask(real, t.ID)
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) == 0 {
+			return nil, nil
+		}
+		ids := make([]string, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.ID)
+		}
+		return curatorJobBody(id, t.ID, ids), nil
+	}
+}
+
 // workerSpawnModel is the model and effort a Job of the given role runs on, for the
 // task folder dir: the catalog default of the role's agent, then the `model:` and
 // `effort:` of the brain agent the project or the home holds for the role (passed
@@ -240,6 +281,95 @@ func workerSpawnModel(env Env, dir, role string) (string, string, error) {
 		return "", "", err
 	}
 	return st.ModelForWith(role, settings.Agent{Model: fm.Model, Effort: fm.Effort})
+}
+
+// workerSpawnTools is the tool names the agent that runs a Job of the given role names
+// in its `tools:` front matter, for the task folder dir, in the order the file gives
+// them. The agent is the one the Job's Instructions come from: the brain agent the
+// project or the home holds for the role, else the plugin's own agents/<role>.md. The
+// two are never merged: a brain agent with no `tools:` answers nil, as does a role with
+// no agent file. Nothing is added, removed or checked here; the worker decides what to
+// do with the names.
+func workerSpawnTools(env Env, dir, role string) ([]string, error) {
+	project := filepath.Base(filepath.Dir(filepath.Dir(dir))) // the project workerSpawnModel reads
+	md, _, ok := (brain.Store{GridHome: env.GridHome, Project: project}).AgentFor(role)
+	if !ok {
+		md, ok = gridplugins.AgentFor(contract.NormalizeRole(role))
+	}
+	if !ok {
+		return nil, nil
+	}
+	return beAgentTools(md), nil
+}
+
+// beToolsFragment is the lines of the one top-level `tools:` key of a front matter: the
+// key line and the indented or `- ` lines under it. Only these lines are parsed, so a
+// description elsewhere in the file that is not strict YAML (agents/builder.md has a
+// ": " in its description) does not hide the tools. No `tools:` key, or two, is no
+// fragment.
+func beToolsFragment(front []byte) ([]byte, bool) {
+	var frag []string
+	keys := 0
+	in := false
+	for _, l := range strings.Split(string(front), "\n") {
+		trimmed := strings.TrimSpace(l)
+		switch {
+		case strings.HasPrefix(l, "tools:"):
+			keys++
+			in = true
+			frag = append(frag, l)
+		case in && (trimmed == "" || l[0] == ' ' || l[0] == '\t' || l[0] == '-' || l[0] == '#'):
+			frag = append(frag, l)
+		default:
+			in = false
+		}
+	}
+	return []byte(strings.Join(frag, "\n")), keys == 1
+}
+
+// beAgentTools is the `tools:` of an agent file's front matter, read as a
+// comma-separated string or as a list. Each entry is trimmed; empty entries and
+// repeats are dropped and the order is kept. A file with no `tools:`, a `tools:`
+// that does not parse, and a value of any other shape (a map, a number, a list that
+// holds a non-string) give nil, as workerSpawnModel treats a model that is not a
+// plain string.
+func beAgentTools(md string) []string {
+	front, _, err := mdfile.Split([]byte(md))
+	if err != nil {
+		return nil
+	}
+	frag, ok := beToolsFragment(front)
+	if !ok {
+		return nil
+	}
+	var fm struct {
+		Tools any `yaml:"tools"`
+	}
+	if mdfile.Load(frag, &fm, false) != nil {
+		return nil
+	}
+	var raw []string
+	switch v := fm.Tools.(type) {
+	case string:
+		raw = strings.Split(v, ",")
+	case []any:
+		for _, e := range v {
+			s, ok := e.(string)
+			if !ok {
+				return nil
+			}
+			raw = append(raw, s)
+		}
+	default:
+		return nil
+	}
+	var tools []string
+	for _, r := range raw {
+		if r = strings.TrimSpace(r); r != "" && !slices.Contains(tools, r) {
+			tools = append(tools, r)
+		}
+	}
+	return tools
 }
 
 type writerFunc func([]byte) (int, error)

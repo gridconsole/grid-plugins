@@ -63,6 +63,12 @@ type Stream struct {
 	// model and effort. Empty strings leave the keys out. An error is one Diag line:
 	// the spawn line is still printed without the two keys, never a skipped Job.
 	Model func(taskDir, role string) (model, effort string, err error)
+	// Tools, when set, is called the same way as Model; the tool names it answers go on
+	// the spawn line as tools, in order. Nothing is answered for a role whose agent names
+	// none, and the key is left out. The stream reports what the callback answers and does
+	// not filter, add or cap it. An error is one Diag line: the spawn line is still
+	// printed without the key, never a skipped Job.
+	Tools func(taskDir, role string) ([]string, error)
 	// Repo, when set, is called with the task folder and the repo the Job of a spawn
 	// names ("" when it names none) the first time the stream prints that spawn; the
 	// folder it answers goes on the spawn line as repo, and empty leaves the key out.
@@ -84,6 +90,17 @@ type Stream struct {
 	// kind, the kind written in task.md ("" when none). A closed task, a task waiting
 	// on a person and a task with any Job record are left alone. Nil posts nothing.
 	FirstJob func(kind string) map[string]any
+	// ClosedCurator, when set, is asked for the curator Job of a task whose task.md
+	// says state: closed, inside the pass that cancels that task's open Jobs, when no
+	// curator Job of the task is open. dir is the task folder, taskID the task's Feed
+	// id, id the Job id the record will be posted with. It answers the job-record body
+	// of a curator Job for the brain proposals waiting for the task, or nil when none
+	// waits. A body is posted under the task lease, the task is not left alone while
+	// that Job is open, and the Job is assigned and spawned like any Job; every other
+	// Job of the closed task is cancelled as before. An error is one Diag line and
+	// posts nothing. Nil posts nothing, and a curator Job already open is still left
+	// alone.
+	ClosedCurator func(dir, taskID, id string) (map[string]any, error)
 
 	Out  io.Writer // JSON lines
 	Diag io.Writer // one readable line per skip; nil discards
@@ -113,6 +130,9 @@ type spawnLine struct {
 	// leaves them out and claude keeps its own default.
 	Model  string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
+	// Tools are the tool names the role's agent file names, as the worker may add them
+	// to the claude command; empty leaves the key out.
+	Tools []string `json:"tools,omitempty"`
 	// Repo is the folder of the repo the Job works in, which the worker runs it in;
 	// empty leaves it out and the worker finds the repo itself.
 	Repo string `json:"repo,omitempty"`
@@ -297,6 +317,14 @@ func (s *Stream) task(dir string) error {
 			if err != nil {
 				line.Model, line.Effort = "", ""
 				s.diag("grid worker next: task %s: job %s assigned, no model or effort for role %q: %s\n", taskID, sp.Job, sp.Role, oneLine(err))
+			}
+		}
+		if s.Tools != nil {
+			tools, err := s.Tools(dir, sp.Role)
+			if err != nil {
+				s.diag("grid worker next: task %s: job %s assigned, no tools for role %q: %s\n", taskID, sp.Job, sp.Role, oneLine(err))
+			} else {
+				line.Tools = tools
 			}
 		}
 		if s.Repo != nil {
