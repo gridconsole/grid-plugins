@@ -2,11 +2,13 @@ diff --grid a/claude.env b/claude.env
 new file mode 0600
 --- /dev/null
 +++ b/claude.env
-@@ -0,0 +1,4 @@
+@@ -0,0 +1,6 @@
 +
++# >>> grid session env >>>
 +export GRID_HOME='$GRID_HOME'
 +export GRID_PROJECTS='$GRID_HOME/projects'
 +export GRID_TASK='T-1-demo'
++# <<< grid session env <<<
 diff --grid a/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json b/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json
 new file mode 0600
 --- /dev/null
