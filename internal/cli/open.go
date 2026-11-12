@@ -37,6 +37,21 @@ func appBaseURL(env Env) string {
 	return strings.TrimRight(raw, "/")
 }
 
+// wbOpenLaunchFile is the file in the Grid home where a local app writes its one-time
+// launch code (one line, mode 0600) before it writes app-url. The app trades the code
+// once at /api/launch for an HttpOnly cookie, so the page it opens can call the API.
+const wbOpenLaunchFile = "launch-code"
+
+// wbOpenLaunchCode is the code a local app wrote in the Grid home, "" when there is none.
+func wbOpenLaunchCode(env Env) string {
+	b, err := os.ReadFile(filepath.Join(env.GridHome, wbOpenLaunchFile))
+	if err != nil {
+		return ""
+	}
+	code, _, _ := strings.Cut(strings.TrimSpace(string(b)), "\n")
+	return strings.TrimSpace(code)
+}
+
 // openCommand is the argv that opens target on the given OS. It is pure: the environment
 // and the executable lookup come in as arguments. On windows the target is one argv item
 // after the handler and no shell is involved, so a space or & in it needs no quoting.
@@ -132,8 +147,10 @@ func runOpen(args []string, env Env) int {
 	}
 	route := "#/t/" + url.PathEscape(t.Project) + "/" + url.PathEscape(linkID) + "/overview"
 	base := appBaseURL(env)
-	// GRID_APP_URL points at an app this machine does not run: open it as it is, start nothing.
-	if env.AppStart != nil && strings.TrimSpace(env.getenv("GRID_APP_URL")) == "" {
+	// GRID_APP_URL points at an app this machine does not run: open it as it is, start
+	// nothing, and never hand it this home's launch code.
+	local := strings.TrimSpace(env.getenv("GRID_APP_URL")) == ""
+	if env.AppStart != nil && local {
 		var code int
 		if base, code = env.AppStart.ensure(env); code != 0 {
 			return code
@@ -150,6 +167,12 @@ func runOpen(args []string, env Env) int {
 		return 0
 	}
 	target := base + "/" + route
+	if local {
+		if code := wbOpenLaunchCode(env); code != "" {
+			// The app answers 303 to / with the cookie; the browser keeps the #route.
+			target = base + "/api/launch?code=" + url.QueryEscape(code) + route
+		}
+	}
 	openErr := env.openURL(target)
 	if *asJSON {
 		return writeJSON(env.Stdout, struct {
