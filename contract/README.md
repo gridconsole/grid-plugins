@@ -86,6 +86,7 @@ during `task show` exits 1.
 | `notes_full` | A signal move found the target notes folder already holding 4000 files; nothing was written and it exits 3. |
 | `guest_refused` | The caller is refused as a guest (role guest, external or an unknown role); nothing was written. |
 | `job_exists` | A Job post (`grid job post`, `grid feed post --type job`) named a Job id the Feed already holds; nothing was written. A repeat of the same request (same `--id`, same body) exits 0 instead. Exits 3. |
+| `task_state` | The task's state does not allow the move (`task stop`, `task close`, `task reopen`, `task status`, and `deliver`, which the same state table can refuse); nothing was written and it exits 1. |
 | `person_required` | The existing person gate refused the request. |
 | `job_waiting` | A person Job still waits for a Job in its after list (`grid approve`, `grid job result`); exits 3. |
 | `changed` | A settings file or preview changed since the person looked; nothing was written. |
@@ -95,7 +96,7 @@ during `task show` exits 1.
 | `nothing_to_undo` | An undo of an agent budget Apply found no Apply to undo. |
 | `index_rebuild_failed` | The change was written; rebuilding index.md failed; the stdout object holds the result (`grid brain revert`, `grid brain supersede`); exits 1. |
 
-The first twelve constants live in `internal/cli/error_codes.go`, the settings
+The first thirteen constants live in `internal/cli/error_codes.go`, the settings
 codes in `internal/settings/claude_user.go` and `index_rebuild_failed` in
 `internal/braincmd/changes.go`; `person_required` and `job_waiting` are
 written as literals in `internal/cli/role_policy.go`, `internal/cli/person_check.go`
@@ -182,7 +183,13 @@ are reference-document names and original line numbers, not machine paths.
 | grid feed state output | [cmd-feed-state.json](schemas/cmd-feed-state.json) | internal/cli/feed.go:131 |
 | grid intent list output | [cmd-intent-list.json](schemas/cmd-intent-list.json) | internal/cli/intent.go:247 |
 | grid job next output | [cmd-job-next.json](schemas/cmd-job-next.json) | internal/cli/orchestrator.go:175 and :228 |
+| grid lease status output | [cmd-lease-status.json](schemas/cmd-lease-status.json) | internal/cli/task_lease.go:146 |
 | grid plan hash output | [cmd-plan-hash.json](schemas/cmd-plan-hash.json) | internal/cli/plan.go:74 |
+| grid project add output | [cmd-project-add.json](schemas/cmd-project-add.json) | internal/cli/projects.go:172 |
+| grid project-md set output | [cmd-project-md-set.json](schemas/cmd-project-md-set.json) | internal/cli/projectmd.go:41 |
+| grid project remove output | [cmd-project-remove.json](schemas/cmd-project-remove.json) | internal/cli/projects.go:172 |
+| grid project repo output | [cmd-project-repo.json](schemas/cmd-project-repo.json) | internal/cli/project_repo.go:110 |
+| grid project scan output | [cmd-project-scan.json](schemas/cmd-project-scan.json) | internal/cli/projects.go:143 |
 | grid session handback output | [cmd-session-handback.json](schemas/cmd-session-handback.json) | internal/cli/intent.go:140 |
 | grid session list output | [cmd-session-list.json](schemas/cmd-session-list.json) | internal/cli/liveness.go:142 |
 | grid session pause output | [cmd-session-pause.json](schemas/cmd-session-pause.json) | internal/cli/intent.go:140 |
@@ -192,10 +199,12 @@ are reference-document names and original line numbers, not machine paths.
 | grid session start output | [cmd-session-start.json](schemas/cmd-session-start.json) | internal/cli/intent.go:140 |
 | grid session stop output | [cmd-session-stop.json](schemas/cmd-session-stop.json) | internal/cli/intent.go:140 |
 | grid session switch output | [cmd-session-switch.json](schemas/cmd-session-switch.json) | internal/cli/intent.go:140 |
+| grid setup output | [cmd-setup.json](schemas/cmd-setup.json) | internal/cli/settings.go:257; internal/settings/claude.go:306 |
 | grid task list output | [cmd-task-list.json](schemas/cmd-task-list.json) | internal/cli/task.go:142 |
 | grid task move output | [cmd-task-move.json](schemas/cmd-task-move.json) | internal/cli/intent.go:140 |
 | grid task show output | [cmd-task-show.json](schemas/cmd-task-show.json) | internal/cli/task.go:122 |
 | grid version output | [cmd-version.json](schemas/cmd-version.json) | internal/cli/version.go:54 |
+| grid where output | [cmd-where.json](schemas/cmd-where.json) | internal/cli/cli.go:407 |
 | grid worker list output | [cmd-worker-list.json](schemas/cmd-worker-list.json) | internal/cli/worker.go:57 |
 
 Run `make test` and `make lint` from the repository root. Keep the default
@@ -698,13 +707,17 @@ verb still reports the version before the error and exits 1: plain output prints
 this case) and the usual `{"error": "<message>"}` on stderr.
 
 Both verbs check `GRID_ROLE` after the flags parse and before any resolution,
-read or write. The replaceable `brain.ChangesReadAllowed` (host key
-`brain_changes_read_roles`) and `brain.RevertAllowed` (host key
-`brain_revert_roles`) policies default to the empty local role, `owner` and
-`member`; any other role, including `guest`, exits 3 with
+read or write. `changes` checks the replaceable `brain.ChangesReadAllowed` (host
+key `brain_changes_read_roles`) and `revert` checks the replaceable
+`brain.CurateAllowed`; both default to the empty local role, `owner`, `member` and
+`worker` (a Job agent, which brain-keeper tells to read the log and to supersede
+and revert). Any other role, including `guest`, exits 3 with
 `grid brain <changes|revert>: caller role is not allowed to <read brain changes|revert brain entries>`.
-`grid brain supersede` checks `brain.RevertAllowed` at the same point and exits 3
+`grid brain supersede` checks `brain.CurateAllowed` at the same point and exits 3
 with `grid brain supersede: caller role is not allowed to supersede brain entries`.
+`brain.RevertAllowed` (host key `brain_revert_roles`) keeps its default, the empty
+local role, `owner` and `member`, and gates `write`, `rename`, `drop` and
+`restore`, which still refuse a `worker`.
 With `--json` each of the seven refusals (changes, revert, supersede, drop,
 restore, write, rename) keeps that stderr line and exit 3 and
 also prints one stdout object, the person-gate refusal shape:

@@ -49,6 +49,14 @@ func TestTaskCommandsMigratedAndLegacyShape(t *testing.T) {
 				t.Fatalf("rename changed identity or missed title:\n%s", text)
 			}
 
+			if !tc.version {
+				// An old home is no longer stamped by the first write; it is migrated
+				// first. Show and rename above ran on it unversioned; the new task is
+				// the first write, so the home is given VERSION 1 here.
+				if err := os.WriteFile(filepath.Join(h.gridHome, "VERSION"), []byte("1\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if code := h.run(h.home, "task", "new", "Second task", "--json"); code != 0 {
 				t.Fatalf("new: %d %s", code, h.errb)
 			}

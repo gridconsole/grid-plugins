@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-project-md-set.json",
+  "description": "JSON output of grid project-md set <project> <key> <value> --json; internal/cli/projectmd.go:41, internal/projectmd/projectmd.go:21. value is the YAML value now stored under key, as JSON: any type, null included. The app runs the command and reads no field of the answer, only the exit code (app internal/slices/projectsettings/project_settings_write.go:105).",
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "project": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "value": {
+      "description": "The stored YAML value as JSON; any type."
+    }
+  },
+  "required": [
+    "project",
+    "key",
+    "value"
+  ],
+  "title": "grid project-md set output",
+  "type": "object"
+}

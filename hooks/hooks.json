@@ -6,7 +6,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook permissionrequest",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }
@@ -50,7 +50,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook pretooluse",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }
@@ -117,7 +117,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook userpromptsubmit",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }

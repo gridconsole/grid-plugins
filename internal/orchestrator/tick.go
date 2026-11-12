@@ -297,6 +297,9 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 			return s.control(j, contract.Parked, "usage_limit", j.Exited)
 		case "cancelled":
 			m.Failures = nil
+			if ycWorkerStopped(j.ExitCode) {
+				return s.control(j, contract.Ready, "worker stopped", j.Exited)
+			}
 			return s.control(j, contract.Cancelled, "worker cancelled", j.Exited)
 		case "done":
 			return s.control(j, contract.Submitted, "awaiting judgement", j.Exited)

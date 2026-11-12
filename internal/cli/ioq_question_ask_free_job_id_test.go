@@ -2,6 +2,8 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -134,12 +136,67 @@ func TestIoqHeldJobResolvesBesideQuestionJob(t *testing.T) {
 	}
 }
 
+// ioqRawJob appends a job record for id straight to the Feed file of the J-1
+// record, past Post and its Job-id check, as an old Feed written before that
+// check would hold it. It follows TestIcjJobExistsRefused (internal/feed/
+// icj_job_exists_test.go:81-96), which raw-appends its J-9 pair the same way.
+func ioqRawJob(t *testing.T, store feed.Store, id, title, after string) {
+	t.Helper()
+	read, err := store.Read(feed.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tpl feed.Entry
+	var seq int64
+	for _, e := range read.Records {
+		if e.Seq > seq {
+			seq = e.Seq
+		}
+		if e.Type == "job" && e.Body["id"] == "J-1" {
+			tpl = e
+		}
+	}
+	if tpl.ID == "" {
+		t.Fatal("no J-1 record to copy the writer from")
+	}
+	recID, err := feed.NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := feed.Body{}
+	for k, v := range tpl.Body {
+		body[k] = v
+	}
+	body["id"], body["title"] = id, title
+	r := tpl.Record
+	r.ID, r.Seq, r.Job, r.Body, r.After = recID, seq+1, &id, body, []string{}
+	if after != "" {
+		r.After = []string{after}
+	}
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(store.Dir(), tpl.File), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.Write(append(data, '\n'))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // An old Feed that already holds the pair folds as it always did: the record
-// with the lower seq is the Job, and the later one is ignored.
+// with the lower seq is the Job, and the later one is ignored. Post now refuses
+// the second J-2, so the pair is raw-appended.
 func TestIoqOldFeedPairFoldsAsToday(t *testing.T) {
 	h, path, store := orchestratorHarness(t)
-	ioqPostJob(t, h, path, "J-2", "First J-2", ioqUnknownRef)
-	ioqPostJob(t, h, path, "J-2", "Second J-2", "")
+	ioqRawJob(t, store, "J-2", "First J-2", ioqUnknownRef)
+	ioqRawJob(t, store, "J-2", "Second J-2", "")
 	ioqResolve(t, h, path)
 	snap, err := orchestrator.Load(store)
 	if err != nil {

@@ -28,22 +28,24 @@ type Event struct {
 }
 
 // This table is the source for dispatch, Handles and generated plugin hooks.
-// Timeouts are seconds: Stop and SubagentStop leave room for a bounded verify.
+// Timeouts are seconds: Stop and SubagentStop leave room for a bounded verify;
+// the guard events (PreToolUse, PermissionRequest, UserPromptSubmit) get 30 so a
+// loaded machine does not time out and let Claude Code skip them.
 var events = []struct {
 	Event
 	run func(Options) int
 }{
 	{Event{"SessionStart", "startup|resume|clear|compact|fork", 10}, quiet(func(o Options) { o.record("session start", func() { sessionStart(o) }) })},
-	{Event{"UserPromptSubmit", "", 10}, remaining},
+	{Event{"UserPromptSubmit", "", 30}, remaining},
 	{Event{"SubagentStart", "", 10}, remaining},
-	{Event{"PreToolUse", "", 10}, quiet(toolUse)},
+	{Event{"PreToolUse", "", 30}, quiet(toolUse)},
 	{Event{"PostToolUse", "", 10}, remaining},
 	{Event{"PreCompact", "", 10}, remaining},
 	{Event{"Stop", "", 60}, remaining},
 	{Event{"SubagentStop", "", 60}, remaining},
 	{Event{"SessionEnd", "", 10}, remaining},
 	{Event{"PostToolUseFailure", "", 10}, remaining},
-	{Event{"PermissionRequest", "", 10}, quiet(toolUse)},
+	{Event{"PermissionRequest", "", 30}, quiet(toolUse)},
 }
 
 // Events returns registration metadata without exposing the dispatcher table.

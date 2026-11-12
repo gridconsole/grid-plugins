@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-project-remove.json",
+  "description": "JSON output of grid project remove <name-or-id> --json: the project entry after this machine's folder and keys are unbound; internal/cli/projects.go:172, internal/projects/projects.go:398. The app runs the command and reads no field of the answer, only the exit code (app internal/slices/setup/remove_project.go:91). The shape is the project add entry.",
+  "additionalProperties": false,
+  "properties": {
+    "folders": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "machine": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "machine",
+          "path"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "keys": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "machine": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "repos": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "remote": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "remote"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "id",
+    "folders",
+    "repos",
+    "keys"
+  ],
+  "title": "grid project remove output",
+  "type": "object"
+}

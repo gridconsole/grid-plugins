@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	gridplugins "github.com/gridconsole/grid-plugins"
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -25,6 +26,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
 	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/settings"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -634,6 +636,11 @@ func sources(task string, e Env) (*world, error) {
 			role, _ = d.Data["owner"].(string)
 		}
 		f.Owner = ownerTier(role)
+		// A task turned from an outside signal holds the sender's subject, not the
+		// owner's words, whoever pressed Turn.
+		if from, _ := d.Data["intent_from"].(string); from == "signal" {
+			f.Owner = contract.External
+		}
 		prototype, _ = d.Data["prototype"].(string)
 	}
 	if w.project != "" {
@@ -650,7 +657,33 @@ func sources(task string, e Env) (*world, error) {
 
 // lintOptions is what lint checks a Job against: the task's files and the project's repos.
 func (w *world) lintOptions() lint.Options {
-	return lint.Options{Resolver: w.files, Repos: w.repos}
+	return lint.Options{Resolver: w.files, Repos: w.repos, KnownRole: w.knownRole}
+}
+
+// knownRole is true when an agent runs a Job of the normalized role: the plugin's
+// agents, the catalog, or an agent note in the project or home brain.
+func (w *world) knownRole(role string) bool {
+	if _, ok := gridplugins.AgentFor(role); ok {
+		return true
+	}
+	if _, ok := settings.AgentForRole(role); ok {
+		return true
+	}
+	for _, level := range []string{"project", "home"} {
+		if level == "project" && w.project == "" {
+			continue // no project, no project brain: the brain's prefix refuses an empty one
+		}
+		names, err := w.store.ConfigNames(level, "agents")
+		if err != nil {
+			continue
+		}
+		for _, n := range names {
+			if n == "grid-"+role || n == role {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // LintOptions returns the lint Options that grid job render and grid job lint use for
