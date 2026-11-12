@@ -13,7 +13,7 @@ Base: main 219ca2bb3e97ac493b3888649013dce4985d8063. Base check, `git grep -n '"
   - Finding b: start at the person Job's `discovered_from`; while the Job's role normalizes to `reviewer` or `checker`, step to its `discovered_from`; the first other Job is b. A visited set ends a cycle. No `discovered_from`, an unknown id, or a chain that ends on a review: nothing is posted.
   - Only a Submitted b moves. Answer: `{target b, status accepted, reason "answered by <who> through <person Job>", answer}`. Send-back: `{target b, status rejected, reason and close_reason "sent back by <who> through <person Job>", answer}`, with no `send_back` or `sent_back_hash`. `sendsBack` is unchanged.
 - `internal/orchestrator/yv_person_answer_moves_test.go`: new, `yvPam` helpers and `TestYvPam` tests.
-- `docs/lanes/C-yv-person-answer-moves-job.md`: this report. It is the one file outside the brief's Touches list, written because the runbook asks for it; `git diff main --stat` named only person.go and the test file before it was added.
+- `docs/lanes/C-yv-person-answer-moves-job.md`: the lane report the builder runbook requires. The code changes are person.go and the test file only, as `git diff main --stat` showed before this report was added.
 - No command, flag, record type, golden, walk table or ops row changed.
 
 ## Proof table
@@ -31,6 +31,7 @@ Base: main 219ca2bb3e97ac493b3888649013dce4985d8063. Base check, `git grep -n '"
 | 6 `go test ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` | HOLDS, exit 0: `--- PASS: TestHsIpWalksEveryCommand`, `--- PASS: TestIlGuestSiteList`. |
 | 6 `go test -count=1 ./internal/job/lint/` | HOLDS, exit 0: `ok .../internal/job/lint 0.090s`. |
 | 6 `make lint` | HOLDS, exit 0 (`go vet ./...`, no output). |
+| gofmt | HOLDS: `gofmt -l internal/orchestrator` printed nothing, exit 0. |
 | 6 `make cross` | HOLDS, exit 0: darwin/arm64 and windows/amd64 vet and test compile of every package. |
 | 6 after `git merge main` | HOLDS: `Already up to date.` (the lane base is main's head). |
 | 6 `git diff main --stat` | HOLDS: person.go (58 insertions) and yv_person_answer_moves_test.go (240 insertions), before this doc was committed. |
