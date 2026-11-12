@@ -25,8 +25,12 @@ const (
 	OpenStartLock = "open-start.lock"
 	// defaultAppWait is how long grid open waits for the server after it starts it.
 	defaultAppWait = 30 * time.Second
-	appPoll        = 50 * time.Millisecond
-	dialTimeout    = time.Second
+	// appLogLimit and appLogFiles: grid open shifts <name>.log at this size, keeping the
+	// active file and six old ones, before it starts a program.
+	appLogLimit = 10 << 20
+	appLogFiles = 7
+	appPoll     = 50 * time.Millisecond
+	dialTimeout = time.Second
 )
 
 // AppStart tells grid open how to find and start the app. A nil *AppStart starts
@@ -216,6 +220,28 @@ func appStartArgs(name, home string) []string {
 	return []string{"start", "-home", home}
 }
 
+// shiftAppLog shifts path to path.1 ... path.6 when it is appLogLimit bytes or more,
+// as the worker's own log does. The first error that is not a missing file stops the
+// shift; what moved stays moved, and the caller appends to path as before.
+func shiftAppLog(path string) {
+	if fi, err := os.Stat(path); err != nil || fi.Size() < appLogLimit {
+		return
+	}
+	last := fmt.Sprintf("%s.%d", path, appLogFiles-1)
+	if err := os.Remove(last); err != nil && !os.IsNotExist(err) {
+		return
+	}
+	for i := appLogFiles - 2; i >= 0; i-- {
+		from := path
+		if i > 0 {
+			from = fmt.Sprintf("%s.%d", path, i)
+		}
+		if err := os.Rename(from, fmt.Sprintf("%s.%d", path, i+1)); err != nil && !os.IsNotExist(err) {
+			return
+		}
+	}
+}
+
 // startDetached starts a program that outlives grid open: its own session or process
 // group, no terminal, output in <Grid home>/logs/<name>.log. It runs with args, and
 // the app finds the Grid home through GRID_HOME as well.
@@ -224,6 +250,7 @@ func startDetached(env Env, name, path string, args []string) error {
 	if err := os.MkdirAll(logDir, 0o700); err != nil {
 		return err
 	}
+	shiftAppLog(filepath.Join(logDir, name+".log"))
 	logf, err := os.OpenFile(filepath.Join(logDir, name+".log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 	if err != nil {
 		return err
