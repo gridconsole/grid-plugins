@@ -177,7 +177,15 @@ func bashHistory(o Options, in hookio.Input) {
 	}
 }
 
+// ojSnapshotForTest is nil in production. A test sets it to stop at the start of
+// a walk, as fslock.OnBlockForTest does for a lock wait, and to put it back when
+// the test ends; no file outside tests sets it.
+var ojSnapshotForTest func()
+
 func snapshot(dir string) (map[string]string, error) {
+	if ojSnapshotForTest != nil {
+		ojSnapshotForTest()
+	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return nil, err
