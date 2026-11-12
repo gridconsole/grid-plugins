@@ -1,8 +1,0 @@
-{
-  "changed": [
-    ".agents"
-  ],
-  "hook": "brief-lint",
-  "name": "complete",
-  "proves": "A complete brief passes and records dispatch."
-}

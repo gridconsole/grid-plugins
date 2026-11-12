@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-task-new.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid task new --json; internal/cli/task.go:189. id is the new task's id; path is its folder.",
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "path": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "path"
+  ],
+  "title": "grid task new output",
+  "type": "object"
+}

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-agent-budget-show.json",
+  "title": "grid agent budget show output",
+  "description": "JSON output of grid agent budget show; internal/cli/budget.go:83 writes settings.BudgetShowResult (internal/settings/budget.go:388). The app relays it raw (internal/slices/agentreads/http.go:80) and internal/kernel/webui/app/pages/settings/agents-budget.mjs reads agents and presets (:29), env (:55) and undo (:63), note.state (:69), and applied and closest through detectCustom. The page also reads data.blockedAdvisor (:37) and data.mainWindow (:60), which this command does not write; they are not part of this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": "string"},
+        "state": {"type": "string", "enum": ["ok", "missing", "invalid"]},
+        "error": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+      },
+      "required": ["path", "state", "error"]
+    },
+    "presets": {
+      "type": "object",
+      "description": "The budget presets by name, from the brain note \"Agent budget\" or the built-in values.",
+      "required": ["economic", "balanced", "high"],
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "compact": {"type": "integer"},
+          "advisor": {"type": "string"},
+          "agents": {
+            "type": "object",
+            "description": "Model and effort by agent name.",
+            "additionalProperties": {"type": "object", "additionalProperties": false, "properties": {"model": {"type": "string"}, "effort": {"type": "string"}}}
+          }
+        },
+        "required": ["compact", "advisor", "agents"]
+      }
+    },
+    "codexPresets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "compact": {"type": "integer"},
+          "subagent_model": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+          "subagent_effort": {"type": "string"}
+        },
+        "required": ["compact", "subagent_model", "subagent_effort"]
+      }
+    },
+    "agents": {
+      "type": "object",
+      "description": "Each Grid agent as it is now, by agent name.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": {"type": "string"},
+          "effort": {"type": "string"},
+          "file": {"type": "string"},
+          "state": {"type": "string", "enum": ["grid", "missing", "yours", "project"]},
+          "changedByHand": {"type": "boolean"}
+        },
+        "required": ["model", "effort", "file", "state", "changedByHand"]
+      }
+    },
+    "applied": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "The preset in force, or null when none matches."},
+    "closest": {"type": "string"},
+    "custom": {"type": "array", "items": {"type": "string"}},
+    "env": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string"},
+          "value": {"type": "string"},
+          "effect": {"type": "string", "enum": ["overrides-effort", "forces-model", "fills-gaps"]}
+        },
+        "required": ["name", "value", "effect"]
+      }
+    },
+    "undo": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"at": {"type": "string"}, "preset": {"type": "string"}, "from": {"type": "string"}},
+          "required": ["at", "preset", "from"]
+        }
+      ]
+    }
+  },
+  "required": ["note", "presets", "codexPresets", "agents", "applied", "closest", "custom", "env", "undo"]
+}

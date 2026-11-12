@@ -1,0 +1,14 @@
+{
+  "changes": [
+    {
+      "at": "2026-11-12T02:23:02.076Z",
+      "status": "created",
+      "topic": "decisions",
+      "name": "ferry",
+      "version": 1,
+      "hash": "sha256:76d41c859c2a8514",
+      "origin_kind": "person",
+      "reason": ""
+    }
+  ]
+}

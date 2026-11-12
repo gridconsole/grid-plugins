@@ -6,5 +6,5 @@
   },
   "hook": "stop-check",
   "name": "subagent-missing",
-  "proves": "A builder must fill its own brief Outcome."
+  "proves": "With no GRID_JOB the shrunk Stop check exits 0 silently for a builder whose brief has no Outcome (docs/lanes/E-verdict-5-stop.md:10); the old Outcome demand is gone."
 }

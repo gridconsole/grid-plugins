@@ -1,22 +1,5 @@
-diff --grid a/demo/plugin-data/sessions/session-demo b/demo/plugin-data/sessions/session-demo
-new file mode 0644
---- /dev/null
-+++ b/demo/plugin-data/sessions/session-demo
-@@ -0,0 +1 @@
-+$GRID_HOME/projects/demo/tasks/T-1-demo
-diff --grid a/demo/plugin-data/sessions/session-demo.bash-tool-demo b/demo/plugin-data/sessions/session-demo.bash-tool-demo
-deleted file mode 0644
---- a/demo/plugin-data/sessions/session-demo.bash-tool-demo
-+++ /dev/null
-@@ -1 +0,0 @@
--{"dirs":{"$GRID_HOME/projects/demo/tasks/T-1-demo":{"intent.md":"53:<TIME>:<TIME>","plan.md":"114:<TIME>:<TIME>","subagents/01-build.md":"341:<TIME>:<TIME>","task.md":"347:<TIME>:<TIME>"}}}
-\ No newline at end of file
-diff --grid a/demo/plugin-data/sessions/session-demo.tasks b/demo/plugin-data/sessions/session-demo.tasks
-new file mode 0644
---- /dev/null
-+++ b/demo/plugin-data/sessions/session-demo.tasks
-@@ -0,0 +1 @@
-+$GRID_HOME/projects/demo/tasks/T-1-demo
+diff --grid a/demo/projects/demo/tasks/T-1-demo/.task.lock b/demo/projects/demo/tasks/T-1-demo/.task.lock
+new file mode 0600
 diff --grid a/demo/projects/demo/tasks/T-1-demo/history.md b/demo/projects/demo/tasks/T-1-demo/history.md
 --- a/demo/projects/demo/tasks/T-1-demo/history.md
 +++ b/demo/projects/demo/tasks/T-1-demo/history.md
@@ -25,3 +8,9 @@ diff --grid a/demo/projects/demo/tasks/T-1-demo/history.md b/demo/projects/demo/
 +- <TIME> · file edited · intent.md · by claude · via Bash
 +- <TIME> · file written · notes.md · by claude · via Bash
 +- <TIME> · file removed · subagents/01-build.md · by claude · via Bash
+diff --grid a/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json b/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json
+--- a/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json
++++ b/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json
+@@ -1 +1 @@
+-{"session_id":"session-demo","last":"<TIME>","snapshots":{"tool-demo":{"intent.md":"85824985659d4b3cb6fd59b8d5afb014a3398d908a0a0fdd549034d29cd47482","plan.md":"57071d920a74823c34700fcd5d1983754badef2b5df292b794b8386b93a5ebb9","subagents/01-build.md":"23b48b54d958c37fff6b1697b2d07d16daf905ceeceb50401fb7f3333a36d4e1","task.md":"d83365124def29ce56822ce07fbf72259a8755bcf03f9d3ce62d9120a5347f1b"}}}
++{"session_id":"session-demo","last":"<TIME>"}

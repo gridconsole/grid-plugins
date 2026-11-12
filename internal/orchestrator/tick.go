@@ -120,6 +120,17 @@ func (s Store) Tick() (out Output, err error) {
 		if e := s.kbSecurityFound(snap); e != nil {
 			return e
 		}
+		snap, e = Load(s.Feed)
+		if e != nil {
+			return e
+		}
+		if e := s.abDecisionsNeeded(snap); e != nil {
+			return e
+		}
+		snap, e = Load(s.Feed)
+		if e != nil {
+			return e
+		}
 		if e := s.proposals(snap); e != nil {
 			return e
 		}

@@ -1,0 +1,456 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-workflow-show.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid workflow show --json, with or without --policy; internal/cli/workflow.go:74, internal/workflow/read.go:13. One schema for both: policy is present only for --policy (one entry per file of files, in order). The app reads templates and errors (judge, task page) and the whole envelope with policy (write policy).",
+  "properties": {
+    "errors": {
+      "type": "array",
+      "description": "Files and sections that could not be loaded. A file problem has a null section.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "workflows.md for the workspace file, <project>/workflows.md for a project file, or a brain note label."
+          },
+          "line": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "section": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "file",
+          "section",
+          "line",
+          "message"
+        ]
+      }
+    },
+    "files": {
+      "type": "array",
+      "description": "The workspace file, then each registered project's file. An absent file has a null rev and empty text.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for the workspace file."
+          },
+          "rev": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First 12 hex characters of the file's SHA-256; null when the file is absent."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "workspace",
+              "project"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "project",
+          "rev",
+          "text"
+        ]
+      }
+    },
+    "policy": {
+      "type": "array",
+      "description": "Effective application policy, one entry per file of files. Only with --policy.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "keys": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "inbox_act_roles": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "value maps each inbox act (turn, add, note, snooze, dismiss, wake, reopen) to its roles.",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "enum": ["workspace", "project"]
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": ["default", "workflow"]
+                  },
+                  "value": {
+                    "type": "object"
+                  }
+                },
+                "required": ["value", "source"]
+              },
+              "project_document_write_roles": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "value is a list of roles (owner, member).",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "enum": ["workspace", "project"]
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": ["default", "workflow"]
+                  },
+                  "value": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["value", "source"]
+              },
+              "refusal_message": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "value is plugin or none.",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "enum": ["workspace", "project"]
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": ["default", "workflow"]
+                  },
+                  "value": {
+                    "type": "string",
+                    "enum": ["plugin", "none"]
+                  }
+                },
+                "required": ["value", "source"]
+              },
+              "task_undo_roles": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "value is a list of roles (owner, member).",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "enum": ["workspace", "project"]
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": ["default", "workflow"]
+                  },
+                  "value": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["value", "source"]
+              }
+            },
+            "required": [
+              "refusal_message",
+              "inbox_act_roles",
+              "project_document_write_roles",
+              "task_undo_roles"
+            ]
+          },
+          "project": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for the workspace file."
+          }
+        },
+        "required": [
+          "project",
+          "keys"
+        ]
+      }
+    },
+    "templates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "applies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "by": {
+                  "type": "string",
+                  "enum": [
+                    "goal",
+                    "title",
+                    "project",
+                    "label"
+                  ]
+                },
+                "v": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "by",
+                "v"
+              ]
+            }
+          },
+          "approvers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "batch": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default": {
+            "type": "boolean"
+          },
+          "file": {
+            "type": "string",
+            "description": "Label of the file or brain note the template came from."
+          },
+          "lead": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "only": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "openTasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "overrides": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repeat": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "research": {
+            "type": "boolean"
+          },
+          "rounds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "agent": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "approver": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "approvers": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Null for a step that is not an approve step."
+                },
+                "back": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "check",
+                    "ask",
+                    "approve",
+                    "make-together",
+                    "run",
+                    "schedule"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "runs": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sizes": {
+                  "type": "string",
+                  "description": "Task-size letters (S, N, L) the step runs for."
+                }
+              },
+              "required": [
+                "name",
+                "kind",
+                "approver",
+                "approvers",
+                "agent",
+                "runs",
+                "sizes",
+                "back"
+              ]
+            }
+          },
+          "usedIn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "default",
+          "applies",
+          "only",
+          "approvers",
+          "repeat",
+          "lead",
+          "batch",
+          "rounds",
+          "research",
+          "steps",
+          "overrides",
+          "file",
+          "usedIn",
+          "openTasks"
+        ]
+      }
+    }
+  },
+  "required": [
+    "files",
+    "templates",
+    "errors"
+  ],
+  "title": "grid workflow show output",
+  "type": "object"
+}

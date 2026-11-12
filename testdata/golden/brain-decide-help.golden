@@ -1,6 +1,8 @@
-Usage: grid brain decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--json]
+Usage: grid brain decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--link <json>]... [--json]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
   -json
     	print JSON
+  -link value
+    	link JSON {to,rel,summary,why} added to the filed note (repeatable; ignored by reject)
   -note string
     	reason for the decision

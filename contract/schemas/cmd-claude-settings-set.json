@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-claude-settings-set.json",
+  "title": "grid claude settings set output",
+  "description": "JSON output of grid claude settings set; internal/cli/budget.go:143 writes settings.ClaudeSetResult (internal/settings/claude_user.go:213). The app relays it unchanged (internal/slices/claudesettings/http.go:144-148) and the page documents { path, key, from, to, written } (internal/kernel/webui/app/client.mjs:732 on app 8f9b806d). from and to are the raw JSON value, or null for an absent key.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "path": {"type": "string", "description": "The settings file the key was written to."},
+    "key": {"type": "string"},
+    "from": {"description": "The value before the write, any JSON value; null when the key was absent."},
+    "to": {"description": "The value after the write, any JSON value; null when the key was removed."},
+    "written": {"type": "boolean"}
+  },
+  "required": ["path", "key", "from", "to", "written"]
+}

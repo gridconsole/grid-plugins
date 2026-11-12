@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-routine-add.json",
+  "description": "JSON output of grid routine add --json; internal/cli/routine.go:158. The one routine that was written, in the shape grid routine list --json gives for each entry (cmd-routine-list). A new routine has no last_run, outcome or last_task; with --replace the three the old routine held are kept and listed. scheduled is false and next is null: add never installs a timer.",
+  "additionalProperties": false,
+  "properties": {
+    "every": {
+      "type": "string"
+    },
+    "last_run": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "last_task": {
+      "type": "string"
+    },
+    "limits": {
+      "additionalProperties": false,
+      "properties": {
+        "routine_budget": {
+          "type": "number"
+        },
+        "routine_max_turns": {
+          "type": "integer"
+        },
+        "routine_timeout": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "routine_timeout",
+        "routine_max_turns",
+        "routine_budget"
+      ],
+      "type": "object"
+    },
+    "machine": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "next": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "running",
+        "success",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "run": {
+      "type": "string"
+    },
+    "scheduled": {
+      "type": "boolean"
+    },
+    "workflow": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "every",
+    "run",
+    "machine",
+    "limits",
+    "scheduled",
+    "next"
+  ],
+  "title": "grid routine add output",
+  "type": "object"
+}

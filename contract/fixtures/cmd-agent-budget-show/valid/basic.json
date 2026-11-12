@@ -1,0 +1,146 @@
+{
+  "agents": {
+    "grid-builder": {
+      "changedByHand": false,
+      "effort": "medium",
+      "file": "~/.claude/agents/grid-builder.md",
+      "model": "sonnet",
+      "state": "missing"
+    },
+    "grid-designer": {
+      "changedByHand": false,
+      "effort": "medium",
+      "file": "~/.claude/agents/grid-designer.md",
+      "model": "sonnet",
+      "state": "missing"
+    },
+    "grid-planner": {
+      "changedByHand": false,
+      "effort": "medium",
+      "file": "~/.claude/agents/grid-planner.md",
+      "model": "opus",
+      "state": "missing"
+    },
+    "grid-researcher": {
+      "changedByHand": false,
+      "effort": "medium",
+      "file": "~/.claude/agents/grid-researcher.md",
+      "model": "opus",
+      "state": "missing"
+    },
+    "grid-reviewer": {
+      "changedByHand": false,
+      "effort": "medium",
+      "file": "~/.claude/agents/grid-reviewer.md",
+      "model": "opus",
+      "state": "missing"
+    }
+  },
+  "applied": "economic",
+  "closest": "economic",
+  "codexPresets": {
+    "balanced": {
+      "compact": 250000,
+      "subagent_effort": "medium",
+      "subagent_model": null
+    },
+    "economic": {
+      "compact": 200000,
+      "subagent_effort": "medium",
+      "subagent_model": null
+    },
+    "high": {
+      "compact": 350000,
+      "subagent_effort": "high",
+      "subagent_model": null
+    }
+  },
+  "custom": [],
+  "env": [],
+  "note": {
+    "error": "no Agent budget note",
+    "path": "\u003cROOT\u003e/home/.grid/knowledge/budget/agent-budget.md",
+    "state": "missing"
+  },
+  "presets": {
+    "balanced": {
+      "advisor": "opus",
+      "agents": {
+        "grid-builder": {
+          "effort": "high",
+          "model": "sonnet"
+        },
+        "grid-designer": {
+          "effort": "high",
+          "model": "sonnet"
+        },
+        "grid-planner": {
+          "effort": "medium",
+          "model": "opus"
+        },
+        "grid-researcher": {
+          "effort": "medium",
+          "model": "opus"
+        },
+        "grid-reviewer": {
+          "effort": "medium",
+          "model": "opus"
+        }
+      },
+      "compact": 250000
+    },
+    "economic": {
+      "advisor": "off",
+      "agents": {
+        "grid-builder": {
+          "effort": "medium",
+          "model": "sonnet"
+        },
+        "grid-designer": {
+          "effort": "medium",
+          "model": "sonnet"
+        },
+        "grid-planner": {
+          "effort": "medium",
+          "model": "opus"
+        },
+        "grid-researcher": {
+          "effort": "medium",
+          "model": "opus"
+        },
+        "grid-reviewer": {
+          "effort": "medium",
+          "model": "opus"
+        }
+      },
+      "compact": 200000
+    },
+    "high": {
+      "advisor": "fable",
+      "agents": {
+        "grid-builder": {
+          "effort": "high",
+          "model": "opus"
+        },
+        "grid-designer": {
+          "effort": "high",
+          "model": "opus"
+        },
+        "grid-planner": {
+          "effort": "high",
+          "model": "opus"
+        },
+        "grid-researcher": {
+          "effort": "high",
+          "model": "opus"
+        },
+        "grid-reviewer": {
+          "effort": "high",
+          "model": "opus"
+        }
+      },
+      "compact": 350000
+    }
+  },
+  "undo": null
+}

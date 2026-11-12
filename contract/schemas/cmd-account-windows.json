@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-account-windows.json",
+  "title": "grid account windows output",
+  "description": "JSON output of grid account windows --json, with or without --id; internal/cli/account.go:165. The app reads id, source, windows[].label, used and resetsAt (worker account.go:101-111) and relays each account entry to the page as it is.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "accounts"
+  ],
+  "properties": {
+    "accounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "windows",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "claude or codex."
+          },
+          "windows": {
+            "type": "array",
+            "description": "Empty when no source has numbers; the app shows that as no data, never as 0.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "label",
+                "used"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "enum": [
+                    "5h",
+                    "7d"
+                  ]
+                },
+                "used": {
+                  "type": "number",
+                  "description": "Percent used, 0 to 100; 0 when the window has started over since the reading."
+                },
+                "resetsAt": {
+                  "type": "integer",
+                  "description": "Unix seconds. Left out when the source gave none (omitempty), so it is not required."
+                }
+              }
+            }
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the numbers were kept, UTC. Left out when there are none."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "statusline",
+              "stream",
+              "codex",
+              "none"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "Why there are no numbers. Left out when there are some."
+          }
+        }
+      }
+    }
+  }
+}
