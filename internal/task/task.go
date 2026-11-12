@@ -37,6 +37,11 @@ type Record struct {
 	Kind    string `yaml:"kind,omitempty" json:"kind,omitempty"`
 	State   string `yaml:"state" json:"state"`
 	Created string `yaml:"created" json:"created"`
+	// IntentFrom is "signal" when intent.md holds text an outside sender wrote (the
+	// subject of a turned signal), so job render fences it as external data. Empty
+	// means the person typed it. It is read from task.md only and never shown in
+	// task show or task list.
+	IntentFrom string `yaml:"intent_from,omitempty" json:"-"`
 }
 
 // Task folds the task record and the person's unmodified words into one view.
@@ -62,6 +67,9 @@ type NewOptions struct {
 	// Kind is empty or "setup": a setup task is the one the app finds by
 	// `kind: setup` in task.md. Validate refuses any other value.
 	Kind string
+	// IntentFrom is empty or "signal": a task turned from an outside signal writes
+	// intent_from: signal to task.md, and job render then treats intent.md as external data.
+	IntentFrom string
 	// Inputs are files copied into the new task's inputs/ folder, each under
 	// its base name. New fails before it writes anything when one is missing or
 	// is not a file.
@@ -107,6 +115,11 @@ func (o NewOptions) Validate() error {
 	case "", "setup":
 	default:
 		return fmt.Errorf("invalid kind %q: use setup", o.Kind)
+	}
+	switch o.IntentFrom {
+	case "", "signal":
+	default:
+		return fmt.Errorf("invalid intent_from %q: use signal", o.IntentFrom)
 	}
 	return nil
 }

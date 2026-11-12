@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
 )
@@ -23,6 +24,9 @@ type Finding struct {
 type Options struct {
 	Resolver job.Resolver
 	Repos    []string
+	// KnownRole says whether some agent runs a Job of the given normalized role.
+	// Nil adds no role check, so a caller that has no agent list is unchanged.
+	KnownRole func(role string) bool
 }
 
 var sections = []string{"Intent", "Job", "Context", "Out of scope", "Open", "Acceptance", "Outcome", "Verdict", "Follow-up"}
@@ -133,6 +137,9 @@ func (c *checker) validate(j job.Job, o Options) {
 		if strings.TrimSpace(value) == "" {
 			c.add("job.required", key, "Empty "+key, "Fill in "+key+" from the plan item.")
 		}
+	}
+	if role := contract.NormalizeRole(j.Role); o.KnownRole != nil && role != "" && role != "person" && !o.KnownRole(role) {
+		c.addAt("job.role-agent", c.line("role"), "warning", "No agent runs role "+role+": none in the plugin, the catalog or the brain", "Use the step's who without grid- (for example builder, designer), or add knowledge/agents/grid-"+role+".md to the brain.")
 	}
 	for _, risk := range j.Risk {
 		if !wordSet("concurrency security data-format cross-platform")[risk] {

@@ -698,13 +698,17 @@ verb still reports the version before the error and exits 1: plain output prints
 this case) and the usual `{"error": "<message>"}` on stderr.
 
 Both verbs check `GRID_ROLE` after the flags parse and before any resolution,
-read or write. The replaceable `brain.ChangesReadAllowed` (host key
-`brain_changes_read_roles`) and `brain.RevertAllowed` (host key
-`brain_revert_roles`) policies default to the empty local role, `owner` and
-`member`; any other role, including `guest`, exits 3 with
+read or write. `changes` checks the replaceable `brain.ChangesReadAllowed` (host
+key `brain_changes_read_roles`) and `revert` checks the replaceable
+`brain.CurateAllowed`; both default to the empty local role, `owner`, `member` and
+`worker` (a Job agent, which brain-keeper tells to read the log and to supersede
+and revert). Any other role, including `guest`, exits 3 with
 `grid brain <changes|revert>: caller role is not allowed to <read brain changes|revert brain entries>`.
-`grid brain supersede` checks `brain.RevertAllowed` at the same point and exits 3
+`grid brain supersede` checks `brain.CurateAllowed` at the same point and exits 3
 with `grid brain supersede: caller role is not allowed to supersede brain entries`.
+`brain.RevertAllowed` (host key `brain_revert_roles`) keeps its default, the empty
+local role, `owner` and `member`, and gates `write`, `rename`, `drop` and
+`restore`, which still refuse a `worker`.
 With `--json` each of the seven refusals (changes, revert, supersede, drop,
 restore, write, rename) keeps that stderr line and exit 3 and
 also prints one stdout object, the person-gate refusal shape:

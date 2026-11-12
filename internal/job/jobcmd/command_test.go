@@ -123,9 +123,10 @@ func TestRenderRefusesInvalidAndChangedJobs(t *testing.T) {
 	if err = f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	rejected := call(t, e, out, errs, 1, "render", "T-01", "1", "--json")
-	if !strings.Contains(rejected.Error, "different saved inputs") {
-		t.Fatalf("%+v", rejected)
+	// An unchanged Job renders again to its first bundle, whatever the brain holds now.
+	reused := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
+	if !reused.OK || reused.Path != r.Path {
+		t.Fatalf("%+v", reused)
 	}
 	after, err := os.ReadFile(r.Path)
 	if err != nil || !bytes.Equal(before, after) {

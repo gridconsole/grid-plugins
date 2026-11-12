@@ -12,13 +12,19 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/safefile"
 )
 
-// ChangesReadAllowed and RevertAllowed are the replaceable host policies for
-// listing the audit log and for putting an entry back, called with the host's
-// GRID_ROLE. The host keys are brain_changes_read_roles and brain_revert_roles;
-// the defaults allow the empty local role, owner and member. Configure them
-// before serving concurrent CLI calls.
+// ChangesReadAllowed, CurateAllowed and RevertAllowed are the replaceable host
+// policies called with the host's GRID_ROLE. ChangesReadAllowed gates listing
+// the audit log. CurateAllowed gates the curator's two writes, `grid brain
+// revert` and `grid brain supersede`. RevertAllowed gates `grid brain write`,
+// `rename` and `drop`. The host keys are brain_changes_read_roles and
+// brain_revert_roles. The defaults of ChangesReadAllowed and CurateAllowed allow
+// the empty local role, owner, member and worker (a Job agent, which brain-keeper
+// tells to read the log, supersede and revert); the default of RevertAllowed
+// allows the empty local role, owner and member. Configure them before serving
+// concurrent CLI calls.
 var (
-	ChangesReadAllowed = func(role string) bool { return ownerOrMember(role) }
+	ChangesReadAllowed = func(role string) bool { return ownerMemberOrWorker(role) }
+	CurateAllowed      = func(role string) bool { return ownerMemberOrWorker(role) }
 	RevertAllowed      = func(role string) bool { return ownerOrMember(role) }
 )
 
@@ -33,6 +39,11 @@ func ownerOrMember(role string) bool {
 	default:
 		return false
 	}
+}
+
+// ownerMemberOrWorker is ownerOrMember and the Job agent role.
+func ownerMemberOrWorker(role string) bool {
+	return ownerOrMember(role) || strings.TrimSpace(role) == "worker"
 }
 
 // RevertResult is what RevertTo did: the entry, the version that now holds its
