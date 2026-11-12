@@ -139,7 +139,7 @@ func remaining(o Options) int {
 }
 
 // oiRecordSeenForTest is nil in production. A test sets it to see the names
-// record is called with, in order, as fslock.OnBlockForTest is used.
+// record is called with, in order; the fslock test seam is used the same way.
 var oiRecordSeenForTest func(name string)
 
 // record runs one function that only records (history, usage, heartbeat, brain
