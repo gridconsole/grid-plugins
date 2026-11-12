@@ -160,6 +160,8 @@ func runWorkerNext(args []string, env Env) int {
 		Tools: func(dir, role string) ([]string, error) { return workerSpawnTools(env, dir, role) },
 		// A task whose first Job was never posted gets the same J-1 grid task new posts.
 		FirstJob: firstJobOf,
+		// A closed task whose brain proposals still wait gets the curator Job deliver would post.
+		ClosedCurator: workerClosedCurator(env),
 		// The pass moves an old approval receipt into the task's Feed once, under the task lease.
 		ReceiptPending: migrate.ReceiptPending,
 		ReceiptMove: func(dir string, w feed.Writer) error {
@@ -202,6 +204,43 @@ func runWorkerNext(args []string, env Env) int {
 		return 1
 	}
 	return 1 // Run returns only an error
+}
+
+// workerClosedCurator answers the stream's ClosedCurator: the curator Job body, with
+// the given Job id, for the brain proposals waiting for the task in dir, or nil when
+// none waits. It reads the queue as deliver does (task.Store.Deliver: the project's
+// brain store, the task folder with links resolved, WaitingForTask with the T-NN id)
+// and names the proposals the way deliver's curator Job does, with curatorJobBody. The
+// task id the stream passes is the Feed id; the Job and its `grid brain keep --task`
+// line name the T-NN id, so the folder is resolved the way the Assigned callback does.
+// It reads and writes nothing else and asks nobody.
+func workerClosedCurator(env Env) func(dir, taskID, id string) (map[string]any, error) {
+	return func(dir, _, id string) (map[string]any, error) {
+		t, err := resolveTaskOperand(env, dir)
+		if err != nil {
+			return nil, err
+		}
+		real, err := filepath.EvalSymlinks(t.Path)
+		if err != nil {
+			return nil, err
+		}
+		project := t.Project
+		if project == where.Personal {
+			project = ""
+		}
+		rows, err := (brain.Store{GridHome: env.GridHome, Project: project}).WaitingForTask(real, t.ID)
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) == 0 {
+			return nil, nil
+		}
+		ids := make([]string, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.ID)
+		}
+		return curatorJobBody(id, t.ID, ids), nil
+	}
 }
 
 // workerSpawnModel is the model and effort a Job of the given role runs on, for the
