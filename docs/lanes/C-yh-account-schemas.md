@@ -47,10 +47,10 @@ annotation (`internal/cli/contract_inventory_test.go:433-440` read `{}` or `requ
 
 ## Open items
 
-1. Row 4 does not hold as written: `contract/README.md` is changed and is not in Touches. It cannot be left out while row 5 holds, because `TestIySchemaRows` fails for an unlinked schema. Either add `contract/README.md` to Touches, or take the commit `Link the five account schemas from the contract README...` and accept the red `TestIySchemaRows`. The commit stands alone, so either choice is one step.
+1. CLOSED BY C-yh2-schema-readme-rows: the README rows are carried by that lane, which lists `contract/README.md` in its Touches. Was: row 4 does not hold as written: `contract/README.md` is changed and is not in Touches. It cannot be left out while row 5 holds, because `TestIySchemaRows` fails for an unlinked schema. Either add `contract/README.md` to Touches, or take the commit `Link the five account schemas from the contract README...` and accept the red `TestIySchemaRows`. The commit stands alone, so either choice is one step.
 2. The first parallel importer run failed three packages under load (R1); the isolated reruns pass. Nobody has run those three on base for comparison.
 3. The brief says the app reads `id, name, default, checked, added` from `account scan`; it does not (Findings). If the app is meant to read them from the plugin, that is a change to `account scan` and to the app, not to a schema, and no lane here does it.
 
 Code head: `ef454f43` (the lane head is the commit that adds this file; its sha is in the report message). Base: `103b9157`.
 
-NOT DONE
+CLOSED BY C-yh2-schema-readme-rows (was NOT DONE on the README row only)
