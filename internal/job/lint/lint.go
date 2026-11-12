@@ -256,6 +256,7 @@ func (c *checker) validate(j job.Job, o Options) {
 			c.repo(p, group.key, o.Repos)
 		}
 	}
+	c.jobRepo(j.Repo, o.Repos)
 	itemText := j.Title
 	if o.Resolver != nil {
 		for _, p := range []string{j.Intent.Owner, j.Intent.Item, j.Intent.Goal} {
@@ -375,6 +376,20 @@ func (c *checker) repo(p, key string, repos []string) {
 		}
 	}
 	c.add("job.repo", key, fmt.Sprintf("Repository %q is not listed", prefix), "Use a repository declared by the task/project.")
+}
+
+// jobRepo checks the repo a Job names against the project's repos. A project with
+// no repo record lists none, and then any name passes, as before the key existed.
+func (c *checker) jobRepo(name string, repos []string) {
+	if name == "" || len(repos) == 0 {
+		return
+	}
+	for _, r := range repos {
+		if name == r {
+			return
+		}
+	}
+	c.add("job.repo", "repo", fmt.Sprintf("Repo %q is not a repo of the project; it has %s", name, strings.Join(repos, ", ")), "Name one of the project's repos in repo, or leave repo out for the first one.")
 }
 func validBrain(s string) bool {
 	id, anchor, hasAnchor := strings.Cut(s, "#")

@@ -41,6 +41,7 @@ type Spawn struct {
 	Gen     int64
 	Assign  string
 	Role    string // the Job's role, from which a stream picks its model and effort
+	Repo    string // the repo path the Job names, from which a stream finds its folder; empty is the first repo
 }
 type Output struct {
 	Rows     []Row   `json:"jobs"`

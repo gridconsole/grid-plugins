@@ -622,6 +622,32 @@ func LintOptions(task string, e Env) (lint.Options, error) {
 	return w.lintOptions(), nil
 }
 
+// RepoFolder answers the folder on this computer of the repo a Job of task names:
+// a named repo is its folder from the project record ("." the project folder), an
+// empty name is the first repo of project.md (or the project folder when it lists
+// none), and a task with no project record answers "". A name the record does not
+// list is an error.
+func RepoFolder(task, repo string, e Env) (string, error) {
+	w, err := sources(task, e)
+	if err != nil {
+		return "", err
+	}
+	f := w.files
+	name := filepath.ToSlash(filepath.Clean(repo))
+	switch {
+	case f.Repo == "":
+		return "", nil
+	case repo == "":
+		return f.Repo, nil
+	case name == ".":
+		return f.Folders[0], nil
+	}
+	if dir, ok := f.Repos[name]; ok {
+		return dir, nil
+	}
+	return "", fmt.Errorf("project %s has no repo %q; it has %s", w.project, repo, strings.Join(w.repos, ", "))
+}
+
 // ownerTier maps the role task.md records for the owner to a trust tier. A task
 // without a known owner role is unknown provenance, and that is external.
 func ownerTier(role string) contract.TrustTier {
