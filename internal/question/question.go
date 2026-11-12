@@ -40,7 +40,10 @@ type Record struct {
 	Blocking        bool     `json:"blocking"`
 	Options         []string `json:"options,omitempty"`
 	Recommended     string   `json:"recommended,omitempty"`
-	Gate            Gate     `json:"gate"`
+	// WaitsOn names the options that keep the question open: such an answer is
+	// recorded as a waiting event and the person Job stays open ("Not yet").
+	WaitsOn []string `json:"waits_on,omitempty"`
+	Gate    Gate     `json:"gate"`
 	Asked           Stamp    `json:"asked"`
 	State           string   `json:"state"`
 	Answer          string   `json:"answer"`
@@ -71,6 +74,7 @@ type Input struct {
 	Item                 int
 	Question, Who, Why   string
 	Options              []string
+	WaitsOn              []string
 	Recommended, Default string
 	Applies              time.Time
 	Blocking             bool
@@ -122,6 +126,13 @@ func validateInput(in Input) error {
 	if len(in.Options) > 0 && !slices.Contains(in.Options, in.Recommended) {
 		return errors.New("recommended must name an option")
 	}
+	waits := map[string]bool{}
+	for _, label := range in.WaitsOn {
+		if !seen[label] || waits[label] {
+			return fmt.Errorf("waits-on %q must name a distinct option", label)
+		}
+		waits[label] = true
+	}
 	if in.Why != "" && strings.TrimSpace(in.Why) == "" {
 		return errors.New("why must not be blank")
 	}
@@ -167,7 +178,7 @@ func (s Store) add(in Input, asJob bool) (rec Record, err error) {
 		if age == 0 {
 			age = DefaultAgeAfter
 		}
-		rec = Record{Job: in.Job, Item: in.Item, ID: fmt.Sprintf("Q-%d", next), Question: in.Question, Who: in.Who, Why: in.Why, Blocking: in.Blocking, Options: append([]string{}, in.Options...), Recommended: in.Recommended, Gate: Gate{ID: fmt.Sprintf("Q-%d", next), Kind: "person", Default: in.Default, At: Stamp{in.Applies.UTC().Truncate(time.Millisecond)}}, Asked: Stamp{s.now()}, State: "open", AgeAfterSeconds: int64(age / time.Second), History: []Event{}}
+		rec = Record{Job: in.Job, Item: in.Item, ID: fmt.Sprintf("Q-%d", next), Question: in.Question, Who: in.Who, Why: in.Why, Blocking: in.Blocking, Options: append([]string{}, in.Options...), WaitsOn: slices.Clone(in.WaitsOn), Recommended: in.Recommended, Gate: Gate{ID: fmt.Sprintf("Q-%d", next), Kind: "person", Default: in.Default, At: Stamp{in.Applies.UTC().Truncate(time.Millisecond)}}, Asked: Stamp{s.now()}, State: "open", AgeAfterSeconds: int64(age / time.Second), History: []Event{}}
 		if withJob {
 			return atomicfile.Write(filepath.Join(dir, rec.ID+".feed"), nil, 0600)
 		}
@@ -234,6 +245,8 @@ func (s Store) List() ([]Record, error) {
 // Answer accepts option labels or free text. Repeating an identical answer is a
 // no-op; a different human answer cannot silently overwrite an earlier answer.
 // A default is provisional and always permits a subsequent human answer.
+// An answer that names a waits_on label ("Not yet") is recorded as a waiting
+// event: the question stays open with no answer, and its person Job stays open.
 func (s Store) Answer(id, text string) (Record, error) {
 	switch contract.NormalizeRole(s.Writer.Author.Role) {
 	case "owner", "member", "lead", "guest":
@@ -248,6 +261,14 @@ func (s Store) Answer(id, text string) (Record, error) {
 			return errors.New("guest answer must name a question addressed to that guest")
 		}
 		if r.State == "answered" && r.Answer == text {
+			return nil
+		}
+		if slices.Contains(r.WaitsOn, text) {
+			// The Feed keeps a waiting event only while the question is open.
+			if r.State != "open" {
+				return fmt.Errorf("%s is %s", id, r.State)
+			}
+			r.History = append(r.History, Event{Kind: "waiting", At: Stamp{s.now()}, Text: text})
 			return nil
 		}
 		if r.State != "open" && r.State != "defaulted" {
