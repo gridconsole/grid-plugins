@@ -87,7 +87,7 @@ the schema.
 | `posts_back` | required | plan `internal/job/record.go` | What the worker may post: `result`, `question`, `knowledge`, `checkpoint`; `[]` when unset. |
 | `kind` | optional | plan `internal/job/planned.go` | The step's work kind (`^[a-z][a-z-]*$`), taken from the checklist item. |
 | `visible` | optional | plan `internal/job/planned.go` | `big` or `small`. |
-| `repo` | optional | plan `internal/job/planned.go` | The project repo a code Job works in, by its path in project.md; lint refuses a path the project does not list (rule `job.repo`); none is the first repo. `grid worker next` puts that repo's folder on the spawn line as `repo`. |
+| `repo` | optional | plan `internal/job/planned.go` | The project repo a code Job works in, by its path in project.md; `.` names the project folder and always passes, whether or not project.md lists it; lint refuses any other path the project does not list (rule `job.repo`); none is the first repo. `grid worker next` puts that repo's folder on the spawn line as `repo`. |
 | `irreversible` | optional | plan `internal/job/planned.go` | Boolean; the Job does something that cannot be undone. |
 | `review_reason` | optional | plan `internal/job/planned.go` | A nonempty sentence, at most 500 characters, saying why a review is wanted. |
 | `order` | optional | run `internal/cli/orchestrator.go`, `internal/contract/fold.go` | Queue position, lowest first; changes only a Job that has not started. |

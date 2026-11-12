@@ -4,6 +4,7 @@ package lint
 import (
 	"fmt"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -387,12 +388,21 @@ func (c *checker) repo(p, key string, repos []string) {
 
 // jobRepo checks the repo a Job names against the project's repos. A project with
 // no repo record lists none, and then any name passes, as before the key existed.
+// The name is cleaned the way jobcmd.RepoFolder cleans it, and a cleaned "." always passes:
+// RepoFolder takes "." as the project folder whether or not project.md lists "." among
+// its repos (a project with only web and api takes it too). The repos lint is given hold
+// no ".", so "." is not looked up in them. Any other name must be one of the repos; the
+// finding quotes the name as the Job wrote it.
 func (c *checker) jobRepo(name string, repos []string) {
 	if name == "" || len(repos) == 0 {
 		return
 	}
+	clean := filepath.ToSlash(filepath.Clean(name))
+	if clean == "." {
+		return
+	}
 	for _, r := range repos {
-		if name == r {
+		if clean == r {
 			return
 		}
 	}
