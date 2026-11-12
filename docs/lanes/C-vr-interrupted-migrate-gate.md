@@ -2,7 +2,7 @@
 
 Base: plugin main 792b8d6e53bb5a1c84a82c2e5da65bd638babfac. Code head: 2cdd05df9d3aa1df0ce2be8fac0e94d61fdb1312 (three code commits: 5c53a440, 244ed2ae, 2cdd05df); the lane's last commit adds only this doc, and its sha is in the report.
 
-Verdict: NOT DONE on one sub-row (row 5, `TestGjReadmeDoctorChecksMatch`). Everything else HOLDS. The red test is red because of a hard-coded count in an existing test outside Touches; the fix is two characters and is written out below. I did not make it, because the brief says "do not change files outside Touches" and the owner's rule says not to edit an existing test to make it pass.
+Verdict: CLOSED BY C-vr2-doctor-count-ten: accepted 05:49 UTC on one sub-row (row 5, `TestGjReadmeDoctorChecksMatch`). Everything else HOLDS. The red test is red because of a hard-coded count in an existing test outside Touches; the fix is two characters and is written out below. I did not make it, because the brief says "do not change files outside Touches" and the owner's rule says not to edit an existing test to make it pass.
 
 ## Base check
 
