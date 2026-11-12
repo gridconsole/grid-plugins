@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-setup.json",
+  "description": "JSON output of grid setup --json. Without a project operand (grid setup [--yes] [--remove] [--sandbox] --json) it is the Claude Code settings result, internal/settings/claude.go:227-232 and :306; the app reads path, added, present and written (app internal/slices/setup/machine.go:26 and :51). With a project operand (grid setup <project> --answers <file> --json) it is the recorded answers, internal/cli/settings.go:257-260.",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "present": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "written": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "added",
+        "present",
+        "written"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "answers"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "grid setup output"
+}

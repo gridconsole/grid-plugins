@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-project-scan.json",
+  "description": "JSON output of grid project scan <root> --json, with or without --apply; internal/cli/projects.go:143, internal/projects/projects.go:507. One row per visible direct child folder of the root. The app reads name, path, rule, registered and error (app internal/slices/setup/http.go:148-160). error is written only for a row that failed to register under --apply.",
+  "items": {
+    "additionalProperties": false,
+    "properties": {
+      "error": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "path": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "registered": {
+        "type": "boolean"
+      },
+      "rule": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "required": [
+      "name",
+      "path",
+      "rule",
+      "registered"
+    ],
+    "type": "object"
+  },
+  "title": "grid project scan output",
+  "type": "array"
+}

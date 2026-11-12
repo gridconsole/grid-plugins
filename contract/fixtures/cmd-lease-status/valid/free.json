@@ -1,0 +1,11 @@
+{
+  "lease": "task",
+  "holder": null,
+  "fence": 0,
+  "gen": 0,
+  "attempt": null,
+  "since": "",
+  "pid": null,
+  "pid_start": null,
+  "process": "free"
+}

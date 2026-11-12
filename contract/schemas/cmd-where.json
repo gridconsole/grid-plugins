@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-where.json",
+  "additionalProperties": false,
+  "description": "JSON output of grid where --json; internal/cli/cli.go:403, fields from where.Result, internal/where/where.go:69. Every field is always written, an empty string when it has no value.",
+  "properties": {
+    "folder": {
+      "type": "string",
+      "description": "The project folder on this machine; empty when none is known, as for a task of the Personal project."
+    },
+    "id": {
+      "type": "string",
+      "description": "The project id; empty when no project record exists."
+    },
+    "keys": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Keys that identify the project on this machine, such as common:<git dir> and remote:<url>."
+    },
+    "project": {
+      "type": "string",
+      "minLength": 1
+    },
+    "record": {
+      "type": "boolean",
+      "description": "False when no project record exists yet."
+    },
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The git repos of a multi-repo project, else empty."
+    },
+    "rule": {
+      "enum": [
+        "explicit",
+        "task",
+        "record",
+        "multi-repo",
+        "git",
+        "folder",
+        "personal"
+      ],
+      "description": "The rule that decided; the where.Rule values."
+    },
+    "task": {
+      "type": "string",
+      "description": "The task folder name; empty when the answer names no task."
+    },
+    "task_path": {
+      "type": "string",
+      "description": "The task folder path; empty when the answer names no task."
+    }
+  },
+  "required": [
+    "project",
+    "id",
+    "rule",
+    "folder",
+    "record",
+    "repos",
+    "keys",
+    "task",
+    "task_path"
+  ],
+  "title": "grid where output",
+  "type": "object"
+}

@@ -183,7 +183,13 @@ are reference-document names and original line numbers, not machine paths.
 | grid feed state output | [cmd-feed-state.json](schemas/cmd-feed-state.json) | internal/cli/feed.go:131 |
 | grid intent list output | [cmd-intent-list.json](schemas/cmd-intent-list.json) | internal/cli/intent.go:247 |
 | grid job next output | [cmd-job-next.json](schemas/cmd-job-next.json) | internal/cli/orchestrator.go:175 and :228 |
+| grid lease status output | [cmd-lease-status.json](schemas/cmd-lease-status.json) | internal/cli/task_lease.go:146 |
 | grid plan hash output | [cmd-plan-hash.json](schemas/cmd-plan-hash.json) | internal/cli/plan.go:74 |
+| grid project add output | [cmd-project-add.json](schemas/cmd-project-add.json) | internal/cli/projects.go:172 |
+| grid project-md set output | [cmd-project-md-set.json](schemas/cmd-project-md-set.json) | internal/cli/projectmd.go:41 |
+| grid project remove output | [cmd-project-remove.json](schemas/cmd-project-remove.json) | internal/cli/projects.go:172 |
+| grid project repo output | [cmd-project-repo.json](schemas/cmd-project-repo.json) | internal/cli/project_repo.go:110 |
+| grid project scan output | [cmd-project-scan.json](schemas/cmd-project-scan.json) | internal/cli/projects.go:143 |
 | grid session handback output | [cmd-session-handback.json](schemas/cmd-session-handback.json) | internal/cli/intent.go:140 |
 | grid session list output | [cmd-session-list.json](schemas/cmd-session-list.json) | internal/cli/liveness.go:142 |
 | grid session pause output | [cmd-session-pause.json](schemas/cmd-session-pause.json) | internal/cli/intent.go:140 |
@@ -193,10 +199,12 @@ are reference-document names and original line numbers, not machine paths.
 | grid session start output | [cmd-session-start.json](schemas/cmd-session-start.json) | internal/cli/intent.go:140 |
 | grid session stop output | [cmd-session-stop.json](schemas/cmd-session-stop.json) | internal/cli/intent.go:140 |
 | grid session switch output | [cmd-session-switch.json](schemas/cmd-session-switch.json) | internal/cli/intent.go:140 |
+| grid setup output | [cmd-setup.json](schemas/cmd-setup.json) | internal/cli/settings.go:257; internal/settings/claude.go:306 |
 | grid task list output | [cmd-task-list.json](schemas/cmd-task-list.json) | internal/cli/task.go:142 |
 | grid task move output | [cmd-task-move.json](schemas/cmd-task-move.json) | internal/cli/intent.go:140 |
 | grid task show output | [cmd-task-show.json](schemas/cmd-task-show.json) | internal/cli/task.go:122 |
 | grid version output | [cmd-version.json](schemas/cmd-version.json) | internal/cli/version.go:54 |
+| grid where output | [cmd-where.json](schemas/cmd-where.json) | internal/cli/cli.go:407 |
 | grid worker list output | [cmd-worker-list.json](schemas/cmd-worker-list.json) | internal/cli/worker.go:57 |
 
 Run `make test` and `make lint` from the repository root. Keep the default

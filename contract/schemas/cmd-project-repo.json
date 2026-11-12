@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-project-repo.json",
+  "description": "JSON output of grid project repo add|edit|remove <project> --json; internal/cli/project_repo.go:102-111. state is always applied. item is the repository as projects/<project>/repos.json holds it, written for add and edit and absent for remove. The plugin keeps every key of an existing item in order (internal/projects/repos.go:18-21), so item names the four keys add writes and allows others. The app reads state and item and passes item through (app internal/slices/projectsettings/project_repos_write.go:96-106).",
+  "additionalProperties": false,
+  "properties": {
+    "item": {
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "where": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "state": {
+      "enum": [
+        "applied"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "state"
+  ],
+  "title": "grid project repo output",
+  "type": "object"
+}

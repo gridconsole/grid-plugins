@@ -72,7 +72,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-where.json"
         }
       ]
     },
@@ -1749,7 +1749,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-lease-status.json"
         },
         {
           "name": "take",
@@ -4710,7 +4710,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-project-add.json"
         },
         {
           "name": "list",
@@ -4754,7 +4754,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-project-remove.json"
         },
         {
           "name": "repo",
@@ -4790,7 +4790,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-project-repo.json"
         },
         {
           "name": "scan",
@@ -4810,7 +4810,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-project-scan.json"
         }
       ]
     },
@@ -4850,7 +4850,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-project-md-set.json"
         }
       ]
     },
@@ -4984,7 +4984,7 @@
             }
           ],
           "json": true,
-          "output": ""
+          "output": "cmd-setup.json"
         }
       ]
     },

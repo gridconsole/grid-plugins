@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-lease-status.json",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "holder": {
+            "type": "string"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "fence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pid": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pid_start": {
+            "type": "string",
+            "minLength": 1,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          },
+          "since": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ],
+  "description": "JSON output of grid lease status task --json; internal/cli/task_lease.go:145. The task lease file as lease.json holds it (the task branch) plus process, written out here because the validator's $ref cannot add a field to an additionalProperties false object; TestYgLeaseStatusFieldsMatchLeaseJSON keeps the two equal. fence and since are looser than lease.json: a task never leased answers fence 0 and since \"\" (task_lease.go:123). While a holder is named, fence is at least 1 and pid, pid_start and since are set.",
+  "properties": {
+    "attempt": {
+      "type": "null"
+    },
+    "fence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Grant counter of the lease; 0 only for a task never leased."
+    },
+    "gen": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "holder": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/\\s]+@[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lease": {
+      "enum": [
+        "task"
+      ]
+    },
+    "pid": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pid_start": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "process": {
+      "enum": [
+        "free",
+        "remote",
+        "alive",
+        "dead",
+        "unknown"
+      ],
+      "description": "free: no holder; remote: held from another machine; alive, dead or unknown: the probe of the holder's process on this machine (task_lease.go:40)."
+    },
+    "since": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 0
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+        }
+      ],
+      "description": "When the tenure began; empty only for a task never leased."
+    }
+  },
+  "required": [
+    "lease",
+    "holder",
+    "fence",
+    "gen",
+    "attempt",
+    "since",
+    "pid",
+    "pid_start",
+    "process"
+  ],
+  "title": "grid lease status output",
+  "type": "object"
+}
