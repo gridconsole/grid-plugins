@@ -26,23 +26,24 @@ import (
 // task_write.go, reopenPlanJob); that is the path of today, and the cancelled
 // Jobs stay cancelled.
 //
-// Does a Cancelled control end a Job's grant? No. In the plugin a grant is the
-// lease file lease/<job>.json written by TaskStore.GrantJob (internal/lease/task.go:310)
-// and ended only by TaskStore.end (:406), which has two callers: ReleaseTask
-// (:295, the task lease of a stream, not a Job lease) and grant (:350, when the
-// same lease name is granted again). Nothing in internal/lease or internal/feed
-// reads a Job's status (a grep for the Cancelled status finds only
-// feed/questions.go:155, a question about a cancelled Job). What a Cancelled control does change is the
-// Job's writer: orchestrator/write.go:79 refuses a post under that Job's lease
-// with ErrStaleLease once the Job is Cancelled, so a running child cannot post
-// its ack, result or exit. The app worker stops a child only when WithLease
-// reports that the lease file no longer names it (kernel/worker/supervisor.go
-// Recover :662-679, Tick :723-747), and that stays true here: lease/<job>.json
-// still names the holder. So a child that was running when the task was closed
-// runs on until it ends by itself, and its posts are refused. That is an open
-// item for the lease code or the app (end the Job grant on a Cancelled control,
-// or have the worker stop a child whose Job is Cancelled), not something this
-// file does: it changes neither.
+// Does a Cancelled control end a Job's grant? Not by itself. A grant is the lease
+// file lease/<job>.json written by TaskStore.GrantJob (internal/lease/task.go:360)
+// and ended by TaskStore.EndJob (:317) through end (:456); nothing in
+// internal/lease or internal/feed reads a Job's status. Tick ends the grant of
+// each Cancelled Job through taCancelEndGrants, but this pass does not tick. So
+// pgClosedCancel calls taCancelEndGrants itself, in the same lock and under the
+// same task lease, after the cancels: a snapshot read again, so it holds the
+// Cancelled status just written, and EndJob writes the takeover line and clears
+// the holder of each Job it cancelled. A Job that was never granted has no lease
+// file and is left alone, and a later pass ends nothing twice (EndJob is
+// idempotent). An error from that pass is returned like a control error.
+//
+// What the end of the grant is for: the app worker stops a child only when
+// WithLease reports that the lease file no longer names it (kernel/worker/
+// supervisor.go Recover, Tick), and orchestrator/write.go refuses a post under a
+// Cancelled Job's lease with ErrStaleLease. With the holder cleared the worker
+// can see the lease end. That the worker then stops the child is not checked in
+// this file.
 
 // pgClosedReason is the close reason written on every Job a closed task loses.
 const pgClosedReason = "task stopped"
@@ -149,6 +150,15 @@ func (s Store) pgClosedCancel(dir, taskID string, curator func(dir, taskID, id s
 			if e := s.control(j, contract.Cancelled, pgClosedReason, ""); e != nil {
 				return e
 			}
+		}
+		// The snapshot above was read before the cancels. Read it again, so the
+		// Jobs just cancelled have their grants ended here, where Tick never runs.
+		cancelled, e := Load(s.Feed)
+		if e != nil {
+			return e
+		}
+		if e := s.taCancelEndGrants(cancelled); e != nil {
+			return e
 		}
 		if curator == nil {
 			return nil
