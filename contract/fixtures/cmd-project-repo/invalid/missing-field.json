@@ -1,0 +1,8 @@
+{
+  "item": {
+    "branch": "main",
+    "id": "api",
+    "remote": "git@example.com:org/api.git",
+    "where": "services/api"
+  }
+}

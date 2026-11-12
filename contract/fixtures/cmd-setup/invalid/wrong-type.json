@@ -1,0 +1,32 @@
+{
+  "added": [
+    "Bash(grid *)",
+    "Read(~/.grid/**)",
+    "Edit(~/.grid/**)",
+    "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
+    "Edit(~/.grid/[pP][eE][rR][sS][oO][nN][aA][lL]/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
+    "Edit(~/.grid/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
+    "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
+    "Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
+    "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])",
+    "Edit(~/.grid/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])",
+    "Edit(~/.grid/*/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])",
+    "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])",
+    "Edit(~/.grid/.[sS][eE][tT][tT][iI][nN][gG][sS].[lL][oO][cC][kK])",
+    "Edit(~/.grid/*/.[sS][eE][tT][tT][iI][nN][gG][sS].[lL][oO][cC][kK])",
+    "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/.[sS][eE][tT][tT][iI][nN][gG][sS].[lL][oO][cC][kK])",
+    "Edit(~/.grid/[wW][oO][rR][kK][fF][lL][oO][wW][sS].[mM][dD])",
+    "Edit(~/.grid/*/[wW][oO][rR][kK][fF][lL][oO][wW][sS].[mM][dD])",
+    "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[wW][oO][rR][kK][fF][lL][oO][wW][sS].[mM][dD])",
+    "Edit(~/.grid/.[hH][oO][sS][tT]/**)",
+    "Edit(~/.grid-person/**)",
+    "Write(~/.grid-person/**)",
+    "Edit(~/.grid/setup/**)",
+    "Write(~/.grid/setup/**)",
+    "$defaults",
+    "The Grid home at ~/.grid is trusted for Grid operations."
+  ],
+  "path": 7,
+  "present": [],
+  "written": true
+}

@@ -1,0 +1,7 @@
+{
+  "answers": {
+    "description": "Example project",
+    "test": "go test ./..."
+  },
+  "project": "example"
+}
