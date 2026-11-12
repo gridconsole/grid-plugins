@@ -100,6 +100,33 @@ func bashHistory(o Options, in hookio.Input) {
 		return
 	}
 	store := session.Store{TaskDir: dir}
+	// The walk and the hashing of the task folder take as long as the folder is
+	// big, so they run before the session lock is taken: every hook of every
+	// session in the task waits on that lock, and none of them waits behind
+	// another session's walk. Under the lock stay the read and the write of this
+	// session's snapshots, the compare and the list of lines.
+	//
+	// A Post walks only when its tool use has a stored snapshot, as before. The
+	// stored one is read here without the lock, which is a plain read of a file
+	// that is replaced whole; the read under the lock below decides, so a
+	// snapshot that is gone by then records nothing. A walk that fails logs and
+	// writes nothing, as it did inside the lock.
+	var snap, after map[string]string
+	if in.HookEventName == "PreToolUse" {
+		var walkErr error
+		if snap, walkErr = snapshot(dir); walkErr != nil {
+			o.log("history snapshot", walkErr)
+			return
+		}
+	} else if stored, readErr := store.Activity(in.SessionID); readErr == nil {
+		if _, ok := stored.Snapshots[in.ToolUseID]; ok {
+			var walkErr error
+			if after, walkErr = snapshot(dir); walkErr != nil {
+				o.log("history snapshot", walkErr)
+				return
+			}
+		}
+	}
 	// The lines are decided under the session lock and appended after it is
 	// released: .task.lock is never taken while the session lock is held.
 	type historyLine struct{ event, detail string }
@@ -112,19 +139,12 @@ func bashHistory(o Options, in hookio.Input) {
 	err = store.UpdateActivityContext(ctx, in.SessionID, func(a *session.Activity) error {
 		lines = nil
 		if in.HookEventName == "PreToolUse" {
-			snap, err := snapshot(dir)
-			if err == nil {
-				a.Snapshots[in.ToolUseID] = snap
-			}
-			return err
-		}
-		before, ok := a.Snapshots[in.ToolUseID]
-		if !ok {
+			a.Snapshots[in.ToolUseID] = snap
 			return nil
 		}
-		after, err := snapshot(dir)
-		if err != nil {
-			return err
+		before, ok := a.Snapshots[in.ToolUseID]
+		if !ok || after == nil {
+			return nil
 		}
 		// Stable ordering makes history independent of map iteration.
 		names := map[string]bool{}
