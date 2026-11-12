@@ -51,6 +51,7 @@ Head: see the bundle; lane commits 04862855 (routine) and 3ffef514 (cli, contrac
 
 - `routine add missing-flags` (no `--every`, no `--run`) still exits 1 from the store's interval error, as TestRoutineCLI (routine_test.go:78) expects; the "one of --run or --workflow" exit 2 applies once `--every` is given (routine.go:78-88).
 - When `task new` creates the task but fails to post its first Job it exits 1: the routine records `failed` and keeps the old last_task, as row 1 asks, though a task exists. Backlog note.
+- TestZbFlowRunRoutineListsNoNewKeys (internal/cli/zb_routine_workflow_test.go) asserts the exact JSON key set of a never-run `--run` routine; a lane stacked on this one (zd, zc, ze) that adds a key to that row must be briefed to update it.
 - The app half (write.go sends `--workflow`, edit sends `--replace`, the row reads `workflow` and `last_task`) is WAIT-C-zb-routine-workflow-write.
 
 ## NOT VERIFIED
