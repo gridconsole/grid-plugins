@@ -526,7 +526,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"brain decide":         {args: []string{"<task>", "<proposal-id>", "<accept|reject|merge-into>", "[note-id]"}},
 		"env up":               {args: []string{"<J>"}},
 		"env down":             {args: []string{"<J>"}},
-		"routine add":          {args: []string{"<name>"}, required: map[string]bool{"--every": true, "--run": true}},
+		"routine add":          {args: []string{"<name>"}, required: map[string]bool{"--every": true}},
 		"routine list":         {},
 		"routine remove":       {args: []string{"<name>"}},
 		"routine run":          {args: []string{"<name>"}},

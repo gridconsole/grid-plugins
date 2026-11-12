@@ -3364,6 +3364,11 @@
               "required": false
             },
             {
+              "name": "--replace",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--routine-budget",
               "takes": "value",
               "required": false
@@ -3381,7 +3386,12 @@
             {
               "name": "--run",
               "takes": "value",
-              "required": true
+              "required": false
+            },
+            {
+              "name": "--workflow",
+              "takes": "value",
+              "required": false
             }
           ],
           "json": true,
