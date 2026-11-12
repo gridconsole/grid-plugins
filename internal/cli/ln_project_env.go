@@ -200,54 +200,44 @@ func projectEnv(args []string, env Env) int {
 	var stored projectenv.Entry
 	switch verb {
 	case "add", "edit":
-		e := projectenv.Entry{ID: *id}
-		old, err := store.ReadConfig("project", "environments", *id)
-		switch {
-		case err == nil && verb == "add":
-			return commandError(env, "grid project env", fmt.Errorf("environment %s already exists; use edit", *id))
-		case err == nil:
-			if e, err = projectenv.Parse(*id, old); err != nil {
-				return commandError(env, "grid project env", fmt.Errorf("environment %s: %w", *id, err))
+		// The stored entry is read, merged with the flags and written inside one
+		// brain lock, so the add and edit decisions are made on the bytes that the
+		// write replaces.
+		var err error
+		stored, err = projectenv.EditBy(store, *id, origin, func(e projectenv.Entry, exists bool) (projectenv.Entry, error) {
+			switch {
+			case exists && verb == "add":
+				return e, fmt.Errorf("environment %s already exists; use edit", *id)
+			case !exists && verb == "edit":
+				return e, fmt.Errorf("environment %s: %w", *id, iofs.ErrNotExist)
 			}
-		case errors.Is(err, iofs.ErrNotExist) && verb == "add":
-		case errors.Is(err, iofs.ErrNotExist):
-			return commandError(env, "grid project env", fmt.Errorf("environment %s: %w", *id, iofs.ErrNotExist))
-		default:
-			return commandError(env, "grid project env", err)
-		}
-		// A flag that is given replaces its field; every other field, the steps
-		// included, keeps what is stored. who is the environment's people list,
-		// not an author.
-		pick := func(flag string, value *string, kept string) string {
-			if given[flag] {
-				return *value
+			// A flag that is given replaces its field; every other field, the steps
+			// included, keeps what is stored. who is the environment's people list,
+			// not an author.
+			pick := func(flag string, value *string, kept string) string {
+				if given[flag] {
+					return *value
+				}
+				return kept
 			}
-			return kept
-		}
-		people, named, approve := e.Who, e.Secrets, e.Approval
-		if given["who"] {
-			people = lnEnvClearable(who)
-		}
-		if given["secret"] {
-			named = secrets
-		}
-		if given["approval"] {
-			approve = nil
-			if *approval != "" {
-				v := *approval == "yes"
-				approve = &v
+			people, named, approve := e.Who, e.Secrets, e.Approval
+			if given["who"] {
+				people = lnEnvClearable(who)
 			}
-		}
-		next := projectenv.Entry{ID: e.ID, Name: pick("name", name, e.Name), Kind: pick("kind", kind, e.Kind),
-			Where: pick("where", place, e.Where), Runs: pick("runs", runs, e.Runs), Test: pick("test", test, e.Test),
-			How: pick("how", how, e.How), From: pick("from", from, e.From), Who: people, Secrets: named, Steps: e.Steps, Approval: approve}
-		data, err := projectenv.Render(next)
-		if err == nil {
-			stored, err = projectenv.Parse(next.ID, data)
-		}
-		if err == nil {
-			err = projectenv.SaveBy(store, next, origin)
-		}
+			if given["secret"] {
+				named = secrets
+			}
+			if given["approval"] {
+				approve = nil
+				if *approval != "" {
+					v := *approval == "yes"
+					approve = &v
+				}
+			}
+			return projectenv.Entry{ID: e.ID, Name: pick("name", name, e.Name), Kind: pick("kind", kind, e.Kind),
+				Where: pick("where", place, e.Where), Runs: pick("runs", runs, e.Runs), Test: pick("test", test, e.Test),
+				How: pick("how", how, e.How), From: pick("from", from, e.From), Who: people, Secrets: named, Steps: e.Steps, Approval: approve}, nil
+		})
 		if err != nil {
 			return commandError(env, "grid project env", err)
 		}
