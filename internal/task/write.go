@@ -37,6 +37,19 @@ func StateMoves() map[string][]string {
 	}
 }
 
+// ErrStateMove marks a move the state table refuses. NextState wraps it with %w
+// and adds no words of its own, so the refusal text is the same as before and a
+// caller classifies the refusal with errors.Is.
+var ErrStateMove = errors.New("state move refused")
+
+// stateMoveError is the refusal of NextState: its text is the sentence alone and
+// errors.Is finds ErrStateMove behind it.
+type stateMoveError struct{ text string }
+
+func (e *stateMoveError) Error() string { return e.text }
+
+func (e *stateMoveError) Unwrap() error { return ErrStateMove }
+
 // NextState validates a move without touching disk. Stop means closed/stopped,
 // as in the task menu; it records intent, not a claim that a worker was killed.
 func NextState(current, action, requested string) (string, error) {
@@ -60,7 +73,7 @@ func NextState(current, action, requested string) (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("cannot %s task in current state %q to %q", action, current, requested)
+	return "", &stateMoveError{fmt.Sprintf("cannot %s task in current state %q to %q", action, current, requested)}
 }
 
 // Event is a local task write receipt, not a Feed post. The shared contract has
