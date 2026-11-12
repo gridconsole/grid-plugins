@@ -1,10 +1,10 @@
 # C-xh2-post-refold-rows
 
-Verdict: DONE. Rows 1 and 5 of C-xh-feed-post-refolds are green. Every row of that brief and of this one holds.
+Verdict: DONE. Rows 1 and 5 of C-xh-feed-post-refolds are green, and every acceptance row of both briefs holds. Two files are outside the base Touches list: `internal/cli/orchestrator.go` (the refold after `grid job post`) and `internal/cli/intent_release_test.go` (an edit to the existing helper `intentFiles`). Step 3 of this brief points at the report sections that name them ("Row 1" and "Red test 2"), and both are in package `internal/cli`. Rows 4 and 5 below declare both.
 
 Base: lane-C-xh-feed-post-refolds at d39442fb, merged with origin/main (merge 88ff49cb). The merge had no conflicts, so no file was resolved by hand.
 Code commit: d60415da. The report commit follows it.
-Budget: about 37 calls against "about 40". The advisor was called once before the edits.
+Budget: about 40 calls against "about 40". The advisor was called before the edits and before hand-off.
 
 ## The failures as found (step 2)
 
@@ -67,3 +67,5 @@ Budget: about 37 calls against "about 40". The advisor was called once before th
 ## NOT VERIFIED
 
 - On a live screen: Home, Needs you right after `grid job post --type answer` with no tick (the base brief's "Check before accept" pair). The UI track takes it after landing.
+
+DONE
