@@ -188,7 +188,8 @@ func TestJwKhHeldIDPlantedBeforeTheLockIsSkipped(t *testing.T) {
 	if v := jwKhVerdict(t, store, held.ID); v != "held" {
 		t.Errorf("verdict of the planted %s record = %q, want held", n, v)
 	}
-	if want := []string{"J-1 builder held", "J-2 curator counted"}; strings.Join(records, "|") != strings.Join(want, "|") {
+	// J-3 is the person Job of the ship step, posted after the curator Job.
+	if want := []string{"J-1 builder held", "J-2 curator counted", "J-3 Person counted"}; strings.Join(records, "|") != strings.Join(want, "|") {
 		t.Errorf("held record still held: job records = %q, want %q", records, want)
 	}
 
@@ -209,7 +210,7 @@ func TestJwKhHeldIDPlantedBeforeTheLockIsSkipped(t *testing.T) {
 	if j := snap.State.Jobs["J-2"]; j == nil || j.Role != "curator" {
 		t.Errorf("held record released: State holds J-2 = %v, want the curator Job", j)
 	}
-	if want := []string{"J-1 builder counted", "J-2 curator counted"}; strings.Join(records, "|") != strings.Join(want, "|") {
+	if want := []string{"J-1 builder counted", "J-2 curator counted", "J-3 Person counted"}; strings.Join(records, "|") != strings.Join(want, "|") {
 		t.Errorf("held record released: job records = %q, want %q", records, want)
 	}
 }
@@ -233,7 +234,8 @@ func TestJwKhNothingPlantedTakesTheFirstID(t *testing.T) {
 	if snap.State.Jobs["J-1"] == nil {
 		t.Fatal("State does not hold J-1")
 	}
-	if want := []string{"J-1 curator counted"}; strings.Join(records, "|") != strings.Join(want, "|") {
+	// J-2 is the person Job of the ship step, posted after the curator Job.
+	if want := []string{"J-1 curator counted", "J-2 Person counted"}; strings.Join(records, "|") != strings.Join(want, "|") {
 		t.Fatalf("job records = %q, want %q", records, want)
 	}
 }

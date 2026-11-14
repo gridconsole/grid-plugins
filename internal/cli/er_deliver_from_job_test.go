@@ -141,8 +141,10 @@ func TestErDeliverFromAJobPostsTheCuratorJobAtTheTaskEpoch(t *testing.T) {
 	}
 }
 
-// Row 4: no proposal waits, so nothing is posted.
-func TestErDeliverFromAJobWithNoProposalPostsNothing(t *testing.T) {
+// Row 4: no proposal waits, so no curator Job is posted; the one new Job is the
+// person Job of the ship step (owner ruling 2212Z M1, orchestrator 14 Nov 22:55).
+// Was TestErDeliverFromAJobWithNoProposalPostsNothing.
+func TestErDeliverFromAJobWithNoProposalPostsOnlyThePersonJob(t *testing.T) {
 	a := erDeliverSetup(t)
 	before := a.jobCount(t)
 	if code := a.deliver(); code != 0 {
@@ -151,8 +153,17 @@ func TestErDeliverFromAJobWithNoProposalPostsNothing(t *testing.T) {
 	if got := a.curatorJob(t); got != "" {
 		t.Fatalf("curator_job = %q, want empty", got)
 	}
-	if after := a.jobCount(t); after != before {
-		t.Fatalf("the Feed holds %d Jobs, was %d", after, before)
+	if after := a.jobCount(t); after != before+1 {
+		t.Fatalf("the Feed holds %d Jobs, was %d, want one more: the person Job", after, before)
+	}
+	var out struct {
+		PersonJob string `json:"person_job"`
+	}
+	if err := json.Unmarshal(a.h.out.Bytes(), &out); err != nil {
+		t.Fatalf("--json: %v %s", err, a.h.out)
+	}
+	if j, _ := openApproveJob(t, a.store); out.PersonJob == "" || j.ID != out.PersonJob {
+		t.Fatalf("the new Job is not the open approve person Job: person_job %q, open approve Job %s", out.PersonJob, j.ID)
 	}
 }
 

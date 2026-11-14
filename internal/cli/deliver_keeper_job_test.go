@@ -138,8 +138,9 @@ func TestDeliverKeeperJobPostsOnceWhileOpen(t *testing.T) {
 	if code := h.run(dir, "job", "cancel", "J-1", "--reason", "scope withdrawn"); code != 0 {
 		t.Fatalf("cancel: %d %s", code, h.errb)
 	}
+	// J-2 is the first delivery's person Job of the ship step, so the next is J-3.
 	posted, err = postCuratorJob(env, dir, id, []string{"first-fact"})
-	if err != nil || posted != "J-2" {
+	if err != nil || posted != "J-3" {
 		t.Fatalf("a cancelled curator Job must not block the next: %q %v", posted, err)
 	}
 }
@@ -157,7 +158,8 @@ func TestDeliverWithNoProposalsPostsNoJobAndPrintsAsBefore(t *testing.T) {
 	}
 }
 
-// A delivery that cannot post still delivers, exit 0, with one stderr line.
+// A delivery that cannot post still delivers, exit 0, with one stderr line per
+// Job it could not post: the curator Job, then the person Job of the ship step.
 func TestDeliverStillDeliversWhenTheCuratorJobCannotBePosted(t *testing.T) {
 	for name, epoch := range map[string]string{"no-epoch": "", "taken-by-someone-else": "0.999"} {
 		t.Run(name, func(t *testing.T) {
@@ -167,7 +169,7 @@ func TestDeliverStillDeliversWhenTheCuratorJobCannotBePosted(t *testing.T) {
 				t.Fatalf("a delivery that cannot post must still exit 0: %d %s", code, h.errb)
 			}
 			lines := strings.Split(strings.TrimSpace(h.errb.String()), "\n")
-			if len(lines) != 1 || !strings.Contains(lines[0], "curator Job was not posted") {
+			if len(lines) != 2 || !strings.Contains(lines[0], "curator Job was not posted") || !strings.Contains(lines[1], "person Job was not posted") {
 				t.Fatalf("stderr: %q", h.errb.String())
 			}
 			if !strings.Contains(h.out.String(), id+" delivered; waiting for the person") || !strings.Contains(h.out.String(), "1 brain proposals wait for the curator") {

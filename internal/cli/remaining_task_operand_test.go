@@ -120,7 +120,13 @@ func TestRemainingTaskOperands(t *testing.T) {
 						t.Errorf("exit %d, want %d: %s", code, wantCode, h.norm(h.errb.String()))
 					}
 					if wantCode == 0 {
-						if !json.Valid(h.out.Bytes()) || h.errb.Len() != 0 {
+						// deliver posts the person Job of the ship step; with no
+						// GRID_MEMBER here it cannot, says why on stderr and still delivers.
+						wantErr := ""
+						if command == "deliver" {
+							wantErr = "deliver: the person Job was not posted: GRID_MEMBER is required\n"
+						}
+						if !json.Valid(h.out.Bytes()) || h.errb.String() != wantErr {
 							t.Errorf("expected JSON success: %s %s", h.norm(h.out.String()), h.norm(h.errb.String()))
 						}
 						return
