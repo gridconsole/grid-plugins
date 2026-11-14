@@ -414,6 +414,7 @@
             ]
           },
           "openTasks": {
+            "description": "Display ids of the project's open tasks that run this template; filled only with --project",
             "type": "array",
             "items": {
               "type": "string"

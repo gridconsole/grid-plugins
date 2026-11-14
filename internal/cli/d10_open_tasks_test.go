@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -66,6 +67,31 @@ func TestD10OtListsOpenTasksUnderTheirTemplate(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "T-03") {
 		t.Fatalf("the closed task T-03 is listed\n%s", raw)
+	}
+
+	// The captured answer is the fixture with a non-empty openTasks.
+	// UPDATE_D10_OT_FIXTURES=1 rewrites contract/fixtures/cmd-workflow-show/valid/project-open-tasks.json.
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	path := yiWfFixturePath("cmd-workflow-show", "valid", "project-open-tasks")
+	if os.Getenv("UPDATE_D10_OT_FIXTURES") == "1" {
+		yiWfWriteFixture(t, path, doc)
+	}
+	fixture, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := contract.Validate("cmd-workflow-show", fixture); err != nil {
+		t.Fatalf("fixture %s does not pass cmd-workflow-show: %v", path, err)
+	}
+	var fixtureDoc any
+	if err := json.Unmarshal(fixture, &fixtureDoc); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(fixtureDoc, doc) {
+		t.Fatalf("fixture %s is not the captured answer; run with UPDATE_D10_OT_FIXTURES=1\n%s", path, raw)
 	}
 }
 
