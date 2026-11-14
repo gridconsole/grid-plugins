@@ -82,6 +82,7 @@ func runWorkflow(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "grid: %v\n", err)
 		return exitCode(err)
 	}
+	d10OtFill(env, *project, &answer)
 	if *asJSON {
 		return writeJSON(env.Stdout, answer)
 	}
