@@ -255,8 +255,15 @@ func (s Store) SetAgents(set map[string]Agent, budget string) error {
 
 // ReadHookLevels is the single settings reader used by guards and the CLI.
 func ReadHookLevels(home, project string) (map[string]string, error) {
+	levels, _, err := ReadHookLevelsWarn(home, project)
+	return levels, err
+}
+
+// ReadHookLevelsWarn is ReadHookLevels that also returns the warnings of the files
+// it read (one per unknown top-level key). It reads only; it never writes.
+func ReadHookLevelsWarn(home, project string) (map[string]string, []string, error) {
 	d, err := (Store{home, project}).Effective()
-	return d.Hooks, err
+	return d.Hooks, d.Warnings, err
 }
 
 // ResolveHookLevel is the runtime level reader for both event hooks and guards.
@@ -289,11 +296,11 @@ func ResolveHookLevelWarn(name string, resolver where.Resolver, query where.Quer
 	if r.Record {
 		project = r.Project
 	}
-	d, err := (Store{resolver.GridHome, project}).Effective()
+	levels, warnings, err := ReadHookLevelsWarn(resolver.GridHome, project)
 	if err != nil {
 		return "block", nil, fmt.Errorf("Cannot read hook settings: %w", err)
 	}
-	return d.Hooks[name], d.Warnings, nil
+	return levels[name], warnings, nil
 }
 
 // SetAgent changes only supplied fields; omitted fields continue to inherit.

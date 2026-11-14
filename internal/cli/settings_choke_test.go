@@ -99,7 +99,7 @@ func settingsPackageBypasses(file string, f *ast.File) []string {
 	allowedReads := map[*ast.Ident]bool{}
 	exports := map[string]string{
 		"AgentNames": "catalog.go", "SkillNames": "catalog.go", "HookNames": "catalog.go",
-		"ParseAnswers": "setup.go", "ReadHookLevels": "store.go", "ResolveHookLevel": "store.go", "ReadSkillsOff": "skill_state.go",
+		"ParseAnswers": "setup.go", "ReadHookLevels": "store.go", "ResolveHookLevel": "store.go", "ReadHookLevelsWarn": "store.go", "ResolveHookLevelWarn": "store.go", "Document.MarshalJSON": "store.go", "ReadSkillsOff": "skill_state.go", // The Warn pair read only and return the unknown-key warnings; MarshalJSON writes a Document's unknown keys back as read.
 		"ClaudeBlock": "claude.go", "ClaudeSetupCommand": "claude.go", "RunClaudeSetup": "claude.go", "claudeInvalid.Error": "claude.go",
 		"ClaudeSettingsPath": "claude.go", "ReadClaudeAllowStatus": "claude_status.go", "ReadClaudeDenyStatus": "claude_status.go", "ReadClaudeSandbox": "claude_status.go", // Read-only setup diagnostics; no Store access.
 		"EditClaudeStatusLine": "claude_statusline.go",                                                          // Writes only the statusLine key of the person's Claude settings file; no Store access.
@@ -133,7 +133,7 @@ func settingsPackageBypasses(file string, f *ast.File) []string {
 			// Inspect the signature without its receiver, and the body. A method may
 			// use its supplied receiver, but cannot construct or return another Store.
 			inspect = &ast.FuncLit{Type: fn.Type, Body: fn.Body}
-			if (file == "store.go" && name == "ReadHookLevels" || file == "agentsync.go" && name == "SyncAgents") && fn.Recv == nil {
+			if (file == "store.go" && name == "ReadHookLevelsWarn" || file == "agentsync.go" && name == "SyncAgents") && fn.Recv == nil {
 				// Allow only Store{...}.Effective(), never a local store that could write.
 				ast.Inspect(fn.Body, func(n ast.Node) bool {
 					call, ok := n.(*ast.CallExpr)
