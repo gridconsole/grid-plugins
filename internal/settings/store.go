@@ -25,16 +25,50 @@ type Document struct {
 	// settings.json. The plugin owns no part of them: the array is carried through
 	// every rewrite as it was read, never merged into Effective and never shown.
 	Accounts json.RawMessage `json:"accounts,omitempty"`
-	// ezKeysApp holds the seven keys the app's Settings page saves into the same
-	// settings.json (the app's check.go field list). Like Accounts, the plugin owns
+	// ezKeysApp holds the keys the app saves or reads in the same settings.json
+	// (the app's check.go field list and agent.go). Like Accounts, the plugin owns
 	// no part of them: each value is carried through every rewrite exactly as it was
 	// read, never merged into Effective and never shown by a list.
 	ezKeysApp
+	// Warnings are one line per top-level key this plugin does not know, from the
+	// files read. They are never written back.
+	Warnings []string `json:"-"`
+	// unknown holds those keys with their values as read; a rewrite appends them
+	// after the known keys so no other program's key is lost.
+	unknown []unknownKey
+}
+
+type unknownKey struct {
+	name  string
+	value json.RawMessage
+}
+
+// MarshalJSON writes the known keys, then each unknown key as it was read.
+func (d Document) MarshalJSON() ([]byte, error) {
+	type plain Document
+	b, err := json.Marshal(plain(d))
+	if err != nil || len(d.unknown) == 0 {
+		return b, err
+	}
+	b = b[:len(b)-1] // the object always holds agents, skills and hooks, so it is not empty
+	for _, u := range d.unknown {
+		name, err := json.Marshal(u.name)
+		if err != nil {
+			return nil, err
+		}
+		b = append(append(append(b, ','), name...), ':')
+		b = append(b, u.value...)
+	}
+	return append(b, '}'), nil
 }
 
 // ezKeysApp is the app's part of settings.json. The embedded struct is written
 // inline, so a rewrite puts each key back beside the plugin's own.
 type ezKeysApp struct {
+	AgentSandbox     json.RawMessage `json:"agentSandbox,omitempty"`
+	ClaudePath       json.RawMessage `json:"claudePath,omitempty"`
+	MaxTurns         json.RawMessage `json:"maxTurns,omitempty"`
+	PermissionMode   json.RawMessage `json:"permissionMode,omitempty"`
 	Notifications    json.RawMessage `json:"notifications,omitempty"`
 	Models           json.RawMessage `json:"models,omitempty"`
 	UsageRules       json.RawMessage `json:"usageRules,omitempty"`
@@ -44,12 +78,22 @@ type ezKeysApp struct {
 	HiddenProjects   json.RawMessage `json:"hiddenProjects,omitempty"`
 }
 
-// ezKeysAppNames lists the keys ezKeysApp carries; decode accepts these and no others.
-var ezKeysAppNames = []string{"notifications", "models", "usageRules", "windowRules", "workspace", "accountSelection", "hiddenProjects"}
+// ezKeysAppNames lists the keys ezKeysApp carries: the ones the app reads for its
+// agent runs (agentSandbox, claudePath, maxTurns, permissionMode) and the ones its
+// Settings page saves. Any other top-level key is an unknown key (see decode).
+var ezKeysAppNames = []string{"agentSandbox", "claudePath", "maxTurns", "permissionMode", "notifications", "models", "usageRules", "windowRules", "workspace", "accountSelection", "hiddenProjects"}
 
 // ezKeysSet keeps the value of one app key verbatim.
 func (k *ezKeysApp) ezKeysSet(key string, v json.RawMessage) {
 	switch key {
+	case "agentSandbox":
+		k.AgentSandbox = v
+	case "claudePath":
+		k.ClaudePath = v
+	case "maxTurns":
+		k.MaxTurns = v
+	case "permissionMode":
+		k.PermissionMode = v
 	case "notifications":
 		k.Notifications = v
 	case "models":
@@ -122,6 +166,9 @@ func readDocument(dir string) (Document, error) {
 	if err != nil {
 		return d, fmt.Errorf("settings.json: %w", err)
 	}
+	for i, w := range d.Warnings {
+		d.Warnings[i] = "settings.json: " + w
+	}
 	return d, nil
 }
 
@@ -151,6 +198,7 @@ func (s Store) Effective() (Document, error) {
 			return Document{}, err
 		}
 		merge(&doc, d)
+		doc.Warnings = append(doc.Warnings, d.Warnings...)
 	}
 	return doc, nil
 }
@@ -217,8 +265,15 @@ func ReadHookLevels(home, project string) (map[string]string, error) {
 // the error without replacing an existing denial. No hook has a fixed level: a
 // guard's default is block, and a setting may lower it.
 func ResolveHookLevel(name string, resolver where.Resolver, query where.Query) (string, error) {
+	level, _, err := ResolveHookLevelWarn(name, resolver, query)
+	return level, err
+}
+
+// ResolveHookLevelWarn is ResolveHookLevel that also returns the warnings of the
+// settings files it read (one per unknown top-level key). The level is still read.
+func ResolveHookLevelWarn(name string, resolver where.Resolver, query where.Query) (string, []string, error) {
 	if resolver.GridHome == "" {
-		return defaultLevel(name), nil
+		return defaultLevel(name), nil, nil
 	}
 	if query.Cwd == "" {
 		query.Cwd = "."
@@ -228,17 +283,17 @@ func ResolveHookLevel(name string, resolver where.Resolver, query where.Query) (
 	}
 	r, err := resolver.Resolve(query)
 	if err != nil {
-		return "block", fmt.Errorf("Cannot resolve hook settings: %w", err)
+		return "block", nil, fmt.Errorf("Cannot resolve hook settings: %w", err)
 	}
 	project := ""
 	if r.Record {
 		project = r.Project
 	}
-	levels, err := ReadHookLevels(resolver.GridHome, project)
+	d, err := (Store{resolver.GridHome, project}).Effective()
 	if err != nil {
-		return "block", fmt.Errorf("Cannot read hook settings: %w", err)
+		return "block", nil, fmt.Errorf("Cannot read hook settings: %w", err)
 	}
-	return levels[name], nil
+	return d.Hooks[name], d.Warnings, nil
 }
 
 // SetAgent changes only supplied fields; omitted fields continue to inherit.

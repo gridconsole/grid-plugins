@@ -100,7 +100,7 @@ func TestInvalidChangesLeaveBytes(t *testing.T) {
 
 func TestInvalidDocumentsWriteNothing(t *testing.T) {
 	for _, data := range []string{
-		`{"unknown":1}`, `{"agents":{"unknown":{"model":"opus"}}}`, `{"agents":{"grid-builder":{"tools":"Bash"}}}`,
+		`{"agents":{"unknown":{"model":"opus"}}}`, `{"agents":{"grid-builder":{"tools":"Bash"}}}`,
 		`{"agents":{"grid-builder":{"model":"unknown"}}}`, `{"agents":{"grid-builder":{"model":""}}}`,
 		`{"agents":{"grid-builder":{"effort":null}}}`, `{"skills":{"research":"false"}}`,
 		`{"hooks":{"plan-guard":"never"}}`, `{"hooks":null}`, `{"hooks":{},"hooks":{}}`,

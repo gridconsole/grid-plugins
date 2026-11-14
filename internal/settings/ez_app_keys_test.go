@@ -210,31 +210,74 @@ func TestEzAppKeysResolveHookLevelAnswersTheSetLevel(t *testing.T) {
 	}
 }
 
-func TestEzAppKeysOtherKeysAreStillRefused(t *testing.T) {
+func TestEzAppKeysMalformedFilesAreStillRefused(t *testing.T) {
 	for _, body := range []string{
-		`{"unknown":1}`,
-		`{"notifications":1,"unknown":2}`,
-		`{"unknown":2,"notifications":{}}`,
 		`{"notifications":{},"notifications":{}}`,
-		`{"hiddenProjects":["old"],"hiddenproject":[]}`,
+		`{"unknown":1,"unknown":2}`,
+		`{"hiddenProjects":["old"],"hiddenproject":[],"hiddenproject":[]}`,
 		`{"accountSelection":{"fullAt":90}}{"models":{}}`,
 	} {
 		if _, err := decode([]byte(body)); err == nil {
 			t.Errorf("%s must still be refused", body)
 		}
 	}
-	if _, err := decode([]byte(`{"notifications":1,"unknown":2}`)); err == nil || !strings.Contains(err.Error(), `unknown key "unknown"`) {
-		t.Errorf("the refusal names the key that is not known: %v", err)
+}
+
+// The owner's direction (lane brief C-fix-plugin-settings-app-keys, item 2): an
+// unknown top-level key is a warning and the rest of the file is read; a rewrite
+// keeps the key, so a program that owns it does not lose it.
+func TestEzAppKeysUnknownKeyWarnsAndSurvivesARewrite(t *testing.T) {
+	for _, body := range []string{`{"notifications":1,"unknown":2}`, `{"unknown":2,"notifications":{}}`} {
+		doc, err := decode([]byte(body))
+		if err != nil || len(doc.Warnings) != 1 || !strings.Contains(doc.Warnings[0], `unknown key "unknown"`) {
+			t.Errorf("%s: want one warning naming the key, no error: %v %v", body, doc.Warnings, err)
+		}
 	}
 	s, _ := fixture(t)
-	put(t, filepath.Join(s.Home, "settings.json"), []byte(`{"notifications":{},"surprise":1}`), 0o644)
-	if _, err := s.Effective(); err == nil || !strings.Contains(err.Error(), `unknown key "surprise"`) {
-		t.Errorf("Effective on an unknown key beside an app key: %v", err)
+	path := filepath.Join(s.Home, "settings.json")
+	put(t, path, []byte(`{"skills":{"research":false},"notifications":{},"surprise":{"a":[1,2]}}`), 0o644)
+	doc, err := s.Effective()
+	if err != nil || len(doc.Warnings) != 1 || !strings.Contains(doc.Warnings[0], `unknown key "surprise"`) {
+		t.Fatalf("Effective: one warning naming surprise, no error: %v %v", doc.Warnings, err)
 	}
-	if err := s.SetSkill("browser", false); err == nil {
-		t.Errorf("a write must not go through a file with an unknown key")
+	if doc.Skills["research"] {
+		t.Errorf("the rest of the file was not read")
 	}
-	if got := string(contents(t, filepath.Join(s.Home, "settings.json"))); got != `{"notifications":{},"surprise":1}` {
-		t.Errorf("the refused file was changed: %s", got)
+	if err := s.SetSkill("browser", false); err != nil {
+		t.Fatalf("a write beside an unknown key: %v", err)
+	}
+	var back map[string]json.RawMessage
+	must(t, json.Unmarshal(contents(t, path), &back))
+	var compact bytes.Buffer
+	must(t, json.Compact(&compact, back["surprise"]))
+	if compact.String() != `{"a":[1,2]}` {
+		t.Errorf("the unknown key was changed by a rewrite: %s", contents(t, path))
+	}
+	if _, ok := back["notifications"]; !ok {
+		t.Errorf("an app key was lost: %s", contents(t, path))
+	}
+}
+
+// agentSandbox, claudePath, maxTurns and permissionMode are the app's own keys
+// (app internal/slices/settings/agent.go): the file loads with no warning, and a
+// rewrite keeps each value as written (round 4 fault F3).
+func TestEzAppKeysAgentRunKeysLoad(t *testing.T) {
+	s, _ := fixture(t)
+	path := filepath.Join(s.Home, "settings.json")
+	put(t, path, []byte(`{"agentSandbox":false,"claudePath":"claude","maxTurns":7,"permissionMode":"plan","hooks":{"plan-guard":"warn"}}`), 0o644)
+	doc, err := s.Effective()
+	if err != nil {
+		t.Fatalf("agentSandbox false must load: %v", err)
+	}
+	if doc.Hooks["plan-guard"] != "warn" {
+		t.Errorf("the hook level in the same file was not read: %v", doc.Hooks)
+	}
+	must(t, s.SetSkill("browser", false))
+	var back map[string]json.RawMessage
+	must(t, json.Unmarshal(contents(t, path), &back))
+	for key, want := range map[string]string{"agentSandbox": "false", "claudePath": `"claude"`, "maxTurns": "7", "permissionMode": `"plan"`} {
+		if string(back[key]) != want {
+			t.Errorf("%s after a rewrite: %s, want %s", key, back[key], want)
+		}
 	}
 }

@@ -101,15 +101,18 @@ func TestAccountsWithAccountSelectionIsAcceptedAndKept(t *testing.T) {
 	}
 }
 
-func TestAccountSelectionBesideAnUnknownKeyIsRefused(t *testing.T) {
+// The owner's direction (lane brief C-fix-plugin-settings-app-keys, item 2): an
+// unknown top-level key is a warning, not a refusal of the whole file.
+func TestAccountSelectionBesideAnUnknownKeyIsRead(t *testing.T) {
 	o, _ := budgetFixture(t)
 	path := filepath.Join(o.GridHome, "settings.json")
 	put(t, path, []byte(`{"accountSelection":{"mode":"use","acct":"","fullAt":95},"unknown":1}`), 0o644)
-	if _, err := (Store{Home: o.GridHome}).Effective(); err == nil || !strings.Contains(err.Error(), `unknown key "unknown"`) {
-		t.Fatalf("must be refused, naming unknown: %v", err)
+	doc, err := (Store{Home: o.GridHome}).Effective()
+	if err != nil || len(doc.Warnings) != 1 || !strings.Contains(doc.Warnings[0], `unknown key "unknown"`) {
+		t.Fatalf("must read with one warning naming unknown: %v %v", doc.Warnings, err)
 	}
-	if _, err := BudgetShow(o); err == nil {
-		t.Fatalf("budget show must refuse")
+	if _, err := BudgetShow(o); err != nil {
+		t.Fatalf("budget show must read the file: %v", err)
 	}
 }
 
@@ -117,7 +120,6 @@ func TestUnknownSettingsKeysAreStillRefused(t *testing.T) {
 	o, _ := budgetFixture(t)
 	path := filepath.Join(o.GridHome, "settings.json")
 	for name, body := range map[string]string{
-		"unknown top key":       `{"surprise":1}`,
 		"accounts not an array": `{"accounts":{"id":"claude-ann"}}`,
 		"accounts null":         `{"accounts":null}`,
 		"accounts twice":        `{"accounts":[],"accounts":[]}`,
