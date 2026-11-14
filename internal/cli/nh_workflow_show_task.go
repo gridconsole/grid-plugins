@@ -189,12 +189,16 @@ func nhWfSource(file string) (string, error) {
 
 // nhWfBuiltIn is the flow a task runs when the home has no default workflow:
 // Run, then Check by grid-reviewer, 2 review rounds, the flow the app's Judge
-// uses for such a home.
+// uses for such a home, then Ship, the person step: grid deliver posts its
+// person Job (postShipPersonJob), the plan approve Job, so the step's kind is
+// approve. Its approvers list is empty: the task's person, the owner when
+// task.md names none.
 func nhWfBuiltIn(id string) nhWfTask {
 	reviewer, rounds := "grid-reviewer", 2
 	return nhWfTask{ID: id, Source: "built-in", Rounds: &rounds, Steps: []nhWfStep{
 		{Name: "Run", Kind: "run"},
 		{Name: "Check", Kind: "check", Agent: &reviewer},
+		{Name: "Ship", Kind: "approve", Approvers: []string{}},
 	}}
 }
 

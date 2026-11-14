@@ -31,6 +31,12 @@
         "approvers": null,
         "kind": "check",
         "name": "Check"
+      },
+      {
+        "agent": null,
+        "approvers": [],
+        "kind": "approve",
+        "name": "Ship"
       }
     ],
     "workflow": null

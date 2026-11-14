@@ -114,12 +114,8 @@ func postCuratorJob(env Env, dir, taskID string, ids []string) (string, error) {
 		if openCuratorJob(snap) != "" {
 			return "", nil
 		}
-		epoch := env.getenv("GRID_LEASE_EPOCH")
-		if te := env.getenv("GRID_TASK_EPOCH"); te != "" && !env.typedGlobal["GRID_LEASE_EPOCH"] {
-			// A Job agent's GRID_LEASE_EPOCH is its Job's; the curator Job is a task write, so it takes the task epoch, as `job post` does.
-			epoch = te
-		}
-		w, err := orchestratorWriter(env, "task", epoch)
+		// The curator Job is a task write, so it takes the task epoch (taskJobWriter).
+		w, err := taskJobWriter(env)
 		if err != nil {
 			return "", err
 		}
@@ -167,8 +163,10 @@ func curatorJobOpen(env Env, dir string) (bool, error) {
 	return openCuratorJob(snap) != "", nil
 }
 
-// deliverOutput is the --json result: the delivery and the curator Job it posted.
+// deliverOutput is the --json result: the delivery, the curator Job it posted and
+// the person Job of the ship step it posted ("" when it posted none).
 type deliverOutput struct {
 	taskstore.Delivery
 	CuratorJob string `json:"curator_job"`
+	PersonJob  string `json:"person_job,omitempty"`
 }

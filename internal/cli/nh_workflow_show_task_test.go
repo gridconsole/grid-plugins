@@ -168,8 +168,8 @@ func TestNhWfShowTaskSources(t *testing.T) {
 			name:    "built-in",
 			builtIn: true,
 			want: nhWfGotTask{ID: "T-1", Source: "built-in", Rounds: nhWfInt(2),
-				Steps: []nhWfGotStep{{Name: "Run", Kind: run}, {Name: "Check", Kind: check, Agent: nhWfStr("grid-reviewer")}}},
-			text: "workflow: (none)\nsource: built-in\nrounds: 2\nstep: Run (run)\nstep: Check (check, grid-reviewer)\n",
+				Steps: []nhWfGotStep{{Name: "Run", Kind: run}, {Name: "Check", Kind: check, Agent: nhWfStr("grid-reviewer")}, {Name: "Ship", Kind: "approve", Approvers: []string{}}}},
+			text: "workflow: (none)\nsource: built-in\nrounds: 2\nstep: Run (run)\nstep: Check (check, grid-reviewer)\nstep: Ship (approve)\n",
 		},
 	}
 	for _, c := range cases {

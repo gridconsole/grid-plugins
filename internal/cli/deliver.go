@@ -99,8 +99,21 @@ func runDeliver(args []string, env Env) int {
 			}
 		}
 	}
+	// The person step after Check: one person Job asks the task's person, posted
+	// after the curator Job and as it is; a Job that cannot be posted never fails
+	// the delivery, which is already written.
+	person := ""
+	if !o.DryRun {
+		posted, err := postShipPersonJob(env, t.Path)
+		if err != nil {
+			fmt.Fprintln(env.Stderr, "deliver: the person Job was not posted: "+strings.Join(strings.Fields(err.Error()), " "))
+		} else if posted != "" {
+			person = posted
+			result.Actions = append(result.Actions, "Post person Job "+posted+" for the ship step")
+		}
+	}
 	if *asJSON {
-		return writeJSON(env.Stdout, deliverOutput{Delivery: result, CuratorJob: curator})
+		return writeJSON(env.Stdout, deliverOutput{Delivery: result, CuratorJob: curator, PersonJob: person})
 	}
 	if o.DryRun {
 		for _, action := range result.Actions {
