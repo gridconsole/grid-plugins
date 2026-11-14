@@ -1,14 +1,17 @@
 {
   "name": "grid",
-  "owner": { "name": "Grid" },
+  "owner": {
+    "name": "Grid"
+  },
   "metadata": {
-    "description": "Grid: task folders, a planner per task, plan pages built from a component library."
+    "description": "Grid: task folders, a planner per task, the Feed and the brain, all written through one grid command."
   },
   "plugins": [
     {
       "name": "grid",
       "source": "./plugins/grid",
-      "description": "Grid: task folders, a planner per task, plan pages built from a component library."
+      "description": "Grid: task folders, a planner per task, the Feed and the brain, all written through one grid command.",
+      "version": "0.2.0"
     }
   ]
 }

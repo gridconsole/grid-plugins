@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "grid-feed": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/feed/mcp.mjs"]
+      "args": [
+        "mcp"
+      ],
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/grid"
     }
   }
 }

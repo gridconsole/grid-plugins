@@ -1,56 +1,24 @@
 ---
 name: questions
-description: Ask a person a question, record their answer, or withdraw a question, in the task's questions folder. Use when the person says "ask Sam ...", "ask <name> which ...", gives an answer to an open question ("Sam says ..."), or a question is no longer needed.
+description: Ask a person a question on a Grid task, record their answer, or withdraw it. Use when work needs a decision only a person can make, or the person says "ask Sam which ...", gives an answer, or a question is no longer needed.
 ---
 
-# Questions
+A question is for a person point only. "Tasks carry on by themselves until a person point": never ask whether to rework, never ask about a refused command, never ask about the brain, and never ask what a default or the brain already answers (`grid brain search <words> --task <task>`).
 
-The task folder is `<projects folder>/<project>/tasks/T-NN-slug/`. The projects folder is `GRID_PROJECTS`, else `$GRID_HOME/projects` (`GRID_HOME` is the Grid data folder `~/.grid/<name>`, never the workspace folder; if both are empty, Grid is not set up for this folder: say so and write nothing). If the person does not say which task, take the only open one, else ask. One file per person asked: `<task folder>/questions/<person>.md` (the person's first name, lowercase, only `a-z`, `0-9` and `-`, such as `sam.md`; the same name goes after `to:`). Only the planner writes in this folder, one writer at a time, with one exception: the task's Feed loop files a `question` post of the Feed as a block here (below). A subagent that needs an answer puts the question in its report; the planner records it. Every path below is under that absolute task folder; nothing is written relative to the working directory, which is the project's repo.
+Rules that apply here:
+- "Everything is a Job, the Job is the brief": a person's decision is a Job with role Person (see plan-jobs); the question is that Job's text.
+- "Approvals and gates come from the workflow in the brain": do not make up a gate; a Job waits only by naming the person Job (or `gate:Q-<n>`) in its own `after`. `--blocking` is a label that raises the question's priority; it holds no Job.
+- "No Grid-made guards, caps or limits."
+- "Every link carries a why."
 
-## Ask
+Steps (all use `--task <task>`). Pass the task folder path `$GRID_HOME/projects/<project>/tasks/<folder>` as `<task>`; `grid where` prints the project and the folder. The folder path works for every verb below. A bare id such as `T-01` works for every verb below when you run it inside the task's project folder; from a folder in no project, `proof`, `brain`, `task history` and `deliver` still find it, and `question`, `answer`, `person` and `plan` answer "needs --project" (a role with no Personal scope gets "task not found"); the folder path works from anywhere (`person` also takes `--project <project>`):
 
-Never ask a question about a refused command or offer to add an allow rule: Grid shows a refusal to the person itself and resumes the task with the decision.
+1. Pick the person. `grid person approvers --area <area> --task <task>` names who answers for the area; no match means the task owner (`grid person show <handle>`).
+2. Ask: `grid question ask --task <task> --who <handle> --question '<one question in plain words>' --option '<answer A>' --option '<answer B>' --recommended '<option label>' --applies <RFC3339 time with timezone> --default '<option label applied at that time>' --why '<why the answer matters>' [--waits-on '<option label>'] [--item <n>] [--job <id>]`. Options are concrete answers only. `--waits-on` (repeatable) names an option that keeps waiting, such as `Not yet` for a person's own action: that answer is recorded, and the question and its Job stay open for the next answer. Always give a recommendation, a why, a deadline (`--applies`) and the default (`--default`) that applies at the deadline; the CLI refuses `--applies` that is not an RFC3339 time with a timezone, and a gate comes with a default. No money in a question: say tokens, minutes or a share of the usage limit.
+   Run by a person of the team or by the holder of the task lease (the orchestrator), `ask` also posts a person Job and the question names it; run by any other writer it posts no Job. The question is itself a person gate, and the Feed takes a person gate only from the roles the workflow's `gate_post_roles` lists for `person` (by default cli, owner, member, lead). A Job agent with GRID_TASK_EPOCH set (every Job agent the app starts, whatever its role) asks as the task holder, so `ask` posts its person Job: do not post a second one. An agent without GRID_TASK_EPOCH (GRID_ROLE=worker, its own Job in GRID_LEASE) gets `role worker may not post person gates` from `grid question ask` under the default workflow and may not post a person Job either: it names the decision, with the options and its recommendation, in its result's `decisions_needed` (`grid job result --task <task> --job <job> --body <json>`) and stops; the orchestrator asks the person. A Job that needs the answer lists `gate:Q-<n>` (or the person Job id, when `ask` printed one) in its own `after` (see plan-jobs); every other Job carries on. `grid question add` takes the same flags and posts no Job: use it only for a note to the person that holds nothing.
+3. A question that must reach people outside the task goes on the Feed as a `question` post (`grid feed types` lists it): `grid feed post --task <task> --type question --body <json>`.
+4. Read open questions: `grid question list --task <task>`.
+5. Record an answer only when the person gave it in their words: `grid answer <task> Q-<n> "<their words>"` (here `<task>` is the first operand, not a flag). Never invent one. An answer is final; a new answer is a new question.
+6. Withdraw a question that is not needed: `grid question withdraw --task <task> Q-<n>`.
 
-0. Pick `<person>`, unless the person named one: (a) the role whose description fits the question (the project's `project-roles.json`), else (b) the person entry in the brain (`knowledge/people/`) with an `owns` or `knows` link, or a "go to" line, for the area, else (c) the owner. Write the reason in the block as `Routed: role <id>` or `Routed: brain <handle>` (nothing for the owner). The `Routed:` line is the last line of the block, after `Answer:` (never beside `asked:`, where it would read as question text).
-1. Find the task folder. Read every file in `questions/` and take the next free id: `Q-n`, counted over the whole task, not per person.
-2. Append a block to `questions/<person>.md` (create the file if it is new), separated from any earlier block by a blank line. Every `<time>` in this skill (here, in the answer, in the history lines) is the output of `date +%Y-%m-%dT%H:%M`, run just before the write, never a guess. Write with the Write or Edit tool, never a shell heredoc or redirect.
-
-```
-## Q-2 · to: sam · not blocking · open
-asked: 2026-03-04T10:30 · by grid-planner
-
-Should the tag box show recent tags?
-Context: the mock lists the last five tags under the box.
-Options: Yes, five / Yes, ten / No
-Recommendation: yes, five, to save typing.
-Answer: —
-Routed: brain sam
-```
-
-- Heading: `## Q-<n> · to: <person> · blocking|not blocking · <state>`. State is `open`, `answered`, `withdrawn` or `disputed`. `blocking` means work cannot go on without the answer. Never write `later` yourself: Grid writes it for the questions of a setup task that wait their turn. In a setup task you add a follow-up as `open`, with a `group: followup` line under the heading.
-- One question per block, in plain words. Context says why it matters; Options is `A / B / C` and may be left out for an open question; Recommendation is always there and starts with your pick and a reason. A question with no recommendation is not ready to ask.
-- Options are concrete answers only; never add "Answer in my own words", "Other" or "Something else", because the card always offers its own free answer.
-- The Answer line stays `Answer: —` until the person answers. `Routed: role <id>` or `Routed: brain <handle>` is the last line, only when the person was picked by role or brain.
-- No money anywhere: a question, task.md, a plan or a history line never states a price, a cost or an estimate in a currency (no currency sign or currency word next to a number). Say it in tokens, minutes or a share of the usage limit, or leave it out.
-- A step or task that waits on a person always has an open question; never set `status: waiting` on a person with none. For a person's own action (for example "ask the client to create a Mollie account") write what they must do, with Options `Done, carry on / Not yet / Answer in my own words`; on Done, record the answer and carry on.
-- Never ask whether to rework. A reviewer's must-fix items go back to the step that built the work and the task carries on, with no question, until the workflow's review rounds are used up (see the execute skill). Only then ask, and name the must-fix items still open.
-   A question that came from a `question` post on the task's Feed is filed by the Feed loop, not by you: its block has a `feed: <post id>` line under the heading, and the loop adds it to task.md and history.md. Never file such a question twice.
-3. Append `- <time> · question asked · Q-<n> · by grid-planner` to `history.md` (Edit tool, not a shell append).
-4. In task.md: for a blocking question add `Q-<n>` to `needs: [...]`, set `status: waiting`, set `next` (for example "Sam answers Q-2"), set `updated` (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess), and add a body line.
-   While the plan skill writes a plan, the planner leaves this step to the plan skill's last step, after the plan's review, so the task does not wait before the reviewer has read the plan.
-5. Tell the person who was asked and what you recommended.
-
-## Record an answer
-
-Only when the person gives the answer in their own words (or says what another person said and names them). Never invent or guess one.
-
-1. In the block, replace `Answer: —` with `Answer: <their words>. (<time>, <who>)` and change the state in the heading to `answered`.
-2. Append `- <time> · question answered · Q-<n> · by <who>` to `history.md` (Edit tool, not a shell append).
-3. In task.md remove `Q-<n>` from `needs`; if `needs` is now empty and `status` was `waiting`, set it to `running`. Set `next` to what happens now that `Q-<n>` is closed (it must not still name `Q-<n>`) and set `updated` (the output of `date +%Y-%m-%dT%H:%M`, run just before this edit, never a guess).
-4. When the question was raised because a brief is `blocked` on the person's action, the answer reruns that brief: the next step is the execute skill rerunning it (status `running`, `next` naming the step); never ask the person to resume or rerun.
-5. Never edit another block, and never change an answer once recorded; a new answer is a new question.
-6. A block with a `feed: <post id>` line came from the Feed: record the answer here as above and stop. The loop posts it on the Feed as an `answer` from the Owner on its next tick, once, whether it was recorded in the app or here; never post it by hand.
-
-## Withdraw
-
-When a question is not needed any more (`<time>` as above): change the state in the heading to `withdrawn`, add a line `withdrawn: <time> · <reason>` under `asked:`, leave the Answer line as it is, append `- <time> · question withdrawn · Q-<n> · by grid-planner` to `history.md`, clear it from `needs` as above, and set `next` to what happens now (it must not still name `Q-<n>`).
+Done looks like: `grid question list` shows the question open with its options, recommendation and why, or the answer recorded, and the task carries on without waiting for anything else.
