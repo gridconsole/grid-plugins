@@ -167,6 +167,8 @@ func runWorkerNext(args []string, env Env) int {
 		FirstJob: firstJobOf,
 		// A closed task whose brain proposals still wait gets the curator Job deliver would post.
 		ClosedCurator: workerClosedCurator(env),
+		// The tick accepts a person's answer to the ship person Job; the task then lands.
+		Ticked: func(dir string) { landAfterShip(env, dir, contract.Author{ID: member, Role: role}) },
 		// The pass moves an old approval receipt into the task's Feed once, under the task lease.
 		ReceiptPending: migrate.ReceiptPending,
 		ReceiptMove: func(dir string, w feed.Writer) error {
