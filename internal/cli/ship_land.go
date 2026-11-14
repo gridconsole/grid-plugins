@@ -40,7 +40,7 @@ func landAfterShip(env Env, dir string, who contract.Author) {
 	if err != nil {
 		return
 	}
-	snap, err := orchestrator.Load(feed.Store{TaskDir: dir, TaskID: fid})
+	snap, err := orchestrator.Load(feed.Store{TaskDir: dir, TaskID: fid, Warn: env.Stderr})
 	if err != nil {
 		return
 	}
