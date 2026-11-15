@@ -118,7 +118,7 @@ personal values, and missing values use the catalog defaults.
 | history-log | warn | File, Bash, subagent, brain-read history entries |
 | usage-log | warn | Usage totals and session/subagent transcript references |
 | session-end | warn | Worker exit records and SessionEnd terminal state |
-| job-lint | block | No runtime counterpart; has no effect yet |
+| job-lint | block | `grid job render`: `block` refuses a Job with lint errors, `warn` says each finding on stderr and renders, `off` does not lint; settings that cannot be read keep the refusal |
 | needs-you, session-check | warn | No runtime counterpart; have no effect yet |
 
 No guard level is fixed. host-guard, only-writer and plan-guard read
@@ -161,8 +161,10 @@ SessionStart also retains its context note. The legacy `GRID_PLAN_GUARD=off`
 switch still suppresses plan checks; it does not suppress the host guard.
 
 The inactive names above remain accepted and stored for compatibility. Setting
-`job-lint`, `needs-you` or `session-check` currently changes no
-runtime behavior. The `subagent-start`, `topic-trigger` and `user-prompt` names
+`needs-you` or `session-check` currently changes no runtime behavior. A guarded
+tool call over the 1 MiB input limit, which the guards cannot read, follows the
+`plan-guard` level: `block` denies it, `warn` (the default) warns and lets it
+through, `off` says nothing. The `subagent-start`, `topic-trigger` and `user-prompt` names
 are retired with the recall hooks: a settings file that still names them loads
 and the entries are ignored. See [the L64 lane note](lanes/L64.md) for the complete mapping
 and the default policies that an owner may change.
