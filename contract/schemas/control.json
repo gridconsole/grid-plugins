@@ -372,6 +372,57 @@
               "additionalProperties": false
             }
           }
+        },
+        {
+          "properties": {
+            "author": {
+              "properties": {
+                "role": {
+                  "enum": [
+                    "owner",
+                    "member",
+                    "lead"
+                  ]
+                }
+              }
+            },
+            "lease": {
+              "type": "null"
+            },
+            "gen": {
+              "const": 0
+            },
+            "fence": {
+              "const": 0
+            },
+            "body": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "type": "string",
+                  "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                },
+                "status": {
+                  "const": "cancelled"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "close_reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "target",
+                "status",
+                "reason",
+                "close_reason"
+              ],
+              "additionalProperties": false
+            }
+          }
         }
       ]
     }

@@ -326,7 +326,14 @@ Disagreements and defaults chosen:
   question with `{target, question_event: "withdrawn", text}`; the reason defaults
   to `No longer needed`. Owners and members are allowed by default. The task snapshot's
   `workflow.md` YAML front matter key `gate_post_roles: {withdraw: [owner, member]}`
-  replaces this policy (an empty list forbids person withdrawals); a host may
+  replaces this policy (an empty list forbids person withdrawals). A person of
+  the team (author role owner, member or lead, never guest or an agent role) may
+  also post a leaseless cancel request: lease null, gen 0, fence 0, and exactly
+  `{target: <Job id>, status: "cancelled", reason, close_reason}`. The fold
+  counts it but never moves the Job with it; the task holder's next pass writes
+  the leased cancel with `re` set to the request id, the earliest request per
+  Job wins, and every other request gets a message that it was not used
+  (docs/decisions/D-r19-person-cancel-holder.md, rule C). A host may
   also supply `question.Store.WithdrawAllowed`. Agent shells still need the task
   lease fence on question, Feed, Job and MCP posting paths. This no-lease refusal
   applies to agent shells only; hosts may write leaseless person records allowed

@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -50,8 +51,14 @@ func PostPerson(store feed.Store, w feed.Writer, in feed.Input) (record feed.Rec
 // true. A check made before the lock could be overtaken by a write from another
 // process, so a caller that must not write twice asks here. A nil done never
 // stops the post.
+//
+// A person's cancel request (a `control` with status cancelled) goes the same
+// way: the holder's next pass writes the leased cancel (personCancels). It is
+// refused under the lock when the task has no such Job or the Job is already
+// closed, with a plain error, so the CLI exits 1.
 func PostPersonUnless(store feed.Store, w feed.Writer, in feed.Input, done func() bool) (record feed.Record, skipped bool, err error) {
-	if !PersonWriter(w) || in.Type != "job" {
+	cancel := in.Type == "control" && stringValue(in.Body["status"]) == string(contract.Cancelled)
+	if !PersonWriter(w) || in.Type != "job" && !cancel {
 		return record, false, errPersonOnly
 	}
 	err = (Store{Feed: store, Writer: w}).exclusive(func() error {
@@ -63,7 +70,16 @@ func PostPersonUnless(store feed.Store, w feed.Writer, in feed.Input, done func(
 		if e != nil {
 			return e
 		}
-		if e := checkAfterTargets(snap, in); e != nil {
+		if cancel {
+			target := stringValue(in.Body["target"])
+			j := snap.State.Jobs[target]
+			if j == nil {
+				return fmt.Errorf("grid job cancel: no Job %s in this task", target)
+			}
+			if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected {
+				return fmt.Errorf("grid job cancel: %s is already %s", target, j.Status)
+			}
+		} else if e := checkAfterTargets(snap, in); e != nil {
 			return e
 		}
 		if in.ID == "" {

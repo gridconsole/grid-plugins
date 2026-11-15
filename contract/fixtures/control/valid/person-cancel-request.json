@@ -1,0 +1,28 @@
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "control",
+  "type_v": 1,
+  "author": {
+    "id": "owner",
+    "role": "owner"
+  },
+  "tier": "person-team",
+  "worker": "owner@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-3",
+  "attempt": null,
+  "wake": null,
+  "body": {
+    "target": "J-3",
+    "status": "cancelled",
+    "reason": "No longer needed",
+    "close_reason": "No longer needed"
+  }
+}

@@ -62,6 +62,14 @@ func (s Store) Tick() (out Output, err error) {
 		if e := s.personAnswers(snap); e != nil {
 			return e
 		}
+		// personAnswers may just have closed a person Job that a cancel request names.
+		snap, e = Load(s.Feed)
+		if e != nil {
+			return e
+		}
+		if e := s.personCancels(snap); e != nil {
+			return e
+		}
 		snap, e = Load(s.Feed)
 		if e != nil {
 			return e

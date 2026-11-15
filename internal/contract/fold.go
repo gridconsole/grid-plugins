@@ -183,6 +183,13 @@ func Fold(posts []Post) State {
 			set(p, "ignored", "unknown Job target")
 			continue
 		}
+		// An unleased control is a person's cancel request (the leaseless cancel
+		// branch of control.json). It stays counted, so the task holder's pass reads
+		// it, but it never moves the Job: the holder's leased control does
+		// (orchestrator personCancels, D-r19 rule point 2).
+		if p.Lease == nil {
+			continue
+		}
 		if b.Assign != nil {
 			a := b.Assign
 			sameRetry := a.Attempt == j.Attempt && j.ExitReason == "usage_limit" && j.Assign != nil && a.Fence > j.Assign.Fence

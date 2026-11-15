@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"sort"
 	"strings"
@@ -123,6 +124,101 @@ func (s Store) personAnswers(snap Snapshot) error {
 		}
 	}
 	return nil
+}
+
+// personCancels is the holder's half of a person's cancel request (D-r19 rule C):
+// a person of the team whose task lease another holder holds writes an unleased
+// control {target, status cancelled, reason, close_reason}, which the fold counts
+// but never applies, and this pass writes the leased control under the task
+// lease, with re the request and an id derived from it. The earliest request of
+// an open Job wins. Every other request for that Job, and a request whose Job
+// closed before this pass, gets a message on the Feed, re the request, that says
+// it was not used, as personAnswers does for answers. A request that already has
+// a record of the task lease with re its id was handled by an earlier pass,
+// perhaps of another tenure, and gets nothing.
+func (s Store) personCancels(snap Snapshot) error {
+	handled := map[string]bool{}
+	for _, r := range snap.Records {
+		if r.Re != nil && r.Lease != nil && *r.Lease == "task" {
+			handled[*r.Re] = true
+		}
+	}
+	byJob := map[string][]feed.Record{}
+	for _, r := range snap.Records {
+		if r.Type != "control" || r.Lease != nil || r.Fence != 0 || r.Gen != 0 || handled[r.ID] || contract.TierFor(r.Author.Role) != contract.PersonTeam || stringValue(r.Body["status"]) != string(contract.Cancelled) {
+			continue
+		}
+		if target := stringValue(r.Body["target"]); snap.State.Jobs[target] != nil {
+			byJob[target] = append(byJob[target], r)
+		}
+	}
+	jobs := make([]string, 0, len(byJob))
+	for id := range byJob {
+		jobs = append(jobs, id)
+	}
+	sort.Strings(jobs)
+	for _, id := range jobs {
+		requests := byJob[id]
+		sort.Slice(requests, func(a, b int) bool {
+			if requests[a].At != requests[b].At {
+				return requests[a].At < requests[b].At
+			}
+			return requests[a].ID < requests[b].ID
+		})
+		j := snap.State.Jobs[id]
+		closed := j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected
+		// A request made before the Job was last put back to posted was made for a
+		// Job that has closed since.
+		reopened := ReopenedAt(snap, j)
+		var first *feed.Record
+		for i := range requests {
+			r := requests[i]
+			note := ""
+			switch {
+			case closed:
+				note = fmt.Sprintf("%s was already %s", id, j.Status)
+			case r.At <= reopened:
+				note = fmt.Sprintf("%s closed and was reopened at %s", id, reopened)
+			case first != nil:
+				note = fmt.Sprintf("%s asked first, at %s (record %s)", first.Author.ID, first.At, first.ID)
+			default:
+				first = &requests[i]
+				continue
+			}
+			text := fmt.Sprintf("The cancel request of %s for %s at %s (record %s) was not used: %s.", r.Author.ID, id, r.At, r.ID, note)
+			// The notices go before the leased control, as in personAnswers.
+			if _, err := s.Feed.Post(feed.Input{ID: personCancelID(r.ID, "unused"), Type: "post", Re: r.ID, Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, s.Writer); err != nil {
+				return err
+			}
+		}
+		if first == nil {
+			continue
+		}
+		body := map[string]any{"target": id, "status": string(contract.Cancelled), "reason": stringValue(first.Body["reason"]), "close_reason": stringValue(first.Body["close_reason"])}
+		if _, err := s.Feed.Post(feed.Input{ID: personCancelID(first.ID, "control"), Type: "control", Re: first.ID, Body: body}, s.Writer); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// personCancelID is the id of the record personCancels writes for the request
+// with id request: the request's 48-bit time and 80 bits of a hash of the
+// request id and what the record is. A pass repeated in the same tenure, from a
+// snapshot that does not hold its first write yet, writes the same record, and
+// the store returns the one it holds.
+func personCancelID(request, what string) string {
+	const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	sum := sha256.Sum256([]byte("person-cancel\x00" + what + "\x00" + request))
+	var out [16]byte
+	for i := range out {
+		v := 0
+		for b := i * 5; b < i*5+5; b++ {
+			v = v<<1 | int(sum[b/8]>>(7-b%8)&1)
+		}
+		out[i] = alphabet[v]
+	}
+	return request[:10] + string(out[:])
 }
 
 // yvPamControl is the control that moves the builder Job a person Job was raised
