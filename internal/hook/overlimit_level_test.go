@@ -45,6 +45,11 @@ func TestOverLimitDenyFollowsThePlanGuardLevel(t *testing.T) {
 				if got := strings.Contains(s, "larger than"); got != (tt.deny || tt.warned) {
 					t.Fatalf("plan-guard %q: reason said=%v: %.300s", tt.level, got, s)
 				}
+				// warn and off give no decision at all, for PermissionRequest too:
+				// at most a systemMessage, never an allow or a behavior.
+				if !tt.deny && (strings.Contains(s, "behavior") || strings.Contains(s, "permissionDecision")) {
+					t.Fatalf("plan-guard %q: a decision was written: %.300s", tt.level, s)
+				}
 				if tt.quiet && s != "" {
 					t.Fatalf("plan-guard off: expected silence: %.300s", s)
 				}

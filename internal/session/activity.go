@@ -82,7 +82,23 @@ func (s Store) UpdateActivityContext(ctx context.Context, id string, change func
 	if !component.MatchString(id) {
 		return errors.New("invalid session id")
 	}
-	return s.lockedContext(ctx, func() error {
+	return s.lockedContext(ctx, s.activityChange(id, change))
+}
+
+// UpdateActivityNow is UpdateActivity that does not wait for the session lock:
+// when another descriptor holds it, it returns fslock.ErrLocked, runs no change
+// and writes nothing.
+func (s Store) UpdateActivityNow(id string, change func(*Activity) error) error {
+	if !component.MatchString(id) {
+		return errors.New("invalid session id")
+	}
+	return s.lockedNow(s.activityChange(id, change))
+}
+
+// activityChange reads the activity of id, applies change and writes the result;
+// the caller holds the session lock.
+func (s Store) activityChange(id string, change func(*Activity) error) func() error {
+	return func() error {
 		a, err := s.Activity(id)
 		if err != nil {
 			return err
@@ -110,7 +126,7 @@ func (s Store) UpdateActivityContext(ctx context.Context, id string, change func
 			return err
 		}
 		return atomicJSON(filepath.Join(dir, id+".json"), a)
-	})
+	}
 }
 
 func (s Store) RecordUsage(id, tool string, u Usage) error {

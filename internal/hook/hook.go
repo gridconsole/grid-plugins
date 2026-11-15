@@ -469,7 +469,9 @@ func toolUse(o Options) {
 		in.Cwd = o.Cwd
 	}
 	if tooLarge {
-		// An event the guards could not read must not pass as one they approved.
+		// The guards could not read this event. At plan-guard block it is denied;
+		// at warn it passes with a warning and at off silently, never with an
+		// allow: Claude Code's own permission flow still decides.
 		if guard.Guarded(in.ToolName) && o.Stdout != nil {
 			reason := fmt.Sprintf("This tool call is larger than %d bytes, more than the Grid guards read, so they cannot check it. Make the change in smaller steps.", hookio.InputLimit)
 			d := o.overLimitDecision(*in, reason)

@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -21,7 +19,7 @@ import (
 const (
 	kr2Session = "kr2-session"
 	kr2Tool    = "kr2-tool"
-	kr2Skip    = "history skipped: session lock busy after 2s"
+	kr2Skip    = "history skipped: session lock busy"
 )
 
 // kr2Bound ends max from now, or 2 s before the test's own deadline when that
@@ -143,48 +141,10 @@ func kr2Activity(f *eventFixture) string {
 	return filepath.Join(f.dir, "sessions", ".hooks", kr2Session+".json")
 }
 
-// (a) With the session lock held elsewhere the history record gives up after
-// 2 s: one log line, no activity, no snapshot, and the decision as without it.
-func TestKr2HistorySkipsWhenSessionLockBusy(t *testing.T) {
-	f := eventSetup(t)
-	if err := kr2Store(f).RecordUsage(kr2Session, "kr2-usage", session.Usage{Input: 7}); err != nil {
-		t.Fatal(err)
-	}
-	activityBefore := kr2Read(t, kr2Activity(f))
-	namesBefore := kr2Names(t, filepath.Dir(kr2Activity(f)))
-	historyBefore := historyOf(t, f)
-
-	release := kr2Hold(t, f.dir)
-	r := kr2Call(t, kr2Bound(t, 5*time.Second), f, release, "PreToolUse", kr2Bash(kr2Tool))
-	if r.elapsed < 2*time.Second || r.elapsed >= 4*time.Second {
-		t.Errorf("PreToolUse took %s with the lock held, want 2 s up to 4 s", r.elapsed)
-	}
-	if n := strings.Count(r.log, kr2Skip); n != 1 {
-		t.Errorf("%d lines %q in the log, want 1:\n%s", n, kr2Skip, r.log)
-	}
-	if n := strings.Count(r.log, "history skipped"); n != 1 {
-		t.Errorf("%d history skipped lines, want 1:\n%s", n, r.log)
-	}
-	if r.code != 0 {
-		t.Errorf("exit code %d, want 0", r.code)
-	}
-	if got := kr2Read(t, kr2Activity(f)); !bytes.Equal(got, activityBefore) {
-		t.Errorf("activity file changed:\nbefore %s\nafter  %s", activityBefore, got)
-	}
-	if got := kr2Names(t, filepath.Dir(kr2Activity(f))); got != namesBefore {
-		t.Errorf("activity folder changed: %q, was %q", got, namesBefore)
-	}
-	if got := historyOf(t, f); got != historyBefore {
-		t.Errorf("history.md changed: %q", got)
-	}
-
-	// The decision is the one a free lock gives.
-	release()
-	free := kr2Call(t, kr2Bound(t, 5*time.Second), f, release, "PreToolUse", kr2Bash("kr2-tool-free"))
-	if free.out != r.out {
-		t.Errorf("decision differs: %q with the lock held, %q with it free", r.out, free.out)
-	}
-}
+// (a) With the session lock held elsewhere the PreToolUse history record is
+// skipped at once: TestKr2PreToolUseHistoryDoesNotWaitForSessionLock in
+// pretooluse_lock_now_test.go. It replaced TestKr2HistorySkipsWhenSessionLockBusy,
+// which pinned the 2 s wait that U-chk-plugin-rev-skills row 15 removed.
 
 // (b) With the lock free the record is what UpdateActivity writes.
 func TestKr2HistoryRecordsWhenSessionLockFree(t *testing.T) {
@@ -256,22 +216,10 @@ func TestKr2PostAfterSkippedPreWritesNothing(t *testing.T) {
 	}
 }
 
-var kr2SlowLine = regexp.MustCompile(`hook PreToolUse slow: (\d+) ms`)
-
-// A call that takes 2 s or more logs one slow line; the held lock makes the
-// history record wait the full 2 s, so the call cannot be faster.
-func TestKr2SlowHookLogsOneLine(t *testing.T) {
-	f := eventSetup(t)
-	release := kr2Hold(t, f.dir)
-	r := kr2Call(t, kr2Bound(t, 5*time.Second), f, release, "PreToolUse", kr2Bash(kr2Tool))
-	lines := kr2SlowLine.FindAllStringSubmatch(r.log, -1)
-	if len(lines) != 1 || strings.Count(r.log, "slow:") != 1 {
-		t.Fatalf("want one slow line in the log:\n%s", r.log)
-	}
-	if ms, _ := strconv.Atoi(lines[0][1]); ms < 2000 || time.Duration(ms)*time.Millisecond > r.elapsed {
-		t.Errorf("slow line says %s ms for a call of %s", lines[0][1], r.elapsed)
-	}
-}
+// A call that takes 2 s or more logs one slow line: TestLtLogSlowSlowWritesOneLine
+// in lt_log_slow_test.go. TestKr2SlowHookLogsOneLine made the call slow with a
+// held lock that the PreToolUse no longer waits for (U-chk-plugin-rev-skills
+// row 15), so it was removed.
 
 // A call under 2 s logs no slow line, for either event.
 func TestKr2FastHookLogsNoSlowLine(t *testing.T) {
