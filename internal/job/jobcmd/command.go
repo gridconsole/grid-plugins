@@ -68,6 +68,7 @@ type report struct {
 	Error    string         `json:"error,omitempty"`
 	Code     string         `json:"code,omitempty"`
 	fromFeed bool           // show resolved a task, so the text output names the state
+	text     string         // what the text output prints for a Job shown from its Feed record, which has no saved brief
 }
 
 // refusalCode is the stable code (contract/README.md) of a refusal that exits
@@ -280,11 +281,20 @@ func Run(args []string, e Env) int {
 			return fail(errors.New("show accepts a saved brief file or a task and Job id"), 2)
 		}
 		path, taskDir, err := showPath(args, f, e)
-		if err != nil {
-			return fail(err, 1)
+		var b []byte
+		if err == nil {
+			b, err = os.ReadFile(path)
 		}
-		b, err := os.ReadFile(path)
 		if err != nil {
+			// A Job with no saved folder (a person question Job, a posted Job not yet
+			// started) is shown from its Feed record; the folder is not written.
+			if id := showID(args); id != "" && taskDir != "" && errors.Is(err, fs.ErrNotExist) {
+				if r, ok, ferr := showFromFeed(taskDir, id); ferr != nil {
+					return fail(ferr, 1)
+				} else if ok {
+					return output(e, f, r, 0)
+				}
+			}
 			return fail(err, 1)
 		}
 		j, _, err := job.DecodeBrief(string(b))
@@ -311,6 +321,68 @@ func Run(args []string, e Env) int {
 	default:
 		return fail(fmt.Errorf("unknown job command %q; use render, lint or show", action), 2)
 	}
+}
+
+// showID is the Job id a show names, "" when it names none.
+func showID(args []string) string {
+	if len(args) == 0 || !job.ValidID(args[len(args)-1]) {
+		return ""
+	}
+	return args[len(args)-1]
+}
+
+// showFromFeed reports a Job that has no saved folder from the job record on the
+// task's Feed: its id, role, kind, title, after and, for a person Job, the
+// question in intent.goal, with the state the Feed folds. ok is false when the
+// Feed holds no record for id, so the caller keeps its original error.
+func showFromFeed(task, id string) (report, bool, error) {
+	read, err := readFeed(task, feed.Filter{})
+	if errors.Is(err, fs.ErrNotExist) {
+		return report{}, false, nil
+	} else if err != nil {
+		return report{}, false, err
+	}
+	j, err := pickJob(read.Records, id)
+	if err != nil || j == nil {
+		return report{}, false, err
+	}
+	state, why := contract.StateOf(contract.Status(j.Status))
+	if posted := feed.FoldRead(read).Jobs[j.ID]; posted != nil {
+		state, why = posted.State, posted.StateReason
+	}
+	return report{OK: true, ID: j.ID, Job: j, State: state, Reason: why, Record: jobRecordID(read.Records, j.ID), fromFeed: true, text: feedBrief(*j, state, why), Findings: []lint.Finding{}}, true, nil
+}
+
+// feedBrief is the text a Job without a saved brief shows: the fields the Feed's
+// job record holds that tell what the Job is.
+func feedBrief(j job.Job, state, why string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "id: %s\nrole: %s\n", j.ID, j.Role)
+	if j.Kind != "" {
+		fmt.Fprintf(&b, "kind: %s\n", j.Kind)
+	}
+	fmt.Fprintf(&b, "title: %s\n", j.Title)
+	if why != "" {
+		fmt.Fprintf(&b, "state: %s (%s)\n", state, why)
+	} else {
+		fmt.Fprintf(&b, "state: %s\n", state)
+	}
+	if len(j.After) > 0 {
+		ids := make([]string, len(j.After))
+		for i, d := range j.After {
+			ids[i] = d.Job
+		}
+		fmt.Fprintf(&b, "after: %s\n", strings.Join(ids, ", "))
+	}
+	if j.Intent.Goal != "" {
+		label := "goal"
+		if strings.EqualFold(j.Role, job.RolePerson) {
+			label = "question"
+		}
+		fmt.Fprintf(&b, "%s: %s\n", label, j.Intent.Goal)
+	}
+	b.WriteString("brief: none saved yet (a Job's folder is written when it starts)\n")
+	return b.String()
 }
 
 // jobRecordID is the id of the newest non-stale job record the Feed holds for the
@@ -455,7 +527,9 @@ func output(e Env, f flags, r report, code int) int {
 		}
 		return code
 	}
-	if r.Brief != "" {
+	if r.text != "" {
+		b.WriteString(r.text)
+	} else if r.Brief != "" {
 		b.WriteString(r.Brief)
 		if r.State != "" && r.Path != "" && r.fromFeed {
 			if !strings.HasSuffix(r.Brief, "\n") {

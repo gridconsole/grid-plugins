@@ -21,8 +21,8 @@ func TestFtJobNotPostedSaysTheJobIsNotPosted(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%s: want an error on a task with no jobs/J-2/brief.md", pointer)
 		}
-		if !strings.HasPrefix(err.Error(), pointer+":") || !strings.Contains(err.Error(), "is not posted yet") {
-			t.Errorf("%s: error %q does not say the Job is not posted yet", pointer, err)
+		if !strings.HasPrefix(err.Error(), pointer+":") || !strings.Contains(err.Error(), "has no saved brief yet") {
+			t.Errorf("%s: error %q does not say the Job has no saved brief yet", pointer, err)
 		}
 		for _, bad := range []string{"lstat", "cannot read source", filepath.Dir(dir)} {
 			if strings.Contains(err.Error(), bad) {
