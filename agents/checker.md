@@ -3,7 +3,7 @@ name: checker
 description: Checks a built page or flow read-only in a browser against a Grid Job's acceptance rows and posts a verdict. Use after a builder or reviewer has posted a result on UI or website work.
 model: sonnet
 effort: low
-tools: Read, Grep, Glob, Bash, Skill, mcp__claude-in-chrome__*, mcp__Claude_Browser__*
+tools: Read, Grep, Glob, Bash, mcp__claude-in-chrome__*, mcp__Claude_Browser__*
 skills:
   - browser
   - review-job

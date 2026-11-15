@@ -142,8 +142,9 @@ func TestR23WorkerTemplatesUseResultKeys(t *testing.T) {
 }
 
 // Row 12: agents/reviewer.md and agents/checker.md send a person question
-// through "the `questions` skill", so each lists it under skills: and has the
-// Skill tool.
+// through "the `questions` skill", so each lists it under skills:, which loads
+// it with the agent. The reviewer also has the Skill tool; the checker's tools:
+// line is pinned by TestBeWorkerSpawnToolsFromAgentFile.
 func TestR23ReviewerAndCheckerCanUseQuestions(t *testing.T) {
 	for _, rel := range []string{"agents/reviewer.md", "agents/checker.md"} {
 		if !strings.Contains(readPluginFile(t, rel), "`questions` skill") {
@@ -152,8 +153,8 @@ func TestR23ReviewerAndCheckerCanUseQuestions(t *testing.T) {
 		if !r23Has(r23Skills(t, rel), "questions") {
 			t.Errorf("%s: skills: does not list questions", rel)
 		}
-		if !r23Has(r23Tools(t, rel), "Skill") {
-			t.Errorf("%s: tools: has no Skill", rel)
-		}
+	}
+	if !r23Has(r23Tools(t, "agents/reviewer.md"), "Skill") {
+		t.Error("agents/reviewer.md: tools: has no Skill")
 	}
 }
