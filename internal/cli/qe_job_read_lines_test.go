@@ -110,7 +110,7 @@ func qeRun(t *testing.T, h *harness, path, job, cmd string) (int, string) {
 // cancelled before its render does not have, so show exited 1 (the text changed for
 // that reason). Since round 15 F6 (C-r15-job-show-unsaved) show prints such a Job from
 // its Feed record, with the state the Feed folds, and still writes no folder.
-func TestQeOldShowLineFailsOnCancelledJob(t *testing.T) {
+func TestQeShowLineExitsZeroOnCancelledJobFromItsFeedRecord(t *testing.T) {
 	h, path := qeFixture(t)
 	code := h.run(path, "job", "show", "J-2", "--task", feedTaskID)
 	if code != 0 || !strings.Contains(h.out.String(), "state: Done (cancelled)\n") {
