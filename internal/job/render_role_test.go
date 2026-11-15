@@ -65,7 +65,9 @@ func TestRoleInstructionsSection(t *testing.T) {
 
 func TestRoleWithoutAgentFileGetsNoSection(t *testing.T) {
 	base := renderRole(t, "writer")
-	for _, role := range []string{"person", "researcher", "scout", "operator", "designer"} {
+	// researcher, scout, operator and designer left this list: their templates are their
+	// instructions now (TestEveryTemplateRoleResolvesForAJob).
+	for _, role := range []string{"person"} {
 		got := renderRole(t, role)
 		if strings.Contains(got.Brief, "### Instructions") {
 			t.Fatalf("%s got an Instructions section", role)
