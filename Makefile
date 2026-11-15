@@ -1,6 +1,6 @@
 PKG     := github.com/gridconsole/grid-plugins
 VERSION ?= $(shell go run ./internal/packaging/cmd -describe)
-# What make dist stamps into the manifests and the binaries: 0.1.<commit count>, so claude plugin update sees it.
+# What make dist stamps into the manifests and the binaries: 0.2.<commit count>, so claude plugin update sees it.
 RELEASE ?= $(shell go run ./internal/packaging/cmd -release)
 LDFLAGS := -buildid= -X $(PKG)/internal/version.Version=$(VERSION)
 

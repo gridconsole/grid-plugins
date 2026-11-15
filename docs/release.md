@@ -11,7 +11,7 @@ claude plugin install grid@grid
 ```
 
 `claude plugin update` picks up a new release because every publish stamps a higher version:
-`0.1.<commit count>`, the number of commits reachable from HEAD of the source repo
+`0.2.<commit count>`, the number of commits reachable from HEAD of the source repo
 (`git rev-list --count HEAD`). The stamp is made in one place, `make dist`, and goes into
 `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`
 and into `grid version` of every binary.
@@ -58,7 +58,7 @@ with go.mod's Go version installed.
 
    ```sh
    git status --short                # prints nothing
-   git rev-list --count HEAD         # N: this release will be 0.1.N
+   git rev-list --count HEAD         # N: this release will be 0.2.N
    make test lint
    ```
 
@@ -68,7 +68,7 @@ with go.mod's Go version installed.
    ```sh
    make dist
    (cd dist && sha256sum -c SHA256SUMS)       # macOS: shasum -a 256 -c SHA256SUMS
-   grep '"version"' dist/plugin/.claude-plugin/plugin.json   # "0.1.N"
+   grep '"version"' dist/plugin/.claude-plugin/plugin.json   # "0.2.N"
    ```
 
 3. Check what will be public. The listing must match the tree above, and nothing may name a
@@ -90,7 +90,7 @@ with go.mod's Go version installed.
    find "$PUB" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
    cp -R dist/plugin/. "$PUB"/
    git -C "$PUB" add -A
-   git -C "$PUB" commit -m "Release 0.1.$N"
+   git -C "$PUB" commit -m "Release 0.2.$N"
    git -C "$PUB" push origin HEAD
    ```
 
@@ -112,13 +112,13 @@ with go.mod's Go version installed.
    so the installed entry is:
 
    ```sh
-   G="$H/.claude/plugins/cache/grid/grid/0.1.$N/bin/grid"      # N from step 1
-   PATH=/usr/bin:/bin "$G" version                              # prints: grid 0.1.N
+   G="$H/.claude/plugins/cache/grid/grid/0.2.$N/bin/grid"      # N from step 1
+   PATH=/usr/bin:/bin "$G" version                              # prints: grid 0.2.N
    ```
 
    `PATH=/usr/bin:/bin` leaves out Go, so a pass shows the entry ran the shipped binary. If the path
    above does not exist (the cache layout is Claude Code's, not this repo's), find the entry with
    `find "$H/.claude/plugins" -path '*/bin/grid' -type f`. On an existing install,
-   `claude plugin update grid@grid` moves it to 0.1.N.
+   `claude plugin update grid@grid` moves it to 0.2.N.
 
-`make dist RELEASE=0.1.N` overrides the stamp for a source archive that has no git history.
+`make dist RELEASE=0.2.N` overrides the stamp for a source archive that has no git history.

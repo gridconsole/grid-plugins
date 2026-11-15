@@ -89,7 +89,7 @@ func TestReleasePrintsCommitCountOfGitRepo(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
-	if want := "0.1.2\n"; stdout != want {
+	if want := "0.2.2\n"; stdout != want {
 		t.Fatalf("stdout %q, want %q", stdout, want)
 	}
 	if len(c.build)+len(c.write) != 0 {

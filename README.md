@@ -7,7 +7,7 @@ This repo replaces the earlier JavaScript plugin. The source stays internal; the
 ## Build and test
 
     make build    # ./dist/grid
-    make dist     # five platform binaries (macOS, Linux, Windows), installable dist/plugin stamped 0.1.<commit count>, SHA256SUMS
+    make dist     # five platform binaries (macOS, Linux, Windows), installable dist/plugin stamped 0.2.<commit count>, SHA256SUMS
     make generate # refresh committed plugin metadata and launcher
     make test
     make test-clean # same suite with the temp leak guard, also included in make test

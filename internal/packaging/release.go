@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// CommitVersion is the version a publish stamps into the plugin: 0.1.<commit count>.
+// CommitVersion is the version a publish stamps into the plugin: 0.2.<commit count>.
 // Every new commit raises it, so `claude plugin update` sees the release as newer.
 func CommitVersion(commits int) string {
-	return fmt.Sprintf("0.1.%d", commits)
+	return fmt.Sprintf("0.2.%d", commits)
 }
 
 // ReleaseVersion counts the commits reachable from HEAD in the repository at root.

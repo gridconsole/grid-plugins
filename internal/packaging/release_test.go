@@ -49,12 +49,12 @@ func TestVersionStampedInEveryManifest(t *testing.T) {
 }
 
 func TestCommitVersion(t *testing.T) {
-	if got := CommitVersion(1221); got != "0.1.1221" {
+	if got := CommitVersion(1221); got != "0.2.1221" {
 		t.Fatalf("got %q", got)
 	}
 }
 
-// ReleaseVersion is 0.1.<commits reachable from HEAD>: it grows with each commit.
+// ReleaseVersion is 0.2.<commits reachable from HEAD>: it grows with each commit.
 func TestReleaseVersionCountsCommits(t *testing.T) {
 	repo := t.TempDir()
 	git := func(args ...string) {

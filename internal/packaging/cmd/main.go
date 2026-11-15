@@ -38,7 +38,7 @@ func run(args []string, stdout, stderr io.Writer, d deps) int {
 	dist := fs.Bool("dist", false, "build all release platforms and the installable plugin")
 	release := fs.String("version", version.Version, "release version")
 	describe := fs.Bool("describe", false, "print the semver version for this checkout from git describe and exit")
-	releaseVersion := fs.Bool("release", false, "print the publish version 0.1.<commit count> for this checkout and exit")
+	releaseVersion := fs.Bool("release", false, "print the publish version 0.2.<commit count> for this checkout and exit")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0

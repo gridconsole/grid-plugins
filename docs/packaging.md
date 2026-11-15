@@ -38,7 +38,7 @@ no `.go` file is newer, and otherwise builds `dist/grid` first; a hook stays sil
 that build is impossible. Releases never build and never touch the network.
 `make build` creates only the native development CLI at `dist/grid`.
 
-The release version is `0.1.<commit count>`, from `git rev-list --count HEAD` (`go run ./internal/packaging/cmd -release`),
+The release version is `0.2.<commit count>`, from `git rev-list --count HEAD` (`go run ./internal/packaging/cmd -release`),
 stamped by `make dist` into `internal/version.Version` through `-ldflags` and into both manifests and the
 marketplace entry; `packaging.Build` takes it as its one argument. A shallow clone counts too few commits.
 `make dist RELEASE=<version>` is available for source archives without Git. `make build` still uses
