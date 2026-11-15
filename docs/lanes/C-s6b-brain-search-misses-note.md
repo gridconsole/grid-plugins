@@ -45,4 +45,4 @@ The Personal refusal is gone. Why the test fixture's note (written at `<grid hom
 
 Nothing; no UI.
 
-NOT DONE
+CLOSED BY C-s6c-brain-search-misses-note: accepted 03:31 UTC
