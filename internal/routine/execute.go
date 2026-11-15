@@ -189,7 +189,14 @@ func (p ProcessExecutor) execute(ctx context.Context, s Store, e Entry) (string,
 		if s.Project != "" {
 			prompt += " The project is " + s.Project + "."
 		}
-		args = []string{"-p", prompt, "--allowedTools", "Read,Glob,Grep,Bash(grid brain:*),Bash(grid signal:*)", "--max-budget-usd", strconv.FormatFloat(p.Budget, 'f', -1, 64), "--max-turns", strconv.Itoa(p.MaxTurns), "--permission-mode", "dontAsk"}
+		allowed := "Read,Glob,Grep,Bash(grid brain:*),Bash(grid signal:*)"
+		if len(e.Tools) > 0 {
+			// The routine's own source tools, as it lists them: they are named in the
+			// prompt so the skill knows its source, and allowed so dontAsk accepts them.
+			prompt += " Read the source with these tools: " + strings.Join(e.Tools, ", ") + "."
+			allowed += "," + strings.Join(e.Tools, ",")
+		}
+		args = []string{"-p", prompt, "--allowedTools", allowed, "--max-budget-usd", strconv.FormatFloat(p.Budget, 'f', -1, 64), "--max-turns", strconv.Itoa(p.MaxTurns), "--permission-mode", "dontAsk"}
 	}
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Dir = s.GridHome

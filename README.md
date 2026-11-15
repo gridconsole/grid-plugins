@@ -85,6 +85,24 @@ routine_max_turns: 3
 routine_budget: 0.25
 ```
 
+A skill routine that reads a mail, chat or calendar source lists that source's
+tools in its front matter, or with a repeated `--tool` flag on `grid routine add`:
+
+```yaml
+tools:
+  - mcp__mail__search_messages
+  - mcp__mail__read_message
+```
+
+Write each name in full, as the source's tool list gives it. The routine adds the
+names to its allow list as they are, after `Read`, `Glob`, `Grep`, `grid brain`
+and `grid signal`, and names them in its prompt; it adds no other tool. List the
+tools that read and no tool that sends, replies or deletes: the `signals` skill
+only reads. A name may hold no comma, space or control character. A routine
+without `tools` runs with the allow list it had before. The timer guard below
+also records `tools`, so adding or changing one makes timer runs refuse until
+`grid routine schedule` approves them again.
+
 `grid routine run daily` resolves entry and workflow policy on each run. Skill
 routines pass the budget and turn limits to the agent; commands starting with
 `grid` use only the timeout. Invalid policy refuses add or run with exit 2 and a
