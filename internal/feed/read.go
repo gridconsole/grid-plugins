@@ -208,9 +208,17 @@ func applyFilter(out ReadResult, f Filter) (ReadResult, error) {
 			}
 		}
 	}
+	closesPerson := personClosings(out.Records, f.Job)
 	selected := []Entry{}
 	for _, e := range out.Records[start:] {
-		if f.Type != "" && e.Type != f.Type || f.Job != "" && value(e.Job) != f.Job {
+		if closesPerson[e.ID] {
+			// The control that closed the person Job with the person's answer is
+			// that Job's result: it is shown for --job and for --type result, and
+			// no copy of the answer is written for it (r10 P3).
+			if f.Type != "" && f.Type != "result" && f.Type != e.Type {
+				continue
+			}
+		} else if f.Type != "" && e.Type != f.Type || f.Job != "" && value(e.Job) != f.Job {
 			continue
 		}
 		if !since.IsZero() {
@@ -223,6 +231,46 @@ func applyFilter(out ReadResult, f Filter) (ReadResult, error) {
 	}
 	out.Records = selected
 	return out, nil
+}
+
+// personClosings names the controls that close the person Job job with the
+// person's answer, the same records a Job waiting on it reads as its answer
+// (jobcmd waitedAnswers): a control whose target is job, that carries the answer
+// text, and that accepts the Job or sends its plan back. The answer record an
+// unleased person wrote is not among them; the closing control holds its text.
+func personClosings(records []Entry, job string) map[string]bool {
+	out := map[string]bool{}
+	if job == "" {
+		return out
+	}
+	person := false
+	for _, e := range records {
+		if e.Type != "job" {
+			continue
+		}
+		id := str(e.Body["id"])
+		if id == "" {
+			id = value(e.Job)
+		}
+		if id == job {
+			person = strings.EqualFold(strings.TrimSpace(str(e.Body["role"])), "person")
+		}
+	}
+	if !person {
+		return out
+	}
+	for _, e := range records {
+		if e.Type != "control" || str(e.Body["target"]) != job {
+			continue
+		}
+		if _, ok := e.Body["answer"].(string); !ok {
+			continue
+		}
+		if status := str(e.Body["status"]); status == "accepted" || status == "rejected" && e.Body["send_back"] == true {
+			out[e.ID] = true
+		}
+	}
+	return out
 }
 
 // MarshalData safely quotes untrusted text so embedded fence or newline strings
