@@ -11,7 +11,7 @@ The routine names the project and the source. If either is missing, say so and s
 
 ## Collect
 
-1. Read the source with the tools the routine names, or the files it names. Read only: never send, reply, delete, label or mark anything. A routine run is started with only Read, Glob, Grep, `grid brain` and `grid signal` allowed, so there the source is the files the routine names; when it names none, say so and stop.
+1. Read the source with the tools the routine names, or the files it names. Read only: never send, reply, delete, label or mark anything. A routine run is started with Read, Glob, Grep, `grid brain` and `grid signal` allowed, and with the source tools the routine lists in its `tools` key, if any; there the source is those tools or the files the routine names, and when it names neither, say so and stop.
 2. Decide per message. Keep what the person could act on or should know about; skip newsletters, receipts and notices that need nothing. When unsure, keep it: the person triages, you do not.
 3. Save each kept message with one command that starts with `grid signal add`, the body on stdin from a here-document that follows it:
 

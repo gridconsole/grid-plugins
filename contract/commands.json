@@ -3452,6 +3452,11 @@
               "required": false
             },
             {
+              "name": "--tool",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--workflow",
               "takes": "value",
               "required": false

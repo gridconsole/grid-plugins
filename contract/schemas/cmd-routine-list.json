@@ -66,6 +66,12 @@
       "scheduled": {
         "type": "boolean"
       },
+      "tools": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
       "workflow": {
         "type": "string"
       }
