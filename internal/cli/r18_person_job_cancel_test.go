@@ -79,27 +79,49 @@ func TestR18PersonTypedGuessedEpochStaysStale(t *testing.T) {
 	}
 }
 
-// The person is not the member the task lease is held by: reading the lease does not let one
-// member write as another. The cancel is refused as stale lease, exit 3, and the Job runs on.
-func TestR18PersonOfAnotherMemberStaysStale(t *testing.T) {
+// N1 of docs/decisions/D-r19-person-cancel-holder.md. This test REPLACES
+// TestR18PersonOfAnotherMemberStaysStale. The removal is directed by that decision (doc:126,
+// doc:152): a person who is not the member the task lease is held by used to be refused as a
+// stale lease, exit 3, and no product person could cancel a Job the machine's worker runs. The
+// person now saves an unleased cancel request, exit 0; the Job is still Running until the
+// holder's next pass (the end-to-end test in r20_cancel_request_cli_test.go runs that pass).
+func TestR20ClN1PersonOfAnotherMemberSavesARequest(t *testing.T) {
 	a, _ := kbRoleAgent(t)
 	r18PersonAtTerminal(t, "dana")
-	if code := r18Cancel(a); code != 3 || !strings.Contains(a.h.errb.String(), "stale lease") {
-		t.Fatalf("a cancel by a member who does not hold the task lease: exit %d %s, want 3 stale lease", code, a.h.errb)
+	before := r20ClControls(t, a)
+	if code := r18Cancel(a); code != 0 {
+		t.Fatalf("a cancel by a member who does not hold the task lease: exit %d %s, want 0", code, a.h.errb)
+	}
+	if !strings.Contains(a.h.errb.String(), "Saved. The cancel will be carried out on the next pass of the task's orchestrator.") {
+		t.Fatalf("stderr does not say the request was saved: %q", a.h.errb)
 	}
 	if got := a.status(t, "J-1"); got != contract.Running {
-		t.Fatalf("J-1 is %q after a refused cancel, want running", got)
+		t.Fatalf("J-1 is %q after the request alone, want running", got)
+	}
+	after := r20ClControls(t, a)
+	if len(after) != len(before)+1 {
+		t.Fatalf("want one new control, got %d before and %d after", len(before), len(after))
+	}
+	c := after[len(after)-1]
+	if c.Lease != nil || c.Fence != 0 || c.Gen != 0 || c.Author.ID != "dana" || c.Author.Role != "owner" || c.Worker != "dana@"+feedMachine {
+		t.Fatalf("want an unleased request by dana (owner) as dana@%s: lease %v gen %d fence %d author %+v worker %s", feedMachine, c.Lease, c.Gen, c.Fence, c.Author, c.Worker)
+	}
+	if c.Body["status"] != "cancelled" || c.Body["target"] != "J-1" || c.Body["reason"] != "scope withdrawn" || c.Body["close_reason"] != "scope withdrawn" {
+		t.Fatalf("the request body: %v", c.Body)
 	}
 }
 
 // `grid job cancel --help` says how a person cancels and what an agent uses, and still lists the flags.
+// The wanted token "reads the" is dropped: it was only in the old help (the CLI reads the lease and
+// writes under it), which docs/decisions/D-r19-person-cancel-holder.md:157-165 replaces. The new
+// text is pinned verbatim by TestR20ClJobCancelHelpIsTheDecisionsText.
 func TestR18JobCancelHelpNamesHowAPersonCancels(t *testing.T) {
 	h, path := feedHarness(t)
 	if code := h.run(path, "job", "cancel", "--help"); code != 0 {
 		t.Fatalf("job cancel --help: exit %d %s", code, h.errb)
 	}
 	help := h.errb.String() + h.out.String()
-	for _, want := range []string{"A person", "types no lease and no epoch", "reads the", "task lease", "GRID_TASK_EPOCH", "--reason", "--lease-epoch"} {
+	for _, want := range []string{"A person", "types no lease and no epoch", "task lease", "GRID_TASK_EPOCH", "--reason", "--lease-epoch"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("job cancel --help does not say %q:\n%s", want, help)
 		}
