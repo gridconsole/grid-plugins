@@ -214,7 +214,7 @@ Run this on a task whose rework Job is Running under `worker@<machine>`, with th
 2. `grid feed read` shows the person's unleased control: author = the owner's member, role owner, lease null, status `cancelled`.
 3. Within one worker pass, the Feed shows a leased control `status: cancelled` for `<rework>`, written by `worker@<machine>`, with `re` set to the request id.
 4. `grid job show <rework>` shows the Job **Cancelled**.
-5. **Its agent exits.** The rework's agent process is gone, and the Feed has the rework's `worker-exit`. This was NOT VERIFIED on a live worker in C-r18 and must be seen here.
+5. **Its agent exits.** The rework's agent process is gone, and the worker.log has the line `exit_superseded` with reason `job cancelled by a person` for the rework. No worker-exit for the rework reaches the Feed: the plugin refuses a post under a cancelled Job's lease (internal/feed/store.go:143-144), and the app worker records the exit as superseded (app internal/kernel/worker/supervisor.go, stampJobCancel and finish, lane F-r22-cancel-exit).
 6. The worker log shows **no `judgement_review_cancelled`** for the rework's builder. That event is the judge's for a review cancelled before it ran (app:internal/kernel/worker/judge.go:839-860). The cancel must reach the rework, not its review.
 7. DeliveryWait says the rework "was cancelled".
 
