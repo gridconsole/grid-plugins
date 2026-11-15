@@ -125,6 +125,8 @@ children, as the app's Judge posts when a review rejects. Every rework must be
 own rework in turn. A Job that is still open, such as a parked parent of a
 split, needs only its children (`internal/jobgraph/graph.go`, `childrenDone`).
 
+The review of a submitted Job and the rework after a rejection are posted by the app's Judge, not by the plugin: when a Job's agent exits `done`, the tick moves it to `submitted` ("awaiting judgement", `internal/orchestrator/tick.go`) and the worker stream prints a `wake` line (`internal/orchestrator/stream.go`), and nothing in the plugin reads a review's `ACCEPTED` or `REJECTED` verdict. Without the app's worker a done Job stays `submitted`. `grid job tree` names such a Job as an orphan of kind `never_judged` once its lease has run out and no wake of its result is acknowledged and no review or person Job stands from it (`internal/orchestrator/write.go`, `neverJudged`).
+
 A Job declares no review level: `review` is a retired optional field that
 nothing reads, and a Job that still carries one is not refused. The plan check
 refuses an unknown `risk` value (`concurrency`, `security`, `data-format` or
