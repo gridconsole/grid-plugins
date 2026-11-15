@@ -148,6 +148,24 @@
           "output": ""
         },
         {
+          "name": "events",
+          "args": [],
+          "flags": [
+            {
+              "name": "--all",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
           "name": "level",
           "args": [
             "\u003chook\u003e",

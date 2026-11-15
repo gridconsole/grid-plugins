@@ -656,6 +656,22 @@ Reads the event JSON on stdin and always exits 0. `sessionstart` prints
 
 where `additionalContext` names the project or task `grid where` resolved for the event's `cwd`. Other events print nothing yet.
 
+### `grid hook levels [--json]`
+
+Read-only. Prints `<rule> <level>` per line for every hook rule, or with `--json` one object `{"<rule>": "off|warn|block", ...}`, for the current project. The rule names are the ones `grid hook events` answers for.
+
+### `grid hook events [--all] [--json]`
+
+Read-only. Every hook run that consults a rule appends one line to `<GRID_HOME>/.hook-counts/events.jsonl`, next to the `home-allow.jsonl` counter that folder already holds. The file is always under the Grid home, never under `CLAUDE_PLUGIN_DATA`, so this read finds what a hook wrote inside Claude Code. A line is `{"rule": string, "event": string, "at": string, "outcome": string}`: `rule` is a name `grid hook levels` lists; `event` is the Claude Code or Codex hook event the rule was consulted for (`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`, ...); `at` is UTC, RFC 3339 (`2026-11-15T10:00:00Z`); `outcome` is one of `ok` (consulted and let the event through), `warned` (it spoke, a warning or a question, and did not refuse), `blocked` (it refused: a denied tool call, or `Stop` exit 2) or `skipped` (its level is `off`). A line holds nothing else: no tool, path, prompt, session or project, so the log is Grid-home wide. A rule asked at several places in one run leaves one line. The write is best effort: a failure is ignored and never changes the hook's exit code or output. Only rules a hook run reads leave lines: `session-start`, `session-end`, `history-log`, `usage-log`, `stop-check`, `plan-guard` and `home-allow` (when its fallback allows); `host-guard`, `only-writer`, `needs-you`, `session-check` and `job-lint` have no hook reader and stay null.
+
+The log is bounded like the app log (`grid open`): at 256 KiB the file is shifted to `events.jsonl.1`, then `.2`, and the oldest copy is dropped, so at most three files stay (about 7,500 lines). A busy rule can push a quiet rule's last line out of that bound; the rule then answers null.
+
+Default output is one line per rule, `<rule> <lastEvent> <at> <outcome>` with `-` for a rule with no line. `--json` prints an array in the order of `grid hook levels`, one object for every rule it lists:
+
+    [{"rule": string, "lastEvent": string|null, "at": string|null, "outcome": string|null}, ...]
+
+A rule with no line has all three of `lastEvent`, `at` and `outcome` null. `--all` prints the log instead, newest first (file order, across the shifted copies, not sorted by `at`): `<at> <rule> <event> <outcome>` per line, or with `--json` an array of `{rule, event, at, outcome}`, `[]` when the log is empty. A line that does not parse is skipped. Exit 0; exit 2 for an operand or an unknown flag; exit 1 when the folder cannot be read. It takes no `--project` or `--task`.
+
 ### `grid brain check [<proposal-id>] [--level home|project] [--project <p>] [--json]`
 
 Read-only gate for what changes what runs. With an id it checks that proposal

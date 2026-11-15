@@ -269,7 +269,7 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 	// follow-through cannot see. The app calls "agent budget show".
 	paths["agent"] = []string{"budget apply", "budget show", "budget undo", "check", "list", "set", "sync", "unset"}
 	paths["skill"] = []string{"disable", "enable", "list"}
-	paths["hook"] = []string{"", "level", "levels"}
+	paths["hook"] = []string{"", "events", "level", "levels"}
 	// runClaude has one level of its own ("settings") and a second of show and set.
 	paths["claude"] = []string{"settings set", "settings show"}
 	// "answer" is the top-level command; question.Run keeps no such route.
@@ -429,6 +429,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"open":                 {args: []string{"[task]"}},
 		"doctor":               {},
 		"hook":                 {args: []string{"<event>"}},
+		"hook events":          {},
 		"hook level":           {args: []string{"<hook>", "<off|warn|block>"}},
 		"hook levels":          {},
 		"account list":         {output: "cmd-account-status.json"},
