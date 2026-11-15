@@ -271,6 +271,12 @@ func (s Store) spawn(j *contract.Job) error {
 	return writeJSON(path, request)
 }
 func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory) error {
+	// A worker stop puts the Job to Ready itself (the app worker posts the control
+	// re the exit), so the cancelled arm below never sees it. The stop is not a
+	// failure and clears the count, as that arm does.
+	if j.Status == contract.Ready && j.ExitReason == "cancelled" && ycWorkerStopped(j.ExitCode) {
+		m.Failures = nil
+	}
 	if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected || j.Status == contract.Posted || j.Status == contract.Ready {
 		return nil
 	}

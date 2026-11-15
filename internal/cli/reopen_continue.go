@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -19,17 +22,31 @@ import (
 
 // A task whose Jobs a person stopped can be continued (eval round 13, T-02).
 //
-// grid-worker stop ends each running agent with a worker-exit `cancelled` whose code
-// is stop_requested (app internal/kernel/worker/supervisor.go stopRequestedCode) and
-// then cancels the Job. The task stays running with only cancelled Jobs, and
-// `grid task stop` followed by `grid task reopen` gives queued with no open Job: the
-// worker ticks a task only while a Job is open, so nothing started. reopenPlanJob
-// posts a plan Job only when the task has an accepted approve step to answer again.
-// The reopen here posts what the worker can start: an orchestrator Job like J-1, which
-// reads the request and the Jobs on the Feed and posts what the task still needs.
+// Two stops end an agent, and the app worker (since app c8bec32d, end review 1012Z
+// ruling 1) treats them differently:
+//
+//   - A worker stop (grid-worker stop, a signal, an update) ends each running agent
+//     with a worker-exit `cancelled` whose code is worker_stopped, and the worker
+//     posts the Job's Ready control itself. The Jobs stay Ready and the task stays
+//     running; nothing is stopped and a reopen of it is refused, as it was.
+//   - A task stop (the app's stop, grid task stop) ends each running agent with the
+//     code stop_requested and the worker cancels the Job ("task stopped"). The task
+//     is closed with only cancelled Jobs, and `grid task reopen` gives queued with no
+//     open Job: the worker ticks a task only while a Job is open, so nothing started.
+//
+// reopenPlanJob posts a plan Job only when the task has an accepted approve step to
+// answer again. The reopen here posts what the worker can start: an orchestrator Job
+// like J-1, which reads the request and the Jobs on the Feed and posts what the task
+// still needs.
+//
+// A running task whose Job carries stop_requested is the shape that a worker stop
+// left before app c8bec32d; on a Feed the new worker wrote it is not reached, and the
+// branch only serves a Feed written before.
 //
 // It posts a Job and refuses nothing new: a running task that has an open Job, or no
-// Job a stop ended, gets the refusal it got before.
+// Job a stop ended, gets the refusal it got before. A closed task gets the Job only
+// when its last move to closed was a stop: a delivered task that the land approval
+// closed, and once had a cancelled Job, is reopened as before with nothing posted.
 
 // reopenContinueTitle is the title of the orchestrator Job a reopen posts after a stop.
 const reopenContinueTitle = "Continue the task after it was stopped"
@@ -48,8 +65,33 @@ type reopenContinuation struct {
 	drop        func()
 }
 
-// reopenStopCode is the worker-exit code of an agent that a requested stop ended.
+// reopenStopCode is the worker-exit code of an agent that a task stop ended (and, on a
+// Feed written before app c8bec32d, one that a worker stop ended).
 const reopenStopCode = "stop_requested"
+
+// reopenClosedByStop reports whether the last receipt in history.md that moved the
+// task to closed was a stop. Receipts are the "- {json}" lines of task.Event; a
+// history with no such receipt, or one that cannot be read, is not a stop.
+func reopenClosedByStop(dir string) bool {
+	data, err := os.ReadFile(filepath.Join(dir, "history.md"))
+	if err != nil {
+		return false
+	}
+	what := ""
+	scan := bufio.NewScanner(bytes.NewReader(data))
+	scan.Buffer(make([]byte, 0, 64<<10), 4<<20)
+	for scan.Scan() {
+		raw, ok := strings.CutPrefix(scan.Text(), "- {")
+		if !ok {
+			continue
+		}
+		var e taskstore.Event
+		if json.Unmarshal([]byte("{"+raw), &e) == nil && e.ToState == "closed" {
+			what = e.What
+		}
+	}
+	return what == "stop"
+}
 
 // reopenCodeIs reports whether a folded worker-exit code is the JSON string want. A
 // number, no code or any other string is not it.
@@ -61,9 +103,9 @@ func reopenCodeIs(raw json.RawMessage, want string) bool {
 // reopenContinueJob prepares the orchestrator Job of a reopen, or returns nil when the
 // reopen has none to post: the task is not running or closed, the Feed holds no Job
 // (the worker posts J-1 itself), a Job is open, or no Job was cancelled by a stop. A
-// running task needs a Job a worker stop ended (code stop_requested); a closed task,
-// which `grid task stop` and the worker's pass left with cancelled Jobs, needs any
-// cancelled Job.
+// running task needs a Job whose agent a stop ended (code stop_requested, a Feed
+// written before app c8bec32d); a closed task needs a cancelled Job and a last move
+// to closed that was a stop (reopenClosedByStop), not a close.
 func reopenContinueJob(env Env, dir string) (*reopenContinuation, error) {
 	b, err := os.ReadFile(filepath.Join(dir, "task.md"))
 	if err != nil {
@@ -103,7 +145,10 @@ func reopenContinueJob(env Env, dir string) (*reopenContinuation, error) {
 	if cancelled == 0 || (state == "running" && stopped == 0) {
 		return nil, nil
 	}
-	w, release, err := reopenTaskWriter(env, store)
+	if state == "closed" && !reopenClosedByStop(dir) {
+		return nil, nil
+	}
+	w, release, begin, err := reopenTaskWriter(env, store)
 	if err != nil {
 		return nil, fmt.Errorf("the orchestrator Job cannot be posted for the reopened task: %w", err)
 	}
@@ -118,6 +163,11 @@ func reopenContinueJob(env Env, dir string) (*reopenContinuation, error) {
 		fromRunning: state == "running",
 		post: func() error {
 			defer release()
+			// The Handover record is written here, after the state moves held: a
+			// refused move leaves nothing on the Feed.
+			if err := begin(); err != nil {
+				return err
+			}
 			return reopenPostJob(store, w, 0, record)
 		},
 		drop: release,
@@ -129,22 +179,26 @@ func reopenContinueJob(env Env, dir string) (*reopenContinuation, error) {
 // global), as reopenPlanJob takes it. A person at a terminal holds none, so the person
 // acquires the task lease for this one post (free, or left by a worker process that is
 // gone), as grid task new does for J-1. release gives it back; it is safe to call twice.
-func reopenTaskWriter(env Env, store feed.Store) (feed.Writer, func(), error) {
+// begin writes the Handover record that a lease taken anew must open its tenure with;
+// it does nothing for a lease the caller already held. It is not called here: the
+// caller calls it after the state moves, so a refused move writes no record.
+func reopenTaskWriter(env Env, store feed.Store) (w feed.Writer, release func(), begin func() error, err error) {
 	none := func() {}
+	noBegin := func() error { return nil }
 	epoch := env.getenv("GRID_LEASE_EPOCH")
 	if t := env.getenv("GRID_TASK_EPOCH"); t != "" && !env.typedGlobal["GRID_LEASE_EPOCH"] {
 		epoch = t
 	}
 	if epoch != "" {
 		w, err := orchestratorWriter(env, "task", epoch)
-		return w, none, err
+		return w, none, noBegin, err
 	}
-	w, err := orchestratorWriter(env, "task", "0.0")
+	w, err = orchestratorWriter(env, "task", "0.0")
 	if err != nil {
-		return w, none, err
+		return w, none, noBegin, err
 	}
 	if !contract.ValidWorker(w.Worker) {
-		return w, none, fmt.Errorf("%q is not a valid <member>@<machine ULID> writer id", w.Worker)
+		return w, none, noBegin, fmt.Errorf("%q is not a valid <member>@<machine ULID> writer id", w.Worker)
 	}
 	pid, began := os.Getpid(), time.Time{}
 	if env.OwnerPID != 0 {
@@ -164,21 +218,22 @@ func reopenTaskWriter(env Env, store feed.Store) (feed.Writer, func(), error) {
 	ts := lease.TaskStore{Feed: store}
 	got, err := ts.AcquireTask(w, pid, contract.FormatTime(began), session.ProbeLocal)
 	if err != nil {
-		return w, none, fmt.Errorf("the task lease cannot be taken: %w", err)
+		return w, none, noBegin, fmt.Errorf("the task lease cannot be taken: %w", err)
 	}
 	w.Gen, w.Fence = got.Tenure.Gen, got.Tenure.Fence
 	released := false
-	release := func() {
+	release = func() {
 		if !released {
 			released = true
 			_ = ts.ReleaseTask(w)
 		}
 	}
+	begin = noBegin
 	if got.How != lease.AcquiredReused {
-		if _, err := store.Handover(feed.Input{Body: map[string]any{}}, w); err != nil {
-			release()
-			return w, none, err
+		begin = func() error {
+			_, err := store.Handover(feed.Input{Body: map[string]any{}}, w)
+			return err
 		}
 	}
-	return w, release, nil
+	return w, release, begin, nil
 }
