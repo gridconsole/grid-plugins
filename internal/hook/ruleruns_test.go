@@ -209,6 +209,6 @@ func TestRuleRunsLogIsBounded(t *testing.T) {
 	}
 	lines := readRunLines(t, filepath.Join(dir, "events.jsonl"))
 	if len(lines) != 1 || lines[0].Rule != "history-log" || lines[0].Event != "PostToolUse" {
-		t.Errorf("the fresh log holds %+v, want the one new PostToolUse line", lines)
+		t.Errorf("the fresh log holds %d lines, want the one new PostToolUse line", len(lines))
 	}
 }
