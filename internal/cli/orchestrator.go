@@ -20,6 +20,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/job/jobcmd"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
 	"github.com/gridconsole/grid-plugins/internal/land"
+	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/session"
@@ -27,6 +28,21 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
+
+// jobCancelUsage is what `grid job cancel --help` says before its flags: how a person
+// cancels a Running Job without knowing a lease epoch, and how an agent does.
+const jobCancelUsage = `Usage: grid job cancel <job> --reason <text> [--task <task>] [--json]
+
+Cancels a Job, a Running one too.
+A person (role owner, member or lead) types no lease and no epoch: the CLI reads the
+task lease's current generation.fence from the Feed and writes the cancel under it, with
+the person as the author. Run it as the member who started the task's worker on this
+machine (your GRID_MEMBER). For another member the lease names a different holder and the
+cancel is refused as a stale lease (exit 3).
+An agent cancels with the GRID_TASK_EPOCH its worker gave it. A --lease-epoch typed on the
+command line is used as typed, so a guessed or old one is refused as a stale lease (exit 3).
+
+`
 
 func runOrchestratorJob(args []string, env Env) int {
 	if len(args) > 0 {
@@ -50,6 +66,9 @@ func runOrchestrator(args []string, env Env) int {
 		id, rest = rest[0], rest[1:]
 	}
 	fs := newFlags("job "+verb, env)
+	if verb == "cancel" {
+		fs.Usage = func() { fmt.Fprint(env.Stderr, jobCancelUsage); fs.PrintDefaults() }
+	}
 	orderFlag := fs.Int("order", -1, "queue order of the Job (lowest first); on job post only")
 	task := fs.String("task", "", "task folder or id")
 	project := fs.String("project", "", "project name or id")
@@ -284,6 +303,21 @@ func runOrchestrator(args []string, env Env) int {
 	// guest with any lease, keeps the lease path and its refusal.
 	if !unleased && personResult && *planHash == "" && *epoch == "" && *leaseFlag == "" && env.getenv("GRID_LEASE") == "" {
 		unleased = contract.GuestAddressee(personRole, env.getenv("GRID_MEMBER"), false, personJobRole, personOwner, personKind)
+	}
+	// A person of the team at a terminal holds no lease epoch to cancel a Job with: the
+	// worker gives its agents GRID_TASK_EPOCH, and a person has no such variable, so the
+	// cancel of a Running Job stopped at "must be gen.fence", or at "stale lease" when the
+	// epoch was guessed. A cancel is a control record under the task lease, so for a person
+	// who holds and typed no epoch the current task lease is read from the Feed and its
+	// generation and fence are used, with the person as the author. This is not a way past
+	// the fence: the lease still has to name this member's own <member>@<machine> as holder
+	// (the member who started the worker on this machine), or the write is refused as a
+	// stale lease as before. A typed epoch is used as typed, and an agent keeps the epochs
+	// the worker gave it.
+	if verb == "cancel" && *epoch == "" && (*leaseFlag == "" || *leaseFlag == "task") && contract.TierFor(personRole) == contract.PersonTeam {
+		if held, readErr := (lease.TaskStore{Feed: store}).Read("task"); readErr == nil && held.Holder != nil {
+			leaseName, *epoch = "task", fmt.Sprintf("%d.%d", held.Gen, held.Fence)
+		}
 	}
 	var writer feed.Writer
 	if unleased {

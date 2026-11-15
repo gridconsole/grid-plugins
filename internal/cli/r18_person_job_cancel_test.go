@@ -92,6 +92,20 @@ func TestR18PersonOfAnotherMemberStaysStale(t *testing.T) {
 	}
 }
 
+// `grid job cancel --help` says how a person cancels and what an agent uses, and still lists the flags.
+func TestR18JobCancelHelpNamesHowAPersonCancels(t *testing.T) {
+	h, path := feedHarness(t)
+	if code := h.run(path, "job", "cancel", "--help"); code != 0 {
+		t.Fatalf("job cancel --help: exit %d %s", code, h.errb)
+	}
+	help := h.errb.String() + h.out.String()
+	for _, want := range []string{"A person", "types no lease and no epoch", "reads the", "task lease", "GRID_TASK_EPOCH", "--reason", "--lease-epoch"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("job cancel --help does not say %q:\n%s", want, help)
+		}
+	}
+}
+
 // The agent path is as it was: an agent (role worker) has the epochs the worker gave it, and
 // the CLI does not read the lease for it. With a stale GRID_TASK_EPOCH it is refused as stale
 // lease, exit 3; with no epoch at all it is told to give one, and nothing is cancelled.
