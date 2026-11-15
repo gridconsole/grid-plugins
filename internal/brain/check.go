@@ -42,7 +42,7 @@ type CheckResult struct {
 
 var (
 	configProposalTopics = map[string]bool{"workflows": true, "environments": true, "machines": true, "deploy": true, "people": true, "routines": true, "agents": true}
-	skillFields          = map[string]bool{"name": true, "description": true, "when_to_use": true, "metadata": true}
+	skillFields          = map[string]bool{"name": true, "description": true, "when_to_use": true, "metadata": true, "topics": true}
 	agentFields          = map[string]bool{"name": true, "description": true, "tools": true, "model": true, "effort": true, "maxTurns": true, "metadata": true}
 	runningSkillFields   = map[string]bool{"allowed-tools": true, "hooks": true, "shell": true, "context": true, "agent": true, "model": true}
 )
@@ -335,7 +335,7 @@ func checkSkill(root *os.Root, level, dir string, res *CheckResult) error {
 				case runningSkillFields[k.name]:
 					res.add(CheckSkillField, scoped(level, p), k.line, "skill front matter key can run code or widen permissions", k.name)
 				case !skillFields[k.name]:
-					res.add(CheckSkillField, scoped(level, p), k.line, "skill front matter key is outside name, description, when_to_use, metadata", k.name)
+					res.add(CheckSkillField, scoped(level, p), k.line, "skill front matter key is outside name, description, when_to_use, metadata, topics", k.name)
 				}
 			}
 		}
