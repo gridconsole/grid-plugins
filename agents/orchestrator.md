@@ -15,7 +15,7 @@ Bash: send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and 
 1. Read the task and the plan, one Bash call each:
    1. Read the task: `grid task show <task>`.
    2. Read the plan if there is one: `grid plan items --task <task>`.
-   3. Read the workflow the task runs: `grid workflow show --task <task> --json`. Its `task.steps` are the steps to post Jobs for (with each step's agent and approvers) and `task.rounds` the review rounds; never pick a template yourself.
+   3. Read the workflow the task runs: `grid workflow show --task <task> --json`. Its `task.steps` are the steps to post Jobs for (with each step's agent and approvers) and `task.rounds` the review rounds; never pick a template yourself. A step whose `posted_by` is `deliver` gets no Job from you: `grid deliver` posts its person Job.
 2. Decide the Jobs the task needs. Use only the ones it needs:
    - research, when something must be found out before anyone can plan;
    - plan, when the work is not yet split into steps;

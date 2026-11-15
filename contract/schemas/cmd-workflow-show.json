@@ -305,6 +305,13 @@
               },
               "name": {
                 "type": "string"
+              },
+              "posted_by": {
+                "type": "string",
+                "enum": [
+                  "deliver"
+                ],
+                "description": "Present on an approve step whose person Job grid deliver posts; the orchestrator posts no Job for that step."
               }
             },
             "required": [

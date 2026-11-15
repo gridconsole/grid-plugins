@@ -42,12 +42,19 @@ type nhWfTask struct {
 
 // nhWfStep is one step the task runs: its name and kind as TaskWorkflow gives
 // them, and the template step's agent and approvers (null when it has none).
+// PostedBy is "deliver" on an approve step whose person Job grid deliver posts
+// (postShipPersonJob), so the orchestrator posts no Job for it; it is absent on
+// every other step.
 type nhWfStep struct {
 	Name      string   `json:"name"`
 	Kind      string   `json:"kind"`
 	Agent     *string  `json:"agent"`
 	Approvers []string `json:"approvers"`
+	PostedBy  string   `json:"posted_by,omitempty"`
 }
+
+// nhWfPostedByDeliver is the posted_by of a step whose person Job grid deliver posts.
+const nhWfPostedByDeliver = "deliver"
 
 // nhWfShowTask answers workflow show --task. The task is resolved as grid plan
 // resolves --task, its task.md goes to workflow.TaskWorkflow with the task's
@@ -191,14 +198,14 @@ func nhWfSource(file string) (string, error) {
 // Run, then Check by grid-reviewer, 2 review rounds, the flow the app's Judge
 // uses for such a home, then Ship, the person step: grid deliver posts its
 // person Job (postShipPersonJob), the plan approve Job, so the step's kind is
-// approve. Its approvers list is empty: the task's person, the owner when
-// task.md names none.
+// approve, and posted_by is deliver: the orchestrator posts no Job for it. Its
+// approvers list is empty: the task's person, the owner when task.md names none.
 func nhWfBuiltIn(id string) nhWfTask {
 	reviewer, rounds := "grid-reviewer", 2
 	return nhWfTask{ID: id, Source: "built-in", Rounds: &rounds, Steps: []nhWfStep{
 		{Name: "Run", Kind: "run"},
 		{Name: "Check", Kind: "check", Agent: &reviewer},
-		{Name: "Ship", Kind: "approve", Approvers: []string{}},
+		{Name: "Ship", Kind: "approve", Approvers: []string{}, PostedBy: nhWfPostedByDeliver},
 	}}
 }
 

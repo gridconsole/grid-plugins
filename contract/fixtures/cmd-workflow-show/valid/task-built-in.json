@@ -36,7 +36,8 @@
         "agent": null,
         "approvers": [],
         "kind": "approve",
-        "name": "Ship"
+        "name": "Ship",
+        "posted_by": "deliver"
       }
     ],
     "workflow": null
