@@ -135,6 +135,9 @@ func (r Resolver) implicit(gridHome, cwd string, records []project.Record) Resul
 	if proj, task, ok := taskParts(gridHome, cwd); ok {
 		return r.taskResult(gridHome, records, RuleTask, proj, task)
 	}
+	if proj, task, ok := r.worktreeTask(gridHome, cwd, records); ok {
+		return r.taskResult(gridHome, records, RuleTask, proj, task)
+	}
 	if within(gridHome, cwd) {
 		return newResult(RulePersonal, Personal, cwd) // Grid's own data is never a project folder
 	}
@@ -250,20 +253,8 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 	}
 	if name == "" && taskULID.MatchString(arg) {
 		// A task ULID is unique in the home, so it needs no project.
-		names := []string{}
-		for _, rec := range records {
-			names = append(names, rec.Name)
-		}
-		if personalOK {
-			names = append(names, Personal)
-		}
-		for _, n := range names {
-			if !r.GuestProjectAllowed(n) || !r.guestTaskPathAllowed(gridhome.TasksDir(gridHome, n)) {
-				continue
-			}
-			if task := taskWithID(gridhome.TasksDir(gridHome, n), arg); task != "" {
-				return n, task, nil
-			}
+		if proj, task, ok := r.taskByULID(gridHome, records, arg, personalOK); ok {
+			return proj, task, nil
 		}
 	}
 	if name == "" {
@@ -302,6 +293,47 @@ func (r Resolver) explicitTask(gridHome, cwd, arg, name string, records []projec
 		return "", "", ErrTaskNotFound
 	}
 	return "", "", &LookupError{Kind: ErrTaskNotFound, Message: fmt.Sprintf("task %s not found in project %s", arg, name)}
+}
+
+// taskByULID finds the task whose task.md gives id, in any project the caller may
+// read, and in Personal when personalOK.
+func (r Resolver) taskByULID(gridHome string, records []project.Record, id string, personalOK bool) (proj, task string, ok bool) {
+	names := []string{}
+	for _, rec := range records {
+		names = append(names, rec.Name)
+	}
+	if personalOK {
+		names = append(names, Personal)
+	}
+	for _, n := range names {
+		if !r.GuestProjectAllowed(n) || !r.guestTaskPathAllowed(gridhome.TasksDir(gridHome, n)) {
+			continue
+		}
+		if t := taskWithID(gridhome.TasksDir(gridHome, n), id); t != "" {
+			return n, t, true
+		}
+	}
+	return "", "", false
+}
+
+// worktreeTask maps <grid home>/worktrees/<task ulid>[/...], where a Job's agent
+// works, to the task with that ULID. An unknown ULID is not a task folder.
+func (r Resolver) worktreeTask(gridHome, cwd string, records []project.Record) (proj, task string, ok bool) {
+	rel, err := filepath.Rel(gridHome, cwd)
+	if err != nil {
+		return "", "", false
+	}
+	parts := strings.Split(rel, string(filepath.Separator))
+	if len(parts) < 2 || parts[0] != "worktrees" {
+		return "", "", false
+	}
+	// The folder is the ULID (worktrees/<ulid>/J-N-aN), or starts with it
+	// (worktrees/<ulid>-J-N-aN).
+	id, _, _ := strings.Cut(parts[1], "-")
+	if !taskULID.MatchString(id) {
+		return "", "", false
+	}
+	return r.taskByULID(gridHome, records, id, r.PersonalOK())
 }
 
 // taskWithID is the folder name of the task in tasksDir whose task.md gives id, or "".
