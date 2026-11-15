@@ -8,7 +8,7 @@ Go code is at 78def420; every run below is on that head. The commits after it ch
 
 | Row | Result |
 |---|---|
-| 1a. cli row 1 confirmed on main | HOLDS, confirmed. FAIL_BASE_PENDING |
+| 1a. cli row 1 confirmed on main | HOLDS, confirmed. With main's `approve_record.go` put back (`git checkout origin/main -- internal/cli/approve_record.go`, then restored; `git status --short` clean), `go test -count=1 -run TestR23 ./internal/cli/` exit 1: `--- FAIL: TestR23ApproveNeedsNoGridMember`, `r23_approve_person_test.go:47: "": approve exit 3, want 0; stderr "grid approve: approving is for a person of the team: set GRID_MEMBER\n"`. The test runs `grid task status T-01 waiting` first in the same empty environment; it exits 0 (the test checks that and goes on), then `grid approve T-01 --plan-hash <hash> --json` exits 3. The other two R23 tests pass on main. On the head: `go test -count=1 -v -run TestR23 ./internal/cli/` exit 0, `--- PASS` for `TestR23ApproveNeedsNoGridMember`, `TestR23WorkerShellWithoutMemberWritesNothing` and the 5 subtests of `TestR23ApproveRefusesAgentEnvironment`. |
 | 1b. orch row 3 confirmed on main | HOLDS, confirmed. Scratch run (not committed, removed): `grid task status T-01 waiting --json` exit 0 in an unmarked session (`who {"id":"local","role":"owner"}`), with `GRID_AGENT=orchestrator` (`who {"id":"orchestrator","role":"agent"}`) and with `GRID_ROLE=worker` (`who {"id":"grid","role":"worker"}`). No code refuses an agent on that verb. |
 | 2a. cli row 1: fix and test | HOLDS. `approvalWriter` (internal/cli/approve_record.go:22): with no lease epoch, no GRID_MEMBER, no GRID_ACTOR and no worker mark, a person's role writes as the local person. An empty or `cli` GRID_ROLE records `{local, owner}`, the person `grid task status` and `grid task close` record in that shell; an explicit `GRID_ROLE=member` records `{local, member}`. Test `TestR23ApproveNeedsNoGridMember` (internal/cli/r23_approve_person_test.go) runs three shells (empty env, `GRID_ROLE=cli`, `GRID_ROLE=owner`) and asserts: `task status` exit 0, `approve` exit 0 with no GRID_MEMBER on stderr, exactly one answer record authored `{local, owner}`, the plan approve Job answered, and after the lease holder's pass (`holderPass`) `task.Approved(path)` is true. Fails on main (row 1a), passes on the head. |
 | 2b. agent environment refused for approve | PARTLY. Shells with a worker mark (GRID_WORKER_ID, GRID_AGENT, GRID_WORKER) or an agent role and no GRID_MEMBER stay refused, exit 3 with `approving is for a person of the team: set GRID_MEMBER`, nothing written: `TestR23ApproveRefusesAgentEnvironment` (5 shells) and `TestR23WorkerShellWithoutMemberWritesNothing`. Both pass on main too; they pin refusals that already existed, the lane added none. A shell that carries no GRID_* variable at all is not detected as an agent and now approves (see 2c). |
@@ -24,12 +24,13 @@ Go code is at 78def420; every run below is on that head. The commits after it ch
 | No attribution lines, no personal paths | HOLDS: commit messages are one sentence each with no trailer; this doc and the code hold no home path, host or email. |
 | *RealPlugin* tests | None apply. |
 | Whole-module test, cross-repo set | not run, not asked (the orchestrator runs them at landing). |
-| Budget | About 65 tool calls against the brief's "about 50": the full `internal/cli` run takes about four minutes and was run twice, and the advisor's review added an edit round. The WIP bundle was written late, not at 60 percent. |
+| Budget | About 65 tool calls against the brief's "about 50": the full `internal/cli` run takes about four minutes and was run three times, and a review of my own work added an edit round (the deleted test and the holder's-pass assertion). The WIP bundle was written late, not at 60 percent. |
 
 ## Runs (Go code at 78def420)
 
 - `go test -count=1 -run 'TestR23|TestApproveRecord' ./internal/cli/`: `ok` 3.583s.
-- `go test -count=1 ./internal/cli/ ./cmd/grid/ ./lib/`: FULL_RUN_PENDING
+- `go test -count=1 ./internal/cli/ ./cmd/grid/ ./lib/` exit 0: `ok github.com/gridconsole/grid-plugins/internal/cli 129.322s`, `? github.com/gridconsole/grid-plugins/cmd/grid [no test files]`, `ok github.com/gridconsole/grid-plugins/lib 33.098s`.
+- `go test -count=1 ./internal/task/ ./internal/hook/ ./internal/orchestrator/ ./internal/feed/` exit 0 (packages `approvalWriter` reads from; none changed): all `ok`.
 
 ## What changed
 
