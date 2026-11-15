@@ -22,6 +22,7 @@ Checks the orchestrator runs on each Job before posting it (the rules of 10 Nov)
 5. One budget number: `budget.turns_estimate`. If the step will not fit in about 60 calls, split it into Jobs before launch, each with its own `after` and a why.
 6. Hand-off: acceptance rows are written so each can be answered HOLDS (with a command and exit code or `path:line`) or NOT DONE. The builder hands off a proof table; a row it could not prove is NOT DONE.
 7. Verify: a test command with a positive `min_tests`, or `kind: file-exists` or `kind: reviewer-check` for non-code work. Before you name a whole-suite verify (`go test ./...`), run it once on the base; when it is already red, name the tests the change touches in verify and write the pre-existing failure in the Job's out of scope, so no builder is rejected for it.
+8. Note to keep: when the owner's request or the plan step asks for a note, a decision or knowledge to keep ("leave a note for whoever works on it next", "record why we chose it", "write down how X is handled"), the Job that does the work has an acceptance row of its own that names it: what it says and its topic (`conventions` for a practice or a lesson, `decisions` for a choice and its reason; `grid brain topics` lists them). The row says the builder proposes it with `grid brain propose --task <task>` and lists it in the result's `knowledge`. A file the request also names (a README, a doc) is a second row; a file never stands in for the proposal. Without that row the builder reads the ask as a file to write, and no curator Job follows (eval round 12, E3).
 
 ## Bash
 
@@ -124,4 +125,4 @@ Then run, in this order:
 - `grid plan check` for a plan;
 - `grid job post --task <task> --type job --body <json>` once each check exits 0, after the Jobs it names in `after`.
 
-Done: every Job posted passed the seven checks and `grid job tree --task <task>` shows it.
+Done: every Job posted passed the eight checks and `grid job tree --task <task>` shows it.
