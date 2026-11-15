@@ -37,6 +37,20 @@ type stringList []string
 func (l *stringList) String() string     { return strings.Join(*l, ",") }
 func (l *stringList) Set(v string) error { *l = append(*l, v); return nil }
 
+// helpOut is where a flag set prints its usage: stdout when the arguments ask for
+// help (-h, -help or --help before any --), stderr on any other parse error.
+func helpOut(args []string, env Env) io.Writer {
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		if a == "-h" || a == "-help" || a == "--help" {
+			return env.Stdout
+		}
+	}
+	return env.Stderr
+}
+
 // Run returns 0 on success, 1 for failed checks or execution/storage errors,
 // and 2 for invalid command usage. Reading a failed run with show returns 0.
 func Run(args []string, env Env) int {
@@ -53,7 +67,7 @@ func Run(args []string, env Env) int {
 		return runExportSuite(args[1:], env)
 	}
 	fs := flag.NewFlagSet("grid eval "+verb, flag.ContinueOnError)
-	fs.SetOutput(env.Stderr)
+	fs.SetOutput(helpOut(args, env))
 	asJSON := fs.Bool("json", false, "print JSON")
 	var suite, results, tier, size, agent string
 	var timeout time.Duration

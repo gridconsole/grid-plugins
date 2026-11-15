@@ -47,7 +47,7 @@ func TestJobFlagAndCommandRefusals(t *testing.T) {
 		{"budget 2001", []string{"render", "T-01", "1", "--budget", "2001"}, "job: --budget must be between 1 and 2000\n"},
 		{"budget x", []string{"render", "T-01", "1", "--budget", "x"}, "job: --budget must be between 1 and 2000\n"},
 		{"unknown flag", []string{"render", "T-01", "1", "--bogus"}, "job: unknown flag --bogus\n"},
-		{"unknown command", []string{"frobnicate", "T-01"}, "job: unknown job command \"frobnicate\"; use render, lint or show\n"},
+		{"unknown command", []string{"frobnicate", "T-01"}, "job: unknown job command \"frobnicate\"; use next, post, ack, result, cancel, tree, blocked, render, lint, show, trace, verify or cycles\n"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

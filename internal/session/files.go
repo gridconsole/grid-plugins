@@ -99,6 +99,25 @@ func (s Store) locked(fn func() error) error {
 	return fn()
 }
 
+// lockedNow is locked without a wait: when another descriptor holds the session
+// lock it returns fslock.ErrLocked and fn does not run.
+func (s Store) lockedNow(fn func() error) error {
+	dir, err := s.storageDir(true, "sessions")
+	if err != nil {
+		return err
+	}
+	f, err := fslock.OpenNoFollow(filepath.Join(dir, ".lock"), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := fslock.TryLockExclusive(f); err != nil {
+		return err
+	}
+	defer fslock.Unlock(f)
+	return fn()
+}
+
 // lockedContext is locked with a bound on the wait for the session lock: when
 // ctx ends first it returns ctx.Err() and fn does not run. fslock takes the
 // descriptor over for the wait, so f is closed here only once the lock is held;

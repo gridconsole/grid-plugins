@@ -94,7 +94,10 @@ func stderrWithJSON(e Env, code string) bool {
 	return (code == "no_such_task" || code == "no_such_project") && !e.Resolver.Caller.IsGuest()
 }
 
-const usage = "Usage: grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--project <name>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--project <name>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--project <name>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\nExit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip), 6 stale rev (read again), 7 not versioned (nothing written).\n"
+// verbList names every grid job verb, the orchestrator verbs (internal/cli/orchestrator.go) and these.
+const verbList = "next, post, ack, result, cancel, tree, blocked, render, lint, show, trace, verify or cycles"
+
+const usage = "Usage: grid job next [--task <task>] [--wait] [--json]\n       grid job post [<job>] [--task <task>] [--type <type>] [--body <json>|-] [--order N] [--person <member>] [--json]\n       grid job ack <job> [--task <task>] [--json]\n       grid job result <job> [--task <task>] [--body <json>|-] [--plan-hash <hash>] [--json]\n       grid job cancel <job> --reason <text> [--task <task>] [--json]\n       grid job tree [--task <task>] [--json]\n       grid job blocked [--task <task>] [--json]\n       (grid job <verb> --help lists the flags of a verb)\n       grid job render <task> <item> [--budget N] [--json]\n       grid job lint <file> [--task <task>] [--project <name>] [--json]\n       grid job show [<task> <job>|<job>|<file>] [--task <task>] [--project <name>] [--json]\n       grid job trace <pointer> [--sha256 <digest>] [--project <name-or-id>] [--json]\n       grid job verify <job> [--task <task>] [--project <name>] [--dir <path>] [--json]\n       grid job cycles <items.json> [--json]\nExit status: 0 done, 1 failed, 2 usage, 3 rejected (stale lease, invalid record or intent claim token; do not retry), 4 disk full, 5 taken (intent already claimed or done; skip), 6 stale rev (read again), 7 not versioned (nothing written).\n"
 
 func Run(args []string, e Env) int {
 	if err := memberContext(e.Resolver); err != nil {
@@ -117,11 +120,18 @@ func Run(args []string, e Env) int {
 	if err != nil {
 		return output(e, f, report{Error: err.Error(), Code: refusalCode(err, 2), Findings: []lint.Finding{}}, 2)
 	}
-	if f.help || len(f.args) == 0 {
+	if f.help {
 		if _, err := io.WriteString(e.Stdout, usage); err != nil {
 			return 1
 		}
 		return 0
+	}
+	if len(f.args) == 0 {
+		// A bare grid job is a usage error, as a bare grid feed is: usage on stderr, exit 2.
+		if _, err := io.WriteString(e.Stderr, usage); err != nil {
+			return 1
+		}
+		return 2
 	}
 	e.project = f.project
 	action, args := f.args[0], f.args[1:]
@@ -160,9 +170,24 @@ func Run(args []string, e Env) int {
 			return fail(err, 1)
 		}
 		skeleton := meta + "\n## Intent\n## Job\n## Context\n## Out of scope\n## Open\n## Acceptance\n## Outcome\n## Verdict\n## Follow-up\n"
-		findings := lint.Check(skeleton, w.lintOptions())
-		if lint.HasErrors(findings) {
-			return output(e, f, report{ID: j.ID, Findings: findings}, 1)
+		// The job-lint level says what lint errors do here: block refuses (the default),
+		// warn says them on stderr and renders, off does not lint. Settings that cannot
+		// be read keep the refusal.
+		lintLevel, levelErr := jobLintLevel(e.GridHome, w.project)
+		if levelErr != nil {
+			fmt.Fprintf(e.Stderr, "grid job render: hook settings cannot be read: %v\n", levelErr)
+		}
+		var findings []lint.Finding
+		if lintLevel != "off" {
+			findings = lint.Check(skeleton, w.lintOptions())
+			if lint.HasErrors(findings) {
+				if lintLevel != "warn" {
+					return output(e, f, report{ID: j.ID, Findings: findings}, 1)
+				}
+				for _, fd := range findings {
+					fmt.Fprintf(e.Stderr, "grid job render: %s: %s: %s (job-lint is warn, rendering anyway)\n", j.ID, fd.Rule, fd.Message)
+				}
+			}
 		}
 		agent, _, _ := w.store.AgentFor(j.Role) // the brain's agent for the role, if it holds one
 		// A skill the person turned off (grid skill disable) is left out of the Skills block.
@@ -319,7 +344,7 @@ func Run(args []string, e Env) int {
 		}
 		return output(e, f, report{OK: true, ID: j.ID, Path: display(path, e), Job: &j, State: state, Reason: why, Record: record, fromFeed: taskDir != "", Brief: string(b), Findings: []lint.Finding{}}, 0)
 	default:
-		return fail(fmt.Errorf("unknown job command %q; use render, lint or show", action), 2)
+		return fail(fmt.Errorf("unknown job command %q; use "+verbList, action), 2)
 	}
 }
 
@@ -872,6 +897,23 @@ func sources(task string, e Env) (*world, error) {
 	}
 	sort.Strings(w.repos)
 	return w, nil
+}
+
+// jobLintLevel reads the job-lint hook level the way the guards do: the project's
+// value over the personal one, the catalog default (block) when none is stored. A
+// settings error returns block, so an unreadable file never turns the refusal off.
+func jobLintLevel(gridHome, project string) (string, error) {
+	if gridHome == "" {
+		return "block", nil
+	}
+	levels, err := settings.ReadHookLevels(gridHome, project)
+	if err != nil {
+		return "block", err
+	}
+	if l := levels["job-lint"]; l != "" {
+		return l, nil
+	}
+	return "block", nil
 }
 
 // lintOptions is what lint checks a Job against: the task's files and the project's repos.

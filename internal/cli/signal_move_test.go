@@ -214,5 +214,8 @@ func TestSignalMoveHelp(t *testing.T) {
 	if code := h.run(h.home, "signal", "move", "--help"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.errb)
 	}
-	golden.Assert(t, "signal-move-help", h.errb.String())
+	if h.errb.Len() != 0 {
+		t.Fatalf("signal move --help wrote to stderr: %s", h.errb)
+	}
+	golden.Assert(t, "signal-move-help", h.out.String())
 }

@@ -469,9 +469,12 @@ func toolUse(o Options) {
 		in.Cwd = o.Cwd
 	}
 	if tooLarge {
-		// An event the guards could not read must not pass as one they approved.
+		// The guards could not read this event. At plan-guard block it is denied;
+		// at warn it passes with a warning and at off silently, never with an
+		// allow: Claude Code's own permission flow still decides.
 		if guard.Guarded(in.ToolName) && o.Stdout != nil {
-			d := hookio.Deny(fmt.Sprintf("This tool call is larger than %d bytes, more than the Grid guards read, so they cannot check it. Make the change in smaller steps.", hookio.InputLimit))
+			reason := fmt.Sprintf("This tool call is larger than %d bytes, more than the Grid guards read, so they cannot check it. Make the change in smaller steps.", hookio.InputLimit)
+			d := o.overLimitDecision(*in, reason)
 			if in.HookEventName == "PermissionRequest" {
 				d.Event = "PermissionRequest"
 			}
@@ -495,6 +498,29 @@ func toolUse(o Options) {
 	if o.Stdout != nil {
 		o.log("guard output", decision.Write(o.Stdout))
 	}
+}
+
+// overLimitDecision is the answer to a guarded tool call the guards could not
+// read. It follows the plan-guard level like the plan guard's own denials: block
+// (or no Grid home, or settings that cannot be read) denies, warn says the reason
+// as a warning and lets the call through, off says nothing.
+func (o Options) overLimitDecision(in hookio.Input, reason string) hookio.Decision {
+	deny := hookio.Deny(reason)
+	if o.Resolver.GridHome == "" {
+		return deny
+	}
+	level, err := o.hookLevel("plan-guard", in)
+	if err != nil {
+		deny.Warnings = append(deny.Warnings, err.Error())
+		return deny
+	}
+	switch level {
+	case "off":
+		return hookio.Decision{}
+	case "warn":
+		return hookio.Decision{Warnings: []string{"plan-guard: " + reason}}
+	}
+	return deny
 }
 
 func evaluateGuards(o Options, in hookio.Input, env map[string]string) hookio.Decision {

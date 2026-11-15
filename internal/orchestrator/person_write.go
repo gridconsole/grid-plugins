@@ -45,6 +45,29 @@ func PostPerson(store feed.Store, w feed.Writer, in feed.Input) (record feed.Rec
 	return record, err
 }
 
+// openCancelRequest is the earliest cancel request of person author for Job
+// target that no pass has handled yet: an unleased `control` with status
+// cancelled, written after the Job was last put back to posted, with no record of
+// the task lease whose re is its id (the filter personCancels uses).
+func openCancelRequest(snap Snapshot, j *contract.Job, target, author string) (feed.Record, bool) {
+	handled := map[string]bool{}
+	for _, r := range snap.Records {
+		if r.Re != nil && r.Lease != nil && *r.Lease == "task" {
+			handled[*r.Re] = true
+		}
+	}
+	reopened := ReopenedAt(snap, j)
+	for _, r := range snap.Records {
+		if r.Type != "control" || r.Lease != nil || r.Fence != 0 || r.Gen != 0 || handled[r.ID] || r.Author.ID != author ||
+			contract.TierFor(r.Author.Role) != contract.PersonTeam || stringValue(r.Body["status"]) != string(contract.Cancelled) ||
+			stringValue(r.Body["target"]) != target || r.At <= reopened {
+			continue
+		}
+		return r, true
+	}
+	return feed.Record{}, false
+}
+
 // PostPersonUnless is PostPerson with a check made under .orchestrator.lock, in
 // the same pass as the write, as WriteUnless makes it for a leased write: when
 // done returns true nothing is written, the record is empty and the bool is
@@ -55,7 +78,9 @@ func PostPerson(store feed.Store, w feed.Writer, in feed.Input) (record feed.Rec
 // A person's cancel request (a `control` with status cancelled) goes the same
 // way: the holder's next pass writes the leased cancel (personCancels). It is
 // refused under the lock when the task has no such Job or the Job is already
-// closed, with a plain error, so the CLI exits 1.
+// closed, with a plain error, so the CLI exits 1. When the same person's earlier
+// request for the Job is still open, nothing is written, the bool is true and
+// the record is that request.
 func PostPersonUnless(store feed.Store, w feed.Writer, in feed.Input, done func() bool) (record feed.Record, skipped bool, err error) {
 	cancel := in.Type == "control" && stringValue(in.Body["status"]) == string(contract.Cancelled)
 	if !PersonWriter(w) || in.Type != "job" && !cancel {
@@ -78,6 +103,12 @@ func PostPersonUnless(store feed.Store, w feed.Writer, in feed.Input, done func(
 			}
 			if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected {
 				return fmt.Errorf("grid job cancel: %s is already %s", target, j.Status)
+			}
+			// The same person's request for this Job is still open: it is the answer,
+			// so a repeated press or a retry saves nothing and prints its id.
+			if open, ok := openCancelRequest(snap, j, target, w.Author.ID); ok {
+				record, skipped = open, true
+				return nil
 			}
 		} else if e := checkAfterTargets(snap, in); e != nil {
 			return e

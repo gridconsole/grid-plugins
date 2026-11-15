@@ -153,15 +153,32 @@
             "\u003chook\u003e",
             "\u003coff|warn|block\u003e"
           ],
-          "flags": [],
-          "json": false,
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
           "output": ""
         },
         {
           "name": "levels",
           "args": [],
-          "flags": [],
-          "json": false,
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
           "output": ""
         }
       ]
@@ -568,7 +585,7 @@
     },
     {
       "name": "plan",
-      "summary": "write, check, items, hash, diff, migrate",
+      "summary": "write, check, items, hash, migrate",
       "built": true,
       "subcommands": [
         {
@@ -704,7 +721,7 @@
     },
     {
       "name": "job",
-      "summary": "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace",
+      "summary": "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, trace",
       "built": true,
       "subcommands": [
         {
@@ -1830,7 +1847,7 @@
     },
     {
       "name": "feed",
-      "summary": "tick, post, read, state, types, handover, fold",
+      "summary": "tick, post, read, state, types, handover",
       "built": true,
       "subcommands": [
         {
@@ -3448,6 +3465,11 @@
             },
             {
               "name": "--run",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--tool",
               "takes": "value",
               "required": false
             },

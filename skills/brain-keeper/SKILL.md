@@ -17,7 +17,7 @@ Owner decision: the brain needs no attention from the person. A subagent curates
 grid brain propose --project <project> --name <id> --topic <topic> --description "<when to read it>" --summary "<what it holds>" --source <task, Job or person> --body "<text>" --link '{"to":"brain:project/<note>","rel":"explains","summary":"<what that note holds>","why":"<what the reader gains by following it>"}'
 ```
 
-Always pass `--project <project>` when the person or routine names one: without it a proposal goes to the project of the folder it runs in: from another registered project's folder it lands in that project, from a repo with no Grid record it refuses with `project "<name>" has no Grid record; create its first task or use --level home`, and only a Personal folder gives home, where a `conventions` note fails with `topic conventions is not available at home level`. `grid brain accept` and `grid brain check` take `--project` too. A proposal made this way waits in the project's `brain-proposals`: file it with `grid brain accept --project <project> <id>`; `grid brain decide` is for a proposal in a task's own folder.
+Always pass `--project <project>` when the person or routine names one: without it a proposal goes to the project of the folder it runs in: from another registered project's folder it lands in that project, from a repo with no Grid record it refuses with `project "<name>" has no Grid record; create its first task or use --level home`, and only a Personal folder gives home, where a `conventions` note fails with `topic conventions is not available at home level`. `grid brain accept` and `grid brain check` take `--project` too. A proposal made this way waits in the project's `brain-proposals`: file it with `grid brain accept --project <project> <id>` (the plain id finds only a project proposal; a home proposal needs the full `brain:home/<id>`, and a `brain:` row always carries it); `grid brain decide` is for a proposal in a task's own folder.
 
 `--file <path|->` takes Markdown with front matter instead of `--body`. `--level home` is for what is true in every project; without `--level` a resolved project is used, else home. `--external` quarantines text that came from outside.
 
@@ -72,7 +72,7 @@ A note:
 A link: `to` is `brain:<level>/<id>`, `job:<task>/<job>` or `person:<id>`. `rel` is one of depends-on, explains, decided-by, supersedes, duplicates, related, blocks, continues, validates, same-files, uses, owns, decides, approves, knows. `why` is 8 to 160 characters and says what the reader gains by following the link. Every link carries a why. "See also", "related" and the target's own name are refused. A note with a related note and no link is incomplete.
 
 A skill:
-- Front matter has only `name`, `description`, `when_to_use`, `metadata`. Any other key can change what runs and is a finding.
+- Front matter has only `name`, `description`, `when_to_use`, `metadata`, `topics` (the topic the skill belongs to; it starts nothing). Any other key can change what runs and is a finding.
 - The description says what it is for and when it triggers. The steps use exact `grid` verbs, each checked with `grid <verb> --help` first.
 - Only `SKILL.md` and `reference/*.md`. No executable file, `bin/`, `hooks/`, `.mcp.json`, symlink, or line that starts a shell command.
 - Short and plain, no emojis.

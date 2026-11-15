@@ -18,6 +18,12 @@ import (
 
 const routineLockHelp = "Runs hold the entry lock until execution finishes; another run, schedule or remove of that entry waits for it."
 
+// routineTools collects the repeated --tool flag of grid routine add.
+type routineTools []string
+
+func (t *routineTools) String() string         { return strings.Join(*t, ", ") }
+func (t *routineTools) Set(value string) error { *t = append(*t, value); return nil }
+
 func runRoutine(args []string, env Env) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprintln(env.Stdout, "Usage: grid routine add <name> --every <cron or duration> (--run <grid command or skill> | --workflow <workflow>) [--replace] [--project p]\n       grid routine list [--project p] [--json]\n       grid routine schedule|unschedule [<name>] [--project p] [--json]\n       grid routine remove|run <name> [--project p] [--json]")
@@ -27,16 +33,19 @@ func runRoutine(args []string, env Env) int {
 	verb := args[0]
 	fs := newFlags("routine "+verb, env)
 	fs.Usage = func() {
-		fmt.Fprintf(env.Stderr, "Usage: grid routine %s [options]\n\n%s\n", verb, routineLockHelp+"\n"+routine.LimitsHelp())
+		fmt.Fprintf(fs.Output(), "Usage: grid routine %s [options]\n\n%s\n", verb, routineLockHelp+"\n"+routine.LimitsHelp())
 		fs.PrintDefaults()
 	}
+	helpToStdout(fs, args, env)
 	project := fs.String("project", "", "project name or id; defaults to home")
 	asJSON := fs.Bool("json", false, "print JSON")
 	var every, run, workflow, homeOverride string
 	var due, replace bool
 	var timeout, turns, budget string
+	var tools routineTools
 	switch verb {
 	case "add":
+		fs.Var(&tools, "tool", "a tool of the mail, chat or calendar source a skill routine reads, by its full name; repeat for each; added to the routine's allow list")
 		fs.StringVar(&timeout, "routine-timeout", "", "routine_timeout override; see policy defaults above")
 		fs.StringVar(&turns, "routine-max-turns", "", "routine_max_turns override; see policy defaults above")
 		fs.StringVar(&budget, "routine-budget", "", "routine_budget override; see policy defaults above")
@@ -151,7 +160,7 @@ func runRoutine(args []string, env Env) int {
 		if policyErr != nil {
 			return routineError(env, policyErr)
 		}
-		entry, err := store.AddWith(fs.Arg(0), every, run, routine.AddOptions{Workflow: workflow, Replace: replace, Policy: policy})
+		entry, err := store.AddWith(fs.Arg(0), every, run, routine.AddOptions{Workflow: workflow, Replace: replace, Policy: policy, Tools: tools})
 		if err != nil {
 			return routineError(env, err)
 		}
@@ -278,6 +287,9 @@ func printRoutine(env Env, e routine.Entry) {
 		fmt.Fprintf(env.Stdout, "run: %s\n", e.Run)
 	} else {
 		fmt.Fprintf(env.Stdout, "workflow: %s\n", e.Workflow)
+	}
+	if len(e.Tools) > 0 {
+		fmt.Fprintf(env.Stdout, "tools: %s\n", strings.Join(e.Tools, ", "))
 	}
 	fmt.Fprintf(env.Stdout, "machine: %s\n", e.Machine)
 	if !e.LastRun.IsZero() {

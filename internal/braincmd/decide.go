@@ -14,10 +14,10 @@ import (
 
 func runDecide(args []string, env Env) int {
 	f := flag.NewFlagSet("grid brain decide", flag.ContinueOnError)
-	f.SetOutput(env.Stderr)
+	f.SetOutput(helpOut(args, env))
 	f.Usage = func() {
-		fmt.Fprintln(env.Stdout, "Usage: grid brain decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--link <json>]... [--json]")
-		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		fmt.Fprintln(f.Output(), "Usage: grid brain decide <task> <proposal-id> accept|reject|merge-into [<note-id>] [--note <reason>] [--link <json>]... [--json]")
+		fmt.Fprintln(f.Output(), "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
 		f.PrintDefaults()
 	}
 	note := f.String("note", "", "reason for the decision")

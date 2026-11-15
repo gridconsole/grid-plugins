@@ -115,11 +115,12 @@ func runTaskMerge(args []string, env Env) int {
 	id := fs.String("task", "", "task id or folder")
 	proj := fs.String("project", "", "project name or id; the task must be in it")
 	fs.Usage = func() {
-		fmt.Fprint(env.Stderr, taskUsage)
-		fmt.Fprintln(env.Stderr, "merge merges the task's branch (task.md branch:) into its base with a merge commit in the project's checkout; it never fetches or pushes.")
-		fmt.Fprintln(env.Stderr, "The base is task.md base: when it names a branch, else the first of main and master. The checkout returns to the branch it was on.")
+		fmt.Fprint(fs.Output(), taskUsage)
+		fmt.Fprintln(fs.Output(), "merge merges the task's branch (task.md branch:) into its base with a merge commit in the project's checkout; it never fetches or pushes.")
+		fmt.Fprintln(fs.Output(), "The base is task.md base: when it names a branch, else the first of main and master. The checkout returns to the branch it was on.")
 		fs.PrintDefaults()
 	}
+	helpToStdout(fs, args, env)
 	pos, err := taskArgs(fs, args)
 	if errors.Is(err, flag.ErrHelp) {
 		return 0
@@ -372,9 +373,10 @@ func runTask(args []string, env Env) int {
 		fs.StringVar(&state, "state", "", "include only tasks in this state")
 	}
 	fs.Usage = func() {
-		fmt.Fprint(env.Stderr, taskUsage)
+		fmt.Fprint(fs.Output(), taskUsage)
 		fs.PrintDefaults()
 	}
+	helpToStdout(fs, args, env)
 	pos, err := taskArgs(fs, args[1:])
 	if errors.Is(err, flag.ErrHelp) {
 		return 0

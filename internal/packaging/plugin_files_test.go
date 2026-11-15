@@ -107,24 +107,61 @@ var (
 // lists the folders under skills/ that hold a SKILL.md. checked counts the
 // `grid ...` command spans that were compared with the contract.
 func checkPluginFiles(agents, skills map[string]string, skillDirs map[string]bool, surface contractSurface) (problems []string, checked int) {
+	return checkPluginFilesWith(agents, skills, nil, skillDirs, surface)
+}
+
+// pipedGrid finds a grid command after a pipe, as in `printf ... | grid signal add`.
+var pipedGrid = regexp.MustCompile(`\|\s*(grid\s.*)$`)
+
+// commandSpans returns the `grid ...` command texts one line holds: each
+// backticked span, or the whole line inside a fenced block, and the command
+// after a pipe.
+func commandSpans(line string, inFence bool) []string {
+	var cands []string
+	if inFence {
+		cands = []string{strings.TrimSpace(line)}
+	} else {
+		for _, m := range backtickSpan.FindAllStringSubmatch(line, -1) {
+			cands = append(cands, strings.TrimSpace(m[1]))
+		}
+	}
+	var out []string
+	for _, c := range cands {
+		if c == "grid" || strings.HasPrefix(c, "grid ") {
+			out = append(out, c)
+		} else if m := pipedGrid.FindStringSubmatch(c); m != nil {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
+// checkPluginFilesWith is checkPluginFiles plus docs: files that hold no front
+// matter rules (the topics) and are read for their grid commands only.
+func checkPluginFilesWith(agents, skills, docs map[string]string, skillDirs map[string]bool, surface contractSurface) (problems []string, checked int) {
 	add := func(format string, a ...any) { problems = append(problems, fmt.Sprintf(format, a...)) }
 
 	type file struct {
 		path, want, text string
-		agent            bool
+		agent, doc       bool
 	}
 	var files []file
+	for p, text := range docs {
+		files = append(files, file{path: p, text: text, doc: true})
+	}
 	for p, text := range agents {
-		files = append(files, file{p, strings.TrimSuffix(filepath.Base(p), ".md"), text, true})
+		files = append(files, file{path: p, want: strings.TrimSuffix(filepath.Base(p), ".md"), text: text, agent: true})
 	}
 	for p, text := range skills {
-		files = append(files, file{p, filepath.Base(filepath.Dir(p)), text, false})
+		files = append(files, file{path: p, want: filepath.Base(filepath.Dir(p)), text: text})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].path < files[j].path })
 
 	for _, f := range files {
 		keys, lists, err := frontMatter(f.text)
-		if err != nil {
+		if f.doc {
+			// no front matter rules for a doc
+		} else if err != nil {
 			add("%s: front matter: %v", f.path, err)
 		} else {
 			if keys["name"] != f.want {
@@ -154,12 +191,13 @@ func checkPluginFiles(agents, skills map[string]string, skillDirs map[string]boo
 			}
 		}
 
+		inFence := false
 		for ln, line := range strings.Split(f.text, "\n") {
-			for _, m := range backtickSpan.FindAllStringSubmatch(line, -1) {
-				span := strings.TrimSpace(m[1])
-				if span != "grid" && !strings.HasPrefix(span, "grid ") {
-					continue
-				}
+			if strings.HasPrefix(strings.TrimSpace(line), "```") {
+				inFence = !inFence
+				continue
+			}
+			for _, span := range commandSpans(line, inFence) {
 				fields := strings.Fields(strings.TrimPrefix(span, "grid"))
 				if len(fields) == 0 || !verbToken.MatchString(fields[0]) {
 					continue // "grid" alone, or a placeholder such as `grid <verb> --help`
