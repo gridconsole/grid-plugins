@@ -171,6 +171,11 @@ const (
 	// OrphanDeadWait is a Posted or Ready Job that waits through a done edge on a
 	// Job that was rejected or cancelled: it is never released by itself.
 	OrphanDeadWait = "dead_wait"
+	// OrphanNeverJudged is a Submitted Job past its lease that no Judge has taken:
+	// the wake of its latest result is not acknowledged and no review or person
+	// Job stands from it. The review and the rework come from the app's Judge, so
+	// where the app's worker does not run a done Job stops here.
+	OrphanNeverJudged = "never_judged"
 )
 
 // Orphan names a Job left behind: ready and never assigned, assigned and never
@@ -223,6 +228,7 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 			}
 		}
 	}
+	acked := ackedEvents(s)
 	for _, id := range ids(s) {
 		j := s.State.Jobs[id]
 		row := TreeJob{Job: j, Attempts: []Attempt{}}
@@ -271,9 +277,53 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 		if w, isDead := dead[id]; isDead && row.Orphan == nil && (j.Status == contract.Posted || j.Status == contract.Ready) {
 			row.Orphan = &Orphan{Kind: OrphanDeadWait, Since: contract.FormatTime(closedAt(s, w.Target)), Detail: w.Reason}
 		}
+		if row.Orphan == nil {
+			row.Orphan = neverJudged(s, j, acked, now)
+		}
 		out = append(out, row)
 	}
 	return out
+}
+
+// ackedEvents is the set of events some record answers with its wake ("<event>/<n>").
+func ackedEvents(s Snapshot) map[string]bool {
+	out := map[string]bool{}
+	for _, r := range s.Records {
+		if r.Wake != nil {
+			event, _, _ := strings.Cut(*r.Wake, "/")
+			out[event] = true
+		}
+	}
+	return out
+}
+
+// neverJudged names a Submitted Job whose lease ran out and that no Judge has
+// taken: the wake of its latest result is not acknowledged, and no review, check
+// or person Job was raised from it. The plugin only prints the wake; the review,
+// the accept and the rework after a rejection come from the app's Judge, so a
+// done Job waits here when the app's worker does not run. It is a report; nothing
+// acts on it.
+func neverJudged(s Snapshot, j *contract.Job, acked map[string]bool, now time.Time) *Orphan {
+	if j.Status != contract.Submitted {
+		return nil
+	}
+	lease, _ := time.Parse(time.RFC3339Nano, j.LeaseExpires)
+	if lease.IsZero() || !lease.Before(now) {
+		return nil
+	}
+	if n := len(j.Results); n > 0 && acked[j.Results[n-1]] {
+		return nil
+	}
+	for _, other := range s.State.Jobs {
+		if other.DiscoveredFrom == nil || *other.DiscoveredFrom != j.ID {
+			continue
+		}
+		switch contract.NormalizeRole(other.Role) {
+		case "reviewer", "checker", "person":
+			return nil
+		}
+	}
+	return &Orphan{Kind: OrphanNeverJudged, Since: contract.FormatTime(lease), Detail: "submitted, and no wake of its result acknowledged after its lease ran out; the review and any rework are posted by the app's Judge"}
 }
 
 // deadDoneWait reports whether w is a wait through a done edge on a Job that
