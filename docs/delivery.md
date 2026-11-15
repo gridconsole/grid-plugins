@@ -214,5 +214,8 @@ existing unsupported-platform error.
 Person-only commands, including `grid approve` and `grid task status`, refuse
 with exit **3** when called from an agent environment or process ancestry. Run
 them from the Grid app or a separate person terminal. `grid person check --json`
-reports whether that entry point is available. `grid deliver` still moves the
+reports whether that entry point is available. A person in their own terminal
+approves without setting `GRID_MEMBER`: with no `GRID_MEMBER`, `GRID_ACTOR` or
+worker mark in the shell, `grid approve` records the approval as the local owner,
+the same person `grid task close` and `grid task status` record there. `grid deliver` still moves the
 task to the ship approve step in-process and does not require a person.

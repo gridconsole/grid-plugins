@@ -15,22 +15,38 @@ import (
 // approvalWriter is the Feed writer of a person's approval. A caller that holds a
 // task lease epoch writes under it. A person of the team with no epoch writes
 // unleased, as grid job post --person does, so the worker that holds the task
-// lease never blocks the approval. Anyone else gets an error and nothing is
-// written: grid approve is for a person.
+// lease never blocks the approval. A person's own terminal that names no member
+// (no GRID_MEMBER, no GRID_ACTOR, no worker mark) writes as the local owner, the
+// same person grid task close and grid task status record there (writeAuthor).
+// Anyone else gets an error and nothing is written: grid approve is for a person.
 func approvalWriter(env Env) (feed.Writer, error) {
 	if epoch := env.getenv("GRID_LEASE_EPOCH"); epoch != "" {
 		return orchestratorWriter(env, "task", epoch)
 	}
 	role := contract.NormalizeRole(env.getenv("GRID_ROLE"))
+	local := env.getenv("GRID_MEMBER") == "" && env.getenv("GRID_ACTOR") == "" && !workerMarked(env)
 	switch role {
 	case "":
 		role = "member"
+		if local {
+			role = "owner"
+		}
 	case "cli":
 		// The plain cli role is a person's shell; writeOptions records it as the owner.
 		role = "owner"
 	}
-	if env.getenv("GRID_MEMBER") == "" || contract.TierFor(role) != contract.PersonTeam {
+	if contract.TierFor(role) != contract.PersonTeam || (env.getenv("GRID_MEMBER") == "" && !local) {
 		return feed.Writer{}, errors.New("approving is for a person of the team: set GRID_MEMBER")
+	}
+	if local {
+		// Only the member id is supplied; the rest of the environment is the caller's.
+		read := env.getenv
+		env.Getenv = func(key string) string {
+			if key == "GRID_MEMBER" {
+				return "local"
+			}
+			return read(key)
+		}
 	}
 	w, err := feedWriter(env, "", "")
 	w.Author.Role = role
