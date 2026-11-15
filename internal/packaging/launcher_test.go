@@ -166,6 +166,72 @@ func TestCheckoutLauncherRebuildsStaleBinary(t *testing.T) {
 	}
 }
 
+// recordGoCalls replaces the fake go with one that also leaves a marker file when it runs.
+func recordGoCalls(t *testing.T, root string) string {
+	t.Helper()
+	marker := filepath.Join(root, "go-was-called")
+	writeTestFile(t, filepath.Join(root, "tools", "go"), `#!/bin/sh
+: > "`+marker+`"
+while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done
+printf '#!/bin/sh\necho freshly-built\n' > "$out" && chmod +x "$out"
+`, 0o755)
+	return marker
+}
+
+func runHook(t *testing.T, root string) string {
+	t.Helper()
+	b, err := exec.Command(filepath.Join(root, "bin", "grid"), "hook", "pretooluse").CombinedOutput()
+	if err != nil {
+		t.Fatalf("%q %v", b, err)
+	}
+	return string(b)
+}
+
+// A hook call never compiles: it runs the build it finds, even when sources are newer.
+func TestCheckoutLauncherHookDoesNotBuildStaleBinary(t *testing.T) {
+	root := checkoutWithFakeGo(t)
+	marker := recordGoCalls(t, root)
+	stale := filepath.Join(root, "dist", "plugin", "bin", "grid-linux-amd64")
+	writeTestFile(t, stale, "#!/bin/sh\necho stale\n", 0o755)
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(root, "cmd", "grid", "main.go"), "package main\n", 0o644)
+	if got := runHook(t, root); got != "stale\n" {
+		t.Fatalf("hook ran %q, want the existing build", got)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("go build ran inside a hook call")
+	}
+}
+
+func TestCheckoutLauncherHookDoesNotBuildMissingBinary(t *testing.T) {
+	root := checkoutWithFakeGo(t)
+	marker := recordGoCalls(t, root)
+	if got := runHook(t, root); got != "" {
+		t.Fatalf("hook printed %q, want a silent skip", got)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("go build ran inside a hook call")
+	}
+	if _, err := os.Stat(filepath.Join(root, "dist", "grid")); err == nil {
+		t.Fatal("a hook call left a build behind")
+	}
+}
+
+// A command that is not a hook still builds, so the dev flow is unchanged.
+func TestCheckoutLauncherCommandStillBuilds(t *testing.T) {
+	root := checkoutWithFakeGo(t)
+	marker := recordGoCalls(t, root)
+	if got := runGrid(t, root); got != "freshly-built\n" {
+		t.Fatalf("%q", got)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatal("go was not called for a non-hook command")
+	}
+}
+
 func TestCheckoutLauncherHookFailsOpenWithoutGo(t *testing.T) {
 	root := checkoutWithFakeGo(t)
 	if err := os.Remove(filepath.Join(root, "tools", "go")); err != nil {

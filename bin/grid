@@ -58,10 +58,16 @@ if [ ! -x "$binary" ] && [ -f "$root/go.mod" ]; then
 	binary="$root/dist/plugin/bin/grid-$platform"
 	if stale "$binary"; then
 		binary="$root/dist/grid"
-		if stale "$binary"; then
+		if stale "$binary" && [ "${1:-}" = hook ]; then
+			# A hook call never compiles (its timeout is short): run the build there is, or skip.
+			if [ -x "$root/dist/plugin/bin/grid-$platform" ]; then
+				binary="$root/dist/plugin/bin/grid-$platform"
+			elif [ ! -x "$binary" ]; then
+				exit 0
+			fi
+		elif stale "$binary"; then
 			if ! command -v go >/dev/null 2>&1 || ! mkdir -p "$root/dist" || ! go build -C "$root" -trimpath -buildvcs=false -o "$binary" ./cmd/grid </dev/null >&2; then
-				# A hook never fails the session; other commands say why.
-				[ "${1:-}" = hook ] && exit 0
+				# Hooks never reach here; they skip above. Other commands say why.
 				echo 'grid: cannot build grid from this source checkout (needs go on PATH)' >&2
 				exit 1
 			fi
