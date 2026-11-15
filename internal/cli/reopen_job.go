@@ -70,49 +70,58 @@ func reopenPlanJob(env Env, dir string) (func() error, error) {
 	next.Worktree = nil
 	return func() error {
 		next.Defaults()
-		// The id is picked now, not before the reopen: a Job posted since the first
-		// read, or one the fold holds out of the snapshot, may already carry it. The
-		// post is checked again under .orchestrator.lock, and a taken id is picked again.
-		for {
-			top, err := reopenJobTop(store, highest)
-			if err != nil {
-				return err
-			}
-			next.ID = "J-" + strconv.Itoa(top+1)
-			data, err := next.Record()
-			if err != nil {
-				return err
-			}
-			if err := contract.Validate("job-record", data); err != nil {
-				return err
-			}
-			var body map[string]any
-			if err := json.Unmarshal(data, &body); err != nil {
-				return err
-			}
-			skipped := false
-			var readErr error
-			_, err = orchestrator.WriteUnless(store, w, feed.Input{Type: "job", Job: next.ID, Body: body}, func() bool {
-				taken, e := reopenJobTaken(store, next.ID)
-				if e != nil {
-					// Nothing is written on a failed read; the error is returned below.
-					readErr = e
-					return true
-				}
-				skipped = taken
-				return taken
-			})
-			if err != nil {
-				return err
-			}
-			if readErr != nil {
-				return readErr
-			}
-			if !skipped {
-				return nil
-			}
-		}
+		return reopenPostJob(store, w, highest, func(id string) ([]byte, error) {
+			next.ID = id
+			return next.Record()
+		})
 	}, nil
+}
+
+// reopenPostJob posts the job record that record builds for the next free J-<n>.
+// The id is picked now, not before the reopen: a Job posted since the first read,
+// or one the fold holds out of the snapshot, may already carry it. The post is
+// checked again under .orchestrator.lock, and a taken id is picked again. floor is
+// the highest J-<n> already known.
+func reopenPostJob(store feed.Store, w feed.Writer, floor int, record func(id string) ([]byte, error)) error {
+	for {
+		top, err := reopenJobTop(store, floor)
+		if err != nil {
+			return err
+		}
+		id := "J-" + strconv.Itoa(top+1)
+		data, err := record(id)
+		if err != nil {
+			return err
+		}
+		if err := contract.Validate("job-record", data); err != nil {
+			return err
+		}
+		var body map[string]any
+		if err := json.Unmarshal(data, &body); err != nil {
+			return err
+		}
+		skipped := false
+		var readErr error
+		_, err = orchestrator.WriteUnless(store, w, feed.Input{Type: "job", Job: id, Body: body}, func() bool {
+			taken, e := reopenJobTaken(store, id)
+			if e != nil {
+				// Nothing is written on a failed read; the error is returned below.
+				readErr = e
+				return true
+			}
+			skipped = taken
+			return taken
+		})
+		if err != nil {
+			return err
+		}
+		if readErr != nil {
+			return readErr
+		}
+		if !skipped {
+			return nil
+		}
+	}
 }
 
 // reopenJobNumber is the n of a J-<n> id; a dotted child id counts by its J-<n> part.

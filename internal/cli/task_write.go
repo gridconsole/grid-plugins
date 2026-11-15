@@ -197,16 +197,46 @@ func runTaskWrite(args []string, env Env) int {
 	// A reopen posts a new plan Job for a person (Q8). The writer is built first,
 	// so a reopen never leaves the old result approving the plan.
 	var postPlanJob func() error
+	var cont *reopenContinuation
 	if sub == "reopen" {
 		var perr error
 		if postPlanJob, perr = reopenPlanJob(env, resolved.Path); perr != nil {
 			fmt.Fprintf(env.Stderr, "grid task reopen: %v\n", perr)
 			return 1
 		}
+		// With no plan Job to answer again, a task that a stop left with no open Job
+		// gets an orchestrator Job the worker starts (reopen_continue.go).
+		if postPlanJob == nil {
+			if cont, perr = reopenContinueJob(env, resolved.Path); perr != nil {
+				fmt.Fprintf(env.Stderr, "grid task reopen: %v\n", perr)
+				return 1
+			}
+		}
 	}
-	event, err := store.Change(o)
+	var event task.Event
+	if cont != nil && cont.fromRunning {
+		// A running task whose Jobs a stop cancelled goes through closed: the state
+		// table moves a task to queued only from closed.
+		stop := o
+		stop.Action = "stop"
+		if _, err = store.Change(stop); err != nil {
+			cont.drop()
+			if errors.Is(err, task.ErrStateMove) {
+				env.recordError(err)
+			}
+			return taskWriteResult(env, event, err, *asJSON, resolved.Path)
+		}
+	}
+	event, err = store.Change(o)
 	if err == nil && postPlanJob != nil {
 		err = postPlanJob()
+	}
+	if cont != nil {
+		if err == nil {
+			err = cont.post()
+		} else {
+			cont.drop()
+		}
 	}
 	// Only this path records the code: taskWriteResult is also the exit of
 	// grid approve, which keeps what it printed before.
