@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -30,8 +31,20 @@ func acceptedShipJob(snap orchestrator.Snapshot) string {
 // where an unleased answer is accepted, and grid approve calls it after a leased
 // answer. A task that is not waiting, or has no accepted ship Job, gets nothing.
 // A land that fails is recorded in the task's history and said on stderr; it never
-// fails the caller, and it posts no Job.
+// fails the caller, and it posts no Job. It also puts the ship Job back with its
+// person, with the failure text as its reason (reopenShipJob), so the task is in
+// Needs you again and the person's next approve runs land once more.
 func landAfterShip(env Env, dir string, who contract.Author) {
+	w, err := approvalWriter(env)
+	if err != nil {
+		w = feed.Writer{}
+	}
+	landAfterShipAs(env, dir, who, w)
+}
+
+// landAfterShipAs is landAfterShip with the Feed writer w that reopens the ship
+// Job after a failed land: the task lease of grid approve, or of the holder's pass.
+func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 	rec, err := taskstore.Read(dir)
 	if err != nil || rec.State != "waiting" {
 		return
@@ -40,7 +53,8 @@ func landAfterShip(env Env, dir string, who contract.Author) {
 	if err != nil {
 		return
 	}
-	snap, err := orchestrator.Load(feed.Store{TaskDir: dir, TaskID: fid, Warn: env.Stderr})
+	fs := feed.Store{TaskDir: dir, TaskID: fid, Warn: env.Stderr}
+	snap, err := orchestrator.Load(fs)
 	if err != nil {
 		return
 	}
@@ -59,6 +73,32 @@ func landAfterShip(env Env, dir string, who contract.Author) {
 			return
 		}
 		fmt.Fprintf(env.Stderr, "land: %s after %s: %s\n", resolved.ID, job, oneLineErr(err))
+		var failed *land.FailedError
+		if errors.As(err, &failed) {
+			reopenShipJob(env, fs, w, store, resolved.ID, job, failed.Text)
+		}
+	}
+}
+
+// reopenShipJob puts the ship Job job back with its person after a failed land:
+// a control sets it posted again with "land failed: <text>" as its reason, so it
+// reads as waiting for its person and the task shows in Needs you. Only then does
+// land.Store.Reopened let the next acceptance run land once more; a Job that could
+// not be reopened keeps its once-guard, so no pass lands it again on its own. One
+// approve runs one land; nothing here retries.
+func reopenShipJob(env Env, fs feed.Store, w feed.Writer, store land.Store, id, job, text string) {
+	if w.Lease != "task" {
+		fmt.Fprintf(env.Stderr, "land: %s stays accepted: reopening it needs the task lease\n", job)
+		return
+	}
+	body := map[string]any{"target": job, "status": string(contract.Posted), "reason": "land failed: " + text}
+	if _, err := orchestrator.Write(fs, w, feed.Input{Type: "control", Body: body}); err != nil {
+		fmt.Fprintf(env.Stderr, "land: %s not reopened: %s\n", job, oneLineErr(err))
+		return
+	}
+	refoldAfterWrite(env, fs)
+	if err := store.Reopened(env.Cwd, id, job); err != nil {
+		fmt.Fprintf(env.Stderr, "land: %s reopened, but its history line failed: %s\n", job, oneLineErr(err))
 	}
 }
 
