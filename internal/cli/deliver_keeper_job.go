@@ -61,6 +61,9 @@ func nextJobID(snap orchestrator.Snapshot) string {
 // no test command to count and, at L0, no reviewer Job to name: verify is the one
 // remaining kind, file-exists, on the task file the keeper reads. It asks no
 // person (on_blocked exit): the keeper accepts, merges or rejects with a reason.
+// Each proposal is read whole (the lint lets a brain-proposals/<name>.md read go
+// unranged), and the one acceptance row names the title's words, which are the
+// plan the lint checks a curator Job's acceptance against.
 func curatorJobBody(id, taskID string, ids []string) map[string]any {
 	reads := make([]any, 0, len(ids))
 	for _, p := range ids {
@@ -80,7 +83,7 @@ func curatorJobBody(id, taskID string, ids []string) map[string]any {
 		"read": reads, "write": []any{}, "out_of_scope": []any{},
 		"acceptance": []any{map[string]any{
 			"id":     "A1",
-			"text":   fmt.Sprintf("`grid brain keep --task %s` lists no waiting proposal; each one is accepted, merged or rejected with a reason", taskID),
+			"text":   fmt.Sprintf("Curate the %d brain %s of %s: `grid brain keep --task %s` lists no waiting proposal; each one is accepted, merged or rejected with a reason", len(ids), noun, taskID, taskID),
 			"traces": "item",
 		}},
 		"verify":     map[string]any{"kind": "file-exists", "path": "task.md"},
