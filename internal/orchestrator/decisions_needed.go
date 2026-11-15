@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -38,7 +39,7 @@ func (s Store) abDecisionsNeeded(snap Snapshot) error {
 			if !ok {
 				continue
 			}
-			decisions := abDnDecisions(r.Body)
+			decisions := r9OaOpen(snap, abDnDecisions(r.Body))
 			if len(decisions) == 0 || abDnPosted(snap, result) {
 				continue
 			}
@@ -74,6 +75,33 @@ func abDnDecisions(body feed.Body) []string {
 		}
 	}
 	return out
+}
+
+// r9OaJobID is a Job id as a word of a decision line.
+var r9OaJobID = regexp.MustCompile(`\bJ-[0-9]+(?:\.[0-9]+)*\b`)
+
+// r9OaOpen is the decisions no person Job on the Feed asks yet. One decision
+// has one ask (round 9, task T-02): a decision line that names a Job whose role
+// is Person was asked by that Job, so the pass asks it no second time. A line
+// that names no Job, or only Jobs of another role, stays open.
+func r9OaOpen(snap Snapshot, decisions []string) []string {
+	person := map[string]bool{}
+	for _, it := range snap.Items {
+		if strings.EqualFold(strings.TrimSpace(it.Role), "person") {
+			person[it.ID] = true
+		}
+	}
+	var open []string
+	for _, d := range decisions {
+		asked := false
+		for _, id := range r9OaJobID.FindAllString(d, -1) {
+			asked = asked || person[id]
+		}
+		if !asked {
+			open = append(open, d)
+		}
+	}
+	return open
 }
 
 // abDnAsks reports whether the Job id is a decisions Job: its A1 begins with
@@ -132,7 +160,7 @@ func AbDnJobBody(id, result, job string, decisions []string) map[string]any {
 	}
 	body["title"] = "Decisions needed on " + job + ": " + first
 	body["discovered_from"] = nil
-	a1 := fmt.Sprintf("%s%s (on %s): %s. Ask the person who decides each one with `grid question ask` (a default and a time) or a person Job, then post the result with `grid job result`.",
+	a1 := fmt.Sprintf("%s%s (on %s): %s. One decision has one ask: ask nothing a person Job or question on this task already asks (`grid job tree`, `grid question list`), and only what the person's words leave open and the work cannot go on without; a new option the person did not ask for is left out and named in the result. Ask the person who decides each one with `grid question ask` (a default and a time) or a person Job, then post the result with `grid job result`.",
 		abDnA1Lead, result, job, strings.Join(each, "; "))
 	body["acceptance"] = []map[string]any{{"id": "A1", "text": a1, "traces": "owner"}}
 	return body

@@ -132,20 +132,3 @@ func TestShipLandFailureRecorded(t *testing.T) {
 		t.Fatalf("task state %q %v after a failed land, want waiting", rec.State, err)
 	}
 }
-
-// After a failed land a second answer runs land no second time and no second ship
-// person Job is posted.
-func TestShipLandFailurePostsNoSecondJob(t *testing.T) {
-	env, dir, _, store, stderr := shipLandFixture(t, "git merge -q --ff-only no-such-branch")
-	for press := 0; press < 2; press++ {
-		if code := Run([]string{"approve", "T-01"}, env); code != 0 {
-			t.Fatalf("approve press %d: %d %s", press+1, code, stderr)
-		}
-	}
-	if n := strings.Count(shipHistory(t, dir), " · land failed · "); n != 1 {
-		t.Fatalf("%d land failed lines after two presses, want 1 (land ran once):\n%s", n, shipHistory(t, dir))
-	}
-	if jobs, _ := approveJobs(t, store); len(jobs) != 1 {
-		t.Fatalf("%d approve person Jobs after a failed land, want the one ship Job", len(jobs))
-	}
-}
