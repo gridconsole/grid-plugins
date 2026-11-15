@@ -331,50 +331,6 @@ func TestApproveRecordOldReceiptMovedOrRetired(t *testing.T) {
 	})
 }
 
-// A worker's shell with no GRID_MEMBER and no lease epoch is refused with exit 3 and
-// nothing is written: no Job result, no answer, no receipt, no history line. A
-// person's own terminal with no GRID_MEMBER is not refused: it approves as the
-// local owner (TestR23ApproveNeedsNoGridMember); this test used the empty
-// environment for the refused case before that, and now names the worker mark.
-func TestApproveRecordCallerWithoutMemberWritesNothing(t *testing.T) {
-	h, path, store, text := approveJobHarness(t)
-	before, _ := os.ReadFile(filepath.Join(path, "history.md"))
-	// grid job result takes its writer from feedWriter, which falls back to the git
-	// or OS user for a person, as grid job post --person does; grid approve is
-	// person-only, so it is the one command refused here.
-	h.env.Getenv = func(key string) string {
-		if key == "GRID_AGENT" {
-			return "worker-1"
-		}
-		return ""
-	}
-	for _, args := range [][]string{
-		{"approve", path, "--plan-hash", plan.Hash(text)},
-		{"approve", path},
-	} {
-		code := h.run(path, args...)
-		if code != 3 || !strings.Contains(h.errb.String(), "person of the team") {
-			t.Fatalf("%v: %d %s", args, code, h.errb.String())
-		}
-		if got := arAccepts(t, store, "J-2"); len(got) != 0 {
-			t.Fatalf("%v wrote a result %v", args, got)
-		}
-		if got := arAnswers(t, store); len(got) != 0 {
-			t.Fatalf("%v wrote an answer %+v", args, got)
-		}
-		if jobs := arApproveJobs(t, store); len(jobs) != 1 {
-			t.Fatalf("%v changed the Jobs %v", args, jobs)
-		}
-		if _, err := os.Lstat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
-			t.Fatalf("%v wrote approval.json: %v", args, err)
-		}
-		after, _ := os.ReadFile(filepath.Join(path, "history.md"))
-		if string(after) != string(before) {
-			t.Fatalf("%v wrote history: %s", args, after)
-		}
-	}
-}
-
 // The worker pass moves the old approval.json of a task that is only read (no
 // approve Job, no open Job) into its approve person Job, under the task lease the
 // pass takes, so the approval takes effect at once. This runs the real

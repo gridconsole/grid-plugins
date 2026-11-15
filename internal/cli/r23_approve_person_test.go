@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -68,6 +70,53 @@ func TestR23ApproveNeedsNoGridMember(t *testing.T) {
 		jobs, snap := approveJobs(t, feed.Store{TaskDir: path, TaskID: id})
 		if len(jobs) != 1 || !personJobAnswered(snap, snap.State.Jobs[jobs[0].ID]) {
 			t.Fatalf("%q: the approve did not answer the plan Job: %+v", name, jobs)
+		}
+		// The lease holder's next pass turns the person's answer into the accepting
+		// control: only then does the plan count as approved.
+		holderPass(t, path)
+		if !taskstore.Approved(path) {
+			t.Fatalf("%q: the plan is not approved after the holder's pass", name)
+		}
+	}
+}
+
+// A worker's shell with no GRID_MEMBER and no lease epoch is refused with exit 3 and
+// nothing is written: no Job result, no answer, no receipt, no history line. This
+// is the body of TestApproveRecordCallerWithoutMemberWritesNothing, which asserted
+// the same of an empty environment (a person's terminal, now approved) and is
+// deleted; the environment here names the worker.
+func TestR23WorkerShellWithoutMemberWritesNothing(t *testing.T) {
+	h, path, store, text := approveJobHarness(t)
+	before, _ := os.ReadFile(filepath.Join(path, "history.md"))
+	h.env.Getenv = func(key string) string {
+		if key == "GRID_AGENT" {
+			return "worker-1"
+		}
+		return ""
+	}
+	for _, args := range [][]string{
+		{"approve", path, "--plan-hash", plan.Hash(text)},
+		{"approve", path},
+	} {
+		code := h.run(path, args...)
+		if code != 3 || !strings.Contains(h.errb.String(), "person of the team") {
+			t.Fatalf("%v: %d %s", args, code, h.errb.String())
+		}
+		if got := arAccepts(t, store, "J-2"); len(got) != 0 {
+			t.Fatalf("%v wrote a result %v", args, got)
+		}
+		if got := arAnswers(t, store); len(got) != 0 {
+			t.Fatalf("%v wrote an answer %+v", args, got)
+		}
+		if jobs := arApproveJobs(t, store); len(jobs) != 1 {
+			t.Fatalf("%v changed the Jobs %v", args, jobs)
+		}
+		if _, err := os.Lstat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%v wrote approval.json: %v", args, err)
+		}
+		after, _ := os.ReadFile(filepath.Join(path, "history.md"))
+		if string(after) != string(before) {
+			t.Fatalf("%v wrote history: %s", args, after)
 		}
 	}
 }
