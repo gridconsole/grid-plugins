@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
@@ -23,8 +24,13 @@ type Entry struct {
 	Run         string `json:"run" yaml:"run"`
 	// Workflow, when set, takes the place of Run: each run starts one new task
 	// named after the routine with this workflow, and LastTask records its id.
-	Workflow string    `json:"workflow,omitempty" yaml:"workflow,omitempty"`
-	Machine  string    `json:"machine" yaml:"machine"`
+	Workflow string `json:"workflow,omitempty" yaml:"workflow,omitempty"`
+	// Tools are the tool names of the mail, chat or calendar source a skill
+	// routine reads, written as the source's tool list names them. They are added
+	// to the routine's own allow list as they stand; a routine with none runs
+	// with the list it always had.
+	Tools   []string  `json:"tools,omitempty" yaml:"tools,omitempty"`
+	Machine string    `json:"machine" yaml:"machine"`
 	LastRun  time.Time `json:"last_run,omitzero" yaml:"last_run,omitempty"`
 	Outcome  string    `json:"outcome,omitempty" yaml:"outcome,omitempty"`
 	LastTask string    `json:"last_task,omitempty" yaml:"last_task,omitempty"`
@@ -84,6 +90,9 @@ func (e Entry) Fingerprint() (string, error) {
 	}
 	if e.Workflow != "" {
 		input += "\x00workflow-v1\x00" + e.Workflow
+	}
+	if len(e.Tools) > 0 {
+		input += "\x00tools-v1\x00" + strings.Join(e.Tools, ",")
 	}
 	sum := sha256.Sum256([]byte(input))
 	return hex.EncodeToString(sum[:]), nil
@@ -150,6 +159,9 @@ func (e Entry) Validate() error {
 	if err := e.validCommand(); err != nil {
 		return err
 	}
+	if err := e.validTools(); err != nil {
+		return err
+	}
 	switch e.Outcome {
 	case "", "running", "success", "failed":
 	default:
@@ -170,6 +182,23 @@ func (e Entry) validCommand() error {
 	}
 	if !brain.ValidName(e.Workflow) {
 		return fmt.Errorf("workflow must be a plain name")
+	}
+	return nil
+}
+
+// validTools checks the spelling of each tool name and nothing else: the allow
+// list is a comma list, so a name with a comma, a space or a control character
+// would become two rules or none. Which tools a routine lists is its own choice.
+func (e Entry) validTools() error {
+	for _, tool := range e.Tools {
+		if tool == "" {
+			return fmt.Errorf("invalid tools")
+		}
+		for _, r := range tool {
+			if r == ',' || unicode.IsSpace(r) || unicode.IsControl(r) {
+				return fmt.Errorf("invalid tools")
+			}
+		}
 	}
 	return nil
 }
@@ -254,11 +283,13 @@ type AddOptions struct {
 	// was edited, so an installed timer refuses it until it is scheduled again.
 	Replace bool
 	Policy  LimitPolicy
+	// Tools are the source tools of a skill routine, see Entry.Tools.
+	Tools []string
 }
 
 // AddWith adds a routine with a run command or a workflow.
 func (s Store) AddWith(name, every, run string, o AddOptions) (Entry, error) {
-	e := Entry{Name: name, Every: strings.TrimSpace(every), Run: strings.TrimSpace(run), Workflow: strings.TrimSpace(o.Workflow), LimitPolicy: o.Policy}
+	e := Entry{Name: name, Every: strings.TrimSpace(every), Run: strings.TrimSpace(run), Workflow: strings.TrimSpace(o.Workflow), LimitPolicy: o.Policy, Tools: o.Tools}
 	var err error
 	e, err = s.resolveLimits(e)
 	if err != nil {
