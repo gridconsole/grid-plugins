@@ -13,11 +13,11 @@ Docs and topics match the delivery flow. Rows: U-chk-plugin-rev-cli row 5; U-chk
 | skills 8 confirmed | HOLDS. topics/delivering said proposals "block delivery" and grid deliver "refuses (waiting proposals"; docs/delivery.md and internal/task/deliver.go:41 say a waiting proposal never stops a delivery. |
 | skills 8 fixed | HOLDS. topics/delivering description and pointers say a waiting proposal gets a curator Job and does not block `grid deliver`. |
 | Test per fixed row | `TestR23DeliveryDocNamesNoRemovedCommand` (internal/cli/r23_docs_delivery_test.go) and `TestR23DeliveringTopicsMatchDelivery`. On base (doc and topics stashed): FAIL, e.g. `docs/delivery.md still names "grid preview"`, `still names "--gate"`, `topics/delivering/TOPIC.md says a hook reads it; topics/README.md says none does`, `still says "block delivery"`. On the head: `ok github.com/gridconsole/grid-plugins/internal/cli`. |
-| Go tests changed packages | `go test -count=1 ./internal/cli` and `./internal/packaging ./internal/brain ./internal/job/lint/`: see the report tail. |
-| `make lint` | `go vet ./...` printed, no error lines (see report). |
+| Go tests changed packages | HOLDS. `go test -count=1 ./internal/cli` `ok ... 323.220s`; importers from `go list` (cmd/grid, lib): `./cmd/grid` no test files, `./lib` `ok 98.430s`; also `./internal/packaging ./internal/brain ./internal/job/lint/` ok. |
+| `make lint` | HOLDS. Output `go vet ./...`, no error lines, exit 0. |
 | Walk tests | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand|TestIlGuestSiteList'` ok (run with the R23 tests, `ok ... internal/cli`). `./internal/job/lint/` ok. |
-| Windows and macOS builds | not run, not asked |
-| Merge of origin/main before last proof | see report |
+| Windows and macOS builds | HOLDS. `GOOS=windows CGO_ENABLED=0 go build ./...` and `GOOS=darwin ...` both exit 0, no output. |
+| Merge of origin/main before last proof | HOLDS. `git fetch origin && git merge origin/main`: "Already up to date." |
 
 ## What changed
 
