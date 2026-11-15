@@ -8,13 +8,23 @@ import (
 const ikJuCyclesLine = "       grid job cycles <items.json> [--json]"
 
 func TestIkJuJobHelpExitLine(t *testing.T) {
+	// grid job --help is the usage on stdout, exit 0; a bare grid job is a usage
+	// error as a bare grid feed is: the same usage on stderr, exit 2 (P-r23-cli-help row 3).
 	for _, args := range [][]string{{"job", "--help"}, {"job"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			h, path := feedHarness(t)
-			if code := h.run(path, args...); code != 0 {
-				t.Fatalf("exit %d: %s %s", code, h.out, h.errb)
+			wantCode := 0
+			if len(args) == 1 {
+				wantCode = 2
 			}
-			lines := strings.Split(h.out.String(), "\n")
+			if code := h.run(path, args...); code != wantCode {
+				t.Fatalf("exit %d, want %d: %s %s", code, wantCode, h.out, h.errb)
+			}
+			usageText := h.out
+			if wantCode == 2 {
+				usageText = h.errb
+			}
+			lines := strings.Split(usageText.String(), "\n")
 			var got []string
 			prev := ""
 			for i, l := range lines {

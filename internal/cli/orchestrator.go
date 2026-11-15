@@ -65,9 +65,13 @@ func runOrchestrator(args []string, env Env) int {
 	if len(rest) > 0 && !strings.HasPrefix(rest[0], "-") {
 		id, rest = rest[0], rest[1:]
 	}
-	fs := newFlags("job "+verb, env)
+	name := "job " + verb
+	if verb == "tick" {
+		name = "feed tick" // runOrchestratorFeed sends only tick here
+	}
+	fs := newFlags(name, env)
 	if verb == "cancel" {
-		fs.Usage = func() { fmt.Fprint(env.Stderr, jobCancelUsage); fs.PrintDefaults() }
+		fs.Usage = func() { fmt.Fprint(fs.Output(), jobCancelUsage); fs.PrintDefaults() }
 	}
 	orderFlag := fs.Int("order", -1, "queue order of the Job (lowest first); on job post only")
 	task := fs.String("task", "", "task folder or id")

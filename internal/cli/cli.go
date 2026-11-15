@@ -139,10 +139,10 @@ func commands() []command {
 		{"doctor", "check machine health and collect a support bundle", runDoctor},
 		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels", runHook},
 		{"task", "new|show|list|status|lane|merge, stop|close|reopen, history|attach|move (grid task help lists all)", runTask},
-		{"plan", "write, check, items, hash, diff, migrate", runPlan},
-		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace", runOrchestratorJob},
+		{"plan", "write, check, items, hash, migrate", runPlan},
+		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, trace", runOrchestratorJob},
 		{"lease", "take, release, status (task lease)", runTaskLease},
-		{"feed", "tick, post, read, state, types, handover, fold", runOrchestratorFeed},
+		{"feed", "tick, post, read, state, types, handover", runOrchestratorFeed},
 		{"mcp", "stdio server with the Feed tools", runMCP},
 		{"question", "add, ask, withdraw, list, tick and sync task questions", runQuestion},
 		{"answer", "record a person's answer", runAnswer},
@@ -381,6 +381,7 @@ func newFlags(name string, env Env) *flag.FlagSet {
 
 // parse returns stop true with the exit code when the command must end.
 func parse(fs *flag.FlagSet, args []string, env Env) (code int, stop bool) {
+	helpToStdout(fs, args, env)
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0, true

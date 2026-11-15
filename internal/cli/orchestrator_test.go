@@ -293,7 +293,7 @@ func TestTakeTaskCLI(t *testing.T) {
 	if len(records.Records) != 2 || records.Records[1].Body["adopted"] != "session-gone" {
 		t.Fatal(records)
 	}
-	if code := h.run(path, "lease", "take", "task", "--help"); code != 0 || !strings.Contains(h.errb.String(), "adoption") || !strings.Contains(h.errb.String(), "takeover") {
+	if code := h.run(path, "lease", "take", "task", "--help"); code != 0 || !strings.Contains(h.out.String(), "adoption") || !strings.Contains(h.out.String(), "takeover") || h.errb.Len() != 0 {
 		t.Fatalf("help: %d %s %s", code, h.out, h.errb)
 	}
 	t.Setenv("GRID_LEASE_EPOCH", fmt.Sprintf("0.%d", second.Fence))

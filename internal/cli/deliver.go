@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"strings"
@@ -17,6 +18,14 @@ func (f *deliveryFiles) Set(value string) error { *f = append(*f, value); return
 // usageOut is where a flag set prints its usage: stdout when the arguments ask
 // for help, stderr on any other parse error so --json gets its error envelope.
 func usageOut(args []string, env Env) io.Writer {
+	if wantsHelp(args) {
+		return env.Stdout
+	}
+	return env.Stderr
+}
+
+// wantsHelp reports whether the arguments ask for help (-h, -help or --help before any --).
+func wantsHelp(args []string) bool {
 	for _, a := range args {
 		if a == "--" {
 			break
@@ -24,11 +33,19 @@ func usageOut(args []string, env Env) io.Writer {
 		switch strings.TrimLeft(a, "-") {
 		case "h", "help":
 			if strings.HasPrefix(a, "-") {
-				return env.Stdout
+				return true
 			}
 		}
 	}
-	return env.Stderr
+	return false
+}
+
+// helpToStdout makes the flag set print its usage on stdout when the arguments ask
+// for help; any other parse error keeps it on stderr. A custom fs.Usage must write to fs.Output().
+func helpToStdout(fs *flag.FlagSet, args []string, env Env) {
+	if wantsHelp(args) {
+		fs.SetOutput(env.Stdout)
+	}
 }
 
 func runDeliver(args []string, env Env) int {

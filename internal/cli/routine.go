@@ -27,9 +27,10 @@ func runRoutine(args []string, env Env) int {
 	verb := args[0]
 	fs := newFlags("routine "+verb, env)
 	fs.Usage = func() {
-		fmt.Fprintf(env.Stderr, "Usage: grid routine %s [options]\n\n%s\n", verb, routineLockHelp+"\n"+routine.LimitsHelp())
+		fmt.Fprintf(fs.Output(), "Usage: grid routine %s [options]\n\n%s\n", verb, routineLockHelp+"\n"+routine.LimitsHelp())
 		fs.PrintDefaults()
 	}
+	helpToStdout(fs, args, env)
 	project := fs.String("project", "", "project name or id; defaults to home")
 	asJSON := fs.Bool("json", false, "print JSON")
 	var every, run, workflow, homeOverride string

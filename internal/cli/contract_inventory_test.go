@@ -347,7 +347,8 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 					return withProject, withProjectTakes
 				}
 			}
-			// Hook deliberately ignores invalid input and has no flags.
+			// The hook event handler deliberately ignores invalid input and has no flags;
+			// hook level and hook levels use the runSettings parser, which the probe can read.
 			// answer takes <task> first, so a leading probe flag is swallowed as the task.
 			if key == "workflow write" {
 				// Its parser prints one fixed usage line for any bad flag, so the unknown-flag probe cannot read arity.
@@ -358,7 +359,7 @@ func contractCommandInventory(t *testing.T) contractCommandDocument {
 			} else if c.name == "answer" {
 				sub.Flags = append(sub.Flags, contractCommandFlag{Name: "--json", Takes: "none"})
 				sub.JSON = true
-			} else if c.name != "hook" {
+			} else if key != "hook" {
 				for _, flag := range candidates {
 					recognized, takes := probe(flag)
 					if recognized {

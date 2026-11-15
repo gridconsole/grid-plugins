@@ -55,13 +55,13 @@ func TestHeJpRemovedSubs(t *testing.T) {
 	t.Run("job order is an unknown job command", func(t *testing.T) {
 		h, path, _ := orchestratorHarness(t)
 		t.Setenv("GRID_ROLE", "member")
-		const message = `job: unknown job command "order"; use render, lint or show`
+		const message = `job: unknown job command "order"; use next, post, ack, result, cancel, tree, blocked, render, lint, show, trace, verify or cycles`
 		heJpRefused(t, h, path, message, "job", "order", "J-1", "3")
 		heJpRefused(t, h, path, message, "job", "order")
 		// With --json grid job answers its own {"ok":false,"error":...} shape on stdout.
 		h.out.Reset()
 		h.errb.Reset()
-		if code := h.run(path, "job", "order", "J-1", "3", "--json"); code != 2 || !strings.Contains(h.out.String(), `"error":"unknown job command \"order\"; use render, lint or show"`) {
+		if code := h.run(path, "job", "order", "J-1", "3", "--json"); code != 2 || !strings.Contains(h.out.String(), `"error":"unknown job command \"order\"; use next, post, ack, result, cancel, tree, blocked, render, lint, show, trace, verify or cycles"`) {
 			t.Fatalf("job order --json: exit %d\nstdout: %s\nstderr: %s", code, h.out, h.errb)
 		}
 	})

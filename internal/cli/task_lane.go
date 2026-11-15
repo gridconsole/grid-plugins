@@ -16,9 +16,10 @@ func runTaskLane(args []string, env Env) int {
 	asJSON := fs.Bool("json", false, "print JSON")
 	project := fs.String("project", "", "project name or id; the task must be in it")
 	fs.Usage = func() {
-		fmt.Fprint(env.Stderr, taskUsage)
+		fmt.Fprint(fs.Output(), taskUsage)
 		fs.PrintDefaults()
 	}
+	helpToStdout(fs, args, env)
 	pos, err := taskArgs(fs, args)
 	if errors.Is(err, flag.ErrHelp) {
 		return 0
