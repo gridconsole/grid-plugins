@@ -21,6 +21,19 @@ func TestR23DeliveryDocNamesNoRemovedCommand(t *testing.T) {
 			t.Errorf("docs/delivery.md still names %q", bad)
 		}
 	}
+	// "preview command" may appear only as "no preview command".
+	flat := strings.Join(strings.Fields(text), " ")
+	for i := 0; ; {
+		j := strings.Index(flat[i:], "preview command")
+		if j < 0 {
+			break
+		}
+		j += i
+		if !strings.HasSuffix(flat[:j], "no ") {
+			t.Errorf("docs/delivery.md says %q without a leading \"no\"", flat[max(0, j-12):j+len("preview command")])
+		}
+		i = j + 1
+	}
 	// The receipt files may be named only as no longer written or read.
 	for _, f := range []string{"approval-ship.json", "approval-preview.json"} {
 		for _, line := range strings.Split(text, "\n") {

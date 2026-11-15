@@ -153,7 +153,7 @@ approval receipts"). Delivery writes no approval and no `gate`. After the write 
 posts one person Job for the ship step (`Post person Job J-n for the ship step`;
 `person_job` in the `--json` result), which the person answers in the Grid app or
 with `grid approve T-NN`, as any plan approve Job. No second person Job is posted
-while one is open. A Job that cannot be posted never fails the delivery. There is
+while one is open. A Job that cannot be posted never fails the delivery. There is no
 preview command, and no ship or preview receipt: `approval-ship.json` and
 `approval-preview.json` are no longer written or read.
 
