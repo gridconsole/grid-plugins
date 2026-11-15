@@ -29,8 +29,8 @@ type Entry struct {
 	// routine reads, written as the source's tool list names them. They are added
 	// to the routine's own allow list as they stand; a routine with none runs
 	// with the list it always had.
-	Tools   []string  `json:"tools,omitempty" yaml:"tools,omitempty"`
-	Machine string    `json:"machine" yaml:"machine"`
+	Tools    []string  `json:"tools,omitempty" yaml:"tools,omitempty"`
+	Machine  string    `json:"machine" yaml:"machine"`
 	LastRun  time.Time `json:"last_run,omitzero" yaml:"last_run,omitempty"`
 	Outcome  string    `json:"outcome,omitempty" yaml:"outcome,omitempty"`
 	LastTask string    `json:"last_task,omitempty" yaml:"last_task,omitempty"`
