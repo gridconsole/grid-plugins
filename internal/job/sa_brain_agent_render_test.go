@@ -59,9 +59,14 @@ func TestSaBrainAgentRendered(t *testing.T) {
 	if strings.Contains(got.Brief, "model: sonnet") || strings.Contains(got.Brief, "description: from the brain") {
 		t.Fatal("the agent's front matter is in the brief")
 	}
-	// The same Job without the brain's agent has no Instructions: researcher has no agents/ file.
-	if bare := saRenderWith(t, "researcher", ""); strings.Contains(bare.Brief, "### Instructions") {
-		t.Fatal("a researcher without a brain agent got an Instructions section")
+	// The same Job without the brain's agent has its template's Instructions: researcher has no agents/ file, only agent-templates/grid-researcher.md.
+	_, tplBody := frontAndBody(t, "grid-researcher", pluginFile(t, "agent-templates/grid-researcher.md"))
+	if bare := saRenderWith(t, "researcher", ""); !strings.Contains(bare.Brief, "### Instructions\n\n"+tplBody+"\n\n") {
+		t.Fatal("a researcher without a brain agent got no Instructions from its template")
+	}
+	// A role with neither file has none.
+	if bare := saRenderWith(t, "writer", ""); strings.Contains(bare.Brief, "### Instructions") {
+		t.Fatal("a writer with no agent file got an Instructions section")
 	}
 }
 

@@ -32,9 +32,13 @@ func SkillFor(name string) (string, bool) {
 	return string(b), true
 }
 
-// AgentFor is the text of agents/<role>.md for a normalized role, and false when
-// the role has no agent file. A role is a plain name, never a path.
-func AgentFor(role string) (string, bool) {
+//go:embed agent-templates/grid-*.md
+var templates embed.FS
+
+// AgentFileFor is the text of agents/<role>.md alone, and false when the role has no
+// agents file. Its `tools:` line is the one a worker spawn passes on; a template's
+// tools are those of an interactive subagent and are not.
+func AgentFileFor(role string) (string, bool) {
 	if role == "" || strings.ContainsAny(role, "/\\.") {
 		return "", false
 	}
@@ -43,4 +47,21 @@ func AgentFor(role string) (string, bool) {
 		return "", false
 	}
 	return string(b), true
+}
+
+// AgentFor is the text of the file that defines a normalized role: agents/<role>.md,
+// else the role's template agent-templates/grid-<role>.md, so a role a Job can name
+// has one definition and no role is left without instructions. It answers false when
+// the role has neither file. A role is a plain name, never a path.
+func AgentFor(role string) (string, bool) {
+	if role == "" || strings.ContainsAny(role, "/\\.") {
+		return "", false
+	}
+	if s, ok := AgentFileFor(role); ok {
+		return s, true
+	}
+	if b, err := templates.ReadFile("agent-templates/grid-" + role + ".md"); err == nil {
+		return string(b), true
+	}
+	return "", false
 }
