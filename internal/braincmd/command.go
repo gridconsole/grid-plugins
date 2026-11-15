@@ -37,6 +37,9 @@ type Env struct {
 	// the Job as its author when it runs in one, else the session; see
 	// cbAuProposeOrigin. braincmd reads no environment variable itself.
 	Task, Job, Session string
+	// SessionTask is the session's task as the hooks read it: GRID_TASK, else
+	// GRID_FEED_TASK. With no --project or --task it picks the project.
+	SessionTask string
 	// The CLI supplies its shared folder resolver and refusal contract.
 	ResolveTask      func(string) (task.Task, error)
 	TaskOperandError func(string, error) int
@@ -294,6 +297,15 @@ func Run(args []string, env Env) int {
 			proposeTask, taskID = t, t.Path
 		}
 		res, err := resolver.Resolve(where.Query{Cwd: env.Cwd, Project: *project, Task: taskID})
+		if *project == "" && taskID == "" && env.SessionTask != "" {
+			// A Job session runs from a worktree that names no task; its task, the
+			// one the hooks record against, picks the project. It does not pick a
+			// task folder: only --task does that.
+			if s, serr := resolver.Resolve(where.Query{Cwd: env.Cwd, Task: env.SessionTask}); serr == nil && (err != nil || s.Project != res.Project) {
+				s.TaskPath = ""
+				res, err = s, nil
+			}
+		}
 		if err != nil {
 			return fail(err)
 		}

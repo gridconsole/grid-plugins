@@ -13,7 +13,17 @@ func runBrain(args []string, env Env) int {
 		Cwd: env.Cwd, Home: env.Home, GridHome: env.GridHome, TempRoots: env.TempRoots,
 		Role: env.getenv("GRID_ROLE"), Member: brainMember(env), RecordError: env.recordError,
 		Task: env.getenv("GRID_TASK"), Job: env.getenv("GRID_JOB"), Session: brainSession(env),
+		SessionTask: brainSessionTask(env),
 	})
+}
+
+// brainSessionTask is the session task in the order the hooks read it:
+// GRID_TASK, else GRID_FEED_TASK.
+func brainSessionTask(env Env) string {
+	if v := env.getenv("GRID_TASK"); v != "" {
+		return v
+	}
+	return env.getenv("GRID_FEED_TASK")
 }
 
 // brainSession is the session id in the order grid task attach reads it:
