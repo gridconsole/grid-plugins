@@ -36,6 +36,9 @@ var relations = wordSet("depends-on explains decided-by supersedes duplicates re
 var anchorName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 var acceptanceID = regexp.MustCompile(`^A[1-9][0-9]*$`)
 var words = regexp.MustCompile(`[\pL][\pL\pN_-]*`)
+
+// proposalRead is a whole-file read of one task brain proposal.
+var proposalRead = regexp.MustCompile(`^(?:task:)?brain-proposals/[A-Za-z0-9][A-Za-z0-9._-]*\.md$`)
 var stopWords = wordSet("a an the and or of to for from in on at with without by as is are be it this that these those its their our your we you they one all only not no new add adds make makes create creates implement implements support supports update updates change changes use uses must should will can do does has have step verify item plan test tests")
 
 type checker struct {
@@ -279,7 +282,10 @@ func (c *checker) validate(j job.Job, o Options) {
 			}
 		}
 		for _, p := range j.Read {
-			if !strings.Contains(p, "#") && !regexp.MustCompile(`:[0-9]+-[0-9]+$`).MatchString(p) {
+			// A task's brain proposal is one note the curator decides on whole, so
+			// it is read whole; a line range taken at post time would fall outside
+			// the file once the proposal is edited before render.
+			if !strings.Contains(p, "#") && !regexp.MustCompile(`:[0-9]+-[0-9]+$`).MatchString(p) && !proposalRead.MatchString(p) {
 				c.add("job.read-range", "read", "Read pointer has no range: "+p, "Name a line range or an explicit anchor.")
 			}
 			if _, e := o.Resolver.Resolve(p); e != nil {
@@ -303,6 +309,12 @@ func (c *checker) validate(j job.Job, o Options) {
 	// not a plan step, so it has no plan words to cover.
 	if strings.EqualFold(strings.TrimSpace(j.Role), "orchestrator") {
 		return
+	}
+	// A curator Job's item is the task's delivered Outcome, which the keeper links
+	// its notes to, not a plan step it builds; its plan is its title, so its
+	// acceptance covers the title's words.
+	if strings.EqualFold(strings.TrimSpace(j.Role), "curator") {
+		itemText = j.Title
 	}
 	nouns := contentWords(itemText)
 	covered := ""
