@@ -12,6 +12,9 @@ func runHook(args []string, env Env) int {
 	if len(args) > 0 && (args[0] == "level" || args[0] == "levels" || args[0] == "--help" || args[0] == "-h") {
 		return runSettings("hook", args, env)
 	}
+	if len(args) > 0 && args[0] == "events" {
+		return runHookEvents(args[1:], env)
+	}
 	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
 		return 0
 	}

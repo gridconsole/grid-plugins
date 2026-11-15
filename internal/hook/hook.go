@@ -17,6 +17,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/guard"
+	"github.com/gridconsole/grid-plugins/internal/hookevents"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/settings"
@@ -33,6 +34,9 @@ type Options struct {
 	Resolver where.Resolver
 	Cwd      string
 	Getenv   func(string) string
+
+	// runs collects the rules one Run consulted; Run sets it.
+	runs *ruleRuns
 }
 
 // Handles reports whether Run answers the event, so callers can tell a handled
@@ -55,7 +59,11 @@ func Run(o Options) int {
 		return 0
 	}
 	defer o.logSlow(time.Now())
-	return run(o)
+	o.runs = &ruleRuns{}
+	code := run(o)
+	// One line per rule the run consulted, after the run has its answer.
+	o.flushRuns()
+	return code
 }
 
 // slowHook is the time from the start of a hook call to its output from which
@@ -491,6 +499,7 @@ func toolUse(o Options) {
 	}
 	if decision.Behavior == "allow" {
 		CountHomeAllow(env, *in)
+		o.note("home-allow", hookevents.OK)
 	}
 	if in.HookEventName == "PermissionRequest" && decision.Behavior != "" {
 		decision.Event = "PermissionRequest"
@@ -512,20 +521,25 @@ func (o Options) overLimitDecision(in hookio.Input, reason string) hookio.Decisi
 	level, err := o.hookLevel("plan-guard", in)
 	if err != nil {
 		deny.Warnings = append(deny.Warnings, err.Error())
+		o.note("plan-guard", hookevents.Blocked)
 		return deny
 	}
 	switch level {
 	case "off":
 		return hookio.Decision{}
 	case "warn":
+		o.note("plan-guard", hookevents.Warned)
 		return hookio.Decision{Warnings: []string{"plan-guard: " + reason}}
 	}
+	o.note("plan-guard", hookevents.Blocked)
 	return deny
 }
 
+// evaluateGuards asks the plan guard and the home guard, notes what each came to
+// for the events log, and returns the stronger answer.
 func evaluateGuards(o Options, in hookio.Input, env map[string]string) hookio.Decision {
-	return hookio.Strongest(
-		guard.EvaluatePlan(in, o.Cwd, env),
-		guard.EvaluateHome(in, o.Cwd, env),
-	)
+	plan := guard.EvaluatePlan(in, o.Cwd, env)
+	home := guard.EvaluateHome(in, o.Cwd, env)
+	o.note("plan-guard", decisionOutcome(plan))
+	return hookio.Strongest(plan, home)
 }

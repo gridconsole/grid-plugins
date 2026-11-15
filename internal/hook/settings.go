@@ -20,6 +20,7 @@ func (o Options) hookLevel(name string, in hookio.Input) (string, error) {
 	for _, w := range warnings {
 		o.log("hook settings", errors.New(w))
 	}
+	o.note(name, levelOutcome(level))
 	return level, err
 }
 
