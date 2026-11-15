@@ -170,9 +170,24 @@ func Run(args []string, e Env) int {
 			return fail(err, 1)
 		}
 		skeleton := meta + "\n## Intent\n## Job\n## Context\n## Out of scope\n## Open\n## Acceptance\n## Outcome\n## Verdict\n## Follow-up\n"
-		findings := lint.Check(skeleton, w.lintOptions())
-		if lint.HasErrors(findings) {
-			return output(e, f, report{ID: j.ID, Findings: findings}, 1)
+		// The job-lint level says what lint errors do here: block refuses (the default),
+		// warn says them on stderr and renders, off does not lint. Settings that cannot
+		// be read keep the refusal.
+		lintLevel, levelErr := jobLintLevel(e.GridHome, w.project)
+		if levelErr != nil {
+			fmt.Fprintf(e.Stderr, "grid job render: hook settings cannot be read: %v\n", levelErr)
+		}
+		var findings []lint.Finding
+		if lintLevel != "off" {
+			findings = lint.Check(skeleton, w.lintOptions())
+			if lint.HasErrors(findings) {
+				if lintLevel != "warn" {
+					return output(e, f, report{ID: j.ID, Findings: findings}, 1)
+				}
+				for _, fd := range findings {
+					fmt.Fprintf(e.Stderr, "grid job render: %s: %s: %s (job-lint is warn, rendering anyway)\n", j.ID, fd.Rule, fd.Message)
+				}
+			}
 		}
 		agent, _, _ := w.store.AgentFor(j.Role) // the brain's agent for the role, if it holds one
 		// A skill the person turned off (grid skill disable) is left out of the Skills block.
@@ -882,6 +897,23 @@ func sources(task string, e Env) (*world, error) {
 	}
 	sort.Strings(w.repos)
 	return w, nil
+}
+
+// jobLintLevel reads the job-lint hook level the way the guards do: the project's
+// value over the personal one, the catalog default (block) when none is stored. A
+// settings error returns block, so an unreadable file never turns the refusal off.
+func jobLintLevel(gridHome, project string) (string, error) {
+	if gridHome == "" {
+		return "block", nil
+	}
+	levels, err := settings.ReadHookLevels(gridHome, project)
+	if err != nil {
+		return "block", err
+	}
+	if l := levels["job-lint"]; l != "" {
+		return l, nil
+	}
+	return "block", nil
 }
 
 // lintOptions is what lint checks a Job against: the task's files and the project's repos.
