@@ -12,6 +12,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
+	"github.com/gridconsole/grid-plugins/internal/session"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
 )
@@ -125,10 +126,9 @@ func reopenContinueJob(env Env, dir string) (*reopenContinuation, error) {
 
 // reopenTaskWriter is the writer of a task write that a reopen makes: the task epoch
 // the caller holds (GRID_TASK_EPOCH, or GRID_LEASE_EPOCH unless it was typed as a
-// global), as reopenPlanJob takes it. A person at a terminal holds none, and the worker
-// gave the lease back when the last Job closed, so the person takes the task lease for
-// this one post, as grid task new does for J-1. release gives it back; it is safe to
-// call twice.
+// global), as reopenPlanJob takes it. A person at a terminal holds none, so the person
+// acquires the task lease for this one post (free, or left by a worker process that is
+// gone), as grid task new does for J-1. release gives it back; it is safe to call twice.
 func reopenTaskWriter(env Env, store feed.Store) (feed.Writer, func(), error) {
 	none := func() {}
 	epoch := env.getenv("GRID_LEASE_EPOCH")
@@ -156,12 +156,17 @@ func reopenTaskWriter(env Env, store feed.Store) (feed.Writer, func(), error) {
 			began = time.Now()
 		}
 	}
+	// A worker that was stopped never gave the lease back: the lease file still names
+	// its process, which is gone. AcquireTask takes a free lease and adopts one whose
+	// holder is provably gone on this host, as the worker's own pass does
+	// (internal/lease/task.go AcquireTask); a live holder keeps it and the reopen is
+	// refused before any state moves.
 	ts := lease.TaskStore{Feed: store}
-	grant, err := ts.TakeTask(w, pid, contract.FormatTime(began))
+	got, err := ts.AcquireTask(w, pid, contract.FormatTime(began), session.ProbeLocal)
 	if err != nil {
 		return w, none, fmt.Errorf("the task lease cannot be taken: %w", err)
 	}
-	w.Gen, w.Fence = grant.Gen, grant.Fence
+	w.Gen, w.Fence = got.Tenure.Gen, got.Tenure.Fence
 	released := false
 	release := func() {
 		if !released {
@@ -169,9 +174,11 @@ func reopenTaskWriter(env Env, store feed.Store) (feed.Writer, func(), error) {
 			_ = ts.ReleaseTask(w)
 		}
 	}
-	if _, err := store.Handover(feed.Input{Body: map[string]any{}}, w); err != nil {
-		release()
-		return w, none, err
+	if got.How != lease.AcquiredReused {
+		if _, err := store.Handover(feed.Input{Body: map[string]any{}}, w); err != nil {
+			release()
+			return w, none, err
+		}
 	}
 	return w, release, nil
 }

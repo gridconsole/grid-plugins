@@ -20,7 +20,8 @@ import (
 
 // r13Stopped makes the task of that round: J-1 was assigned, acknowledged and ended
 // by a worker-exit cancelled with code, then cancelled as the worker does after a
-// requested stop. The worker has given the task lease back. task.md says state.
+// requested stop. The task lease still names the stopped worker's dead process.
+// task.md says state.
 // The harness is a person at a terminal afterwards: a member with no lease epoch.
 func r13Stopped(t *testing.T, state, code string) (*harness, string, feed.Store) {
 	t.Helper()
@@ -50,7 +51,8 @@ func r13Stopped(t *testing.T, state, code string) (*harness, string, feed.Store)
 	if c := h.run(path, "job", "cancel", "J-1", "--reason", "worker stopped on request"); c != 0 {
 		t.Fatalf("job cancel: %d %s", c, h.errb)
 	}
-	// The worker has no open Job left, so it gives the task lease back.
+	// The stopped worker never gave the task lease back: the lease file still names
+	// its process, which is gone (a pid no process holds).
 	ts := lease.TaskStore{Feed: store}
 	held, err := ts.Read("task")
 	if err != nil || held.Holder == nil {
@@ -58,6 +60,10 @@ func r13Stopped(t *testing.T, state, code string) (*harness, string, feed.Store)
 	}
 	w := feed.Writer{Author: feed.Author{ID: "member", Role: "member"}, Worker: *held.Holder, Lease: "task", Gen: held.Gen, Fence: held.Fence}
 	if err := ts.ReleaseTask(w); err != nil {
+		t.Fatal(err)
+	}
+	w.Fence = 0
+	if _, err := ts.TakeTask(w, 4000000, contract.FormatTime(time.Now().Add(-time.Hour))); err != nil {
 		t.Fatal(err)
 	}
 	// A person at a terminal: no lease epoch, no Job.
@@ -176,7 +182,7 @@ func TestR13ReopenRunningTaskKeepsItsRefusal(t *testing.T) {
 				t.Setenv("GRID_ROLE", "member")
 				t.Setenv("GRID_LEASE_EPOCH", "")
 				if c := h.run(path, "job", "post", "--person", "dana", "--job", "J-2", "--body", personBody(t, "J-2", nil)); c != 0 {
-					t.Skipf("cannot post the open Job without a lease: %d %s", c, h.errb)
+					t.Fatalf("cannot post the open Job: %d %s", c, h.errb)
 				}
 				h.errb.Reset()
 			}
