@@ -78,4 +78,4 @@ FAIL	github.com/gridconsole/grid-plugins/internal/cli
 
 - No live screen; no UI in this lane. The r6 end-to-end run (person.sh, then a worker pass, then a merge on the handbook) was not rerun.
 
-NOT DONE
+CLOSED BY C-r6-ship-ticked-test: accepted 00:33 UTC
