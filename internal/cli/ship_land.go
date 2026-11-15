@@ -62,6 +62,14 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 	if job == "" {
 		return
 	}
+	// An answer accepted while the delivery waits (an app answer the holder's tick
+	// accepts) lands nothing: the ship Job goes back to its person, and the land
+	// runs on the answer given once the rework is accepted (shipWait).
+	if err := shipWait(snap, job); err != nil {
+		fmt.Fprintf(env.Stderr, "land: %s not run: %s\n", job, oneLineErr(err))
+		reopenShipWaiting(env, fs, w, job, err)
+		return
+	}
 	resolved, err := resolveTaskOperand(env, dir)
 	if err != nil {
 		fmt.Fprintln(env.Stderr, "land: "+oneLineErr(err))
@@ -100,6 +108,27 @@ func reopenShipJob(env Env, fs feed.Store, w feed.Writer, store land.Store, id, 
 	if err := store.Reopened(env.Cwd, id, job); err != nil {
 		fmt.Fprintf(env.Stderr, "land: %s reopened, but its history line failed: %s\n", job, oneLineErr(err))
 	}
+}
+
+// reopenShipWaiting puts the accepted ship Job job back with its person while the
+// delivery waits: a control sets it posted again with the wait as its reason. No
+// land ran, so the land's once-guard is untouched and the next answer lands.
+func reopenShipWaiting(env Env, fs feed.Store, w feed.Writer, job string, why error) {
+	if w.Lease != "task" {
+		fmt.Fprintf(env.Stderr, "land: %s stays accepted: reopening it needs the task lease\n", job)
+		return
+	}
+	reason := why.Error()
+	var waiting *orchestrator.WaitingError
+	if errors.As(why, &waiting) {
+		reason = waiting.Reason
+	}
+	body := map[string]any{"target": job, "status": string(contract.Posted), "reason": "the delivery is not accepted: " + reason}
+	if _, err := orchestrator.Write(fs, w, feed.Input{Type: "control", Body: body}); err != nil {
+		fmt.Fprintf(env.Stderr, "land: %s not reopened: %s\n", job, oneLineErr(err))
+		return
+	}
+	refoldAfterWrite(env, fs)
 }
 
 func oneLineErr(err error) string { return strings.Join(strings.Fields(err.Error()), " ") }

@@ -110,6 +110,7 @@ func runDeliver(args []string, env Env) int {
 		} else if posted != "" {
 			person = posted
 			result.Actions = append(result.Actions, "Post person Job "+posted+" for the ship step")
+			renderShipJob(env, t.Path, posted)
 		}
 	}
 	if *asJSON {

@@ -3,11 +3,15 @@ package cli
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/jobgraph"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
@@ -56,6 +60,83 @@ func shipJobBody(id, owner string) map[string]any {
 // isShipJob reports whether it is the ship person Job a delivery posts.
 func isShipJob(it job.Job) bool {
 	return it.IsPerson() && it.Kind == "approve" && len(it.Acceptance) == 1 && it.Acceptance[0].Text == shipAcceptance
+}
+
+// isShipJobID reports whether id is a ship person Job of the Feed.
+func isShipJobID(snap orchestrator.Snapshot, id string) bool {
+	for _, it := range snap.Items {
+		if it.ID == id {
+			return isShipJob(it)
+		}
+	}
+	return false
+}
+
+// shipWait is why the ship person Job ship may not be answered or land yet: a
+// deliver Job of the task is not accepted, or was rejected and its rework is not
+// yet accepted (jobgraph.DeliveryWait). The ship Job stays bound to the task's
+// delivery, not to the run that posted it: a rework delivers again into the same
+// task.md and finds the ship Job open, so the person's approve lands the rework's
+// delivery once the rework is accepted, and never a rejected one (round 14 F1).
+func shipWait(snap orchestrator.Snapshot, ship string) error {
+	jobs := map[string]contract.Job{}
+	for id, j := range snap.State.Jobs {
+		if j != nil {
+			jobs[id] = *j
+		}
+	}
+	if w, ok := jobgraph.DeliveryWait(snap.Items, jobgraph.Snapshot{Jobs: jobs}); !ok {
+		return &orchestrator.WaitingError{Job: ship, Target: w.Target, Reason: w.Reason}
+	}
+	return nil
+}
+
+// renderShipJob saves the brief of the ship person Job in jobs/<id>/brief.md, so
+// grid job show reads it as it reads every Job a worker starts (round 14 F6). A
+// person Job is never started by a worker, and grid job render refuses its body
+// (intent.owner names the person, not a pointer), so the brief is the Job record's
+// metadata with the brief's sections, which is what grid job show decodes. A
+// brief that cannot be saved is said on stderr and never fails the delivery.
+func renderShipJob(env Env, dir, id string) {
+	if err := saveShipBrief(env, dir, id); err != nil {
+		fmt.Fprintf(env.Stderr, "deliver: the brief of %s was not saved: %s\n", id, oneLineErr(err))
+	}
+}
+
+func saveShipBrief(env Env, dir, id string) error {
+	fid, _, err := taskstore.FeedIdentity(dir)
+	if err != nil {
+		return err
+	}
+	snap, err := orchestrator.Load(feed.Store{TaskDir: dir, TaskID: fid, Warn: env.Stderr})
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(snap.Items, func(it job.Job) bool { return it.ID == id })
+	if i < 0 {
+		return fmt.Errorf("%s is not on the Feed", id)
+	}
+	meta, err := job.Metadata(snap.Items[i])
+	if err != nil {
+		return err
+	}
+	// Each folder is checked inside the task before the next is made in it, as
+	// grid job render saves a brief.
+	for _, rel := range []string{"jobs", filepath.Join("jobs", id)} {
+		if err := os.MkdirAll(filepath.Join(dir, rel), 0o755); err != nil {
+			return err
+		}
+		if _, err := job.Within(dir, rel); err != nil {
+			return err
+		}
+	}
+	// A brief already there (a symlink included) is left as it is.
+	path := filepath.Join(dir, "jobs", id, "brief.md")
+	if _, err := os.Lstat(path); err == nil {
+		return nil
+	}
+	brief := meta + "\n## Intent\nThe person approves the delivered work (task.md, Outcome) to land.\n## Job\nAnswer with grid approve or in the Grid app.\n## Context\n## Out of scope\n## Open\n## Acceptance\n- A1 " + shipAcceptance + "\n## Outcome\n## Verdict\n## Follow-up\n"
+	return os.WriteFile(path, []byte(brief), 0o644)
 }
 
 // postShipPersonJob posts the person step that follows Check: the plan approve

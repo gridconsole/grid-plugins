@@ -334,6 +334,7 @@ func started(status contract.Status) bool {
 
 // Ready lists unstarted posted/ready Jobs whose dependencies are satisfied.
 // No children is a wait, not a vacuous success before a split has happened.
+// A deliver Job also waits for every open person question (questionWaits).
 // Already assigned, running, parked or terminal Jobs are never offered again.
 func (g *Graph) Ready(s Snapshot) (Readiness, error) {
 	out := Readiness{Ready: []string{}, Waiting: []Wait{}}
@@ -376,6 +377,9 @@ func (g *Graph) Ready(s Snapshot) (Readiness, error) {
 			if !satisfied {
 				out.Waiting = append(out.Waiting, Wait{Job: id, Target: e.Job, Kind: kind, Reason: reason})
 			}
+		}
+		if IsDeliver(g.items[id]) {
+			out.Waiting = append(out.Waiting, g.questionWaits(s, id)...)
 		}
 		if len(out.Waiting) == start {
 			out.Ready = append(out.Ready, id)

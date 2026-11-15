@@ -322,6 +322,10 @@ func runApprove(args []string, env Env) int {
 		if err == nil {
 			err = orchestrator.PersonReady(snap, job, time.Now())
 		}
+		// The ship Job also waits for the task's delivery to be accepted (shipWait).
+		if err == nil && isShipJobID(snap, job) {
+			err = shipWait(snap, job)
+		}
 		if err != nil {
 			fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
 			if *asJSON {
