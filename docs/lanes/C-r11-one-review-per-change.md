@@ -2,7 +2,7 @@
 
 A change is reviewed once. The orchestrator no longer plans a reviewer Job for a Job whose review the worker posts. A review asked for on top of that one is still possible. Eval rounds 10 and 11, P5.
 
-Verdict: DONE (see the proof table; `make test` row filled from the final run).
+Verdict: DONE. `make test` ran on 9fc9c717; the later commits touch only `docs/lanes/`. `git fetch origin` showed nothing new on main (`git log HEAD..origin/main` was empty), so there was nothing to merge.
 
 ## Cause
 
@@ -91,19 +91,23 @@ Tests:
 | Brief 3: the plugin plans no review for a Job the worker reviews; a review on top stays possible; change kept to the orchestrator text, the plan-jobs skill and the lint; a test where the lint changes | HOLDS | `agents/orchestrator.md:18,23`, `skills/plan-jobs/SKILL.md:11,43`, `internal/job/lint/lint.go:350-367`, `r11_review_twice_test.go` |
 | Acceptance: a lint case flags a plan with a builder Job and a planned review of it | HOLDS | `go test -count=1 -run TestR11 -v ./internal/job/lint/`, exit 0 (PASS lines below) |
 | Acceptance: the orchestrator text that forbids it, quoted | HOLDS | `agents/orchestrator.md:18`, quoted under "The change" |
-| Acceptance: `make test` passes | see the run below | `make test` |
+| Acceptance: `make test` passes | HOLDS | `make test` exit 0; no `FAIL` line in its log; `internal/cli` ok 42.6s, `internal/job` ok, `internal/job/jobcmd` ok, `internal/job/lint` ok |
 | Brief 4: lane doc with the cause, the change and the rows | HOLDS | this file |
 | New tests fail on base | HOLDS | failing lines below |
 | No existing test edited | HOLDS | `git diff origin/main --stat` only adds test files |
 | No guard, gate, cap or hold on agents | HOLDS | the lint finding is a warning; refusal is on errors only (`jobcmd/command.go:163`) |
 | App not changed | HOLDS | the diff is plugin-only; `judge.go` was read with `git show` from the ref repo |
-| Tests of changed packages and their importers | HOLDS | `go list` importers: internal/cli, internal/job, internal/job/jobcmd (plus the root embed readers); all run by `make test` |
+| Tests of changed packages and their importers | HOLDS | `go list -f '{{.ImportPath}} {{join .Imports " "}}' ./...` filtered on internal/job/lint and the root package lists internal/cli, internal/job and internal/job/jobcmd; all ok in `make test` |
 | `make lint` | HOLDS | exit 0 |
 | Windows and macOS builds | HOLDS | `GOOS=windows go build ./... && GOOS=darwin go build ./...` exit 0 |
-| Walk tests (plugin) | HOLDS | listed below |
-| Merge origin/main before the last proof | HOLDS | listed below |
-| Whole-module test and cross-repo set | not run, not asked | the orchestrator runs them at landing (beyond `make test`) |
+| Walk test `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` | HOLDS | exit 0; `--- PASS: TestHsIpWalksEveryCommand`, `--- PASS: TestIlGuestSiteList`, `ok internal/cli 0.033s` |
+| Walk test `go test -count=1 ./internal/job/lint/` | HOLDS | exit 0; `ok internal/job/lint 0.124s` |
+| New tests on the lane `go test -count=1 -run TestR11 -v ./internal/job/lint/` | HOLDS | exit 0; `--- PASS: TestR11PlannedReviewOfABuildIsFlagged`, `--- PASS: TestR11ReviewNotFlagged`, `--- PASS: TestR11OrchestratorPlansNoReviewTheWorkerPosts` |
+| Merge origin/main before the last proof | HOLDS | `git fetch -q origin && git log --oneline HEAD..origin/main` printed nothing: the lane is on current main |
+| `children-done` met by the worker's review | HOLDS | E2 `feed/state.json`: the first status after `"J-2.1":{` is `accepted`, so a deliver `children-done` edge on J-2 is met once J-2.1 is accepted |
+| Cross-repo set | not run, not asked | the orchestrator runs it at landing |
 | *RealPlugin* tests | not run, not asked | the brief names none |
+| Copy of the report to /srv/gridwork/tmp/hand | not run, the brief forbids it | the brief says "Never: cp outside the clone"; this doc travels in the bundle |
 
 ### New tests on base (lint rule before c0fb0901, text before 9fc9c717)
 
@@ -125,4 +129,6 @@ TestR11ReviewNotFlagged passes on base too. It checks for false positives and is
 
 ## NOT VERIFIED on a live run
 
-That the orchestrator in an eval round posts no J-3 beside J-2.1, and that delivery then waits on J-2.1 through `children-done`. A checker sees this in the next eval round.
+That the orchestrator in an eval round posts no J-3 beside J-2.1, and that delivery then waits on J-2.1 through `children-done`. A checker sees this in the next eval round. The path where a review sends the build back for rework, with `children-done`, is not checked either.
+
+DONE
