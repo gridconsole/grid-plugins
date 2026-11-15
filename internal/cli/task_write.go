@@ -257,7 +257,8 @@ the plan; it needs the current --plan-hash and takes no --note.
 
 func runApprove(args []string, env Env) int {
 	fs := newFlags("approve", env)
-	fs.Usage = func() { fmt.Fprint(env.Stderr, approveUsage); fs.PrintDefaults() }
+	fs.Usage = func() { fmt.Fprint(fs.Output(), approveUsage); fs.PrintDefaults() }
+	helpToStdout(fs, args, env)
 	hash := fs.String("plan-hash", "", "6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json; workflow.md plan_hash_token: digest requires the digest")
 	note := fs.String("note", "", "approval note")
 	sendBack := fs.String("send-back", "", "send the open plan approve Job back with these words instead of approving; needs --plan-hash, takes no --note")

@@ -9,10 +9,10 @@ Commands:
   doctor      check machine health and collect a support bundle
   hook        answer a Claude Code or Codex hook event; set and list hook levels
   task        new|show|list|status|lane|merge, stop|close|reopen, history|attach|move (grid task help lists all)
-  plan        write, check, items, hash, diff, migrate
-  job         next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace
+  plan        write, check, items, hash, migrate
+  job         next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, trace
   lease       take, release, status (task lease)
-  feed        tick, post, read, state, types, handover, fold
+  feed        tick, post, read, state, types, handover
   mcp         stdio server with the Feed tools
   question    add, ask, withdraw, list, tick and sync task questions
   answer      record a person's answer

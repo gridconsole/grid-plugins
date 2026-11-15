@@ -66,9 +66,9 @@ func hyDrRun(op string, args []string, env Env) int {
 		usage, past = restoreUsage, "restore"
 	}
 	f := flag.NewFlagSet("grid brain "+op, flag.ContinueOnError)
-	f.SetOutput(env.Stderr)
+	f.SetOutput(helpOut(args, env))
 	f.Usage = func() {
-		fmt.Fprintln(env.Stdout, usage)
+		fmt.Fprintln(f.Output(), usage)
 		f.PrintDefaults()
 	}
 	var l leveled

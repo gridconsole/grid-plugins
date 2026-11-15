@@ -45,6 +45,9 @@ type Env struct {
 	Ceiling    string                 // "" walks to the root; tests set their fixture root
 	GitVersion func() (string, error) // nil runs git --version
 	failure    *commandFailure
+	// helpAsked is set by Run when the arguments ask for help: every flag set made
+	// by newFlags then prints its usage on stdout, whichever verb parses it.
+	helpAsked  bool
 	Getenv     func(string) string    // nil reads the process environment
 	Executable func() (string, error) // nil asks os.Executable
 	OpenURL    func(string) error     // nil opens the system browser; tests set it
@@ -139,10 +142,10 @@ func commands() []command {
 		{"doctor", "check machine health and collect a support bundle", runDoctor},
 		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels", runHook},
 		{"task", "new|show|list|status|lane|merge, stop|close|reopen, history|attach|move (grid task help lists all)", runTask},
-		{"plan", "write, check, items, hash, diff, migrate", runPlan},
-		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, order, trace", runOrchestratorJob},
+		{"plan", "write, check, items, hash, migrate", runPlan},
+		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, trace", runOrchestratorJob},
 		{"lease", "take, release, status (task lease)", runTaskLease},
-		{"feed", "tick, post, read, state, types, handover, fold", runOrchestratorFeed},
+		{"feed", "tick, post, read, state, types, handover", runOrchestratorFeed},
 		{"mcp", "stdio server with the Feed tools", runMCP},
 		{"question", "add, ask, withdraw, list, tick and sync task questions", runQuestion},
 		{"answer", "record a person's answer", runAnswer},
@@ -271,6 +274,7 @@ func Run(args []string, env Env) (exit int) {
 		if code := workflowRoleRefusal(args, env); code != 0 {
 			return code
 		}
+		env.helpAsked = wantsHelp(rest)
 		return c.run(rest, env)
 	}
 	fmt.Fprintf(env.Stderr, "grid: unknown command %q. Run: grid help\n", name)
@@ -373,6 +377,9 @@ func printHelp(w io.Writer) {
 func newFlags(name string, env Env) *flag.FlagSet {
 	fs := flag.NewFlagSet("grid "+name, flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
+	if env.helpAsked {
+		fs.SetOutput(env.Stdout)
+	}
 	if env.failure != nil {
 		env.failure.flags = fs
 	}
@@ -381,6 +388,7 @@ func newFlags(name string, env Env) *flag.FlagSet {
 
 // parse returns stop true with the exit code when the command must end.
 func parse(fs *flag.FlagSet, args []string, env Env) (code int, stop bool) {
+	helpToStdout(fs, args, env)
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0, true

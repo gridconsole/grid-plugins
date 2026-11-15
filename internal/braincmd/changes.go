@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 	"unicode"
@@ -112,6 +113,20 @@ func (l *leveled) add(f *flag.FlagSet) {
 	f.StringVar(&l.level, "level", "", "home or project")
 }
 
+// helpOut is where a flag set prints its usage: stdout when the arguments ask for
+// help (-h, -help or --help before any --), stderr on any other parse error.
+func helpOut(args []string, env Env) io.Writer {
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		if a == "-h" || a == "-help" || a == "--help" {
+			return env.Stdout
+		}
+	}
+	return env.Stderr
+}
+
 func parseVerb(f *flag.FlagSet, args []string, env Env) (int, bool) {
 	ordered, err := interspersed(f, args)
 	if err != nil {
@@ -144,9 +159,9 @@ func (l *leveled) check(verb string, env Env) (int, bool) {
 
 func runChanges(args []string, env Env) int {
 	f := flag.NewFlagSet("grid brain changes", flag.ContinueOnError)
-	f.SetOutput(env.Stderr)
+	f.SetOutput(helpOut(args, env))
 	f.Usage = func() {
-		fmt.Fprintln(env.Stdout, changesUsage)
+		fmt.Fprintln(f.Output(), changesUsage)
 		f.PrintDefaults()
 	}
 	var l leveled
@@ -227,9 +242,9 @@ func changeLine(c brain.Change) string {
 
 func runRevert(args []string, env Env) int {
 	f := flag.NewFlagSet("grid brain revert", flag.ContinueOnError)
-	f.SetOutput(env.Stderr)
+	f.SetOutput(helpOut(args, env))
 	f.Usage = func() {
-		fmt.Fprintln(env.Stdout, revertUsage)
+		fmt.Fprintln(f.Output(), revertUsage)
 		f.PrintDefaults()
 	}
 	var l leveled

@@ -194,7 +194,7 @@ func yamlString(s string) string {
 // none of the run filters; usage errors exit 2 before any file is written.
 func runExportSuite(args []string, env Env) int {
 	fs := flag.NewFlagSet("grid eval export-suite", flag.ContinueOnError)
-	fs.SetOutput(env.Stderr)
+	fs.SetOutput(helpOut(args, env))
 	asJSON := fs.Bool("json", false, "print JSON")
 	suite := fs.String("suite", "evals/tasks", "task suite directory")
 	out := fs.String("out", "", "folder to write the claude plugin eval cases into (required)")

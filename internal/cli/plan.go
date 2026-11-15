@@ -31,7 +31,8 @@ func runPlan(args []string, env Env) int {
 		return 2
 	}
 	fs := newFlags("plan "+action, env)
-	fs.Usage = func() { fmt.Fprintln(env.Stderr, planUsage); fs.PrintDefaults() }
+	fs.Usage = func() { fmt.Fprintln(fs.Output(), planUsage); fs.PrintDefaults() }
+	helpToStdout(fs, args, env)
 	task := fs.String("task", "", "task folder or id; otherwise use the current task")
 	project := fs.String("project", "", "project name or id to disambiguate a task id")
 	asJSON := fs.Bool("json", false, "print JSON")
