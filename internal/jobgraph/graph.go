@@ -253,6 +253,13 @@ func DoneReason(target string, status contract.Status) string {
 // 0612Z M1). A cancelled target waits; a rejected one meets the edge through the
 // Jobs that rework it (reworkDone). Cycle does not follow reworks: they are
 // posted after the plan, when the review rejects.
+//
+// An open target meets the edge on its children alone (end review 0812Z S5): a
+// parked split parent has no other way to release it. For a build with a review
+// child this relies on the order the app's Judge uses, build closed first and the
+// review accepted after; a review accepted while the build is still submitted
+// would make the edge met on an unaccepted build. s5_children_done_open_target_test.go
+// pins it.
 func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 	if !g.childrenAccepted(s, target) || len(g.children[target]) == 0 {
 		return false, "waiting for all children of " + target + " to be accepted"
