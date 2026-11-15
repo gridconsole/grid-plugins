@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -38,6 +40,9 @@ func runPersonCheck(args []string, env Env) int {
 	fs := newFlags("person check", env)
 	asJSON := fs.Bool("json", false, "print JSON")
 	if err := parsePositionals(fs, args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	if fs.NArg() != 0 {

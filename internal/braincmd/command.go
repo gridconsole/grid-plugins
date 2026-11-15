@@ -176,20 +176,21 @@ func Run(args []string, env Env) int {
 		return 2
 	}
 	f := flag.NewFlagSet("grid brain "+verb, flag.ContinueOnError)
-	f.SetOutput(env.Stderr)
+	f.SetOutput(helpOut(args, env))
 	f.Usage = func() {
+		out := f.Output()
 		switch verb {
 		case "show":
-			fmt.Fprintln(env.Stdout, "Usage: grid brain show <id> [--task <task>] [flags]")
+			fmt.Fprintln(out, "Usage: grid brain show <id> [--task <task>] [flags]")
 		case "search":
-			fmt.Fprintln(env.Stdout, "Usage: grid brain search <words> [--task <task>] [flags]")
+			fmt.Fprintln(out, "Usage: grid brain search <words> [--task <task>] [flags]")
 		case "keep":
-			fmt.Fprintln(env.Stdout, "Usage: grid brain keep [--task <task>] [flags]")
+			fmt.Fprintln(out, "Usage: grid brain keep [--task <task>] [flags]")
 		default:
-			fmt.Fprint(env.Stdout, usage)
+			fmt.Fprint(out, usage)
 			return
 		}
-		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
+		fmt.Fprintln(out, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
 		f.PrintDefaults()
 	}
 	asJSON := f.Bool("json", false, "print JSON")

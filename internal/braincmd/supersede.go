@@ -20,9 +20,9 @@ const supersedeUsage = `Usage: grid brain supersede <old-note> --by <new-note> -
 
 func runSupersede(args []string, env Env) int {
 	f := flag.NewFlagSet("grid brain supersede", flag.ContinueOnError)
-	f.SetOutput(env.Stderr)
+	f.SetOutput(helpOut(args, env))
 	f.Usage = func() {
-		fmt.Fprintln(env.Stdout, supersedeUsage)
+		fmt.Fprintln(f.Output(), supersedeUsage)
 		f.PrintDefaults()
 	}
 	var l leveled

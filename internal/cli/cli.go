@@ -45,6 +45,9 @@ type Env struct {
 	Ceiling    string                 // "" walks to the root; tests set their fixture root
 	GitVersion func() (string, error) // nil runs git --version
 	failure    *commandFailure
+	// helpAsked is set by Run when the arguments ask for help: every flag set made
+	// by newFlags then prints its usage on stdout, whichever verb parses it.
+	helpAsked  bool
 	Getenv     func(string) string    // nil reads the process environment
 	Executable func() (string, error) // nil asks os.Executable
 	OpenURL    func(string) error     // nil opens the system browser; tests set it
@@ -271,6 +274,7 @@ func Run(args []string, env Env) (exit int) {
 		if code := workflowRoleRefusal(args, env); code != 0 {
 			return code
 		}
+		env.helpAsked = wantsHelp(rest)
 		return c.run(rest, env)
 	}
 	fmt.Fprintf(env.Stderr, "grid: unknown command %q. Run: grid help\n", name)
@@ -373,6 +377,9 @@ func printHelp(w io.Writer) {
 func newFlags(name string, env Env) *flag.FlagSet {
 	fs := flag.NewFlagSet("grid "+name, flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
+	if env.helpAsked {
+		fs.SetOutput(env.Stdout)
+	}
 	if env.failure != nil {
 		env.failure.flags = fs
 	}

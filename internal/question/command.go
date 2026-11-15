@@ -84,14 +84,25 @@ func run(args []string, env Env) int {
 		name = "grid answer"
 	}
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.SetOutput(env.Stderr)
+	// --help prints the usage on stdout; any other parse error keeps it on stderr.
+	var usageOut io.Writer = env.Stderr
+	for _, a := range args[1:] {
+		if a == "--" {
+			break
+		}
+		if a == "-h" || a == "--help" || a == "-help" {
+			usageOut = env.Stdout
+			break
+		}
+	}
+	fs.SetOutput(usageOut)
 	fs.Usage = func() {
-		fmt.Fprintf(env.Stderr, "Usage: %s [flags]\n", name)
+		fmt.Fprintf(usageOut, "Usage: %s [flags]\n", name)
 		if action == "withdraw" {
-			fmt.Fprintln(env.Stderr, "A person may withdraw without a lease; a task lease holder may also withdraw.")
+			fmt.Fprintln(usageOut, "A person may withdraw without a lease; a task lease holder may also withdraw.")
 		}
 		if action == "tick" {
-			fmt.Fprintln(env.Stderr, "Requires a task lease: GRID_LEASE=task and GRID_LEASE_EPOCH.")
+			fmt.Fprintln(usageOut, "Requires a task lease: GRID_LEASE=task and GRID_LEASE_EPOCH.")
 		}
 		fs.PrintDefaults()
 	}

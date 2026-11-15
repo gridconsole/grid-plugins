@@ -20,9 +20,9 @@ const renameUsage = "Usage: grid brain rename <topic>/<name> <new-name> --expect
 // env.Member, else the session.
 func runRename(args []string, env Env) int {
 	f := flag.NewFlagSet("grid brain rename", flag.ContinueOnError)
-	f.SetOutput(env.Stderr)
+	f.SetOutput(helpOut(args, env))
 	f.Usage = func() {
-		fmt.Fprintln(env.Stdout, renameUsage)
+		fmt.Fprintln(f.Output(), renameUsage)
 		f.PrintDefaults()
 	}
 	var l leveled

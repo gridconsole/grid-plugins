@@ -85,6 +85,55 @@ func TestIkHelpGoesToStdoutUnderItsOwnName(t *testing.T) {
 	}
 }
 
+// TestIkEveryBuiltVerbHelpGoesToStdout walks every built subcommand of
+// contract/commands.json: --help exits 0 with the usage on stdout and nothing on
+// stderr. hook (the event handler) and mcp (a server) do not take --help.
+func TestIkEveryBuiltVerbHelpGoesToStdout(t *testing.T) {
+	var doc contractCommandDocument
+	if err := json.Unmarshal(contractdata.Commands, &doc); err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness(t)
+	walked := 0
+	for _, c := range doc.Commands {
+		if !c.Built || c.Name == "hook" || c.Name == "mcp" {
+			continue
+		}
+		for _, sub := range c.Subcommands {
+			args := []string{c.Name}
+			args = append(args, strings.Fields(sub.Name)...)
+			args = append(args, "--help")
+			code := h.run(h.home, args...)
+			walked++
+			if code != 0 || h.errb.Len() != 0 || strings.TrimSpace(h.out.String()) == "" {
+				t.Errorf("grid %s: exit %d, want 0 with the usage on stdout and nothing on stderr\nstdout: %.200q\nstderr: %.200q", strings.Join(args, " "), code, h.out.String(), h.errb.String())
+			}
+		}
+	}
+	if walked < 100 {
+		t.Errorf("walked %d subcommands, want the whole inventory", walked)
+	}
+}
+
+// TestIkBadFlagUsageStaysOnStderr: only --help moves the usage to stdout; a flag
+// that does not exist leaves stdout empty and the usage on stderr, exit 2.
+func TestIkBadFlagUsageStaysOnStderr(t *testing.T) {
+	h := newHarness(t)
+	for _, args := range [][]string{
+		{"task", "status", "--nope"},
+		{"job", "cycles", "--nope"},
+		{"question", "list", "--nope"},
+		{"brain", "show", "--nope"},
+		{"eval", "list", "--nope"},
+		{"person", "check", "--nope"},
+	} {
+		code := h.run(h.home, args...)
+		if code != 2 || h.out.Len() != 0 || !strings.Contains(h.errb.String(), "nope") {
+			t.Errorf("%v: exit %d, want 2 with stdout empty and the usage on stderr\nstdout: %q\nstderr: %q", args, code, h.out.String(), h.errb.String())
+		}
+	}
+}
+
 // TestIkHookInventoryHasItsFlags: contract/commands.json lists the flags hook level and hook levels take.
 func TestIkHookInventoryHasItsFlags(t *testing.T) {
 	var doc contractCommandDocument
