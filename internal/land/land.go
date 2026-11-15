@@ -93,6 +93,27 @@ func (s Store) prepare(cwd, id string) (Plan, task.Task, string, error) {
 	return p, t, res.Folder, nil
 }
 
+// ErrNoDeployTopic is the error rule gives when the project has no deploy topic:
+// knowledge/deploy is missing, or it holds no entry with a lands: block. A topic
+// that exists but is unreadable or malformed is a different error.
+var ErrNoDeployTopic = errors.New("no deploy topic")
+
+// noDeployTopic names the project without the file system text. A missing folder
+// still matches os.ErrNotExist, as Approve reads it; a folder with no lands entry
+// does not, so Approve keeps refusing it as before.
+type noDeployTopic struct {
+	project string
+	missing error // the not-exist error of a missing folder, nil for no lands entry
+}
+
+func (e noDeployTopic) Error() string {
+	return fmt.Sprintf("project %s has no deploy topic (knowledge/deploy/<name>.md with a lands: block)", e.project)
+}
+
+func (e noDeployTopic) Is(target error) bool { return target == ErrNoDeployTopic }
+
+func (e noDeployTopic) Unwrap() error { return e.missing }
+
 func (s Store) rule(project string) (Rule, error) {
 	var rule Rule
 	root, err := os.OpenRoot(s.Resolver.GridHome)
@@ -105,6 +126,9 @@ func (s Store) rule(project string) (Rule, error) {
 		return rule, fmt.Errorf("deploy topic: %w", err)
 	}
 	entries, err := fs.ReadDir(root.FS(), dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return rule, noDeployTopic{project: project, missing: err}
+	}
 	if err != nil {
 		return rule, fmt.Errorf("deploy topic: %w", err)
 	}
@@ -175,7 +199,7 @@ func (s Store) rule(project string) (Rule, error) {
 		}
 	}
 	if !found {
-		return rule, fmt.Errorf("deploy topic has no lands rule")
+		return rule, noDeployTopic{project: project}
 	}
 	return rule, nil
 }

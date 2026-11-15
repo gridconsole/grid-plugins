@@ -2,6 +2,8 @@ package land
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +23,10 @@ const shipEvent = "ship answered"
 // under .land.lock, so a second call for the same Job does nothing (ran is false).
 // A land that stops before its command runs gets a "land failed" history line
 // with the reason; a command that fails has Run's own line. A land that passed
-// closes the task. Nothing here posts a Job.
+// closes the task. A project with no deploy topic (ErrNoDeployTopic) has nothing
+// to land: a "ship answered" line says so and the task closes on the answer. A
+// deploy topic that is unreadable or malformed is still "land failed". Nothing
+// here posts a Job.
 func (s Store) AfterShip(ctx context.Context, cwd, id, job string) (result Result, ran bool, err error) {
 	t, err := s.tasks().Show(cwd, id)
 	if err != nil {
@@ -31,7 +36,19 @@ func (s Store) AfterShip(ctx context.Context, cwd, id, job string) (result Resul
 	if err != nil || !first {
 		return result, false, err
 	}
+	who := s.Who
+	if who.ID == "" {
+		who.ID, who.Role = "local", "owner"
+	}
 	result, err = s.Run(ctx, cwd, id, false)
+	if errors.Is(err, ErrNoDeployTopic) && result.Execution == nil {
+		// Nothing to land: the answer is the approval, and the task closes on it.
+		if err = s.note(cwd, id, fmt.Sprintf("%s: %s approved; no deploy topic for project %s, nothing to land", shipEvent, job, t.Project)); err != nil {
+			return result, true, err
+		}
+		_, err = s.tasks().Change(task.WriteOptions{Cwd: cwd, ID: id, Action: "close", Note: "approved after " + job + "; no deploy topic", Who: who})
+		return result, true, err
+	}
 	if err != nil {
 		if result.Execution == nil {
 			if noteErr := s.note(cwd, id, "land failed: "+strings.Join(strings.Fields(err.Error()), " ")); noteErr != nil {
@@ -39,10 +56,6 @@ func (s Store) AfterShip(ctx context.Context, cwd, id, job string) (result Resul
 			}
 		}
 		return result, true, err
-	}
-	who := s.Who
-	if who.ID == "" {
-		who.ID, who.Role = "local", "owner"
 	}
 	_, err = s.tasks().Change(task.WriteOptions{Cwd: cwd, ID: id, Action: "close", Note: "landed after " + job, Who: who})
 	return result, true, err
