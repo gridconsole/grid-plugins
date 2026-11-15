@@ -212,12 +212,12 @@ supported on macOS and Linux; other platforms inherit `internal/fslock`'s
 existing unsupported-platform error.
 
 `grid approve` is for a person of the team: it exits **3** and writes nothing
-when `GRID_MEMBER` is not set, or when `GRID_ROLE` is an agent role and the shell
-holds no task lease epoch, and it records the approval as `GRID_MEMBER`. It does
-not look at the process ancestry, so a person approves from the Grid app or from
-a terminal that exports `GRID_MEMBER`. `grid task status` is not person-only: it
-records its caller (a person's shell as the local owner, a worker shell as the
-worker), and `agents/orchestrator.md:27,48` has the orchestrator agent run it.
-`grid person check --json` reports whether the caller looks like an agent; no
-other command reads that answer. `grid deliver` still moves the task to the ship
-approve step in-process and does not require a person.
+when `GRID_MEMBER` is not set (or `GRID_ROLE` is an agent role and the shell holds
+no task lease epoch), it records the approval as `GRID_MEMBER`, and it does not
+look at the process ancestry. `grid task status` is not person-only: it records
+its caller (a person's shell as the local owner, a worker shell as the worker),
+and `agents/orchestrator.md:27,48` has the orchestrator agent run it. Run
+`grid approve` from the Grid app or a separate person terminal that exports
+`GRID_MEMBER`; `grid person check --json`
+reports whether that entry point is available. `grid deliver` still moves the
+task to the ship approve step in-process and does not require a person.
