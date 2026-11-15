@@ -97,6 +97,10 @@ func run(args []string, env Env) int {
 	}
 	task := fs.String("task", "", "task folder or id; otherwise the enclosing task")
 	asJSON := fs.Bool("json", false, "print JSON")
+	proj := new(string)
+	if action == "list" {
+		proj = fs.String("project", "", "project name or id; the task must be in it")
+	}
 	var in Input
 	var opts, waits options
 	var applies, reason string
@@ -195,7 +199,7 @@ func run(args []string, env Env) int {
 			return usage(action + " takes no arguments")
 		}
 	}
-	scope, err := env.Resolver.Resolve(where.Query{Cwd: env.Cwd, Task: *task})
+	scope, err := env.Resolver.Resolve(where.Query{Cwd: env.Cwd, Task: *task, Project: *proj})
 	if err == nil && scope.TaskPath == "" {
 		err = errors.New("no enclosing task; use --task <path>")
 	}

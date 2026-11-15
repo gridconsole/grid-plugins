@@ -21,6 +21,13 @@ var taskOperandName = regexp.MustCompile(`^(T-[0-9]+)(?:-.+)?$`)
 // folder to name exactly one task directory. Enumeration and final resolution
 // both use the existing caller-policy choke point.
 func resolveTaskOperand(env Env, operand string) (task.Task, error) {
+	return resolveTaskOperandIn(env, operand, "")
+}
+
+// resolveTaskOperandIn is resolveTaskOperand looking only in project proj (a name
+// or id) when proj is set; the operand then names one task even if another project
+// has the same T-NN.
+func resolveTaskOperandIn(env Env, operand, proj string) (task.Task, error) {
 	if env.GridHome == "" {
 		return task.Task{}, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
@@ -30,7 +37,7 @@ func resolveTaskOperand(env Env, operand string) (task.Task, error) {
 			return task.Task{}, fmt.Errorf("%w: parent traversal is not allowed", errTaskOperand)
 		}
 	}
-	dirs, err := r.TasksDirs()
+	dirs, err := r.TasksDirsIn(env.Cwd, proj)
 	if err != nil {
 		return task.Task{}, err
 	}
@@ -47,7 +54,7 @@ func resolveTaskOperand(env Env, operand string) (task.Task, error) {
 			return task.Task{}, errors.New("give a task id or folder, or run inside a task folder")
 		}
 	case match != nil && match[1] == operand:
-		t, err := taskWriter(env).Show(env.Cwd, operand)
+		t, err := taskWriter(env).ShowIn(env.Cwd, operand, proj)
 		if err != nil {
 			return task.Task{}, err
 		}
@@ -98,7 +105,7 @@ func resolveTaskOperand(env Env, operand string) (task.Task, error) {
 			return task.Task{}, where.ErrTaskNotFound
 		}
 	case !strings.ContainsAny(operand, `/\`) && !strings.HasPrefix(operand, "."):
-		return taskWriter(env).Show(env.Cwd, operand)
+		return taskWriter(env).ShowIn(env.Cwd, operand, proj)
 	default:
 		path = operand
 		if !filepath.IsAbs(path) {
@@ -146,14 +153,21 @@ func resolveTaskOperand(env Env, operand string) (task.Task, error) {
 	if filepath.Dir(real) != expectedRoot || !taskOperandName.MatchString(filepath.Base(real)) {
 		return task.Task{}, fmt.Errorf("%w: folder escapes its tasks directory", errTaskOperand)
 	}
-	scope, err := r.Resolve(where.Query{Cwd: env.Cwd, Task: real})
+	scope, err := r.Resolve(where.Query{Cwd: env.Cwd, Task: real, Project: proj})
 	if err != nil {
 		return task.Task{}, err
 	}
 	// Reuse Show's record validation and duplicate-ID check, so a folder cannot
 	// choose a different target from the ID subsequently passed to a writer.
 	id := taskOperandName.FindStringSubmatch(scope.Task)[1]
-	t, err := taskWriter(env).Show(env.Cwd, id)
+	var t task.Task
+	if operand == "" {
+		// The folder came from where the caller stands (a task folder or a Job
+		// worktree), so another project's task of the same T-NN is not a rival.
+		t, err = taskWriter(env).ShowUnder(id, expectedRoot)
+	} else {
+		t, err = taskWriter(env).ShowIn(env.Cwd, id, proj)
+	}
 	if err != nil {
 		return task.Task{}, err
 	}

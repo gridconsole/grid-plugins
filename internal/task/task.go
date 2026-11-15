@@ -270,7 +270,11 @@ func Read(path string) (Task, error) {
 
 // Show resolves a home-wide display id, or the enclosing task when id is empty.
 // It never creates project records or other files.
-func (s Store) Show(cwd, id string) (Task, error) {
+func (s Store) Show(cwd, id string) (Task, error) { return s.ShowIn(cwd, id, "") }
+
+// ShowIn is Show looking only in project only (a name or id) when it is set, so
+// a T-NN that two projects share names one task.
+func (s Store) ShowIn(cwd, id, only string) (Task, error) {
 	if s.Resolver.GridHome == "" {
 		return Task{}, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
@@ -287,10 +291,23 @@ func (s Store) Show(cwd, id string) (Task, error) {
 		}
 		return readProject(r.TaskPath, r.Project)
 	}
-	dirs, err := s.Resolver.TasksDirs()
+	dirs, err := s.Resolver.TasksDirsIn(cwd, only)
 	if err != nil {
 		return Task{}, err
 	}
+	return s.showUnder(id, dirs)
+}
+
+// ShowUnder is Show for the id T-NN looking only in the tasks directory dir, which
+// the caller took from a folder it already resolved.
+func (s Store) ShowUnder(id, dir string) (Task, error) {
+	if !idPattern.MatchString(id) {
+		return Task{}, fmt.Errorf("invalid task id %q: use T-NN", id)
+	}
+	return s.showUnder(id, []string{dir})
+}
+
+func (s Store) showUnder(id string, dirs []string) (Task, error) {
 	var found, proj string
 	for _, dir := range dirs {
 		paths, err := folders(dir)

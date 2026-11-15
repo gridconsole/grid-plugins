@@ -1,6 +1,6 @@
 Usage:
   grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--kind setup] [--input <file>]... [--json]
-  grid task show [<task>] [--json]
+  grid task show [<task>] [--project <name-or-id>] [--json]
   grid task attach <task> [--session ID] [--runtime claude] [--json]
   grid task list [--project <name-or-id>] [--state <state>] [--json]
   grid task move <machine> [--task <task>] [--project <project>] [--who <caller>] [--json]
