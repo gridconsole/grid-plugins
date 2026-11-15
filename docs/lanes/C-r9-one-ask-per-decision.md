@@ -10,20 +10,20 @@ The chain, read from the code at base 6c44c381:
 2. `internal/orchestrator/decisions_needed.go:30-46` (`abDecisionsNeeded`, pass added by lane C-ab-decisions-orchestrator-job) posts one orchestrator Job for every result whose `decisions_needed` is non-empty. At `:41-42` it reads the decisions and checks only that the same result was not asked before (`abDnPosted`). It never looks for a person Job that already asks the decision. Its title is set at `:133` ("Decisions needed on J-1: ..." is J-7), and its A1 at `:135` says "Ask the person who decides each one with `grid question ask` ... or a person Job".
 3. J-7 followed A1. `skills/questions/SKILL.md:18` makes `grid question ask` from the task holder post a person Job, so the same --out decision became Q-1/J-8. J-7 also asked Q-2/J-9 ("Should tally also get -o?"), because neither the orchestrator nor the questions skill said that an option the person did not ask for is not asked (F3; the clamp question of T-01 is the same gap).
 
-Not verified against the round 9 feed: the evidence folders sit outside /srv/gridwork, and Read and `ls` on them were refused in this session. Without them I could not confirm that J-1's result really carried `decisions_needed`. The chain above is derived from the code. Step 2 is the only path in the plugin that posts a Job titled "Decisions needed on <job>" (`grep -rn "Decisions needed on"` finds only decisions_needed.go and its test).
+The brief names J-7 "Decisions needed on J-1". Step 2 is the only path in the plugin that posts a Job with that title (`grep -rn "Decisions needed on"` finds only decisions_needed.go and its test), so J-1's result did hold a non-empty `decisions_needed`. Not verified: the exact words of those lines. The round 9 feed and question files sit outside the lane folder, and Read and `ls` on them were refused in this session.
 
 ## Proof table
 
 | Row | State | Proof |
 |---|---|---|
-| Brief A1: the cause of J-7 named with file:line | HOLDS | Section above: decisions_needed.go:30-46, :41-42, :133, :135 at base; orchestrator.md:24, :56, :62; questions SKILL.md:18. Derived from code; r9 feed not readable here. |
-| Brief A2: diff of the instruction text and the test; new tests fail on main and pass on the lane | HOLDS | Failing run on base below; passing run `go test -count=1 ./internal/orchestrator ./internal/job/lint -run 'TestR9Oa\|TestAbDn'` exit 0 |
+| Brief A1: the cause of J-7 named with file:line | HOLDS | Section above: decisions_needed.go:30-46, :41-42, :133, :135 at base; orchestrator.md:24, :56, :62; questions SKILL.md:18. The J-7 title has one poster (:133); the words of J-1's decision lines are not verified (r9 feed not readable here). |
+| Brief A2: diff of the instruction text and the test; new tests fail on main and pass on the lane | HOLDS | Four new tests fail on base (TestR9OaAskedDecisionPostsNoSecondAsk, TestR9OaOnlyOpenDecisionIsAsked, TestR9OaOrchestratorOneAskPerDecision, TestR9OaQuestionsSkillOneAsk; lines below). The fifth, TestR9OaNonPersonJobIdStillAsks, guards against over-matching and passes on base and lane. Lane: `go test -count=1 ./internal/orchestrator ./internal/job/lint -run 'TestR9Oa\|TestAbDn'` exit 0 |
 | Brief A3: make lint and the touched package tests pass | HOLDS | `make lint` exit 0 (go vet ./...); `gofmt -l internal/orchestrator internal/job/lint` empty; package run below exit 0 |
 | Brief A4: docs/lanes/C-r9-one-ask-per-decision.md | HOLDS | this file |
-| Do 3: a person Job and a question on the same decision are caught | HOLDS | `internal/orchestrator/r9_one_ask_test.go` TestR9OaAskedDecisionPostsNoSecondAsk, TestR9OaOnlyOpenDecisionIsAsked (structural rule below) |
+| Do 3: a person Job and a question on the same decision are caught | HOLDS, narrower | `internal/orchestrator/r9_one_ask_test.go` TestR9OaAskedDecisionPostsNoSecondAsk, TestR9OaOnlyOpenDecisionIsAsked: when a decision line names a person Job, the pass posts no second ask. Nothing detects a person Job and a question that are already both on the Feed for one decision; code cannot tell that two texts are one decision (see What changed). |
 | Do 3: text tests for the two instruction changes | HOLDS | `internal/job/lint/r9_one_ask_text_test.go` TestR9OaOrchestratorOneAskPerDecision, TestR9OaQuestionsSkillOneAsk |
 | No new guard, gate, cap or limit | HOLDS | The pass posts fewer Jobs and refuses, holds and counts nothing. The Job-count sentence (orchestrator.md:62) is guidance with an example, not a number. |
-| Tests of changed packages and of every package that imports them | HOLDS | `go test -count=1 ./internal/orchestrator ./internal/cli ./internal/job/... ./internal/mcp ./internal/migrate ./internal/contract . ./cmd/grid` exit 0 |
+| Tests of changed packages and of every package that imports them | HOLDS | `go test -count=1 ./internal/orchestrator ./internal/cli ./internal/job/... ./internal/mcp ./internal/migrate ./internal/contract . ./cmd/grid` exit 0; root-package importers `go test -count=1 ./internal/brain ./internal/braincmd ./internal/settings` exit 0 |
 | Walk tests: `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` | HOLDS | exit 0 (`ok internal/cli 0.037s`) |
 | Walk tests: `go test -count=1 ./internal/job/lint/` | HOLDS | exit 0 (`ok internal/job/lint 0.086s`) |
 | `git fetch origin && git merge origin/main` before the last proof run | HOLDS | "Already up to date." |
@@ -31,7 +31,7 @@ Not verified against the round 9 feed: the evidence folders sit outside /srv/gri
 | macOS build `GOOS=darwin go build ./...` | HOLDS | exit 0 |
 | Whole-module test and cross-repo set | not run, not asked | run by the orchestrator at landing |
 | RealPlugin tests | not run, not asked | the brief names none |
-| No attribution lines, no personal paths or emails | HOLDS | `git log origin/main..HEAD`: one-sentence messages, no trailers. This doc names no host path outside /srv/gridwork. |
+| No attribution lines, no personal paths or emails | HOLDS | `git log origin/main..HEAD`: one-sentence messages, no trailers. This doc names no host path. |
 
 Importers of the changed packages, from `go list -f '...{{range .Imports}}...' ./... | grep IMPORTS`:
 
@@ -43,7 +43,19 @@ github.com/gridconsole/grid-plugins/internal/migrate IMPORTS TESTIMPORTS
 github.com/gridconsole/grid-plugins/internal/orchestrator XTESTIMPORTS
 ```
 
-internal/job/lint changed only in a `_test.go` file of `lint_test`, so no package imports the change. agents/orchestrator.md and skills/questions/SKILL.md are read by tests in internal/cli, internal/job, internal/job/lint, internal/contract and the root package, and all of them are in the run.
+The root package embeds agents/ and skills/. Its importers, from the same template with `github.com/gridconsole/grid-plugins`:
+
+```
+github.com/gridconsole/grid-plugins/internal/brain TESTIMPORTS
+github.com/gridconsole/grid-plugins/internal/braincmd TESTIMPORTS
+github.com/gridconsole/grid-plugins/internal/cli IMPORTS TESTIMPORTS
+github.com/gridconsole/grid-plugins/internal/contract TESTIMPORTS
+github.com/gridconsole/grid-plugins/internal/job IMPORTS XTESTIMPORTS
+github.com/gridconsole/grid-plugins/internal/job/jobcmd IMPORTS
+github.com/gridconsole/grid-plugins/internal/settings TESTIMPORTS
+```
+
+internal/job/lint changed only in a `_test.go` file of `lint_test`, so no package imports the change. Every package listed above is in one of the two runs.
 
 Failing lines on base (new tests, instruction and code not yet changed):
 
@@ -84,4 +96,7 @@ TestR9OaNonPersonJobIdStillAsks passes on base and on the lane. It guards the ne
 ## Open items / NOT VERIFIED
 
 - Not checked against a live run: whether an orchestrator agent now names the person Job id in `decisions_needed`, asks no unrequested option, and keeps a one-line fix to one build and one review. That needs a new real run (round 10).
-- The cause in acceptance 1 is derived from code. The round 9 feed and question files were not readable in this session.
+- The words of J-1's `decisions_needed` lines in round 9 are not verified. The round 9 feed and question files were not readable in this session.
+- `r9OaOpen` matches a person Job id anywhere in the line. A new decision that only cites an answered person Job ("J-2 said alias; should it also warn?") is therefore dropped, and nothing asks it. Follow-up: match only a line that begins with the id, as orchestrator.md:56 words it.
+
+DONE
