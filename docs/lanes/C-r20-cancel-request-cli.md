@@ -6,14 +6,14 @@ Base: the branch holds d807a936 (the decision) and 82048785 (the core lane). The
 
 ```
 $ git diff --stat 82048785..HEAD
- docs/lanes/C-r20-cancel-request-cli.md      | 117 ++++++
+ docs/lanes/C-r20-cancel-request-cli.md      | (this file)
  internal/cli/orchestrator.go                |  62 ++--
  internal/cli/r18_person_job_cancel_test.go  |  36 ++-
  internal/cli/r20_cancel_request_cli_test.go | 333 ++++++++++
  4 files changed
 ```
 
-The doc was 117 lines when this stat was taken; later edits change that number.
+The three Go files are the stat taken on 0a8f79bc; the doc's own row is left out because its length changes with each edit.
 
 ## Proof table
 
