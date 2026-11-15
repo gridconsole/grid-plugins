@@ -39,7 +39,11 @@ func ReplanPlanFaultJobBody(id, cause string) map[string]any {
 // other than Accepted, Rejected or Cancelled, and a first job record that
 // carries the task lease. A Job a person posted with that title has no lease
 // and does not count.
-func jiPlanFaultOpen(snap Snapshot) bool {
+func jiPlanFaultOpen(snap Snapshot) bool { return len(jiPlanFaultOpenIDs(snap)) > 0 }
+
+// jiPlanFaultOpenIDs is the ids of the Jobs jiPlanFaultOpen counts.
+func jiPlanFaultOpenIDs(snap Snapshot) []string {
+	var open []string
 	for _, it := range snap.Items {
 		if !strings.EqualFold(strings.TrimSpace(it.Role), gkReplanRole) || it.Title != jiPlanFaultTitle {
 			continue
@@ -59,7 +63,49 @@ func jiPlanFaultOpen(snap Snapshot) bool {
 			}
 		}
 		if first != nil && first.Lease != nil && *first.Lease == "task" {
-			return true
+			open = append(open, it.ID)
+		}
+	}
+	return open
+}
+
+// jiPlanPublishesReason is the close reason of a re-plan Job for a plan fault
+// that is gone.
+const jiPlanPublishesReason = "plan.md now publishes"
+
+// closePlanFaultJobs cancels the re-plan Job of an earlier plan fault when plan.md
+// publishes without a fault: it has nothing left to fix. Only a Job no agent has
+// acknowledged is closed (posted, ready or assigned); one whose agent has begun
+// (running or later) is left to finish. It posts a control and nothing more.
+func (s Store) closePlanFaultJobs(snap Snapshot) error {
+	for _, id := range jiPlanFaultOpenIDs(snap) {
+		j := snap.State.Jobs[id]
+		if j.Status != contract.Posted && j.Status != contract.Ready && j.Status != contract.Assigned {
+			continue
+		}
+		if err := s.control(j, contract.Cancelled, jiPlanPublishesReason, ""); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// jiPlanWriterOpen reports whether the Feed holds an orchestrator Job whose write
+// names plan.md that is not yet Accepted, Rejected or Cancelled: its agent is
+// still writing the plan and runs `grid plan check` on it itself.
+func jiPlanWriterOpen(snap Snapshot) bool {
+	for _, it := range snap.Items {
+		if !strings.EqualFold(strings.TrimSpace(it.Role), gkReplanRole) {
+			continue
+		}
+		st := snap.State.Jobs[it.ID]
+		if st == nil || st.Status == contract.Accepted || st.Status == contract.Rejected || st.Status == contract.Cancelled {
+			continue
+		}
+		for _, w := range it.Write {
+			if strings.TrimSpace(w) == "plan.md" {
+				return true
+			}
 		}
 	}
 	return false
@@ -83,10 +129,11 @@ func jiPlanFaultJobID(snap Snapshot, planText string) string {
 }
 
 // postPlanFaultJob posts one re-plan Job to the orchestrator role with the
-// cause, unless one for a plan fault is still open. It posts a Job and nothing
-// more: it refuses, holds and counts nothing.
+// cause, unless one for a plan fault is still open or an orchestrator Job that
+// writes plan.md is (the Feed notice alone tells the task meanwhile). It posts a
+// Job and nothing more: it refuses, holds and counts nothing.
 func (s Store) postPlanFaultJob(snap Snapshot, planText, cause string) error {
-	if jiPlanFaultOpen(snap) {
+	if jiPlanFaultOpen(snap) || jiPlanWriterOpen(snap) {
 		return nil
 	}
 	id := jiPlanFaultJobID(snap, planText)

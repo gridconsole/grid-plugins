@@ -60,6 +60,10 @@ func (s Store) publishPlanWithReader(snap Snapshot, m *memory, read func() (stri
 		if err := s.postPlanJobs(pending); err != nil {
 			return err
 		}
+		// The plan publishes: a re-plan Job for an earlier fault of it is moot.
+		if err := s.closePlanFaultJobs(snap); err != nil {
+			return err
+		}
 		return s.postTakenNotices(snap, taken)
 	})
 }
@@ -175,15 +179,18 @@ func (s Store) planJobInputs(snap Snapshot, text string) ([]feed.Input, []string
 			if len(problems) > 0 {
 				return nil, nil, fmt.Errorf("plan.md Job %s: %s", j.ID, strings.Join(problems, "; "))
 			}
+			// The plan check's own checker runs first, so a fault of the plan
+			// reads as the sentence `grid plan check` prints and not as the
+			// schema error of the same fault.
+			if err := jobgraph.CheckPlanJob(j); err != nil {
+				return nil, nil, fmt.Errorf("plan.md Job %s: %w", j.ID, err)
+			}
 			j.Defaults()
 			data, err := j.Record()
 			if err != nil {
 				return nil, nil, err
 			}
 			if err := contract.Validate("job-record", data); err != nil {
-				return nil, nil, fmt.Errorf("plan.md Job %s: %w", j.ID, err)
-			}
-			if err := jobgraph.CheckPlanJob(j); err != nil {
 				return nil, nil, fmt.Errorf("plan.md Job %s: %w", j.ID, err)
 			}
 			var body map[string]any
