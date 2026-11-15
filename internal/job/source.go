@@ -454,10 +454,16 @@ var ErrJobNotInPlan = errors.New("plan.md names no such Job")
 
 func LoadPlan(dir, selector string) (Job, error) {
 	path, err := Within(dir, "plan.md")
+	if errors.Is(err, os.ErrNotExist) {
+		return Job{}, plan.NoPlanError()
+	}
 	if err != nil {
 		return Job{}, err
 	}
 	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return Job{}, plan.NoPlanError()
+	}
 	if err != nil {
 		return Job{}, err
 	}

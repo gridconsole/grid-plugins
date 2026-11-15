@@ -140,8 +140,24 @@ func (s Store) Read() (string, error) {
 		return "", err
 	}
 	b, err := readRegular(filepath.Join(dir, "plan.md"))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", NoPlanError()
+	}
 	return string(b), err
 }
+
+// NoPlanError is the refusal for a task with no plan.md, for a reader that opens
+// plan.md itself: the sentence alone, ErrNoPlan and os.ErrNotExist at once.
+func NoPlanError() error { return noPlanError{} }
+
+// noPlanError is the refusal of a read of a task with no plan.md: one sentence
+// with no path. It is ErrNoPlan and still os.ErrNotExist, so a caller that tests
+// either keeps working.
+type noPlanError struct{}
+
+func (noPlanError) Error() string { return ErrNoPlan.Error() + "; write the plan first" }
+
+func (noPlanError) Is(target error) bool { return target == ErrNoPlan || target == os.ErrNotExist }
 
 // WithHash calls fn with the hash of the current plan.md while holding
 // .plan.lock, serializing cooperative plan writers with what fn records.

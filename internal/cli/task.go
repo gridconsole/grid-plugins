@@ -466,6 +466,10 @@ func runTask(args []string, env Env) int {
 			fmt.Fprintln(env.Stdout)
 		}
 	case "list":
+		if states := task.States(); state != "" && !slices.Contains(states, state) {
+			fmt.Fprintf(env.Stderr, "grid task list: %q is not a task state; use one of: %s\n", state, strings.Join(states, ", "))
+			return 2
+		}
 		tasks, err := store.List(env.Cwd, proj, state)
 		if err != nil {
 			return fail(err)

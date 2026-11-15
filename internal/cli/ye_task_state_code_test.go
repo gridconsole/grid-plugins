@@ -23,13 +23,13 @@ type yeTsMove struct {
 
 var yeTsMoves = []yeTsMove{
 	{"stop of a closed task", true, []string{"task", "stop", "T-01"},
-		"grid: cannot stop task in current state \"closed\" to \"\"\n"},
+		"grid: T-01 is already closed\n"},
 	{"close of a closed task", true, []string{"task", "close", "T-01"},
-		"grid: cannot close task in current state \"closed\" to \"\"\n"},
+		"grid: T-01 is already closed\n"},
 	{"reopen of a queued task", false, []string{"task", "reopen", "T-01"},
-		"grid: cannot reopen task in current state \"queued\" to \"\"\n"},
+		"grid: T-01 is queued; only a closed task can be reopened\n"},
 	{"status of a closed task to running", true, []string{"task", "status", "T-01", "running"},
-		"grid: cannot status task in current state \"closed\" to \"running\"\n"},
+		"grid: T-01 is closed and cannot move to running\n"},
 }
 
 // yeTsHarness is a harness with one queued task T-01, closed when the move needs it.
@@ -157,7 +157,7 @@ func TestYeTsNextStateSentinel(t *testing.T) {
 	if !errors.Is(err, task.ErrStateMove) {
 		t.Fatalf("NextState error %v is not task.ErrStateMove", err)
 	}
-	if want := `cannot close task in current state "closed" to ""`; err.Error() != want {
+	if want := `the task is already closed`; err.Error() != want {
 		t.Fatalf("text %q, want %q", err.Error(), want)
 	}
 	if _, err := task.NextState("queued", "status", "running"); err != nil {

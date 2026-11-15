@@ -190,7 +190,7 @@ func TestR13ReopenRunningTaskKeepsItsRefusal(t *testing.T) {
 			if c := h.run(path, "task", "reopen", "T-07"); c == 0 {
 				t.Fatalf("task reopen of a running task succeeded: %s", h.out)
 			}
-			if want := `cannot reopen task in current state "running"`; !strings.Contains(h.errb.String(), want) {
+			if want := `is running; only a closed task can be reopened`; !strings.Contains(h.errb.String(), want) {
 				t.Fatalf("stderr %q lacks %q", h.errb, want)
 			}
 			if got := r13State(t, path); got != "running" {

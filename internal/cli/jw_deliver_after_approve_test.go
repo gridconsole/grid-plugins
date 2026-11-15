@@ -13,7 +13,7 @@ import (
 
 // jwDaRefusal is the state table's refusal of a move from waiting to waiting
 // (task.NextState), which delivery returns for a task it may not deliver.
-const jwDaRefusal = `cannot status task in current state "waiting" to "waiting"`
+const jwDaRefusal = `T-07 is already waiting`
 
 // jwDaPlan is the plan of deliveryFixture: one step whose proof delivery checks.
 const jwDaPlan = "# Plan 1\n- [x] 1 Check result\n  proof: check\n  jobs: []\n"
