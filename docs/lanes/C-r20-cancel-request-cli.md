@@ -2,7 +2,18 @@
 
 This lane builds the CLI half of decision D-r19, option C (docs/decisions/D-r19-person-cancel-holder.md). `grid job cancel` by a person of the team (role owner, member or lead) with no lease epoch now writes the cancel at once under the task lease when the person is the holder (`GRID_MEMBER@<this machine>`), and saves an unleased cancel request when anyone else holds the lease, or nobody does. The holder's next pass carries it out (C-r20-cancel-request-core, already on this branch: head 82048785). It also answers end review 2026-11-15T1612Z M1: the help and comment no longer describe a path no product person can take. A guest and the `cli` role of `grid worker next` stay refused (R2, R5).
 
-Base: the branch holds d807a936 (the decision) and 82048785 (the core lane); `git fetch origin && git merge origin/main` reported "Already up to date" before the last proof run. This lane's own commits are the three after 82048785: cd370e49 (CLI), a40aa06f (tests), and the gofmt fix.
+Base: the branch holds d807a936 (the decision) and 82048785 (the core lane). The core lane's review (/srv/gridwork/tmp/hand/review-C-r20-cancel-request-core.md) is ACCEPTED WITH NOTES on 82048785, so that is its accepted head. `git fetch origin && git merge origin/main` reported "Already up to date" before the last proof run. This lane's own commits after 82048785 are cd370e49 (CLI), a40aa06f (tests), 0a8f79bc (gofmt) and the commit that adds this file. The bundle against origin/main also carries the core lane's 15 files, because origin/main does not hold d807a936 and 82048785 yet; this lane's own diff is four files:
+
+```
+$ git diff --stat 82048785..HEAD
+ docs/lanes/C-r20-cancel-request-cli.md      | 117 ++++++
+ internal/cli/orchestrator.go                |  62 ++--
+ internal/cli/r18_person_job_cancel_test.go  |  36 ++-
+ internal/cli/r20_cancel_request_cli_test.go | 333 ++++++++++
+ 4 files changed
+```
+
+The doc was 117 lines when this stat was taken; later edits change that number.
 
 ## Proof table
 
@@ -20,9 +31,9 @@ Base: the branch holds d807a936 (the decision) and 82048785 (the core lane); `gi
 | Acc 5: this file | HOLDS | docs/lanes/C-r20-cancel-request-cli.md |
 | Rule: new tests fail on base and pass on the lane | HOLDS, see below | the failing lines on base are listed below. Four tests pass on base, as the decision marks their rows "today": N10, R1, R2 and R7a. They pin that the change leaves those rows as they are |
 | Rule: tests of the changed package and every importer | HOLDS | `go list -f '{{.ImportPath}} {{join .Imports " "}}' ./... \| grep " .../internal/cli( \|$)"` gives cmd/grid and lib. `go test -count=1 ./internal/cli/ ./internal/orchestrator/ ./cmd/grid/ ./lib/` exit 0 (cmd/grid has no test files) |
-| Rule: lint | HOLDS | `make lint` (go vet, gofmt check) exit 0 after the gofmt fix. The first run failed on gofmt in orchestrator.go; fixed in the head commit |
-| Rule: Windows and macOS builds | HOLDS | `GOOS=windows go build ./...` exit 0; `GOOS=darwin go build ./...` exit 0 |
-| Rule: plugin walk tests | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` exit 0; `go test -count=1 ./internal/job/lint/` exit 0 |
+| Rule: lint | HOLDS | `make lint` (go vet, gofmt check) exit 0 after the gofmt fix. The first run failed on gofmt in orchestrator.go; fixed in 0a8f79bc |
+| Rule: Windows and macOS builds | HOLDS | `GOOS=windows go build ./...` exit 0; `GOOS=darwin go build ./...` exit 0, both rerun on 0a8f79bc, after the gofmt fix. The doc commit after it changes no Go file |
+| Rule: plugin walk tests | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` exit 0 (before and after gofmt); `go test -count=1 ./internal/job/lint/ ./lib/` exit 0 on 0a8f79bc |
 | Rule: merge origin/main before the last proof run | HOLDS | `git fetch origin && git merge origin/main`: "Already up to date" |
 | Rule: no change to store.go or record.go | HOLDS | `git diff 82048785..HEAD --stat` lists no internal/feed file |
 | Rule: no guard, cap, gate or hold on agents beyond the decision's rule | HOLDS | the only new branch is for PersonTeam with no typed epoch, which turns a refusal into a saved request. Nothing new refuses an agent or a guest; R2 and R5 behave as before |
@@ -39,7 +50,9 @@ Base: the branch holds d807a936 (the decision) and 82048785 (the core lane); `gi
 - internal/cli/r18_person_job_cancel_test.go: N1 replaces the stale-lease test; "reads the" is dropped from the help test.
 - internal/cli/r20_cancel_request_cli_test.go: N10, R1, R2, R7a, R8, R9, R10, the no-holder case, the JSON shape, the end-to-end pass, and the help text.
 
-A cancel with no readable lease file (none ever taken, or a read error) now saves a request as well. The brief says "Otherwise (another holder, or none)". Before, that case stopped at "must be gen.fence". `TestR20ClNobodyHoldsTheRequestIsSaved` covers a lease file with no holder (after a release).
+A cancel with no readable lease file (none ever taken, or a read error) now saves a request as well. The brief says "Otherwise (another holder, or none)". Before, that case stopped at "must be gen.fence". `TestR20ClNobodyHoldsTheRequestIsSaved` covers a lease file with no holder (after a release). No test pins the missing-file or read-error branch: it takes the same `else` as the released lease.
+
+Budget: the brief says about 50 calls; this lane used about 75, because the file reads before the first edit, the base-failure run and the proof reruns each took calls.
 
 ## Failing on base (orchestrator.go stashed, tests kept)
 
