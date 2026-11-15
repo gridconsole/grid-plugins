@@ -67,6 +67,10 @@ FAIL	github.com/gridconsole/grid-plugins/internal/cli
 - internal/orchestrator/stream.go: new `Stream.Ticked` callback after a successful Tick. internal/cli/worker.go sets it. These files are outside the brief's list; this is the r6 trigger, the unleased answer accepted by the holder's pass.
 - internal/cli/ship_land_test.go (new), deliver_person_job_test.go:84 (text only).
 
+## Who can trigger the land
+
+A hosted owner or member answer on the ship Job runs `grid land` on the owner's machine; the guest path cannot answer a ship Job. (Note: the ship Job is kind `approve` (deliver_person_job.go:58), and `contract.GuestAddressee` refuses a guest for kind approve (internal/contract/guest_person_answer.go:19); `AnswerPersonWith` takes an unleased guest only when that holds (internal/orchestrator/person.go:286, via person.go:65 in personAnswers).)
+
 ## Open items
 
 - The deliver outcome still can't name the Job on the plain stdout line (see the NOT DONE row).
