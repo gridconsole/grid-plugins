@@ -61,8 +61,9 @@ func (s Store) personAnswers(snap Snapshot) error {
 			continue
 		}
 		var answers []feed.Record
+		reopened := ReopenedAt(snap, j)
 		for _, r := range snap.Records {
-			if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] || r.Lease != nil || r.Fence != 0 || contract.TierFor(r.Author.Role) != contract.PersonTeam && !contract.GuestAddressee(r.Author.Role, r.Author.ID, false, item.Role, item.PersonName(), item.Kind) {
+			if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] || r.At <= reopened || r.Lease != nil || r.Fence != 0 || contract.TierFor(r.Author.Role) != contract.PersonTeam && !contract.GuestAddressee(r.Author.Role, r.Author.ID, false, item.Role, item.PersonName(), item.Kind) {
 				continue
 			}
 			if text, _ := r.Body["answer"].(string); strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > maxPersonAnswer {
@@ -167,6 +168,28 @@ func yvPamControl(snap Snapshot, moved map[string]bool, personID, who, answer st
 		return map[string]any{"target": b.ID, "status": "rejected", "reason": "sent back" + through, "close_reason": "sent back" + through, "answer": answer}
 	}
 	return map[string]any{"target": b.ID, "status": "accepted", "reason": "answered" + through, "answer": answer}
+}
+
+// ReopenedAt is the time of the newest control that put the person Job j back
+// to posted (a failed land reopens the ship Job so), or "" when none did. An
+// answer at or before it was used by the acceptance the reopen undid, so it does
+// not count again: only a new answer accepts the Job, and nothing retries alone.
+// Feed times share one fixed-width layout, so they compare as strings.
+func ReopenedAt(snap Snapshot, j *contract.Job) string {
+	at := ""
+	if j == nil {
+		return at
+	}
+	for _, id := range j.History {
+		r, ok := snap.Records[id]
+		if !ok || r.Type != "control" {
+			continue
+		}
+		if status, _ := r.Body["status"].(string); status == string(contract.Posted) && r.At > at {
+			at = r.At
+		}
+	}
+	return at
 }
 
 // CheckPersonAnswer refuses an answer, already trimmed, longer than the cap. The

@@ -43,8 +43,10 @@ func answered(snap orchestrator.Snapshot, j *contract.Job, e taskstore.Event) bo
 	if len(j.History) == 0 {
 		return false
 	}
+	// An answer from before the Job was last reopened (a failed land) was used.
+	reopened := orchestrator.ReopenedAt(snap, j)
 	for _, r := range snap.Records {
-		if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] {
+		if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] || r.At <= reopened {
 			continue
 		}
 		hash, _ := r.Body["plan_hash"].(string)

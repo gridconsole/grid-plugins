@@ -104,8 +104,9 @@ type Stream struct {
 	// Ticked is called with the task folder after each tick of the task that did
 	// not fail: the tick is where an unleased answer to a person Job is accepted, so
 	// this is what runs the step that follows it (grid land after the ship person
-	// Job). It reports nothing back; nil does nothing.
-	Ticked func(dir string)
+	// Job). w is the pass's task-lease writer, which puts the ship Job back with its
+	// person when that land fails. It reports nothing back; nil does nothing.
+	Ticked func(dir string, w feed.Writer)
 
 	Out  io.Writer // JSON lines
 	Diag io.Writer // one readable line per skip; nil discards
@@ -302,7 +303,7 @@ func (s *Stream) task(dir string) error {
 	}
 	delete(s.skipped, dir)
 	if s.Ticked != nil {
-		s.Ticked(dir)
+		s.Ticked(dir, w)
 	}
 	epoch := fmt.Sprintf("%d.%d", w.Gen, w.Fence)
 	for _, sp := range out.Spawns {
