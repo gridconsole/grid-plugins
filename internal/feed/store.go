@@ -203,6 +203,11 @@ func (s Store) Post(in Input, w Writer) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
+	// Only the spill below writes a body that is a bare reference; the read
+	// drops one that names no stored body of its record, so a caller's would vanish.
+	if bodyRef(r.Body) {
+		return Record{}, &InvalidRecordError{Err: errors.New(`$.body: must be inline; a body that is only {"ref":"bodies/..."} is written by the Feed itself`)}
+	}
 	if err := validate(r); err != nil {
 		return Record{}, err
 	}

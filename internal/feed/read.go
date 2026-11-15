@@ -64,7 +64,8 @@ func (s Store) read(filter Filter, readOnly bool) (ReadResult, error) {
 		if seen[r.ID] {
 			continue
 		}
-		if ref, ok := r.Body["ref"]; ok && len(r.Body) == 1 && strings.HasPrefix(str(ref), "bodies/") {
+		if bodyRef(r.Body) {
+			ref := r.Body["ref"]
 			if ref != "bodies/"+r.ID+".json" {
 				out.Bad[e.File]++
 				continue
@@ -132,6 +133,14 @@ func (s Store) read(filter Filter, readOnly bool) (ReadResult, error) {
 	// writer's records. The fold does not use this ordering for authority.
 	out.Records = displayOrder(out.Records)
 	return applyFilter(out, filter)
+}
+
+// bodyRef reports a body that only points at a stored body file. Post writes
+// that form itself when a record is too large for one line, and refuses it from
+// a caller.
+func bodyRef(body map[string]any) bool {
+	ref, ok := body["ref"]
+	return ok && len(body) == 1 && strings.HasPrefix(str(ref), "bodies/")
 }
 
 func wireValid(line []byte, r Record, task string) bool {
