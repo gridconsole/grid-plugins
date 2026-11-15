@@ -211,11 +211,13 @@ history is preserved, including a missing final newline. Runtime locking is
 supported on macOS and Linux; other platforms inherit `internal/fslock`'s
 existing unsupported-platform error.
 
-Person-only commands, including `grid approve` and `grid task status`, refuse
-with exit **3** when called from an agent environment or process ancestry. Run
-them from the Grid app or a separate person terminal. `grid person check --json`
-reports whether that entry point is available. A person in their own terminal
-approves without setting `GRID_MEMBER`: with no `GRID_MEMBER`, `GRID_ACTOR` or
-worker mark in the shell, `grid approve` records the approval as the local owner,
-the same person `grid task close` and `grid task status` record there. `grid deliver` still moves the
-task to the ship approve step in-process and does not require a person.
+`grid approve` is for a person of the team: it exits **3** and writes nothing
+when `GRID_MEMBER` is not set, or when `GRID_ROLE` is an agent role and the shell
+holds no task lease epoch, and it records the approval as `GRID_MEMBER`. It does
+not look at the process ancestry, so a person approves from the Grid app or from
+a terminal that exports `GRID_MEMBER`. `grid task status` is not person-only: it
+records its caller (a person's shell as the local owner, a worker shell as the
+worker), and `agents/orchestrator.md:27,48` has the orchestrator agent run it.
+`grid person check --json` reports whether the caller looks like an agent; no
+other command reads that answer. `grid deliver` still moves the task to the ship
+approve step in-process and does not require a person.
