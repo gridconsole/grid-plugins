@@ -216,15 +216,22 @@ func validate(s map[string]any, v any, path string, depth int) error {
 		if children, ok := s[key].([]any); ok {
 			count := 0
 			var last, best error
+			bestScore := 0
 			for _, child := range children {
 				if err := check(child); err == nil {
 					count++
 				} else {
 					last = err
 					// The branch that got furthest into the value is the one the
-					// writer meant; on a tie the later branch is kept.
-					if best == nil || errDepth(err) >= errDepth(best) {
-						best = err
+					// writer meant. On a depth tie the branch whose required keys
+					// the body holds most wins; a one-key branch (the external
+					// ref form) never wins a tie for a body with more keys.
+					score, narrow := branchMatch(child.(map[string]any), v)
+					switch {
+					case best == nil, errDepth(err) > errDepth(best):
+						best, bestScore = err, score
+					case errDepth(err) == errDepth(best) && (score > bestScore || score == bestScore && !narrow):
+						best, bestScore = err, score
 					}
 				}
 			}
@@ -335,6 +342,28 @@ type ruleError struct {
 }
 
 func (e *ruleError) Error() string { return e.msg }
+
+// branchMatch counts the required keys of a oneOf branch that an object value
+// holds, and says whether the branch is the narrow one-key form that a value
+// with more keys cannot be meant for.
+func branchMatch(branch map[string]any, v any) (score int, narrow bool) {
+	object, ok := v.(map[string]any)
+	if !ok {
+		return 0, false
+	}
+	if name, ok := branch["$ref"].(string); ok {
+		if target, ok := schemas.byName[name]; ok {
+			branch = target
+		}
+	}
+	required, _ := branch["required"].([]any)
+	for _, key := range required {
+		if _, exists := object[key.(string)]; exists {
+			score++
+		}
+	}
+	return score, len(required) == 1 && len(object) > 1
+}
 
 func pathDepth(path string) int { return strings.Count(path, ".") + strings.Count(path, "[") }
 
