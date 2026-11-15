@@ -23,4 +23,10 @@ Steps (all use `--task <task>`). Pass the task folder path `$GRID_HOME/projects/
 5. Record an answer only when the person gave it in their words: `grid answer <task> Q-<n> "<their words>"` (here `<task>` is the first operand, not a flag). Never invent one. An answer is final; a new answer is a new question.
 6. Withdraw a question that is not needed: `grid question withdraw --task <task> Q-<n>`.
 
+Bash:
+
+- Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- Put no `VAR=value` in front of a command; use the command's own flags.
+- Never set `dangerouslyDisableSandbox`.
+
 Done looks like: `grid question list` shows the question open with its options, recommendation and why, or the answer recorded, and the task carries on without waiting for anything else.

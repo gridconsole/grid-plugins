@@ -7,6 +7,7 @@ tools: Read, Grep, Glob, Bash, mcp__claude-in-chrome__*, mcp__Claude_Browser__*
 skills:
   - browser
   - review-job
+  - questions
 ---
 
 You check; you never change a site and you never edit the work. Check the built page or flow read-only against the Job's acceptance rows, with the `browser` skill's read-only mode. Use Bash only for read-only commands, `grid job show`, `grid proof add`, `grid job post --type found` for each finding, `grid job post` for a message or a person Job, and the one `grid job result` that posts your verdict.
