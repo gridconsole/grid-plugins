@@ -259,6 +259,7 @@ func (c *checker) validate(j job.Job, o Options) {
 			c.add("job.after-why", "after", "Dependency kind needs a reason", "Explain why this dependency starts the Job.")
 		}
 	}
+	c.reviewTwice(j)
 	for _, group := range []struct {
 		key   string
 		paths []string
@@ -342,6 +343,26 @@ func (c *checker) validate(j job.Job, o Options) {
 		sort.Strings(matches)
 		if len(matches) > 0 {
 			c.add("job.scope-narrowing", "out_of_scope", "Out of scope names plan words: "+strings.Join(matches, ", "), "Revise the plan through a recorded decision; do not exclude a plan requirement in the Job.")
+		}
+	}
+}
+
+// reviewTwice warns on a review Job the orchestrator plans for a Job it waits on:
+// when the workflow's step after a run step is a check step, the worker posts that
+// Job's review itself (discovered_from names the Job), so a planned one beside it
+// reviews the change twice (eval rounds 10 and 11, P5). A review asked for on top
+// says who asked in review_reason. A warning only: the Job still renders and runs.
+func (c *checker) reviewTwice(j job.Job) {
+	if role := contract.NormalizeRole(j.Role); role != "reviewer" && role != "checker" {
+		return
+	}
+	if j.DiscoveredFrom != nil || strings.TrimSpace(j.ReviewReason) != "" {
+		return
+	}
+	for _, d := range j.After {
+		if job.ValidID(d.Job) {
+			c.addAt("job.review-twice", c.line("role"), "warning", "Planned review of "+d.Job+": the worker posts the review of "+d.Job+" itself when its run step is followed by a check step, so this one reviews the change a second time", "Leave this Job out, or say in review_reason who asked for this review on top of the worker's.")
+			return
 		}
 	}
 }
