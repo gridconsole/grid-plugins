@@ -529,6 +529,10 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 	if err == nil {
 		env.afterApproveHook()
 		err = recordApproval(env, resolved.Path, store, w, job, answer, event)
+		if err == nil {
+			// A leased answer accepts the ship person Job here: the task lands now.
+			landAfterShip(env, resolved.Path, o.Who)
+		}
 	}
 	return taskWriteResult(env, event, err, asJSON, resolved.Path)
 }

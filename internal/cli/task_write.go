@@ -309,6 +309,10 @@ func runApprove(args []string, env Env) int {
 		if err == nil && store.TaskDir != "" {
 			refoldAfterWrite(env, store)
 		}
+		if err == nil {
+			// A leased answer accepts the ship person Job here: the task lands now.
+			landAfterShip(env, resolved.Path, o.Who)
+		}
 	}
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }

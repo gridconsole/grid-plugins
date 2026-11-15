@@ -7,6 +7,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
@@ -39,8 +40,26 @@ func taskJobWriter(env Env) (feed.Writer, error) {
 	return orchestratorWriter(env, "task", epoch)
 }
 
+// shipAcceptance is the acceptance text of the ship person Job. It names what the
+// answer lets happen next, landing, and is how landAfterShip tells the ship Job
+// from the plan Job, which has the same kind and item.
+const shipAcceptance = "The delivered work is approved to land"
+
+// shipJobBody is the plan approve Job (migrate.PlanJobBody) with the acceptance
+// text of the ship step; everything else, kind and item included, is the plan Job's.
+func shipJobBody(id, owner string) map[string]any {
+	body := migrate.PlanJobBody(id, owner)
+	body["acceptance"] = []any{map[string]any{"id": "A1", "text": shipAcceptance, "traces": "item"}}
+	return body
+}
+
+// isShipJob reports whether it is the ship person Job a delivery posts.
+func isShipJob(it job.Job) bool {
+	return it.IsPerson() && it.Kind == "approve" && len(it.Acceptance) == 1 && it.Acceptance[0].Text == shipAcceptance
+}
+
 // postShipPersonJob posts the person step that follows Check: the plan approve
-// Job (migrate.PlanJobBody) for the person of the delivered task in dir, the
+// Job (shipJobBody) for the person of the delivered task in dir, the
 // owner when task.md names none. grid approve and the app answer it as any plan
 // approve Job, and its answer is the task's one approval, of its plan (S6c4). A
 // task that already has an open approve person Job gets nothing new, so a second
@@ -65,7 +84,7 @@ func postShipPersonJob(env Env, dir string) (string, error) {
 			return "", err
 		}
 		id := nextJobID(snap)
-		body := migrate.PlanJobBody(id, owner)
+		body := shipJobBody(id, owner)
 		data, err := json.Marshal(body)
 		if err != nil {
 			return "", err

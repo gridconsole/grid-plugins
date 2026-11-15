@@ -101,6 +101,11 @@ type Stream struct {
 	// posts nothing. Nil posts nothing, and a curator Job already open is still left
 	// alone.
 	ClosedCurator func(dir, taskID, id string) (map[string]any, error)
+	// Ticked is called with the task folder after each tick of the task that did
+	// not fail: the tick is where an unleased answer to a person Job is accepted, so
+	// this is what runs the step that follows it (grid land after the ship person
+	// Job). It reports nothing back; nil does nothing.
+	Ticked func(dir string)
 
 	Out  io.Writer // JSON lines
 	Diag io.Writer // one readable line per skip; nil discards
@@ -296,6 +301,9 @@ func (s *Stream) task(dir string) error {
 		return s.skip(dir, taskID, SkipTickFailed, err)
 	}
 	delete(s.skipped, dir)
+	if s.Ticked != nil {
+		s.Ticked(dir)
+	}
 	epoch := fmt.Sprintf("%d.%d", w.Gen, w.Fence)
 	for _, sp := range out.Spawns {
 		if sp.To != w.Worker {
