@@ -1,3 +1,9 @@
+diff --grid a/demo/.hook-counts/events.jsonl b/demo/.hook-counts/events.jsonl
+new file mode 0600
+--- /dev/null
++++ b/demo/.hook-counts/events.jsonl
+@@ -0,0 +1 @@
++{"rule":"session-end","event":"worker-exit","at":"<TIME>","outcome":"ok"}
 diff --grid a/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json b/demo/projects/demo/tasks/T-1-demo/sessions/.hooks/session-demo.json
 new file mode 0600
 --- /dev/null

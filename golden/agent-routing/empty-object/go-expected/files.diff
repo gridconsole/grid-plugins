@@ -9,3 +9,9 @@ new file mode 0600
 +export GRID_PROJECTS='$GRID_HOME/projects'
 +unset GRID_TASK
 +# <<< grid-session-env <<<
+diff --grid a/demo/.hook-counts/events.jsonl b/demo/.hook-counts/events.jsonl
+new file mode 0600
+--- /dev/null
++++ b/demo/.hook-counts/events.jsonl
+@@ -0,0 +1 @@
++{"rule":"session-start","event":"SessionStart","at":"<TIME>","outcome":"ok"}

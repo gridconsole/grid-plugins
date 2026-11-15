@@ -135,7 +135,7 @@
     },
     {
       "name": "hook",
-      "summary": "answer a Claude Code or Codex hook event; set and list hook levels",
+      "summary": "answer a Claude Code or Codex hook event; set and list hook levels; read hook events",
       "built": true,
       "subcommands": [
         {

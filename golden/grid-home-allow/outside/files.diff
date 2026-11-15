@@ -1,0 +1,7 @@
+diff --grid a/demo/.hook-counts/events.jsonl b/demo/.hook-counts/events.jsonl
+new file mode 0600
+--- /dev/null
++++ b/demo/.hook-counts/events.jsonl
+@@ -0,0 +1,2 @@
++{"rule":"plan-guard","event":"PreToolUse","at":"<TIME>","outcome":"ok"}
++{"rule":"history-log","event":"PreToolUse","at":"<TIME>","outcome":"ok"}
