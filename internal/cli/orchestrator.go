@@ -61,7 +61,7 @@ func runOrchestrator(args []string, env Env) int {
 	}
 	job := fs.String("job", id, "Job id")
 	kind := fs.String("type", "post", "registered post type")
-	body := fs.String("body", "{}", "JSON body, or - for stdin")
+	body := fs.String("body", "{}", "JSON body, or - for stdin; in a shell put it in single quotes, since double quotes run backticks and $ (write a single quote as \\u0027)")
 	reason := fs.String("reason", "", "cancellation reason")
 	attempt := fs.Int("attempt", 0, "Job attempt (or GRID_ATTEMPT)")
 	leaseFlag := fs.String("lease", env.getenv("GRID_LEASE"), "task or Job lease")
