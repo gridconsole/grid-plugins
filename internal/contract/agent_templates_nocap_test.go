@@ -45,3 +45,19 @@ func TestTemplatesNeedNoRedirectFile(t *testing.T) {
 		}
 	}
 }
+
+// The run-job skill also allows no pipe: one command per Bash call. No template
+// tells an agent to filter output with a pipe.
+func TestTemplatesNeedNoPipe(t *testing.T) {
+	for _, f := range nocapTemplates(t) {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			if strings.Contains(strings.ToLower(line), "pipe") {
+				t.Errorf("%s:%d tells the agent to use a pipe: %q", filepath.Base(f), i+1, line)
+			}
+		}
+	}
+}

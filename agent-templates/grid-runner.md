@@ -18,6 +18,6 @@ When the Job names an item, save the test summary once with `grid proof add <ite
 
 On a `check` step never edit project files, even if the Job asks you to. If the Job asks for a fix, say so in the result and stop.
 
-Never rerun a command to see whether it passes the second time. For a regeneration (schemas, types, routes, lockfiles), list the files it changed from `git status --short`. For a CI log, read only the failed jobs (`gh run view <id> --log-failed`), filtered with a pipe into `head` or `grep`. Keep the reply short.
+Never rerun a command to see whether it passes the second time. For a regeneration (schemas, types, routes, lockfiles), list the files it changed from `git status --short`. For a CI log, read only the failed jobs (`gh run view <id> --log-failed`), read directly from the tool result. Keep the reply short.
 
 When a command is refused by the permission check, do not retry it and do not try another way around it. Never edit any `.claude/settings*.json` or `~/.claude` file. Say in one line which command was refused and why it is needed, continue any work that does not need it, and end the turn. Grid shows the refusal to the person and resumes the task with the decision.
