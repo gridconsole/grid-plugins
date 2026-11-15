@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/job"
@@ -136,7 +137,9 @@ func saveShipBrief(env Env, dir, id string) error {
 		return nil
 	}
 	brief := meta + "\n## Intent\nThe person approves the delivered work (task.md, Outcome) to land.\n## Job\nAnswer with grid approve or in the Grid app.\n## Context\n## Out of scope\n## Open\n## Acceptance\n- A1 " + shipAcceptance + "\n## Outcome\n## Verdict\n## Follow-up\n"
-	return os.WriteFile(path, []byte(brief), 0o644)
+	// Atomic, as every other task-folder writer is: the next delivery keeps a brief
+	// that exists, so a part-written one would stay for good.
+	return atomicfile.Write(path, []byte(brief), 0o644)
 }
 
 // postShipPersonJob posts the person step that follows Check: the plan approve
