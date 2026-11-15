@@ -106,14 +106,15 @@ func qeRun(t *testing.T, h *harness, path, job, cmd string) (int, string) {
 	return code, h.out.String()
 }
 
-// The base line of plan-jobs' Re-plan step 1: show reads jobs/<id>/brief.md, which a
-// Job cancelled before its render does not have, so it exits 1. This pins why the text changed.
+// The base line of plan-jobs' Re-plan step 1 read jobs/<id>/brief.md, which a Job
+// cancelled before its render does not have, so show exited 1 (the text changed for
+// that reason). Since round 15 F6 (C-r15-job-show-unsaved) show prints such a Job from
+// its Feed record, with the state the Feed folds, and still writes no folder.
 func TestQeOldShowLineFailsOnCancelledJob(t *testing.T) {
 	h, path := qeFixture(t)
 	code := h.run(path, "job", "show", "J-2", "--task", feedTaskID)
-	t.Logf("job show J-2 --task: exit %d, stderr: %q", code, h.errb.String())
-	if code != 1 {
-		t.Fatalf("job show on a cancelled unrendered Job: exit %d, want 1; stdout %q", code, h.out)
+	if code != 0 || !strings.Contains(h.out.String(), "state: Done (cancelled)\n") {
+		t.Fatalf("job show on a cancelled unrendered Job: exit %d, want 0 with its Feed state; stdout %q stderr %q", code, h.out, h.errb)
 	}
 }
 
