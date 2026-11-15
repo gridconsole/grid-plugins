@@ -5,6 +5,8 @@ description: Ask a person a question on a Grid task, record their answer, or wit
 
 A question is for a person point only. "Tasks carry on by themselves until a person point": never ask whether to rework, never ask about a refused command, never ask about the brain, and never ask what a default or the brain already answers (`grid brain search <words> --task <task>`).
 
+One decision has one ask. Ask only what the person's words leave open and the work cannot go on without. Never ask a decision a person Job or question on the task already asks (`grid job tree --task <task>`, `grid question list --task <task>`): a person Job and a question on the same decision ask the person twice. A new option the person did not ask for (a short flag, a clamp, a new behaviour) is not asked: it is left out and named in the result.
+
 Rules that apply here:
 - "Everything is a Job, the Job is the brief": a person's decision is a Job with role Person (see plan-jobs); the question is that Job's text.
 - "Approvals and gates come from the workflow in the brain": do not make up a gate; a Job waits only by naming the person Job (or `gate:Q-<n>`) in its own `after`. `--blocking` is a label that raises the question's priority; it holds no Job.
