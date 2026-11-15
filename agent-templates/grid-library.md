@@ -3,7 +3,6 @@ name: grid-library
 description: Answers a question from the Grid brain - what the project or the person already decided, learned or wrote down - and names the notes it used; read-only. Use before planning or building when earlier work may already hold the answer.
 model: haiku
 effort: low
-maxTurns: 15
 tools: Read, Grep, Glob, Bash
 ---
 

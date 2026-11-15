@@ -3,7 +3,6 @@ name: grid-reviewer
 description: Reviews one finished Grid Job and posts only its verdict; with "end review" in the Job, reviews a whole phase. Use after a builder, researcher or runner has posted a result, and before a person is asked to approve.
 model: opus
 effort: medium
-maxTurns: 45
 tools: Read, Grep, Glob, Bash, Edit, Skill
 skills:
   - review-job

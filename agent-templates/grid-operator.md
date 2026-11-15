@@ -3,7 +3,6 @@ name: grid-operator
 description: Does browser work that changes state for a Grid Job - forms, admin panels, dashboards, multi-page flows, uploads, saving pages to files - and posts its result. Use when a check needs a state change or the Job is browser work.
 model: sonnet
 effort: medium
-maxTurns: 40
 tools: Read, Grep, Glob, Edit, Write, Bash, mcp__claude-in-chrome__*, mcp__Claude_Browser__*
 ---
 
