@@ -244,6 +244,77 @@ func DoneReason(target string, status contract.Status) string {
 	return "waiting for " + target + " to be accepted"
 }
 
+// childrenDone reports whether a children-done edge on target is met, and why it
+// waits when it is not. Every immediate child of target is accepted, and there
+// is one: no children is a wait, not a vacuous success before a split. A target
+// that is still open (a parked split parent, say) is not asked for more. A target
+// closed without its work does not meet the edge, however its children ended: a
+// review child is accepted even when its verdict rejected the work (end review
+// 0612Z M1). A cancelled target waits; a rejected one meets the edge through the
+// Jobs that rework it (reworkDone). Cycle does not follow reworks: they are
+// posted after the plan, when the review rejects.
+func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
+	if !g.childrenAccepted(s, target) || len(g.children[target]) == 0 {
+		return false, "waiting for all children of " + target + " to be accepted"
+	}
+	switch s.Jobs[target].Status {
+	case contract.Cancelled:
+		return false, "waiting for " + target + " to be accepted, but it was cancelled"
+	case contract.Rejected:
+		return g.reworkDone(s, target, map[string]bool{target: true})
+	}
+	return true, ""
+}
+
+// reworkDone reports whether the rejected Job id is made good by its reworks. A
+// rework continues id and is not one of id's own children (a proposed child
+// continues its parent too); the app's Judge posts one when a review rejects,
+// and numbers its review under the first build. Every rework counts, not any:
+// each is accepted with its own children accepted, or was rejected and is made
+// good by its own reworks in turn. seen ends a loop of continues.
+func (g *Graph) reworkDone(s Snapshot, id string, seen map[string]bool) (bool, string) {
+	reworks := []string{}
+	for _, r := range g.ids {
+		if c := g.items[r].Continues; c != nil && *c == id && !seen[r] && !strings.HasPrefix(r, id+".") {
+			reworks = append(reworks, r)
+		}
+	}
+	if len(reworks) == 0 {
+		return false, "waiting for a Job that reworks " + id + ", which was rejected"
+	}
+	for _, r := range reworks {
+		seen[r] = true
+	}
+	for _, r := range reworks {
+		if !g.childrenAccepted(s, r) {
+			return false, "waiting for all children of " + r + " to be accepted"
+		}
+		switch s.Jobs[r].Status {
+		case contract.Accepted:
+		case contract.Rejected:
+			if ok, reason := g.reworkDone(s, r, seen); !ok {
+				return false, reason
+			}
+		case contract.Cancelled:
+			return false, "waiting for " + r + ", which reworks " + id + ", to be accepted, but it was cancelled"
+		default:
+			return false, "waiting for " + r + ", which reworks " + id + ", to be accepted"
+		}
+	}
+	return true, ""
+}
+
+// childrenAccepted reports whether every immediate child of id is accepted; a
+// Job with no children has none waiting.
+func (g *Graph) childrenAccepted(s Snapshot, id string) bool {
+	for _, child := range g.children[id] {
+		if s.Jobs[child].Status != contract.Accepted {
+			return false
+		}
+	}
+	return true
+}
+
 // started is a Job that a worker holds or has handed in: it reads as Started or
 // Needs review, or it is parked mid-run.
 func started(status contract.Status) bool {
@@ -293,14 +364,7 @@ func (g *Graph) Ready(s Snapshot) (Readiness, error) {
 				satisfied = (status == contract.Rejected || status == contract.Cancelled) && s.Exhausted[e.Job]
 				reason = "waiting for " + e.Job + " to fail with no attempt left"
 			case kind == ChildrenDone:
-				children := g.children[e.Job]
-				satisfied = len(children) > 0
-				for _, child := range children {
-					if s.Jobs[child].Status != contract.Accepted {
-						satisfied = false
-					}
-				}
-				reason = "waiting for all children of " + e.Job + " to be accepted"
+				satisfied, reason = g.childrenDone(s, e.Job)
 			}
 			if !satisfied {
 				out.Waiting = append(out.Waiting, Wait{Job: id, Target: e.Job, Kind: kind, Reason: reason})
