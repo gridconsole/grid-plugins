@@ -8,7 +8,7 @@ A Job is the brief. A builder or reviewer reads only the Job, so it stands alone
 Owner decisions that apply here:
 
 - "No Grid-made guards, caps or limits": use the Claude Code built-ins. Add no hook, hold or cap to a Job.
-- Approvals and gates come from the workflow in the brain with a default: read the workflow this task runs with `grid workflow show --task <task> --json` and use its `task.steps` (kind, agent, approvers) and `task.rounds`, never hard-code one. A step only a person can do is a Job with role Person (`grid job post --person`). An approve step whose `posted_by` is `deliver` is not a Job you post: `grid deliver` posts that person Job, so your Jobs end at the step before it.
+- Approvals and gates come from the workflow in the brain with a default: read the workflow this task runs with `grid workflow show --task <task> --json` and use its `task.steps` (kind, agent, approvers) and `task.rounds`, never hard-code one. A step only a person can do is a Job with role Person (`grid job post --person`). An approve step whose `posted_by` is `deliver` is not a Job you post: `grid deliver` posts that person Job, so your Jobs end at the step before it. A `check` step right after a `run` step is not a Job you post either: the worker posts the review of a run step's Job when that Job posts its result (`J-2.1` for `J-2`). A review Job you post is one asked for on top of it (a second check step, or the person's words), and its `review_reason` says who asked; `grid job lint` warns `job.review-twice` on a review Job that waits on a Job and has neither `review_reason` nor `discovered_from`.
 - Everything is a Job and the Job is the brief. Tasks carry on by themselves until a person point. No plan mode.
 - The brain needs no attention from the person: a subagent curates proposals (`grid brain propose`), nobody asks the person to review one.
 - Every link carries a why: each `links` entry and each `after` object has a `why` of 8 to 160 characters.
@@ -40,10 +40,10 @@ Point, do not paste. A pasted block goes stale, fills the worker's context and h
 - `links`: entries `{to, rel, why}`. `to` is `brain:project/<id>`, a Job (`job:J-3`) or a person node. `rel` is one of depends-on, explains, decided-by, supersedes, duplicates, related, continues, validates, uses, owns, decides, approves, knows (blocks and same-files are derived by the CLI; do not write them). `why` is 8 to 160 characters and says what the worker gains by following the link; "see also", "related" and the note's own name fail lint.
 - `read`: name the lines, not the file: `repo:path/file.go:40-95`, or a heading anchor such as `task:research.md#format`. A bare file name makes the worker read all of it.
 - `intent` and `acceptance` state the goal and the check in your own words. If you are about to copy a paragraph from a file or a note, link or read it instead.
-- `after`: bare Job ids that must be done first, or objects with `job`, `kind` (`done`, `failed`, `children-done`) and `why` (8 to 160 characters). A gate is `gate:Q-7`. A review Job names the build Job it checks.
+- `after`: bare Job ids that must be done first, or objects with `job`, `kind` (`done`, `failed`, `children-done`) and `why` (8 to 160 characters). A gate is `gate:Q-7`. A review Job you post (only one asked for on top of the worker's, see the workflow rule above) names the build Job it checks and carries `review_reason`.
 - `repo`: in a project with more than one repo, a code Job names its `repo` (one of the project's repos); with none named the Job runs in the first repo of project.md.
 - Keep a Job small: one outcome, one owner, a read list of a few ranges. If it needs more, split it into Jobs joined by `after`.
-- The last Job of a task is the deliver Job: title "Deliver the task", role orchestrator, `after` names every other Job (each with a why), and it runs `grid deliver --task <task> --outcome <text> --json`.
+- The last Job of a task is the deliver Job: title "Deliver the task", role orchestrator, `after` names every other Job (each with a why; a Job the worker reviews is named with kind `children-done`, so delivery waits for that review), and it runs `grid deliver --task <task> --outcome <text> --json`.
 
 ## Pointers into plan.md
 
