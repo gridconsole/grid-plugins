@@ -87,6 +87,27 @@ func (r Resolver) TasksDirs() ([]string, error) {
 	return visible, nil
 }
 
+// TasksDirsIn is TasksDirs narrowed to project proj (a name or id) when proj is
+// set. An unknown or hidden project answers as Resolve does.
+func (r Resolver) TasksDirsIn(cwd, proj string) ([]string, error) {
+	dirs, err := r.TasksDirs()
+	if err != nil || proj == "" {
+		return dirs, err
+	}
+	res, err := r.Resolve(Query{Cwd: cwd, Project: proj})
+	if err != nil {
+		return nil, err
+	}
+	want := filepath.Clean(gridhome.TasksDir(r.GridHome, res.Project))
+	kept := []string{}
+	for _, dir := range dirs {
+		if filepath.Clean(dir) == want {
+			kept = append(kept, dir)
+		}
+	}
+	return kept, nil
+}
+
 func unregisteredProject(name string) error { return projectUnavailable{name} }
 
 type projectUnavailable struct{ name string }

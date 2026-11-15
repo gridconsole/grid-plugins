@@ -23,7 +23,7 @@ import (
 
 const taskUsage = `Usage:
   grid task new "<words>" [--project <name-or-id>] [--size auto|small|normal|large] [--workflow <name>] [--kind setup] [--input <file>]... [--json]
-  grid task show [<task>] [--json]
+  grid task show [<task>] [--project <name-or-id>] [--json]
   grid task attach <task> [--session ID] [--runtime claude] [--json]
   grid task list [--project <name-or-id>] [--state <state>] [--json]
   grid task move <machine> [--task <task>] [--project <project>] [--who <caller>] [--json]
@@ -359,6 +359,9 @@ func runTask(args []string, env Env) int {
 	if sub == "new" || sub == "list" {
 		fs.StringVar(&proj, "project", "", "project name or id; personal selects Personal")
 	}
+	if sub == "show" {
+		fs.StringVar(&proj, "project", "", "project name or id; look only in it")
+	}
 	if sub == "new" {
 		fs.StringVar(&size, "size", "auto", "auto, small, normal or large")
 		fs.StringVar(&workflow, "workflow", "", "workflow name; omitted leaves selection to the rules")
@@ -436,7 +439,7 @@ func runTask(args []string, env Env) int {
 		if len(pos) == 1 {
 			id = pos[0]
 		}
-		t, err := resolveTaskOperand(env, id)
+		t, err := resolveTaskOperandIn(env, id, proj)
 		if err != nil {
 			return taskOperandError(env, "grid task show", err)
 		}
