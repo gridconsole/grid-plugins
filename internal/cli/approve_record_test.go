@@ -331,15 +331,23 @@ func TestApproveRecordOldReceiptMovedOrRetired(t *testing.T) {
 	})
 }
 
-// A caller with no GRID_MEMBER and no lease epoch is refused with exit 3 and
-// nothing is written: no Job result, no answer, no receipt, no history line.
+// A worker's shell with no GRID_MEMBER and no lease epoch is refused with exit 3 and
+// nothing is written: no Job result, no answer, no receipt, no history line. A
+// person's own terminal with no GRID_MEMBER is not refused: it approves as the
+// local owner (TestR23ApproveNeedsNoGridMember); this test used the empty
+// environment for the refused case before that, and now names the worker mark.
 func TestApproveRecordCallerWithoutMemberWritesNothing(t *testing.T) {
 	h, path, store, text := approveJobHarness(t)
 	before, _ := os.ReadFile(filepath.Join(path, "history.md"))
 	// grid job result takes its writer from feedWriter, which falls back to the git
-	// or OS user for a person, as grid job post --person does; only grid approve
-	// is person-only by GRID_MEMBER, so it is the one command refused here.
-	h.env.Getenv = func(string) string { return "" }
+	// or OS user for a person, as grid job post --person does; grid approve is
+	// person-only, so it is the one command refused here.
+	h.env.Getenv = func(key string) string {
+		if key == "GRID_AGENT" {
+			return "worker-1"
+		}
+		return ""
+	}
 	for _, args := range [][]string{
 		{"approve", path, "--plan-hash", plan.Hash(text)},
 		{"approve", path},
