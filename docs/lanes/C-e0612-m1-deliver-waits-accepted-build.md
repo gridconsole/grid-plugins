@@ -33,10 +33,11 @@ Verdict: DONE. `make test`, `make lint`, both OS builds and the walk tests ran o
 - Every rework must be `accepted` with all its own children accepted, or be `rejected` and met in turn through its own reworks. A loop of `continues` ends: each Job is visited once.
 - A target that is still open (posted to submitted, or parked) keeps the old rule, so the split case in `TestReadyChildrenAndGates` still holds.
 
-**Why an open target needs nothing more.** Every Judge path closes the builder before its last child is accepted:
-- Accept: the build is accepted, then the review.
-- Rework: the rework is posted, the build is rejected, then the review is accepted.
-- Person path: the person Job is posted under the root, and the plugin's `yvPamControl` (`person.go`) moves the builder before it accepts the person Job.
+**Why an open target needs nothing more.** In every Judge path, by the time the last child is accepted, either the builder is closed or an open person Job is a child of the target. The steps run in order (app `internal/kernel/worker/judge.go:1037-1075`), and the review child is always accepted last (`:1071`):
+- Accept: the build is accepted (`:1051`), then the review.
+- Accept with a person step after the check: `approvePoint` (`:1048`) posts the person Job as a child of the build (`:1095`) before the build is accepted (`:1051`). For a rework J-4 that child is J-4.1, so the rework's open child holds the edge.
+- Rework: the rework is posted, the build is closed `rejected` (`:1140`), then the review is accepted.
+- Rounds used up: `person` (`:1064`) posts the person Job as a child of the root (`:1227`) before the review is accepted. The build stays `submitted` with an open child under the root. The plugin's `yvPamControl` (`person.go`) moves the builder before it accepts the person Job.
 
 So an open build with all children accepted is the split parent, not a reviewed build.
 
@@ -57,7 +58,7 @@ So an open build with all children accepted is the split parent, not a reviewed 
 
 ## Failing lines on base
 
-`go test -count=1 ./internal/jobgraph/ -run TestM1` at 06540774 (8b8959ca plus the new test file only; `graph.go` is unchanged there), exit 1:
+This run is `go test -count=1 ./internal/jobgraph/ -run TestM1` with the base `graph.go` swapped in on the lane head. The swap was `git checkout 8b8959ca -- internal/jobgraph/graph.go`, restored afterwards with `git checkout HEAD -- internal/jobgraph/graph.go`, and `git status --short` was empty after it. The jobgraph package then holds what 06540774 holds: 8b8959ca plus the new test file. Exit 1, verbatim:
 
 ```
 --- FAIL: TestM1DeliverNotReadyOnRejectedBuild (0.00s)
@@ -66,17 +67,28 @@ So an open build with all children accepted is the split parent, not a reviewed 
     --- FAIL: TestM1DeliverNotReadyOnRejectedBuild/build_cancelled,_review_accepted (0.00s)
         m1_children_done_rework_test.go:97: deliver J-3 is ready, want it waiting: waiting for J-2 to be accepted, but it was cancelled
 --- FAIL: TestM1ReworkAcceptedReleasesDeliver (0.00s)
-    --- FAIL: .../rework_posted ... deliver J-3 is ready, want it waiting: waiting for J-4, which reworks J-2, to be accepted
-    --- FAIL: .../rework_running ... (same)
-    --- FAIL: .../second_rework_posted ... waiting for J-5, which reworks J-4, to be accepted
-    --- FAIL: .../rework_accepted,_the_person's_Job_open ... waiting for all children of J-4 to be accepted
+    --- FAIL: TestM1ReworkAcceptedReleasesDeliver/rework_posted (0.00s)
+        m1_children_done_rework_test.go:97: deliver J-3 is ready, want it waiting: waiting for J-4, which reworks J-2, to be accepted
+    --- FAIL: TestM1ReworkAcceptedReleasesDeliver/rework_running (0.00s)
+        m1_children_done_rework_test.go:97: deliver J-3 is ready, want it waiting: waiting for J-4, which reworks J-2, to be accepted
+    --- FAIL: TestM1ReworkAcceptedReleasesDeliver/second_rework_posted (0.00s)
+        m1_children_done_rework_test.go:97: deliver J-3 is ready, want it waiting: waiting for J-5, which reworks J-4, to be accepted
+    --- FAIL: TestM1ReworkAcceptedReleasesDeliver/rework_accepted,_the_person's_Job_open (0.00s)
+        m1_children_done_rework_test.go:97: deliver J-3 is ready, want it waiting: waiting for all children of J-4 to be accepted
 --- FAIL: TestM1OnlyAReworkStandsInForTheBuild (0.00s)
-    --- FAIL: .../a_proposed_child_is_not_a_rework ... waiting for a Job that reworks J-2, which was rejected
-    --- FAIL: .../rework_sent_back_by_the_person ... waiting for a Job that reworks J-4, which was rejected
-    --- FAIL: .../rework_cancelled ... waiting for J-4, which reworks J-2, to be accepted, but it was cancelled
-    --- FAIL: .../one_of_two_reworks_accepted ... waiting for J-5, which reworks J-2, to be accepted
-    --- FAIL: .../continues_loop ... waiting for a Job that reworks J-5, which was rejected
-FAIL	github.com/gridconsole/grid-plugins/internal/jobgraph	0.007s
+    --- FAIL: TestM1OnlyAReworkStandsInForTheBuild/a_proposed_child_is_not_a_rework (0.00s)
+        m1_children_done_rework_test.go:97: deliver J-3 is ready, want it waiting: waiting for a Job that reworks J-2, which was rejected
+    --- FAIL: TestM1OnlyAReworkStandsInForTheBuild/rework_sent_back_by_the_person (0.00s)
+        m1_children_done_rework_test.go:97: deliver J-3 is ready, want it waiting: waiting for a Job that reworks J-4, which was rejected
+    --- FAIL: TestM1OnlyAReworkStandsInForTheBuild/rework_cancelled (0.00s)
+        m1_children_done_rework_test.go:97: deliver J-3 is ready, want it waiting: waiting for J-4, which reworks J-2, to be accepted, but it was cancelled
+    --- FAIL: TestM1OnlyAReworkStandsInForTheBuild/one_of_two_reworks_accepted (0.00s)
+        m1_children_done_rework_test.go:97: deliver J-3 is ready, want it waiting: waiting for J-5, which reworks J-2, to be accepted
+    --- FAIL: TestM1OnlyAReworkStandsInForTheBuild/continues_loop (0.00s)
+        m1_children_done_rework_test.go:97: deliver J-3 is ready, want it waiting: waiting for a Job that reworks J-5, which was rejected
+FAIL
+FAIL	github.com/gridconsole/grid-plugins/internal/jobgraph	0.006s
+FAIL
 ```
 
 The Feed test runs against base `graph.go`, swapped in with `git checkout 8b8959ca -- internal/jobgraph/graph.go`, then restored with `git checkout HEAD -- internal/jobgraph/graph.go`. `git status --short` was clean afterwards. `go test -count=1 ./internal/orchestrator/ -run TestM1`, exit 1:
@@ -92,7 +104,7 @@ On the lane, all four tests pass: `--- PASS` for each, `ok internal/jobgraph`, `
 
 | Row | State | Proof |
 | --- | --- | --- |
-| Brief 1: failing unit test first (build rejected, review accepted, deliver `children-done` not ready), shown failing on main | HOLDS | Test commit 06540774 comes before the fix 02e9e238. `internal/jobgraph/m1_children_done_rework_test.go:109` TestM1DeliverNotReadyOnRejectedBuild. The failing lines above, exit 1 at 06540774. |
+| Brief 1: failing unit test first (build rejected, review accepted, deliver `children-done` not ready), shown failing on main | HOLDS | Test commit 06540774 comes before the fix 02e9e238. `internal/jobgraph/m1_children_done_rework_test.go:109` TestM1DeliverNotReadyOnRejectedBuild. The failing lines above, exit 1 with base `graph.go` (the package as at 06540774). |
 | Brief 2: fix with (a) or (b), say why, list what was checked | HOLDS | (a), widened to follow the rework: `internal/jobgraph/graph.go:247-316`. The why and the list are in "Choice" above. |
 | Brief 3: rework accepted with its new review accepted makes deliver ready; tested | HOLDS | `m1_children_done_rework_test.go:120` TestM1ReworkAcceptedReleasesDeliver (also a second round and a person child). `internal/orchestrator/m1_deliver_rework_test.go:75` TestM1DeliverWaitsForTheReworkOnTheFeed walks the Judge's post order through Load and Ready. `go test -count=1 ./internal/jobgraph/ ./internal/orchestrator/` exit 0. |
 | Brief 4: `agents/orchestrator.md:27` and `skills/plan-jobs/SKILL.md:46` match; one-review lint warning kept | HOLDS | Both sentences now say delivery waits for the Job and its review, or the rework and the rework's review (e4cb8535). Every phrase `internal/cli/er_deliver_job_text_test.go` pins is kept, and none of approve, gate or "ask the person" is used. `job.review-twice` is unchanged at `internal/job/lint/lint.go:364`, `SKILL.md:11` and `orchestrator.md:23`. `go test -count=1 ./internal/job/lint/ ./internal/cli/ ./internal/mcp/ ./internal/job/ ./internal/plan/` exit 0. |
@@ -107,9 +119,9 @@ On the lane, all four tests pass: `--- PASS` for each, `ok internal/jobgraph`, `
 | Rule: walk tests | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` exit 0, with `--- PASS` for both under `-v`. `go test -count=1 ./internal/job/lint/` exit 0. |
 | Rule: fetch and merge main before the last proof run, then rerun the walk tests | HOLDS | `git fetch origin && git merge origin/main` printed "Already up to date". The walk tests and `make test` ran after it. |
 | Rule: new tests fail on base and pass on the lane; no existing test edited | HOLDS | `git diff --stat origin/main..HEAD` lists only two new `_test.go` files: `m1_children_done_rework_test.go` and `m1_deliver_rework_test.go`. No test was deleted. |
-| Rule: mismatch-proof edit of a production file only for its row, status clean before committing | HOLDS | Base `graph.go` was swapped in only for the Feed test's base run, then restored. `git status --short` was empty before each commit. |
+| Rule: mismatch-proof edit of a production file only for its row, status clean before committing | HOLDS | Base `graph.go` was swapped in only for the base runs of the two new test files, then restored. `git status --short` was empty after each restore and after each commit, and no swap was ever committed. |
 | Rule: small commits, one-sentence messages, no attribution lines | HOLDS | `git log --format='%h %s%n%b' origin/main..HEAD`: 4 commits plus this doc, one sentence each, empty bodies. |
-| Rule: public repo, no personal paths, hosts or emails | HOLDS | `grep -rn "/Users\|/srv/\|@gmail"` over the six changed files, exit 1 (no match). The review is cited as "end review 0612Z M1". |
+| Rule: public repo, no personal paths, hosts or emails | HOLDS | `grep -rn "/Users\|/srv/\|@gmail"` over the six changed code, text and contract files, exit 1 (no match). This lane doc names only `/srv/gridwork/...` hand-off paths, as the C-r11 lane doc does, and no /Users path. The review is cited as "end review 0612Z M1". |
 | Rule: no guard, gate, cap, hold or blocking hook on agents | HOLDS | The change is the readiness rule of an existing edge kind in `graph.go`. No hook, cap or limit. A Job that has started is never stopped, and the texts name no new step for agents. |
 | Rule: do not change the app | HOLDS | The app was read only, through `git show` on the app ref; nothing in it was written. |
 | Rule: never push, curl, sudo | HOLDS | None was run. The bundle is the hand-off. |
