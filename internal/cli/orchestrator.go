@@ -34,11 +34,11 @@ import (
 const jobCancelUsage = `Usage: grid job cancel <job> --reason <text> [--task <task>] [--json]
 
 Cancels a Job, a Running one too.
-A person (role owner, member or lead) types no lease and no epoch: the CLI reads the
-task lease's current generation.fence from the Feed and writes the cancel under it, with
-the person as the author. Run it as the member who started the task's worker on this
-machine (your GRID_MEMBER). For another member the lease names a different holder and the
-cancel is refused as a stale lease (exit 3).
+A person (role owner, member or lead) types no lease and no epoch. When the task lease is
+held by your own <member>@<machine> (GRID_MEMBER on this machine), the cancel is written
+at once under it. When another holder holds it (the machine's worker, worker@<machine>, by
+default), the cancel is saved as your request and the holder writes it under its lease on
+its next pass; `+"`grid job show <job>`"+` then shows it Cancelled. Both exit 0.
 An agent cancels with the GRID_TASK_EPOCH its worker gave it. A --lease-epoch typed on the
 command line is used as typed, so a guessed or old one is refused as a stale lease (exit 3).
 
@@ -304,19 +304,22 @@ func runOrchestrator(args []string, env Env) int {
 	if !unleased && personResult && *planHash == "" && *epoch == "" && *leaseFlag == "" && env.getenv("GRID_LEASE") == "" {
 		unleased = contract.GuestAddressee(personRole, env.getenv("GRID_MEMBER"), false, personJobRole, personOwner, personKind)
 	}
-	// A person of the team at a terminal holds no lease epoch to cancel a Job with: the
-	// worker gives its agents GRID_TASK_EPOCH, and a person has no such variable, so the
-	// cancel of a Running Job stopped at "must be gen.fence", or at "stale lease" when the
-	// epoch was guessed. A cancel is a control record under the task lease, so for a person
-	// who holds and typed no epoch the current task lease is read from the Feed and its
-	// generation and fence are used, with the person as the author. This is not a way past
-	// the fence: the lease still has to name this member's own <member>@<machine> as holder
-	// (the member who started the worker on this machine), or the write is refused as a
-	// stale lease as before. A typed epoch is used as typed, and an agent keeps the epochs
-	// the worker gave it.
+	// A person of the team at a terminal holds no lease epoch to cancel a Job with. When the
+	// task lease names this member's own <member>@<machine>, the cancel is written under the
+	// lease's current generation and fence, with the person as the author. When another
+	// holder holds it (by default the machine's worker), the person writes an unleased cancel
+	// request instead, as a person posts a Job or answers a person Job, and the holder's next
+	// pass writes the leased control (personCancels beside personAnswers). The person never
+	// writes under another holder's lease, so store.go's holder check and record.go's
+	// author check stay as they are. A typed epoch is used as typed, and an agent keeps the
+	// epochs the worker gave it.
+	request := false
 	if verb == "cancel" && *epoch == "" && (*leaseFlag == "" || *leaseFlag == "task") && contract.TierFor(personRole) == contract.PersonTeam {
-		if held, readErr := (lease.TaskStore{Feed: store}).Read("task"); readErr == nil && held.Holder != nil {
+		held, readErr := (lease.TaskStore{Feed: store}).Read("task")
+		if readErr == nil && held.Holder != nil && *held.Holder == env.getenv("GRID_MEMBER")+"@"+localMachine(env) {
 			leaseName, *epoch = "task", fmt.Sprintf("%d.%d", held.Gen, held.Fence)
+		} else {
+			request, unleased = true, true
 		}
 	}
 	var writer feed.Writer
@@ -446,6 +449,18 @@ func runOrchestrator(args []string, env Env) int {
 	// fold repairs the files. The write's own fold has said any withdrawal-policy
 	// warning for this operation already, so the refold does not say it again.
 	refoldAfterWrite(env, store)
+	// A cancel request moves no Job by itself: the Job stays as it is until the next
+	// pass of whoever holds the task lease writes the leased control. Say so, as an
+	// unleased answer does above, so the request is not mistaken for a cancelled Job.
+	if request {
+		fmt.Fprintln(env.Stderr, "Saved. The cancel will be carried out on the next pass of the task's orchestrator.")
+		if *asJSON {
+			return writeJSON(env.Stdout, struct {
+				feed.Record
+				Pending bool `json:"pending"`
+			}{record, true})
+		}
+	}
 	if checked {
 		printPostFindings(env.Stderr, *job, findings, findingsErr)
 		if *asJSON {
@@ -705,6 +720,15 @@ func orchestratorRows(env Env, rows []orchestrator.Row, asJSON bool) int {
 	}
 	return 0
 }
+// localMachine is this machine's id as a lease holder names it: the Env's, else the Grid
+// home's. It is empty when neither is known.
+func localMachine(env Env) string {
+	if env.Machine != "" {
+		return env.Machine
+	}
+	return gridhome.Machine(env.GridHome)
+}
+
 func orchestratorWriter(env Env, name, epoch string) (feed.Writer, error) {
 	member, role := env.getenv("GRID_MEMBER"), contract.NormalizeRole(env.getenv("GRID_ROLE"))
 	if member == "" {
@@ -718,10 +742,7 @@ func orchestratorWriter(env Env, name, epoch string) (feed.Writer, error) {
 	if name == "task" && role == "worker" {
 		role = "cli"
 	}
-	machine := env.Machine
-	if machine == "" {
-		machine = gridhome.Machine(env.GridHome)
-	}
+	machine := localMachine(env)
 	if machine == "" {
 		return feed.Writer{}, errors.New("machine id is missing; initialize the Grid home")
 	}
