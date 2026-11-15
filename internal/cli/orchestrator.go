@@ -38,7 +38,7 @@ A person (role owner, member or lead) types no lease and no epoch. When the task
 held by your own <member>@<machine> (GRID_MEMBER on this machine), the cancel is written
 at once under it. When another holder holds it (the machine's worker, worker@<machine>, by
 default), the cancel is saved as your request and the holder writes it under its lease on
-its next pass; `+"`grid job show <job>`"+` then shows it Cancelled. Both exit 0.
+its next pass; ` + "`grid job show <job>`" + ` then shows it Cancelled. Both exit 0.
 An agent cancels with the GRID_TASK_EPOCH its worker gave it. A --lease-epoch typed on the
 command line is used as typed, so a guessed or old one is refused as a stale lease (exit 3).
 
@@ -720,6 +720,7 @@ func orchestratorRows(env Env, rows []orchestrator.Row, asJSON bool) int {
 	}
 	return 0
 }
+
 // localMachine is this machine's id as a lease holder names it: the Env's, else the Grid
 // home's. It is empty when neither is known.
 func localMachine(env Env) string {
