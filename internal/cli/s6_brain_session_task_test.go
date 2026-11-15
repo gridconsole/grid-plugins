@@ -20,6 +20,9 @@ links: []
 level: project
 status: accepted
 reason: ''
+origin:
+  kind: session
+  id: d183b075b0c9c1dacc4e8567
 ---
 
 Shell commands in the handbook are written in ` + "`sh`" + ` code fences, one command per line.
@@ -34,11 +37,17 @@ func TestS6BrainSearchUsesSessionTaskProject(t *testing.T) {
 			h, task := feedHarness(t)
 			t.Setenv("GRID_TASK", "")
 			t.Setenv("GRID_FEED_TASK", "")
+			h.write(filepath.Join(h.gridHome, "projects", "example", "project.md"), "---\nid: id-example\n---\n")
 			h.write(filepath.Join(h.gridHome, "projects", "example", "knowledge", "conventions", "command-blocks.md"), s6Note)
 			worktree := filepath.Join(h.gridHome, "worktrees", "01M7EDXBM4NR2GFFBAFPEXWNM1-J-1-a1")
 			h.mkdir(worktree)
+			// With the project named, a miss is the fixture's fault, not the scope's.
+			code := h.run(worktree, "brain", "search", "--project", "example", "install page handbook links commands")
+			if code != 0 || !strings.Contains(h.out.String(), "command-blocks") {
+				t.Fatalf("brain search --project example: exit %d out %q err %q", code, h.out, h.errb)
+			}
 			t.Setenv(name, task)
-			code := h.run(worktree, "brain", "search", "install page handbook links commands")
+			code = h.run(worktree, "brain", "search", "install page handbook links commands")
 			if code != 0 || !strings.Contains(h.out.String(), "command-blocks") {
 				t.Fatalf("brain search from the Job worktree with %s: exit %d out %q err %q", name, code, h.out, h.errb)
 			}
