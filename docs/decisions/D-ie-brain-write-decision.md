@@ -21,14 +21,14 @@ Paths below are plugin paths unless they start with `app`.
 
 ## (a) Who may
 
-Verb: `grid brain write <topic>/<name> --rev <16-hex|none> --file <path|-> [--level home|project] [--project <p>] [--json]`. `--rev none` means the note must not exist. The rev is the first 8 bytes of SHA-256 as 16 lower hex, the audit hash without its `sha256:` prefix (internal/brain/versions.go:36-38).
+Verb: `grid brain write <topic>/<name> --expect <16-hex|none> --file <path|-> [--level home|project] [--project <p>] [--json]`. `--expect none` means the note must not exist. The rev is the first 8 bytes of SHA-256 as 16 lower hex, the audit hash without its `sha256:` prefix (internal/brain/versions.go:36-38).
 
 Role rule for the verb: brain.RevertAllowed (internal/brain/revert.go:22, :25-31): the empty role, `owner`, `member`. Host key `brain_revert_roles` (revert.go:17).
 Role rule for a `type: workflow` note (new text or on disk): the verb's rule, the empty role, `owner` or `member`. Reason: owner answer 3 of 11 Nov (owner-answers/2026-11-11T2107Z.md): "anyone can store things in the brain, author is written ... No owner-only gate on brain writes." The author is written in the audit line (point 1). Guests and workers stay refused by the verb's rule ("guest per role rules already in the product").
 
 | Row | owner | member | guest of the project | guest of another project only | signed out | hosted session | agent Job (GRID_ROLE=worker) | empty role (own terminal) |
 |---|---|---|---|---|---|---|---|---|
-| `grid brain write` new note (`--rev none`) | 0 | 0 | exit 3 | exit 3 | no CLI call; the host answers 401 | the person's role (owner 0, member 0, guest exit 3) | exit 3 | 0 |
+| `grid brain write` new note (`--expect none`) | 0 | 0 | exit 3 | exit 3 | no CLI call; the host answers 401 | the person's role (owner 0, member 0, guest exit 3) | exit 3 | 0 |
 | `grid brain write` replace at a rev | 0 | 0 | exit 3 | exit 3 | no CLI call; 401 | the person's role | exit 3 | 0 |
 | replace or create a `type: workflow` note | 0 | 0 | exit 3 | exit 3 | no CLI call; 401 | the person's role (owner 0, member 0, guest exit 3) | exit 3 | 0 |
 | app knowledge write route | 200 | 200, a workflow note too (owner answer 3) | 404 `not_found` | 404 `not_found` | 401 | the person's role | no route; a worker has no app session | no route; the app always sets a role |
@@ -43,12 +43,12 @@ Notes on the table:
 
 | Exit | stderr (plain) | When | App status and `code` | Rule it copies |
 |---|---|---|---|---|
-| 2 | `grid brain write: flag provided but not defined: -by` and the usage line | `--by`, any unknown flag, missing `--rev` or `--file`, a `--rev` that is neither `none` nor 16 hex | 400 `bad_request` | flag parse as runRevert, internal/braincmd/changes.go:216-218 |
+| 2 | `grid brain write: flag provided but not defined: -by` and the usage line | `--by`, any unknown flag, missing `--expect` or `--file`, a `--expect` that is neither `none` nor 16 hex | 400 `bad_request` | flag parse as runRevert, internal/braincmd/changes.go:216-218 |
 | 2 | `brain write: expected <topic>/<name>. Run: grid brain help` | absolute path, three-part path, a part that fails ValidName | 400 `bad_request` | changes.go:226-232; internal/brain/note.go:83 |
 | 2 | `grid brain write: <reason from Note.Validate>` | the new text fails Note.Validate | 400 `bad_request` | internal/brain/note.go:93-122 |
 | 2 | `grid brain write: linked or non-regular target` | symlinked topic folder or symlinked note file, seen under the lock | 400 `bad_request` | contract/README.md:478; internal/safefile/file.go:17 |
 | 3 | `grid brain write: caller role is not allowed to write brain entries` | RevertAllowed(GRID_ROLE) is false (guest, worker) | 403 `forbidden` (the app checks first, so this is a backstop) | internal/braincmd/changes.go:236-238; internal/brain/revert.go:22 |
-| 6 | `grid brain write: note changed since read` | `--rev` does not match the file under the lock, `--rev none` and the file exists, or a rev and no file | 409 `conflict` with the current `rev` | contract/README.md:474 with 6 in place of 3; app 1d9f3f99 vault_write.go:208 |
+| 6 | `grid brain write: note changed since read` | `--expect` does not match the file under the lock, `--expect none` and the file exists, or a rev and no file | 409 `conflict` with the current `rev` | contract/README.md:474 with 6 in place of 3; app 1d9f3f99 vault_write.go:208 |
 | 7 | `grid brain write: note is not versioned; nothing written` | the target folder is not a knowledge topic (machines, skills; revert.go:96), or the note exists but knowledge/versions holds no copy of it, so replacing it would lose its bytes | 409 `refused` "the note has no accepted version"; the app writes nothing | point 4; versions folder internal/brain/versions.go:19-22, :80 |
 | 1 | `brain: <error>` | store error (a full disk included), unregistered `--project` | 502 `read_or_plugin_failed` | failWith, internal/braincmd/changes.go:25-36; app workflows/write.go:131-132 |
 
@@ -61,13 +61,13 @@ Rules for the mapping:
 
 | # | Verb or route | Caller | Input | Expected | Must not happen |
 |---|---|---|---|---|---|
-| 1 | `grid brain write` | owner | `/abs/x --rev none` | exit 2, usage line | no file, no version, no audit line, no index change |
-| 2 | `grid brain write` | owner | `a/b/c --rev none` | exit 2, usage line | same |
+| 1 | `grid brain write` | owner | `/abs/x --expect none` | exit 2, usage line | no file, no version, no audit line, no index change |
+| 2 | `grid brain write` | owner | `a/b/c --expect none` | exit 2, usage line | same |
 | 3 | `grid brain write` | owner | `notes/x` where knowledge/notes is a symlink to a folder | exit 2, `linked or non-regular target` | nothing written through the link or beside it |
 | 4 | `grid brain write` | owner | `notes/x` where notes/x.md is a symlink | exit 2, `linked or non-regular target` | the link target is unchanged |
-| 5 | `grid brain write` | member | `notes/x --rev <old>` after another write | exit 6, `note changed since read` | note bytes, versions and log.md unchanged |
-| 6 | `grid brain write` | owner | `machines/x --rev none`, a folder that is not a versioned knowledge topic (the unversioned folder) | exit 7, `not versioned; nothing written` | same; no folder made |
-| 6b | `grid brain write` | owner | `notes/x --rev <current>` where notes/x.md has no stored version | exit 7, same text | same |
+| 5 | `grid brain write` | member | `notes/x --expect <old>` after another write | exit 6, `note changed since read` | note bytes, versions and log.md unchanged |
+| 6 | `grid brain write` | owner | `machines/x --expect none`, a folder that is not a versioned knowledge topic (the unversioned folder) | exit 7, `not versioned; nothing written` | same; no folder made |
+| 6b | `grid brain write` | owner | `notes/x --expect <current>` where notes/x.md has no stored version | exit 7, same text | same |
 | 7 | app knowledge write | owner | plugin exits 7 | 409 `refused` | no raw write by the app, no file |
 | 8 | `grid brain write` | GRID_ROLE=member | replace a note whose file says `type: workflow` | exit 0, the note written, an `edited` audit line naming the member (owner answer 3, 11 Nov) | a refusal; an audit line without the author |
 | 9 | `grid brain write` | GRID_ROLE=member | new note whose text says `type: workflow` | exit 0, the note written, a `created` audit line naming the member (owner answer 3) | a refusal; no file |
@@ -92,7 +92,7 @@ Rows 1 to 4 are the four path rows of point 5. Row 5 is the stale rev. Rows 6, 6
 
 ## (d) Order of checks
 
-1. Flags: parse, `--rev` form, `--file`, operand form and ValidName. Exit 2. (Before the role, a usage error leaks nothing.)
+1. Flags: parse, `--expect` form, `--file`, operand form and ValidName. Exit 2. (Before the role, a usage error leaks nothing.)
 2. Role: RevertAllowed(GRID_ROLE). Exit 3. Before reading input, as `grid workflow write` refuses before reading input (contract/README.md:478).
 3. Input: read the file and Note.Validate. Exit 2. A `type: workflow` text is written by owner or member too (owner answer 3).
 4. Store: levelStore(..., writes=true) (internal/braincmd/changes.go:49). Exit 1 through failWith.
@@ -110,7 +110,7 @@ Plugin half (cite on the build's own base):
 - internal/cli/brain.go:14: `Actor:` beside `Role:`, from GRID_WHO, else GRID_ACTOR. The same field drop and restore use; whichever lands second keeps the one `Actor` field.
 - internal/cli/exitcode.go:10: add 6 and 7 to exitStatusHelp. testdata/golden/help.golden follows.
 - internal/brain/note.go:118-122: unchanged. The audit names the actor in log.md only; front matter kinds stay session, job, server, import.
-- internal/cli/contract_inventory_test.go: one row beside the brain rows (:521-523 at 91fadeff), `"brain write": {args: []string{"<topic>/<name>"}, required: map[string]bool{"--rev": true, "--file": true}}`.
+- internal/cli/contract_inventory_test.go: one row beside the brain rows (:521-523 at 91fadeff), `"brain write": {args: []string{"<topic>/<name>"}, required: map[string]bool{"--expect": true, "--file": true}}`.
 - internal/cli/guest_parity_test.go: argv beside :34 and a want beside :441-442 with exit 3 and the role line of (b).
 - internal/cli/gg_unknown_project_walk_test.go: no row. ggProjectKnownOpen has no brain rows since 91fadeff (hr review row 1 point 4); the walk takes members from contract/commands.json and fails a known-open member that answers no_such_project (:290-291, :334). The verb passes by sending an unregistered project through failWith.
 - testdata/golden/brain-help.golden (:1 copies command.go:38).
