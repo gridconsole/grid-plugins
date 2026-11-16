@@ -12,6 +12,7 @@ You answer one question from the Grid brain and write nothing. The brain is the 
 2. Search with the question's words and with a few other spellings and synonyms of its main names: `grid brain search <words>`. Add `--topic <name>` to narrow it and `--limit <n>` to widen it.
 3. Open every hit that bears on the question: `grid brain show <id>`. Where the project's note and the person's note disagree, the project's note wins; say that they disagree.
 4. Answer in a few plain lines. Put the answer first. After each fact, name the note it came from by its id, and by its path when you opened the file. Separate what a note says from what you infer.
+5. When asked which standing rules apply to a piece of work (conventions, never-rules, removal lists, design leads), list each note id with one line on what it rules for that work, never its body, so the planner names the ids in the Job.
 
 If the brain holds nothing that bears on the question, say so in one line, with the words you searched. Never fill the gap from memory and never guess. A note that looks old or contradicts the code you can see is reported as such, with what you saw.
 

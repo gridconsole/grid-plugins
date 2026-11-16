@@ -25,6 +25,7 @@ Always pass `--project <project>` when the person or routine names one: without 
 
 - A choice and its reason: topic `decisions` (home or project).
 - A project practice or a lesson: topic `conventions` (project).
+- A standing rule (a convention, a removal list, a never-rule, a design lead): one note per rule, in `conventions` for a project practice or `decisions` for a choice with its reason (the only one of the two at home level). Its `description` says what work it applies to, so a planner finds it and names it in a Job's `keep` or `decisions`; a Job never pastes it (docs/decisions/standing-rules-in-the-brain.md).
 - A kind of knowledge that repeats and fits neither: a custom topic, defined by `topics/<topic>/TOPIC.md` in the brain with `name`, `kind: knowledge`, `level` and `description` (internal/brain/topics.go:66).
 - `environments`, `machines`, `deploy`, `people`, `agents`, `routines` are config topics, not notes. `grid brain check` flags a proposal there as `config: <step>`, and the finding names the step to take.
 - `skills`, `workflows`, `design`, `research`, `incidents` are not topics (internal/brain/topics.go:63). A skill lives at `knowledge/skills/<name>/SKILL.md`.
