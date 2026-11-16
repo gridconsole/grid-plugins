@@ -63,6 +63,10 @@ FAIL	github.com/gridconsole/grid-plugins/internal/logshift	0.158s
 
 `internal/logshift/logshift_test.go`: five tests, none of them there before; the package had no test file.
 
+## Fix round (P-logshift-lock-fix1)
+
+After `origin/main` landed `internal/hookevents/hookevents_test.go`, `TestFilesStayWithinFilesTimesLimitPlusOneLine` failed on the merged head: `after line 51287 there are 4 files, more than Files=3`. The fourth entry is `events.jsonl.lock`, the lock file this lane adds beside the log; it holds no lines and is not one of the `Files` copies. The test now leaves that one name out of its file count (its bytes still count in the size bound). The row above that says `hookevents [no test files]` is out of date: `hookevents` has tests since that merge. See `docs/lanes/P-logshift-lock-fix1.md`.
+
 ## NOT VERIFIED on a live screen
 
 There is no screen here. Not run: two real `grid hook` processes on a real Grid home; the goroutine tests stand in for them, since flock excludes separate opens inside one process.
