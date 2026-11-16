@@ -23,6 +23,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/hookevents"
 	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/job/frontmatter"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
@@ -181,6 +182,7 @@ func Run(args []string, e Env) int {
 		if lintLevel != "off" {
 			findings = lint.Check(skeleton, w.lintOptions())
 			if lint.HasErrors(findings) {
+				recordJobLint(e.GridHome, task, lintLevel, findings)
 				if lintLevel != "warn" {
 					return output(e, f, report{ID: j.ID, Findings: findings}, 1)
 				}
@@ -914,6 +916,24 @@ func jobLintLevel(gridHome, project string) (string, error) {
 		return l, nil
 	}
 	return "block", nil
+}
+
+// recordJobLint appends the job-lint line of a render whose lint found errors to
+// the hook events log: blocked when the level refuses the Job, warned at warn. It
+// names the task folder's id and the first error. A failure to write is ignored,
+// as for every hook record.
+func recordJobLint(gridHome, taskDir, level string, findings []lint.Finding) {
+	outcome, reason := hookevents.Blocked, ""
+	if level == "warn" {
+		outcome = hookevents.Warned
+	}
+	for _, fd := range findings {
+		if fd.Severity == "error" {
+			reason = fd.Rule + ": " + fd.Message
+			break
+		}
+	}
+	hookevents.Append(gridHome, []hookevents.Record{{Rule: "job-lint", Event: "grid job render", At: time.Now().UTC().Format(time.RFC3339), Outcome: outcome, Task: hookevents.TaskOf(taskDir), Reason: reason}})
 }
 
 // lintOptions is what lint checks a Job against: the task's files and the project's repos.

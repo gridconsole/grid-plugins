@@ -11,6 +11,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/gridconsole/grid-plugins/internal/logshift"
 )
@@ -42,13 +43,30 @@ const (
 )
 
 // Record is one line: the rule as grid hook levels names it, the hook event it was
-// consulted for, when (UTC, RFC 3339) and the outcome. Nothing else is kept: no
-// tool, path, prompt, session or project.
+// consulted for, when (UTC, RFC 3339) and the outcome. A rule that refuses or
+// warns may add the task it refused for (the task folder's id, T-NN) and a short
+// reason; job-lint and stop-check do. Nothing else is kept: no tool, path, prompt,
+// session or project. A line written before Task and Reason existed reads with
+// both empty.
 type Record struct {
 	Rule    string `json:"rule"`
 	Event   string `json:"event"`
 	At      string `json:"at"`
 	Outcome string `json:"outcome"`
+	Task    string `json:"task,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+var folderTask = regexp.MustCompile(`^(T-[0-9]+)(?:-.+)?$`)
+
+// TaskOf is the task id a task folder holds: the T-NN the folder's name starts
+// with (T-10-rate-limits is T-10). A folder named some other way gives its name.
+func TaskOf(folder string) string {
+	name := filepath.Base(folder)
+	if m := folderTask.FindStringSubmatch(name); m != nil {
+		return m[1]
+	}
+	return name
 }
 
 // Path is the log of a Grid home.

@@ -14,6 +14,20 @@ import (
 type ruleRuns struct {
 	order   []string
 	outcome map[string]string
+	task    map[string]string
+	reason  map[string]string
+}
+
+// why keeps the task and the reason a rule refused or warned for. The line a later
+// note writes for the rule carries them.
+func (r *ruleRuns) why(rule, task, reason string) {
+	if r == nil {
+		return
+	}
+	if r.task == nil {
+		r.task, r.reason = map[string]string{}, map[string]string{}
+	}
+	r.task[rule], r.reason[rule] = task, reason
 }
 
 func (r *ruleRuns) note(rule, outcome string) {
@@ -70,7 +84,11 @@ func (o Options) flushRuns() {
 	at := time.Now().UTC().Format(time.RFC3339)
 	recs := make([]hookevents.Record, 0, len(o.runs.order))
 	for _, rule := range o.runs.order {
-		recs = append(recs, hookevents.Record{Rule: rule, Event: event, At: at, Outcome: o.runs.outcome[rule]})
+		rec := hookevents.Record{Rule: rule, Event: event, At: at, Outcome: o.runs.outcome[rule]}
+		if rec.Outcome == hookevents.Blocked || rec.Outcome == hookevents.Warned {
+			rec.Task, rec.Reason = o.runs.task[rule], o.runs.reason[rule]
+		}
+		recs = append(recs, rec)
 	}
 	hookevents.Append(o.Resolver.GridHome, recs)
 }

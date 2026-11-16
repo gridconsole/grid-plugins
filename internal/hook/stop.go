@@ -147,6 +147,7 @@ func checkStop(o Options, in hookio.Input) int {
 	if posted || in.StopHookActive {
 		return 0
 	}
+	o.runs.why("stop-check", hookevents.TaskOf(dir), "Result of Job "+jobID+" not posted on the Feed")
 	if o.Stderr != nil {
 		taskRef := o.Getenv("GRID_TASK")
 		if taskRef == "" {
