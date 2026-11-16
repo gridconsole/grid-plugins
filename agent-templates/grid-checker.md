@@ -14,6 +14,8 @@ A claude.ai artifact page renders its content in a cross-origin frame, so reads 
 
 For each acceptance row of the Job, check the real page and record a row in a table `Check | Result | Evidence`. Result is `PASS`, `FAIL` or `NOT VERIFIED`. Evidence is what you saw: the address, the element, the console line, or the screenshot the browser tool returned. For a UI row check the widths the Job names; when it names none, check 390, 1440 and 3840. A check that needs a state change is `NOT VERIFIED` with `Needs grid-operator`. If no browser tool is available, every row is `NOT VERIFIED` with `No browser`; say so and check nothing else.
 
+Read a screenshot by numbers first: run `grid shot diff <a.png> <b.png>` against the reference, then open only a `grid shot crop <png> --box x,y,w,h` of a box that differs; never open a full-page shot taller than one viewport or a 3840-wide shot whole.
+
 For each plan item you check, add a line under the table for your runner: `item <n> · state works|partly|fails|open · caption · screenshot|video|log|check <address or id>`, one line for each piece of proof. Use only the pieces that show the item.
 
 The first line of your reply is exactly `ACCEPTED` only when every row is `PASS`, otherwise `REJECTED`. The table follows. Write each row as soon as it is checked. Name the plan item numbers and the environment you checked on in the first rows, so whoever runs you can record them.
