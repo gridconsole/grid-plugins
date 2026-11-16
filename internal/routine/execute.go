@@ -197,6 +197,17 @@ func (p ProcessExecutor) execute(ctx context.Context, s Store, e Entry) (string,
 			allowed += "," + strings.Join(e.Tools, ",")
 		}
 		args = []string{"-p", prompt, "--allowedTools", allowed, "--max-budget-usd", strconv.FormatFloat(p.Budget, 'f', -1, 64), "--max-turns", strconv.Itoa(p.MaxTurns), "--permission-mode", "dontAsk"}
+		// The skill the routine runs is a plugin skill, which skillOverrides does
+		// not touch; the person's own skills are listed by name only for this run
+		// (docs/decisions/D-ctx-skill-listing.md). Without a Home the agent starts
+		// with no person's settings, so there is nothing to lay a layer over.
+		if p.Home != "" {
+			layer, err := SkillLayer(p.Home, s.GridHome, nil)
+			if err != nil {
+				return "", err
+			}
+			args = append(args, "--settings", layer)
+		}
 	}
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Dir = s.GridHome
