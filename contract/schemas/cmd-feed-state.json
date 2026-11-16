@@ -42,6 +42,40 @@
           {
             "additionalProperties": false,
             "properties": {
+              "acceptance": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "enum": [
+                            "pending",
+                            "met",
+                            "not met",
+                            "dropped"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "assign": {
                 "anyOf": [
                   {

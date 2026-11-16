@@ -2,14 +2,14 @@ package hook
 
 import "testing"
 
-// The guard events get 30 s so a loaded machine does not time out and let
-// Claude Code skip the hook; every other event keeps its earlier value.
+// Every event but Stop and SubagentStop gets 30 s so a loaded machine does not
+// cut a hook off; Stop and SubagentStop keep 60.
 func TestGuardHookTimeoutsSurviveLoad(t *testing.T) {
 	want := map[string]int{
-		"SessionStart": 10, "UserPromptSubmit": 30, "SubagentStart": 10,
-		"PreToolUse": 30, "PostToolUse": 30, "PreCompact": 10,
-		"Stop": 60, "SubagentStop": 60, "SessionEnd": 10,
-		"PostToolUseFailure": 10, "PermissionRequest": 30,
+		"SessionStart": 30, "UserPromptSubmit": 30, "SubagentStart": 30,
+		"PreToolUse": 30, "PostToolUse": 30, "PreCompact": 30,
+		"Stop": 60, "SubagentStop": 60, "SessionEnd": 30,
+		"PostToolUseFailure": 30, "PermissionRequest": 30,
 	}
 	got := Events()
 	if len(got) != len(want) {

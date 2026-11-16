@@ -109,6 +109,8 @@ A checkpoint is a worker's progress mark inside a Job tenure: the `job`, a short
 }
 ```
 
+A checkpoint can instead mark one acceptance row of the Job: the body is the `job` and an `acceptance` object with the row `id`, its `state` (`met`, `not met`, `not-met` or `pending`) and an optional `note`, for example `{"job": "J-1", "acceptance": {"id": "A1", "state": "met", "note": "go test ./... exit 0"}}`. A worker writes it with `grid job post --type checkpoint` when it proves a row. The fold keeps the latest state and note of each row in the Job's `acceptance` list (record order; a row nothing marked reads `pending`, a row the record drops reads `dropped`, `not-met` reads `not met`), and a result's `acceptance` states overwrite the marks. A row mark leaves the step checkpoint as it was; it still counts as progress for the crash-loop count, as a step checkpoint does. A mark of a row the Job record does not have is ignored with its reason.
+
 Read: contract/schemas/checkpoint.json:92; internal/contract/fold.go:362-365; contract/README.md:160.
 
 ## control

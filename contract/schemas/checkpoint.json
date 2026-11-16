@@ -55,6 +55,48 @@
             {
               "type": "object",
               "properties": {
+                "job": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                },
+                "acceptance": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^A[1-9][0-9]*$"
+                    },
+                    "state": {
+                      "enum": [
+                        "pending",
+                        "met",
+                        "not met",
+                        "not-met"
+                      ]
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "state"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "job",
+                "acceptance"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
                 "ref": {
                   "type": "string",
                   "minLength": 1,

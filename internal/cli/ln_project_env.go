@@ -12,10 +12,10 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
-const projectEnvUsage = "usage: grid project env list|add|edit|remove <project> [--id ID] [--name N] [--kind local|remote|cloud|deploy] [--where W] [--runs R] [--test T] [--how H] [--from F] [--who P]... [--secret NAME:set|missing]... [--approval yes|no] [--json]"
+const projectEnvUsage = "usage: grid project env list|add|edit|remove <project> [--id ID] [--name N] [--kind local|remote|cloud|deploy] [--where W] [--runs R] [--test T] [--how H] [--from F] [--who P]... [--secret NAME:set|missing]... [--step WF:STEP]... [--approval yes|no] [--json]"
 
 // lnEnvFields are the flags that set a field of an environment.
-var lnEnvFields = []string{"name", "kind", "where", "runs", "test", "how", "from", "who", "secret", "approval"}
+var lnEnvFields = []string{"name", "kind", "where", "runs", "test", "how", "from", "who", "secret", "step", "approval"}
 
 // lnEnvRepeat collects a flag that may be given more than once. Set never fails,
 // so the flag package never prints a value back.
@@ -89,9 +89,10 @@ func projectEnv(args []string, env Env) int {
 	how := fs.String("how", "", "how to reach it")
 	from := fs.String("from", "", "what it is made from")
 	approval := fs.String("approval", "", "yes or no")
-	var who, secret lnEnvRepeat
+	var who, secret, step lnEnvRepeat
 	fs.Var(&who, "who", "a person who may use it; repeat for more")
 	fs.Var(&secret, "secret", "NAME:set or NAME:missing; repeat for more")
+	fs.Var(&step, "step", "WF:STEP, a workflow step it runs; repeat for more; one empty value clears them")
 	if err := parsePositionals(fs, args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -161,6 +162,16 @@ func projectEnv(args []string, env Env) int {
 		}
 		secrets = append(secrets, projectenv.Secret{Name: n, Set: state == "set"})
 	}
+	// A step is a workflow and one of its steps; the text is read from the
+	// workflow, so no flag carries it.
+	var steps []projectenv.Step
+	for _, v := range lnEnvClearable(step) {
+		wf, name, ok := strings.Cut(v, ":")
+		if !ok || wf == "" || name == "" {
+			return usage("--step takes WF:STEP, both parts given")
+		}
+		steps = append(steps, projectenv.Step{WF: wf, Step: name})
+	}
 	if *approval != "" && *approval != "yes" && *approval != "no" {
 		return usage("--approval takes yes or no")
 	}
@@ -227,6 +238,21 @@ func projectEnv(args []string, env Env) int {
 			if given["secret"] {
 				named = secrets
 			}
+			// Given steps replace the stored list; a stored text stays when the
+			// same workflow and step are given again.
+			kept := e.Steps
+			if given["step"] {
+				kept = nil
+				for _, s := range steps {
+					for _, old := range e.Steps {
+						if old.WF == s.WF && old.Step == s.Step {
+							s.Text = old.Text
+							break
+						}
+					}
+					kept = append(kept, s)
+				}
+			}
 			if given["approval"] {
 				approve = nil
 				if *approval != "" {
@@ -236,7 +262,7 @@ func projectEnv(args []string, env Env) int {
 			}
 			return projectenv.Entry{ID: e.ID, Name: pick("name", name, e.Name), Kind: pick("kind", kind, e.Kind),
 				Where: pick("where", place, e.Where), Runs: pick("runs", runs, e.Runs), Test: pick("test", test, e.Test),
-				How: pick("how", how, e.How), From: pick("from", from, e.From), Who: people, Secrets: named, Steps: e.Steps, Approval: approve}, nil
+				How: pick("how", how, e.How), From: pick("from", from, e.From), Who: people, Secrets: named, Steps: kept, Approval: approve}, nil
 		})
 		if err != nil {
 			return commandError(env, "grid project env", err)

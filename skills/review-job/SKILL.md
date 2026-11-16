@@ -15,6 +15,12 @@ Steps:
 5. A change outside the Job's write list, a failing or skipped verify, or an existing test edited to pass breaks the Job: must-fix.
 6. Anything else is a one-line note. A note never blocks and nobody starts work on it unless a person asks.
 
+Reading code, as the run-job skill's Helpers section says:
+
+- To check a row in code you do not know, send `grid:scout` for the `path:line` ranges and read only those, because a map costs far less than whole files.
+- Read a large file or log by line range, never whole, because whole-file reads are most of what a session reads.
+- Hand a read-only check longer than a short one to `grid:runner`, which returns pass or fail and only the failing lines.
+
 Bash:
 
 - Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.

@@ -3,6 +3,7 @@ package gridplugins
 
 import (
 	"embed"
+	"slices"
 	"strings"
 )
 
@@ -47,6 +48,16 @@ func AgentFileFor(role string) (string, bool) {
 		return "", false
 	}
 	return string(b), true
+}
+
+// helperAgents are the plugin agents a builder, reviewer or checker hands a read or a
+// run to: grid:scout, grid:runner and grid:library. Their `tools:` are those of an
+// interactive subagent, as a template's are, so a worker spawn does not pass them on.
+var helperAgents = []string{"library", "runner", "scout"}
+
+// IsHelperAgent reports whether a normalized role names one of the helper agents.
+func IsHelperAgent(role string) bool {
+	return slices.Contains(helperAgents, role)
 }
 
 // AgentFor is the text of the file that defines a normalized role: agents/<role>.md,
