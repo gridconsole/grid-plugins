@@ -32,21 +32,25 @@ type Event struct {
 // the guard events (PreToolUse, PermissionRequest, UserPromptSubmit) get 30 so a
 // loaded machine does not time out and let Claude Code skip them. PostToolUse
 // gets 30 too: it carries a person's message to the Job's agent, and a hook cut
-// off late loses it.
+// off late loses it. SessionStart, SubagentStart, PreCompact, SessionEnd and
+// PostToolUseFailure get 30 as well: on a loaded VM (load above 600) SessionStart
+// was cut off at 10 s on 16 Nov (11012 ms at load 878), and the session lost its
+// Grid context and session record; SessionEnd (10567 ms) and PostToolUseFailure
+// (11045 ms) ran past 10 s too (plugin check 2026-11-16T1352Z, Issue 1).
 var events = []struct {
 	Event
 	run func(Options) int
 }{
-	{Event{"SessionStart", "startup|resume|clear|compact|fork", 10}, quiet(func(o Options) { o.record("session start", func() { sessionStart(o) }) })},
+	{Event{"SessionStart", "startup|resume|clear|compact|fork", 30}, quiet(func(o Options) { o.record("session start", func() { sessionStart(o) }) })},
 	{Event{"UserPromptSubmit", "", 30}, remaining},
-	{Event{"SubagentStart", "", 10}, remaining},
+	{Event{"SubagentStart", "", 30}, remaining},
 	{Event{"PreToolUse", "", 30}, quiet(toolUse)},
 	{Event{"PostToolUse", "", 30}, remaining},
-	{Event{"PreCompact", "", 10}, remaining},
+	{Event{"PreCompact", "", 30}, remaining},
 	{Event{"Stop", "", 60}, remaining},
 	{Event{"SubagentStop", "", 60}, remaining},
-	{Event{"SessionEnd", "", 10}, remaining},
-	{Event{"PostToolUseFailure", "", 10}, remaining},
+	{Event{"SessionEnd", "", 30}, remaining},
+	{Event{"PostToolUseFailure", "", 30}, remaining},
 	{Event{"PermissionRequest", "", 30}, quiet(toolUse)},
 }
 

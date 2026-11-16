@@ -28,7 +28,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook posttoolusefailure",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }
@@ -39,7 +39,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook precompact",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }
@@ -61,7 +61,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook sessionend",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }
@@ -73,7 +73,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook sessionstart",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }
@@ -95,7 +95,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/grid\" hook subagentstart",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }
