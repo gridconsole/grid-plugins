@@ -7,13 +7,24 @@ The review is about what a person sees, so it is done on screenshots of the rend
 
 ## Steps
 
-1. **Render and capture.** Open the page in a browser. Capture full-page screenshots at widths 390, 1440 and 3840, in each theme the page supports, plus the important states: empty, loading, error, read-only, a dialog or panel open. File each one: `grid proof add <item> <file> --kind screenshot --note "<width, theme, state>" --by <agent> --task <task>`.
+1. **Render and capture.** Open the page in a browser. Capture screenshots at widths 390, 1440 and 3840, in each theme the page supports, plus the important states: empty, loading, error, read-only, a dialog or panel open. The widths are widths to measure; a capture is filed, and it is read only by the rules in "Numbers before pictures". File each one: `grid proof add <item> <file> --kind screenshot --note "<width, theme, state>" --by <agent> --task <task>`.
 2. **Load project rules.** Read the project's design rules: its `DESIGN.md` or design notes, the README of each component the page uses, and `grid brain search <words>` for decisions and conventions. They are checked with the checklist below and win where they conflict.
 3. **Load the decided design and the page's job.** Find what is already decided for this page (the app shell, navigation, where a task opens, colour and state rules) and the Job's statement of who uses the page and what they come to do. Write the page's job in one sentence. A page that ignores a decided layout, or does its job less clearly than it could, fails even when every measured check passes.
 4. **Measure.** Run `measure.js` (beside this file) inside the rendered page at each width. It returns contrast ratios from computed colours, font families and sizes, text under 11px, sentences in monospace, sideways scroll, boxes that clip or scroll sideways, and, at 390, tap targets under 44 by 44px. Use its numbers instead of estimating from the image. File them: `grid proof add <item> --text "<numbers>" --kind check --by <agent> --task <task>`.
-5. **Review with fresh eyes.** Hand the screenshots, the Job (`grid job show <task> <job>`), the project rules, the measurements, the checklist and the output format to a separate subagent that did not build the page. It judges only what it can see.
+5. **Review with fresh eyes.** Hand the crops (never a whole tall or 3840-wide screenshot), the Job (`grid job show <task> <job>`), the project rules, the measurements, the checklist and the output format to a separate subagent that did not build the page. It judges only what it can see.
 6. **Fix and recheck.** Fix the high and medium findings, capture again, review once more. Stop after two rounds; list what is left in the Job result, as NOT DONE rows, rather than churning.
 7. **Feed back.** A finding this project has had before is proposed to the brain so the next build avoids it: `grid brain propose --topic conventions ...` (see the `brain-keeper` skill, including the link-with-a-why rule).
+
+## Numbers before pictures
+
+A full-page PNG can cost hundreds of thousands of characters of context on every later turn, and one wider than 1568 px is scaled down before you see it, so small text blurs. Each rule has its reason:
+
+1. Compare numbers first: element boxes, computed sizes and colours, the `measure.js` output, and for a before and after `grid shot diff <a.png> <b.png>`, which prints the boxes that differ with a percentage each. A number is exact and costs a line; a picture only suggests.
+2. Open only a crop of a part that differs or that a number could not settle: `grid shot crop <png> --box x,y,w,h`, which scales to at most 1568 px on the long side so every pixel you pay for is seen. A box line from `grid shot diff` is already in that form.
+3. Never open a full-page screenshot taller than one viewport: its height multiplies the cost and blurs it when scaled. Crop a viewport-high band or the element's box.
+4. Never open a 3840-wide screenshot whole: it is scaled by more than half before you see it. Measure at 3840, then crop the box that matters.
+5. Keep 390, 1440 and 3840 as widths to measure, not images to read: the numbers at each width (overflow, tap target sizes, line length, text size) decide the row, and a crop is evidence only for what they cannot settle.
+6. A visual checklist item below (squint test, focal point, rhythm) is judged on one crop of the first view at 1440, not on every width.
 
 ## Checklist
 
@@ -74,7 +85,7 @@ Why it matters: one sentence tied to the standard
 Fix: one concrete change
 ```
 
-With no browser, write the review from the code and mark every screenshot-based claim NOT VERIFIED, naming the widths 390, 1440 and 3840.
+With no browser, write the review from the code and mark every screenshot-based claim NOT VERIFIED, naming the widths 390, 1440 and 3840. A claim settled by numbers or by a crop is verified.
 
 End with one or two sentences on what already works, so fixes do not undo it. Do not pad the list.
 

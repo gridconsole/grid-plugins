@@ -5365,6 +5365,69 @@
       ]
     },
     {
+      "name": "shot",
+      "summary": "crop a PNG to a box and scale it down; diff two PNGs into boxes with a percentage each",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "crop",
+          "args": [
+            "\u003cpng\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--box",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--max",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--out",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "diff",
+          "args": [
+            "\u003cpng-a\u003e",
+            "\u003cpng-b\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--threshold",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--tile",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
       "name": "eval",
       "summary": "list, run and show task evaluations; export-suite writes plugin eval cases",
       "built": true,

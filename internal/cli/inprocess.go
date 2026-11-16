@@ -159,6 +159,8 @@ var hsIpTable = map[string]hsIpVerb{
 	"setup":      {},
 	"signal":     {},
 	"artifact":   {},
+	// shot.go reads and writes the PNG files it is given, by path from the Call's Cwd.
+	"shot": {},
 	"eval": {subs: map[string]hsIpSub{
 		"list": {},
 		// evalcmd/command.go:169 waits on os.Interrupt; :175 runs the agent under evaluation as a child.
