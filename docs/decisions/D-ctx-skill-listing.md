@@ -23,4 +23,5 @@ Every skill in Claude Code's listing adds its description to the context of ever
 ## Not decided here
 
 - Measuring the real listing size of a routine run needs a live `claude` and was not done.
+- A person may already have set one of their own skills to `off` or `user-invocable-only` in their settings. The layer's `name-only` for that name may then list it again in a routine run. The docs read here do not say whether `--settings` merges `skillOverrides` name by name or replaces the whole map. A follow-up can carry the person's stricter value into the layer.
 - On Windows a `claude.cmd` shim may quote the inline JSON differently from `claude.exe`. That was not tried. If it proves a problem, the same layer can go in a temporary file whose path is passed to `--settings`.
