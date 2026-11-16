@@ -98,7 +98,7 @@ func settingsPackageBypasses(file string, f *ast.File) []string {
 	var problems []string
 	allowedReads := map[*ast.Ident]bool{}
 	exports := map[string]string{
-		"AgentNames": "catalog.go", "SkillNames": "catalog.go", "HookNames": "catalog.go",
+		"AgentNames": "catalog.go", "SkillNames": "catalog.go", "HookNames": "catalog.go", "HookRules": "catalog.go", // HookRules is read-only: the rule table and the levels a caller passes in.
 		"ParseAnswers": "setup.go", "ReadHookLevels": "store.go", "ResolveHookLevel": "store.go", "ReadHookLevelsWarn": "store.go", "ResolveHookLevelWarn": "store.go", "Document.MarshalJSON": "store.go", "ReadSkillsOff": "skill_state.go", // The Warn pair read only and return the unknown-key warnings; MarshalJSON writes a Document's unknown keys back as read.
 		"ClaudeBlock": "claude.go", "ClaudeSetupCommand": "claude.go", "RunClaudeSetup": "claude.go", "claudeInvalid.Error": "claude.go",
 		"ClaudeSettingsPath": "claude.go", "ReadClaudeAllowStatus": "claude_status.go", "ReadClaudeDenyStatus": "claude_status.go", "ReadClaudeSandbox": "claude_status.go", // Read-only setup diagnostics; no Store access.

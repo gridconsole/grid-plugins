@@ -191,6 +191,11 @@
           "args": [],
           "flags": [
             {
+              "name": "--detail",
+              "takes": "none",
+              "required": false
+            },
+            {
               "name": "--json",
               "takes": "none",
               "required": false

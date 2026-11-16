@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/settings"
@@ -22,7 +23,7 @@ func settingsUsage(kind string, env Env) {
 	case "skill":
 		fmt.Fprintln(env.Stdout, "Usage: grid skill enable|disable <skill> [--project P]\n       grid skill list [--project P] [--json]")
 	case "hook":
-		fmt.Fprintln(env.Stdout, "Usage: grid hook level <hook> off|warn|block [--project P]\n       grid hook levels [--json]\n       grid hook events [--all] [--json]\nEvery hook takes any level; host-guard, only-writer and plan-guard default to warn.")
+		fmt.Fprintln(env.Stdout, "Usage: grid hook level <hook> off|warn|block [--project P]\n       grid hook levels [--json] [--detail]\n       grid hook events [--all] [--json]\nEvery hook takes any level; host-guard, only-writer and plan-guard default to warn.")
 	}
 }
 
@@ -65,8 +66,10 @@ func runSettings(kind string, args []string, env Env) int {
 	project := new(string)
 	asJSON := fs.Bool("json", false, "print JSON")
 	model, effort := new(string), new(string)
+	detail := new(bool)
 	if listing && kind == "hook" {
 		// hook levels answers for the current project only.
+		detail = fs.Bool("detail", false, "add each rule's events and description")
 	} else if listing {
 		project = fs.String("project", "", "registered project name or id; defaults to the current project")
 	} else {
@@ -111,6 +114,20 @@ func runSettings(kind string, args []string, env Env) int {
 			levels, err := settings.ReadHookLevels(store.Home, store.Project)
 			if err != nil {
 				return commandError(env, kind, err)
+			}
+			if *detail {
+				rules := settings.HookRules(levels)
+				if *asJSON {
+					return writeJSON(env.Stdout, rules)
+				}
+				for _, r := range rules {
+					names := make([]string, len(r.Events))
+					for i, e := range r.Events {
+						names[i] = e.Event
+					}
+					fmt.Fprintf(env.Stdout, "%s %s [%s] %s\n", r.Name, r.Level, strings.Join(names, ","), r.Desc)
+				}
+				return 0
 			}
 			if *asJSON {
 				return writeJSON(env.Stdout, levels)

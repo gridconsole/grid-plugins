@@ -31,6 +31,66 @@ var skills = []string{"brain-keeper", "browser", "deliver", "plan-jobs", "questi
 var hooks = []string{"history-log", "home-allow", "host-guard", "job-lint", "needs-you", "only-writer", "plan-guard", "session-check", "session-end", "session-start", "stop-check", "usage-log"}
 var levels = []string{"off", "warn", "block"}
 
+// HookEvent is one hook event a rule runs on, named as hooks/hooks.json names it.
+// Matcher is that entry's matcher, empty when the entry has none.
+type HookEvent struct {
+	Event   string `json:"event"`
+	Matcher string `json:"matcher,omitempty"`
+}
+
+// HookRule is one row of grid hook levels --json --detail: the rule, its level,
+// the events it runs on and a one-line description. A rule that no hook event
+// runs has an empty Events (job-lint runs in grid job render).
+type HookRule struct {
+	Name   string      `json:"n"`
+	Level  string      `json:"level"`
+	Events []HookEvent `json:"events"`
+	Desc   string      `json:"d"`
+}
+
+type hookInfo struct {
+	name   string
+	events []HookEvent
+	desc   string
+}
+
+// sessionStartMatcher is the matcher hooks/hooks.json gives SessionStart.
+const sessionStartMatcher = "startup|resume|clear|compact|fork"
+
+// hookInfos holds, for each name in hooks, the events the rule runs on and what it
+// does. The events are those the code consults the rule on (internal/hook), each
+// named as hooks/hooks.json wires it; TestHookInfoEventsAreWired fails when this
+// table and hooks.json disagree.
+var hookInfos = []hookInfo{
+	{"history-log", []HookEvent{{"PreToolUse", ""}, {"PostToolUse", ""}, {"SubagentStop", ""}}, "Writes file edits, Bash commands, finished subagents and brain reads to the task history."},
+	{"home-allow", []HookEvent{{"PermissionRequest", ""}, {"PreToolUse", ""}}, "Allows a tool call inside the Grid home so the person is not asked."},
+	{"host-guard", []HookEvent{}, "Retired: no hook runs it, so its level changes nothing."},
+	{"job-lint", []HookEvent{}, "Checks a Job when grid job render builds it; block refuses a Job with lint errors."},
+	{"needs-you", []HookEvent{}, "No hook runs it yet, so its level changes nothing."},
+	{"only-writer", []HookEvent{}, "Retired: ownership is a Claude Code deny rule now, so its level changes nothing."},
+	{"plan-guard", []HookEvent{{"PreToolUse", ""}, {"PermissionRequest", ""}}, "Checks plan folder names and agent role folders on a write; block refuses it, warn says it."},
+	{"session-check", []HookEvent{}, "No hook runs it yet, so its level changes nothing."},
+	{"session-end", []HookEvent{{"SessionEnd", ""}, {"SubagentStop", ""}}, "Records how a worker's session ended on its Job."},
+	{"session-start", []HookEvent{{"SessionStart", sessionStartMatcher}}, "Gives a starting session its Grid context."},
+	{"stop-check", []HookEvent{{"Stop", ""}, {"SubagentStop", ""}}, "Refuses a stop while an agent's Job has no result on the Feed."},
+	{"usage-log", []HookEvent{{"SessionStart", sessionStartMatcher}, {"SubagentStop", ""}, {"PostToolUse", ""}}, "Records token usage and transcript references of sessions and subagents."},
+}
+
+// HookRules returns every rule with its level from levels (a name missing there
+// reads the default), the events it runs on and its description, in the order of
+// HookNames.
+func HookRules(levels map[string]string) []HookRule {
+	out := make([]HookRule, 0, len(hookInfos))
+	for _, h := range hookInfos {
+		level := levels[h.name]
+		if level == "" {
+			level = defaultLevel(h.name)
+		}
+		out = append(out, HookRule{Name: h.name, Level: level, Events: slices.Clone(h.events), Desc: h.desc})
+	}
+	return out
+}
+
 // retiredHooks are hooks removed from Grid. A settings.json written earlier may
 // still name one; the file reads without error and the entry is ignored.
 var retiredHooks = []string{"brief-lint", "precompact", "subagent-start", "topic-trigger", "user-prompt"}
