@@ -1,6 +1,6 @@
 ---
 name: setup
-description: First run of Grid for a person or a project: read the person's repos and their existing Claude Code sessions, propose what Grid should hold about the project, and record it with `grid setup`. Use when the person says "set up Grid", "set up <project>", "read my repo and my history and tell Grid what you found".
+description: Read the person's repos and Claude Code sessions and record what Grid should hold about a project. Use when the person says "set up Grid" or "set up <project>".
 ---
 
 # Setup

@@ -1,6 +1,6 @@
 ---
 name: questions
-description: Ask a person a question on a Grid task, record their answer, or withdraw it. Use when work needs a decision only a person can make, or the person says "ask Sam which ...", gives an answer, or a question is no longer needed.
+description: Ask a person a question on a Grid task, record their answer, or withdraw it. Use when only a person can decide, or the person answers.
 ---
 
 A question is for a person point only. "Tasks carry on by themselves until a person point": never ask whether to rework, never ask about a refused command, never ask about the brain, and never ask what a default or the brain already answers (`grid brain search <words> --task <task>`).
