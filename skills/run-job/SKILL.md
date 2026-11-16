@@ -56,6 +56,15 @@ A security problem you meet, in or outside your scope, is posted at once as a `f
 
 Done: every row has a line, the verify exit codes are pasted, and the result is posted.
 
+## Helpers
+
+The plugin ships three Haiku agents for heavy reads; each answers short, so your own context stays small.
+
+- A code area you do not know yet: send `grid:scout` for the `path:line` ranges that matter, then read only those ranges, because a map costs far less than reading the files whole.
+- A test, build or lint run longer than a short check: hand it to `grid:runner`, which returns pass or fail and only the failing lines, because the full output would fill your context.
+- A large file or log: read a line range (Read with offset and limit, or Grep for the lines), never the whole file, because whole-file reads are most of what a session reads.
+- A question earlier work may already answer: ask `grid:library`, because it searches the brain and names the notes it used.
+
 ## Bash
 
 - Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.

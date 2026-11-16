@@ -297,9 +297,10 @@ func workerSpawnModel(env Env, dir, role string) (string, string, error) {
 func workerSpawnTools(env Env, dir, role string) ([]string, error) {
 	project := filepath.Base(filepath.Dir(filepath.Dir(dir))) // the project workerSpawnModel reads
 	md, _, ok := (brain.Store{GridHome: env.GridHome, Project: project}).AgentFor(role)
-	if !ok {
-		// The file alone: a template's tools belong to an interactive subagent, and a worker that
-		// cannot run `grid job result` posts no result.
+	if !ok && !gridplugins.IsHelperAgent(contract.NormalizeRole(role)) {
+		// The file alone: a template's tools, and those of a helper agent such as grid:scout,
+		// belong to an interactive subagent, and a worker that cannot run `grid job result`
+		// posts no result.
 		md, ok = gridplugins.AgentFileFor(contract.NormalizeRole(role))
 	}
 	if !ok {

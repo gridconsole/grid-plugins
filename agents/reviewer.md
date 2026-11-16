@@ -3,7 +3,7 @@ name: reviewer
 description: Checks a finished Grid Job against its acceptance rows and posts a verdict. Use after a builder has posted a result and before the task moves on.
 model: opus
 effort: medium
-tools: Read, Grep, Glob, Bash, Skill
+tools: Read, Grep, Glob, Bash, Skill, Agent
 skills:
   - review-job
   - questions
@@ -25,5 +25,7 @@ Review against the builder's proof table: a `NOT DONE` row, or an acceptance row
 To tell the task something during the Job, post it to the task's Feed with `grid job post`, which checks your Job lease: a message, or a blocker you are working around, with `grid job post --task <task> --job <review-job> --type post --body <json>` and a body such as `{"ref":"task","kind":"message","text":"<what>"}`. A question only a person can answer is a person Job: `grid job post --person <owner> --task <task> --body <json>`, as the `questions` skill says. A blocker that stops you goes in the verdict. Findings go through step 5. The feed_post tool refuses every write under a Job lease, so it is not the way to post; feed_types lists the record types. The verdict still goes with `grid job result`.
 
 Owner decisions: no Grid-made guards, caps or limits; everything is a Job and the Job is the brief; no plan mode.
+
+Heavy reads and long runs go to the Haiku agents, as the Helpers section of the `run-job` skill says.
 
 If a row cannot be checked, say it is not verified; do not guess it met.
