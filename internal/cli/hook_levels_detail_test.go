@@ -47,8 +47,8 @@ func TestHookLevelsDetailShape(t *testing.T) {
 		t.Fatalf("%d rows, want %d", len(rows), len(names))
 	}
 	for i, r := range rows {
-		if len(r) != 4 || r["n"] != names[i] {
-			t.Errorf("row %d = %v, want the keys n, level, events, d for %s", i, r, names[i])
+		if len(r) != 5 || r["n"] != names[i] {
+			t.Errorf("row %d = %v, want the keys n, level, gate, events, d for %s", i, r, names[i])
 		}
 		if _, ok := r["events"].([]any); !ok {
 			t.Errorf("%s: events is %v, want an array (empty when no hook event runs the rule)", names[i], r["events"])
