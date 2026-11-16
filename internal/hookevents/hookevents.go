@@ -23,8 +23,11 @@ const (
 	// Limit and Files bound the log the way grid open bounds the app log
 	// (logshift): the log is shifted to events.jsonl.1 at Limit bytes and the
 	// oldest copy is dropped, so Files files of about Limit bytes are the most that
-	// stay. At about 100 bytes a line that is some 7,500 lines.
-	Limit = 256 << 10
+	// stay: at most 6 MiB an account. At about 100 bytes a line that is some 60,000
+	// lines, which is over 3 hours at 250 lines a minute. A busy lane account writes
+	// about 200 lines a minute, and the old 3 x 256 KiB (about 7,500 lines) covered
+	// only some 40 minutes, less than the hourly check window.
+	Limit = 2 << 20
 	Files = 3
 )
 
