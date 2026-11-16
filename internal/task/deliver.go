@@ -327,7 +327,7 @@ func tiOutcomeDelivered(branch, head string) string {
 // binds step metadata (plan.Digest). A task already at step ship, a task with no
 // approval and an approval of an older plan get the state table's refusal.
 func (d delivery) nextState(t Task, data []byte) (string, error) {
-	next, err := NextState(t.State, "status", "waiting")
+	next, err := nextStateOf(t.ID, t.State, "status", "waiting")
 	if err == nil || t.State != "waiting" {
 		return next, err
 	}

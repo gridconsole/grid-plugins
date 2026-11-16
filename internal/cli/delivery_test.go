@@ -279,7 +279,7 @@ func TestDeliverSuccessAndDryRun(t *testing.T) {
 	}
 	// A task already at the ship gate cannot move to waiting again; the person
 	// sends it back, and delivery then replaces the section without inventing an approval.
-	if code := h.run(dir, "deliver", "Updated outcome"); code != 1 || !strings.Contains(h.errb.String(), `current state "waiting"`) {
+	if code := h.run(dir, "deliver", "Updated outcome"); code != 1 || !strings.Contains(h.errb.String(), `is already waiting`) {
 		t.Fatal(code, h.errb)
 	}
 	if code := h.run(dir, "task", "status", "T-01", "running"); code != 0 {

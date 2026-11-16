@@ -136,7 +136,7 @@ func TestDeliverFollowsTheStateTable(t *testing.T) {
 			if err == nil {
 				t.Fatal("delivered")
 			}
-			if state != "closed" && !strings.Contains(err.Error(), `current state "`+state+`"`) {
+			if state != "closed" && !strings.Contains(err.Error(), state) {
 				t.Fatal(err)
 			}
 			for name, want := range snapshot {

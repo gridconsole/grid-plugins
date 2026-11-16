@@ -44,7 +44,7 @@ func TestStateMachine(t *testing.T) {
 					if got != want || (err != nil) != (want == "") {
 						t.Fatalf("got %q, %v; want %q", got, err, want)
 					}
-					if err != nil && !strings.Contains(err.Error(), `current state "`+from+`"`) {
+					if err != nil && !strings.Contains(err.Error(), from) {
 						t.Fatal(err)
 					}
 				})

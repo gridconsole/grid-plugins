@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -171,7 +172,7 @@ func flakeCRChild(t *testing.T) {
 			data, _ := json.Marshal(event)
 			fmt.Println(string(data))
 			moves++
-		case strings.Contains(err.Error(), "current state"):
+		case errors.Is(err, ErrStateMove):
 			if refused == 0 {
 				fmt.Println(koTfRefused)
 			}

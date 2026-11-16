@@ -37,6 +37,17 @@ func StateMoves() map[string][]string {
 	}
 }
 
+// States lists the task states of the state table, sorted by name.
+func States() []string {
+	moves := StateMoves()
+	out := make([]string, 0, len(moves))
+	for state := range moves {
+		out = append(out, state)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // ErrStateMove marks a move the state table refuses. NextState returns a
 // stateMoveError that unwraps to it. A plain %w would add the sentinel's words to
 // the refusal; this keeps the text as it was, and a caller classifies the
@@ -54,6 +65,11 @@ func (e *stateMoveError) Unwrap() error { return ErrStateMove }
 // NextState validates a move without touching disk. Stop means closed/stopped,
 // as in the task menu; it records intent, not a claim that a worker was killed.
 func NextState(current, action, requested string) (string, error) {
+	return nextStateOf("", current, action, requested)
+}
+
+// nextStateOf is NextState for the task id, so a refusal can name the task.
+func nextStateOf(id, current, action, requested string) (string, error) {
 	moves := StateMoves()
 	allowed, known := moves[current]
 	if known {
@@ -74,7 +90,25 @@ func NextState(current, action, requested string) (string, error) {
 			}
 		}
 	}
-	return "", &stateMoveError{fmt.Sprintf("cannot %s task in current state %q to %q", action, current, requested)}
+	return "", &stateMoveError{stateMoveText(id, current, action, requested)}
+}
+
+// stateMoveText is the one plain sentence of a refused move, with none of the
+// state table's words. id may be empty when the caller has no task.
+func stateMoveText(id, current, action, requested string) string {
+	name := id
+	if name == "" {
+		name = "the task"
+	}
+	switch {
+	case (action == "stop" || action == "close") && current == "closed":
+		return name + " is already closed"
+	case action == "status" && requested == current:
+		return name + " is already " + current
+	case action == "reopen":
+		return name + " is " + current + "; only a closed task can be reopened"
+	}
+	return name + " is " + current + " and cannot move to " + requested
 }
 
 // Event is a local task write receipt, not a Feed post. The shared contract has
@@ -127,7 +161,7 @@ func (s Store) Change(o WriteOptions) (Event, error) {
 // against the state table, rewrites task.md and appends the receipt.
 func (s Store) change(t Task, o WriteOptions) (Event, error) {
 	var event Event
-	next, err := NextState(t.State, o.Action, o.State)
+	next, err := nextStateOf(t.ID, t.State, o.Action, o.State)
 	if err != nil {
 		return event, err
 	}

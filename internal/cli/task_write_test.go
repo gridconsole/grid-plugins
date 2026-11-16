@@ -81,7 +81,7 @@ func TestTaskWriteCLIValidation(t *testing.T) {
 	if code := h.run(h.home, "task", "close", fixture.ID); code != 0 {
 		t.Fatal(h.errb)
 	}
-	if code := h.run(h.home, "task", "status", fixture.ID, "running"); code != 1 || !strings.Contains(h.errb.String(), `current state "closed"`) {
+	if code := h.run(h.home, "task", "status", fixture.ID, "running"); code != 1 || !strings.Contains(h.errb.String(), `T-01 is closed and cannot move to running`) {
 		t.Fatalf("exit %d: %s", code, h.errb)
 	}
 }
