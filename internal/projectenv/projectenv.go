@@ -27,7 +27,7 @@ const (
 type Entry struct {
 	ID      string
 	Name    string
-	Kind    string // local, remote or cloud; empty when unset
+	Kind    string // local, remote, cloud or deploy (a deploy target); empty when unset
 	Where   string
 	Runs    string
 	Test    string
@@ -101,9 +101,9 @@ func clean(e Entry) (Entry, error) {
 		return Entry{}, errors.New("environment name is required")
 	}
 	switch out.Kind {
-	case "", "local", "remote", "cloud":
+	case "", "local", "remote", "cloud", "deploy":
 	default:
-		return Entry{}, errors.New("environment kind must be local, remote or cloud")
+		return Entry{}, errors.New("environment kind must be local, remote, cloud or deploy")
 	}
 	for _, w := range e.Who {
 		if err := oneLine("who entry", w); err != nil {
