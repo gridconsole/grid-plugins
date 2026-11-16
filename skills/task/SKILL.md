@@ -1,6 +1,6 @@
 ---
 name: task
-description: Start a Grid task from the person's own words, or show where a task stands. Use when the person says "start a task", "new task", "I want to add ...", "here is what the customer sent", "show task T-02", "what is the state of ...", or "list my tasks".
+description: Start a Grid task from the person's own words, or show where tasks stand. Use when the person says "start a task", "I want to add", "show task T-02" or "list my tasks".
 ---
 
 # Task
