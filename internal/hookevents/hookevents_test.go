@@ -125,7 +125,11 @@ func TestFilesStayWithinFilesTimesLimitPlusOneLine(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			names++
+			// events.jsonl.lock is the flock file logshift.Shift takes; it holds no
+			// log lines and is not one of the Files copies. Its bytes still count.
+			if e.Name() != filepath.Base(Path(home))+".lock" {
+				names++
+			}
 			total += fi.Size()
 			if fi.Size() > maxFile {
 				maxFile = fi.Size()
