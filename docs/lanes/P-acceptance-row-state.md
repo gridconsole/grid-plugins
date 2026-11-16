@@ -49,9 +49,11 @@ That is 3 of 5. The app counts `met` over rows that are not `dropped`.
 | run-job skill tells a worker to mark a row when it proves it (one sentence) | HOLDS | skills/run-job/SKILL.md step 7. Skill tests: `go test ./internal/contract/ ./internal/job/... ./internal/hook/` exit 0 |
 | Doc with the worker's command and an example fold | HOLDS | this file; contract/docs/feed-posts.md checkpoint section |
 | New tests fail on base | HOLDS | With main's fold.go, types.go and the two schemas checked out (`git checkout origin/main -- …`), `go test -run TestAr ./internal/contract/ ./internal/cli/` exit 1: `internal/contract/ar_acceptance_rows_test.go:37:19: undefined: AcceptanceRow`, `ar_acceptance_rows_test.go:74:26: j.Acceptance undefined (type *Job has no field or method Acceptance)`, `internal/cli/ar_job_row_mark_test.go:17:72: undefined: contract.AcceptanceRow`. Restored with `git checkout HEAD -- …`; `git status --short` clean |
-| No existing test edited or deleted | HOLDS | `git diff origin/main --stat` adds only ar_acceptance_rows_test.go and ar_job_row_mark_test.go |
-| go test -race of touched packages and their importers | RACE_RESULT |
-| Plugin CLI tests (internal/cli) | in the row above |
+| No existing test edited or deleted | HOLDS | The lane's commits (`git log origin/main..`) add two test files, internal/contract/ar_acceptance_rows_test.go and internal/cli/ar_job_row_mark_test.go, and touch no other test file. `git status --short` was clean after the base run |
+| go test -race of touched packages | HOLDS for the production packages; internal/cli in the next row | `go test -race -count=1` passed (`ok`) for ./contract, ./contract/formats and ./internal/contract (the only production Go package changed). The first run (all importers, -race, default 10m timeout) found a real gap: `TestSessionGolden` (internal/mcp) failed because feed_types prints the checkpoint schema. testdata/golden/mcp-session.golden now holds the new branch; this change forces that golden, so it counts as inside Touches. After that, `go test -race -count=1 ./internal/mcp/` passed (`ok 4.7s`) |
+| go test -race ./internal/cli (whole package; it has only a new test file) | RACE_CLI |
+| Tests of every importer (go list set below) | HOLDS | With -race and the default 10m timeout, `ok` for artifact, brain, braincmd, guard, intent, job, job/jobcmd, job/lint, jobgraph, land, lease, migrate, ports, question, session, settings, signal, task, usage, where, workflow, lib; internal/updates has no tests. The second -race run (40m timeout) passed feed (`ok 533.8s`) and hook (`ok 62.3s`); in the first run hook had failed only on the timing line `hook SessionEnd slow: 3349 ms` under race load. cli and orchestrator timed out under -race twice, each time in a different test that had run only for seconds (TestE1012…, TestTcPressLaterStep, TestGyGpAnswerPersonGuest), with no assertion failure. Without -race: `go test -count=1 -timeout 30m ./internal/cli/ ./internal/orchestrator/` exit 0 (`ok internal/cli 647.6s`, `ok internal/orchestrator 1390.8s`) |
+| Plugin CLI tests (internal/cli) | HOLDS | in the rows above |
 | make lint | HOLDS | `make -C . lint` (go vet ./...) exit 0 |
 | Windows and macOS builds | HOLDS | `GOOS=windows CGO_ENABLED=0 go build ./...` exit 0; `GOOS=darwin CGO_ENABLED=0 go build ./...` exit 0 |
 | Walk tests (plugin) | HOLDS | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` ok; `go test -count=1 ./internal/job/lint/` ok |
@@ -61,7 +63,7 @@ That is 3 of 5. The app counts `met` over rows that are not `dropped`.
 | Whole-module test, cross-repo set | not run, not asked | the orchestrator runs them at landing |
 | make realplugin / RealPlugin tests | not run, not asked | the brief names none for the plugin repo |
 
-Importers of internal/contract (`go list -f '{{.ImportPath}} {{.Imports}} {{.TestImports}}' ./... | grep internal/contract`): internal/artifact, brain, braincmd, cli, contract, feed, guard, hook, intent, job, job/jobcmd, job/lint, jobgraph, land, lease, mcp, migrate, orchestrator, ports, question, session, settings, signal, task, updates, usage, where, workflow, lib; plus ./contract/... for the schemas.
+Importers of internal/contract (`go list -f '{{.ImportPath}} {{.Imports}} {{.TestImports}}' ./... | grep internal/contract`): internal/artifact, brain, braincmd, cli, contract, feed, guard, hook, intent, job, job/jobcmd, job/lint, jobgraph, land, lease, mcp, migrate, orchestrator, ports, question, session, settings, signal, task, updates, usage, where, workflow, lib; plus ./contract/... for the schemas. Importers of the root `contract` package (the embedded schemas) were not listed separately. Tests outside this set that read `skills/` or `contract/docs` by path were not hunted down. The whole-module run at landing covers them.
 
 ## What changed
 
@@ -72,11 +74,16 @@ Importers of internal/contract (`go list -f '{{.ImportPath}} {{.Imports}} {{.Tes
 - internal/contract/types.go: `Job.Acceptance`, `AcceptanceRow`, row state words, `rowState`.
 - internal/contract/fold.go: seeds rows from the Job record, applies row marks and result states, and `applySide` returns an ignore reason.
 - skills/run-job/SKILL.md: one sentence in step 7.
+- testdata/golden/mcp-session.golden: the checkpoint schema that feed_types prints now has the row-mark branch (forced by the schema change).
 - Tests: internal/contract/ar_acceptance_rows_test.go, internal/cli/ar_job_row_mark_test.go.
 
 ## Open
 
 - The app does not read `acceptance` yet: R5 "3 of 5 rows" needs an app lane that counts `met` over non-dropped rows from `grid feed state`.
+- Row states carry across attempts. A re-assigned Job keeps the previous attempt's marks and result states until a worker marks the rows again.
+- A result overwrites a row's note: it is empty for met and not met, and the decision id for dropped.
+- How the app handles the new, always-present `acceptance` key was not checked. The cross-repo set at landing covers it.
+- The `Read:` line refs in the checkpoint section of contract/docs/feed-posts.md predate this lane and no longer point at the right lines.
 - NOT VERIFIED on a live screen: nothing here has a screen; the app side is a later lane.
 
 DONE
