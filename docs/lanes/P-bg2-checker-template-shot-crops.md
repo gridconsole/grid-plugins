@@ -10,7 +10,7 @@ Base sha 656e6bce. Base check: `agent-templates/grid-checker.md:15` says only "t
 | 2. Template pins | HOLDS. `go test -count=1 ./internal/contract/ ./internal/job/ ./internal/cli/ ./internal/settings/ .` exit 0, with no existing test edited. |
 | 3. Walk tests | HOLDS. `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` exit 0. `go test -count=1 ./internal/job/lint/` exit 0. |
 | 4. `make lint` | HOLDS, exit 0 (`go vet ./...`). |
-| 4. `make cross` | darwin/arm64 vet and test compile exit 0; windows/amd64: see the report line below. |
+| 4. `make cross` | HOLDS, exit 0 (darwin/arm64 and windows/amd64, vet and test compile). |
 | 4. Diff touches | The template, the new test file and this doc only. |
 | Merge origin/main | HOLDS. `git fetch origin && git merge origin/main` reported "Already up to date". |
 | Packages importing the changed ones | No Go package imports the test file or the template. The brief's package list is the set run. |
