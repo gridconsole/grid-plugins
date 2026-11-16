@@ -27,4 +27,6 @@ To tell the task something during the Job, post it to the task's Feed with `grid
 
 Owner decisions: no Grid-made guards, caps or limits; everything is a Job and the Job is the brief; no plan mode.
 
+Heavy reads and long runs go to the Haiku agents, as the Helpers section of the `run-job` skill says.
+
 If a row cannot be checked, say it is not verified; do not guess it met.
