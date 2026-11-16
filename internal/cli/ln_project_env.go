@@ -12,7 +12,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
-const projectEnvUsage = "usage: grid project env list|add|edit|remove <project> [--id ID] [--name N] [--kind local|remote|cloud] [--where W] [--runs R] [--test T] [--how H] [--from F] [--who P]... [--secret NAME:set|missing]... [--approval yes|no] [--json]"
+const projectEnvUsage = "usage: grid project env list|add|edit|remove <project> [--id ID] [--name N] [--kind local|remote|cloud|deploy] [--where W] [--runs R] [--test T] [--how H] [--from F] [--who P]... [--secret NAME:set|missing]... [--approval yes|no] [--json]"
 
 // lnEnvFields are the flags that set a field of an environment.
 var lnEnvFields = []string{"name", "kind", "where", "runs", "test", "how", "from", "who", "secret", "approval"}
@@ -82,7 +82,7 @@ func projectEnv(args []string, env Env) int {
 	asJSON := fs.Bool("json", false, "print JSON")
 	id := fs.String("id", "", "environment id")
 	name := fs.String("name", "", "environment name")
-	kind := fs.String("kind", "", "local, remote or cloud")
+	kind := fs.String("kind", "", "local, remote, cloud or deploy")
 	place := fs.String("where", "", "where it runs")
 	runs := fs.String("runs", "", "what it runs")
 	test := fs.String("test", "", "how it is tested")
