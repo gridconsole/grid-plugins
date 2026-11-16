@@ -75,7 +75,7 @@ The plugin ships three Haiku agents for heavy reads; each answers short, so your
 
 ## Brain
 
-- Read the notes the Job's Context names: `grid brain show <note> --task <task>`.
+- What you read from the brain is the SessionStart index and the notes the Job names: the brain lines of its Context (its keep, decisions and links) and, when the brief says entries were cut, the ids in `not_rendered` of the Job's inputs.json (beside its brief.md). Read one whole with `grid brain show <note> --task <task>` when its excerpt is not enough. Read nothing else from the brain by default; a broader question goes to `grid:library`, which answers with note ids. Cite a note by its id; never paste its text into your result.
 - To leave a durable fact for later tasks, propose it: `grid brain propose --task <task> --name <id> --topic <topic> --description <when> --summary <what> --body <text> --source job:<task>/<job>`.
 - When the Job asks for a note, a decision or knowledge to keep (in its intent, the owner's request in its Intent block, or an acceptance row), propose it before you post the result, with the command above: one proposal for each thing asked, topic `conventions` for a practice or a lesson and `decisions` for a choice and its reason. A file in the repo (a README, a doc) does not stand in for the proposal; write the file too only when the Job names it. Nothing else starts a curator Job: `grid deliver` posts one only for proposals that wait.
 - List each proposal in the result's `knowledge`, one string each: `<name> (<topic>): <what it holds>`. A builder whose Job asks for a note fills `knowledge` with it, and a row that asks for the note is `not met` while `knowledge` is `[]`. `[]` is right when the Job asks for nothing to keep.

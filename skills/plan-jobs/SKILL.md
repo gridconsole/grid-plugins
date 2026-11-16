@@ -47,6 +47,16 @@ Point, do not paste. A pasted block goes stale, fills the worker's context and h
 - Post it with `grid job post --task <task> --type job --body '<json>'`, the JSON body in single quotes: the shell runs backticks and `$` inside double quotes, so a backticked `grid deliver ...` in an acceptance row would run there and vanish from the body. A single quote in the text is the JSON escape `\u0027`; or write the body to a file and post it with `--body -` and a `<` redirect from that file.
 - The last Job of a task is the deliver Job: title "Deliver the task", role orchestrator, `after` names every other Job (each with a why; a Job the worker reviews is named with kind `children-done`, so delivery waits until that Job and its review are accepted, or, when the review sends it back, its rework and the rework's review), and it runs `grid deliver --task <task> --outcome <text> --json`.
 
+## Standing rules
+
+A standing rule is one that holds beyond this task: a project convention, a removal list, a never-rule, a design lead. It lives in one brain note, and a Job names the note; it never pastes the rule (docs/decisions/standing-rules-in-the-brain.md).
+
+- Find the rules that apply with `grid brain search "<words>"`, or ask `grid:library` which standing rules apply; it answers with note ids.
+- Name each note the worker must hold to in `keep`, and a note an acceptance row traces to or drops a requirement by in `decisions`. Give each the same id in `links`, `rel: depends-on` (or `decided-by`), with a why that says what it rules in this Job; without one the brief prints a generic reason.
+- A removal list in a note does not replace check 1: the Job still lists the items it removes, one row each; the note says why they go.
+- The brief shows each named note's pointer, summary and an excerpt, and the worker reads it whole with `grid brain show`. Restate the check in your own words: `grid job lint` warns `job.pasted-rule` when the title, an acceptance row or a why copies a sentence of a note the Job names.
+- A rule with no note yet is proposed first (`grid brain propose`, topic `conventions` for a practice, `decisions` for a choice; see brain-keeper), then named.
+
 ## Pointers into plan.md
 
 `plan.md#step-N` resolves only a checklist line `- [ ] N title` (under `## Steps`); a `### Step 1: ...` heading gives `anchor "step-1" not found`. `plan.md#verify` needs a `## Verify` heading with a paragraph under it. plan.md has no other anchors: a slug such as `plan.md#update-install-md` fails. In other files a heading anchor is the heading's slug or its `{#id}`. `## Where it stands` is never a source for `intent` or `read`.
