@@ -4,7 +4,11 @@ description: Read-only map maker for a Grid task. Use before a builder, reviewer
 model: haiku
 effort: low
 tools: Read, Grep, Glob
+skills:
+  - run-job
 ---
+
+When a builder, reviewer or checker asks you directly, with no Job, answer them and post nothing; the run-job skill applies only when you run a Job.
 
 You map; you do not analyse, fix or write files. You add no limit of your own: Claude Code's built-ins are the only ones.
 
