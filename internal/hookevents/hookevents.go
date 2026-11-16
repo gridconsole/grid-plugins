@@ -96,12 +96,32 @@ func Append(gridHome string, recs []Record) {
 	}
 	path := Path(gridHome)
 	logshift.Shift(path, Limit, Files)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0o600)
 	if err != nil {
 		return
 	}
+	// A write cut short (a full disk) leaves a last line with no newline; the next
+	// record would join it and both would be lost. Start a fresh line in the same
+	// write, so only the torn record is lost.
+	if endsTorn(f) {
+		buf = append([]byte{'\n'}, buf...)
+	}
 	_, _ = f.Write(buf)
 	_ = f.Close()
+}
+
+// endsTorn reports whether the file is not empty and its last byte is not '\n'.
+// A file it cannot read counts as not torn.
+func endsTorn(f *os.File) bool {
+	fi, err := f.Stat()
+	if err != nil || fi.Size() == 0 {
+		return false
+	}
+	var last [1]byte
+	if n, _ := f.ReadAt(last[:], fi.Size()-1); n != 1 {
+		return false
+	}
+	return last[0] != '\n'
 }
 
 // Read returns the log newest first, across the shifted copies. A missing log is

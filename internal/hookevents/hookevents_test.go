@@ -162,3 +162,63 @@ func TestFilesStayWithinFilesTimesLimitPlusOneLine(t *testing.T) {
 		t.Fatalf("the files only reached %d bytes: the test did not fill the log", maxTotal)
 	}
 }
+
+// seedLog writes content as the live log of a new Grid home and returns the home.
+func seedLog(t *testing.T, content string) string {
+	t.Helper()
+	home := t.TempDir()
+	if err := os.Mkdir(filepath.Join(home, Dir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Path(home), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return home
+}
+
+func rec(rule string) Record {
+	return Record{Rule: rule, Event: "PreToolUse", Outcome: OK, At: "2026-11-16T09:12:00Z"}
+}
+
+func TestAppendAfterTornLineLosesOnlyTheTornRecord(t *testing.T) {
+	home := seedLog(t, `{"rule":"first","event":"PreToolUse","at":"2026-11-16T09:11:00Z","outcome":"ok"}`+"\n"+`{"rule":"plan-guar`)
+	Append(home, []Record{rec("after")})
+	got, err := Read(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rules []string
+	for _, r := range got {
+		rules = append(rules, r.Rule)
+	}
+	// Newest first: the appended record is read, the torn line is the only one lost.
+	if want := "after,first"; strings.Join(rules, ",") != want {
+		t.Fatalf("Read returned rules %v, want %s", rules, want)
+	}
+}
+
+func TestAppendAfterNewlineAddsNoBlankLine(t *testing.T) {
+	line := `{"rule":"first","event":"PreToolUse","at":"2026-11-16T09:11:00Z","outcome":"ok"}` + "\n"
+	home := seedLog(t, line)
+	Append(home, []Record{rec("after")})
+	b, err := os.ReadFile(Path(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(b), line+`{"rule":"after"`) || strings.Contains(string(b), "\n\n") {
+		t.Fatalf("log after Append = %q, want the old line then the new record with no blank line", b)
+	}
+}
+
+func TestAppendToEmptyOrMissingLogAddsNoLeadingNewline(t *testing.T) {
+	for name, home := range map[string]string{"empty": seedLog(t, ""), "missing": t.TempDir()} {
+		Append(home, []Record{rec("after")})
+		b, err := os.ReadFile(Path(home))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !strings.HasPrefix(string(b), `{"rule":"after"`) {
+			t.Fatalf("%s log starts %q, want the record with no leading newline", name, b)
+		}
+	}
+}
