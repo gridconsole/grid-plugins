@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/hookevents"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/settings"
 )
@@ -166,7 +167,7 @@ func TestRuleRunsNoGridHomeWritesNothing(t *testing.T) {
 // The bound: a log at the limit is shifted to events.jsonl.1 and so on, and no more
 // than the active file and two older copies stay. The oldest copy is dropped.
 func TestRuleRunsLogIsBounded(t *testing.T) {
-	const limit = 256 << 10
+	const limit = hookevents.Limit
 	f := eventSetup(t)
 	dir := filepath.Join(f.home, ".hook-counts")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
