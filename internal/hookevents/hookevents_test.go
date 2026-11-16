@@ -109,14 +109,11 @@ func TestReadReturnsShiftedCopiesInTimeOrder(t *testing.T) {
 func TestFilesStayWithinFilesTimesLimitPlusOneLine(t *testing.T) {
 	home := t.TempDir()
 	n := manyLines
-	var maxLine int64
+	var maxFile int64
 	var maxTotal int64
 	dir := filepath.Dir(Path(home))
-	const longest = 120 // one line of this test is under 120 bytes; checked below
 	writeLines(home, n, func(i int) {
-		if i%97 != 0 && i != n-1 {
-			return
-		}
+		// Checked after every append, so the maximum is the true maximum.
 		ents, err := os.ReadDir(dir)
 		if err != nil {
 			t.Fatal(err)
@@ -130,8 +127,8 @@ func TestFilesStayWithinFilesTimesLimitPlusOneLine(t *testing.T) {
 			}
 			names++
 			total += fi.Size()
-			if fi.Size() > maxLine {
-				maxLine = fi.Size()
+			if fi.Size() > maxFile {
+				maxFile = fi.Size()
 			}
 		}
 		if names > Files {
@@ -145,16 +142,17 @@ func TestFilesStayWithinFilesTimesLimitPlusOneLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, l := range strings.Split(strings.TrimRight(string(b), "\n"), "\n") {
-		if len(l)+1 > longest {
-			t.Fatalf("a line is %d bytes, the bound below assumes under %d", len(l)+1, longest)
-		}
+	// The line numbers rise, so the last line is the longest one written.
+	ls := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	longest := int64(len(ls[len(ls)-1]) + 1)
+	// A file is shifted at its next append once it holds Limit bytes or more, so it
+	// stops less than one line past Limit: no file is above Limit plus one line, and
+	// the log is at most Files files of that size.
+	if maxFile >= Limit+longest {
+		t.Fatalf("a file reached %d bytes, not under Limit %d plus one line of %d bytes", maxFile, int64(Limit), longest)
 	}
-	if maxLine > Limit+int64(longest) {
-		t.Fatalf("a file reached %d bytes, more than Limit %d plus one line", maxLine, int64(Limit))
-	}
-	if bound := int64(Files)*Limit + int64(longest); maxTotal > bound {
-		t.Fatalf("the files reached %d bytes together, more than Files x Limit plus one line = %d", maxTotal, bound)
+	if bound := int64(Files) * (Limit + longest); maxTotal >= bound {
+		t.Fatalf("the files reached %d bytes together, not under Files x (Limit + one line) = %d", maxTotal, bound)
 	}
 	if maxTotal < int64(Files-1)*Limit {
 		t.Fatalf("the files only reached %d bytes: the test did not fill the log", maxTotal)
