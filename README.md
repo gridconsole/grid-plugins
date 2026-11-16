@@ -37,6 +37,7 @@ same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` thro
 - `grid person`, `grid routine`, `grid worker`, `grid session`, `grid intent`, `grid usage`, `grid account`: people, routines, workers, sessions, worker requests, usage, accounts.
 - `grid agent`, `grid claude`, `grid workflow`, `grid skill`, `grid setup`: agent, Claude, workflow and skill settings, and project setup.
 - `grid project`, `grid project-md`, `grid update`, `grid signal`, `grid artifact`, `grid eval`, `grid migrate`: projects, project updates, inbox signals, artifacts, evaluations, home upgrade.
+- `grid shot`: crop a screenshot to a box, and compare two screenshots (below).
 
 The `--json` shapes are in [contract/README.md](contract/README.md).
 
@@ -48,6 +49,20 @@ The `--json` shapes are in [contract/README.md](contract/README.md).
 Tasks use the current folder's project, or Personal when no project applies. `--project` accepts a registered project's name or id, or `personal`. A new task preserves the quoted request exactly in `intent.md`, starts in `state: queued`, and defaults to `size: auto`. `--workflow` stores a workflow name; omitting it leaves selection to the workflow rules. Creation does not start work. `show` needs no id inside a task folder or its descendants. `list` reads one project and optionally filters by an exact state.
 
 `grid mcp` serves the five Feed tools (`feed_post`, `feed_read`, `feed_state`, `feed_types`, `feed_handover`) over stdio MCP. The plugin's `.mcp.json` starts `${CLAUDE_PLUGIN_ROOT}/bin/grid mcp` as the `grid-feed` server, so Claude Code needs nothing more. To run it by hand, build with `make build` and start `./dist/grid mcp` with `GRID_HOME` and the session variables (`GRID_FEED_TASK`, `GRID_JOB`, `GRID_ATTEMPT`, ...) set; it speaks JSON-RPC lines on stdin and stdout. Codex uses `grid feed` in its shell without Feed MCP configuration. See [Feed MCP and Codex](docs/feed-mcp.md) for session context, tools, and examples.
+
+## Screenshots: numbers first, then a crop
+
+A full-page PNG costs far more to read than its answer is worth, and a PNG wider than 1568 px is scaled down before a model sees it, which blurs small text. `grid shot` lets a check compare numbers first and open only the part that differs. It reads and writes PNG files by path and needs no task or project.
+
+    grid shot diff before.png after.png            # text
+    grid shot diff before.png after.png --json
+    grid shot crop after.png --box 0,640,1440,480  # writes after-crop-0-640-1440-480.png
+    grid shot crop after.png --max 1200 --out small.png
+
+- `grid shot diff <png-a> <png-b> [--tile <px>] [--threshold <0-255>] [--json]` prints the boxes where the pictures differ. Text is `differs <p>% in <n> boxes`, then one `x,y,w,h  <p>%` line per box, top to bottom; the box is written as `crop --box` reads it, and the percentage is the share of that box's pixels that differ. The same pictures print `same <w>x<h>`. `--json` has `width_a`, `height_a`, `width_b`, `height_b`, `differs`, `percent` (of the larger picture) and `boxes`, a list (empty when nothing differs) of `x`, `y`, `w`, `h`, `pixels`, `percent`. A channel difference up to `--threshold` (default 8) counts as the same, which hides compression noise; `--threshold 0` compares exactly. Differing pixels in tiles of `--tile` pixels (default 16) that touch join one box. When the sizes differ, the area only one picture has counts as different. It exits 0 whether or not the pictures differ; read `differs`.
+- `grid shot crop <png> [--box x,y,w,h] [--max <px>] [--out <png>] [--json]` cuts the box (x, y from the top left, in pixels; default the whole picture) and scales it down, never up, so its long side is at most `--max` (default 1568). Without `--out` the file is `<png>-crop-<x>-<y>-<w>-<h>.png` beside the input. A box outside the picture is refused and names the picture size. `--json` has `file`, `box`, `width`, `height`, `source_width`, `source_height`, `scale`.
+
+The `browser` and `visual-design-review` skills use these in order: element boxes and computed sizes, then `grid shot diff`, then `grid shot crop` of a box that differs.
 
 ## Doctor
 

@@ -572,6 +572,8 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"artifact link":        {args: []string{"<https-url>"}},
 		"artifact list":        {},
 		"artifact publish":     {args: []string{"<id>"}},
+		"shot crop":            {args: []string{"<png>"}},
+		"shot diff":            {args: []string{"<png-a>", "<png-b>"}},
 		"eval list":            {},
 		"eval run":             {args: []string{"[task]"}},
 		"eval show":            {args: []string{"<run-id>"}},

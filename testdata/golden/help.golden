@@ -40,6 +40,7 @@ Commands:
   setup       record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)
   signal      add, act on, dismiss and move inbox signals
   artifact    import, link, list and publish task artifacts
+  shot        crop a PNG to a box and scale it down; diff two PNGs into boxes with a percentage each
   eval        list, run and show task evaluations; export-suite writes plugin eval cases
   migrate     upgrade the Grid home to this format
 
