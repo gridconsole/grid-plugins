@@ -19,7 +19,7 @@ func bs2Run(t *testing.T, h *harness, args ...string) map[string]any {
 // bs2Steps reads project alpha's stored steps of environment id through list --json.
 func bs2Steps(t *testing.T, h *harness, id string) []any {
 	t.Helper()
-	answer := bs2Run(t, h,"list", "alpha", "--json")
+	answer := bs2Run(t, h, "list", "alpha", "--json")
 	for _, it := range answer["items"].([]any) {
 		m := it.(map[string]any)
 		if m["id"] == id {
@@ -35,7 +35,7 @@ func bs2Step(wf, step string) map[string]any { return map[string]any{"wf": wf, "
 
 func TestBs2EnvAddStepsRepeat(t *testing.T) {
 	h := lnEnvCliHarness(t, "owner", "bo")
-	bs2Run(t, h,"add", "alpha", "--id", "dev", "--name", "A", "--kind", "local", "--step", "build:test", "--step", "ship:deploy")
+	bs2Run(t, h, "add", "alpha", "--id", "dev", "--name", "A", "--kind", "local", "--step", "build:test", "--step", "ship:deploy")
 	got := bs2Steps(t, h, "dev")
 	want := []any{bs2Step("build", "test"), bs2Step("ship", "deploy")}
 	if !reflect.DeepEqual(got, want) {
@@ -45,10 +45,10 @@ func TestBs2EnvAddStepsRepeat(t *testing.T) {
 
 func TestBs2EnvEditSteps(t *testing.T) {
 	h := lnEnvCliHarness(t, "owner", "bo")
-	bs2Run(t, h,"add", "alpha", "--id", "dev", "--name", "A", "--kind", "local", "--step", "build:test", "--step", "ship:deploy")
+	bs2Run(t, h, "add", "alpha", "--id", "dev", "--name", "A", "--kind", "local", "--step", "build:test", "--step", "ship:deploy")
 
 	// An edit with no --step keeps the stored steps.
-	bs2Run(t, h,"edit", "alpha", "--id", "dev", "--name", "B")
+	bs2Run(t, h, "edit", "alpha", "--id", "dev", "--name", "B")
 	if got, want := bs2Steps(t, h, "dev"), []any{bs2Step("build", "test"), bs2Step("ship", "deploy")}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("after an edit without --step: %v, want %v", got, want)
 	}
@@ -65,7 +65,7 @@ func TestBs2EnvEditSteps(t *testing.T) {
 	}
 
 	// Given steps replace the list; the text stays for the same wf and step.
-	bs2Run(t, h,"edit", "alpha", "--id", "dev", "--step", "ship:deploy")
+	bs2Run(t, h, "edit", "alpha", "--id", "dev", "--step", "ship:deploy")
 	got := bs2Steps(t, h, "dev")
 	want := []any{map[string]any{"wf": "ship", "step": "deploy", "text": "Push the build"}}
 	if !reflect.DeepEqual(got, want) {
@@ -73,7 +73,7 @@ func TestBs2EnvEditSteps(t *testing.T) {
 	}
 
 	// A step the stored list did not hold has no text.
-	bs2Run(t, h,"edit", "alpha", "--id", "dev", "--step", "ship:deploy", "--step", "ship:verify")
+	bs2Run(t, h, "edit", "alpha", "--id", "dev", "--step", "ship:deploy", "--step", "ship:verify")
 	got = bs2Steps(t, h, "dev")
 	want = []any{map[string]any{"wf": "ship", "step": "deploy", "text": "Push the build"}, bs2Step("ship", "verify")}
 	if !reflect.DeepEqual(got, want) {
@@ -81,7 +81,7 @@ func TestBs2EnvEditSteps(t *testing.T) {
 	}
 
 	// One empty --step clears the list; the other fields stay.
-	bs2Run(t, h,"edit", "alpha", "--id", "dev", "--step", "")
+	bs2Run(t, h, "edit", "alpha", "--id", "dev", "--step", "")
 	if got := bs2Steps(t, h, "dev"); len(got) != 0 {
 		t.Fatalf("after --step \"\": %v, want none", got)
 	}
@@ -96,7 +96,7 @@ func TestBs2EnvStepRefused(t *testing.T) {
 			h := lnEnvCliHarness(t, "owner", "bo")
 			args := []string{verb, "alpha", "--id", "dev", "--name", "A", "--kind", "local", "--step", bad}
 			if verb == "edit" {
-				bs2Run(t, h,"add", "alpha", "--id", "dev", "--name", "A", "--kind", "local", "--step", "keep:me")
+				bs2Run(t, h, "add", "alpha", "--id", "dev", "--name", "A", "--kind", "local", "--step", "keep:me")
 			}
 			before, existed := lnEnvCliRaw(t, h, "dev")
 			if code := h.run(h.tmp, append([]string{"project", "env"}, args...)...); code != 2 {
