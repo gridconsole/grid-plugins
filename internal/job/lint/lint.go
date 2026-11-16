@@ -260,6 +260,7 @@ func (c *checker) validate(j job.Job, o Options) {
 		}
 	}
 	c.reviewTwice(j)
+	c.pastedRule(j, o)
 	for _, group := range []struct {
 		key   string
 		paths []string
