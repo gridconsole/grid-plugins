@@ -14,7 +14,7 @@ Steps:
 4. For UI, every field comes from the data source the Job names (served op answer, `frame/model.mjs`, decision doc). A field the read lacks is NOT DONE, not a guess. Check at widths 390, 1440 and 3840.
 5. `budget.turns_estimate` is the planner's estimate, not a limit; finish the Job. If you end before every row holds (Claude Code's own limit, a blocker), post the result with the rows left as NOT DONE (`not met` in the result body).
 6. A new test fails on the base and passes on your change; paste the failing lines. Never edit an existing test to make it pass.
-7. Run `grid job verify <job> --task <task>` and the Job's verify command.
+7. Run `grid job verify <job> --task <task>` and the Job's verify command. When you prove an acceptance row, mark it at once so the task shows it met while you work: `grid job post --task <task> --job <job> --type checkpoint --body '{"job":"<job>","acceptance":{"id":"A1","state":"met","note":"<command and exit code>"}}'` (state `met`, `not met` or `pending`).
 8. Post the result with `grid job result --task <task> --job <job> --body <json>`. If it exits 3 the lease or record was rejected: do not retry.
 
 The result is a proof table: one line per acceptance row, each either
