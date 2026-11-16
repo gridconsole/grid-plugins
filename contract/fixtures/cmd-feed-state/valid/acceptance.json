@@ -1,0 +1,65 @@
+{
+  "by_ref": {},
+  "head": null,
+  "hosts": {},
+  "jobs": {
+    "J-1": {
+      "acceptance": [
+        {
+          "id": "A1",
+          "state": "met",
+          "note": "go test ./... exit 0"
+        },
+        {
+          "id": "A2",
+          "state": "met"
+        },
+        {
+          "id": "A3",
+          "state": "met"
+        },
+        {
+          "id": "A4",
+          "state": "not met"
+        },
+        {
+          "id": "A5",
+          "state": "pending"
+        }
+      ],
+      "assign": null,
+      "assign_post": "",
+      "attempt": 0,
+      "checkpoint": null,
+      "close_reason": null,
+      "continues": null,
+      "decisions_needed": [],
+      "discovered_from": null,
+      "exit_reason": "",
+      "exited": "",
+      "gen": 0,
+      "history": [
+        "01M6Y4ZPZFR0G49GQNRPVD45S1"
+      ],
+      "id": "J-1",
+      "lease_expires": "",
+      "needs_lead": false,
+      "open_questions": [],
+      "proposed_jobs": [],
+      "reason": "",
+      "results": [],
+      "review_rounds": 0,
+      "role": "builder",
+      "state": "Started",
+      "status": "running",
+      "submits": [],
+      "task": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "title": "Build example feature",
+      "verified": null
+    }
+  },
+  "needs_you": [],
+  "questions": {},
+  "verdicts": [],
+  "wakes": []
+}

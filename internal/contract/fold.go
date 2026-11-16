@@ -137,6 +137,7 @@ func Fold(posts []Post) State {
 				DiscoveredFrom        *string `json:"discovered_from"`
 				Order                 *int    `json:"order"`
 				Intent                struct{ Owner string }
+				Acceptance            []struct{ ID, State string }
 			}
 			// An old record may still carry review and max_rounds; they are not
 			// decoded, so they are ignored.
@@ -145,7 +146,12 @@ func Fold(posts []Post) State {
 				set(p, "ignored", "Job already exists; revisions need a new Job")
 				continue
 			}
-			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Repo: b.Repo, Status: Posted, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}}
+			// A record row has no state or dropped; one without reads pending.
+			rows := []AcceptanceRow{}
+			for _, a := range b.Acceptance {
+				rows = append(rows, AcceptanceRow{ID: a.ID, State: rowState(a.State)})
+			}
+			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Repo: b.Repo, Status: Posted, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}, Acceptance: rows}
 			personJobs[p.ID] = personJob{b.Role, b.Intent.Owner, b.Kind}
 		case "question":
 			var b struct{ Who string }
@@ -226,7 +232,9 @@ func Fold(posts []Post) State {
 					set(side, "ignored", "Job tenure must start with ack")
 					continue
 				}
-				applySide(j, side)
+				if reason := applySide(j, side); reason != "" {
+					set(side, "ignored", reason)
+				}
 			}
 			continue
 		}
@@ -350,7 +358,23 @@ func Fold(posts []Post) State {
 	return out
 }
 
-func applySide(j *Job, p Post) {
+// applySide applies one Job-side post of the current tenure. It returns why the
+// post is ignored, or "" when it counts.
+func applySide(j *Job, p Post) string {
+	// A checkpoint that marks one acceptance row sets that row's state and note
+	// and leaves the step checkpoint as it was; a row the Job record lacks is ignored.
+	var mark struct {
+		Acceptance *struct{ ID, State, Note string }
+	}
+	if p.Type == "checkpoint" && json.Unmarshal(p.Body, &mark) == nil && mark.Acceptance != nil {
+		row := rowOf(j, mark.Acceptance.ID)
+		if row == nil {
+			return "Job has no acceptance row " + mark.Acceptance.ID
+		}
+		j.History = append(j.History, p.ID)
+		row.State, row.Note = rowState(mark.Acceptance.State), mark.Acceptance.Note
+		return ""
+	}
 	j.History = append(j.History, p.ID)
 	switch p.Type {
 	case "submit":
@@ -361,8 +385,16 @@ func applySide(j *Job, p Post) {
 			ProposedJobs    []ProposedJob   `json:"proposed_jobs"`
 			DecisionsNeeded []string        `json:"decisions_needed"`
 			Verified        json.RawMessage `json:"verified"`
+			Acceptance      []struct{ ID, State, Decision string }
 		}
 		_ = json.Unmarshal(p.Body, &b)
+		// The result's row states are the latest marks; a row the record lacks
+		// is not added.
+		for _, a := range b.Acceptance {
+			if row := rowOf(j, a.ID); row != nil {
+				row.State, row.Note = rowState(a.State), a.Decision
+			}
+		}
 		j.ProposedJobs = append(j.ProposedJobs, b.ProposedJobs...)
 		j.DecisionsNeeded = append(j.DecisionsNeeded, b.DecisionsNeeded...)
 		j.Verified = b.Verified
@@ -392,6 +424,17 @@ func applySide(j *Job, p Post) {
 			j.NeedsLead = true
 		}
 	}
+	return ""
+}
+
+// rowOf returns the Job's acceptance row with this id, or nil.
+func rowOf(j *Job, id string) *AcceptanceRow {
+	for i := range j.Acceptance {
+		if j.Acceptance[i].ID == id {
+			return &j.Acceptance[i]
+		}
+	}
+	return nil
 }
 
 // exitCode keeps a worker-exit code as the writer sent it when it is what the

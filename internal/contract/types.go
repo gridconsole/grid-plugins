@@ -148,8 +148,12 @@ type Job struct {
 	Verified        json.RawMessage `json:"verified"`
 	NeedsLead       bool            `json:"needs_lead"`
 	Order           *int            `json:"order,omitempty"`
-	State           string          `json:"state,omitempty"`
-	StateReason     string          `json:"state_reason,omitempty"`
+	// Acceptance holds the Job record's acceptance rows in record order, each with
+	// the latest state a checkpoint or result of the Job set; a row nothing has
+	// marked reads pending.
+	Acceptance  []AcceptanceRow `json:"acceptance"`
+	State       string          `json:"state,omitempty"`
+	StateReason string          `json:"state_reason,omitempty"`
 
 	ExitCode          json.RawMessage `json:"exit_code,omitempty"`
 	ExitReasonMissing bool            `json:"exit_reason_missing,omitempty"`
@@ -179,6 +183,35 @@ func StateOf(s Status) (state, reason string) {
 		return StateDone, "cancelled"
 	}
 	return StateNotStarted, ""
+}
+
+// The states an acceptance row reads in. A worker may write not-met, the word job
+// lint knows; the fold reads it as not met, the word of the result schema.
+const (
+	RowPending = "pending"
+	RowMet     = "met"
+	RowNotMet  = "not met"
+	RowDropped = "dropped"
+)
+
+// AcceptanceRow is one acceptance row of a Job as the fold reads it. Note is the
+// note that came with the latest mark.
+type AcceptanceRow struct {
+	ID    string `json:"id"`
+	State string `json:"state"`
+	Note  string `json:"note,omitempty"`
+}
+
+// rowState reads a written row state in the fold's words: not-met is not met and
+// an empty state is pending.
+func rowState(s string) string {
+	switch s {
+	case "", RowPending:
+		return RowPending
+	case "not-met":
+		return RowNotMet
+	}
+	return s
 }
 
 type ProposedJob struct {
