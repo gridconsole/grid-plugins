@@ -217,7 +217,14 @@ func TestOjSoTwoSessionsOwnChanges(t *testing.T) {
 		}
 	}
 
-	both("PreToolUse")
+	// The Pre takes the session lock without waiting and skips its history when
+	// the lock is busy (history.go), so two Pres started at once can log a skip.
+	// They run one after the other; the two Posts below stay concurrent.
+	for _, c := range calls {
+		if log := ojSoWait(t, ctx, ojSoStart(rig, f, c.id, "PreToolUse", c.use, c.agent)); log != "" {
+			t.Errorf("PreToolUse of %s: %q", c.id, log)
+		}
+	}
 	for _, c := range calls {
 		a := ojSoActivity(t, f, c.id)
 		for _, other := range calls {
