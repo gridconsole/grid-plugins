@@ -140,7 +140,7 @@ func commands() []command {
 		{"where", "show which project and task a folder belongs to", runWhere},
 		{"open", "open the task page in the browser", runOpen},
 		{"doctor", "check machine health and collect a support bundle", runDoctor},
-		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels", runHook},
+		{"hook", "answer a Claude Code or Codex hook event; set and list hook levels; read hook events", runHook},
 		{"task", "new|show|list|status|lane|merge, stop|close|reopen, history|attach|move (grid task help lists all)", runTask},
 		{"plan", "write, check, items, hash, migrate", runPlan},
 		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, trace", runOrchestratorJob},

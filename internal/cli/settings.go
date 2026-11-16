@@ -22,7 +22,7 @@ func settingsUsage(kind string, env Env) {
 	case "skill":
 		fmt.Fprintln(env.Stdout, "Usage: grid skill enable|disable <skill> [--project P]\n       grid skill list [--project P] [--json]")
 	case "hook":
-		fmt.Fprintln(env.Stdout, "Usage: grid hook level <hook> off|warn|block [--project P]\n       grid hook levels [--json]\nEvery hook takes any level; host-guard, only-writer and plan-guard default to warn.")
+		fmt.Fprintln(env.Stdout, "Usage: grid hook level <hook> off|warn|block [--project P]\n       grid hook levels [--json]\n       grid hook events [--all] [--json]\nEvery hook takes any level; host-guard, only-writer and plan-guard default to warn.")
 	}
 }
 

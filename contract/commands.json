@@ -135,7 +135,7 @@
     },
     {
       "name": "hook",
-      "summary": "answer a Claude Code or Codex hook event; set and list hook levels",
+      "summary": "answer a Claude Code or Codex hook event; set and list hook levels; read hook events",
       "built": true,
       "subcommands": [
         {
@@ -145,6 +145,24 @@
           ],
           "flags": [],
           "json": false,
+          "output": ""
+        },
+        {
+          "name": "events",
+          "args": [],
+          "flags": [
+            {
+              "name": "--all",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
           "output": ""
         },
         {

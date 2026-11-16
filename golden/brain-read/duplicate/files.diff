@@ -1,0 +1,6 @@
+diff --grid a/demo/.hook-counts/events.jsonl b/demo/.hook-counts/events.jsonl
+--- a/demo/.hook-counts/events.jsonl
++++ b/demo/.hook-counts/events.jsonl
+@@ -1 +1,2 @@
+ {"rule":"history-log","event":"brain-read","at":"<TIME>","outcome":"ok"}
++{"rule":"history-log","event":"brain-read","at":"<TIME>","outcome":"ok"}

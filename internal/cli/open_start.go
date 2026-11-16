@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/logshift"
 	"github.com/gridconsole/grid-plugins/internal/worker"
 )
 
@@ -223,24 +224,7 @@ func appStartArgs(name, home string) []string {
 // shiftAppLog shifts path to path.1 ... path.6 when it is appLogLimit bytes or more,
 // as the worker's own log does. The first error that is not a missing file stops the
 // shift; what moved stays moved, and the caller appends to path as before.
-func shiftAppLog(path string) {
-	if fi, err := os.Stat(path); err != nil || fi.Size() < appLogLimit {
-		return
-	}
-	last := fmt.Sprintf("%s.%d", path, appLogFiles-1)
-	if err := os.Remove(last); err != nil && !os.IsNotExist(err) {
-		return
-	}
-	for i := appLogFiles - 2; i >= 0; i-- {
-		from := path
-		if i > 0 {
-			from = fmt.Sprintf("%s.%d", path, i)
-		}
-		if err := os.Rename(from, fmt.Sprintf("%s.%d", path, i+1)); err != nil && !os.IsNotExist(err) {
-			return
-		}
-	}
-}
+func shiftAppLog(path string) { logshift.Shift(path, appLogLimit, appLogFiles) }
 
 // startDetached starts a program that outlives grid open: its own session or process
 // group, no terminal, output in <Grid home>/logs/<name>.log. It runs with args, and

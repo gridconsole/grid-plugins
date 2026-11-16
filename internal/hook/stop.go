@@ -13,6 +13,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/guard"
+	"github.com/gridconsole/grid-plugins/internal/hookevents"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 )
 
@@ -95,13 +96,20 @@ func stopCheck(o Options, in hookio.Input) int {
 		return 0
 	}
 	if level != "warn" {
-		return checkStop(o, in)
+		code := checkStop(o, in)
+		if code != 0 {
+			o.note("stop-check", hookevents.Blocked)
+		}
+		return code
 	}
 	// Preserve the diagnostic while allowing the stop.
 	var warning bytes.Buffer
 	output := o.Stderr
 	o.Stderr = &warning
 	code := checkStop(o, in)
+	if code == 2 {
+		o.note("stop-check", hookevents.Warned)
+	}
 	if output != nil {
 		if code == 2 {
 			fmt.Fprint(output, "Warning: stop-check: ")
