@@ -333,6 +333,9 @@ func machineFile(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if OldAppMachine(dir) {
+		return "", fmt.Errorf("%s is a folder the older Grid app left, not the machine id file; the next grid command that adds a project or a task moves it to %s and makes the id", path, oldAppFolder)
+	}
 	if !st.Mode().IsRegular() || st.Size() > 128 {
 		return "", fmt.Errorf("machine is not a regular ULID file")
 	}
