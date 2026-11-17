@@ -99,8 +99,24 @@ func finishPublication(j *journal) error {
 	if len(j.Published) > 0 && !(j.RemoveHome && !exists(j.Home)) {
 		intact = verifyDigests(j.Home, j.Published, true) == nil
 	}
+	if !j.Rollback {
+		// The worktrees must be where the pointers will name them before the pointers change.
+		if err := placeExternals(j.Externals); err != nil {
+			return err
+		}
+	}
 	if err := applyPointers(j.Pointers); err != nil {
 		return err
+	}
+	if j.Rollback && j.ExternalsVerified {
+		// The pointers name the old place again; the copies in the machine folder were
+		// checked unchanged before the swap and are removed now. A rerun repeats this.
+		for _, x := range j.Externals {
+			if err := os.RemoveAll(x.Target); err != nil {
+				return err
+			}
+		}
+		reached("worktrees-removed")
 	}
 	if j.Rollback {
 		if j.RemoveHome && intact && exists(j.Home) {
@@ -178,10 +194,17 @@ func Rollback(home string) (Result, error) {
 			}
 		}
 	}
+	if err := verifyExternals(old.Externals); err != nil {
+		return Result{}, err
+	}
 	token := randomToken()
 	j := journal{Version: 1, Phase: phasePreparing, Source: old.Source, Home: home, Backup: old.Backup,
 		Stage: home + ".migrate-stage-" + token, Previous: home + ".migrate-previous-" + token,
 		HadHome: true, Rollback: true, RemoveHome: !old.HadHome, Before: old.Published}
+	for _, x := range old.Externals {
+		x.Stage = "" // built and placed by the migration; a rollback only removes the target
+		j.Externals = append(j.Externals, x)
+	}
 	for _, c := range old.Pointers {
 		c.Before, c.After = c.After, c.Before
 		j.Pointers = append(j.Pointers, c)
@@ -228,6 +251,10 @@ func Rollback(home string) (Result, error) {
 	if err := checkPointers(j.Pointers, false); err != nil {
 		return Result{}, err
 	}
+	if err := verifyExternals(j.Externals); err != nil {
+		return Result{}, err
+	}
+	j.ExternalsVerified = len(j.Externals) > 0
 	j.Phase = phasePublishing
 	if err := writeJournal(j); err != nil {
 		return Result{}, err
@@ -257,13 +284,42 @@ func Rollback(home string) (Result, error) {
 	return Result{Backup: j.Backup, Changed: true}, nil
 }
 
+// verifyExternals checks that the worktree folders in the machine folder still hold
+// what the migration put there. A worktree used since is work a rollback must not delete.
+func verifyExternals(xs []externalMove) error {
+	for _, x := range xs {
+		if err := verifyDigests(x.Target, x.Digests, true); err != nil {
+			return fmt.Errorf("rollback refused: worktrees in the machine folder were written after migration (%s): %w", x.Target, err)
+		}
+	}
+	return nil
+}
+
+// validExternals restricts what a journal may name outside the home: a folder one
+// level below a folder called worktrees, with a plain name, not inside the home, and
+// a stage folder beside it made by this migrator.
+func validExternals(xs []externalMove, home string) bool {
+	for _, x := range xs {
+		dir, name := filepath.Split(x.Target)
+		dir = filepath.Clean(dir)
+		if !filepath.IsAbs(x.Target) || filepath.Clean(x.Target) != x.Target || filepath.Base(dir) != "worktrees" || name == "" || name == "." || name == ".." ||
+			within(x.Target, home) || within(home, x.Target) {
+			return false
+		}
+		if x.Stage != "" && (filepath.Clean(x.Stage) != x.Stage || filepath.Dir(x.Stage) != dir || !strings.HasPrefix(filepath.Base(x.Stage), externalStagePrefix) || len(filepath.Base(x.Stage)) <= len(externalStagePrefix)) {
+			return false
+		}
+	}
+	return true
+}
+
 // Restrict mutation targets to the siblings allocated by this migrator. A corrupt
 // journal must not turn recovery into deletion of arbitrary paths.
 func validJournal(j journal, home string) bool {
 	sibling := func(p, prefix string) bool {
 		return filepath.Clean(p) == p && filepath.Dir(p) == filepath.Dir(home) && strings.HasPrefix(p, home+prefix) && len(p) > len(home+prefix)
 	}
-	return j.Version == 1 && j.Home == home && filepath.IsAbs(j.Source) &&
+	return validExternals(j.Externals, home) && j.Version == 1 && j.Home == home && filepath.IsAbs(j.Source) &&
 		(j.Phase == phasePreparing || j.Phase == phasePublishing) &&
 		sibling(j.Stage, ".migrate-stage-") && sibling(j.Previous, ".migrate-previous-") &&
 		filepath.Clean(j.Backup) == j.Backup && filepath.Dir(j.Backup) == home+"-backup"

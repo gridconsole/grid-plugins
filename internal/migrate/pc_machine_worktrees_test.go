@@ -54,7 +54,7 @@ func TestMachineFolderApplyMovesTheWorktreesOutOfTheHome(t *testing.T) {
 	for _, a := range p.Actions {
 		if filepath.IsAbs(a.To) {
 			outside++
-			if !strings.HasPrefix(a.To, filepath.Join(machine, "worktrees", "widget")+string(filepath.Separator)) {
+			if root := filepath.Join(machine, "worktrees", "widget"); a.To != root && !strings.HasPrefix(a.To, root+string(filepath.Separator)) {
 				t.Errorf("action target outside the worktrees folder of the project: %s", a.To)
 			}
 		}

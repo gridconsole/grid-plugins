@@ -153,6 +153,9 @@ func (p *Plan) publish(parent string) (Result, error) {
 		HadHome:  len(p.destination.m) > 0,
 		Pointers: p.pointers,
 	}
+	for _, root := range p.moves {
+		j.Externals = append(j.Externals, externalMove{Target: root, Stage: filepath.Join(filepath.Dir(root), externalStagePrefix+token+"-"+filepath.Base(root))})
+	}
 	if err := writeJournal(j); err != nil {
 		return Result{}, err
 	}
@@ -161,6 +164,9 @@ func (p *Plan) publish(parent string) (Result, error) {
 	// A failed backup is retained for inspection and is never used for publication.
 	fail := func(err error) (Result, error) {
 		os.RemoveAll(j.Stage)
+		if serr := removeStages(j); serr != nil {
+			err = fmt.Errorf("%w; remove the staged worktrees by hand: %v", err, serr)
+		}
 		if rerr := removeJournal(p.Home); rerr != nil {
 			err = fmt.Errorf("%w; remove %s by hand", err, journalPath(p.Home))
 		}
@@ -199,6 +205,9 @@ func (p *Plan) publish(parent string) (Result, error) {
 	reached("backed-up")
 	// The backup is complete and is never written again after this point.
 	if err := p.stage(j.Stage, data); err != nil {
+		return fail(err)
+	}
+	if err := p.stageExternals(&j); err != nil {
 		return fail(err)
 	}
 	if err := p.unchanged(); err != nil {
@@ -266,6 +275,36 @@ func backupTree(root string, s snap, base string) (map[string]digest, error) {
 		return nil, fmt.Errorf("backup verification failed: %w", err)
 	}
 	return digs, nil
+}
+
+// stageExternals copies each folder that goes to the machine folder into a stage folder
+// beside its target, checks the copy against the plan by reading it back, and records
+// its digests. The journal already names the stage folders, so a crash here leaves
+// nothing that recovery cannot find. Nothing is ever written at a target: it must not
+// exist, and the rename that puts the stage there is in finishPublication.
+func (p *Plan) stageExternals(j *journal) error {
+	for i := range j.Externals {
+		x := &j.Externals[i]
+		if exists(x.Target) {
+			return fmt.Errorf("%s already exists; move it aside, then run grid migrate again", x.Target)
+		}
+		if err := p.machineFolder.MkdirAll(filepath.Dir(x.Stage)); err != nil {
+			return err
+		}
+		s := p.outsideSnap(x.Target)
+		digs, err := writeEntries(x.Stage, s.keys, func(rel string) entry { return s.m[rel] })
+		if err != nil {
+			return err
+		}
+		if err := verifyEntries(x.Stage, s, digs, true); err != nil {
+			return fmt.Errorf("staged worktrees verification failed: %w", err)
+		}
+		if x.Digests, err = capture(x.Stage); err != nil {
+			return err
+		}
+		reached("worktrees-staged")
+	}
+	return nil
 }
 
 // stage builds the new home beside the old one, with the machine id made once and
