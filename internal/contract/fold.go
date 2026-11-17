@@ -133,6 +133,7 @@ func Fold(posts []Post) State {
 			var b struct {
 				ID, Title, Role, Kind string
 				Repo                  string
+				Base, Model, Effort   string
 				Continues             *string `json:"continues"`
 				DiscoveredFrom        *string `json:"discovered_from"`
 				Order                 *int    `json:"order"`
@@ -151,7 +152,7 @@ func Fold(posts []Post) State {
 			for _, a := range b.Acceptance {
 				rows = append(rows, AcceptanceRow{ID: a.ID, State: rowState(a.State)})
 			}
-			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Repo: b.Repo, Status: Posted, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}, Acceptance: rows}
+			out.Jobs[b.ID] = &Job{ID: b.ID, Task: p.Task, Title: b.Title, Role: b.Role, Kind: b.Kind, Repo: b.Repo, Base: b.Base, Model: b.Model, Effort: b.Effort, Status: Posted, Continues: b.Continues, DiscoveredFrom: b.DiscoveredFrom, Order: b.Order, Results: []string{}, Submits: []string{}, History: []string{p.ID}, OpenQuestions: []string{}, ProposedJobs: []ProposedJob{}, DecisionsNeeded: []string{}, Acceptance: rows}
 			personJobs[p.ID] = personJob{b.Role, b.Intent.Owner, b.Kind}
 		case "question":
 			var b struct{ Who string }

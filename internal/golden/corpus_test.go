@@ -71,7 +71,7 @@ func cliDriver(t *testing.T) golden.Driver {
 			if home != "" {
 				home = gridhome.Real(home)
 			}
-			gh := gridhome.Dir(getenv, home)
+			gh := gridhome.Resolve(getenv, home).Dir
 			if gh != "" {
 				gh = gridhome.Real(gh)
 			}

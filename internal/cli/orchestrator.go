@@ -17,6 +17,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/job/jobcmd"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
 	"github.com/gridconsole/grid-plugins/internal/land"
@@ -98,8 +99,16 @@ func runOrchestrator(args []string, env Env) int {
 	usageReady := fs.Bool("usage-ready", false, "capacity has been restored for the selected assignee")
 	person := fs.String("person", "", "post a Job for this person (role Person); other Jobs depend on it with after")
 	planHash := fs.String("plan-hash", "", "on job result for a person Job of an approve step: the 6-hex plan_hash or 64-hex plan_digest the person approved")
+	fromBrief := fs.String("from-brief", "", "on job post: post a Job built from this brief file, copied into the task's inputs")
 	if code, stop := parse(fs, rest, env); stop {
 		return code
+	}
+	if *fromBrief != "" {
+		if verb != "post" || *person != "" || *body != "{}" {
+			fmt.Fprintln(env.Stderr, "--from-brief applies to job post, without --person or --body")
+			return 2
+		}
+		*kind = "job"
 	}
 	if *person != "" {
 		if verb != "post" {
@@ -193,6 +202,12 @@ func runOrchestrator(args []string, env Env) int {
 		*owner = taskOwner
 	}
 	store := feed.Store{TaskDir: scope.TaskPath, TaskID: taskID, Warn: env.Stderr}
+	if *fromBrief != "" {
+		if obj, err = jobFromBrief(env, store, scope.TaskPath, *fromBrief, *job); err != nil {
+			return fail(err)
+		}
+		*job, _ = obj["id"].(string)
+	}
 	if verb == "tree" || verb == "blocked" {
 		snap, err := orchestrator.Load(store)
 		if err != nil {
@@ -491,6 +506,39 @@ func refoldAfterWrite(env Env, store feed.Store) {
 	if _, err := refold.RefoldPublished(); err != nil {
 		fmt.Fprintln(env.Stderr, "refold:", err)
 	}
+}
+
+// jobFromBrief copies the brief at src into the task's inputs and answers the Job
+// body job.FromBrief builds from it, with Job id id, or the task's next free Job id
+// when id is empty. A brief whose repo the project does not list is said on stderr
+// and the Job names no repo, so it works in the project's first one.
+func jobFromBrief(env Env, store feed.Store, taskPath, src, id string) (map[string]any, error) {
+	if !filepath.IsAbs(src) {
+		src = filepath.Join(env.Cwd, src)
+	}
+	if id == "" {
+		snap, err := orchestrator.Load(store)
+		if err != nil {
+			return nil, err
+		}
+		id = nextJobID(snap)
+	}
+	input, data, err := job.CopyBrief(taskPath, src)
+	if err != nil {
+		return nil, err
+	}
+	var repos []string
+	if opts, err := jobcmd.LintOptions(taskPath, jobcmdEnv(env, resolver(env))); err == nil {
+		repos = opts.Repos
+	}
+	body, skipped, err := job.FromBrief(id, input, data, repos)
+	if err != nil {
+		return nil, &feed.InvalidRecordError{Err: fmt.Errorf("--from-brief %s: %w", src, err)}
+	}
+	if skipped != "" {
+		fmt.Fprintf(env.Stderr, "grid job post: the brief names repo %s, which the project does not list; the Job works in the project's first repo\n", skipped)
+	}
+	return body, nil
 }
 
 // postFindings lints a Job body with the options grid job render uses. It is told

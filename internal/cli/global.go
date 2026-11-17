@@ -55,6 +55,15 @@ func applyGlobalFlags(args []string, env Env) ([]string, Env, int) {
 		gh = gridhome.Real(gh)
 		over["GRID_HOME"] = gh
 		env.GridHome = gh
+		// Resolve again with this folder, so the workspace and brain are the ones that name it.
+		base := env.getenv
+		env.Resolved = gridhome.Resolve(func(key string) string {
+			if key == "GRID_HOME" {
+				return gh
+			}
+			return base(key)
+		}, env.Home)
+		env.Resolved.Dir, env.Resolved.Source = gh, gridhome.SourceFlag
 		env.Machine = gridhome.Machine(gh)
 	}
 	env.typedGlobal = map[string]bool{}

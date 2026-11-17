@@ -1,0 +1,7 @@
+{
+  "v": 2,
+  "current": "old-one",
+  "workspaces": [
+    {"name": "old-one", "member": "sam-old", "folder": "~/workspace", "setup": "done", "step": null}
+  ]
+}

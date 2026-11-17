@@ -18,7 +18,12 @@ type Job struct {
 	ReviewReason string `json:"review_reason,omitempty"`
 	// Repo names the project repo a code Job works in, by its path in project.md;
 	// empty is the project's first repo.
-	Repo   string   `json:"repo,omitempty"`
+	Repo string `json:"repo,omitempty"`
+	// Base is the branch the Job's clone or worktree starts from; Model and Effort
+	// are what its agent runs on. Empty keeps the role's model and effort.
+	Base   string   `json:"base,omitempty"`
+	Model  string   `json:"model,omitempty"`
+	Effort string   `json:"effort,omitempty"`
 	ID     string   `json:"id"`
 	Item   int      `json:"item"`
 	Title  string   `json:"title"`
