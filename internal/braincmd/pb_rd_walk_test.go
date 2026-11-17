@@ -11,12 +11,15 @@ import (
 // pbRdRow says what a reader of the 2.2 table must look like now. marker is text
 // the file must hold (the new layout's path or id call); old lists the only code
 // lines that may still name knowledge/, the key-absent layout's own paths. exempt
-// is a reason the row is not this lane's; a file with one is still searched for
-// knowledge/ paths in code when old is given.
+// is a reason the row is not this lane's: the file needs no marker. A Go file
+// with an exempt row is still searched for knowledge/ paths in code when search
+// is true (old then lists the lines allowed); without search it is not read at
+// all, so search is set on every exempt Go file that exists.
 type pbRdRow struct {
 	marker string
 	old    []string
 	exempt string
+	search bool
 }
 
 // pbRdTable has one entry per file the 2.2 plugin table names outside
@@ -27,7 +30,7 @@ var pbRdTable = map[string]pbRdRow{
 	"internal/braincmd/ke_rename.go":        {marker: "brain.ValidID"},
 	"internal/braincmd/ke_write.go":         {marker: "brain.ValidID"},
 	"internal/braincmd/hy_drop.go":          {marker: "brain.ValidID"},
-	"internal/braincmd/cb_author_origin.go": {exempt: "ValidName at :19-24 reads session, job and task ids Grid generates; 2.2 keeps ValidName for names Grid makes"},
+	"internal/braincmd/cb_author_origin.go": {search: true, exempt: "ValidName at :19-24 reads session, job and task ids Grid generates; 2.2 keeps ValidName for names Grid makes"},
 	"internal/braincmd/changes.go":          {marker: "brain.ValidID"},
 	"internal/job/source.go":                {marker: "brain.ValidID"},
 	"internal/workflow/brain.go":            {marker: `"grid/workflows"`, old: []string{`"knowledge"`, `"knowledge/"`}},
@@ -50,11 +53,11 @@ var pbRdTable = map[string]pbRdRow{
 	"topics/README.md":                      {marker: "grid/"},
 	"skills/brain-keeper/SKILL.md":          {exempt: "the brain-keeper skill follows the writers (P-brain-format), not in this brief's Touches"},
 	"agents/curator.md":                     {exempt: "the curator agent follows the writers (P-brain-format), not in this brief's Touches"},
-	"internal/hook/brain.go":                {exempt: "the hook's read path is the hook lane's, not in this brief's Touches"},
-	"internal/jobcmd/command.go":            {exempt: "2.2 says Index() is unchanged"},
-	"internal/hook/hook.go":                 {exempt: "2.2 says SessionStart Index() is unchanged in shape"},
-	"internal/mdfile/markdown.go":           {exempt: "SplitOptional is the front-matter split P-brain-vault-read landed; it names no brain path"},
-	"internal/migrate/plan.go":              {exempt: "read by the migration lane (2.2, section 8)"},
+	"internal/hook/brain.go":                {search: true, exempt: "the hook's read path is the hook lane's, not in this brief's Touches; it must still name no knowledge/ path"},
+	"internal/jobcmd/command.go":            {exempt: "2.2 says Index() is unchanged; the file is gone from the tree (the doc line is stale), so it cannot be searched"},
+	"internal/hook/hook.go":                 {search: true, exempt: "2.2 says SessionStart Index() is unchanged in shape"},
+	"internal/mdfile/markdown.go":           {search: true, exempt: "SplitOptional is the front-matter split P-brain-vault-read landed; it names no brain path"},
+	"internal/migrate/plan.go":              {search: true, old: []string{`[]string{"knowledge", "sessions"}`}, exempt: "read by the migration lane (2.2, section 8); its two kind lists (:228, :252) name the old layout's knowledge folder on purpose, to move it"},
 }
 
 var (
@@ -140,7 +143,7 @@ func TestPbRdReaderTableWalk(t *testing.T) {
 			t.Errorf("2.2 names %s, which has no entry in pbRdTable: decide its reader now", p)
 			continue
 		}
-		if row.exempt != "" && row.marker == "" {
+		if row.exempt != "" && row.marker == "" && !row.search {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(p)))
