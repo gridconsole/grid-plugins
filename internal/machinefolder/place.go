@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 )
 
 // Where Grid's per-machine files go. A Folder that is Active sends them to the
@@ -49,6 +50,38 @@ func (f Folder) OpenLog(path string) (*os.File, error) {
 		return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 	}
 	return f.OpenCreate(path, os.O_WRONLY|os.O_APPEND)
+}
+
+// StartLockPath is the lock that makes two grid open calls start the app one after
+// the other: <grid home>/open-start.lock, and launcher/<login>/lock when Active.
+// The lock is the login's own, so a login never waits on, or breaks, another's.
+func (f Folder) StartLockPath(gridHome, login string) (string, error) {
+	if !f.Active() {
+		return filepath.Join(gridHome, "open-start.lock"), nil
+	}
+	l, err := f.Launcher(login)
+	if err != nil {
+		return "", err
+	}
+	return l.LockPath(), nil
+}
+
+// OpenStartLock opens a path from StartLockPath for locking, making it when missing.
+// Not Active it is the open grid open always made: no symlink as the last element,
+// 0600. Active the file is made through OpenCreate (2770 folder, 0660 file in a
+// shared folder) and then opened the same no-symlink way.
+func (f Folder) OpenStartLock(path string) (*os.File, error) {
+	if !f.Active() {
+		return fslock.OpenNoFollow(path, os.O_RDWR|os.O_CREATE, 0o600)
+	}
+	made, err := f.OpenCreate(path, os.O_RDWR)
+	if err != nil {
+		return nil, err
+	}
+	if err := made.Close(); err != nil {
+		return nil, err
+	}
+	return fslock.OpenNoFollow(path, os.O_RDWR, 0)
 }
 
 // StateFile is the file a task's fold is published to: <feed folder>/state.json,

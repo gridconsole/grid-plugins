@@ -133,7 +133,12 @@ func (a *AppStart) ensure(env Env) (string, int) {
 		return p.base, 0
 	}
 	// Two grid open calls at once: the second waits here, then sees the app the first started.
-	lock, err := fslock.OpenNoFollow(filepath.Join(env.GridHome, OpenStartLock), os.O_RDWR|os.O_CREATE, 0o600)
+	lockPath, err := env.MachineFolder.StartLockPath(env.GridHome, env.login())
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "grid open: cannot place %s: %v\n", OpenStartLock, err)
+		return "", 1
+	}
+	lock, err := env.MachineFolder.OpenStartLock(lockPath)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid open: cannot open %s: %v\n", OpenStartLock, err)
 		return "", 1
