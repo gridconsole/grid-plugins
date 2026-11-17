@@ -37,6 +37,9 @@ type Snapshot struct {
 	// a record the fold holds (its after or re target is not here yet) is in
 	// neither State nor Items, but its id is taken. Only the next-id rule reads it.
 	JobIDs []string
+	// Landed is the Job ids the fold holds a landed post for: what a landed
+	// after edge waits for.
+	Landed map[string]bool
 }
 
 func Load(store feed.Store) (Snapshot, error) {
@@ -53,8 +56,11 @@ func Load(store feed.Store) (Snapshot, error) {
 		now = store.Now()
 	}
 	// The person layer keeps a non-person answer from releasing a person gate.
-	state, _ := feed.FoldReadAt(r, now, allowed)
-	s := Snapshot{State: state, Records: map[string]feed.Record{}, Bodies: map[string]map[string]any{}, Created: map[string]time.Time{}}
+	state, loop, _ := feed.FoldReadLoopAt(r, now, allowed)
+	s := Snapshot{State: state, Records: map[string]feed.Record{}, Bodies: map[string]map[string]any{}, Created: map[string]time.Time{}, Landed: map[string]bool{}}
+	for id := range loop.Landed {
+		s.Landed[id] = true
+	}
 	counted := map[string]bool{}
 	for _, v := range s.State.Verdicts {
 		counted[v.ID] = v.Kind == "counted"
@@ -142,7 +148,7 @@ func readyAt(s Snapshot, now time.Time) (jobgraph.Readiness, map[string]time.Tim
 	if err != nil {
 		return jobgraph.Readiness{}, nil, err
 	}
-	input := jobgraph.Snapshot{Jobs: map[string]contract.Job{}, Exhausted: map[string]bool{}, OpenGates: map[string]bool{}, ReadySince: map[string]time.Time{}, CreatedAt: s.Created}
+	input := jobgraph.Snapshot{Jobs: map[string]contract.Job{}, Exhausted: map[string]bool{}, OpenGates: map[string]bool{}, ReadySince: map[string]time.Time{}, CreatedAt: s.Created, Landed: s.Landed}
 	settled := map[string]time.Time{}
 	for id, j := range s.State.Jobs {
 		input.Jobs[id] = *j

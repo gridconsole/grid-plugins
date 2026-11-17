@@ -251,8 +251,8 @@ func (c *checker) validate(j job.Job, o Options) {
 		if !job.ValidID(d.Job) && !regexp.MustCompile(`^gate:Q-[0-9]+$`).MatchString(d.Job) {
 			c.add("job.after", "after", "Invalid dependency "+d.Job, "Use a Job id or gate:Q-<number>.")
 		}
-		if d.Kind != "" && !wordSet("done failed children-done")[d.Kind] {
-			c.add("job.after-kind", "after", "Invalid dependency kind", "Use done, failed or children-done.")
+		if d.Kind != "" && !wordSet("done failed children-done landed")[d.Kind] {
+			c.add("job.after-kind", "after", "Invalid dependency kind", "Use done, failed, children-done or landed.")
 		}
 		if d.Job == j.ID {
 			c.add("job.after-cycle", "after", "A Job cannot depend on itself", "Remove the self-dependency.")
