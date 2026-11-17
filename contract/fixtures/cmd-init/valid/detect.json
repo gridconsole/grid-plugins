@@ -1,0 +1,15 @@
+{
+  "config": "/home/sam/.config/grid/config.json",
+  "found": true,
+  "workspace": "acme",
+  "questions": [
+    {"id": "data", "question": "Where does Grid keep your tasks and work?", "default": "/home/sam/.grid/acme", "source": "config", "asked": true},
+    {"id": "brain", "question": "Brain folder", "default": "/home/sam/.grid/acme", "source": "default", "asked": false},
+    {"id": "member", "question": "Name in Grid", "default": "sam", "source": "config", "asked": true, "note": "shown once, prefilled, to confirm"},
+    {"id": "accounts", "question": "Which agent accounts should Grid use?", "default": [{"id": "claude-sam", "kind": "claude", "email": "sam@example.com", "dir": "/home/sam/.claude", "source": "registry"}], "source": "registry", "asked": false},
+    {"id": "claudeSettings", "question": "Add the Grid entries to Claude Code's settings?", "default": "yes", "source": "default", "asked": true},
+    {"id": "sandbox", "question": "Sandbox", "default": false, "source": "default", "asked": false},
+    {"id": "testDefault", "question": "Test default", "default": "", "source": "default", "asked": false, "note": "asked only in the app"},
+    {"id": "packs", "question": "Packs", "default": [], "source": "default", "asked": false, "note": "asked only in the app"}
+  ]
+}

@@ -40,6 +40,7 @@ Commands:
   project-md  get or set a project front-matter key
   update      draft, edit, discard, skip and send a project's update
   setup       record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)
+  init        ask the first-run questions once (--detect shows them) and write the one config (--answers -)
   signal      add, act on, dismiss and move inbox signals
   artifact    import, link, list and publish task artifacts
   shot        crop a PNG to a box and scale it down; diff two PNGs into boxes with a percentage each

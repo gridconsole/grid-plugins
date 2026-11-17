@@ -1,0 +1,8 @@
+{
+  "config": "/home/sam/.config/grid/config.json",
+  "written": true,
+  "workspace": "acme",
+  "data": "/home/sam/.grid/acme",
+  "member": "sam",
+  "accounts": ["claude-sam"]
+}

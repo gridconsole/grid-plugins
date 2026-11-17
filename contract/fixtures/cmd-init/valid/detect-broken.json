@@ -1,0 +1,10 @@
+{
+  "config": "/home/sam/.config/grid/config.json",
+  "found": true,
+  "problem": "config.json: invalid character '}' looking for beginning of object key string",
+  "workspace": "",
+  "questions": [
+    {"id": "data", "question": "Where does Grid keep your tasks and work?", "default": "/home/sam/.grid", "source": "default", "asked": true},
+    {"id": "member", "question": "Name in Grid", "default": "sam", "source": "login", "asked": true}
+  ]
+}

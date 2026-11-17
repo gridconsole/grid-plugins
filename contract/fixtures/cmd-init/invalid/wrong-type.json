@@ -1,0 +1,8 @@
+{
+  "config": "/home/sam/.config/grid/config.json",
+  "found": "yes",
+  "workspace": "acme",
+  "questions": [
+    {"id": "data", "question": "Where does Grid keep your tasks and work?", "default": "/home/sam/.grid/acme", "source": "config", "asked": true}
+  ]
+}
