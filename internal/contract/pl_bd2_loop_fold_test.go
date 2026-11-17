@@ -78,6 +78,14 @@ func TestPlBd2BlockedThenExitFoldsBlocked(t *testing.T) {
 		{"started moves an assigned Job to running", func(t *testing.T) []Post {
 			return append(base(t)[:2], plBd2Loop(t, "started", 4, 1))
 		}, Running, ""},
+		// No ack: the tenure rule (main's) ignores the result, so a done exit is
+		// left to the tick, as P-loop-board's done exit with no result is.
+		{"launcher only: started, result, exit done, no ack", func(t *testing.T) []Post {
+			return append(base(t)[:2], plBd2Loop(t, "started", 4, 1), side(t, "result", 5), plBd2Exit(t, 7, 1, "done"))
+		}, Running, ""},
+		{"launcher only with blocked", func(t *testing.T) []Post {
+			return append(base(t)[:2], plBd2Loop(t, "started", 4, 1), plBd2Loop(t, "blocked", 6, 1), plBd2Exit(t, 7, 1, "done"))
+		}, Blocked, rule},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			posts := tc.posts(t)
