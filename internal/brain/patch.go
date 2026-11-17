@@ -218,10 +218,10 @@ type filedFront struct {
 	Summary      string `yaml:"summary"`
 	Updated      string `yaml:"updated"`
 	Source       string `yaml:"source"`
-	SupersededBy string `yaml:"superseded_by,omitempty"`
+	SupersededBy string `yaml:"superseded_by"`
 	Level        string `yaml:"level"`
 	Status       string `yaml:"status"`
-	Reason       string `yaml:"reason,omitempty"`
+	Reason       string `yaml:"reason"`
 }
 
 // filedKeys are the keys Grid owns in a filed note. A key outside the list, and
@@ -272,6 +272,17 @@ func EncodeOver(old []byte, n Note) ([]byte, error) {
 	front, err := dumpFiled(n)
 	if err != nil {
 		return nil, err
+	}
+	// An empty superseded_by or reason is written into a new note, but a note
+	// that lacks the key is not given an empty one by a rewrite.
+	have := map[string]bool{}
+	for _, sp := range frontSpans(f.front) {
+		have[sp.key] = true
+	}
+	for _, k := range []string{"superseded_by", "reason"} {
+		if !have[k] {
+			front = strings.Replace(front, "\n"+k+": ''\n", "\n", 1)
+		}
 	}
 	f.front = patchFront(f, front, filedKey)
 	f.body = patchBody(f.body, n, f.eol)

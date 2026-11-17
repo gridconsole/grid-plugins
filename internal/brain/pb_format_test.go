@@ -103,8 +103,9 @@ func TestPbFmSupersedeChangesOnlyItsKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(keRnRead(t, s, "knowledge/decisions/old.md"))
-	if strings.Replace(got, "superseded_by: brain:project/new\r\n", "", 1) != string(orig) {
-		t.Errorf("supersede changed more than superseded_by:\n got %q\nwant %q plus the key", got, orig)
+	want := strings.Replace(string(orig), "superseded_by: ''\r\n", "superseded_by: brain:project/new\r\n", 1)
+	if want == string(orig) || got != want {
+		t.Errorf("supersede changed more than superseded_by:\n got %q\nwant %q", got, want)
 	}
 	pbFmLists(t, "superseded note", []byte(got))
 }
