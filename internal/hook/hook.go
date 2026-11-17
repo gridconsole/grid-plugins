@@ -495,6 +495,7 @@ func toolUse(o Options) {
 	// Convert a refusal to that event's decision shape after arbitration.
 	decision := evaluateGuards(o, *in, env)
 	if in.HookEventName == "PreToolUse" && decision.Behavior != "deny" {
+		brainAdopt(o, *in)
 		history(o, *in)
 	}
 	if decision.Behavior == "allow" {

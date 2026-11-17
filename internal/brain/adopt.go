@@ -146,6 +146,10 @@ func (s Store) lockLocal(try bool) (func(), error) {
 	return func() { fslock.Unlock(f); f.Close() }, nil
 }
 
+// LockLocal is lockLocal for a caller outside the package, such as a process that
+// holds the lock while a hook runs. The returned function releases it.
+func (s Store) LockLocal(try bool) (func(), error) { return s.lockLocal(try) }
+
 type seenFile struct {
 	Size  int64  `json:"size"`
 	MTime int64  `json:"mtime"`
