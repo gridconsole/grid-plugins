@@ -82,4 +82,4 @@ The lane stopped building at the 85% budget mark, as the brief says. The per-pos
 - File modes of `board.lock`, `board.seq` and `board.cache.json` in a shared machine folder under two logins.
 - The final `cp` of this report to the hand-off folder, if it is refused.
 
-NOT DONE
+CLOSED BY P-board-store-fix1: accepted 16:46 UTC
