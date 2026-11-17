@@ -15,6 +15,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 	"github.com/gridconsole/grid-plugins/internal/version"
 )
 
@@ -31,6 +32,10 @@ type BundleOptions struct {
 	Out          string
 	Report       Report
 	Now          func() time.Time
+	// Machine and Login add the launcher logs of this login in the machine folder to
+	// the bundle; the zero values leave the bundle as it was.
+	Machine machinefolder.Folder
+	Login   string
 }
 
 // WriteReport prints the same plain diagnostics used by doctor and doctor.txt.
@@ -75,6 +80,23 @@ func Bundle(o BundleOptions) (string, error) {
 	files, err := bundleFiles(filepath.Join(o.GridHome, "logs"), out)
 	if err != nil {
 		return "", err
+	}
+	// The launcher logs of this login in the machine folder (grid open's server and
+	// worker logs, the routine timer logs), under their own name in the archive so they
+	// never collide with logs/ of the Grid home. Not the lock or pid files beside them.
+	if o.Machine.Active() && o.Login != "" {
+		launcher, lerr := o.Machine.Launcher(o.Login)
+		if lerr != nil {
+			return "", lerr
+		}
+		machineLogs, lerr := collectBundleFiles(launcher.Dir(), out, func(name string) bool { return strings.HasSuffix(name, ".log") })
+		if lerr != nil {
+			return "", lerr
+		}
+		for _, f := range machineLogs {
+			f.name = filepath.Join("machine", "launcher", f.name)
+			files = append(files, f)
+		}
 	}
 	var data bytes.Buffer
 	archive := zip.NewWriter(&data)
@@ -158,6 +180,12 @@ type bundleFile struct {
 }
 
 func bundleFiles(root, out string) ([]bundleFile, error) {
+	return collectBundleFiles(root, out, nil)
+}
+
+// collectBundleFiles is bundleFiles keeping only the files whose name (relative to
+// root) keep accepts; a nil keep accepts every file.
+func collectBundleFiles(root, out string, keep func(name string) bool) ([]bundleFile, error) {
 	st, err := os.Lstat(root)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -194,7 +222,10 @@ func bundleFiles(root, out string) ([]bundleFile, error) {
 		if strings.ContainsAny(filepath.ToSlash(name), "\\\r\n") {
 			return nil
 		}
-		file := bundleFile{path: path, name: name, modified: info.ModTime()}
+		if keep != nil && !keep(name) {
+				return nil
+			}
+			file := bundleFile{path: path, name: name, modified: info.ModTime()}
 		if strings.HasPrefix(d.Name(), "crash-") && strings.HasSuffix(d.Name(), ".txt") {
 			crashes = append(crashes, file)
 		} else {

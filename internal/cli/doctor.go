@@ -45,7 +45,7 @@ func runDoctor(args []string, env Env) int {
 		if path != "" && !filepath.IsAbs(path) {
 			path = filepath.Join(env.Cwd, path)
 		}
-		path, err := doctor.Bundle(doctor.BundleOptions{GridHome: env.GridHome, Home: env.Home, SettingsPath: settingsPath, Out: path, Report: rep})
+		path, err := doctor.Bundle(doctor.BundleOptions{GridHome: env.GridHome, Home: env.Home, SettingsPath: settingsPath, Out: path, Report: rep, Machine: env.MachineFolder, Login: env.Login})
 		if err != nil {
 			fmt.Fprintf(env.Stderr, "doctor --bundle: %v\n", err)
 			return 1
