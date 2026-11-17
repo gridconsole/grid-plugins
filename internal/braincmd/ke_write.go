@@ -80,7 +80,9 @@ func runWrite(args []string, env Env) int {
 		return usageError("expected <topic>/<name>")
 	}
 	topic, name, ok := strings.Cut(f.Arg(0), "/")
-	if !ok || !brain.ValidID(topic) || !brain.ValidID(name) || strings.Contains(name, "/") {
+	// A note of a vault may sit deeper than <topic>/<name>.
+	vault := brain.Store{GridHome: env.GridHome}.WithConfig(env.Home, nil).Vault()
+	if !ok || !brain.ValidID(topic) || !brain.ValidID(name) || (!vault && strings.Contains(name, "/")) {
 		return usageError("expected <topic>/<name>")
 	}
 	if *expect != "none" && !hyDrRev(*expect) {
@@ -111,12 +113,17 @@ func runWrite(args []string, env Env) int {
 	if err != nil {
 		return usageError(err.Error())
 	}
-	n, err := brain.Parse(data)
-	if err == nil {
-		err = n.Validate()
-	}
-	if err != nil {
-		return usageError(err.Error())
+	// A vault's note is any Markdown a person may write: only the old layout parses
+	// and validates it as a Grid note.
+	store = store.WithConfig(env.Home, nil)
+	if !store.Vault() {
+		n, err := brain.Parse(data)
+		if err == nil {
+			err = n.Validate()
+		}
+		if err != nil {
+			return usageError(err.Error())
+		}
 	}
 	origin, err := hyDrOrigin(env)
 	if err != nil {
@@ -148,6 +155,16 @@ func runWrite(args []string, env Env) int {
 		enc.SetEscapeHTML(false)
 		if encErr := enc.Encode(res); encErr != nil {
 			return failWith(env, l.asJSON, errors.Join(encErr, err))
+		}
+	} else if store.Vault() {
+		// The path of the note, or of the draft in Proposals/ when the change could
+		// not be put on top of what a person wrote meanwhile.
+		line := fmt.Sprintf("%s: %s rev %s\n", res.Status, res.Path, res.Rev)
+		if res.Proposed != "" {
+			line = fmt.Sprintf("proposed: %s\n", res.Proposed)
+		}
+		if _, perr := fmt.Fprint(env.Stdout, line); perr != nil {
+			return failWith(env, l.asJSON, errors.Join(perr, err))
 		}
 	} else if _, perr := fmt.Fprintf(env.Stdout, "%s %s/%s v%d rev %s\n", res.Status, topic, name, res.Version, res.Rev); perr != nil {
 		return failWith(env, l.asJSON, errors.Join(perr, err))

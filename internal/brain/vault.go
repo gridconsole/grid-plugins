@@ -864,6 +864,7 @@ func (s Store) row(f vaultFile, lk lookup) ListRow {
 
 // readFiles reads every level the store reads, the files of each.
 func (s Store) readFiles() (map[string][]vaultFile, error) {
+	s.adoptForRead()
 	all := map[string][]vaultFile{}
 	for _, level := range s.levels() {
 		files, err := s.filesOf(level)
@@ -890,6 +891,9 @@ func (s Store) List() (Listing, error) {
 			out.Notes = append(out.Notes, s.row(f, lk))
 		}
 	}
+	if s.Vault() {
+		out.Notes = s.decorate(out.Notes)
+	}
 	sort.SliceStable(out.Notes, func(i, j int) bool { return out.Notes[i].Path < out.Notes[j].Path })
 	return out, nil
 }
@@ -903,6 +907,7 @@ func (s Store) vaultEntries() ([]Entry, error) {
 		return nil, err
 	}
 	lk := newLookup(all)
+	ix := s.originIndex()
 	var entries []Entry
 	for _, level := range s.levels() {
 		for _, f := range all[level] {
@@ -910,6 +915,7 @@ func (s Store) vaultEntries() ([]Entry, error) {
 				continue
 			}
 			r := s.row(f, lk)
+			ix.apply(&r, level, f.id)
 			n := Note{Name: f.id, Topic: f.topic, Description: r.Description, Summary: r.Summary, Updated: r.Updated,
 				Level: level, Status: "accepted", Links: []Link{}, Body: f.note.Body}
 			for _, e := range r.Edges {
@@ -954,6 +960,19 @@ func (s Store) vaultShow(id string) (Entry, error) {
 		if got, ok := lk.resolve(l, name); ok {
 			for _, e := range entries {
 				if e.Note.Level == l && e.Note.Name == got {
+					return e, nil
+				}
+			}
+		}
+	}
+	// An id a person renamed away still resolves, to the note it became (5.2).
+	for _, l := range s.levels() {
+		if level != "" && level != l {
+			continue
+		}
+		if to, moved := s.originIndex().renamedTo(l, name); moved {
+			for _, e := range entries {
+				if e.Note.Level == l && e.Note.Name == to {
 					return e, nil
 				}
 			}
@@ -1056,6 +1075,9 @@ func (s Store) WithConfig(userHome string, getenv func(string) string) Store {
 	}
 	if s.Author == "" {
 		s.Author = h.Member
+	}
+	if s.MachineDir == "" {
+		s.MachineDir, s.MachineID = h.Machine, gridhome.Machine(h.Machine)
 	}
 	return s
 }
