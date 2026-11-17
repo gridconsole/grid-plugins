@@ -142,6 +142,8 @@ type spawnLine struct {
 	// Repo is the folder of the repo the Job works in, which the worker runs it in;
 	// empty leaves it out and the worker finds the repo itself.
 	Repo string `json:"repo,omitempty"`
+	// Base is the branch the Job names for its clone or worktree; empty leaves it out.
+	Base string `json:"base,omitempty"`
 }
 type wakeLine struct {
 	Task   string   `json:"task"`
@@ -328,6 +330,14 @@ func (s *Stream) task(dir string) error {
 				s.diag("grid worker next: task %s: job %s assigned, no model or effort for role %q: %s\n", taskID, sp.Job, sp.Role, oneLine(err))
 			}
 		}
+		// A Job that names its own model or effort runs on it; an empty one keeps the role's.
+		if sp.Model != "" {
+			line.Model = sp.Model
+		}
+		if sp.Effort != "" {
+			line.Effort = sp.Effort
+		}
+		line.Base = sp.Base
 		if s.Tools != nil {
 			tools, err := s.Tools(dir, sp.Role)
 			if err != nil {

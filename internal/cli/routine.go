@@ -212,7 +212,8 @@ func runRoutine(args []string, env Env) int {
 		// Timers start the launcher in the Grid home, which survives a plugin update, when it is there.
 		if env.GridHome != "" {
 			// Stat follows the link: one whose target an update removed falls back to the executable.
-			launcher := routine.LauncherPath(env.GridHome)
+			// The machine folder's launcher comes first, then the older ~/.grid/bin, when it is there.
+			launcher := routine.LauncherPath(gridhome.FindLauncherDir(env.getenv, env.Home, env.GridHome))
 			if info, statErr := os.Stat(launcher); statErr == nil && info.Mode().IsRegular() {
 				binary = launcher
 			}

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
@@ -204,10 +205,78 @@ func registerNew(env Env, recs []Record, folders []Folder) ([]Record, bool, erro
 	return recs, changed, nil
 }
 
-// describe joins the records with what the scan saw. The default tag is never
-// stored: a record carries it when its email is the one signed in on ~/.claude
-// (or ~/.codex), so it moves when /login changes that email.
-func describe(env Env, recs []Record, folders []Folder) []Account {
+// foldRecords groups the records that are one account: the same kind, and the
+// same folder, the same id or the same login email (letters of any case). The
+// registry can hold such twins (an old record and one made from the email's other
+// spelling, or a record a person added for a folder that was already known), and
+// each used to show as a row of its own. The groups come in the registry order of
+// their first record. In a group the record whose own folder is signed in comes
+// first, because that is the one that can be read; otherwise the first record
+// does. Nothing here writes the registry: a read folds, the file is left as it is.
+func foldRecords(env Env, recs []Record, byDir map[string]Folder) [][]Record {
+	root := make([]int, len(recs))
+	for i := range root {
+		root[i] = i
+	}
+	find := func(i int) int {
+		for root[i] != i {
+			root[i] = root[root[i]]
+			i = root[i]
+		}
+		return i
+	}
+	same := func(a, b Record) bool {
+		if a.Kind != b.Kind {
+			return false
+		}
+		if a.ID == b.ID || env.pathKey(env.expand(a.Dir)) == env.pathKey(env.expand(b.Dir)) {
+			return true
+		}
+		ea, eb := normEmail(a.Email), normEmail(b.Email)
+		return ea != "" && ea == eb
+	}
+	for i := range recs {
+		for j := i + 1; j < len(recs); j++ {
+			if same(recs[i], recs[j]) {
+				root[find(j)] = find(i)
+			}
+		}
+	}
+	var order []int
+	members := map[int][]Record{}
+	for i, r := range recs {
+		k := find(i)
+		if _, ok := members[k]; !ok {
+			order = append(order, k)
+		}
+		members[k] = append(members[k], r)
+	}
+	out := make([][]Record, 0, len(order))
+	for _, k := range order {
+		g := members[k]
+		for i, r := range g {
+			if f, ok := byDir[env.pathKey(env.expand(r.Dir))]; ok && f.SignedIn != nil && *f.SignedIn {
+				g[0], g[i] = g[i], g[0]
+				break
+			}
+		}
+		out = append(out, g)
+	}
+	return out
+}
+
+// accountGroup is one account row with what it folded: every id and folder of
+// the records it stands for, the representative's first.
+type accountGroup struct {
+	Account
+	ids, dirs, emails []string
+}
+
+// groupAccounts joins the records with what the scan saw, one entry for each
+// account (see foldRecords). The default tag is never stored: an account carries
+// it when its email is the one signed in on ~/.claude (or ~/.codex), so it moves
+// when /login changes that email.
+func groupAccounts(env Env, recs []Record, folders []Folder) []accountGroup {
 	byDir := map[string]Folder{}
 	home := map[string]Folder{}
 	for _, f := range folders {
@@ -217,11 +286,18 @@ func describe(env Env, recs []Record, folders []Folder) []Account {
 		}
 	}
 	checked := env.now().UTC().Format(time.RFC3339)
-	out := []Account{}
-	for _, r := range recs {
+	out := []accountGroup{}
+	for _, members := range foldRecords(env, recs, byDir) {
+		r := members[0]
 		a := Account{ID: r.ID, Kind: r.Kind, Name: r.Name, Email: r.Email, Dir: env.expand(r.Dir), Checked: checked, Added: r.Added}
 		h, hasHome := home[r.Kind]
-		a.Default = hasHome && h.Email != "" && strings.EqualFold(h.Email, r.Email)
+		g := accountGroup{}
+		for _, m := range members {
+			g.ids = append(g.ids, m.ID)
+			g.dirs = append(g.dirs, env.expand(m.Dir))
+			g.emails = append(g.emails, m.Email)
+			a.Default = a.Default || (hasHome && h.Email != "" && strings.EqualFold(h.Email, m.Email))
+		}
 		own, ok := byDir[env.pathKey(a.Dir)]
 		switch {
 		case !ok:
@@ -233,7 +309,17 @@ func describe(env Env, recs []Record, folders []Folder) []Account {
 		if a.Plan == "" && a.Default {
 			a.Plan = h.Plan
 		}
-		out = append(out, a)
+		g.Account = a
+		out = append(out, g)
+	}
+	return out
+}
+
+// describe is the account rows: groupAccounts without what each folded.
+func describe(env Env, recs []Record, folders []Folder) []Account {
+	out := []Account{}
+	for _, g := range groupAccounts(env, recs, folders) {
+		out = append(out, g.Account)
 	}
 	return out
 }
@@ -271,9 +357,26 @@ func Status(env Env, register bool) ([]Account, error) {
 	return describe(env, recs, folders), nil
 }
 
+// windowsPlan is one row of the windows answer before it is read: the id it
+// shows, the ids it also answers to (the ids of the records it folded), and the
+// folders that may hold its numbers, in the order they are read.
+type windowsPlan struct {
+	id, kind string
+	ids      []string
+	dirs     []string
+	onDisk   bool // one of dirs is a folder the scan found
+}
+
+// maxProbes bounds how many folders are read at once.
+const maxProbes = 8
+
 // Windows answers the account_windows shape for every account, or for the one
 // whose id is given. A default account reads the numbers of ~/.claude, where its
-// sessions run, then those of its own folder.
+// sessions run, then those of its own folder. Each account is one row, however
+// many records or folders carry its login (see foldRecords): a folder with the
+// login of an account adds no row of its own, it is another place to read that
+// account. The folders are read side by side, so one that hangs costs one timeout
+// and holds up no other; with an id only that account is read.
 func Windows(env Env, id string) ([]AccountWindows, error) {
 	recs := []Record{}
 	if env.GridHome != "" {
@@ -294,33 +397,79 @@ func Windows(env Env, id string) ([]AccountWindows, error) {
 		}
 	}
 	covered := map[string]bool{}
-	out := []AccountWindows{}
-	for _, a := range describe(env, recs, folders) {
-		dirs := []string{a.Dir}
-		covered[env.pathKey(a.Dir)] = true
+	byLogin := map[string]int{} // kind and login -> index in plans
+	loginKey := func(kind, email string) string { return kind + "\x00" + normEmail(email) }
+	var plans []windowsPlan
+	for _, g := range groupAccounts(env, recs, folders) {
+		a := g.Account
+		dirs := g.dirs
 		if a.Default {
-			dirs = []string{home[a.Kind], a.Dir}
-			covered[env.pathKey(home[a.Kind])] = true
+			dirs = append([]string{home[a.Kind]}, dirs...)
 		}
-		// The numbers are kept per spelling, so the scanned spelling of the
+		// The numbers are kept per spelling, so the scanned spelling of an
 		// account's folder is read too when it differs from the record's.
-		if s, ok := spelled[env.pathKey(a.Dir)]; ok && s != a.Dir {
-			dirs = append(dirs, s)
+		onDisk := false
+		for _, d := range dirs {
+			s, ok := spelled[env.pathKey(d)]
+			if ok && s != d {
+				dirs = append(dirs, s)
+			}
+			onDisk = onDisk || ok
+			covered[env.pathKey(d)] = true
 		}
-		out = append(out, windowsFor(env, a.ID, a.Kind, dirs))
+		for _, e := range g.emails {
+			if normEmail(e) != "" {
+				byLogin[loginKey(a.Kind, e)] = len(plans)
+			}
+		}
+		plans = append(plans, windowsPlan{id: a.ID, kind: a.Kind, ids: g.ids, dirs: dirs, onDisk: onDisk})
 	}
 	for _, f := range folders {
-		if !covered[env.pathKey(f.Dir)] {
-			out = append(out, windowsFor(env, strings.TrimPrefix(filepath.Base(f.Dir), "."), f.Kind, []string{f.Dir}))
+		if covered[env.pathKey(f.Dir)] {
+			continue
 		}
-	}
-	if id == "" {
-		return out, nil
-	}
-	for _, w := range out {
-		if w.ID == id {
-			return []AccountWindows{w}, nil
+		covered[env.pathKey(f.Dir)] = true
+		// A folder with the login of an account that already has a folder of its
+		// own is another place to read that account, not another account. When the
+		// account's folder is not there (on Linux ~/.Claude-ann is not the record's
+		// ~/.claude-ann), the folder stays a row of its own, as it always did.
+		if i, ok := byLogin[loginKey(f.Kind, f.Email)]; ok && normEmail(f.Email) != "" && plans[i].onDisk {
+			plans[i].dirs = append(plans[i].dirs, f.Dir)
+			continue
 		}
+		fid := strings.TrimPrefix(filepath.Base(f.Dir), ".")
+		if normEmail(f.Email) != "" {
+			byLogin[loginKey(f.Kind, f.Email)] = len(plans)
+		}
+		plans = append(plans, windowsPlan{id: fid, kind: f.Kind, ids: []string{fid}, dirs: []string{f.Dir}, onDisk: true})
 	}
-	return nil, fmt.Errorf("no account %q", id)
+	if id != "" {
+		var chosen []windowsPlan
+		for _, p := range plans {
+			for _, pid := range p.ids {
+				if pid == id {
+					chosen = append(chosen, p)
+					break
+				}
+			}
+		}
+		if len(chosen) == 0 {
+			return nil, fmt.Errorf("no account %q", id)
+		}
+		plans = chosen[:1]
+	}
+	out := make([]AccountWindows, len(plans))
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, maxProbes)
+	for i, p := range plans {
+		wg.Add(1)
+		slots <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-slots }()
+			out[i] = windowsFor(env, p.id, p.kind, p.dirs)
+		}()
+	}
+	wg.Wait()
+	return out, nil
 }
