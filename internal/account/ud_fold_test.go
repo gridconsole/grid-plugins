@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // Row 5: one folder, or one login, gives one account row. The two names the
@@ -111,6 +112,7 @@ func TestUdTwoRecordsOfOneFolderGiveOneRow(t *testing.T) {
 // Other logins, and the same email on another kind, stay apart.
 func TestUdDifferentLoginsAndKindsStayApart(t *testing.T) {
 	m := udMachine(t)
+	m.env.ProbeTimeout = time.Second // the fake Codex here has nothing to answer with
 	a, b := m.folder(".claude-a"), m.folder(".claude-b")
 	login(t, a, "a@example.com")
 	login(t, b, "b@example.com")
