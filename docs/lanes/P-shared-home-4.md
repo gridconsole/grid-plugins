@@ -110,11 +110,11 @@ The test files carry the prefix `pc_machine_`, so they are new files. No existin
 
 ## Open items
 
-1. **migrate (row 4)**: NOT DONE, with the split named there. This lane is NOT DONE for that row only.
-2. **Two resolvers on main.** `gridconfig` / `gridhome.Home.Machine` read the config key `machineFolder` (camelCase) and `machinefolder.Resolve` reads `machine_folder`. They can disagree when the config sets only one of them. This lane branches only on `machinefolder.Resolve`; never branch on `Home.Machine`, because it is set by default and unconfigured paths would move. A lane that makes one of the two the owner is needed.
+1. **migrate (row 4)**: NOT DONE, with the split named there. This lane is NOT DONE for that row only. P-shared-home-5 was asked to build it and also ends NOT DONE on it, so it is not closed there: see row 1 of `docs/lanes/P-shared-home-5.md`, which carries the design of the split.
+2. **Two resolvers on main.** CLOSED BY P-shared-home-5. The config keys are now `machineFolder` and `sharedGroup`; `machinefolder.Resolve` is the one resolver and reads them through `gridconfig`, and `gridhome.Home.Machine` comes from it (see `docs/lanes/P-shared-home-5.md`). Still true: never branch on `Home.Machine`, because it is set by default; `Folder.Active()` says whether the folder is in use.
 3. **Not on main**: the P-shared-home-2 doctor rows and `grid setup --shared-group` (no use of `SharedGroup` outside `machinefolder`). Open item 7 of P-shared-home-3 stays open.
 4. **The app** reads `feed/state.json` and the logs from the Grid home; it must read the machine folder (item 6, a separate app lane).
-5. **A new failure path in `grid doctor --bundle`.** With an active folder and a known login, `doctor.Bundle` returns an error if `Launcher(login)` or the walk of `launcher/<login>/` fails (`bundle.go:88-95`), so `--bundle` can fail where it succeeded on base. A missing `launcher/<login>/` is not an error (`collectBundleFiles` returns nothing). If the owner wants the bundle to be written without those logs, the two `return` lines become a skip; not changed here because that is the owner's call.
+5. **A new failure path in `grid doctor --bundle`.** CLOSED BY P-shared-home-5. The owner decided a support bundle is best effort: a failing `Launcher(login)` or walk of `launcher/<login>/` is now a line in `skipped.txt` of the bundle, and the bundle is still written (`docs/lanes/P-shared-home-5.md`, row 3).
 6. **Worktrees folder maker**: nothing in this repo makes `worktrees/<project>` (see P-shared-home-3 item 5b); `where` only reads it.
 
 ## NOT VERIFIED
