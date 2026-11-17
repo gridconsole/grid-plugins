@@ -82,6 +82,21 @@ type Env struct {
 	// OwnerPID. OwnerStart is read only when OwnerPID is set.
 	OwnerPID   int
 	OwnerStart time.Time
+	// MachineFolder is where the per-machine files go (the launcher logs, the task
+	// state.json, the Job worktrees). OSEnv resolves it once; the zero value keeps
+	// every file where Grid always put it, so a test never reads a real config.
+	MachineFolder machinefolder.Folder
+	// Login names the login in launcher/<login>/ of a shared machine folder; "" is
+	// the OS user that runs grid. A test sets it to stand for another login.
+	Login string
+}
+
+// login is the name this login's files go under in the machine folder.
+func (e Env) login() string {
+	if e.Login != "" {
+		return e.Login
+	}
+	return machinefolder.CurrentLogin(e.getenv)
 }
 
 // signalContext is the context of a command that runs until it is interrupted: a
@@ -137,6 +152,8 @@ func OSEnv() Env {
 		TempRoots: []string{os.TempDir(), "/tmp", "/var/tmp"},
 		Machine:   machine,
 		AppStart:  &AppStart{},
+		// The one resolver; nothing else in the CLI decides where the folder is.
+		MachineFolder: machinefolder.Resolve(machinefolder.Env{Home: home}),
 	}
 }
 

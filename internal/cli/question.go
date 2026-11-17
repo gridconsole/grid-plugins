@@ -25,7 +25,7 @@ func questionEnv(env Env) question.Env {
 		}
 		return feedWriter(env, "", "")
 	}
-	return question.Env{Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Jobs: questionJobs(), RecordError: env.recordError, Writer: writer, AskWriter: func() (feed.Writer, error) {
+	return question.Env{Machine: env.MachineFolder, Cwd: env.Cwd, Resolver: resolver(env), Stdout: env.Stdout, Stderr: env.Stderr, Jobs: questionJobs(), RecordError: env.recordError, Writer: writer, AskWriter: func() (feed.Writer, error) {
 		// A Job agent's GRID_LEASE names its own Job, but its question and person Job
 		// are task writes, so it asks as the task holder with GRID_TASK_EPOCH, as
 		// `job post` and postCuratorJob do; a typed global --lease-epoch is used instead.

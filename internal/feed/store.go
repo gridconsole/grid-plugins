@@ -16,6 +16,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 	"github.com/gridconsole/grid-plugins/internal/workflow"
 )
 
@@ -48,6 +49,11 @@ type Store struct {
 	// host that runs many calls in one process sets it to the call's own stderr.
 	// Nil is the process stderr, as before.
 	Warn io.Writer
+	// Machine says where state.json is published. The zero value keeps it in
+	// feed/state.json; a machine folder that is Active takes it to
+	// tasks/<TaskID>/state.json there, so every login on the machine reads one copy.
+	// Every Store that folds a task must carry the same Machine, or two copies diverge.
+	Machine machinefolder.Folder
 	// afterGateCheck is a test hook inside the gate lock, before the append.
 	afterGateCheck func()
 	// afterJobCheck is a test hook inside the job lock, before the append.

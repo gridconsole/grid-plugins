@@ -41,8 +41,11 @@ func checkHomeSource(add func(string, bool, string), o Options) {
 	}
 	if r.Machine != "" {
 		from := "the OS standard place"
-		if r.MachineSource == gridhome.SourceConfig {
+		switch r.MachineSource {
+		case gridhome.SourceConfig:
 			from = "the config"
+		case gridhome.SourceEnv:
+			from = "the environment"
 		}
 		parts = append(parts, "machine folder "+tilde(r.Machine)+" from "+from)
 	}

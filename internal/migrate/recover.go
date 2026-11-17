@@ -88,6 +88,61 @@ type journal struct {
 	RemoveHome  bool              `json:"remove_home,omitempty"`
 	// PreviousVerified: a rollback checked the displaced new home and may delete it.
 	PreviousVerified bool `json:"previous_verified,omitempty"`
+	// Externals are the worktree folders this run puts in the machine folder, journaled
+	// before the first byte lands there. In a rollback they are the folders to remove.
+	Externals []externalMove `json:"externals,omitempty"`
+	// ExternalsVerified: a rollback checked them unchanged and may delete them.
+	ExternalsVerified bool `json:"externals_verified,omitempty"`
+}
+
+// externalMove is one folder outside the home: <machine>/worktrees/<project> (Target),
+// built beside it as Stage and renamed into place once the new home is published. The
+// digests are what the copy held when it was verified; rollback removes the folder
+// only if it still matches them. Stage is empty in a rollback.
+type externalMove struct {
+	Stage   string            `json:"stage,omitempty"`
+	Target  string            `json:"target"`
+	Digests map[string]digest `json:"digests,omitempty"`
+}
+
+const externalStagePrefix = ".migrate-stage-"
+
+// removeStages deletes the folders a run built for the machine folder and never
+// placed. Only names the journal holds, made with this run's random token.
+func removeStages(j journal) error {
+	if j.Rollback {
+		return nil
+	}
+	for _, x := range j.Externals {
+		if x.Stage != "" && exists(x.Stage) {
+			if err := os.RemoveAll(x.Stage); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// placeExternals renames each staged folder to its target. A rerun after a crash finds
+// the work done and does nothing; a target that exists beside a stage is never
+// replaced.
+func placeExternals(xs []externalMove) error {
+	for _, x := range xs {
+		s, t := exists(x.Stage), exists(x.Target)
+		switch {
+		case s && t:
+			return fmt.Errorf("%s exists beside the staged worktrees %s; move it aside, then run grid migrate --apply again", x.Target, x.Stage)
+		case s:
+			if err := os.Rename(x.Stage, x.Target); err != nil {
+				return err
+			}
+			syncDir(filepath.Dir(x.Target))
+			reached("worktrees-placed")
+		case !t:
+			return fmt.Errorf("the worktrees of this migration are missing: neither %s nor %s exists", x.Stage, x.Target)
+		}
+	}
+	return nil
 }
 
 // writeJournal replaces the journal atomically, so it is never half written.
@@ -202,6 +257,9 @@ func (r *recovery) run() (Result, error) {
 			err = os.RemoveAll(j.Backup) // an incomplete backup is of no use
 		}
 		if err == nil {
+			err = removeStages(j)
+		}
+		if err == nil {
 			err = step("recover-discarded", os.RemoveAll(j.Stage))
 		}
 		res.Rerun = true
@@ -221,6 +279,9 @@ func (r *recovery) run() (Result, error) {
 		res.Changed = true
 	case "back":
 		err = step("recover-renamed", os.Rename(j.Previous, j.Home))
+		if err == nil {
+			err = removeStages(j)
+		}
 		if err == nil {
 			err = os.RemoveAll(j.Stage)
 		}

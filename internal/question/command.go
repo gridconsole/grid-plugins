@@ -10,10 +10,13 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
 type Env struct {
+	// Machine is passed to the Store so a refold publishes state.json where the Feed does.
+	Machine         machinefolder.Folder
 	WithdrawAllowed func(role string) bool
 	Cwd             string
 	Resolver        where.Resolver
@@ -221,7 +224,7 @@ func run(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "question:", err)
 		return 1
 	}
-	store := Store{TaskDir: scope.TaskPath, Now: env.Now, Warn: env.Stderr, WithdrawAllowed: env.WithdrawAllowed, Jobs: env.Jobs}
+	store := Store{Machine: env.Machine, TaskDir: scope.TaskPath, Now: env.Now, Warn: env.Stderr, WithdrawAllowed: env.WithdrawAllowed, Jobs: env.Jobs}
 
 	// Fail before writer identity setup, which may create local machine state.
 	if action != "list" {

@@ -15,6 +15,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 	"github.com/gridconsole/grid-plugins/internal/version"
 )
 
@@ -31,6 +32,10 @@ type BundleOptions struct {
 	Out          string
 	Report       Report
 	Now          func() time.Time
+	// Machine and Login add the launcher logs of this login in the machine folder to
+	// the bundle; the zero values leave the bundle as it was.
+	Machine machinefolder.Folder
+	Login   string
 }
 
 // WriteReport prints the same plain diagnostics used by doctor and doctor.txt.
@@ -76,6 +81,23 @@ func Bundle(o BundleOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// The launcher logs of this login in the machine folder (grid open's server and
+	// worker logs, the routine timer logs), under their own name in the archive so they
+	// never collide with logs/ of the Grid home. Not the lock or pid files beside them.
+	// A support bundle is best effort: a launcher folder that cannot be read is left
+	// out, the bundle is still written, and skipped.txt in it says what was left out
+	// and why, so nobody takes the gap for an empty folder.
+	var skipped []string
+	if o.Machine.Active() && o.Login != "" {
+		machineLogs, lerr := machineLauncherLogs(o, out)
+		if lerr != nil {
+			skipped = append(skipped, fmt.Sprintf("skipped the launcher logs of %s in the machine folder: %v", o.Login, lerr))
+		}
+		for _, f := range machineLogs {
+			f.name = filepath.Join("machine", "launcher", f.name)
+			files = append(files, f)
+		}
+	}
 	var data bytes.Buffer
 	archive := zip.NewWriter(&data)
 	names := map[string]bool{}
@@ -111,6 +133,11 @@ func Bundle(o BundleOptions) (string, error) {
 	}
 	if err = add("versions.txt", versions); err != nil {
 		return "", err
+	}
+	if len(skipped) > 0 {
+		if err = add("skipped.txt", strings.Join(skipped, "\n")+"\n"); err != nil {
+			return "", err
+		}
 	}
 	for _, file := range files {
 		content, err := readBundleTail(file.path)
@@ -152,12 +179,29 @@ func Bundle(o BundleOptions) (string, error) {
 	return out, nil
 }
 
+// machineLauncherLogs collects the .log files of this login's launcher folder in
+// the machine folder. The error is why the folder was left out; Bundle turns it into
+// a line of skipped.txt and goes on.
+func machineLauncherLogs(o BundleOptions, out string) ([]bundleFile, error) {
+	launcher, err := o.Machine.Launcher(o.Login)
+	if err != nil {
+		return nil, err
+	}
+	return collectBundleFiles(launcher.Dir(), out, func(name string) bool { return strings.HasSuffix(name, ".log") })
+}
+
 type bundleFile struct {
 	path, name string
 	modified   time.Time
 }
 
 func bundleFiles(root, out string) ([]bundleFile, error) {
+	return collectBundleFiles(root, out, nil)
+}
+
+// collectBundleFiles is bundleFiles keeping only the files whose name (relative to
+// root) keep accepts; a nil keep accepts every file.
+func collectBundleFiles(root, out string, keep func(name string) bool) ([]bundleFile, error) {
 	st, err := os.Lstat(root)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -192,6 +236,9 @@ func bundleFiles(root, out string) ([]bundleFile, error) {
 		}
 		// Backslashes in Unix names can become traversal separators on extraction.
 		if strings.ContainsAny(filepath.ToSlash(name), "\\\r\n") {
+			return nil
+		}
+		if keep != nil && !keep(name) {
 			return nil
 		}
 		file := bundleFile{path: path, name: name, modified: info.ModTime()}

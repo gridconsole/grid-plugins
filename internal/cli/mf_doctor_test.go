@@ -119,7 +119,7 @@ func TestMfDoctorUnconfiguredHasNoMachineFolderRows(t *testing.T) {
 // holding and none naming a fix, after the 10 rows.
 func TestMfDoctorConfiguredRowsFollowTheDefaultRows(t *testing.T) {
 	h := newMfHarness(t)
-	h.config(`{"shared_group":"` + mfGroup + `"}`)
+	h.config(`{"sharedGroup":"` + mfGroup + `"}`)
 	h.sharedFolder(os.ModeSetgid | 0o770)
 	rows, names, _ := h.doctor()
 	if !reflect.DeepEqual(names[:len(mfDefaultRows)], mfDefaultRows) {
@@ -141,7 +141,7 @@ func TestMfDoctorConfiguredRowsFollowTheDefaultRows(t *testing.T) {
 func TestMfDoctorFindsWrongGroupMissingSetgidAndPrivateLeftover(t *testing.T) {
 	t.Run("wrong group", func(t *testing.T) {
 		h := newMfHarness(t)
-		h.config(`{"shared_group":"` + mfGroup + `"}`)
+		h.config(`{"sharedGroup":"` + mfGroup + `"}`)
 		h.sharedFolder(os.ModeSetgid | 0o770)
 		h.env.machineCheck = mfOpts("424242", []string{"424242"}) // the group is not the folder's
 		rows, _, code := h.doctor()
@@ -158,7 +158,7 @@ func TestMfDoctorFindsWrongGroupMissingSetgidAndPrivateLeftover(t *testing.T) {
 	})
 	t.Run("missing setgid", func(t *testing.T) {
 		h := newMfHarness(t)
-		h.config(`{"shared_group":"` + mfGroup + `"}`)
+		h.config(`{"sharedGroup":"` + mfGroup + `"}`)
 		h.sharedFolder(0o770)
 		rows, _, code := h.doctor()
 		r := rows[machinefolder.RowMode]
@@ -174,7 +174,7 @@ func TestMfDoctorFindsWrongGroupMissingSetgidAndPrivateLeftover(t *testing.T) {
 	})
 	t.Run("private leftover", func(t *testing.T) {
 		h := newMfHarness(t)
-		h.config(`{"shared_group":"` + mfGroup + `"}`)
+		h.config(`{"sharedGroup":"` + mfGroup + `"}`)
 		h.sharedFolder(os.ModeSetgid | 0o770)
 		old := machinefolder.DefaultPath(machinefolder.Env{Home: h.home, Getenv: h.env.Getenv})
 		h.mkdir(filepath.Join(old, "launcher"))
@@ -202,7 +202,7 @@ func TestMfDoctorFindsWrongGroupMissingSetgidAndPrivateLeftover(t *testing.T) {
 // nothing in the folder but the probe file it removes at once.
 func TestMfDoctorPlainOutputPrintsTheFixAndChangesNothing(t *testing.T) {
 	h := newMfHarness(t)
-	h.config(`{"shared_group":"` + mfGroup + `"}`)
+	h.config(`{"sharedGroup":"` + mfGroup + `"}`)
 	h.sharedFolder(0o750)
 	h.env.machineCheck = mfOpts("424242", []string{"1"})
 	before, err := os.Stat(h.folder)
