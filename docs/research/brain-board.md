@@ -103,12 +103,16 @@ Base: plugin main `885dc9a6`, app main `e60fab587`. Plugin paths are repo-relati
 
 ## Q2. Read performance with 30 agents on one task
 
-**Measured.** `go run docs/research/testdata/boardbench/main.go` ran on this VM's default temp directory (filesystem type not checked) and took about 2 s in total. Each read row is the mean of 5 runs.
+**Measured.** `go run docs/research/testdata/boardbench/main.go` ran twice in this VM's default temp directory (filesystem type not checked). Each run took about 2 s. Each read row is the mean of 5 repetitions.
 
 | Posts (30 writers) | Write: lock + counter + temp + link | Today: parse 30 jsonl (cold) | List board, names only | List + lstat every name | List + parse every header (cold) | List + parse 30 files |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1,200 | 574 µs/post (first run, cold cache) | 11.3 ms | 0.60 ms | 7.97 ms | 57.1 ms | 0.90 ms |
 | 6,000 | 140 µs/post | 184.6 ms | 5.55 ms | 77.7 ms | 303.4 ms | 6.71 ms |
+| 1,200 (second run) | 133 µs/post | 32.0 ms | 0.43 ms | 4.23 ms | 25.8 ms | 1.47 ms |
+| 6,000 (second run) | 132 µs/post | 80.7 ms | 5.35 ms | 62.7 ms | 256.2 ms | 32.1 ms |
+
+The two runs differ by up to 5 times on the small rows, which is noise from a shared VM. Two things hold in both runs. Listing names stays near 5 ms at 6,000 posts. The warm read (list plus a few new files) stays an order of magnitude below a cold parse of either format.
 
 **Caveats on the numbers:**
 
@@ -119,7 +123,7 @@ Base: plugin main `885dc9a6`, app main `e60fab587`. Plugin paths are repo-relati
 
 **What replaces the per-writer append:**
 
-1. **A names cache in the machine folder.** `<machine>/tasks/<T>/board.cache.json` maps file name to the parsed post plus its sha256. Posts are immutable, so a warm read is one `Readdirnames` plus a parse of the new names: 1 to 7 ms at these sizes. It does not lstat known names; that 78 ms check moves to the slow pass in F6.
+1. **A names cache in the machine folder.** `<machine>/tasks/<T>/board.cache.json` maps file name to the parsed post plus its sha256. Posts are immutable, so a warm read is one `Readdirnames` plus a parse of the new names: 1 to 32 ms at these sizes across the two runs. It does not lstat known names; that 78 ms check moves to the slow pass in F6.
 2. **state.json and needs-you.json are machine-folder caches**, rebuilt under the machine-folder fold lock when the names digest changes. `ohSqFeedKey` (internal/orchestrator/oh_quiet_task.go:46-76) becomes a digest of the sorted board names alone. No size or mtime is needed, because posts never change.
 3. **No sharding and no index file in the brain.** 6,000 names list in 5.5 ms, roughly linear. Revisit above about 20,000 posts per task. An index in the brain would be one more synced edited file, which the ruling rules out.
 4. **Posting cost with 30 agents.** Each post takes the machine lock for under 1 ms, plus a refold (`RefoldPublished`, internal/mcp/tools.go:237): one listing plus one new parse plus the fold. At 3 posts/s (30 agents, one post per 10 s each) the lock is idle more than 99% of the time.
@@ -308,7 +312,7 @@ The markdown below the header is display only.
 | Method | Per-post files |
 | --- | --- |
 | `Tasks` | The task folders under `projects/*/tasks/` in the brain whose fold has an open Job (from the machine-folder state cache) |
-| `Read(t, since)` | List `board/`, diff the names against the cursor (a digest plus the name set, kept in the machine folder), parse the new names, and return them in `(gen, seq, id)` order. Q2 costs this at 1 to 7 ms. |
+| `Read(t, since)` | List `board/`, diff the names against the cursor (a digest plus the name set, kept in the machine folder), parse the new names, and return them in `(gen, seq, id)` order. Q2 measured 1 to 32 ms for this. |
 | `Post(t, p)` | Under the machine-folder board lock: take the next seq, write `board/.tmp/<name>`, link it to `board/<name>`, refold |
 | `Claim(t, k, p)` | Under the same lock: if the names cache holds a post with the key's `(job, attempt, type, firing)`, return `ErrClaimed`; otherwise `Post`. The file name stays `<seq>-<job>-<type>.md` and is not keyed. On one machine the lock makes the claim exactly-once. Across machines no race exists, because one attempt names one `machine:login` (R-run-jobs-launcher Q7 point 5). If two copies still meet after sync, the fold counts the first by `(gen, seq, id)` and folds the other `ignored` ("duplicate claim"). |
 
