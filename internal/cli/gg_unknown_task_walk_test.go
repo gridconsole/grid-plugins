@@ -25,6 +25,7 @@ var ggTaskWalked = []string{
 	"plan check", "plan hash", "plan items", "plan migrate", "plan write",
 	"job ack", "job blocked", "job cancel", "job lint", "job next", "job post",
 	"job render", "job result", "job show", "job tree", "job verify",
+	"judge person", "judge review", "judge rework", "judge verdict",
 	"lease release", "lease status", "lease take",
 	"feed handover", "feed post", "feed read", "feed state", "feed tick", "feed types",
 	"question add", "question ask", "question list", "question sync", "question tick", "question withdraw",
