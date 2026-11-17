@@ -35,6 +35,11 @@ type Store struct {
 	// Author is the configured Grid name: the author the listing gives to
 	// bytes no Grid record explains. Empty when the config names none.
 	Author string
+	// MachineDir is the machine folder (never synced) that holds the local brain
+	// lock and the adoption cache; MachineID names this computer in change records.
+	// See adopt.go.
+	MachineDir string
+	MachineID  string
 }
 
 // Root is the folder entry paths are relative to and where the vault reader

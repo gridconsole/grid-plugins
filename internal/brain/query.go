@@ -84,6 +84,9 @@ type Hit struct {
 	Description string `json:"description"`
 	Summary     string `json:"summary"`
 	Score       int    `json:"score"`
+	// Conflict names the person notes an agent note supersedes or duplicates; the
+	// person note is listed before it (docs/research/brain-obsidian.md 6.3).
+	Conflict []string `json:"conflict,omitempty"`
 }
 
 var wordPattern = regexp.MustCompile(`[\p{L}\p{N}]+`)
@@ -155,6 +158,9 @@ func (s Store) Search(query, topic string, limit int) ([]Hit, error) {
 		}
 	}
 	sort.SliceStable(hits, func(i, j int) bool { return hits[i].Score > hits[j].Score })
+	if s.Vault() {
+		hits = personFirst(hits, entries)
+	}
 	if len(hits) > limit {
 		hits = hits[:limit]
 	}
