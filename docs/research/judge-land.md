@@ -46,7 +46,10 @@ brain-obsidian brief's Addendum 6 (no task lease, `attempt` in the post header).
    goes in `internal/land` (Addendum 3's word), in new files beside the deploy
    executor (`internal/land/land.go:1`), which stays as it is. Deploy stays the
    existing `grid land` step (`internal/land/land.go:208`).
-5. The launcher retries a lost push race mechanically, as a new attempt of the
+5. The test run is the land Job itself. The land Job carries the start condition
+   "no other test run on this machine" and runs the checks on the rebased SHA
+   that it then pushes (Q4).
+6. The launcher retries a lost push race mechanically, as a new attempt of the
    same land Job. Posts carry `attempt`, not a lease epoch (Addendum 6).
    - The app's `no_epoch` failure (`app: judge.go`, `epoch`) goes away.
    - So does the `--lease-epoch` flag on its posts (`app: judge.go:962-979`).
@@ -78,6 +81,13 @@ acceptance runs with the app stopped, so nothing on the path may live in the app
 - *Batches, MAXB, TRAIN-DROP, flock* (`land.sh:29-31`, `land.sh:83`,
   `land.sh:88-98`). One land Job per change makes them unneeded. Order becomes an
   after condition, and the lock becomes the lease on the push.
+- *A separate test-runner Job beside the land Job.* Addendum 3 asks for a test
+  runner Job with "no other test run on this machine". A second Job would test
+  one SHA, and the land Job would then push a SHA rebased again after main moved.
+  That SHA would be untested, unless the land Job waited on the runner and passed
+  the SHA on, which is two Jobs doing the work of one. One runner-role land Job
+  carrying that start condition meets the Addendum's condition and keeps "tested
+  SHA = pushed SHA".
 - *A hard-coded STUCK path in Go.* STUCK is a verdict word the verdict verb
   reports. Posting the person Job stays the orchestrator's choice.
 
@@ -372,7 +382,8 @@ deploy executor `land.go` is untouched.
 | Rule | land.sh | Go file | Test |
 |---|---|---|---|
 | branch exists and differs from target | `:25` | `change.go` | temp repo: missing branch gives an error code |
-| ATTR (union attributes from the note) | `:27`, `:79` | `conflict.go` | temp repo: union file conflict resolved, check command run |
+| ATTR: an attribution line in a change commit is reported, not blocked (the script prints and logs, `:26-27`) | `:26-27` | `change.go` (the `landed` or `conflict` result lists `attribution` commits) | temp repo: a commit with a Co-Authored-By trailer is named in the result, and the land still goes ahead |
+| union attributes for the note's union files, then the note's check | `:79` | `conflict.go` | temp repo: union file conflict resolved, check command run |
 | generated file takes main's side, then regenerate | `:36`, `:41-55` | `conflict.go` | temp repo: generated conflict resolved, regenerate called once |
 | other conflict gives `conflict` | `:41-55` (returns 3) | `conflict.go` | temp repo: real conflict gives result `conflict` with files |
 | nothing to land | `:84` | `change.go` | temp repo: tree equal gives accepted "nothing to land" |
@@ -384,19 +395,28 @@ deploy executor `land.go` is untouched.
 | flake: whole package 3 times, 2 of 3 green | `:300-316` | `flake.go` | fake runner 2 of 3 gives `landed` + flake; 1 of 3 gives red |
 | one fix Job per test | `:272-295` | `flake.go` (finds open Jobs naming the test) | an open Job names it: no second proposal |
 | push with lease (was update-ref CAS) | `:467-469` | `push.go` | bare remote moved between fetch and push gives `push_lease_lost`; untouched remote gives `landed <sha>` |
-| dropped: flock, MAXB, TRAIN-DROP, cross-floor, HOLD, STATE-UI | `:29-31`, `:59-70`, `:83`, `:88-98`, `:471` | — | — |
+| dropped: flock and reserve-cpu (replaced by the push lease and the machine condition) | `:29-31` | — | — |
+| dropped: cross-floor, MAXB, TRAIN-DROP (one change per Job; order by after edges) | `:59-70`, `:83`, `:88-98` | — | — |
+| dropped: blame, msgblame, eject (lane blame inside a batch; a single change needs no blame) | `:133-164` | — | — |
+| dropped: try_waive and the attempts 2–3 loop with FLAKE-RERUN (replaced by the flake rule above and a new attempt of the land Job) | `:360-374`, `:432-464` (FLAKE-RERUN at `:441`) | — | — |
+| dropped: the STATE-UI row (a file outside the repo; the status block replaces it) | `:471` | — | — |
 
 ## Q5. Reconciling R-land-job-type L1–L6 and P-land-kind-2
 
+The L1–L6 rows are at `docs/research/land-job-type.md:207-213`. The naming choice
+is at `:203`, the CPU section at `:154`, and the plan that sends the app Judge the
+land Job is at `:192`.
+
 | Lane (land-job-type section 6) | Verdict | What changes |
 |---|---|---|
-| L1-land-kind | **stays** | This is P-land-kind-2: `target`, `branch` and `sha` on `kind: land`, three lint rules, and a round-trip test (aa0cf14a). The rebase flow needs no other field. |
-| L2-land-change | **stays, changed** | The package is `internal/land`, not `internal/landjob`. The flow is rebase, not merge. The push uses a lease (no local update-ref CAS). Stacking (option B) is dropped. It adds the result codes `landed`, `conflict`, `red`, `preexisting` and `push_lease_lost`. |
-| L3-land-red | **stays, changed** | Red is bisected within the change's commits, not across lanes. The flake rule has the owner's second-time delete and the incident exception. |
-| L4-land-step (workflow step `land`, spawn `command`) | **split** | The workflow step kind is dropped: the orchestrator posts the land Job after ACCEPTED, and no workflow step is needed. The `command` spawn (a runner Job that runs a plugin verb with no agent) moves to the launcher lanes of P-run-jobs-decide. |
-| L5-app-land | **dropped from the app** | It moves to the plugin as `grid judge` and the orchestrator's text (lane J2 and J3 below), as dogfood-gaps G8 already found. |
-| L6-feed-land-ui (app) | **dropped** | The task.md status block shows "landed <sha>" (Addendum 4). The app is not on the path. |
-| agent nice +10 (section 4) | **not in this plan** | It is a capacity setting, which is the launcher's measuring side. Left to P-run-jobs-decide. |
+| L1-land-kind (`land-job-type.md:207`) | **stays** | This is P-land-kind-2, commit aa0cf14a on `lane-P-land-kind`. It adds `target`, `branch` and `sha` on `kind: land` in `schemas/job-record.json` and `internal/job/job.go`, the lint rules `job.land-target`, `job.land-branch` and `job.land-sha` in `internal/job/lint/lint.go`, and the tests `internal/job/lint/land_kind_test.go` and `internal/cli/feed_land_roundtrip_test.go`. The rebase flow needs no other field. |
+| L2-land-change (`:208`, naming at `:203`) | **stays, changed** | The package is `internal/land`, not `internal/landjob`. The flow is rebase, not merge. The push uses a lease (no local update-ref CAS). Stacking (option B) is dropped. It adds the result codes `landed`, `conflict`, `red`, `preexisting` and `push_lease_lost`. |
+| L3-land-red (`:209`) | **stays, changed** | Red is bisected within the change's commits, not across lanes. The flake rule has the owner's second-time delete and the incident exception. |
+| L4-land-step (`:210`; workflow step `land`, spawn `command`) | **split** | The workflow step kind is dropped: the orchestrator posts the land Job after ACCEPTED, and no workflow step is needed. The `command` spawn (a runner Job that runs a plugin verb with no agent) moves to the launcher lanes of P-run-jobs-decide. |
+| L5-app-land (`:211`) | **dropped from the app** | It moves to the plugin as `grid judge` and the orchestrator's text (lane J2 and J3 below), as dogfood-gaps G8 already found. |
+| L6-feed-land-ui (`:212`, app) | **dropped** | The task.md status block shows "landed <sha>" (Addendum 4). The app is not on the path. |
+| agent nice +10 (`:154`, section 4) | **not in this plan** | It is a capacity setting, which is the launcher's measuring side. Left to P-run-jobs-decide. |
+| Brain notes (`:213`) | **stays, owner named** | Lane 4 below writes the note shape that `grid land change` reads (generated pattern, regenerate command, union list and check, the check commands), with a seed note for the plugin repo. Lane 3 writes the default workflow note. |
 
 **P-land-kind-2 continues as is.** Its rows 1–3 hold unchanged: the lint rules,
 the round-trip test, and the existing tests staying green. It is the first lane
@@ -414,9 +434,9 @@ order:
 | 1 | **P-land-kind-2** (as briefed) | `schemas/job-record.json`, `internal/job/job.go`, `internal/job/lint/`, tests from aa0cf14a | 1. lint refuses a land Job without target, branch or sha; 2. round-trip through the Feed keeps them; 3. existing tests green | — |
 | 2 | **P-judge-verbs** | new `internal/judge/` (`verdict.go`, `review.go`, `rework.go`, `person.go`, `id.go`), `internal/cli/judge.go`, `commands.json`, `docs/job-contract.md:123-128` | 1. verdict parse ports the app's verdict cases and adds STUCK; 2. rework body ports `TestReworkPostsANewJobIDWithOnlyJobRecordKeys`; 3. request id ports both `judge_post_request_id` tests (no epoch); 4. a second call with the same wake succeeds with nothing posted (`ErrDuplicateWake`); 5. a cancelled review gives one person Job (ports both `judge_cancelled_review` tests); 6. `verdict` reports rounds over the `continues` chain; 7. a verdict from an older attempt is reported stale | 1 (only for `kind`), launcher wake (exists) |
 | 3 | **P-judge-orchestrator** | `agents/orchestrator.md` (replace the `never_judged` text at line 28 with the flow in Q2), the brain default workflow note (`review rounds: 2`), `docs/job-contract.md` | 1. a scripted task with a fake reviewer: finished, reviewed REJECTED, one rework, reviewed ACCEPTED, accepted, with no hand step and the app stopped; 2. a second REJECTED gives one person Job; 3. STUCK gives one person Job and no rework; 4. every wake is acked once (ports `TestJudgeAcknowledgesEveryWake` cases as fold checks) | 2 |
-| 4 | **P-land-change** | `internal/land/change.go`, `conflict.go`, `push.go`, `internal/cli/land.go` (`grid land change`) | Q4 table rows for branch, ATTR, generated, conflict, nothing to land, push with lease; plus: two accepted changes in one repo land in order and the second rebases onto the first | 1 |
+| 4 | **P-land-change** | `internal/land/change.go`, `conflict.go`, `push.go`, `internal/land/note.go` (reads the brain note: generated pattern, regenerate command, union list and check, check commands), `internal/cli/land.go` (`grid land change`), a seed environments note for the plugin repo | Q4 table rows for branch, ATTR, generated, union, conflict, nothing to land, push with lease; plus: two accepted changes in one repo land in order and the second rebases onto the first; plus: the generated list and commands come from the note, none hard-coded | 1 |
 | 5 | **P-land-tests** | `internal/land/check.go`, `bisect.go`, `flake.go` | Q4 table rows for checks, rerun, not waivable, preexisting, bisect, flake, one fix Job | 4 |
-| 6 | **P-land-launch** | launcher files named by P-run-jobs-decide (start conditions "after L lands" and "no other test run on this machine"; a new attempt on `push_lease_lost`; the status block "landed <sha>"), `agents/orchestrator.md` (post a land Job after ACCEPTED; fix Jobs for flakes) | 1. a lost lease reruns as attempt 2 and lands; 2. two land Jobs on one machine never run checks at the same time; 3. the status block shows the main SHA | 3, 5, the launcher lanes of P-run-jobs-decide |
+| 6 | **P-land-launch** | launcher files named by P-run-jobs-decide (start conditions "after L lands" and "no other test run on this machine"; a new attempt on `push_lease_lost`; the status block "landed <sha>"), `agents/orchestrator.md` (post a land Job after ACCEPTED; fix Jobs for flakes) | 1. a lost lease reruns as attempt 2 and lands; 2. two land Jobs on one machine never run checks at the same time; 3. the status block shows the main SHA; 4. a `conflict` result leads the orchestrator to post one rework Job (`grid judge rework`, `continues` J) that names the files; 5. a `red` result leads to one rework Job whose must-fix names the commit and the test; 6. a `landed` result with a flake leads to one fix-the-cause Job, and none when an open Job already names the test; 7. a `preexisting` note leads to one fix Job against main | 3, 5, the launcher lanes of P-run-jobs-decide |
 | 7 | **P-judge-land-proof** | a real-plugin test under `internal/cli` or `tests/`, plus the lane doc | the owner's acceptance below, end to end with the app not running | 1–6 |
 
 **The owner's acceptance, mapped.**
@@ -426,9 +446,9 @@ order:
 | finished, reviewed, rework once, accepted, landed; no hand step, app not running | 3.1 + 6.3 + 7 |
 | a second failed review raises a person question | 3.2 (+ 2.5 for the cancelled review) |
 | two accepted changes in one repo land in order, the second rebases | 4 (order row) + 6.2 + 7 |
-| one conflict | 4 (conflict row): `conflict`, then a rework Job |
-| one red test bisected | 5 (bisect row): the result names the commit and the test |
-| one flaky test landed with a fix Job | 5 (flake row) + 6 (orchestrator posts the fix Job) |
+| one conflict | 4 (conflict row): `conflict`; 6.4: the rework Job |
+| one red test bisected | 5 (bisect row): the result names the commit and the test; 6.5: the rework Job |
+| one flaky test landed with a fix Job | 5 (flake row) + 6.6 (orchestrator posts the fix Job) |
 
 **Open items.**
 - The sibling decision doc (`docs/research/run-jobs-launcher.md`,
