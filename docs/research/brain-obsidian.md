@@ -472,8 +472,13 @@ who wrote it". This section decides what the owner sees in Obsidian.
   - at the start of every `grid brain` read (show, search, list, index);
   - under the write lock before every Grid write;
   - in `grid brain check`.
-- **How.** It walks the brain (with the skips in 2.2) and compares each file
-  with the machine-folder cache `files.json` (path → size, mtime, hash).
+- **How.** It walks the brain (with the skips in 2.2, except `Proposals/`)
+  and compares each file with the machine-folder cache `files.json`
+  (path → size, mtime, hash).
+  - `Proposals/` is skipped by the index walk only (2.2). Adoption walks it,
+    so a person edit to a draft is recorded like any other person edit
+    (6.2). A proposal's id is its path, `Proposals/<name>`, and its versions
+    go to `.grid/versions/<level>/Proposals/<name>/<hash16>.version`.
   - Size and mtime unchanged means no hash is needed.
   - Otherwise the file is hashed. If the hash matches a change record Grid
     wrote for this path, the change is Grid's own; only the cache is updated.
@@ -575,15 +580,28 @@ notes.
   indexed as knowledge (Addendum 2). The listing gives its files
   `kind: proposal`.
 - **Person edits to a draft.** The owner may edit a draft. Adoption records
-  that edit with origin person, and the curator works from the edited bytes.
-  The person's edits are person input (Addendum 2).
+  that edit with origin person (5.1 walks `Proposals/`), and the curator
+  works from the edited bytes. The person's edits are person input
+  (Addendum 2).
+  - The curator reads the proposal's current bytes at accept time, never a
+    copy taken before the edit.
+  - Where the curator rewrites the draft into a finished note, it keeps
+    what the person wrote. It may add links and a description around it,
+    and it never drops or rewords the person's lines.
+  - The filed note's change record names the proposal and the person
+    change record it built on, so the listing can show that person input
+    went into it.
 - **Decision state.** It is a change record (`accepted`, `rejected`), not an
   in-place rewrite of the proposal. Today's in-place status rewrite
   (store.go:436, :497) goes. On accept:
   1. the curator files the note into its topic folder (a Grid write with
      origin agent and the proposal id as reason);
-  2. the proposal file is removed;
-  3. its bytes stay in `versions/`.
+  2. an `accepted` change record names the proposal id;
+  3. the proposal file is removed;
+  4. its last bytes, including any person edit, stay in
+     `.grid/versions/<level>/Proposals/<name>/` (5.1).
+- **On reject:** a `rejected` record, the file is removed, and its bytes
+  stay in `versions/` the same way.
 
 ### 6.3 The curator and conflicts
 
@@ -873,7 +891,11 @@ rows. A row owned by another decision lane is marked "owned by".
     proposal and the person bytes are unchanged;
   - (V19) an agent write to a person note writes `Proposals/` and exits 0;
   - (V13) `grid brain check` adopts a person edit without a drift finding;
-  - (V13) two adoptions of the same edit produce one logical change.
+  - (V13) two adoptions of the same edit produce one logical change;
+  - (V14) a draft in `Proposals/` changed on disk with no Grid record is
+    adopted by `grid brain check` as `edited`, origin person, with its
+    version stored under `.grid/versions/<level>/Proposals/<name>/`, and
+    `grid brain list --json` shows the proposal with `origin: person`.
 - **Seam.** The sync server's version-checked write is a client call into
   the sync server's write API. Until that lands, the local lock is the path.
   L8 carries the client side once the API exists.
@@ -897,7 +919,18 @@ rows. A row owned by another decision lane is marked "owned by".
   - (V13) the SessionStart text is at most 1200 bytes, with topics and
     counts only;
   - (V13) a folder without TOPIC.md is searchable but has no row;
-  - (V14) `Proposals/` is not in search results as knowledge.
+  - (V14) `Proposals/` is not in search results as knowledge;
+  - (V14, 6.2 person input) a person edits a draft in `Proposals/` by
+    changing the file on disk (a line added, a line reworded), then the
+    proposal is accepted. The filed note in its topic folder contains the
+    person's added and reworded lines, not the original draft's lines. Its
+    change record names the proposal and the person change record;
+  - (V14, 6.2 accept) after accept, `Proposals/<name>.md` no longer exists,
+    an `accepted` change record names the proposal id, and the proposal's
+    last bytes (with the person edit) are present under
+    `.grid/versions/<level>/Proposals/<name>/` with a matching hash;
+  - (V14, 6.2 reject) after reject, the file is gone, a `rejected` record
+    exists and its bytes are in `versions/`.
 
 **L5b P-brain-curator-shots**
 
