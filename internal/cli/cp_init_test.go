@@ -232,7 +232,7 @@ func TestCpInitDetect(t *testing.T) {
 		if got := cpInitString(t, q["member"].Default); got != "sam-example" || q["member"].Source != "account" {
 			t.Errorf("member %q from %q, want sam-example from the account's displayName", got, q["member"].Source)
 		}
-		var accts []initAccount
+		var accts []struct{ Email, Source string }
 		if err := json.Unmarshal(q["accounts"].Default, &accts); err != nil || len(accts) != 1 || accts[0].Email != "sam@example.com" || accts[0].Source != "found" || !q["accounts"].Asked {
 			t.Errorf("accounts %s asked %v, want sam's folder found and asked", q["accounts"].Default, q["accounts"].Asked)
 		}
