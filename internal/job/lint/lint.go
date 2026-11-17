@@ -185,6 +185,7 @@ func (c *checker) validate(j job.Job, o Options) {
 		}
 	}
 	c.land(j)
+	c.command(j)
 	if (j.Status == "cancelled" || j.Status == "rejected") && (j.CloseReason == nil || strings.TrimSpace(*j.CloseReason) == "") {
 		c.add("job.close-reason", "close_reason", "A closed Job needs a reason", "Record close_reason for cancellation or rejection.")
 	}
@@ -363,6 +364,22 @@ func (c *checker) land(j job.Job) {
 		if strings.TrimSpace(f.value) == "" {
 			c.add(f.rule, f.key, "A land Job needs "+f.key, f.fix)
 		}
+	}
+}
+
+// command checks the argv a command Job cannot run without: at least one word,
+// and no word empty. Other kinds are not checked; a wait Job's every and timeout
+// are checked by the schema, not here.
+func (c *checker) command(j job.Job) {
+	if j.Kind != "command" {
+		return
+	}
+	ok := len(j.Command) > 0
+	for _, word := range j.Command {
+		ok = ok && strings.TrimSpace(word) != ""
+	}
+	if !ok {
+		c.add("job.command-argv", "command", "A command Job needs an argv with no empty word", "Give the argv the Job runs, for example [land, test, T-1, J-3].")
 	}
 }
 

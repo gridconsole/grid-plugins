@@ -37,6 +37,24 @@
       "type": "string",
       "minLength": 1
     },
+    "command": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "every": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[1-9][0-9]*(s|m|h|d)$"
+    },
+    "timeout": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[1-9][0-9]*(s|m|h|d)$"
+    },
     "base": {
       "type": "string",
       "minLength": 1

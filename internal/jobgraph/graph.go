@@ -20,6 +20,9 @@ const (
 	Done         = "done"
 	Failed       = "failed"
 	ChildrenDone = "children-done"
+	// Landed is met only by a counted landed post for the target (Snapshot.Landed);
+	// an accept is not a landing.
+	Landed = "landed"
 )
 
 type Edge = job.Dependency
@@ -70,7 +73,7 @@ func New(items []job.Job) (*Graph, error) {
 					return nil, fmt.Errorf("%s: after target %q does not exist", id, e.Job)
 				}
 				switch e.Kind {
-				case "", Done, Failed, ChildrenDone:
+				case "", Done, Failed, ChildrenDone, Landed:
 				default:
 					return nil, fmt.Errorf("%s: unknown after kind %q", id, e.Kind)
 				}
@@ -176,12 +179,15 @@ func (e *CycleError) Error() string { return "Job cycle: " + strings.Join(e.Path
 // retry decision must not release a failed edge. OpenGates keys are gate:Q-id.
 // Optional times enable the canonical order (ready since, created at, id).
 // Without timestamps, Ready returns lexical id order, not a scheduling history.
+// Landed holds the Jobs that have a counted landed post (contract.FoldLoop's
+// Loop.Landed); a landed edge on a Job not in it waits.
 type Snapshot struct {
 	Jobs       map[string]contract.Job
 	Exhausted  map[string]bool
 	OpenGates  map[string]bool
 	ReadySince map[string]time.Time
 	CreatedAt  map[string]time.Time
+	Landed     map[string]bool
 }
 
 type Wait struct {
@@ -373,6 +379,9 @@ func (g *Graph) Ready(s Snapshot) (Readiness, error) {
 				reason = "waiting for " + e.Job + " to fail with no attempt left"
 			case kind == ChildrenDone:
 				satisfied, reason = g.childrenDone(s, e.Job)
+			case kind == Landed:
+				satisfied = s.Landed[e.Job]
+				reason = "waiting for " + e.Job + " to land"
 			}
 			if !satisfied {
 				out.Waiting = append(out.Waiting, Wait{Job: id, Target: e.Job, Kind: kind, Reason: reason})
