@@ -117,12 +117,12 @@ func TestPbStFoldSameSeqTiesByID(t *testing.T) {
 	}
 }
 
-// V9: a control counts only from the home of its gen; a non-home control, a person's
-// as well, is a request: counted, and it moves nothing.
+// V9: a control counts only from the home of its gen; a non-home control, and a
+// person's even on the home machine, is a request: counted, and it moves nothing.
 func TestPbStFoldControlCountsOnlyFromHome(t *testing.T) {
 	j := pbStJob(t)
 	fromB := pbStAssign(t, 2, 1, 0, pbStHomeB)
-	person := pbStAssign(t, 3, 1, 0, pbStHomeB)
+	person := pbStAssign(t, 3, 1, 0, pbStHomeA)
 	person.Author = Author{ID: "lead", Role: "lead"}
 	s, loop := FoldBoard([]BoardPost{j, fromB, person})
 	pbStVerdict(t, s, fromB, "counted", "")

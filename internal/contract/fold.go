@@ -75,8 +75,9 @@ type BoardPost struct {
 //   - Posts sort by (gen, seq, id).
 //   - The home of gen 0 is the home in the body of the first Job record; a counted
 //     task-move of gen n names the home of gen n in its to. A control moves a Job
-//     only when the machine of its by is the home of its gen. Any other control is
-//     a request: it counts and moves nothing, as an unleased control does on a JSONL
+//     only when its author has an orchestrator, cli or launcher role and the machine
+//     of its by is the home of its gen. Any other control, a person's always, is a
+//     request: it counts and moves nothing, as an unleased control does on a JSONL
 //     feed. Loop.Home is the current home.
 //   - An assign must raise the Job's attempt. A Job-side post belongs to an assign
 //     whose to is its author at the machine of its by.
@@ -160,6 +161,18 @@ func boardValid(p Post, b boardInfo) error {
 func boardMachine(by string) string {
 	m, _, _ := strings.Cut(by, ":")
 	return m
+}
+
+// boardController reports the roles whose controls the home counts: an orchestrator,
+// cli or launcher role (docs/research/brain-board.md, the fold.go:192-198 row). Of
+// these the envelope's role enum holds cli, the role the orchestrator pass writes
+// with today. A person's control is always a request.
+func boardController(role string) bool {
+	switch NormalizeRole(role) {
+	case "orchestrator", "cli", "launcher":
+		return true
+	}
+	return false
 }
 
 func foldLoop(posts []Post, info map[string]boardInfo) (State, Loop) {
@@ -293,7 +306,7 @@ func foldLoop(posts []Post, info map[string]boardInfo) (State, Loop) {
 			return true
 		}
 		home := homeOf(p.Gen)
-		return home != "" && boardMachine(b.by) == home
+		return home != "" && boardController(p.Author.Role) && boardMachine(b.by) == home
 	}
 
 	questions := map[string]*question{}
