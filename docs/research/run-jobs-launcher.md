@@ -312,7 +312,7 @@ The existing candidates in `internal/orchestrator/events.go:193-224` are results
 - verdict posts (accepted, rework or rejected, STUCK);
 - person posts: an answer, a `task-move`, a cancel request;
 - a closed task (for the curator decision, Q1);
-- the land results `conflict`, `red` and `preexisting`, and a `landed` with flakes (P-judge-land-decide).
+- the land results `conflict`, `red`, `preexisting` and `base_moved`, a `tested` with flakes, and a `landed` with flakes (P-judge-land-decide).
 
 ### How
 
