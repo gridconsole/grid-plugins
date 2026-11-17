@@ -1058,7 +1058,8 @@ rows. A row owned by another decision lane is marked "owned by".
 - **Ledger rows.** V17 (owned by P-brain-board-decide: screenshots kept
   compressed by the curator), V13 (the curator writes notes Obsidian links,
   gate 7 curator step). The curator keeping a person's draft lines (V14,
-  6.2) is proved in L5a, not here.
+  6.2) is proved in L5a, not here. V16 (owned by P-brain-board-decide: the
+  curator handles the `home-differs` task proposal).
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L5a and **P-brain-board-decide**.
 - **Builds.**
@@ -1083,6 +1084,8 @@ rows. A row owned by another decision lane is marked "owned by".
     - V17: on the fixture set (one UI screenshot each at 390, 1440 and 3840 wide) every output has the input's pixel size and decodes to exactly the input pixels, and the lane records each output size against the 300 KB target in its proof table.
     - V17: agents/curator.md and the brain-keeper skill carry the step, the target and the check.
     - V17, person check (R-brain-obsidian 9.4 step 7): the compressed screenshot opens in Obsidian and its text reads at 100%.
+  - V16 row, owned by P-brain-board-decide (Abdu's option C, R-brain-board "Decided by Abdu: V16 home edit"); R-brain-board Q9's L5b row carries it word for word:
+    - V16: agents/curator.md says how the curator handles a `home-differs` proposal: it never writes `home:` and never runs `grid task move`; it records the proposal `accepted` once task.md `home:` and the posts' home name the same machine again, and leaves it waiting until then.
   - (V13) the curator files a proposal into a topic with working `[[links]]`.
 
 **L6 P-brain-migrate**
