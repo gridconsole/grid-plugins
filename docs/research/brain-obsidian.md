@@ -4,10 +4,10 @@ Decision lane P-brain-obsidian-decide, 17 Nov 2026. This note decides the vault
 reader, ids, links, authority and folder layout. It builds nothing. The owner's
 person notes become first-class brain notes, and Obsidian can be used as the
 editor without Grid fighting it. Tasks, Jobs and the board as brain nodes
-(Addendum 3) are decided by P-brain-board-decide; section 10 names the seams
+(Addendum 3) are decided by P-brain-board-decide; section 9.2 names the seams
 that lane must use.
 
-Evidence is given as plugin `file:line` at the lane head. Obsidian facts cite
+Evidence is given as plugin `file:line` at commit `885dc9a6`. Obsidian facts cite
 the official help source
 ([obsidianmd/obsidian-help](https://github.com/obsidianmd/obsidian-help) at
 commit `cbe447c`, 16 Nov 2026, published at https://obsidian.md/help) and the
@@ -136,14 +136,21 @@ relative to `en/` in that repo.
 - whether automatic link update is on by default;
 - whether a rename also rewrites quoted `"[[x]]"` front-matter links;
 - what an open editor does when Grid writes the same file;
-- whether file names are case-sensitive in links on APFS.
+- whether file names are case-sensitive in links on APFS;
+- whether Obsidian ignores a dot-file temp file (`.x.tmp`) that exists for a
+  moment next to a note.
 
-The decisions below do not depend on these facts:
+The decisions do not depend on these facts:
 
-- `.grid/` holds no notes;
-- adoption catches renames whether or not links were rewritten;
-- Grid writes no front-matter links;
-- an agent never writes a person note.
+- `.grid/` holds no `.md` files. Change records end in `.change` and versions
+  end in `.version`, so even if Obsidian indexes dot-folders, it never parses
+  them as notes or rewrites links inside them on a rename. Their content
+  hashes stay valid.
+- Adoption catches renames whether or not links were rewritten.
+- Grid writes no front-matter links.
+- An agent never writes a person note.
+- A temp file is renamed within the same write, and the reader skips
+  dot-files.
 
 ## 2. Ids and names
 
@@ -196,7 +203,7 @@ Plugin, at the lane head:
 | internal/brain/note.go:118-122 | origin kind is session, job, server or import | Add `person`. Origin moves out of front matter (section 4). |
 | internal/brain/markdown.go:21 `Parse` | strict `mdfile.Load(...,true)` | A new lenient `ParseVault`: no front matter is allowed, unknown keys are kept, known keys accept Obsidian's shapes (`tags` as a string or a list). |
 | internal/mdfile/markdown.go:46-50 `Split` | an error when there is no `---` | `SplitOptional` returns empty front matter. |
-| internal/brain/topics.go:204-269 `scan` | walks `knowledge/`; invalid unless topic, level and name equal the path and `len(parts)==3` (:241); a duplicate name is invalid (:254-266) | Walk the level root at any depth. Skip `.obsidian/`, `.trash/`, `.grid/`, every dot-folder, `Proposals/`, `projects/` (at home level) and non-`.md` files. Derive topic, id and title from the path. Duplicate base names are legal and only make a bare link ambiguous. Keep the symlink refusal (:217). |
+| internal/brain/topics.go:204-269 `scan` | walks `knowledge/`; invalid unless topic, level and name equal the path and `len(parts)==3` (:241); a duplicate name is invalid (:254-266) | With the brain key set, walk the level root at any depth; with it absent, walk only the old folders (7.1). Skip `.obsidian/`, `.trash/`, `.grid/`, every dot-folder, `Proposals/`, `projects/` (at home level) and non-`.md` files. Derive topic, id and title from the path. Duplicate base names are legal and only make a bare link ambiguous. Keep the symlink refusal (:217). |
 | internal/brain/topics.go:47-63 `topicAt` | a custom topic needs `topics/<t>/TOPIC.md` with `kind: knowledge` | A top-level folder with a `TOPIC.md` is an indexed topic. A folder without one holds searchable notes but has no row in SessionStart (layout addendum). |
 | internal/brain/topic_text.go:26 | `topics/<name>/TOPIC.md`, falling back to `knowledge/<name>/TOPIC.md` | `<level root>/<topic>/TOPIC.md` |
 | internal/brain/store.go:25-33 `Store`, `Entry` | `GridHome`; `Entry.Path` is relative to GRID_HOME | Add `Root` (the brain folder from config; GRID_HOME when the key is absent). `Entry.Path` is relative to `Root`. |
@@ -223,7 +230,7 @@ Plugin, at the lane head:
 | internal/people/store.go:35 | `knowledge/people` | `grid/people` |
 | internal/projectenv/projectenv.go:74, internal/cli/ln_project_env.go:325 | `knowledge/environments` | `grid/environments` |
 | internal/land/land.go:124, approval.go:62 | `projects/<p>/knowledge/deploy`, `knowledge/workflows` | `projects/<p>/grid/deploy`, `grid/workflows` |
-| internal/settings/claude.go:54-55 | permission glob `knowledge/**` under GRID_HOME | The absolute brain root `<Root>/**`. |
+| internal/settings/claude.go:54-55 | permission glob `knowledge/**` under GRID_HOME | With the brain key set: the absolute brain root `<Root>/**`, which is a separate folder. With the key absent: unchanged (`knowledge/**`), never all of GRID_HOME. |
 | internal/settings/budget.go:61 | `knowledge/budget/agent-budget.md` | `grid/budget/agent-budget.md` |
 | internal/guard/context.go:250-257 | knowledge paths | `Root` paths |
 | internal/orchestrator/progress.go:33 | skips `brain-proposals` | Skips `Proposals`. |
@@ -352,10 +359,30 @@ this.
 - **No record.** If none matches, the bytes were not written by Grid, so
   origin is `person` and author is the Grid name configured in
   `~/.config/grid/config.json` (the user name key P-grid-config-read reads).
-  When no name is configured, the author is the OS user name.
+  That brief defaults the name to the Claude account's display name, else
+  the OS login name (P-grid-config-read item 4). This lane only uses the
+  name it returns.
 - **Note text never counts.** A front-matter `origin:` or `author:` is kept as
   an unknown key and never read as origin. Grid stops writing `origin:` into
   notes; the migration moves existing `origin:` maps into change records.
+- **Direct agent edits.** An agent may Edit or Write a brain file with its own
+  tools rather than through `grid brain` (the settings glob allows it). A
+  PostToolUse hook on Edit and Write records the path, the new hash and the
+  session or Job as an agent change record. It only records and never blocks,
+  in the same way `brainRead` records reads today (hook/brain.go:22-71).
+  - Those bytes are agent bytes.
+  - If the target was a person note, adoption turns the agent's bytes into a
+    proposal and restores the person's version from `versions/`. Person
+    notes win (6.1), and nothing is lost.
+- **Link-only rewrites keep authority.** Obsidian's rename rewrites
+  `[[links]]` inside every note that links to the renamed file. When a change
+  differs from the previous version only in link targets that match a
+  `renamed` record, adoption records it as `relinked`, origin person, and
+  keeps the note's authority. An agent note stays an agent note.
+- **Record order across machines.** A machine may adopt bytes as person before
+  the agent's change record for the same path and hash syncs in. A Grid write
+  record (agent) for the same path and hash always beats an adoption record
+  (person), whichever arrived first.
 
 ### 4.4 Unknown keys kept byte-for-byte
 
@@ -403,13 +430,14 @@ notes.
 ### 5.2 Change records and versions
 
 - **One immutable file per change** (ruling 17 Nov 02:12):
-  `<brain>/.grid/changes/<yyyy-mm>/<utc-time>-<machine>-<hash8>.md`.
+  `<brain>/.grid/changes/<yyyy-mm>/<utc-time>-<machine>-<hash8>.change`
+  (YAML; not `.md`, see section 1).
   - It holds the fields of today's audit line (changes.go:55-58): time,
     status, id, origin kind and id, reason, topic, content hash.
   - A rename also holds the old id. A proposal record also holds the task.
   - It replaces the append-only `knowledge/log.md` (changes.go:38, :94).
 - **Content-addressed versions**:
-  `<brain>/.grid/versions/<level>/<id>/<hash16>.md`. Storing the same bytes
+  `<brain>/.grid/versions/<level>/<id>/<hash16>.version`. Storing the same bytes
   twice is a no-op, and two machines never collide. This replaces last+1
   (versions.go:80-102). Order comes from the change records.
 - **Duplicate adoptions.** Two machines adopting the same person edit write two
@@ -437,8 +465,12 @@ notes.
 
 1. **Read.** An agent write carries the `rev` it read (`--expect-rev`,
    `NoteRev`, hy_drop.go:62; checked today at ke_write.go:188-195).
-2. **Check.** Under the write lock (7.2): adopt, then compare the current
-   bytes' rev with the expected rev.
+2. **Check.** Adopt, then compare the current bytes' rev with the expected
+   rev.
+   - With no sync server, both happen under the local lock in the machine
+     folder (7.2).
+   - With a sync server, the server's version check (step 5) takes the lock's
+     place.
 3. **Mismatch.**
    - If the current bytes are a person change (origin person), the agent
      change is written as a proposal to `Proposals/` and the command exits 0
@@ -516,8 +548,8 @@ notes.
   .obsidian/                  Obsidian's own; ignored by Grid
   .trash/                     Obsidian's trash; ignored
   .grid/                      synced Grid bookkeeping, immutable files only
-    changes/<yyyy-mm>/<time>-<machine>-<hash8>.md
-    versions/<level>/<id>/<hash16>.md
+    changes/<yyyy-mm>/<time>-<machine>-<hash8>.change
+    versions/<level>/<id>/<hash16>.version
   Proposals/                  visible; not a topic; not indexed
   decisions/  TOPIC.md  *.md  built-in knowledge topics
   conventions/ TOPIC.md *.md
@@ -530,9 +562,13 @@ notes.
 
 - **Brain path key.** The brain folder comes from the brain path key that
   P-grid-config-read adds (read-only). When the key is absent, `Root` is
-  GRID_HOME and the reader also reads the old `knowledge/` layout, so nothing
-  moves until the owner sets the key and runs the migration ("when absent, the
-  brain stays where it is today").
+  GRID_HOME and the reader reads only the old layout, so nothing moves until
+  the owner sets the key and runs the migration ("when absent, the brain stays
+  where it is today").
+  - The walk, adoption and the settings glob stay scoped to `knowledge/`,
+    `topics/`, `brain-proposals/` and `projects/<p>/knowledge/`.
+  - Task files, accounts and usage under GRID_HOME are never read as notes.
+  - The any-depth walk and `<Root>/**` apply only when the key is set.
 - **Built-in config topics** move from `knowledge/` to `grid/`: environments,
   machines, deploy, people, agents, routines (topics.go:25-36). This ends the
   clash between a top-level `people/` topic and config.
@@ -573,8 +609,8 @@ notes.
 - **The curator compresses them** when it files a proposal or delivers. It runs
   `grid shot crop <png> --max 1568`. `shot.Crop` already scales the long side
   down to `MaxSide` = 1568 (shot.go:21, :80-118) and never up.
-- **Target size: at most 300 KB per image,** with the text still readable at
-  100%.
+- **Target size: about 300 KB per image,** with the text still readable at
+  100%. This is a target for the curator, not a limit the code enforces.
   - Today `shot.Encode` writes PNG only (shot.go:120-127). PNG stays for UI
     screenshots, where it is small and sharp.
   - A PNG over 300 KB after scaling is written as JPEG quality 80 through a new
@@ -600,7 +636,7 @@ until the owner removes it.
 | `topics/<t>/TOPIC.md`, `knowledge/<t>/TOPIC.md` | `<t>/TOPIC.md` |
 | `brain-proposals/*.md` | `Proposals/*.md` |
 | `knowledge/log.md`, one line each | one record each in `.grid/changes/`, with time and hash kept |
-| `knowledge/versions/<topic>/<name>/<n>.md` | `.grid/versions/<level>/<id>/<hash16>.md` |
+| `knowledge/versions/<topic>/<name>/<n>.md` | `.grid/versions/<level>/<id>/<hash16>.version` |
 | `projects/<p>/knowledge/…` and the rest | `projects/<p>/…` with the same mapping |
 | `knowledge/index.md`, `backlinks.json`, `.brain.lock` | not copied; rebuilt in the machine folder |
 
@@ -694,6 +730,18 @@ The brief's fixture list (F1-F9):
   `grid/` paths: braincmd, job/source.go (id parsing only), workflow, routine,
   people, projectenv, land, settings, guard, orchestrator, contract, skills
   and agents docs.
+- **Files.**
+  - braincmd/command.go, ke_rename.go, ke_write.go, hy_drop.go,
+    cb_author_origin.go, changes.go;
+  - job/source.go;
+  - workflow/brain.go;
+  - routine/schedule.go, workflow.go, execute.go, store.go;
+  - people/store.go, projectenv/projectenv.go, cli/ln_project_env.go;
+  - land/land.go, land/approval.go;
+  - settings/claude.go, settings/budget.go;
+  - guard/context.go, orchestrator/progress.go;
+  - contract/formats.md;
+  - skills/plan-jobs/SKILL.md, agents/library.md, topics/README.md.
 - **Acceptance.**
   - each reader finds its file under `grid/…` in a new-layout fixture and
     under `knowledge/…` with the key absent;
@@ -709,6 +757,9 @@ The brief's fixture list (F1-F9):
   - `ValidateGenerated` versus person notes;
   - origin out of front matter;
   - `RenameWith` rewriting body links.
+- **Files.** brain/markdown.go (`Encode`), config.go (`EncodeConfig`,
+  `EditConfig`), note.go (`Validate` split, `Link`), store.go (decide,
+  `markSuperseded`), ke_rename.go, ke_write.go, and a new brain/patch.go.
 - **Acceptance.**
   - a rewrite of a note with unknown keys, comments and CRLF changes only the
     edited key (byte diff);
@@ -727,7 +778,14 @@ The brief's fixture list (F1-F9):
   - expect-rev and proposal on mismatch (5.4);
   - person authority on every write path (6.1);
   - person-first ranking (6.3);
-  - `origin`, `author`, `updated` and `conflict` in the listing.
+  - `origin`, `author`, `updated` and `conflict` in the listing;
+  - the PostToolUse record of agent Edit and Write on brain files (4.3).
+- **Files.**
+  - brain/changes.go, versions.go, audit_check.go, check.go, lock.go,
+    store.go, ke_write.go, hy_drop.go, query.go, index.go, revert.go,
+    supersede_verb.go;
+  - a new brain/adopt.go;
+  - hook/brain.go.
 - **Acceptance.**
   - F7: a rename is recorded and the old id resolves;
   - F8: a delete is recorded;
@@ -748,6 +806,10 @@ The brief's fixture list (F1-F9):
   - the `grid/` config topics;
   - TOPIC.md topics;
   - the SessionStart rows (8.3).
+- **Files.**
+  - brain/store.go (`Propose`, decide), topics.go, topic_text.go, index.go,
+    config.go, waiting.go, check.go, sb_skill_for.go, sa_agent_for.go;
+  - hook/hook.go.
 - **Acceptance.**
   - the SessionStart text is at most 1200 bytes, with topics and counts only;
   - a folder without TOPIC.md is searchable but has no row;
@@ -763,9 +825,13 @@ The brief's fixture list (F1-F9):
   - `grid shot crop --jpeg`;
   - task proposals and attachments per the board decision;
   - task_decide.go.
+- **Files.**
+  - agents/curator.md, skills/brain-keeper/SKILL.md;
+  - shot/shot.go, cli/shot.go;
+  - brain/store.go (`ProposeTask`), task_decide.go.
 - **Acceptance.**
-  - a 3840×2400 PNG fixture ends at most 300 KB with its long side at most
-    1568;
+  - a 3840×2400 PNG fixture comes out near the 300 KB target with its long
+    side at 1568;
   - the curator files a proposal into a topic with working `[[links]]`.
 
 **L6 P-brain-migrate**
@@ -773,6 +839,10 @@ The brief's fixture list (F1-F9):
 - **Repo and model.** plugin, sonnet, **xhigh**.
 - **Depends on.** L3, L4, L5a.
 - **Builds.** `grid brain migrate --dry-run|--apply` (section 8).
+- **Files.**
+  - a new brain/migrate_vault.go;
+  - braincmd/command.go;
+  - migrate/plan.go:213, :231 (old paths).
 - **Acceptance.**
   - a fixture copy of a home and project brain with log, versions,
     proposals, front-matter links and origin, plus a flat-notes folder,
@@ -789,6 +859,8 @@ The brief's fixture list (F1-F9):
 - **Depends on.** L1 (the field shape) and L4 (origin).
 - **Builds.** It drops `vaultRoots` (vault.go:80-81) and the prefix matching
   (:401, :445-447) and reads `grid brain list --json`.
+- **Files.** internal/slices/brain/vault.go and
+  internal/kernel/webui/app/pages/brain/browser.mjs.
 - **Acceptance.** The app lists a person note with spaces in its name, shows
   its edges and backlinks, and marks a conflict person-first.
 
@@ -831,7 +903,9 @@ step). Nothing is called done before this.
    - Each note's `## Links` lines are clickable, and the backlinks pane of a
      target shows them.
    - Look whether `.grid/` shows in the file explorer (NOT VERIFIED, section
-     1).
+     1). Either way, nothing under `.grid/` shows in search or the graph,
+     because it holds no `.md` files. Pass: no `.change` or `.version` file
+     appears as a note.
 3. **Edit an agent note** in Obsidian, then run `grid brain check`.
    - It reports one adopted person change.
    - `grid brain list --json` shows `origin: person` and the owner's name for
@@ -852,7 +926,7 @@ step). Nothing is called done before this.
    - Search lists the note first, with the proposal marked as a conflict.
 7. **Curator.** Have the curator file a proposal (after L5b).
    - It shows in its topic folder with working links and backlinks.
-   - A screenshot attachment is at most 300 KB.
+   - A screenshot attachment is near the 300 KB target and readable.
 8. **Open editor.** With a note open in Obsidian, let Grid write a different
    agent note it links to. Look whether the open editor refreshes cleanly
    (NOT VERIFIED).
@@ -860,10 +934,10 @@ step). Nothing is called done before this.
    - `grid brain check` records the delete.
    - The bytes are in `.grid/versions/`.
 
-## Open items
+### 9.5 Open items
 
-- Five Obsidian behaviours are not stated in the official docs and are checked
-  on the Mac (section 1, step lines marked NOT VERIFIED). No decision depends
+- Six Obsidian behaviours are not stated in the official docs and are checked
+  on the Mac (section 1; the steps marked NOT VERIFIED). No decision depends
   on them.
 - The app reader was read from the reference app repository at `main`. The
   plugin reader rows outside internal/brain and internal/hook come from a
