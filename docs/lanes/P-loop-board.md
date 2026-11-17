@@ -34,6 +34,7 @@ The board interface with its JSONL claim, the older-attempt stale rule, and an e
 | Standing: `go test -count=1 ./internal/board/... ./internal/contract/... ./internal/feed/... ./internal/orchestrator/...` | **FAIL** | After the merge: board `ok 0.258s`, contract `ok 0.900s`, feed `ok 7.737s`, orchestrator `FAIL 98.953s`, only on `--- FAIL: TestOrphanNoExit`. See the finding below |
 | Standing: whole module and importers | **FAIL**, only `TestOrphanNoExit` | `go test -count=1 ./...`: every package `ok` except `internal/orchestrator`, whose only failing test is `TestOrphanNoExit`. Before the merge: same result, `FAIL .../internal/orchestrator 159.550s`. After the merge: the same, `--- FAIL: TestOrphanNoExit (0.08s)` and `FAIL .../internal/orchestrator 111.269s`, with no other FAIL line. The whole module covers every importer of `internal/contract`, `internal/board` and `internal/orchestrator` (from `go list`) |
 | Standing: walk tests | HOLDS | After the merge: `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` gives `ok .../internal/cli 0.039s`. `go test -count=1 ./internal/job/lint/` gives `ok 0.151s`, which includes `TestR23JobContractSaysTheJudgePostsReviewAndRework` on the edited `docs/job-contract.md` |
+| Doc-parsing tests on the final lane doc | HOLDS | After the last edit of this doc: `go test -count=1 ./internal/feed/ ./internal/golden/ ./internal/land/ ./internal/job/lint/` gives feed `ok 8.258s`, golden `ok 0.271s`, land `ok 0.531s`, lint `ok 0.212s`. These are the packages whose tests name `docs/lanes`. The cli walk tests again give `ok 0.047s` |
 | Standing: `make lint` | HOLDS | After the merge: exit 0 (`go vet ./...`, no output) |
 | Standing: `make cross` | HOLDS | After the merge: exit 0. darwin/arm64 and windows/amd64 vet and test compile, every package `ok`, including `internal/board` (the fslock claim lock builds on windows) |
 | Unedited tests that must pass | HOLDS | Run by name after the merge, all `--- PASS`: <br>• `TestMoves`, all 6 rows including `done` (`orchestrator_test.go:127`)<br>• `TestUsageLimitReoffer`, `TestYaUrWalk`, `TestYaUrReoffer` (16 subtests)<br>• `TestStreamReoffersUsageLimitParkedJob`, `TestUsageHoldBlocksHostDemand`<br>• the r23 orchestrator tests: `TestR23NeverJudgedNamesASubmittedJobNobodyJudges`, `TestR23JudgedSubmittedJobIsNoOrphan` (4), `TestR23LatestResultNeedsItsOwnWake`, and the 4 `TestR23PlanFault*`<br>• `TestAssignClearsTheExitCode`, `TestControlTenures`<br>• `TestFoldScenarios`: `usage-limit-reoffers-same-attempt`, `usage-limit-hold`, `checkpoint-survives-retry`, `stale-old-result-ignored`, `duplicate-assign-ignored`<br>• `TestAssignmentFold` (feed)<br>The r23 tests in cli, routine, lint and contract pass in the whole-module run |
@@ -63,7 +64,7 @@ Options, for a ruling. Neither is done here, because the brief says not to edit 
 
 ## Base-grep hits and verdicts
 
-Grep on base 92e1e9a3: `git grep -n -e "awaiting judgement" -e "past tenure end offset" -e "grant must advance" -e "no matching counted assign" -e "sameRetry" -- internal docs`.
+The brief's exact grep command is not quoted here. This is a reconstruction on base 92e1e9a3 that returns the recorded hit list line for line: `git grep -n -e "awaiting judgement" -e "past tenure end offset" -e "grant must advance" -e "no matching counted assign" -e "sameRetry" -- internal docs`.
 
 | Hit | Verdict |
 |---|---|
@@ -73,7 +74,7 @@ Grep on base 92e1e9a3: `git grep -n -e "awaiting judgement" -e "past tenure end 
 | `internal/contract/fold.go:208` "grant must advance the tenure" | Removed with its fence compare (`:207-208`), as asked. `duplicate-assign-ignored` still passes through the `:203` check |
 | `internal/contract/fold.go:269` "no matching counted assign for this tenure" | Changed as asked. Kept for current-attempt posts, while older-attempt posts fold `stale` "older attempt" (now `:285-287`) |
 | `internal/orchestrator/tick.go:330` done control | Kept (ruling 2). Comment added at `:330-331`, and the call is now `:332` |
-| `internal/orchestrator/r23_never_judged_test.go:13` comment "a tick that folds the exit to submitted" | Left: a test file this lane may not edit. The tick still posts the control there (a done exit with no result), so it is still true for that test |
+| `internal/orchestrator/r23_never_judged_test.go:13` comment "a tick that folds the exit to submitted" | Left: a test file this lane may not edit. The comment is now out of date. Its helper `r23Submitted` (`:16-33`) posts a result before the exit `done`, so the fold makes J-1 `submitted` at the exit and the tick posts no control. The test still passes because it checks `submitted` after the tick. Listed under open items |
 | `docs/job-contract.md:132` | Changed as asked: the fold acts when a result exists, and the tick when none does |
 | `docs/lanes/P-brain-board-decide.md:18` (`sameRetry` via `legacy`) | Left: an old lane's record. `sameRetry` is unchanged |
 | `docs/lanes/P-r23-judge-review.md:14` (`tick.go:329-330` done control) | Left: an old lane's record. It is still true for a done exit with no result |
@@ -83,7 +84,7 @@ Grep on base 92e1e9a3: `git grep -n -e "awaiting judgement" -e "past tenure end 
 | `docs/research/judge-land.md:37`, `:265`, `:285`, `:327` (launcher control "awaiting judgement") | Left: research for the judge lane. A done exit with a result no longer gets this control. That is the plan of `run-jobs-launcher.md:151`, which this lane carries out |
 | `docs/research/land-job-type.md:24` (`tick.go:329-330`) | Left: research snapshot. It is still true for a done exit with no result |
 | `docs/research/run-jobs-launcher.md:151`, `:310`, `:444` (done with a result folds Submitted, no control) | Matches. This lane carries it out |
-| App: `internal/kernel/worker/judge.go:20-21`, `judge_notyet_test.go:11` (comments) | Left: app repo, outside this lane. The comments describe the Submitted state, which the app still sees |
+| App: `internal/kernel/worker/judge.go:20-21`, `judge_notyet_test.go:11` (comments) | Left: app repo, outside this lane. Not checked here, app repo |
 | App: `replay_first_task_realplugin_unix_test.go:580-581` (done with no result) | Kept by ruling 2. The tick still posts that control. Not run here (app repo) |
 
 ## Outside Touches
@@ -93,6 +94,7 @@ None. Only the listed files are changed: `internal/board/*`, `internal/contract/
 ## Open items
 
 - **`TestOrphanNoExit` is red** (the finding above). It needs a ruling.
+- **An out-of-date test comment.** `internal/orchestrator/r23_never_judged_test.go:13` says the tick folds the exit to `submitted`. With a result, the fold now does it. The test passes, but the comment needs an edit this lane may not make.
 - **The claim key also matches the post type.** The brief's key is (task, Job, attempt, plus firing). One attempt writes several post types under the same header (ack, checkpoint, result, worker-exit). Without the type, any earlier post of that attempt would make a claim fail, and the claim post would block the attempt's own result. `Claim(key, ack)` therefore means "no ack of this attempt yet". The key also rejects a claim post whose own header or firing does not match the key, because a later claim could never find such a post.
 - **The claim lock is a file in `feed/.cache/`.** Only `Claim` takes it. A plain `Post` of the same type does not, so a writer that bypasses `Claim` can still add a second post. Callers that need create-only must use `Claim`.
 - **The shared disk filled during the run.** `/` reached 0 bytes free from other work on the host. A git checkout failed for a moment, and the first fetch could not write its ref. Both were redone once space came back. The working tree and the commits are intact.
