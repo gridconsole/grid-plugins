@@ -2,7 +2,7 @@
 
 This is the decision lane for tasks, Jobs and the board as brain nodes. The decision note is `docs/research/brain-board.md`. The lane adds no product code. The one code file it adds is the measurement program for Q2, `docs/research/testdata/boardbench/main.go`. It sits under `testdata/`, so `go build ./...`, `go vet ./...` and `go test ./...` never build it.
 
-The proof was taken after `git merge origin/main` ("Already up to date", plugin main `885dc9a6`). App evidence was read at app main `e60fab587`, using `git grep` and `git show` on the reference repository.
+The proof was taken after `git merge origin/main` ("Already up to date", plugin main `885dc9a6`). The walk tests, lint, the cross builds and the second benchmark run ran on head `a60a8ecf`. Every later commit changes only `docs/research/brain-board.md` and this doc. App evidence was read at app main `e60fab587`, using `git grep` and `git show` on the reference repository.
 
 ## Proof
 
@@ -17,7 +17,7 @@ The proof was taken after `git merge origin/main` ("Already up to date", plugin 
 | Q6 ranking and context: knowledge above history, start from the Job node, SessionStart index only, guest sees one task folder | HOLDS | Section Q6. The guest scope is written as a requirement on P-shared-home. |
 | Q7 forward-only migration with a fold-equality check | HOLDS | Section Q7, steps 1 to 7. "Equal" is defined as a list of fields dropped and a list compared. Records stale only by takeover offset, and `sameRetry` grants, are handled through `legacy`. |
 | Q8 post read/write interface for the launcher and the vault reader | HOLDS | Section Q8: the header key table, `board.Board` methods for per-post files (including `Claim`), the launcher post types and the vault reader rules. It is aligned with the sibling notes R-run-jobs-launcher and R-brain-obsidian, which landed during this lane. The one deviation, the claim file name, is stated with its reason. |
-| Q9 lane plan: order, repo, model/effort, files, acceptance rows, dependencies; format and migration at xhigh | HOLDS | Section Q9. B1 (format) and B3 (migration) are opus xhigh. Rows are added to run-jobs lanes P-loop-board, P-loop-home and P-loop-retire, so no two lanes edit fold.go, internal/lease or the status writer. |
+| Q9 lane plan: order, repo, model/effort, files, acceptance rows, dependencies; format and migration at xhigh | HOLDS | Section Q9. B1 (format) and B3 (migration) are opus xhigh. Rows are added to run-jobs lanes P-loop-board, P-loop-home and P-loop-retire, so no two lanes edit internal/lease or the status writer. The new fold rules land in B1 behind the home format version, so JSONL homes fold as today until B3 migrates them. Every Q3 plugin row is named in some lane's Files column. |
 | Ruling of 17 Nov 02:12 followed (attempts, no lease, version-checked writes, caches never sync, home launcher writes the status block, inbox note) | HOLDS | Decision points 2 to 7, Q1, Q4. No lease or lock is proposed across machines. The locks named are local to one machine and order honest writers there. |
 | Last line is DONE or NOT DONE | HOLDS | The last line of `docs/research/brain-board.md` is `DONE`. |
 | Copy to the hand folder as R-brain-board.md | HOLDS | `cp`, exit 0 (after the last commit). |
