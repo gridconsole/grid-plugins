@@ -119,10 +119,13 @@ type Checkpoint struct {
 // the writer sent it); ExitReasonMissing says the worker-exit gave no reason, so
 // ExitReason reads crash only by default.
 type Job struct {
-	ID              string          `json:"id"`
-	Task            string          `json:"task"`
-	Title           string          `json:"title"`
-	Role            string          `json:"role"`
+	ID    string `json:"id"`
+	Task  string `json:"task"`
+	Title string `json:"title"`
+	Role  string `json:"role"`
+	// Kind is the Job's free-form kind from its job post. Kind land marks a Job
+	// that lands one accepted change; its record also carries target, branch and
+	// sha (the job-record body), which feed read holds and the state does not fold.
 	Kind            string          `json:"kind,omitempty"`
 	Repo            string          `json:"repo,omitempty"`   // the repo path the Job names; empty is the project's first repo
 	Base            string          `json:"base,omitempty"`   // the branch the Job's clone starts from; empty names none
