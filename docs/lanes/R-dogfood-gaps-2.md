@@ -1,6 +1,6 @@
 # Lane R-dogfood-gaps-2
 
-The research lane on what grid-plugins needs to run this build itself, across the local accounts of one machine. The research doc is `docs/research/dogfood-gaps.md`. The proof was taken after merging origin/main (cba64cdf), at lane head 3edbb141 plus this doc.
+The research lane on what grid-plugins needs to run this build itself, across the local accounts of one machine. The research doc is `docs/research/dogfood-gaps.md`. The proof was taken after merging origin/main (cba64cdf), The walk tests ran green on head f000db3d. The only later commit changes this doc.
 
 ## Proof
 
