@@ -297,7 +297,13 @@ func (d Dir) saveCache(c namesCache) error {
 // List reads the board: the names in board/, each known name from the names cache and
 // each new name from its file. Posts never change, so a known name is not read again;
 // Check is the pass that looks at the files.
-func (d Dir) List() (Listing, error) {
+func (d Dir) List() (Listing, error) { return d.list(true) }
+
+// Scan is List without writing the names cache: a new name is read from its file and
+// not kept, for a reader that must not change the machine folder.
+func (d Dir) Scan() (Listing, error) { return d.list(false) }
+
+func (d Dir) list(save bool) (Listing, error) {
 	out := Listing{Bad: map[string]string{}}
 	names, err := d.names()
 	if err != nil {
@@ -331,7 +337,7 @@ func (d Dir) List() (Listing, error) {
 		changed = true
 		out.Posts = append(out.Posts, Post{Name: n, Header: h, Sum: cp.Sum})
 	}
-	if changed {
+	if changed && save {
 		if err := d.saveCache(c); err != nil {
 			return out, err
 		}

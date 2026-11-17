@@ -101,6 +101,12 @@ func FoldBoard(posts []BoardPost) (State, Loop) {
 
 type boardInfo struct{ by, legacy string }
 
+// ValidBoardPost says why the fold would ignore p for its schema, or nil when its
+// type's schema takes it: the check a writer of the board makes before it publishes.
+func ValidBoardPost(p BoardPost) error {
+	return boardValid(p.Post, boardInfo{by: p.By, legacy: p.Legacy})
+}
+
 // boardWorker stands in for the worker a board post has none of, so the envelope
 // schema checks every other field as on a JSONL feed.
 const boardWorker = "board@00000000000000000000000000"
