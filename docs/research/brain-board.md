@@ -1,6 +1,6 @@
 # Brain board: tasks, Jobs and the board as brain nodes (decision)
 
-Base: plugin main `885dc9a6`, app main `e60fab587`. Plugin paths are repo-relative. App paths are prefixed `app:`. Sources: the owner's brain-obsidian brief (Addenda 3 to 6), the run-jobs design brief (Correction and Addenda 2 to 5), and the ruling of 17 Nov 02:12 UTC on this lane. This is a decision lane: it changes no product code. The one code file it adds is the measurement program for Q2, `docs/research/testdata/boardbench/main.go`, which `./...` never builds.
+Base: plugin main `885dc9a6`, app main `e60fab587`. Plugin paths are repo-relative. App paths are prefixed `app:`. Sources: the owner's brain-obsidian brief (Addenda 3 to 6), the run-jobs design brief (Correction and Addenda 2 to 5), the ruling of 17 Nov 02:12 UTC on this lane, and the sibling decision notes R-run-jobs-launcher and R-brain-obsidian. This note uses their names for post types, paths and lanes wherever they already decided them. This is a decision lane: it changes no product code. The one code file it adds is the measurement program for Q2, `docs/research/testdata/boardbench/main.go`, which `./...` never builds.
 
 ## Decision
 
@@ -10,14 +10,15 @@ Base: plugin main `885dc9a6`, app main `e60fab587`. Plugin paths are repo-relati
 2. **Identity is the header `id` (a ULID), not the file name and not `seq`.** `re`, `after`, `assign_post`, the fold, and every reader use the id. `seq` gives display order and the order of one writer's posts. It does not confer authority, and two posts may share it.
 3. **The header is strict YAML.** It holds a fixed key set in a fixed order. The typed body is one line of JSON under `body:`, which is valid YAML flow. The markdown under the header is a human rendering for display only, and the fold never reads it.
 4. **No lease and no fence.** Authority comes from two sources:
-   - **The task home.** task.md names it as `home: <machine>`. A control counts only when the writer in force at the control's `gen` is the home machine. `gen` is the home generation; it starts at 0 and only a `move` control raises it.
-   - **The attempt.** A Job-side post counts only for the current attempt of its Job, and only when the writer is that attempt's `to`. Posts from an older attempt are ignored. This replaces `lease`/`fence`/`takeovers.jsonl`. The ruling sets the attempt rule; the home rule is how it turns into a fold check.
+   - **The task home.** task.md names it as `home: <machine>`. A control counts only when the writer in force at the control's `gen` is the home machine. `gen` is the home generation; it starts at 0 and only a `task-move` post raises it (the person post that `grid task move` writes, R-run-jobs-launcher Q4).
+   - **The attempt.** A Job-side post counts only for the current attempt of its Job, and only when the writer is that attempt's `to`. Posts from an older attempt fold as `stale` and change nothing, as R-run-jobs-launcher Q1 also says. This replaces `lease`/`fence`/`takeovers.jsonl`. The ruling sets the attempt rule; the home rule is how it turns into a fold check.
 5. **Fold order is `(gen, seq, id)`.** It replaces `(gen, fence, worker, seq)` at internal/contract/fold.go:63-75. Cross-writer causality stays as `re`/`after`, and a post is held until its references arrive (fold.go:86-99, unchanged).
 6. **Caches live in the machine folder and are never synced.** These are state.json, needs-you.json, the reader cache, liveness and the seq counter. Locks live there too: the board lock that allocates seq, and the task lock that serializes one machine's orchestrator pass. They are local and order honest writers on one machine. Neither one is a lease or a gate.
 7. **task.md gets a status block between markers.** Only the home launcher writes it, after a hash or version check (Q4). The "Needs you" inbox is one brain note with one marked section per home machine.
-8. **Screenshots go in `tasks/<T>/proof/`.** They are linked with standard relative markdown image links (Q5). Videos stay in the machine folder.
-9. **Search ranks knowledge above history** (Q6). A guest shared one task sees that task's folder only. That is a requirement on the shared-home lane.
-10. **Migration is forward only, with a fold-equality check per task** (Q7).
+8. **Screenshots go in `projects/<p>/tasks/<T>/proof/`.** They are linked with standard relative markdown image links (Q5). Videos stay in the machine folder.
+9. **Task proposals go to `projects/<p>/Proposals/`** with a `task: <T>` front-matter key. That is the one proposals folder that R-brain-obsidian section 6.2 sets up, so the curator has one place to look. Each proposal is an immutable file.
+10. **Search ranks knowledge above history** (Q6). A guest shared one task sees that task's folder only. That is a requirement on the shared-home lane.
+11. **Migration is forward only, with a fold-equality check per task** (Q7).
 
 **Why.**
 
@@ -65,7 +66,7 @@ Base: plugin main `885dc9a6`, app main `e60fab587`. Plugin paths are repo-relati
 | --- | --- | --- |
 | Fencing (lease, fence, takeovers) | **Refuted as a mechanism, kept as a property.** A per-post file cannot carry a fence, because nothing grants one across machines. | Attempt replaces the Job fence, and `gen` (home generation) replaces the task tenure. "Only the current tenure writes" becomes "the fold counts only the current attempt's writer, and only the home's controls". |
 | Ordering of seq under concurrent writers | **Confirmed on one machine, refuted across machines.** The benchmark: 30 writers under one machine-folder lock produced 0 duplicate seq. Two machines without a shared lock can both pick seq N. | The fold does not need a total order (decision point 5). Controls come from one writer per `gen`, the home under its local lock, so their seq order is the home's order. Side posts of one `(job, attempt)` come from one machine: the launcher and its agent share that machine's lock. So their seq order is that machine's order. Ties break by id. |
-| Stale-lease rules (F4a step 5, lease expiry) | **Replaced.** | A post from an attempt that is closed (cancelled, exited, superseded by a newer assign) is written but folded `ignored` ("older attempt" or "attempt already exited", fold.go:221-223 already has the second). The launcher still logs `exit_superseded` in its machine log. Lease expiry (`until`, `lease_expires`) becomes the orchestrator's reassignment on a missed start or a stale machine note (run-jobs Addendum, "If an assigned Job is not started in time"). |
+| Stale-lease rules (F4a step 5, lease expiry) | **Replaced.** | A post from an attempt that a newer assign superseded is written but folded `stale` ("older attempt"). A post after its attempt's exit is folded `ignored` ("attempt already exited"; fold.go:221-223 already has this case). The launcher still logs `exit_superseded` in its machine log. Lease expiry (`until`, `lease_expires`) becomes the orchestrator's reassignment on a missed start or a stale machine note (run-jobs Addendum, "If an assigned Job is not started in time"). |
 | The fold | **Survives with seven edits** (the next table). | It stays an in-memory function of the admitted posts, and no timestamp decides anything (fold.go:31). |
 
 ### Fold and write-side edits, one per current use of lease, fence or gen
@@ -73,7 +74,7 @@ Base: plugin main `885dc9a6`, app main `e60fab587`. Plugin paths are repo-relati
 | Today | Replacement |
 | --- | --- |
 | fold.go:63-75 sort `(gen, fence, worker, seq)` | `(gen, seq, id)` |
-| fold.go:192-198 unleased control means a person's request | A control counts only when its author's role is an orchestrator, cli or launcher role, and its writer `by` names the home machine of `gen` (from task.md `home` and the `move` controls). A person's control is always a request, written with the person as author. The home's pass writes the counted control with `re` set to the request. This keeps D-r19 option C as it is. |
+| fold.go:192-198 unleased control means a person's request | A control counts only when its author's role is an orchestrator, cli or launcher role, and its writer `by` names the home machine of `gen` (from task.md `home` and the `task-move` posts). A person's control is always a request, written with the person as author. The home's pass writes the counted control with `re` set to the request. This keeps D-r19 option C as it is. |
 | fold.go:199-209 assign must advance the attempt, or be a `sameRetry` with a higher fence | The attempt must strictly advance. A usage-limit retry becomes a new attempt with `retry_of: usage_limit` in the assign body, as the ruling says ("a reassigned Job gets a new attempt number"). Readers that use the attempt as a rework count must skip `retry_of` attempts. The rework count lives in the Job graph (a new rework Job, run-jobs Addendum 3), so none is known to. |
 | fold.go:217 side match on attempt, `to`, fence, gen | Match on `job`, attempt, and `by == assign.to`. |
 | fold.go:273, store.go:392 guest addressee reads `Lease != nil \|\| Fence != 0` as "leased" | "Not a person-request writer": `by` is a launcher or agent writer. Same meaning, without the lease. |
@@ -94,9 +95,9 @@ Base: plugin main `885dc9a6`, app main `e60fab587`. Plugin paths are repo-relati
 | F5 | The same seq with different names | Harmless: the fold breaks ties by id, and display sorts by `(seq, id)`. |
 | F6 | A post edited or deleted by hand (Obsidian or a shell) | The reader cache keeps the sha256 of each post's bytes when it is first read. `grid brain check` and the launcher's slow pass compare them and report an "edited post" finding in state.json errors and in the status block. The fold reads the file as it is now. A deleted post is a finding and drops out of the fold. The sync server refuses edits to `board/` from agents. A person's edit is kept locally and flagged, never synced over the original. |
 | F7 | A post whose `re`/`after` has not synced yet | Held (fold.go:97-99) until it arrives, as today. |
-| F8 | A late post from an older attempt (a slow remote machine) | Ignored, reason "older attempt". |
-| F9 | A worker-exit after a cancel (F4a step 5) | Written by the launcher, or refused locally by the stale-attempt check. Either way it is folded `ignored`. The launcher logs `exit_superseded`. The status block shows Cancelled. |
-| F10 | Two orchestrators: a task moved while the old home is still running | `grid task move` writes a `move` control that raises `gen`. Controls the old home writes before it sees the move have the lower `gen`, so they sort first, and the new home's controls override them. A conflicting assign loses on the attempt rule. The old home's launcher stops waking its orchestrator for the task once its fold shows another home (run-jobs Addendum 4.2). |
+| F8 | A late post from an older attempt (a slow remote machine) | Folded `stale`, reason "older attempt". |
+| F9 | An exit after a cancel (F4a step 5) | Written by the launcher, or refused locally by the stale-attempt check. Either way it is folded `ignored` ("attempt already exited"). If the orchestrator has already posted a newer attempt, it is folded `stale`. The launcher logs `exit_superseded`. The status block shows Cancelled. |
+| F10 | Two orchestrators: a task moved while the old home is still running | `grid task move` writes a `task-move` person post that raises `gen` and rewrites `home:` in task.md. It is the one person post the fold counts as authority, because the owner moves a task only by this command (run-jobs Addendum 4.2). Controls the old home writes before it sees the move have the lower `gen`, so they sort first, and the new home's controls override them. A conflicting assign loses on the attempt rule. The old home's launcher stops waking its orchestrator for the task once its fold shows another home (run-jobs Addendum 4.2). |
 | F11 | Clock skew between machines | `at` is display only (fold.go:31). |
 | F12 | No hard links (FAT, exFAT, some network drives) | Fallback: create the final name with O_EXCL, write it, fsync it. A reader skips a header without its closing `---` until the next pass, as in F3. Windows NTFS supports `os.Link`. |
 
@@ -149,7 +150,7 @@ Every `TaskPath` user that reads a cache must take the machine root. 24 call sit
 | internal/feed/record.go:183 | Author must be the writer's member | Kept, with `by` as the writer |
 | internal/contract/fold.go:63-75, :192-209, :217, :273, :317-326, :472 | Lease, fence and tenure rules | Q1 edits table |
 | internal/contract/schema.go:434 | Takeover file name check | Removed with takeover.json |
-| contract/schemas/envelope.json, control.json, worker-exit.json, takeover.json, lease.json, handover.json, transfer.json | Lease, fence, takeover | Envelope gets `by`, `seq`, `gen`, `attempt` and `legacy`, and loses `lease` and `fence`. Assign loses `fence` and `until` and gets `retry_of`. worker-exit gets `no_result` and `cost`. A new `move` control. Takeover, lease, handover and transfer are retired; old records read as `unknown` (fold.go:101-104). |
+| contract/schemas/envelope.json, control.json, worker-exit.json, takeover.json, lease.json, handover.json, transfer.json | Lease, fence, takeover | Envelope gets `by`, `seq`, `gen`, `attempt` and `legacy`, and loses `lease` and `fence`. Assign loses `fence` and `until` and gets `retry_of`. The launcher types of R-run-jobs-launcher Q7 are added (`started`, `exit` with `cost`, `waiting`, `wake`, `cancel`, `task-move`). Takeover, lease, handover and transfer are retired; old records read as `unknown` (fold.go:101-104). |
 | internal/lease/task.go (all), internal/lease/job.go:46-111 | Task lease, Job grants, takeovers, expiry | Removed. Liveness is read from the launcher's machine-folder records (run-jobs lane). |
 | internal/orchestrator/stream.go:236-361, :399-432, :471-500 | `grid worker next`: AcquireTask, epoch, spawn line `fence`/`task_epoch` (:130, :308-322), ReleaseTask, handover | Without a lease: the home check (task.md `home`) decides whether this machine runs the pass. Spawn lines carry job, attempt and `to`. |
 | internal/orchestrator/tick.go:24, :207, :241-254, :396-416, :447-468 | Requires the task lease, GrantJob fence, observed fence, `.live/<to>.<fence>.json` | Assign with attempt only; liveness keyed by `(job, attempt)` |
@@ -160,7 +161,7 @@ Every `TaskPath` user that reads a cache must take the machine root. 24 call sit
 | internal/mcp/stale.go | Stale lease env | Stale attempt env |
 | internal/cli/feed.go:119, :178, :193-223 | Store resolution and refold | Two roots |
 | internal/cli/orchestrator.go:195, :307-321, :450-491, :617, :709-740 | Writer with lease and epoch; the C-r18 person epoch path | Writer `by`; the person path always writes a request (D-r19 C) |
-| internal/cli/cli.go, internal/cli/global.go, internal/cli/mcp.go, internal/question/command.go, internal/hook/events.go | `GRID_LEASE_EPOCH`, `GRID_TASK_EPOCH`, `--lease-epoch` | Removed. GRID_ATTEMPT stays. About 60 test files under internal/cli name these variables; lane B2 rewrites them. |
+| internal/cli/cli.go, internal/cli/global.go, internal/cli/mcp.go, internal/question/command.go, internal/hook/events.go | `GRID_LEASE_EPOCH`, `GRID_TASK_EPOCH`, `--lease-epoch` | Removed. GRID_ATTEMPT stays. About 60 test files under internal/cli name these variables; lane P-loop-retire rewrites them. |
 | internal/hook/events.go:385-393, internal/hook/pe_job_message.go:38-46 | Stat `feed/`, read posts of one Job | Stat `board/` |
 | internal/hook/hook.go:405-427 (:417) | Job context from `jobs/<id>/brief.md` | `jobs/<J-n>.md` (the Job node) |
 | internal/hook/brain_why.go:32 | `jobs/<id>/job.yaml` | Front matter of `jobs/<J-n>.md` |
@@ -244,15 +245,15 @@ Every `TaskPath` user that reads a cache must take the machine root. 24 call sit
 
 ## Q5. Proof screenshots in the brain
 
-- **Path.** `projects/<p>/tasks/<T>/proof/<job>-<row>.webp`, for example `proof/J-4-row2.webp`, with `-2`, `-3` for more shots of one row. Today's layout is `proof/<id>/<ulid>.<ext>` plus `proof.json` (internal/proof/proof.go:144-168).
+- **Path.** `projects/<p>/tasks/<T>/proof/<job>-<row>.<ext>`, for example `proof/J-4-row2.png`, with `-2`, `-3` for more shots of one row. The extension is the one captured: png, jpg, webp or gif (proof.go:138). After compression it is png or jpg, because R-brain-obsidian section 7.3 compresses to PNG or JPEG. Today's layout is `proof/<id>/<ulid>.<ext>` plus `proof.json` (internal/proof/proof.go:144-168).
 - **proof.json.** It is an edited file and goes away. Each proof record (kind, sha256, file, plan_hash, row) goes into the body of the result or checkpoint post that adds it. A machine-folder cache can rebuild the list.
-- **Link form.** A standard relative markdown image link: `![J-4 row 2](../proof/J-4-row2.webp)` from a board post, `![J-4 row 2](proof/J-4-row2.webp)` from outcome.md. A bare `![[J-4-row2.webp]]` embed is ambiguous, because the same name repeats in every task, and its resolution depends on the vault's link setting. A relative path does not. It works when the brain is a folder inside a larger vault, and it renders in the app and on GitHub. Rendering in Obsidian is NOT VERIFIED.
+- **Link form.** A standard relative markdown image link: `![J-4 row 2](../proof/J-4-row2.png)` from a board post, `![J-4 row 2](proof/J-4-row2.png)` from outcome.md. A bare `![[J-4-row2.png]]` embed is ambiguous, because the same name repeats in every task, and its resolution depends on the vault's link setting. A relative path does not. It works when the brain is a folder inside a larger vault, and it renders in the app and on GitHub. Rendering in Obsidian is NOT VERIFIED.
 - **Videos.** They stay in the machine folder, `<machine>/tasks/<T>/videos/`. The post names the machine and the relative path as text. Obsidian cannot open them; the app can.
-- **Compression** is the curator's (P-brain-obsidian-decide). Posts are immutable, so the curator's compressed file replaces the image and the curator writes a new `post` recording the file, the old and new sha256, and the sizes. The original post's sha256 then names the first image, and the new post explains the change.
+- **Compression** is the curator's (P-brain-obsidian-decide). Posts are immutable, so the curator's compressed file replaces the image (or sits beside it under its new extension, with the original removed) and the curator writes a new `post` recording the file, the old and new sha256, and the sizes. The original post's sha256 then names the first image, and the new post explains the change.
 
 ## Q6. Ranking and context
 
-- **Search.** `brain.Store.Search` (internal/brain/query.go:107-152) scores knowledge notes only today. It gains a node kind: `note`, then `task`, `job`, `post` (history), and `proposal`. Proposals are left out unless asked for. Results sort by kind class first (knowledge before history), then by score. `--kind` filters. Only posts of type `result`, `question`, `answer` and `found`, plus task.md, outcome.md and Job nodes, are indexed. Checkpoints and heartbeats are not, so a 6,000-post task adds at most a few hundred entries. The index stays a machine-folder cache.
+- **Search.** `brain.Store.Search` (internal/brain/query.go:107-152) scores knowledge notes only today. It gains a node kind: `note`, then `task`, `job`, `post` (history), and `proposal`. `post` is the kind that R-brain-obsidian section 3.4 left open as `board`: one board file is one post. Proposals are left out unless asked for. Results sort by kind class first (knowledge before history), then by score. `--kind` filters. Only posts of type `result`, `question`, `answer` and `found`, plus task.md, outcome.md and Job nodes, are indexed. Checkpoints and heartbeats are not, so a 6,000-post task adds at most a few hundred entries. The index stays a machine-folder cache.
 - **Library agent.** agents/library.md:18 gets one rule: answer from knowledge first. Cite history (task, Job, post) only when no note answers, and label it history. A decision made in a task becomes knowledge only when the curator files a note linking back to the task (Addendum 3 rule 1).
 - **Agents start from their Job node.** The hook injects the Job's lines from `jobs/<J-n>.md` (internal/hook/hook.go:405-427). Those lines are the brief with its described links. The agent follows links on demand.
 - **SessionStart** still injects only the topic index (internal/hook/hook.go:147, pinned by internal/hook/sessionstart_index_only_test.go). Tasks and posts never enter it.
@@ -302,25 +303,25 @@ Every `TaskPath` user that reads a cache must take the machine root. 24 call sit
 
 The markdown below the header is display only.
 
-**Go API** (lane B1), with `feed.Store` kept as a facade:
+**Go API.** R-run-jobs-launcher Q7 proposes the interface `board.Board`, with `Tasks`, `Read(since Cursor)` in write order, `Post` and `Claim(Key)`. Lane B1 implements it for per-post files and keeps `feed.Store` as a facade for today's callers:
 
-```go
-type Board struct{ BrainTask, MachineTask, TaskID string /* + Now, Context, Warn */ }
-func (b Board) Post(in Input, w Writer) (Record, error)       // seq under the machine lock, publish by link, refold
-func (b Board) Read(f Filter) (ReadResult, error)              // admitted posts with verdicts, (seq, id) order
-func (b Board) State() (contract.State, error)                 // fold; SaveState writes the machine-folder caches
-func (b Board) Changed(since Cursor) ([]Entry, Cursor, error) // new names since a cursor (a digest + name set), for the launcher's wake
-```
+| Method | Per-post files |
+| --- | --- |
+| `Tasks` | The task folders under `projects/*/tasks/` in the brain whose fold has an open Job (from the machine-folder state cache) |
+| `Read(t, since)` | List `board/`, diff the names against the cursor (a digest plus the name set, kept in the machine folder), parse the new names, and return them in `(gen, seq, id)` order. Q2 costs this at 1 to 7 ms. |
+| `Post(t, p)` | Under the machine-folder board lock: take the next seq, write `board/.tmp/<name>`, link it to `board/<name>`, refold |
+| `Claim(t, k, p)` | Under the same lock: if the names cache holds a post with the key's `(job, attempt, type, firing)`, return `ErrClaimed`; otherwise `Post`. The file name stays `<seq>-<job>-<type>.md` and is not keyed. On one machine the lock makes the claim exactly-once. Across machines no race exists, because one attempt names one `machine:login` (R-run-jobs-launcher Q7 point 5). If two copies still meet after sync, the fold counts the first by `(gen, seq, id)` and folds the other `ignored` ("duplicate claim"). |
+
+This deviates from the deterministic claim name that R-run-jobs-launcher suggests (`board/<job>-a<n>-started.md`). The reason: one name scheme keeps every board listing in seq order, and that note already places the cross-machine guarantee on the attempt, not on the name.
 
 **CLI** (unchanged names, the stable interface for the app and for shell callers): `grid feed post|read|state --json`, with the record shape given in Q3.
 
 **The launcher (P-run-jobs-decide):**
 
-- **Started** is `ack` with `after: [assign post id]`, `attempt`, and `by` set to its own `<machine>:<login>`.
-- **Exit** is `worker-exit` with reason `done`, `crash`, `usage_limit`, `cancelled`, `loop` or `no_result`, plus a `cost` object (cpu_s, mem_peak_mb, wall_s, tokens; run-jobs Correction). `no_result` and `cost` are a contract change. The current enum (contract/schemas/worker-exit.json:34-40) has neither. Lane B0 owns it.
-- **"Awaiting judgement"** is a launcher `post` with `ref: <job>`.
-- **Reading Jobs.** The launcher reads `jobs/<J-n>.md` front matter, plus the fold's `assign{job, attempt, to, start_when}`. The start condition is decided by P-run-jobs-decide and carried in the assign body.
-- **Writing.** It writes only through `Board.Post` or the CLI, never by hand.
+- **Post types** are the ones R-run-jobs-launcher Q7 lists: `assign`, `started`, `exit`, `waiting`, `wake`, `cancel`, `task-move`, `landed`, `push-request` and `push-lost`. `started` replaces today's `ack` and `exit` replaces `worker-exit`. The fold rules that `ack` has today (first side post, names its assign, fold.go:215-238) move to `started`.
+- **Exit** carries `reason` (done, crash, usage_limit, cancelled, lost, start_lost, account_missing), `code` (the exit code, `no_result`, or the usage reset) and `cost` (R-run-jobs-launcher Q3). Today's enum (contract/schemas/worker-exit.json:34-40) has neither the new reasons nor `cost`. The contract lane P-loop-board owns the change.
+- **Reading Jobs.** The launcher reads `jobs/<J-n>.md` front matter plus the fold's `assign`. The start condition is carried in the assign body (R-run-jobs-launcher Q2).
+- **Writing.** It writes only through `board.Board` or the CLI, never by hand. The status block and the inbox section use the Q4 writer.
 
 **The vault reader (P-brain-obsidian-decide):**
 
@@ -330,16 +331,22 @@ func (b Board) Changed(since Cursor) ([]Entry, Cursor, error) // new names since
 
 ## Q9. Lane plan
 
-Order: B0, then B1, then B2 and B3 in parallel, then B4, B5 and A1. Each build lane runs the whole-module tests and the walk tests as usual.
+Three of the lanes this note needs are already in R-run-jobs-launcher's lane plan, because they edit the same files. Two lanes editing fold.go, internal/lease or the status writer would collide, so this note adds its acceptance rows to those lanes instead of opening new ones:
+
+- run-jobs lane 1, P-loop-board;
+- run-jobs lane 5, P-loop-home;
+- run-jobs lane 11, P-loop-retire.
+
+Order: P-loop-board, then B1, then B3 and P-loop-home, then P-loop-retire, B5 and A1. B3 must land before P-loop-retire removes internal/lease, because migration step 1 takes the old lease. Each build lane runs the whole-module tests and the walk tests as usual.
 
 | Lane | Repo | Model, effort | Files | Acceptance rows | Depends on |
 | --- | --- | --- | --- | --- | --- |
-| **B0 P-board-contract** | plugin | opus, xhigh (format) | contract/schemas/{envelope,control,worker-exit}.json, new move control, retire takeover/lease/handover/transfer; internal/contract/fold.go; contract fixtures and README | Fold sorts `(gen, seq, id)`. A home-only control counts and a non-home control is a request. An older-attempt side post is ignored. A usage-limit retry is a new attempt. `legacy` is honoured. A `move` raises `gen` (F10). `no_result` and `cost` validate. Each row is a test that fails on base. | none |
-| **B1 P-board-store** | plugin | opus, xhigh (format) | new internal/board (or internal/feed rewritten): header codec, publish by link with the F12 fallback, names cache, machine-folder caches; internal/feed facade; internal/mcp/tools.go; internal/cli/feed.go | Header round-trips byte-exactly (exit code `2.0`, a 64 KB body). 30 concurrent goroutines give unique names. F2, F3, F5 and F6 tests. A fold benchmark at 6,000 posts. The CLI JSON shape of Q3 is pinned by a golden. | B0; P-grid-config-read (machine folder and brain path) |
-| **B2 P-board-no-lease** | plugin | opus, xhigh | internal/lease (removed), internal/orchestrator/{stream,tick,write,store,oh_quiet_task}.go, internal/cli/{orchestrator,cli,global,mcp}.go, internal/mcp/stale.go, internal/hook/events.go, the tests that pin epochs | `grid worker next` runs a pass only on the home. No `GRID_TASK_EPOCH` remains. D-r19 rows N1 to N9 hold with home authority. F4a step 5: the cancelled attempt's exit is ignored and the Job shows Cancelled. A deleted test names its replacement or this note. | B1; coordinate with the P-run-jobs launcher build |
-| **B3 P-board-migrate** | plugin | opus, xhigh (migration) | internal/migrate (legacyfeed, board), internal/gridhome format bump, the task folder split into brain plus machine folder, Job nodes | On 3 fixture homes (one with a takeover, one with a `sameRetry`, one with a person cancel request) S_new equals S_old. A forced mismatch leaves the task untouched and exits non-zero. A task with a live holder is skipped. | B1, B2; the P-brain-obsidian layout lane |
-| **B4 P-board-status** | plugin | sonnet, high | the status block renderer and writer, the inbox note, hooked into the launcher's fold step | A hand edit outside the markers survives a rewrite. An edit inside is replaced and logged. A concurrent edit (hash change between read and write) causes a retry, not an overwrite. The bytes do not change when the state does not. | B1; the launcher lane |
-| **B5 P-board-search-proof** | plugin | sonnet, high | internal/brain/query.go and its index, agents/library.md, internal/proof (records in posts, new path), internal/hook/hook.go job context | Knowledge ranks above history for an equal score. `--kind` works. The SessionStart index-only test still passes. A screenshot lands at `proof/J-n-rowN.webp` and is linked relatively from its post. | B1; the P-brain-obsidian vault reader |
+| **P-loop-board** (run-jobs lane 1), plus these rows | plugin | opus, xhigh (format) | Its files, plus contract/schemas/envelope.json (`by`, `seq`, `gen`, `legacy`; no `lease`, `fence`) and the retired takeover, lease, handover and transfer schemas | Added rows: fold sorts `(gen, seq, id)`. A control counts only from the home of its `gen`, and a non-home control is a request. A `task-move` raises `gen` (F10). A usage-limit retry is a new attempt with `retry_of`. `legacy` verdicts are honoured. A duplicate claim folds `ignored`. Each row is a test that fails on base. | none |
+| **B1 P-board-store** | plugin | opus, xhigh (format) | the per-post adapter of `board.Board` (header codec, publish by link with the F12 fallback, `Claim` under the board lock, names cache, machine-folder caches); internal/feed facade; internal/mcp/tools.go; internal/cli/feed.go; internal/orchestrator/oh_quiet_task.go (digest of names) | Header round-trips byte-exactly (exit code `2.0`, a 64 KB body). 30 concurrent goroutines give unique names. `Claim` twice from two processes gives one post and one `ErrClaimed`. F2, F3, F5 and F6 tests. A fold benchmark at 6,000 posts. The CLI JSON shape of Q3 is pinned by a golden. | P-loop-board; P-grid-config-read (machine folder and brain path) |
+| **B3 P-board-migrate** | plugin | opus, xhigh (migration) | internal/migrate (legacyfeed, board), internal/gridhome format bump, the task folder split into brain and machine folder, Job nodes, task proposals into `projects/<p>/Proposals/` | On 3 fixture homes (one with a takeover, one with a `sameRetry`, one with a person cancel request) S_new equals S_old. A forced mismatch leaves the task untouched and exits non-zero. A task with a live holder is skipped. | B1; the R-brain-obsidian layout lane (its section 7) |
+| **P-loop-home** (run-jobs lane 5), plus these rows | plugin | opus, xhigh | Its files; the status block in the Q4 format; the inbox note `Needs you.md` | Added rows: a hand edit outside the markers survives a rewrite. An edit inside the markers is replaced and logged. A hash change between read and write causes a retry, not an overwrite. The bytes do not change when the state does not. Two homes write two inbox sections without loss. | B1 |
+| **P-loop-retire** (run-jobs lane 11), plus these rows | plugin | opus, high | Its files, plus internal/orchestrator/write.go (stale-attempt check), internal/mcp/stale.go, the `GRID_TASK_EPOCH`/`GRID_LEASE_EPOCH` readers in Q3, and the tests that pin epochs | Added rows: no `GRID_TASK_EPOCH` or `GRID_LEASE_EPOCH` remains. D-r19 rows N1 to N9 hold with home authority. F4a step 5: the cancelled attempt's exit folds `ignored` and the Job shows Cancelled. `internal/migrate/legacyfeed` still builds. | P-loop-home, B3 |
+| **B5 P-board-search-proof** | plugin | sonnet, high | internal/brain/query.go and its index, agents/library.md, internal/proof (records in posts, new path), internal/hook/hook.go and brain_why.go job context | Knowledge ranks above history for an equal score. `--kind` works. The SessionStart index-only test still passes. A screenshot lands at `proof/J-n-rowN.png` and is linked relatively from its post. | B1; the R-brain-obsidian vault reader lane |
 | **A1 A-board-readers** | app | opus, high | the direct readers in Q3 (tasks/store.go, feed/http.go, feed/post.go, gates/model.go, taskcode/build.go, taskview/{posts,store,view,view_warm}.go, usage/report.go), slices/feed/fold.go (`epoch`, `lease_expires`), webui feed-tab and client.mjs, the jstest walk at task-feed-r25-3 | Every Q3 app row reads `board/` or the CLI shape. The Feed tab renders a migrated fixture home. No reader opens `feed/*.jsonl`. | B1's JSON golden |
 | **Requirement on P-shared-home** | app and sync | (its own lane) | app:internal/kernel/projectaccess/access.go; sync server ACLs | A guest shared T-n reads only `projects/<p>/tasks/<T-n>/` | B3 layout |
 | **Requirement on the sync lane** | sync | (its own lane) | grid sync | Create-only for `board/`, `jobs/` and proposals. Version-checked edits. Skip dot names. Atomic delivery. | none |
