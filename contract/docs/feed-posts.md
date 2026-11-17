@@ -960,6 +960,58 @@ A task-move post moves the task's home from the machine `from` to the machine `t
 
 Read: contract/schemas/task-move.json:76; internal/contract/fold.go:101-103 (no task-move case); contract/README.md:184.
 
+## tested
+Version 1. Class state. Written by cli, host, worker.
+
+A tested post records what a runner Job (`grid land test`) tested: it rebased the task head `head_sha` onto the target at `base_sha`, ran the checks on the rebased commit `sha`, and pushed it to its own attempt ref `ref`. The land Job pushes only that `sha`, and only while the target is still at `base_sha` and the head at `head_sha` (owner decision V12.c; judge-land.md Q3 steps 4-6). `result` is `green`, or `nothing` when the rebased tree equals the target's and nothing is pushed; `ref` is required for `green` only. `flakes` are tests green on 2 or 3 of 3 reruns, each `{test, package, green: "n/3"}`, and `preexisting` are tests already red on the base, each `{test, package}` (judge-land.md Q4 Red and Flaky). A red or conflicting run posts no `tested`. The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "tested",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-17T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 1,
+  "wake": null,
+  "body": {
+    "sha": "9ab01cd0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70",
+    "ref": "refs/grid/T-1/jobs/J-7/a1",
+    "base_sha": "3f2c9e1a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e",
+    "head_sha": "5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e",
+    "result": "green",
+    "flakes": [
+      {
+        "test": "TestSlowFold",
+        "package": "./internal/feed",
+        "green": "2/3"
+      }
+    ],
+    "preexisting": [
+      {
+        "test": "TestOldRed",
+        "package": "./internal/cli"
+      }
+    ]
+  }
+}
+```
+
+Read: contract/schemas/tested.json:151; internal/contract/fold.go:101-103 (no tested case); contract/README.md:185.
+
 ## transfer
 Version 1. Class state. Written by lead, owner, member, cli.
 
