@@ -211,13 +211,21 @@ func FoldReadQuestions(read ReadResult) (contract.State, map[string]QuestionDeci
 // FoldReadAt projects person gates at a specified read time without writing events.
 // An optional callback replaces the default withdrawal role policy.
 func FoldReadAt(read ReadResult, now time.Time, withdrawAllowed ...func(string) bool) (contract.State, map[string]QuestionDecision) {
-	state := contract.Fold(posts(read))
+	state, _, questions := FoldReadLoopAt(read, now, withdrawAllowed...)
+	return state, questions
+}
+
+// FoldReadLoopAt is FoldReadAt with the fold's Loop beside the State: the same
+// withdraw rule and the same posts, plus the landed set a landed after edge waits
+// for.
+func FoldReadLoopAt(read ReadResult, now time.Time, withdrawAllowed ...func(string) bool) (contract.State, contract.Loop, map[string]QuestionDecision) {
+	state, loop := contract.FoldLoop(posts(read))
 	allowed := DefaultWithdrawAllowed
 	if len(withdrawAllowed) > 0 && withdrawAllowed[0] != nil {
 		allowed = withdrawAllowed[0]
 	}
 	questions := foldQuestions(read, &state, now, allowed)
-	return state, questions
+	return state, loop, questions
 }
 
 // DefaultWithdrawAllowed is the shared default for person withdrawal policy.
