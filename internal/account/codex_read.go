@@ -52,6 +52,11 @@ type codexFile struct {
 // the time of the last line), ties by path, later first.
 func codexRollouts(sessions string) []codexFile {
 	var files []codexFile
+	// WalkDir does not descend a root that is itself a link, so a sessions folder
+	// that links elsewhere is resolved first.
+	if real, err := filepath.EvalSymlinks(sessions); err == nil {
+		sessions = real
+	}
 	_ = filepath.WalkDir(sessions, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !d.Type().IsRegular() {
 			return nil

@@ -320,6 +320,20 @@ func TestCxLongLinesAreRead(t *testing.T) {
 	}
 }
 
+func TestCxSessionsFolderThatIsASymlinkIsRead(t *testing.T) {
+	store, home := t.TempDir(), t.TempDir()
+	cxRollout(t, store, "2026/11/09", "2026-11-09T02-50-00", time.Date(2026, 11, 9, 3, 0, 0, 0, time.UTC),
+		cxLine("2026-11-09T02:54:26.916Z", cxInfo, cxRealLimits))
+	// <home>/sessions is a link to the folder holding the year folders.
+	if err := os.Symlink(filepath.Join(store, "sessions"), filepath.Join(home, "sessions")); err != nil {
+		t.Skipf("no symlinks here: %v", err)
+	}
+	got := windowsFor(cxEnv(cxNow), "codex", Codex, []string{home})
+	if got.Source != "codex" || len(got.Windows) != 1 || got.Windows[0] != (Window{"7d", 100, cxReset7d}) {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 func TestCxFirstFolderWithAReadingWins(t *testing.T) {
 	a, b := t.TempDir(), t.TempDir()
 	lineA := cxLine("2026-11-09T02:54:26.916Z", cxInfo, cxLimits(cxWindow(11, 10080, cxReset7d), `null`))
