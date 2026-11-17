@@ -1,0 +1,30 @@
+{
+  "id": "01K9J000000000000000000003",
+  "task": "01K9J000000000000000000001",
+  "type": "tested",
+  "type_v": 1,
+  "author": {
+    "id": "worker",
+    "role": "worker"
+  },
+  "tier": "agent",
+  "worker": "worker@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 2,
+  "fence": 0,
+  "seq": 4,
+  "at": "2026-11-17T10:05:00.000Z",
+  "re": "01K9J000000000000000000002",
+  "after": [],
+  "job": "J-7",
+  "attempt": 2,
+  "wake": null,
+  "body": {
+    "sha": "3f2c9e1",
+    "base_sha": "3f2c9e1",
+    "head_sha": "5d4e3f2",
+    "result": "nothing",
+    "flakes": [],
+    "preexisting": []
+  }
+}
