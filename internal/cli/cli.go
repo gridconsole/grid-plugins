@@ -40,6 +40,9 @@ type Env struct {
 	Cwd        string
 	Home       string
 	GridHome   string // "" when neither GRID_HOME nor a home folder is known
+	// Resolved is how OSEnv found GridHome (its source, the machine folder and the
+	// shared config's current entry). Zero in an Env a test builds by hand.
+	Resolved gridhome.Home
 	TempRoots  []string
 	Machine    string                 // this machine's id, "" before it is made
 	Ceiling    string                 // "" walks to the root; tests set their fixture root
@@ -111,9 +114,11 @@ func OSEnv() Env {
 		home = gridhome.Real(home)
 	}
 	cwd, _ := os.Getwd()
-	gh := gridhome.Dir(os.Getenv, home)
+	resolved := gridhome.Resolve(os.Getenv, home)
+	gh := resolved.Dir
 	if gh != "" {
 		gh = gridhome.Real(gh)
+		resolved.Dir = gh
 	}
 	machine := ""
 	if gh != "" {
@@ -121,7 +126,7 @@ func OSEnv() Env {
 	}
 	return Env{
 		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr,
-		Cwd: cwd, Home: home, GridHome: gh,
+		Cwd: cwd, Home: home, GridHome: gh, Resolved: resolved,
 		TempRoots: []string{os.TempDir(), "/tmp", "/var/tmp"},
 		Machine:   machine,
 		AppStart:  &AppStart{},

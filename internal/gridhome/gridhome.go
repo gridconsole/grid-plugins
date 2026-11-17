@@ -7,23 +7,128 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/gridconfig"
 )
 
 // FormatVersion is the layout version of the data folder this grid reads and writes.
 const FormatVersion = 1
 
-// Dir returns the Grid home: GRID_HOME when set, else <userHome>/.grid.
-// It returns "" when neither is known.
+// Source says where a resolved value came from.
+type Source string
+
+const (
+	SourceFlag    Source = "flag"    // a --grid-home or --member flag
+	SourceEnv     Source = "env"     // GRID_HOME, or GRID_WHO, GRID_ACTOR, GRID_MEMBER
+	SourceConfig  Source = "config"  // the current entry of ~/.grid/config.json
+	SourceLegacy  Source = "legacy"  // the v1 top-level keys of that file, migrated in memory
+	SourceDefault Source = "default" // ~/.grid itself
+)
+
+// Home is the resolved Grid home and what the shared config says about it.
+type Home struct {
+	// Dir is the data folder: tasks, projects, the brain, settings. "" when no
+	// GRID_HOME is set and the user's home folder is unknown.
+	Dir    string
+	Source Source
+	// Machine is the machine folder <userHome>/.grid: config.json and bin/grid.
+	Machine string
+	// Config is the config file read, "" when there was none.
+	Config string
+	// ConfigProblem says why the config could not be used; the home is then
+	// resolved as if there were no config, never refused.
+	ConfigProblem string
+	// Workspace is the current entry's name, "" without a config.
+	Workspace string
+	// Member is the current entry's member, with MemberSource config or legacy; ""
+	// when the config names none. GRID_WHO and the flags are read by the commands.
+	Member       string
+	MemberSource Source
+}
+
+// Resolve is the one resolver of the Grid home: GRID_HOME when set (the
+// --grid-home flag arrives here as GRID_HOME, and the CLI marks it flag); else the
+// data folder of the current workspace in <userHome>/.grid/config.json; else the
+// v1 shape of that file migrated in memory; else <userHome>/.grid. A config that
+// is missing, unreadable or names no usable folder falls through to the next step:
+// it is never a refusal.
+func Resolve(getenv func(string) string, userHome string) Home {
+	h := Home{Machine: gridconfig.MachineDir(userHome)}
+	path := gridconfig.Path(userHome)
+	cfg, found, err := gridconfig.Read(path)
+	if found {
+		h.Config = path
+	}
+	if err != nil {
+		h.ConfigProblem = err.Error()
+	}
+	dataSource := SourceConfig
+	if err == nil && found {
+		login := getenv("USER")
+		if login == "" {
+			login = getenv("USERNAME")
+		}
+		if cfg.Migrate(userHome, gridconfig.HandleFromLogin(login)) {
+			dataSource = SourceLegacy
+		}
+	}
+	data := ""
+	if w := cfg.CurrentEntry(); w != nil {
+		h.Workspace = w.Name
+		if w.Member != "" {
+			h.Member, h.MemberSource = w.Member, dataSource
+		}
+		data = w.DataFolder(userHome)
+		if data == "" && h.ConfigProblem == "" {
+			h.ConfigProblem = fmt.Sprintf("workspace %q names no usable data folder", w.Name)
+		}
+	} else if found && err == nil && cfg.Current != "" {
+		h.ConfigProblem = fmt.Sprintf("current workspace %q is not in the workspaces list", cfg.Current)
+	}
+	switch {
+	case getenv("GRID_HOME") != "":
+		h.Dir, h.Source = filepath.Clean(getenv("GRID_HOME")), SourceEnv
+	case data != "":
+		h.Dir, h.Source = data, dataSource
+	case h.Machine != "":
+		h.Dir, h.Source = h.Machine, SourceDefault
+	}
+	return h
+}
+
+// Dir is Resolve(getenv, userHome).Dir, kept for this package's own tests; callers
+// use Resolve.
 func Dir(getenv func(string) string, userHome string) string {
-	if d := getenv("GRID_HOME"); d != "" {
-		return filepath.Clean(d)
+	return Resolve(getenv, userHome).Dir
+}
+
+// LauncherDir is the folder whose bin/grid timers start and SessionStart puts on
+// PATH, for the writer: the machine folder when the data folder came from the
+// config or sits in it (~/.grid/<name>), else the data folder, as before.
+func (h Home) LauncherDir() string {
+	if h.Machine != "" && (h.Source == SourceConfig || h.Source == SourceLegacy || filepath.Dir(h.Dir) == h.Machine) {
+		return h.Machine
 	}
-	if userHome == "" {
-		return ""
+	return h.Dir
+}
+
+// FindLauncherDir is the folder to look for bin/grid in: the machine folder
+// <userHome>/.grid when its bin/grid is there (a file, or a link to one), else the
+// data folder.
+func FindLauncherDir(userHome, data string) string {
+	if m := gridconfig.MachineDir(userHome); m != "" {
+		name := "grid"
+		if runtime.GOOS == "windows" {
+			name = "grid.exe"
+		}
+		if st, err := os.Stat(filepath.Join(m, "bin", name)); err == nil && !st.IsDir() {
+			return m
+		}
 	}
-	return filepath.Join(userHome, ".grid")
+	return data
 }
 
 // Real makes path absolute and resolves symlinks in its longest existing prefix, so

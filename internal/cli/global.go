@@ -55,6 +55,7 @@ func applyGlobalFlags(args []string, env Env) ([]string, Env, int) {
 		gh = gridhome.Real(gh)
 		over["GRID_HOME"] = gh
 		env.GridHome = gh
+		env.Resolved.Dir, env.Resolved.Source = gh, gridhome.SourceFlag
 		env.Machine = gridhome.Machine(gh)
 	}
 	env.typedGlobal = map[string]bool{}

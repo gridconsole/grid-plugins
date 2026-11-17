@@ -160,7 +160,7 @@ func (c Call) env(stderr io.Writer) cli.Env {
 	if home != "" {
 		home = gridhome.Real(home)
 	}
-	grid := gridhome.Dir(getenv, home)
+	grid := gridhome.Resolve(getenv, home).Dir
 	machine := ""
 	if grid != "" {
 		grid = gridhome.Real(grid)
