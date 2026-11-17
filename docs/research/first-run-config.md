@@ -241,7 +241,7 @@ redirect shape can be reused in A2; the page-side name rules are dropped.
 **C-mac-desktop-plugin-home (dd7eefdbd).** That commit is in its lane clone (`git log` there shows `dd7eefdbd` and
 `19022c9fb` on `lane-C-mac-desktop-plugin-home`) but not in the app ref repo (`git show dd7eefdbd` there fails), so
 whether it landed is not known here. Its retry of a failed person check stays as is. Its `plugincli.Client{Home: home}`
-stays too, but A1 changes what it finds: the launcher at `~/.grid/bin/grid` (machine folder) and `home` from the shared
+stays too, but A1 changes what it finds: the launcher at `bin/grid` in the machine folder and `home` from the shared
 resolver, so a data folder in `~/.grid/<name>` does not lose the launcher.
 
 ## Open items
