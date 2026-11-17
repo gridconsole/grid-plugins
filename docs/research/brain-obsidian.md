@@ -991,6 +991,46 @@ rows. A row owned by another decision lane is marked "owned by".
     `grid brain list --json`;
   - (V19) the app marks a conflict person-first.
 
+**L8 P-brain-sync-write**
+
+- **Ledger rows.** V19 (the sync-server half of the version check: a stale
+  write is rejected, the client re-reads, re-applies and retries, and a person
+  save that won turns the agent write into a proposal). It also serves V18
+  (owned by P-run-jobs-decide: only the brain syncs) at the client.
+- **Repo and model.** plugin, sonnet, high.
+- **Depends on.** L4 (expect-rev, adoption, proposal on mismatch), run-jobs
+  lane 7 P-loop-service (starts `grid sync` when a licence and server are
+  set), and the sync server's version-checked write API. No lane in any plan
+  builds that API yet (9.5). Until it exists, L8 builds against a stub
+  server in the test.
+- **Builds.** The step 5 client of 5.4:
+  - a brain write with a sync server configured sends the version it was
+    based on;
+  - on a rejection it runs steps 2-4 of 5.4 again: re-read, adopt, then
+    re-apply or propose;
+  - it retries a bounded number of times with backoff and then writes a
+    proposal. It never overwrites silently, and it never blocks the agent:
+    exit 0 with the written or proposed path.
+  - With no sync server configured, the local lock of L4 is used unchanged.
+- **Files.** brain/store.go and ke_write.go (the write path), a new
+  brain/syncwrite.go (the client seam), and braincmd/command.go only if a
+  flag is needed.
+- **Acceptance** (test-plan sync checks 1 and 2, against an `httptest` stub
+  server that holds a version per path and rejects a stale base):
+  - (V19, sync check 1) a write based on an old version is rejected by the
+    stub. The client re-reads, re-applies a change that touches a different
+    key or section, retries, and the stub holds both changes. The command
+    exits 0;
+  - (V19, sync check 2) the stub holds a person save newer than the agent's
+    base. The agent write is rejected, the client writes
+    `Proposals/<name>.md` and exits 0 with `proposed:`. The person's bytes
+    at the stub and on disk are unchanged;
+  - (V19) with no sync server configured, the F9 test of L4 still passes
+    under the local lock.
+- **Server side.** The server's own rows (reject a stale base, accept only
+  brain files) belong to the sync server lane. That lane is not named in
+  any plan yet (9.5).
+
 ### 9.2 Before P-brain-board-decide lands
 
 - **May build now:** L1, L2, L3, L4, L5a and L6, the vault reader and the
@@ -1013,7 +1053,8 @@ rows. A row owned by another decision lane is marked "owned by".
 ### 9.3 Order
 
 L1 → L2 ∥ L3 → L4 → L5a → L6; L7 after L4; L5b after L5a and
-P-brain-board-decide. Then the Mac round trip.
+P-brain-board-decide; L8 after L4 and P-loop-service. It goes live only once
+the sync server's write API exists. Then the Mac round trip.
 
 ### 9.4 Mac round trip
 
@@ -1069,8 +1110,16 @@ step). Nothing is called done before this.
 - The app reader was read from the reference app repository at `main`. The
   plugin reader rows outside internal/brain and internal/hook come from a
   scout map at the lane head and were not each re-opened in this lane.
-- The sync server's version-checked write API is not built yet (run-jobs
-  lane). L4 uses the local lock until it lands.
+- The sync server's version-checked write API is not built yet. L4 uses the
+  local lock until it lands, and L8 carries the client half of V19 against
+  a stub server.
+- **No lane owns the server half of V19.** The run-jobs lane plan (lanes
+  1-13) starts `grid sync` (lane 7 P-loop-service) and adds a push hook
+  point (lane 8 P-loop-remote). No lane there builds the server's
+  version-checked write: test-plan sync checks 1 and 2, "a write based on an
+  old version is refused" and "yours is kept, the agent's becomes a
+  proposal". For the orchestrator: name the sync server lane that owns those
+  rows. L8 is not live until it lands.
 - **Question for the owner (V13, 4.5).** A person note shows no Grid header,
   and an agent note's `source` names the first Grid writer even after the
   owner edits it. This deviates from "the header says who wrote it". Is
