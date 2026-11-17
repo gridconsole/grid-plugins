@@ -103,7 +103,6 @@ func TestCpOfferQuietWithData(t *testing.T) {
 	cases := map[string]string{
 		"VERSION under ~/.grid":          filepath.Join(".grid", "VERSION"),
 		"projects under ~/.grid":         filepath.Join(".grid", "projects", "demo", "project.json"),
-		"knowledge under ~/.grid":        filepath.Join(".grid", "knowledge", "x.md"),
 		"data under ~/.grid/<workspace>": filepath.Join(".grid", "acme", "projects", "demo", "project.json"),
 	}
 	for name, rel := range cases {

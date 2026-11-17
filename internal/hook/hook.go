@@ -219,12 +219,12 @@ func cpOfferWanted(o Options) bool {
 	return true
 }
 
-// cpOfferHoldsData reports a folder that holds Grid data: VERSION, projects or knowledge.
+// cpOfferHoldsData reports a folder that holds Grid data: VERSION or projects.
 func cpOfferHoldsData(dir string) bool {
 	if dir == "" {
 		return false
 	}
-	for _, name := range []string{"VERSION", "projects", "knowledge"} {
+	for _, name := range []string{"VERSION", "projects"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
 			return true
 		}
