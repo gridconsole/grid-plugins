@@ -84,14 +84,14 @@ func Bundle(o BundleOptions) (string, error) {
 	// The launcher logs of this login in the machine folder (grid open's server and
 	// worker logs, the routine timer logs), under their own name in the archive so they
 	// never collide with logs/ of the Grid home. Not the lock or pid files beside them.
+	// A support bundle is best effort: a launcher folder that cannot be read is left
+	// out, the bundle is still written, and skipped.txt in it says what was left out
+	// and why, so nobody takes the gap for an empty folder.
+	var skipped []string
 	if o.Machine.Active() && o.Login != "" {
-		launcher, lerr := o.Machine.Launcher(o.Login)
+		machineLogs, lerr := machineLauncherLogs(o, out)
 		if lerr != nil {
-			return "", lerr
-		}
-		machineLogs, lerr := collectBundleFiles(launcher.Dir(), out, func(name string) bool { return strings.HasSuffix(name, ".log") })
-		if lerr != nil {
-			return "", lerr
+			skipped = append(skipped, fmt.Sprintf("skipped the launcher logs of %s in the machine folder: %v", o.Login, lerr))
 		}
 		for _, f := range machineLogs {
 			f.name = filepath.Join("machine", "launcher", f.name)
@@ -134,6 +134,11 @@ func Bundle(o BundleOptions) (string, error) {
 	if err = add("versions.txt", versions); err != nil {
 		return "", err
 	}
+	if len(skipped) > 0 {
+		if err = add("skipped.txt", strings.Join(skipped, "\n")+"\n"); err != nil {
+			return "", err
+		}
+	}
 	for _, file := range files {
 		content, err := readBundleTail(file.path)
 		if err != nil {
@@ -172,6 +177,17 @@ func Bundle(o BundleOptions) (string, error) {
 		return "", err
 	}
 	return out, nil
+}
+
+// machineLauncherLogs collects the .log files of this login's launcher folder in
+// the machine folder. The error is why the folder was left out; Bundle turns it into
+// a line of skipped.txt and goes on.
+func machineLauncherLogs(o BundleOptions, out string) ([]bundleFile, error) {
+	launcher, err := o.Machine.Launcher(o.Login)
+	if err != nil {
+		return nil, err
+	}
+	return collectBundleFiles(launcher.Dir(), out, func(name string) bool { return strings.HasSuffix(name, ".log") })
 }
 
 type bundleFile struct {
