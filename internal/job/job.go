@@ -18,7 +18,13 @@ type Job struct {
 	ReviewReason string `json:"review_reason,omitempty"`
 	// Repo names the project repo a code Job works in, by its path in project.md;
 	// empty is the project's first repo.
-	Repo   string   `json:"repo,omitempty"`
+	Repo string `json:"repo,omitempty"`
+	// Target, Branch and SHA are what a Job of kind "land" lands: the branch to
+	// move, the accepted change's branch and the commit pinned at accept. Other
+	// kinds leave them empty and they are left out of the record.
+	Target string   `json:"target,omitempty"`
+	Branch string   `json:"branch,omitempty"`
+	SHA    string   `json:"sha,omitempty"`
 	ID     string   `json:"id"`
 	Item   int      `json:"item"`
 	Title  string   `json:"title"`
