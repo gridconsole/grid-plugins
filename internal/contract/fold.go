@@ -6,6 +6,8 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
+	"time"
 )
 
 type controlBody struct {
@@ -28,7 +30,9 @@ type question struct {
 
 // Fold materializes one task's admitted posts. The caller checks writer-file
 // identity, complete lines and takeover byte offsets, setting Post.Stale for
-// lines beyond an ended tenure. No timestamp affects a decision here.
+// lines beyond an ended tenure. No timestamp affects a decision here; the one
+// rule that reads a time is PostedAs, which compares a post's own at with a
+// grant's until, and Fold does not call it.
 //
 // Controls apply by (gen, fence, seq). Each grant consumes its matching Job
 // tenure in seq order before the next control. Cross-file causal dependencies
@@ -511,6 +515,99 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// Grant is a person's grant note, grid/people/<person>/grants/<name>.md in the
+// brain (run-jobs-launcher.md Q8): it lets the agents it names post as that
+// person. Link, Person and Role come from where the note lives and the person's
+// own note, never from a post.
+type Grant struct {
+	Link   string   // the note's path from the brain root, without .md
+	Person string   // the person whose folder holds the note
+	Role   string   // that person's role (owner, member, guest)
+	Agents []string // the agent ids or roles it names
+	Posts  []string // the post types it covers, such as answer
+	Kinds  []string // the person-Job kinds an answer may close; approve only when named
+	Tasks  []string // the task ids it covers; empty or "all" covers every task
+	Until  string   // RFC 3339; it covers a post whose own time is before this
+}
+
+// PostAs is PostedAs for a contract post.
+func PostAs(p Post, kind string, grants []Grant) (Author, string) {
+	var body map[string]any
+	_ = json.Unmarshal(p.Body, &body)
+	return PostedAs(p.Type, p.Author, p.Task, p.At, body, kind, grants)
+}
+
+// PostedAs is the author a post counts as (run-jobs-launcher.md Q8, ledger V22).
+// A post by an agent counts as a person's only when its body carries `for` (the
+// person), `by` (its own stamped author id) and `grant` (a link to the grant
+// note), and that note is the person's, names the agent by id or role, covers
+// the post type, the task and the person-Job kind, and had not expired at the
+// post's own time. Otherwise it counts as its stamped author's.
+//
+// This is a rule on reading, not on writing: no post is refused or dropped, and
+// the stored author is never changed. The reason is "" when the post counts as
+// the person's or asks for no person; otherwise it says why the agent's own
+// author stands, for a note a reader may show. kind is the person-Job kind the
+// post answers, "" for none. The expiry compares the post's at with the grant's
+// until; the clock is never read.
+func PostedAs(typ string, author Author, task, at string, body map[string]any, kind string, grants []Grant) (Author, string) {
+	person, _ := body["for"].(string)
+	by, _ := body["by"].(string)
+	link, _ := body["grant"].(string)
+	if person == "" && by == "" && link == "" {
+		return author, ""
+	}
+	if person == "" || by == "" || link == "" {
+		return author, "for, by and grant are all needed to post as a person"
+	}
+	if TierFor(author.Role) != Agent {
+		return author, "only an agent posts for a person; a person posts as themselves"
+	}
+	if by != author.ID {
+		return author, fmt.Sprintf("by %q is not the post's author %q", by, author.ID)
+	}
+	target := GrantTarget(link)
+	var g *Grant
+	for i := range grants {
+		if grants[i].Link == target {
+			g = &grants[i]
+			break
+		}
+	}
+	switch {
+	case g == nil:
+		return author, fmt.Sprintf("no grant note %s", target)
+	case g.Person != person:
+		return author, fmt.Sprintf("the grant %s is %s's, not %s's", target, g.Person, person)
+	case TierFor(g.Role) != PersonTeam:
+		return author, fmt.Sprintf("the grant %s is not of a person of the team", target)
+	case !contains(g.Agents, author.ID) && !contains(g.Agents, NormalizeRole(author.Role)):
+		return author, fmt.Sprintf("the grant %s does not name %s", target, author.ID)
+	case !contains(g.Posts, typ):
+		return author, fmt.Sprintf("the grant %s does not cover %s posts", target, typ)
+	case kind == "approve" && !contains(g.Kinds, kind) || len(g.Kinds) > 0 && !contains(g.Kinds, kind):
+		return author, fmt.Sprintf("the grant %s does not cover %q person Jobs", target, kind)
+	case len(g.Tasks) > 0 && !contains(g.Tasks, "all") && !contains(g.Tasks, task):
+		return author, fmt.Sprintf("the grant %s does not cover task %s", target, task)
+	}
+	posted, err := time.Parse(time.RFC3339Nano, at)
+	until, uerr := time.Parse(time.RFC3339Nano, g.Until)
+	if err != nil || uerr != nil || !posted.Before(until) {
+		return author, fmt.Sprintf("the grant %s had expired at %s (until %q)", target, at, g.Until)
+	}
+	return Author{ID: g.Person, Role: NormalizeRole(g.Role)}, ""
+}
+
+// GrantTarget is the note path a grant link names: [[grid/people/dana/grants/x|label]],
+// grid/people/dana/grants/x.md and /grid/people/dana/grants/x all name the same note.
+func GrantTarget(link string) string {
+	link = strings.TrimSpace(link)
+	link = strings.TrimSuffix(strings.TrimPrefix(link, "[["), "]]")
+	link, _, _ = strings.Cut(link, "|")
+	link, _, _ = strings.Cut(link, "#")
+	return strings.TrimPrefix(strings.TrimSuffix(strings.TrimSpace(link), ".md"), "/")
 }
 
 // typeVersion returns the type_v const a post type's schema pins, or 0 when it pins none.

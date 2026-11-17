@@ -68,6 +68,18 @@
                 "sent_back_hash": {
                   "type": "string",
                   "pattern": "^[0-9a-f]{6}$"
+                },
+                "for": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "by": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "grant": {
+                  "type": "string",
+                  "minLength": 1
                 }
               },
               "required": [
