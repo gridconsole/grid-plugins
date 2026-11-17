@@ -1,0 +1,69 @@
+{
+  "acceptance": [
+    {
+      "id": "A1",
+      "text": "Example feature passes its checks",
+      "traces": "item"
+    }
+  ],
+  "after": [
+    {
+      "job": "J-4",
+      "kind": "landed",
+      "why": "Start after the build Job lands"
+    },
+    {
+      "job": "J-4",
+      "kind": "landed",
+      "task": "01K9J000000000000000000009",
+      "why": "Wait for the build task to land"
+    }
+  ],
+  "attempt": 1,
+  "budget": {
+    "reads_before_first_edit": 15,
+    "turns_estimate": 20
+  },
+  "checkpoint": null,
+  "close_reason": null,
+  "continues": null,
+  "decisions": [],
+  "discovered_from": null,
+  "home": "01K9J000000000000000000002",
+  "id": "J-1",
+  "intent": {
+    "goal": "plan.md#verify",
+    "item": "plan.md#step-1",
+    "owner": "intent.md#L1"
+  },
+  "item": 1,
+  "keep": [],
+  "level_raised": null,
+  "links": [],
+  "max_rounds": 2,
+  "on_blocked": "ask-and-continue",
+  "out_of_scope": [],
+  "posts_back": [
+    "result",
+    "question",
+    "knowledge",
+    "checkpoint"
+  ],
+  "read": [
+    "repo:main.go:1-10"
+  ],
+  "review": "L1",
+  "review_rounds": 0,
+  "risk": [],
+  "role": "builder",
+  "skills": [],
+  "title": "Build example feature",
+  "verify": {
+    "command": "go test ./...",
+    "min_tests": 1
+  },
+  "worktree": "example-worktree",
+  "write": [
+    "main.go"
+  ]
+}

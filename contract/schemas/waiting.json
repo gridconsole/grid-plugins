@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/waiting.json",
+  "title": "waiting",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "waiting"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "cli",
+                "host",
+                "worker"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "condition": {
+                  "type": "object"
+                },
+                "unmet": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "atom": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "measured": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "want": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "atom"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "condition",
+                "unmet"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "x-class": "state",
+  "x-roles": [
+    "cli",
+    "host",
+    "worker"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "01K9J000000000000000000003",
+  "task": "01K9J000000000000000000001",
+  "type": "landed",
+  "type_v": 1,
+  "author": {
+    "id": "worker",
+    "role": "worker"
+  },
+  "tier": "agent",
+  "worker": "worker@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 2,
+  "fence": 0,
+  "seq": 4,
+  "at": "2026-11-08T10:05:00.000Z",
+  "re": "01K9J000000000000000000002",
+  "after": [],
+  "job": "J-7",
+  "attempt": 2,
+  "wake": null,
+  "body": {
+    "main_sha": "9ab01cd0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70"
+  }
+}

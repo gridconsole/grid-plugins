@@ -74,6 +74,115 @@ An answer replies to a question: `re` names the question post and the body holds
 
 Read: contract/schemas/answer.json:95; internal/contract/fold.go:166, :254-259, :293-296; contract/README.md:163.
 
+## approval
+Version 1. Class state. Written by owner, member, lead, agent, cli.
+
+An approval post answers a `blocked` post. `re` names the blocked post, `job` and `attempt` name the attempt, and the body holds the exact `rules` and the `decision`. An assignment's `grant` names it (run-jobs-launcher.md Addendum 7 A2 and C point 11, which write it as `approval {re, job, attempt, rules, decision}`; `re`, `job` and `attempt` are the envelope's). The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "approval",
+  "type_v": 1,
+  "author": {
+    "id": "owner",
+    "role": "owner"
+  },
+  "tier": "person-team",
+  "worker": "owner@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": "01K9J0000000000000000000B1",
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "rules": [
+      "Bash(make deploy-prod)"
+    ],
+    "decision": "approve"
+  }
+}
+```
+
+Read: contract/schemas/approval.json:82; internal/contract/fold.go:101-103 (no approval case); contract/README.md:177.
+
+## blocked
+Version 1. Class state. Written by worker, agent, reviewer.
+
+A blocked post says that the agent's attempt needs a permission it does not have: the `rule` it needs, the exact `command` and `why`. The agent ends after it (run-jobs-launcher.md Addendum 7 A5 and C point 13, `blocked {need: permission, rule, command, why}`). The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "blocked",
+  "type_v": 1,
+  "author": {
+    "id": "worker",
+    "role": "worker"
+  },
+  "tier": "agent",
+  "worker": "worker@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "need": "permission",
+    "rule": "Bash(make deploy-prod)",
+    "command": "make deploy-prod",
+    "why": "The Job deploys the site"
+  }
+}
+```
+
+Read: contract/schemas/blocked.json:80; internal/contract/fold.go:101-103 (no blocked case); contract/README.md:178.
+
+## cancel
+Version 1. Class state. Written by owner, member, lead, cli.
+
+A cancel post asks to stop the attempt that `job` and `attempt` name, with an optional `why`. A person writes it as a request, and the orchestrator writes it to drop an attempt it no longer wants (run-jobs-launcher.md Q2 and Q4). The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "cancel",
+  "type_v": 1,
+  "author": {
+    "id": "owner",
+    "role": "owner"
+  },
+  "tier": "person-team",
+  "worker": "owner@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {}
+}
+```
+
+Read: contract/schemas/cancel.json:62; internal/contract/fold.go:101-103 (no cancel case); contract/README.md:179.
+
 ## checkpoint
 Version 1. Class state. Written by worker, agent, cli.
 
@@ -152,7 +261,7 @@ A control is a decision about a Job or a question, and the only post that moves 
 }
 ```
 
-Read: contract/schemas/control.json:356; internal/contract/fold.go:11-20, :33-34, :158-249; contract/README.md:156.
+Read: contract/schemas/control.json:484; internal/contract/fold.go:11-20, :33-34, :158-249; contract/README.md:156.
 
 ## deploy-failed
 Version 1. Class state. Written by lead, owner, member, cli.
@@ -190,6 +299,57 @@ A deploy-failed post records that a delivery to an environment (`env`) stopped a
 ```
 
 Read: contract/schemas/deploy-failed.json:87; internal/contract/fold.go:292-319 (no deploy-failed case); contract/README.md:174.
+
+## exit
+Version 1. Class state. Written by cli, host, worker.
+
+An exit post is the launcher's record that an attempt ended: the `reason`, the `code` (an exit code, `no_result`, or the usage reset in unix seconds), the `cost` line, the pushed `sha` and the agent's `permission_denials`. On `secret_found`, `secret` names the commit, file, line and pattern, never the secret text; a command Job's exit also carries its `log` and `link` (run-jobs-launcher.md Q3, Addendum 7 B and C points 15-16). The YAML in that note writes `job` and `attempt` beside the body; on the Feed they are the envelope's. The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "exit",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "reason": "done",
+    "code": 0,
+    "cost": {
+      "wall_s": 2140,
+      "cpu_s": 3810,
+      "cpu_avg_cores": 1.8,
+      "rss_peak_mb": 2900,
+      "io_read_mb": 410,
+      "io_write_mb": 95,
+      "tokens_in": 81234,
+      "tokens_out": 21011,
+      "cache_read": 1904400,
+      "usd": 6.12,
+      "model": "opus",
+      "account": "claude-team-2"
+    },
+    "sha": "9ab01cd"
+  }
+}
+```
+
+Read: contract/schemas/exit.json:197; internal/contract/fold.go:101-103 (no exit case); contract/README.md:180.
 
 ## found
 Version 1. Class chatter. Written by reviewer, lead, worker, agent, cli.
@@ -335,6 +495,41 @@ A host post says whether a machine is `online`, whether it takes work (`grant`),
 
 Read: contract/schemas/host.json:93; internal/contract/fold.go:307-310, :324-326; contract/README.md:172.
 
+## integrated
+Version 1. Class state. Written by cli, host, worker.
+
+An integrated post records that `grid task integrate` squashed the accepted attempt onto the task head; `head_sha` is the new head (run-jobs-launcher.md C point 7, `integrated {head_sha}`). The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "integrated",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "head_sha": "9ab01cd"
+  }
+}
+```
+
+Read: contract/schemas/integrated.json:63; internal/contract/fold.go:101-103 (no integrated case); contract/README.md:181.
+
 ## job
 Version 1. Class state. Written by lead, owner, member, cli.
 
@@ -458,6 +653,41 @@ A knowledge post holds one fact worth keeping: a `title` and the `text`. It is p
 ```
 
 Read: contract/schemas/knowledge.json:141; internal/contract/fold.go:292-319 (no knowledge case); contract/README.md:168.
+
+## landed
+Version 1. Class state. Written by cli, host, worker.
+
+A landed post records that a land Job put the change on main; `main_sha` is main after the land. A Job record's `after` edge of kind `landed` waits for it (run-jobs-launcher.md Q2 and Q9). The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "landed",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 1,
+  "wake": null,
+  "body": {
+    "main_sha": "9ab01cd"
+  }
+}
+```
+
+Read: contract/schemas/landed.json:63; internal/contract/fold.go:101-103 (no landed case); contract/README.md:182.
 
 ## loop-detected
 Version 1. Class state. Written by cli, worker, lead.
@@ -624,6 +854,41 @@ A result is the worker's report that an attempt is done: the `outcome`, what `ch
 
 Read: contract/schemas/result.json:303; internal/contract/fold.go:350-361; contract/README.md:159.
 
+## started
+Version 1. Class state. Written by cli, host, worker.
+
+A started post is the launcher's claim that it started the attempt that `job` and `attempt` name. `base_sha` is the commit the worktree starts at, `allow_dropped` lists the `allow` rules that no grant covered, and `firing` is the scheduled minute of a recurring Job (run-jobs-launcher.md Decision note point 3, Q2, Addendum 7 A2 and B). The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "started",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "base_sha": "3f2c9e1"
+  }
+}
+```
+
+Read: contract/schemas/started.json:75; internal/contract/fold.go:101-103 (no started case); contract/README.md:183.
+
 ## submit
 Version 1. Class state. Written by worker, agent, cli.
 
@@ -657,7 +922,43 @@ A submit post hands in the work of a Job attempt: the body holds the `sha` of th
 }
 ```
 
-Read: contract/schemas/submit.json:89; internal/contract/fold.go:348-349; contract/README.md:158.
+Read: contract/schemas/submit.json:94; internal/contract/fold.go:348-349; contract/README.md:158.
+
+## task-move
+Version 1. Class state. Written by owner, member, lead, cli.
+
+A task-move post moves the task's home from the machine `from` to the machine `to`. `to` is required; `from` is null only on the post that migration writes (brain-board.md decision point 4 and migration step 5; run-jobs-launcher.md Q4 "Task move"). The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "task-move",
+  "type_v": 1,
+  "author": {
+    "id": "owner",
+    "role": "owner"
+  },
+  "tier": "person-team",
+  "worker": "owner@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": null,
+  "attempt": null,
+  "wake": null,
+  "body": {
+    "from": "01K9J000000000000000000002",
+    "to": "01K9J000000000000000000003"
+  }
+}
+```
+
+Read: contract/schemas/task-move.json:76; internal/contract/fold.go:101-103 (no task-move case); contract/README.md:184.
 
 ## transfer
 Version 1. Class state. Written by lead, owner, member, cli.
@@ -730,6 +1031,132 @@ A usage-notice tells the task that its spend crossed a `threshold` with the `dol
 ```
 
 Read: contract/schemas/usage-notice.json:96; internal/contract/fold.go:292-319 (no usage-notice case); contract/README.md:170.
+
+## waited
+Version 1. Class state. Written by cli, host, worker.
+
+A waited post is the outcome of `grid wait`: `status` is `green`, `red` or `timeout`, with the pipeline's `link` and the `log` (run-jobs-launcher.md C point 16, `waited {status: green|red|timeout, link, log}`). The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "waited",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-9",
+  "attempt": 1,
+  "wake": null,
+  "body": {
+    "status": "green",
+    "link": "https://ci.example.com/runs/42",
+    "log": "logs/J-9-a1.log"
+  }
+}
+```
+
+Read: contract/schemas/waited.json:73; internal/contract/fold.go:101-103 (no waited case); contract/README.md:185.
+
+## waiting
+Version 1. Class state. Written by cli, host, worker.
+
+A waiting post says that an assignment's `start` condition has not held for its `wait_max`. `condition` is the start condition, and `unmet` names each atom that does not hold, with its `measured` value and the value it wants (run-jobs-launcher.md Q2, "Timeout"). The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "waiting",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "condition": {
+      "all": [
+        {
+          "cores_free": 4
+        },
+        {
+          "no_test_run": true
+        }
+      ],
+      "wait_max": "30m"
+    },
+    "unmet": [
+      {
+        "atom": "cores_free",
+        "measured": 1.5,
+        "want": 4
+      }
+    ]
+  }
+}
+```
+
+Read: contract/schemas/waiting.json:111; internal/contract/fold.go:101-103 (no waiting case); contract/README.md:186.
+
+## wake
+Version 1. Class state. Written by cli, host.
+
+A wake post records that the task's home launcher woke the orchestrator: `events` are the ids of the event posts it handed over, and `pid` is the session's process (run-jobs-launcher.md Q4). The fold has no case for it yet: it counts as a post and changes no Job.
+
+```json
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "wake",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": null,
+  "attempt": null,
+  "wake": null,
+  "body": {
+    "events": [
+      "01K9J0000000000000000000E1"
+    ]
+  }
+}
+```
+
+Read: contract/schemas/wake.json:71; internal/contract/fold.go:101-103 (no wake case); contract/README.md:187.
 
 ## worker-exit
 Version 1. Class state. Written by worker, agent, cli.

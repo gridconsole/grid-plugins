@@ -1,0 +1,29 @@
+{
+  "id": "01K9J000000000000000000003",
+  "task": "01K9J000000000000000000001",
+  "type": "submit",
+  "type_v": 1,
+  "author": {
+    "id": "worker",
+    "role": "worker"
+  },
+  "tier": "agent",
+  "worker": "worker@01K9J000000000000000000002",
+  "lease": "J-7",
+  "gen": 0,
+  "fence": 2,
+  "seq": 4,
+  "at": "2026-11-08T10:05:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "repo": "plugin",
+    "ref": "refs/grid/T-12/jobs/J-7/a3",
+    "sha": "9ab01cd",
+    "base_sha": "3f2c9e1",
+    "commits": 2
+  }
+}

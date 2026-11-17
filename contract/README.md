@@ -174,6 +174,17 @@ are reference-document names and original line numbers, not machine paths.
 | Host | [host.json](schemas/host.json) | feed-contract.md:86; old-plugin/feed/types/host.md:5-15 |
 | Transfer | [transfer.json](schemas/transfer.json) | feed-contract.md:86; old-plugin/feed/types/transfer.md:5-13 |
 | Deploy failed | [deploy-failed.json](schemas/deploy-failed.json) | feed-contract.md:86; old-plugin/feed/types/deploy-failed.md:5-17 |
+| Approval: a person's answer to a blocked post, naming the exact rules | [approval.json](schemas/approval.json) | run-jobs-launcher.md:485-486, :619 |
+| Blocked: an agent's attempt needs a permission rule it lacks | [blocked.json](schemas/blocked.json) | run-jobs-launcher.md:621 |
+| Cancel: a request to stop one attempt of a Job | [cancel.json](schemas/cancel.json) | run-jobs-launcher.md:218, :313 |
+| Exit: the launcher's record that an attempt ended, with its cost line | [exit.json](schemas/exit.json) | run-jobs-launcher.md:253-261, :580; Addendum 7 B |
+| Integrated: an accepted attempt was squashed onto the task head | [integrated.json](schemas/integrated.json) | run-jobs-launcher.md:615 |
+| Landed: a land Job put the change on main | [landed.json](schemas/landed.json) | run-jobs-launcher.md:217, :454; brain-board.md:475 |
+| Started: the launcher's claim that it started one attempt | [started.json](schemas/started.json) | run-jobs-launcher.md:58, :219, :618 |
+| Task move: the task's home moves to another machine | [task-move.json](schemas/task-move.json) | run-jobs-launcher.md:324; brain-board.md:103, :321, :475 |
+| Waited: the outcome of a wait Job's poll | [waited.json](schemas/waited.json) | run-jobs-launcher.md:499, :624 |
+| Waiting: an assignment's start condition has not held for its wait_max | [waiting.json](schemas/waiting.json) | run-jobs-launcher.md:218 |
+| Wake: the home launcher woke the orchestrator with these event posts | [wake.json](schemas/wake.json) | run-jobs-launcher.md:66, Q4 |
 | Task or Job lease | [lease.json](schemas/lease.json) | feed-contract.md:92-124 |
 | Heartbeat file, not a post | [heartbeat.json](schemas/heartbeat.json) | feed-contract.md:200-218 |
 | Takeover log entry | [takeover.json](schemas/takeover.json) | feed-contract.md:105-111 |

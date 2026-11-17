@@ -1,0 +1,36 @@
+{
+  "id": "01K9J000000000000000000003",
+  "task": "01K9J000000000000000000001",
+  "type": "control",
+  "type_v": 1,
+  "author": {
+    "id": "lead",
+    "role": "lead"
+  },
+  "tier": "person-team",
+  "worker": "lead@01K9J000000000000000000002",
+  "lease": "task",
+  "gen": 0,
+  "fence": 1,
+  "seq": 4,
+  "at": "2026-11-08T10:05:00.000Z",
+  "re": null,
+  "after": [],
+  "job": null,
+  "attempt": null,
+  "wake": null,
+  "body": {
+    "assign": {
+      "job": "J-8",
+      "attempt": 1,
+      "to": "builder@01K9J000000000000000000002",
+      "fence": 2,
+      "until": "2026-11-08T10:10:00.000Z",
+      "start": "now",
+      "test_run": true,
+      "base": {
+        "ref": "refs/grid/T-12/head"
+      }
+    }
+  }
+}

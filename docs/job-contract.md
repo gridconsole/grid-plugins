@@ -99,6 +99,7 @@ the schema.
 | `created_at` | optional | none | UTC time with milliseconds; no code writes it. The ready order reads it and falls back to the post time (`internal/orchestrator/ready.go`). |
 | `status` | optional | run `internal/contract/fold.go` | The lifecycle status; `Record` drops the brief-only `briefed`, `done` and `blocked` (`internal/job/record.go`). |
 | `review_override` | optional | none | `level` and `reason`; the schema allows it, no code writes or reads it. |
+| `home` | optional | run `internal/cli/task_new_first_job.go` | The task's home machine at gen 0, written on J-1 only: the machine id that the writer id `<member>@<machine>` names (brain-board.md decision point 4). No code reads it yet. |
 
 ## Dependencies and review
 

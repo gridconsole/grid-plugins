@@ -147,6 +147,16 @@
     },
     "body": {
       "type": "object"
+    },
+    "by": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^:\\s]+:[^:\\s]+$"
+    },
+    "legacy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
     }
   },
   "required": [

@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/approval.json",
+  "title": "approval",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "approval"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "owner",
+                "member",
+                "lead",
+                "agent",
+                "cli"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "rules": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "decision": {
+                  "enum": [
+                    "approve",
+                    "decline"
+                  ]
+                },
+                "why": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 400
+                }
+              },
+              "required": [
+                "rules",
+                "decision"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "x-class": "state",
+  "x-roles": [
+    "owner",
+    "member",
+    "lead",
+    "agent",
+    "cli"
+  ]
+}
