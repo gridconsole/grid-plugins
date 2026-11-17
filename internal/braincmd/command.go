@@ -85,7 +85,7 @@ const usage = `Usage: grid brain <show|list|search|topics|index|propose|accept|k
 
 Common: --json, --project <name|id>, --level home|project
 Show: --proposal             Read a proposal instead of an accepted note.
-Search: --topic <name>, --limit <n> (default 5)
+Search: --topic <name>, --kind note|task|job|post|proposal, --limit <n> (default 5); notes come before history
 Propose: --file <Markdown|->, --link <JSON> (repeatable), --external
 Index: --read-only           Render without updating generated files.
 Unqualified note ids prefer the project; brain:home/<id> selects a personal note.
@@ -201,7 +201,7 @@ func Run(args []string, env Env) int {
 	asJSON := f.Bool("json", false, "print JSON")
 	project := f.String("project", "", "project name or id")
 	level := f.String("level", "", "home or project")
-	var topic, name, description, summary, source, body, file, reject, taskID, taskDir string
+	var topic, kind, name, description, summary, source, body, file, reject, taskID, taskDir string
 	var links linkFlags
 	var proposeTask task.Task // set when --task resolved
 	var proposal, external, readOnly bool
@@ -228,6 +228,7 @@ func Run(args []string, env Env) int {
 	case "search":
 		f.StringVar(&taskID, "task", "", "resolve this task")
 		f.StringVar(&topic, "topic", "", "topic filter")
+		f.StringVar(&kind, "kind", "", "kind filter: note, task, job, post or proposal")
 		f.IntVar(&limit, "limit", 5, "maximum hits (1 to 100)")
 	case "index":
 		f.BoolVar(&readOnly, "read-only", false, "do not write generated files")
@@ -393,7 +394,7 @@ func Run(args []string, env Env) int {
 		result, err = store.List()
 	case "search":
 		var hits []brain.Hit
-		hits, err = store.Search(strings.Join(f.Args(), " "), topic, limit)
+		hits, err = store.SearchKind(strings.Join(f.Args(), " "), topic, kind, limit)
 		result = struct {
 			Query string      `json:"query"`
 			Hits  []brain.Hit `json:"hits"`

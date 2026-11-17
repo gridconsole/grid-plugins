@@ -33,7 +33,7 @@ Usage: grid brain <show|list|search|topics|index|propose|accept|keep|decide|chec
 
 Common: --json, --project <name|id>, --level home|project
 Show: --proposal             Read a proposal instead of an accepted note.
-Search: --topic <name>, --limit <n> (default 5)
+Search: --topic <name>, --kind note|task|job|post|proposal, --limit <n> (default 5); notes come before history
 Propose: --file <Markdown|->, --link <JSON> (repeatable), --external
 Index: --read-only           Render without updating generated files.
 Unqualified note ids prefer the project; brain:home/<id> selects a personal note.

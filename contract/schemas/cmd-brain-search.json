@@ -40,6 +40,16 @@
           },
           "score": {
             "type": "integer"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "task",
+              "job",
+              "post",
+              "proposal"
+            ],
+            "description": "Absent for a note (knowledge). task, job and post are history and sort after every note."
           }
         },
         "required": [

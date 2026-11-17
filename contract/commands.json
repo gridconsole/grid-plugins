@@ -3404,6 +3404,11 @@
               "required": false
             },
             {
+              "name": "--kind",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--level",
               "takes": "value",
               "required": false

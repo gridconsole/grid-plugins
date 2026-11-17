@@ -84,6 +84,97 @@ type Hit struct {
 	Description string `json:"description"`
 	Summary     string `json:"summary"`
 	Score       int    `json:"score"`
+	// Kind is task, job, post or proposal. It is empty for a note, so a note
+	// hit reads as it always did.
+	Kind string `json:"kind,omitempty"`
+}
+
+// The kinds of a search hit (docs/research/brain-board.md Q6). A note is
+// knowledge; task, job and post are history; a proposal is a note waiting to be
+// filed and is searched only when asked for.
+const (
+	KindNote     = "note"
+	KindTask     = "task"
+	KindJob      = "job"
+	KindPost     = "post"
+	KindProposal = "proposal"
+)
+
+// Kinds lists the values `--kind` takes, knowledge first.
+var Kinds = []string{KindNote, KindTask, KindJob, KindPost, KindProposal}
+
+// ValidKind reports whether kind is a value of --kind.
+func ValidKind(kind string) bool {
+	for _, k := range Kinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// postTypes are the board post types that are searched. Checkpoints, heartbeats
+// and the other types are not indexed, so a long task adds few entries.
+var postTypes = []string{"result", "question", "answer", "found"}
+
+// entryKind says what a vault entry is by where it sits: tasks/<T>/board/ holds
+// posts, tasks/<T>/jobs/ holds Job nodes, the rest of tasks/<T>/ is the task, and
+// every other note is knowledge. indexed is false for a post of a type that is
+// not searched. An entry of the old layout (no row) is always a note.
+func entryKind(e Entry) (kind string, indexed bool) {
+	if e.row == nil {
+		return KindNote, true
+	}
+	parts := strings.Split(e.Note.Name, "/")
+	if len(parts) < 3 || parts[0] != "tasks" {
+		return KindNote, true
+	}
+	switch parts[2] {
+	case "board":
+		if len(parts) != 4 {
+			return KindPost, false
+		}
+		for _, t := range postTypes {
+			if strings.HasSuffix(parts[3], "-"+t) {
+				return KindPost, true
+			}
+		}
+		return KindPost, false
+	case "jobs":
+		return KindJob, true
+	}
+	return KindTask, true
+}
+
+// kindClass orders kinds: knowledge before history.
+func kindClass(kind string) int {
+	if kind == KindNote || kind == "" { // a hit's kind is empty for a note
+		return 0
+	}
+	return 1
+}
+
+// proposalEntries are the notes waiting to be filed at the levels the store
+// reads, as entries.
+func (s Store) proposalEntries() ([]Entry, error) {
+	waiting, err := s.Waiting("")
+	if err != nil {
+		return nil, err
+	}
+	var out []Entry
+	for _, w := range waiting {
+		// Path is brain:<level>/brain-proposals/<name>.md; ID is the name.
+		level, _, ok := strings.Cut(strings.TrimPrefix(w.Path, "brain:"), "/")
+		if !strings.HasPrefix(w.Path, "brain:") || !ok {
+			continue
+		}
+		e, err := s.Proposal(level, w.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, nil
 }
 
 var wordPattern = regexp.MustCompile(`[\p{L}\p{N}]+`)
@@ -110,16 +201,33 @@ func words(s string) map[string]bool {
 	return out
 }
 
-// Search ranks description matches ahead of title/summary and body matches.
-// Equal scores prefer the project level; results never contain note bodies.
+// Search is SearchKind over every kind but proposals.
 func (s Store) Search(query, topic string, limit int) ([]Hit, error) {
+	return s.SearchKind(query, topic, "", limit)
+}
+
+// SearchKind ranks description matches ahead of title/summary and body matches.
+// Knowledge (notes) comes before history (tasks, Jobs, posts) whatever the score;
+// within a class the higher score comes first, and equal scores prefer the
+// project level. kind limits the hits to one kind; empty means every kind but
+// proposals. Results never contain note bodies.
+func (s Store) SearchKind(query, topic, kind string, limit int) ([]Hit, error) {
 	if limit < 1 || limit > 100 {
 		return nil, fmt.Errorf("limit must be between 1 and 100")
 	}
 	if topic != "" && !ValidName(topic) && !(s.Vault() && ValidID(topic)) {
 		return nil, fmt.Errorf("topic must be a plain name")
 	}
-	entries, err := s.entries()
+	if kind != "" && !ValidKind(kind) {
+		return nil, fmt.Errorf("kind must be one of %s", strings.Join(Kinds, ", "))
+	}
+	var entries []Entry
+	var err error
+	if kind == KindProposal {
+		entries, err = s.proposalEntries()
+	} else {
+		entries, err = s.entries()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +237,13 @@ func (s Store) Search(query, topic string, limit int) ([]Hit, error) {
 		n := e.Note
 		if n.SupersededBy != "" || e.Dropped {
 			continue
+		}
+		ek := KindProposal
+		if kind != KindProposal {
+			var indexed bool
+			if ek, indexed = entryKind(e); !indexed || (kind != "" && ek != kind) {
+				continue
+			}
 		}
 		if topic != "" && n.Topic != topic {
 			continue
@@ -151,10 +266,18 @@ func (s Store) Search(query, topic string, limit int) ([]Hit, error) {
 			}
 		}
 		if score > 0 {
-			hits = append(hits, Hit{ID: e.ID, Path: e.Path, Topic: n.Topic, Level: n.Level, Description: n.Description, Summary: n.Summary, Score: score})
+			if ek == KindNote {
+				ek = ""
+			}
+			hits = append(hits, Hit{ID: e.ID, Path: e.Path, Topic: n.Topic, Level: n.Level, Description: n.Description, Summary: n.Summary, Score: score, Kind: ek})
 		}
 	}
-	sort.SliceStable(hits, func(i, j int) bool { return hits[i].Score > hits[j].Score })
+	sort.SliceStable(hits, func(i, j int) bool {
+		if ci, cj := kindClass(hits[i].Kind), kindClass(hits[j].Kind); ci != cj {
+			return ci < cj
+		}
+		return hits[i].Score > hits[j].Score
+	})
 	if len(hits) > limit {
 		hits = hits[:limit]
 	}
