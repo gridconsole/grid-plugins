@@ -483,13 +483,16 @@ func (s Store) decide(level, name, reject string) (Entry, error) {
 			// The note may have been published before a failed proposal-status
 			// write. Preserve that publication time when recovering the write.
 			n.Updated = old.Updated
-			if err != nil || !reflect.DeepEqual(old, normalized(n)) {
+			if err == nil && !sameFiled(old, n) {
+				err = fmt.Errorf("different content")
+			}
+			if err != nil {
 				return fmt.Errorf("note %q already exists with different content", name)
 			}
 			published = before
 		} else if errors.Is(err, fs.ErrNotExist) {
 			n.Updated = s.stamp()
-			published, err = Encode(n)
+			published, err = encodeFiled(filedOf(n))
 			if err != nil {
 				return err
 			}
@@ -608,8 +611,13 @@ func markSuperseded(root *os.Root, old, by Note, why string) error {
 		}
 		version, hash = newest, auditHash(current)
 	} else {
+		// The file as it is now: a person's keys, comments and line endings stay.
+		current, err := safefile.Read(root, path)
+		if err != nil {
+			return err
+		}
 		old.SupersededBy = id
-		data, err := Encode(old)
+		data, err := EncodeOver(current, old)
 		if err != nil {
 			return err
 		}
@@ -626,6 +634,30 @@ func markSuperseded(root *os.Root, old, by Note, why string) error {
 	}
 	return logAudit(root, Change{At: by.Updated, Status: "superseded", Topic: old.Topic, Name: old.Name,
 		Version: version, Hash: hash, OriginKind: by.Origin.Kind, OriginID: by.Origin.ID, Reason: reason})
+}
+
+// sameFiled reports whether the published note read back as old is the note n
+// files: the same content, whatever origin and link summaries the file carries
+// (an accept interrupted by an older Grid published them in the front matter) and
+// whether its source was completed with the Job.
+func sameFiled(old, n Note) bool {
+	strip := func(x Note) Note {
+		x = normalized(x)
+		x.Origin = Origin{}
+		links := make([]Link, len(x.Links))
+		for i, l := range x.Links {
+			l.Summary = ""
+			links[i] = l
+		}
+		x.Links = links
+		return x
+	}
+	a, b := strip(old), strip(n)
+	if reflect.DeepEqual(a, b) {
+		return true
+	}
+	b.Source = filedOf(n).Source
+	return reflect.DeepEqual(a, b)
 }
 
 func normalized(n Note) Note {

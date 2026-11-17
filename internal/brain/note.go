@@ -119,7 +119,18 @@ func line(s string) bool { return !strings.ContainsAny(s, "\r\n\x00") }
 func size(s string) int  { return utf8.RuneCountInString(s) }
 
 // Validate checks the common note schema, not a config topic's executable schema.
-func (n Note) Validate() error {
+// A filed (accepted) note is read back as a person may have left it, so it need
+// not carry an origin, which Grid no longer writes into it, and its links need no
+// stored summary; whatever it has must still be valid. A proposal is Grid's own
+// file and is held to the whole schema.
+func (n Note) Validate() error { return n.validate(n.Status != "accepted") }
+
+// ValidateGenerated checks a note Grid is about to write against the whole schema,
+// the links' summaries included, whatever its status. A note a person wrote or
+// edited is never held to it; Validate is the check for what is read.
+func (n Note) ValidateGenerated() error { return n.validate(true) }
+
+func (n Note) validate(generated bool) error {
 	if !ValidName(n.Name) || !ValidName(n.Topic) {
 		return fmt.Errorf("name and topic must be plain names")
 	}
@@ -141,16 +152,20 @@ func (n Note) Validate() error {
 	if strings.TrimSpace(n.Source) == "" || !line(n.Source) {
 		return fmt.Errorf("source must name a task, Job or person on one line")
 	}
-	if !line(n.Reason) || !line(n.Updated) || !line(n.SupersededBy) || !line(n.Origin.ID) || strings.TrimSpace(n.Origin.ID) == "" {
+	// A filed note holds no origin unless an old file still carries one.
+	originless := n.Status == "accepted" && n.Origin == (Origin{})
+	if !line(n.Reason) || !line(n.Updated) || !line(n.SupersededBy) || !line(n.Origin.ID) || (strings.TrimSpace(n.Origin.ID) == "" && !originless) {
 		return fmt.Errorf("metadata must contain single-line values and an origin id")
 	}
 	switch n.Origin.Kind {
 	case "session", "job", "server", "import":
 	default:
-		return fmt.Errorf("origin kind must be session, job, server or import")
+		if !originless {
+			return fmt.Errorf("origin kind must be session, job, server or import")
+		}
 	}
 	for _, l := range n.Links {
-		if err := l.Validate(); err != nil {
+		if err := l.validate(generated); err != nil {
 			return err
 		}
 	}
@@ -191,8 +206,10 @@ func summary(s string) error {
 	return nil
 }
 
-func (l Link) Validate() error {
-	base, anchor, anchored := strings.Cut(l.To, "#")
+// linkTarget is the syntax of a link target: brain:<level>/<id>, job:<task>/<job>
+// or person:<id>, optionally with #anchor.
+func linkTarget(to string) bool {
+	base, anchor, anchored := strings.Cut(to, "#")
 	kind, id, ok := strings.Cut(base, ":")
 	parts := strings.Split(id, "/")
 	valid := ok && (!anchored || ValidName(anchor))
@@ -206,7 +223,21 @@ func (l Link) Validate() error {
 	default:
 		valid = false
 	}
-	if !valid {
+	return valid
+}
+
+// Validate is the check of a link Grid writes: the target, the relation, the why
+// and the destination's summary.
+func (l Link) Validate() error { return l.validate(true) }
+
+// validate checks a link. A link read from a note's ## Links section has no summary
+// stored with it (the summary is the destination's, read when it is shown), so a
+// stored link is checked without one.
+func (l Link) validate(needSummary bool) error {
+	base, _, _ := strings.Cut(l.To, "#")
+	_, id, _ := strings.Cut(base, ":")
+	parts := strings.Split(id, "/")
+	if !linkTarget(l.To) {
 		return fmt.Errorf("link target must be brain:<level>/<id>, job:<task>/<job> or person:<id>, optionally with #anchor")
 	}
 	known := false
@@ -219,6 +250,9 @@ func (l Link) Validate() error {
 	why := strings.TrimSpace(l.Why)
 	if !line(why) || size(why) < 8 || size(why) > 160 || strings.EqualFold(why, "see also") || strings.EqualFold(why, "related") || strings.EqualFold(why, parts[len(parts)-1]) || strings.EqualFold(why, l.To) {
 		return fmt.Errorf("link why must explain the benefit in 8 to 160 characters")
+	}
+	if !needSummary {
+		return nil
 	}
 	return summary(l.Summary)
 }

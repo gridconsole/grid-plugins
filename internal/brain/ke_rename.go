@@ -192,7 +192,8 @@ func keRnApply(root *os.Root, level, topic, name, newName, expect string, origin
 	}
 	renamed := n
 	renamed.Name = newName
-	newData, err := Encode(renamed)
+	// The file as it is: a person's keys, comments and line endings come along.
+	newData, err := EncodeOver(data, renamed)
 	if err == nil {
 		err = renamed.Validate()
 	}
@@ -238,32 +239,108 @@ func keRnApply(root *os.Root, level, topic, name, newName, expect string, origin
 	if err != nil {
 		return res, fmt.Errorf("renamed %s to %s, but the notes that link to it could not be listed: %w", res.From, res.To, err)
 	}
-	oldID, newID := "brain:"+level+"/"+name, "brain:"+level+"/"+newName
+	files, err := keRnFiles(root, level)
+	if err != nil {
+		return res, fmt.Errorf("renamed %s to %s, but the notes that link to it could not be listed: %w", res.From, res.To, err)
+	}
+	filed := map[string]Note{}
 	for _, m := range notes {
-		if m.Topic == topic && m.Name == newName {
+		filed[m.Topic+"/"+m.Name] = m
+	}
+	oldID, newID := "brain:"+level+"/"+name, "brain:"+level+"/"+newName
+	for _, rel := range files {
+		key := strings.TrimSuffix(strings.TrimPrefix(filepath.ToSlash(rel), "knowledge/"), ".md")
+		if key == topic+"/"+newName {
 			continue
 		}
-		links, changed := keRnLinks(m.Links, oldID, newID)
-		superseded := m.SupersededBy == oldID
-		if !changed && !superseded {
+		current, err := safefile.Read(root, rel)
+		if err != nil {
+			res.Kept = append(res.Kept, key)
 			continue
 		}
-		key := m.Topic + "/" + m.Name
+		next := current
+		m, isNote := filed[key]
+		if isNote {
+			_, moved := keRnLinks(m.Links, oldID, newID)
+			superseded := m.SupersededBy == oldID
+			// Links an old file keeps in its front matter move to the body here,
+			// where the rewrite below finds them.
+			legacy := moved && keRnFrontLinks(current)
+			if superseded || legacy {
+				if superseded {
+					m.SupersededBy = newID
+				}
+				if next, err = EncodeOver(current, m); err != nil {
+					res.Kept = append(res.Kept, key)
+					continue
+				}
+			}
+		}
+		next, _ = rewriteNoteLinks(next, level, topic, name, newName)
+		if bytes.Equal(next, current) {
+			continue
+		}
 		if states[key].status == "dropped" {
 			res.Skipped = append(res.Skipped, key)
 			continue
 		}
-		m.Links = links
-		if superseded {
-			m.SupersededBy = newID
-		}
-		if err := keRnRelink(root, m, newID, res.From, res.To, origin, now); err != nil {
+		if err := keRnRelink(root, rel, key, isNote, next, newID, res.From, res.To, origin, now); err != nil {
 			res.Kept = append(res.Kept, key)
 			continue
 		}
 		res.Linked = append(res.Linked, key)
 	}
 	return res, nil
+}
+
+// keRnFiles lists every Markdown file of the level's knowledge topics that a link
+// to a renamed note can be in: the accepted notes, and the files a person wrote or
+// edited that Grid does not count as notes. Versions, topic definitions and the
+// entries of config topics are not among them.
+func keRnFiles(root *os.Root, level string) ([]string, error) {
+	var files []string
+	if err := safefile.NoSymlinks(root, "knowledge"); err != nil {
+		return nil, err
+	}
+	err := fs.WalkDir(root.FS(), "knowledge", func(path string, d fs.DirEntry, err error) error {
+		if errors.Is(err, fs.ErrNotExist) && path == "knowledge" {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("brain paths cannot be symbolic links")
+		}
+		if d.IsDir() && path == "knowledge/"+versionsTopic {
+			return fs.SkipDir
+		}
+		parts := strings.Split(path, "/")
+		if d.IsDir() || len(parts) != 3 || filepath.Ext(path) != ".md" || d.Name() == "TOPIC.md" {
+			return nil
+		}
+		if definition, err := topicAt(root, parts[1], level); err == nil && definition.Kind == "config" {
+			return nil
+		}
+		files = append(files, path)
+		return nil
+	})
+	return files, err
+}
+
+// keRnFrontLinks reports whether a note file holds a links key in its front
+// matter, the form notes were written in before their links moved to the body.
+func keRnFrontLinks(data []byte) bool {
+	f, ok := splitRaw(data)
+	if !ok {
+		return false
+	}
+	for _, sp := range frontSpans(f.front) {
+		if sp.key == "links" {
+			return true
+		}
+	}
+	return false
 }
 
 // keRnLinks returns links with every target oldID, with or without an anchor,
@@ -289,8 +366,7 @@ func keRnLinks(links []Link, oldID, newID string) ([]Link, bool) {
 // keRnRelink writes the relinked note m as a new version, as its file and as a
 // "linked" line. When any step fails the file and the version list are as they
 // were before, and the error says which step.
-func keRnRelink(root *os.Root, m Note, newID, from, to string, origin Origin, now time.Time) error {
-	rel := filepath.Join("knowledge", m.Topic, m.Name+".md")
+func keRnRelink(root *os.Root, rel, key string, versioned bool, data []byte, newID, from, to string, origin Origin, now time.Time) error {
 	if hook := keRnWriteHook; hook != nil {
 		if err := hook(filepath.ToSlash(rel)); err != nil {
 			return err
@@ -300,7 +376,12 @@ func keRnRelink(root *os.Root, m Note, newID, from, to string, origin Origin, no
 	if err != nil {
 		return err
 	}
-	data, err := Encode(m)
+	if !versioned {
+		// A file a person wrote is not a note with versions and an audit line: its
+		// links move, and nothing else in it does.
+		return atomicWrite(root, rel, data)
+	}
+	m, err := Parse(data)
 	if err == nil {
 		err = m.Validate()
 	}

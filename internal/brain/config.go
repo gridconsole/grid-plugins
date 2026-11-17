@@ -139,6 +139,12 @@ func (s Store) editConfig(level, topic, name string, by *Origin, edit func([]byt
 			return logAudit(root, Change{At: s.stamp(), Status: "dropped", Topic: topic, Name: name,
 				Version: version, Hash: auditHash(old), OriginKind: by.Kind, OriginID: by.ID})
 		}
+		// The editor's bytes are the new entry. Put into the file as it is, so that
+		// only the keys the edit changed differ: comments, spelling, key order and
+		// line endings stay.
+		if old != nil {
+			data = patchConfig(old, data)
+		}
 		if len(data) > 1<<20 {
 			return fmt.Errorf("config entry exceeds 1 MiB")
 		}
