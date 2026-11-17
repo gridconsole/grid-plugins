@@ -31,7 +31,7 @@ Failure on the merged head before the fix:
 | 3. `go test -count=1 ./internal/job/lint/` | HOLDS, exit 0: `ok  github.com/gridconsole/grid-plugins/internal/job/lint  0.405s` |
 | 3. `make webui-test`, `TestFvArgvCollects`, `TestEveryWiredMount`, slices Imports | not run, not asked (app-repo walk tests; this is the plugin repo) |
 | 4. `make lint` | HOLDS, exit 0 (`go vet ./...`, no output) |
-| 4. `make cross` | see below |
+| 4. `make cross` | HOLDS, exit 0 (darwin/arm64 and windows/amd64: vet and test compile, no FAIL) |
 | Tests of changed packages and importers | the only changed file is README.md, read by `internal/cli` tests; no Go package changed, so no importer set; `internal/cli` run above |
 | New test | none added: the existing test already fails on the merged head without the fix and passes with it (failing lines above) |
 | `git fetch origin && git merge origin/main` | done at start of the round; Merge made by the ort strategy, no conflict |
