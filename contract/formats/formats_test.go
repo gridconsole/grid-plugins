@@ -132,11 +132,13 @@ func TestFormatOriginWriter(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if accepted.Origin != n.Origin {
-					t.Fatal("accept changed origin")
+				// A filed note names its author in the flat source, not in an origin
+				// key: Obsidian's Properties editor shows flat keys only.
+				if accepted.Origin != (brain.Origin{}) || bytes.Contains(formatRead(t, saved), []byte("origin:")) {
+					t.Fatal("accept kept the origin in the front matter")
 				}
-				if err := contract.Validate("fmt-origin", formatJSON(t, accepted.Origin)); err != nil {
-					t.Fatal(err)
+				if accepted.Source != "job:T-01/J-01" || !bytes.Contains(formatRead(t, saved), []byte("\nsource: job:T-01/J-01\n")) {
+					t.Fatalf("accept lost the flat source: %q", accepted.Source)
 				}
 			}
 		})
@@ -157,8 +159,11 @@ func TestFormatOriginLegacyRead(t *testing.T) {
 	if err := contract.Validate("fmt-origin", formatJSON(t, n.Origin)); err == nil {
 		t.Fatal("schema accepted the unstamped legacy note")
 	}
-	if n.Validate() == nil {
-		t.Fatal("legacy note unexpectedly qualifies as stamped knowledge")
+	// A note with no origin is the filed form (the author is the flat source), so
+	// it validates; the quarantine of what came from outside is the import path
+	// below, which stamps the proposal and refuses to accept it.
+	if err := n.Validate(); err != nil {
+		t.Fatalf("legacy note is the filed form and must validate: %v", err)
 	}
 	dir := filepath.Join(h.env.GridHome, "knowledge", "decisions")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -167,8 +172,8 @@ func TestFormatOriginLegacyRead(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "legacy.md"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := (brain.Store{GridHome: h.env.GridHome}).Show("brain:home/legacy"); err == nil {
-		t.Fatal("unstamped legacy note entered accepted knowledge")
+	if _, err := (brain.Store{GridHome: h.env.GridHome}).Show("brain:home/legacy"); err != nil {
+		t.Fatalf("a filed note without an origin must read: %v", err)
 	}
 	// The existing import path still reads it and supplies provenance itself.
 	h.env.Stdin = bytes.NewReader(data)
