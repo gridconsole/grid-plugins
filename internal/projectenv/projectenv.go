@@ -394,18 +394,21 @@ func remove(edit editFunc, id string) error {
 	})
 }
 
-// List returns every saved environment in id order. A home with no knowledge
+// List returns every saved environment in id order. When the store names the
+// brain folder (BrainDir), the environments of projects/<project>/grid/environments
+// come first and those of knowledge/environments the folder does not hold follow,
+// since Save still writes to knowledge/. A home with no knowledge
 // folder gives an empty list. An entry that cannot be read stops the list with
 // an error naming it.
 func List(s brain.Store) ([]Entry, error) {
-	names, err := s.ConfigNames(level, topic)
+	names, err := entryNames(s)
 	if err != nil {
 		return nil, err
 	}
 	sort.Strings(names)
 	out := []Entry{}
 	for _, name := range names {
-		data, err := s.ReadConfig(level, topic, name)
+		data, err := readEntry(s, name)
 		if err != nil {
 			return nil, fmt.Errorf("environment %s: %w", name, err)
 		}

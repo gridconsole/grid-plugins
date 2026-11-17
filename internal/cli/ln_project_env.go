@@ -315,7 +315,9 @@ func lnEnvStore(env Env, name string) (brain.Store, error) {
 	case matches > 1:
 		return brain.Store{}, fmt.Errorf("project %q is ambiguous", name)
 	}
-	return brain.Store{GridHome: r.GridHome, Project: project}, nil
+	// The config's brain key, when set, makes List read grid/environments of the
+	// brain folder; Save still writes knowledge/ until the writers move.
+	return brain.Store{GridHome: r.GridHome, Project: project}.WithConfig(r.Home, nil), nil
 }
 
 // lnEnvOrigin names the person the host runs the plugin for, else the session,

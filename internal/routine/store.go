@@ -47,6 +47,10 @@ type Store struct {
 	GridHome string
 	Project  string // empty selects home; no implicit project fallback
 	Now      func() time.Time
+	// BrainDir is the brain folder of the Grid config (brain.Store.BrainDir).
+	// When set, routines are read from its grid/routines folder first. Empty
+	// reads knowledge/routines alone, as before. Writes stay in knowledge/.
+	BrainDir string
 }
 
 var ErrScheduleChanged = errors.New("routine changed since it was scheduled")
@@ -223,7 +227,7 @@ func decode(name string, b []byte) (Entry, error) {
 	return e, err
 }
 func (s Store) Get(name string) (Entry, error) {
-	b, err := s.brain().ReadConfig(s.level(), "routines", name)
+	b, err := s.readEntry(name)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -235,7 +239,7 @@ func (s Store) Get(name string) (Entry, error) {
 }
 func (s Store) List() ([]Entry, error) {
 	entries := []Entry{}
-	names, err := s.brain().ConfigNames(s.level(), "routines")
+	names, err := s.entryNames()
 	if err != nil {
 		return nil, err
 	}

@@ -29,6 +29,10 @@ type Problem struct {
 type Store struct {
 	GridHome string
 	Project  string // empty reads home only
+	// BrainDir is the brain folder of the Grid config (brain.Store.BrainDir).
+	// When set, people are read from its grid/people folder first. Empty reads
+	// knowledge/people alone, as before.
+	BrainDir string
 }
 
 func (e Entry) Validate() error {
@@ -80,9 +84,8 @@ func (s Store) levels() []string {
 // an invalid project override must not revive a home approval grant.
 // A missing handle returns an error wrapping fs.ErrNotExist.
 func (s Store) Get(handle string) (Entry, error) {
-	b := brain.Store{GridHome: s.GridHome, Project: s.Project}
 	for _, level := range s.levels() {
-		data, err := b.ReadConfig(level, "people", handle)
+		data, err := s.readPerson(level, handle)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
@@ -100,9 +103,8 @@ func (s Store) Get(handle string) (Entry, error) {
 func (s Store) List() ([]Entry, []Problem, error) {
 	entries, problems := []Entry{}, []Problem{}
 	seen := map[string]bool{}
-	b := brain.Store{GridHome: s.GridHome, Project: s.Project}
 	for _, level := range s.levels() {
-		names, err := b.ConfigNames(level, "people")
+		names, err := s.personNames(level)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -111,7 +113,7 @@ func (s Store) List() ([]Entry, []Problem, error) {
 				continue
 			}
 			seen[name] = true
-			data, err := b.ReadConfig(level, "people", name)
+			data, err := s.readPerson(level, name)
 			if err != nil {
 				return nil, nil, err
 			}
