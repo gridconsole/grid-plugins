@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
@@ -33,6 +34,10 @@ type BoardHome struct {
 	Rel string
 	// By is <machine>:<login>, the by of every post this Store writes.
 	By string
+	// Login is the login of this process. When By is empty, a post's by is the machine
+	// of its writer (the part of Writer.Worker after the @), a colon and Login, so a
+	// caller that resolves the Store before it knows the writer sets this instead.
+	Login string
 }
 
 var errNoMachineFolder = errors.New("a per-post board keeps its caches and locks in the machine folder, and it is not known")
@@ -219,7 +224,13 @@ func (s Store) boardHeader(in Input, w Writer) (postfile.Header, error) {
 	invalid := func(format string, args ...any) (postfile.Header, error) {
 		return postfile.Header{}, &InvalidRecordError{Err: fmt.Errorf(format, args...)}
 	}
-	if s.Board.By == "" {
+	by := s.Board.By
+	if by == "" && s.Board.Login != "" {
+		if _, machine, ok := strings.Cut(w.Worker, "@"); ok && machine != "" {
+			by = machine + ":" + s.Board.Login
+		}
+	}
+	if by == "" {
 		return invalid("a board post needs its by, <machine>:<login>")
 	}
 	t, known := contract.LookupType(in.Type)
@@ -247,7 +258,7 @@ func (s Store) boardHeader(in Input, w Writer) (postfile.Header, error) {
 	if s.Now != nil {
 		now = s.Now()
 	}
-	h := postfile.Header{ID: id, Task: s.TaskID, Type: in.Type, TypeV: t.Version, Job: in.Job, Gen: w.Gen, At: contract.FormatTime(now), Author: postfile.Author{ID: w.Author.ID, Role: w.Author.Role}, By: s.Board.By, Re: in.Re, After: append([]string{}, in.After...), Body: data}
+	h := postfile.Header{ID: id, Task: s.TaskID, Type: in.Type, TypeV: t.Version, Job: in.Job, Gen: w.Gen, At: contract.FormatTime(now), Author: postfile.Author{ID: w.Author.ID, Role: w.Author.Role}, By: by, Re: in.Re, After: append([]string{}, in.After...), Body: data}
 	if in.Attempt > 0 {
 		attempt := in.Attempt
 		h.Attempt = &attempt

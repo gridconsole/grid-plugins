@@ -194,6 +194,9 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
+		if store.Board != nil {
+			return render(read.BoardView(), records(read.Records))
+		}
 		return render(read, records(read.Records))
 	case "feed_state":
 		state, err := store.SaveState()
@@ -219,10 +222,23 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
+		if tool.Name == "feed_handover" && store.Board != nil {
+			return Result{}, &feed.InvalidRecordError{Err: errors.New("a per-post board has no task lease; handover is retired")}
+		}
+		// The author is the session's, never an argument (an author argument is
+		// unknown and refused above). A post that answers for a person names its
+		// agent in `by` from that same session, so a `by` the body carries is
+		// replaced, not trusted; whether it counts as the person's is the reader's
+		// rule (contract.PostedAs), so nothing is refused here. Only an answer
+		// posts for a person; control and host bodies have a grant of their own.
+		if in.Type == "answer" && (in.Body["for"] != nil || in.Body["grant"] != nil) {
+			in.Body["by"] = writer.Author.ID
+		}
 		var post feed.Record
 		if tool.Name == "feed_handover" {
 			post, err = store.Handover(in, writer)
-		} else if in.Type == "job" {
+		} else if in.Type == "job" && store.Board == nil {
+			// On a board the Job post is one publish under the board lock.
 			post, err = orchestrator.PostJobLocked(store, in, writer)
 		} else {
 			post, err = store.Post(in, writer)
@@ -235,6 +251,9 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		// it is: the post stands and the next fold repairs the files. The server
 		// has no stderr (stdout carries the protocol), so the error is not shown.
 		_, _ = store.RefoldPublished()
+		if store.Board != nil {
+			return render(map[string]any{"post": post.BoardView(), "file": post.BoardFile(), "tier": post.Tier, "data": post.Data()}, []feed.Record{post})
+		}
 		return render(map[string]any{"post": post, "tier": post.Tier, "data": post.Data()}, []feed.Record{post})
 	}
 }

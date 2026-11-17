@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type controlBody struct {
@@ -29,15 +30,23 @@ type question struct {
 
 // Fold materializes one task's admitted posts. The caller checks writer-file
 // identity, complete lines and takeover byte offsets, setting Post.Stale for
-// lines beyond an ended tenure. No timestamp affects a decision here.
+// lines beyond an ended tenure. No timestamp affects a decision here except
+// through PostedAs, which compares a post's own at with a grant's until; the
+// clock is never read.
+//
+// grants are the people's grant notes (run-jobs-launcher.md Q8). A counted answer
+// counts as the person's only with for, by and a covering grant (PostedAs), and
+// FoldLoop's Loop.PostedAs records it; without one it folds as its stamped
+// author's own.
+// The grants never refuse or drop a post.
 //
 // Controls apply by (gen, fence, seq). Each grant consumes its matching Job
 // tenure in seq order before the next control. Cross-file causal dependencies
 // must be named by re/after. Unknown types and versions remain visible without
 // affecting Jobs. This is an in-memory contract fold, not a filesystem reader
 // or the scheduling/liveness loop.
-func Fold(posts []Post) State {
-	out, _ := FoldLoop(posts)
+func Fold(posts []Post, grants ...Grant) State {
+	out, _ := FoldLoop(posts, grants...)
 	return out
 }
 
@@ -49,17 +58,23 @@ const Blocked Status = "blocked"
 // Allow holds, by Job, the allow rules of the Job's current assign, and only when
 // its grant names a counted approval by a person that approves every one of them
 // for that Job (V22); any other allow folds absent. Landed holds, by Job, its
-// counted landed post: what a landed after edge waits for (V27).
+// counted landed post: what a landed after edge waits for (V27). PostedAs holds,
+// by post id, the person a counted answer counts as when an agent posted it for
+// that person under a covering grant (V22); it is nil when every answer counts as
+// its stamped author.
 type Loop struct {
-	Allow  map[string][]string `json:"allow"`
-	Landed map[string]string   `json:"landed"`
+	Allow    map[string][]string `json:"allow"`
+	Landed   map[string]string   `json:"landed"`
+	PostedAs map[string]Author   `json:"posted_as,omitempty"`
 	// Home is the machine that holds a per-post board's task now: the home of the
 	// highest gen the posts name. A JSONL feed has none.
 	Home string `json:"home,omitempty"`
 }
 
 // FoldLoop is Fold, also returning the Loop that the same pass read.
-func FoldLoop(posts []Post) (State, Loop) { return foldLoop(posts, nil) }
+func FoldLoop(posts []Post, grants ...Grant) (State, Loop) {
+	return foldLoop(posts, nil, grants)
+}
 
 // BoardPost is one post of a per-post board (internal/board/postfile): the post with
 // its by, <machine>:<login>, in place of a worker, lease and fence, and the verdict
@@ -96,7 +111,7 @@ func FoldBoard(posts []BoardPost) (State, Loop) {
 			info[p.ID] = boardInfo{by: p.By, legacy: p.Legacy}
 		}
 	}
-	return foldLoop(plain, info)
+	return foldLoop(plain, info, nil)
 }
 
 type boardInfo struct{ by, legacy string }
@@ -181,7 +196,7 @@ func boardController(role string) bool {
 	return false
 }
 
-func foldLoop(posts []Post, info map[string]boardInfo) (State, Loop) {
+func foldLoop(posts []Post, info map[string]boardInfo, grants []Grant) (State, Loop) {
 	board := info != nil
 	loop := Loop{Allow: map[string][]string{}, Landed: map[string]string{}}
 	out := State{Jobs: map[string]*Job{}, Verdicts: []Verdict{}, Questions: map[string]*Question{}, NeedsYou: []string{}, Wakes: []string{}, ByRef: map[string][]string{}, Hosts: map[string]string{}}
@@ -355,6 +370,25 @@ func foldLoop(posts []Post, info map[string]boardInfo) (State, Loop) {
 			// Announcement only: neither this nor transfer changes authority.
 		}
 	}
+	// An answer counts as a person's only under a covering grant, read for the
+	// kind of the person Job it answers; the stored author is never changed.
+	for _, p := range active {
+		if p.Type != "answer" {
+			continue
+		}
+		if who, _ := PostAs(p, personJobs[deref(p.Re)].kind, grants); who != p.Author {
+			if loop.PostedAs == nil {
+				loop.PostedAs = map[string]Author{}
+			}
+			loop.PostedAs[p.ID] = who
+		}
+	}
+	countedAs := func(p Post) Author {
+		if who, ok := loop.PostedAs[p.ID]; ok {
+			return who
+		}
+		return p.Author
+	}
 	consumed := map[string]bool{}
 	// moved holds the Jobs whose status a control set after their latest assign;
 	// the attempt's loop posts below do not undo it.
@@ -367,7 +401,8 @@ func foldLoop(posts []Post, info map[string]boardInfo) (State, Loop) {
 		_ = json.Unmarshal(p.Body, &b)
 		if q := questions[b.Target]; q != nil {
 			answer, exists := seen[b.Answer]
-			if !exists || answer.Type != "answer" || verdicts[answer.ID].Kind != "counted" || answer.Re == nil || *answer.Re != q.post.ID || NormalizeRole(answer.Author.Role) == "guest" && answer.Author.ID != q.who {
+			who := countedAs(answer)
+			if !exists || answer.Type != "answer" || verdicts[answer.ID].Kind != "counted" || answer.Re == nil || *answer.Re != q.post.ID || NormalizeRole(who.Role) == "guest" && who.ID != q.who {
 				set(p, "ignored", "control must select an eligible answer to this question")
 				continue
 			}
@@ -516,10 +551,10 @@ func foldLoop(posts []Post, info map[string]boardInfo) (State, Loop) {
 				set(p, "ignored", "no matching counted assign for this tenure")
 			}
 		}
-		if p.Type == "answer" && NormalizeRole(p.Author.Role) == "guest" {
+		if who := countedAs(p); p.Type == "answer" && NormalizeRole(who.Role) == "guest" {
 			q := questions[*p.Re]
 			pj := personJobs[*p.Re]
-			if (q == nil || q.who != p.Author.ID) && !GuestAddressee(p.Author.Role, p.Author.ID, p.Lease != nil || p.Fence != 0, pj.role, pj.owner, pj.kind) {
+			if (q == nil || q.who != who.ID) && !GuestAddressee(who.Role, who.ID, p.Lease != nil || p.Fence != 0, pj.role, pj.owner, pj.kind) {
 				set(p, "ignored", "question is not addressed to this guest")
 			}
 		}
@@ -962,6 +997,99 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// Grant is a person's grant note, grid/people/<person>/grants/<name>.md in the
+// brain (run-jobs-launcher.md Q8): it lets the agents it names post as that
+// person. Link, Person and Role come from where the note lives and the person's
+// own note, never from a post.
+type Grant struct {
+	Link   string   // the note's path from the brain root, without .md
+	Person string   // the person whose folder holds the note
+	Role   string   // that person's role (owner, member, guest)
+	Agents []string // the agent ids or roles it names
+	Posts  []string // the post types it covers, such as answer
+	Kinds  []string // the person-Job kinds an answer may close; approve only when named
+	Tasks  []string // the task ids it covers; empty or "all" covers every task
+	Until  string   // RFC 3339; it covers a post whose own time is before this
+}
+
+// PostAs is PostedAs for a contract post.
+func PostAs(p Post, kind string, grants []Grant) (Author, string) {
+	var body map[string]any
+	_ = json.Unmarshal(p.Body, &body)
+	return PostedAs(p.Type, p.Author, p.Task, p.At, body, kind, grants)
+}
+
+// PostedAs is the author a post counts as (run-jobs-launcher.md Q8, ledger V22).
+// A post by an agent counts as a person's only when its body carries `for` (the
+// person), `by` (its own stamped author id) and `grant` (a link to the grant
+// note), and that note is the person's, names the agent by id or role, covers
+// the post type, the task and the person-Job kind, and had not expired at the
+// post's own time. Otherwise it counts as its stamped author's.
+//
+// This is a rule on reading, not on writing: no post is refused or dropped, and
+// the stored author is never changed. The reason is "" when the post counts as
+// the person's or asks for no person; otherwise it says why the agent's own
+// author stands, for a note a reader may show. kind is the person-Job kind the
+// post answers, "" for none. The expiry compares the post's at with the grant's
+// until; the clock is never read.
+func PostedAs(typ string, author Author, task, at string, body map[string]any, kind string, grants []Grant) (Author, string) {
+	person, _ := body["for"].(string)
+	by, _ := body["by"].(string)
+	link, _ := body["grant"].(string)
+	if person == "" && by == "" && link == "" {
+		return author, ""
+	}
+	if person == "" || by == "" || link == "" {
+		return author, "for, by and grant are all needed to post as a person"
+	}
+	if TierFor(author.Role) != Agent {
+		return author, "only an agent posts for a person; a person posts as themselves"
+	}
+	if by != author.ID {
+		return author, fmt.Sprintf("by %q is not the post's author %q", by, author.ID)
+	}
+	target := GrantTarget(link)
+	var g *Grant
+	for i := range grants {
+		if grants[i].Link == target {
+			g = &grants[i]
+			break
+		}
+	}
+	switch {
+	case g == nil:
+		return author, fmt.Sprintf("no grant note %s", target)
+	case g.Person != person:
+		return author, fmt.Sprintf("the grant %s is %s's, not %s's", target, g.Person, person)
+	case TierFor(g.Role) != PersonTeam:
+		return author, fmt.Sprintf("the grant %s is not of a person of the team", target)
+	case !contains(g.Agents, author.ID) && !contains(g.Agents, NormalizeRole(author.Role)):
+		return author, fmt.Sprintf("the grant %s does not name %s", target, author.ID)
+	case !contains(g.Posts, typ):
+		return author, fmt.Sprintf("the grant %s does not cover %s posts", target, typ)
+	case kind == "approve" && !contains(g.Kinds, kind) || len(g.Kinds) > 0 && !contains(g.Kinds, kind):
+		return author, fmt.Sprintf("the grant %s does not cover %q person Jobs", target, kind)
+	case len(g.Tasks) > 0 && !contains(g.Tasks, "all") && !contains(g.Tasks, task):
+		return author, fmt.Sprintf("the grant %s does not cover task %s", target, task)
+	}
+	posted, err := time.Parse(time.RFC3339Nano, at)
+	until, uerr := time.Parse(time.RFC3339Nano, g.Until)
+	if err != nil || uerr != nil || !posted.Before(until) {
+		return author, fmt.Sprintf("the grant %s had expired at %s (until %q)", target, at, g.Until)
+	}
+	return Author{ID: g.Person, Role: NormalizeRole(g.Role)}, ""
+}
+
+// GrantTarget is the note path a grant link names: [[grid/people/dana/grants/x|label]],
+// grid/people/dana/grants/x.md and /grid/people/dana/grants/x all name the same note.
+func GrantTarget(link string) string {
+	link = strings.TrimSpace(link)
+	link = strings.TrimSuffix(strings.TrimPrefix(link, "[["), "]]")
+	link, _, _ = strings.Cut(link, "|")
+	link, _, _ = strings.Cut(link, "#")
+	return strings.TrimPrefix(strings.TrimSuffix(strings.TrimSpace(link), ".md"), "/")
 }
 
 // typeVersion returns the type_v const a post type's schema pins, or 0 when it pins none.

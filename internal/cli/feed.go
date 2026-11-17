@@ -8,6 +8,7 @@ import (
 	"io"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -108,11 +109,17 @@ func runFeed(args []string, env Env) int {
 	if !write && store.TaskID == "" {
 		return fail(feed.ErrNoTaskID)
 	}
+	if verb == "handover" && store.Board != nil {
+		return fail(&feed.InvalidRecordError{Err: errBoardHandover})
+	}
 	switch verb {
 	case "read":
 		result, err := store.Read(feed.Filter{Since: since, Type: kind, Job: job})
 		if err != nil {
 			return fail(err)
+		}
+		if store.Board != nil {
+			return output(result.BoardView())
 		}
 		return output(result)
 	case "state":
@@ -163,7 +170,9 @@ func runFeed(args []string, env Env) int {
 	var record feed.Record
 	if verb == "handover" {
 		record, err = store.Handover(in, writer)
-	} else if kind == "job" {
+	} else if kind == "job" && store.Board == nil {
+		// On a board the Job post is one publish under the board lock; the pass lock
+		// of PostJobLocked lives in feed/, which a board task does not have.
 		record, err = orchestrator.PostJobLocked(store, in, writer)
 	} else {
 		record, err = store.Post(in, writer)
@@ -177,6 +186,14 @@ func runFeed(args []string, env Env) int {
 	// a tick. A fold error does not undo the post; the next fold repairs the files.
 	if _, err := store.RefoldPublished(); err != nil {
 		fmt.Fprintln(env.Stderr, "refold:", err)
+	}
+	if store.Board != nil {
+		return output(struct {
+			Post feed.BoardRecord `json:"post"`
+			File string           `json:"file"`
+			Tier string           `json:"tier"`
+			Data bool             `json:"data"`
+		}{record.BoardView(), record.BoardFile(), string(record.Tier), record.Data()})
 	}
 	return output(struct {
 		Post feed.Record `json:"post"`
@@ -220,7 +237,25 @@ func feedStore(env Env, task, project string) (feed.Store, error) {
 	if err != nil && !errors.Is(err, feed.ErrNoTaskID) {
 		return feed.Store{}, err
 	}
-	return feed.Store{TaskDir: res.TaskPath, TaskID: taskID, Context: env.Context, Warn: env.Stderr, Machine: env.MachineFolder}, nil
+	store := feed.Store{TaskDir: res.TaskPath, TaskID: taskID, Context: env.Context, Warn: env.Stderr, Machine: env.MachineFolder}
+	// A task whose folder holds board/ is on a per-post board: the posts are files
+	// there and the caches are in the machine folder. Any other task keeps its JSONL
+	// Feed, so a home that is not migrated reads and writes as before.
+	return store.Boarded(boardRel(env.GridHome, res.TaskPath), env.login()), nil
+}
+
+// errBoardHandover is the refusal of a handover on a board: there is no task lease
+// to hand over (docs/research/brain-board.md Q3, feed_handover retired).
+var errBoardHandover = errors.New("a per-post board has no task lease; handover is retired")
+
+// boardRel is the task folder's path from the Grid home, in slashes, for the links in
+// a post file's body. A task folder outside the Grid home has none.
+func boardRel(gridHome, taskPath string) string {
+	rel, err := filepath.Rel(gridHome, taskPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ""
+	}
+	return filepath.ToSlash(rel)
 }
 
 // feedDefaults supplies the supervised session's Job context for either front end.

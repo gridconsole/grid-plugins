@@ -54,6 +54,9 @@ type RevertResult struct {
 	// Wrote is true when the entry was published or logged, even if the newest
 	// stored copy already held the bytes and no version was added.
 	Wrote bool
+	// Proposed is the draft in Proposals/ a vault revert made when a person's edit
+	// and the revert cannot both hold.
+	Proposed string
 }
 
 // Revert is RevertTo without the Wrote report: the entry, the version that now
@@ -92,6 +95,9 @@ func (o RevertOptions) revertReason(to int) string {
 // RevertWith is RevertTo with options. A no-op revert writes no audit line,
 // whatever the reason.
 func (s Store) RevertWith(level, topic, name string, to int, origin Origin, opts RevertOptions) (RevertResult, error) {
+	if s.Vault() {
+		return s.vaultRevert(level, topic, name, to, origin, opts)
+	}
 	if !ValidName(topic) || !ValidName(name) {
 		return RevertResult{}, fmt.Errorf("topic and name must be plain names")
 	}

@@ -36,7 +36,9 @@ type Finding struct {
 }
 
 type CheckResult struct {
-	Checked  int       `json:"checked"`
+	Checked int `json:"checked"`
+	// Adopted counts the person changes this check recorded (a vault only).
+	Adopted  int       `json:"adopted,omitempty"`
 	Findings []Finding `json:"findings"`
 }
 
@@ -81,6 +83,11 @@ func (s Store) CheckProposal(level, name string) (CheckResult, error) {
 // Waiting, so a gate never treats what it could not read as clean.
 func (s Store) Check() (CheckResult, error) {
 	res := CheckResult{Findings: []Finding{}}
+	if s.Vault() {
+		if err := s.vaultCheck(&res); err != nil {
+			return CheckResult{}, err
+		}
+	}
 	for _, level := range s.levels() {
 		root, err := s.scope(level, false)
 		if errors.Is(err, fs.ErrNotExist) {

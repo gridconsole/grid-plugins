@@ -94,6 +94,9 @@ func (s Store) EditConfigBy(level, topic, name string, origin Origin, edit func(
 	if !ValidName(origin.Kind) || strings.TrimSpace(origin.ID) == "" || !line(origin.ID) {
 		return fmt.Errorf("config author needs a plain kind and a one-line id")
 	}
+	if s.Vault() {
+		return s.vaultEditConfig(level, topic, name, origin, edit)
+	}
 	return s.editConfig(level, topic, name, &origin, edit)
 }
 

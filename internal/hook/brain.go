@@ -1,6 +1,8 @@
 package hook
 
 import (
+	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -19,7 +21,81 @@ func brainStore(o Options, dir string) brain.Store {
 	}
 	return brain.Store{GridHome: o.Resolver.GridHome, Project: project}.WithConfig(o.Resolver.Home, o.Getenv)
 }
+
+// brainVaultTarget is the absolute path of the file an agent's Edit, MultiEdit or
+// Write changes, and the store when that file is a note of the brain folder. It
+// needs no task folder and no history-log: a person's edit is adopted wherever the
+// agent works (docs/research/brain-obsidian.md 4.3).
+func brainVaultTarget(o Options, in hookio.Input) (brain.Store, string, bool) {
+	switch in.ToolName {
+	case "Edit", "MultiEdit", "Write":
+	default:
+		return brain.Store{}, "", false
+	}
+	path := str(in.ToolInput["file_path"])
+	if path == "" || !strings.HasSuffix(strings.ToLower(path), ".md") || o.Resolver.GridHome == "" {
+		return brain.Store{}, "", false
+	}
+	store := brain.Store{GridHome: o.Resolver.GridHome}.WithConfig(o.Resolver.Home, o.Getenv)
+	if !store.Vault() {
+		return brain.Store{}, "", false
+	}
+	return store, absolute(in.Cwd, path), true
+}
+
+// brainAdopt runs before an agent's Edit, MultiEdit or Write on a note of the
+// brain folder: the bytes on disk, which a person may have changed since Grid last
+// looked, are saved as a version with an edited record before the agent's tool
+// replaces them. It only records. It takes the local lock without waiting; a
+// busy lock or any failure is logged and the tool call goes on, so it never
+// blocks and never prints a decision.
+func brainAdopt(o Options, in hookio.Input) {
+	defer func() {
+		if r := recover(); r != nil {
+			o.log("brain adopt", fmt.Errorf("%v", r))
+		}
+	}()
+	store, abs, ok := brainVaultTarget(o, in)
+	if !ok {
+		return
+	}
+	_, err := store.AdoptPath(abs)
+	if errors.Is(err, brain.ErrLockBusy) {
+		o.log("brain adopt skipped", errors.New("brain lock busy"))
+		return
+	}
+	o.log("brain adopt", err)
+}
+
+// brainRecord runs after an agent's Edit, MultiEdit or Write on a note of the
+// brain folder and records the bytes it left as the agent's change. Like
+// brainAdopt it only records and never waits for the lock.
+func brainRecord(o Options, in hookio.Input) {
+	defer func() {
+		if r := recover(); r != nil {
+			o.log("brain record", fmt.Errorf("%v", r))
+		}
+	}()
+	store, abs, ok := brainVaultTarget(o, in)
+	if !ok {
+		return
+	}
+	who := in.SessionID
+	if who == "" {
+		who = "claude"
+	}
+	_, err := store.RecordAgentWrite(abs, who)
+	if errors.Is(err, brain.ErrLockBusy) {
+		o.log("brain record skipped", errors.New("brain lock busy"))
+		return
+	}
+	o.log("brain record", err)
+}
+
 func brainRead(o Options, in hookio.Input) {
+	if in.HookEventName == "PostToolUse" {
+		brainRecord(o, in)
+	}
 	if in.HookEventName != "PostToolUse" || in.SessionID == "" {
 		return
 	}

@@ -87,6 +87,9 @@ type Hit struct {
 	// Kind is task, job, post or proposal. It is empty for a note, so a note
 	// hit reads as it always did.
 	Kind string `json:"kind,omitempty"`
+	// Conflict names the person notes an agent note supersedes or duplicates; the
+	// person note is listed before it (docs/research/brain-obsidian.md 6.3).
+	Conflict []string `json:"conflict,omitempty"`
 }
 
 // The kinds of a search hit (docs/research/brain-board.md Q6). A note is
@@ -278,6 +281,9 @@ func (s Store) SearchKind(query, topic, kind string, limit int) ([]Hit, error) {
 		}
 		return hits[i].Score > hits[j].Score
 	})
+	if s.Vault() {
+		hits = personFirst(hits, entries)
+	}
 	if len(hits) > limit {
 		hits = hits[:limit]
 	}

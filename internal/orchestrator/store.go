@@ -73,6 +73,10 @@ type Store struct {
 	// again by yaUsageReady only when its reset time has passed or there is room.
 	AccountRoom func() (room, known bool)
 	Incident    func(string, []string) error
+	// Grants are the people's grant notes (LoadGrants). An agent's answer to a
+	// person Job counts as the person's only under one of them (personAnswers,
+	// contract.PostedAs); with none, every agent answer is the agent's own.
+	Grants []contract.Grant
 	// Diagnostics receives publication notices; nil discards them.
 	Diagnostics io.Writer
 	// pause is the wait between two passes of Next; nil means the one-second tick.

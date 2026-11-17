@@ -160,8 +160,11 @@ var hsIpTable = map[string]hsIpVerb{
 	"project":    {},
 	"project-md": {},
 	"setup":      {},
-	"signal":     {},
-	"artifact":   {},
+	// init.go initAccounts and account.RegisterKept scan the account folders, which
+	// probes the provider's status command with the host environment, as account status does.
+	"init":     {why: "scans the agent accounts: probes the provider's status command with the host environment (init.go initAccounts, account/account.go:216, :68)"},
+	"signal":   {},
+	"artifact": {},
 	// shot.go reads and writes the PNG files it is given, by path from the Call's Cwd.
 	"shot": {},
 	// judge.go reads and writes the task's Feed, as job post does.

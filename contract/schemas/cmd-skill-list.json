@@ -9,6 +9,7 @@
     "brain-keeper": {"type": "boolean"},
     "browser": {"type": "boolean"},
     "deliver": {"type": "boolean"},
+    "first-run": {"type": "boolean"},
     "plan-jobs": {"type": "boolean"},
     "questions": {"type": "boolean"},
     "research": {"type": "boolean"},
@@ -19,5 +20,5 @@
     "task": {"type": "boolean"},
     "visual-design-review": {"type": "boolean"}
   },
-  "required": ["brain-keeper", "browser", "deliver", "plan-jobs", "questions", "research", "review-job", "run-job", "setup", "signals", "task", "visual-design-review"]
+  "required": ["brain-keeper", "browser", "deliver", "first-run", "plan-jobs", "questions", "research", "review-job", "run-job", "setup", "signals", "task", "visual-design-review"]
 }

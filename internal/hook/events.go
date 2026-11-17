@@ -14,6 +14,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookio"
 	"github.com/gridconsole/grid-plugins/internal/lease"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
@@ -303,7 +304,7 @@ func workerExit(o Options, in hookio.Input) {
 	if dir == "" {
 		return
 	}
-	if done, err := jobHasResult(dir, jobID, o.Getenv("GRID_ATTEMPT")); err != nil {
+	if done, err := jobHasResultOn(o, dir, jobID, o.Getenv("GRID_ATTEMPT")); err != nil {
 		o.log("worker exit", err)
 		return
 	} else if done {
@@ -382,15 +383,17 @@ func exitReason(in hookio.Input) string {
 // jobHasResult reports a result or an earlier worker-exit for the Job's attempt.
 // A task without a Feed has none.
 func jobHasResult(dir, jobID, attempt string) (bool, error) {
-	if _, err := os.Stat(filepath.Join(dir, "feed")); errors.Is(err, os.ErrNotExist) {
-		return false, nil
+	return jobHasResultOn(Options{}, dir, jobID, attempt)
+}
+
+// jobHasResultOn is jobHasResult for a hook with its options: a task with a board/
+// folder is read from the board, one with only feed/ from its JSONL Feed.
+func jobHasResultOn(o Options, dir, jobID, attempt string) (bool, error) {
+	store, ok, err := hookFeed(o, dir)
+	if err != nil || !ok {
+		return false, err
 	}
-	// A task with no stable id has no Feed this store can read.
-	id, err := feed.TaskID(dir)
-	if err != nil {
-		return false, nil
-	}
-	read, err := feed.Store{TaskDir: dir, TaskID: id}.ReadOnly(feed.Filter{Job: jobID})
+	read, err := store.ReadOnly(feed.Filter{Job: jobID})
 	if err != nil {
 		return false, err
 	}
@@ -401,6 +404,47 @@ func jobHasResult(dir, jobID, attempt string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// hookFeed is the store a hook reads one task's posts from. A task folder with a
+// board/ folder is on a per-post board, whose caches are in the machine folder; a
+// task with only feed/ keeps its JSONL Feed, so a home that is not migrated reads as
+// before. ok is false when the task has neither, or has no stable id: it has nothing
+// this store can read.
+func hookFeed(o Options, dir string) (store feed.Store, ok bool, err error) {
+	switch {
+	case feed.BoardPresent(dir):
+	case dirExists(filepath.Join(dir, "feed")):
+	default:
+		return feed.Store{}, false, nil
+	}
+	id, err := feed.TaskID(dir)
+	if err != nil {
+		// A task with no stable id has no Feed this store can read.
+		return feed.Store{}, false, nil
+	}
+	store = feed.Store{TaskDir: dir, TaskID: id}
+	if feed.BoardPresent(dir) {
+		getenv := o.Getenv
+		if getenv == nil {
+			getenv = os.Getenv
+		}
+		home := o.Resolver.Home
+		if home == "" {
+			// jobHasResult has no options: it is the process's own environment.
+			home, _ = os.UserHomeDir()
+		}
+		store.Machine = machinefolder.Resolve(machinefolder.Env{Getenv: getenv, Home: home})
+		store = store.Boarded("", "")
+	}
+	return store, true, nil
+}
+
+// dirExists reports that path is not missing, whatever it is: the hooks asked only
+// that feed/ was not absent, and went on when it could not be told.
+func dirExists(path string) bool {
+	_, err := os.Stat(path)
+	return !errors.Is(err, os.ErrNotExist)
 }
 
 // Helper events expose the same pure functions the handlers use. They are

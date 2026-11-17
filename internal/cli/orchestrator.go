@@ -743,6 +743,16 @@ func configureTickStore(env Env, s *orchestrator.Store, project, taskID string) 
 	s.Feed.Machine = env.MachineFolder
 	s.Diagnostics = env.Stderr
 	s.AccountRoom = yaAccountRoomFor(env)
+	// The people's grant notes in the brain folder the Grid config names, read where
+	// internal/people reads grid/people. A pass reads them to take an agent's
+	// answer as a person's (run-jobs-launcher.md Q8); notes that do not read leave
+	// no grant, so every agent answer stays the agent's own and nothing is refused.
+	brainDir := brain.Store{GridHome: env.GridHome, Project: project}.WithConfig(env.Home, env.getenv).BrainDir
+	if grants, err := orchestrator.LoadGrants(brainDir); err == nil {
+		s.Grants = grants
+	} else if env.Stderr != nil {
+		fmt.Fprintf(env.Stderr, "grid: the grant notes in %s were not read: %v\n", brainDir, err)
+	}
 	s.Probe = func(live session.Live) session.ProcessState {
 		local := s.Writer.Worker[strings.LastIndexByte(s.Writer.Worker, '@'):]
 		if !strings.HasSuffix(live.Holder, local) {
