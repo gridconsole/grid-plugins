@@ -30,6 +30,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 )
 
 // Version is the config shape this grid writes as "v".
@@ -96,26 +98,11 @@ func PathFor(goos string, getenv func(string) string, userHome string) string {
 // <userHome>\AppData\Local), else ~/.local/state/grid. It is "" when the folder
 // cannot be known. The config's MachineFolder, when set, is used instead.
 func MachineDirFor(goos string, getenv func(string) string, userHome string) string {
-	switch goos {
-	case "windows":
-		base := getenv("LOCALAPPDATA")
-		if base == "" && userHome != "" {
-			base = filepath.Join(userHome, "AppData", "Local")
-		}
-		if base == "" {
-			return ""
-		}
-		return filepath.Join(base, "Grid")
-	case "darwin", "ios":
-		if userHome == "" {
-			return ""
-		}
-		return filepath.Join(userHome, "Library", "Application Support", "Grid")
+	if goos == "ios" {
+		goos = "darwin"
 	}
-	if userHome == "" {
-		return ""
-	}
-	return filepath.Join(userHome, ".local", "state", "grid")
+	// machinefolder owns the OS standard place; no other package spells it.
+	return machinefolder.DefaultPath(machinefolder.Env{Getenv: getenv, Home: userHome, GOOS: goos})
 }
 
 // Workspace is one entry of "workspaces".
