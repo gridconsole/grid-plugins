@@ -80,7 +80,7 @@ lines on `origin/main`, printed with `git show origin/main:<file> | sed -n '<n>p
 
 ### Fail on base
 
-NOT DONE for the brain and braincmd tests. I tried to copy the new test files into a worktree at
+CLOSED BY P-brain-adopt-fix1: accepted 17:22 UTC for the brain and braincmd tests. I tried to copy the new test files into a worktree at
 `origin/main` and run them there; the copy into a path outside the repo was denied in this session, so I did
 not run it. The new tests call symbols that exist only in this lane (`Adopt`, `AdoptPath`, `Hit.Conflict`,
 `LockLocal`), so they should not compile on base, but that is a reading, not a run.
