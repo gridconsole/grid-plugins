@@ -122,9 +122,13 @@ func Init(home string) error {
 // Machine returns this computer's id, creating <home>/machine on first use.
 // Creation takes its own lock, because project and signal writers hold different
 // ones. A file that is empty or torn from a crash is replaced; one that holds
-// something else is an error.
+// something else is an error. A folder the older desktop app left there is moved
+// aside first (gridhome.SetAsideOldMachine).
 func Machine(home string) (string, error) {
 	if err := Init(home); err != nil {
+		return "", err
+	}
+	if _, err := gridhome.SetAsideOldMachine(home); err != nil {
 		return "", err
 	}
 	path, err := Safe(home, "machine")

@@ -12,11 +12,15 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
 
 // MachineID creates the stable local machine key once, under a file lock.
 func MachineID(gridHome string) (string, error) {
 	if err := os.MkdirAll(gridHome, 0o700); err != nil {
+		return "", err
+	}
+	if _, err := gridhome.SetAsideOldMachine(gridHome); err != nil {
 		return "", err
 	}
 	f, err := os.OpenFile(filepath.Join(gridHome, "machine"), os.O_CREATE|os.O_RDWR, 0o600)

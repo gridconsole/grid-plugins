@@ -67,6 +67,9 @@ func (s Store) New(o NewOptions) (Task, error) {
 		return Task{}, err
 	}
 	sweepStale(home, time.Now().Add(-staleStage))
+	if _, err := gridhome.SetAsideOldMachine(home); err != nil {
+		return Task{}, err
+	}
 	// Reload machine identity after taking the lock: another first writer may
 	// have registered this same folder while this process was waiting.
 	machine, err := os.ReadFile(filepath.Join(home, "machine"))
