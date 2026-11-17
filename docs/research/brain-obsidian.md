@@ -25,7 +25,7 @@ P-brain-obsidian-decide):
 |---|---|---|---|
 | V13 | The brain is an Obsidian vault of your notes plus agent notes; Obsidian edits are adopted. | Decisions 1-5 and 7 below; sections 2, 3, 4.1-4.4 (any `.md` is a note, ids, links, origin), 4.5 (who wrote a note, as shown in Obsidian, with its stated deviation), 5.1-5.3 (adoption), 7.1-7.2 (layout), 8 (migration) | L1, L2, L3, L4, L5a, L6 (9.1); Mac round trip 9.4 |
 | V14 | Proposals are visible. | Decision 7 below; sections 5.1 (adoption walks `Proposals/`), 6.2 (visible `Proposals/`, person edits to a draft, accept) | L4, L5a (9.1) |
-| V19 | Conflicts by version check; your edits win, an agent change becomes a proposal. | Decision 6 below; sections 5.4 (version check, local lock, sync server), 6.1 (every write path), 6.3 (conflicts shown person-first) | L4 (local lock), L8 (sync server client), L7 (display) (9.1) |
+| V19 | Conflicts by version check; your edits win, an agent change becomes a proposal. | Decision 6 below; sections 4.3 (an agent's own Edit or Write: the target is adopted before the tool writes), 5.4 (version check, local lock, sync server, step 7), 6.1 (every write path), 6.3 (conflicts shown person-first) | L4 (local lock, pre-edit adoption), L8 (sync server client), L7 (display) (9.1); the server half is A-sync-version-write, not in this plugin plan (9.5) |
 
 Rows carried by a lane here but owned elsewhere: V17 (screenshots, owned by
 P-brain-board-decide; section 7.3, lane L5b) and V25 (Brain view, owned by
@@ -383,14 +383,45 @@ this.
   an unknown key and never read as origin. Grid stops writing `origin:` into
   notes; the migration moves existing `origin:` maps into change records.
 - **Direct agent edits.** An agent may Edit or Write a brain file with its own
-  tools rather than through `grid brain` (the settings glob allows it). A
-  PostToolUse hook on Edit and Write records the path, the new hash and the
-  session or Job as an agent change record. It only records and never blocks,
-  in the same way `brainRead` records reads today (hook/brain.go:22-71).
-  - Those bytes are agent bytes.
-  - If the target was a person note, adoption turns the agent's bytes into a
-    proposal and restores the person's version from `versions/`. Person
-    notes win (6.1), and nothing is lost.
+  tools rather than through `grid brain` (the settings glob allows it). Two
+  hook steps bracket the tool. Both only record; neither blocks.
+  - **Before the tool: adopt that one path (V19).** The PreToolUse hook
+    (`grid hook pretooluse`, already registered for every tool in
+    hooks/hooks.json) sees an Edit, MultiEdit or Write whose `file_path` is
+    inside the brain path. It runs adoption (5.1) for that one file before
+    the tool writes. An Obsidian save that Grid has not seen yet is then
+    stored in `versions/` with an `edited` (or `created`) record, origin
+    person. This is how the owner's not-yet-adopted save is versioned before
+    an agent overwrites it.
+    - It is unconditional. Unlike the Read record (hook/brain.go:23-52), it
+      does not need a session id, the `history-log` setting, a task folder
+      or a `ValidName` base name. Any file under the brain path counts,
+      including names with spaces.
+    - It records only. The hook prints no permission decision and exits 0
+      whatever adoption returns; an adoption error is logged, never shown to
+      the agent as a refusal. It adds no guard, gate or lock on the agent:
+      it takes the local lock (7.2) only for the length of one file's
+      adoption, the same lock a `grid brain` read takes.
+    - A Write to a new path (no file yet) has nothing to adopt and does
+      nothing.
+  - **After the tool: record the agent bytes.** A PostToolUse hook on Edit,
+    MultiEdit and Write records the path, the new hash and the session or Job
+    as an agent change record, in the same way `brainRead` records reads
+    today (hook/brain.go:22-71). Those bytes are agent bytes.
+  - **Then person notes win.** If the version before the agent's change was a
+    person version, the next adoption turns the agent's bytes into a
+    `Proposals/` file and restores the person's version from `versions/`
+    (6.1). Because the pre-tool step stored that person version first,
+    nothing is lost.
+  - **What is not covered.** A person save that lands in the moment between
+    the pre-tool adoption and the tool's own write is overwritten without a
+    version. Claude Code's Edit and Write refuse a file changed since the
+    agent's Read, which narrows that window. Whether that refusal covers
+    every save in the window is NOT VERIFIED. Obsidian's own file recovery
+    snapshots and `.trash` are the fallback, as for any byte Grid never saw
+    (5.1). An agent tool without these hooks (a session outside the plugin)
+    writes bytes with no agent record. They are adopted as a person change
+    and are not lost either; only their origin is wrong.
 - **Link-only rewrites keep authority.** Obsidian's rename rewrites
   `[[links]]` inside every note that links to the renamed file. When a change
   differs from the previous version only in link targets that match a
@@ -471,7 +502,10 @@ who wrote it". This section decides what the owner sees in Obsidian.
 - **When.** `adopt(root)` runs:
   - at the start of every `grid brain` read (show, search, list, index);
   - under the write lock before every Grid write;
-  - in `grid brain check`.
+  - in `grid brain check`;
+  - for one file, in the PreToolUse hook before an agent's own Edit,
+    MultiEdit or Write on a brain file (4.3). It records only and never
+    blocks the tool.
 - **How.** It walks the brain (with the skips in 2.2, except `Proposals/`)
   and compares each file with the machine-folder cache `files.json`
   (path → size, mtime, hash).
@@ -555,6 +589,11 @@ notes.
 6. **Person saves.** Obsidian writes without Grid's lock. A person save that
    lands after a Grid write is a later person change and is adopted, so the
    person wins. One that lands before is caught by step 2.
+7. **An agent's own Edit or Write.** It does not go through steps 1-5. The
+   PreToolUse hook adopts the target file first, so a person save not yet
+   adopted is versioned before the tool writes. Adoption after the tool then
+   turns the agent's bytes into a proposal and restores the person's version
+   (4.3). It records only and never blocks the tool.
 
 ## 6. Authority
 
@@ -921,19 +960,32 @@ rows. A row owned by another decision lane is marked "owned by".
   - person authority on every write path (6.1);
   - person-first ranking (6.3);
   - `origin`, `author`, `updated` and `conflict` in the listing;
-  - the PostToolUse record of agent Edit and Write on brain files (4.3).
+  - the PreToolUse adoption of the target before an agent Edit, MultiEdit or
+    Write on a brain file, and the PostToolUse record after it (4.3, 5.4
+    step 7).
 - **Files.**
   - brain/changes.go, versions.go, audit_check.go, check.go, lock.go,
     store.go, ke_write.go, hy_drop.go, query.go, index.go, revert.go,
     supersede_verb.go;
   - a new brain/adopt.go;
-  - hook/brain.go.
+  - hook/brain.go, and the PreToolUse dispatch in hook/hook.go.
 - **Acceptance.**
   - (V13) F7: a rename is recorded and the old id resolves;
   - (V13) F8: a delete is recorded;
   - (V19) F9: an edit between read and write turns the agent write into a
     proposal and the person bytes are unchanged;
   - (V19) an agent write to a person note writes `Proposals/` and exits 0;
+  - (V19, 4.3 direct edit) a person note whose name has a space is changed on
+    disk with no Grid record (an Obsidian save not yet adopted), with
+    `history-log` off and no task folder. A PreToolUse Edit event on that
+    path, then the agent's bytes on disk, then the PostToolUse event, then
+    `grid brain check` give:
+    - the person bytes under `.grid/versions/` with an `edited` record,
+      origin person;
+    - the note on disk byte-equal to those person bytes;
+    - a `Proposals/` file holding the agent's bytes;
+    - both hook runs exit 0 and print no permission decision, also when the
+      pre-tool adoption fails (a fixture with an unreadable `.grid/`).
   - (V13) `grid brain check` adopts a person edit without a drift finding;
   - (V13) two adoptions of the same edit produce one logical change;
   - (V14) a draft in `Proposals/` changed on disk with no Grid record is
