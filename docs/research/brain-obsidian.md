@@ -61,11 +61,13 @@ P-brain-view; lane L7).
    on a brain file becomes adoption, not a finding.
 6. **Both edit; no blind overwrite.** The person and agents both edit notes,
    person notes included. An agent reads the current file, with the person's
-   edits, and carries on from there. Every agent write carries the version it
-   read. On a version mismatch it re-reads and redoes its change on top of the
-   current bytes, whoever wrote them. A proposal in the visible
+   edits, and carries on from there. Every `grid brain` write carries the
+   version it read. On a version mismatch it re-reads and redoes its change
+   on top of the current bytes, whoever wrote them. A proposal in the visible
    `<brain>/Proposals/` folder is only for two edits that cannot both hold
-   (5.4 step 3 gives the test). Nothing writes over bytes it has not read.
+   (5.4 step 3 gives the test). No `grid brain` write goes over bytes it has
+   not read. An agent's own Edit or Write relies on the tool's stale-read
+   refusal instead, and 4.3 lists the two cases that check does not cover.
    This is never a refusal, gate or lock on the agent: the write exits 0.
    Owner, 17 Nov about 03:35 UTC: "why not just read the edits, and continue
    working on it, why is it a bad thing if both the agent and the human edit
@@ -177,7 +179,8 @@ The decisions do not depend on these facts:
   hashes stay valid.
 - Adoption catches renames whether or not links were rewritten.
 - Grid writes no front-matter links.
-- An agent never writes a person note.
+- An agent writes a person note only on top of the bytes it read, with the
+  version check (decision 6).
 - A temp file is renamed within the same write, and the reader skips
   dot-files.
 
@@ -486,9 +489,11 @@ who wrote it". This section decides what the owner sees in Obsidian.
   Properties view shows it as an editable text row at the top of the note
   (Properties.md:37-47). The nested `origin:` map goes (4.3), so `source` is
   the only authorship line in the header.
-- **A person note.** Grid writes nothing into it: no `source`, no
+- **A person note.** Grid writes no header into it: no `source`, no
   `author`, no front matter at all if it had none. No Grid header means you
-  wrote it.
+  wrote it. An agent may still edit its text on top of your bytes
+  (decision 6); that edit adds no header either, and the change record
+  names the agent as the author of that change.
 - **Which one is authoritative.** The change records (4.3). The `source`
   property is display only and is never read as origin.
   - When the owner edits an agent note, adoption records origin person, but
@@ -596,7 +601,7 @@ notes.
    bytes, the person or another agent (decision 6).
    - The command re-reads the current bytes and re-applies the agent's patch
      (4.4) on top of them, then writes by steps 2-4. The other edit's lines
-     stay as they are. It exits 0 with `written:`.
+     stay as they are. It exits 0 with the written path.
    - Only when the patch touches a front-matter key or body section that the
      other change also changed do the two edits not both hold. This is this
      note's testable form of the owner's case (the same lines, opposite
@@ -1026,7 +1031,7 @@ rows. A row owned by another decision lane is marked "owned by".
   - (V19) F9, other lines: a person edit to one body section lands between
     the agent's read and its write, and the agent's patch changes another
     section. The note on disk holds both changes, no `Proposals/` file is
-    written, and the command exits 0 with `written:`;
+    written, and the command exits 0 with the written path;
   - (V19) F9, same lines: the person edit and the agent's patch change the
     same front-matter key. The agent change is in `Proposals/`, the note on
     disk is byte-equal to the person's bytes, and the command exits 0 with
@@ -1129,7 +1134,7 @@ rows. A row owned by another decision lane is marked "owned by".
     - V17: agents/curator.md and the brain-keeper skill carry the step, the target and the check.
     - V17, person check (R-brain-obsidian 9.4 step 7): the compressed screenshot opens in Obsidian and its text reads at 100%.
   - V16 row, owned by P-brain-board-decide (Abdu's option C, R-brain-board "Decided by Abdu: V16 home edit"); R-brain-board Q9's L5b row carries it word for word:
-    - V16: agents/curator.md says how the curator handles a `home-differs` proposal: it never writes `home:` and never runs `grid task move`; it records the proposal `accepted` once task.md `home:` and the posts' home name the same machine again, and leaves it waiting until then.
+    - V16: agents/curator.md says how the curator handles a `home-differs` proposal: it never writes `home:` and never runs `grid task move`; it records the proposal `accepted` once task.md `home:` and the posts' home name the same machine again (R-brain-obsidian 6.2 accept steps 2 to 4; no note is filed), and leaves it waiting until then.
   - (V13) the curator files a proposal into a topic with working `[[links]]`.
 
 **L6 P-brain-migrate**
@@ -1205,8 +1210,8 @@ rows. A row owned by another decision lane is marked "owned by".
     the agent's base, in another section than the agent's patch. The agent
     write is rejected, the client re-reads, redoes the change on top and
     retries, and the stub holds the person's lines and the agent's change.
-    No `Proposals/` file is written, and the command exits 0 with
-    `written:`;
+    No `Proposals/` file is written, and the command exits 0 with the
+    written path;
   - (V19, sync check 2, same lines) the person save changed the same key as
     the agent's patch. The client writes `Proposals/<name>.md` and exits 0
     with `proposed:`. The person's bytes at the stub and on disk are
