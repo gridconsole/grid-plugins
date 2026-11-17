@@ -3,6 +3,7 @@ package machinefolder
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
@@ -103,6 +104,26 @@ func (f Folder) WriteStateFile(path string, data []byte) error {
 		return atomicfile.Write(path, data, 0o600)
 	}
 	return f.WriteFile(path, data)
+}
+
+// WorktreeParts is the read side of the worktrees folders: path split into the folder
+// names below <machine folder>/worktrees. It holds none when the Folder is not Active
+// or path is not below worktrees/, so a caller that asks it leaves every other path
+// as it was. The caller passes path and the folder's Path in the same spelling
+// (both resolved through symlinks).
+func (f Folder) WorktreeParts(path string) ([]string, bool) {
+	if !f.Active() {
+		return nil, false
+	}
+	root, err := f.Worktrees()
+	if err != nil {
+		return nil, false
+	}
+	rel, err := filepath.Rel(root, filepath.Clean(path))
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return nil, false
+	}
+	return strings.Split(rel, string(filepath.Separator)), true
 }
 
 // WorktreesDir holds the git worktrees of one project's Jobs:

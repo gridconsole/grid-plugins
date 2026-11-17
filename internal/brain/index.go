@@ -244,7 +244,11 @@ func (s Store) RebuildIndex() (Index, error) {
 			if err != nil {
 				return err
 			}
-			if err := atomicWrite(root, "knowledge/backlinks.json", append(b, '\n')); err != nil {
+			// The cache stays in this brain root, per person, and does not go to the
+				// machine folder (the owner's decision, lane P-shared-home-4): a home-level
+				// brain is one person's, and a machine folder shared by several logins must
+				// not show its summaries (index.md) and backlinks to the other logins.
+				if err := atomicWrite(root, "knowledge/backlinks.json", append(b, '\n')); err != nil {
 				return err
 			}
 			text := fmt.Sprintf("generation: %d\nlevel: %s\n", backlinks.Generation, level) + SessionStartText(r)

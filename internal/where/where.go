@@ -24,6 +24,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/gitx"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
@@ -319,17 +320,41 @@ func (r Resolver) taskByULID(gridHome string, records []project.Record, id strin
 // worktreeTask maps <grid home>/worktrees/<task ulid>[/...], where a Job's agent
 // works, to the task with that ULID. An unknown ULID is not a task folder.
 func (r Resolver) worktreeTask(gridHome, cwd string, records []project.Record) (proj, task string, ok bool) {
-	rel, err := filepath.Rel(gridHome, cwd)
-	if err != nil {
+	if rel, err := filepath.Rel(gridHome, cwd); err == nil {
+		parts := strings.Split(rel, string(filepath.Separator))
+		if len(parts) >= 2 && parts[0] == "worktrees" {
+			proj, task, ok = r.worktreeNamed(gridHome, records, parts[1])
+			return proj, task, ok
+		}
+	}
+	// With a machine folder the worktrees are there, not in the Grid home:
+	// <machine folder>/worktrees/<ulid>..., or one folder deeper under the project's
+	// name, worktrees/<project>/<ulid>... (machinefolder.WorktreesDir). The folder
+	// comes from machinefolder.Resolve, and without one nothing here matches.
+	folder := machinefolder.Resolve(machinefolder.Env{Home: r.Home})
+	if !folder.Active() {
 		return "", "", false
 	}
-	parts := strings.Split(rel, string(filepath.Separator))
-	if len(parts) < 2 || parts[0] != "worktrees" {
+	folder.Path = gridhome.Real(folder.Path)
+	parts, found := folder.WorktreeParts(cwd)
+	if !found {
 		return "", "", false
 	}
-	// The folder is the ULID (worktrees/<ulid>/J-N-aN), or starts with it
-	// (worktrees/<ulid>-J-N-aN).
-	id, _, _ := strings.Cut(parts[1], "-")
+	if proj, task, ok = r.worktreeNamed(gridHome, records, parts[0]); ok {
+		return proj, task, true
+	}
+	if len(parts) >= 2 {
+		if p, t, ok := r.worktreeNamed(gridHome, records, parts[1]); ok && p == parts[0] {
+			return p, t, true
+		}
+	}
+	return "", "", false
+}
+
+// worktreeNamed maps a worktree folder name to its task. The name is the task's ULID
+// (worktrees/<ulid>/J-N-aN), or starts with it (worktrees/<ulid>-J-N-aN).
+func (r Resolver) worktreeNamed(gridHome string, records []project.Record, name string) (proj, task string, ok bool) {
+	id, _, _ := strings.Cut(name, "-")
 	if !taskULID.MatchString(id) {
 		return "", "", false
 	}
