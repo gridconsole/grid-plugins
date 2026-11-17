@@ -122,7 +122,7 @@ func readFailure(label string, err error) Problem {
 
 // fromBrain finds the single workflow note at one brain level and takes it.
 func (a *Answer) fromBrain(home, level, folder, source, project string) bool {
-	notes, err := workflowNotes(home, folder, level, &a.Errors)
+	notes, err := workflowNotes(home, workflowBrainDir(home), folder, level, &a.Errors)
 	if err != nil {
 		a.Errors = append(a.Errors, readFailure("brain:"+level, err))
 		return false
@@ -141,17 +141,38 @@ func (a *Answer) fromBrain(home, level, folder, source, project string) bool {
 
 type workflowNote struct{ name, text string }
 
+// workflowBrainDir is the brain folder the Grid config names for the data folder
+// home: "" when the key is absent (the old knowledge/ layout under home), else
+// the folder, where workflow notes sit in grid/workflows/. The user's home and
+// environment are the process's, as the binary's own resolver reads them.
+func workflowBrainDir(home string) string {
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return brain.Store{GridHome: home}.WithConfig(userHome, func(key string) string {
+		if key == "GRID_HOME" {
+			return home
+		}
+		return os.Getenv(key)
+	}).BrainDir
+}
+
 // workflowNotes lists accepted brain notes whose front matter says
 // `type: workflow`, below knowledge/<topic>/<name>.md of one level (folder is a
-// project folder name, or empty for the Grid home). That is the layout
-// brain.Store scans. The note's `name:` must be its file name, as the brain
+// project folder name, or empty for the Grid home), or with brainDir set below
+// grid/workflows/<name>.md of that level in the brain folder. The first is the
+// layout brain.Store scans. The note's `name:` must be its file name, as the brain
 // requires. brain.Store itself parses front matter strictly and would refuse
 // the policy keys a workflow note carries, so this reads the files with the
 // same safefile and mdfile calls it uses and only looks at type, name and status.
 //
 // A note whose front matter is not valid YAML but has a `type: workflow` line
 // adds a Problem (labelled with level) to problems and is skipped alone.
-func workflowNotes(home, folder, level string, problems *[]Problem) ([]workflowNote, error) {
+func workflowNotes(home, brainDir, folder, level string, problems *[]Problem) ([]workflowNote, error) {
+	if brainDir != "" {
+		home = brainDir
+	}
 	root, err := os.OpenRoot(home)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -178,23 +199,37 @@ func workflowNotes(home, folder, level string, problems *[]Problem) ([]workflowN
 		defer level.Close()
 		root = level
 	}
-	if err := safefile.NoSymlinks(root, "knowledge"); err != nil {
-		return nil, err
-	}
-	topics, err := fs.ReadDir(root.FS(), "knowledge")
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
+	// With the brain folder key set the notes are the files of grid/workflows; with
+	// it absent they are any topic's of knowledge/ under the Grid home.
+	var dirs []string
+	if brainDir != "" {
+		dirs = []string{"grid/workflows"}
+		if err := safefile.NoSymlinks(root, "grid/workflows"); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := safefile.NoSymlinks(root, "knowledge"); err != nil {
+			return nil, err
+		}
+		topics, err := fs.ReadDir(root.FS(), "knowledge")
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, topic := range topics {
+			if topic.IsDir() && brain.ValidName(topic.Name()) {
+				dirs = append(dirs, "knowledge/"+topic.Name())
+			}
+		}
 	}
 	var found []workflowNote
-	for _, topic := range topics {
-		if !topic.IsDir() || !brain.ValidName(topic.Name()) {
+	for _, dir := range dirs {
+		files, err := fs.ReadDir(root.FS(), dir)
+		if errors.Is(err, fs.ErrNotExist) && brainDir != "" {
 			continue
 		}
-		dir := "knowledge/" + topic.Name()
-		files, err := fs.ReadDir(root.FS(), dir)
 		if err != nil {
 			return nil, err
 		}

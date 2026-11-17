@@ -70,9 +70,15 @@ var rangeSuffix = regexp.MustCompile(`:([0-9]+)-([0-9]+)$`)
 var slugDrop = regexp.MustCompile(`[^\pL\pN -]`)
 
 // ParseBrain splits brain:<level>/<name>, the one id shape the brain store uses.
+// The name is one path segment that brain.ValidID reads, so a note of the vault's
+// root with spaces or Unicode in its name (Café plan) is a brain pointer. A
+// name with a "/" is still refused here: TestBrainIDs and
+// TestResolveBrainPointerRefusals pin brain:project/conventions/a and a/b as
+// malformed, and a Job's pointer to a note in a folder waits for the board
+// decision's task, Job and board shape.
 func ParseBrain(id string) (level, name string, ok bool) {
 	level, name, ok = strings.Cut(strings.TrimPrefix(id, "brain:"), "/")
-	return level, name, strings.HasPrefix(id, "brain:") && ok && (level == "home" || level == "project") && brain.ValidName(name)
+	return level, name, strings.HasPrefix(id, "brain:") && ok && (level == "home" || level == "project") && !strings.Contains(name, "/") && brain.ValidID(name)
 }
 
 // planReadable has no plan rule: an unapproved, edited or missing-receipt plan renders.
