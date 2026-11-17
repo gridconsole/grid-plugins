@@ -202,6 +202,7 @@ func commands() []command {
 		{"project-md", "get or set a project front-matter key", runProjectMD},
 		{"update", "draft, edit, discard, skip and send a project's update", runUpdate},
 		{"setup", "record project setup answers and write the Claude Code settings block (--sandbox turns on its sandbox)", runSetup},
+		{"init", "ask the first-run questions once (--detect shows them) and write the one config (--answers -)", runInit},
 		{"signal", "add, act on, dismiss and move inbox signals", runSignal},
 		{"artifact", "import, link, list and publish task artifacts", runArtifact},
 		{"shot", "crop a PNG to a box and scale it down; diff two PNGs into boxes with a percentage each", runShot},

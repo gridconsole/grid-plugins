@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cmd-init.json",
+  "description": "JSON output of grid init --json. With --detect (or no --answers) it is every first-run question of docs/research/first-run-config.md section 5 with its default, the source of that default and whether it is asked (internal/cli/init.go initDetection). With --answers it is the config written and the accounts registered (internal/cli/init.go initResult).",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "type": "string"
+        },
+        "found": {
+          "type": "boolean"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "questions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "asked": {
+                "type": "boolean"
+              },
+              "default": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "array"
+                  }
+                ]
+              },
+              "id": {
+                "enum": [
+                  "data",
+                  "brain",
+                  "member",
+                  "accounts",
+                  "claudeSettings",
+                  "sandbox",
+                  "testDefault",
+                  "packs"
+                ]
+              },
+              "note": {
+                "type": "string"
+              },
+              "question": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "flag",
+                  "env",
+                  "config",
+                  "legacy",
+                  "registry",
+                  "found",
+                  "account",
+                  "login",
+                  "default"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "question",
+              "default",
+              "source",
+              "asked"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "workspace": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "config",
+        "found",
+        "workspace",
+        "questions"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "accounts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "config": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "data": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "member": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "workspace": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "written": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "config",
+        "written",
+        "workspace",
+        "data",
+        "member",
+        "accounts"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "grid init output"
+}

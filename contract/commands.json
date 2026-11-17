@@ -1878,6 +1878,11 @@
               "required": false
             },
             {
+              "name": "--remote",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--target",
               "takes": "value",
               "required": false
@@ -5382,6 +5387,41 @@
           ],
           "json": true,
           "output": "cmd-setup.json"
+        }
+      ]
+    },
+    {
+      "name": "init",
+      "summary": "ask the first-run questions once (--detect shows them) and write the one config (--answers -)",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [
+            {
+              "name": "--answers",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--detect",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--workspace",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-init.json"
         }
       ]
     },

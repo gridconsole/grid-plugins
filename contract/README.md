@@ -205,6 +205,7 @@ are reference-document names and original line numbers, not machine paths.
 | grid claude settings show output | [cmd-claude-settings-show.json](schemas/cmd-claude-settings-show.json) | internal/cli/budget.go:133 |
 | grid feed post output | [cmd-feed-post.json](schemas/cmd-feed-post.json) | internal/cli/feed.go:168 |
 | grid feed state output | [cmd-feed-state.json](schemas/cmd-feed-state.json) | internal/cli/feed.go:131 |
+| grid init output | [cmd-init.json](schemas/cmd-init.json) | internal/cli/init.go:127 (`--detect`: every first-run question with its default, its source and whether it is asked) and :152 (`--answers`: the config written and the accounts registered) |
 | grid intent list output | [cmd-intent-list.json](schemas/cmd-intent-list.json) | internal/cli/intent.go:247 |
 | grid job next output | [cmd-job-next.json](schemas/cmd-job-next.json) | internal/cli/orchestrator.go:175 and :228 |
 | grid lease status output | [cmd-lease-status.json](schemas/cmd-lease-status.json) | internal/cli/task_lease.go:146 |

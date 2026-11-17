@@ -1,0 +1,8 @@
+{
+  "config": "/home/sam/.config/grid/config.json",
+  "found": false,
+  "workspace": "",
+  "questions": [
+    {"id": "colour", "question": "Favourite colour", "default": "blue", "source": "default", "asked": true}
+  ]
+}
