@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	maxLine   = 4 << 20       // a longer line of the provider's output is skipped, not kept
-	exitGrace = time.Second   // after the answer, the child may leave by itself this long
+	maxLine   = 4 << 20         // a longer line of the provider's output is skipped, not kept
+	exitGrace = time.Second     // after the answer, the child may leave by itself this long
 	killWait  = 2 * time.Second // after the kill, wait this long for the output pipes
 )
 
