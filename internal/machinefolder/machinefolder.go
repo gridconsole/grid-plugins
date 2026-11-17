@@ -1,32 +1,31 @@
 // Package machinefolder finds and fills the machine folder: the one folder per
 // computer for the launcher's own files, caches, worktrees and videos. It sits at
-// the OS standard place unless GRID_MACHINE_DIR or the machine_folder key of the
-// one config names another. When the config has shared_group, several logins on
+// the OS standard place unless GRID_MACHINE_DIR or the machineFolder key of the
+// one config names another. When the config has sharedGroup, several logins on
 // the computer share the folder: its directories are 2770 and its files 0660.
 //
-// Resolve is the only place that computes the folder's path. A person's secrets
-// (account tokens, credentials, Claude config folders) never go in it.
+// Resolve is the only place that computes the folder's path. The two keys are read
+// through gridconfig, the reader every other key of the one config goes through, so
+// no second parser of the file exists. A person's secrets (account tokens,
+// credentials, Claude config folders) never go in the folder.
 package machinefolder
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/gridconsole/grid-plugins/internal/atomicfile"
+	"github.com/gridconsole/grid-plugins/internal/gridconfig"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder/osplace"
 )
 
 // The config keys and the environment override.
 const (
-	KeyMachineFolder = "machine_folder"
-	KeySharedGroup   = "shared_group"
+	KeyMachineFolder = osplace.KeyMachineFolder
+	KeySharedGroup   = osplace.KeySharedGroup
 	// EnvDir overrides the folder's path, for tests and one-off runs.
 	EnvDir = "GRID_MACHINE_DIR"
 )
@@ -37,9 +36,6 @@ const (
 	SourceConfig  = "config"
 	SourceDefault = "default"
 )
-
-// maxConfig bounds the config file Grid will read.
-const maxConfig = 1 << 20
 
 // Env is what the resolver reads. Tests pass their own, so none can reach the
 // real config or a real machine folder.
@@ -67,43 +63,13 @@ func (e Env) goos() string {
 // ~/Library/Application Support/Grid on macOS, %LOCALAPPDATA%\Grid on Windows.
 // It is "" when the place cannot be known.
 func DefaultPath(e Env) string {
-	switch e.goos() {
-	case "darwin":
-		if e.Home == "" {
-			return ""
-		}
-		return filepath.Join(e.Home, "Library", "Application Support", "Grid")
-	case "windows":
-		if local := e.getenv("LOCALAPPDATA"); local != "" {
-			return filepath.Join(local, "Grid")
-		}
-		if e.Home == "" {
-			return ""
-		}
-		return filepath.Join(e.Home, "AppData", "Local", "Grid")
-	}
-	if e.Home == "" {
-		return ""
-	}
-	return filepath.Join(e.Home, ".local", "state", "grid")
+	return osplace.DefaultPath(e.goos(), e.getenv, e.Home)
 }
 
 // ConfigPath is the one config: ~/.config/grid/config.json, or
 // %APPDATA%\Grid\config.json on Windows. It is "" when the place cannot be known.
 func ConfigPath(e Env) string {
-	if e.goos() == "windows" {
-		if roaming := e.getenv("APPDATA"); roaming != "" {
-			return filepath.Join(roaming, "Grid", "config.json")
-		}
-		if e.Home == "" {
-			return ""
-		}
-		return filepath.Join(e.Home, "AppData", "Roaming", "Grid", "config.json")
-	}
-	if e.Home == "" {
-		return ""
-	}
-	return filepath.Join(e.Home, ".config", "grid", "config.json")
+	return gridconfig.PathFor(e.goos(), e.getenv, e.Home)
 }
 
 // Config holds the two keys this package owns. Every other key of the file
@@ -113,91 +79,61 @@ type Config struct {
 	SharedGroup   string
 }
 
+// load reads the one config the way gridhome does: the file at ConfigPath, or, when
+// that has none, the older ~/.grid/config.json, copied once to the new place. An
+// error names the file and never says what it holds.
+func load(e Env) (gridconfig.Config, string, error) {
+	path := ConfigPath(e)
+	if path == "" {
+		return gridconfig.Config{}, "", nil
+	}
+	l := gridconfig.Load(path, gridconfig.OldPath(e.Home))
+	if l.Err != nil {
+		var pe *fs.PathError
+		if errors.As(l.Err, &pe) {
+			return gridconfig.Config{}, path, fmt.Errorf("%s: %v", l.Path, pe.Err)
+		}
+		return gridconfig.Config{}, path, fmt.Errorf("%s is not a JSON object the Grid config can be read from", l.Path)
+	}
+	return l.Config, path, nil
+}
+
 // ReadConfig reads the two keys. A missing file is an empty Config and no error.
 // A file that is not a JSON object, or holds one of the two keys as anything but
 // text, is an error naming the file and the key, never its content.
 func ReadConfig(e Env) (Config, error) {
-	path := ConfigPath(e)
-	if path == "" {
-		return Config{}, nil
-	}
-	raw, err := readObject(path)
+	cfg, path, err := load(e)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return Config{}, nil
-		}
 		return Config{}, err
 	}
-	var c Config
-	for key, dst := range map[string]*string{KeyMachineFolder: &c.MachineFolder, KeySharedGroup: &c.SharedGroup} {
-		v, ok := raw[key]
-		if !ok {
-			continue
-		}
-		if err := json.Unmarshal(v, dst); err != nil {
-			return Config{}, fmt.Errorf("%s: %s must be text", path, key)
-		}
-		*dst = strings.TrimSpace(*dst)
+	if len(cfg.NotText) > 0 {
+		return Config{}, fmt.Errorf("%s: %s must be text", path, strings.Join(cfg.NotText, " and "))
 	}
-	return c, nil
-}
-
-// readObject reads path as one JSON object, keeping each value as it is written.
-func readObject(path string) (map[string]json.RawMessage, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, maxConfig+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(b) > maxConfig {
-		return nil, fmt.Errorf("%s is larger than %d bytes", path, maxConfig)
-	}
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(b, &raw); err != nil || raw == nil {
-		return nil, fmt.Errorf("%s is not a JSON object", path)
-	}
-	return raw, nil
+	return Config{MachineFolder: cfg.MachineFolder, SharedGroup: cfg.SharedGroup}, nil
 }
 
 // WriteConfig sets the two keys in the one config and keeps every other key as it
-// was. It refuses a file that is not a JSON object, so a person's edit is never
-// replaced. The file stays private to the login (0600) and is written by atomic
-// rename. It never writes into the machine folder.
+// was; gridconfig writes the file (version 3 shape, a copy of an older version kept,
+// private to the login, atomic rename). It refuses a file that is not a JSON object
+// and a file still in the version 1 shape, so a person's edit is never replaced and
+// nothing is lost. An empty value removes the key. It never writes into the machine
+// folder.
 func WriteConfig(e Env, c Config) (string, error) {
-	path := ConfigPath(e)
+	cfg, path, err := load(e)
 	if path == "" {
 		return "", errors.New("cannot find the config folder: the login has no home folder")
 	}
-	raw, err := readObject(path)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		raw = map[string]json.RawMessage{}
-	case err != nil:
+	if err != nil {
 		return "", err
 	}
-	for key, val := range map[string]string{KeyMachineFolder: c.MachineFolder, KeySharedGroup: c.SharedGroup} {
-		if val == "" {
-			delete(raw, key)
-			continue
-		}
-		b, _ := json.Marshal(val)
-		raw[key] = b
+	if cfg.Legacy != nil {
+		return "", fmt.Errorf("%s is still in the version 1 shape; open grid setup once before changing the machine folder", path)
 	}
-	var out bytes.Buffer
-	enc := json.NewEncoder(&out)
-	enc.SetIndent("", "  ")
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(raw); err != nil {
+	cfg.MachineFolder, cfg.SharedGroup = c.MachineFolder, c.SharedGroup
+	if err := gridconfig.Write(path, cfg); err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return "", err
-	}
-	return path, atomicfile.Write(path, out.Bytes(), 0o600)
+	return path, nil
 }
 
 // Folder is the resolved machine folder.
@@ -220,10 +156,10 @@ func (f Folder) Configured() bool {
 }
 
 // Resolve is the one function that computes the machine folder: GRID_MACHINE_DIR
-// first, then machine_folder of the config, then the OS standard place. A leading
-// ~/ is the login's home; a relative path is not used. shared_group comes from the
-// config whichever source named the path. It never fails: what it could not use
-// is in Problem.
+// first, then the machineFolder key of the config, then the OS standard place. A
+// leading ~/ is the login's home; a relative path is not used. The sharedGroup key
+// comes from the config whichever source named the path. It never fails: what it
+// could not use is in Problem.
 func Resolve(e Env) Folder {
 	f := Folder{Source: SourceDefault}
 	cfg, err := ReadConfig(e)
@@ -238,7 +174,7 @@ func Resolve(e Env) Folder {
 		if strings.TrimSpace(c.value) == "" {
 			continue
 		}
-		p, ok := e.absolute(strings.TrimSpace(c.value))
+		p, ok := osplace.Absolute(e.Home, strings.TrimSpace(c.value))
 		if !ok {
 			if f.Problem == "" {
 				f.Problem = c.key + " must be an absolute path"
@@ -250,18 +186,4 @@ func Resolve(e Env) Folder {
 	}
 	f.Path = DefaultPath(e)
 	return f
-}
-
-// absolute expands a leading ~/ and reports whether the result is absolute.
-func (e Env) absolute(p string) (string, bool) {
-	if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
-		if e.Home == "" {
-			return "", false
-		}
-		p = filepath.Join(e.Home, p[1:])
-	}
-	if !filepath.IsAbs(p) {
-		return "", false
-	}
-	return filepath.Clean(p), true
 }

@@ -12,7 +12,9 @@
 // The machine folder (locks, caches, worktrees, runner logs, bin/grid) is
 // ~/Library/Application Support/Grid on macOS, ~/.local/state/grid on Linux and
 // %LOCALAPPDATA%\Grid on Windows (XDG_STATE_HOME is not read), unless the config's
-// "machineFolder" names another absolute folder. ~/.grid stays the default data
+// machineFolder key names another absolute folder (and sharedGroup, when set, makes
+// it shared by several logins). machinefolder.Resolve is the one resolver of the
+// folder; this package only holds the two keys. ~/.grid stays the default data
 // folder and the parent of <name> data folders.
 //
 // It reads version 3 and the earlier desktop's version 2 and version 1 shapes,
@@ -31,7 +33,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/gridconsole/grid-plugins/internal/machinefolder"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder/osplace"
 )
 
 // Version is the config shape this grid writes as "v".
@@ -101,8 +103,8 @@ func MachineDirFor(goos string, getenv func(string) string, userHome string) str
 	if goos == "ios" {
 		goos = "darwin"
 	}
-	// machinefolder owns the OS standard place; no other package spells it.
-	return machinefolder.DefaultPath(machinefolder.Env{Getenv: getenv, Home: userHome, GOOS: goos})
+	// osplace, under machinefolder, owns the OS standard place; no other package spells it.
+	return osplace.DefaultPath(goos, getenv, userHome)
 }
 
 // Workspace is one entry of "workspaces".
@@ -136,10 +138,17 @@ type Config struct {
 	Choices map[string]json.RawMessage
 	// SetupAt is when setup last saved, RFC 3339.
 	SetupAt string
-	// MachineFolder is "machineFolder": an absolute machine folder instead of the
-	// OS standard place (on the VM, one folder shared by several logins); "" or a
+	// MachineFolder is the machineFolder key: an absolute machine folder instead of
+	// the OS standard place (on the VM, one folder shared by several logins); "" or a
 	// relative path means the OS standard place.
 	MachineFolder string
+	// SharedGroup is the sharedGroup key: the group that shares the machine folder
+	// between logins; "" is private mode.
+	SharedGroup string
+	// NotText lists the keys of MachineFolder and SharedGroup that the file holds as
+	// something other than text. They are read as empty; machinefolder.Resolve turns
+	// each into a Problem for grid doctor.
+	NotText []string
 	// Legacy is the v1 top-level workspace when the file has one; Migrate turns it
 	// into an entry and Write never writes it back.
 	Legacy *Legacy
@@ -266,7 +275,8 @@ func Parse(b []byte) (Config, error) {
 	}
 	str(top, "current", &c.Current)
 	str(top, "setupAt", &c.SetupAt)
-	str(top, "machineFolder", &c.MachineFolder)
+	machineKey(top, osplace.KeyMachineFolder, &c.MachineFolder, &c.NotText)
+	machineKey(top, osplace.KeySharedGroup, &c.SharedGroup, &c.NotText)
 	if raw, ok := take(top, "choices"); ok && !isNull(raw) {
 		if err := json.Unmarshal(raw, &c.Choices); err != nil {
 			return Config{}, fmt.Errorf("config.json: choices: %w", err)
@@ -324,6 +334,21 @@ func str(m map[string]json.RawMessage, key string, dst *string) {
 	}
 }
 
+// machineKey takes one of the two machine folder keys: trimmed text, or, for any
+// other type, empty with the key noted in notText.
+func machineKey(m map[string]json.RawMessage, key string, dst *string, notText *[]string) {
+	raw, ok := take(m, key)
+	if !ok || isNull(raw) {
+		return
+	}
+	if err := json.Unmarshal(raw, dst); err != nil {
+		*dst = ""
+		*notText = append(*notText, key)
+		return
+	}
+	*dst = strings.TrimSpace(*dst)
+}
+
 func optStr(m map[string]json.RawMessage, key string) *string {
 	raw, ok := take(m, key)
 	if !ok || isNull(raw) {
@@ -376,11 +401,14 @@ func (w Workspace) BrainFolder() string {
 	return ""
 }
 
-// MachineDir is the machine folder for goos: the config's MachineFolder when it is
-// an absolute path, else MachineDirFor. fromConfig says which.
+// MachineDir is the machine folder the file alone names for goos: the config's
+// MachineFolder when it is an absolute path (a leading ~/ is userHome), else
+// MachineDirFor. fromConfig says which. It reads no environment
+// override and nothing else outside the file, so machinefolder.Resolve, which does, is the one
+// resolver callers use; for a config with no env override both give one folder.
 func (c *Config) MachineDir(goos string, getenv func(string) string, userHome string) (dir string, fromConfig bool) {
-	if c.MachineFolder != "" && filepath.IsAbs(c.MachineFolder) {
-		return filepath.Clean(c.MachineFolder), true
+	if p, ok := osplace.Absolute(userHome, c.MachineFolder); ok {
+		return p, true
 	}
 	return MachineDirFor(goos, getenv, userHome), false
 }
@@ -534,7 +562,10 @@ func (c Config) Marshal() ([]byte, error) {
 		top["setupAt"] = c.SetupAt
 	}
 	if c.MachineFolder != "" {
-		top["machineFolder"] = c.MachineFolder
+		top[osplace.KeyMachineFolder] = c.MachineFolder
+	}
+	if c.SharedGroup != "" {
+		top[osplace.KeySharedGroup] = c.SharedGroup
 	}
 	b, err := json.MarshalIndent(top, "", "  ")
 	if err != nil {

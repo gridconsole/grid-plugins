@@ -15,7 +15,7 @@ import (
 // The functions below hold both paths, so no caller joins them itself.
 
 // Active reports that the person asked for a machine folder: GRID_MACHINE_DIR or
-// machine_folder named a path, or shared_group is set. The OS standard place in
+// machineFolder named a path, or sharedGroup is set. The OS standard place in
 // private mode is not active, and neither is a folder whose setting could not be
 // used (Folder.Problem): both leave every file where it was and grid doctor
 // shows the problem.
