@@ -71,9 +71,12 @@ lanes 7 and 8).
    goes in `internal/land` (Addendum 3's word), in new files beside the deploy
    executor (`internal/land/land.go:1`), which stays as it is. Deploy stays the
    existing `grid land` step (`internal/land/land.go:208`).
-5. The test run is the land Job itself. The land Job carries the start condition
-   "no other test run on this machine" and runs the checks on the rebased SHA
-   that it then pushes (Q4).
+5. **Open for Abdu (V12.c).** The plan below is written for option A: the test
+   run is the land Job itself. The land Job carries the start condition "no
+   other test run on this machine" and runs the checks on the rebased SHA that
+   it then pushes (Q4). Option B, the owner's wording (a separate runner Job that
+   the land Job waits on), and what it changes are in section "Open for Abdu:
+   V12.c". This is not settled here.
 6. The launcher retries a lost push race mechanically, as a new attempt of the
    same land Job. Posts carry `attempt`, not a lease epoch (Addendum 6).
    - The app's `no_epoch` failure (`app: judge.go`, `epoch`) goes away.
@@ -130,7 +133,8 @@ acceptance runs with the app stopped, so nothing on the path may live in the app
 - *Batches, MAXB, TRAIN-DROP, flock* (`land.sh:29-31`, `land.sh:83`,
   `land.sh:88-98`). One land Job per change makes them unneeded. Order becomes an
   after condition, and the lock becomes the lease on the push.
-- *A separate test-runner Job beside the land Job.* Addendum 3 asks for a test
+- *(Open for Abdu, V12.c: not rejected until he answers.)* *A separate
+  test-runner Job beside the land Job.* Addendum 3 asks for a test
   runner Job with "no other test run on this machine". A second Job would test
   one SHA, and the land Job would then push a SHA rebased again after main moved.
   That SHA would be untested, unless the land Job waited on the runner and passed
@@ -407,7 +411,8 @@ still keeps main correct; only the order between tasks is not fixed.
 
 ## Q4. Tests
 
-**The runner condition.** The land Job carries a second start condition: "no
+**The runner condition** (option A of "Open for Abdu: V12.c"; option B moves it
+to a separate runner Job). The land Job carries a second start condition: "no
 other test run on this machine". The launcher evaluates it from the machine note
 (grid/machines/<m>.md, design brief), and the land Job holds it while its checks
 run. The checks run on the rebased SHA that the push sends, so a land Job is both
@@ -852,6 +857,34 @@ verbs (lane 4) and the deploy approval, deploy command Job and `wait` verb
 (lane 9). The sibling owns `internal/gitref`, `internal/secret`, `grid job
 submit`, the permissions and the running of command and `wait` Jobs (its lanes
 14, 15 and 4). This doc's lanes 7 and 8 are merged into its lanes 14 and 15.
+
+## Open for Abdu: V12.c
+
+The design (:67) says: "the lander asks for a runner Job (test command from the
+project's environments/deploy topic) with start condition 'no other test run on
+this machine'". This doc's plan makes the land Job the test run. The gate may
+not choose for you, so both options are below. The lane plan is written for A;
+answering B means applying the B column in one edit.
+
+| | **A. The land Job is the test run** (as planned) | **B. A separate runner Job; the land Job waits on it** (the design's words) |
+|---|---|---|
+| Jobs per accepted change | integrate, then land (role runner, assign `test_run: true`, start `no_test_run`) | integrate, then a runner Job (`kind: command`, `command: [land, test, T-n, J]`, assign `test_run: true`, start `no_test_run`), then land with `after: {job: <runner Job>, kind: done}` and no test condition |
+| What is tested | the rebased SHA the land Job then pushes | the runner rebases head onto `origin/<target>` in a scratch worktree, runs the note's checks (and bisect and flake), and posts `tested {sha, base_sha, result}` |
+| What is pushed | the tested SHA, always | the land Job pushes the tested sha only if `origin/<target>` still equals the tested `base_sha`. If main moved, it pushes nothing and ends `base_moved`, and the orchestrator posts a new runner Job and land Job |
+| Cost | one Job; the test lock and the push are one step | two Jobs; a retest whenever main moves between the test and the land |
+| Decision note 5 | stays (drop its "Open for Abdu" line) | becomes: "The test run is a runner Job the land Job waits on; the land Job pushes only the tested sha" |
+| Rejected list | the "separate test-runner Job" bullet stays as written (drop its "Open" mark) | that bullet is deleted; a new bullet rejects "the land Job runs its own checks" with the reason "the owner's design names a runner Job" |
+| Q4 "The runner condition" | stays (drop the option note) | moves to the runner Job; the Q4 table's check, rerun, not-waivable, preexisting, bisect and flake rows run in `grid land test` (same Go files) |
+| Lane 1 (P-land-kind-2) | no change | adds the `tested` post schema |
+| Lane 3 row 5 | no change | "one integrate Job, one runner Job, and one land Job that waits on it" |
+| Lane 4 (P-land-change) | no change | adds `grid land test` to `internal/cli/land.go`; new row (m): `grid land change` pushes nothing without a `tested` green post for the same head and base, and with main moved ends `base_moved` |
+| Lane 5 (P-land-tests) | no change | `check.go`, `bisect.go` and `flake.go` are called by `grid land test`; the rows stay |
+| Lane 6 (P-land-launch) | no change | row 2 reads "two runner Jobs on one machine never run at once"; new row 9: `base_moved` leads to exactly one new runner Job and land Job |
+| Sibling (run-jobs-launcher.md) | no change | lane 4 row 9 adds `grid land test` to the verbs run as command Jobs; Q9's `no_test_run` line is unchanged (the runner Job carries `test_run: true`) |
+
+The optional note in the same question: should a test that is flaky again be
+deleted like one that is red again (Q4, the flake rule)? The plan keeps it as
+written until you answer.
 
 ## Q6. Lane plan
 
