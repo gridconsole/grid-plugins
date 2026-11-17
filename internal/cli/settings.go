@@ -193,6 +193,9 @@ func runSetup(args []string, env Env) int {
 	if resolver(env).Caller.IsGuest() {
 		return commandError(env, "setup", ilGuestRefused)
 	}
+	if setupSharedGroupAsked(args) {
+		return runSetupShared(args, env)
+	}
 	if settings.ClaudeSetupCommand(args) {
 		fs := newFlags("setup", env)
 		fs.Usage = func() {

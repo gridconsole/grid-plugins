@@ -29,13 +29,14 @@ same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` thro
 
 - `grid version`, `grid where`, `grid open`, `grid doctor`: version, location, open the task page, machine health.
 - `grid hook`: answer hook events; set and list hook levels.
-- `grid task`, `grid plan`, `grid job`, `grid lease`, `grid run`: tasks, plans, Jobs, leases, and the task holder starting one agent per assigned Job in its own worktree.
+- `grid task`, `grid plan`, `grid job`, `grid run`, `grid lease`: tasks, plans, Jobs, starting assigned Jobs, and leases.
 - `grid feed`, `grid mcp`: the Feed and its stdio MCP server.
 - `grid question`, `grid answer`, `grid approve`, `grid deliver`, `grid proof`, `grid history`, `grid land`: questions, answers, gates, outcome, proof, history, landing.
 - `grid brain`: the brain notes and topics.
 - `grid env`: dev environments.
 - `grid person`, `grid routine`, `grid worker`, `grid session`, `grid intent`, `grid usage`, `grid account`: people, routines, workers, sessions, worker requests, usage, accounts.
 - `grid agent`, `grid claude`, `grid workflow`, `grid skill`, `grid setup`: agent, Claude, workflow and skill settings, and project setup.
+- `grid run`: as the task holder, start one agent per assigned Job in its own worktree and post its ack and exit.
 - `grid project`, `grid project-md`, `grid update`, `grid signal`, `grid artifact`, `grid eval`, `grid migrate`: projects, project updates, inbox signals, artifacts, evaluations, home upgrade.
 - `grid shot`: crop a screenshot to a box, and compare two screenshots (below).
 
