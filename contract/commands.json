@@ -5119,6 +5119,11 @@
               "required": false
             },
             {
+              "name": "--shared-group",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--yes",
               "takes": "none",
               "required": false
