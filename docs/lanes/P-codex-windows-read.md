@@ -30,7 +30,7 @@ Only what Codex already writes is read: no new process, no network call, no wrap
 | Long lines | `TestCxLongLinesAreRead`: a 200000 byte line before the reading and a reading line of 200000+ bytes | HOLDS |
 | Passed reset | `TestCxPassedResetGivesZeroUsed`: Used 0 at the reset second, kept one second before, ResetsAt kept | HOLDS |
 | Importers | `go list` of the module: `internal/cli` imports `internal/account`; `cmd/grid` and `lib` import `internal/cli`. `go test -count=1 ./internal/account ./internal/cli ./cmd/grid ./lib` exit 0 (`cmd/grid` has no test files) | HOLDS |
-| `make test` | `make test` exit 0: it cannot be scoped to one package, so it ran the whole module (`internal/account` ok, "temp leak check: no new matching entries"). `go test -count=1 ./internal/account` exit 0 | HOLDS |
+| `make test` | `make test` exit 0: it cannot be scoped to one package, so it ran the whole module (`internal/account` ok, "temp leak check: no new matching entries"), on the head before the last commit (the symlink fix). After that commit: `go test -count=1 ./internal/account ./internal/cli ./cmd/grid ./lib` exit 0, `make lint` exit 0, `make cross` exit 0, both walk tests ok | HOLDS |
 | Lint | `make lint` (go vet ./..., gofmt -l .) exit 0 | HOLDS |
 | Cross builds | `make cross` exit 0 (darwin/arm64 and windows/amd64 vet and test compile) | HOLDS |
 | Walk tests | `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` ok; `go test -count=1 ./internal/job/lint/` ok | HOLDS |
