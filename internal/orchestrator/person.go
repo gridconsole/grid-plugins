@@ -62,13 +62,28 @@ func (s Store) personAnswers(snap Snapshot) error {
 			continue
 		}
 		var answers []feed.Record
+		// postedBy holds, by answer id, the agent that wrote an answer counted as a
+		// person's under a grant (contract.PostedAs), for the message that names it.
+		postedBy := map[string]string{}
 		reopened := ReopenedAt(snap, j)
 		for _, r := range snap.Records {
-			if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] || r.At <= reopened || r.Lease != nil || r.Fence != 0 || contract.TierFor(r.Author.Role) != contract.PersonTeam && !contract.GuestAddressee(r.Author.Role, r.Author.ID, false, item.Role, item.PersonName(), item.Kind) {
+			if r.Type != "answer" || r.Re == nil || *r.Re != j.History[0] || r.At <= reopened {
+				continue
+			}
+			// An agent's answer under a covering grant is the person's, whatever lease
+			// its Job session holds; any other answer is taken as before. The record
+			// itself keeps the agent as its author.
+			who, _ := contract.PostedAs(r.Type, r.Author, r.Task, r.At, r.Body, item.Kind, s.Grants)
+			granted := who != r.Author
+			if !granted && (r.Lease != nil || r.Fence != 0 || contract.TierFor(r.Author.Role) != contract.PersonTeam && !contract.GuestAddressee(r.Author.Role, r.Author.ID, false, item.Role, item.PersonName(), item.Kind)) {
 				continue
 			}
 			if text, _ := r.Body["answer"].(string); strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > maxPersonAnswer {
 				continue
+			}
+			if granted {
+				postedBy[r.ID] = fmt.Sprintf("%s under %s", r.Author.ID, contract.GrantTarget(fmt.Sprint(r.Body["grant"])))
+				r.Author = who
 			}
 			answers = append(answers, r)
 		}
@@ -87,6 +102,9 @@ func (s Store) personAnswers(snap Snapshot) error {
 		text := fmt.Sprintf("%s answered %s at %s: %s", first.Author.ID, item.ID, first.At, strings.TrimSpace(answer))
 		if back {
 			text = fmt.Sprintf("%s sent %s back at %s: %s", first.Author.ID, item.ID, first.At, strings.TrimSpace(answer))
+		}
+		if by := postedBy[first.ID]; by != "" {
+			text += " (posted by " + by + ")"
 		}
 		said, err := s.Feed.Post(feed.Input{Type: "post", Body: map[string]any{"ref": "task", "kind": "message", "text": text}}, s.Writer)
 		if err != nil {
