@@ -19,6 +19,10 @@ import (
 // State is what the verbs read of one task: the folded Jobs, the job record body of each Job,
 // the counted records by id (orchestrator.Snapshot holds all three), every Job id a job record
 // names, and the record id of the task's newest head post (contract.State.Head).
+//
+// Tip, when set, reads the task's git remote as it is now: the SHA a full ref points at there,
+// "" when the remote has no such ref (RemoteTip). HeadRef is the task head's ref on that remote,
+// refs/grid/<T>/head (HeadRef). With Tip nil the verbs read no remote.
 type State struct {
 	Task    string
 	Jobs    map[string]*contract.Job
@@ -26,6 +30,8 @@ type State struct {
 	Records map[string]feed.Record
 	IDs     []string
 	Head    string
+	Tip     func(ref string) (string, error)
+	HeadRef string
 }
 
 // Plan is what a verb posts, in order. Note says why a verb posts nothing, or less than its
