@@ -37,9 +37,9 @@ func newContext(in hookio.Input, root string, env map[string]string) context {
 	c := context{in: in, env: env, root: root, home: env["GRID_HOME"], projects: env["GRID_PROJECTS"]}
 	c.set = c.home != "" || c.projects != ""
 	// The new CLI has one Grid home, independent of desktop workspace config.
-	// gridhome.Dir is the one place that reads GRID_HOME and spells the default.
+	// gridhome.Resolve is the one place that reads GRID_HOME, the shared config and the default.
 	if c.projects == "" {
-		c.home = gridhome.Dir(func(key string) string { return env[key] }, env["HOME"])
+		c.home = gridhome.Resolve(func(key string) string { return env[key] }, env["HOME"]).Dir
 	}
 	if c.projects == "" && c.home != "" {
 		c.projects = filepath.Join(c.home, "projects")

@@ -1,0 +1,7 @@
+{
+  "v": 3,
+  "current": "new-one",
+  "workspaces": [
+    {"name": "new-one", "member": "sam", "setup": "done", "step": null}
+  ]
+}
