@@ -73,14 +73,17 @@ func Fold(posts []Post) State {
 		}
 		return a.Seq < b.Seq
 	})
-	var active []Post
+	var active, readerStale []Post
 	for _, p := range ordered {
 		if len(tasks) != 1 {
 			set(p, "bad", "Fold requires exactly one task")
 			continue
 		}
 		if p.Stale {
+			// A Job-side one of an older attempt gets "older attempt" once the
+			// Jobs are folded (olderAttempt below).
 			set(p, "stale", "past tenure end offset")
+			readerStale = append(readerStale, p)
 			continue
 		}
 		missing := ""
@@ -204,10 +207,6 @@ func Fold(posts []Post) State {
 				set(p, "ignored", "attempt already granted, regressed, or Job closed")
 				continue
 			}
-			if j.Assign != nil && a.Fence <= j.Assign.Fence && p.Gen <= j.Generation {
-				set(p, "ignored", "grant must advance the tenure")
-				continue
-			}
 			j.Assign, j.AssignPost, j.Generation = a, p.ID, p.Gen
 			j.Attempt, j.Status, j.LeaseExpires = a.Attempt, Assigned, a.Until
 			j.Exited, j.ExitReason, j.Reason = "", "", ""
@@ -235,6 +234,10 @@ func Fold(posts []Post) State {
 				}
 				if reason := applySide(j, side); reason != "" {
 					set(side, "ignored", reason)
+				} else if side.Type == "worker-exit" && j.ExitReason == "done" && resultOf(j, seen, a.Attempt) {
+					// Done with a result of this attempt is awaiting judgement with no
+					// control post. A done exit with none is left to the tick's control.
+					j.Status, j.Reason = Submitted, "awaiting judgement"
 				}
 			}
 			continue
@@ -264,9 +267,25 @@ func Fold(posts []Post) State {
 		j.Reason = b.Reason
 		j.History = append(j.History, p.ID)
 	}
+	// A Job-side post of an attempt lower than its Job's that no tenure counted
+	// was superseded by a newer assign: it folds stale and changes nothing. One
+	// its own tenure counted stays counted.
+	olderAttempt := func(p Post) bool {
+		j := out.Jobs[deref(p.Job)]
+		return isJobSide(p.Type) && j != nil && p.Attempt != nil && *p.Attempt < j.Attempt
+	}
+	for _, p := range readerStale {
+		if olderAttempt(p) {
+			set(p, "stale", "older attempt")
+		}
+	}
 	for _, p := range active {
 		if isJobSide(p.Type) && !consumed[p.ID] {
-			set(p, "ignored", "no matching counted assign for this tenure")
+			if olderAttempt(p) {
+				set(p, "stale", "older attempt")
+			} else {
+				set(p, "ignored", "no matching counted assign for this tenure")
+			}
 		}
 		if p.Type == "answer" && NormalizeRole(p.Author.Role) == "guest" {
 			q := questions[*p.Re]
@@ -426,6 +445,17 @@ func applySide(j *Job, p Post) string {
 		}
 	}
 	return ""
+}
+
+// resultOf says whether the Job counted a result of this attempt. Results stay
+// across a new assign, so an older attempt's result is not one.
+func resultOf(j *Job, seen map[string]Post, attempt int) bool {
+	for _, id := range j.Results {
+		if r := seen[id]; r.Attempt != nil && *r.Attempt == attempt {
+			return true
+		}
+	}
+	return false
 }
 
 // rowOf returns the Job's acceptance row with this id, or nil.
