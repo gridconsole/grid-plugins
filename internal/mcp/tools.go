@@ -219,6 +219,15 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
+		// The author is the session's, never an argument (an author argument is
+		// unknown and refused above). A post that answers for a person names its
+		// agent in `by` from that same session, so a `by` the body carries is
+		// replaced, not trusted; whether it counts as the person's is the reader's
+		// rule (contract.PostedAs), so nothing is refused here. Only an answer
+		// posts for a person; control and host bodies have a grant of their own.
+		if in.Type == "answer" && (in.Body["for"] != nil || in.Body["grant"] != nil) {
+			in.Body["by"] = writer.Author.ID
+		}
 		var post feed.Record
 		if tool.Name == "feed_handover" {
 			post, err = store.Handover(in, writer)
