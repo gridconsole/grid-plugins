@@ -147,6 +147,7 @@ func (s Store) pgClosedCancel(dir, taskID string, curator func(dir, taskID, id s
 			if keep[id] {
 				continue
 			}
+			s.pcClosedExit(taskID, j)
 			if e := s.control(j, contract.Cancelled, pgClosedReason, ""); e != nil {
 				return e
 			}
@@ -169,6 +170,46 @@ func (s Store) pgClosedCancel(dir, taskID string, curator func(dir, taskID, id s
 		return s.usPostCurator(snap, dir, taskID, curator)
 	})
 	return closed, err
+}
+
+// A cancelled attempt still ends with one worker-exit on the Feed (decision
+// 2026-11-17-cancelled-job-feed-exit: the Feed is the event log, worker.log is not).
+//
+// After a task stop two passes race: the app worker's beat stops the agent and posts
+// its exit (cancelled, code stop_requested), and this pass cancels the Job and ends
+// its grant. When this pass ran first, the worker's exit came under a Cancelled Job
+// and was refused as a stale lease (writeLocked), so the attempt had no exit on the
+// Feed. So this pass posts the exit itself, before the cancel: reason cancelled and
+// code "task stopped", the body worker-exit.json allows to role cli, as a Job-side
+// record of the Job's own tenure (holder, gen, fence and attempt of its grant), which
+// is the tenure the fold reads an exit from. Accepting the worker's exit after the
+// cancel instead would mean admitting a post past the takeover line EndJob writes,
+// which the Feed refuses (feed store.go leaseLock) and the fold reads as stale.
+//
+// Never two: the worker's exit goes through Write, which takes the same
+// .orchestrator.lock and refuses an attempt already exited or a Cancelled Job. A
+// Job whose attempt has an exit (the worker came first) gets none here. A Job that
+// is not Running gets none: before its ack the fold ignores any Job-side record. A
+// Job granted to another holder gets none: its exit is that holder's to write.
+// The exit goes before the cancel, so a pass cut off between them heals: the next
+// pass sees the exit and only cancels. A failed exit is one Diagnostics line, and
+// the cancel still goes out.
+
+// pcClosedExit posts the worker-exit of the running attempt of j, which the close pass
+// is about to cancel. The caller holds the task lock and lease.
+func (s Store) pcClosedExit(taskID string, j *contract.Job) {
+	if j.Status != contract.Running || j.Assign == nil || j.Exited != "" {
+		return
+	}
+	if j.Assign.To != s.Writer.Worker {
+		s.usDiag("grid worker next: task %s: %s is held by %s, which posts its worker-exit\n", taskID, j.ID, j.Assign.To)
+		return
+	}
+	w := feed.Writer{Author: s.Writer.Author, Worker: j.Assign.To, Lease: j.ID, Gen: j.Generation, Fence: j.Assign.Fence}
+	in := feed.Input{Type: "worker-exit", Job: j.ID, Attempt: j.Attempt, Body: map[string]any{"reason": "cancelled", "code": pgClosedReason}}
+	if _, err := writeLocked(s.Feed, w, in); err != nil {
+		s.usDiag("grid worker next: task %s: no worker-exit for %s attempt %d: %s\n", taskID, j.ID, j.Attempt, oneLine(err))
+	}
 }
 
 // usPostCurator asks curator for the body of the curator Job of a closed task and
