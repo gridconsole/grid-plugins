@@ -13,7 +13,9 @@ The research lane on what grid-plugins needs to run this build itself, across th
 | Q5 brain drafts for decisions, conventions, machines, agents, routines with reasons, including the owner's correction | HOLDS | Section 5. The first note is decisions / plugin-one-machine-many-accounts. |
 | Owner correction: Judge and the missing agent start are confirmed as plugin gaps | HOLDS | G1 cites `agents/orchestrator.md:46`. G3 cites `tick.go:330` and the app's `judge.go:243`. |
 | Last line is DONE or NOT DONE | HOLDS | The last line of `docs/research/dogfood-gaps.md` is `DONE`. |
-| No personal paths, hosts or emails in committed files | HOLDS | `grep -nE '/srv|/home|/Users|@[a-z0-9.-]+\.(nl|com|org)' docs/research/dogfood-gaps.md`: no match, exit 1. |
+| No personal paths, hosts or emails in committed files | HOLDS | `grep -nE` for the private path prefixes and email domains on both docs: no match, exit 1. |
+| Citations re-read | HOLDS | Plugin and script line numbers were re-checked with `grep -n` on the lane head. Lines marked "(R-dogfood-gaps, not re-read)" are labelled as such. |
+| Skill grid:research | HOLDS, with a deviation | The skill was loaded. The brief's layout (gap table first, last line DONE) wins over its research.md shape. This lane is not a Grid Job, so no `grid job result` was posted. |
 | No guard, gate, cap, hold or blocking hook added | HOLDS | Docs only. The cap question G15 is left to the owner. |
 | No attribution lines, small commits with one-sentence messages | HOLDS | `git log origin/main..HEAD` |
 | Smoke files not committed | HOLDS | `.smoke/` is untracked (`git status`). |
@@ -27,6 +29,7 @@ The research lane on what grid-plugins needs to run this build itself, across th
   - option A or B for running a Job as another login;
   - whether any cap on running agents is wanted;
   - which Grid home is the shared one, and its group.
+- The smoke ran as grid2 under the lane folder, not as grid4: there is no sudo and the session allow list refused the path.
 - R-land-job-type L5 must be re-scoped from the app to the plugin.
 - G12: it is UNVERIFIED whether `grid feed read --wait` crosses tasks.
 - Script lines marked "(R-dogfood-gaps, not re-read)" were not checked again.
