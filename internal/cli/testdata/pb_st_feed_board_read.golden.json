@@ -1,0 +1,97 @@
+{
+  "bad": {},
+  "records": [
+    {
+      "after": [],
+      "arrived": "",
+      "at": "AT",
+      "attempt": null,
+      "author": {
+        "id": "member",
+        "role": "member"
+      },
+      "body": {
+        "kind": "message",
+        "ref": "task",
+        "text": "first"
+      },
+      "by": "01ARZ3NDEKTSV4RRFFQ69G5FAW:tester",
+      "data": false,
+      "file": "000001-task-post.md",
+      "id": "ID-A",
+      "job": null,
+      "re": null,
+      "reason": "",
+      "seq": 1,
+      "task": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "tier": "person-team",
+      "type": "post",
+      "type_v": 1,
+      "verdict": "counted",
+      "waiting": null,
+      "wake": null,
+      "worker": "01ARZ3NDEKTSV4RRFFQ69G5FAW:tester"
+    },
+    {
+      "after": [],
+      "arrived": "",
+      "at": "AT",
+      "attempt": null,
+      "author": {
+        "id": "member",
+        "role": "member"
+      },
+      "body": {
+        "question": "Continue?",
+        "who": "owner"
+      },
+      "by": "01ARZ3NDEKTSV4RRFFQ69G5FAW:tester",
+      "data": false,
+      "file": "000002-task-question.md",
+      "id": "ID-B",
+      "job": null,
+      "re": null,
+      "reason": "",
+      "seq": 2,
+      "task": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "tier": "person-team",
+      "type": "question",
+      "type_v": 1,
+      "verdict": "counted",
+      "waiting": null,
+      "wake": null,
+      "worker": "01ARZ3NDEKTSV4RRFFQ69G5FAW:tester"
+    },
+    {
+      "after": [],
+      "arrived": "",
+      "at": "AT",
+      "attempt": null,
+      "author": {
+        "id": "member",
+        "role": "member"
+      },
+      "body": {
+        "kind": "message",
+        "ref": "task",
+        "text": "third"
+      },
+      "by": "01ARZ3NDEKTSV4RRFFQ69G5FAW:tester",
+      "data": false,
+      "file": "000003-task-post.md",
+      "id": "ID-C",
+      "job": null,
+      "re": null,
+      "reason": "",
+      "seq": 3,
+      "task": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "tier": "person-team",
+      "type": "post",
+      "type_v": 1,
+      "verdict": "counted",
+      "waiting": null,
+      "wake": null,
+      "worker": "01ARZ3NDEKTSV4RRFFQ69G5FAW:tester"
+    }
+  ]
+}
