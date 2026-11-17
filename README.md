@@ -35,7 +35,7 @@ same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` thro
 - `grid brain`: the brain notes and topics.
 - `grid env`: dev environments.
 - `grid person`, `grid routine`, `grid worker`, `grid session`, `grid intent`, `grid usage`, `grid account`: people, routines, workers, sessions, worker requests, usage, accounts.
-- `grid agent`, `grid claude`, `grid workflow`, `grid skill`, `grid setup`: agent, Claude, workflow and skill settings, and project setup.
+- `grid agent`, `grid claude`, `grid workflow`, `grid skill`, `grid setup`, `grid init`: agent, Claude, workflow and skill settings, project setup, and the first-run questions that write the one config.
 - `grid run`: as the task holder, start one agent per assigned Job in its own worktree and post its ack and exit.
 - `grid project`, `grid project-md`, `grid update`, `grid signal`, `grid artifact`, `grid eval`, `grid migrate`: projects, project updates, inbox signals, artifacts, evaluations, home upgrade.
 - `grid shot`: crop a screenshot to a box, and compare two screenshots (below).
