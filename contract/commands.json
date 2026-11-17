@@ -1878,6 +1878,11 @@
               "required": false
             },
             {
+              "name": "--remote",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--target",
               "takes": "value",
               "required": false

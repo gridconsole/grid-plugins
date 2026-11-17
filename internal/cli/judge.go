@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -24,7 +25,8 @@ gave it, and decides nothing itself.
   review <job>                  post the review Job of a submitted Job, based on the SHA it
                                 submitted for its current attempt (--agent checker for a checker)
   rework <job> --from <review>  post the rework Job, which continues <job>, and the control that
-                                rejects <job> as reworked by it
+                                rejects <job> as reworked by it; with --remote <remote> its base is
+                                the SHA of refs/grid/<T>/head there now, else of the target's tip
   person <job>                  post the person Job for the task owner: --from <review> after a
                                 second rejection, STUCK, or a review cancelled before it ran;
                                 --point <step> for a person point of the workflow
@@ -68,7 +70,7 @@ func runJudge(args []string, env Env) int {
 	task := fs.String("task", "", "task folder or id")
 	project := fs.String("project", "", "project name or id")
 	asJSON := fs.Bool("json", false, "print JSON")
-	var wake, from, target, agent, point, owner *string
+	var wake, from, target, remote, agent, point, owner *string
 	rounds := new(int)
 	switch verb {
 	case "verdict":
@@ -80,6 +82,7 @@ func runJudge(args []string, env Env) int {
 		wake = fs.String("wake", env.getenv("GRID_WAKE"), "event/n this call answers")
 		from = fs.String("from", "", "the review Job that rejected the Job (required)")
 		target = fs.String("target", "", "the branch the rework starts from when the task has no head")
+		remote = fs.String("remote", "", "the git remote that holds the task's refs (a remote of the checkout you run in, a URL or a path); the base is read there now")
 	case "person":
 		wake = fs.String("wake", env.getenv("GRID_WAKE"), "event/n this call answers")
 		from = fs.String("from", "", "the review Job the person decides after")
@@ -134,6 +137,17 @@ func runJudge(args []string, env Env) int {
 	st := judge.State{Task: taskID, Jobs: snap.State.Jobs, Bodies: snap.Bodies, Records: snap.Records, IDs: snap.JobIDs}
 	if snap.State.Head != nil {
 		st.Head = *snap.State.Head
+	}
+	if remote != nil && *remote != "" {
+		// The task head's ref is named by the task's T-<n> id, the front of its folder's name.
+		m := taskOperandName.FindStringSubmatch(filepath.Base(scope.TaskPath))
+		if m == nil {
+			return fail(fmt.Errorf("the task folder %s has no T-<n> id to name its head ref refs/grid/<T>/head", filepath.Base(scope.TaskPath)))
+		}
+		if strings.HasPrefix(*remote, "-") {
+			return fail(fmt.Errorf("--remote %q is not a git remote", *remote))
+		}
+		st.Tip, st.HeadRef = judge.RemoteTip(env.Cwd, *remote), judge.HeadRef(m[1])
 	}
 
 	var plan judge.Plan
