@@ -127,6 +127,8 @@ split, needs only its children (`internal/jobgraph/graph.go`, `childrenDone`).
 
 The review of a submitted Job and the rework after a rejection are posted by the app's Judge, not by the plugin: when a Job's agent exits `done`, the tick moves it to `submitted` ("awaiting judgement", `internal/orchestrator/tick.go`) and the worker stream prints a `wake` line (`internal/orchestrator/stream.go`), and nothing in the plugin reads a review's `ACCEPTED` or `REJECTED` verdict. Without the app's worker a done Job stays `submitted`. `grid job tree` names such a Job as an orphan of kind `never_judged` once its lease has run out and no wake of its result is acknowledged and no review or person Job stands from it (`internal/orchestrator/write.go`, `neverJudged`).
 
+A running attempt that the closed-task pass cancels after `grid task stop` ends with exactly one `worker-exit` on the Feed: the worker's own when it came first, otherwise the pass posts `{"reason": "cancelled", "code": "task stopped"}` under the Job's tenure before the cancel, and the worker's later exit is refused as a stale lease (`internal/orchestrator/pg_closed_task.go`, `pcClosedExit`).
+
 A Job declares no review level: `review` is a retired optional field that
 nothing reads, and a Job that still carries one is not refused. The plan check
 refuses an unknown `risk` value (`concurrency`, `security`, `data-format` or
