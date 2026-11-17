@@ -18,6 +18,19 @@ relative to `en/` in that repo.
 
 ## Decision
 
+**Owned ledger rows** (decision ledger of 17 Nov, column "Decided in" =
+P-brain-obsidian-decide):
+
+| Row | The owner's decision | Decided in | Built and proved by |
+|---|---|---|---|
+| V13 | The brain is an Obsidian vault of your notes plus agent notes; Obsidian edits are adopted. | Decisions 1-5 and 7 below; sections 2, 3, 4.1-4.4 (any `.md` is a note, ids, links, origin), 4.5 (who wrote a note, as shown in Obsidian, with its stated deviation), 5.1-5.3 (adoption), 7.1-7.2 (layout), 8 (migration) | L1, L2, L3, L4, L5a, L6 (9.1); Mac round trip 9.4 |
+| V14 | Proposals are visible. | Decision 7 below; sections 5.1 (adoption walks `Proposals/`), 6.2 (visible `Proposals/`, person edits to a draft, accept) | L4, L5a (9.1) |
+| V19 | Conflicts by version check; your edits win, an agent change becomes a proposal. | Decision 6 below; sections 5.4 (version check, local lock, sync server), 6.1 (every write path), 6.3 (conflicts shown person-first) | L4 (local lock), L8 (sync server client), L7 (display) (9.1) |
+
+Rows carried by a lane here but owned elsewhere: V17 (screenshots, owned by
+P-brain-board-decide; section 7.3, lane L5b) and V25 (Brain view, owned by
+P-brain-view; lane L7).
+
 **Decided.**
 
 1. **Any `.md` file in the brain folder is a note.** Grid fields are optional.
