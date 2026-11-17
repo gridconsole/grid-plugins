@@ -3700,6 +3700,37 @@
       ]
     },
     {
+      "name": "run",
+      "summary": "as the task holder, start one agent per assigned Job in its own worktree and post its ack and exit",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [
+            {
+              "name": "--command",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--permission-mode",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--repo",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": false,
+          "output": "",
+          "stream": true
+        }
+      ]
+    },
+    {
       "name": "agent",
       "summary": "check agent readiness; sync templates; set or unset models and efforts; budget; list settings",
       "built": true,

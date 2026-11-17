@@ -90,17 +90,57 @@ func runWorkerNext(args []string, env Env) int {
 		return code
 	}
 	usage := func(message string) int { fmt.Fprintln(env.Stderr, "grid worker next: "+message); return 2 }
+	member, machine, role, code := workerHolder(env, "worker next")
+	if code != 0 {
+		return code
+	}
+	if *pid < 1 || *start == "" {
+		return usage("--pid and --pid-start are required")
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, *start)
+	if err != nil {
+		return usage("--pid-start must be RFC3339")
+	}
+	*start = contract.FormatTime(parsed)
+	if state := session.ProbeLocal(session.Live{PID: *pid, PIDStart: *start}); state != session.Alive {
+		return usage(fmt.Sprintf("pid %d started %s is not a live process on this host (%s)", *pid, *start, processStates[state]))
+	}
+
+	s := workerStream(env, member, machine, role, *pid, *start, env.Stdout, workerDiag(env))
+	// The stream runs until SIGINT. It does not release the task leases then: the
+	// tenure names the worker's process, and the worker's next stream reuses it.
+	ctx, cancel := env.signalContext(os.Interrupt)
+	defer cancel()
+	err = s.Run(ctx)
+	if errors.Is(err, context.Canceled) {
+		return 130
+	}
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "grid worker next: %v\n", err)
+		return 1
+	}
+	return 1 // Run returns only an error
+}
+
+// workerHolder reads the task holder a stream runs as: the member (GRID_MEMBER, which
+// may be written member@machine), this machine, and the role, where a worker becomes
+// cli. A code other than 0 is the exit code; the message is already written.
+func workerHolder(env Env, verb string) (member, machine, role string, code int) {
+	usage := func(message string) (string, string, string, int) {
+		fmt.Fprintln(env.Stderr, "grid "+verb+": "+message)
+		return "", "", "", 2
+	}
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
-		return livenessError(env, errors.New("task lease needs a Unix host for process identity"))
+		return "", "", "", livenessError(env, errors.New("task lease needs a Unix host for process identity"))
 	}
 	if env.GridHome == "" {
 		return usage("cannot find the Grid home; set GRID_HOME or use --grid-home")
 	}
-	member := env.getenv("GRID_MEMBER")
+	member = env.getenv("GRID_MEMBER")
 	if member == "" {
 		return usage("the holder is required: --member or GRID_MEMBER")
 	}
-	machine := env.Machine
+	machine = env.Machine
 	if machine == "" {
 		machine = gridhome.Machine(env.GridHome)
 	}
@@ -110,12 +150,12 @@ func runWorkerNext(args []string, env Env) int {
 	// A holder may be written member@machine; the machine must be this one.
 	if at := strings.IndexByte(member, '@'); at >= 0 {
 		if member[at+1:] != machine {
-			fmt.Fprintf(env.Stderr, "grid worker next: holder %q is not on this machine (%s)\n", member, machine)
-			return 3
+			fmt.Fprintf(env.Stderr, "grid %s: holder %q is not on this machine (%s)\n", verb, member, machine)
+			return "", "", "", 3
 		}
 		member = member[:at]
 	}
-	role := contract.NormalizeRole(env.getenv("GRID_ROLE"))
+	role = contract.NormalizeRole(env.getenv("GRID_ROLE"))
 	if role == "" {
 		role = "member"
 	}
@@ -130,19 +170,12 @@ func runWorkerNext(args []string, env Env) int {
 	if !contract.ValidWorker(member + "@" + machine) {
 		return usage("holder must be <member>@<machine ULID> with no slash or whitespace")
 	}
-	if *pid < 1 || *start == "" {
-		return usage("--pid and --pid-start are required")
-	}
-	parsed, err := time.Parse(time.RFC3339Nano, *start)
-	if err != nil {
-		return usage("--pid-start must be RFC3339")
-	}
-	*start = contract.FormatTime(parsed)
-	if state := session.ProbeLocal(session.Live{PID: *pid, PIDStart: *start}); state != session.Alive {
-		return usage(fmt.Sprintf("pid %d started %s is not a live process on this host (%s)", *pid, *start, processStates[state]))
-	}
+	return member, machine, role, 0
+}
 
-	// A stream runs for days: do not let the failure recorder keep every diagnostic line.
+// workerDiag is the diagnostic writer of a stream. A stream runs for days: do not let
+// the failure recorder keep every diagnostic line.
+func workerDiag(env Env) io.Writer {
 	diag := io.Writer(env.Stderr)
 	if env.failure != nil {
 		f := env.failure
@@ -152,10 +185,16 @@ func runWorkerNext(args []string, env Env) int {
 			return n, err
 		})
 	}
+	return diag
+}
+
+// workerStream is the stream of task holder member@machine whose task leases name the
+// process pid started at start: the stream grid worker next prints and grid run follows.
+func workerStream(env Env, member, machine, role string, pid int, start string, out, diag io.Writer) *orchestrator.Stream {
 	s := &orchestrator.Stream{
 		Member: member, Machine: machine, Role: role,
-		PID: *pid, PIDStart: *start,
-		Out: env.Stdout, Diag: diag,
+		PID: pid, PIDStart: start,
+		Out: out, Diag: diag,
 		Tasks: func() ([]string, error) { return workerTaskDirs(env) },
 		Model: func(dir, role string) (string, string, error) { return workerSpawnModel(env, dir, role) },
 		Tools: func(dir, role string) ([]string, error) { return workerSpawnTools(env, dir, role) },
@@ -200,19 +239,7 @@ func runWorkerNext(args []string, env Env) int {
 		})
 		return err
 	}
-	// The stream runs until SIGINT. It does not release the task leases then: the
-	// tenure names the worker's process, and the worker's next stream reuses it.
-	ctx, cancel := env.signalContext(os.Interrupt)
-	defer cancel()
-	err = s.Run(ctx)
-	if errors.Is(err, context.Canceled) {
-		return 130
-	}
-	if err != nil {
-		fmt.Fprintf(env.Stderr, "grid worker next: %v\n", err)
-		return 1
-	}
-	return 1 // Run returns only an error
+	return s
 }
 
 // workerClosedCurator answers the stream's ClosedCurator: the curator Job body, with
