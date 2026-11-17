@@ -8,13 +8,15 @@ import (
 	"time"
 )
 
-// Row 5: one folder, or one login, gives one account row. The two names the
-// owner's Mac showed are claude-abdu-egal and claude-abdu-egal-gmail-com.
+// Row 5: one folder, or one login, gives one account row. The Mac showed two
+// records of one login, one named for the part of the address before the @ and
+// one for the whole address; the names below keep that shape with an example
+// address, since this repository is public.
 
 const (
-	udIDShort = "claude-abdu-egal"
-	udIDLong  = "claude-abdu-egal-gmail-com"
-	udLogin   = "abdu.egal@gmail.com"
+	udIDShort = "claude-pat-lee"
+	udIDLong  = "claude-pat-lee-example-com"
+	udLogin   = "pat.lee@example.com"
 )
 
 func udRecord(env Env, id, dir, email string) Record {
