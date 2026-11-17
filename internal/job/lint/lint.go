@@ -184,6 +184,7 @@ func (c *checker) validate(j job.Job, o Options) {
 			c.add("job.verify", "verify", "Missing verification command or kind", "Use a command with min_tests, file-exists, or reviewer-check.")
 		}
 	}
+	c.land(j)
 	if (j.Status == "cancelled" || j.Status == "rejected") && (j.CloseReason == nil || strings.TrimSpace(*j.CloseReason) == "") {
 		c.add("job.close-reason", "close_reason", "A closed Job needs a reason", "Record close_reason for cancellation or rejection.")
 	}
@@ -344,6 +345,23 @@ func (c *checker) validate(j job.Job, o Options) {
 		sort.Strings(matches)
 		if len(matches) > 0 {
 			c.add("job.scope-narrowing", "out_of_scope", "Out of scope names plan words: "+strings.Join(matches, ", "), "Revise the plan through a recorded decision; do not exclude a plan requirement in the Job.")
+		}
+	}
+}
+
+// land checks the three fields a land Job cannot run without. Each missing one
+// has its own rule so the finding names what to add. Other kinds are not checked.
+func (c *checker) land(j job.Job) {
+	if j.Kind != "land" {
+		return
+	}
+	for _, f := range []struct{ rule, key, value, fix string }{
+		{"job.land-target", "target", j.Target, "Name the branch the change lands on, for example main."},
+		{"job.land-branch", "branch", j.Branch, "Name the accepted change's branch."},
+		{"job.land-sha", "sha", j.SHA, "Pin the commit of the accepted change."},
+	} {
+		if strings.TrimSpace(f.value) == "" {
+			c.add(f.rule, f.key, "A land Job needs "+f.key, f.fix)
 		}
 	}
 }
