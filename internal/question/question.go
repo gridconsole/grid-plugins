@@ -7,6 +7,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 	"io"
 	"os"
 	"path/filepath"
@@ -86,6 +87,8 @@ var ErrWithdrawRefused = errors.New("question withdrawal refused")
 func DefaultWithdrawAllowed(role string) bool { return feed.DefaultWithdrawAllowed(role) }
 
 type Store struct {
+	// Machine is where the refold publishes state.json; see feed.Store.Machine.
+	Machine machinefolder.Folder
 	// WithdrawAllowed may be replaced by a host; nil reads the workflow policy
 	// or uses the owner/member default when no policy is specified.
 	WithdrawAllowed func(role string) bool

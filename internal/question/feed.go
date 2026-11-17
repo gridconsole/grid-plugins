@@ -26,7 +26,7 @@ func (s Store) feed() (feed.Store, error) {
 			return feed.Store{}, err
 		}
 	}
-	return feed.Store{TaskDir: s.TaskDir, TaskID: id, Now: s.Now, Warn: s.Warn}, nil
+	return feed.Store{TaskDir: s.TaskDir, TaskID: id, Now: s.Now, Warn: s.Warn, Machine: s.Machine}, nil
 }
 
 func (s Store) publishQuestion(dir string, r *Record) error {

@@ -205,8 +205,9 @@ func (a *AppStart) ensure(env Env) (string, int) {
 			break
 		}
 	}
+	serverLog, _ := env.MachineFolder.LogPath(env.GridHome, env.login(), AppServerBin)
 	fmt.Fprintf(env.Stderr, "grid open: %s did not write %s within %s (see %s). Run grid open again.\n",
-		AppServerBin, AppURLFile, wait, filepath.Join(env.GridHome, "logs", AppServerBin+".log"))
+		AppServerBin, AppURLFile, wait, serverLog)
 	return "", 1
 }
 
@@ -230,12 +231,12 @@ func shiftAppLog(path string) { logshift.Shift(path, appLogLimit, appLogFiles) }
 // group, no terminal, output in <Grid home>/logs/<name>.log. It runs with args, and
 // the app finds the Grid home through GRID_HOME as well.
 func startDetached(env Env, name, path string, args []string) error {
-	logDir := filepath.Join(env.GridHome, "logs")
-	if err := os.MkdirAll(logDir, 0o700); err != nil {
+	logPath, err := env.MachineFolder.LogPath(env.GridHome, env.login(), name)
+	if err != nil {
 		return err
 	}
-	shiftAppLog(filepath.Join(logDir, name+".log"))
-	logf, err := os.OpenFile(filepath.Join(logDir, name+".log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	shiftAppLog(logPath)
+	logf, err := env.MachineFolder.OpenLog(logPath)
 	if err != nil {
 		return err
 	}

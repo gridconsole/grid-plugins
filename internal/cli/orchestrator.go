@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -488,6 +487,7 @@ func runOrchestrator(args []string, env Env) int {
 func refoldAfterWrite(env Env, store feed.Store) {
 	refold := store
 	refold.Warn = io.Discard
+	refold.Machine = env.MachineFolder
 	if _, err := refold.RefoldPublished(); err != nil {
 		fmt.Fprintln(env.Stderr, "refold:", err)
 	}
@@ -689,7 +689,9 @@ func personApproval(store feed.Store, w feed.Writer, job, answer string, e tasks
 // the writer: where Job worktrees live, how to judge a local process, and where
 // a crash loop is recorded. job next and worker next build a task's Store here.
 func configureTickStore(env Env, s *orchestrator.Store, project, taskID string) {
-	s.WorktreesDir = filepath.Join(env.GridHome, "projects", project, "worktrees")
+	// A project name the machine folder cannot hold leaves WorktreesDir empty: no path is computed.
+	s.WorktreesDir, _ = env.MachineFolder.WorktreesDir(env.GridHome, project)
+	s.Feed.Machine = env.MachineFolder
 	s.Diagnostics = env.Stderr
 	s.AccountRoom = yaAccountRoomFor(env)
 	s.Probe = func(live session.Live) session.ProcessState {

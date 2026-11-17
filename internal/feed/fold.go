@@ -81,8 +81,16 @@ func (s Store) published(name string) bool {
 	return err == nil
 }
 
+// stateFile is where state.json is published: feed/state.json, or the task's file
+// in the machine folder when that is Active.
+func (s Store) stateFile() (string, error) { return s.Machine.StateFile(s.Dir(), s.TaskID) }
+
 func (s Store) saveState(liveness map[string]string, keep, onlyPublished bool) (contract.State, error) {
 	if err := s.prepare(); err != nil {
+		return contract.State{}, err
+	}
+	statePath, err := s.stateFile()
+	if err != nil {
 		return contract.State{}, err
 	}
 	if err := os.MkdirAll(filepath.Join(s.Dir(), ".cache"), 0o700); err != nil {
@@ -103,7 +111,7 @@ func (s Store) saveState(liveness map[string]string, keep, onlyPublished bool) (
 	}
 	if keep && len(liveness) == 0 {
 		// Still under fold.lock, the only lock any writer of state.json takes.
-		liveness = keptLiveness(s.Dir(), state)
+		liveness = keptLiveness(statePath, state)
 	}
 	var projection any = state
 	if len(liveness) > 0 {
@@ -123,8 +131,8 @@ func (s Store) saveState(liveness map[string]string, keep, onlyPublished bool) (
 		}
 		projection = view
 	}
-	if !onlyPublished || s.published("state.json") {
-		if err := writeProjection(s.Dir(), "state.json", projection); err != nil {
+	if _, lerr := os.Lstat(statePath); !onlyPublished || lerr == nil {
+		if err := writeProjectionAt(statePath, projection, s.Machine.WriteStateFile); err != nil {
 			return contract.State{}, err
 		}
 	}
@@ -141,8 +149,8 @@ func (s Store) saveState(liveness map[string]string, keep, onlyPublished bool) (
 // and same status. A Job that was reassigned or moved on is not listed, so an
 // observation of its old holder does not outlive it. A missing or undecodable
 // file keeps nothing; it is not an error, the next tick writes the values again.
-func keptLiveness(dir string, state contract.State) map[string]string {
-	data, err := os.ReadFile(filepath.Join(dir, "state.json"))
+func keptLiveness(statePath string, state contract.State) map[string]string {
+	data, err := os.ReadFile(statePath)
 	if err != nil {
 		return nil
 	}
@@ -167,12 +175,19 @@ func keptLiveness(dir string, state contract.State) map[string]string {
 }
 
 func writeProjection(dir, name string, v any) error {
+	return writeProjectionAt(filepath.Join(dir, name), v, func(path string, data []byte) error {
+		return atomicfile.Write(path, data, 0o600)
+	})
+}
+
+// writeProjectionAt marshals v and, when the file at path differs, replaces it
+// through write, which must be an atomic rename.
+func writeProjectionAt(path string, v any, write func(path string, data []byte) error) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
 	data = append(data, '\n')
-	path := filepath.Join(dir, name)
 	old, err := os.ReadFile(path)
 	if err == nil && bytes.Equal(old, data) {
 		return nil
@@ -180,7 +195,7 @@ func writeProjection(dir, name string, v any) error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return atomicfile.Write(path, data, 0o600)
+	return write(path, data)
 }
 
 // FoldRead folds precisely one reader snapshot, without reading the Feed again.
