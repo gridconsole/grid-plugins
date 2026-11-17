@@ -1,0 +1,86 @@
+{
+  "acceptance": [
+    {
+      "id": "A1",
+      "text": "`TestAkOpenHomeOutsideProject`: with app-url `http://127.0.0.1:8484/` and the launch-code file as wbOpenHome writes them, `grid open` with no operand run from a folder outside every project exits 0 and hands the browser exactly `http://127.0.0.1:8484/api/launch?code=\u003cwbOpenCode\u003e#/`; without the code file it hands `http://127.0.0.1:8484/#/` and stderr holds \"grid open: no launch code was found; the page opens without one.\" (open.go:175). Red on base: exit non-zero with \"give a task id or folder, or run inside a task folder\" (task_operand.go:47); paste that line.",
+      "traces": "item"
+    },
+    {
+      "id": "A2",
+      "text": "`TestAkOpenHomeInProjectFolder` and `TestAkOpenHomeJSON`: run from the project folder of openFixture with no task folder as cwd, `grid open --json` prints exactly one field `url` ending in `/#/`; with no app-url and no GRID_APP_URL it prints `{\"url\":\"#/\"}` and stderr holds \"grid open: the app's address is not known. Start the app, then run grid open again.\" (open.go:166). Red on base: as row 1.",
+      "traces": "item"
+    },
+    {
+      "id": "A3",
+      "text": "`TestAkOpenTaskStillOpensTask`: from inside the task folder of openFixtureAt, `grid open` with no operand still hands the browser the task route `#/t/\u003cproject\u003e/\u003cid\u003e/overview` (open.go:148), and `grid open T-99` still exits non-zero with no address opened.",
+      "traces": "item"
+    },
+    {
+      "id": "A4",
+      "text": "`go test -count=1 -v ./internal/cli/ -run 'TestAkOpen|TestOpen|TestWbOpen|TestWaOpen|TestGuestProjectParity'` exits 0 with a `--- PASS:` line for each TestAkOpen test and no `--- FAIL`.",
+      "traces": "item"
+    },
+    {
+      "id": "A5",
+      "text": "Plugin walk rows: `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand|TestIlGuestSiteList'` and `go test -count=1 ./internal/job/lint/` exit 0.",
+      "traces": "item"
+    },
+    {
+      "id": "A6",
+      "text": "`make lint` and `make cross` exit 0 (Makefile:27, :33).",
+      "traces": "item"
+    }
+  ],
+  "after": [],
+  "attempt": 1,
+  "base": "main",
+  "budget": {
+    "reads_before_first_edit": 10,
+    "turns_estimate": 40
+  },
+  "checkpoint": null,
+  "close_reason": null,
+  "continues": null,
+  "decisions": [],
+  "discovered_from": null,
+  "effort": "high",
+  "id": "J-2",
+  "intent": {
+    "goal": "inputs/C-ak-open-home-without-task.md#L20-L25",
+    "item": "inputs/C-ak-open-home-without-task.md#L1",
+    "owner": "inputs/C-ak-open-home-without-task.md#L5"
+  },
+  "item": 1,
+  "keep": [],
+  "level_raised": null,
+  "links": [],
+  "model": "sonnet",
+  "on_blocked": "ask-and-continue",
+  "out_of_scope": [],
+  "posts_back": [
+    "result",
+    "question",
+    "knowledge",
+    "checkpoint"
+  ],
+  "read": [
+    "task:inputs/C-ak-open-home-without-task.md:1-35"
+  ],
+  "repo": "plugin",
+  "review_rounds": 0,
+  "risk": [],
+  "role": "builder",
+  "skills": [
+    "go-conventions"
+  ],
+  "title": "C-ak-open-home-without-task: `grid open` with no task and no enclosing task folder opens Grid's Home page instead of failing",
+  "verify": {
+    "kind": "file-exists",
+    "path": "docs/lanes/C-ak-open-home-without-task.md"
+  },
+  "worktree": null,
+  "write": [
+    "internal/cli/open.go",
+    "internal/cli/ak_open_home_test.go"
+  ]
+}

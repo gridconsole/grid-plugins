@@ -2,28 +2,241 @@
 package gridhome
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/gridconsole/grid-plugins/internal/gridconfig"
 )
 
 // FormatVersion is the layout version of the data folder this grid reads and writes.
 const FormatVersion = 1
 
-// Dir returns the Grid home: GRID_HOME when set, else <userHome>/.grid.
-// It returns "" when neither is known.
+// Source says where a resolved value came from.
+type Source string
+
+const (
+	SourceFlag    Source = "flag"    // a --grid-home flag
+	SourceEnv     Source = "env"     // GRID_HOME
+	SourceConfig  Source = "config"  // the shared config (gridconfig.Path, or the older ~/.grid/config.json)
+	SourceLegacy  Source = "legacy"  // the v1 top-level keys of that file, migrated in memory
+	SourceDefault Source = "default" // ~/.grid itself, or the OS standard machine folder
+	SourceAccount Source = "account" // oauthAccount displayName of the Claude account
+	SourceLogin   Source = "login"   // the OS login name
+)
+
+// Home is the resolved Grid home and what the shared config says about it.
+type Home struct {
+	// Dir is the data folder: tasks, projects, accounts, usage, settings, and the
+	// brain unless Brain names another folder. "" when no GRID_HOME is set and the
+	// user's home folder is unknown.
+	Dir    string
+	Source Source
+	// DataRoot is <userHome>/.grid: the default data folder, the parent of
+	// ~/.grid/<name>, and where the older config and launcher sit.
+	DataRoot string
+	// Machine is the machine folder (locks, caches, worktrees, runner logs,
+	// bin/grid): the config's machineFolder (MachineSource config) or the OS
+	// standard place (MachineSource default).
+	Machine       string
+	MachineSource Source
+	// Config is the config file read, "" when there was none. ConfigCopiedFrom is
+	// the older ~/.grid/config.json when this resolve copied it to Config.
+	Config           string
+	ConfigCopiedFrom string
+	// ConfigProblem says why the config could not be used; the home is then
+	// resolved as if there were no config, never refused.
+	ConfigProblem string
+	// Workspace is the config entry whose data folder is Dir: the current entry,
+	// or with GRID_HOME the entry that names that folder. "" when none does.
+	Workspace string
+	// Brain is that entry's brain folder when the config names one, else "": the
+	// brain stays in Dir. It is only read here; the brain decides how to use it.
+	Brain string
+	// Member is the config's member for Workspace (else the current entry), with
+	// MemberSource config or legacy; "" when the config names none. It is not the
+	// acting member: GRID_WHO and --member are read by the commands, and
+	// DefaultMember gives the name to offer when the config has none.
+	Member       string
+	MemberSource Source
+}
+
+// Resolve is the one resolver of the Grid home: GRID_HOME when set (the
+// --grid-home flag arrives here as GRID_HOME, and the CLI marks it flag); else the
+// data folder of the current workspace in the shared config; else the v1 shape of
+// that file migrated in memory; else <userHome>/.grid. A config that is missing,
+// unreadable or names no usable folder falls through to the next step: it is never
+// a refusal. The config is gridconfig.Path, else the older ~/.grid/config.json,
+// which is copied once to gridconfig.Path.
+func Resolve(getenv func(string) string, userHome string) Home {
+	return resolve(runtime.GOOS, getenv, userHome)
+}
+
+func resolve(goos string, getenv func(string) string, userHome string) Home {
+	h := Home{DataRoot: gridconfig.DataRoot(userHome)}
+	l := gridconfig.Load(gridconfig.PathFor(goos, getenv, userHome), gridconfig.OldPath(userHome))
+	cfg, found := l.Config, l.Found
+	h.Config, h.ConfigCopiedFrom = l.Path, l.CopiedFrom
+	if l.Err != nil {
+		h.ConfigProblem = l.Err.Error()
+		cfg = gridconfig.Config{}
+	}
+	machine, fromConfig := cfg.MachineDir(goos, getenv, userHome)
+	h.Machine, h.MachineSource = machine, SourceDefault
+	if fromConfig {
+		h.MachineSource = SourceConfig
+	}
+	dataSource := SourceConfig
+	if l.Err == nil && found && cfg.Migrate(userHome, gridconfig.HandleFromLogin(login(getenv))) {
+		dataSource = SourceLegacy
+	}
+	data := ""
+	cur := cfg.CurrentEntry()
+	if cur != nil {
+		data = cur.DataFolder(userHome)
+		if data == "" && h.ConfigProblem == "" {
+			h.ConfigProblem = fmt.Sprintf("workspace %q names no usable data folder", cur.Name)
+		}
+	} else if found && l.Err == nil && cfg.Current != "" {
+		h.ConfigProblem = fmt.Sprintf("current workspace %q is not in the workspaces list", cfg.Current)
+	}
+	switch {
+	case getenv("GRID_HOME") != "":
+		h.Dir, h.Source = filepath.Clean(getenv("GRID_HOME")), SourceEnv
+	case data != "":
+		h.Dir, h.Source = data, dataSource
+	case h.DataRoot != "":
+		h.Dir, h.Source = h.DataRoot, SourceDefault
+	}
+	in := cur
+	if h.Source == SourceEnv {
+		in = entryAt(cfg, h.Dir, userHome)
+	}
+	if in != nil {
+		h.Workspace, h.Brain = in.Name, in.BrainFolder()
+	}
+	named := in
+	if named == nil || named.Member == "" {
+		named = cur
+	}
+	if named != nil && named.Member != "" {
+		h.Member, h.MemberSource = named.Member, dataSource
+	}
+	return h
+}
+
+// Dir is Resolve(getenv, userHome).Dir, kept for this package's own tests; callers
+// use Resolve.
 func Dir(getenv func(string) string, userHome string) string {
-	if d := getenv("GRID_HOME"); d != "" {
-		return filepath.Clean(d)
+	return Resolve(getenv, userHome).Dir
+}
+
+// entryAt is the workspace whose data folder is dir, or nil.
+func entryAt(cfg gridconfig.Config, dir, userHome string) *gridconfig.Workspace {
+	want := Real(dir)
+	for i := range cfg.Workspaces {
+		if d := cfg.Workspaces[i].DataFolder(userHome); d != "" && Real(d) == want {
+			return &cfg.Workspaces[i]
+		}
 	}
-	if userHome == "" {
-		return ""
+	return nil
+}
+
+// login is the OS login name from the environment: USER, else USERNAME, else LOGNAME.
+func login(getenv func(string) string) string {
+	for _, key := range []string{"USER", "USERNAME", "LOGNAME"} {
+		if v := strings.TrimSpace(getenv(key)); v != "" {
+			return v
+		}
 	}
-	return filepath.Join(userHome, ".grid")
+	return ""
+}
+
+// LauncherDirs are the folders whose bin/grid each grid run points at itself: Dir,
+// as before (timers made earlier start it); and when Dir is this person's own home
+// (~/.grid, or the data folder of a config workspace) also the machine folder,
+// which the caller makes when it is missing, and ~/.grid when its bin/grid is
+// already there. A GRID_HOME no config names (a test or a second home) gets only
+// its own launcher, so the machine folder is not pointed at its binary.
+func (h Home) LauncherDirs() []string {
+	if h.Dir == "" {
+		return nil
+	}
+	dirs := []string{h.Dir}
+	own := h.Workspace != "" || (h.DataRoot != "" && Real(h.Dir) == Real(h.DataRoot))
+	if !own {
+		return dirs
+	}
+	if h.Machine != "" && Real(h.Machine) != Real(h.Dir) {
+		dirs = append(dirs, h.Machine)
+	}
+	if h.DataRoot != "" && Real(h.DataRoot) != Real(h.Dir) {
+		if _, err := os.Lstat(launcherIn(h.DataRoot)); err == nil {
+			dirs = append(dirs, h.DataRoot)
+		}
+	}
+	return dirs
+}
+
+// FindLauncherDir is the folder to look for bin/grid in: the machine folder when
+// its bin/grid is there (a file, or a link to one), else ~/.grid when its bin/grid
+// is there (the older place), else the data folder.
+func FindLauncherDir(getenv func(string) string, userHome, data string) string {
+	h := Resolve(getenv, userHome)
+	for _, dir := range []string{h.Machine, h.DataRoot} {
+		if dir == "" {
+			continue
+		}
+		if st, err := os.Stat(launcherIn(dir)); err == nil && !st.IsDir() {
+			return dir
+		}
+	}
+	return data
+}
+
+// launcherIn is <dir>/bin/grid, or grid.exe on Windows.
+func launcherIn(dir string) string {
+	name := "grid"
+	if runtime.GOOS == "windows" {
+		name = "grid.exe"
+	}
+	return filepath.Join(dir, "bin", name)
+}
+
+// DefaultMember is the name in Grid to offer when the config names none: the
+// oauthAccount displayName of the Claude account doing setup (the .claude.json in
+// CLAUDE_CONFIG_DIR when set, else ~/.claude.json), else the OS login name. The
+// name is returned as written, not made a handle. It reads; it never writes, and it
+// is kept out of Resolve because .claude.json can be large and hooks resolve often.
+func DefaultMember(getenv func(string) string, userHome string) (string, Source) {
+	path := ""
+	if dir := getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		path = filepath.Join(dir, ".claude.json")
+	} else if userHome != "" {
+		path = filepath.Join(userHome, ".claude.json")
+	}
+	if b, err := os.ReadFile(path); path != "" && err == nil {
+		var d struct {
+			OAuthAccount struct {
+				DisplayName string `json:"displayName"`
+			} `json:"oauthAccount"`
+		}
+		if json.Unmarshal(b, &d) == nil {
+			if name := strings.TrimSpace(d.OAuthAccount.DisplayName); name != "" {
+				return name, SourceAccount
+			}
+		}
+	}
+	if name := login(getenv); name != "" {
+		return name, SourceLogin
+	}
+	return "", ""
 }
 
 // Real makes path absolute and resolves symlinks in its longest existing prefix, so
