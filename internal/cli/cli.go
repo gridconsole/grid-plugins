@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
 	"github.com/gridconsole/grid-plugins/internal/question"
 	"github.com/gridconsole/grid-plugins/internal/routine"
@@ -34,12 +35,16 @@ var ilGuestRefused = errors.New(guestSettingsRefusal)
 // Env is everything a command reads from the machine, so tests can set it.
 // Paths are expected to be symlink-resolved (see gridhome.Real).
 type Env struct {
-	Stdin      io.Reader
-	Stdout     io.Writer
-	Stderr     io.Writer
-	Cwd        string
-	Home       string
-	GridHome   string // "" when neither GRID_HOME nor a home folder is known
+	Stdin    io.Reader
+	Stdout   io.Writer
+	Stderr   io.Writer
+	Cwd      string
+	Home     string
+	GridHome string // "" when neither GRID_HOME nor a home folder is known
+	// Resolved is how OSEnv found GridHome: its source, the config file read, the
+	// machine folder, and the workspace, brain and member the config names. Zero in
+	// an Env a test builds by hand.
+	Resolved   gridhome.Home
 	TempRoots  []string
 	Machine    string                 // this machine's id, "" before it is made
 	Ceiling    string                 // "" walks to the root; tests set their fixture root
@@ -59,6 +64,11 @@ type Env struct {
 	// takes the project's timers down with, so a test never calls the OS scheduler.
 	// Nil uses the native backend and ExecOSRunner.
 	timerOS func() (routine.Backend, routine.OSRunner)
+	// machineCheck and machineGOOS are test seams for the machine folder: the group
+	// lookups of grid doctor and grid setup --shared-group, and the OS the setgid
+	// rule is read for. Zero values read the real system.
+	machineCheck machinefolder.CheckOptions
+	machineGOOS  string
 	// typedGlobal names the variables a global flag was typed for (GRID_LEASE_EPOCH for --lease-epoch):
 	// getenv shows the flag's value either way, and this tells a typed flag from an inherited variable.
 	typedGlobal map[string]bool
@@ -111,9 +121,11 @@ func OSEnv() Env {
 		home = gridhome.Real(home)
 	}
 	cwd, _ := os.Getwd()
-	gh := gridhome.Dir(os.Getenv, home)
+	resolved := gridhome.Resolve(os.Getenv, home)
+	gh := resolved.Dir
 	if gh != "" {
 		gh = gridhome.Real(gh)
+		resolved.Dir = gh
 	}
 	machine := ""
 	if gh != "" {
@@ -121,7 +133,7 @@ func OSEnv() Env {
 	}
 	return Env{
 		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr,
-		Cwd: cwd, Home: home, GridHome: gh,
+		Cwd: cwd, Home: home, GridHome: gh, Resolved: resolved,
 		TempRoots: []string{os.TempDir(), "/tmp", "/var/tmp"},
 		Machine:   machine,
 		AppStart:  &AppStart{},
@@ -159,6 +171,7 @@ func commands() []command {
 		{"person", "check person access; list, show and find approvers", runPerson},
 		{"routine", "add, list, remove, run, schedule and unschedule routines", runRoutine},
 		{"worker", "list local grid-worker processes; next is a worker's call for its next request", runWorker},
+		{"run", "as the task holder, start one agent per assigned Job in its own worktree and post its ack and exit", runRun},
 		{"agent", "check agent readiness; sync templates; set or unset models and efforts; budget; list settings", runAgentCommand},
 		{"claude", "show and set the person's Claude Code settings rows", runClaude},
 		{"workflow", "show workflow template files and parse problems; write a template file", runWorkflow},

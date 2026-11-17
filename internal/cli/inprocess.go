@@ -127,9 +127,12 @@ var hsIpTable = map[string]hsIpVerb{
 	}},
 	"worker": {subs: map[string]hsIpSub{
 		"list": {},
-		// worker.go:188 waits on os.Interrupt.
-		"next": {why: "waits on the process's interrupt signal (worker.go:188)"},
+		// worker.go:112 waits on os.Interrupt.
+		"next": {why: "waits on the process's interrupt signal (worker.go:112)"},
 	}},
+	// run.go:51 waits on os.Interrupt, run.go:43 and :76 name the host's process id in the
+	// task lease, and the runner starts agents as host children (runner/runner.go).
+	"run": {why: "waits on the process's interrupt signal, holds task leases for the process id and starts agents as host children (run.go:43, run.go:51)"},
 	// agent.go:34 stops on the Call's Context; agent check probes with the Call's
 	// PATH and Getenv (agent.go:14, agent/runner.go:57-58); agent sync asks the
 	// Call's Executable (agent_sync.go:17); budget reads the Call's getenv (budget.go:19).

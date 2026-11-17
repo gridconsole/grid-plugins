@@ -127,7 +127,10 @@ type Job struct {
 	// that lands one accepted change; its record also carries target, branch and
 	// sha (the job-record body), which feed read holds and the state does not fold.
 	Kind            string          `json:"kind,omitempty"`
-	Repo            string          `json:"repo,omitempty"` // the repo path the Job names; empty is the project's first repo
+	Repo            string          `json:"repo,omitempty"`   // the repo path the Job names; empty is the project's first repo
+	Base            string          `json:"base,omitempty"`   // the branch the Job's clone starts from; empty names none
+	Model           string          `json:"model,omitempty"`  // the Job's own model; empty keeps the role's
+	Effort          string          `json:"effort,omitempty"` // the Job's own effort; empty keeps the role's
 	Status          Status          `json:"status"`
 	Attempt         int             `json:"attempt"`
 	Assign          *Assignment     `json:"assign"`

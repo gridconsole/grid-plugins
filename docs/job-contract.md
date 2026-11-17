@@ -91,6 +91,9 @@ the schema.
 | `target` | optional | plan `internal/job/job.go` | For `kind: land`: the branch the accepted change lands on, for example `main`; lint refuses a land Job without it (rule `job.land-target`). Other kinds leave it out. |
 | `branch` | optional | plan `internal/job/job.go` | For `kind: land`: the accepted change's branch; lint refuses a land Job without it (rule `job.land-branch`). Other kinds leave it out. |
 | `sha` | optional | plan `internal/job/job.go` | For `kind: land`: the commit of the accepted change, pinned at accept; lint refuses a land Job without it (rule `job.land-sha`). Other kinds leave it out. |
+| `base` | optional | run `internal/cli/orchestrator.go`, `internal/job/frombrief.go` | The branch the Job's clone or worktree starts from, from the brief's `Repo:` line ("from main"). `grid worker next` puts it on the spawn line as `base`; none leaves the key out. |
+| `model` | optional | run `internal/cli/orchestrator.go`, `internal/job/frombrief.go` | The model the Job's agent runs on, from the brief's `Model:` line. It goes on the spawn line as `model` in place of the role's; none keeps the role's model. |
+| `effort` | optional | run `internal/cli/orchestrator.go`, `internal/job/frombrief.go` | The effort the Job's agent runs at, from the brief's `Model:` line. It goes on the spawn line as `effort` in place of the role's; none keeps the role's effort. |
 | `irreversible` | optional | plan `internal/job/planned.go` | Boolean; the Job does something that cannot be undone. |
 | `review_reason` | optional | plan `internal/job/planned.go` | A nonempty sentence, at most 500 characters, saying why a review is wanted. |
 | `order` | optional | run `internal/cli/orchestrator.go`, `internal/contract/fold.go` | Queue position, lowest first; changes only a Job that has not started. |
@@ -129,6 +132,8 @@ own rework in turn. A Job that is still open, such as a parked parent of a
 split, needs only its children (`internal/jobgraph/graph.go`, `childrenDone`).
 
 The review of a submitted Job and the rework after a rejection are posted by the app's Judge, not by the plugin: when a Job's agent exits `done`, the tick moves it to `submitted` ("awaiting judgement", `internal/orchestrator/tick.go`) and the worker stream prints a `wake` line (`internal/orchestrator/stream.go`), and nothing in the plugin reads a review's `ACCEPTED` or `REJECTED` verdict. Without the app's worker a done Job stays `submitted`. `grid job tree` names such a Job as an orphan of kind `never_judged` once its lease has run out and no wake of its result is acknowledged and no review or person Job stands from it (`internal/orchestrator/write.go`, `neverJudged`).
+
+A running attempt that the closed-task pass cancels after `grid task stop`, on a Job the worker stream (role `cli`, as the app starts it) granted to its own worker, ends with exactly one `worker-exit` on the Feed: the worker's own when it came first, otherwise the pass posts `{"reason": "cancelled", "code": "task stopped"}` under the Job's tenure before the cancel, and the worker's later exit is refused as a stale lease (`internal/orchestrator/pg_closed_task.go`, `pcClosedExit`).
 
 A Job declares no review level: `review` is a retired optional field that
 nothing reads, and a Job that still carries one is not refused. The plan check

@@ -22,9 +22,14 @@ type Job struct {
 	// Target, Branch and SHA are what a Job of kind "land" lands: the branch to
 	// move, the accepted change's branch and the commit pinned at accept. Other
 	// kinds leave them empty and they are left out of the record.
-	Target string   `json:"target,omitempty"`
-	Branch string   `json:"branch,omitempty"`
-	SHA    string   `json:"sha,omitempty"`
+	Target string `json:"target,omitempty"`
+	Branch string `json:"branch,omitempty"`
+	SHA    string `json:"sha,omitempty"`
+	// Base is the branch the Job's clone or worktree starts from; Model and Effort
+	// are what its agent runs on. Empty keeps the role's model and effort.
+	Base   string   `json:"base,omitempty"`
+	Model  string   `json:"model,omitempty"`
+	Effort string   `json:"effort,omitempty"`
 	ID     string   `json:"id"`
 	Item   int      `json:"item"`
 	Title  string   `json:"title"`

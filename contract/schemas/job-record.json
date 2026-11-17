@@ -25,6 +25,7 @@
       "type": "string",
       "minLength": 1
     },
+<<<<<<< HEAD
     "target": {
       "type": "string",
       "minLength": 1
@@ -34,6 +35,17 @@
       "minLength": 1
     },
     "sha": {
+=======
+    "base": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "effort": {
+>>>>>>> origin/main
       "type": "string",
       "minLength": 1
     },

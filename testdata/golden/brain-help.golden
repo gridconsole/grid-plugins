@@ -1,5 +1,6 @@
-Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|write|rename|supersede> [flags]
+Usage: grid brain <show|list|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|write|rename|supersede> [flags]
   show <id> [--task <task>]  Show an accepted note and its links.
+  list [--json]              List every note of the brain: id, path, kind, title, summary, tags, aliases and links.
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
   index                      Rebuild the SessionStart index and backlinks.

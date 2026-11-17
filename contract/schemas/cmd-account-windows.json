@@ -65,6 +65,7 @@
           "source": {
             "type": "string",
             "enum": [
+              "direct",
               "statusline",
               "stream",
               "codex",
