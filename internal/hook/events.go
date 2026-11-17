@@ -303,7 +303,7 @@ func workerExit(o Options, in hookio.Input) {
 	if dir == "" {
 		return
 	}
-	if done, err := jobHasResult(dir, jobID, o.Getenv("GRID_ATTEMPT")); err != nil {
+	if done, err := jobHasResultOn(o, dir, jobID, o.Getenv("GRID_ATTEMPT")); err != nil {
 		o.log("worker exit", err)
 		return
 	} else if done {
@@ -382,15 +382,17 @@ func exitReason(in hookio.Input) string {
 // jobHasResult reports a result or an earlier worker-exit for the Job's attempt.
 // A task without a Feed has none.
 func jobHasResult(dir, jobID, attempt string) (bool, error) {
-	if _, err := os.Stat(filepath.Join(dir, "feed")); errors.Is(err, os.ErrNotExist) {
-		return false, nil
+	return jobHasResultOn(Options{}, dir, jobID, attempt)
+}
+
+// jobHasResultOn is jobHasResult for a hook with its options: a task with a board/
+// folder is read from the board, one with only feed/ from its JSONL Feed.
+func jobHasResultOn(o Options, dir, jobID, attempt string) (bool, error) {
+	store, ok, err := hookFeed(o, dir)
+	if err != nil || !ok {
+		return false, err
 	}
-	// A task with no stable id has no Feed this store can read.
-	id, err := feed.TaskID(dir)
-	if err != nil {
-		return false, nil
-	}
-	read, err := feed.Store{TaskDir: dir, TaskID: id}.ReadOnly(feed.Filter{Job: jobID})
+	read, err := store.ReadOnly(feed.Filter{Job: jobID})
 	if err != nil {
 		return false, err
 	}

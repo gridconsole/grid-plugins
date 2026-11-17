@@ -194,6 +194,9 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
+		if store.Board != nil {
+			return render(read.BoardView(), records(read.Records))
+		}
 		return render(read, records(read.Records))
 	case "feed_state":
 		state, err := store.SaveState()
@@ -219,10 +222,14 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
+		if tool.Name == "feed_handover" && store.Board != nil {
+			return Result{}, &feed.InvalidRecordError{Err: errors.New("a per-post board has no task lease; handover is retired")}
+		}
 		var post feed.Record
 		if tool.Name == "feed_handover" {
 			post, err = store.Handover(in, writer)
-		} else if in.Type == "job" {
+		} else if in.Type == "job" && store.Board == nil {
+			// On a board the Job post is one publish under the board lock.
 			post, err = orchestrator.PostJobLocked(store, in, writer)
 		} else {
 			post, err = store.Post(in, writer)
@@ -235,6 +242,9 @@ func (s Server) call(tool Tool, raw json.RawMessage) (Result, error) {
 		// it is: the post stands and the next fold repairs the files. The server
 		// has no stderr (stdout carries the protocol), so the error is not shown.
 		_, _ = store.RefoldPublished()
+		if store.Board != nil {
+			return render(map[string]any{"post": post.BoardView(), "file": post.BoardFile(), "tier": post.Tier, "data": post.Data()}, []feed.Record{post})
+		}
 		return render(map[string]any{"post": post, "tier": post.Tier, "data": post.Data()}, []feed.Record{post})
 	}
 }

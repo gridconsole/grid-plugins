@@ -44,6 +44,9 @@ type ohSqKey struct {
 // sizes and mod times. It answers no key when a file cannot be listed or has gone
 // by the time it is looked at: the task is then read as before.
 func ohSqFeedKey(fs feed.Store) ohSqKey {
+	if feed.BoardPresent(fs.TaskDir) {
+		return ohSqBoardKey(fs.TaskDir)
+	}
 	dir := fs.Dir()
 	h := sha256.New()
 	logs, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
@@ -68,6 +71,28 @@ func ohSqFeedKey(fs feed.Store) ohSqKey {
 			return ohSqKey{}
 		}
 		ohSqAdd(h, "lease", e.Name(), info)
+	}
+	var k ohSqKey
+	h.Sum(k.sum[:0])
+	k.ok = true
+	return k
+}
+
+// ohSqBoardKey is the key of a task on a per-post board: a digest of the sorted names
+// of board/*.md alone. A post never changes once it is written, so its name says all
+// that the pass could learn from it (docs/research/brain-board.md Q2): no size or
+// mod time is taken, and the lease folder of a JSONL Feed does not exist. board/.tmp
+// and the other dot folders are not posts and are not listed. A listing that fails
+// answers no key, and the task is read as before.
+func ohSqBoardKey(taskDir string) ohSqKey {
+	names, err := filepath.Glob(filepath.Join(taskDir, "board", "*.md"))
+	if err != nil {
+		return ohSqKey{}
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, p := range names {
+		fmt.Fprintf(h, "board\x00%s\x00", filepath.Base(p))
 	}
 	var k ohSqKey
 	h.Sum(k.sum[:0])

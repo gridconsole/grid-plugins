@@ -232,7 +232,7 @@ func snapshot(dir string) (map[string]string, error) {
 		if err != nil {
 			return err
 		}
-		if path == "history.md" || path == "sessions" || path == "feed" || strings.HasPrefix(d.Name(), ".") && path != "." {
+		if path == "history.md" || path == "sessions" || path == "feed" || path == "board" || strings.HasPrefix(d.Name(), ".") && path != "." {
 			if d.IsDir() {
 				return fs.SkipDir
 			}

@@ -2,9 +2,6 @@ package hook
 
 import (
 	"encoding/json"
-	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -35,15 +32,17 @@ func peMsgDeliver(o Options, in hookio.Input) {
 	if dir == "" {
 		return
 	}
-	if _, err := os.Stat(filepath.Join(dir, "feed")); errors.Is(err, os.ErrNotExist) {
-		return
-	}
-	id, err := feed.TaskID(dir)
+	// A task with a board/ folder is read from the board; one with only feed/ from
+	// its JSONL Feed; one with neither, or with no stable id, has nothing to read.
+	board, ok, err := hookFeed(o, dir)
 	if err != nil {
-		// A task with no stable id has no Feed this store can read.
+		o.log("job message", err)
 		return
 	}
-	read, err := feed.Store{TaskDir: dir, TaskID: id}.ReadOnly(feed.Filter{Type: "post"})
+	if !ok {
+		return
+	}
+	read, err := board.ReadOnly(feed.Filter{Type: "post"})
 	if err != nil {
 		o.log("job message", err)
 		return
