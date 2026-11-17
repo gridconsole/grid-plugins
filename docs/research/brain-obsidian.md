@@ -50,6 +50,10 @@ P-brain-view; lane L7).
    from immutable per-change records that Grid writes. Bytes that no Grid
    record explains are a person change, with the author taken from the
    configured Grid name. A front-matter `origin:` is never trusted.
+   In Obsidian, a note Grid writes shows who wrote it in a flat `source`
+   property naming its task and Job. A person note has no Grid header, so
+   no header means you wrote it. This is a stated deviation from "the header
+   says who wrote it" (4.5).
 5. **Grid adopts person changes.** A changed, new, renamed or deleted file is
    seen on read, on index rebuild and on `grid brain check`. It is recorded
    with origin person, versioned (content-addressed) and reindexed. Audit drift
@@ -416,6 +420,50 @@ this.
   status rewrite (store.go:436, :497), `markSuperseded` (store.go:560) and
   `RenameWith`. `Encode` stays for a new file Grid creates.
 
+### 4.5 Who wrote a note, as shown in Obsidian
+
+The plan page shown to the owner says "A note's header says who wrote it:
+you, or which task and Job", and the layout addendum says "the header says
+who wrote it". This section decides what the owner sees in Obsidian.
+
+- **A note Grid writes.** Its front matter carries the flat `source` key,
+  which Grid already requires on every note it writes ("source must name a
+  task, Job or person on one line", note.go:112-113). For an agent note the
+  value names the task and the Job, for example
+  `source: task T-04, Job J-7`. It is a plain text property, so Obsidian's
+  Properties view shows it as the first editable row at the top of the note
+  (Properties.md:37-47). The nested `origin:` map goes (4.3), so `source` is
+  the only authorship line in the header.
+- **A person note.** Grid writes nothing into it: no `source`, no
+  `author`, no front matter at all if it had none. No Grid header means you
+  wrote it.
+- **Which one is authoritative.** The change records (4.3). The `source`
+  property is display only and is never read as origin.
+  - When the owner edits an agent note, adoption records origin person, but
+    Grid does not rewrite the note's bytes. Doing so would be an agent write
+    to a note the person just changed, which decision 6 forbids. It would
+    also make every person save cause a second Grid save.
+  - So the `source` line of an edited agent note still names the Job that
+    first wrote it. It then reads as "first written by". The current author
+    is in `grid brain list --json` (`origin`, `author`, 3.4), in the app's
+    Brain view (L7) and in search results.
+- **Stated deviation.** The plan page line asks for a header that says
+  "you" on a person note, and for a header that stays current.
+  - The owner's own words were "allow edits made in Obsidian".
+  - This decision does not add a "you" header. Writing one would mean Grid
+    writes into every person note: the notes the owner wrote by hand and
+    every note the owner has edited.
+  - That is the authority problem decision 6 removes, and it would turn the
+    owner's untouched notes into Grid-written bytes.
+  - Reason: person notes stay byte-for-byte the owner's, and absence of a
+    Grid header is an unambiguous sign. The trust reason in "Rejected" (a typed
+    `origin:` is not trusted) is separate: it covers what Grid believes,
+    while this point covers what the owner sees.
+- **Question for the owner** (9.5). Is "no Grid header = you, and the
+  header names the first Grid writer" acceptable? The alternative is a
+  `source: <your name>` line that Grid adds when it adopts a person edit.
+  That alternative is a Grid write into the owner's note on every save.
+
 ## 5. Person edits adopted
 
 ### 5.1 When and how
@@ -611,6 +659,10 @@ notes.
 - **Deviation from the first layout addendum.** It placed index.md,
   backlinks.json, log.md, brain.lock and proposals/ in `.grid/`. Stated
   reason: the 17 Nov 02:12 ruling and Addendum 2 replace it.
+- **Deviation from "the header says who wrote it"** (layout addendum; plan
+  page). A person note gets no Grid header; only notes Grid writes carry
+  `source`, and it is not updated when the owner edits the note. Stated
+  reason and the question for the owner: section 4.5.
 - **Obsidian Sync.** It does not sync `.grid/` (Sync settings and selective
   syncing.md:105). Only the grid sync server carries it, which is what the
   ruling wants.
@@ -785,7 +837,12 @@ rows. A row owned by another decision lane is marked "owned by".
   - (V13) a rewrite of a note with unknown keys, comments and CRLF changes
     only the edited key (byte diff);
   - (V13) F5 links survive a Grid rename;
-  - (V13) F2 lists stay lists.
+  - (V13) F2 lists stay lists;
+  - (V13, 4.5) a note Grid writes has a flat `source:` naming its task and
+    Job and no `origin:` key, and Properties-compatible front matter (no
+    nested map);
+  - (V13, 4.5) a person note with no front matter is never given one by a
+    Grid read, rename or check (bytes unchanged).
 
 **L4 P-brain-adopt**
 
@@ -981,5 +1038,11 @@ step). Nothing is called done before this.
   scout map at the lane head and were not each re-opened in this lane.
 - The sync server's version-checked write API is not built yet (run-jobs
   lane). L4 uses the local lock until it lands.
+- **Question for the owner (V13, 4.5).** A person note shows no Grid header,
+  and an agent note's `source` names the first Grid writer even after the
+  owner edits it. This deviates from "the header says who wrote it". Is
+  that accepted, or should Grid add a `source: <owner name>` line to a note
+  on adoption, which means a Grid write into the owner's note on every
+  save? L3 and L4 build the first form unless the owner chooses the second.
 
 DONE
