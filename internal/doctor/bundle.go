@@ -223,9 +223,9 @@ func collectBundleFiles(root, out string, keep func(name string) bool) ([]bundle
 			return nil
 		}
 		if keep != nil && !keep(name) {
-				return nil
-			}
-			file := bundleFile{path: path, name: name, modified: info.ModTime()}
+			return nil
+		}
+		file := bundleFile{path: path, name: name, modified: info.ModTime()}
 		if strings.HasPrefix(d.Name(), "crash-") && strings.HasSuffix(d.Name(), ".txt") {
 			crashes = append(crashes, file)
 		} else {

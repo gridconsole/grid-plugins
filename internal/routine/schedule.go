@@ -152,6 +152,7 @@ func (s Scheduler) plan(project, name string) (TimerPlan, error) {
 	}
 	return s.Backend.Plan(TimerSpec{Home: s.Home, GridHome: s.GridHome, Project: project, Binary: s.Binary, Name: name, Path: s.Path, Machine: s.Machine, Login: s.Login})
 }
+
 // makeLogDir makes a timer's log folder: inside an Active machine folder through the
 // folder, which sets its modes (2770 in a shared one); anywhere else 0700 as before.
 func (s Scheduler) makeLogDir(dir string) error {
