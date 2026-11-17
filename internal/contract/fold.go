@@ -36,6 +36,27 @@ type question struct {
 // affecting Jobs. This is an in-memory contract fold, not a filesystem reader
 // or the scheduling/liveness loop.
 func Fold(posts []Post) State {
+	out, _ := FoldLoop(posts)
+	return out
+}
+
+// Blocked is a Job whose attempt posted blocked and then exited: it waits for a
+// person's approval and a new assign, not for judgement (V26).
+const Blocked Status = "blocked"
+
+// Loop is what one fold reads from the loop posts that State has no field for.
+// Allow holds, by Job, the allow rules of the Job's current assign, and only when
+// its grant names a counted approval by a person that approves every one of them
+// for that Job (V22); any other allow folds absent. Landed holds, by Job, its
+// counted landed post: what a landed after edge waits for (V27).
+type Loop struct {
+	Allow  map[string][]string `json:"allow"`
+	Landed map[string]string   `json:"landed"`
+}
+
+// FoldLoop is Fold, also returning the Loop that the same pass read.
+func FoldLoop(posts []Post) (State, Loop) {
+	loop := Loop{Allow: map[string][]string{}, Landed: map[string]string{}}
 	out := State{Jobs: map[string]*Job{}, Verdicts: []Verdict{}, Questions: map[string]*Question{}, NeedsYou: []string{}, Wakes: []string{}, ByRef: map[string][]string{}, Hosts: map[string]string{}}
 	verdicts := map[string]Verdict{}
 	set := func(p Post, kind, reason string) { verdicts[p.ID] = Verdict{p.ID, kind, reason} }
@@ -166,6 +187,9 @@ func Fold(posts []Post) State {
 		}
 	}
 	consumed := map[string]bool{}
+	// moved holds the Jobs whose status a control set after their latest assign;
+	// the attempt's loop posts below do not undo it.
+	moved := map[string]bool{}
 	for _, p := range active {
 		if p.Type != "control" {
 			continue
@@ -212,6 +236,7 @@ func Fold(posts []Post) State {
 			j.Exited, j.ExitReason, j.Reason = "", "", ""
 			j.ExitCode, j.ExitReasonMissing = nil, false
 			j.History = append(j.History, p.ID)
+			moved[id] = false
 			acknowledged := false
 			for _, side := range active {
 				if !isJobSide(side.Type) || side.Job == nil || *side.Job != id || side.Attempt == nil || *side.Attempt != a.Attempt || side.Worker != a.To || side.Fence != a.Fence || side.Gen != p.Gen || consumed[side.ID] {
@@ -263,8 +288,26 @@ func Fold(posts []Post) State {
 		if b.Status != "" {
 			j.Status = b.Status
 			j.CloseReason = b.CloseReason
+			moved[id] = true
 		}
 		j.Reason = b.Reason
+		j.History = append(j.History, p.ID)
+	}
+	foldAttempts(out.Jobs, active, seen, moved, set)
+	foldGrants(out.Jobs, seen, verdicts, loop.Allow)
+	for _, p := range active {
+		if p.Type != "landed" {
+			continue
+		}
+		// A landed post names its Job in the envelope; there is no attempt rule.
+		j := out.Jobs[deref(p.Job)]
+		if j == nil {
+			set(p, "ignored", "unknown Job target")
+			continue
+		}
+		if old, ok := loop.Landed[j.ID]; !ok || p.ID < old {
+			loop.Landed[j.ID] = p.ID
+		}
 		j.History = append(j.History, p.ID)
 	}
 	// A Job-side post of an attempt lower than its Job's that no tenure counted
@@ -375,7 +418,146 @@ func Fold(posts []Post) State {
 		out.Verdicts = append(out.Verdicts, v)
 	}
 	sort.Slice(out.Verdicts, func(i, j int) bool { return out.Verdicts[i].ID < out.Verdicts[j].ID })
-	return out
+	return out, loop
+}
+
+// isAttemptSide reports the loop posts that belong to one attempt of a Job and
+// carry no lease: the launcher's started and exit, the agent's blocked and
+// waiting, and a cancel. A tenure's posts (isJobSide) are not among them.
+func isAttemptSide(typ string) bool {
+	switch typ {
+	case "started", "exit", "blocked", "waiting", "cancel":
+		return true
+	}
+	return false
+}
+
+// foldAttempts folds the attempt-side loop posts. They carry no lease and fence
+// 0, so no tenure consumes them: each matches its Job and attempt only (RJ :165,
+// :171). One of an attempt below its Job's folds stale, "older attempt"; one of
+// an attempt the Job was not assigned is ignored. Each Job's posts are read
+// together after the controls, so the outcome does not hang on the order the
+// writers sort in: cli@ sorts before worker@, so the launcher's exit is walked
+// before the agent's blocked.
+//
+// An attempt's first exit counts and sets Exited, ExitReason and ExitCode unless
+// a worker-exit of the attempt already did; a second exit is ignored. Then, when
+// no control set the Job's status after its assign: a blocked and an exit fold
+// Blocked, not Submitted (V26); else an exit done with a result of the attempt
+// folds Submitted, "awaiting judgement"; else a started moves Assigned to Running.
+// A blocked with no exit, a waiting and a cancel count and move nothing.
+func foldAttempts(jobs map[string]*Job, active []Post, seen map[string]Post, moved map[string]bool, set func(Post, string, string)) {
+	type attempt struct {
+		exit, blocked *Post
+		started       bool
+	}
+	attempts := map[string]*attempt{}
+	var ids []string
+	for _, p := range active {
+		if !isAttemptSide(p.Type) {
+			continue
+		}
+		j := jobs[deref(p.Job)]
+		switch {
+		case j == nil:
+			set(p, "ignored", "unknown Job target")
+			continue
+		case p.Attempt != nil && *p.Attempt < j.Attempt:
+			set(p, "stale", "older attempt")
+			continue
+		case p.Attempt == nil || j.Assign == nil || *p.Attempt != j.Attempt:
+			set(p, "ignored", "no counted assign for this attempt")
+			continue
+		}
+		a := attempts[j.ID]
+		if a == nil {
+			a = &attempt{}
+			attempts[j.ID] = a
+			ids = append(ids, j.ID)
+		}
+		switch p.Type {
+		case "exit":
+			if a.exit != nil {
+				set(p, "ignored", "attempt already exited")
+				continue
+			}
+			a.exit = &p
+		case "blocked":
+			if a.blocked == nil {
+				a.blocked = &p
+			}
+		case "started":
+			a.started = true
+		}
+		j.History = append(j.History, p.ID)
+	}
+	for _, id := range ids {
+		j, a := jobs[id], attempts[id]
+		var exit struct {
+			Reason string
+			Code   json.RawMessage
+		}
+		if a.exit != nil {
+			_ = json.Unmarshal(a.exit.Body, &exit)
+			if j.Exited == "" {
+				j.Exited, j.ExitReason, j.ExitCode = a.exit.ID, exit.Reason, exitCode(exit.Code)
+			}
+		}
+		if moved[id] {
+			continue
+		}
+		switch {
+		case a.exit != nil && a.blocked != nil:
+			var b struct{ Rule string }
+			_ = json.Unmarshal(a.blocked.Body, &b)
+			j.Status, j.Reason = Blocked, "blocked on "+b.Rule
+		case a.exit != nil && exit.Reason == "done" && resultOf(j, seen, j.Attempt):
+			j.Status, j.Reason = Submitted, "awaiting judgement"
+		case a.started && j.Status == Assigned:
+			j.Status = Running
+		}
+	}
+}
+
+// foldGrants fills allow with the allow rules of each Job's current assign when
+// its grant names a counted approval by a person (owner, member or lead) that
+// approves, names the Job in its envelope and lists every one of those rules.
+// The approval's attempt is not compared: it names the blocked attempt and the
+// assign is the next one. Any other allow folds absent and the assign still
+// counts. A grant note (P-loop-grants) is not read here.
+func foldGrants(jobs map[string]*Job, seen map[string]Post, verdicts map[string]Verdict, allow map[string][]string) {
+	for id, j := range jobs {
+		var b struct {
+			Assign struct {
+				Allow []string `json:"allow"`
+				Grant string   `json:"grant"`
+			} `json:"assign"`
+		}
+		if j.AssignPost == "" || json.Unmarshal(seen[j.AssignPost].Body, &b) != nil || len(b.Assign.Allow) == 0 {
+			continue
+		}
+		if approves(seen[b.Assign.Grant], verdicts, id, b.Assign.Allow) {
+			allow[id] = append([]string(nil), b.Assign.Allow...)
+		}
+	}
+}
+
+// approves reports whether g is a counted approval by a person that approves
+// every rule for job.
+func approves(g Post, verdicts map[string]Verdict, job string, rules []string) bool {
+	var b struct {
+		Rules    []string `json:"rules"`
+		Decision string   `json:"decision"`
+	}
+	if g.Type != "approval" || verdicts[g.ID].Kind != "counted" || TierFor(g.Author.Role) != PersonTeam || deref(g.Job) != job || json.Unmarshal(g.Body, &b) != nil || b.Decision != "approve" {
+		return false
+	}
+	for _, r := range rules {
+		if !contains(b.Rules, r) {
+			return false
+		}
+	}
+	return true
 }
 
 // applySide applies one Job-side post of the current tenure. It returns why the
