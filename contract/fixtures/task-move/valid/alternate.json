@@ -1,0 +1,26 @@
+{
+  "id": "01K9J000000000000000000003",
+  "task": "01K9J000000000000000000001",
+  "type": "task-move",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 3,
+  "fence": 0,
+  "seq": 4,
+  "at": "2026-11-08T10:05:00.000Z",
+  "re": null,
+  "after": [],
+  "job": null,
+  "attempt": null,
+  "wake": null,
+  "body": {
+    "from": null,
+    "to": "01K9J000000000000000000003"
+  }
+}

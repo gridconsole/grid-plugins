@@ -1,0 +1,47 @@
+{
+  "id": "01K9J000000000000000000003",
+  "task": "01K9J000000000000000000001",
+  "type": "waiting",
+  "type_v": 1,
+  "author": {
+    "id": "host",
+    "role": "host"
+  },
+  "tier": "agent",
+  "worker": "host@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 4,
+  "at": "2026-11-08T10:05:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "condition": {
+      "any": [
+        {
+          "account_room": {
+            "window": "5h",
+            "below": 90
+          }
+        }
+      ],
+      "wait_max": "1h"
+    },
+    "unmet": [
+      {
+        "atom": "account_room",
+        "measured": 97,
+        "want": 90
+      },
+      {
+        "atom": "no_test_run",
+        "measured": false,
+        "want": true
+      }
+    ]
+  }
+}

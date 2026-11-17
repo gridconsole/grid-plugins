@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/cancel.json",
+  "title": "cancel",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "cancel"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "owner",
+                "member",
+                "lead",
+                "cli"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "why": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 400
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "x-class": "state",
+  "x-roles": [
+    "owner",
+    "member",
+    "lead",
+    "cli"
+  ]
+}

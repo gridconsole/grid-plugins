@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/exit.json",
+  "title": "exit",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "exit"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "cli",
+                "host",
+                "worker"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "enum": [
+                    "done",
+                    "failed",
+                    "crash",
+                    "usage_limit",
+                    "cancelled",
+                    "lost",
+                    "start_lost",
+                    "account_missing",
+                    "secret_found",
+                    "ref_exists",
+                    "push_refused",
+                    "base_missing",
+                    "carry_missing"
+                  ]
+                },
+                "code": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  ]
+                },
+                "cost": {
+                  "type": "object",
+                  "properties": {
+                    "wall_s": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cpu_s": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cpu_avg_cores": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "rss_peak_mb": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "io_read_mb": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "io_write_mb": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "tokens_in": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "tokens_out": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cache_read": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "usd": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "model": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "account": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "sha": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[0-9a-f]{7,64}$"
+                },
+                "permission_denials": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tool_name": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "tool_name"
+                    ]
+                  }
+                },
+                "secret": {
+                  "type": "object",
+                  "properties": {
+                    "commit": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[0-9a-f]{7,64}$"
+                    },
+                    "file": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "line": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "pattern": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "commit",
+                    "file",
+                    "line",
+                    "pattern"
+                  ],
+                  "additionalProperties": false
+                },
+                "log": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "link": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "reason"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "x-class": "state",
+  "x-roles": [
+    "cli",
+    "host",
+    "worker"
+  ]
+}

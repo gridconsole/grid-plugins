@@ -301,6 +301,11 @@
         "exit"
       ]
     },
+    "home": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
     "after": {
       "type": "array",
       "items": {
@@ -327,13 +332,19 @@
                 "enum": [
                   "done",
                   "failed",
-                  "children-done"
+                  "children-done",
+                  "landed"
                 ]
               },
               "why": {
                 "type": "string",
                 "minLength": 8,
                 "maxLength": 160
+              },
+              "task": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
               }
             },
             "required": [

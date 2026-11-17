@@ -17,7 +17,7 @@ import (
 
 func TestTypesRegistered(t *testing.T) {
 	types := contract.PostTypes()
-	if len(types) != 19 {
+	if len(types) != 30 {
 		t.Fatalf("got %d post types", len(types))
 	}
 	for _, typ := range types {

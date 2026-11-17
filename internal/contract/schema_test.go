@@ -243,7 +243,7 @@ func TestWorkerPatternIsTheContracts(t *testing.T) {
 
 func TestPostTypes(t *testing.T) {
 	types := PostTypes()
-	if len(types) != 19 {
+	if len(types) != 30 {
 		t.Fatalf("post types = %d", len(types))
 	}
 	for _, typ := range types {

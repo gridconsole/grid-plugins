@@ -1,0 +1,29 @@
+{
+  "id": "01K9J000000000000000000003",
+  "task": "01K9J000000000000000000001",
+  "type": "started",
+  "type_v": 1,
+  "author": {
+    "id": "host",
+    "role": "host"
+  },
+  "tier": "agent",
+  "worker": "host@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 4,
+  "at": "2026-11-08T10:05:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "base_sha": "3f2c9e1",
+    "allow_dropped": [
+      "Bash(make deploy-prod)"
+    ],
+    "firing": "2026-11-18T03:00:00.000Z"
+  }
+}
