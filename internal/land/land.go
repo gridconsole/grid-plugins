@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/eval"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
@@ -25,7 +26,8 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
-// Rule is the lands mapping of one Markdown entry in knowledge/deploy/.
+// Rule is the lands mapping of one Markdown entry in knowledge/deploy/ (grid/deploy/
+// when the brain folder key is set).
 type Rule struct {
 	Target       string   `json:"target" yaml:"target"`
 	Branch       string   `json:"branch" yaml:"branch"`
@@ -114,14 +116,38 @@ func (e noDeployTopic) Is(target error) bool { return target == ErrNoDeployTopic
 
 func (e noDeployTopic) Unwrap() error { return e.missing }
 
+// brainFolder is where the project's deploy rule and workflow notes are read:
+// the folder to open and the name of the folder inside a project level that holds
+// the config topics. With the brain folder key set it is the brain folder and
+// "grid" (projects/<p>/grid/deploy); with the key absent it is the Grid home and
+// "knowledge" (projects/<p>/knowledge/deploy), as before.
+func (s Store) brainFolder() (root, config string) {
+	getenv := s.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	b := brain.Store{GridHome: s.Resolver.GridHome}.WithConfig(s.Resolver.Home, getenv)
+	if b.Vault() {
+		return b.Root(), "grid"
+	}
+	return b.Root(), "knowledge"
+}
+
+// projectTopic is the path below the folder brainFolder names of one config topic
+// of a project.
+func projectTopic(config, project, topic string) string {
+	return filepath.Join("projects", project, config, topic)
+}
+
 func (s Store) rule(project string) (Rule, error) {
 	var rule Rule
-	root, err := os.OpenRoot(s.Resolver.GridHome)
+	folder, config := s.brainFolder()
+	root, err := os.OpenRoot(folder)
 	if err != nil {
 		return rule, err
 	}
 	defer root.Close()
-	dir := filepath.Join("projects", project, "knowledge", "deploy")
+	dir := projectTopic(config, project, "deploy")
 	if err = safefile.NoSymlinks(root, dir); err != nil {
 		return rule, fmt.Errorf("deploy topic: %w", err)
 	}

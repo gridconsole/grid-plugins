@@ -265,7 +265,7 @@ func runRevert(args []string, env Env) int {
 		return usageError("expected <topic>/<name>")
 	}
 	topic, name, ok := strings.Cut(f.Arg(0), "/")
-	if !ok || !brain.ValidName(topic) || !brain.ValidName(name) {
+	if !ok || !brain.ValidID(topic) || !brain.ValidID(name) || strings.Contains(name, "/") {
 		return usageError("expected <topic>/<name>")
 	}
 	if *to < 1 {

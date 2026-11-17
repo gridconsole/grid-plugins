@@ -11,11 +11,14 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/safefile"
 )
 
 const (
@@ -394,18 +397,84 @@ func remove(edit editFunc, id string) error {
 	})
 }
 
-// List returns every saved environment in id order. A home with no knowledge
-// folder gives an empty list. An entry that cannot be read stops the list with
-// an error naming it.
-func List(s brain.Store) ([]Entry, error) {
+// vaultDir is the folder of the project's environments below the brain folder:
+// projects/<project>/grid/environments.
+func vaultDir(project string) string {
+	return path.Join("projects", project, "grid", topic)
+}
+
+// readEntry reads an environment: from the brain folder's grid/environments when
+// the store names the brain folder, falling back to knowledge/environments for
+// one the folder does not hold (Save still writes there). A missing entry wraps
+// fs.ErrNotExist.
+func readEntry(s brain.Store, name string) ([]byte, error) {
+	if s.Vault() && brain.ValidName(s.Project) && brain.ValidName(name) && name != "TOPIC" {
+		root, err := os.OpenRoot(s.BrainDir)
+		if err == nil {
+			defer root.Close()
+			data, err := safefile.Read(root, path.Join(vaultDir(s.Project), name+".md"))
+			if !errors.Is(err, fs.ErrNotExist) {
+				return data, err
+			}
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+	}
+	return s.ReadConfig(level, topic, name)
+}
+
+// entryNames lists the environments: those of knowledge/environments and those of
+// the brain folder's grid/environments that it does not hold.
+func entryNames(s brain.Store) ([]string, error) {
 	names, err := s.ConfigNames(level, topic)
+	if err != nil || !s.Vault() || !brain.ValidName(s.Project) {
+		return names, err
+	}
+	root, err := os.OpenRoot(s.BrainDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return names, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	if err := safefile.NoSymlinks(root, vaultDir(s.Project)); err != nil {
+		return nil, err
+	}
+	entries, err := fs.ReadDir(root.FS(), vaultDir(s.Project))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	for _, n := range names {
+		seen[n] = true
+	}
+	for _, e := range entries {
+		n, ok := strings.CutSuffix(e.Name(), ".md")
+		if e.Type()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("config paths cannot be symbolic links")
+		}
+		if ok && !e.IsDir() && n != "TOPIC" && !seen[n] {
+			seen[n], names = true, append(names, n)
+		}
+	}
+	return names, nil
+}
+
+// List returns every saved environment in id order. When the store names the
+// brain folder (BrainDir), the environments of projects/<project>/grid/environments
+// are read too, beside those of knowledge/environments, since Save still writes
+// to knowledge/. A home with no knowledge folder gives an empty list. An entry
+// that cannot be read stops the list with an error naming it.
+func List(s brain.Store) ([]Entry, error) {
+	names, err := entryNames(s)
 	if err != nil {
 		return nil, err
 	}
 	sort.Strings(names)
 	out := []Entry{}
 	for _, name := range names {
-		data, err := s.ReadConfig(level, topic, name)
+		data, err := readEntry(s, name)
 		if err != nil {
 			return nil, fmt.Errorf("environment %s: %w", name, err)
 		}

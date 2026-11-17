@@ -174,7 +174,12 @@ Invalid absence fixtures: [null](fixtures/fmt-origin/invalid/absent.json),
 Files: the `origin` block in YAML front matter at
 `$GRID_HOME/brain-proposals/<name>.md` or
 `$GRID_HOME/projects/<project>/brain-proposals/<name>.md`, retained in accepted
-`knowledge/<topic>/<name>.md` at the same level. Writer: `grid brain propose`
+`knowledge/<topic>/<name>.md` at the same level. With the Grid config's `brain` key
+set the brain folder is an Obsidian vault: the level's proposals are in its
+`Proposals/` folder (not read by the vault walk), and accepted notes are read
+as `grid/<topic>/<name>.md` below the level root (the brain folder at home,
+`projects/<project>/` in it at project level). A task's own `brain-proposals/`
+folder keeps its name. Writer: `grid brain propose`
 then `accept`, through `internal/braincmd/command.go:286-304` and
 `internal/brain/store.go:227-228`. Readers: brain store/curator, Job source
 resolver, app and eventual server sync. The schema validates the decoded block,

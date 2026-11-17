@@ -30,7 +30,7 @@ func (s Store) fileProgress(m *memory) (string, error) {
 		if d.IsDir() {
 			if path != s.Feed.TaskDir {
 				switch d.Name() {
-				case "feed", "spawned", "questions", ".git", "brain-proposals":
+				case "feed", "spawned", "questions", ".git", "brain-proposals", "Proposals":
 					return filepath.SkipDir
 				}
 			}
