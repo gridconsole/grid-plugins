@@ -1,0 +1,30 @@
+{
+  "id": "01K9J000000000000000000003",
+  "task": "01K9J000000000000000000001",
+  "type": "approval",
+  "type_v": 1,
+  "author": {
+    "id": "member",
+    "role": "member"
+  },
+  "tier": "person-team",
+  "worker": "member@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 4,
+  "at": "2026-11-08T10:05:00.000Z",
+  "re": "01K9J0000000000000000000B1",
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "rules": [
+      "Bash(make deploy-prod)",
+      "Bash(make deploy-check)"
+    ],
+    "decision": "decline",
+    "why": "Deploy after the release notes are merged"
+  }
+}

@@ -47,6 +47,134 @@
                           "minLength": 1,
                           "format": "date-time",
                           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+                        },
+                        "on": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "account": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "model": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "effort": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40
+                        },
+                        "start": {
+                          "anyOf": [
+                            {
+                              "const": "now"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "all": {
+                                  "type": "array",
+                                  "minItems": 1,
+                                  "items": {
+                                    "type": "object"
+                                  }
+                                },
+                                "any": {
+                                  "type": "array",
+                                  "minItems": 1,
+                                  "items": {
+                                    "type": "object"
+                                  }
+                                },
+                                "wait_max": {
+                                  "type": "string",
+                                  "pattern": "^[1-9][0-9]*(s|m|h|d)$"
+                                },
+                                "missed": {
+                                  "enum": [
+                                    "run-once",
+                                    "skip"
+                                  ]
+                                },
+                                "tz": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        "expect": {
+                          "type": "object",
+                          "properties": {
+                            "cores": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "mem_gb": {
+                              "type": "number",
+                              "minimum": 0
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "test_run": {
+                          "type": "boolean"
+                        },
+                        "base": {
+                          "type": "object",
+                          "properties": {
+                            "ref": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^refs/"
+                            },
+                            "sha": {
+                              "type": "string",
+                              "pattern": "^[0-9a-f]{7,64}$"
+                            }
+                          },
+                          "required": [
+                            "ref"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "allow": {
+                          "type": "array",
+                          "uniqueItems": true,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          }
+                        },
+                        "grant": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+                        },
+                        "carry": {
+                          "type": "object",
+                          "properties": {
+                            "job": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+                            },
+                            "attempt": {
+                              "type": "integer",
+                              "minimum": 1
+                            }
+                          },
+                          "required": [
+                            "job",
+                            "attempt"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [

@@ -1,0 +1,26 @@
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "landed",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 1,
+  "wake": null,
+  "body": {
+    "main_sha": "9ab01cd",
+    "colour": "blue"
+  }
+}
