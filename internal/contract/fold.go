@@ -30,17 +30,23 @@ type question struct {
 
 // Fold materializes one task's admitted posts. The caller checks writer-file
 // identity, complete lines and takeover byte offsets, setting Post.Stale for
-// lines beyond an ended tenure. No timestamp affects a decision here; the one
-// rule that reads a time is PostedAs, which compares a post's own at with a
-// grant's until, and Fold does not call it.
+// lines beyond an ended tenure. No timestamp affects a decision here except
+// through PostedAs, which compares a post's own at with a grant's until; the
+// clock is never read.
+//
+// grants are the people's grant notes (run-jobs-launcher.md Q8). A counted answer
+// counts as the person's only with for, by and a covering grant (PostedAs), and
+// FoldLoop's Loop.PostedAs records it; without one it folds as its stamped
+// author's own.
+// The grants never refuse or drop a post.
 //
 // Controls apply by (gen, fence, seq). Each grant consumes its matching Job
 // tenure in seq order before the next control. Cross-file causal dependencies
 // must be named by re/after. Unknown types and versions remain visible without
 // affecting Jobs. This is an in-memory contract fold, not a filesystem reader
 // or the scheduling/liveness loop.
-func Fold(posts []Post) State {
-	out, _ := FoldLoop(posts)
+func Fold(posts []Post, grants ...Grant) State {
+	out, _ := FoldLoop(posts, grants...)
 	return out
 }
 
@@ -52,14 +58,18 @@ const Blocked Status = "blocked"
 // Allow holds, by Job, the allow rules of the Job's current assign, and only when
 // its grant names a counted approval by a person that approves every one of them
 // for that Job (V22); any other allow folds absent. Landed holds, by Job, its
-// counted landed post: what a landed after edge waits for (V27).
+// counted landed post: what a landed after edge waits for (V27). PostedAs holds,
+// by post id, the person a counted answer counts as when an agent posted it for
+// that person under a covering grant (V22); it is nil when every answer counts as
+// its stamped author.
 type Loop struct {
-	Allow  map[string][]string `json:"allow"`
-	Landed map[string]string   `json:"landed"`
+	Allow    map[string][]string `json:"allow"`
+	Landed   map[string]string   `json:"landed"`
+	PostedAs map[string]Author   `json:"posted_as,omitempty"`
 }
 
 // FoldLoop is Fold, also returning the Loop that the same pass read.
-func FoldLoop(posts []Post) (State, Loop) {
+func FoldLoop(posts []Post, grants ...Grant) (State, Loop) {
 	loop := Loop{Allow: map[string][]string{}, Landed: map[string]string{}}
 	out := State{Jobs: map[string]*Job{}, Verdicts: []Verdict{}, Questions: map[string]*Question{}, NeedsYou: []string{}, Wakes: []string{}, ByRef: map[string][]string{}, Hosts: map[string]string{}}
 	verdicts := map[string]Verdict{}
@@ -190,6 +200,25 @@ func FoldLoop(posts []Post) (State, Loop) {
 			// Announcement only: neither this nor transfer changes authority.
 		}
 	}
+	// An answer counts as a person's only under a covering grant, read for the
+	// kind of the person Job it answers; the stored author is never changed.
+	for _, p := range active {
+		if p.Type != "answer" {
+			continue
+		}
+		if who, _ := PostAs(p, personJobs[deref(p.Re)].kind, grants); who != p.Author {
+			if loop.PostedAs == nil {
+				loop.PostedAs = map[string]Author{}
+			}
+			loop.PostedAs[p.ID] = who
+		}
+	}
+	countedAs := func(p Post) Author {
+		if who, ok := loop.PostedAs[p.ID]; ok {
+			return who
+		}
+		return p.Author
+	}
 	consumed := map[string]bool{}
 	// moved holds the Jobs whose status a control set after their latest assign;
 	// the attempt's loop posts below do not undo it.
@@ -202,7 +231,8 @@ func FoldLoop(posts []Post) (State, Loop) {
 		_ = json.Unmarshal(p.Body, &b)
 		if q := questions[b.Target]; q != nil {
 			answer, exists := seen[b.Answer]
-			if !exists || answer.Type != "answer" || verdicts[answer.ID].Kind != "counted" || answer.Re == nil || *answer.Re != q.post.ID || NormalizeRole(answer.Author.Role) == "guest" && answer.Author.ID != q.who {
+			who := countedAs(answer)
+			if !exists || answer.Type != "answer" || verdicts[answer.ID].Kind != "counted" || answer.Re == nil || *answer.Re != q.post.ID || NormalizeRole(who.Role) == "guest" && who.ID != q.who {
 				set(p, "ignored", "control must select an eligible answer to this question")
 				continue
 			}
@@ -334,10 +364,10 @@ func FoldLoop(posts []Post) (State, Loop) {
 				set(p, "ignored", "no matching counted assign for this tenure")
 			}
 		}
-		if p.Type == "answer" && NormalizeRole(p.Author.Role) == "guest" {
+		if who := countedAs(p); p.Type == "answer" && NormalizeRole(who.Role) == "guest" {
 			q := questions[*p.Re]
 			pj := personJobs[*p.Re]
-			if (q == nil || q.who != p.Author.ID) && !GuestAddressee(p.Author.Role, p.Author.ID, p.Lease != nil || p.Fence != 0, pj.role, pj.owner, pj.kind) {
+			if (q == nil || q.who != who.ID) && !GuestAddressee(who.Role, who.ID, p.Lease != nil || p.Fence != 0, pj.role, pj.owner, pj.kind) {
 				set(p, "ignored", "question is not addressed to this guest")
 			}
 		}
