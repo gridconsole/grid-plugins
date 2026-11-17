@@ -1,6 +1,6 @@
 # M-P-shared-home-6-onto-main: lane P-shared-home-6 merged onto plugin main 63d58a47
 
-Result: **NOT DONE** on row 2. The merge is done and clean in text, but five `internal/cli` tests of main fail on the merged head. They need a decision this brief does not give. The lane is not handed off as DONE with that row red.
+Result: **NOT DONE** on row 2 (CLOSED BY M-P-shared-home-6-onto-main-fix1). The merge is done and clean in text, but five `internal/cli` tests of main fail on the merged head. They need a decision this brief does not give. The lane is not handed off as DONE with that row red.
 
 ## Proof table
 
@@ -43,4 +43,4 @@ The orchestrator or the owner picks. The merged head is kept so that the choice 
 - The five failing tests were not changed, so their behaviour on a fixed head is not shown.
 - Behaviour on a real shared folder with two logins, and macOS and Windows runtime (build and vet only), as in P-shared-home-5 and -6.
 
-NOT DONE
+CLOSED BY M-P-shared-home-6-onto-main-fix1
