@@ -11,13 +11,14 @@ Not verified on a live launcher.
 | 1 fails on main for (a), (b) | HOLDS, see the mutation below (the tick.go line without Blocked is main's line) |
 | 2 `go test -count=1 -v ./internal/contract/ -run TestB2StateOfBlocked` | HOLDS, exit 0: `--- PASS: TestB2StateOfBlocked`. internal/contract/b2_state_of_blocked_test.go |
 | 3 `go test -count=1 ./contract/ -run TestT12Posts` | HOLDS, exit 0 (`ok .../contract`) |
-| 3 `go test -count=1 ./internal/orchestrator/ ./internal/contract/ ./internal/board/ ./internal/job/jobcmd/` | see the line under the table |
+| 3 `go test -count=1 ./internal/orchestrator/ ./internal/contract/ ./internal/board/ ./internal/job/jobcmd/` HOLDS, exit 0 (with `./contract/`): `ok internal/orchestrator 427.127s`, `ok internal/contract`, `ok internal/board`, `ok internal/job/jobcmd`, `ok contract` |
+| 3 importers of orchestrator (go list: cli, mcp, migrate, runner) | HOLDS, exit 0: `go test -count=1 ./internal/mcp/ ./internal/migrate/ ./internal/runner/` ok (runner has no tests); cli ran only the walk tests of row 4, not the whole package (not run, not asked). The many importers of contract (artifact, brain, feed, guard, job, lease, ...) are compiled and run by `make cross` only as test-compile; their tests: not run, not asked |
 | 4 `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` | HOLDS, exit 0 |
 | 4 `go test -count=1 ./internal/job/lint/` | HOLDS, exit 0 |
 | 5 `make lint` | HOLDS, exit 0 (`go vet ./...`) |
 | 5 `make cross` | HOLDS, exit 0 (darwin/arm64 and windows/amd64 vet and test compile) |
 | Merge before the last run: `git fetch origin && git merge origin/main` | HOLDS: "Already up to date." |
-| No attribution lines: `git log --format=%B origin/main..HEAD \| grep -ciE "co-authored-by\|claude-session\|generated with"` | HOLDS: prints 0 (see the end of the run notes) |
+| No attribution lines: `git log --format=%B origin/main..HEAD \| grep -ciE "co-authored-by\|claude-session\|generated with"` | HOLDS: prints 0 |
 | `make webui-test`, app guest walk tables, `realplugin` | not run, not asked (plugin repo; the brief names no app run) |
 | Windows and macOS builds | HOLDS via `make cross` above |
 
