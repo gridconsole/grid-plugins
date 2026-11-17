@@ -11,6 +11,7 @@ Commands:
   task        new|show|list|status|lane|merge, stop|close|reopen, history|attach|move (grid task help lists all)
   plan        write, check, items, hash, migrate
   job         next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, trace
+  judge       verdict, review, rework, person (read a review; post the review, rework or person Job)
   lease       take, release, status (task lease)
   feed        tick, post, read, state, types, handover
   mcp         stdio server with the Feed tools

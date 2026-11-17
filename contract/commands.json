@@ -1772,6 +1772,163 @@
       ]
     },
     {
+      "name": "judge",
+      "summary": "verdict, review, rework, person (read a review; post the review, rework or person Job)",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "person",
+          "args": [
+            "\u003cjob\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--from",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--owner",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--point",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "review",
+          "args": [
+            "\u003cjob\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--agent",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "rework",
+          "args": [
+            "\u003cjob\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--from",
+              "takes": "value",
+              "required": true
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--target",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--wake",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
+          "name": "verdict",
+          "args": [
+            "\u003creview\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--rounds",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--task",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        }
+      ]
+    },
+    {
       "name": "lease",
       "summary": "take, release, status (task lease)",
       "built": true,
