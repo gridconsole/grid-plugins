@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -1331,4 +1332,531 @@ func (s Store) vaultPutProposal(top *os.Root, level, id, stem, curRev string, ou
 	}
 	s.touchSeen(top, level, pid+".md", NoteRev(out))
 	return WriteResult{Status: "proposed", Rev: curRev, Proposed: filepath.Join(s.BrainDir, filepath.FromSlash(prel))}, nil
+}
+
+// --- the other verbs of a vault: each runs the version check of 5.4 and 6.1 ---
+
+// vaultBeforeWrite is nil in production. A test sets it to make an edit land between
+// the read of a verb and its write, the window the version check is for.
+var vaultBeforeWrite func(level, id string)
+
+// idParts cuts a note id into its folder and its last part.
+func idParts(id string) (topic, name string) {
+	i := strings.LastIndex(id, "/")
+	if i < 0 {
+		return "", id
+	}
+	return id[:i], id[i+1:]
+}
+
+// vaultRef reads a note id of a verb: brain:<level>/<id>, or an id alone at the
+// store's default level.
+func (s Store) vaultRef(id string) (level, name string, err error) {
+	name = NFC(id)
+	if rest, ok := strings.CutPrefix(id, "brain:"); ok {
+		var found bool
+		level, name, found = strings.Cut(rest, "/")
+		if !found || (level != "home" && level != "project") {
+			return "", "", fmt.Errorf("id must be brain:<home|project>/<id>")
+		}
+		name = NFC(name)
+	}
+	name = strings.TrimSuffix(name, ".md")
+	if !vaultNoteID(name) {
+		return "", "", keWrInvalid("%q is not a note id", id)
+	}
+	if level == "" {
+		switch {
+		case s.ReadLevel != "":
+			level = s.ReadLevel
+		case s.Project != "":
+			level = "project"
+		default:
+			level = "home"
+		}
+	}
+	return level, name, nil
+}
+
+// vaultOpen takes the local lock, adopts what a person changed in level and opens
+// the brain. The caller calls the returned function when it is done.
+func (s Store) vaultOpen(level string) (*os.Root, func(), error) {
+	if level == "project" && !ValidName(s.Project) {
+		return nil, nil, fmt.Errorf("level project needs a project")
+	}
+	unlock, err := s.lockLocal(false)
+	if err != nil {
+		return nil, nil, err
+	}
+	if _, err := s.adoptLocked([]string{level}); err != nil {
+		unlock()
+		return nil, nil, err
+	}
+	top, err := s.openTop()
+	if err != nil {
+		unlock()
+		return nil, nil, err
+	}
+	return top, func() { top.Close(); unlock() }, nil
+}
+
+// vaultRead adopts, then reads the note id of level: its bytes (nil when it is not
+// there) and its rev ("none" then).
+func (s Store) vaultRead(level, id string) ([]byte, string, error) {
+	if !vaultNoteID(id) {
+		return nil, "", keWrInvalid("%q is not a note id", id)
+	}
+	top, done, err := s.vaultOpen(level)
+	if err != nil {
+		return nil, "", err
+	}
+	defer done()
+	rel := s.levelPrefix(level) + id + ".md"
+	if err := keWrNoLink(top, filepath.FromSlash(rel)); err != nil {
+		return nil, "", err
+	}
+	b, err := fs.ReadFile(top.FS(), rel)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, "none", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	return b, NoteRev(b), nil
+}
+
+// vaultApply is a verb that changes one note: read it, make the new bytes from what
+// was read, write them with the version check. A person's edit between the read and
+// the write is redone on top when both hold, and a proposal when they cannot (5.4).
+// change returns nil to delete the note. The lock is never held across the write.
+func (s Store) vaultApply(level, id string, origin Origin, reason string, noSecret bool, change func(old []byte) ([]byte, error)) (WriteResult, error) {
+	old, rev, err := s.vaultRead(level, id)
+	if err != nil {
+		return WriteResult{}, err
+	}
+	data, err := change(old)
+	if err != nil {
+		return WriteResult{}, err
+	}
+	if vaultBeforeWrite != nil {
+		vaultBeforeWrite(level, id)
+	}
+	if data == nil {
+		return s.vaultDelete(level, id, rev, origin, reason)
+	}
+	topic, name := idParts(id)
+	return s.vaultWriteOpt(level, topic, name, rev, data, origin, reason, noSecret)
+}
+
+// vaultDelete removes a note when expect is its rev, keeping its bytes under
+// .grid/versions. When a person changed the note since, a delete cannot keep their
+// edit: the delete is a proposal and the note stays.
+func (s Store) vaultDelete(level, id, expect string, origin Origin, reason string) (WriteResult, error) {
+	if !keWrRevForm(expect) {
+		return WriteResult{}, fmt.Errorf("expect must be none or a rev of 16 lower-case hex digits")
+	}
+	if origin.Kind == "" || strings.TrimSpace(origin.ID) == "" {
+		return WriteResult{}, fmt.Errorf("the change record needs an origin")
+	}
+	top, done, err := s.vaultOpen(level)
+	if err != nil {
+		return WriteResult{}, err
+	}
+	defer done()
+	rel := s.levelPrefix(level) + id + ".md"
+	osRel := filepath.FromSlash(rel)
+	if err := keWrNoLink(top, osRel); err != nil {
+		return WriteResult{}, err
+	}
+	cur, err := fs.ReadFile(top.FS(), rel)
+	if errors.Is(err, fs.ErrNotExist) {
+		return WriteResult{Status: "unchanged", Rev: "none"}, nil
+	}
+	if err != nil {
+		return WriteResult{}, err
+	}
+	curRev := NoteRev(cur)
+	if curRev != expect {
+		if expect != "none" {
+			if _, err := s.readVersion(top, level, id, expect); err != nil {
+				return WriteResult{}, &ConflictError{Rev: curRev}
+			}
+		}
+		return s.vaultProposeChange(top, level, id, expect, curRev, "delete the note", origin, reason)
+	}
+	if err := s.storeVersion(top, level, id, cur); err != nil {
+		return WriteResult{}, err
+	}
+	if err := top.Remove(osRel); err != nil {
+		return WriteResult{}, err
+	}
+	if err := s.writeRecord(top, ChangeRecord{Level: level, Status: "deleted", ID: id, OriginKind: "agent", OriginID: origin.ID,
+		Author: origin.ID, Reason: reason, Topic: topicOfID(id), Hash: curRev}); err != nil {
+		return WriteResult{}, err
+	}
+	return WriteResult{Status: "deleted", Rev: curRev}, nil
+}
+
+// vaultProposeChange keeps a change that is not a new text for the note (a delete, a
+// rename) as a draft in Proposals/ and leaves the note exactly as it is.
+func (s Store) vaultProposeChange(top *os.Root, level, id, expect, curRev, what string, origin Origin, reason string) (WriteResult, error) {
+	last := id[strings.LastIndex(id, "/")+1:]
+	stem := last + "-" + NoteRev([]byte(what + "\x00" + expect + "\x00" + curRev))[:8]
+	var b strings.Builder
+	b.WriteString("---\nstatus: proposed\n")
+	for _, kv := range [][2]string{{"target", id}, {"level", level}, {"base", expect}, {"current", curRev},
+		{"change", what}, {"author", origin.ID}, {"reason", reason}} {
+		if kv[1] != "" {
+			b.WriteString(kv[0] + ": " + jsonString(kv[1]) + "\n")
+		}
+	}
+	b.WriteString("---\n# Proposed change to " + last + "\n\nThe note changed while this change was being made, and both cannot hold. The note was not changed. The change asked for: " + what + ".\n")
+	return s.vaultPutProposal(top, level, id, stem, curRev, []byte(b.String()), origin, reason)
+}
+
+// vaultRecords lists the hashes the change records give a note, oldest first, for
+// the statuses named; a hash twice in a row (two machines adopting one edit) is one.
+func (s Store) vaultRecords(level, id string, statuses ...string) ([]string, error) {
+	top, err := s.openTop()
+	if err != nil {
+		return nil, err
+	}
+	defer top.Close()
+	recs, _, err := readRecords(top)
+	if err != nil {
+		return nil, err
+	}
+	k := s.recKeyOf(ChangeRecord{Level: level, Project: s.Project}, id)
+	var out []string
+	for _, r := range recs {
+		if r.ID != id || r.Hash == "" || !slices.Contains(statuses, r.Status) || s.recKeyOf(r.ChangeRecord, r.ID) != k {
+			continue
+		}
+		if n := len(out); n > 0 && out[n-1] == r.Hash {
+			continue
+		}
+		out = append(out, r.Hash)
+	}
+	return out, nil
+}
+
+// vaultEditConfig is EditConfigBy for a vault: the entry is the note
+// grid/<topic>/<name>, changed with the version check.
+func (s Store) vaultEditConfig(level, topic, name string, origin Origin, edit func([]byte) ([]byte, error)) error {
+	if !ValidName(topic) || !ValidName(name) {
+		return fmt.Errorf("topic and name must be plain names")
+	}
+	_, err := s.vaultApply(level, "grid/"+topic+"/"+name, origin, "config "+topic+"/"+name, true, func(old []byte) ([]byte, error) {
+		data, err := edit(old)
+		if err != nil || data == nil || old == nil {
+			return data, err
+		}
+		return patchConfig(old, data), nil
+	})
+	return err
+}
+
+// vaultAddLink adds "- [[target]] - rel: why" to the note's Links section, or a new
+// one at its end.
+func vaultAddLink(data []byte, target, rel, why string) []byte {
+	text := string(data)
+	eol := "\n"
+	if strings.Contains(text, "\r\n") {
+		eol = "\r\n"
+	}
+	last := ""
+	for _, l := range strings.Split(text, "\n") {
+		if h := headingLine.FindStringSubmatch(strings.TrimRight(l, "\r")); h != nil {
+			last = h[2]
+		}
+	}
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += eol
+	}
+	if !strings.EqualFold(strings.TrimSpace(last), "links") {
+		text += eol + "## Links" + eol + eol
+	}
+	return []byte(text + "- [[" + target + "]] - " + rel + ": " + why + eol)
+}
+
+// vaultHasLink reports whether the note links to target with rel.
+func vaultHasLink(data []byte, target, rel string) bool {
+	v, err := ParseVault(data)
+	if err != nil {
+		return false
+	}
+	for _, l := range v.Links {
+		if l.Rel == rel && (l.Target == target || strings.HasSuffix(target, "/"+l.Target)) {
+			return true
+		}
+	}
+	return false
+}
+
+// vaultSetFront sets a top-level front-matter key to a text value, adding the front
+// matter when the note has none, and leaves every other byte as it was.
+func vaultSetFront(data []byte, key, value string) []byte {
+	line := key + ": " + jsonString(value)
+	f, ok := splitRaw(data)
+	if !ok {
+		return []byte("---\n" + line + "\n---\n" + string(data))
+	}
+	f.front = append(f.front, line+f.eol)
+	return f.bytes()
+}
+
+// vaultSupersede is Supersede for a vault: the new note gets a "supersedes" link to
+// the old one and the old note gets superseded_by, each written with the version
+// check. Nothing is deleted.
+func (s Store) vaultSupersede(oldID, newID, reason string, origin Origin) (SupersedeResult, error) {
+	oldLevel, oldName, err := s.vaultRef(oldID)
+	if err != nil {
+		return SupersedeResult{}, err
+	}
+	newLevel, newName, err := s.vaultRef(newID)
+	if err != nil {
+		return SupersedeResult{}, err
+	}
+	oldRef, newRef := "brain:"+oldLevel+"/"+oldName, "brain:"+newLevel+"/"+newName
+	if oldLevel != newLevel {
+		return SupersedeResult{}, fmt.Errorf("%s and %s are at different levels; a note can only be superseded by a note at its own level", oldRef, newRef)
+	}
+	level := oldLevel
+	reason = strings.TrimSpace(reason)
+	if !line(reason) || size(reason) < 8 || size(reason) > 160 || len(strings.Fields(reason)) < 2 {
+		return SupersedeResult{}, fmt.Errorf("reason must say why in 8 to 160 characters on one line, in more than one word")
+	}
+	if oldName == newName {
+		return SupersedeResult{}, fmt.Errorf("%s cannot supersede itself", oldRef)
+	}
+	res := SupersedeResult{Old: oldRef, New: newRef}
+	for _, c := range []struct{ id, ref string }{{oldName, oldRef}, {newName, newRef}} {
+		b, _, err := s.vaultRead(level, c.id)
+		if err != nil {
+			return SupersedeResult{}, err
+		}
+		if b == nil {
+			return SupersedeResult{}, fmt.Errorf("accepted note %q not found", c.ref)
+		}
+		v, _ := ParseVault(b)
+		by := frontString(v.Front["superseded_by"])
+		switch {
+		case c.id == newName && by != "":
+			return SupersedeResult{}, fmt.Errorf("%s is itself superseded by %s; supersede by that note instead", newRef, by)
+		case c.id == oldName && by != "" && by != newRef:
+			return SupersedeResult{}, fmt.Errorf("%s is already superseded by %s", oldRef, by)
+		}
+	}
+	note := func(wr WriteResult) {
+		if wr.Status == "edited" || wr.Status == "created" {
+			res.Wrote = true
+		}
+		if wr.Proposed != "" {
+			res.Proposed = append(res.Proposed, wr.Proposed)
+		}
+	}
+	// The new note's link first and the old note's mark second, as the old layout
+	// does, so a stop between them leaves a link to a live note.
+	wr, err := s.vaultApply(level, newName, origin, "supersedes "+oldRef+": "+reason, false, func(b []byte) ([]byte, error) {
+		if b == nil {
+			return nil, fmt.Errorf("accepted note %q not found", newRef)
+		}
+		if vaultHasLink(b, oldName, "supersedes") {
+			return b, nil
+		}
+		return vaultAddLink(b, oldName, "supersedes", reason), nil
+	})
+	if err != nil {
+		return SupersedeResult{}, err
+	}
+	note(wr)
+	wr, err = s.vaultApply(level, oldName, origin, "superseded by "+newRef+": "+reason, false, func(b []byte) ([]byte, error) {
+		if b == nil {
+			return nil, fmt.Errorf("accepted note %q not found", oldRef)
+		}
+		v, _ := ParseVault(b)
+		if by := frontString(v.Front["superseded_by"]); by == newRef {
+			return b, nil
+		} else if by != "" {
+			return nil, fmt.Errorf("%s is already superseded by %s", oldRef, by)
+		}
+		return vaultSetFront(b, "superseded_by", newRef), nil
+	})
+	if err != nil {
+		return SupersedeResult{}, err
+	}
+	note(wr)
+	return res, nil
+}
+
+// vaultRevert is RevertWith for a vault: version `to` is the note's to-th recorded
+// state, oldest first, and it is written as the note's new bytes with the version
+// check, so a person's edit to another part of the note stays.
+func (s Store) vaultRevert(level, topic, name string, to int, origin Origin, opts RevertOptions) (RevertResult, error) {
+	id := NFC(topic + "/" + name)
+	if !vaultNoteID(id) {
+		return RevertResult{}, keWrInvalid("%q is not a note id", id)
+	}
+	if to < 1 {
+		return RevertResult{}, fmt.Errorf("version must be 1 or more")
+	}
+	hashes, err := s.vaultRecords(level, id, "created", "edited", "renamed")
+	if err != nil {
+		return RevertResult{}, err
+	}
+	if to > len(hashes) {
+		return RevertResult{}, fmt.Errorf("%s/%s has no version %d", topic, name, to)
+	}
+	top, err := s.openTop()
+	if err != nil {
+		return RevertResult{}, err
+	}
+	want, err := s.readVersion(top, level, id, hashes[to-1])
+	top.Close()
+	if err != nil {
+		return RevertResult{}, fmt.Errorf("%s/%s has no version %d", topic, name, to)
+	}
+	wr, err := s.vaultApply(level, id, origin, opts.revertReason(to), false, func([]byte) ([]byte, error) { return want, nil })
+	if err != nil {
+		return RevertResult{}, err
+	}
+	res := RevertResult{Version: to, Wrote: wr.Status == "edited" || wr.Status == "created", Proposed: wr.Proposed}
+	if e, err := s.vaultShow("brain:" + level + "/" + id); err == nil {
+		res.Entry = e
+	}
+	return res, nil
+}
+
+// vaultDrop is Drop for a vault. A drop deletes the note and keeps its bytes under
+// .grid/versions; a change by a person since expect makes it a proposal. A restore
+// writes the dropped bytes back.
+func (s Store) vaultDrop(level, topic, name, op, expect string, origin Origin, reason string) (DropResult, error) {
+	if op != OpDrop && op != OpRestore {
+		return DropResult{}, fmt.Errorf("unknown operation %q", op)
+	}
+	id := NFC(topic + "/" + name)
+	if !vaultNoteID(id) {
+		return DropResult{}, keWrInvalid("%q is not a note id", id)
+	}
+	if op == OpDrop {
+		_, _, err := s.vaultRead(level, id)
+		if err != nil {
+			return DropResult{}, err
+		}
+		wr, err := s.vaultDelete(level, id, expect, origin, reason)
+		if err != nil {
+			return DropResult{}, err
+		}
+		switch wr.Status {
+		case "proposed":
+			return DropResult{Status: "proposed", Rev: wr.Rev, Proposed: wr.Proposed}, nil
+		case "unchanged":
+			return DropResult{}, fmt.Errorf("%s/%s: %w", topic, name, ErrNoSuchNote)
+		}
+		return DropResult{Status: "dropped", Rev: wr.Rev}, nil
+	}
+	cur, _, err := s.vaultRead(level, id)
+	if err != nil {
+		return DropResult{}, err
+	}
+	if cur != nil {
+		return DropResult{}, hyDrRefuse("%s is not dropped", id)
+	}
+	hashes, err := s.vaultRecords(level, id, "deleted")
+	if err != nil {
+		return DropResult{}, err
+	}
+	if len(hashes) == 0 {
+		return DropResult{}, fmt.Errorf("%s/%s: %w", topic, name, ErrNoSuchNote)
+	}
+	top, err := s.openTop()
+	if err != nil {
+		return DropResult{}, err
+	}
+	data, err := s.readVersion(top, level, id, hashes[len(hashes)-1])
+	top.Close()
+	if err != nil {
+		return DropResult{}, err
+	}
+	wr, err := s.vaultWriteOpt(level, topic, name, "none", data, origin, reason, true)
+	if err != nil {
+		return DropResult{}, err
+	}
+	if wr.Status == "proposed" {
+		return DropResult{Status: "proposed", Rev: wr.Rev, Proposed: wr.Proposed}, nil
+	}
+	return DropResult{Status: "restored", Rev: wr.Rev}, nil
+}
+
+// vaultRename is Rename for a vault: the file moves to the new name in its folder
+// with the bytes it has now, so an edit a person made since expect comes along and
+// both edits hold. When the new name is taken, a rename cannot hold and is a
+// proposal. Links in other notes are not rewritten: an old name still resolves to
+// the note it became (5.2).
+func (s Store) vaultRename(level, topic, name, newName, expect string, origin Origin, reason string) (RenameResult, error) {
+	id, newID := NFC(topic+"/"+name), NFC(topic+"/"+newName)
+	if !vaultNoteID(id) || !vaultNoteID(newID) || strings.Contains(newName, "/") {
+		return RenameResult{}, keWrInvalid("%q is not a note id", newID)
+	}
+	if id == newID {
+		return RenameResult{}, fmt.Errorf("the new name is the old name")
+	}
+	if !keWrRevForm(expect) {
+		return RenameResult{}, fmt.Errorf("expect must be none or a rev of 16 lower-case hex digits")
+	}
+	if origin.Kind == "" || strings.TrimSpace(origin.ID) == "" {
+		return RenameResult{}, fmt.Errorf("the change record needs an origin")
+	}
+	top, done, err := s.vaultOpen(level)
+	if err != nil {
+		return RenameResult{}, err
+	}
+	defer done()
+	src, dst := s.levelPrefix(level)+id+".md", s.levelPrefix(level)+newID+".md"
+	for _, p := range []string{src, dst} {
+		if err := keWrNoLink(top, filepath.FromSlash(p)); err != nil {
+			return RenameResult{}, err
+		}
+	}
+	res := RenameResult{From: id, To: newID, Linked: []string{}, Kept: []string{}, Skipped: []string{}}
+	cur, err := fs.ReadFile(top.FS(), src)
+	if errors.Is(err, fs.ErrNotExist) {
+		return RenameResult{}, fmt.Errorf("%s/%s: %w", topic, name, ErrNoSuchNote)
+	}
+	if err != nil {
+		return RenameResult{}, err
+	}
+	curRev := NoteRev(cur)
+	if curRev != expect {
+		if expect == "none" {
+			return RenameResult{}, &ConflictError{Rev: curRev}
+		}
+		if _, err := s.readVersion(top, level, id, expect); err != nil {
+			return RenameResult{}, &ConflictError{Rev: curRev}
+		}
+	}
+	if _, err := top.Lstat(filepath.FromSlash(dst)); err == nil {
+		wr, err := s.vaultProposeChange(top, level, id, expect, curRev, "rename to "+newID+", which is taken", origin, reason)
+		if err != nil {
+			return RenameResult{}, err
+		}
+		res.Status, res.Rev, res.Proposed = "proposed", curRev, wr.Proposed
+		return res, nil
+	}
+	if err := s.storeVersion(top, level, newID, cur); err != nil {
+		return RenameResult{}, err
+	}
+	if err := atomicWrite(top, filepath.FromSlash(dst), cur); err != nil {
+		return RenameResult{}, err
+	}
+	if err := top.Remove(filepath.FromSlash(src)); err != nil {
+		return RenameResult{}, err
+	}
+	if err := s.writeRecord(top, ChangeRecord{Level: level, Status: "renamed", ID: newID, OldID: id, OriginKind: "agent", OriginID: origin.ID,
+		Author: origin.ID, Reason: reason, Topic: topicOfID(newID), Hash: curRev}); err != nil {
+		return RenameResult{}, err
+	}
+	s.touchSeen(top, level, newID+".md", curRev)
+	res.Status, res.Rev = "renamed", curRev
+	return res, nil
 }
