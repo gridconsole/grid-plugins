@@ -116,6 +116,20 @@ func TestDoctorSaysWhenTheOldAppFolderIsInTheWay(t *testing.T) {
 	}
 }
 
+// A home holding only the older app's folder is a new home too: one failing row, the machine id one.
+func TestHomeWithOnlyTheOldAppFolderFailsOnlyTheMachineRow(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, "machine"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rep := runDoctor(t, home, healthyAllowSettings(t, filepath.Dir(home), home))
+	for _, c := range rep.Checks {
+		if c.OK == (c.Name == "machine id") {
+			t.Errorf("row %+v", c)
+		}
+	}
+}
+
 // Homes without the folder get no extra row, so every report stays as it was.
 func TestDoctorHasNoMachineRowOtherwise(t *testing.T) {
 	for name, setup := range map[string]func(t *testing.T, home string){

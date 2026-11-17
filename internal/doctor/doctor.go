@@ -129,11 +129,11 @@ func checkFormat(add func(string, bool, string), dir, label string) {
 	}
 }
 
-// freshHome reports a home only the plugin hooks (sessions/) or grid setup (setup/)
-// have written to: it holds no project and no personal task, so there is nothing
-// for grid migrate to do.
+// freshHome reports a home only the plugin hooks (sessions/), grid setup (setup/) or
+// the older desktop app (its machine/ folder) have written to: it holds no project
+// and no personal task, so there is nothing for grid migrate to do.
 func freshHome(dir string) bool {
-	made := false
+	made := gridhome.OldAppMachine(dir)
 	for _, name := range []string{"sessions", "setup"} {
 		if s, err := os.Stat(filepath.Join(dir, name)); err == nil && s.IsDir() {
 			made = true
