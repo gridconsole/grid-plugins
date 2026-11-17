@@ -134,7 +134,7 @@ func Fold(posts []Post) State {
 				ID, Title, Role, Kind string
 				Repo                  string
 				Base, Model, Effort   string
-				Continues           *string `json:"continues"`
+				Continues             *string `json:"continues"`
 				DiscoveredFrom        *string `json:"discovered_from"`
 				Order                 *int    `json:"order"`
 				Intent                struct{ Owner string }

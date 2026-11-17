@@ -124,11 +124,11 @@ type Job struct {
 	Title           string          `json:"title"`
 	Role            string          `json:"role"`
 	Kind            string          `json:"kind,omitempty"`
-	Repo            string          `json:"repo,omitempty"` // the repo path the Job names; empty is the project's first repo
+	Repo            string          `json:"repo,omitempty"`   // the repo path the Job names; empty is the project's first repo
 	Base            string          `json:"base,omitempty"`   // the branch the Job's clone starts from; empty names none
 	Model           string          `json:"model,omitempty"`  // the Job's own model; empty keeps the role's
 	Effort          string          `json:"effort,omitempty"` // the Job's own effort; empty keeps the role's
-	Status         Status          `json:"status"`
+	Status          Status          `json:"status"`
 	Attempt         int             `json:"attempt"`
 	Assign          *Assignment     `json:"assign"`
 	Generation      int64           `json:"gen"`

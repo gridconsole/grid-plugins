@@ -94,7 +94,7 @@ func FromBrief(id, input string, text []byte, repos []string) (map[string]any, s
 		"id": id, "item": 1, "title": title, "role": "builder",
 		"skills": []any{}, "risk": []any{},
 		"intent": map[string]any{"owner": ptr(ownerAt, ownerAt), "item": ptr(titleAt, titleAt), "goal": ptr(from, to)},
-		"links": []any{}, "keep": []any{}, "decisions": []any{},
+		"links":  []any{}, "keep": []any{}, "decisions": []any{},
 		"read":  []any{fmt.Sprintf("task:%s:1-%d", input, len(lines))},
 		"write": []any{}, "out_of_scope": []any{},
 		"acceptance": acceptance,
