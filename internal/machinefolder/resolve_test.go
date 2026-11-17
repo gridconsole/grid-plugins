@@ -243,6 +243,12 @@ func TestOneResolver(t *testing.T) {
 			return err
 		}
 		for _, n := range needles {
+			// Main's internal/gridconfig holds the same OS default and cannot call
+			// this package (machinefolder imports gridhome, which imports
+			// gridconfig); TestDefaultPathAgreesWithGridconfig keeps the two equal.
+			if n == needles[2] && filepath.Base(filepath.Dir(path)) == "gridconfig" {
+				continue
+			}
 			if strings.Contains(string(b), n) {
 				t.Errorf("%s computes the machine folder itself (%s); call machinefolder.Resolve", path, n)
 			}
