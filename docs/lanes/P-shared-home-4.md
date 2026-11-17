@@ -70,7 +70,7 @@ The test files carry the prefix `pc_machine_`, so they are new files. No existin
 | Rule | Result | Proof |
 |------|--------|-------|
 | Never push | HOLDS | No `git push`; the result leaves as a bundle. |
-| Never touch /srv/gmf, /root/.grid, /srv/grid, other users' homes, another lane's clone | HOLDS | Every command ran in this clone; the new tests use `t.TempDir()` and `t.Setenv`. |
+| Never touch the folders the brief forbids (the shared folders, a root home, other users' homes, another lane's clone) | HOLDS | Every command ran in this clone; the new tests use `t.TempDir()` and `t.Setenv`. |
 | Never sudo, never `pkill -f` | HOLDS | None run. |
 | Commits: small, one sentence, no attribution lines | HOLDS | `git log --oneline origin/main..HEAD` lists one-sentence commits; `git log --oneline -i --grep=Co-Authored --grep=Claude --grep=Generated origin/main..HEAD` prints nothing. |
 | No personal paths, hosts or emails in committed files | HOLDS | The doc and the tests use `<temp>` and `t.TempDir()` paths only. |
