@@ -189,7 +189,7 @@ model: opus
 effort: xhigh
 base: {ref: refs/grid/T-12/jobs/J-7/a2, sha: 3f2c9e1}  # optional: continue the previous attempt's work (Addendum 7 B)
 allow: ["Bash(make deploy-prod)"]   # optional: exact rules, folded only under a person's approval (Addendum 7 A)
-grant: <approval post id>           # the approval that allow rests on
+grant: <approval record>            # the approval post or accepted control that allow rests on (A2)
 expect: {cores: 4, mem_gb: 6}   # optional: the orchestrator's estimate, from past exit costs
 test_run: false         # true for a runner Job that runs a test suite (counts for no_test_run)
 start:
@@ -482,7 +482,7 @@ Decided:
 
 **A2. The allow list.**
 - **Base.** The list is the role agent's `tools:` front matter, as today: `internal/cli/worker.go:317-336` reads it, `internal/orchestrator/stream.go:331-337` puts it on the spawn line, and `runner.go:388-390` passes it.
-- **Exact rule.** The assignment may carry `allow: [<rule>]` and `grant: <approval post id>` (Q2 post shape). The launcher appends each rule to `--allowedTools` as written, and nothing wider. It never turns `Bash(make deploy-prod)` into `Bash(make:*)`, and it never adds `--dangerously-skip-permissions`. The launcher decides nothing here: the rule text comes from the approval.
+- **Exact rule.** The assignment may carry `allow: [<rule>]` and `grant: <approval record>` (an `approval` post or the accepted control; Q2 post shape). The launcher appends each rule to `--allowedTools` as written, and nothing wider. It never turns `Bash(make deploy-prod)` into `Bash(make:*)`, and it never adds `--dangerously-skip-permissions`. The launcher decides nothing here: the rule text comes from the approval.
 - **When `allow` counts.** It folds only when `grant` names an approval record (C, point 11: an `approval` post, or the accepted control of an approve person Job) by a person (tier person, `internal/contract/types.go:13-35`), or by an agent under a Q8 grant that covers `approval` (A6). The approval must be for this task and Job and name exactly these rules. Otherwise the fold ignores the field and the agent starts with its role tools. This is the same read-side rule as Q8, not a gate on the agent. An agent cannot widen its own next attempt by writing `allow`.
 - **Codex Jobs.** Codex Jobs have no exact-rule equivalent in this design. An agent Job that needs a production action runs on a claude account (open item).
 
@@ -525,7 +525,7 @@ Decided:
 
 ### B. Job code on hidden refs (V27)
 
-**Answer:** Lane branches go. An attempt works in a detached worktree in the machine folder. Its work leaves the machine only as a write-once ref, `refs/grid/<T>/jobs/<J>/a<n>`, pushed by the launcher after a secrets check over every new commit. Reviewers and runners on any machine fetch that ref. Accepted work is squashed onto `refs/grid/<T>/head` by an `integrate` command Job. The land Job lands head and moves head to the landed sha in one atomic push. A `cleanup` command Job deletes `refs/grid/<T>/*` when the task closes. Only the brain syncs; code moves through git.
+**Answer:** Lane branches go. An attempt works in a detached worktree in the machine folder. Its work leaves the machine only as a create-only ref (C, point 4), `refs/grid/<T>/jobs/<J>/a<n>`, pushed by the launcher after a secrets check over every new commit. Reviewers and runners on any machine fetch that ref. Accepted work is squashed onto `refs/grid/<T>/head` by an `integrate` command Job. The land Job lands head and moves head to the landed sha in one atomic push. A `cleanup` command Job deletes `refs/grid/<T>/*` when the task closes. Only the brain syncs; code moves through git.
 
 **B1. What this replaces.**
 
@@ -582,7 +582,7 @@ Decided:
 **B4. Verify.**
 - A reviewer, checker or runner Job is assigned with `base: {ref: refs/grid/<T>/jobs/<J>/a<n>, sha}`.
 - Its launcher, on any machine, runs the fetch of B2 and opens a detached worktree at that sha.
-- Because attempt refs are write-once and the post names the sha, every verifier sees exactly the submitted tree ("verified before it merges", V27).
+- Because attempt refs are pushed create-only and the post names the sha, every verifier sees exactly the submitted tree ("verified before it merges", V27).
 
 **B5. Integrate onto `refs/grid/<T>/head`.** Judge-land owns it (C, point 7; judge-land B.7, lane JL 4). The launcher's part is to run the `grid task integrate T J` command Job under the same claim, shim and exit (lane 4 row 9), and to post the one mechanical new attempt after `push_lease_lost` (lane 4 row 10).
 
