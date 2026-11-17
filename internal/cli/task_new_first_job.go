@@ -78,7 +78,11 @@ func postFirstJob(env Env, t task.Task, o task.NewOptions) error {
 		fmt.Fprintf(env.Stderr, "grid task new: %s has no first Job: %q is not a valid <member>@<machine ULID> writer id\n", t.ID, worker)
 		return nil
 	}
-	data, err := json.Marshal(firstJobOf(o.Kind))
+	// The task's home is this machine, the one the writer id names (brain-board.md
+	// decision point 4). Only J-1 carries it, so it is set here and not in firstJobOf.
+	rec := firstJobOf(o.Kind)
+	rec["home"] = machine
+	data, err := json.Marshal(rec)
 	if err != nil {
 		return err
 	}

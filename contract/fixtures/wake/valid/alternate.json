@@ -1,0 +1,29 @@
+{
+  "id": "01K9J000000000000000000003",
+  "task": "01K9J000000000000000000001",
+  "type": "wake",
+  "type_v": 1,
+  "author": {
+    "id": "host",
+    "role": "host"
+  },
+  "tier": "agent",
+  "worker": "host@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 4,
+  "at": "2026-11-08T10:05:00.000Z",
+  "re": null,
+  "after": [],
+  "job": null,
+  "attempt": null,
+  "wake": null,
+  "body": {
+    "events": [
+      "01K9J0000000000000000000E1",
+      "01K9J0000000000000000000E2"
+    ],
+    "pid": 48211
+  }
+}

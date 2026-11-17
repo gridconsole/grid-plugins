@@ -1,0 +1,41 @@
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "exit",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-08T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 3,
+  "wake": null,
+  "body": {
+    "reason": "done",
+    "code": 0,
+    "cost": {
+      "wall_s": 2140,
+      "cpu_s": 3810,
+      "cpu_avg_cores": 1.8,
+      "rss_peak_mb": 2900,
+      "io_read_mb": 410,
+      "io_write_mb": 95,
+      "tokens_in": 81234,
+      "tokens_out": 21011,
+      "cache_read": 1904400,
+      "usd": 6.12,
+      "model": "opus",
+      "account": "claude-team-2"
+    },
+    "sha": "9ab01cd"
+  }
+}

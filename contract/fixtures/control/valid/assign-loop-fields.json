@@ -1,0 +1,63 @@
+{
+  "id": "01K9J000000000000000000003",
+  "task": "01K9J000000000000000000001",
+  "type": "control",
+  "type_v": 1,
+  "author": {
+    "id": "lead",
+    "role": "lead"
+  },
+  "tier": "person-team",
+  "worker": "lead@01K9J000000000000000000002",
+  "lease": "task",
+  "gen": 0,
+  "fence": 1,
+  "seq": 4,
+  "at": "2026-11-08T10:05:00.000Z",
+  "re": null,
+  "after": [],
+  "job": null,
+  "attempt": null,
+  "wake": null,
+  "body": {
+    "assign": {
+      "job": "J-7",
+      "attempt": 3,
+      "to": "builder@01K9J000000000000000000002",
+      "fence": 2,
+      "until": "2026-11-08T10:10:00.000Z",
+      "on": "vm:grid2",
+      "account": "claude-team-2",
+      "model": "opus",
+      "effort": "xhigh",
+      "base": {
+        "ref": "refs/grid/T-12/jobs/J-7/a2",
+        "sha": "3f2c9e1"
+      },
+      "allow": [
+        "Bash(make deploy-prod)"
+      ],
+      "grant": "01K9J0000000000000000000B1",
+      "expect": {
+        "cores": 4,
+        "mem_gb": 6
+      },
+      "test_run": false,
+      "start": {
+        "all": [
+          {
+            "cores_free": 4
+          },
+          {
+            "no_test_run": true
+          }
+        ],
+        "wait_max": "30m"
+      },
+      "carry": {
+        "job": "J-7",
+        "attempt": 2
+      }
+    }
+  }
+}
