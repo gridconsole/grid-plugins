@@ -45,6 +45,17 @@ func Files(version string) (map[string][]byte, error) {
 		"homepage":    "https://github.com/gridconsole/grid-plugins",
 		"repository":  "https://github.com/gridconsole/grid-plugins", "license": "MIT",
 	}
+	// userConfig is a Claude Code manifest key: the "Shared group" question of the
+	// configuration dialog. The answer is the group grid setup --shared-group writes
+	// to the Grid config; Codex has no such key, so its manifest stays as it was.
+	claude := make(map[string]any, len(manifest)+1)
+	for k, v := range manifest {
+		claude[k] = v
+	}
+	claude["userConfig"] = map[string]any{"shared_group": map[string]any{
+		"type": "string", "title": "Shared group", "required": false,
+		"description": "Only when several logins on this computer share one Grid machine folder: the group they share. Leave empty to keep the folder private. grid setup --shared-group <group> writes it to the Grid config and prints the commands a person runs to make the folder; Grid runs no sudo.",
+	}}
 	config := HookConfig{Hooks: make(map[string][]HookGroup)}
 	for _, e := range hook.Events() {
 		config.Hooks[e.Name] = []HookGroup{{Matcher: e.Matcher, Hooks: []HookCommand{{
@@ -53,7 +64,7 @@ func Files(version string) (map[string][]byte, error) {
 	}
 	// Both hosts discover skills/, hooks/hooks.json and .mcp.json at the plugin root.
 	values := map[string]any{
-		".claude-plugin/plugin.json": manifest,
+		".claude-plugin/plugin.json": claude,
 		".codex-plugin/plugin.json":  manifest,
 		"hooks/hooks.json":           config,
 		".mcp.json": map[string]any{"mcpServers": map[string]any{"grid-feed": map[string]any{

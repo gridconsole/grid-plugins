@@ -1,0 +1,7 @@
+{
+  "commands": "sudo mkdir -p /srv/grid",
+  "config": "/home/example/.config/grid/config.json",
+  "group": "grid",
+  "path": "/srv/grid",
+  "ready": false
+}
