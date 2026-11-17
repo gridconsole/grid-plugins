@@ -1114,83 +1114,8 @@ func merge3(base, agent, cur []byte) (out []byte, conflict string, ok bool) {
 	return []byte(buf.String()), "", true
 }
 
-// CheckGridIntegrity is the finding for a .grid/ file that does not read as what
-// it should be: a record that does not parse, or a record whose version is gone.
-// It is the only drift finding left for a vault: a person's edit is adopted, not
-// reported (7.1).
-const CheckGridIntegrity = "grid_integrity"
-
-// CheckSecretShaped is the finding for a line of a note that looks like a secret.
-// It names the file and the line only: the finding never carries the line.
-const CheckSecretShaped = "secret-shaped"
-
-// vaultCheck adopts what a person changed, then reports what is wrong in the
-// vault. It writes no proposal and never changes a note.
-func (s Store) vaultCheck(res *CheckResult) error {
-	n, err := s.Adopt()
-	if err != nil {
-		return err
-	}
-	res.Adopted = n
-	top, err := s.openTop()
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	defer top.Close()
-	recs, bad, err := readRecords(top)
-	if err != nil {
-		return err
-	}
-	for _, p := range bad {
-		res.Findings = append(res.Findings, Finding{Code: CheckGridIntegrity, File: p, Message: "change record does not parse"})
-	}
-	st := s.foldRecords(recs)
-	var missing []string
-	for k, h := range st.live {
-		lvl, lvDir := "home", "home"
-		if strings.HasPrefix(k.lv, "project/") {
-			lvl, lvDir = "project", k.lv[len("project/"):]
-			s2 := s
-			s2.Project = lvDir
-			if _, err := s2.readVersion(top, lvl, k.id, h); err != nil {
-				missing = append(missing, versionRel("projects/"+lvDir, k.id, h))
-			}
-			continue
-		}
-		if _, err := s.readVersion(top, lvl, k.id, h); err != nil {
-			missing = append(missing, versionRel(lvDir, k.id, h))
-		}
-	}
-	sort.Strings(missing)
-	for _, p := range missing {
-		res.Findings = append(res.Findings, Finding{Code: CheckGridIntegrity, File: p, Message: "version named by a change record is missing"})
-	}
-	for _, level := range s.levels() {
-		if level == "project" && !ValidName(s.Project) {
-			continue
-		}
-		files, err := s.walkLevel(top, level)
-		if err != nil {
-			return err
-		}
-		for i := range files {
-			f := &files[i]
-			if s.loadFile(top, level, f) != nil {
-				continue
-			}
-			res.Checked++
-			for ln, line := range strings.Split(string(f.data), "\n") {
-				if LooksSecret(line) {
-					res.add(CheckSecretShaped, s.levelPrefix(level)+f.path, ln+1, "line looks like a secret; the note is unchanged", "")
-				}
-			}
-		}
-	}
-	return nil
-}
+// CheckGridIntegrity, CheckSecretShaped and vaultCheck moved to audit_check.go: the
+// drift finding of a vault is there (5.3).
 
 // --- the version check of a Grid write to a vault (5.4) ---
 
@@ -1229,6 +1154,12 @@ func secretLineNotIn(old, data []byte) bool {
 // bytes, unit by unit; only a front-matter key or a body section both sides
 // changed, differently, makes a proposal in Proposals/ and leaves the note alone.
 func (s Store) vaultWrite(level, topic, name, expect string, data []byte, origin Origin, reason string) (WriteResult, error) {
+	return s.vaultWriteOpt(level, topic, name, expect, data, origin, reason, false)
+}
+
+// vaultWriteOpt is vaultWrite. noSecret leaves out the secret-shaped line check,
+// for a config entry, whose old write path never made it.
+func (s Store) vaultWriteOpt(level, topic, name, expect string, data []byte, origin Origin, reason string, noSecret bool) (WriteResult, error) {
 	id := NFC(topic + "/" + name)
 	if !vaultNoteID(id) {
 		return WriteResult{}, keWrInvalid("%q is not a note id", id)
@@ -1303,7 +1234,7 @@ func (s Store) vaultWrite(level, topic, name, expect string, data []byte, origin
 		}
 		final = merged
 	}
-	if secretLineNotIn(cur, final) {
+	if !noSecret && secretLineNotIn(cur, final) {
 		return WriteResult{}, keWrInvalid("a line looks like a secret")
 	}
 	res := WriteResult{Status: "edited", Rev: NoteRev(final), Path: filepath.Join(s.BrainDir, osRel)}
@@ -1370,7 +1301,12 @@ func (s Store) vaultPropose(top *os.Root, level, id, expect, curRev string, data
 		b.WriteString("\n")
 	}
 	b.WriteString(fence + "\n")
-	out := []byte(b.String())
+	return s.vaultPutProposal(top, level, id, stem, curRev, []byte(b.String()), origin, reason)
+}
+
+// vaultPutProposal writes a draft to Proposals/<stem>[-n], reusing the path of a
+// draft that holds the same bytes, with its version and its record.
+func (s Store) vaultPutProposal(top *os.Root, level, id, stem, curRev string, out []byte, origin Origin, reason string) (WriteResult, error) {
 	pid := "Proposals/" + stem
 	for n := 2; ; n++ {
 		have, err := fs.ReadFile(top.FS(), s.levelPrefix(level)+pid+".md")
