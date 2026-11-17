@@ -233,8 +233,9 @@ func appStartArgs(name, home string) []string {
 func shiftAppLog(path string) { logshift.Shift(path, appLogLimit, appLogFiles) }
 
 // startDetached starts a program that outlives grid open: its own session or process
-// group, no terminal, output in <Grid home>/logs/<name>.log. It runs with args, and
-// the app finds the Grid home through GRID_HOME as well.
+// group, no terminal, output in <Grid home>/logs/<name>.log (launcher/<login>/<name>.log
+// in the machine folder when one is set). It runs with args, and the app finds the
+// Grid home through GRID_HOME as well.
 func startDetached(env Env, name, path string, args []string) error {
 	logPath, err := env.MachineFolder.LogPath(env.GridHome, env.login(), name)
 	if err != nil {

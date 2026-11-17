@@ -85,19 +85,21 @@ func (f Folder) OpenStartLock(path string) (*os.File, error) {
 }
 
 // StateFile is the file a task's fold is published to: <feed folder>/state.json,
-// and tasks/<task id>/state.json in the machine folder when Active.
+// and tasks/<task id>/state.json in the machine folder when Active. A feed with no
+// task id has no name to put under tasks/, so it keeps <feed folder>/state.json.
 func (f Folder) StateFile(feedDir, taskID string) (string, error) {
-	if !f.Active() {
+	if !f.Active() || taskID == "" {
 		return filepath.Join(feedDir, "state.json"), nil
 	}
 	return f.StatePath(taskID)
 }
 
-// WriteStateFile writes the fold at a StateFile path by atomic rename. Not Active
-// it is 0600, as before; Active it is WriteFile, so a shared folder gets 0660 and a
-// reader under any login sees the whole old file or the whole new one.
+// WriteStateFile writes the fold at a StateFile path by atomic rename. Outside the
+// machine folder (not Active, or a feed with no task id) it is 0600, as before; in it
+// it is WriteFile, so a shared folder gets 0660 and a reader under any login sees the
+// whole old file or the whole new one.
 func (f Folder) WriteStateFile(path string, data []byte) error {
-	if !f.Active() {
+	if !f.Active() || !f.inside(path) {
 		return atomicfile.Write(path, data, 0o600)
 	}
 	return f.WriteFile(path, data)
