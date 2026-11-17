@@ -1,6 +1,7 @@
 # P-jobs-land-g1: close the decision-gate gaps of run-jobs and judge-land
 
-Docs only. No code changed and nothing built. The two docs are
+This lane's own commits are docs only; the branch also carries the `grid run`
+code of lane-P-run-jobs-a7 (see docs/lanes/P-jobs-land-g1-fix1.md). The two docs are
 `docs/research/run-jobs-launcher.md` ("RJ") and `docs/research/judge-land.md`
 ("JL"). Line numbers are on this lane's head, after the merge of origin/main.
 Both docs still end with the line `DONE` (RJ:688, JL:962).
