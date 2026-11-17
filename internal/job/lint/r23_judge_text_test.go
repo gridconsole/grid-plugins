@@ -17,12 +17,13 @@ func TestR23OrchestratorNamesNeverJudged(t *testing.T) {
 }
 
 // docs/job-contract.md says who posts the review of a submitted Job and the rework
-// after a rejection: the app's Judge, so a plugin with no app worker leaves a
-// done Job submitted.
+// after a rejection: the plugin's grid judge review and grid judge rework, while the
+// app's Judge keeps running until A-worker-out. A done Job that nothing judges stays
+// submitted and grid job tree names it never_judged.
 func TestR23JobContractSaysTheJudgePostsReviewAndRework(t *testing.T) {
 	text := strings.Join(strings.Fields(readText(t, "../../../docs/job-contract.md")), " ")
 	for _, want := range []string{
-		"The review of a submitted Job and the rework after a rejection are posted by the app's Judge, not by the plugin",
+		"The review of a submitted Job and the rework after a rejection are posted by the plugin's `grid judge review` and `grid judge rework`, and the app's Judge keeps running until A-worker-out",
 		"`never_judged`",
 	} {
 		if !strings.Contains(text, want) {
