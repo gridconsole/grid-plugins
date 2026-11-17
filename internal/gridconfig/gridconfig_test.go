@@ -112,6 +112,109 @@ func TestMigrateV1WritesNoOldKeys(t *testing.T) {
 	}
 }
 
+// The older ~/.grid/config.json is read when the new path has no file and copied
+// there once, byte for byte, with the old file left in place; a later Load reads the
+// new file, so a change made there is kept; a new file always wins; and when the
+// copy cannot be made the old file is still read in place.
+func TestLoadCopiesOldFileOnce(t *testing.T) {
+	home := t.TempDir()
+	old := OldPath(home)
+	path := PathFor("linux", func(string) string { return "" }, home)
+	if path != filepath.Join(home, ".config", "grid", File) || old != filepath.Join(home, ".grid", File) {
+		t.Fatalf("paths %q %q", path, old)
+	}
+	if l := Load(path, old); l.Found || l.Err != nil || l.Path != "" {
+		t.Fatalf("no file: %+v", l)
+	}
+	v2 := `{"v":2,"current":"acme","workspaces":[{"name":"acme","member":"sam","step":null}],"kept":1}`
+	if err := os.MkdirAll(filepath.Dir(old), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(old, []byte(v2), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l := Load(path, old)
+	if !l.Found || l.Err != nil || l.Path != path || l.CopiedFrom != old || l.Config.CurrentEntry() == nil || l.Config.V != 2 {
+		t.Fatalf("old only: %+v", l)
+	}
+	if b, err := os.ReadFile(path); err != nil || string(b) != v2 {
+		t.Fatalf("copy = %q %v, want the old bytes", b, err)
+	}
+	if b, err := os.ReadFile(old); err != nil || string(b) != v2 {
+		t.Fatalf("old file = %q %v, want it left in place", b, err)
+	}
+	edited := `{"v":3,"current":"beta","workspaces":[{"name":"beta"}]}`
+	if err := os.WriteFile(path, []byte(edited), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l = Load(path, old)
+	if l.CopiedFrom != "" || l.Path != path || l.Config.Current != "beta" {
+		t.Fatalf("second load: %+v", l)
+	}
+	if b, _ := os.ReadFile(path); string(b) != edited {
+		t.Fatalf("the new file was replaced: %s", b)
+	}
+
+	// The new path's folder is a file, so the copy cannot be made.
+	home2 := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home2, ".config"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old2 := OldPath(home2)
+	if err := os.MkdirAll(filepath.Dir(old2), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(old2, []byte(v2), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l = Load(PathFor("linux", func(string) string { return "" }, home2), old2)
+	if !l.Found || l.Err != nil || l.Path != old2 || l.CopiedFrom != "" || l.Config.Current != "acme" {
+		t.Fatalf("copy cannot be made: %+v", l)
+	}
+
+	// A broken old file is reported and not copied.
+	home3 := t.TempDir()
+	old3 := OldPath(home3)
+	if err := os.MkdirAll(filepath.Dir(old3), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(old3, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path3 := PathFor("darwin", func(string) string { return "" }, home3)
+	if l := Load(path3, old3); !l.Found || l.Err == nil || l.CopiedFrom != "" {
+		t.Fatalf("broken old: %+v", l)
+	}
+	if _, err := os.Stat(path3); err == nil {
+		t.Fatal("a broken old file was copied")
+	}
+}
+
+// The brain and machine folder keys are read, and kept on a write.
+func TestBrainAndMachineFolderKeys(t *testing.T) {
+	cfg, err := Parse([]byte(`{"v":3,"current":"a","machineFolder":"/m/grid","workspaces":[{"name":"a","brain":"/b/brain"},{"name":"c","brain":"rel"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.CurrentEntry().BrainFolder(); got != filepath.Clean("/b/brain") {
+		t.Fatalf("brain = %q", got)
+	}
+	if got := cfg.Entry("c").BrainFolder(); got != "" {
+		t.Fatalf("relative brain = %q, want none", got)
+	}
+	if dir, fromConfig := cfg.MachineDir("linux", func(string) string { return "" }, "/h"); dir != filepath.Clean("/m/grid") || !fromConfig {
+		t.Fatalf("machine = %q %v", dir, fromConfig)
+	}
+	b, err := cfg.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := Parse(b)
+	if err != nil || again.MachineFolder != "/m/grid" || again.CurrentEntry().Brain != "/b/brain" {
+		t.Fatalf("written: %s %v", b, err)
+	}
+}
+
 func TestNames(t *testing.T) {
 	for _, s := range []string{"acme", "a.b_c-1", "Sam"} {
 		if !ValidName(s) {

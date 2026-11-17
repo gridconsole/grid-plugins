@@ -35,7 +35,7 @@ func checkLauncher(add func(string, bool, string), o Options) {
 	if runtime.GOOS == "windows" {
 		name = "grid.exe"
 	}
-	launcher := filepath.Join(gridhome.FindLauncherDir(o.Home, o.GridHome), "bin", name)
+	launcher := filepath.Join(gridhome.FindLauncherDir(os.Getenv, o.Home, o.GridHome), "bin", name)
 	if _, err := os.Lstat(launcher); err != nil {
 		return
 	}

@@ -7,33 +7,47 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/gridconfig"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/project"
 )
 
-// pcConfigHome makes a home folder whose ~/.grid/config.json is the contract
-// fixture case, with "~" read as that folder, and clears every variable that would
-// pick the Grid home without the config.
+// pcConfigHome makes a home folder holding the contract fixture case, with "~" read
+// as that folder: its config.json at the config path (~/.config/grid/config.json;
+// on Windows %APPDATA%\Grid, here under the home folder) and its old-config.json at
+// ~/.grid/config.json. It clears every variable that would pick the Grid home
+// without the config.
 func pcConfigHome(t *testing.T, fixture string) string {
 	t.Helper()
 	home := t.TempDir()
-	for _, key := range []string{"GRID_HOME", "GRID_PROJECTS", "USERPROFILE"} {
+	for _, key := range []string{"GRID_HOME", "GRID_PROJECTS", "USERPROFILE", "APPDATA", "LOCALAPPDATA"} {
 		t.Setenv(key, "")
 	}
 	t.Setenv("HOME", home)
 	if os.Getenv("USERPROFILE") == "" && filepath.Separator == '\\' {
 		t.Setenv("USERPROFILE", home)
 	}
-	b, err := os.ReadFile(filepath.Join("..", "..", "contract", "gridconfig", fixture, "config.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	q, _ := json.Marshal(home)
-	text := strings.ReplaceAll(string(b), "~", strings.Trim(string(q), `"`))
-	if err := os.MkdirAll(filepath.Join(home, ".grid"), 0o700); err != nil {
-		t.Fatal(err)
+	placed := 0
+	for name, path := range map[string]string{
+		"config.json":     gridconfig.Path(os.Getenv, home),
+		"old-config.json": gridconfig.OldPath(home),
+	} {
+		b, err := os.ReadFile(filepath.Join("..", "..", "contract", "gridconfig", fixture, name))
+		if err != nil {
+			continue
+		}
+		text := strings.ReplaceAll(string(b), "~", strings.Trim(string(q), `"`))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		placed++
 	}
-	if err := os.WriteFile(filepath.Join(home, ".grid", "config.json"), []byte(text), 0o600); err != nil {
-		t.Fatal(err)
+	if placed == 0 {
+		t.Fatalf("fixture %s has no config file", fixture)
 	}
 	return home
 }
@@ -48,11 +62,17 @@ func pcRun(t *testing.T, args ...string) (string, int) {
 	return out.String() + errOut.String(), code
 }
 
-// Row (1): the owner-shaped config (v2, data in ~/.grid/<name>) makes the brain and
-// project reads list what sits in that data folder, and nothing is copied to ~/.grid.
+// Row (1): the owner-shaped config (a redacted v3 sample at the older
+// ~/.grid/config.json, data in ~/.grid/<name>) makes the brain and project reads
+// list what sits in that data folder; the config file is copied once to
+// ~/.config/grid/config.json with the old one left in place, and no data is copied.
 func TestPcConfigDataFolderIsRead(t *testing.T) {
-	home := pcConfigHome(t, "v2-owner")
-	data := filepath.Join(home, ".grid", "acme")
+	home := pcConfigHome(t, "owner-v3")
+	data := filepath.Join(home, ".grid", "studio")
+	old, err := os.ReadFile(gridconfig.OldPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
 	work := filepath.Join(home, "workspace", "example")
 	if err := os.MkdirAll(work, 0o700); err != nil {
 		t.Fatal(err)
@@ -89,6 +109,30 @@ func TestPcConfigDataFolderIsRead(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(home, ".grid", name)); err == nil {
 			t.Fatalf("~/.grid/%s exists: the data was copied or written to ~/.grid", name)
 		}
+	}
+	if b, err := os.ReadFile(gridconfig.Path(os.Getenv, home)); err != nil || string(b) != string(old) {
+		t.Fatalf("~/.config/grid/config.json = %q %v, want the copy of ~/.grid/config.json", b, err)
+	}
+	if b, err := os.ReadFile(gridconfig.OldPath(home)); err != nil || string(b) != string(old) {
+		t.Fatalf("~/.grid/config.json = %q %v, want it left in place", b, err)
+	}
+	if env := OSEnv(); env.Resolved.Config != gridconfig.Path(os.Getenv, home) || env.Resolved.Workspace != "studio" || env.Resolved.Member != "sam" {
+		t.Fatalf("Resolved = %+v", env.Resolved)
+	}
+}
+
+// Row (2) with the flag: --grid-home picks the workspace that names its folder, and
+// that workspace's brain, from the shared config.
+func TestPcFlagPicksItsWorkspace(t *testing.T) {
+	home := pcConfigHome(t, "brain-machine")
+	data := filepath.Join(home, "grid-data", "acme")
+	_, env, code := applyGlobalFlags([]string{"--grid-home", data, "version"}, OSEnv())
+	if code != 0 || env.GridHome != data || env.Resolved.Source != gridhome.SourceFlag || env.Resolved.Workspace != "acme" || env.Resolved.Brain != filepath.Join(home, "Brain", "acme") {
+		t.Fatalf("code %d Resolved = %+v", code, env.Resolved)
+	}
+	_, env, _ = applyGlobalFlags([]string{"--grid-home", filepath.Join(home, "elsewhere"), "version"}, OSEnv())
+	if env.Resolved.Workspace != "" || env.Resolved.Brain != "" {
+		t.Fatalf("a folder no workspace names: Resolved = %+v", env.Resolved)
 	}
 }
 

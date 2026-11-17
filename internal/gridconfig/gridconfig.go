@@ -1,8 +1,23 @@
-// Package gridconfig reads and writes ~/.grid/config.json, the one first-run config
-// the plugin and the app share: the workspaces this machine knows, the one in use,
-// and for each its data folder and member. It reads version 3 and the earlier desktop's
-// version 2 and version 1 shapes, writes version 3 only, and keeps every key it does
-// not know. It never decides a folder by itself; gridhome resolves the Grid home from it.
+// Package gridconfig reads and writes the one first-run config the plugin and the
+// app share: the workspaces this machine knows, the one in use, and for each its
+// data folder, brain folder and member, plus the machine folder when it is not at
+// the OS standard place.
+//
+// The config is ~/.config/grid/config.json on macOS and Linux and
+// %APPDATA%\Grid\config.json on Windows; XDG_CONFIG_HOME is not read, so the app
+// and the plugin find the same file from a Finder launch too. The older
+// ~/.grid/config.json is read when the new file is missing, and Load copies it once
+// to the new path, leaving the old file in place.
+//
+// The machine folder (locks, caches, worktrees, runner logs, bin/grid) is
+// ~/Library/Application Support/Grid on macOS, ~/.local/state/grid on Linux and
+// %LOCALAPPDATA%\Grid on Windows (XDG_STATE_HOME is not read), unless the config's
+// "machineFolder" names another absolute folder. ~/.grid stays the default data
+// folder and the parent of <name> data folders.
+//
+// It reads version 3 and the earlier desktop's version 2 and version 1 shapes,
+// writes version 3 only, and keeps every key it does not know. It never decides a
+// folder by itself; gridhome resolves the Grid home from it.
 package gridconfig
 
 import (
@@ -13,18 +28,20 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
 // Version is the config shape this grid writes as "v".
 const Version = 3
 
-// File is the config's name in the machine folder.
+// File is the config's file name.
 const File = "config.json"
 
-// MachineDirName is the machine folder's name in the user's home folder. It holds
-// config.json and bin/grid; it is also the data folder when no config names another.
-const MachineDirName = ".grid"
+// DataDirName is the default data folder's name in the user's home folder. It is
+// the data folder when no config names another, the parent of ~/.grid/<name> data
+// folders, and where the older config and launcher sit.
+const DataDirName = ".grid"
 
 // FallbackName is the workspace name the v1 rules give when no plain name is found.
 const FallbackName = "default"
@@ -32,20 +49,73 @@ const FallbackName = "default"
 // v1 keys: the earlier shape kept one workspace in the top level.
 var legacyKeys = []string{"workspace", "projectsFolder", "member", "setup", "step"}
 
-// MachineDir is <userHome>/.grid, or "" when userHome is unknown.
-func MachineDir(userHome string) string {
+// DataRoot is <userHome>/.grid, or "" when userHome is unknown.
+func DataRoot(userHome string) string {
 	if userHome == "" {
 		return ""
 	}
-	return filepath.Join(userHome, MachineDirName)
+	return filepath.Join(userHome, DataDirName)
 }
 
-// Path is <userHome>/.grid/config.json, or "" when userHome is unknown.
-func Path(userHome string) string {
+// OldPath is the older config <userHome>/.grid/config.json, or "" when userHome is
+// unknown. It is read only when Path has no file.
+func OldPath(userHome string) string {
 	if userHome == "" {
 		return ""
 	}
-	return filepath.Join(MachineDir(userHome), File)
+	return filepath.Join(DataRoot(userHome), File)
+}
+
+// Path is the config on this OS; see PathFor.
+func Path(getenv func(string) string, userHome string) string {
+	return PathFor(runtime.GOOS, getenv, userHome)
+}
+
+// PathFor is the config for goos: %APPDATA%\Grid\config.json on Windows (APPDATA
+// unset: <userHome>\AppData\Roaming), else <userHome>/.config/grid/config.json.
+// It is "" when the folder cannot be known.
+func PathFor(goos string, getenv func(string) string, userHome string) string {
+	if goos == "windows" {
+		base := getenv("APPDATA")
+		if base == "" && userHome != "" {
+			base = filepath.Join(userHome, "AppData", "Roaming")
+		}
+		if base == "" {
+			return ""
+		}
+		return filepath.Join(base, "Grid", File)
+	}
+	if userHome == "" {
+		return ""
+	}
+	return filepath.Join(userHome, ".config", "grid", File)
+}
+
+// MachineDirFor is the OS standard machine folder for goos: ~/Library/Application
+// Support/Grid on macOS, %LOCALAPPDATA%\Grid on Windows (LOCALAPPDATA unset:
+// <userHome>\AppData\Local), else ~/.local/state/grid. It is "" when the folder
+// cannot be known. The config's MachineFolder, when set, is used instead.
+func MachineDirFor(goos string, getenv func(string) string, userHome string) string {
+	switch goos {
+	case "windows":
+		base := getenv("LOCALAPPDATA")
+		if base == "" && userHome != "" {
+			base = filepath.Join(userHome, "AppData", "Local")
+		}
+		if base == "" {
+			return ""
+		}
+		return filepath.Join(base, "Grid")
+	case "darwin", "ios":
+		if userHome == "" {
+			return ""
+		}
+		return filepath.Join(userHome, "Library", "Application Support", "Grid")
+	}
+	if userHome == "" {
+		return ""
+	}
+	return filepath.Join(userHome, ".local", "state", "grid")
 }
 
 // Workspace is one entry of "workspaces".
@@ -53,7 +123,8 @@ type Workspace struct {
 	Name string
 	// Data is the absolute data folder; empty (or relative) means ~/.grid/<name>.
 	Data string
-	// Brain is the absolute brain folder; empty means the data folder.
+	// Brain is the absolute brain folder, apart from the data folder that holds
+	// tasks, accounts and usage; empty means the brain stays in the data folder.
 	Brain  string
 	Member string
 	// Folder is the folder that holds the repositories.
@@ -78,6 +149,10 @@ type Config struct {
 	Choices map[string]json.RawMessage
 	// SetupAt is when setup last saved, RFC 3339.
 	SetupAt string
+	// MachineFolder is "machineFolder": an absolute machine folder instead of the
+	// OS standard place (on the VM, one folder shared by several logins); "" or a
+	// relative path means the OS standard place.
+	MachineFolder string
 	// Legacy is the v1 top-level workspace when the file has one; Migrate turns it
 	// into an entry and Write never writes it back.
 	Legacy *Legacy
@@ -112,6 +187,80 @@ func Read(path string) (cfg Config, found bool, err error) {
 	return cfg, true, err
 }
 
+// Loaded is what Load found.
+type Loaded struct {
+	Config Config
+	// Found is false when neither file is there.
+	Found bool
+	// Path is the file read: the new path, or the old one when the copy could not
+	// be made. "" when nothing was found.
+	Path string
+	// CopiedFrom is the old path when this Load copied it to the new path.
+	CopiedFrom string
+	// Err says why the file read could not be used; the caller goes on as if there
+	// were no config.
+	Err error
+}
+
+// Load reads the config at path. When path has no file and old has one that
+// parses, it copies old's bytes once to path (through a temporary file and a
+// rename, the old file left in place) and reads them; when the copy cannot be
+// made it reads old in place. A file at path always wins over old.
+func Load(path, old string) Loaded {
+	cfg, found, err := Read(path)
+	if found && err != nil {
+		// A path that cannot hold a file (a file where its folder should be) has none.
+		if st, serr := os.Stat(path); serr != nil && !errors.Is(serr, fs.ErrPermission) || serr == nil && st.IsDir() {
+			cfg, found, err = Config{}, false, nil
+		}
+	}
+	if found || old == "" || old == path {
+		l := Loaded{Config: cfg, Found: found, Err: err}
+		if found {
+			l.Path = path
+		}
+		return l
+	}
+	b, err := os.ReadFile(old)
+	if errors.Is(err, fs.ErrNotExist) {
+		return Loaded{}
+	}
+	if err != nil {
+		return Loaded{Found: true, Path: old, Err: err}
+	}
+	cfg, err = Parse(b)
+	l := Loaded{Config: cfg, Found: true, Path: old, Err: err}
+	if err == nil && path != "" && copyOnce(b, path) == nil {
+		l.Path, l.CopiedFrom = path, old
+	}
+	return l
+}
+
+// copyOnce writes b at path when path has no file yet, through a temporary file in
+// the same folder and a rename, so a reader never sees half a file.
+func copyOnce(b []byte, path string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".config-*.json")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	_, werr := tmp.Write(b)
+	cerr := tmp.Close()
+	if werr != nil || cerr != nil {
+		return errors.Join(werr, cerr)
+	}
+	if _, err := os.Lstat(path); err == nil {
+		// Another grid made it first, or something else sits there: read old in place.
+		return fs.ErrExist
+	}
+	return os.Rename(name, path)
+}
+
 // Parse decodes the file's bytes.
 func Parse(b []byte) (Config, error) {
 	var top map[string]json.RawMessage
@@ -130,6 +279,7 @@ func Parse(b []byte) (Config, error) {
 	}
 	str(top, "current", &c.Current)
 	str(top, "setupAt", &c.SetupAt)
+	str(top, "machineFolder", &c.MachineFolder)
 	if raw, ok := take(top, "choices"); ok && !isNull(raw) {
 		if err := json.Unmarshal(raw, &c.Choices); err != nil {
 			return Config{}, fmt.Errorf("config.json: choices: %w", err)
@@ -227,15 +377,25 @@ func (w Workspace) DataFolder(userHome string) string {
 	if userHome == "" || !ValidName(w.Name) || reserved(w.Name) {
 		return ""
 	}
-	return filepath.Join(MachineDir(userHome), w.Name)
+	return filepath.Join(DataRoot(userHome), w.Name)
 }
 
-// BrainFolder is the entry's brain folder: its own brain when absolute, else the data folder.
-func (w Workspace) BrainFolder(userHome string) string {
+// BrainFolder is the entry's own brain folder when "brain" is an absolute path,
+// else "": the brain then stays in the data folder, as it does today.
+func (w Workspace) BrainFolder() string {
 	if w.Brain != "" && filepath.IsAbs(w.Brain) {
 		return filepath.Clean(w.Brain)
 	}
-	return w.DataFolder(userHome)
+	return ""
+}
+
+// MachineDir is the machine folder for goos: the config's MachineFolder when it is
+// an absolute path, else MachineDirFor. fromConfig says which.
+func (c *Config) MachineDir(goos string, getenv func(string) string, userHome string) (dir string, fromConfig bool) {
+	if c.MachineFolder != "" && filepath.IsAbs(c.MachineFolder) {
+		return filepath.Clean(c.MachineFolder), true
+	}
+	return MachineDirFor(goos, getenv, userHome), false
 }
 
 // reserved names a name whose folder under ~/.grid is something else.
@@ -292,7 +452,7 @@ func (c *Config) Migrate(userHome, login string) bool {
 	if w.Setup == "" {
 		w.Setup = "new"
 	}
-	if oldData != "" && (userHome == "" || oldData != filepath.Join(MachineDir(userHome), name)) {
+	if oldData != "" && (userHome == "" || oldData != filepath.Join(DataRoot(userHome), name)) {
 		w.Data = oldData
 	}
 	c.Workspaces = append(c.Workspaces, w)
@@ -385,6 +545,9 @@ func (c Config) Marshal() ([]byte, error) {
 	}
 	if c.SetupAt != "" {
 		top["setupAt"] = c.SetupAt
+	}
+	if c.MachineFolder != "" {
+		top["machineFolder"] = c.MachineFolder
 	}
 	b, err := json.MarshalIndent(top, "", "  ")
 	if err != nil {

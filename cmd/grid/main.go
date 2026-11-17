@@ -12,12 +12,13 @@ import (
 
 func main() {
 	env := cli.OSEnv()
-	launchDir := env.GridHome
-	if env.Resolved.Dir == env.GridHome {
-		// The machine folder (~/.grid) when the data folder is the config's or sits in it.
-		launchDir = env.Resolved.LauncherDir()
+	for _, dir := range env.Resolved.LauncherDirs() {
+		if dir == env.Resolved.Machine {
+			// The machine folder sits at the OS standard place without asking.
+			_ = os.MkdirAll(dir, 0o700)
+		}
+		blLaunchRefresh(dir)
 	}
-	blLaunchRefresh(launchDir)
 	os.Exit(cli.Run(os.Args[1:], env))
 }
 
