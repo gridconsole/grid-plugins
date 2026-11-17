@@ -1119,7 +1119,7 @@ A waited post is the outcome of `grid wait`: `status` is `green`, `red` or `time
 }
 ```
 
-Read: contract/schemas/waited.json:73; internal/contract/fold.go:101-103 (no waited case); contract/README.md:185.
+Read: contract/schemas/waited.json:73; internal/contract/fold.go:101-103 (no waited case); contract/README.md:186.
 
 ## waiting
 Version 1. Class state. Written by cli, host, worker.
@@ -1171,7 +1171,7 @@ A waiting post says that an assignment's `start` condition has not held for its 
 }
 ```
 
-Read: contract/schemas/waiting.json:111; internal/contract/fold.go:101-103 (no waiting case); contract/README.md:186.
+Read: contract/schemas/waiting.json:111; internal/contract/fold.go:101-103 (no waiting case); contract/README.md:187.
 
 ## wake
 Version 1. Class state. Written by cli, host.
@@ -1208,7 +1208,7 @@ A wake post records that the task's home launcher woke the orchestrator: `events
 }
 ```
 
-Read: contract/schemas/wake.json:71; internal/contract/fold.go:101-103 (no wake case); contract/README.md:187.
+Read: contract/schemas/wake.json:71; internal/contract/fold.go:101-103 (no wake case); contract/README.md:188.
 
 ## worker-exit
 Version 1. Class state. Written by worker, agent, cli.
