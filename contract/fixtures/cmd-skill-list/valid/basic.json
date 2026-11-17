@@ -2,6 +2,7 @@
   "brain-keeper": true,
   "browser": true,
   "deliver": true,
+  "first-run": true,
   "plan-jobs": true,
   "questions": true,
   "research": true,
