@@ -7,6 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -14,6 +18,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
+	"github.com/gridconsole/grid-plugins/internal/safefile"
 )
 
 type Entry struct {
@@ -226,6 +231,92 @@ func decode(name string, b []byte) (Entry, error) {
 	e.Limits, err = e.EffectiveLimits()
 	return e, err
 }
+
+// brainDir is the brain folder routines are read from: BrainDir when the store
+// carries it, else the folder the Grid config names for GridHome, "" when the key
+// is absent (the routines then stay in GridHome/knowledge/routines).
+func (s Store) brainDir() string {
+	if s.BrainDir != "" || s.GridHome == "" {
+		return s.BrainDir
+	}
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return s.brain().WithConfig(userHome, os.Getenv).BrainDir
+}
+
+// vaultDir is the folder of the routines below the brain folder: grid/routines at
+// home, projects/<project>/grid/routines at project level.
+func (s Store) vaultDir() string {
+	if s.level() == "project" {
+		return path.Join("projects", s.Project, "grid", "routines")
+	}
+	return path.Join("grid", "routines")
+}
+
+// readEntry reads a routine: from the brain folder's grid/routines when there is
+// a brain folder, falling back to knowledge/routines for an entry the folder does
+// not hold (the writers still put new entries there); with no brain folder,
+// knowledge/routines alone. A missing entry wraps fs.ErrNotExist.
+func (s Store) readEntry(name string) ([]byte, error) {
+	if dir := s.brainDir(); dir != "" && brain.ValidName(name) && name != "TOPIC" &&
+		(s.level() == "home" || brain.ValidName(s.Project)) {
+		root, err := os.OpenRoot(dir)
+		if err == nil {
+			defer root.Close()
+			b, err := safefile.Read(root, path.Join(s.vaultDir(), name+".md"))
+			if !errors.Is(err, fs.ErrNotExist) {
+				return b, err
+			}
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+	}
+	return s.brain().ReadConfig(s.level(), "routines", name)
+}
+
+// entryNames lists the routines of the level: those of grid/routines in the brain
+// folder first, then those of knowledge/routines that grid/routines does not hold.
+func (s Store) entryNames() ([]string, error) {
+	names, err := s.brain().ConfigNames(s.level(), "routines")
+	dir := s.brainDir()
+	if err != nil || dir == "" || (s.level() == "project" && !brain.ValidName(s.Project)) {
+		return names, err
+	}
+	root, err := os.OpenRoot(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return names, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	if err := safefile.NoSymlinks(root, s.vaultDir()); err != nil {
+		return nil, err
+	}
+	entries, err := fs.ReadDir(root.FS(), s.vaultDir())
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, n := range names {
+		seen[n], out = true, append(out, n)
+	}
+	for _, e := range entries {
+		n, ok := strings.CutSuffix(e.Name(), ".md")
+		if e.Type()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("config paths cannot be symbolic links")
+		}
+		if ok && !e.IsDir() && n != "TOPIC" && !seen[n] {
+			seen[n], out = true, append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
 func (s Store) Get(name string) (Entry, error) {
 	b, err := s.readEntry(name)
 	if err != nil {
