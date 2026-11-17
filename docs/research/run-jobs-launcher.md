@@ -20,7 +20,7 @@ The decision ledger of 17 Nov names this lane in its "Decided in" column for the
 | V20 | A task stays on its machine; moving it is a deliberate act | Q4 (task move) |
 | V21 | Routines are time start conditions | Q2 (`at`, `every`, recurring Jobs) |
 | V22 | An agent posts as the person only under the person's grant | Q8 (posting as a person); Addendum 7 A6 (grants and approvals) |
-| V23 | Inbox in the brain; notifications belong to the app and sync server | Q8 (inbox) |
+| V23 | Inbox in the brain; notifications belong to the app and sync server; the hosted web UI belongs to the app and grid-sync, not the plugin | Q8 (inbox) |
 | V24 | The launcher starts without the app and starts `grid sync` with a licence | Q5 |
 | V26 | Production actions: workflow approval, command Job, exact allow rule, blocked post | Addendum 7 A; decision note item 8 |
 | V27 | Job code on hidden git refs, verified before it merges, readable from other machines | Addendum 7 B; decision note item 9 |
@@ -431,7 +431,7 @@ type Board interface {
   - One note, for example `<brain>/Needs you.md`, with one section per home machine between `<!-- grid:inbox <machine> -->` markers.
   - Each home launcher rewrites only its own section, version-checked (sync server) or under the local brain lock (one machine).
   - So the note is one file, as the owner asked (Addendum 4.6), but has several writers. That is allowed by Addendum 5A's version check, and it is an open item for the owner if strict single-writer is wanted (then one note per machine, embedded).
-  - Notifications stay the app's.
+  - Notifications stay the app's and the sync server's, and the hosted web UI belongs to the app and grid-sync, not the plugin (ledger V23). The plugin writes the inbox section; it serves no web page and sends no notification.
 - **Posting as a person** (Addendum 4.5).
   - A grant is a note the person writes, `grid/people/<person>/grants/<name>.md` or a workflow section, naming the agent or role, what it may answer (question kinds, verdicts), the scope (tasks or all) and `until`.
   - An agent's post may carry `for: <person>`, `by: <agent>`, `grant: [[link]]`.
