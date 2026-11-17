@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/version"
 	"github.com/gridconsole/grid-plugins/internal/worker"
 )
@@ -34,7 +35,7 @@ func checkLauncher(add func(string, bool, string), o Options) {
 	if runtime.GOOS == "windows" {
 		name = "grid.exe"
 	}
-	launcher := filepath.Join(o.GridHome, "bin", name)
+	launcher := filepath.Join(gridhome.FindLauncherDir(os.Getenv, o.Home, o.GridHome), "bin", name)
 	if _, err := os.Lstat(launcher); err != nil {
 		return
 	}

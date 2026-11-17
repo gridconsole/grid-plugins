@@ -42,6 +42,8 @@ type Options struct {
 	// GridVersion answers the version of the grid at path; nil means the version
 	// is not read, which never fails a check on its own.
 	GridVersion func(path string) (string, error)
+	// Resolved is how the Grid home was found. A zero Source adds no source row.
+	Resolved gridhome.Home
 }
 
 // Run runs the checks. The home checks that depend on the folder are skipped
@@ -83,6 +85,7 @@ func Run(o Options) Report {
 		}
 		checkFormat(add, o.GridHome, label)
 	}
+	checkHomeSource(add, o)
 
 	// The journal sits beside the home, so this row shows when the home is absent too:
 	// between migrate's two renames the home does not exist, and grid migrate puts it back.

@@ -1,0 +1,15 @@
+{
+  "v": 3,
+  "current": "studio",
+  "workspaces": [
+    {
+      "name": "studio",
+      "member": "sam",
+      "folder": "~/workspace",
+      "setup": "done",
+      "step": null
+    }
+  ],
+  "choices": {"claudeSettings": "yes", "sandbox": false},
+  "setupAt": "2026-11-01T09:00:00Z"
+}

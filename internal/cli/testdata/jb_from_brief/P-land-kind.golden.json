@@ -1,0 +1,71 @@
+{
+  "acceptance": [
+    {
+      "id": "A1",
+      "text": "kind: land with role runner passes `grid job lint`; it needs target, branch and sha and refuses each missing one with its own code: tests.",
+      "traces": "item"
+    },
+    {
+      "id": "A2",
+      "text": "A land Job's record round-trips through grid feed post / grid feed state: test.",
+      "traces": "item"
+    },
+    {
+      "id": "A3",
+      "text": "Existing lint tests stay green. go test ./internal/job/... ./internal/contract/... and make lint: 0 fail (tails). Walk tests before handoff: go test ./internal/cli -run 'TestHsIpWalksEveryCommand|TestIlGuestSiteList' and go test ./internal/job/lint/ (result lines). Merge main into the lane before the proof.",
+      "traces": "item"
+    }
+  ],
+  "after": [],
+  "attempt": 1,
+  "base": "main",
+  "budget": {
+    "reads_before_first_edit": 12,
+    "turns_estimate": 50
+  },
+  "checkpoint": null,
+  "close_reason": null,
+  "continues": null,
+  "decisions": [],
+  "discovered_from": null,
+  "effort": "high",
+  "id": "J-2",
+  "intent": {
+    "goal": "inputs/P-land-kind.md#L8-L10",
+    "item": "inputs/P-land-kind.md#L1",
+    "owner": "inputs/P-land-kind.md#L6"
+  },
+  "item": 1,
+  "keep": [],
+  "level_raised": null,
+  "links": [],
+  "model": "sonnet",
+  "on_blocked": "ask-and-continue",
+  "out_of_scope": [
+    "push, publish the plugin, touch \u003cgmf\u003e or \u003cevalprog\u003e, write \u003croot-home\u003e, pkill -f, add a guard, cap, delay or limit on Jobs",
+    "No attribution lines; committed files carry no private paths, hosts or emails"
+  ],
+  "posts_back": [
+    "result",
+    "question",
+    "knowledge",
+    "checkpoint"
+  ],
+  "read": [
+    "task:inputs/P-land-kind.md:1-12"
+  ],
+  "repo": "plugin",
+  "review_rounds": 0,
+  "risk": [],
+  "role": "builder",
+  "skills": [
+    "grid:run-job"
+  ],
+  "title": "P-land-kind: a land Job kind on the feed (R-land-job-type L1)",
+  "verify": {
+    "kind": "file-exists",
+    "path": "docs/lanes/P-land-kind.md"
+  },
+  "worktree": null,
+  "write": []
+}
