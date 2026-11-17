@@ -268,6 +268,16 @@ func pbVrTree(t *testing.T, dir string) []string {
 	return out
 }
 
+func TestPbVrSymlinkedFolderRefused(t *testing.T) {
+	s := pbVrVault(t)
+	if err := os.Symlink(filepath.Join(s.BrainDir, "Ideas"), filepath.Join(s.BrainDir, "Alias")); err != nil {
+		t.Skip("no symlinks here")
+	}
+	if _, err := s.List(); err == nil || !strings.Contains(err.Error(), "symbolic links") {
+		t.Fatalf("a symbolic link to a folder must be refused, got %v", err)
+	}
+}
+
 func TestPbVrSymlinkRefused(t *testing.T) {
 	s := pbVrVault(t)
 	if err := os.Symlink(filepath.Join(s.BrainDir, "Plain.md"), filepath.Join(s.BrainDir, "Link.md")); err != nil {

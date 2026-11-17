@@ -83,6 +83,16 @@ func TestPbVrReadOfVaultNoteLogsBrainRead(t *testing.T) {
 	}
 }
 
+// `grid brain show "brain:home/Ideas/Café plan"` in a Bash command logs the same
+// read, quoted id with a space and a slash.
+func TestPbVrBrainShowOfAVaultIDLogsBrainRead(t *testing.T) {
+	f, _ := pbVrHookVault(t)
+	f.run(t, "PostToolUse", bash(`grid brain show "brain:home/Ideas/Café plan" --json`))
+	if h := historyOf(t, f); !strings.Contains(h, "· brain read · brain:home/Ideas/Café plan · by claude") {
+		t.Fatalf("history: %q", h)
+	}
+}
+
 func TestPbVrReadOutsideTheVaultNotesLogsNothing(t *testing.T) {
 	f, vault := pbVrHookVault(t)
 	for _, p := range []string{

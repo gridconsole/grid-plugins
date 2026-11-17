@@ -648,8 +648,16 @@ func (s Store) vaultFiles(level string) ([]vaultFile, error) {
 		if d.IsDir() && (path == "Proposals" || (level == "home" && path == "projects")) {
 			return fs.SkipDir
 		}
-		if d.Type()&os.ModeSymlink != 0 && (d.IsDir() || strings.EqualFold(filepath.Ext(name), ".md")) {
-			return fmt.Errorf("brain paths cannot be symbolic links")
+		if d.Type()&os.ModeSymlink != 0 {
+			// WalkDir does not follow a link, so a link to a folder shows as a file.
+			linked := strings.EqualFold(filepath.Ext(name), ".md")
+			if info, err := os.Stat(filepath.Join(root.Name(), filepath.FromSlash(path))); err == nil && info.IsDir() {
+				linked = true
+			}
+			if linked {
+				return fmt.Errorf("brain paths cannot be symbolic links")
+			}
+			return nil
 		}
 		if d.IsDir() || d.Type()&os.ModeSymlink != 0 || !strings.EqualFold(filepath.Ext(name), ".md") {
 			return nil
