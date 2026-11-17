@@ -40,7 +40,6 @@ const (
 	reasonCodexError     = "Codex answered the usage request with an error"
 	reasonTimedOut       = "usage read timed out"
 	reasonCannotStart    = "the provider could not be started"
-	reasonNoGridHome     = "cannot find the Grid home; set GRID_HOME"
 	reasonCannotKeep     = "cannot write the Grid home, so usage is not read"
 	reasonNotFoundSuffix = " was not found on PATH"
 )
@@ -162,7 +161,7 @@ func lockDirect(env Env, dir string, wait time.Duration) (unlock func(), ok bool
 // the reason of the last failed attempt.
 func directRead(env Env, kind, dir string) directCache {
 	if env.GridHome == "" {
-		return directCache{Reason: reasonNoGridHome}
+		return directCache{} // no cache to keep, so no probe: nothing was tried and there is no reason to give
 	}
 	c := loadDirect(env, dir)
 	if !directDue(env, c) {

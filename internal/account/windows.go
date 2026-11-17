@@ -148,44 +148,61 @@ func readSnapshot(env Env, dir string) (Snapshot, bool) {
 //
 //  1. the direct read: the provider's own command, asked for the windows (cached,
 //     see direct.go), whose last good reading stays when a later read fails;
-//  2. a status line or stream note, but only one made after that reading;
+//  2. a record the provider's own session left, but only one made after that
+//     reading: for Claude a status line or stream note, for Codex the newest
+//     rollout line (codex_read.go); with no direct reading at all it is the
+//     first source;
 //  3. none, with the reason the direct read gave.
-//
-// The Codex rollout record is a source between 2 and 3 once it is on main; its
-// place is marked below.
 func windowsFor(env Env, id, kind string, dirs []string) AccountWindows {
 	res := AccountWindows{ID: id, Kind: kind, Windows: []Window{}, Source: "none"}
 	direct, reason := directFor(env, kind, dirs)
-	var (
-		note   Snapshot
-		hasNot bool
-	)
-	if kind == Claude {
-		for _, d := range dirs {
-			if s, ok := readSnapshot(env, d); ok {
-				note, hasNot = s, true
-				break
-			}
-		}
-	}
+	rec := sessionRecord(env, kind, dirs)
 	switch {
-	case hasNot && (!direct.good() || madeAfter(note.At, direct.At)):
-		res.Windows = readingWindows(env, note.FiveHour, note.SevenDay)
-		res.AsOf, res.Source = note.At, note.Source
-		if res.Source == "" {
-			res.Source = "statusline"
-		}
+	case rec.ok && (!direct.good() || madeAfter(rec.at, direct.At)):
+		res.Windows, res.AsOf, res.Source = rec.windows, rec.at, rec.source
 	case direct.good():
 		res.Windows = readingWindows(env, direct.FiveHour, direct.SevenDay)
 		res.AsOf, res.Source = direct.At, "direct"
 	default:
-		// The Codex rollout record would be read here, only when it is on main.
 		res.Note = reason
 		if res.Note == "" {
 			res.Note = "No use reported for this folder yet"
+			if kind == Codex {
+				res.Note = "Codex use is not read yet"
+			}
 		}
 	}
 	return res
+}
+
+// record is a reading the provider's own session left behind: the status line
+// snapshot or stream note of a Claude folder, or the newest Codex rollout line.
+type record struct {
+	windows []Window
+	at      string
+	source  string
+	ok      bool
+}
+
+// sessionRecord reads the record of the first folder of dirs that holds one.
+func sessionRecord(env Env, kind string, dirs []string) record {
+	switch kind {
+	case Claude:
+		for _, d := range dirs {
+			if s, ok := readSnapshot(env, d); ok {
+				src := s.Source
+				if src == "" {
+					src = "statusline"
+				}
+				return record{readingWindows(env, s.FiveHour, s.SevenDay), s.At, src, true}
+			}
+		}
+	case Codex:
+		if got, ok := codexWindowsFor(env, AccountWindows{}, dirs); ok {
+			return record{got.Windows, got.AsOf, got.Source, true}
+		}
+	}
+	return record{}
 }
 
 // readingWindows turns the two readings into the rows of the shape. A window

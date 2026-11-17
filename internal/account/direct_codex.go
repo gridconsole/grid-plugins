@@ -73,7 +73,7 @@ func codexAttempt(ctx context.Context, env Env, dir string) (directReading, stri
 
 	replies := make(chan codexReply, 8)
 	child, err := startProbe(ctx, env, Codex, []string{"app-server"}, dirVars[Codex], dir, cwd, nil, func(line []byte) {
-		if r, ok := parseCodexLine(line); ok {
+		if r, ok := parseAppServerLine(line); ok {
 			select {
 			case replies <- r:
 			default: // an app-server that talks without being asked is not waited for
@@ -144,10 +144,10 @@ func codexAttempt(ctx context.Context, env Env, dir string) (directReading, stri
 	return reading, "", codexRead
 }
 
-// parseCodexLine reads one line of the app-server's output. It answers ok only
-// for a response (an id with a result or an error and no method); notifications
-// and requests of the server are not replies.
-func parseCodexLine(line []byte) (codexReply, bool) {
+// parseAppServerLine reads one line of the app-server's output. It answers ok
+// only for a response (an id with a result or an error and no method);
+// notifications and requests of the server are not replies.
+func parseAppServerLine(line []byte) (codexReply, bool) {
 	line = bytes.TrimSpace(line)
 	if len(line) == 0 || line[0] != '{' {
 		return codexReply{}, false
