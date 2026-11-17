@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "sudo mkdir -p /srv/grid",
+    "sudo chgrp grid /srv/grid",
+    "sudo chmod 2770 /srv/grid",
+    "sudo usermod -aG grid alice"
+  ],
+  "config": "/home/example/.config/grid/config.json",
+  "group": "grid",
+  "path": "/srv/grid",
+  "ready": false,
+  "why": "/srv/grid does not exist"
+}

@@ -41,6 +41,22 @@ func plainNodes(n *yaml.Node) error {
 	return nil
 }
 
+// SplitOptional is Split for a file written by a person, where front matter is
+// optional. A file that does not start with a --- line, or whose --- block is
+// never closed (a Markdown rule, not front matter), has empty front matter and
+// its whole text as the body. A leading byte order mark is not part of the test
+// and stays in the body.
+func SplitOptional(data []byte) ([]byte, string, error) {
+	probe := data
+	if len(probe) >= 3 && probe[0] == 0xEF && probe[1] == 0xBB && probe[2] == 0xBF {
+		probe = probe[3:]
+	}
+	if front, body, err := Split(probe); err == nil {
+		return front, body, nil
+	}
+	return nil, string(data), nil
+}
+
 // Split returns YAML between the opening and closing --- lines and the
 // unmodified Markdown body, including its original line endings.
 func Split(data []byte) ([]byte, string, error) {

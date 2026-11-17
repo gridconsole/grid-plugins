@@ -53,6 +53,44 @@
         "answers"
       ],
       "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "grid setup --shared-group <group> --json: the config it wrote and, when the folder is not ready, the commands a person runs (internal/cli/setup_shared.go sharedGroupResult). Grid runs none of them.",
+      "properties": {
+        "commands": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "config": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "group": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "group",
+        "path",
+        "config",
+        "ready",
+        "commands"
+      ],
+      "type": "object"
     }
   ],
   "title": "grid setup output"

@@ -98,6 +98,13 @@ func (s Store) TopicBriefAt(pluginRoot, name string) (string, error) {
 		return "", fs.ErrNotExist
 	}
 	for _, level := range s.levels() {
+		if s.Vault() {
+			text, err := s.vaultTopicBrief(level, name)
+			if err == nil || !errors.Is(err, fs.ErrNotExist) {
+				return text, err
+			}
+			continue
+		}
 		root, err := s.scope(level, false)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
@@ -112,6 +119,42 @@ func (s Store) TopicBriefAt(pluginRoot, name string) (string, error) {
 		}
 	}
 	return "", fs.ErrNotExist
+}
+
+// vaultTopicBrief is TopicBrief for a vault: the topic is the top-level folder
+// <name>, its definition <name>/TOPIC.md, read as any note is (no front matter
+// needed, no name key). The summary is the description or the first paragraph.
+func (s Store) vaultTopicBrief(level, name string) (string, error) {
+	if !ValidID(name) || strings.Contains(name, "/") || strings.HasPrefix(name, ".") || name == "Proposals" {
+		return "", fs.ErrNotExist
+	}
+	root, _, err := s.vaultLevel(level)
+	if err != nil {
+		return "", err
+	}
+	defer root.Close()
+	b, err := safefile.Read(root, name+"/TOPIC.md")
+	if err != nil {
+		return "", err
+	}
+	note, err := ParseVault(b)
+	if err != nil {
+		return "", err
+	}
+	summary := note.Description
+	if summary == "" {
+		summary = firstParagraph(note.Body)
+	}
+	if summary == "" {
+		return "", fmt.Errorf("topic %s has no summary", name)
+	}
+	var pointers []string
+	textLines(note.Body, func(l string) {
+		if t := strings.TrimSpace(l); (strings.HasPrefix(t, "- ") || strings.HasPrefix(t, "* ")) && len(pointers) < briefPointers {
+			pointers = append(pointers, "- "+clip(strings.TrimSpace(t[2:])))
+		}
+	})
+	return strings.Join(append([]string{"Brain topic " + name + ": " + clip(summary)}, pointers...), "\n"), nil
 }
 
 func clip(s string) string {

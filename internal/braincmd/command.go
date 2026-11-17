@@ -50,8 +50,9 @@ type Env struct {
 	RecordError func(error)
 }
 
-const usage = `Usage: grid brain <show|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|write|rename|supersede> [flags]
+const usage = `Usage: grid brain <show|list|search|topics|index|propose|accept|keep|decide|check|changes|revert|drop|restore|write|rename|supersede> [flags]
   show <id> [--task <task>]  Show an accepted note and its links.
+  list [--json]              List every note of the brain: id, path, kind, title, summary, tags, aliases and links.
   search <words> [--task <task>] Find notes by description, summary and body.
   topics                     List built-in and custom topics.
   index                      Rebuild the SessionStart index and backlinks.
@@ -170,7 +171,7 @@ func Run(args []string, env Env) int {
 		verb = args[0]
 	}
 	switch verb {
-	case "show", "search", "topics", "index", "propose", "accept", "keep", "check":
+	case "show", "list", "search", "topics", "index", "propose", "accept", "keep", "check":
 	default:
 		fmt.Fprintf(env.Stderr, "brain: unknown command %q. Run: grid brain help\n", verb)
 		return 2
@@ -182,6 +183,10 @@ func Run(args []string, env Env) int {
 		switch verb {
 		case "show":
 			fmt.Fprintln(out, "Usage: grid brain show <id> [--task <task>] [flags]")
+		case "list":
+			fmt.Fprintln(out, "Usage: grid brain list [--json] [--project <name>] [--level home|project]")
+			f.PrintDefaults()
+			return
 		case "search":
 			fmt.Fprintln(out, "Usage: grid brain search <words> [--task <task>] [flags]")
 		case "keep":
@@ -287,7 +292,7 @@ func Run(args []string, env Env) int {
 	if env.GridHome == "" {
 		return fail(fmt.Errorf("cannot find the Grid home; set GRID_HOME"))
 	}
-	store := brain.Store{GridHome: env.GridHome, ReadLevel: *level}
+	store := brain.Store{GridHome: env.GridHome, ReadLevel: *level}.WithConfig(env.Home, nil)
 	if *level != "home" {
 		resolver := env.Resolver
 		if taskID != "" {
@@ -366,7 +371,14 @@ func Run(args []string, env Env) int {
 				result, err = store.Proposal(writeLevel, id)
 			}
 		} else {
-			if strings.HasPrefix(id, "brain:") {
+			if strings.HasPrefix(id, "brain:") && store.Vault() {
+				// A vault id is a path: spaces and Unicode are fine.
+				level, rest, found := strings.Cut(strings.TrimPrefix(id, "brain:"), "/")
+				if !found || (level != "home" && level != "project") || !brain.ValidID(strings.TrimSuffix(rest, ".md")) {
+					err = fmt.Errorf("id must be brain:<home|project>/<id>")
+					break
+				}
+			} else if strings.HasPrefix(id, "brain:") {
 				_, _, err = proposalID(id, writeLevel, *level)
 				if err != nil {
 					break
@@ -377,6 +389,8 @@ func Run(args []string, env Env) int {
 			}
 			result, err = store.Show(id)
 		}
+	case "list":
+		result, err = store.List()
 	case "search":
 		var hits []brain.Hit
 		hits, err = store.Search(strings.Join(f.Args(), " "), topic, limit)

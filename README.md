@@ -29,13 +29,14 @@ same system temp folder. Test subprocesses get a parent-owned `t.TempDir()` thro
 
 - `grid version`, `grid where`, `grid open`, `grid doctor`: version, location, open the task page, machine health.
 - `grid hook`: answer hook events; set and list hook levels.
-- `grid task`, `grid plan`, `grid job`, `grid lease`: tasks, plans, Jobs and leases.
+- `grid task`, `grid plan`, `grid job`, `grid run`, `grid lease`: tasks, plans, Jobs, starting assigned Jobs, and leases.
 - `grid feed`, `grid mcp`: the Feed and its stdio MCP server.
 - `grid question`, `grid answer`, `grid approve`, `grid deliver`, `grid proof`, `grid history`, `grid land`: questions, answers, gates, outcome, proof, history, landing.
 - `grid brain`: the brain notes and topics.
 - `grid env`: dev environments.
 - `grid person`, `grid routine`, `grid worker`, `grid session`, `grid intent`, `grid usage`, `grid account`: people, routines, workers, sessions, worker requests, usage, accounts.
 - `grid agent`, `grid claude`, `grid workflow`, `grid skill`, `grid setup`: agent, Claude, workflow and skill settings, and project setup.
+- `grid run`: as the task holder, start one agent per assigned Job in its own worktree and post its ack and exit.
 - `grid project`, `grid project-md`, `grid update`, `grid signal`, `grid artifact`, `grid eval`, `grid migrate`: projects, project updates, inbox signals, artifacts, evaluations, home upgrade.
 - `grid shot`: crop a screenshot to a box, and compare two screenshots (below).
 
@@ -159,3 +160,16 @@ notes, and unrelated workflow fields do not affect the guard.
 `GRID_HOME` overrides the data folder; the default is `~/.grid`. It holds `VERSION` (the format version), `machine` (this computer's id) and `projects/<name>/project.md`, each project's record: YAML front matter with its `id`, its folder per machine, its repos with their normalised remotes, and its match keys. The format is in `internal/project/project.go`.
 
 Task folders are `projects/<name>/tasks/T-NN-slug/`; Personal tasks are `personal/tasks/T-NN-slug/` with `project: personal`. Display numbers increase across both locations. Creation takes an exclusive `flock` on `.task-alloc.lock` through `internal/fslock` and publishes a complete folder by rename. Linux and macOS are supported; elsewhere `grid task new` fails with the same "not supported" error as the lease and session commands. Project records are created on the first task write; task reads create nothing.
+
+## Use your Obsidian vault as the Grid brain
+
+Set the `brain` key of your workspace in the Grid config to the absolute path of an Obsidian vault (or any folder of Markdown files), and `grid brain` reads that folder instead of `knowledge/` in the data folder. With the key absent nothing changes: the old `knowledge/<topic>/<name>.md` layout reads exactly as before.
+
+- **Any `.md` file is a note**, at any depth. Front matter is optional; unknown keys are kept, and `tags` and `aliases` may be a list or one text value.
+- **The id is the path** inside the brain folder without `.md`: `Ideas/Café plan.md` is `brain:home/Ideas/Café plan`. Spaces and Unicode are fine. A note below `projects/<project>/` belongs to that project and has the level `project`. Lookup tries the exact id, then the id ignoring case, then a file name that exactly one note has, and a name two notes share is ambiguous, not guessed. Ids are compared in a composed form so a macOS file name stored with a combining accent still matches; the composition covers the Latin letters of Western and Central European names, not every script.
+- **Links are edges.** `[[note]]`, `[[note|text]]`, `[[note#heading]]`, `![[note]]`, `[text](note.md)` and a quoted `"[[note]]"` in front matter are read; links in code are not. A line `- [[note]] - depends-on: why` under `## Links` gives the edge a relation and a reason. Targets that match no note stay in the list as unresolved, and the old front-matter `links:` list still reads.
+- **Defaults fill what a person did not write:** the title is the file name, the description is the first paragraph (Markdown stripped, at most 200 characters), the summary is the description, and tags include inline `#tags`.
+- **Never read:** `.obsidian/`, `.trash/`, `.grid/` and any other folder or file that starts with a dot, a top-level `Proposals/` folder, a top-level `projects/` folder when reading home, and files that are not `.md`. A symbolic link to a note or folder is refused.
+- `grid brain list --json` prints `{"root": ..., "notes": [...]}`, one row per note with `id`, `path`, `kind`, `origin`, `author`, `level`, `project`, `task`, `title`, `summary`, `description`, `topic`, `tags`, `aliases`, `concepts`, `edges`, `rev`, `updated` and `conflict`. The origin is `person` for every note for now, and `updated` is the front matter `updated` or else the file's modification time.
+
+Reading is all this does. A note Grid writes (`propose`, `accept`, `write`) still goes to the data folder's `knowledge/` layout, and reading a vault creates no file in it.

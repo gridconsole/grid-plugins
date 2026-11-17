@@ -40,6 +40,7 @@ func runDoctor(args []string, env Env) int {
 		projects = filepath.Join(env.Cwd, projects)
 	}
 	rep := doctor.Run(doctor.Options{Home: env.Home, SettingsPath: settingsPath, GridHome: env.GridHome, Projects: projects, Label: gridhome.Tilde(env.GridHome, env.Home), GitVersion: env.GitVersion, HooksFile: *hooks, GridVersion: gridVersionAt, Resolved: env.Resolved})
+	rep = doctor.AddMachineFolder(rep, env.machineEnv(), env.machineCheck)
 	if *bundle {
 		path := *out
 		if path != "" && !filepath.IsAbs(path) {

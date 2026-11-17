@@ -3034,6 +3034,29 @@
           "output": ""
         },
         {
+          "name": "list",
+          "args": [],
+          "flags": [
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--level",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": ""
+        },
+        {
           "name": "propose",
           "args": [],
           "flags": [
@@ -3694,6 +3717,37 @@
             }
           ],
           "json": true,
+          "output": "",
+          "stream": true
+        }
+      ]
+    },
+    {
+      "name": "run",
+      "summary": "as the task holder, start one agent per assigned Job in its own worktree and post its ack and exit",
+      "built": true,
+      "subcommands": [
+        {
+          "name": "",
+          "args": [],
+          "flags": [
+            {
+              "name": "--command",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--permission-mode",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--repo",
+              "takes": "value",
+              "required": false
+            }
+          ],
+          "json": false,
           "output": "",
           "stream": true
         }
@@ -5156,6 +5210,11 @@
             {
               "name": "--sandbox",
               "takes": "none",
+              "required": false
+            },
+            {
+              "name": "--shared-group",
+              "takes": "value",
               "required": false
             },
             {

@@ -133,25 +133,35 @@ func (s Store) Index() (Index, error) {
 		idx.Topics = append(idx.Topics, TopicRow{Topic: t.Name, Description: t.Description})
 	}
 	for _, level := range s.levels() {
-		root, err := s.scope(level, false)
-		if errors.Is(err, fs.ErrNotExist) {
+		var r []TopicRow
+		if s.Vault() {
+			// The vault is read as it is: no cache files, so no generation.
+			var err error
+			if r, err = s.vaultRows(level); err != nil {
+				return Index{}, err
+			}
 			idx.Generations[level] = 0
-			continue
-		}
-		if err != nil {
-			return Index{}, err
-		}
-		r, _, err := rows(root, level)
-		if err != nil {
+		} else {
+			root, err := s.scope(level, false)
+			if errors.Is(err, fs.ErrNotExist) {
+				idx.Generations[level] = 0
+				continue
+			}
+			if err != nil {
+				return Index{}, err
+			}
+			r, _, err = rows(root, level)
+			if err != nil {
+				root.Close()
+				return Index{}, err
+			}
+			backlinks, err := readBacklinks(root)
 			root.Close()
-			return Index{}, err
+			if err != nil {
+				return Index{}, err
+			}
+			idx.Generations[level] = backlinks.Generation
 		}
-		backlinks, err := readBacklinks(root)
-		root.Close()
-		if err != nil {
-			return Index{}, err
-		}
-		idx.Generations[level] = backlinks.Generation
 		for _, row := range r {
 			if i, ok := positions[row.Topic]; ok {
 				idx.Topics[i].Entries += row.Entries
@@ -217,6 +227,9 @@ func truncate(s string, bytes int) string {
 // and links are never copied to the project's syncable tree. The generation in
 // index.md lets readers detect an interrupted pair of atomic renames.
 func (s Store) RebuildIndex() (Index, error) {
+	if s.Vault() {
+		return s.Index() // a person's vault gets no generated files
+	}
 	for _, level := range s.levels() {
 		root, err := s.scope(level, true)
 		if err != nil {

@@ -10,6 +10,9 @@ import (
 )
 
 func (s Store) entries() ([]Entry, error) {
+	if s.Vault() {
+		return s.vaultEntries()
+	}
 	entries := []Entry{}
 	for _, level := range s.levels() {
 		root, err := s.scope(level, false)
@@ -39,6 +42,9 @@ func (s Store) entries() ([]Entry, error) {
 
 // Show resolves an unqualified id project-first, or an explicit brain:<level>/<id>.
 func (s Store) Show(id string) (Entry, error) {
+	if s.Vault() {
+		return s.vaultShow(id)
+	}
 	level, name, err := splitID(id)
 	if err != nil {
 		return Entry{}, err
@@ -110,7 +116,7 @@ func (s Store) Search(query, topic string, limit int) ([]Hit, error) {
 	if limit < 1 || limit > 100 {
 		return nil, fmt.Errorf("limit must be between 1 and 100")
 	}
-	if topic != "" && !ValidName(topic) {
+	if topic != "" && !ValidName(topic) && !(s.Vault() && ValidID(topic)) {
 		return nil, fmt.Errorf("topic must be a plain name")
 	}
 	entries, err := s.entries()
@@ -128,9 +134,13 @@ func (s Store) Search(query, topic string, limit int) ([]Hit, error) {
 			continue
 		}
 		desc, title, body := words(n.Description), words(n.Name+" "+n.Summary), words(n.Body)
+		tags := map[string]bool{}
+		if e.row != nil { // a vault note: its aliases and tags weigh like a description
+			tags = words(strings.Join(append(append([]string{}, e.row.Aliases...), e.row.Tags...), " "))
+		}
 		score := 0
 		for w := range q {
-			if desc[w] {
+			if desc[w] || tags[w] {
 				score += 4
 			}
 			if title[w] {

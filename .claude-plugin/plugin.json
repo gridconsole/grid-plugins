@@ -7,5 +7,13 @@
   "license": "MIT",
   "name": "grid",
   "repository": "https://github.com/gridconsole/grid-plugins",
+  "userConfig": {
+    "shared_group": {
+      "description": "Only when several logins on this computer share one Grid machine folder: the group they share. Leave empty to keep the folder private. grid setup --shared-group \u003cgroup\u003e writes it to the Grid config and prints the commands a person runs to make the folder; Grid runs no sudo.",
+      "required": false,
+      "title": "Shared group",
+      "type": "string"
+    }
+  },
   "version": "0.1.0"
 }

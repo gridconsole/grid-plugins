@@ -25,7 +25,7 @@ P-brain-obsidian-decide):
 |---|---|---|---|
 | V13 | The brain is an Obsidian vault of your notes plus agent notes; Obsidian edits are adopted. | Decisions 1-5 and 7 below; sections 2, 3, 4.1-4.4 (any `.md` is a note, ids, links, origin), 4.5 (who wrote a note, as shown in Obsidian, with its stated deviation), 5.1-5.3 (adoption), 7.1-7.2 (layout), 8 (migration) | L1, L2, L3, L4, L5a, L6 (9.1); Mac round trip 9.4 |
 | V14 | Proposals are visible. | Decision 7 below; sections 5.1 (adoption walks `Proposals/`), 6.2 (visible `Proposals/`, person edits to a draft, accept) | L4, L5a (9.1) |
-| V19 | Conflicts by version check; your edits win, an agent change becomes a proposal. | Decision 6 below; sections 5.4 (version check, local lock, sync server), 6.1 (every write path), 6.3 (conflicts shown person-first) | L4 (local lock), L8 (sync server client), L7 (display) (9.1) |
+| V19 | Conflicts by version check; your edits win, an agent change becomes a proposal. Amended by the owner answer of 17 Nov, about 03:35 UTC: both the person and agents edit files; an agent reads the current file and carries on, on a version mismatch it re-reads and redoes its change on top, and a proposal is only for two edits that cannot both hold. | Decision 6 below; sections 4.3 (an agent's own Edit or Write: the target is adopted before the tool writes), 5.4 (version check, local lock, sync server, step 3 the one rule, step 7), 6.1 (every write path), 6.3 (conflicts shown person-first) | L4 (local lock, pre-edit adoption), L8 (sync server client), L7 (display) (9.1); the server half is A-sync-version-write, not in this plugin plan (9.5) |
 
 Rows carried by a lane here but owned elsewhere: V17 (screenshots, owned by
 P-brain-board-decide; section 7.3, lane L5b) and V25 (Brain view, owned by
@@ -55,13 +55,23 @@ P-brain-view; lane L7).
    no header means you wrote it. This is a stated deviation from "the header
    says who wrote it" (4.5).
 5. **Grid adopts person changes.** A changed, new, renamed or deleted file is
-   seen on read, on index rebuild and on `grid brain check`. It is recorded
+   seen on read, on index rebuild, on `grid brain check`, and for one file
+   just before an agent's own Edit or Write on it (4.3). It is recorded
    with origin person, versioned (content-addressed) and reindexed. Audit drift
    on a brain file becomes adoption, not a finding.
-6. **Person notes win.** An agent never rewrites a person note. An agent write
-   aimed at a person note, or one that loses a version check against a person
-   save, becomes a proposal in the visible `<brain>/Proposals/` folder. This is
-   a redirect with exit 0, not a refusal, gate or lock on the agent.
+6. **Both edit; no blind overwrite.** The person and agents both edit notes,
+   person notes included. An agent reads the current file, with the person's
+   edits, and carries on from there. Every `grid brain` write carries the
+   version it read. On a version mismatch it re-reads and redoes its change
+   on top of the current bytes, whoever wrote them. A proposal in the visible
+   `<brain>/Proposals/` folder is only for two edits that cannot both hold
+   (5.4 step 3 gives the test). No `grid brain` write goes over bytes it has
+   not read. An agent's own Edit or Write relies on the tool's stale-read
+   refusal instead, and 4.3 lists the two cases that check does not cover.
+   This is never a refusal, gate or lock on the agent: the write exits 0.
+   Owner, 17 Nov about 03:35 UTC: "why not just read the edits, and continue
+   working on it, why is it a bad thing if both the agent and the human edit
+   files."
 7. **Layout.** The brain is its own folder, read from the brain path key in
    `~/.config/grid/config.json`. It is separate from GRID_HOME, where tasks,
    accounts and usage stay.
@@ -114,8 +124,12 @@ P-brain-view; lane L7).
 - *Trust a front-matter `origin:`.* Anyone can type it, and the brief requires
   the id to come from the configured name, never from note text.
 - *Refuse agent writes to person notes.* That is a gate; the lane rules forbid
-  new gates. A redirect to a proposal gives the same authority without
-  blocking.
+  new gates.
+- *Person notes win: every agent write to a person note becomes a proposal,
+  and an agent's direct Edit of one is turned into a proposal with the person
+  version restored* (this note before the owner answer of 17 Nov). The owner
+  ruled it out: "I dont think you need to be that scary of me editting
+  things". Person edits are input an agent builds on, not a stop.
 - *`.grid/proposals/`* (first layout addendum). Replaced by Addendum 2: visible
   `Proposals/`.
 - *`brain.lock`, `log.md`, `index.md` and `backlinks.json` in `<brain>/.grid/`*
@@ -165,7 +179,8 @@ The decisions do not depend on these facts:
   hashes stay valid.
 - Adoption catches renames whether or not links were rewritten.
 - Grid writes no front-matter links.
-- An agent never writes a person note.
+- An agent writes a person note only on top of the bytes it read, with the
+  version check (decision 6).
 - A temp file is renamed within the same write, and the reader skips
   dot-files.
 
@@ -254,7 +269,7 @@ Plugin, at the lane head:
 | internal/jobcmd/command.go:1082 | `Index()` | Unchanged. |
 | internal/migrate/plan.go:213, :231 | old knowledge paths | Read by the migration lane (section 8). |
 | contract/formats.md:175-177 | `brain-proposals` paths | `Proposals/`; task proposals per P-brain-board-decide. |
-| skills/brain-keeper/SKILL.md:6,31,39-45,73; skills/plan-jobs/SKILL.md:41,89; agents/library.md:15; agents/curator.md:15-19; topics/README.md:3,9 | old paths and the front-matter link rule | New layout, `## Links` rule, person authority. |
+| skills/brain-keeper/SKILL.md:6,31,39-45,73; skills/plan-jobs/SKILL.md:41,89; agents/library.md:15; agents/curator.md:15-19; topics/README.md:3,9 | old paths and the front-matter link rule | New layout, `## Links` rule, edits on top of the current bytes with the version check (decision 6, 6.1). |
 
 App (`git -C <ref>/app.git show main:internal/slices/brain/vault.go`):
 
@@ -383,14 +398,54 @@ this.
   an unknown key and never read as origin. Grid stops writing `origin:` into
   notes; the migration moves existing `origin:` maps into change records.
 - **Direct agent edits.** An agent may Edit or Write a brain file with its own
-  tools rather than through `grid brain` (the settings glob allows it). A
-  PostToolUse hook on Edit and Write records the path, the new hash and the
-  session or Job as an agent change record. It only records and never blocks,
-  in the same way `brainRead` records reads today (hook/brain.go:22-71).
-  - Those bytes are agent bytes.
-  - If the target was a person note, adoption turns the agent's bytes into a
-    proposal and restores the person's version from `versions/`. Person
-    notes win (6.1), and nothing is lost.
+  tools rather than through `grid brain` (the settings glob allows it). Two
+  hook steps bracket the tool. Both only record; neither blocks.
+  - **Before the tool: adopt that one path (V19).** The PreToolUse hook
+    (`grid hook pretooluse`, already registered for every tool in
+    hooks/hooks.json) sees an Edit, MultiEdit or Write whose `file_path` is
+    inside the brain path. It runs adoption (5.1) for that one file before
+    the tool writes. An Obsidian save that Grid has not seen yet is then
+    stored in `versions/` with an `edited` (or `created`) record, origin
+    person. This is how the owner's not-yet-adopted save is versioned before
+    an agent overwrites it.
+    - It is unconditional. Unlike the Read record (hook/brain.go:23-52), it
+      does not need a session id, the `history-log` setting, a task folder
+      or a `ValidName` base name. Any file under the brain path counts,
+      including names with spaces.
+    - It records only. The hook prints no permission decision and exits 0
+      whatever adoption returns; an adoption error is logged, never shown to
+      the agent as a refusal. It adds no guard, gate or lock on the agent:
+      it tries the local lock (7.2) for at most 500 ms and holds it only for
+      one file's adoption, the same lock a `grid brain` read takes. If the
+      lock is busy past that bound, it skips adoption, logs that, and exits
+      0, so the tool never waits on it.
+    - A Write to a new path (no file yet) has nothing to adopt and does
+      nothing.
+  - **After the tool: record the agent bytes.** A PostToolUse hook on Edit,
+    MultiEdit and Write records the path, the new hash and the session or Job
+    as an agent change record, in the same way `brainRead` records reads
+    today (hook/brain.go:22-71). Those bytes are agent bytes.
+  - **Then the agent's bytes stand.** The agent read the file before its Edit
+    or Write, person edits included, and changed it on top (decision 6). Its
+    bytes stay on disk as the newest version, origin agent; no proposal is
+    written and nothing is restored. The person version before it is kept in
+    `versions/` by the pre-tool step, so nothing is lost. The version check
+    for a direct edit is the tool's own: Claude Code's Edit and Write refuse a
+    file changed since the agent's Read, and the agent re-reads and redoes its
+    change on top (5.4 step 7).
+  - **What is not covered.** Two cases overwrite an unseen person save
+    without a version:
+    - a save that lands in the moment between the pre-tool adoption and the
+      tool's own write. Claude Code's Edit and Write refuse a file changed
+      since the agent's Read, which narrows that window; whether that
+      refusal covers every save in the window is NOT VERIFIED;
+    - a pre-tool adoption skipped because the lock stayed busy past its
+      bound, or because adoption failed.
+    Whether Obsidian's File recovery core plugin keeps a snapshot of the
+    overwritten bytes is NOT VERIFIED here. `.trash` does not help: it keeps
+    deleted files, not overwritten bytes. An agent tool without these hooks (a session outside the plugin)
+    writes bytes with no agent record. They are adopted as a person change
+    and are not lost either; only their origin is wrong.
 - **Link-only rewrites keep authority.** Obsidian's rename rewrites
   `[[links]]` inside every note that links to the renamed file. When a change
   differs from the previous version only in link targets that match a
@@ -434,15 +489,17 @@ who wrote it". This section decides what the owner sees in Obsidian.
   Properties view shows it as an editable text row at the top of the note
   (Properties.md:37-47). The nested `origin:` map goes (4.3), so `source` is
   the only authorship line in the header.
-- **A person note.** Grid writes nothing into it: no `source`, no
+- **A person note.** Grid writes no header into it: no `source`, no
   `author`, no front matter at all if it had none. No Grid header means you
-  wrote it.
+  wrote it. An agent may still edit its text on top of your bytes
+  (decision 6); that edit adds no header either, and the change record
+  names the agent as the author of that change.
 - **Which one is authoritative.** The change records (4.3). The `source`
   property is display only and is never read as origin.
   - When the owner edits an agent note, adoption records origin person, but
-    Grid does not rewrite the note's bytes. Doing so would be an agent write
-    to a note the person just changed, which decision 6 forbids. It would
-    also make every person save cause a second Grid save.
+    Grid does not rewrite the note's bytes to update `source`. That would
+    make every person save cause a second Grid save, only to change a
+    display line.
   - So the `source` line of an edited agent note still names the Job that
     first wrote it. It then reads as "first written by". The current author
     is in `grid brain list --json` (`origin`, `author`, 3.4), in the app's
@@ -453,7 +510,7 @@ who wrote it". This section decides what the owner sees in Obsidian.
   - This decision does not add a "you" header. Writing one would mean Grid
     writes into every person note: the notes the owner wrote by hand and
     every note the owner has edited.
-  - That is the authority problem decision 6 removes, and it would turn the
+  - That would be a Grid save after every person save, and it would turn the
     owner's untouched notes into Grid-written bytes.
   - Reason: person notes stay byte-for-byte the owner's, and absence of a
     Grid header is an unambiguous sign. The trust reason in "Rejected" (a typed
@@ -471,7 +528,10 @@ who wrote it". This section decides what the owner sees in Obsidian.
 - **When.** `adopt(root)` runs:
   - at the start of every `grid brain` read (show, search, list, index);
   - under the write lock before every Grid write;
-  - in `grid brain check`.
+  - in `grid brain check`;
+  - for one file, in the PreToolUse hook before an agent's own Edit,
+    MultiEdit or Write on a brain file (4.3). It records only and never
+    blocks the tool.
 - **How.** It walks the brain (with the skips in 2.2, except `Proposals/`)
   and compares each file with the machine-folder cache `files.json`
   (path → size, mtime, hash).
@@ -537,39 +597,57 @@ notes.
      folder (7.2).
    - With a sync server, the server's version check (step 5) takes the lock's
      place.
-3. **Mismatch.**
-   - If the current bytes are a person change (origin person), the agent
-     change is written as a proposal to `Proposals/` and the command exits 0
-     with `proposed: Proposals/<name>.md`.
-   - If they are another agent's change, the command re-reads, re-applies the
-     agent's patch (4.4) when it touches different keys or sections, and
-     otherwise writes a proposal. It never overwrites silently.
+3. **Mismatch: the one rule.** The same rule holds whoever wrote the current
+   bytes, the person or another agent (decision 6).
+   - The command re-reads the current bytes and re-applies the agent's patch
+     (4.4) on top of them, then writes by steps 2-4. The other edit's lines
+     stay as they are. It exits 0 with the written path.
+   - Only when the patch touches a front-matter key or body section that the
+     other change also changed do the two edits not both hold. This is this
+     note's testable form of the owner's case (the same lines, opposite
+     intent). Then the agent change is written as a proposal to `Proposals/`,
+     the current bytes stay, and the command exits 0 with
+     `proposed: Proposals/<name>.md`.
+   - It never overwrites silently.
 4. **Write.** A temp file in the same folder (a dot-file, so Obsidian and the
    reader ignore it), then rename. Today's `atomicWrite` (store.go:117) is
    kept, with the temp file moved next to the target because ids have folders.
 5. **With the grid sync server.** The write sends the version it was based on.
    The server rejects a stale write. The client re-reads, re-applies and
    retries by steps 2-4 (ruling 17 Nov 02:12; run-jobs Addendum 5A). A person
-   save that reaches the server first therefore turns the agent write into a
-   proposal.
+   save that reaches the server first is re-read, and the agent change is
+   redone on top of it by step 3. After a bounded number of rejected retries
+   the agent change is kept as a proposal rather than lost; this is the only
+   other proposal case, and it never blocks the agent.
 6. **Person saves.** Obsidian writes without Grid's lock. A person save that
-   lands after a Grid write is a later person change and is adopted, so the
-   person wins. One that lands before is caught by step 2.
+   lands after a Grid write is a later person change and is adopted; it
+   builds on the agent's bytes as the agent built on the person's. One that
+   lands before is caught by step 2.
+7. **An agent's own Edit or Write.** It does not go through steps 1-5. The
+   PreToolUse hook adopts the target file first, so a person save not yet
+   adopted is versioned before the tool writes. The tool's own stale-read
+   refusal is the version check: the agent re-reads and redoes its change
+   on top. The agent's bytes then stand, with the person version in
+   `versions/` (4.3). The hooks record only and never block the tool.
 
 ## 6. Authority
 
-### 6.1 Person notes win
+### 6.1 Person and agent edits on one note
 
 - **Which notes are person notes.** A note whose newest change record has
-  origin person, or that has no record at all.
-- **An agent never rewrites one.** Every write path (`WriteWith`
-  ke_write.go:117, `EditConfigBy`, `RenameWith`, supersede, revert) checks the
-  target's origin first. If it is person, the write becomes a proposal (6.2)
-  and returns success with the proposal path.
-- **No gate.** Nothing is refused, held or blocked; the work is kept as a
-  proposal.
-- **Deleting a person note** is likewise a proposal (`status: proposed`,
-  `change: delete`).
+  origin person, or that has no record at all. Origin decides what the
+  listing and search show (3.4, 6.3); it does not stop a write.
+- **An agent edits one like any note.** Every write path (`WriteWith`
+  ke_write.go:117, `EditConfigBy`, `RenameWith`, supersede, revert) adopts
+  first, reads the current bytes with the person's edits, and writes its
+  change on top with the version check of 5.4. On a mismatch the one rule of
+  5.4 step 3 applies. The person's previous version stays in `versions/`.
+- **No gate.** Nothing is refused, held or blocked; a proposal is written
+  only where 5.4 step 3 or step 5 says so.
+- **Deleting a person note** follows the same rule: an agent that read the
+  current bytes may delete it, and a person save it has not read turns the
+  delete into a proposal (`status: proposed`, `change: delete`) by step 3.
+  The deleted bytes stay in `versions/`.
 
 ### 6.2 Proposals in `<brain>/Proposals/`
 
@@ -606,10 +684,13 @@ notes.
 ### 6.3 The curator and conflicts
 
 - **Two choices.** The curator Job (agents/curator.md) either files a proposal
-  as a new note or turns it into an edit proposal against a person note. It
-  never applies that edit itself.
-- **Applying an edit.** The person applies it in Obsidian, or a person step in
-  the brain workflow approves it. That step lives in the workflow file
+  as a new note or applies it as an edit to an existing note, person notes
+  included. It reads the note's current bytes and writes the edit on top by
+  5.4 (decision 6).
+- **When it cannot apply an edit.** If the edit and a person change touch
+  the same key or section (5.4 step 3), the proposal stays waiting against
+  the note. The person settles it in Obsidian, or a person step in the brain
+  workflow does. That step lives in the workflow file
   (`grid/workflows/brain.md`, read by workflow/brain.go), not in code.
 - **Conflicts.** A note with a waiting proposal against it, or an agent note
   linked to a person note by `supersedes` or `duplicates`, is a conflict.
@@ -710,39 +791,50 @@ notes.
 - **What they are.** Screenshots are task attachments; their place is P-brain-board-decide's
   task folder.
 - **The curator compresses them** when it files a proposal or delivers. It runs
-  `grid shot crop <png> --max 1568 --small`. `shot.Crop` already scales the long side
-  down to `MaxSide` = 1568 (shot.go:21, :80-118) and never up.
+  `grid shot compress <file>` (R-brain-board Q5, which owns V17). The
+  command keeps the pixel size: it never scales or crops. Scaling a
+  3840-wide screenshot to 1568 would shrink 14 px text to under 6 px, and
+  any scaling changes what the proof shows. `shot.Crop` and its
+  `MaxSide` = 1568 (shot.go:21, :80-118) stay for their current callers and
+  are not used here.
 - **Format: optimised PNG, lossless** (V17, owned by P-brain-board-decide).
   The owner's words (brain-obsidian Addendum 5.2): "a format Obsidian shows
   (WebP or optimised PNG), text still readable ... Compression must not
-  alter what the proof shows." No JPEG and no other lossy step.
+  alter what the proof shows." No JPEG and no other lossy step: no scaling
+  and no colour quantisation.
   - Today `shot.Encode` writes PNG with the default settings
     (shot.go:120-127).
-  - The optimised writer, a new `shot.EncodeSmall`, used by
-    `grid shot crop --small`:
-    - scales the long side down to 1568 (`shot.Crop`, unchanged);
+  - `grid shot compress` on a png:
     - writes with `png.Encoder{CompressionLevel: png.BestCompression}`
       from the standard library;
     - writes a picture with no transparent pixel without an alpha channel.
       Whether the standard encoder already picks that colour type on its
       own was not read here (NOT VERIFIED); the builder checks `image/png`
       and converts only if it does not;
-    - writes a picture with at most 256 distinct colours as a paletted PNG.
-    Every step is exact: the decoded pixels equal the scaled picture.
+    - writes a picture with at most 256 distinct colours as a paletted PNG;
+    - replaces the file at the same path (dot temp file, then rename) only
+      when the result is smaller.
+    Every step is exact: the decoded pixels equal the input pixels.
   - **No colour quantisation.** Reducing a many-colour picture to a palette
     is lossy, so it changes what the proof shows and is not done.
+  - **Same rule in both notes.** An earlier version of this section scaled
+    to 1568, and an earlier version of R-brain-board Q5 allowed a bounded
+    palette step. Both changed pixels and both are dropped, so the two notes
+    carry one lossless rule and one set of L5b V17 rows, word for word.
   - **WebP is not chosen now.** Go's standard library has no WebP encoder,
     and `golang.org/x/image/webp` only decodes. WebP would need cgo
     (libwebp) or a new third-party encoder, which this lane does not add.
     If the owner wants WebP, it is a later lane with its own dependency
     decision.
-  - Captured files that are not PNG (jpg, webp or gif, R-brain-board
-    section on proof paths) are left as captured. `shot.Load` reads PNG
-    only (shot.go:56-66).
+  - Captured files that are not PNG: a webp is left byte-for-byte by
+    `grid shot compress`. A jpg or single-frame gif never reaches it as
+    such, because `grid proof add` stores it as a `.png` with the same
+    decoded pixels (R-brain-board Q5, lane B5). `shot.Load` reads PNG only
+    today (shot.go:56-66).
 - **Target size: about 300 KB per image,** with the text still readable at
   100%. This is a target for the curator, not a limit the code enforces.
-  - A lossless PNG that is still larger after scaling is kept as it is. The
-    command prints its size, and nothing recompresses it lossily.
+  - A lossless PNG that is still larger is kept as it is. The command prints
+    its size and `over_target`, and nothing recompresses it lossily.
 - **Docs change in one lane.** The curator agent (agents/curator.md) and the
   brain-keeper skill (skills/brain-keeper/SKILL.md) gain the step and the
   target in the same lane.
@@ -909,7 +1001,9 @@ rows. A row owned by another decision lane is marked "owned by".
 **L4 P-brain-adopt**
 
 - **Ledger rows.** V13 (Obsidian edits adopted), V14 (adoption of
-  `Proposals/`), V19 (version check under the local lock; person notes win).
+  `Proposals/`), V19 (version check under the local lock; on a mismatch the
+  agent change is redone on top, and a proposal only when both edits cannot
+  hold).
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L1, L3.
 - **Builds.**
@@ -917,23 +1011,49 @@ rows. A row owned by another decision lane is marked "owned by".
   - adoption (5.1);
   - the machine-folder caches and local lock (7.2);
   - the audit drift change (5.3);
-  - expect-rev and proposal on mismatch (5.4);
-  - person authority on every write path (6.1);
+  - expect-rev, and on mismatch re-read and redo on top, with a proposal
+    only when both edits cannot hold (5.4 step 3);
+  - the version check on every write path, person notes included (6.1);
   - person-first ranking (6.3);
   - `origin`, `author`, `updated` and `conflict` in the listing;
-  - the PostToolUse record of agent Edit and Write on brain files (4.3).
+  - the PreToolUse adoption of the target before an agent Edit, MultiEdit or
+    Write on a brain file, and the PostToolUse record after it (4.3, 5.4
+    step 7).
 - **Files.**
   - brain/changes.go, versions.go, audit_check.go, check.go, lock.go,
     store.go, ke_write.go, hy_drop.go, query.go, index.go, revert.go,
     supersede_verb.go;
   - a new brain/adopt.go;
-  - hook/brain.go.
+  - hook/brain.go, and the PreToolUse dispatch in hook/hook.go.
 - **Acceptance.**
   - (V13) F7: a rename is recorded and the old id resolves;
   - (V13) F8: a delete is recorded;
-  - (V19) F9: an edit between read and write turns the agent write into a
-    proposal and the person bytes are unchanged;
-  - (V19) an agent write to a person note writes `Proposals/` and exits 0;
+  - (V19) F9, other lines: a person edit to one body section lands between
+    the agent's read and its write, and the agent's patch changes another
+    section. The note on disk holds both changes, no `Proposals/` file is
+    written, and the command exits 0 with the written path;
+  - (V19) F9, same lines: the person edit and the agent's patch change the
+    same front-matter key. The agent change is in `Proposals/`, the note on
+    disk is byte-equal to the person's bytes, and the command exits 0 with
+    `proposed:`;
+  - (V19) an agent write to a person note, based on its current rev, is
+    written on top: the note holds the person's lines and the agent's change,
+    the person's previous bytes are under `.grid/versions/`, no `Proposals/`
+    file is written, and the command exits 0;
+  - (V19, 4.3 direct edit) a person note whose name has a space is changed on
+    disk with no Grid record (an Obsidian save not yet adopted), with
+    `history-log` off and no task folder. A PreToolUse Edit event on that
+    path, then the agent's bytes on disk, then the PostToolUse event, then
+    `grid brain check` give:
+    - the person bytes under `.grid/versions/` with an `edited` record,
+      origin person;
+    - the note on disk byte-equal to the agent's bytes, with an agent
+      change record;
+    - no `Proposals/` file;
+    - both hook runs exit 0 and print no permission decision, also when the
+      pre-tool adoption fails (a fixture with an unreadable `.grid/`);
+    - with the local lock held by another process, the pre-tool hook exits
+      0 within one second, prints no permission decision and logs the skip.
   - (V13) `grid brain check` adopts a person edit without a drift finding;
   - (V13) two adoptions of the same edit produce one logical change;
   - (V14) a draft in `Proposals/` changed on disk with no Grid record is
@@ -985,14 +1105,17 @@ rows. A row owned by another decision lane is marked "owned by".
 
 - **Ledger rows.** V17 (owned by P-brain-board-decide: screenshots kept
   compressed by the curator), V13 (the curator writes notes Obsidian links,
-  gate 7 curator step), V14 (curator.md keeps a person's draft lines, 6.2).
+  gate 7 curator step). The curator keeping a person's draft lines (V14,
+  6.2) is proved in L5a, not here. V16 (owned by P-brain-board-decide: the
+  curator handles the `home-differs` task proposal).
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L5a and **P-brain-board-decide**.
 - **Builds.**
   - agents/curator.md and skills/brain-keeper/SKILL.md (new layout,
-    `## Links`, person authority, screenshots);
-  - `grid shot crop --small` and `shot.EncodeSmall`: optimised lossless
-    PNG (7.3);
+    `## Links`, edits on top of the current bytes (6.1, 6.3), screenshots,
+    the V16 `home-differs` proposal);
+  - `grid shot compress`: optimised lossless PNG at the same pixel size
+    (7.3; R-brain-board Q5);
   - task proposals and attachments per the board decision;
   - task_decide.go.
 - **Files.**
@@ -1000,16 +1123,18 @@ rows. A row owned by another decision lane is marked "owned by".
   - shot/shot.go, cli/shot.go;
   - brain/store.go (`ProposeTask`), task_decide.go.
 - **Acceptance.**
-  - (V17, owned by P-brain-board-decide) a 3840×2400 UI screenshot PNG
-    fixture run through `grid shot crop --small` comes out as follows:
-    - a PNG (signature bytes), with its long side at 1568;
-    - decoded pixels equal to `shot.Crop`'s scaled picture (lossless);
-    - no larger than `shot.Encode` of the same picture;
-    - its size in bytes printed;
-  - (V17) a fixture with at most 256 colours is written paletted and decodes
-    pixel-equal;
-  - (V17) `go list -deps ./internal/shot` shows no `image/jpeg`, and `grid
-    shot crop --help` has no `--jpeg` flag;
+  - V17 rows, owned by P-brain-board-decide. They are R-brain-board Q9's
+    L5b rows word for word; a change goes into both notes:
+    - V17: `grid shot compress` on a png writes an optimised png at the same path and the same pixel size, and its decoded pixels equal the input's.
+    - V17: on a png with at most 256 colours the output is a paletted png that decodes to exactly the input pixels.
+    - V17: `go list -deps ./internal/shot` shows no `image/jpeg`, the command has no flag that scales, quantises or writes JPEG, and no output is a JPEG.
+    - V17: a webp is left byte-for-byte.
+    - V17: the command prints the old and new sha256 and sizes and `over_target`, and the curator writes them in a `post`.
+    - V17: on the fixture set (one UI screenshot each at 390, 1440 and 3840 wide) every output has the input's pixel size and decodes to exactly the input pixels, and the lane records each output size against the 300 KB target in its proof table.
+    - V17: agents/curator.md and the brain-keeper skill carry the step, the target and the check.
+    - V17, person check (R-brain-obsidian 9.4 step 7): the compressed screenshot opens in Obsidian and its text reads at 100%.
+  - V16 row, owned by P-brain-board-decide (Abdu's option C, R-brain-board "Decided by Abdu: V16 home edit"); R-brain-board Q9's L5b row carries it word for word:
+    - V16: agents/curator.md says how the curator handles a `home-differs` proposal: it never writes `home:` and never runs `grid task move`; it records the proposal `accepted` once task.md `home:` and the posts' home name the same machine again (R-brain-obsidian 6.2 accept steps 2 to 4; no note is filed), and leaves it waiting until then.
   - (V13) the curator files a proposal into a topic with working `[[links]]`.
 
 **L6 P-brain-migrate**
@@ -1052,23 +1177,25 @@ rows. A row owned by another decision lane is marked "owned by".
 **L8 P-brain-sync-write**
 
 - **Ledger rows.** V19 (the sync-server half of the version check: a stale
-  write is rejected, the client re-reads, re-applies and retries, and a person
-  save that won turns the agent write into a proposal). It also serves V18
+  write is rejected, the client re-reads, redoes the agent change on top of
+  the newer bytes and retries; a proposal only when both edits cannot hold,
+  5.4 step 3, or after the bounded retries, step 5). It also serves V18
   (owned by P-run-jobs-decide: only the brain syncs) at the client.
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L4 (expect-rev, adoption, proposal on mismatch), run-jobs
   lane 7 P-loop-service (starts `grid sync` when a licence and server are
-  set), and the sync server's version-checked write API. No lane in any plan
-  builds that API yet (9.5). Until it exists, L8 builds against a stub
-  server in the test.
+  set), and the sync server's version-checked write API, which lane
+  A-sync-version-write builds outside this plugin plan (9.5). Until it
+  lands, L8 builds against a stub server in the test.
 - **Builds.** The step 5 client of 5.4:
   - a brain write with a sync server configured sends the version it was
     based on;
   - on a rejection it runs steps 2-4 of 5.4 again: re-read, adopt, then
-    re-apply or propose;
-  - it retries a bounded number of times with backoff and then writes a
-    proposal. It never overwrites silently, and it never blocks the agent:
-    exit 0 with the written or proposed path.
+    redo the change on top, or propose only by the rule of step 3;
+  - it retries a bounded number of times with backoff and then keeps the
+    change as a proposal rather than lose it (5.4 step 5). It never
+    overwrites silently, and it never blocks the agent: exit 0 with the
+    written or proposed path.
   - With no sync server configured, the local lock of L4 is used unchanged.
 - **Files.** brain/store.go and ke_write.go (the write path), a new
   brain/syncwrite.go (the client seam), and braincmd/command.go only if a
@@ -1079,15 +1206,21 @@ rows. A row owned by another decision lane is marked "owned by".
     stub. The client re-reads, re-applies a change that touches a different
     key or section, retries, and the stub holds both changes. The command
     exits 0;
-  - (V19, sync check 2) the stub holds a person save newer than the agent's
-    base. The agent write is rejected, the client writes
-    `Proposals/<name>.md` and exits 0 with `proposed:`. The person's bytes
-    at the stub and on disk are unchanged;
-  - (V19) with no sync server configured, the F9 test of L4 still passes
+  - (V19, sync check 2, other lines) the stub holds a person save newer than
+    the agent's base, in another section than the agent's patch. The agent
+    write is rejected, the client re-reads, redoes the change on top and
+    retries, and the stub holds the person's lines and the agent's change.
+    No `Proposals/` file is written, and the command exits 0 with the
+    written path;
+  - (V19, sync check 2, same lines) the person save changed the same key as
+    the agent's patch. The client writes `Proposals/<name>.md` and exits 0
+    with `proposed:`. The person's bytes at the stub and on disk are
+    unchanged;
+  - (V19) with no sync server configured, both F9 tests of L4 still pass
     under the local lock.
 - **Server side.** The server's own rows (reject a stale base, accept only
-  brain files) belong to the sync server lane. That lane is not named in
-  any plan yet (9.5).
+  brain files) belong to lane A-sync-version-write in the sync server's
+  repo (the app, to be confirmed), not in this plugin plan (9.5).
 
 ### 9.2 Before P-brain-board-decide lands
 
@@ -1104,7 +1237,7 @@ rows. A row owned by another decision lane is marked "owned by".
   - ids are paths under a level root (2.1);
   - edges are body `[[links]]` plus `## Links` (3);
   - origin comes from change records (4.3);
-  - adoption and the person-first rule apply to every `.md` it places in the
+  - adoption and the version check of 5.4 apply to every `.md` it places in the
     brain (5, 6);
   - new kinds are added to the listing's `kind` (3.4);
   - task files may link `[[decisions/x]]` and the reader resolves them.
@@ -1113,7 +1246,8 @@ rows. A row owned by another decision lane is marked "owned by".
 
 L1 → L2 ∥ L3 → L4 → L5a → L6; L7 after L4; L5b after L5a and
 P-brain-board-decide; L8 after L4 and P-loop-service. It goes live only once
-the sync server's write API exists. Then the Mac round trip.
+A-sync-version-write (the sync server's lane, 9.5) has landed the sync server's write API.
+Then the Mac round trip.
 
 ### 9.4 Mac round trip
 
@@ -1146,11 +1280,14 @@ step). Nothing is called done before this.
      was on by default (NOT VERIFIED).
    - `grid brain show brain:home/<old id>` resolves to the new path.
    - Try a case-only rename `Foo` → `foo` (NOT VERIFIED).
-6. **Person-first.** Ask an agent to edit that renamed note through
+6. **Both edit.** Ask an agent to add a line to that renamed note through
    `grid brain write`.
-   - A file appears in `Proposals/`.
-   - The note is unchanged.
-   - Search lists the note first, with the proposal marked as a conflict.
+   - The note holds the owner's lines and the agent's new line; no file
+     appears in `Proposals/`.
+   - Then change one property of the note in Obsidian, and have the agent
+     write the same property from the rev it read before the save. A file
+     appears in `Proposals/`, the note keeps the owner's value, and search
+     lists the note first, with the proposal marked as a conflict.
 7. **Curator.** Have the curator file a proposal (after L5b).
    - It shows in its topic folder with working links and backlinks.
    - A screenshot attachment is a PNG, readable at 100%, and its size is
@@ -1173,25 +1310,68 @@ step). Nothing is called done before this.
 - The sync server's version-checked write API is not built yet. L4 uses the
   local lock until it lands, and L8 carries the client half of V19 against
   a stub server.
-- **No lane owns the server half of V19.** The run-jobs lane plan (lanes
-  1-13) starts `grid sync` (lane 7 P-loop-service) and adds a push hook
-  point (lane 8 P-loop-remote). No lane there builds the server's
-  version-checked write: test-plan sync checks 1 and 2, "a write based on an
-  old version is refused" and "yours is kept, the agent's becomes a
-  proposal". For the orchestrator: name the sync server lane that owns those
-  rows. L8 is not live until it lands.
+- **The server half of V19: lane A-sync-version-write (not in this plugin
+  plan).** The run-jobs lane plan (lanes 1-13) starts `grid sync` (lane 7
+  P-loop-service) and adds a push hook point (lane 8 P-loop-remote). No lane
+  there builds the server's version-checked write. This note names the lane
+  that must own it; the orchestrator writes its brief.
+  - **Lane.** A-sync-version-write, in the repo that holds the Grid sync
+    server (the sync server check list of the test plan). The evidence
+    points to the app repo: its `internal/slices/sync` package says it
+    "keeps the relay queue on the server", and the app serves
+    `cmd/grid-server`. The orchestrator confirms the repo when it writes
+    the brief. A grep of the app's `internal/slices/sync` and
+    `cmd/grid-server/sync*.go` for a base version, `If-Match` or `409`
+    found nothing, and the plugin has no `grid sync` client yet. The brief
+    picks the files.
+  - **Ledger rows.** V19 (server half), V18 (owned by P-run-jobs-decide:
+    only brain files are accepted).
+  - **Acceptance** (unit tests on the server):
+    - (V19, sync check 1) a write whose base version is not the current one
+      is refused with the current version in the answer; the server's bytes
+      for that path are unchanged. A retry based on the current version is
+      accepted;
+    - (V19, sync check 2) a person save arrives first and an agent write
+      based on the version before it arrives second. The agent write is
+      refused and the server still holds the person's bytes. The client
+      half (L8) then re-reads and redoes the agent change on top, or writes
+      it as a proposal when both edits cannot hold (5.4 step 3); the server
+      only has to refuse and keep;
+    - (V19) a create of a path that exists is refused (create-only files:
+      board posts, Job nodes, proposals, change records and versions);
+    - (V18, sync check 3) a path outside the brain (a worktree, cache or
+      video path) is refused.
+  - **Also carries** the board decision's "Requirement on the sync lane"
+    (R-brain-board Q9). Both notes name this one lane.
+  - L8 builds against an `httptest` stub with the same contract and is not
+    live until A-sync-version-write lands.
 - **Question for the owner (V13, 4.5).** A person note shows no Grid header,
   and an agent note's `source` names the first Grid writer even after the
   owner edits it. This deviates from "the header says who wrote it". Is
   that accepted, or should Grid add a `source: <owner name>` line to a note
   on adoption, which means a Grid write into the owner's note on every
   save? L3 and L4 build the first form unless the owner chooses the second.
-- **V17 format, for the orchestrator.** Section 7.3 now writes lossless
-  optimised PNG only, per the owner's "WebP or optimised PNG". The board
-  decision (R-brain-board, proof path section) still says "After compression
-  it is png or jpg, because R-brain-obsidian section 7.3 compresses to PNG
-  or JPEG". That line follows the old 7.3 and needs the same change in the
-  board lane; it is not edited here.
+- **V17: one row set.** R-brain-board owns V17. Its Q5 and this note's 7.3
+  now say the same thing: `grid shot compress`, the same pixel size,
+  lossless only, a webp left as captured, never JPEG. L5b's V17 rows here
+  are R-brain-board Q9's L5b rows word for word. The board note no longer
+  says "png or jpg" and no longer has a palette step.
+- **The owner answer of 17 Nov, about 03:35 UTC (person and agent edits).**
+  Applied in decision 6, Rejected, 4.3, 4.5, 5.4 steps 3 and 5-7, 6.1, 6.3,
+  the reader table, L4, L5b, L8, 9.2, 9.4 step 6 and this section. Checked
+  and left as they are, because none stops an agent on a person edit:
+  - the local lock (7.2): it orders Grid writers on one machine, and
+    Obsidian never takes it;
+  - the server refusing a stale base (9.5): that is the version check the
+    answer keeps; the client redoes the change on top;
+  - the secret check (7.1): it reports only;
+  - person-first ranking (6.3) and L7's conflict display: they order a
+    listing and stop nothing;
+  - the board note's immutable `board/` posts, its F6 row and the status
+    block replaced inside its markers: they are R-brain-board's, and its
+    status block writer already re-reads and redoes on top (its Q4 step 4).
+  - A direct Edit or Write relies on Claude Code's stale-read refusal; that
+    it covers every save in the window stays NOT VERIFIED (4.3).
 - **Secret in an adopted person note.** The report-only check (7.1) leaves
   the bytes in `.grid/versions/`, which syncs. Whether Grid should offer a
   way to purge a version is not decided here.
