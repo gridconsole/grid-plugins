@@ -10,12 +10,15 @@ code on hidden refs) and the ruling of 17 Nov 02:50 (section "Addendum 7").
 
 **Ledger rows this doc owns (decision gate).**
 
-| Row | What | Decided in |
-|---|---|---|
-| V11 | Judgement: verdict, review, rework and person Jobs from the orchestrator with plain verbs | Decision note 1-3, Q1, Q2, Q6 lanes 2, 3, 6 and 10 |
-| V12 | Landing: one land Job per accepted change, rebase, checks, bisect, push with lease | Decision note 4-6, Q3, Q4, Q5, Q6 lanes 1, 4, 5, 6 and 10 |
-| V26 | Production actions: dontAsk plus exact allow rule, approval in the workflow, command and `wait` Jobs, `blocked: needs permission` | Decision note 7, Addendum 7 A, Q6 lanes 8, 9 and 10 |
-| V27 | Job code on hidden refs `refs/grid/<T>/jobs/<J>/a<n>` and the task head `refs/grid/<T>/head` | Decision note 8, Addendum 7 B, Q3 (redone), Q6 lanes 1, 2, 3, 4, 5, 7 and 10 |
+The "Ledger" column quotes the decision ledger of 17 Nov. "Proved by" names its
+test-plan tracks.
+
+| Row | Ledger | Proved by | Decided in |
+|---|---|---|---|
+| V11 | Judgement without the app: review, one rework, then a person | D | Decision note 1-3, Q1, Q2, Q6 lanes 2, 3, 6 and 10 |
+| V12 | Landing in the plugin: conflicts, red and flaky tests | D | Decision note 4-6, Q3, Q4, Q5, Q6 lanes 1, 4, 5, 6 and 10 |
+| V26 | Production actions: workflow approval, command Job, exact allow rule, blocked post | D, G | Decision note 7, Addendum 7 A, Q6 lanes 8, 9 and 10 |
+| V27 | Job code on hidden git refs, verified before it merges, readable from other machines | D, E, M | Decision note 8, Addendum 7 B, Q3 (redone), Q6 lanes 1, 2, 3, 4, 5, 7 and 10 |
 
 V26 and V27 are shared with P-run-jobs-decide; the launcher parts are listed as
 asks at the end of section "Addendum 7".
@@ -30,7 +33,7 @@ asks at the end of section "Addendum 7".
    and prints the wake (`internal/orchestrator/stream.go:353`). From there the
    home orchestrator decides. It posts a reviewer Job. On the verdict it posts
    exactly one of three things:
-   - a land Job;
+   - an integrate Job and the land Job that waits on it (Addendum 7 B.7);
    - one rework Job that carries the must-fix items;
    - a person Job, after a second failed review or a STUCK verdict.
 2. The mechanical parts of the app Judge become plain Go verbs. The orchestrator
@@ -269,12 +272,12 @@ builder J exits done (worker-exit, attempt a)
 orchestrator: grid workflow show -> next step after run
   check  -> grid judge review J --wake result/J/a   posts J.1 (reviewer)
   person -> grid judge person J --point S --wake ...
-  none   -> control J accepted "workflow carries on" (+ land Job if J changed a repo)
+  none   -> control J accepted "workflow carries on" (+ integrate Job I and land Job L if J changed a repo)
 reviewer J.1 exits done
   launcher: control J.1 submitted; wake result J.1/1
 orchestrator: grid judge verdict J.1 --json
   ACCEPTED                      -> control J accepted; control J.1 accepted "verdict ACCEPTED";
-                                   post land Job L (Q3)
+                                   post integrate Job I and land Job L after I (Q3, Addendum 7 B.7)
   REJECTED, rounds_used < rounds -> grid judge rework J --from J.1   posts J' (continues J),
                                    control J rejected "reworked as J'"
   REJECTED, rounds_used = rounds -> grid judge person J --from J.1 "rejected again after its rework"
@@ -310,7 +313,8 @@ default; a project with no workflow and no note gets a person Job asking for one
 | review Job | orchestrator via `grid judge review` | job | as in the app's review child (Q1), plus header `wake result/J/a`; `attempt 1` |
 | verdict read | `grid judge verdict` (no post) | — | JSON: `verdict` (ACCEPTED, REJECTED or STUCK), `must_fix[]`, `review`, `review_attempt`, `rounds_used`, `rounds` |
 | accept | orchestrator | control | `target J, status accepted, reason "review accepted by J.1"`, wake |
-| land Job | orchestrator | job | Q3 |
+| integrate Job | orchestrator | job, `kind: command`, runs `grid task integrate T J` | Addendum 7 B.7 |
+| land Job | orchestrator | job, after the integrate Job | Q3 |
 | rework Job | orchestrator via `grid judge rework` | job | new id, `continues J`, `discovered_from J.1`, copied body, row "Must-fix from review round N" (keys id, text, traces, state), `review_rounds N`, `attempt 1` |
 | reject | `grid judge rework` | control | `target J, status rejected, close_reason "reworked as J'"` |
 | person Job | orchestrator via `grid judge person` | job, `--person owner` | as in the app's `personBody` (Q1), with the reason: second fail with the reviewer's text, STUCK, or a review cancelled before it ran |
@@ -475,10 +479,10 @@ land Job is at `:192`.
 
 | Lane (land-job-type section 6) | Verdict | What changes |
 |---|---|---|
-| L1-land-kind (`land-job-type.md:207`) | **stays** | This is P-land-kind-2, commit aa0cf14a on `lane-P-land-kind`. It adds `target`, `branch` and `sha` on `kind: land` in `schemas/job-record.json` and `internal/job/job.go`, the lint rules `job.land-target`, `job.land-branch` and `job.land-sha` in `internal/job/lint/lint.go`, and the tests `internal/job/lint/land_kind_test.go` and `internal/cli/feed_land_roundtrip_test.go`. The rebase flow needs no other field. Under Addendum 7 B, `branch` holds the full ref `refs/grid/<T>/head`, which the non-empty lint accepts (`lint.go:360-361` on aa0cf14a). |
+| L1-land-kind (`land-job-type.md:207`) | **stays** | This is P-land-kind-2, commit aa0cf14a on `lane-P-land-kind`. It adds `target`, `branch` and `sha` on `kind: land` in `contract/schemas/job-record.json` and `internal/job/job.go`, the lint rules `job.land-target`, `job.land-branch` and `job.land-sha` in `internal/job/lint/lint.go`, and the tests `internal/job/lint/land_kind_test.go` and `internal/cli/feed_land_roundtrip_test.go`. The rebase flow needs no other field. Under Addendum 7 B, `branch` holds the full ref `refs/grid/<T>/head`, which the non-empty lint accepts (`lint.go:360-361` on aa0cf14a). |
 | L2-land-change (`:208`, naming at `:203`) | **stays, changed** | The package is `internal/land`, not `internal/landjob`. The flow is rebase, not merge. The push uses a lease (no local update-ref CAS). Stacking (option B) is dropped. It adds the result codes `landed`, `conflict`, `red`, `preexisting` and `push_lease_lost`. |
 | L3-land-red (`:209`) | **stays, changed** | Red is bisected within the change's commits, not across lanes. The flake rule has the owner's second-time delete and the incident exception. |
-| L4-land-step (`:210`; workflow step `land`, spawn `command`) | **split** | The workflow step kind is dropped: the orchestrator posts the land Job after ACCEPTED, and no workflow step is needed. The `command` spawn (a runner Job that runs a plugin verb with no agent) moves to the launcher lanes of P-run-jobs-decide. |
+| L4-land-step (`:210`; workflow step `land`, spawn `command`) | **split** | The workflow step kind is dropped: the orchestrator posts the integrate Job and the land Job after ACCEPTED, and no workflow step is needed. The `command` spawn (a runner Job that runs a plugin verb with no agent) moves to the launcher lanes of P-run-jobs-decide. |
 | L5-app-land (`:211`) | **dropped from the app** | It moves to the plugin as `grid judge` and the orchestrator's text (lanes 2 and 3 below), as dogfood-gaps G8 already found. |
 | L6-feed-land-ui (`:212`, app) | **dropped** | The task.md status block shows "landed <sha>" (Addendum 4). The app is not on the path. |
 | agent nice +10 (`:154`, section 4) | **not in this plan** | It is a capacity setting, which is the launcher's measuring side. Left to P-run-jobs-decide. |
@@ -559,20 +563,27 @@ Auto mode is no gate for a production action that the prompt asks for.
 2. **Approval comes from the workflow, before the Job.** The project's deploy
    workflow note has an `approve` step before `deploy`. In one turn the
    orchestrator posts two Jobs:
-   - a person Job (kind ask) asking "approve deploy of <sha> to <env>", which
-     the person sees in the brain inbox and the status block;
+   - a person Job (role Person, `kind: approve`) asking "approve deploy of
+     <sha> to <env>", which the person sees in the brain inbox and the status
+     block. This is the plan Job shape the plugin already reads as an approval
+     (`internal/task/gates.go:244-248`, `:285`);
    - the deploy command Job, with `after: {job: <person Job>, kind: approved}`.
+
+   **The approval record exists today.** `grid approve` answers that person Job
+   (`internal/land/approval.go:30-41` adds the lands-rule hash). It posts an
+   accepted control carrying `plan_hash`, `plan_digest` and `lands_hash`, which
+   `planJobResult` reads (`gates.go:297-306`). `land.Run` checks the plan hash
+   and the lands-rule hash against it (`land.go:243-251`, via
+   `ApprovalForGate`, `gates.go:143-172`). So no new record and no new check are
+   needed: the deploy rule's own check stays as it is. Answering from the brain
+   inbox must post the same control. Lane 9 row 5 tests it.
 
    **The `approved` kind.** It is a new dependency kind beside `done`, `failed`
    and `children-done` (`internal/job/lint/lint.go:252-253`,
-   `contract/schemas/job-record.json:292-318`). It holds when the person Job's
-   answer approves. A declined answer wakes the orchestrator, which cancels the
+   `contract/schemas/job-record.json:292-318`). It holds when the person Job is
+   accepted with a `plan_digest`, the same test `planJobResult` makes
+   (`gates.go:300`). A declined answer wakes the orchestrator, which cancels the
    deploy Job or replans.
-
-   **The approval record.** The approving answer writes the same approval record
-   that `grid approve` writes today. So the existing run-time check in
-   `land.go:243-251`, of the plan hash and the lands-rule hash, stays as it is.
-   It belongs to the deploy rule and is not new.
 3. **The deploy is a command Job, not an agent.**
    - The Job is `kind: command` with role runner, and it runs `grid land T-n`,
      the existing deploy executor (`land.go:208`).
@@ -679,17 +690,22 @@ Auto mode is no gate for a production action that the prompt asks for.
    - to continue an earlier attempt, `refs/grid/<T>/jobs/<J>/a<n-1>`. This
      replaces the sibling's `base: grid-T-12-J-7-a2` (sibling Q2).
 4. **Job done: `grid job submit`.** The shim runs it after the agent exits and
-   before the `exit` post. An agent may also run it earlier itself. It does
-   this, in order:
+   before the `exit` post. Only the shim runs it, once per attempt, so the ref
+   is written once. An agent that wants a reviewer to see work early ends its
+   attempt instead. It does this, in order:
    1. If anything is uncommitted, it commits it with the message "J-n attempt a:
       uncommitted work at exit". Normally the agent has already committed its
       work with its own messages.
    2. If HEAD equals the base, it pushes nothing (a Job with no code).
    3. It runs the secrets check (B.5). On a hit it pushes nothing.
-   4. It runs `git push origin HEAD:refs/grid/<T>/jobs/<J>/a<n>`. Each attempt
-      gets a new ref, so no force is needed. If the ref already exists with
-      another SHA, the result is `ref_exists`. Two writers of one attempt cannot
-      happen, because one attempt is one claim (sibling Q1).
+   4. It runs `git push --force-with-lease=refs/grid/<T>/jobs/<J>/a<n>: origin
+      HEAD:refs/grid/<T>/jobs/<J>/a<n>`. The empty expected value makes the
+      push create-only: git's documented form for "the ref must not exist yet".
+      A plain push could fast-forward an existing ref. If the ref already exists,
+      the push is refused and the result is `ref_exists`. Two writers of one
+      attempt should not happen, because one attempt is one claim (sibling Q1).
+      The create-only push holds that rule on the remote too. Creation with this
+      form was run once on a scratch bare repo. The refusal is lane 7 row 9.
    5. It posts `submit {repo, ref, sha, base, commits}` on the board. That is
       the existing type with new fields. The fold records it on the Job, and the
       reviewer and land Jobs read it from there.
@@ -860,6 +876,7 @@ Where the two docs disagree, the decision gate settles it.
 | `permission_denials` copied into `exit` | sibling P-loop-core (exit reader, `runner.go:467` on 43d26ad5) | A.6 |
 | `after` kind `approved` | sibling P-loop-board (`after` kinds) | A.2 |
 | `kind: command` and `kind: wait` run with no agent | sibling P-loop-core row 9 | A.3, A.4, B.7 |
+| `push_lease_lost` from an integrate Job also gives exactly one new attempt (sibling row 10 names only the land Job) | sibling P-loop-core row 10 | B.7 |
 | Detached worktree at the assignment's base SHA, refspec, `fetch --prune`, worktree removal on close, `grid job submit` in the shim | sibling P-loop-core | B.2, B.3, B.4, B.9 |
 | `base` names a SHA or an attempt ref, not a branch | sibling P-loop-board (assign schema) | B.3 |
 
@@ -877,12 +894,12 @@ lane's rows come from the ledger rows in its V column.
 | 1 | **P-land-kind-2** (as briefed) | V12, V27 | `contract/schemas/job-record.json`, `internal/job/job.go`, `internal/job/lint/`, tests from aa0cf14a | 1. lint refuses a land Job without target, branch or sha; 2. round-trip through the Feed keeps them; 3. existing tests green; 4. (V27) a land Job whose `branch` is `refs/grid/T-1/head` passes lint and survives the round-trip | — |
 | 2 | **P-judge-verbs** | V11, V27 | new `internal/judge/` (`verdict.go`, `review.go`, `rework.go`, `person.go`, `id.go`), `internal/cli/judge.go`, `commands.json`, `docs/job-contract.md:123-128` | 1. verdict parse ports the app's verdict cases and adds STUCK; 2. rework body ports `TestReworkPostsANewJobIDWithOnlyJobRecordKeys`; 3. request id ports both `judge_post_request_id` tests (no epoch); 4. a second call with the same wake succeeds with nothing posted (`ErrDuplicateWake`); 5. a cancelled review gives one person Job (ports both `judge_cancelled_review` tests); 6. `verdict` reports rounds over the `continues` chain; 7. a verdict from an older attempt is reported stale; 8. (V27) the review Job's base is the submitted SHA of the reviewed attempt, and a rework Job's base is the current `refs/grid/<T>/head` SHA, or the target's tip when the task has no head | 1 (only for `kind`), launcher wake (exists) |
 | 3 | **P-judge-orchestrator** | V11, V27 | `agents/orchestrator.md` (replace the `never_judged` text at line 28 with the flow in Q2), the brain default workflow note (`review rounds: 2`), `docs/job-contract.md` | 1. a scripted task with a fake reviewer: finished, reviewed REJECTED, one rework, reviewed ACCEPTED, accepted, with no hand step and the app stopped; 2. a second REJECTED gives one person Job; 3. STUCK gives one person Job and no rework; 4. every wake is acked once (ports `TestJudgeAcknowledgesEveryWake` cases as fold checks); 5. (V27) after ACCEPTED the orchestrator posts one integrate Job and one land Job that waits on it; 6. (V27) `secret_found` leads to one rework Job, "remove the secret from the history"; 7. (ruling) `grid setup` creates the default workflow note once with a version check, and a second run after a person's edit leaves the edit | 2 |
-| 4 | **P-land-change** | V12, V27 | `internal/land/change.go`, `conflict.go`, `push.go`, new `integrate.go` and `cleanup.go`, `internal/land/note.go` (reads the brain note: generated pattern, regenerate command, union list and check, check commands, landing rule), `internal/cli/land.go` (`grid land change`), `internal/cli/task.go` (`grid task integrate`, `grid task cleanup`), a seed environments note for the plugin repo | Q4 table rows for branch, ATTR, generated, union, conflict, nothing to land, push with lease; plus: two accepted changes in one repo land in order and the second rebases onto the first; plus: the generated list and commands come from the note, none hard-coded; plus (V27, bare remote in a temp dir): (a) integrate squashes `base..sha` onto the head as one commit with the `Grid-Ref` trailer; (b) an integrate conflict gives `conflict` with files; (c) a head moved between fetch and push gives `push_lease_lost` for integrate and for land; (d) land rebases the head and pushes main and head in one atomic push, and after it head equals main; (e) if either lease fails, neither ref moves; (f) the landed Jobs' attempt refs are gone from the remote, and a failed delete is reported in `landed` while the land still succeeds; (g) rule `branch` pushes the head to `refs/heads/<prefix>T-1`; (h) rule `pr` calls a fake `gh pr create` and posts one `wait` Job; (i) `grid task cleanup` removes every `refs/grid/T-1/*` on the remote | 1, 7 |
+| 4 | **P-land-change** | V12, V27 | `internal/land/change.go`, `conflict.go`, `push.go`, new `integrate.go` and `cleanup.go`, `internal/land/note.go` (reads the brain note: generated pattern, regenerate command, union list and check, check commands, landing rule), `internal/cli/land.go` (`grid land change`), `internal/cli/task.go` (`grid task integrate`, `grid task cleanup`), a seed environments note for the plugin repo | Q4 table rows for branch, ATTR, generated, union, conflict, nothing to land, push with lease; plus: two accepted changes in one repo land in order and the second rebases onto the first; plus: the generated list and commands come from the note, none hard-coded; plus (V27, bare remote in a temp dir): (a) integrate squashes `base..sha` onto the head as one commit with the `Grid-Ref` trailer; (b) an integrate conflict gives `conflict` with files; (c) a head moved between fetch and push gives `push_lease_lost` for integrate and for land; (d) land rebases the head and pushes main and head in one atomic push, and after it head equals main; (e) if either lease fails, neither ref moves; (f) the landed Jobs' attempt refs are gone from the remote, and a failed delete is reported in `landed` while the land still succeeds; (g) rule `branch` pushes the head to `refs/heads/<prefix>T-1`; (h) rule `pr` calls a fake `gh pr create` and posts one `wait` Job; (i) `grid task cleanup` removes every `refs/grid/T-1/*` on the remote; (j) (test plan E) integrate squashes only the attempt the accepted review names, and with `a1` and `a2` on the remote it never takes `a1`; (k) (test plan D) before ACCEPTED, no `refs/heads/*` on the remote changes and the head holds none of the Job's commits | 1, 7 |
 | 5 | **P-land-tests** | V12, V27 | `internal/land/check.go`, `bisect.go`, `flake.go` | Q4 table rows for checks, rerun, not waivable, preexisting, bisect, flake, one fix Job; plus (V27): a head with two squash commits where the second is red: the result names that Job, then bisects its attempt ref's commits replayed on the main base and names the commit and the test | 4 |
-| 6 | **P-land-launch** | V11, V12 | launcher files named by P-run-jobs-decide (start conditions "after L lands" and "no other test run on this machine"; a new attempt on `push_lease_lost`; the status block "landed <sha>"), `agents/orchestrator.md` (post a land Job after ACCEPTED; fix Jobs for flakes) | 1. a lost lease reruns as attempt 2 and lands; 2. two land Jobs on one machine never run checks at the same time; 3. the status block shows the main SHA; 4. a `conflict` result leads the orchestrator to post one rework Job (`grid judge rework`, `continues` J) that names the files; 5. a `red` result leads to one rework Job whose must-fix names the commit and the test; 6. a `landed` result with a flake leads to one fix-the-cause Job, and none when an open Job already names the test; 7. a `preexisting` note leads to one fix Job against main | 3, 5, the launcher lanes of P-run-jobs-decide |
-| 7 | **P-code-refs** (new) | V27 | new `internal/gitref` (refspec, detached worktree, attempt ref names, submit push, prune, worktree removal), new `internal/secret` (patterns moved from `internal/brain/note.go:199-204`; the brain calls it), `internal/cli` (`grid job submit`; `grid setup` adds the refspec), the launcher's start and shim call sites in `internal/loop` (Addendum 7 asks, rows B.2-B.4 and B.9), `contract/schemas` (`submit` fields `ref`, `base`, `commits`; result `secret_found`) | 1. a Job's commits land on `refs/grid/T-1/jobs/J-1/a1` on a bare remote, `submit` holds that ref and SHA, and the repo has no new local branch; 2. a second clone fetches with the refspec and opens a detached worktree at the SHA (a reviewer); 3. a secret added in one commit and removed in a later one: nothing is pushed, `secret_found` names the file and line, and no post or log holds the matched text; 4. after the remote ref is deleted, `fetch --prune` drops the local copy and leaves a real branch `grid/x` and its remote-tracking ref alone; 5. running the refspec setup twice leaves one fetch line; 6. after `grid task cleanup`, a second machine's prune and close pass leave no `refs/grid-remotes/origin/T-1/*` and no worktree for T-1, and a worktree with uncommitted changes is kept and named; 7. HEAD equal to the base pushes nothing; 8. a non-GitHub remote's first submit is recorded in the result as "host not checked" (Addendum 7 B, other hosts) | P-loop-core and P-loop-board (P-run-jobs-decide lanes 4 and 1) |
+| 6 | **P-land-launch** | V11, V12 | launcher files named by P-run-jobs-decide (start conditions "after L lands" and "no other test run on this machine"; a new attempt on `push_lease_lost`; the status block "landed <sha>"), `agents/orchestrator.md` (post an integrate Job and a land Job after ACCEPTED; fix Jobs for flakes) | 1. a lost lease reruns as attempt 2 and lands; 2. two land Jobs on one machine never run checks at the same time; 3. the status block shows the main SHA; 4. a `conflict` result leads the orchestrator to post one rework Job (`grid judge rework`, `continues` J) that names the files; 5. a `red` result leads to one rework Job whose must-fix names the commit and the test; 6. a `landed` result with a flake leads to one fix-the-cause Job, and none when an open Job already names the test; 7. a `preexisting` note leads to one fix Job against main | 3, 5, the launcher lanes of P-run-jobs-decide |
+| 7 | **P-code-refs** (new) | V27 | new `internal/gitref` (refspec, detached worktree, attempt ref names, submit push, prune, worktree removal), new `internal/secret` (patterns moved from `internal/brain/note.go:199-204`; the brain calls it), `internal/cli` (`grid job submit`; `grid setup` adds the refspec), the launcher's start and shim call sites in `internal/loop` (Addendum 7 asks, rows B.2-B.4 and B.9), `contract/schemas` (`submit` fields `ref`, `base`, `commits`; result `secret_found`) | 1. a Job's commits land on `refs/grid/T-1/jobs/J-1/a1` on a bare remote, `submit` holds that ref and SHA, and the repo has no new local branch; 2. a second clone fetches with the refspec and opens a detached worktree at the SHA (a reviewer); 3. a secret added in one commit and removed in a later one: nothing is pushed, `secret_found` names the file and line, and no post or log holds the matched text; 4. after the remote ref is deleted, `fetch --prune` drops the local copy and leaves a real branch `grid/x` and its remote-tracking ref alone; 5. running the refspec setup twice leaves one fetch line; 6. after T-1's remote refs are deleted with plain `git push --delete` (as `grid task cleanup` in lane 4 will), a second machine's prune and close pass leave no `refs/grid-remotes/origin/T-1/*` and no worktree for T-1, and a worktree with uncommitted changes is kept and named; 7. HEAD equal to the base pushes nothing; 8. a non-GitHub remote's first submit is recorded in the result as "host not checked" (Addendum 7 B, other hosts); 9. a second submit to an existing attempt ref, with another SHA, is refused and gives `ref_exists`, and the ref keeps its first SHA; 10. (test plan E) a reassigned Job pushes `a2`, and `a1` stays as it was | P-loop-core and P-loop-board (P-run-jobs-decide lanes 4 and 1) |
 | 8 | **P-prod-actions** (new) | V26 | the launcher's command line (`internal/runner` or `internal/loop`, per P-loop-core), `contract/schemas` (`allow`, `grant` on the assignment; post `blocked {need, rule, command, why}`; `permission_denials` on `exit`), `internal/job/lint/` (`job.allow-exact`), the fold's `blocked` state and the status block's "needs you", the mechanical new attempt on an approved `blocked`, `agents/*.md` and the run-job skill (the denied-mid-Job words) | 1. the command line always holds `--permission-mode dontAsk`, also when the person's settings name `auto` or `bypassPermissions`; 2. with a covering grant, `--allowedTools` holds the role tools plus exactly the one granted rule; on the real `claude` CLI, a stand-in target `make deploy-prod` in a temp repo runs with the rule and gives one permission denial without it; 3. an agent denied mid-Job posts `blocked`, the `exit` carries `permission_denials`, and the status block lists the Job under "needs you"; 4. an approved `blocked` gives exactly one new attempt with `allow` and `grant`, and a declined one gives exactly one orchestrator wake; 5. lint reports `Bash(make:*)` and `Bash(*)`; 6. `allow` with no covering grant starts the attempt without the rule and says so in `started` | 7 for the shared shim, P-loop-core, P-loop-grants (P-run-jobs-decide lane 10) |
-| 9 | **P-deploy-jobs** (new) | V26 | the deploy workflow note's `approve` step (the default deploy workflow note), `contract/schemas` (`after` kind `approved`, post `waited`), new `internal/land/wait.go` and `internal/cli` (`grid wait`), `agents/orchestrator.md` (post the person Job, the deploy command Job and the wait Job; fix forward or revert) | 1. a deploy command Job with `after: {kind: approved}` does not start before the person approves, and starts once they do; a decline wakes the orchestrator and the Job never starts; 2. the deploy runs as a command Job with no agent, its exit holds the code, the log and the link, and `internal/land`'s approval tests stay green; 3. `grid wait` against a fake poll command gives `waited green`, then `red` and `timeout` each give `deploy-failed` and reopen the task; 4. with the project rule "revert", red leads to one revert Job and then a land; with "fix forward", it leads to one fix Job | 8, P-loop-core row 9 |
+| 9 | **P-deploy-jobs** (new) | V26 | the deploy workflow note's `approve` step (the default deploy workflow note), `contract/schemas` (`after` kind `approved`, post `waited`), new `internal/land/wait.go` and `internal/cli` (`grid wait`), `agents/orchestrator.md` (post the person Job, the deploy command Job and the wait Job; fix forward or revert), the inbox answer path for an approve Job (calls `internal/land/approval.go`) | 1. a deploy command Job with `after: {kind: approved}` does not start before the person approves, and starts once they do; a decline wakes the orchestrator and the Job never starts; 2. the deploy runs as a command Job with no agent, its exit holds the code, the log and the link, and `internal/land`'s approval tests stay green; 3. `grid wait` against a fake poll command gives `waited green`, then `red` and `timeout` each give `deploy-failed` and reopen the task; 4. with the project rule "revert", red leads to one revert Job and then a land; with "fix forward", it leads to one fix Job; 5. an approval answered from the brain inbox posts the same accepted control as `grid approve` (`plan_hash`, `plan_digest`, `lands_hash`), and `land.Run` accepts it; an answer for another plan or lands rule is refused | 8, P-loop-core row 9 |
 | 10 | **P-judge-land-proof** (was 7) | V11, V12, V26, V27 | a real-plugin test under `internal/cli` or `tests/`, plus the lane doc | the owner's acceptance below, end to end with the app not running, with the code on hidden refs (lane 7) and one approved deploy (lane 9) | 1–9 |
 
 **The owner's acceptance, mapped.**
@@ -906,6 +923,12 @@ lane's rows come from the ledger rows in its V column.
 | (V27, B) land: rebase head onto main, or a branch or PR, per the landing rule | 4d, 4e, 4g, 4h |
 | (V27, B) cleanup on the remote and on every machine; prune never touches real `grid/...` | 4f, 4i, 7.4, 7.6 |
 | (V27, B) the refspec on every clone | 7.5 |
+| Test plan D: a Job's code arrives on `refs/grid/<T>/jobs/<J>/a<n>`; nothing reaches main or a branch before a reviewer accepts it; after landing the refs are gone on the remote and every machine | 7.1, 4k, 4f, 4i, 7.6 |
+| Test plan D: no deploy before approval in the inbox; the command Job deploys, the wait Job reports, a failed deploy reopens the task | 9.1, 9.5, 9.2, 9.3 |
+| Test plan D: an agent refused a permission posts `blocked: needs permission`, tries no other route, and approving restarts it with only that rule | 8.3, 8.4, 8.2 |
+| Test plan E: a reassigned Job pushes a new attempt ref; the old attempt's ref is never integrated | 7.10, 4j |
+| Test plan G: approval as a file-based gate, answered in the inbox with no app | 9.1, 9.5 |
+| Test plan M: a reviewer on another machine checks out a Job ref with no branch and no copy by hand | 7.2, 10 |
 
 **Open items.**
 - **Launcher interfaces.** The sibling doc (P-run-jobs-decide) is now handed in
