@@ -1574,7 +1574,9 @@ func vaultAddLink(data []byte, target, rel, why string) []byte {
 		text += eol
 	}
 	if !strings.EqualFold(strings.TrimSpace(last), "links") {
-		text += eol + "## Links" + eol + eol
+		// No blank line before the heading: the section above keeps its bytes, so a
+		// person's edit to it does not meet the agent's.
+		text += "## Links" + eol + eol
 	}
 	return []byte(text + "- [[" + target + "]] - " + rel + ": " + why + eol)
 }
