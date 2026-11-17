@@ -62,7 +62,7 @@ func runMigrate(args []string, env Env) int {
 		}
 		source = env.GridHome
 	}
-	opts := []migrate.Option{migrate.WithCeiling(env.Ceiling)}
+	opts := []migrate.Option{migrate.WithCeiling(env.Ceiling), migrate.WithMachineFolder(env.MachineFolder)}
 	// The flag wins; without it the folder is CLAUDE_PLUGIN_DATA of this call's
 	// environment, never the host process's when a lib call gave its own.
 	data := *pluginData

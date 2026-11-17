@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/version"
 )
@@ -58,6 +59,7 @@ type Plan struct {
 	pluginData          string
 	plugin              snap
 	pointers            []pointerChange
+	machineFolder       machinefolder.Folder
 }
 
 // Option adjusts a scan.
@@ -70,6 +72,11 @@ func WithCeiling(dir string) Option { return func(p *Plan) { p.ceiling = dir } }
 // plugin data: Scan reads no process variable, so the caller passes the folder it
 // got from its own environment (grid migrate takes CLAUDE_PLUGIN_DATA from the call).
 func WithPluginData(dir string) Option { return func(p *Plan) { p.pluginData = dir } }
+
+// WithMachineFolder names the machine folder the caller resolved (grid migrate passes
+// its own). A folder that is not Active, that is one nobody configured, moves nothing:
+// the plan is the one made without this option. Scan never resolves the folder itself.
+func WithMachineFolder(f machinefolder.Folder) Option { return func(p *Plan) { p.machineFolder = f } }
 
 // pendingMachine stands in for the machine id in a plan made before one exists.
 const pendingMachine = "MACHINE-ID-MADE-ON-APPLY"
