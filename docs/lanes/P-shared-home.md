@@ -83,4 +83,4 @@ Choices the reviewer may question:
 - macOS and Windows runtime: only built and vetted there, not run.
 - The `grid doctor` and `grid setup --shared-group` output, because they are not written.
 
-NOT DONE
+CLOSED BY P-shared-home-6: accepted 05:38 UTC

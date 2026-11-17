@@ -183,4 +183,4 @@ None. `git diff --stat 182e67b6 HEAD` lists 13 files, all in `internal/doctor`, 
 - macOS and Windows runtime: only built and vetted there.
 - The bundle test needs a folder the login cannot read, so it is skipped on Windows and as root; on those it proves nothing, and the second test (`Launcher(login)` failing) still runs.
 
-NOT DONE
+CLOSED BY P-shared-home-6: accepted 05:38 UTC
