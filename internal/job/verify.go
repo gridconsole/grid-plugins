@@ -33,6 +33,9 @@ type VerifyOptions struct {
 	GridHome string
 	TaskPath string
 	Cwd      string
+	// WorktreesDir, when set, says where a project's worktrees are (the machine
+	// folder's); nil is projects/<project>/worktrees in the Grid home.
+	WorktreesDir func(gridHome, project string) (string, error)
 }
 
 // RunVerify executes the Job's verification and returns evidence even on failure.

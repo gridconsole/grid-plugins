@@ -24,7 +24,7 @@ func runJob(args []string, env Env) int {
 // jobcmdEnv is the environment grid job commands run in, for resolver r.
 func jobcmdEnv(env Env, r where.Resolver) jobcmd.Env {
 	return jobcmd.Env{Context: env.Context, Cwd: env.Cwd, Home: env.Home, GridHome: env.GridHome, Machine: env.Machine, Stdout: env.Stdout, Stderr: env.Stderr,
-		Resolver: r,
+		Resolver: r, WorktreesDir: env.MachineFolder.WorktreesDir,
 		ResolveTask: func(task string) (string, error) {
 			result, err := r.Resolve(where.Query{Cwd: env.Cwd, Task: task})
 			return result.TaskPath, err

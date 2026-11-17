@@ -13,6 +13,14 @@ import (
 // keys do not add a directory. The @sha suffix records a commit, not a folder.
 // Absolute paths remain supported for callers with an existing checkout.
 func WorktreePath(gridHome, project, recorded string) (string, error) {
+	return WorktreePathIn(nil, gridHome, project, recorded)
+}
+
+// WorktreePathIn is WorktreePath for a Grid that keeps its worktrees in a machine
+// folder: dirFor gives a project's worktrees folder, and the recorded name is a
+// folder in it. A nil dirFor is the old place, projects/<project>/worktrees in the
+// Grid home, so WorktreePath answers as it always has.
+func WorktreePathIn(dirFor func(gridHome, project string) (string, error), gridHome, project, recorded string) (string, error) {
 	if filepath.IsAbs(recorded) {
 		return recorded, nil
 	}
@@ -25,6 +33,13 @@ func WorktreePath(gridHome, project, recorded string) (string, error) {
 	}
 	if gridHome == "" || !component(project) {
 		return "", errors.New("recorded worktree needs a Grid home and project; specify --dir")
+	}
+	if dirFor != nil {
+		base, err := dirFor(gridHome, project)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(base, name), nil
 	}
 	return filepath.Join(gridHome, "projects", project, "worktrees", name), nil
 }
@@ -53,7 +68,7 @@ func resolveVerifyPaths(j Job, dir string, o VerifyOptions) (Job, string, error)
 				project = record.Project
 			}
 			var err error
-			dir, err = WorktreePath(o.GridHome, project, recorded)
+			dir, err = WorktreePathIn(o.WorktreesDir, o.GridHome, project, recorded)
 			if err != nil {
 				return j, "", err
 			}

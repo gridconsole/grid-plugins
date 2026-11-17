@@ -44,7 +44,9 @@ type Env struct {
 	Stdout      io.Writer
 	Stderr      io.Writer
 	ResolveTask func(string) (string, error)
-	project     string // --project value; set by Run, passed to the resolver as Query.Project
+	// WorktreesDir, when set, says where a project's worktrees are; nil is the Grid home's.
+	WorktreesDir func(gridHome, project string) (string, error)
+	project      string // --project value; set by Run, passed to the resolver as Query.Project
 }
 type flags struct {
 	json    bool

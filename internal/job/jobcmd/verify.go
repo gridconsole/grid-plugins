@@ -38,7 +38,7 @@ func runVerify(args []string, f flags, e Env) int {
 		ctx, stop = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	}
 	defer stop()
-	r, err := job.RunVerify(ctx, j, f.dir, job.VerifyOptions{GridHome: e.GridHome, TaskPath: taskPath, Cwd: e.Cwd})
+	r, err := job.RunVerify(ctx, j, f.dir, job.VerifyOptions{GridHome: e.GridHome, TaskPath: taskPath, Cwd: e.Cwd, WorktreesDir: e.WorktreesDir})
 	code := 0
 	if !r.Pass || err != nil {
 		code = 1
