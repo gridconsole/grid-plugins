@@ -88,9 +88,9 @@ the schema.
 | `kind` | optional | plan `internal/job/planned.go` | The step's work kind (`^[a-z][a-z-]*$`), taken from the checklist item. |
 | `visible` | optional | plan `internal/job/planned.go` | `big` or `small`. |
 | `repo` | optional | plan `internal/job/planned.go` | The project repo a code Job works in, by its path in project.md; `.` names the project folder and always passes, whether or not project.md lists it; lint refuses any other path the project does not list (rule `job.repo`); none is the first repo. `grid worker next` puts that repo's folder on the spawn line as `repo`. |
-| `base` | optional | brief `internal/job/frombrief.go` | The branch the Job's clone or worktree starts from, from the brief's `Repo:` line ("from main"). `grid worker next` puts it on the spawn line as `base`; none leaves the key out. |
-| `model` | optional | brief `internal/job/frombrief.go` | The model the Job's agent runs on, from the brief's `Model:` line. It goes on the spawn line as `model` in place of the role's; none keeps the role's model. |
-| `effort` | optional | brief `internal/job/frombrief.go` | The effort the Job's agent runs at, from the brief's `Model:` line. It goes on the spawn line as `effort` in place of the role's; none keeps the role's effort. |
+| `base` | optional | run `internal/cli/orchestrator.go`, `internal/job/frombrief.go` | The branch the Job's clone or worktree starts from, from the brief's `Repo:` line ("from main"). `grid worker next` puts it on the spawn line as `base`; none leaves the key out. |
+| `model` | optional | run `internal/cli/orchestrator.go`, `internal/job/frombrief.go` | The model the Job's agent runs on, from the brief's `Model:` line. It goes on the spawn line as `model` in place of the role's; none keeps the role's model. |
+| `effort` | optional | run `internal/cli/orchestrator.go`, `internal/job/frombrief.go` | The effort the Job's agent runs at, from the brief's `Model:` line. It goes on the spawn line as `effort` in place of the role's; none keeps the role's effort. |
 | `irreversible` | optional | plan `internal/job/planned.go` | Boolean; the Job does something that cannot be undone. |
 | `review_reason` | optional | plan `internal/job/planned.go` | A nonempty sentence, at most 500 characters, saying why a review is wanted. |
 | `order` | optional | run `internal/cli/orchestrator.go`, `internal/contract/fold.go` | Queue position, lowest first; changes only a Job that has not started. |
