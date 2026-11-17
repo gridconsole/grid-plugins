@@ -54,6 +54,10 @@ type Store struct {
 	// tasks/<TaskID>/state.json there, so every login on the machine reads one copy.
 	// Every Store that folds a task must carry the same Machine, or two copies diverge.
 	Machine machinefolder.Folder
+	// Board, when set, makes the Store the facade of a per-post board: the posts are
+	// files in board/ and the caches and locks are in Machine (see BoardHome). Nil is
+	// the per-writer JSONL Feed in feed/, as before.
+	Board *BoardHome
 	// afterGateCheck is a test hook inside the gate lock, before the append.
 	afterGateCheck func()
 	// afterJobCheck is a test hook inside the job lock, before the append.
@@ -194,9 +198,14 @@ func completeLines(data []byte) [][]byte {
 
 // Post appends with a file lock held across seq allocation, tail repair, the
 // whole-line write and required durability. A lease lock covers that interval.
+// On a board it publishes one post file under the board lock instead.
 func (s Store) Post(in Input, w Writer) (Record, error) {
 	if err := s.CheckWithdrawalPolicy(in); err != nil {
 		return Record{}, err
+	}
+	if s.Board != nil {
+		r, _, err := s.boardPublish(in, w, nil)
+		return r, err
 	}
 	if s.TaskID == "" {
 		var err error

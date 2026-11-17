@@ -86,7 +86,8 @@ func Bundle(o BundleOptions) (string, error) {
 	// never collide with logs/ of the Grid home. Not the lock or pid files beside them.
 	// A support bundle is best effort: a launcher folder that cannot be read is left
 	// out, the bundle is still written, and skipped.txt in it says what was left out
-	// and why, so nobody takes the gap for an empty folder.
+	// and why, so nobody takes the gap for an empty folder. A log that cannot be read
+	// is left out and named in skipped.txt the same way (the file loop below).
 	var skipped []string
 	if o.Machine.Active() && o.Login != "" {
 		machineLogs, lerr := machineLauncherLogs(o, out)
@@ -134,17 +135,23 @@ func Bundle(o BundleOptions) (string, error) {
 	if err = add("versions.txt", versions); err != nil {
 		return "", err
 	}
-	if len(skipped) > 0 {
-		if err = add("skipped.txt", strings.Join(skipped, "\n")+"\n"); err != nil {
+	for _, file := range files {
+		name := "logs/" + filepath.ToSlash(file.name)
+		// A log that cannot be read, or that readBundleTail refuses, is left out like
+		// an unreadable launcher folder: its content never reaches the archive, and
+		// skipped.txt names it and says why.
+		content, rerr := readBundleTail(file.path)
+		if rerr != nil {
+			skipped = append(skipped, fmt.Sprintf("skipped %s: %v", name, rerr))
+			continue
+		}
+		if err = add(name, content); err != nil {
 			return "", err
 		}
 	}
-	for _, file := range files {
-		content, err := readBundleTail(file.path)
-		if err != nil {
-			return "", fmt.Errorf("collect %s: %w", file.name, err)
-		}
-		if err = add("logs/"+filepath.ToSlash(file.name), content); err != nil {
+	// After the loop, so the skipped logs are in it too; add redacts it like every entry.
+	if len(skipped) > 0 {
+		if err = add("skipped.txt", strings.Join(skipped, "\n")+"\n"); err != nil {
 			return "", err
 		}
 	}

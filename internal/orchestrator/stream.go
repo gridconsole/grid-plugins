@@ -415,6 +415,10 @@ func (s *Stream) wlFirstJob(dir, taskID string, fs feed.Store, ts lease.TaskStor
 		return snap, false, nil
 	}
 	body := s.FirstJob(kind)
+	// J-1 carries the writer's machine as home, as `grid task new` sets it; a body with home keeps it.
+	if _, has := body["home"]; !has && s.Machine != "" && body != nil {
+		body["home"] = s.Machine
+	}
 	data, err := json.Marshal(body)
 	if err == nil {
 		err = contract.Validate("job-record", data)

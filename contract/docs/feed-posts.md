@@ -77,7 +77,7 @@ Read: contract/schemas/answer.json:95; internal/contract/fold.go:166, :254-259, 
 ## approval
 Version 1. Class state. Written by owner, member, lead, agent, cli.
 
-An approval post answers a `blocked` post. `re` names the blocked post, `job` and `attempt` name the attempt, and the body holds the exact `rules` and the `decision`. An assignment's `grant` names it (run-jobs-launcher.md Addendum 7 A2 and C point 11, which write it as `approval {re, job, attempt, rules, decision}`; `re`, `job` and `attempt` are the envelope's). The fold has no case for it yet: it counts as a post and changes no Job.
+An approval post answers a `blocked` post. `re` names the blocked post, `job` and `attempt` name the attempt, and the body holds the exact `rules` and the `decision`. An assignment's `grant` names it (run-jobs-launcher.md Addendum 7 A2 and C point 11, which write it as `approval {re, job, attempt, rules, decision}`; `re`, `job` and `attempt` are the envelope's). The fold counts it and changes no Job's status; an assign's `allow` counts only when its `grant` names a counted approval by a person that approves every rule for that Job (`foldGrants`, fold.go:528-543, `approves`, fold.go:547).
 
 ```json
 {
@@ -115,7 +115,7 @@ Read: contract/schemas/approval.json:82; internal/contract/fold.go:101-103 (no a
 ## blocked
 Version 1. Class state. Written by worker, agent, reviewer.
 
-A blocked post says that the agent's attempt needs a permission it does not have: the `rule` it needs, the exact `command` and `why`. The agent ends after it (run-jobs-launcher.md Addendum 7 A5 and C point 13, `blocked {need: permission, rule, command, why}`). The fold has no case for it yet: it counts as a post and changes no Job.
+A blocked post says that the agent's attempt needs a permission it does not have: the `rule` it needs, the exact `command` and `why`. The agent ends after it (run-jobs-launcher.md Addendum 7 A5 and C point 13, `blocked {need: permission, rule, command, why}`). The fold counts it for the attempt, and a blocked then an exit of that attempt with no later control fold the Job Blocked, reason "blocked on" and the rule (`foldAttempts`, fold.go:510-513); the tick leaves a Blocked Job alone.
 
 ```json
 {
@@ -303,7 +303,7 @@ Read: contract/schemas/deploy-failed.json:87; internal/contract/fold.go:292-319 
 ## exit
 Version 1. Class state. Written by cli, host, worker.
 
-An exit post is the launcher's record that an attempt ended: the `reason`, the `code` (an exit code, `no_result`, or the usage reset in unix seconds), the `cost` line, the pushed `sha` and the agent's `permission_denials`. On `secret_found`, `secret` names the commit, file, line and pattern, never the secret text; a command Job's exit also carries its `log` and `link` (run-jobs-launcher.md Q3, Addendum 7 B and C points 15-16). The YAML in that note writes `job` and `attempt` beside the body; on the Feed they are the envelope's. The fold has no case for it yet: it counts as a post and changes no Job.
+An exit post is the launcher's record that an attempt ended: the `reason`, the `code` (an exit code, `no_result`, or the usage reset in unix seconds), the `cost` line, the pushed `sha` and the agent's `permission_denials`. On `secret_found`, `secret` names the commit, file, line and pattern, never the secret text; a command Job's exit also carries its `log` and `link` (run-jobs-launcher.md Q3, Addendum 7 B and C points 15-16). The YAML in that note writes `job` and `attempt` beside the body; on the Feed they are the envelope's. The fold counts the attempt's first exit and sets the Job's `Exited`, `ExitReason` and `ExitCode` from it (fold.go:479-505); a done exit with a result folds Submitted, and one after a blocked folds Blocked (fold.go:510-515).
 
 ```json
 {
@@ -657,7 +657,7 @@ Read: contract/schemas/knowledge.json:141; internal/contract/fold.go:292-319 (no
 ## landed
 Version 1. Class state. Written by cli, host, worker.
 
-A landed post records that a land Job put the change on main; `main_sha` is main after the land. A Job record's `after` edge of kind `landed` waits for it (run-jobs-launcher.md Q2 and Q9). The fold has no case for it yet: it counts as a post and changes no Job.
+A landed post records that a land Job put the change on main; `main_sha` is main after the land. A Job record's `after` edge of kind `landed` waits for it (run-jobs-launcher.md Q2 and Q9). The fold counts it for the Job its envelope names, records the earliest one in `Landed` and changes no Job's status (fold.go:298-312).
 
 ```json
 {
@@ -857,7 +857,7 @@ Read: contract/schemas/result.json:303; internal/contract/fold.go:350-361; contr
 ## started
 Version 1. Class state. Written by cli, host, worker.
 
-A started post is the launcher's claim that it started the attempt that `job` and `attempt` name. `base_sha` is the commit the worktree starts at, `allow_dropped` lists the `allow` rules that no grant covered, and `firing` is the scheduled minute of a recurring Job (run-jobs-launcher.md Decision note point 3, Q2, Addendum 7 A2 and B). The fold has no case for it yet: it counts as a post and changes no Job.
+A started post is the launcher's claim that it started the attempt that `job` and `attempt` name. `base_sha` is the commit the worktree starts at, `allow_dropped` lists the `allow` rules that no grant covered, and `firing` is the scheduled minute of a recurring Job (run-jobs-launcher.md Decision note point 3, Q2, Addendum 7 A2 and B). The fold counts it for the attempt and moves an Assigned Job to Running (fold.go:516-517).
 
 ```json
 {

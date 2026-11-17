@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 type controlBody struct {
@@ -52,10 +53,136 @@ const Blocked Status = "blocked"
 type Loop struct {
 	Allow  map[string][]string `json:"allow"`
 	Landed map[string]string   `json:"landed"`
+	// Home is the machine that holds a per-post board's task now: the home of the
+	// highest gen the posts name. A JSONL feed has none.
+	Home string `json:"home,omitempty"`
 }
 
 // FoldLoop is Fold, also returning the Loop that the same pass read.
-func FoldLoop(posts []Post) (State, Loop) {
+func FoldLoop(posts []Post) (State, Loop) { return foldLoop(posts, nil) }
+
+// BoardPost is one post of a per-post board (internal/board/postfile): the post with
+// its by, <machine>:<login>, in place of a worker, lease and fence, and the verdict
+// a migrated post carried, in Legacy.
+type BoardPost struct {
+	Post
+	By     string
+	Legacy string
+}
+
+// FoldBoard folds a per-post board. It is FoldLoop with the board's rules:
+//
+//   - Posts sort by (gen, seq, id).
+//   - The home of gen 0 is the home in the body of the first Job record; a counted
+//     task-move of gen n names the home of gen n in its to. A control moves a Job
+//     only when its author has an orchestrator, cli or launcher role and the machine
+//     of its by is the home of its gen. Any other control, a person's always, is a
+//     request: it counts and moves nothing, as an unleased control does on a JSONL
+//     feed. Loop.Home is the current home.
+//   - An assign must raise the Job's attempt. A Job-side post belongs to an assign
+//     whose to is its author at the machine of its by.
+//   - A second claim, a started or ack with the same Job, attempt, type and body
+//     firing as an earlier one, folds ignored, "duplicate claim".
+//   - Legacy "counted" is authority as it was counted on the JSONL feed it came
+//     from, and legacy "stale" stays stale; any other legacy verdict is folded again.
+//
+// The body is validated against its type's schema as on a JSONL feed.
+func FoldBoard(posts []BoardPost) (State, Loop) {
+	plain := make([]Post, len(posts))
+	info := make(map[string]boardInfo, len(posts))
+	for i, p := range posts {
+		plain[i] = p.Post
+		if _, dup := info[p.ID]; !dup {
+			info[p.ID] = boardInfo{by: p.By, legacy: p.Legacy}
+		}
+	}
+	return foldLoop(plain, info)
+}
+
+type boardInfo struct{ by, legacy string }
+
+// ValidBoardPost says why the fold would ignore p for its schema, or nil when its
+// type's schema takes it: the check a writer of the board makes before it publishes.
+func ValidBoardPost(p BoardPost) error {
+	return boardValid(p.Post, boardInfo{by: p.By, legacy: p.Legacy})
+}
+
+// boardWorker stands in for the worker a board post has none of, so the envelope
+// schema checks every other field as on a JSONL feed.
+const boardWorker = "board@00000000000000000000000000"
+
+// boardData is the post as the schemas read it: the stand-in worker, the given lease
+// and fence, the tier of its author's role, and its by and legacy.
+func boardData(p Post, b boardInfo, lease *string, fence int64) ([]byte, error) {
+	p.Worker, p.Lease, p.Fence, p.Wake = boardWorker, lease, fence, nil
+	p.Tier = TierFor(p.Author.Role)
+	data, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	m["by"], _ = json.Marshal(b.by)
+	if b.legacy != "" {
+		m["legacy"], _ = json.Marshal(b.legacy)
+	}
+	return json.Marshal(m)
+}
+
+// boardValid validates a board post against its type's schema with no lease, with the
+// task lease and with its Job's lease, as a writer of each would have sent it. A body
+// that one of them accepts is valid; the error is that of the first.
+func boardValid(p Post, b boardInfo) error {
+	// The likely lease first: a Job-side post's is its Job's, any other the task's.
+	task := "task"
+	leases := []*string{&task, nil}
+	if p.Job != nil && p.Type != "control" && p.Type != "job" {
+		leases = []*string{p.Job, &task, nil}
+	} else if p.Job != nil {
+		leases = append(leases, p.Job)
+	}
+	var first error
+	for _, lease := range leases {
+		fence := int64(1)
+		if lease == nil {
+			fence = 0
+		}
+		data, err := boardData(p, b, lease, fence)
+		if err == nil {
+			err = Validate(p.Type, data)
+		}
+		if err == nil {
+			return nil
+		}
+		if first == nil {
+			first = err
+		}
+	}
+	return first
+}
+
+// boardMachine is the machine half of a by.
+func boardMachine(by string) string {
+	m, _, _ := strings.Cut(by, ":")
+	return m
+}
+
+// boardController reports the roles whose controls the home counts: an orchestrator,
+// cli or launcher role (docs/research/brain-board.md, the fold.go:192-198 row). Of
+// these the envelope's role enum holds cli, the role the orchestrator pass writes
+// with today. A person's control is always a request.
+func boardController(role string) bool {
+	switch NormalizeRole(role) {
+	case "orchestrator", "cli", "launcher":
+		return true
+	}
+	return false
+}
+
+func foldLoop(posts []Post, info map[string]boardInfo) (State, Loop) {
+	board := info != nil
 	loop := Loop{Allow: map[string][]string{}, Landed: map[string]string{}}
 	out := State{Jobs: map[string]*Job{}, Verdicts: []Verdict{}, Questions: map[string]*Question{}, NeedsYou: []string{}, Wakes: []string{}, ByRef: map[string][]string{}, Hosts: map[string]string{}}
 	verdicts := map[string]Verdict{}
@@ -67,7 +194,13 @@ func FoldLoop(posts []Post) (State, Loop) {
 		if _, duplicate := seen[p.ID]; duplicate {
 			continue
 		}
-		data, err := json.Marshal(p)
+		var data []byte
+		var err error
+		if board {
+			data, err = boardData(p, info[p.ID], nil, 0)
+		} else {
+			data, err = json.Marshal(p)
+		}
 		if err == nil {
 			err = Validate("envelope", data)
 		}
@@ -81,8 +214,18 @@ func FoldLoop(posts []Post) (State, Loop) {
 	}
 	// Sorting is only an implementation traversal. Cross-writer authority comes
 	// from the task controls and their granted Job fences, never these tie-breaks.
+	// A board sorts by (gen, seq, id); two posts with one seq tie by id (F5).
 	sort.SliceStable(ordered, func(i, j int) bool {
 		a, b := ordered[i], ordered[j]
+		if board {
+			if a.Gen != b.Gen {
+				return a.Gen < b.Gen
+			}
+			if a.Seq != b.Seq {
+				return a.Seq < b.Seq
+			}
+			return a.ID < b.ID
+		}
 		if a.Gen != b.Gen {
 			return a.Gen < b.Gen
 		}
@@ -105,6 +248,10 @@ func FoldLoop(posts []Post) (State, Loop) {
 			// Jobs are folded (olderAttempt below).
 			set(p, "stale", "past tenure end offset")
 			readerStale = append(readerStale, p)
+			continue
+		}
+		if board && info[p.ID].legacy == "stale" {
+			set(p, "stale", "legacy verdict stale")
 			continue
 		}
 		missing := ""
@@ -131,8 +278,14 @@ func FoldLoop(posts []Post) (State, Loop) {
 			set(p, "unknown", "unknown type version")
 			continue
 		}
-		data, _ := json.Marshal(p)
-		if err := Validate(p.Type, data); err != nil {
+		var err error
+		if board {
+			err = boardValid(p, info[p.ID])
+		} else {
+			data, _ := json.Marshal(p)
+			err = Validate(p.Type, data)
+		}
+		if err != nil {
 			set(p, "bad", err.Error())
 			continue
 		}
@@ -144,6 +297,22 @@ func FoldLoop(posts []Post) (State, Loop) {
 		}
 		set(p, "counted", "")
 		active = append(active, p)
+	}
+	var homeOf func(gen int64) string
+	if board {
+		active = boardClaims(active, set)
+		homeOf = boardHomes(active, info)
+		loop.Home = homeOf(math.MaxInt64)
+	}
+	// authority reports a board control the home of its gen wrote, or one a JSONL
+	// feed counted before it was migrated.
+	authority := func(p Post) bool {
+		b := info[p.ID]
+		if b.legacy == "counted" {
+			return true
+		}
+		home := homeOf(p.Gen)
+		return home != "" && boardController(p.Author.Role) && boardMachine(b.by) == home
 	}
 
 	questions := map[string]*question{}
@@ -221,13 +390,23 @@ func FoldLoop(posts []Post) (State, Loop) {
 		// branch of control.json). It stays counted, so the task holder's pass reads
 		// it, but it never moves the Job: the holder's leased control does
 		// (orchestrator personCancels, D-r19 rule point 2).
-		if p.Lease == nil {
+		// On a board, a control the home of its gen did not write is the same request.
+		if board && !authority(p) || !board && p.Lease == nil {
 			continue
 		}
 		if b.Assign != nil {
 			a := b.Assign
-			sameRetry := a.Attempt == j.Attempt && j.ExitReason == "usage_limit" && j.Assign != nil && a.Fence > j.Assign.Fence
-			if a.Attempt < j.Attempt || a.Attempt == j.Attempt && !sameRetry || j.Status == Accepted || j.Status == Cancelled || j.Status == Rejected {
+			var refused bool
+			switch {
+			case board && info[p.ID].legacy == "counted":
+				refused = a.Attempt < j.Attempt
+			case board:
+				refused = a.Attempt <= j.Attempt
+			default:
+				sameRetry := a.Attempt == j.Attempt && j.ExitReason == "usage_limit" && j.Assign != nil && a.Fence > j.Assign.Fence
+				refused = a.Attempt < j.Attempt || a.Attempt == j.Attempt && !sameRetry
+			}
+			if refused || j.Status == Accepted || j.Status == Cancelled || j.Status == Rejected {
 				set(p, "ignored", "attempt already granted, regressed, or Job closed")
 				continue
 			}
@@ -239,7 +418,14 @@ func FoldLoop(posts []Post) (State, Loop) {
 			moved[id] = false
 			acknowledged := false
 			for _, side := range active {
-				if !isJobSide(side.Type) || side.Job == nil || *side.Job != id || side.Attempt == nil || *side.Attempt != a.Attempt || side.Worker != a.To || side.Fence != a.Fence || side.Gen != p.Gen || consumed[side.ID] {
+				if !isJobSide(side.Type) || side.Job == nil || *side.Job != id || side.Attempt == nil || *side.Attempt != a.Attempt || consumed[side.ID] {
+					continue
+				}
+				if board {
+					if s := info[side.ID]; s.legacy != "counted" && side.Author.ID+"@"+boardMachine(s.by) != a.To {
+						continue
+					}
+				} else if side.Worker != a.To || side.Fence != a.Fence || side.Gen != p.Gen {
 					continue
 				}
 				consumed[side.ID] = true
@@ -379,13 +565,22 @@ func FoldLoop(posts []Post) (State, Loop) {
 			out.ByRef[b.Ref] = append(out.ByRef[b.Ref], p.ID)
 		case "head":
 			// Only a task-lease head is ordered by tenure; unleased heads stay visible.
-			if deref(p.Lease) == "task" && (head == nil || newer(p, *head)) {
+			// On a board the home's head is ordered, by (gen, seq).
+			leased := deref(p.Lease) == "task"
+			if board {
+				leased = authority(p)
+			}
+			if leased && (head == nil || newer(p, *head)) {
 				h := p
 				head = &h
 			}
 		case "host":
-			if old, ok := hosts[p.Worker]; !ok || newer(p, old) {
-				hosts[p.Worker] = p
+			key := p.Worker
+			if board {
+				key = info[p.ID].by
+			}
+			if old, ok := hosts[key]; !ok || newer(p, old) {
+				hosts[key] = p
 			}
 		case "found":
 			var b struct{ Job, Kind string }
@@ -672,6 +867,80 @@ func exitCode(raw json.RawMessage) json.RawMessage {
 		return json.RawMessage(strconv.FormatInt(int64(f), 10))
 	}
 	return nil
+}
+
+// boardClaims folds ignored each started or ack whose Job, attempt, type and body
+// firing an earlier one in (gen, seq, id) order holds: two machines' copies of one
+// claim met after sync, and the first counts. It answers the rest.
+func boardClaims(active []Post, set func(Post, string, string)) []Post {
+	claimed := map[string]bool{}
+	out := make([]Post, 0, len(active))
+	for _, p := range active {
+		if (p.Type == "started" || p.Type == "ack") && p.Job != nil && p.Attempt != nil {
+			var b struct {
+				Firing json.RawMessage `json:"firing"`
+			}
+			_ = json.Unmarshal(p.Body, &b)
+			key := *p.Job + "\x00" + strconv.Itoa(*p.Attempt) + "\x00" + p.Type + "\x00" + string(b.Firing)
+			if claimed[key] {
+				set(p, "ignored", "duplicate claim")
+				continue
+			}
+			claimed[key] = true
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// boardHomes reads a board's homes from its counted posts: gen 0's is the home in the
+// first Job record that names one, and gen n's is the to of the first task-move of
+// gen n by a person of the team. It answers the home of a gen: that of the highest gen
+// at or below it that has one. task.md's home: line is a display copy and is not read.
+func boardHomes(active []Post, info map[string]boardInfo) func(int64) string {
+	homes := map[int64]string{}
+	for _, p := range active {
+		switch p.Type {
+		case "job":
+			if _, ok := homes[0]; ok {
+				continue
+			}
+			var b struct {
+				Home string `json:"home"`
+			}
+			if json.Unmarshal(p.Body, &b) == nil && b.Home != "" {
+				homes[0] = b.Home
+			}
+		case "task-move":
+			if _, ok := homes[p.Gen]; ok || p.Gen < 1 {
+				continue
+			}
+			if TierFor(p.Author.Role) != PersonTeam && info[p.ID].legacy != "counted" {
+				continue
+			}
+			var b struct {
+				To string `json:"to"`
+			}
+			if json.Unmarshal(p.Body, &b) == nil && b.To != "" {
+				homes[p.Gen] = b.To
+			}
+		}
+	}
+	gens := make([]int64, 0, len(homes))
+	for g := range homes {
+		gens = append(gens, g)
+	}
+	sort.Slice(gens, func(i, j int) bool { return gens[i] < gens[j] })
+	return func(gen int64) string {
+		home := ""
+		for _, g := range gens {
+			if g > gen {
+				break
+			}
+			home = homes[g]
+		}
+		return home
+	}
 }
 
 func deref(s *string) string {

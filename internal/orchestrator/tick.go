@@ -285,7 +285,8 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 	if j.Status == contract.Ready && j.ExitReason == "cancelled" && ycWorkerStopped(j.ExitCode) {
 		m.Failures = nil
 	}
-	if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected || j.Status == contract.Posted || j.Status == contract.Ready {
+	if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected || j.Status == contract.Posted || j.Status == contract.Ready || j.Status == contract.Blocked {
+		// Blocked waits for a person; the tick posts no control over it, whatever the exit reason.
 		return nil
 	}
 	if j.Status == contract.Parked {

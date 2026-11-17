@@ -176,11 +176,14 @@ const (
 
 // StateOf maps a stored status to one of the four states. Cancelled reads as
 // Done with the reason "cancelled". integrated (in the control schema, not the
-// Status constants) reads as Needs review; any other status reads as Not started.
+// Status constants) reads as Needs review; Blocked reads as Started with the
+// reason "blocked"; any other status reads as Not started.
 func StateOf(s Status) (state, reason string) {
 	switch s {
 	case Assigned, Running:
 		return StateStarted, ""
+	case Blocked:
+		return StateStarted, "blocked"
 	case Submitted, "integrated":
 		return StateNeedsReview, ""
 	case Accepted:
