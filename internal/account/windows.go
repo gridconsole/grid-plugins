@@ -148,6 +148,11 @@ func readSnapshot(env Env, dir string) (Snapshot, bool) {
 func windowsFor(env Env, id, kind string, dirs []string) AccountWindows {
 	res := AccountWindows{ID: id, Kind: kind, Windows: []Window{}, Source: "none"}
 	if kind != Claude {
+		if kind == Codex {
+			if got, ok := codexWindowsFor(env, res, dirs); ok {
+				return got
+			}
+		}
 		res.Note = "Codex use is not read yet"
 		return res
 	}
