@@ -1,0 +1,593 @@
+{
+  "accepted then cancelled": {
+    "loop": {
+      "allow": {},
+      "landed": {}
+    },
+    "state": {
+      "jobs": {
+        "J-1": {
+          "id": "J-1",
+          "task": "01K9J000000000000000000001",
+          "title": "Build example feature",
+          "role": "builder",
+          "status": "cancelled",
+          "attempt": 1,
+          "assign": {
+            "job": "J-1",
+            "attempt": 1,
+            "to": "worker@01K9J000000000000000000002",
+            "fence": 2,
+            "until": "2026-11-08T10:10:00.000Z"
+          },
+          "gen": 0,
+          "assign_post": "00000000000000000000000002",
+          "lease_expires": "2026-11-08T10:10:00.000Z",
+          "reason": "The task holder made this decision",
+          "close_reason": "The requested work is no longer needed",
+          "results": [],
+          "submits": [],
+          "history": [
+            "00000000000000000000000001",
+            "00000000000000000000000002",
+            "00000000000000000000000003",
+            "00000000000000000000000004",
+            "00000000000000000000000005"
+          ],
+          "open_questions": [],
+          "checkpoint": null,
+          "exited": "",
+          "exit_reason": "",
+          "review_rounds": 0,
+          "continues": null,
+          "discovered_from": null,
+          "proposed_jobs": [],
+          "decisions_needed": [],
+          "verified": null,
+          "needs_lead": false,
+          "acceptance": [
+            {
+              "id": "A1",
+              "state": "pending"
+            }
+          ],
+          "state": "Done",
+          "state_reason": "cancelled"
+        }
+      },
+      "verdicts": [
+        {
+          "id": "00000000000000000000000001",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000002",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000003",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000004",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000005",
+          "kind": "counted",
+          "reason": ""
+        }
+      ],
+      "questions": {},
+      "needs_you": [],
+      "wakes": [],
+      "by_ref": {},
+      "head": null,
+      "hosts": {}
+    }
+  },
+  "base": {
+    "loop": {
+      "allow": {},
+      "landed": {}
+    },
+    "state": {
+      "jobs": {
+        "J-1": {
+          "id": "J-1",
+          "task": "01K9J000000000000000000001",
+          "title": "Build example feature",
+          "role": "builder",
+          "status": "running",
+          "attempt": 1,
+          "assign": {
+            "job": "J-1",
+            "attempt": 1,
+            "to": "worker@01K9J000000000000000000002",
+            "fence": 2,
+            "until": "2026-11-08T10:10:00.000Z"
+          },
+          "gen": 0,
+          "assign_post": "00000000000000000000000002",
+          "lease_expires": "2026-11-08T10:10:00.000Z",
+          "reason": "",
+          "close_reason": null,
+          "results": [],
+          "submits": [],
+          "history": [
+            "00000000000000000000000001",
+            "00000000000000000000000002",
+            "00000000000000000000000003"
+          ],
+          "open_questions": [],
+          "checkpoint": null,
+          "exited": "",
+          "exit_reason": "",
+          "review_rounds": 0,
+          "continues": null,
+          "discovered_from": null,
+          "proposed_jobs": [],
+          "decisions_needed": [],
+          "verified": null,
+          "needs_lead": false,
+          "acceptance": [
+            {
+              "id": "A1",
+              "state": "pending"
+            }
+          ],
+          "state": "Started"
+        }
+      },
+      "verdicts": [
+        {
+          "id": "00000000000000000000000001",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000002",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000003",
+          "kind": "counted",
+          "reason": ""
+        }
+      ],
+      "questions": {},
+      "needs_you": [],
+      "wakes": [],
+      "by_ref": {},
+      "head": null,
+      "hosts": {}
+    }
+  },
+  "running": {
+    "loop": {
+      "allow": {},
+      "landed": {}
+    },
+    "state": {
+      "jobs": {
+        "J-1": {
+          "id": "J-1",
+          "task": "01K9J000000000000000000001",
+          "title": "Build example feature",
+          "role": "builder",
+          "status": "running",
+          "attempt": 1,
+          "assign": {
+            "job": "J-1",
+            "attempt": 1,
+            "to": "worker@01K9J000000000000000000002",
+            "fence": 2,
+            "until": "2026-11-08T10:10:00.000Z"
+          },
+          "gen": 0,
+          "assign_post": "00000000000000000000000002",
+          "lease_expires": "2026-11-08T10:10:00.000Z",
+          "reason": "",
+          "close_reason": null,
+          "results": [],
+          "submits": [],
+          "history": [
+            "00000000000000000000000001",
+            "00000000000000000000000002",
+            "00000000000000000000000003",
+            "00000000000000000000000004"
+          ],
+          "open_questions": [],
+          "checkpoint": {
+            "job": "J-1",
+            "step": "Checks complete",
+            "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "exited": "",
+          "exit_reason": "",
+          "review_rounds": 0,
+          "continues": null,
+          "discovered_from": null,
+          "proposed_jobs": [],
+          "decisions_needed": [],
+          "verified": null,
+          "needs_lead": false,
+          "acceptance": [
+            {
+              "id": "A1",
+              "state": "pending"
+            }
+          ],
+          "state": "Started"
+        }
+      },
+      "verdicts": [
+        {
+          "id": "00000000000000000000000001",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000002",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000003",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000004",
+          "kind": "counted",
+          "reason": ""
+        }
+      ],
+      "questions": {},
+      "needs_you": [],
+      "wakes": [],
+      "by_ref": {},
+      "head": null,
+      "hosts": {}
+    }
+  },
+  "second ack": {
+    "loop": {
+      "allow": {},
+      "landed": {}
+    },
+    "state": {
+      "jobs": {
+        "J-1": {
+          "id": "J-1",
+          "task": "01K9J000000000000000000001",
+          "title": "Build example feature",
+          "role": "builder",
+          "status": "running",
+          "attempt": 1,
+          "assign": {
+            "job": "J-1",
+            "attempt": 1,
+            "to": "worker@01K9J000000000000000000002",
+            "fence": 2,
+            "until": "2026-11-08T10:10:00.000Z"
+          },
+          "gen": 0,
+          "assign_post": "00000000000000000000000002",
+          "lease_expires": "2026-11-08T10:10:00.000Z",
+          "reason": "",
+          "close_reason": null,
+          "results": [],
+          "submits": [],
+          "history": [
+            "00000000000000000000000001",
+            "00000000000000000000000002",
+            "00000000000000000000000003"
+          ],
+          "open_questions": [],
+          "checkpoint": null,
+          "exited": "",
+          "exit_reason": "",
+          "review_rounds": 0,
+          "continues": null,
+          "discovered_from": null,
+          "proposed_jobs": [],
+          "decisions_needed": [],
+          "verified": null,
+          "needs_lead": false,
+          "acceptance": [
+            {
+              "id": "A1",
+              "state": "pending"
+            }
+          ],
+          "state": "Started"
+        }
+      },
+      "verdicts": [
+        {
+          "id": "00000000000000000000000001",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000002",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000003",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000008",
+          "kind": "ignored",
+          "reason": "ack must name its assign exactly once"
+        }
+      ],
+      "questions": {},
+      "needs_you": [],
+      "wakes": [],
+      "by_ref": {},
+      "head": null,
+      "hosts": {}
+    }
+  },
+  "seq out of order": {
+    "loop": {
+      "allow": {},
+      "landed": {}
+    },
+    "state": {
+      "jobs": {
+        "J-1": {
+          "id": "J-1",
+          "task": "01K9J000000000000000000001",
+          "title": "Build example feature",
+          "role": "builder",
+          "status": "accepted",
+          "attempt": 1,
+          "assign": {
+            "job": "J-1",
+            "attempt": 1,
+            "to": "worker@01K9J000000000000000000002",
+            "fence": 2,
+            "until": "2026-11-08T10:10:00.000Z"
+          },
+          "gen": 0,
+          "assign_post": "00000000000000000000000002",
+          "lease_expires": "2026-11-08T10:10:00.000Z",
+          "reason": "The task holder made this decision",
+          "close_reason": null,
+          "results": [],
+          "submits": [],
+          "history": [
+            "00000000000000000000000001",
+            "00000000000000000000000002",
+            "00000000000000000000000003",
+            "00000000000000000000000005",
+            "00000000000000000000000004"
+          ],
+          "open_questions": [],
+          "checkpoint": null,
+          "exited": "",
+          "exit_reason": "",
+          "review_rounds": 0,
+          "continues": null,
+          "discovered_from": null,
+          "proposed_jobs": [],
+          "decisions_needed": [],
+          "verified": null,
+          "needs_lead": false,
+          "acceptance": [
+            {
+              "id": "A1",
+              "state": "pending"
+            }
+          ],
+          "state": "Done"
+        }
+      },
+      "verdicts": [
+        {
+          "id": "00000000000000000000000001",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000002",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000003",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000004",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000005",
+          "kind": "counted",
+          "reason": ""
+        }
+      ],
+      "questions": {},
+      "needs_you": [],
+      "wakes": [],
+      "by_ref": {},
+      "head": null,
+      "hosts": {}
+    }
+  },
+  "task-move": {
+    "loop": {
+      "allow": {},
+      "landed": {}
+    },
+    "state": {
+      "jobs": {
+        "J-1": {
+          "id": "J-1",
+          "task": "01K9J000000000000000000001",
+          "title": "Build example feature",
+          "role": "builder",
+          "status": "running",
+          "attempt": 1,
+          "assign": {
+            "job": "J-1",
+            "attempt": 1,
+            "to": "worker@01K9J000000000000000000002",
+            "fence": 2,
+            "until": "2026-11-08T10:10:00.000Z"
+          },
+          "gen": 0,
+          "assign_post": "00000000000000000000000002",
+          "lease_expires": "2026-11-08T10:10:00.000Z",
+          "reason": "",
+          "close_reason": null,
+          "results": [
+            "00000000000000000000000007"
+          ],
+          "submits": [],
+          "history": [
+            "00000000000000000000000001",
+            "00000000000000000000000002",
+            "00000000000000000000000003",
+            "00000000000000000000000007"
+          ],
+          "open_questions": [],
+          "checkpoint": null,
+          "exited": "",
+          "exit_reason": "",
+          "review_rounds": 0,
+          "continues": null,
+          "discovered_from": null,
+          "proposed_jobs": [],
+          "decisions_needed": [],
+          "verified": null,
+          "needs_lead": false,
+          "acceptance": [
+            {
+              "id": "A1",
+              "state": "met"
+            }
+          ],
+          "state": "Started"
+        }
+      },
+      "verdicts": [
+        {
+          "id": "00000000000000000000000001",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000002",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000003",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000006",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000007",
+          "kind": "counted",
+          "reason": ""
+        }
+      ],
+      "questions": {},
+      "needs_you": [],
+      "wakes": [],
+      "by_ref": {},
+      "head": null,
+      "hosts": {}
+    }
+  },
+  "unleased control": {
+    "loop": {
+      "allow": {},
+      "landed": {}
+    },
+    "state": {
+      "jobs": {
+        "J-1": {
+          "id": "J-1",
+          "task": "01K9J000000000000000000001",
+          "title": "Build example feature",
+          "role": "builder",
+          "status": "posted",
+          "attempt": 0,
+          "assign": null,
+          "gen": 0,
+          "assign_post": "",
+          "lease_expires": "",
+          "reason": "",
+          "close_reason": null,
+          "results": [],
+          "submits": [],
+          "history": [
+            "00000000000000000000000001"
+          ],
+          "open_questions": [],
+          "checkpoint": null,
+          "exited": "",
+          "exit_reason": "",
+          "review_rounds": 0,
+          "continues": null,
+          "discovered_from": null,
+          "proposed_jobs": [],
+          "decisions_needed": [],
+          "verified": null,
+          "needs_lead": false,
+          "acceptance": [
+            {
+              "id": "A1",
+              "state": "pending"
+            }
+          ],
+          "state": "Not started"
+        }
+      },
+      "verdicts": [
+        {
+          "id": "00000000000000000000000001",
+          "kind": "counted",
+          "reason": ""
+        },
+        {
+          "id": "00000000000000000000000002",
+          "kind": "bad",
+          "reason": "$: oneOf matched 0 branches: $.lease: expected string"
+        },
+        {
+          "id": "00000000000000000000000003",
+          "kind": "held",
+          "reason": "waiting for 00000000000000000000000002"
+        }
+      ],
+      "questions": {},
+      "needs_you": [],
+      "wakes": [],
+      "by_ref": {},
+      "head": null,
+      "hosts": {}
+    }
+  }
+}

@@ -45,6 +45,10 @@ func (s Store) ReadOnly(filter Filter) (ReadResult, error) {
 }
 
 func (s Store) read(filter Filter, readOnly bool) (ReadResult, error) {
+	if s.Board != nil {
+		out, _, err := s.boardRead(filter, !readOnly)
+		return out, err
+	}
 	out, err := s.scan(readOnly)
 	if err != nil {
 		return out, err
