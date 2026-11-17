@@ -877,7 +877,89 @@ func (s Store) decorate(rows []ListRow) []ListRow {
 			rows[i].Conflict = c
 		}
 	}
+	// An agent note that supersedes or duplicates a person note is a conflict too:
+	// the person note names it and it names the person note (6.3).
+	byID := map[string]int{}
+	for i := range rows {
+		byID[rows[i].ID] = i
+	}
+	for i := range rows {
+		for _, to := range personTargets(rows[i], func(id string) (ListRow, bool) {
+			j, ok := byID[id]
+			if !ok {
+				return ListRow{}, false
+			}
+			return rows[j], true
+		}) {
+			rows[i].Conflict = appendUnique(rows[i].Conflict, to)
+			j := byID[to]
+			rows[j].Conflict = appendUnique(rows[j].Conflict, rows[i].ID)
+		}
+	}
+	for i := range rows {
+		sort.Strings(rows[i].Conflict)
+	}
 	return append(rows, extra...)
+}
+
+// personTargets are the ids of the person notes an agent note supersedes or
+// duplicates. A note whose newest bytes a person wrote has none.
+func personTargets(r ListRow, find func(id string) (ListRow, bool)) []string {
+	if r.Origin != "agent" {
+		return nil
+	}
+	var out []string
+	for _, e := range r.Edges {
+		if !e.Resolved || (e.Rel != "supersedes" && e.Rel != "duplicates") {
+			continue
+		}
+		if t, ok := find(e.To); ok && t.Origin != "agent" {
+			out = append(out, e.To)
+		}
+	}
+	return out
+}
+
+// personFirst orders search hits so that a person note comes before the agent
+// notes that supersede or duplicate it, and marks those agent hits conflict. Among
+// hits that do not conflict the score order stays (6.3).
+func personFirst(hits []Hit, entries []Entry) []Hit {
+	rows := map[string]ListRow{}
+	for _, e := range entries {
+		if e.row != nil {
+			rows[e.ID] = *e.row
+		}
+	}
+	find := func(id string) (ListRow, bool) { r, ok := rows[id]; return r, ok }
+	inHits := map[string]bool{}
+	for _, h := range hits {
+		inHits[h.ID] = true
+	}
+	after := map[string][]int{} // person note id -> the agent hits that wait for it
+	waiting := map[int]bool{}
+	for i := range hits {
+		for _, to := range personTargets(rows[hits[i].ID], find) {
+			hits[i].Conflict = appendUnique(hits[i].Conflict, to)
+			if inHits[to] && !waiting[i] {
+				after[to] = append(after[to], i)
+				waiting[i] = true
+			}
+		}
+	}
+	if len(waiting) == 0 {
+		return hits
+	}
+	out := make([]Hit, 0, len(hits))
+	for i, h := range hits {
+		if waiting[i] {
+			continue
+		}
+		out = append(out, h)
+		for _, j := range after[h.ID] {
+			out = append(out, hits[j])
+		}
+	}
+	return out
 }
 
 // --- three-way merge by front-matter key and body section (5.4 step 3) ---
