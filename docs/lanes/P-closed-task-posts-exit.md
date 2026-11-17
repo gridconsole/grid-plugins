@@ -7,7 +7,7 @@ Decision: 2026-11-17-cancelled-job-feed-exit.md in the orchestrator's briefs. Ev
 
 The brief offered two ways. This lane takes the first: the closed-task pass posts the exit itself. Why the contract allows that one and not the other:
 
-- **The body is already allowed.** contract/schemas/worker-exit.json: `reason` is an enum (`done`, `crash`, `usage_limit`, `cancelled`, `loop`), `code` is any non-empty string, and `x-roles` holds `cli`, the stream's role. So the pass posts `{"reason": "cancelled", "code": "task stopped"}`. "task stopped" is not a reason value, so it goes in `code`, the field where the app worker puts `stop_requested` and `worker_stopped`. It is `pgClosedReason`, the close reason the pass already writes on the cancel.
+- **The body is already allowed.** contract/schemas/worker-exit.json: `reason` is an enum (`done`, `crash`, `usage_limit`, `cancelled`, `loop`), `code` is any non-empty string, and `x-roles` holds `worker`, `agent` and `cli`. The stream's role is `cli`: the app starts it with `grid worker next --role worker` (app internal/kernel/worker/job.go:352), and the plugin maps `worker` to `cli` (internal/cli/worker.go:123-124). So the pass posts `{"reason": "cancelled", "code": "task stopped"}`. "task stopped" is not a reason value, so it goes in `code`, the field where the app worker puts `stop_requested` and `worker_stopped`. It is `pgClosedReason`, the close reason the pass already writes on the cancel.
 - **The tenure the fold reads.** The fold counts an exit only as a Job-side record of the grant's tenure (internal/contract/fold.go:216-238: same worker, fence, gen and attempt as the assign). The pass therefore writes it under the Job's own lease (`j.Assign.To`, `j.ID`, `j.Generation`, `j.Assign.Fence`, `j.Attempt`) through `writeLocked`, the same check the worker's own `grid job` post goes through. The stream assigns its Jobs to its own worker id (tick.go:149-151, `Assignee: s.Holder()` at stream.go:285, `Holder` is member@machine at stream.go:159, so it is the same id after a restart), and pgClosedCancel is called only from the stream (pg_closed_task.go:252). So the pass is the grant's holder.
 - **Why not accept the worker's late exit.** The other way would need the Feed to admit a post after `EndJob` has written the takeover line and cleared the holder. That post is refused by internal/feed/store.go:143 (holder) and :153 (ended tenure), and the fold reads any line past the end offset as stale (fold.go:82-83). Accepting it means opening the fence for a closed tenure. A worker that died would still leave no exit.
 - **Never two.** The worker's exit goes through `orchestrator.Write` (internal/cli/orchestrator.go:430). That call takes the same `.orchestrator.lock` (write.go:50) and refuses an attempt already exited (write.go:87) or a Cancelled Job (write.go:79). The pass holds that lock across the exit, the cancel and `EndJob`, and posts the exit only when `Exited == ""`; `writeLocked` reloads the Feed and checks `Exited` again before it posts. When the worker came first, its exit stays the only one. When the pass came first, the worker's exit is refused with `stale lease`, which the app records as `exit_superseded`.
@@ -41,7 +41,7 @@ The brief offered two ways. This lane takes the first: the closed-task pass post
 
 - internal/orchestrator/pg_closed_task.go: `pcClosedExit` and its comment. `pgClosedCancel` calls it for each Job just before the cancel control.
 - internal/orchestrator/pc_closed_exit_test.go: the three tests above.
-- docs/job-contract.md: the one-line rule, scoped to Jobs the stream granted to its own worker.
+- docs/job-contract.md: the one-line rule, scoped to Jobs that the worker stream (role `cli`) granted to its own worker.
 - docs/lanes/P-closed-task-posts-exit.md: this file.
 
 ## For the app lane (C-e0812-pin-one-outcome)
@@ -49,12 +49,13 @@ The brief offered two ways. This lane takes the first: the closed-task pass post
 After a task stop, J-2 has exactly one Feed worker-exit, in one of two shapes:
 
 - worker first: `{"reason":"cancelled","code":"stop_requested"}`, author the agent's worker;
-- pass first: `{"reason":"cancelled","code":"task stopped"}`, author `worker` with role `cli`, on J-2's lease and attempt. worker.log still has `exit_superseded` "task stopped" for J-2: the worker's own post is refused as before.
+- pass first: `{"reason":"cancelled","code":"task stopped"}`, author the stream's member (the member part of the holder the app passes as `--member`) with role `cli`, on J-2's lease and attempt. worker.log still has `exit_superseded` "task stopped" for J-2: the worker's own post is refused as before.
 
 ## Open items and NOT VERIFIED
 
 - A Job that is Assigned but not yet acked when the pass cancels it gets no worker-exit. The fold ignores a Job-side record before the ack ("Job tenure must start with ack"), and the worker cannot post one either. Whether such an attempt needs a record is a contract question; this lane does not change it.
 - A Job granted to another worker id gets no exit from the pass, only a Diagnostics line (pg_closed_task.go, `pcClosedExit`). The stream always grants to its own member@machine id, so this needs `grid job tick --to <other>` (internal/cli/orchestrator.go:339) or a stream of another member or machine holding the task lease at close time. Posting under another holder's id would be writing as that holder, so the pass leaves it. That case has no test; the contract line is scoped to Jobs the stream granted to its own worker.
+- A stream that a person starts by hand with GRID_ROLE `member` (the default), `owner` or `lead` can hold the task lease (handover.json `x-roles`), but worker-exit.json does not admit those roles. Its pass therefore writes one Diagnostics line and no exit. The app's stream is always `cli` (above), and the tests run with role `cli` (stream_test.go:55).
 - A person's cancel (D-r19, `personCancels`) and the worker's own cancel still leave the exit to the worker. The contract line is scoped to the closed-task pass.
 - No live run against the app worker. The app test is the next lane's.
 - No UI change, so there is nothing to check on a live screen.
