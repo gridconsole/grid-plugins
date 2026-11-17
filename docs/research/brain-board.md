@@ -19,7 +19,7 @@ This note decides four rows of the decision ledger of 17 Nov (column "Decided in
 
 1. **One immutable file per post.** A post is `projects/<p>/tasks/<T>/board/<seq>-<job>-<type>.md` in the brain. `<job>` is the Job id, or `task` for a post that names no Job. `<seq>` is zero-padded to 6 digits. The file is published once, by writing a dot temp file and then `link`ing it to its final name. The link fails if the name exists, which gives O_EXCL semantics; `saveBody` already publishes this way at internal/feed/store.go:584-606. A published post is never edited. A correction is a new post.
 2. **Identity is the header `id` (a ULID), not the file name and not `seq`.** `re`, `after`, `assign_post`, the fold, and every reader use the id. `seq` gives display order and the order of one writer's posts. It does not confer authority, and two posts may share it.
-3. **The header is strict YAML.** It holds a fixed key set in a fixed order. The typed body is one line of JSON under `body:`, which is valid YAML flow. The markdown under the header is a human rendering for display only, and the fold never reads it.
+3. **The header is strict YAML.** It holds a fixed key set in a fixed order. The typed body is one line of JSON under `body:`, which is valid YAML flow. The markdown under the header is a rendering of the header and typed body for people and for Obsidian's links, and the fold never reads it. It carries path-qualified `[[links]]` to the task, the Job node and the posts it answers (Q8, "Post body and links").
 4. **No lease and no fence.** Authority comes from two sources:
    - **The task home.** A control counts only when its writer is the home machine of the control's `gen`. `gen` is the home generation; it starts at 0 and only a `task-move` post raises it (the person post that `grid task move` writes, R-run-jobs-launcher Q4). The fold derives each gen's home from the posts alone:
      - gen 0's home is the `home` field in the body of the task's first Job record, which `grid task new` writes;
@@ -106,7 +106,7 @@ This note decides four rows of the decision ledger of 17 Nov (column "Decided in
 | F1 | Two local writers post at the same moment | The machine-folder board lock serializes seq allocation and publishing. Logins on one machine share the machine folder (run-jobs Addendum 2), so they share the lock. |
 | F2 | A crash between the temp write and the link | The temp file lives in `board/.tmp/`, a dot folder: Obsidian hides it and grid sync must skip dot names in the brain (a requirement on the sync lane). The next poster under the lock removes temps older than one hour. Nothing half-written is ever visible. |
 | F3 | A partial file delivered by sync | Sync must write atomically (temp plus rename), a requirement on the sync lane. A reader that sees an unterminated or invalid header counts the file `bad` for this pass and does not cache it, so the next pass reads it again as an unseen name. |
-| F4 | The same name on two machines (same seq, Job and type) | The sync server accepts a create only if the path is absent (Addendum 5A). The losing client renumbers its unaccepted posts to the next free seq: the same id and body, a new name and `seq`. This is allowed because no other machine has read them. The client pushes in seq order and stops at the first rejection, so every renumbered post is still unaccepted. Grid-written links inside those posts are rewritten in the same step. After acceptance a post never changes. |
+| F4 | The same name on two machines (same seq, Job and type) | The sync server accepts a create only if the path is absent (Addendum 5A). The losing client renumbers its unaccepted posts to the next free seq: the same id and body, a new name and `seq`. This is allowed because no other machine has read them. The client pushes in seq order and stops at the first rejection, so every renumbered post is still unaccepted. Grid-written links inside those posts, and inside any unaccepted post that links to them, are rewritten in the same step by re-rendering the body (Q8, "Post body and links"). An accepted post cannot link to an unaccepted one, because it was pushed first. After acceptance a post never changes. |
 | F5 | The same seq with different names | Harmless: the fold breaks ties by id, and display sorts by `(seq, id)`. |
 | F6 | A post edited or deleted by hand (Obsidian or a shell) | The reader cache keeps the sha256 of each post's bytes when it is first read. `grid brain check` and the launcher's slow pass compare them and report an "edited post" finding in state.json errors and in the status block. The fold reads the file as it is now. A deleted post is a finding and drops out of the fold. The sync server refuses edits to `board/` from agents. A person's edit is kept locally and flagged, never synced over the original. |
 | F7 | A post whose `re`/`after` has not synced yet | Held (fold.go:97-99) until it arrives, as today. |
@@ -238,7 +238,7 @@ Every `TaskPath` user that reads a cache must take the machine root. 24 call sit
 > [!grid] building
 > - J-4 running on grid2 since 2026-11-17 01:40 UTC
 > - J-5 waiting on review
-> - 1 question for you: [[0042-J-5-question]]
+> - 1 question for you: [[projects/demo/tasks/T-7/board/000042-J-5-question|J-5 question]]
 <!-- /grid:status -->
 ```
 
@@ -284,7 +284,7 @@ Every `TaskPath` user that reads a cache must take the machine root. 24 call sit
 
 1. **Stop old writers.** Take the old task lease the way `AcquireTask` does today (internal/lease/task.go:237). No old writer can append during the copy, and a task with a live holder is skipped and reported, not forced. `internal/migrate/legacyfeed` carries its own copy of everything it needs: this lease take, the takeover reader, the JSONL reader and the old fold. People will run `grid migrate board` after P-loop-retire removes internal/lease, so migration must not import it.
 2. **Fold the old Feed** with the old reader and fold, kept as `internal/migrate/legacyfeed`. This gives S_old.
-3. **Write one post file per admitted record**, that is, every record except `bad` lines. Each post keeps the old record's `id`, `type`, `type_v`, `author`, `at`, `re`, `after`, `job`, `attempt` and body bytes. A spilled body is inlined. `by` is the old `worker`, and `gen` is the old `gen`. The new `seq` follows the old canonical order `(gen, fence, worker, seq)`. Each post gets `legacy: <old verdict>`.
+3. **Write one post file per admitted record**, that is, every record except `bad` lines. Each post keeps the old record's `id`, `type`, `type_v`, `author`, `at`, `re`, `after`, `job`, `attempt` and body bytes. A spilled body is inlined. `by` is the old `worker`, and `gen` is the old `gen`. The new `seq` follows the old canonical order `(gen, fence, worker, seq)`. Each post gets `legacy: <old verdict>`. Its markdown body comes from the same renderer as a new post's (Q8, "Post body and links"), so a migrated post links to its task, Job node and `re` post like any other.
 4. **The new fold honours `legacy`** for posts that carry it, and only for the checks it cannot recompute: lease and fence authority, takeover stale, and `sameRetry` grants. `counted` grants authority and `stale` stays ignored. Every other rule is recomputed. This covers:
    - records stale only by takeover offset;
    - grants that are `sameRetry` (same attempt, higher fence);
@@ -320,7 +320,84 @@ Every `TaskPath` user that reads a cache must take the machine root. 24 call sit
 | `legacy` | Migrated posts only |
 | `body` | One-line JSON, validated against `contract/schemas/<type>.json` exactly as today |
 
-The markdown below the header is display only.
+The markdown below the header is display and links only; the fold never reads it.
+
+### Post body and links
+
+The owner asked for "a board that is markdown, readable, linked like the brain … a markdown body with [[links]]" (brain-obsidian Addendum 3). The body under the header is how a post is readable and linked.
+
+**Rules.**
+
+1. **One renderer.** Grid writes the body when it publishes the post, from the header and the typed body alone. It reads no other file, so the same header and body always give the same bytes. That makes three things safe: the F4 renumber can re-render a post's links, B3 can give migrated posts the same body (Q7 step 3), and a reader can check a body against its header.
+2. **Layout.** A title line, a short facts list, the type's text, then a `## Links` section last:
+   - **Title:** `# <job> <type>: <summary>`, or `# task <type>: <summary>` for a post that names no Job. The summary is the type's summary field from the table below, cut at 80 characters.
+   - **Facts:** Job and attempt, author and `by`, the time in UTC, and the post it answers.
+   - **Text:** the type's long text fields in full, as written. A line in that text that reads `## Links` is written as `### Links`, so the post keeps one Grid `## Links` section.
+3. **Links point back, never forward.** A post is never edited, so it links only to what exists when it is written: task.md, the Job node, the `re` post, the `after` posts, and the proof images this post adds. There are no "answered by" links. Obsidian's backlinks pane shows those from the other side.
+4. **Link form.**
+   - **Notes and posts.** `[[<path from the brain root, without .md>|<label>]]`, the target form of R-brain-obsidian section 3.1. A bare `[[J-5]]` or `[[000042-J-5-question]]` is not used, for the reason Q5 gives for images: the same name repeats in every task.
+   - **Images.** The relative markdown image link of Q5.
+   - **`## Links`.** It uses R-brain-obsidian's line format `- [[<target>|<label>]] - <rel>: <why>`, with rels from the existing list (internal/brain/note.go:87):
+     - task.md: `related`;
+     - the Job node: `continues`;
+     - the `re` post: `decides` from an answer to its question, `validates` from a verdict to its result, `continues` otherwise;
+     - each `after` post: `depends-on`.
+5. **The vault reader.** It reads these links as edges, as it reads every body link (R-brain-obsidian section 3.2). So posts appear in Obsidian's graph and backlinks and in the app's link lists. A post is still never a knowledge note (Q8, "The vault reader"), and search lists it as kind `post` (Q6).
+
+**What each type shows.** Types not listed render the title and one `- key: value` line per top-level body key.
+
+| Type | Summary in the title | Text | Links besides task.md and the Job node |
+| --- | --- | --- | --- |
+| `assign` | `assigned to <to>, attempt <n>` | start condition; `retry_of` when set | none |
+| `started` | `started, attempt <n>` | none | its assign post (`re`) |
+| `exit` | `exited: <reason>, code <code>` | cost | its assign post |
+| `result` | the first line of the result text | the result text; one image link per proof record | its assign post |
+| `checkpoint` | the first line of the text | the text; image links | its assign post |
+| `question` | the question text | choices as a list; the default and when it applies | the post it asks about (`re`), if any |
+| `answer` | the chosen answer | the answer text; `for` grant link when set | the question (`re`, rel `decides`) |
+| `verdict` | `<verdict>` | reason; must-fix items as a list | the result (`re`, rel `validates`) |
+| `waiting` | `waiting on <unmet atoms>` | the condition and measured values | its assign post |
+| `cancel`, `wake` | `cancel` or `wake` | reason; the event post ids as links | `re` and `after` posts |
+| `task-move` | `moved from <from> to <to>, gen <n>` | none | none besides task.md |
+| `post`, `found` | the first line of the text | the text | `re`, if any |
+
+**Example.** The post `projects/demo/tasks/T-7/board/000042-J-5-question.md`:
+
+```markdown
+---
+id: 01JD7Q4ZK0V8M2T6Y1N3B5C9XE
+task: 01JD7P0A1B2C3D4E5F6G7H8J9K
+type: question
+type_v: 1
+job: J-5
+attempt: 1
+gen: 0
+seq: 42
+at: 2026-11-17T01:52:10.123Z
+author: {id: J-5, role: reviewer}
+by: grid2:grid3
+for: null
+re: 01JD7Q1W3X5Y7Z9A2B4C6D8E0F
+after: []
+body: {"text":"Should the inbox keep one section per machine?","choices":["yes","no"]}
+---
+# J-5 question: Should the inbox keep one section per machine?
+
+- Job: [[projects/demo/tasks/T-7/jobs/J-5|J-5]], attempt 1
+- From: reviewer J-5, by grid2:grid3, 2026-11-17 01:52 UTC
+- About: [[projects/demo/tasks/T-7/board/000041-J-5-result|J-5 result]]
+
+Should the inbox keep one section per machine?
+
+- yes
+- no
+
+## Links
+
+- [[projects/demo/tasks/T-7/task|T-7]] - related: the task this board belongs to
+- [[projects/demo/tasks/T-7/jobs/J-5|J-5]] - continues: the Job this question comes from
+- [[projects/demo/tasks/T-7/board/000041-J-5-result|J-5 result]] - continues: the result the question is about
+```
 
 **Go API.** R-run-jobs-launcher Q7 proposes the interface `board.Board`, with `Tasks`, `Read(since Cursor)` in write order, `Post` and `Claim(Key)`. Lane B1 implements it for per-post files and keeps `feed.Store` as a facade for today's callers:
 
@@ -344,7 +421,7 @@ This deviates from the deterministic claim name that R-run-jobs-launcher suggest
 
 **The vault reader (P-brain-obsidian-decide):**
 
-- It classifies by path. `projects/<p>/tasks/<T>/board/*.md` is a post: never a knowledge note, never "adopted" as a person edit (F6 flags it instead), and never in the topic index. `tasks/<T>/jobs/*.md` is a Job node, and `tasks/<T>/task.md` is a task node.
+- It classifies by path. `projects/<p>/tasks/<T>/board/*.md` is a post: never a knowledge note, never "adopted" as a person edit (F6 flags it instead), and never in the topic index. Its body links are edges like any note's. `tasks/<T>/jobs/*.md` is a Job node, and `tasks/<T>/task.md` is a task node.
 - It skips dot folders (`board/.tmp/`).
 - Its "person edits are adopted" rule excludes the status block and the inbox sections.
 
@@ -383,6 +460,7 @@ The app worker's lease and takeover readers (app:internal/kernel/worker/job.go:1
 ## NOT VERIFIED
 
 - Obsidian rendering of the status callout and its markers, of relative image links, and of a one-line JSON `body:` in the Properties view.
+- Obsidian resolving the path-qualified post links when the brain is a folder inside a larger vault (the target form is R-brain-obsidian section 3.1's, and that note owns the prefix rule).
 - Obsidian indexing speed with thousands of post files.
 - Hard-link behaviour on Windows network drives and on exFAT (the F12 fallback).
 - Fold cost at 6,000 posts (left to lane B1).
