@@ -7,15 +7,16 @@ import "testing"
 const pbFmBareOriginNote = "---\nname: cafe-plan\ntopic: conventions\ntype: note\ndescription: Cafe plan\nsummary: Cafe plan\n" +
 	"updated: 2026-11-13\nsource: Brain page\nlevel: project\nstatus: accepted\norigin:\n---\n# Cafe plan\n\nPick a table by the window.\n"
 
-// TestPbFmBareOriginIsAPersonNote: an empty `origin:` is no origin, and a filed note needs none (4.5), so the note reads
-// and validates instead of being refused as it was when origin was a required front matter field.
-func TestPbFmBareOriginIsAPersonNote(t *testing.T) {
+// TestPbFmBareOriginIsNotAPersonNote: fix1 had this test assert that a bare `origin:` reads as a person note. Fix2 reverses
+// that on purpose: the app's TestCaPnRealPluginResave (app main, not changeable from this repo) pins that a bare origin is
+// refused as a bad note, so a filed note may leave the origin key out but not leave it empty.
+func TestPbFmBareOriginIsNotAPersonNote(t *testing.T) {
 	n, err := Parse([]byte(pbFmBareOriginNote))
-	if err != nil {
-		t.Fatalf("a note with a bare origin does not parse: %v", err)
+	if err == nil {
+		err = n.Validate()
 	}
-	if err := n.Validate(); err != nil {
-		t.Fatalf("a filed note with a bare origin is refused: %v", err)
+	if err == nil {
+		t.Fatal("a filed note with a bare origin is accepted")
 	}
 }
 

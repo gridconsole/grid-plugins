@@ -1,8 +1,11 @@
 package brain
 
 import (
+	"fmt"
 	"slices"
 	"strings"
+
+	"go.yaml.in/yaml/v4"
 
 	"github.com/gridconsole/grid-plugins/internal/mdfile"
 )
@@ -42,6 +45,13 @@ func Parse(data []byte) (Note, error) {
 			return Note{}, err
 		}
 		n = filed
+	}
+	// An origin key that is there must name an origin: a filed note may leave the key out, not leave it empty.
+	var probe struct {
+		Origin yaml.Node `yaml:"origin"`
+	}
+	if mdfile.Load(front, &probe, false) == nil && probe.Origin.Kind != 0 && n.Origin == (Origin{}) {
+		return Note{}, fmt.Errorf("origin must name a kind and an id, or the key must be left out")
 	}
 	n.Body = strings.ReplaceAll(body, "\r\n", "\n")
 	if plain, links := splitLinks(n.Body, n.Level); len(links) > 0 {
