@@ -128,10 +128,24 @@ func validateBudget(f budgetFront) error {
 }
 
 // ReadBudgetNote reads the preset values from the note <home>/knowledge/budget/agent-budget.md
-// with the strict front matter parser. A missing or invalid note yields the built-in
+// (<brain folder>/grid/budget/agent-budget.md when the Grid config names a brain
+// folder; Apply reads it there) with the strict front matter parser. A missing or invalid note yields the built-in
 // values and says so; the raw bytes go into the Apply digest.
 func ReadBudgetNote(gridHome string) (BudgetData, BudgetNote, []byte) {
-	path := budgetNotePath(gridHome)
+	return readBudgetNoteAt(budgetNotePath(gridHome))
+}
+
+// budgetNoteFor is the budget note's path for the Grid home gridHome of the user
+// whose home is userHome: <brain folder>/grid/budget/agent-budget.md when the
+// Grid config names a brain folder, else the old <gridHome>/knowledge/budget/ path.
+func budgetNoteFor(gridHome, userHome string, getenv func(string) string) string {
+	if root := brainRootOf(gridHome, userHome, getenv); root != "" {
+		return filepath.Join(root, "grid", "budget", "agent-budget.md")
+	}
+	return budgetNotePath(gridHome)
+}
+
+func readBudgetNoteAt(path string) (BudgetData, BudgetNote, []byte) {
 	note := BudgetNote{Path: path, State: "ok"}
 	fail := func(state string, err error) (BudgetData, BudgetNote, []byte) {
 		msg := err.Error()
@@ -315,7 +329,7 @@ func (o BudgetOptions) load() (*budgetState, error) {
 	if st.explicit, err = readDocument(dir); err != nil {
 		return nil, err
 	}
-	st.data, st.note, st.noteRaw = ReadBudgetNote(o.GridHome)
+	st.data, st.note, st.noteRaw = readBudgetNoteAt(budgetNoteFor(o.GridHome, o.Home, o.env()))
 	if st.overlay, err = readClaudeFile(filepath.Join(dir, "settings.json")); err != nil {
 		return nil, err
 	}

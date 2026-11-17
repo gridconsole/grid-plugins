@@ -39,6 +39,11 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 	if err != nil {
 		return nil, err
 	}
+	brainRules, err := claudeBrainRules(home, gridHome, os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	rules = append(rules, brainRules...)
 	home, gridHome = gridhome.Real(home), gridhome.Real(gridHome)
 	if projects == "" {
 		projects = filepath.Join(gridHome, "projects")
