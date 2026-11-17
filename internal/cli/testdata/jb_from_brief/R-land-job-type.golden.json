@@ -1,0 +1,88 @@
+{
+  "acceptance": [
+    {
+      "id": "A1",
+      "text": "What the plugin has today for the life of a change after review: Job kinds (internal/job), the feed (internal/orchestrator, grid worker next), how a Job ends after a reviewer verdict, whether anything merges onto a branch. Name what is missing for landing.",
+      "traces": "item"
+    },
+    {
+      "id": "A2",
+      "text": "What the scripts do that the plugin would need, read from land.sh, landbatch.sh, landrun.sh, collect.sh, eject2fix.sh, skip2merge.sh: list the rules (holds, stacks, M- merge lanes, ejects, flake reruns, cross-repo check, generated-file conflicts, attribution check, NOT DONE closing) and say for each whether it belongs in a land Job, in the project's workflow note (brain), or disappears with per-change landing.",
+      "traces": "item"
+    },
+    {
+      "id": "A3",
+      "text": "Design of a land Job: posted by the orchestrator when a change's review passes; depends on the change's Job and on the land Jobs of changes it stacks on; runs as a runner (no agent needed for the green path): merge onto the current target in a worktree, run the project's check command (from the brain, e.g. make check), fast-forward or merge on green. Parallel: speculative stacking (test N on main+pending N-1, like a merge queue) or test each on main and rebase-check at merge; pick one with numbers from this box (12 cores, full check time from the land logs). A red check: rerun the failing tests alone; flake -\u003e lands and posts a flake Job; real -\u003e the land Job fails and posts a fix Job for the builder. Conflict -\u003e a merge Job for a builder.",
+      "traces": "item"
+    },
+    {
+      "id": "A4",
+      "text": "Capacity: how a land Job gets CPU before builders on one machine with the worker's existing launch path (priority between Job kinds, a slot for check Jobs), without adding a cap on agents.",
+      "traces": "item"
+    },
+    {
+      "id": "A5",
+      "text": "Moving this build onto Grid: what else the scripts do (multi-account lanes, limit switching, planners, maps, end reviews) and which plugin features already cover it; an order of steps to move, smallest first, and what has to land before the cutover (23 Nov).",
+      "traces": "item"
+    },
+    {
+      "id": "A6",
+      "text": "Lane plan: plugin lanes with repo, model/effort, files, acceptance rows and dependencies; then the app pieces (Feed shows land Jobs).",
+      "traces": "item"
+    }
+  ],
+  "after": [],
+  "attempt": 1,
+  "base": "main",
+  "budget": {
+    "reads_before_first_edit": 20,
+    "turns_estimate": 80
+  },
+  "checkpoint": null,
+  "close_reason": null,
+  "continues": null,
+  "decisions": [],
+  "discovered_from": null,
+  "effort": "medium",
+  "id": "J-2",
+  "intent": {
+    "goal": "inputs/R-land-job-type.md#L9-L14",
+    "item": "inputs/R-land-job-type.md#L1",
+    "owner": "inputs/R-land-job-type.md#L6"
+  },
+  "item": 1,
+  "keep": [],
+  "level_raised": null,
+  "links": [],
+  "model": "opus",
+  "on_blocked": "ask-and-continue",
+  "out_of_scope": [
+    "push, touch \u003cgmf\u003e, \u003croot-home\u003e, other users' homes, pkill -f; never edit the scripts in \u003chand\u003e (read only)",
+    "One command per Bash call",
+    "A refused Bash call is not the end - rerun it as one plain command and go on",
+    "No attribution lines in commits or files"
+  ],
+  "posts_back": [
+    "result",
+    "question",
+    "knowledge",
+    "checkpoint"
+  ],
+  "read": [
+    "task:inputs/R-land-job-type.md:1-18"
+  ],
+  "repo": "plugin",
+  "review_rounds": 0,
+  "risk": [],
+  "role": "researcher",
+  "skills": [
+    "grid:research"
+  ],
+  "title": "R-land-job-type: landing as a first-class Grid Job, so the build can run on Grid itself",
+  "verify": {
+    "kind": "file-exists",
+    "path": "docs/research/land-job-type.md"
+  },
+  "worktree": null,
+  "write": []
+}

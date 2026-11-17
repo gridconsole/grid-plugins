@@ -1,0 +1,16 @@
+{
+  "v": 3,
+  "current": "acme",
+  "machineFolder": "~/shared/grid-machine",
+  "workspaces": [
+    {
+      "name": "acme",
+      "data": "~/grid-data/acme",
+      "brain": "~/Brain/acme",
+      "member": "sam",
+      "folder": "~/workspace",
+      "setup": "done",
+      "step": null
+    }
+  ]
+}

@@ -158,7 +158,7 @@ func sessionStart(o Options) {
 		return
 	}
 	if envFile := o.Getenv("CLAUDE_ENV_FILE"); envFile != "" {
-		pathLine := voLauncherPathLine(o.Resolver.GridHome, o.Getenv("PATH"))
+		pathLine := voLauncherPathLine(gridhome.FindLauncherDir(o.Getenv, o.Resolver.Home, o.Resolver.GridHome), o.Getenv("PATH"))
 		if pathLine == "" {
 			pathLine = pluginPathLine(o.Getenv("CLAUDE_PLUGIN_ROOT"), o.Getenv("PATH"))
 		}
