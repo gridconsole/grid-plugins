@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
+	"path"
 	"sort"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/safefile"
 )
 
 // Entry is the default executable schema; the owner may change the policy.
@@ -29,6 +32,10 @@ type Problem struct {
 type Store struct {
 	GridHome string
 	Project  string // empty reads home only
+	// BrainDir is the brain folder of the Grid config (brain.Store.BrainDir).
+	// When set, people are read from its grid/people folder first. Empty reads
+	// knowledge/people alone, as before.
+	BrainDir string
 }
 
 func (e Entry) Validate() error {
@@ -76,13 +83,97 @@ func (s Store) levels() []string {
 	return []string{"home"}
 }
 
+// brainDir is the brain folder people are read from: BrainDir when the store
+// carries it, else the folder the Grid config names for GridHome, "" when the key
+// is absent (people then stay in GridHome/knowledge/people).
+func (s Store) brainDir() string {
+	if s.BrainDir != "" || s.GridHome == "" {
+		return s.BrainDir
+	}
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return brain.Store{GridHome: s.GridHome}.WithConfig(userHome, os.Getenv).BrainDir
+}
+
+// vaultDir is the folder of the people of one level below the brain folder:
+// grid/people at home, projects/<project>/grid/people at project level.
+func (s Store) vaultDir(level string) string {
+	if level == "project" {
+		return path.Join("projects", s.Project, "grid", "people")
+	}
+	return path.Join("grid", "people")
+}
+
+// readPerson reads a person's file at one level: from the brain folder's
+// grid/people when there is a brain folder, falling back to knowledge/people for
+// a file the folder does not hold (the writers still put new ones there). A
+// missing file wraps fs.ErrNotExist.
+func (s Store) readPerson(level, handle string) ([]byte, error) {
+	if dir := s.brainDir(); dir != "" && brain.ValidName(handle) && handle != "TOPIC" &&
+		(level == "home" || brain.ValidName(s.Project)) {
+		root, err := os.OpenRoot(dir)
+		if err == nil {
+			defer root.Close()
+			data, err := safefile.Read(root, path.Join(s.vaultDir(level), handle+".md"))
+			if !errors.Is(err, fs.ErrNotExist) {
+				return data, err
+			}
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+	}
+	return brain.Store{GridHome: s.GridHome, Project: s.Project}.ReadConfig(level, "people", handle)
+}
+
+// personNames lists the files of one level: those of knowledge/people and those
+// of the brain folder's grid/people that it does not hold.
+func (s Store) personNames(level string) ([]string, error) {
+	names, err := brain.Store{GridHome: s.GridHome, Project: s.Project}.ConfigNames(level, "people")
+	dir := s.brainDir()
+	if err != nil || dir == "" || (level == "project" && !brain.ValidName(s.Project)) {
+		return names, err
+	}
+	root, err := os.OpenRoot(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return names, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	if err := safefile.NoSymlinks(root, s.vaultDir(level)); err != nil {
+		return nil, err
+	}
+	entries, err := fs.ReadDir(root.FS(), s.vaultDir(level))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, n := range names {
+		seen[n], out = true, append(out, n)
+	}
+	for _, e := range entries {
+		n, ok := strings.CutSuffix(e.Name(), ".md")
+		if e.Type()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("config paths cannot be symbolic links")
+		}
+		if ok && !e.IsDir() && n != "TOPIC" && !seen[n] {
+			seen[n], out = true, append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
 // Get returns the project record when present, including its decode error;
 // an invalid project override must not revive a home approval grant.
 // A missing handle returns an error wrapping fs.ErrNotExist.
 func (s Store) Get(handle string) (Entry, error) {
-	b := brain.Store{GridHome: s.GridHome, Project: s.Project}
 	for _, level := range s.levels() {
-		data, err := b.ReadConfig(level, "people", handle)
+		data, err := s.readPerson(level, handle)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
@@ -100,9 +191,8 @@ func (s Store) Get(handle string) (Entry, error) {
 func (s Store) List() ([]Entry, []Problem, error) {
 	entries, problems := []Entry{}, []Problem{}
 	seen := map[string]bool{}
-	b := brain.Store{GridHome: s.GridHome, Project: s.Project}
 	for _, level := range s.levels() {
-		names, err := b.ConfigNames(level, "people")
+		names, err := s.personNames(level)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -111,7 +201,7 @@ func (s Store) List() ([]Entry, []Problem, error) {
 				continue
 			}
 			seen[name] = true
-			data, err := b.ReadConfig(level, "people", name)
+			data, err := s.readPerson(level, name)
 			if err != nil {
 				return nil, nil, err
 			}

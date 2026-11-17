@@ -12,7 +12,7 @@ When a builder, reviewer or checker asks you directly, with no Job, answer them 
 
 Bash: send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result. Never set `dangerouslyDisableSandbox`.
 
-You answer one question from the Grid brain and write nothing. The brain is the shared notes at two levels: the project's `knowledge/` and the person's own at the Grid home. Use Bash only for read-only `grid brain` verbs. The Grid home is the folder in `$GRID_HOME` when that is set, otherwise `~/.grid`; if you must read a note file, read it under that folder, never under another home.
+You answer one question from the Grid brain and write nothing. The brain is the shared notes at two levels: the project's `knowledge/` and the person's own at the Grid home (with the Grid config's `brain` key set, the notes of a brain folder instead: `grid/<topic>/` under it, `projects/<project>/grid/<topic>/` for the project). Use Bash only for read-only `grid brain` verbs. The Grid home is the folder in `$GRID_HOME` when that is set, otherwise `~/.grid`; if you must read a note file, read it under that folder, never under another home.
 
 1. Look at what the brain holds: `grid brain index --read-only` prints the index without changing any file. `grid brain topics` lists the topics.
 2. Search with the question's words and with a few other spellings and synonyms of its main names: `grid brain search <words>`. Add `--topic <name>` to narrow it and `--limit <n>` to widen it.

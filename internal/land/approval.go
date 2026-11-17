@@ -54,12 +54,13 @@ func (s Store) gate(t task.Task) (string, error) {
 	if strings.ContainsAny(t.Workflow, `/\\`) || t.Workflow == "." || t.Workflow == ".." {
 		return "", fmt.Errorf("invalid workflow name %q", t.Workflow)
 	}
-	root, err := os.OpenRoot(s.Resolver.GridHome)
+	folder, config := s.brainFolder()
+	root, err := os.OpenRoot(folder)
 	if err != nil {
 		return "", err
 	}
 	defer root.Close()
-	path := filepath.Join("projects", t.Project, "knowledge", "workflows", t.Workflow+".md")
+	path := filepath.Join(projectTopic(config, t.Project, "workflows"), t.Workflow+".md")
 	data, err := safefile.Read(root, path)
 	if err != nil {
 		return "", fmt.Errorf("workflow %q: %w", t.Workflow, err)
