@@ -28,15 +28,38 @@ type Store struct {
 	// ReadLevel optionally restricts queries and generated indexes to one level.
 	ReadLevel string
 	Now       func() time.Time
+	// BrainDir is the brain folder from the Grid config (the workspace's "brain"
+	// key). Empty means the key is absent and the brain is read where it is
+	// today, under GridHome/knowledge. See Root and vault.go.
+	BrainDir string
+	// Author is the configured Grid name: the author the listing gives to
+	// bytes no Grid record explains. Empty when the config names none.
+	Author string
 }
+
+// Root is the folder entry paths are relative to and where the vault reader
+// walks: the brain folder when the config key is set, else GridHome, where the
+// old knowledge/ layout lives. The write paths still use GridHome.
+func (s Store) Root() string {
+	if s.BrainDir != "" {
+		return s.BrainDir
+	}
+	return s.GridHome
+}
+
+// Vault reports that the brain folder key is set, so the reader walks the
+// folder as an Obsidian vault instead of the old knowledge/ layout.
+func (s Store) Vault() bool { return s.BrainDir != "" }
 
 type Entry struct {
 	ID   string `json:"id"`
-	Path string `json:"path"` // relative to the Grid home, portable across machines
+	Path string `json:"path"` // relative to Root (the Grid home when no brain folder is set), portable across machines
 	Note Note   `json:"note"`
 	// Dropped is set when a read finds the entry hidden by grid brain drop; it
 	// stays out of the JSON when false.
 	Dropped bool `json:"dropped,omitempty"`
+	// row is the vault reader's view of the file (aliases, tags, edges).
+	row *ListRow
 }
 
 func (s Store) stamp() string {

@@ -32,6 +32,7 @@ var guestParityCommands = map[string][]string{
 	"brain decide":         {"{task}", "parity", "accept"},
 	"brain index":          {"--read-only"},
 	"brain keep":           {},
+	"brain list":           {},
 	"brain revert":         {"parity/parity", "--to", "1"},
 	"brain drop":           {"parity/parity", "--expect", "0000000000000000"},
 	"brain restore":        {"parity/parity", "--expect", "0000000000000000"},

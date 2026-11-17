@@ -514,6 +514,7 @@ func contractCommandAnnotations() map[string]contractCommandAnnotation {
 		"brain show":           {args: []string{"<id>"}},
 		"brain search":         {args: []string{"<words...>"}, output: "cmd-brain-search.json"},
 		"brain topics":         {},
+		"brain list":           {},
 		"brain index":          {},
 		"brain propose":        {},
 		"brain accept":         {args: []string{"<id>"}},
