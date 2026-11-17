@@ -1,0 +1,30 @@
+{
+  "id": "01K9J000000000000000000001",
+  "task": "01K9J000000000000000000001",
+  "type": "tested",
+  "type_v": 1,
+  "author": {
+    "id": "cli",
+    "role": "cli"
+  },
+  "tier": "agent",
+  "worker": "cli@01K9J000000000000000000002",
+  "lease": null,
+  "gen": 0,
+  "fence": 0,
+  "seq": 1,
+  "at": "2026-11-17T10:00:00.000Z",
+  "re": null,
+  "after": [],
+  "job": "J-7",
+  "attempt": 1,
+  "wake": null,
+  "body": {
+    "sha": "9ab01cd",
+    "ref": "refs/grid/T-1/jobs/J-7/a1",
+    "base_sha": "3f2c9e1",
+    "result": "green",
+    "flakes": [],
+    "preexisting": []
+  }
+}

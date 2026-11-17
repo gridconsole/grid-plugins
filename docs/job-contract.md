@@ -45,7 +45,7 @@ A `read` path renders as `- Read <path> · <summary> · <why> [tier]`, where `<w
 ## Job record fields
 
 `contract/schemas/job-record.json` is the shape of a Job record on the Feed. It
-has 37 properties; 27 are required. The table has one row per property.
+has 40 properties; 27 are required. The table has one row per property.
 `Written by` is `plan` (the plan is published as Job records: decoded in
 `internal/job/planned.go`, encoded by `Record` in `internal/job/record.go`,
 posted by `internal/orchestrator/plan.go`), `run` (a later post or control
@@ -89,8 +89,11 @@ the schema.
 | `visible` | optional | plan `internal/job/planned.go` | `big` or `small`. |
 | `repo` | optional | plan `internal/job/planned.go` | The project repo a code Job works in, by its path in project.md; `.` names the project folder and always passes, whether or not project.md lists it; lint refuses any other path the project does not list (rule `job.repo`); none is the first repo. `grid worker next` puts that repo's folder on the spawn line as `repo`. |
 | `target` | optional | plan `internal/job/job.go` | For `kind: land`: the branch the accepted change lands on, for example `main`; lint refuses a land Job without it (rule `job.land-target`). Other kinds leave it out. |
-| `branch` | optional | plan `internal/job/job.go` | For `kind: land`: the accepted change's branch; lint refuses a land Job without it (rule `job.land-branch`). Other kinds leave it out. |
+| `branch` | optional | plan `internal/job/job.go` | For `kind: land`: the accepted change's branch, a short name or a full ref such as `refs/grid/T-1/head`; lint refuses a land Job without it (rule `job.land-branch`). Other kinds leave it out. |
 | `sha` | optional | plan `internal/job/job.go` | For `kind: land`: the commit of the accepted change, pinned at accept; lint refuses a land Job without it (rule `job.land-sha`). Other kinds leave it out. |
+| `command` | optional | plan `internal/job/job.go` | For `kind: command`: the argv the Job runs, a list of at least one nonempty word, for example `["land", "test", "T-1", "J-3"]`; lint refuses a command Job without it or with an empty word (rule `job.command-argv`). Other kinds leave it out. |
+| `every` | optional | plan `internal/job/job.go` | For `kind: wait`: how often the Job looks, a number and a unit `s`, `m`, `h` or `d`, for example `1m`. Other kinds leave it out. |
+| `timeout` | optional | plan `internal/job/job.go` | For `kind: wait`: how long the Job waits in all, a number and a unit `s`, `m`, `h` or `d`, for example `30m`. Other kinds leave it out. |
 | `base` | optional | run `internal/cli/orchestrator.go`, `internal/job/frombrief.go` | The branch the Job's clone or worktree starts from, from the brief's `Repo:` line ("from main"). `grid worker next` puts it on the spawn line as `base`; none leaves the key out. |
 | `model` | optional | run `internal/cli/orchestrator.go`, `internal/job/frombrief.go` | The model the Job's agent runs on, from the brief's `Model:` line. It goes on the spawn line as `model` in place of the role's; none keeps the role's model. |
 | `effort` | optional | run `internal/cli/orchestrator.go`, `internal/job/frombrief.go` | The effort the Job's agent runs at, from the brief's `Model:` line. It goes on the spawn line as `effort` in place of the role's; none keeps the role's effort. |

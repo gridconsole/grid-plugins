@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/grid/contract/tested.json",
+  "title": "tested",
+  "allOf": [
+    {
+      "$ref": "envelope.json"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "tested"
+        },
+        "type_v": {
+          "const": 1
+        },
+        "author": {
+          "properties": {
+            "role": {
+              "enum": [
+                "cli",
+                "host",
+                "worker"
+              ]
+            }
+          }
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "sha": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[0-9a-f]{7,64}$"
+                },
+                "ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "base_sha": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[0-9a-f]{7,64}$"
+                },
+                "head_sha": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[0-9a-f]{7,64}$"
+                },
+                "result": {
+                  "enum": [
+                    "green",
+                    "nothing"
+                  ]
+                },
+                "flakes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "test": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "package": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "green": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^[0-9]+/[1-9][0-9]*$"
+                      }
+                    },
+                    "required": [
+                      "test",
+                      "package",
+                      "green"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "preexisting": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "test": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "package": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "test",
+                      "package"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "sha",
+                "base_sha",
+                "head_sha",
+                "result",
+                "flakes",
+                "preexisting"
+              ],
+              "additionalProperties": false,
+              "if": {
+                "properties": {
+                  "result": {
+                    "const": "green"
+                  }
+                },
+                "required": [
+                  "result"
+                ]
+              },
+              "then": {
+                "required": [
+                  "ref"
+                ]
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^bodies/[0-7][0-9A-HJKMNP-TV-Z]{25}\\.json$"
+                }
+              },
+              "required": [
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "x-class": "state",
+  "x-roles": [
+    "cli",
+    "host",
+    "worker"
+  ]
+}

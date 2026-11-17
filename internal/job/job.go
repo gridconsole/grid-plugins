@@ -20,11 +20,19 @@ type Job struct {
 	// empty is the project's first repo.
 	Repo string `json:"repo,omitempty"`
 	// Target, Branch and SHA are what a Job of kind "land" lands: the branch to
-	// move, the accepted change's branch and the commit pinned at accept. Other
-	// kinds leave them empty and they are left out of the record.
+	// move, the accepted change's branch and the commit pinned at accept. Branch
+	// may be a short name or a full ref such as refs/grid/T-1/head. Other kinds
+	// leave them empty and they are left out of the record.
 	Target string `json:"target,omitempty"`
 	Branch string `json:"branch,omitempty"`
 	SHA    string `json:"sha,omitempty"`
+	// Command is the argv a Job of kind "command" runs, for example
+	// [land, test, T-1, J-3]. Every and Timeout are how often a Job of kind "wait"
+	// looks and how long it waits, each a number and a unit (s, m, h or d). Other
+	// kinds leave them empty and they are left out of the record.
+	Command []string `json:"command,omitempty"`
+	Every   string   `json:"every,omitempty"`
+	Timeout string   `json:"timeout,omitempty"`
 	// Base is the branch the Job's clone or worktree starts from; Model and Effort
 	// are what its agent runs on. Empty keeps the role's model and effort.
 	Base   string   `json:"base,omitempty"`
