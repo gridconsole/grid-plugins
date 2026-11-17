@@ -1110,9 +1110,9 @@ rows. A row owned by another decision lane is marked "owned by".
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L4 (expect-rev, adoption, proposal on mismatch), run-jobs
   lane 7 P-loop-service (starts `grid sync` when a licence and server are
-  set), and the sync server's version-checked write API. No lane in any plan
-  builds that API yet (9.5). Until it exists, L8 builds against a stub
-  server in the test.
+  set), and the sync server's version-checked write API, which lane
+  A-sync-version-write builds outside this plugin plan (9.5). Until it
+  lands, L8 builds against a stub server in the test.
 - **Builds.** The step 5 client of 5.4:
   - a brain write with a sync server configured sends the version it was
     based on;
@@ -1138,8 +1138,8 @@ rows. A row owned by another decision lane is marked "owned by".
   - (V19) with no sync server configured, the F9 test of L4 still passes
     under the local lock.
 - **Server side.** The server's own rows (reject a stale base, accept only
-  brain files) belong to the sync server lane. That lane is not named in
-  any plan yet (9.5).
+  brain files) belong to lane A-sync-version-write in the app repo, not in
+  this plugin plan (9.5).
 
 ### 9.2 Before P-brain-board-decide lands
 
@@ -1165,7 +1165,8 @@ rows. A row owned by another decision lane is marked "owned by".
 
 L1 → L2 ∥ L3 → L4 → L5a → L6; L7 after L4; L5b after L5a and
 P-brain-board-decide; L8 after L4 and P-loop-service. It goes live only once
-the sync server's write API exists. Then the Mac round trip.
+A-sync-version-write (app repo, 9.5) has landed the sync server's write API.
+Then the Mac round trip.
 
 ### 9.4 Mac round trip
 
@@ -1225,13 +1226,37 @@ step). Nothing is called done before this.
 - The sync server's version-checked write API is not built yet. L4 uses the
   local lock until it lands, and L8 carries the client half of V19 against
   a stub server.
-- **No lane owns the server half of V19.** The run-jobs lane plan (lanes
-  1-13) starts `grid sync` (lane 7 P-loop-service) and adds a push hook
-  point (lane 8 P-loop-remote). No lane there builds the server's
-  version-checked write: test-plan sync checks 1 and 2, "a write based on an
-  old version is refused" and "yours is kept, the agent's becomes a
-  proposal". For the orchestrator: name the sync server lane that owns those
-  rows. L8 is not live until it lands.
+- **The server half of V19: lane A-sync-version-write (not in this plugin
+  plan).** The run-jobs lane plan (lanes 1-13) starts `grid sync` (lane 7
+  P-loop-service) and adds a push hook point (lane 8 P-loop-remote). No lane
+  there builds the server's version-checked write. This note names the lane
+  that must own it; the orchestrator writes its brief.
+  - **Lane.** A-sync-version-write, in the app repo, which serves the Grid
+    sync server (the "Sync — Grid sync server" check list of the test
+    plan). The app's `internal/slices/sync` package says it "keeps the relay
+    queue on the server"; no version-checked write exists there or anywhere
+    in the app today (a grep for a base version, `If-Match` or a conflict
+    status found none). The brief picks the files.
+  - **Ledger rows.** V19 (server half), V18 (owned by P-run-jobs-decide:
+    only brain files are accepted).
+  - **Acceptance** (unit tests on the server):
+    - (V19, sync check 1) a write whose base version is not the current one
+      is refused with the current version in the answer; the server's bytes
+      for that path are unchanged. A retry based on the current version is
+      accepted;
+    - (V19, sync check 2) a person save arrives first and an agent write
+      based on the version before it arrives second. The agent write is
+      refused and the server still holds the person's bytes. The client
+      half (L8) then writes the agent change as a proposal; the server only
+      has to refuse and keep;
+    - (V19) a create of a path that exists is refused (create-only files:
+      board posts, Job nodes, proposals, change records and versions);
+    - (V18, sync check 3) a path outside the brain (a worktree, cache or
+      video path) is refused.
+  - **Also carries** the board decision's "Requirement on the sync lane"
+    (R-brain-board Q9). Both notes name this one lane.
+  - L8 builds against an `httptest` stub with the same contract and is not
+    live until A-sync-version-write lands.
 - **Question for the owner (V13, 4.5).** A person note shows no Grid header,
   and an agent note's `source` names the first Grid writer even after the
   owner edits it. This deviates from "the header says who wrote it". Is
