@@ -10,9 +10,10 @@ import (
 )
 
 // r23Submitted drives J-1 as a worker does: assigned, acked, a result, the exit
-// `done`, and a tick that folds the exit to submitted ("awaiting judgement"). It
-// returns the fixture and the id of the result record, the event a Judge's wake
-// names. The clock is two days back, so the lease is long out when the tree reads.
+// `done` (the fold moves J-1 to submitted, "awaiting judgement", and the tick
+// posts no control for it), and a tick. It returns the fixture and the id of the
+// result record, the event a Judge's wake names. The clock is two days back, so
+// the lease is long out when the tree reads.
 func r23Submitted(t *testing.T) (*fixture, string) {
 	t.Helper()
 	f := setup(t)

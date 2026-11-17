@@ -167,8 +167,8 @@ func TestOrphanNoExit(t *testing.T) {
 		t.Fatalf("a result with no worker-exit is not an orphan: %+v %+v", r.Orphan, r.Attempts)
 	}
 	f.exit(t, "done")
-	if r := treeRow(t, f, "J-1", lease.Add(time.Second)); r.Orphan != nil {
-		t.Fatalf("a worker-exit is not an orphan: %+v", r.Orphan)
+	if r := treeRow(t, f, "J-1", lease.Add(time.Second)); r.Orphan != nil && r.Orphan.Kind == OrphanNoExit {
+		t.Fatalf("a worker-exit is not a no_exit orphan (the fold makes it submitted, so never_judged is by design): %+v", r.Orphan)
 	}
 }
 

@@ -327,6 +327,8 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 			}
 			return s.control(j, contract.Cancelled, "worker cancelled", j.Exited)
 		case "done":
+			// A done exit with a result of its attempt folds Submitted itself and
+			// returned above; this control is for a done exit with no result.
 			return s.control(j, contract.Submitted, "awaiting judgement", j.Exited)
 		default:
 			failure = j.Exited
