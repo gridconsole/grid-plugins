@@ -97,7 +97,10 @@ func runJudge(args []string, env Env) int {
 		fmt.Fprintln(env.Stderr, "grid judge rework needs --from <review>")
 		return 2
 	}
+	// recordError keeps the error's code, so with --json the failure object goes on
+	// stdout with the stderr line as its message, as every other verb answers.
 	fail := func(err error) int {
+		env.recordError(err)
 		fmt.Fprintln(env.Stderr, err)
 		return exitCode(err)
 	}
