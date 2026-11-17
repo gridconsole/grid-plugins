@@ -88,6 +88,9 @@ the schema.
 | `kind` | optional | plan `internal/job/planned.go` | The step's work kind (`^[a-z][a-z-]*$`), taken from the checklist item. |
 | `visible` | optional | plan `internal/job/planned.go` | `big` or `small`. |
 | `repo` | optional | plan `internal/job/planned.go` | The project repo a code Job works in, by its path in project.md; `.` names the project folder and always passes, whether or not project.md lists it; lint refuses any other path the project does not list (rule `job.repo`); none is the first repo. `grid worker next` puts that repo's folder on the spawn line as `repo`. |
+| `target` | optional | plan `internal/job/job.go` | For `kind: land`: the branch the accepted change lands on, for example `main`; lint refuses a land Job without it (rule `job.land-target`). Other kinds leave it out. |
+| `branch` | optional | plan `internal/job/job.go` | For `kind: land`: the accepted change's branch; lint refuses a land Job without it (rule `job.land-branch`). Other kinds leave it out. |
+| `sha` | optional | plan `internal/job/job.go` | For `kind: land`: the commit of the accepted change, pinned at accept; lint refuses a land Job without it (rule `job.land-sha`). Other kinds leave it out. |
 | `irreversible` | optional | plan `internal/job/planned.go` | Boolean; the Job does something that cannot be undone. |
 | `review_reason` | optional | plan `internal/job/planned.go` | A nonempty sentence, at most 500 characters, saying why a review is wanted. |
 | `order` | optional | run `internal/cli/orchestrator.go`, `internal/contract/fold.go` | Queue position, lowest first; changes only a Job that has not started. |
