@@ -62,3 +62,9 @@ No existing test was deleted or loosened.
 - A real Obsidian vault on macOS with decomposed names, and the Grid app showing the list. Only temp-folder fixtures were used.
 - Claude Code's own Read tool event against a vault; the hook is tested with the same input shape as the existing Read tests.
 - The two app rigs above against a built plugin.
+
+## Result
+
+Code and tests proved at `cd43f9d392399bf2033deb3be0d2fbf540daded2`; the commit after it changes only this file. No brief row is NOT DONE. Row 2b (the two app rigs) lives in another repo and is reported as not run.
+
+DONE
