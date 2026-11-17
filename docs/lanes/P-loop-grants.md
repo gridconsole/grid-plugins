@@ -26,7 +26,7 @@ Proofs ran on code head 9178793b (after `git fetch origin && git merge origin/ma
 | No guard, gate, cap, hold or blocking hook on agents; remove nothing | HOLDS | No write path gained a refusal. `PostedAs` only picks the author a reader counts. The mcp change stamps `by` on an answer and refuses nothing: the stamp is limited to `answer`, because `control.json:155` and `host.json:36` have their own body `grant`, and stamping those would have turned valid posts into schema refusals. No line was removed except the doc paragraph this lane itself had added. |
 | No existing test edited | HOLDS | The new tests are only `internal/contract/pl_gr_posted_as_test.go`, `internal/orchestrator/pl_gr_person_grant_test.go` and `internal/mcp/pl_gr_author_test.go`, with helpers prefixed `plGr`. The golden is data, rewritten for the schema change. |
 | No attribution lines | HOLDS | `git log --format=%B origin/main..HEAD \| grep -ciE "co-authored-by\|claude-session\|generated with"` prints `0` (grep exit 1, no match, which is the pass). |
-| No personal paths, hosts or emails in committed files | HOLDS | The committed files and this doc use repo-relative paths only. |
+| No personal paths, hosts or emails in committed files | HOLDS | `git diff origin/main..HEAD \| grep -cE '/srv/\|/home/\|/tmp/claude'`, with the local user name and mail domain added to the pattern, prints `0`. The `agent-7@01J…` strings in the tests are writer ids, not emails. |
 | App rigs that read a person answer's author (gy_personjob_member_realplugin_test.go:185, d19_relay_realplugin_unix_test.go:262, hn_guest_job_answer_realplugin_test.go:46) | not run, not asked | Those are app-repo tests. Their authors are persons, not agents, so PostedAs leaves them as they are (it changes nothing for a non-agent author). |
 | App walk tests | not run, not asked | Plugin lane. |
 
@@ -61,7 +61,7 @@ Proofs ran on code head 9178793b (after `git fetch origin && git merge origin/ma
 
 ## Open items
 
-- **Production wiring.** No production caller sets `Store.Grants` yet: internal/cli would set it to `orchestrator.LoadGrants(<brain>)` where it builds the Store. Until then row 1 holds in tests only, and in production every agent answer stays the agent's own.
+- **Production wiring.** No production caller sets `Store.Grants` yet: internal/cli would set it to `orchestrator.LoadGrants(<brain>)` where it builds the Store. Until then row 1 holds in tests only, and in production every agent answer stays the agent's own. `personAnswers` (`internal/orchestrator/person.go:76`) is the only production caller of `PostedAs`, and `PostAs` has none. `contract.Fold` and every other reader (questions, approvals, board) still read the stamped author.
 - **Name conflict.** brain-board.md:346 puts `for` (a grant link) in the per-post header, and the envelope's `by` is `<machine>:<login>`. RJ's `for: <person>, by: <agent>, grant: [[link]]` is used here as answer body keys. The adapter lane should settle one shape.
 - **Contract doc.** A paragraph for `contract/docs/feed-posts.md` on `for`, `by` and `grant` was taken back out because that file is outside Touches.
 - **Not done in this lane:**
