@@ -128,12 +128,24 @@ func TestMfSetupSharedGroupPrintsCommandsAndWritesOnlyTheConfig(t *testing.T) {
 		t.Fatal("setup made the shared folder")
 	}
 	changed := mfChanged(before, mfSnapshot(t, h.root))
-	wantChanged := []string{filepath.Join("home", ".config", "grid", "config.json")}
+	// The config is written through gridconfig: the new file and the .v1 backup of the
+	// old one, and no other path.
+	wantChanged := []string{
+		filepath.Join("home", ".config", "grid", "config.json"),
+		filepath.Join("home", ".config", "grid", "config.json.v1"),
+	}
 	if !reflect.DeepEqual(changed, wantChanged) {
 		t.Fatalf("setup changed %q, want only %q", changed, wantChanged)
 	}
+	backup, err := os.ReadFile(filepath.Join(h.home, ".config", "grid", "config.json.v1"))
+	if err != nil || string(backup) != `{"theme":"dark"}` {
+		t.Fatalf("the .v1 backup is not the old config: %q %v", backup, err)
+	}
 
 	cfg := h.readConfig()
+	if cfg["v"] != float64(3) || cfg["workspaces"] == nil {
+		t.Fatalf("config is not a version 3 gridconfig file: %v", cfg)
+	}
 	if cfg["theme"] != "dark" || cfg[machinefolder.KeySharedGroup] != mfGroup || cfg[machinefolder.KeyMachineFolder] != h.folder {
 		t.Fatalf("config = %v", cfg)
 	}
@@ -156,9 +168,15 @@ func TestMfSetupSharedGroupMakesTheConfigWhenThereIsNone(t *testing.T) {
 	if code := h.run(h.tmp, "setup", "--shared-group", mfGroup); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.errb)
 	}
+	// gridconfig writes a version 3 file: v and workspaces beside the two keys. There
+	// was no old config, so there is no .v1 backup and no other file in the folder.
 	cfg := h.readConfig()
-	if len(cfg) != 2 || cfg[machinefolder.KeySharedGroup] != mfGroup || cfg[machinefolder.KeyMachineFolder] != h.folder {
+	if len(cfg) != 4 || cfg["v"] != float64(3) || cfg["workspaces"] == nil ||
+		cfg[machinefolder.KeySharedGroup] != mfGroup || cfg[machinefolder.KeyMachineFolder] != h.folder {
 		t.Fatalf("config = %v", cfg)
+	}
+	if entries, err := os.ReadDir(filepath.Join(h.home, ".config", "grid")); err != nil || len(entries) != 1 || entries[0].Name() != "config.json" {
+		t.Fatalf("config folder = %v %v, want only config.json", entries, err)
 	}
 	// A config that setup makes is private to the login.
 	if info, err := os.Stat(filepath.Join(h.home, ".config", "grid", "config.json")); err != nil || info.Mode().Perm() != 0o600 {

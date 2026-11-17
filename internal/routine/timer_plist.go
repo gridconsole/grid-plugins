@@ -20,7 +20,13 @@ type Launchd struct{ UID int }
 
 func (b Launchd) Plan(s TimerSpec) (TimerPlan, error) {
 	label := s.label()
-	logDir, err := localdata.Safe(s.GridHome, "logs", "routines", label)
+	var logDir string
+	var err error
+	if s.Machine.Active() && s.Login != "" {
+		logDir, err = s.Machine.RoutineLogDir(s.Login, label)
+	} else {
+		logDir, err = localdata.Safe(s.GridHome, "logs", "routines", label)
+	}
 	if err != nil {
 		return TimerPlan{}, err
 	}

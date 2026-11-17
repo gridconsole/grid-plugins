@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/version"
 )
@@ -58,6 +59,12 @@ type Plan struct {
 	pluginData          string
 	plugin              snap
 	pointers            []pointerChange
+	machineFolder       machinefolder.Folder
+	// outside holds the entries that go to the machine folder, by absolute path. They
+	// are kept out of result, which is the exact set verified for the staged home.
+	// moves lists the folders (<machine>/worktrees/<project>) this run makes there.
+	outside tree
+	moves   []string
 }
 
 // Option adjusts a scan.
@@ -70,6 +77,11 @@ func WithCeiling(dir string) Option { return func(p *Plan) { p.ceiling = dir } }
 // plugin data: Scan reads no process variable, so the caller passes the folder it
 // got from its own environment (grid migrate takes CLAUDE_PLUGIN_DATA from the call).
 func WithPluginData(dir string) Option { return func(p *Plan) { p.pluginData = dir } }
+
+// WithMachineFolder names the machine folder the caller resolved (grid migrate passes
+// its own). A folder that is not Active, that is one nobody configured, moves nothing:
+// the plan is the one made without this option. Scan never resolves the folder itself.
+func WithMachineFolder(f machinefolder.Folder) Option { return func(p *Plan) { p.machineFolder = f } }
 
 // pendingMachine stands in for the machine id in a plan made before one exists.
 const pendingMachine = "MACHINE-ID-MADE-ON-APPLY"
@@ -91,6 +103,9 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 	}
 	if p.ceiling != "" {
 		p.ceiling = gridhome.Real(p.ceiling)
+	}
+	if p.machineFolder.Path != "" {
+		p.machineFolder.Path = gridhome.Real(p.machineFolder.Path)
 	}
 	rec, err := findRecovery(home)
 	if err != nil {
@@ -220,6 +235,12 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 				p.Unmapped = append(p.Unmapped, src+": no matching project")
 				continue
 			}
+			if root := p.machineWorktrees(path.Base(dst)); root != "" {
+				p.copyOutside(src, root, handled)
+				paths[filepath.Join(from, filepath.FromSlash(src))] = root
+				p.Notes = append(p.Notes, src+": moves to the machine folder, "+root+"; preserves legacy task/worker subfolders; repo/job mapping is unavailable")
+				continue
+			}
 			target := path.Join(dst, "worktrees")
 			p.copyPrefix(src, target, handled)
 			paths[filepath.Join(from, filepath.FromSlash(src))] = filepath.Join(home, filepath.FromSlash(target))
@@ -264,6 +285,9 @@ func Scan(from, home string, opts ...Option) (*Plan, error) {
 		// An entry that is also a destination, or holds one, stays.
 		used := map[string]bool{}
 		for _, a := range p.Actions {
+			if filepath.IsAbs(a.To) { // goes to the machine folder, not into the staged home
+				continue
+			}
 			for d := a.To; d != "." && !used[d]; d = path.Dir(d) {
 				used[d] = true
 			}
@@ -364,7 +388,7 @@ func (p *Plan) rewriteSessions(homes map[string]bool, paths map[string]string) {
 		}
 	}()
 	for _, a := range p.Actions {
-		if a.Kind != "copy" || !isSessionFile(a.From, homes) {
+		if a.Kind != "copy" || filepath.IsAbs(a.To) || !isSessionFile(a.From, homes) {
 			continue
 		}
 		e := p.result[a.To]
@@ -526,6 +550,86 @@ func (p *Plan) copyOne(from, to string, e entry, handled map[string]bool) {
 		p.absLinks = append(p.absLinks, from)
 	}
 	p.add("copy", from, to, e)
+}
+
+// machineWorktrees returns the folder the old worktrees of project go to when a machine
+// folder is configured, <machine>/worktrees/<project>, and "" when they stay in the
+// home: no folder is configured (a path that is not configured does not move), or the
+// folder holds the home or the old data, or its name is not usable. A folder that
+// already exists there is a conflict, never overwritten.
+func (p *Plan) machineWorktrees(project string) string {
+	if !p.machineFolder.Active() {
+		return ""
+	}
+	dir, err := p.machineFolder.WorktreesDir(p.Home, project)
+	if err != nil {
+		p.Unmapped = append(p.Unmapped, project+": its worktrees cannot go to the machine folder: "+err.Error())
+		return ""
+	}
+	dir = gridhome.Real(dir)
+	if within(dir, p.Home) || within(p.Home, dir) || within(dir, p.From) || within(p.From, dir) {
+		p.Notes = append(p.Notes, project+": the machine folder "+p.machineFolder.Path+" and the Grid home or the old data hold each other; its worktrees stay in the home")
+		return ""
+	}
+	if exists(dir) {
+		p.Conflicts = append(p.Conflicts, dir+": the machine folder already has worktrees for "+project+"; move that folder aside, then run grid migrate again")
+	}
+	return dir
+}
+
+// copyOutside plans the copy of the old folder src to root, an absolute folder outside
+// the home: one copy action per entry, with the absolute path as its target. The
+// entries wait in p.outside; rewriteWorktrees changes the .git files there.
+func (p *Plan) copyOutside(src, root string, handled map[string]bool) {
+	if p.outside == nil {
+		p.outside = tree{}
+	}
+	p.moves = append(p.moves, root)
+	put := func(from, to string) {
+		e := p.source.m[from]
+		handled[from] = true
+		e.Src = filepath.Join(p.From, filepath.FromSlash(from))
+		if e.Mode&fs.ModeSymlink != 0 && filepath.IsAbs(e.Link) {
+			p.absLinks = append(p.absLinks, from)
+		}
+		p.outside[to] = e
+		p.Actions = append(p.Actions, Action{"copy", from, to})
+	}
+	if _, ok := p.source.get(src); ok {
+		put(src, root)
+	}
+	for _, f := range p.source.below(src) {
+		put(f, filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(f, src+"/"))))
+	}
+}
+
+// entryOf is the planned entry an action makes, in the staged home or outside it.
+func (p *Plan) entryOf(to string) entry {
+	if filepath.IsAbs(to) {
+		return p.outside[to]
+	}
+	return p.result[to]
+}
+
+func (p *Plan) setEntry(to string, e entry) {
+	if filepath.IsAbs(to) {
+		p.outside[to] = e
+		return
+	}
+	p.result[to] = e
+}
+
+// outsideSnap is the planned tree of one folder made outside the home, by relative path.
+func (p *Plan) outsideSnap(root string) snap {
+	m := tree{}
+	for to, e := range p.outside {
+		if to == root {
+			m["."] = e
+		} else if rel, err := filepath.Rel(root, to); err == nil && within(to, root) {
+			m[filepath.ToSlash(rel)] = e
+		}
+	}
+	return snap{m: m, keys: sortedKeys(m)}
 }
 
 func (p *Plan) projectRecord(src, dst string) {

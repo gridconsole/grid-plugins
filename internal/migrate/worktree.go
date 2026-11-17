@@ -27,7 +27,7 @@ func (p *Plan) rewriteWorktrees(paths map[string]string) {
 		if a.Kind != "copy" || path.Base(a.From) != ".git" {
 			continue
 		}
-		e := p.result[a.To]
+		e := p.entryOf(a.To)
 		oldFile := e.Src
 		newFile, moved := mapPath(oldFile, paths)
 		if !moved || newFile == oldFile {
@@ -84,7 +84,7 @@ func (p *Plan) rewriteWorktrees(paths map[string]string) {
 		p.pointers = append(p.pointers, pointerChange{Path: backlink, Before: string(before), After: newFile + "\n", Mode: uint32(info.Mode().Perm())})
 		e.Data = []byte("gitdir: " + gitdir + "\n")
 		e.Size = int64(len(e.Data))
-		p.result[a.To] = e
+		p.setEntry(a.To, e)
 		p.Notes = append(p.Notes, a.From+": gitdir and repository backlink will be rewritten")
 	}
 }

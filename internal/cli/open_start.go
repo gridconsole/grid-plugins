@@ -133,7 +133,12 @@ func (a *AppStart) ensure(env Env) (string, int) {
 		return p.base, 0
 	}
 	// Two grid open calls at once: the second waits here, then sees the app the first started.
-	lock, err := fslock.OpenNoFollow(filepath.Join(env.GridHome, OpenStartLock), os.O_RDWR|os.O_CREATE, 0o600)
+	lockPath, err := env.MachineFolder.StartLockPath(env.GridHome, env.login())
+	if err != nil {
+		fmt.Fprintf(env.Stderr, "grid open: cannot place %s: %v\n", OpenStartLock, err)
+		return "", 1
+	}
+	lock, err := env.MachineFolder.OpenStartLock(lockPath)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "grid open: cannot open %s: %v\n", OpenStartLock, err)
 		return "", 1
@@ -205,8 +210,9 @@ func (a *AppStart) ensure(env Env) (string, int) {
 			break
 		}
 	}
+	serverLog, _ := env.MachineFolder.LogPath(env.GridHome, env.login(), AppServerBin)
 	fmt.Fprintf(env.Stderr, "grid open: %s did not write %s within %s (see %s). Run grid open again.\n",
-		AppServerBin, AppURLFile, wait, filepath.Join(env.GridHome, "logs", AppServerBin+".log"))
+		AppServerBin, AppURLFile, wait, serverLog)
 	return "", 1
 }
 
@@ -227,15 +233,16 @@ func appStartArgs(name, home string) []string {
 func shiftAppLog(path string) { logshift.Shift(path, appLogLimit, appLogFiles) }
 
 // startDetached starts a program that outlives grid open: its own session or process
-// group, no terminal, output in <Grid home>/logs/<name>.log. It runs with args, and
-// the app finds the Grid home through GRID_HOME as well.
+// group, no terminal, output in <Grid home>/logs/<name>.log (launcher/<login>/<name>.log
+// in the machine folder when one is set). It runs with args, and the app finds the
+// Grid home through GRID_HOME as well.
 func startDetached(env Env, name, path string, args []string) error {
-	logDir := filepath.Join(env.GridHome, "logs")
-	if err := os.MkdirAll(logDir, 0o700); err != nil {
+	logPath, err := env.MachineFolder.LogPath(env.GridHome, env.login(), name)
+	if err != nil {
 		return err
 	}
-	shiftAppLog(filepath.Join(logDir, name+".log"))
-	logf, err := os.OpenFile(filepath.Join(logDir, name+".log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	shiftAppLog(logPath)
+	logf, err := env.MachineFolder.OpenLog(logPath)
 	if err != nil {
 		return err
 	}

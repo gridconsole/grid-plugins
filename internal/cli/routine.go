@@ -218,7 +218,7 @@ func runRoutine(args []string, env Env) int {
 				binary = launcher
 			}
 		}
-		scheduler := routine.Scheduler{Home: env.Home, GridHome: env.GridHome, Binary: binary, Path: env.getenv("PATH"), Backend: routine.NativeBackend(), Runner: routine.ExecOSRunner{}}
+		scheduler := routine.Scheduler{Home: env.Home, GridHome: env.GridHome, Binary: binary, Path: env.getenv("PATH"), Backend: routine.NativeBackend(), Runner: routine.ExecOSRunner{}, Machine: env.MachineFolder, Login: env.Login}
 		if routine.NativePreviewOnly() && (verb == "schedule" || verb == "unschedule") {
 			var plans []routine.TimerPlan
 			if named {

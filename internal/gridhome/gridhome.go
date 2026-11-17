@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/gridconfig"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 )
 
 // FormatVersion is the layout version of the data folder this grid reads and writes.
@@ -42,8 +43,11 @@ type Home struct {
 	// ~/.grid/<name>, and where the older config and launcher sit.
 	DataRoot string
 	// Machine is the machine folder (locks, caches, worktrees, runner logs,
-	// bin/grid): the config's machineFolder (MachineSource config) or the OS
-	// standard place (MachineSource default).
+	// bin/grid) as machinefolder.Resolve finds it: its environment override
+	// (MachineSource env), the config's machineFolder (config) or the OS standard
+	// place (default).
+	// It is set by default, so a caller never decides to use the machine folder by
+	// whether it is set: machinefolder.Folder.Active says that.
 	Machine       string
 	MachineSource Source
 	// Config is the config file read, "" when there was none. ConfigCopiedFrom is
@@ -87,11 +91,11 @@ func resolve(goos string, getenv func(string) string, userHome string) Home {
 		h.ConfigProblem = l.Err.Error()
 		cfg = gridconfig.Config{}
 	}
-	machine, fromConfig := cfg.MachineDir(goos, getenv, userHome)
-	h.Machine, h.MachineSource = machine, SourceDefault
-	if fromConfig {
-		h.MachineSource = SourceConfig
-	}
+	// machinefolder.Resolve is the one resolver of the machine folder (the environment
+	// override, then the config's machineFolder, then the OS standard place); Home only
+	// carries what it found. Its Source strings are this package's.
+	folder := machinefolder.Resolve(machinefolder.Env{Getenv: getenv, Home: userHome, GOOS: goos})
+	h.Machine, h.MachineSource = folder.Path, Source(folder.Source)
 	dataSource := SourceConfig
 	if l.Err == nil && found && cfg.Migrate(userHome, gridconfig.HandleFromLogin(login(getenv))) {
 		dataSource = SourceLegacy

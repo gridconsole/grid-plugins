@@ -84,3 +84,4 @@ Choices the reviewer may question:
 - The `grid doctor` and `grid setup --shared-group` output, because they are not written.
 
 CLOSED BY P-shared-home-2: accepted 03:40 UTC
+CLOSED BY P-shared-home-6: accepted 05:38 UTC

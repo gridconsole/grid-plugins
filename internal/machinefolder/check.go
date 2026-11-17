@@ -6,10 +6,34 @@ import (
 	"io/fs"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strings"
-
-	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
+
+// realPath makes path absolute and resolves the symlinks in its longest existing
+// prefix, as gridhome.Real does, so two spellings of one place compare equal. It is
+// here because this package cannot import gridhome: gridhome reads gridconfig, and
+// gridconfig names the OS standard place through DefaultPath.
+func realPath(path string) string {
+	path = filepath.Clean(path)
+	if !filepath.IsAbs(path) {
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+	}
+	rest := ""
+	for p := path; ; {
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			return filepath.Join(real, rest)
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return path
+		}
+		rest = filepath.Join(filepath.Base(p), rest)
+		p = parent
+	}
+}
 
 // Finding is one row for grid doctor: a name, whether it holds, one line of
 // detail, and the command a person runs to fix it. Grid never runs the fix.
@@ -215,7 +239,7 @@ func groupRows(f Folder, o CheckOptions, login string, st os.FileInfo, add func(
 // person's step.
 func leftoverRow(f Folder, o CheckOptions, group string, add func(string, bool, string, string)) {
 	old := DefaultPath(o.Env)
-	if old == "" || f.Path == "" || gridhome.Real(old) == gridhome.Real(f.Path) {
+	if old == "" || f.Path == "" || realPath(old) == realPath(f.Path) {
 		add(RowLeftover, true, "no private machine folder left behind", "")
 		return
 	}

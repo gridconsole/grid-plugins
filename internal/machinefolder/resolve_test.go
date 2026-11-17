@@ -103,33 +103,6 @@ func TestResolveHomeAndRelative(t *testing.T) {
 	}
 }
 
-func TestResolveBadConfigFallsBack(t *testing.T) {
-	home := t.TempDir()
-	e := envOf(home, "linux", nil)
-	path := machinefolder.ConfigPath(e)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	for name, body := range map[string]string{
-		"array":      `["machine_folder"]`,
-		"not json":   `machine_folder: /srv/grid`,
-		"key number": `{"machine_folder": 7}`,
-	} {
-		t.Run(name, func(t *testing.T) {
-			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			f := machinefolder.Resolve(e)
-			if f.Path != machinefolder.DefaultPath(e) || f.Problem == "" {
-				t.Fatalf("a config that cannot be read falls back to the default and says why: %+v", f)
-			}
-			if strings.Contains(f.Problem, "/srv/grid") {
-				t.Fatalf("the problem must not echo the file's content: %s", f.Problem)
-			}
-		})
-	}
-}
-
 func TestResolveNoHome(t *testing.T) {
 	f := machinefolder.Resolve(envOf("", "linux", nil))
 	if f.Path != "" {
@@ -138,46 +111,6 @@ func TestResolveNoHome(t *testing.T) {
 	f = machinefolder.Resolve(envOf("", "linux", map[string]string{machinefolder.EnvDir: "/srv/grid"}))
 	if f.Path != "/srv/grid" {
 		t.Fatalf("an absolute env path needs no home: %+v", f)
-	}
-}
-
-func TestWriteConfigKeepsOtherKeys(t *testing.T) {
-	home := t.TempDir()
-	e := envOf(home, "linux", nil)
-	path := machinefolder.ConfigPath(e)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	before := `{"other": {"a": [1, 2]}, "machine_folder": "/old", "name": "keep"}`
-	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	got, err := machinefolder.WriteConfig(e, machinefolder.Config{MachineFolder: "/srv/grid", SharedGroup: "grid"})
-	if err != nil || got != path {
-		t.Fatalf("WriteConfig = %q, %v", got, err)
-	}
-	b, _ := os.ReadFile(path)
-	text := string(b)
-	for _, want := range []string{`"other"`, `"name": "keep"`, `"machine_folder": "/srv/grid"`, `"shared_group": "grid"`} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("config lost %s:\n%s", want, text)
-		}
-	}
-	cfg, err := machinefolder.ReadConfig(e)
-	if err != nil || cfg.MachineFolder != "/srv/grid" || cfg.SharedGroup != "grid" {
-		t.Fatalf("ReadConfig = %+v, %v", cfg, err)
-	}
-	if st, err := os.Stat(path); err != nil || st.Mode().Perm()&0o077 != 0 && !isWindows() {
-		t.Fatalf("the config is private to the login: %v %v", st, err)
-	}
-
-	// An empty value removes the key.
-	if _, err := machinefolder.WriteConfig(e, machinefolder.Config{}); err != nil {
-		t.Fatal(err)
-	}
-	b, _ = os.ReadFile(path)
-	if strings.Contains(string(b), "shared_group") || strings.Contains(string(b), "machine_folder") || !strings.Contains(string(b), `"other"`) {
-		t.Fatalf("clearing must drop only the two keys:\n%s", b)
 	}
 }
 
