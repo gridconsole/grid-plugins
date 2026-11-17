@@ -17,6 +17,10 @@ import (
 // concerns: held records wait, bad and ignored lines stay out, and records past
 // an ended tenure reach the fold marked stale.
 func (s Store) State() (contract.State, error) {
+	if s.Board != nil {
+		state, _, err := s.boardFold()
+		return state, err
+	}
 	allowed := s.WithdrawAllowed
 	if allowed == nil {
 		allowed = QuestionWithdrawReadPolicy(s.TaskDir, s.Warn)
@@ -86,17 +90,12 @@ func (s Store) published(name string) bool {
 func (s Store) stateFile() (string, error) { return s.Machine.StateFile(s.Dir(), s.TaskID) }
 
 func (s Store) saveState(liveness map[string]string, keep, onlyPublished bool) (contract.State, error) {
-	if err := s.prepare(); err != nil {
-		return contract.State{}, err
-	}
-	statePath, err := s.stateFile()
+	files, err := s.foldFiles()
 	if err != nil {
 		return contract.State{}, err
 	}
-	if err := os.MkdirAll(filepath.Join(s.Dir(), ".cache"), 0o700); err != nil {
-		return contract.State{}, err
-	}
-	f, err := os.OpenFile(filepath.Join(s.Dir(), ".cache", "fold.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	statePath := files.state
+	f, err := files.openLock()
 	if err != nil {
 		return contract.State{}, err
 	}
@@ -132,12 +131,12 @@ func (s Store) saveState(liveness map[string]string, keep, onlyPublished bool) (
 		projection = view
 	}
 	if _, lerr := os.Lstat(statePath); !onlyPublished || lerr == nil {
-		if err := writeProjectionAt(statePath, projection, s.Machine.WriteStateFile); err != nil {
+		if err := writeProjectionAt(statePath, projection, files.writeState); err != nil {
 			return contract.State{}, err
 		}
 	}
-	if !onlyPublished || s.published("needs-you.json") || len(state.NeedsYou) > 0 {
-		if err := writeProjection(s.Dir(), "needs-you.json", state.NeedsYou); err != nil {
+	if _, nerr := os.Lstat(files.needsYou); !onlyPublished || nerr == nil || len(state.NeedsYou) > 0 {
+		if err := writeProjectionAt(files.needsYou, state.NeedsYou, files.writeNeedsYou); err != nil {
 			return contract.State{}, err
 		}
 	}

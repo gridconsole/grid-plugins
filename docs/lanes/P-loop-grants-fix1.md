@@ -36,7 +36,7 @@ The adapter lane should settle the answer body's `for`/`by`/`grant` keys as buil
 
 ## Review of P-loop-grants
 
-Its rows hold on this branch. Its NOT DONE row (grants not wired into production) is closed by this lane.
+Its rows hold on this branch. Its NOT DONE row (grants not wired into production): CLOSED BY M-P-loop-grants-fix1-onto-main: the wiring holds on the merged head (see docs/lanes/M-P-loop-grants-fix1-onto-main.md).
 
 ## NOT VERIFIED
 

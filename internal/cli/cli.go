@@ -173,6 +173,7 @@ func commands() []command {
 		{"task", "new|show|list|status|lane|merge, stop|close|reopen, history|attach|move (grid task help lists all)", runTask},
 		{"plan", "write, check, items, hash, migrate", runPlan},
 		{"job", "next, post, ack, result, cancel, tree, blocked, render, lint, show, verify, cycles, trace", runOrchestratorJob},
+		{"judge", "verdict, review, rework, person (read a review; post the review, rework or person Job)", runJudge},
 		{"lease", "take, release, status (task lease)", runTaskLease},
 		{"feed", "tick, post, read, state, types, handover", runOrchestratorFeed},
 		{"mcp", "stdio server with the Feed tools", runMCP},
