@@ -244,7 +244,38 @@ func unique(in []string) []string {
 	}
 	return out
 }
+
+// brainRoot is the brain folder the Grid config names, "" when the key is absent
+// or names the Grid home itself (the brain then stays in the home's knowledge/).
+func (c context) brainRoot() string {
+	if strings.TrimSpace(c.home) == "" || c.env["HOME"] == "" {
+		return ""
+	}
+	home := resolve(c.root, c.expand(c.home))
+	h := gridhome.Resolve(func(key string) string {
+		if key == "GRID_HOME" {
+			return home
+		}
+		return c.env[key]
+	}, c.env["HOME"])
+	if h.Brain == "" || filepath.Clean(h.Brain) == filepath.Clean(home) {
+		return ""
+	}
+	return realNative(resolve(c.root, c.expand(h.Brain)), 0)
+}
+
+// brain says whether target is a place of the brain a curator or a planner writes:
+// the Grid home's and the projects' knowledge/ folders, and, when the Grid config
+// names a brain folder, any path in it. The brain folder only widens what a
+// curator or a planner may write; it adds nothing to what another agent is
+// refused, since the person's notes there are for the agents to edit too.
 func (c context) brain(target string) bool {
+	if root := c.brainRoot(); root != "" && inside(root, target) {
+		switch strings.TrimSpace(c.in.AgentType) {
+		case "grid:grid-curator", "grid-curator", "grid:grid-planner", "grid-planner":
+			return true
+		}
+	}
 	root := realNative(c.projects, 0)
 	parts := strings.Split(relative(root, target), "/")
 	if inside(root, target) && len(parts) >= 2 && strings.EqualFold(parts[1], "knowledge") {
