@@ -1,0 +1,26 @@
+{
+  "v": 3,
+  "current": "beta",
+  "workspaces": [
+    {
+      "name": "acme",
+      "folder": "~/workspace",
+      "member": "sam",
+      "setup": "done",
+      "step": null
+    },
+    {
+      "name": "beta",
+      "data": "~/elsewhere/beta-data",
+      "brain": "",
+      "member": "sam-b",
+      "folder": "~/code",
+      "setup": "done",
+      "step": null,
+      "laterKey": {"kept": true}
+    }
+  ],
+  "choices": {"claudeSettings": "yes", "sandbox": false, "testDefault": "unit"},
+  "setupAt": "2026-11-17T00:00:00Z",
+  "laterTop": [1, 2]
+}

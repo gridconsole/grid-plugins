@@ -12,7 +12,13 @@ import (
 
 func main() {
 	env := cli.OSEnv()
-	blLaunchRefresh(env.GridHome)
+	for _, dir := range env.Resolved.LauncherDirs() {
+		if dir == env.Resolved.Machine {
+			// The machine folder sits at the OS standard place without asking.
+			_ = os.MkdirAll(dir, 0o700)
+		}
+		blLaunchRefresh(dir)
+	}
 	os.Exit(cli.Run(os.Args[1:], env))
 }
 

@@ -48,7 +48,7 @@ type AccountWindows struct {
 	Kind    string   `json:"kind"`
 	Windows []Window `json:"windows"`
 	AsOf    string   `json:"asOf,omitempty"`
-	Source  string   `json:"source"` // statusline | stream | codex | none
+	Source  string   `json:"source"` // direct | statusline | stream | codex | none
 	Note    string   `json:"note,omitempty"`
 }
 
@@ -144,41 +144,96 @@ func readSnapshot(env Env, dir string) (Snapshot, bool) {
 }
 
 // windowsFor answers the account_windows entry for dirs, the folders that may
-// hold this account's numbers, in order. The first with a snapshot wins.
+// hold this account's numbers, in order. The sources, best first:
+//
+//  1. the direct read: the provider's own command, asked for the windows (cached,
+//     see direct.go), whose last good reading stays when a later read fails;
+//  2. a record the provider's own session left, but only one made after that
+//     reading: for Claude a status line or stream note, for Codex the newest
+//     rollout line (codex_read.go); with no direct reading at all it is the
+//     first source;
+//  3. none, with the reason the direct read gave.
 func windowsFor(env Env, id, kind string, dirs []string) AccountWindows {
 	res := AccountWindows{ID: id, Kind: kind, Windows: []Window{}, Source: "none"}
-	if kind != Claude {
-		if kind == Codex {
-			if got, ok := codexWindowsFor(env, res, dirs); ok {
-				return got
+	direct, reason := directFor(env, kind, dirs)
+	rec := sessionRecord(env, kind, dirs)
+	switch {
+	case rec.ok && (!direct.good() || madeAfter(rec.at, direct.At)):
+		res.Windows, res.AsOf, res.Source = rec.windows, rec.at, rec.source
+	case direct.good():
+		res.Windows = readingWindows(env, direct.FiveHour, direct.SevenDay)
+		res.AsOf, res.Source = direct.At, "direct"
+	default:
+		res.Note = reason
+		if res.Note == "" {
+			res.Note = "No use reported for this folder yet"
+			if kind == Codex {
+				res.Note = "Codex use is not read yet"
 			}
 		}
-		res.Note = "Codex use is not read yet"
-		return res
 	}
-	for _, d := range dirs {
-		s, ok := readSnapshot(env, d)
-		if !ok {
-			continue
-		}
-		add := func(label string, r *Reading) {
-			if r == nil {
-				return
-			}
-			w := Window{Label: label, Used: r.Used, ResetsAt: r.ResetsAt}
-			if r.ResetsAt != 0 && env.now().Unix() >= r.ResetsAt {
-				w.Used = 0 // the window started over after the reading
-			}
-			res.Windows = append(res.Windows, w)
-		}
-		add("5h", s.FiveHour)
-		add("7d", s.SevenDay)
-		res.AsOf, res.Source = s.At, s.Source
-		if res.Source == "" {
-			res.Source = "statusline"
-		}
-		return res
-	}
-	res.Note = "No use reported for this folder yet"
 	return res
+}
+
+// record is a reading the provider's own session left behind: the status line
+// snapshot or stream note of a Claude folder, or the newest Codex rollout line.
+type record struct {
+	windows []Window
+	at      string
+	source  string
+	ok      bool
+}
+
+// sessionRecord reads the record of the first folder of dirs that holds one.
+func sessionRecord(env Env, kind string, dirs []string) record {
+	switch kind {
+	case Claude:
+		for _, d := range dirs {
+			if s, ok := readSnapshot(env, d); ok {
+				src := s.Source
+				if src == "" {
+					src = "statusline"
+				}
+				return record{readingWindows(env, s.FiveHour, s.SevenDay), s.At, src, true}
+			}
+		}
+	case Codex:
+		if got, ok := codexWindowsFor(env, AccountWindows{}, dirs); ok {
+			return record{got.Windows, got.AsOf, got.Source, true}
+		}
+	}
+	return record{}
+}
+
+// readingWindows turns the two readings into the rows of the shape. A window
+// whose reset time has passed started over after the reading, so it shows 0.
+func readingWindows(env Env, five, seven *Reading) []Window {
+	out := []Window{}
+	add := func(label string, r *Reading) {
+		if r == nil {
+			return
+		}
+		w := Window{Label: label, Used: r.Used, ResetsAt: r.ResetsAt}
+		if r.ResetsAt != 0 && env.now().Unix() >= r.ResetsAt {
+			w.Used = 0
+		}
+		out = append(out, w)
+	}
+	add("5h", five)
+	add("7d", seven)
+	return out
+}
+
+// madeAfter says whether the time a is later than b. A time that cannot be read
+// is the oldest there is.
+func madeAfter(a, b string) bool {
+	ta, errA := time.Parse(time.RFC3339, a)
+	tb, errB := time.Parse(time.RFC3339, b)
+	switch {
+	case errA != nil:
+		return false
+	case errB != nil:
+		return true
+	}
+	return ta.After(tb)
 }

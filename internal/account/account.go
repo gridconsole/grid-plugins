@@ -58,6 +58,11 @@ type Env struct {
 	// entries. nil reads the host process environment (os.Environ), as the
 	// binary does. The provider itself is still looked up on the host PATH.
 	Environ func() []string
+	// ProbeTimeout bounds one direct usage read of one folder; 0 means 30 seconds.
+	ProbeTimeout time.Duration
+	// ProbeRetryWait is the pause before the one retry of an error reply from
+	// `codex app-server`; 0 means 2 seconds.
+	ProbeRetryWait time.Duration
 }
 
 // environ is the child's environment, read at each call and never cached.

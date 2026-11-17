@@ -1,0 +1,13 @@
+{
+  "v": 2,
+  "current": "acme",
+  "workspaces": [
+    {
+      "name": "acme",
+      "folder": "~/workspace",
+      "member": "sam",
+      "setup": "done",
+      "step": null
+    }
+  ]
+}

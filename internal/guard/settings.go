@@ -52,7 +52,7 @@ func configuredLevel(name string, in hookio.Input, root string, env map[string]s
 
 // callerResolver is shared by hook settings and automatic folder permissions.
 func callerResolver(env map[string]string) where.Resolver {
-	home := gridhome.Dir(func(key string) string { return env[key] }, env["HOME"])
+	home := gridhome.Resolve(func(key string) string { return env[key] }, env["HOME"]).Dir
 	machine := env["GRID_MACHINE"]
 	if machine == "" {
 		machine = gridhome.Machine(home)
