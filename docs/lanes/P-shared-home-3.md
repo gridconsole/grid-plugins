@@ -2,7 +2,7 @@
 
 Result: **NOT DONE**. Rows 2 and 3 hold. Row 1 does not: the launcher lock and log, the task `state.json` and the Job worktrees folder now go through `machinefolder.Resolve`, and so does the `job verify` lookup of a recorded worktree. The brain cache is not switched (on purpose, see Open items). The launcher pid and the videos have no writer in this repo, so there was nothing to switch. The open items are at the end.
 
-Code head: `ce60ffdc` (the last code commit). The doc commit comes after it; the tip of the bundle is the lane head. The bundle range `origin/main..lane-P-shared-home-3` also carries the earlier lane P-shared-home (the package `internal/machinefolder`, commits `abfe3a29` to `61264bf9`), because that lane is not on main yet. The commits of this lane are `7e881a34`, `dd9ed3bf` (merge of origin/main), `7dde556f` and `ce60ffdc`.
+Code head: `2cd72055` (the last code commit). The doc commit comes after it; the tip of the bundle is the lane head. The bundle range `origin/main..lane-P-shared-home-3` also carries the earlier lane P-shared-home (the package `internal/machinefolder`, commits `abfe3a29` to `61264bf9`), because that lane is not on main yet. The commits of this lane are `7e881a34`, `dd9ed3bf` (merge of origin/main), `7dde556f`, `ce60ffdc` and `2cd72055`.
 
 ## How it works
 
@@ -22,18 +22,17 @@ Acceptance rows (the brief):
 | 2 | Unconfigured paths byte-identical (tested); `TestOneResolver` passes | HOLDS | `TestPlaceUnconfiguredPathsAreTheOldOnes`, `TestStartLockUnconfiguredIsTheOldFile`, `TestStartDetachedUnconfiguredKeepsTheOldLog`, `TestOpenStartLockAndLogsStayInTheGridHomeWithoutAMachineFolder`, `TestSaveStateUnconfiguredWritesFeedStateJSON`, `TestWorktreePathInFollowsTheMachineFolder` (zero folder, default folder and a `Problem`-only folder all give the old path). The race run below includes `TestOneResolver` in `internal/machinefolder`: exit 0. |
 | 3 | Two fake logins share one folder: each writes its launcher files, neither breaks the other's, `state.json` has no partial read under `-race` | HOLDS | `go test -race -count=1` of `internal/machinefolder internal/feed internal/question internal/job internal/job/frontmatter internal/job/jobcmd internal/job/lint internal/cli` exit 0 (times below). Tests: `TestStartDetachedTwoLoginsShareOneMachineFolder` (two logins write `launcher/<login>/<name>.log`, neither log is touched by the other), `TestStartLockTwoLoginsShareOneMachineFolder` (two logins hold `launcher/<login>/lock` at the same time; the same login is refused a second time), `TestOpenStartLockAndLogsGoToTheMachineFolder`, `TestSaveStateTwoLoginsShareOneMachineFolder` (two stores on one folder, 15 distinct Jobs each, 4 reader goroutines parse `state.json` the whole time and never see a partial file; modes `0660` and `2770` under umask 077; no `feed/state.json`; `needs-you.json` stays in `feed/`). |
 
-The race run, as printed (exit 0):
+The race run, as printed (exit 0), on the final tree after the last code commit `2cd72055`:
 
 ```
-ok  	github.com/gridconsole/grid-plugins/internal/machinefolder	1.632s
-ok  	github.com/gridconsole/grid-plugins/internal/feed	104.006s
-ok  	github.com/gridconsole/grid-plugins/internal/question	17.912s
-ok  	github.com/gridconsole/grid-plugins/internal/job	15.550s
-ok  	github.com/gridconsole/grid-plugins/internal/job/frontmatter	1.095s
-ok  	github.com/gridconsole/grid-plugins/internal/job/jobcmd	22.834s
-?   	github.com/gridconsole/grid-plugins/internal/job/jobtest	[no test files]
-ok  	github.com/gridconsole/grid-plugins/internal/job/lint	4.574s
-ok  	github.com/gridconsole/grid-plugins/internal/cli	235.699s
+ok  	github.com/gridconsole/grid-plugins/internal/machinefolder	2.945s
+ok  	github.com/gridconsole/grid-plugins/internal/feed	218.867s
+ok  	github.com/gridconsole/grid-plugins/internal/question	30.836s
+ok  	github.com/gridconsole/grid-plugins/internal/job	28.740s
+ok  	github.com/gridconsole/grid-plugins/internal/job/frontmatter	1.104s
+ok  	github.com/gridconsole/grid-plugins/internal/job/jobcmd	35.187s
+ok  	github.com/gridconsole/grid-plugins/internal/job/lint	5.877s
+ok  	github.com/gridconsole/grid-plugins/internal/cli	402.507s
 ```
 
 Writer table (what each writer used before, and now):
@@ -42,8 +41,8 @@ Writer table (what each writer used before, and now):
 |------|--------------------|---------------------------------------|----------------------------|--------|
 | Launcher lock | `internal/cli/open_start.go:136` (`StartLockPath`, `OpenStartLock`) | `<grid home>/open-start.lock` | `launcher/<login>/lock` | switched |
 | Launcher log | `internal/cli/open_start.go:239` (`LogPath`, `OpenLog`) | `<grid home>/logs/<name>.log` | `launcher/<login>/<name>.log` | switched |
-| `state.json` | `internal/feed/fold.go:86` (`stateFile`), `:135` (publish through `Machine.WriteStateFile`) | `<feed>/state.json` | `tasks/<task>/state.json`, atomic rename | switched |
-| Job worktrees dir | `internal/cli/orchestrator.go:693` (`configureTickStore`) | `<grid home>/projects/<project>/worktrees` | `worktrees/<project>` | switched |
+| `state.json` | `internal/feed/fold.go:86` (`stateFile`), `:135` (publish through `Machine.WriteStateFile`) | `<feed>/state.json` | `tasks/<task id>/state.json`, atomic rename; a feed with no task id keeps `<feed>/state.json` | switched |
+| Job worktrees dir (read side only) | `internal/cli/orchestrator.go:693` (`configureTickStore`), read at `internal/orchestrator/events.go:28-54`; no code in this repo makes the folder | `<grid home>/projects/<project>/worktrees` | `worktrees/<project>` | switched (the path); the maker is outside this repo |
 | Recorded worktree lookup | `internal/job/verify_paths.go:71` (`WorktreePathIn`) | same old path | same new path | switched |
 | Brain cache | `internal/brain/index.go:247`, `:251` | inside the brain root | not changed | NOT DONE |
 | Launcher pid | none | none | none | no writer |
@@ -63,6 +62,8 @@ Grep proof that no other code computes these paths (non-test Go files under `int
 - `internal/doctor/bundle.go:75`: reads `<grid home>/logs` for the support bundle (see Open items).
 - `internal/routine/timer_plist.go:23`: launchd routine logs, one set per login, left alone.
 
+A looser pass, `grep -rn -E 'state\.json|worktrees|open-start|\.log"|logs/' internal cmd lib --include=*.go --exclude=*_test.go --exclude-dir=machinefolder --exclude-dir=contract --exclude-dir=testdata`, adds only comments and these files that are not in the brief's list and stay as they were: `internal/migrate/apply.go:306` (the `migration.log` record of a migration), `internal/env/env.go:134` (`ports/env-<port>.log`, the dev-environment log in the Grid home), and `internal/doctor/bundle.go:95` and `:120` (the support bundle reads `logs/` of the Grid home).
+
 `grep -rn -E '"pid"\)|\.pid"|\.mp4|\.webm|"videos"' internal cmd lib --include=*.go --exclude=*_test.go` hits only `machinefolder` (`files.go:189`, `launcher.go:83`), a test server fixture (`internal/env/testdata/server/main.go:64`) and the proof file extension list (`internal/proof/proof.go:129`, `:141`). The other `pid` hits in a wider grep are JSON record fields (session, worker, ports, lease), not files in a machine folder.
 
 Rules:
@@ -70,14 +71,14 @@ Rules:
 | Rule | Result | Proof |
 |------|--------|-------|
 | Never push | HOLDS | No `git push` was run; the result leaves as a bundle. |
-| Never touch `/srv/gmf`, `/root/.grid` or another user's home | HOLDS | Every command ran inside the lane folder or a Go temp dir; the new tests use `t.TempDir()`. |
+| Never touch the folders the brief forbids, or another user's home | HOLDS | Every command ran inside the lane folder or a Go temp dir; the new tests use `t.TempDir()`. |
 | Never `pkill -f`, never sudo | HOLDS | None run. The package prints sudo commands as text only (`Finding.Fix`). |
 | Commits: small, one sentence, no attribution lines | HOLDS | `git log --oneline origin/main..HEAD` lists the lane commits, each one sentence; `git log --grep=Co-Authored --grep=Claude --grep=Generated --oneline origin/main..HEAD` prints nothing. |
 | No personal paths, hosts or emails in committed files | HOLDS | The doc and the code use `/srv/grid` as the only example path. |
-| Existing tests not edited | HOLDS | `git diff --stat origin/main...HEAD` shows only new `*_test.go` files, plus the lane doc of the earlier lane. |
+| Existing tests not edited | HOLDS | `git diff --diff-filter=M --name-only origin/main...HEAD -- '*_test.go'` prints nothing (no test file is modified, all are added); `git diff --name-only 61264bf9 -- internal/machinefolder` (the earlier lane's tip) lists only `place.go`, `place_lock_unix_test.go` and `place_test.go`, all files this lane adds, plus the new `place_notask_test.go` that git shows as untracked until committed. |
 | New tests fail on base and pass on the lane | HOLDS | Failing lines below; all pass on the lane (race run above). |
 | No guard, gate, cap, hold or blocking hook on agents | HOLDS | No hook, gate or refusal was added. A bad config or an unreachable folder falls back to the old path. |
-| Shared writes are atomic renames; shared dirs 2770 and files 0660 | HOLDS | `state.json` goes through `WriteStateFile` (`internal/atomicfile`); the modes are asserted under umask 077 in `TestSaveStateTwoLoginsShareOneMachineFolder` and `TestStartLockTwoLoginsShareOneMachineFolder`. |
+| Shared writes are atomic renames; shared dirs 2770 and files 0660 | HOLDS for the lock, the log and `state.json`; NOT VERIFIED for worktrees | `state.json` goes through `WriteStateFile` (`internal/atomicfile`); the modes are asserted under umask 077 in `TestSaveStateTwoLoginsShareOneMachineFolder` and `TestStartLockTwoLoginsShareOneMachineFolder`. `WorktreesDir` only returns a path: this repo never makes the folder (`grep -rn -E '"worktree"\|worktree add' internal cmd lib --include=*.go --exclude=*_test.go` finds no `git worktree add`; only `orchestrator/events.go:28-54` and `job/verify_paths.go` read it), so whoever makes `worktrees/<project>` sets its mode, and no test here asserts it. |
 
 New tests on base (the new test files built against the code without this lane's non-test changes, which has no machine folder wiring; each package fails to build, so no new test passes there):
 
@@ -90,17 +91,27 @@ internal/job/pc_machine_worktree_test.go:23:15: undefined: WorktreePathIn
 FAIL ... [build failed]
 ```
 
+One test was written after a review and run against the lane before its fix, `TestStateFileWithoutATaskIDStaysInTheFeedFolder` (`internal/machinefolder/place_notask_test.go`):
+
+```
+--- FAIL: TestStateFileWithoutATaskIDStaysInTheFeedFolder (0.00s)
+    place_notask_test.go:26: StateFile with no task id: "" is not a plain name
+FAIL	github.com/gridconsole/grid-plugins/internal/machinefolder
+```
+
+It passes after the fix (`StateFile` keeps `<feed>/state.json` for a feed with no task id, `WriteStateFile` writes a path outside the folder as before).
+
 The cli lock test (`pc_machine_lock_unix_test.go`) sets `env.MachineFolder` and `env.Login`, so it fails to compile on base in the same way as the log test. The test files carry the prefix `pc_machine_` so they are new files.
 
 Runbook checks:
 
 | Check | Result | Proof |
 |-------|--------|-------|
-| Tests of changed packages and every importer | HOLDS | Changed packages: `machinefolder`, `feed`, `question`, `job`, `job/jobcmd`, `cli`. `go list -f '{{$p := .ImportPath}}{{range .Imports}}{{if or (eq . ".../machinefolder") (eq . ".../feed") (eq . ".../question") (eq . ".../job") (eq . ".../job/jobcmd") (eq . ".../cli")}}{{$p}} imports {{.}}{{"\n"}}{{end}}{{end}}' ./...` printed: `cmd/grid` imports cli; `approvefix` imports feed; `cli` imports feed, job, jobcmd, machinefolder, question; `feed` imports machinefolder; `hook` imports feed, job; `jobcmd` imports feed, job; `job/lint` imports job; `jobgraph` imports job; `lease` imports feed, job; `mcp` imports feed; `migrate` imports feed, job; `orchestrator` imports feed, job, question; `ports` imports job; `question` imports feed, machinefolder; `task` imports feed, question; `usage` imports feed; `lib` imports cli. The changed packages ran with `-race` (above). The other importers ran without it, exit 0: `approvefix` (no test files), `hook` 8.481s, `lease` 0.252s, `mcp` 0.725s, `migrate` 10.919s, `orchestrator` 194.351s, `task` 8.605s, `usage` 0.343s, `jobgraph` 0.407s, `ports` 2.599s, `cmd/grid` (no test files), `lib` 16.197s. |
+| Tests of changed packages and every importer | HOLDS | Changed packages: `machinefolder`, `feed`, `question`, `job`, `job/jobcmd`, `cli`. `go list -f '{{$p := .ImportPath}}{{range .Imports}}{{if or (eq . ".../machinefolder") (eq . ".../feed") (eq . ".../question") (eq . ".../job") (eq . ".../job/jobcmd") (eq . ".../cli")}}{{$p}} imports {{.}}{{"\n"}}{{end}}{{end}}' ./...` printed: `cmd/grid` imports cli; `approvefix` imports feed; `cli` imports feed, job, jobcmd, machinefolder, question; `feed` imports machinefolder; `hook` imports feed, job; `jobcmd` imports feed, job; `job/lint` imports job; `jobgraph` imports job; `lease` imports feed, job; `mcp` imports feed; `migrate` imports feed, job; `orchestrator` imports feed, job, question; `ports` imports job; `question` imports feed, machinefolder; `task` imports feed, question; `usage` imports feed; `lib` imports cli. The changed packages ran with `-race` (above). The other importers ran without it, exit 0: `approvefix` (no test files), `hook` 14.630s, `lease` 0.394s, `mcp` 1.610s, `migrate` 22.021s, `orchestrator` 384.019s, `task` 16.590s, `usage` 0.630s, `jobgraph` 0.786s, `ports` 4.029s, `cmd/grid` (no test files), `lib` 43.832s. Both runs are of the final tree, after the last code commit `2cd72055`. |
 | `-race` where concurrency changed | HOLDS | `feed` (state.json writers and readers), `machinefolder`, `question`, `cli`, `job`: exit 0 in the race run above. |
 | `make lint` | HOLDS | `go vet ./...` and the gofmt check: exit 0. |
 | Windows and macOS builds | HOLDS | `env GOOS=windows CGO_ENABLED=0 go build ./...` exit 0; `env GOOS=darwin CGO_ENABLED=0 go build ./...` exit 0. `make cross` (vet and test compile for darwin/arm64 and windows/amd64 over every package) printed `ok` for each package and no failure. Tests that need unix modes, groups or flock carry a `unix` build tag. |
-| Walk tests after `git fetch origin && git merge origin/main` | HOLDS | Merge commit `dd9ed3bf`. After it: `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` printed `ok ... 0.109s`, exit 0; `go test -count=1 ./internal/job/lint/` printed `ok ... 0.327s`, exit 0. No command or flag was added, so no golden, contract or walk file changed. |
+| Walk tests after `git fetch origin && git merge origin/main` | HOLDS | Merge commit `dd9ed3bf`. After it: `go test -count=1 ./internal/cli -run 'TestHsIpWalksEveryCommand\|TestIlGuestSiteList'` printed `ok ... 0.158s`, exit 0; `go test -count=1 ./internal/job/lint/` printed `ok ... 0.435s`, exit 0 (rerun on the final tree). No command or flag was added, so no golden, contract or walk file changed. |
 | Live check on /srv/grid with two logins | not run, not asked | The brief makes it a step after landing. |
 | `make test` / `go test ./...` over the whole repo | not run, not asked | The brief names the touched packages and their importers; those ran. |
 
@@ -110,7 +121,8 @@ Runbook checks:
 - `internal/cli`: `grid open` takes its start lock and writes the server and worker logs through the folder; `Env` carries the folder and the login; the feed, question and orchestrator stores get `Machine`.
 - `internal/feed`: `Store.Machine`; the task `state.json` is published through the folder (the `reader.json` and `needs-you.json` files stay in `feed/`).
 - `internal/question`, `internal/job`, `internal/job/jobcmd`: the folder is plumbed; `WorktreePathIn` looks for a recorded worktree under the folder.
-- New test files (all new, none existing edited): `place_test.go`, `place_lock_unix_test.go`, `pc_machine_lock_unix_test.go`, `pc_machine_log_unix_test.go`, `pc_machine_state_test.go`, `pc_machine_worktree_test.go`.
+- `StateFile` and `WriteStateFile` handle a feed with no task id: it keeps `<feed>/state.json` at `0600`, so an active folder never makes a fold fail for want of a name (found in review; before the fix `StateFile` returned an error).
+- New test files (all new, none existing edited): `place_test.go`, `place_notask_test.go`, `place_lock_unix_test.go`, `pc_machine_lock_unix_test.go`, `pc_machine_log_unix_test.go`, `pc_machine_state_test.go`, `pc_machine_worktree_test.go`.
 
 Choices the reviewer may question:
 
@@ -125,7 +137,9 @@ Choices the reviewer may question:
 2. **Launcher pid:** the plugin has no pid writer. `machinefolder.Launcher.Start` writes one, but `grid open` does not call it; wiring it would add a new refusal (`ErrRunning`) to `grid open`.
 3. **Videos:** no writer in this repo (proof only copies a video into the task proof folder).
 4. **Left on the old layout** (read or written elsewhere): `internal/where/where.go:327`, `internal/migrate/plan.go:216-228`, `internal/doctor/bundle.go:75` (the support bundle does not include the launcher logs of a machine folder), `internal/routine/timer_plist.go:23`.
-5. **Every Store that folds a task must carry the same `Machine`**: `cli/feed.go`, `refoldAfterWrite`, `configureTickStore` and `question`. A store without it writes `<feed>/state.json` as before; two such stores can differ in liveness inside one shared file.
+5. **Every Store that folds a task must carry the same `Machine`.** The fold is reached only through `SaveState`, `RefoldPublished` and `SaveStateLiveness` (`internal/feed/fold.go:61`, `:69`, `:75`; `Append` does not fold). `grep -rn -E '\.(SaveState|RefoldPublished|SaveStateLiveness)\(' internal cmd lib --include=*.go --exclude=*_test.go` finds six call sites, and each one's store carries `Machine`: `cli/feed.go:119` and `:178` (`feedStore`, `feed.go:223`), `mcp/tools.go:199` and `:237` (the store is `sessionStore`, which returns a `feedStore`, `cli/mcp.go:19`, `cli/feed.go:246`), `cli/orchestrator.go:491` (`refold.Machine` at `:490`), `orchestrator/tick.go:235` (`Configure` is `configureTickStore`, `cli/orchestrator.go:694`), `question/command.go:290` (`question.Store.Machine`, `feed.go:29`). The other `feed.Store{...}` literals (`approvefix`, `migrate/receipt.go`, `task/gates.go:265`, `orchestrator/stream.go:236` before `Configure`, and the `cli` posting commands such as `reopen_job.go:28`, `ship_land.go:56`, `approve_record.go:96`) append or read and do not fold, so they have no `Machine`. A future caller of one of the three methods must pass it, or it writes `<feed>/state.json` while the others write the machine folder.
+5a. **A task id is a ULID** (`internal/where/where.go:82`, `:285`: "Task IDs are ULIDs"), so `tasks/<task id>/state.json` does not collide between projects or between Grid homes. A feed with no task id keeps `<feed>/state.json` (`place_notask_test.go`).
+5b. **The worktrees folder**: this repo only reads `worktrees/<project>`; the app or worker that runs `git worktree add` must make it (2770 in a shared folder) and use the same path.
 6. **The app repo** reads `feed/state.json` and the logs from the Grid home; it must read the machine folder when one is set.
 7. `grid doctor` and `grid setup --shared-group` (open items 1 and 2 of lane P-shared-home) are still not written.
 
