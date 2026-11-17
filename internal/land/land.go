@@ -25,7 +25,8 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
-// Rule is the lands mapping of one Markdown entry in knowledge/deploy/.
+// Rule is the lands mapping of one Markdown entry in knowledge/deploy/ (grid/deploy/
+// when the brain folder key is set).
 type Rule struct {
 	Target       string   `json:"target" yaml:"target"`
 	Branch       string   `json:"branch" yaml:"branch"`
@@ -116,12 +117,13 @@ func (e noDeployTopic) Unwrap() error { return e.missing }
 
 func (s Store) rule(project string) (Rule, error) {
 	var rule Rule
-	root, err := os.OpenRoot(s.Resolver.GridHome)
+	folder, config := s.brainFolder()
+	root, err := os.OpenRoot(folder)
 	if err != nil {
 		return rule, err
 	}
 	defer root.Close()
-	dir := filepath.Join("projects", project, "knowledge", "deploy")
+	dir := projectTopic(config, project, "deploy")
 	if err = safefile.NoSymlinks(root, dir); err != nil {
 		return rule, fmt.Errorf("deploy topic: %w", err)
 	}
