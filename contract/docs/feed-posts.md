@@ -44,8 +44,6 @@ Version 1. Class state. Written by owner, member, lead, agent, worker, reviewer,
 
 An answer replies to a question: `re` names the question post and the body holds the `answer` text. It does not close the question by itself; a control that selects it does (see control). A guest's answer counts only when the question is addressed to that guest.
 
-An agent may answer for a person with `for` (the person), `by` (its own author id, which grid mcp writes from the session) and `grant` (a link to the person's grant note, `grid/people/<person>/grants/<name>`). The answer counts as the person's only when that note names the agent by id or role, covers `answer`, the task and the person Job's kind (`approve` only when named), and its `until` is after the answer's `at` (contract.PostedAs; run-jobs-launcher.md Q8). Otherwise it counts as the agent's own. It is never refused for this, and its stored author stays the agent's.
-
 ```json
 {
   "id": "01K9J000000000000000000001",
