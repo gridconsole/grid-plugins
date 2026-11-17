@@ -4,7 +4,8 @@ Person edits in an Obsidian vault used as the Grid brain are adopted into `.grid
 content-addressed versions. An agent write is version-checked and redone on top, and becomes a proposal
 only when both edits cannot hold. Follows docs/research/brain-obsidian.md 4.3, 5.1-5.4, 6.1, 6.3, 7.1, 7.2.
 
-Branch `lane-P-brain-adopt`, head `811a3bb9` plus the commit that adds this file. Base `origin/main`.
+Branch `lane-P-brain-adopt`, base `origin/main`. The head sha is in the report that carries this file; it
+cannot name its own commit.
 
 ## What changed
 
@@ -22,7 +23,7 @@ Branch `lane-P-brain-adopt`, head `811a3bb9` plus the commit that adds this file
 - `internal/braincmd/ke_write.go` (allowed only if the write path needs a flag). It needed no new flag. It
   needed two things: the `<topic>/<name>` check accepts a deeper name when the store is a vault, and the
   Grid-note parse and validate step is skipped for a vault, whose notes are any Markdown. A vault write
-  prints `written: <path> rev <rev>` or `proposed: <path>`.
+  prints `<status>: <path> rev <rev>` with status `created`, `edited` or `unchanged`, or `proposed: <path>`.
 - Tests, all new files, helpers prefixed `pbAd`: `internal/brain/pbad_{adopt,write,rank}_test.go`,
   `internal/braincmd/pbad_{write,cmd}_test.go`, `internal/hook/pbad_direct_edit_test.go`.
 
@@ -55,25 +56,36 @@ All commands run from the repo root on the merged tree. "Pkg" = `go test -count=
 | Public repo: no personal paths, hosts, emails | HOLDS | tests use `t.TempDir()`; no host or user path in the new files |
 | No guard, gate, cap, hold or blocking hook on agents | HOLDS | the pre-hook adopts without waiting, prints no decision and skips on a busy lock; no new deny path |
 | Hook never waits on the lock | HOLDS | `lockLocal(true)` uses `TryLockExclusive` and returns `ErrLockBusy` at once; `TestPbAdDirectEditBusyLockSkips` |
-| Edit only Touches files | PARTLY | `internal/brain/vault.go` was changed, see open items. `braincmd/ke_write.go` was changed, see above. |
+| Edit only Touches files | NOT DONE | `internal/brain/vault.go` (22 lines) is outside Touches: `List`, `readFiles`, `vaultEntries`, `vaultShow` and `WithConfig` are defined there and cannot be reached from elsewhere. `braincmd/ke_write.go` is the allowed exception, see above. |
+| Version check on every write path | NOT DONE | wired for `Write`/`WriteWith` (`vaultWrite`) only. Rename, Drop, Supersede, Revert and `EditConfigBy` have no vault-mode path; `hy_drop.go`, `revert.go`, `supersede_verb.go` and `index.go` are untouched. |
+| The audit drift change | NOT DONE | `audit_check.go` is untouched. In vault mode `vaultCheck` (adopt.go) replaces the log.md drift finding, so row 7 holds, but the change was not made in the named file. |
+| Fail on base for the new tests | NOT DONE for brain and braincmd | see Fail on base; the three hook tests were run against the base behaviour and fail |
 | No existing test edited; no sleep or timing assertion | HOLDS | only new `pbad_*_test.go` files; `git diff --name-status origin/main -- internal/brain internal/braincmd internal/hook` lists every test file as `A`; `git grep -E "time\.Sleep\|Since\("` over them prints nothing |
 | Nothing pushed, no claude or curl, no background server | HOLDS | none was run |
 
 ### Base check
 
-On `origin/main` `internal/brain/adopt.go` does not exist (`git ls-tree origin/main internal/brain/adopt.go`
-prints nothing). The brief's line numbers have drifted on current base: the lines are at
-`internal/brain/store.go:171` (`locked`), `:193` (`openLock`), `:219` (`checkLock`) instead of 152, 170, 196;
-`internal/hook/hook.go:464` (`func toolUse`) and `:498` (`history(o, *in)`, the only call in the PreToolUse
-branch) instead of 474 and 497; `hooks/hooks.json:47` is `"PreToolUse"` as named. On base the PreToolUse branch
-runs the guards, then `history(o, *in)`, and nothing adopts; `lock` in `store.go` is the old layout's
-per-level lock, not a per-vault machine-folder lock.
+`git ls-tree origin/main internal/brain/adopt.go` prints nothing: adopt.go does not exist on base. The named
+lines on `origin/main`, printed with `git show origin/main:<file> | sed -n '<n>p'`:
+
+- `internal/hook/hook.go:474`: `in.HookEventName = "PreToolUse"`
+- `internal/hook/hook.go:497`: `if in.HookEventName == "PreToolUse" && decision.Behavior != "deny" {`
+  (line 498, `history(o, *in)`, follows it; nothing there adopts)
+- `hooks/hooks.json:47`: `"PreToolUse": [`
+- `internal/brain/store.go:152`: `f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)` (in
+  `atomicWrite`); `:170` is a blank line; `:196`: `c, cerr := root.OpenFile(lockName, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)`
+  (in `openLock`). The brief's `locked`, `openLock` and `checkLock` are at `:175`, `:193` and `:219` on this
+  base, so those three numbers in the brief are off. `locked` takes `lockName` in a level's root and waits on
+  `fslock.LockExclusive`; it is the old layout's per-level lock, not a per-vault machine-folder lock.
 
 ### Fail on base
 
-The new tests call symbols that exist only in this lane (`Adopt`, `AdoptPath`, `RecordAgentWrite`,
-`LockLocal`, `Hit.Conflict`, `brainAdopt`), so on `origin/main` the three packages' test builds do not
-compile; I did not run that. I ran a mismatch instead: with the `brainAdopt(o, *in)` call removed from
+NOT DONE for the brain and braincmd tests. I tried to copy the new test files into a worktree at
+`origin/main` and run them there; the copy into a path outside the repo was denied in this session, so I did
+not run it. The new tests call symbols that exist only in this lane (`Adopt`, `AdoptPath`, `Hit.Conflict`,
+`LockLocal`), so they should not compile on base, but that is a reading, not a run.
+
+For the hook rows I ran a mismatch instead: with the `brainAdopt(o, *in)` call removed from
 `internal/hook/hook.go` (the base behaviour), the three direct-edit tests fail, and I restored the file:
 
 ```
