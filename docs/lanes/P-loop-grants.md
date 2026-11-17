@@ -74,4 +74,4 @@ Proofs ran on code head 9178793b (after `git fetch origin && git merge origin/ma
 - That a real launched agent's `grid feed post` answer for a person lands as the person's: the wiring is missing (see Open items), so no end-to-end run was possible.
 - Live screens: none, this lane has no UI.
 
-NOT DONE
+CLOSED BY P-loop-grants-fix1: accepted 16:47 UTC
