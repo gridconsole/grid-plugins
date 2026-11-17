@@ -228,6 +228,6 @@ func unscheduleProject(env Env, project string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	scheduler := routine.Scheduler{Home: env.Home, GridHome: env.GridHome, Binary: binary, Path: env.getenv("PATH"), Backend: backend, Runner: runner}
+	scheduler := routine.Scheduler{Home: env.Home, GridHome: env.GridHome, Binary: binary, Path: env.getenv("PATH"), Backend: backend, Runner: runner, Machine: env.MachineFolder, Login: env.Login}
 	return scheduler.UnscheduleProject(context.Background(), project)
 }

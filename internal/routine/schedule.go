@@ -19,6 +19,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/localdata"
+	"github.com/gridconsole/grid-plugins/internal/machinefolder"
 )
 
 const LabelPrefix = "com.gridconsole.routine."
@@ -79,7 +80,15 @@ type TimerPlan struct {
 	AfterRemove []OSCommand `json:"after_remove,omitempty"`
 }
 
-type TimerSpec struct{ Home, GridHome, Project, Binary, Name, Path string }
+// TimerSpec is what a backend renders a timer from. Machine and Login are the machine
+// folder and the login that schedules; a backend that writes a log puts it in the
+// folder when Machine is Active and Login is known, and in the Grid home otherwise
+// (the zero values are the old place).
+type TimerSpec struct {
+	Home, GridHome, Project, Binary, Name, Path string
+	Machine                                     machinefolder.Folder
+	Login                                       string
+}
 
 func (s TimerSpec) label() string { return timerLabel(s.GridHome, s.Project, s.Name) }
 func (s TimerSpec) argv() []string {
@@ -103,6 +112,10 @@ type Scheduler struct {
 	Home, GridHome, Binary, Path string
 	Backend                      Backend
 	Runner                       OSRunner
+	// Machine and Login send the timer logs to the machine folder; the zero values
+	// keep them in the Grid home.
+	Machine machinefolder.Folder
+	Login   string
 }
 
 type timerState struct {
@@ -137,8 +150,19 @@ func (s Scheduler) plan(project, name string) (TimerPlan, error) {
 			return TimerPlan{}, fmt.Errorf("timer paths must be one line")
 		}
 	}
-	return s.Backend.Plan(TimerSpec{Home: s.Home, GridHome: s.GridHome, Project: project, Binary: s.Binary, Name: name, Path: s.Path})
+	return s.Backend.Plan(TimerSpec{Home: s.Home, GridHome: s.GridHome, Project: project, Binary: s.Binary, Name: name, Path: s.Path, Machine: s.Machine, Login: s.Login})
 }
+// makeLogDir makes a timer's log folder: inside an Active machine folder through the
+// folder, which sets its modes (2770 in a shared one); anywhere else 0700 as before.
+func (s Scheduler) makeLogDir(dir string) error {
+	if s.Machine.Active() {
+		if _, err := s.Machine.Rel(dir); err == nil {
+			return s.Machine.MkdirAll(dir)
+		}
+	}
+	return os.MkdirAll(dir, 0o700)
+}
+
 func (s Scheduler) statePath(label string) (string, error) {
 	return localdata.Safe(s.GridHome, "local", "routine-timers", label+".json")
 }
@@ -285,7 +309,7 @@ func (s Scheduler) install(ctx context.Context, store Store, name string) error 
 		return err
 	}
 	if p.LogDir != "" {
-		if err := os.MkdirAll(p.LogDir, 0o700); err != nil {
+		if err := s.makeLogDir(p.LogDir); err != nil {
 			return err
 		}
 	}

@@ -85,6 +85,21 @@ func (f Folder) OpenStartLock(path string) (*os.File, error) {
 	return fslock.OpenNoFollow(path, os.O_RDWR, 0)
 }
 
+// RoutineLogDir is the folder the OS timer of a routine writes its stdout and stderr
+// to when Active: launcher/<login>/routines/<label>. Each login has its own, so two
+// logins that schedule the same routine never share a log. Not Active the log stays in
+// <grid home>/logs/routines/<label>, which the routine package still makes as before.
+func (f Folder) RoutineLogDir(login, label string) (string, error) {
+	if err := validName(label); err != nil {
+		return "", err
+	}
+	l, err := f.Launcher(login)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(l.Dir(), "routines", label), nil
+}
+
 // StateFile is the file a task's fold is published to: <feed folder>/state.json,
 // and tasks/<task id>/state.json in the machine folder when Active. A feed with no
 // task id has no name to put under tasks/, so it keeps <feed folder>/state.json.
