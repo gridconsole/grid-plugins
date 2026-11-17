@@ -707,8 +707,13 @@ The brief's fixture list (F1-F9):
 
 ### 9.1 Lanes in order
 
+Every lane names the ledger rows it carries. Each acceptance bullet is tagged
+with the row it proves; a lane brief copies these bullets as its acceptance
+rows. A row owned by another decision lane is marked "owned by".
+
 **L1 P-brain-vault-read**
 
+- **Ledger rows.** V13 (reading person notes, ids, links, listing).
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** P-grid-config-read (brain path key).
 - **Builds.**
@@ -731,12 +736,13 @@ The brief's fixture list (F1-F9):
   - hook/brain.go;
   - a README section "Use your Obsidian vault as the Grid brain".
 - **Acceptance.**
-  - F1, F2, F3, F4, F5 and F6 read and list correctly;
-  - an old `knowledge/` brain still lists with the key absent;
-  - a `Read` of `Ideas/Café plan.md` logs a brain read.
+  - (V13) F1, F2, F3, F4, F5 and F6 read and list correctly;
+  - (V13) an old `knowledge/` brain still lists with the key absent;
+  - (V13) a `Read` of `Ideas/Café plan.md` logs a brain read.
 
 **L2 P-brain-readers**
 
+- **Ledger rows.** V13 (the layout every reader uses).
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L1.
 - **Builds.** Every row of 2.2 outside internal/brain moves to `Root` and the
@@ -756,12 +762,14 @@ The brief's fixture list (F1-F9):
   - contract/formats.md;
   - skills/plan-jobs/SKILL.md, agents/library.md, topics/README.md.
 - **Acceptance.**
-  - each reader finds its file under `grid/…` in a new-layout fixture and
-    under `knowledge/…` with the key absent;
-  - the settings permission glob covers `<Root>/**`.
+  - (V13) each reader finds its file under `grid/…` in a new-layout fixture
+    and under `knowledge/…` with the key absent;
+  - (V13) the settings permission glob covers `<Root>/**`.
 
 **L3 P-brain-format**
 
+- **Ledger rows.** V13 (notes Obsidian can show and edit; who wrote a note,
+  4.5).
 - **Repo and model.** plugin, sonnet, **xhigh**.
 - **Depends on.** L1.
 - **Builds.**
@@ -774,13 +782,15 @@ The brief's fixture list (F1-F9):
   `EditConfig`), note.go (`Validate` split, `Link`), store.go (decide,
   `markSuperseded`), ke_rename.go, ke_write.go, and a new brain/patch.go.
 - **Acceptance.**
-  - a rewrite of a note with unknown keys, comments and CRLF changes only the
-    edited key (byte diff);
-  - F5 links survive a Grid rename;
-  - F2 lists stay lists.
+  - (V13) a rewrite of a note with unknown keys, comments and CRLF changes
+    only the edited key (byte diff);
+  - (V13) F5 links survive a Grid rename;
+  - (V13) F2 lists stay lists.
 
 **L4 P-brain-adopt**
 
+- **Ledger rows.** V13 (Obsidian edits adopted), V14 (adoption of
+  `Proposals/`), V19 (version check under the local lock; person notes win).
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L1, L3.
 - **Builds.**
@@ -800,18 +810,21 @@ The brief's fixture list (F1-F9):
   - a new brain/adopt.go;
   - hook/brain.go.
 - **Acceptance.**
-  - F7: a rename is recorded and the old id resolves;
-  - F8: a delete is recorded;
-  - F9: an edit between read and write turns the agent write into a proposal
-    and the person bytes are unchanged;
-  - an agent write to a person note writes `Proposals/` and exits 0;
-  - `grid brain check` adopts a person edit without a drift finding;
-  - two adoptions of the same edit produce one logical change.
+  - (V13) F7: a rename is recorded and the old id resolves;
+  - (V13) F8: a delete is recorded;
+  - (V19) F9: an edit between read and write turns the agent write into a
+    proposal and the person bytes are unchanged;
+  - (V19) an agent write to a person note writes `Proposals/` and exits 0;
+  - (V13) `grid brain check` adopts a person edit without a drift finding;
+  - (V13) two adoptions of the same edit produce one logical change.
 - **Seam.** The sync server's version-checked write is a client call into
-  the run-jobs sync API. Until that lands, the local lock is the path.
+  the sync server's write API. Until that lands, the local lock is the path.
+  L8 carries the client side once the API exists.
 
 **L5a P-brain-layout**
 
+- **Ledger rows.** V14 (visible `Proposals/`, draft edits, accept), V13
+  (topics and SessionStart).
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L2, L4.
 - **Builds.**
@@ -824,12 +837,16 @@ The brief's fixture list (F1-F9):
     config.go, waiting.go, check.go, sb_skill_for.go, sa_agent_for.go;
   - hook/hook.go.
 - **Acceptance.**
-  - the SessionStart text is at most 1200 bytes, with topics and counts only;
-  - a folder without TOPIC.md is searchable but has no row;
-  - `Proposals/` is not in search results as knowledge.
+  - (V13) the SessionStart text is at most 1200 bytes, with topics and
+    counts only;
+  - (V13) a folder without TOPIC.md is searchable but has no row;
+  - (V14) `Proposals/` is not in search results as knowledge.
 
 **L5b P-brain-curator-shots**
 
+- **Ledger rows.** V17 (owned by P-brain-board-decide: screenshots kept
+  compressed by the curator), V13 (the curator writes notes Obsidian links,
+  gate 7 curator step).
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L5a and **P-brain-board-decide**.
 - **Builds.**
@@ -843,12 +860,14 @@ The brief's fixture list (F1-F9):
   - shot/shot.go, cli/shot.go;
   - brain/store.go (`ProposeTask`), task_decide.go.
 - **Acceptance.**
-  - a 3840×2400 PNG fixture comes out near the 300 KB target with its long
-    side at 1568;
-  - the curator files a proposal into a topic with working `[[links]]`.
+  - (V17, owned by P-brain-board-decide) a 3840×2400 PNG fixture comes out
+    near the 300 KB target with its long side at 1568;
+  - (V13) the curator files a proposal into a topic with working `[[links]]`.
 
 **L6 P-brain-migrate**
 
+- **Ledger rows.** V13 (the existing brain and flat notes become vault
+  notes; old origin moves to change records).
 - **Repo and model.** plugin, sonnet, **xhigh**.
 - **Depends on.** L3, L4, L5a.
 - **Builds.** `grid brain migrate --dry-run|--apply` (section 8).
@@ -857,25 +876,30 @@ The brief's fixture list (F1-F9):
   - braincmd/command.go;
   - migrate/plan.go:213, :231 (old paths).
 - **Acceptance.**
-  - a fixture copy of a home and project brain with log, versions,
+  - (V13) a fixture copy of a home and project brain with log, versions,
     proposals, front-matter links and origin, plus a flat-notes folder,
     migrates with equal note counts;
-  - every old id resolves;
-  - links appear in `## Links`;
-  - flat notes are byte-identical in `Notes/`;
-  - the SessionStart topics are unchanged;
-  - a second `--apply` changes nothing.
+  - (V13) every old id resolves;
+  - (V13) links appear in `## Links`;
+  - (V13) flat notes are byte-identical in `Notes/`;
+  - (V13) the SessionStart topics are unchanged;
+  - (V13) a second `--apply` changes nothing.
 
 **L7 P-brain-view**
 
+- **Ledger rows.** V25 (owned by P-brain-view: one reader), V13 (person
+  notes shown), V19 (a conflict shown person-first).
 - **Repo and model.** app, sonnet, high.
 - **Depends on.** L1 (the field shape) and L4 (origin).
 - **Builds.** It drops `vaultRoots` (vault.go:80-81) and the prefix matching
   (:401, :445-447) and reads `grid brain list --json`.
 - **Files.** internal/slices/brain/vault.go and
   internal/kernel/webui/app/pages/brain/browser.mjs.
-- **Acceptance.** The app lists a person note with spaces in its name, shows
-  its edges and backlinks, and marks a conflict person-first.
+- **Acceptance.**
+  - (V25, owned by P-brain-view; V13) the app lists a person note with
+    spaces in its name and shows its edges and backlinks, read only from
+    `grid brain list --json`;
+  - (V19) the app marks a conflict person-first.
 
 ### 9.2 Before P-brain-board-decide lands
 
