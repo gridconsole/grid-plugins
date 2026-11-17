@@ -27,7 +27,7 @@ var agents = []agentDefault{
 }
 var models = []string{"haiku", "sonnet", "opus", "fable"}
 var efforts = []string{"low", "medium", "high", "xhigh", "max"}
-var skills = []string{"brain-keeper", "browser", "deliver", "plan-jobs", "questions", "research", "review-job", "run-job", "setup", "signals", "task", "visual-design-review"}
+var skills = []string{"brain-keeper", "browser", "deliver", "first-run", "plan-jobs", "questions", "research", "review-job", "run-job", "setup", "signals", "task", "visual-design-review"}
 var hooks = []string{"history-log", "home-allow", "host-guard", "job-lint", "needs-you", "only-writer", "plan-guard", "session-check", "session-end", "session-start", "stop-check", "usage-log"}
 var levels = []string{"off", "warn", "block"}
 
