@@ -145,8 +145,10 @@ func TestOrphanNeverAcked(t *testing.T) {
 	wantOrphan(t, treeRow(t, f, "J-1", until.Add(time.Second)), OrphanNeverAcked, until)
 }
 
-// Row 4: acked, no result, no worker-exit, lease out: no_exit. A result, or a
-// worker-exit, is not an orphan.
+// Row 4: acked, no result, no worker-exit, lease out: no_exit. A result is not
+// an orphan. After a worker-exit the fold makes the attempt submitted, so the
+// Job is never_judged by design: the Orphan is nil or never_judged, and never
+// no_exit, never_acked or never_picked_up.
 func TestOrphanNoExit(t *testing.T) {
 	f := setup(t)
 	f.now = time.Now().UTC().Add(-48 * time.Hour)
@@ -167,8 +169,8 @@ func TestOrphanNoExit(t *testing.T) {
 		t.Fatalf("a result with no worker-exit is not an orphan: %+v %+v", r.Orphan, r.Attempts)
 	}
 	f.exit(t, "done")
-	if r := treeRow(t, f, "J-1", lease.Add(time.Second)); r.Orphan != nil && r.Orphan.Kind == OrphanNoExit {
-		t.Fatalf("a worker-exit is not a no_exit orphan (the fold makes it submitted, so never_judged is by design): %+v", r.Orphan)
+	if r := treeRow(t, f, "J-1", lease.Add(time.Second)); r.Orphan != nil && r.Orphan.Kind != OrphanNeverJudged {
+		t.Fatalf("after a worker-exit the Orphan is nil or never_judged (the fold makes it submitted), got %+v", r.Orphan)
 	}
 }
 
