@@ -749,39 +749,50 @@ notes.
 - **What they are.** Screenshots are task attachments; their place is P-brain-board-decide's
   task folder.
 - **The curator compresses them** when it files a proposal or delivers. It runs
-  `grid shot crop <png> --max 1568 --small`. `shot.Crop` already scales the long side
-  down to `MaxSide` = 1568 (shot.go:21, :80-118) and never up.
+  `grid shot compress <file>` (R-brain-board Q5, which owns V17). The
+  command keeps the pixel size: it never scales or crops. Scaling a
+  3840-wide screenshot to 1568 would shrink 14 px text to under 6 px, and
+  any scaling changes what the proof shows. `shot.Crop` and its
+  `MaxSide` = 1568 (shot.go:21, :80-118) stay for their current callers and
+  are not used here.
 - **Format: optimised PNG, lossless** (V17, owned by P-brain-board-decide).
   The owner's words (brain-obsidian Addendum 5.2): "a format Obsidian shows
   (WebP or optimised PNG), text still readable ... Compression must not
-  alter what the proof shows." No JPEG and no other lossy step.
+  alter what the proof shows." No JPEG and no other lossy step: no scaling
+  and no colour quantisation.
   - Today `shot.Encode` writes PNG with the default settings
     (shot.go:120-127).
-  - The optimised writer, a new `shot.EncodeSmall`, used by
-    `grid shot crop --small`:
-    - scales the long side down to 1568 (`shot.Crop`, unchanged);
+  - `grid shot compress` on a png:
     - writes with `png.Encoder{CompressionLevel: png.BestCompression}`
       from the standard library;
     - writes a picture with no transparent pixel without an alpha channel.
       Whether the standard encoder already picks that colour type on its
       own was not read here (NOT VERIFIED); the builder checks `image/png`
       and converts only if it does not;
-    - writes a picture with at most 256 distinct colours as a paletted PNG.
-    Every step is exact: the decoded pixels equal the scaled picture.
+    - writes a picture with at most 256 distinct colours as a paletted PNG;
+    - replaces the file at the same path (dot temp file, then rename) only
+      when the result is smaller.
+    Every step is exact: the decoded pixels equal the input pixels.
   - **No colour quantisation.** Reducing a many-colour picture to a palette
     is lossy, so it changes what the proof shows and is not done.
+  - **Same rule in both notes.** An earlier version of this section scaled
+    to 1568, and an earlier version of R-brain-board Q5 allowed a bounded
+    palette step. Both changed pixels and both are dropped, so the two notes
+    carry one lossless rule and one set of L5b V17 rows, word for word.
   - **WebP is not chosen now.** Go's standard library has no WebP encoder,
     and `golang.org/x/image/webp` only decodes. WebP would need cgo
     (libwebp) or a new third-party encoder, which this lane does not add.
     If the owner wants WebP, it is a later lane with its own dependency
     decision.
-  - Captured files that are not PNG (jpg, webp or gif, R-brain-board
-    section on proof paths) are left as captured. `shot.Load` reads PNG
-    only (shot.go:56-66).
+  - Captured files that are not PNG: a webp is left byte-for-byte by
+    `grid shot compress`. A jpg or single-frame gif never reaches it as
+    such, because `grid proof add` stores it as a `.png` with the same
+    decoded pixels (R-brain-board Q5, lane B5). `shot.Load` reads PNG only
+    today (shot.go:56-66).
 - **Target size: about 300 KB per image,** with the text still readable at
   100%. This is a target for the curator, not a limit the code enforces.
-  - A lossless PNG that is still larger after scaling is kept as it is. The
-    command prints its size, and nothing recompresses it lossily.
+  - A lossless PNG that is still larger is kept as it is. The command prints
+    its size and `over_target`, and nothing recompresses it lossily.
 - **Docs change in one lane.** The curator agent (agents/curator.md) and the
   brain-keeper skill (skills/brain-keeper/SKILL.md) gain the step and the
   target in the same lane.
@@ -1037,14 +1048,15 @@ rows. A row owned by another decision lane is marked "owned by".
 
 - **Ledger rows.** V17 (owned by P-brain-board-decide: screenshots kept
   compressed by the curator), V13 (the curator writes notes Obsidian links,
-  gate 7 curator step), V14 (curator.md keeps a person's draft lines, 6.2).
+  gate 7 curator step). The curator keeping a person's draft lines (V14,
+  6.2) is proved in L5a, not here.
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L5a and **P-brain-board-decide**.
 - **Builds.**
   - agents/curator.md and skills/brain-keeper/SKILL.md (new layout,
     `## Links`, person authority, screenshots);
-  - `grid shot crop --small` and `shot.EncodeSmall`: optimised lossless
-    PNG (7.3);
+  - `grid shot compress`: optimised lossless PNG at the same pixel size
+    (7.3; R-brain-board Q5);
   - task proposals and attachments per the board decision;
   - task_decide.go.
 - **Files.**
@@ -1052,16 +1064,16 @@ rows. A row owned by another decision lane is marked "owned by".
   - shot/shot.go, cli/shot.go;
   - brain/store.go (`ProposeTask`), task_decide.go.
 - **Acceptance.**
-  - (V17, owned by P-brain-board-decide) a 3840×2400 UI screenshot PNG
-    fixture run through `grid shot crop --small` comes out as follows:
-    - a PNG (signature bytes), with its long side at 1568;
-    - decoded pixels equal to `shot.Crop`'s scaled picture (lossless);
-    - no larger than `shot.Encode` of the same picture;
-    - its size in bytes printed;
-  - (V17) a fixture with at most 256 colours is written paletted and decodes
-    pixel-equal;
-  - (V17) `go list -deps ./internal/shot` shows no `image/jpeg`, and `grid
-    shot crop --help` has no `--jpeg` flag;
+  - V17 rows, owned by P-brain-board-decide. They are R-brain-board Q9's
+    L5b rows word for word; a change goes into both notes:
+    - V17: `grid shot compress` on a png writes an optimised png at the same path and the same pixel size, and its decoded pixels equal the input's.
+    - V17: on a png with at most 256 colours the output is a paletted png that decodes to exactly the input pixels.
+    - V17: `go list -deps ./internal/shot` shows no `image/jpeg`, the command has no flag that scales, quantises or writes JPEG, and no output is a JPEG.
+    - V17: a webp is left byte-for-byte.
+    - V17: the command prints the old and new sha256 and sizes and `over_target`, and the curator writes them in a `post`.
+    - V17: on the fixture set (one UI screenshot each at 390, 1440 and 3840 wide) every output has the input's pixel size and decodes to exactly the input pixels, and the lane records each output size against the 300 KB target in its proof table.
+    - V17: agents/curator.md and the brain-keeper skill carry the step, the target and the check.
+    - V17, person check (R-brain-obsidian 9.4 step 7): the compressed screenshot opens in Obsidian and its text reads at 100%.
   - (V13) the curator files a proposal into a topic with working `[[links]]`.
 
 **L6 P-brain-migrate**
@@ -1263,12 +1275,11 @@ step). Nothing is called done before this.
   that accepted, or should Grid add a `source: <owner name>` line to a note
   on adoption, which means a Grid write into the owner's note on every
   save? L3 and L4 build the first form unless the owner chooses the second.
-- **V17 format, for the orchestrator.** Section 7.3 now writes lossless
-  optimised PNG only, per the owner's "WebP or optimised PNG". The board
-  decision (R-brain-board, proof path section) still says "After compression
-  it is png or jpg, because R-brain-obsidian section 7.3 compresses to PNG
-  or JPEG". That line follows the old 7.3 and needs the same change in the
-  board lane; it is not edited here.
+- **V17: one row set.** R-brain-board owns V17. Its Q5 and this note's 7.3
+  now say the same thing: `grid shot compress`, the same pixel size,
+  lossless only, a webp left as captured, never JPEG. L5b's V17 rows here
+  are R-brain-board Q9's L5b rows word for word. The board note no longer
+  says "png or jpg" and no longer has a palette step.
 - **Secret in an adopted person note.** The report-only check (7.1) leaves
   the bytes in `.grid/versions/`, which syncs. Whether Grid should offer a
   way to purge a version is not decided here.
