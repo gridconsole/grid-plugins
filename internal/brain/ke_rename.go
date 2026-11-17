@@ -39,6 +39,9 @@ type RenameResult struct {
 	Linked  []string `json:"linked"`
 	Kept    []string `json:"kept"`
 	Skipped []string `json:"skipped"`
+	// Proposed is the draft in Proposals/ a vault rename made when the new name is
+	// taken.
+	Proposed string `json:"proposed,omitempty"`
 }
 
 func keRnNotVersioned(format string, args ...any) error {
@@ -413,6 +416,9 @@ func keRnRelink(root *os.Root, rel, key string, versioned bool, data []byte, new
 // result that has a Status means the rename is applied and something after it
 // failed.
 func (s Store) Rename(level, topic, name, newName, expect string, origin Origin, reason string) (RenameResult, error) {
+	if s.Vault() {
+		return s.vaultRename(level, topic, name, newName, expect, origin, reason)
+	}
 	root, err := s.scope(level, false)
 	if errors.Is(err, fs.ErrNotExist) {
 		return RenameResult{}, fmt.Errorf("%s/%s: %w", topic, name, ErrNoSuchNote)

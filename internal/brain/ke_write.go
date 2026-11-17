@@ -40,6 +40,10 @@ type WriteResult struct {
 	Status  string `json:"status"`
 	Version int    `json:"version"`
 	Rev     string `json:"rev"`
+	// Path is the note a vault write wrote; Proposed is the draft in Proposals/ a
+	// vault write made instead of changing a note (adopt.go).
+	Path     string `json:"path,omitempty"`
+	Proposed string `json:"proposed,omitempty"`
 }
 
 // IsWorkflowNote reports whether a note is a workflow note: `type: workflow`,
@@ -253,6 +257,9 @@ func WriteWith(root *os.Root, level, topic, name, expect string, data []byte, or
 // result that has a Status means the note and its line are written and only the
 // rebuild failed.
 func (s Store) Write(level, topic, name, expect string, data []byte, origin Origin, reason string, allowWorkflow bool) (WriteResult, error) {
+	if s.Vault() {
+		return s.vaultWrite(level, topic, name, expect, data, origin, reason)
+	}
 	if !ValidName(topic) || !ValidName(name) {
 		return WriteResult{}, fmt.Errorf("topic and name must be plain names")
 	}

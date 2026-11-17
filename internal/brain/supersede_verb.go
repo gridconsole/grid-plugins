@@ -21,6 +21,9 @@ type SupersedeResult struct {
 		New int `json:"new"`
 	} `json:"versions"`
 	Wrote bool `json:"wrote"`
+	// Proposed lists the drafts in Proposals/ a vault write made instead of a change
+	// that could not be redone on a person's edit.
+	Proposed []string `json:"proposed,omitempty"`
 }
 
 // Supersede marks the accepted note oldID as replaced by the accepted note
@@ -38,6 +41,9 @@ type SupersedeResult struct {
 // superseded, or the old note is superseded by another note. Repeating a
 // completed call writes nothing and reports Wrote false.
 func (s Store) Supersede(oldID, newID, reason string, origin Origin) (SupersedeResult, error) {
+	if s.Vault() {
+		return s.vaultSupersede(oldID, newID, reason, origin)
+	}
 	oldLevel, oldName, err := s.noteRef(oldID)
 	if err != nil {
 		return SupersedeResult{}, err

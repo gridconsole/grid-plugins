@@ -30,6 +30,9 @@ type DropResult struct {
 	Status  string `json:"status"`
 	Version int    `json:"version"`
 	Rev     string `json:"rev"`
+	// Proposed is the draft in Proposals/ a vault drop made instead of deleting a
+	// note a person changed since expect.
+	Proposed string `json:"proposed,omitempty"`
 }
 
 var (
@@ -252,6 +255,9 @@ func DropWith(root *os.Root, topic, name, op, expect string, origin Origin, reas
 // under its own lock after the entry's lock is released. An error with a result
 // that has a Status means the line is written and only the rebuild failed.
 func (s Store) Drop(level, topic, name, op, expect string, origin Origin, reason string) (DropResult, error) {
+	if s.Vault() {
+		return s.vaultDrop(level, topic, name, op, expect, origin, reason)
+	}
 	root, err := s.scope(level, false)
 	if errors.Is(err, fs.ErrNotExist) {
 		return DropResult{}, fmt.Errorf("%s/%s: %w", topic, name, ErrNoSuchNote)
