@@ -130,7 +130,7 @@ A `children-done` edge is met when the Job it names has at least one child
 was not closed without its work. A review child is accepted whatever its
 verdict, so the edge also reads the Job itself: a `cancelled` Job never meets
 it, and a `rejected` Job meets it only through its rework: a Job that `continues` it and is not one of its
-children, as the app's Judge posts when a review rejects. Every rework must be
+children, as `grid judge rework` (and the app's Judge) posts when a review rejects. Every rework must be
 `accepted` with its own children accepted, or be `rejected` and met through its
 own rework in turn. A Job that is still open, such as a parked parent of a
 split, needs only its children (`internal/jobgraph/graph.go`, `childrenDone`).
