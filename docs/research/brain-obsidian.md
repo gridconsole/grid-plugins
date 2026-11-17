@@ -55,7 +55,8 @@ P-brain-view; lane L7).
    no header means you wrote it. This is a stated deviation from "the header
    says who wrote it" (4.5).
 5. **Grid adopts person changes.** A changed, new, renamed or deleted file is
-   seen on read, on index rebuild and on `grid brain check`. It is recorded
+   seen on read, on index rebuild, on `grid brain check`, and for one file
+   just before an agent's own Edit or Write on it (4.3). It is recorded
    with origin person, versioned (content-addressed) and reindexed. Audit drift
    on a brain file becomes adoption, not a finding.
 6. **Person notes win.** An agent never rewrites a person note. An agent write
@@ -400,8 +401,10 @@ this.
     - It records only. The hook prints no permission decision and exits 0
       whatever adoption returns; an adoption error is logged, never shown to
       the agent as a refusal. It adds no guard, gate or lock on the agent:
-      it takes the local lock (7.2) only for the length of one file's
-      adoption, the same lock a `grid brain` read takes.
+      it tries the local lock (7.2) for at most 500 ms and holds it only for
+      one file's adoption, the same lock a `grid brain` read takes. If the
+      lock is busy past that bound, it skips adoption, logs that, and exits
+      0, so the tool never waits on it.
     - A Write to a new path (no file yet) has nothing to adopt and does
       nothing.
   - **After the tool: record the agent bytes.** A PostToolUse hook on Edit,
@@ -413,13 +416,17 @@ this.
     `Proposals/` file and restores the person's version from `versions/`
     (6.1). Because the pre-tool step stored that person version first,
     nothing is lost.
-  - **What is not covered.** A person save that lands in the moment between
-    the pre-tool adoption and the tool's own write is overwritten without a
-    version. Claude Code's Edit and Write refuse a file changed since the
-    agent's Read, which narrows that window. Whether that refusal covers
-    every save in the window is NOT VERIFIED. Obsidian's own file recovery
-    snapshots and `.trash` are the fallback, as for any byte Grid never saw
-    (5.1). An agent tool without these hooks (a session outside the plugin)
+  - **What is not covered.** Two cases overwrite an unseen person save
+    without a version:
+    - a save that lands in the moment between the pre-tool adoption and the
+      tool's own write. Claude Code's Edit and Write refuse a file changed
+      since the agent's Read, which narrows that window; whether that
+      refusal covers every save in the window is NOT VERIFIED;
+    - a pre-tool adoption skipped because the lock stayed busy past its
+      bound, or because adoption failed.
+    Whether Obsidian's File recovery core plugin keeps a snapshot of the
+    overwritten bytes is NOT VERIFIED here. `.trash` does not help: it keeps
+    deleted files, not overwritten bytes. An agent tool without these hooks (a session outside the plugin)
     writes bytes with no agent record. They are adopted as a person change
     and are not lost either; only their origin is wrong.
 - **Link-only rewrites keep authority.** Obsidian's rename rewrites
@@ -996,7 +1003,9 @@ rows. A row owned by another decision lane is marked "owned by".
     - the note on disk byte-equal to those person bytes;
     - a `Proposals/` file holding the agent's bytes;
     - both hook runs exit 0 and print no permission decision, also when the
-      pre-tool adoption fails (a fixture with an unreadable `.grid/`).
+      pre-tool adoption fails (a fixture with an unreadable `.grid/`);
+    - with the local lock held by another process, the pre-tool hook exits
+      0 within one second, prints no permission decision and logs the skip.
   - (V13) `grid brain check` adopts a person edit without a drift finding;
   - (V13) two adoptions of the same edit produce one logical change;
   - (V14) a draft in `Proposals/` changed on disk with no Grid record is
@@ -1150,8 +1159,8 @@ rows. A row owned by another decision lane is marked "owned by".
   - (V19) with no sync server configured, the F9 test of L4 still passes
     under the local lock.
 - **Server side.** The server's own rows (reject a stale base, accept only
-  brain files) belong to lane A-sync-version-write in the app repo, not in
-  this plugin plan (9.5).
+  brain files) belong to lane A-sync-version-write in the sync server's
+  repo (the app, to be confirmed), not in this plugin plan (9.5).
 
 ### 9.2 Before P-brain-board-decide lands
 
@@ -1177,7 +1186,7 @@ rows. A row owned by another decision lane is marked "owned by".
 
 L1 → L2 ∥ L3 → L4 → L5a → L6; L7 after L4; L5b after L5a and
 P-brain-board-decide; L8 after L4 and P-loop-service. It goes live only once
-A-sync-version-write (app repo, 9.5) has landed the sync server's write API.
+A-sync-version-write (the sync server's lane, 9.5) has landed the sync server's write API.
 Then the Mac round trip.
 
 ### 9.4 Mac round trip
@@ -1243,12 +1252,15 @@ step). Nothing is called done before this.
   P-loop-service) and adds a push hook point (lane 8 P-loop-remote). No lane
   there builds the server's version-checked write. This note names the lane
   that must own it; the orchestrator writes its brief.
-  - **Lane.** A-sync-version-write, in the app repo, which serves the Grid
-    sync server (the "Sync — Grid sync server" check list of the test
-    plan). The app's `internal/slices/sync` package says it "keeps the relay
-    queue on the server"; no version-checked write exists there or anywhere
-    in the app today (a grep for a base version, `If-Match` or a conflict
-    status found none). The brief picks the files.
+  - **Lane.** A-sync-version-write, in the repo that holds the Grid sync
+    server (the sync server check list of the test plan). The evidence
+    points to the app repo: its `internal/slices/sync` package says it
+    "keeps the relay queue on the server", and the app serves
+    `cmd/grid-server`. The orchestrator confirms the repo when it writes
+    the brief. A grep of the app's `internal/slices/sync` and
+    `cmd/grid-server/sync*.go` for a base version, `If-Match` or `409`
+    found nothing, and the plugin has no `grid sync` client yet. The brief
+    picks the files.
   - **Ledger rows.** V19 (server half), V18 (owned by P-run-jobs-decide:
     only brain files are accepted).
   - **Acceptance** (unit tests on the server):
