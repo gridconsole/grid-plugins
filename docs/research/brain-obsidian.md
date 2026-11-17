@@ -431,7 +431,7 @@ who wrote it". This section decides what the owner sees in Obsidian.
   task, Job or person on one line", note.go:112-113). For an agent note the
   value names the task and the Job, for example
   `source: task T-04, Job J-7`. It is a plain text property, so Obsidian's
-  Properties view shows it as the first editable row at the top of the note
+  Properties view shows it as an editable text row at the top of the note
   (Properties.md:37-47). The nested `origin:` map goes (4.3), so `source` is
   the only authorship line in the header.
 - **A person note.** Grid writes nothing into it: no `source`, no
@@ -663,7 +663,8 @@ notes.
   - **What runs.** `LooksSecret` (internal/brain/ln_secret.go:6) applies the
     same `secretPatterns` as `hasSecret` (note.go:199-208) to each line of
     a person note: front matter and body.
-  - **When.** It runs at adoption (5.1) and in `grid brain check`.
+  - **When.** In `grid brain check` only. It exits 3, as for any finding
+    (braincmd/command.go:68); no write path reads it.
   - **What it gives.** A hit is a `grid brain check` finding, code
     `secret-shaped`, with the file and line number, added through
     `CheckResult.add` (check.go:158). The `Text` field is left empty, so
@@ -709,7 +710,7 @@ notes.
 - **What they are.** Screenshots are task attachments; their place is P-brain-board-decide's
   task folder.
 - **The curator compresses them** when it files a proposal or delivers. It runs
-  `grid shot crop <png> --max 1568`. `shot.Crop` already scales the long side
+  `grid shot crop <png> --max 1568 --small`. `shot.Crop` already scales the long side
   down to `MaxSide` = 1568 (shot.go:21, :80-118) and never up.
 - **Format: optimised PNG, lossless** (V17, owned by P-brain-board-decide).
   The owner's words (brain-obsidian Addendum 5.2): "a format Obsidian shows
@@ -984,7 +985,7 @@ rows. A row owned by another decision lane is marked "owned by".
 
 - **Ledger rows.** V17 (owned by P-brain-board-decide: screenshots kept
   compressed by the curator), V13 (the curator writes notes Obsidian links,
-  gate 7 curator step).
+  gate 7 curator step), V14 (curator.md keeps a person's draft lines, 6.2).
 - **Repo and model.** plugin, sonnet, high.
 - **Depends on.** L5a and **P-brain-board-decide**.
 - **Builds.**
@@ -1097,7 +1098,8 @@ rows. A row owned by another decision lane is marked "owned by".
   - L5b, which covers task proposals in task folders (store.go:280
     `ProposeTask`, task_decide.go), screenshots as task attachments and the
     curator's task steps;
-  - any `task`, `job` or `board` kind in the listing.
+  - any `task`, `job` or `board` kind in the listing;
+  - L8 waits on L4 and P-loop-service, not on this lane (9.3).
 - **Seams that lane must use:**
   - ids are paths under a level root (2.1);
   - edges are body `[[links]]` plus `## Links` (3);
