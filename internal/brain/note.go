@@ -84,6 +84,35 @@ func ValidName(s string) bool {
 	return len(s) <= 100 && namePattern.MatchString(s) && !strings.Contains(s, "..")
 }
 
+// ValidID is the readable form of a note id, the path inside the level root
+// without .md (docs/research/brain-obsidian.md 2.1): not empty, no leading or
+// trailing "/", no empty, "." or ".." segment, no "\", no control characters,
+// valid UTF-8 and at most 255 bytes per segment. Spaces and Unicode are fine.
+// ValidName stays the rule for names Grid generates.
+func ValidID(s string) bool {
+	if s == "" || !utf8.ValidString(s) || strings.Contains(s, `\`) {
+		return false
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	for _, seg := range strings.Split(s, "/") {
+		if seg == "" || seg == "." || seg == ".." || len(seg) > 255 {
+			return false
+		}
+	}
+	return true
+}
+
+// LinkableID is a readable id that also holds none of the characters Obsidian
+// says may not work in a link: # | ^ [ ]. A readable id that is not linkable is
+// listed and searched all the same; Grid never renames it.
+func LinkableID(s string) bool {
+	return ValidID(s) && !strings.ContainsAny(s, "#|^[]")
+}
+
 var relations = strings.Fields("depends-on explains decided-by supersedes duplicates related blocks continues validates same-files uses owns decides approves knows")
 
 func line(s string) bool { return !strings.ContainsAny(s, "\r\n\x00") }

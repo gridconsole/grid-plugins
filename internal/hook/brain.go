@@ -17,7 +17,7 @@ func brainStore(o Options, dir string) brain.Store {
 	if project == where.Personal {
 		project = ""
 	}
-	return brain.Store{GridHome: o.Resolver.GridHome, Project: project}
+	return brain.Store{GridHome: o.Resolver.GridHome, Project: project}.WithConfig(o.Resolver.Home, o.Getenv)
 }
 func brainRead(o Options, in hookio.Input) {
 	if in.HookEventName != "PostToolUse" || in.SessionID == "" {
@@ -48,11 +48,15 @@ func brainRead(o Options, in hookio.Input) {
 		return
 	}
 	store := brainStore(o, dir)
+	actual := gridhome.Real(absolute(in.Cwd, path))
+	if store.Vault() {
+		brainReadVault(o, in, store, dir, path)
+		return
+	}
 	name := strings.TrimSuffix(filepath.Base(path), ".md")
 	if !brain.ValidName(name) {
 		return
 	}
-	actual := gridhome.Real(absolute(in.Cwd, path))
 	// Explicit levels avoid a project note with the same name shadowing a home read.
 	for _, level := range []string{"project", "home"} {
 		if level == "project" && store.Project == "" {
@@ -68,6 +72,25 @@ func brainRead(o Options, in hookio.Input) {
 		o.log("brain read", recordBrainRead(o, in, dir, e.ID))
 		return
 	}
+}
+
+// brainReadVault records a Read of a note in a vault. The id is the path of the
+// file below its level root, so Ideas/Café plan.md is brain:home/Ideas/Café plan;
+// the note must resolve to the very file that was read.
+func brainReadVault(o Options, in hookio.Input, store brain.Store, dir, path string) {
+	abs := absolute(in.Cwd, path)
+	level, id, ok := store.VaultID(abs)
+	if !ok {
+		return
+	}
+	e, err := store.Show("brain:" + level + "/" + id)
+	if err != nil {
+		return
+	}
+	if gridhome.Real(abs) != gridhome.Real(filepath.Join(store.Root(), filepath.FromSlash(e.Path))) {
+		return
+	}
+	o.log("brain read", recordBrainRead(o, in, dir, e.ID))
 }
 
 // recordBrainRead logs one `brain read` line per note and session. The Read and
