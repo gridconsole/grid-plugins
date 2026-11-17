@@ -52,4 +52,4 @@ Lane branch lane-P-judge-verbs. `git fetch origin && git merge origin/main` prin
 - Posts do not set the record's `attempt` header (Q2 says posts name the attempt).
 - `grid judge rework` and `grid judge verdict` have no CLI end-to-end test; they are covered at the package level only.
 
-NOT DONE
+CLOSED BY P-judge-verbs-fix1: accepted 16:26 UTC
