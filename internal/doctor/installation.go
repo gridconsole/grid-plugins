@@ -22,10 +22,9 @@ func fixHint(name, detail string) string {
 		if strings.Contains(detail, "Update grid.") {
 			return "Update grid before opening this data."
 		}
-		if strings.HasPrefix(detail, "fresh home") {
-			return "Run grid setup"
-		}
 		return "Run grid migrate; if VERSION is missing or invalid, restore it from a known backup."
+	case "machine id":
+		return "Nothing to delete or move by hand: the next grid project add or grid task new moves the folder to machine.old-app and makes the id file. If the older Grid app is still open, close it first."
 	case "migration":
 		return "Run grid migrate --apply"
 	case "git":

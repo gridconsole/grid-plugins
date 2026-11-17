@@ -21,8 +21,7 @@ func TestFreshHomeVersion(t *testing.T) {
 		wantDetail string
 		wantFix    string
 	}{
-		{"A1 hooks-only home", func(t *testing.T, home string) { mk(t, home, "sessions") },
-			"fresh home: run grid setup", "Run grid setup"},
+		// A1, a hooks-only home, no longer fails: TestFreshHomePasses covers it.
 		{"A2 sessions and projects", func(t *testing.T, home string) { mk(t, home, "sessions", "projects") },
 			"cannot read", "Run grid migrate"},
 		{"A3 VERSION not a number", func(t *testing.T, home string) {

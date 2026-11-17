@@ -84,6 +84,7 @@ func Run(o Options) Report {
 			add("grid home writable", false, "cannot write in "+label)
 		}
 		checkFormat(add, o.GridHome, label)
+		checkMachine(add, o.GridHome, label)
 	}
 	checkHomeSource(add, o)
 
@@ -116,7 +117,9 @@ func checkFormat(add func(string, bool, string), dir, label string) {
 	n, err := gridhome.ReadFormat(dir)
 	switch {
 	case errors.Is(err, fs.ErrNotExist) && freshHome(dir):
-		add("format version", false, "fresh home: run grid setup")
+		// grid setup writes the Claude settings and its record, never VERSION: the
+		// first project or task does, so a new home has nothing for the person to fix.
+		add("format version", true, "new home: VERSION is written by the first project or task")
 	case err != nil:
 		add("format version", false, "cannot read "+filepath.ToSlash(filepath.Join(label, "VERSION")))
 	case gridhome.FormatProblem(n) != "":
@@ -126,14 +129,34 @@ func checkFormat(add func(string, bool, string), dir, label string) {
 	}
 }
 
-// freshHome reports a home the plugin hooks created but grid setup never
-// filled: sessions/ exists and projects/ does not.
+// freshHome reports a home only the plugin hooks (sessions/) or grid setup (setup/)
+// have written to: it holds no project and no personal task, so there is nothing
+// for grid migrate to do.
 func freshHome(dir string) bool {
-	if s, err := os.Stat(filepath.Join(dir, "sessions")); err != nil || !s.IsDir() {
+	made := false
+	for _, name := range []string{"sessions", "setup"} {
+		if s, err := os.Stat(filepath.Join(dir, name)); err == nil && s.IsDir() {
+			made = true
+		}
+	}
+	if !made {
 		return false
 	}
-	_, err := os.Stat(filepath.Join(dir, "projects"))
-	return errors.Is(err, fs.ErrNotExist)
+	for _, name := range []string{"projects", "personal"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); !errors.Is(err, fs.ErrNotExist) {
+			return false
+		}
+	}
+	return true
+}
+
+// checkMachine reports the older desktop app's folder where the machine id file
+// belongs. It only reports: the next grid command that adds a project or a task moves
+// the folder aside (gridhome.SetAsideOldMachine), so the row shows only while it is there.
+func checkMachine(add func(string, bool, string), dir, label string) {
+	if gridhome.OldAppMachine(dir) {
+		add("machine id", false, filepath.ToSlash(filepath.Join(label, "machine"))+" is a folder from the older Grid app, not the machine id file")
+	}
 }
 
 func writable(dir string) bool {
