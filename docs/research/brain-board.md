@@ -2,6 +2,17 @@
 
 Base: plugin main `885dc9a6`, app main `e60fab587`. Plugin paths are repo-relative. App paths are prefixed `app:`. Sources: the owner's brain-obsidian brief (Addenda 3 to 6), the run-jobs design brief (Correction and Addenda 2 to 5), the ruling of 17 Nov 02:12 UTC on this lane, and the sibling decision notes R-run-jobs-launcher and R-brain-obsidian. This note uses their names for post types, paths and lanes wherever they already decided them. This is a decision lane: it changes no product code. The one code file it adds is the measurement program for Q2, `docs/research/testdata/boardbench/main.go`, which `./...` never builds.
 
+## Owned ledger rows
+
+This note decides four rows of the decision ledger of 17 Nov (column "Decided in"). V9 is shared with P-run-jobs-decide: the part where the orchestrator assigns and starts Jobs is decided there, and the board side is decided here. The last column is the ledger's track or check column; the letters are the test plan's tracks in order (B plugin alone, E failures and recovery, F the brain, J scale and endurance).
+
+| Row | Ledger decision | Where this note decides it | Lanes that carry it (Q9) | Ledger check |
+| --- | --- | --- | --- | --- |
+| V9 | No task lease; a reassigned Job gets a new attempt | Decision point 4 (task home and attempt), decision point 6 (local locks are not leases), Q1 (fold edits, F8 to F10), Q8 header key `attempt` | P-loop-board, B1, P-loop-retire, the sync requirement | E |
+| V15 | Tasks, Jobs and the board are in the brain; board per task, one markdown file per post | Decision points 1 to 3, Q3 (two roots), Q7 (migration), Q8 (post file, header, and "Post body and links") | B1, B3, B5, A1, the P-shared-home requirement, the sync requirement | F, J |
+| V16 | task.md opens with a status block, written only by the home launcher | Decision point 7, Q4, and decision point 4 for which machine is the home | P-loop-home | unit + B |
+| V17 | Screenshots are task attachments, kept compressed by the curator | Decision point 8, Q5 (path, link, format, tool, size target, readability check) | B5 (path and link), L5b P-brain-curator-shots (compression; its rows are set in Q5 and Q9 here) | unit |
+
 ## Decision
 
 **Decided.**
