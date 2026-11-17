@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gridconsole/grid-plugins/internal/brain"
+	"github.com/gridconsole/grid-plugins/internal/gridconfig"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/guard"
 	"github.com/gridconsole/grid-plugins/internal/hookevents"
@@ -114,6 +116,9 @@ func sessionStart(o Options) {
 	if o.Resolver.GridHome == "" || o.Stdout == nil {
 		return
 	}
+	// Asked before anything below writes under the Grid home, so this session's own
+	// records are not taken for the person's data.
+	offer := cpOfferWanted(o)
 	cwd := in.Cwd
 	if cwd == "" {
 		cwd = o.Cwd
@@ -150,9 +155,15 @@ func sessionStart(o Options) {
 		o.log("brain index", err)
 	}
 	context := assembleContext(sessionContext(res, o.Resolver, note), jobContext(o, res), brainText)
+	if offer {
+		context += "\n" + cpOfferContext
+	}
 	out := map[string]any{"hookSpecificOutput": map[string]string{
 		"hookEventName": "SessionStart", "additionalContext": context,
 	}}
+	if offer {
+		out["systemMessage"] = cpOfferMessage
+	}
 	b, err := json.Marshal(out)
 	if err != nil {
 		return
@@ -171,6 +182,54 @@ func sessionStart(o Options) {
 		_, err = o.Stdout.Write(append(b, '\n'))
 		o.log("session context", err)
 	}
+}
+
+// The first-run offer: shown to the person, and one line for the model. It is an
+// offer only; the session goes on as before whatever the person answers.
+const (
+	cpOfferMessage = "Grid is not set up on this computer yet. Run /grid:first-run to set it up; it takes a minute."
+	cpOfferContext = "Grid has no config and no data on this computer yet. Offer the person once to run the grid:first-run skill, and carry on with their request if they decline."
+)
+
+// cpOfferWanted reports a machine with no Grid config (gridconfig.Path and the
+// older ~/.grid/config.json both absent) and no data under ~/.grid or the Grid
+// home. It reads two config paths and one folder list: no network, no wait.
+func cpOfferWanted(o Options) bool {
+	if o.Resolver.Home == "" {
+		return false
+	}
+	for _, p := range []string{gridconfig.Path(o.Getenv, o.Resolver.Home), gridconfig.OldPath(o.Resolver.Home)} {
+		if p == "" {
+			continue
+		}
+		if _, err := os.Stat(p); !errors.Is(err, fs.ErrNotExist) {
+			return false
+		}
+	}
+	root := gridconfig.DataRoot(o.Resolver.Home)
+	if cpOfferHoldsData(root) || cpOfferHoldsData(o.Resolver.GridHome) {
+		return false
+	}
+	entries, _ := os.ReadDir(root)
+	for _, e := range entries {
+		if e.IsDir() && cpOfferHoldsData(filepath.Join(root, e.Name())) {
+			return false
+		}
+	}
+	return true
+}
+
+// cpOfferHoldsData reports a folder that holds Grid data: VERSION, projects or knowledge.
+func cpOfferHoldsData(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	for _, name := range []string{"VERSION", "projects", "knowledge"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // syncAgents renders the plugin's agent templates into the person's agents folder.
