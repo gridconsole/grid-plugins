@@ -2,6 +2,8 @@ Usage: grid brain search <words> [--task <task>] [flags]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
   -json
     	print JSON
+  -kind string
+    	kind filter: note, task, job, post or proposal
   -level string
     	home or project
   -limit int
