@@ -34,15 +34,16 @@ var ilGuestRefused = errors.New(guestSettingsRefusal)
 // Env is everything a command reads from the machine, so tests can set it.
 // Paths are expected to be symlink-resolved (see gridhome.Real).
 type Env struct {
-	Stdin      io.Reader
-	Stdout     io.Writer
-	Stderr     io.Writer
-	Cwd        string
-	Home       string
-	GridHome   string // "" when neither GRID_HOME nor a home folder is known
-	// Resolved is how OSEnv found GridHome (its source, the machine folder and the
-	// shared config's current entry). Zero in an Env a test builds by hand.
-	Resolved gridhome.Home
+	Stdin    io.Reader
+	Stdout   io.Writer
+	Stderr   io.Writer
+	Cwd      string
+	Home     string
+	GridHome string // "" when neither GRID_HOME nor a home folder is known
+	// Resolved is how OSEnv found GridHome: its source, the config file read, the
+	// machine folder, and the workspace, brain and member the config names. Zero in
+	// an Env a test builds by hand.
+	Resolved   gridhome.Home
 	TempRoots  []string
 	Machine    string                 // this machine's id, "" before it is made
 	Ceiling    string                 // "" walks to the root; tests set their fixture root
