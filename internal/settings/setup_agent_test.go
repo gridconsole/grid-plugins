@@ -2,8 +2,12 @@ package settings
 
 import (
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
 
 func TestRecordAgentSetupHoldsOnlyNewCommands(t *testing.T) {
@@ -60,4 +64,45 @@ func TestRecordAgentSetupRefusesWithoutAProject(t *testing.T) {
 			t.Errorf("a refused record wrote %s", path)
 		}
 	}
+}
+
+// 18 Nov review: the deny block named neither setup file, so an agent's Write tool could put a
+// command key straight into setup-answers.json and skip the hold. The store writes both files
+// in <Grid home>/projects/<name>/ whatever folder GRID_PROJECTS names.
+func TestClaudeBlockDeniesTheSetupAnswerFiles(t *testing.T) {
+	home := gridhome.Real(t.TempDir())
+	gridHome := filepath.Join(home, ".grid")
+	for _, projects := range []string{"", filepath.Join(home, "work", "projects"), gridhome.Real(t.TempDir())} {
+		rules, err := claudeBlock(home, gridHome, projects)
+		must(t, err)
+		for _, name := range []string{"setup-answers.json", "setup-pending.json"} {
+			file := filepath.ToSlash(filepath.Join(gridHome, "projects", "example", name))
+			for _, tool := range []string{"Edit", "Write"} {
+				if !claudeDenies(rules, home, tool, file) {
+					t.Errorf("projects folder %q: no %s deny rule covers %s", projects, tool, file)
+				}
+			}
+		}
+	}
+}
+
+// claudeDenies reports whether a permissions.deny rule of tool matches file, reading `~/` as
+// home and `//` as the filesystem root, as Claude Code anchors them.
+func claudeDenies(rules []ClaudeRule, home, tool, file string) bool {
+	for _, r := range rules {
+		pattern, ok := strings.CutPrefix(r.Value, tool+"(")
+		if r.Section != "permissions" || r.Key != "deny" || !ok {
+			continue
+		}
+		pattern = strings.TrimSuffix(pattern, ")")
+		if rest, ok := strings.CutPrefix(pattern, "~/"); ok {
+			pattern = filepath.ToSlash(home) + "/" + rest
+		} else {
+			pattern = "/" + strings.TrimLeft(pattern, "/")
+		}
+		if matched, _ := path.Match(pattern, file); matched {
+			return true
+		}
+	}
+	return false
 }

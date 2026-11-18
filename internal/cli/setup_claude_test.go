@@ -177,9 +177,12 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 			// Setup-record defenses are additional to the reserved kinds and are tested
 			// through the CLI in settings.TestClaudeReworkCLIProjectAnchors. So are
 			// the settings, lock, workflows and host-folder rules, which
-			// TestSetupWritesDenyRulesForTheHostGuardFiles checks path by path.
+			// TestSetupWritesDenyRulesForTheHostGuardFiles checks path by path, and the
+			// setup answers rules, which settings.TestClaudeBlockDeniesTheSetupAnswerFiles checks.
 			rules := slices.DeleteFunc(doc.Permissions.Deny, func(rule string) bool {
-				return strings.Contains(rule, "~/.grid-person/**") || rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)" || hostDeny(rule)
+				plain := foldedLetter.ReplaceAllString(rule, "$1")
+				return strings.Contains(rule, "~/.grid-person/**") || rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)" || hostDeny(rule) ||
+					strings.HasSuffix(plain, "/setup-answers.json)") || strings.HasSuffix(plain, "/setup-pending.json)")
 			})
 			// No Grid guard repeats these rules, so the expected answer for each path
 			// is written down here: the five reserved kinds are denied, each in the
