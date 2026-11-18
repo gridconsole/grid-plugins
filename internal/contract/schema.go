@@ -3,6 +3,7 @@ package contract
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -114,6 +115,18 @@ func Validate(name string, data []byte) error {
 		return schemas.err
 	}
 	name = strings.TrimSuffix(name, ".json")
+	key := verdictKey(name, data)
+	if err, ok := verdicts.get(key); ok {
+		return err
+	}
+	err := validateData(name, data)
+	verdicts.put(key, err)
+	return err
+}
+
+// validateData is the uncached Validate. The verdict is a pure function of the
+// schema name and the bytes, so a record seen again is not walked again.
+func validateData(name string, data []byte) error {
 	schema, ok := schemas.byName[name+".json"]
 	if !ok {
 		return fmt.Errorf("unknown schema %q", name)
@@ -126,6 +139,45 @@ func Validate(name string, data []byte) error {
 		return err
 	}
 	return semantic(name, value)
+}
+
+// verdicts remembers Validate's answer per (name, bytes). A Feed read validates
+// every counted record and the fold validates each one again, on every pass of a
+// stream that runs for hours over records that do not change. The memo is emptied
+// when it is full, so a long run holds a bounded number of 32-byte keys.
+var verdicts = &verdictMemo{m: map[[sha256.Size]byte]error{}}
+
+const verdictMemoMax = 1 << 14
+
+type verdictMemo struct {
+	mu sync.Mutex
+	m  map[[sha256.Size]byte]error
+}
+
+func verdictKey(name string, data []byte) [sha256.Size]byte {
+	h := sha256.New()
+	h.Write([]byte(name))
+	h.Write([]byte{0})
+	h.Write(data)
+	var k [sha256.Size]byte
+	h.Sum(k[:0])
+	return k
+}
+
+func (v *verdictMemo) get(k [sha256.Size]byte) (error, bool) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	err, ok := v.m[k]
+	return err, ok
+}
+
+func (v *verdictMemo) put(k [sha256.Size]byte, err error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if len(v.m) >= verdictMemoMax {
+		clear(v.m)
+	}
+	v.m[k] = err
 }
 
 func decode(data []byte, dst any) error {
@@ -311,7 +363,7 @@ func validate(s map[string]any, v any, path string, depth int) error {
 			return fail("string length")
 		}
 		if pattern, ok := s["pattern"].(string); ok {
-			re, err := regexp.Compile(pattern)
+			re, err := compiled(pattern)
 			if err != nil || !re.MatchString(str) {
 				return fail("pattern " + pattern)
 			}
@@ -395,6 +447,22 @@ func matchesType(typ string, v any) bool {
 		return ok && (typ == "number" || rational(n).IsInt())
 	}
 	return false
+}
+
+// patterns holds each schema pattern compiled once: Validate runs for every
+// counted record of every Feed read, and the schemas hold few distinct patterns.
+var patterns sync.Map // string -> *regexp.Regexp
+
+func compiled(pattern string) (*regexp.Regexp, error) {
+	if re, ok := patterns.Load(pattern); ok {
+		return re.(*regexp.Regexp), nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	patterns.Store(pattern, re)
+	return re, nil
 }
 
 func rational(n json.Number) *big.Rat {
