@@ -35,7 +35,7 @@ const taskUsage = `Usage:
   grid task restore <T-NN> --project <p> [--json]
   grid task status <task> <state> [--json]
   grid task lane <task> <inbox|planning|doing|delivering> [--project <p>] [--json]
-  grid task history <task> [--json]
+  grid task history <task> [--project <p>] [--json]
   grid task merge --task <task> [--project <p>] [--json]
 
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
