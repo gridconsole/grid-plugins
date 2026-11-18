@@ -156,9 +156,25 @@ func claudeRetired(home, gridHome, projects string) ([]ClaudeRule, error) {
 	for _, path := range claudeHostPaths(anchor, projectAnchor) {
 		edit(path)
 	}
-	return append(rules,
+	rules = append(rules,
 		ClaudeRule{"permissions", "deny", "Edit(" + anchor + "/setup/**)"},
-		ClaudeRule{"permissions", "deny", "Write(" + anchor + "/setup/**)"}), nil
+		ClaudeRule{"permissions", "deny", "Write(" + anchor + "/setup/**)"})
+	// The first releases wrote these forms of the task, knowledge and project.md rules
+	// (the first with no case folding, the second folding only some names).
+	for _, path := range []string{
+		anchor + "/projects/*/tasks/[Tt]-[0-9]*/**",
+		anchor + "/personal/tasks/[Tt]-[0-9]*/**",
+		anchor + "/projects/*/knowledge/**",
+		anchor + "/knowledge/**",
+		anchor + "/projects/*/project.md",
+		anchor + "/projects/*/" + claudeFold("tasks") + "/[Tt]-[0-9]*/**",
+		anchor + "/projects/*/" + claudeFold("knowledge") + "/**",
+		anchor + "/" + claudeFold("knowledge") + "/**",
+		anchor + "/projects/*/" + claudeFold("project.md"),
+	} {
+		edit(path)
+	}
+	return rules, nil
 }
 
 // claudeHostPaths lists the paths earlier setups denied for the Grid settings, lock

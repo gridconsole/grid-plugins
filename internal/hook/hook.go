@@ -454,7 +454,7 @@ func sessionContext(r where.Result, resolver where.Resolver, note string) string
 		"Grid tracks tasks, Jobs and shared knowledge in one Grid home.",
 		"GRID_HOME is the Grid data folder " + home + "; GRID_PROJECTS is " + gridhome.Tilde(filepath.Join(resolver.GridHome, "projects"), resolver.Home) + ".",
 		ProjectLine(r, resolver.Home) + note,
-		"Task files are written by grid under the Grid home. Project records and task files live outside repositories.",
+		"Task files live under the Grid home; use the grid verbs for task.md, the plan, the history and Jobs, and write any other task file straight into its folder. Project records and task files live outside repositories.",
 		"The Grid brain holds shared topics, knowledge and decisions at home and project level.",
 		"Approvals come from a person through the Grid app or grid approve in a terminal outside Claude Code or Codex.",
 	}, "\n")

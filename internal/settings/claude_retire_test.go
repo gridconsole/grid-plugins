@@ -33,6 +33,20 @@ var retiredDenies = []string{
 	"Write(~/.grid/setup/**)",
 }
 
+// legacyDenies are the forms the first releases wrote for the task, knowledge and
+// project.md rules.
+var legacyDenies = []string{
+	"Edit(~/.grid/projects/*/tasks/[Tt]-[0-9]*/**)",
+	"Edit(~/.grid/personal/tasks/[Tt]-[0-9]*/**)",
+	"Edit(~/.grid/projects/*/knowledge/**)",
+	"Edit(~/.grid/knowledge/**)",
+	"Edit(~/.grid/projects/*/project.md)",
+	"Edit(~/.grid/projects/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
+	"Edit(~/.grid/projects/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
+	"Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
+	"Edit(~/.grid/projects/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])",
+}
+
 // keptDenies are the denies that stay: a project's setup answers and held commands,
 // and the person's approval identity.
 var keptDenies = []string{
@@ -79,12 +93,12 @@ func (f *claudeFixture) recordRules() []ClaudeRule {
 func (f *claudeFixture) seedOldSetup() {
 	f.t.Helper()
 	mine := []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)"}
-	denies, err := json.Marshal(append(slices.Clone(mine), append(slices.Clone(retiredDenies), keptDenies...)...))
+	denies, err := json.Marshal(slices.Concat(mine, legacyDenies, retiredDenies, keptDenies))
 	if err != nil {
 		f.t.Fatal(err)
 	}
 	f.write(f.path, `{"theme":"dark","permissions":{"allow":["Bash(grid *)","Read(~/mine/**)"],"deny":`+string(denies)+`}}`)
-	record := claudeRecord{Path: f.path, Rules: append(denyRules(retiredDenies), denyRules(keptDenies)...)}
+	record := claudeRecord{Path: f.path, Rules: denyRules(slices.Concat(legacyDenies, retiredDenies, keptDenies))}
 	record.Rules = append(record.Rules, ClaudeRule{"permissions", "allow", "Bash(grid *)"})
 	data, err := json.Marshal(record)
 	if err != nil {
@@ -99,7 +113,7 @@ func TestClaudeRetiredIsTheEarlierBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(retired, denyRules(retiredDenies)) {
+	if !reflect.DeepEqual(retired, denyRules(append(slices.Clone(retiredDenies), legacyDenies...))) {
 		t.Fatalf("retired rules differ from the earlier setup's:\n%v", retired)
 	}
 	block, err := claudeBlock(f.o.Home, f.o.GridHome, "")
@@ -194,7 +208,7 @@ func TestRetireClaudeRules(t *testing.T) {
 			t.Fatalf("denies %v, want %v", got, want)
 		}
 		for _, rule := range f.recordRules() {
-			if slices.Contains(denyRules(retiredDenies), rule) {
+			if slices.Contains(denyRules(slices.Concat(legacyDenies, retiredDenies)), rule) {
 				t.Fatalf("record still owns %s", rule.Value)
 			}
 		}
