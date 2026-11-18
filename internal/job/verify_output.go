@@ -19,6 +19,7 @@ var (
 	cargoTests    = regexp.MustCompile(`^test result: (?:ok|FAILED)\. ([0-9]+) passed; ([0-9]+) failed; ([0-9]+) ignored;`)
 	pytestSummary = regexp.MustCompile(`^(?:=+\s*)?(?:[0-9]+ (?:passed|failed|skipped|error|errors|xfailed|xpassed|deselected|warnings?|reruns?)(?:, )?)+ in [0-9.]+s(?: .*)?$`)
 	pytestCount   = regexp.MustCompile(`([0-9]+) (passed|failed|skipped|errors?|xfailed|xpassed|deselected)`)
+	unittestRan   = regexp.MustCompile(`^Ran ([0-9]+) tests? in [0-9.]+s$`)
 	ansiEscape    = regexp.MustCompile("\x1b\\[[0-?]*[ -/]*[@-~]")
 )
 
@@ -117,6 +118,11 @@ func (w *verifyOutput) line(line string) {
 		w.addCount(m[1])
 		w.addCount(m[2])
 		w.addCount(m[3])
+		return
+	}
+	if m := unittestRan.FindStringSubmatch(line); m != nil {
+		w.known = true // the OK or FAILED line after it only splits this total
+		w.addCount(m[1])
 		return
 	}
 	if pytestSummary.MatchString(line) {
