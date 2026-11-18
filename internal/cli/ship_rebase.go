@@ -158,27 +158,38 @@ func postRebaseJob(env Env, store feed.Store, w feed.Writer, c *mergeConflictErr
 // rebase Job, records that the person's approval of the ship Job ship waits for it
 // (land.Store.RebaseQueued), and reports true. It reports false when no rebase Job
 // can be posted (no task lease, the tries are used, the post failed), so the caller
-// puts the ship Job back with its person.
-func queueRebase(env Env, fs feed.Store, w feed.Writer, store land.Store, id, ship string, c *mergeConflictError) bool {
+// puts the ship Job back with its person, with why as its reason when it is not "".
+func queueRebase(env Env, fs feed.Store, w feed.Writer, store land.Store, id, ship string, c *mergeConflictError) (queued bool, why string) {
 	if w.Lease != "task" || len(c.Files) == 0 {
-		return false
+		return false, ""
 	}
 	rebase, err := postRebaseJob(env, fs, w, c)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "land: %s: the rebase Job was not posted: %s\n", ship, oneLineErr(err))
-		return false
+		return false, rebaseRetryText(c, false)
 	}
 	if rebase == "" {
 		fmt.Fprintf(env.Stderr, "land: %s: %d rebase Jobs were tried; %s still conflicts\n", ship, rebaseTries, c.Branch)
-		return false
+		return false, rebaseRetryText(c, true)
 	}
 	refoldAfterWrite(env, fs)
 	if err := store.RebaseQueued(env.Cwd, id, ship, rebase); err != nil {
 		fmt.Fprintf(env.Stderr, "land: %s: rebase Job %s posted, but its history line failed: %s\n", ship, rebase, oneLineErr(err))
-		return false
+		return false, rebaseRetryText(c, false)
 	}
 	fmt.Fprintf(env.Stderr, "land: %s: %s conflicts with %s in %s; rebase Job %s posted, the approval stands\n", ship, c.Branch, c.Target, strings.Join(c.Files, ", "), rebase)
-	return true
+	return true, ""
+}
+
+// rebaseRetryText is the reason the ship Job goes back with when the conflict c got no
+// rebase Job: what happened in plain words and that approving again retries the land.
+// The steps by hand stay in the merge's own error, which the history line keeps.
+func rebaseRetryText(c *mergeConflictError, triesUsed bool) string {
+	files := strings.Join(c.Files, ", ")
+	if triesUsed {
+		return fmt.Sprintf("%s moved again and the work still conflicts in %s after %d rebase tries; approve again to retry the land", c.Target, files, rebaseTries)
+	}
+	return fmt.Sprintf("%s moved and the work conflicts in %s; no agent could be given the rebase, so approve again to retry the land", c.Target, files)
 }
 
 // rebaseStep is a pass over a ship Job whose approval waits for its rebase Job. It
