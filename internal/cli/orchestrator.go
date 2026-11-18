@@ -750,6 +750,7 @@ func configureTickStore(env Env, s *orchestrator.Store, project, taskID string) 
 	s.Feed.Machine = env.MachineFolder
 	s.Diagnostics = env.Stderr
 	s.AccountRoom = yaAccountRoomFor(env)
+	s.RetryDelay = orchestrator.CrashBackoff
 	// The people's grant notes in the brain folder the Grid config names, read where
 	// internal/people reads grid/people. A pass reads them to take an agent's
 	// answer as a person's (run-jobs-launcher.md Q8); notes that do not read leave

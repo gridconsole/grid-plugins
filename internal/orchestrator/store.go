@@ -72,7 +72,10 @@ type Store struct {
 	// account numbers are known at all; a Job parked on usage_limit is offered
 	// again by yaUsageReady only when its reset time has passed or there is room.
 	AccountRoom func() (room, known bool)
-	Incident    func(string, []string) error
+	// RetryDelay, when set, is how long a Job waits before its next attempt after n failed
+	// attempts in a row (CrashBackoff); nil retries at the next pass.
+	RetryDelay func(n int) time.Duration
+	Incident   func(string, []string) error
 	// Grants are the people's grant notes (LoadGrants). An agent's answer to a
 	// person Job counts as the person's only under one of them (personAnswers,
 	// contract.PostedAs); with none, every agent answer is the agent's own.
@@ -99,6 +102,9 @@ type jobMemory struct {
 	Progress      string    `json:"progress"`
 	ParkProgress  string    `json:"park_progress"`
 	Liveness      string    `json:"liveness,omitempty"`
+	// RetryAt is when the next attempt after a failed one may start; no attempt of the Job is
+	// assigned before it.
+	RetryAt time.Time `json:"retry_at,omitempty"`
 }
 type progressFile struct {
 	Size  int64  `json:"size"`

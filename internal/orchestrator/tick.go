@@ -184,6 +184,15 @@ func (s Store) Tick() (out Output, err error) {
 				}
 				continue
 			}
+			if mem := m.Jobs[id]; mem != nil && s.now().Before(mem.RetryAt) {
+				// A failed attempt waits out its back-off, so a crash loop is not a storm of starts.
+				if why := retryWhy(mem.RetryAt); j.Reason != why {
+					if e := s.control(j, "", why, ""); e != nil {
+						return e
+					}
+				}
+				continue
+			}
 			if e := s.assign(j, to); e != nil {
 				return e
 			}
@@ -300,7 +309,7 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 					continue
 				}
 				if snap.Records[*q.Applied].Body["answer"] == "Retry" {
-					m.Failures = nil
+					m.Failures, m.RetryAt = nil, time.Time{}
 					return s.control(j, contract.Ready, ownerRetryReason, *q.Applied)
 				}
 			}
@@ -337,7 +346,7 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 			}
 			return s.control(j, contract.Submitted, "awaiting judgement", j.Exited)
 		default:
-			failure = j.Exited
+			return s.retryCrash(snap, j, m, all)
 		}
 	} else if j.Assign != nil {
 		state := s.liveness(j, m)
@@ -392,6 +401,7 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 		m.ParkProgress = s.progress(snap, j)
 		return nil
 	}
+	s.backOff(m, len(m.Failures))
 	return s.control(j, contract.Ready, "retry after failed attempt", failure)
 }
 func workerHost(worker string) string {

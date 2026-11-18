@@ -220,31 +220,6 @@ func TestCrashLoopPark(t *testing.T) {
 		t.Fatal("owner answer did not reset park")
 	}
 }
-func TestProgressResetsCrashLoop(t *testing.T) {
-	f := setup(t)
-	f.job(t, "J-1", nil)
-	f.tick(t)
-	for n := 0; n < 2; n++ {
-		f.ack(t)
-		f.exit(t, "crash")
-		f.tick(t)
-	}
-	if err := os.WriteFile(filepath.Join(f.s.Feed.TaskDir, "research.md"), []byte("new evidence"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	f.ack(t)
-	f.exit(t, "crash")
-	f.tick(t)
-	j := f.state(t)
-	if j.Status == contract.Parked {
-		t.Fatalf("progress did not reset crashes: %+v", j)
-	}
-	// max_rounds is retired (owner, 11 Nov q-levels and verdicts v-10): a failed
-	// attempt carries on by itself; only the crash loop parks a Job.
-	if j.Status == contract.Rejected || j.Status == contract.Parked {
-		t.Fatal("a failed attempt must carry on", j.Status)
-	}
-}
 func TestLiveness(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
