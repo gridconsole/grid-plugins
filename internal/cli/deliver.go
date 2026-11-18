@@ -105,7 +105,7 @@ func runDeliver(args []string, env Env) int {
 		} else {
 			ids := make([]string, 0, n)
 			for _, w := range result.Waiting {
-				ids = append(ids, w.ID)
+				ids = append(ids, proposalPointer(w))
 			}
 			posted, err := postCuratorJob(env, t.Path, result.Task, ids)
 			if err != nil {
