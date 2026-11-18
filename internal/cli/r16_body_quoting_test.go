@@ -38,7 +38,7 @@ func TestR16OrchestratorTextSaysSingleQuotesForTheBody(t *testing.T) {
 	if step5 == "" {
 		t.Fatal("agents/orchestrator.md has no step 5 line \"5. Post each Job with\"")
 	}
-	for _, want := range []string{"single quotes", "backticks", r16Escape, "--body -"} {
+	for _, want := range []string{"single quotes", "backticks", r16Escape, "--body-file"} {
 		if !strings.Contains(step5, want) {
 			t.Errorf("step 5 lacks %q", want)
 		}
@@ -70,8 +70,7 @@ func TestR16BodyFlagHelpSaysSingleQuotes(t *testing.T) {
 	}
 }
 
-// A body piped in with --body - and a ' escape reaches the Job intact, so the
-// orchestrator text may name that route.
+// A body piped in with --body - and a ' escape reaches the Job intact.
 func TestR16JobPostBodyFromStdinKeepsBackticksAndQuote(t *testing.T) {
 	h, path, store := orchestratorHarness(t)
 	b, err := os.ReadFile("../../contract/fixtures/job-record/valid/basic.json")
