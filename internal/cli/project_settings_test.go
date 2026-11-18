@@ -162,6 +162,12 @@ func TestProjectSettingsApproveWritesTheHeldCommands(t *testing.T) {
 	if code := h.run(h.home, "project", "settings", "approve", "example", "--hash", got.Hash); code == 0 {
 		t.Fatal("an agent approved the held commands")
 	}
+	// The app launches an agent with GRID_ROLE=worker and its holder's member id.
+	h.env.Getenv = psEnv(h, "worker", "sam")
+	h.errb.Reset()
+	if code := h.run(h.home, "project", "settings", "approve", "example", "--hash", got.Hash); code == 0 || !strings.Contains(h.errb.String(), "for a person of the team") {
+		t.Fatalf("a Grid-launched agent approve exit %d: %s", code, h.errb)
+	}
 	h.env.Getenv = psEnv(h, "", "sam")
 	if code := h.run(h.home, "project", "settings", "approve", "example", "--hash", strings.Repeat("0", 64)); code == 0 {
 		t.Fatal("a stale hash approved the held commands")
