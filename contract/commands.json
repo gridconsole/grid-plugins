@@ -5075,7 +5075,7 @@
     },
     {
       "name": "project",
-      "summary": "add, remove, list, scan and relink projects; repo and env edit a project's repos and environments",
+      "summary": "add, remove, list, scan and relink projects; repo, env and settings edit repos, environments and setup",
       "built": true,
       "subcommands": [
         {
@@ -5273,6 +5273,32 @@
           ],
           "json": true,
           "output": "cmd-project-scan.json"
+        },
+        {
+          "name": "settings",
+          "args": [
+            "\u003crecord|show|approve\u003e",
+            "\u003cproject\u003e"
+          ],
+          "flags": [
+            {
+              "name": "--answers",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--hash",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--json",
+              "takes": "none",
+              "required": false
+            }
+          ],
+          "json": true,
+          "output": "cmd-project-settings.json"
         }
       ]
     },

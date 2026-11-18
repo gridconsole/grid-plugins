@@ -216,6 +216,7 @@ are reference-document names and original line numbers, not machine paths.
 | grid project remove output | [cmd-project-remove.json](schemas/cmd-project-remove.json) | internal/cli/projects.go:172 |
 | grid project repo output | [cmd-project-repo.json](schemas/cmd-project-repo.json) | internal/cli/project_repo.go:110 |
 | grid project scan output | [cmd-project-scan.json](schemas/cmd-project-scan.json) | internal/cli/projects.go:143 |
+| grid project settings output | [cmd-project-settings.json](schemas/cmd-project-settings.json) | internal/cli/project_settings.go:82 (record), :100 (show), :130 (approve) |
 | grid routine add output | [cmd-routine-add.json](schemas/cmd-routine-add.json) | internal/cli/routine.go:158 |
 | grid routine list output | [cmd-routine-list.json](schemas/cmd-routine-list.json) | internal/cli/routine.go:120 |
 | grid session handback output | [cmd-session-handback.json](schemas/cmd-session-handback.json) | internal/cli/intent.go:140 |

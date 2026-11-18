@@ -238,36 +238,9 @@ func runSetup(args []string, env Env) int {
 	if err != nil {
 		return commandError(env, "setup", err)
 	}
-	var r io.Reader = env.Stdin
-	if *source != "-" {
-		path := *source
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(env.Cwd, path)
-		}
-		info, err := os.Stat(path)
-		if err != nil {
-			return commandError(env, "setup", err)
-		}
-		if !info.Mode().IsRegular() {
-			return commandError(env, "setup", fmt.Errorf("answers must be a regular JSON file"))
-		}
-		f, err := os.Open(path)
-		if err != nil {
-			return commandError(env, "setup", err)
-		}
-		defer f.Close()
-		r = f
-	}
-	if r == nil {
-		return commandError(env, "setup", fmt.Errorf("no answers input"))
-	}
-	const limit = 1 << 20
-	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	data, err := readSetupAnswers(env, *source)
 	if err != nil {
 		return commandError(env, "setup", err)
-	}
-	if len(data) > limit {
-		return commandError(env, "setup", fmt.Errorf("answers exceed %d bytes", limit))
 	}
 	answers, err := store.RecordSetup(data)
 	if err != nil {
@@ -281,4 +254,40 @@ func runSetup(args []string, env Env) int {
 	}
 	fmt.Fprintf(env.Stdout, "Setup answers recorded for %s\n", store.Project)
 	return 0
+}
+
+// readSetupAnswers reads an answers file relative to the current folder, or stdin for "-".
+func readSetupAnswers(env Env, source string) ([]byte, error) {
+	var r io.Reader = env.Stdin
+	if source != "-" {
+		path := source
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(env.Cwd, path)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("answers must be a regular JSON file")
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		r = f
+	}
+	if r == nil {
+		return nil, fmt.Errorf("no answers input")
+	}
+	const limit = 1 << 20
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > limit {
+		return nil, fmt.Errorf("answers exceed %d bytes", limit)
+	}
+	return data, nil
 }

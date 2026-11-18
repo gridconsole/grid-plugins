@@ -1,0 +1,13 @@
+{
+  "hash": "cd630a46934e249756d898997cef85f7f2d60e47cdae7ccec42f400a09ff1707",
+  "held": {
+    "deployCommand": "make deploy",
+    "starts": "make up",
+    "stops": "make down"
+  },
+  "recorded": {
+    "deploys": "Deploy from this machine",
+    "lands": "Open a pull request",
+    "test": "make test"
+  }
+}

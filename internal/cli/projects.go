@@ -69,7 +69,7 @@ func projectStore(env Env) projects.Store {
 }
 func runProject(args []string, env Env) int {
 	if len(args) == 0 {
-		fmt.Fprintln(env.Stderr, "usage: grid project add|remove|list|scan|relink|repo|env")
+		fmt.Fprintln(env.Stderr, "usage: grid project add|remove|list|scan|relink|repo|env|settings")
 		return 2
 	}
 	verb := args[0]
@@ -78,6 +78,8 @@ func runProject(args []string, env Env) int {
 		return projectRepo(args[1:], env)
 	case "env":
 		return projectEnv(args[1:], env)
+	case "settings":
+		return projectSettings(args[1:], env)
 	}
 	fs := newFlags("project "+verb, env)
 	asJSON := fs.Bool("json", false, "print JSON")
