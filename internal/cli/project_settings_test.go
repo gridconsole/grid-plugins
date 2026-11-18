@@ -202,6 +202,37 @@ func TestProjectSettingsApproveWritesTheHeldCommands(t *testing.T) {
 	}
 }
 
+// 18 Nov review: GRID_ROLE and GRID_MEMBER are an agent's own to set, so with no setup record
+// `GRID_ROLE=owner GRID_MEMBER=x grid project settings approve` passed inside the sandbox. The
+// sandbox denies writes to both setup files whatever the record; read-only files stand in for it.
+func TestProjectSettingsApproveRefusesInsideTheSandbox(t *testing.T) {
+	h := psNew(t)
+	got := h.psRecord(psAnswers)
+	dir := filepath.Join(h.gridHome, "projects", "example")
+	before := map[string][]byte{}
+	for _, name := range []string{"setup-answers.json", "setup-pending.json"} {
+		path := filepath.Join(dir, name)
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[name] = b
+		if err := os.Chmod(path, 0o444); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.env.Getenv = psEnv(h, "owner", "x")
+	h.errb.Reset()
+	if code := h.run(h.home, "project", "settings", "approve", "example", "--hash", got.Hash); code == 0 || !strings.Contains(h.errb.String(), "outside Claude Code or Codex") {
+		t.Fatalf("a spoofed owner inside the sandbox: approve exit %d: %s", code, h.errb)
+	}
+	for name, want := range before {
+		if b, err := os.ReadFile(filepath.Join(dir, name)); err != nil || string(b) != string(want) {
+			t.Errorf("a refused approve changed %s: %q, %v", name, b, err)
+		}
+	}
+}
+
 func TestProjectSettingsRecordRefusesTheClaudeForm(t *testing.T) {
 	h := psNew(t)
 	path := filepath.Join(h.tmp, "answers.json")

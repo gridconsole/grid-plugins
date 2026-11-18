@@ -179,10 +179,25 @@ func (s Store) PendingSetup() (answers, pending SetupAnswers, hash string, err e
 
 // ApproveSetupCommands writes the held command keys into the recorded answers when hash is
 // the hash of what waits, so a person approves exactly what they read.
+//
+// A Grid-launched agent's sandbox denies writes to both files, and the role and member are
+// the agent's own to set, so a file that cannot be opened for writing refuses before anything
+// else: approving is for a person in a terminal outside Claude Code or Codex.
 func (s Store) ApproveSetupCommands(hash string) (approved, answers SetupAnswers, err error) {
 	dir, err := s.setupDirectory()
 	if err != nil {
 		return nil, nil, err
+	}
+	for _, name := range []string{"setup-pending.json", "setup-answers.json"} {
+		f, err := os.OpenFile(filepath.Join(dir, name), os.O_WRONLY, 0)
+		switch {
+		case err == nil:
+			_ = f.Close()
+		case errors.Is(err, os.ErrPermission):
+			return nil, nil, fmt.Errorf("%s cannot be written here: approving setup commands is for a person in a terminal outside Claude Code or Codex", name)
+		case !errors.Is(err, os.ErrNotExist):
+			return nil, nil, err
+		}
 	}
 	err = s.locked(func() error {
 		pendingPath := filepath.Join(dir, "setup-pending.json")
