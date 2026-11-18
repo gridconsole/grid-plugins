@@ -60,6 +60,9 @@ func (s Store) readKey() readKey {
 		}
 		readKeyAdd(h, "feed", filepath.Base(p), info)
 	}
+	if info, err := os.Stat(filepath.Join(dir, ".cache", "reader.json")); err == nil {
+		readKeyAdd(h, "cache", "reader.json", info)
+	}
 	for _, sub := range []string{"lease", "bodies"} {
 		entries, err := os.ReadDir(filepath.Join(dir, sub)) // sorted by name
 		if err != nil && !os.IsNotExist(err) {
