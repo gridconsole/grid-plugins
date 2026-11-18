@@ -75,8 +75,6 @@ func TestCaseAliasesAreJudgedLikeTheirTargets(t *testing.T) {
 		path  string
 		guard func(string) string
 	}{
-		{"brain from a builder", alias(filepath.Join(f.grid, "knowledge", "n.md"), ".grid"), f.planAs("grid:grid-builder")},
-		{"project knowledge from a builder", alias(filepath.Join(f.projects, "example", "knowledge", "n.md"), "projects"), f.planAs("grid:grid-builder")},
 		{"repo write from a held task, cwd spelled differently", filepath.Join(f.repo, "file.go"), f.sameAsExactCwd(f.task, alias(f.task, "projects"))},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

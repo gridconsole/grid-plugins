@@ -5,28 +5,21 @@ import (
 	"testing"
 )
 
-func TestBrainWritePluginAgents(t *testing.T) {
-	for _, agent := range []struct {
-		name  string
-		allow bool
-	}{
-		{"grid:grid-curator", true}, {"grid-curator", true},
-		{"grid:grid-planner", true}, {"grid-planner", true},
-		{"curator", false}, {"planner", false},
-		{"other:curator", false}, {"other:planner", false},
-		{"other:grid-curator", false}, {"other:grid-planner", false},
-		{"grid:curator", false}, {"grid:planner", false},
-		{"grid-grid-curator", false}, {"grid-grid-planner", false},
+// Any agent writes the brain: a rule that left it to the curator and the planner
+// stalled tasks whose builder had a note to keep, so no role is fenced from it.
+func TestBrainWriteIsOpenToEveryAgent(t *testing.T) {
+	for _, agent := range []string{
+		"", "grid:grid-curator", "grid-curator", "grid:grid-planner", "grid-planner",
+		"grid:grid-builder", "grid-researcher", "curator", "planner", "other:curator", "other:grid-planner",
 	} {
-		t.Run(agent.name, func(t *testing.T) {
+		t.Run(agent, func(t *testing.T) {
 			f := setup(t)
-			planBlock(f) // plan-guard warns by default; the brain fence is covered at block
+			planBlock(f)
 			for _, dir := range []string{f.grid, filepath.Join(f.projects, "example")} {
 				in := f.input("Write", filepath.Join(dir, "knowledge", "note.md"))
-				in.AgentType = agent.name
-				got := EvaluatePlan(in, f.root, f.env)
-				if (got.Behavior != "deny") != agent.allow {
-					t.Fatalf("brain write allowed=%t, want %t", got.Behavior != "deny", agent.allow)
+				in.AgentType = agent
+				if got := EvaluatePlan(in, f.root, f.env); got.Behavior != "" || len(got.Warnings) != 0 {
+					t.Fatalf("brain write answered %+v", got)
 				}
 			}
 		})
