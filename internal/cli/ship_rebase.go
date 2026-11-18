@@ -84,9 +84,14 @@ func rebaseVerify(items []job.Job, c *mergeConflictError) map[string]any {
 // sides. Its acceptance rows say what to do and how it is checked.
 func rebaseJobBody(id string, c *mergeConflictError, verify map[string]any) map[string]any {
 	files := strings.Join(c.Files, ", ")
-	write := make([]any, 0, len(c.Files))
-	for _, f := range c.Files {
-		write = append(write, f)
+	// The merge brings in every file the delivered branch changed, so the Job may write them all, the conflicting ones first.
+	write := make([]any, 0, len(c.Files)+len(c.Changed))
+	seen := map[string]bool{}
+	for _, f := range append(slices.Clone(c.Files), c.Changed...) {
+		if !seen[f] {
+			seen[f] = true
+			write = append(write, f)
+		}
 	}
 	pointer := "task.md#outcome"
 	return map[string]any{

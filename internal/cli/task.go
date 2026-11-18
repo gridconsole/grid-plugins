@@ -153,7 +153,8 @@ func runTaskMerge(args []string, env Env) int {
 // task.md base: holds, so a rebase Job can name the branch to rebase on.
 type mergeConflictError struct {
 	Branch, Target string
-	Files          []string
+	Files          []string // the files that conflict
+	Changed        []string // every file the branch changed since it left Target, conflicting or not
 }
 
 func (e *mergeConflictError) Error() string {
@@ -241,7 +242,8 @@ func taskMerge(env Env, id, proj string) (string, error) {
 			return "", fmt.Errorf("merging %s into %s failed and %s is still checked out (%v); run git checkout %s in %s", branch, target, target, err, start, repo)
 		}
 		if conflicts != "" {
-			return "", &mergeConflictError{Branch: branch, Target: target, Files: strings.Fields(conflicts)}
+			changed, _ := taskMergeGit(repo, "diff", "--name-only", target+"..."+branch)
+			return "", &mergeConflictError{Branch: branch, Target: target, Files: strings.Fields(conflicts), Changed: strings.Fields(changed)}
 		}
 		return "", fmt.Errorf("merging %s into %s failed (%v); the checkout is as it was; fix that, then run grid task merge again", branch, target, mergeErr)
 	}
