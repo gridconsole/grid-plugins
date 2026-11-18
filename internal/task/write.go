@@ -223,6 +223,41 @@ func (s Store) RunningFromQueued(o WriteOptions) (moved bool, event Event, err e
 	return moved, event, err
 }
 
+// SyncPersonWait keeps state true to who the task waits on: a running task whose
+// open Jobs all wait on a person moves to waiting, and a waiting task with an
+// agent Job open moves back to running. Any other state, and a task waiting at
+// step ship, is left as it is, with no receipt and no error. o names the task and
+// the author as for RunningFromQueued; Action and State are set here.
+func (s Store) SyncPersonWait(o WriteOptions, onPerson bool) (moved bool, event Event, err error) {
+	o.Action, o.State = "status", "waiting"
+	from := "running"
+	if !onPerson {
+		o.State, from = "running", "waiting"
+	}
+	if err := o.validateText(); err != nil {
+		return false, event, err
+	}
+	err = s.withWrite(o.Cwd, o.ID, func(t Task) error {
+		if t.State != from {
+			return nil
+		}
+		if !onPerson {
+			data, err := os.ReadFile(filepath.Join(t.Path, "task.md"))
+			if err != nil {
+				return err
+			}
+			if fm := taskfile.ScalarFrontmatter(string(data)); fm != nil && fm.Data["step"] == "ship" {
+				return nil
+			}
+		}
+		var moveErr error
+		event, moveErr = s.change(t, o)
+		moved = moveErr == nil
+		return moveErr
+	})
+	return moved, event, err
+}
+
 // rewriteTask edits the task.md header as a YAML document and writes back only
 // the lines of the keys the edit set, added or removed: every other header line
 // keeps its bytes (comments, spelling, unknown keys), and optionally rewrites

@@ -210,6 +210,22 @@ func workerStream(env Env, member, machine, role string, pid int, start string, 
 		Ticked: func(dir string, w feed.Writer) {
 			landAfterShipAs(env, dir, contract.Author{ID: member, Role: role}, w)
 		},
+		// A task waiting only on a person shows waiting; an agent Job ready again shows running.
+		PersonWait: func(dir string, onPerson bool) error {
+			resolved, err := resolveTaskOperand(env, dir)
+			if err != nil {
+				return err
+			}
+			note := "an agent Job is open again"
+			if onPerson {
+				note = "open Jobs wait on a person"
+			}
+			_, _, err = taskWriter(env).SyncPersonWait(taskstore.WriteOptions{
+				Cwd: env.Cwd, ID: resolved.ID, Note: note,
+				Who: contract.Author{ID: member, Role: role},
+			}, onPerson)
+			return err
+		},
 		// The pass moves an old approval receipt into the task's Feed once, under the task lease.
 		ReceiptPending: migrate.ReceiptPending,
 		ReceiptMove: func(dir string, w feed.Writer) error {

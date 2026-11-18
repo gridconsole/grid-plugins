@@ -419,3 +419,36 @@ func TestStreamRunKeepsLeaseOnCancel(t *testing.T) {
 		t.Fatal("cancel released the task lease")
 	}
 }
+
+// PersonWait is told, after a tick, whether every open Job waits on a person.
+func TestStreamPersonWaitReportsPersonOnlyJobs(t *testing.T) {
+	h := newStreamHome(t, 2)
+	h.post(0, "J-1")
+	st := h.store(1)
+	ts := lease.TaskStore{Feed: st}
+	w := feed.Writer{Author: feed.Author{ID: "owner", Role: "owner"}, Worker: "owner@" + machine, Lease: "task"}
+	g, err := ts.TakeTask(w, os.Getpid(), contract.FormatTime(time.Now()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Fence = g.Fence
+	if _, err := st.Handover(feed.Input{Body: map[string]any{}}, w); err != nil {
+		t.Fatal(err)
+	}
+	body := jobBody(t, "J-1")
+	body["role"], body["kind"], body["after"], body["discovered_from"] = "Person", "question", []any{}, nil
+	body["intent"] = map[string]any{"owner": "dana", "item": "i-1", "goal": "Choose the name."}
+	if _, err := st.Post(feed.Input{Type: "job", Job: "J-1", Body: body}, w); err != nil {
+		t.Fatal(err)
+	}
+	if err := ts.ReleaseTask(w); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	s := h.stream(4242, nil)
+	s.PersonWait = func(dir string, onPerson bool) error { got[dir] = onPerson; return nil }
+	h.pass(s)
+	if len(got) != 2 || got[h.dirs[0]] || !got[h.dirs[1]] {
+		t.Fatalf("want agent task false and person-only task true, got %v", got)
+	}
+}

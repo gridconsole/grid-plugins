@@ -107,6 +107,10 @@ type Stream struct {
 	// Job). w is the pass's task-lease writer, which puts the ship Job back with its
 	// person when that land fails. It reports nothing back; nil does nothing.
 	Ticked func(dir string, w feed.Writer)
+	// PersonWait, when set, is called with the task folder after each tick, with whether
+	// every open Job of the task waits on a person (a person Job or an open question), so
+	// task.md can show waiting instead of running. An error is one Diag line.
+	PersonWait func(dir string, onPerson bool) error
 
 	Out  io.Writer // JSON lines
 	Diag io.Writer // one readable line per skip; nil discards
@@ -306,6 +310,13 @@ func (s *Stream) task(dir string) error {
 	delete(s.skipped, dir)
 	if s.Ticked != nil {
 		s.Ticked(dir, w)
+	}
+	if s.PersonWait != nil {
+		if after, err := Load(fs); err == nil && hasOpenJob(after) {
+			if err := s.PersonWait(dir, waitsOnPerson(after)); err != nil {
+				s.diag("grid worker next: task %s: person wait: %s\n", taskID, oneLine(err))
+			}
+		}
 	}
 	epoch := fmt.Sprintf("%d.%d", w.Gen, w.Fence)
 	for _, sp := range out.Spawns {
@@ -543,6 +554,23 @@ func (s *Stream) diag(format string, args ...any) {
 }
 
 func oneLine(err error) string { return strings.Join(strings.Fields(err.Error()), " ") }
+
+// waitsOnPerson reports whether the task has open Jobs and each is a person Job or
+// holds an open question: nothing an agent could do next.
+func waitsOnPerson(snap Snapshot) bool {
+	open := false
+	for _, j := range snap.State.Jobs {
+		switch j.Status {
+		case contract.Accepted, contract.Cancelled, contract.Rejected:
+			continue
+		}
+		open = true
+		if contract.NormalizeRole(j.Role) != "person" && len(j.OpenQuestions) == 0 {
+			return false
+		}
+	}
+	return open
+}
 
 func hasOpenJob(snap Snapshot) bool {
 	for _, j := range snap.State.Jobs {
