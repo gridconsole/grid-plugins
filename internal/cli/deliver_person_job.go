@@ -50,10 +50,15 @@ func taskJobWriter(env Env) (feed.Writer, error) {
 // from the plan Job, which has the same kind and item.
 const shipAcceptance = "The delivered work is approved to land"
 
-// shipJobBody is the plan approve Job (migrate.PlanJobBody) with the acceptance
-// text of the ship step; everything else, kind and item included, is the plan Job's.
+// shipTitle is the title of the ship person Job, which the app shows as its need.
+const shipTitle = "Approve the delivered work"
+
+// shipJobBody is the plan approve Job (migrate.PlanJobBody) with the title and the
+// acceptance text of the ship step; everything else, kind and item included, is
+// the plan Job's.
 func shipJobBody(id, owner string) map[string]any {
 	body := migrate.PlanJobBody(id, owner)
+	body["title"] = shipTitle
 	body["acceptance"] = []any{map[string]any{"id": "A1", "text": shipAcceptance, "traces": "item"}}
 	return body
 }
@@ -90,6 +95,20 @@ func shipWait(snap orchestrator.Snapshot, ship string) error {
 		return &orchestrator.WaitingError{Job: ship, Target: w.Target, Reason: w.Reason}
 	}
 	return nil
+}
+
+// shipReviewing reports whether err, the answer of shipWait, is only a delivery
+// that was submitted and whose review has not decided it. That is the delivery the
+// person is reading, so the answer is recorded and the land waits for the review
+// (landAfterShipAs) rather than the answer being refused. A rejected delivery, or
+// one still being made, is not that delivery: its answer stays refused.
+func shipReviewing(snap orchestrator.Snapshot, err error) bool {
+	var waiting *orchestrator.WaitingError
+	if !errors.As(err, &waiting) {
+		return false
+	}
+	j := snap.State.Jobs[waiting.Target]
+	return j != nil && j.Status == contract.Submitted
 }
 
 // renderShipJob saves the brief of the ship person Job in jobs/<id>/brief.md, so

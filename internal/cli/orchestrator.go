@@ -615,9 +615,12 @@ func runPersonApproval(env Env, store feed.Store, w feed.Writer, dir, job string
 		err = orchestrator.PersonOpen(snap, job, time.Now())
 	}
 	// The ship Job lands the task's delivery: it waits while that delivery is
-	// rejected and its rework is not yet accepted (shipWait).
+	// rejected and its rework is not yet accepted (shipWait). An answer given while
+	// the review of the delivery is out is recorded; the land follows the acceptance.
 	if err == nil && isShipJobID(snap, job) {
-		err = shipWait(snap, job)
+		if err = shipWait(snap, job); shipReviewing(snap, err) {
+			err = nil
+		}
 	}
 	if err != nil {
 		fmt.Fprintln(env.Stderr, err)

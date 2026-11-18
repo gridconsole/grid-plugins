@@ -23,8 +23,11 @@ const shipEvent = "ship answered"
 // under .land.lock, so a second call for the same Job does nothing (ran is false).
 // A land that stops before its command runs gets a "land failed" history line
 // with the reason; a command that fails has Run's own line. A land that passed
-// closes the task. A project with no deploy topic (ErrNoDeployTopic) has nothing
-// to land: a "ship answered" line says so and the task closes on the answer. A
+// closes the task. A project with no deploy topic (ErrNoDeployTopic) has no
+// command to run: Merge, when set, merges the task's delivered branch into its
+// base first (a merge that fails is a "land failed" line and a *FailedError, the
+// task stays waiting), then a "ship answered" line says so and the task closes on
+// the answer. A
 // deploy topic that is unreadable or malformed is still "land failed". A deploy
 // command that ran and failed returns a *FailedError with the text for the person; the
 // caller puts the ship Job back with its person and then calls Reopened, so the
@@ -44,11 +47,30 @@ func (s Store) AfterShip(ctx context.Context, cwd, id, job string) (result Resul
 	}
 	result, err = s.Run(ctx, cwd, id, false)
 	if errors.Is(err, ErrNoDeployTopic) && result.Execution == nil {
-		// Nothing to land: the answer is the approval, and the task closes on it.
-		if err = s.note(cwd, id, fmt.Sprintf("%s: %s approved; no deploy topic for project %s, nothing to land", shipEvent, job, t.Project)); err != nil {
+		// No deploy command to run: the answer is the approval. The delivered branch
+		// still goes into its base, so a task is never closed with its work unlanded.
+		merged := ""
+		if s.Merge != nil {
+			var mergeErr error
+			if merged, mergeErr = s.Merge(id); mergeErr != nil {
+				text := strings.Join(strings.Fields(mergeErr.Error()), " ")
+				if noteErr := s.note(cwd, id, "land failed: "+text); noteErr != nil {
+					return result, true, noteErr
+				}
+				return result, true, &FailedError{Text: text, Err: mergeErr}
+			}
+		}
+		detail, closeNote := "nothing to land", "approved after "+job+"; no deploy topic"
+		if merged != "" {
+			if len(merged) > 12 {
+				merged = merged[:12]
+			}
+			detail, closeNote = "merged the task's branch as "+merged, closeNote+"; merged as "+merged
+		}
+		if err = s.note(cwd, id, fmt.Sprintf("%s: %s approved; no deploy topic for project %s, %s", shipEvent, job, t.Project, detail)); err != nil {
 			return result, true, err
 		}
-		_, err = s.tasks().Change(task.WriteOptions{Cwd: cwd, ID: id, Action: "close", Note: "approved after " + job + "; no deploy topic", Who: who})
+		_, err = s.tasks().Change(task.WriteOptions{Cwd: cwd, ID: id, Action: "close", Note: closeNote, Who: who})
 		return result, true, err
 	}
 	if err != nil {

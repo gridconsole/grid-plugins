@@ -64,8 +64,13 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 	}
 	// An answer accepted while the delivery waits (an app answer the holder's tick
 	// accepts) lands nothing: the ship Job goes back to its person, and the land
-	// runs on the answer given once the rework is accepted (shipWait).
+	// runs on the answer given once the rework is accepted (shipWait). While the
+	// review of the delivery is out the answer stands and the tick that finds the
+	// delivery accepted lands it.
 	if err := shipWait(snap, job); err != nil {
+		if shipReviewing(snap, err) {
+			return
+		}
 		fmt.Fprintf(env.Stderr, "land: %s not run: %s\n", job, oneLineErr(err))
 		reopenShipWaiting(env, fs, w, job, err)
 		return
@@ -75,7 +80,7 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 		fmt.Fprintln(env.Stderr, "land: "+oneLineErr(err))
 		return
 	}
-	store := land.Store{Resolver: resolver(env), Who: who, Getenv: env.Getenv}
+	store := land.Store{Resolver: resolver(env), Who: who, Getenv: env.Getenv, Merge: func(id string) (string, error) { return landMergeBranch(env, dir, id) }}
 	if _, ran, err := store.AfterShip(context.Background(), env.Cwd, resolved.ID, job); err != nil || !ran {
 		if err == nil {
 			return
@@ -86,6 +91,17 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 			reopenShipJob(env, fs, w, store, resolved.ID, job, failed.Text)
 		}
 	}
+}
+
+// landMergeBranch is what a ship answer does on a project with no deploy topic:
+// grid task merge for the task id in dir, so the delivered branch lands on its
+// base. A task with no branch in task.md has nothing to merge and answers "".
+func landMergeBranch(env Env, dir, id string) (string, error) {
+	branch, _, err := taskMergeKeys(dir)
+	if err != nil || branch == "" {
+		return "", err
+	}
+	return taskMerge(env, id, "")
 }
 
 // reopenShipJob puts the ship Job job back with its person after a failed land:
