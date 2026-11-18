@@ -57,6 +57,10 @@ type Task struct {
 type Store struct {
 	Resolver where.Resolver
 	Now      func() time.Time
+	// Project, when set (a name or id), is the only project Show and the writers that
+	// find a task by its id look in: a caller that already holds the task's record names
+	// its project here, so no folder and no second project's T-NN decides.
+	Project string
 }
 
 // NewOptions contains only choices supplied by the caller. Who and Role come
@@ -268,9 +272,10 @@ func Read(path string) (Task, error) {
 	return t, nil
 }
 
-// Show resolves a home-wide display id, or the enclosing task when id is empty.
-// It never creates project records or other files.
-func (s Store) Show(cwd, id string) (Task, error) { return s.ShowIn(cwd, id, "") }
+// Show resolves a home-wide display id, or the enclosing task when id is empty; a
+// Store with a Project looks in that project alone. It never creates project records
+// or other files.
+func (s Store) Show(cwd, id string) (Task, error) { return s.ShowIn(cwd, id, s.Project) }
 
 // ShowIn is Show looking only in project only (a name or id) when it is set, so
 // a T-NN that two projects share names one task.

@@ -153,6 +153,13 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	if env.GridHome == "" {
 		return "", errors.New("cannot find the Grid home; set GRID_HOME")
 	}
+	if proj == "" {
+		// The task's record names its project, as grid land reads it; the folder this
+		// runs in does not. A task not found that way keeps the folder's project.
+		if t, err := resolveTaskOperand(env, id); err == nil {
+			proj = t.Project
+		}
+	}
 	res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: id, Project: proj})
 	if err != nil {
 		return "", err

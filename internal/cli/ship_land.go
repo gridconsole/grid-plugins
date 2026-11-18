@@ -75,12 +75,13 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 		reopenShipWaiting(env, fs, w, job, err)
 		return
 	}
-	resolved, err := resolveTaskOperand(env, dir)
+	// The task's own record names its project; the folder this runs in never does.
+	resolved, err := resolveTaskOperandIn(env, dir, rec.Project)
 	if err != nil {
 		fmt.Fprintln(env.Stderr, "land: "+oneLineErr(err))
 		return
 	}
-	store := land.Store{Resolver: resolver(env), Who: who, Getenv: env.Getenv, Merge: func(id string) (string, error) { return landMergeBranch(env, dir, id) }}
+	store := land.Store{Resolver: resolver(env), Who: who, Getenv: env.Getenv, Project: resolved.Project, Merge: func(id string) (string, error) { return landMergeBranch(env, dir, resolved.Project, id) }}
 	if _, ran, err := store.AfterShip(context.Background(), env.Cwd, resolved.ID, job); err != nil || !ran {
 		if err == nil {
 			return
@@ -94,14 +95,14 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 }
 
 // landMergeBranch is what a ship answer does on a project with no deploy topic:
-// grid task merge for the task id in dir, so the delivered branch lands on its
-// base. A task with no branch in task.md has nothing to merge and answers "".
-func landMergeBranch(env Env, dir, id string) (string, error) {
+// grid task merge for the task id in project proj, so the delivered branch lands on
+// its base. A task with no branch in task.md has nothing to merge and answers "".
+func landMergeBranch(env Env, dir, proj, id string) (string, error) {
 	branch, _, err := taskMergeKeys(dir)
 	if err != nil || branch == "" {
 		return "", err
 	}
-	return taskMerge(env, id, "")
+	return taskMerge(env, id, proj)
 }
 
 // reopenShipJob puts the ship Job job back with its person after a failed land:

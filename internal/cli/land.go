@@ -11,27 +11,29 @@ import (
 func runLand(args []string, env Env) int {
 	f := newFlags("land", env)
 	f.Usage = func() {
-		fmt.Fprintln(env.Stdout, "Usage: grid land <task> [--dry-run] [--json]")
+		fmt.Fprintln(env.Stdout, "Usage: grid land <task> [--project <name-or-id>] [--dry-run] [--json]")
 		fmt.Fprintln(env.Stdout, "<task> is an id, exact folder name, or folder path inside a project tasks directory.")
 		f.PrintDefaults()
 	}
 	dry := f.Bool("dry-run", false, "print the plan without writes or execution")
 	asJSON := f.Bool("json", false, "print JSON")
+	proj := f.String("project", "", "project name or id; look only in it")
 	operands, code, stop := parseMixed(f, args)
 	if stop {
 		return code
 	}
 	if len(operands) != 1 {
-		fmt.Fprintln(env.Stderr, "Usage: grid land <task> [--dry-run] [--json]")
+		fmt.Fprintln(env.Stderr, "Usage: grid land <task> [--project <name-or-id>] [--dry-run] [--json]")
 		return 2
 	}
-	t, err := resolveTaskOperand(env, operands[0])
+	t, err := resolveTaskOperandIn(env, operands[0], *proj)
 	if err != nil {
 		return taskOperandError(env, "land", err)
 	}
 	ctx, cancel := env.signalContext(os.Interrupt)
 	defer cancel()
-	result, err := (land.Store{Resolver: resolver(env), Who: writeOptions(env, "", "", "").Who, Getenv: env.Getenv}).Run(ctx, env.Cwd, t.ID, *dry)
+	// The task found names its project; the land reads everything after in it, not in the folder's.
+	result, err := (land.Store{Resolver: resolver(env), Who: writeOptions(env, "", "", "").Who, Getenv: env.Getenv, Project: t.Project}).Run(ctx, env.Cwd, t.ID, *dry)
 	if err != nil && result.Execution == nil {
 		return landError(env, err)
 	}
