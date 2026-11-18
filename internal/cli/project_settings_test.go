@@ -206,6 +206,9 @@ func TestProjectSettingsApproveWritesTheHeldCommands(t *testing.T) {
 // `GRID_ROLE=owner GRID_MEMBER=x grid project settings approve` passed inside the sandbox. The
 // sandbox denies writes to both setup files whatever the record; read-only files stand in for it.
 func TestProjectSettingsApproveRefusesInsideTheSandbox(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("chmod does not deny writes as root")
+	}
 	h := psNew(t)
 	got := h.psRecord(psAnswers)
 	dir := filepath.Join(h.gridHome, "projects", "example")
