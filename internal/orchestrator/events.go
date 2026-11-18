@@ -334,31 +334,12 @@ func (s Store) wake(snap Snapshot, m *memory) *Wake {
 			}
 		}
 	}
-	times := m.Wakes[:0]
-	for _, at := range m.Wakes {
-		if s.now().Sub(at) < time.Hour {
-			times = append(times, at)
-		}
-	}
-	m.Wakes = times
 	if len(m.Pending) == 0 {
 		return nil
 	}
-	if len(m.Wakes) >= 20 {
-		m.Overflow = true
-		return nil
-	}
+	// One wake is out at a time and goes on being offered until it is answered, so the Judge's own pace
+	// is the only rate: a count of wakes an hour held the next result unjudged and its Jobs waiting.
 	out := m.Pending[0]
-	// Slot 20 is reserved for the summary, and a queue crossing the hourly
-	// boundary is summarized as well. The queue itself stays durable while full.
-	if len(m.Pending) > 1 && (m.Overflow || len(m.Wakes) == 19 || len(m.Pending) > 20) {
-		out.Events = []string{}
-		for _, w := range m.Pending {
-			out.Events = append(out.Events, w.Event)
-		}
-		m.Overflow = false
-	}
-	m.Wakes = append(m.Wakes, s.now())
 	m.Active = &out
 	return m.Active
 }

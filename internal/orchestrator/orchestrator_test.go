@@ -394,44 +394,6 @@ func TestWakeIdempotency(t *testing.T) {
 		t.Fatal("wake number reused", later)
 	}
 }
-func TestWakeRateSummary(t *testing.T) {
-	f := setup(t)
-	snap := Snapshot{State: contract.State{Jobs: map[string]*contract.Job{}, Wakes: []string{}}, Records: map[string]feed.Record{}}
-	m := memory{Jobs: map[string]*jobMemory{}, Delivered: map[string]bool{}}
-	for n := 0; n < 25; n++ {
-		id := fmt.Sprintf("event-%02d", n)
-		snap.State.Wakes = append(snap.State.Wakes, id)
-		snap.Records[id] = feed.Record{Body: map[string]any{"job": "J-1"}}
-		out := f.s.wake(snap, &m)
-		if n < 20 && out == nil {
-			t.Fatal(n)
-		}
-		if n >= 20 && out != nil {
-			t.Fatal("wake cap exceeded")
-		}
-		if out != nil {
-			key := fmt.Sprintf("%s/%d", out.Event, out.N)
-			snap.Records[fmt.Sprint("ack-", n)] = feed.Record{Wake: &key}
-		}
-	}
-	f.s.wake(snap, &m)
-	if len(m.Pending) != 5 {
-		t.Fatal(len(m.Pending))
-	}
-	f.now = f.now.Add(time.Hour)
-	out := f.s.wake(snap, &m)
-	if out == nil || len(out.Events) != 5 {
-		t.Fatal("queue was not summarized", out)
-	}
-	if again := f.s.wake(snap, &m); !reflect.DeepEqual(again, out) {
-		t.Fatal("summary lost before acknowledgement", again)
-	}
-	key := fmt.Sprintf("%s/%d", out.Event, out.N)
-	snap.Records["summary-ack"] = feed.Record{Wake: &key}
-	if again := f.s.wake(snap, &m); again != nil || len(m.Pending) != 0 {
-		t.Fatal("summary acknowledgement left events pending", again, m.Pending)
-	}
-}
 func TestWaitCancellation(t *testing.T) {
 	f := setup(t)
 	ctx, cancel := context.WithCancel(context.Background())
