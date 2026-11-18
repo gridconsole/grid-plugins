@@ -212,7 +212,10 @@ func rebaseStep(env Env, fs feed.Store, w feed.Writer, store land.Store, who con
 	if err != nil {
 		return fail("rebasing the delivered branch failed: " + oneLineErr(err))
 	}
-	if _, err := taskWriter(env).RecordBranch(taskstore.WriteOptions{Cwd: env.Cwd, ID: id, Who: who, Note: "delivered branch is now " + branch + " (rebase Job " + head + ")"}, branch, sha); err != nil {
+	// The task's project decides which T-NN this is, as it does for land.
+	tasks := taskWriter(env)
+	tasks.Project = proj
+	if _, err := tasks.RecordBranch(taskstore.WriteOptions{Cwd: env.Cwd, ID: id, Who: who, Note: "delivered branch is now " + branch + " (rebase Job " + head + ")"}, branch, sha); err != nil {
 		fmt.Fprintf(env.Stderr, "land: %s: the rebased branch %s was not recorded: %s\n", ship, branch, oneLineErr(err))
 		return true
 	}
