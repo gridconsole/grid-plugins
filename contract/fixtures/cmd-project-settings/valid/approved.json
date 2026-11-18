@@ -1,0 +1,16 @@
+{
+  "answers": {
+    "deployCommand": "make deploy",
+    "deploys": "Deploy from this machine",
+    "lands": "Open a pull request",
+    "starts": "make up",
+    "stops": "make down",
+    "test": "make test"
+  },
+  "approved": {
+    "deployCommand": "make deploy",
+    "starts": "make up",
+    "stops": "make down"
+  },
+  "project": "example"
+}

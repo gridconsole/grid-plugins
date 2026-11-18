@@ -7,6 +7,10 @@
 = Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)
 = Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)
 = Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])
+= Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])
+= Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])
+= Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])
+= Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])
 = Edit(~/.grid/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])
 = Edit(~/.grid/*/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])
 = Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])
@@ -37,6 +41,10 @@
       "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
       "Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
       "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])",
+      "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])",
+      "Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])",
+      "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])",
+      "Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])",
       "Edit(~/.grid/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])",
       "Edit(~/.grid/*/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])",
       "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])",

@@ -1,0 +1,97 @@
+{
+  "$id": "https://example.com/grid/contract/cmd-project-settings.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "JSON output of grid project settings record|show|approve <project> --json; internal/cli/project_settings.go. record (:82) answers the keys it wrote to setup-answers.json (recorded) and the command keys it held in setup-pending.json for a person (held), with their hash when any is held. show (:100) answers the recorded answers, the held keys and their hash. approve (:130) answers the keys a person approved and the answers after it.",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "held": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "recorded": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "project",
+        "recorded",
+        "held"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "pending": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "answers",
+        "pending"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "approved": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "approved",
+        "answers"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "grid project settings output"
+}

@@ -106,6 +106,16 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 	} {
 		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + path + ")"})
 	}
+	// The store keeps a project's setup answers and held commands in <home>/projects/<name>/;
+	// grid project settings record is an agent's only way to write them.
+	for _, dir := range slices.Compact([]string{anchor + "/" + claudeFold("projects"), projectAnchor}) {
+		for _, name := range []string{"setup-answers.json", "setup-pending.json"} {
+			path := dir + "/*/" + claudeFold(name)
+			rules = append(rules,
+				ClaudeRule{"permissions", "deny", "Edit(" + path + ")"},
+				ClaudeRule{"permissions", "deny", "Write(" + path + ")"})
+		}
+	}
 	for _, path := range claudeHostPaths(anchor, projectAnchor) {
 		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + path + ")"})
 	}

@@ -20,12 +20,13 @@ func setupAnswersLaneProblems(t *testing.T, surface contractSurface) []string {
 	return out
 }
 
-// With --answers dropped from setup in memory (never in the file), the skill's
-// `grid setup <project> --answers ...` is reported; with the full surface it is not.
+// With --answers dropped from project settings in memory (never in the file), the skill's
+// `grid project settings record <project> --answers ...` is reported; with the full surface
+// it is not.
 func TestSetupAnswersSkillCheckBitesWithoutTheFlag(t *testing.T) {
 	full := loadContractSurface(t)
-	if !full["setup"][""]["--answers"] {
-		t.Fatal("commands.json does not list --answers under setup")
+	if !full["project"]["settings"]["--answers"] {
+		t.Fatal("commands.json does not list --answers under project settings")
 	}
 	if got := setupAnswersLaneProblems(t, full); len(got) != 0 {
 		t.Fatalf("full surface: skills/setup/SKILL.md has problems: %v", got)
@@ -37,7 +38,7 @@ func TestSetupAnswersSkillCheckBitesWithoutTheFlag(t *testing.T) {
 		for verb, flags := range verbs {
 			copied := contractFlags{}
 			for name := range flags {
-				if group == "setup" && verb == "" && name == "--answers" {
+				if group == "project" && verb == "settings" && name == "--answers" {
 					continue
 				}
 				copied[name] = true
@@ -47,7 +48,7 @@ func TestSetupAnswersSkillCheckBitesWithoutTheFlag(t *testing.T) {
 	}
 	got := setupAnswersLaneProblems(t, cut)
 	if len(got) == 0 {
-		t.Fatal("without setup --answers, checkPluginFiles reported nothing for skills/setup/SKILL.md")
+		t.Fatal("without project settings --answers, checkPluginFiles reported nothing for skills/setup/SKILL.md")
 	}
 	for _, p := range got {
 		if !strings.Contains(p, "--answers") {
