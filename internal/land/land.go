@@ -60,9 +60,15 @@ type Store struct {
 	// deploy topic, and answers the commit the base now points at; "" with no error
 	// is a task with no branch. Nil merges nothing.
 	Merge func(id string) (string, error)
+	// Project is the project of the task, from its record, so the task id is looked up
+	// in it alone and never by the folder the caller stands in. Empty looks the id up
+	// in the Grid home.
+	Project string
 }
 
-func (s Store) tasks() task.Store { return task.Store{Resolver: s.Resolver, Now: s.Now} }
+func (s Store) tasks() task.Store {
+	return task.Store{Resolver: s.Resolver, Now: s.Now, Project: s.Project}
+}
 
 func (s Store) prepare(cwd, id string) (Plan, task.Task, string, error) {
 	p := Plan{}
