@@ -1,9 +1,11 @@
 ---
 name: questions
-description: Ask a person a question on a Grid task, record their answer, or withdraw it. Use when work needs a decision only a person can make, or the person says "ask Sam which ...", gives an answer, or a question is no longer needed.
+description: Ask a person a question on a Grid task, record their answer, or withdraw it. Use when only a person can decide, or the person answers.
 ---
 
 A question is for a person point only. "Tasks carry on by themselves until a person point": never ask whether to rework, never ask about a refused command, never ask about the brain, and never ask what a default or the brain already answers (`grid brain search <words> --task <task>`).
+
+One decision has one ask. Ask only what the person's words leave open and the work cannot go on without. Never ask a decision a person Job or question on the task already asks (`grid job tree --task <task>`, `grid question list --task <task>`): a person Job and a question on the same decision ask the person twice. A new option the person did not ask for (a short flag, a clamp, a new behaviour) is not asked: it is left out and named in the result.
 
 Rules that apply here:
 - "Everything is a Job, the Job is the brief": a person's decision is a Job with role Person (see plan-jobs); the question is that Job's text.
@@ -20,5 +22,12 @@ Steps (all use `--task <task>`). Pass the task folder path `$GRID_HOME/projects/
 4. Read open questions: `grid question list --task <task>`.
 5. Record an answer only when the person gave it in their words: `grid answer <task> Q-<n> "<their words>"` (here `<task>` is the first operand, not a flag). Never invent one. An answer is final; a new answer is a new question.
 6. Withdraw a question that is not needed: `grid question withdraw --task <task> Q-<n>`.
+
+Bash:
+
+- Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- Put no `<`, `>`, here-document or pipe on a `grid` command: such a call stays inside Claude Code's sandbox, which cannot write the task's files. Give a JSON body in single quotes, or write it with Write to a file outside the repo and pass `--body-file <file>`.
+- Put no `VAR=value` in front of a command; use the command's own flags.
+- Never set `dangerouslyDisableSandbox`.
 
 Done looks like: `grid question list` shows the question open with its options, recommendation and why, or the answer recorded, and the task carries on without waiting for anything else.

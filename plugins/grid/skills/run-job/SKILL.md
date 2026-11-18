@@ -14,8 +14,8 @@ Steps:
 4. For UI, every field comes from the data source the Job names (served op answer, `frame/model.mjs`, decision doc). A field the read lacks is NOT DONE, not a guess. Check at widths 390, 1440 and 3840.
 5. `budget.turns_estimate` is the planner's estimate, not a limit; finish the Job. If you end before every row holds (Claude Code's own limit, a blocker), post the result with the rows left as NOT DONE (`not met` in the result body).
 6. A new test fails on the base and passes on your change; paste the failing lines. Never edit an existing test to make it pass.
-7. Run `grid job verify <job> --task <task>` and the Job's verify command.
-8. Post the result with `grid job result --task <task> --job <job> --body <json>`. If it exits 3 the lease or record was rejected: do not retry.
+7. Run `grid job verify <job> --task <task>` and the Job's verify command. When you prove an acceptance row, mark it at once so the task shows it met while you work: `grid job post --task <task> --job <job> --type checkpoint --body '{"job":"<job>","acceptance":{"id":"A1","state":"met","note":"<command and exit code>"}}'` (state `met`, `not met` or `pending`).
+8. Post the result with `grid job result --task <task> --job <job> --body '<json>'`, or write the JSON to a file outside the repo and post it with `--body-file <file>` when it is long or holds a single quote. If it exits 3 the lease or record was rejected: do not retry.
 
 The result is a proof table: one line per acceptance row, each either
 
@@ -56,9 +56,19 @@ A security problem you meet, in or outside your scope, is posted at once as a `f
 
 Done: every row has a line, the verify exit codes are pasted, and the result is posted.
 
+## Helpers
+
+The plugin ships three Haiku agents for heavy reads; each answers short, so your own context stays small.
+
+- A code area you do not know yet: send `grid:scout` for the `path:line` ranges that matter, then read only those ranges, because a map costs far less than reading the files whole.
+- A test, build or lint run longer than a short check: hand it to `grid:runner`, which returns pass or fail and only the failing lines, because the full output would fill your context.
+- A large file or log: read a line range (Read with offset and limit, or Grep for the lines), never the whole file, because whole-file reads are most of what a session reads.
+- A question earlier work may already answer: ask `grid:library`, because it searches the brain and names the notes it used.
+
 ## Bash
 
 - Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- Put no `<`, `>`, here-document or pipe on a `grid` command: such a call stays inside Claude Code's sandbox, which cannot write the task's files. Give a JSON body in single quotes, or write it with Write to a file outside the repo and pass `--body-file <file>`.
 - `grid` and `git` are pre-approved. The Job's verify command is still run, as the Job writes it, in a call of its own (step 7).
 - Put no `VAR=value` in front of a command; use the command's own flags.
 - Use Read, Glob and Grep instead of ls, cat, find and grep. Use Write and Edit instead of sed, cp and heredocs.
@@ -66,6 +76,8 @@ Done: every row has a line, the verify exit codes are pasted, and the result is 
 
 ## Brain
 
-- Read the notes the Job's Context names: `grid brain show <note> --task <task>`.
+- What you read from the brain is the SessionStart index and the notes the Job names: the brain lines of its Context (its keep, decisions and links) and, when the brief says entries were cut, the ids in `not_rendered` of the Job's inputs.json (beside its brief.md). Read one whole with `grid brain show <note> --task <task>` when its excerpt is not enough. Read nothing else from the brain by default; a broader question goes to `grid:library`, which answers with note ids. Cite a note by its id; never paste its text into your result.
 - To leave a durable fact for later tasks, propose it: `grid brain propose --task <task> --name <id> --topic <topic> --description <when> --summary <what> --body <text> --source job:<task>/<job>`.
+- When the Job asks for a note, a decision or knowledge to keep (in its intent, the owner's request in its Intent block, or an acceptance row), propose it before you post the result, with the command above: one proposal for each thing asked, topic `conventions` for a practice or a lesson and `decisions` for a choice and its reason. A file in the repo (a README, a doc) does not stand in for the proposal; write the file too only when the Job names it. Nothing else starts a curator Job: `grid deliver` posts one only for proposals that wait.
+- List each proposal in the result's `knowledge`, one string each: `<name> (<topic>): <what it holds>`. A builder whose Job asks for a note fills `knowledge` with it, and a row that asks for the note is `not met` while `knowledge` is `[]`. `[]` is right when the Job asks for nothing to keep.
 - If a note turns out wrong, do not edit it. Propose the fixed fact the same way, with a `supersedes` link to the wrong note: `--link '{"to":"<wrong-note>","rel":"supersedes","summary":"<what it said>","why":"<what was wrong>"}'`.

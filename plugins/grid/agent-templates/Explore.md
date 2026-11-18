@@ -3,7 +3,6 @@ name: Explore
 description: Read-only search over files for a question. Use to find where something is, which files hold a name, or how many places use it, when answering means looking through many files.
 model: haiku
 effort: low
-maxTurns: 25
 tools: Read, Grep, Glob
 ---
 

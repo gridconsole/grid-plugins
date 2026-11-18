@@ -1,6 +1,6 @@
 ---
 name: signals
-description: Read new messages from a connected mail, chat or calendar source and save each one that needs the person's attention as a Grid signal, never for starting work. Use when a routine says "check the inbox", "collect signals" or names a source to read, or when the person asks to act on or dismiss a signal.
+description: Save new mail, chat or calendar messages that need the person as Grid signals, never to start work. Use when a routine says "collect signals" or the person acts on a signal.
 ---
 
 # Signals
@@ -11,15 +11,15 @@ The routine names the project and the source. If either is missing, say so and s
 
 ## Collect
 
-1. Read the source with the tools the routine names, or the files it names. Read only: never send, reply, delete, label or mark anything.
+1. Read the source with the tools the routine names, or the files it names. Read only: never send, reply, delete, label or mark anything. A routine run is started with Read, Glob, Grep, `grid brain` and `grid signal` allowed, and with the source tools the routine lists in its `tools` key, if any; there the source is those tools or the files the routine names, and when it names neither, say so and stop.
 2. Decide per message. Keep what the person could act on or should know about; skip newsletters, receipts and notices that need nothing. When unsure, keep it: the person triages, you do not.
-3. Save each kept message with one command, the body on stdin:
+3. Save each kept message with one command that starts with `grid signal add`, the body on stdin from a here-document that follows it:
 
-   `printf '%s' "<body, trimmed to the part that matters>" | grid signal add --project <project> --source <mail|slack|calendar> --source-id <the source's own message id> --title "<short phrase in your words>" --sender "<who sent it, as the source names them>" --recipient "<the address or channel it came to>" --body -`
+   `grid signal add --project <project> --source <mail|slack|calendar> --source-id <the source's own message id> --title "<short phrase in your words>" --sender "<who sent it, as the source names them>" --recipient "<the address or channel it came to>" --body -`
 
-   Always give `--source-id` when the source has one: it is how a message is never saved twice. The body is the message as it is, not a summary. Use a quoted here-document when the body holds quotes. Give `--sender` and `--recipient` when the source shows them, each as one line of at most 512 bytes; leave a flag out when the source does not say, and the note then has no such line.
+   Write the body after that line, between `<<'GRIDBODY'` and a last line `GRIDBODY` (the quoted word keeps quotes and `$` in the body as they are), trimmed to the part that matters. Never put `printf`, `echo`, `cd` or a pipe in front of the command: a routine allows only commands that start with `grid signal`, and anything else is refused. Always give `--source-id` when the source has one: it is how a message is never saved twice. The body is the message as it is, not a summary. Give `--sender` and `--recipient` when the source shows them, each as one line of at most 512 bytes; leave a flag out when the source does not say, and the note then has no such line.
 
-   Personal is the project for messages that belong to no project. `--project personal` fails with `project is not registered` (exit 1) from every folder, because `--project` names a registered project and Personal has no record; Personal is chosen by the folder, so when the routine names Personal, leave `--project` out and run from the Grid home, in the same command: `cd "$GRID_HOME" && printf '%s' "<body>" | grid signal add --source mail --source-id <id> --title "<phrase>" --body -`. Do not hand-write a note, and do not run `grid project add` for it.
+   Personal is the project for messages that belong to no project. `--project personal` fails with `project is not registered` (exit 1) from every folder, because `--project` names a registered project and Personal has no record; Personal is chosen by the folder, so when the routine names Personal, leave `--project` out: a routine already runs in the Grid home, so no `cd` is needed, and the command is `grid signal add --source mail --source-id <id> --title "<phrase>" --body -` with the body after it as above. Do not hand-write a note, and do not run `grid project add` for it.
 4. Read the answer: `result: written` or a duplicate are both fine. If the command exits 1 with `grid: <field> ...` on stderr, fix the field it names and call once more; if it fails again, skip that message and name it in your last line.
 5. Finish with one line: how many were written, how many duplicates, how many skipped.
 

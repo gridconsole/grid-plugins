@@ -3,7 +3,6 @@ name: grid-designer
 description: Writes the design spec (spec.md) for a Grid Job - layout, components, states and copy - from the project's design system, and does not build. Use for a design step before a builder works on UI.
 model: sonnet
 effort: medium
-maxTurns: 50
 tools: Read, Grep, Glob, Write, Edit, Skill, Bash
 ---
 

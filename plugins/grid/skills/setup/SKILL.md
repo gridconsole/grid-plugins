@@ -1,6 +1,6 @@
 ---
 name: setup
-description: First run of Grid for a person or a project: read the person's repos and their existing Claude Code sessions, propose what Grid should hold about the project, and record it with `grid setup`. Use when the person says "set up Grid", "set up <project>", "read my repo and my history and tell Grid what you found".
+description: Read the person's repos and Claude Code sessions and record what Grid should hold about a project. Use when the person says "set up Grid" or "set up <project>".
 ---
 
 # Setup
@@ -32,7 +32,8 @@ Stop when another file would not change a proposal. Every proposal rests on some
 ## 3. Propose
 
 - Facts for the brain, one command each: `grid brain propose --name <kebab-case> --topic <topic> --description "<when to read it>" --summary "<what it says>" --source "<file, git <what>, or claude session <date>>" --body "<one fact, plain words>" --project <name>`. Topics: `decisions` or `conventions` (`grid brain topics` lists them). Environment and deploy settings go in the `--answers` file below, not in a proposal; any other environment fact is a `conventions` note, one per repo and per URL, not merged.
-- Settings for the project, in one JSON file with only the keys a source settled: `test`, `lands`, `deploys`, `deployCommand`, `description`, `docsFrom`, `model`, `effort`, `long`, `account`, `starts`, `stops`. `lands` is one of "Open a pull request", "Draft pull request", "Push the branch", "Merge, don't push", "Merge, then push", "Ask each time". `deploys` is one of "Don't deploy", "Deploy from this machine", "CI/CD deploys"; give `deployCommand` only with "Deploy from this machine". Then record it with `grid setup <project> --answers <file>` (or `--answers -` on stdin). The command validates the whole file before it writes anything; fix what it names and run it again.
+- Settings for the project, in one JSON file with only the keys a source settled: `test`, `lands`, `deploys`, `deployCommand`, `description`, `docsFrom`, `model`, `effort`, `long`, `account`, `starts`, `stops`. `lands` is one of "Open a pull request", "Draft pull request", "Push the branch", "Merge, don't push", "Merge, then push", "Ask each time". `deploys` is one of "Don't deploy", "Deploy from this machine", "CI/CD deploys"; give `deployCommand` only with "Deploy from this machine". Write the file with Write in your temp folder (never in the repo or a task folder; the deny rules `grid setup` writes refuse Write and Edit on the setup files in the Grid home), then record it with `grid project settings record <project> --answers <file>`, in a call of its own with no pipe or redirect. `--answers -` reads stdin, for a person at a terminal. The command validates the whole file before it writes anything; fix what it names and run it again. It never touches Claude Code settings; `grid setup` does, so an agent does not run it.
+- The record writes every key except the ones that name a command (`deployCommand`, `starts`, `stops`): a new or changed one waits for a person, and the record prints it with the command that approves it, `grid project settings approve <project> --hash <hash>`. Never run that command yourself. Name the held keys and the approve command in your last message (a builder puts them in its result's `decisions_needed`), so the orchestrator posts a person Job (`grid job post --task <task> --person <name>`) for it; the person checks them with `grid project settings show <project>` first.
 - Git authors are candidates for `people`: list them in your last message, name and commit count; never invite anyone.
 
 ## 4. First run on this machine
@@ -48,4 +49,4 @@ After the proposals are in, name what no source settled (for example, where prod
 
 ## Done
 
-The project is registered, each settled fact is a proposal with its source, the settings file is recorded with `grid setup <project>` and exited 0, nothing was written in the repo, and the last message gives the counts per kind, the gaps and the author candidates.
+The project is registered, each settled fact is a proposal with its source, the settings file is recorded with `grid project settings record <project>` and exited 0, any held command keys are named for a person, nothing was written in the repo, and the last message gives the counts per kind, the gaps and the author candidates.

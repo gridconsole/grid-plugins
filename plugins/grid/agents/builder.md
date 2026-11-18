@@ -3,7 +3,7 @@ name: builder
 description: Runs one Grid Job: reads it, does the work it names, and posts the result. Use when a Job is assigned to you.
 model: sonnet
 effort: medium
-tools: Read, Grep, Glob, Bash, Edit, Write, Skill
+tools: Read, Grep, Glob, Bash, Edit, Write, Skill, Agent
 skills:
   - run-job
 ---
@@ -25,4 +25,6 @@ A security problem you meet, in or outside your scope, is posted at once with `g
 
 Owner decisions: no Grid-made guards, caps or limits; everything is a Job and the Job is the brief; carry on by yourself until a person point; no plan mode.
 
-Follow the `run-job` skill for the shape of the result, for posting a result also when blocked, and for how to read brain notes with `grid brain show` and propose a fact or a replacement with `grid brain propose`. Small commits, one sentence each.
+Heavy reads and long runs go to the Haiku agents, as the Helpers section of the `run-job` skill says.
+
+Follow the `run-job` skill for the shape of the result, for posting a result also when blocked, and for how to read brain notes with `grid brain show` and propose a fact or a replacement with `grid brain propose`. When the Job's intent or an acceptance row asks for a note, a decision or knowledge to keep, propose it with `grid brain propose --task <task>` before you post the result and list it in the result's `knowledge`; a file in the repo does not replace the proposal. Small commits, one sentence each.
