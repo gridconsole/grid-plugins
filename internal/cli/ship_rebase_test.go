@@ -85,6 +85,30 @@ func setJobStatus(t *testing.T, env Env, store feed.Store, id string, status con
 	}
 }
 
+// The merge brings in every file the delivered branch changed, not only the ones that conflict, so the
+// rebase Job may write all of them: a builder held to the conflicting file alone would be blocked on the rest.
+func TestShipConflictRebaseJobMayWriteEveryFileTheBranchChanged(t *testing.T) {
+	env, _, repo, _, store, stderr := shipMergeFixture(t, false, true)
+	shipGit(t, repo, "checkout", "-q", "lane")
+	if err := os.WriteFile(filepath.Join(repo, "b.txt"), []byte("docs\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	shipGit(t, repo, "add", "b.txt")
+	shipGit(t, repo, "commit", "-q", "-m", "the delivered docs")
+	shipGit(t, repo, "checkout", "-q", "main")
+	landFirst(t, repo)
+	if code := Run([]string{"approve", "T-01"}, env); code != 0 {
+		t.Fatalf("approve: %d %s", code, stderr)
+	}
+	rebases, _ := rebaseJobs(t, store)
+	if len(rebases) != 1 {
+		t.Fatalf("%d rebase Jobs after the conflict, want 1; stderr %s", len(rebases), stderr)
+	}
+	if got, want := strings.Join(rebases[0].Write, ","), "a.txt,b.txt"; got != want {
+		t.Fatalf("rebase Job write = %q, want %q: the conflicting file first, then the branch's other changes", got, want)
+	}
+}
+
 // Two tasks edit the same line. The first lands. The second's approval lands nothing,
 // posts a rebase Job and keeps the approval; once a builder has resolved the conflict
 // and the Job is accepted, the next pass lands the rebased branch and closes the task.
