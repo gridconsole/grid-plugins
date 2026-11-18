@@ -49,6 +49,21 @@ func (s Store) read(filter Filter, readOnly bool) (ReadResult, error) {
 		out, _, err := s.boardRead(filter, !readOnly)
 		return out, err
 	}
+	key := s.readKey()
+	if out, ok := readMemoGet(s.Dir(), key); ok {
+		return applyFilter(out, filter)
+	}
+	out, err := s.readAll(readOnly)
+	if err != nil {
+		readMemoDrop(s.Dir())
+		return out, err
+	}
+	readMemoPut(s.Dir(), key, out)
+	return applyFilter(out, filter)
+}
+
+// readAll is the read before any filter: every admitted record of the Feed.
+func (s Store) readAll(readOnly bool) (ReadResult, error) {
 	out, err := s.scan(readOnly)
 	if err != nil {
 		return out, err
@@ -136,7 +151,7 @@ func (s Store) read(filter Filter, readOnly bool) (ReadResult, error) {
 	// Cold display merge: compare only heads of writer streams, never shuffle a
 	// writer's records. The fold does not use this ordering for authority.
 	out.Records = displayOrder(out.Records)
-	return applyFilter(out, filter)
+	return out, nil
 }
 
 // bodyRef reports a body that only points at a stored body file. Post writes
