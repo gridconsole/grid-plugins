@@ -24,8 +24,8 @@ Never ask about a budget, a spend limit or a cap; those are Claude Code's own se
 
 ## 3. Write the answers
 
-Build one JSON object with only the keys the person changed from the default (`workspace`, `data`, `member`, `accounts`, `claudeSettings`). A key left out keeps its detected default. Pipe it to `grid init --answers -`. The command validates before it writes; fix what it names and run it again. A second run with the same answers changes nothing.
+Build one JSON object with only the keys the person changed from the default (`workspace`, `data`, `member`, `accounts`, `claudeSettings`). A key left out keeps its detected default. Write it with Write to a file outside the repo and run `grid init --answers <file>`. The command validates before it writes; fix what it names and run it again. A second run with the same answers changes nothing.
 
 ## Done
 
-The config is written and `grid init --answers -` exited 0. The last message gives the config path, the data folder and the name in Grid, from the command's own output. Nothing was written in the person's repo. If the person declines, the session goes on as before; a decline is not an error.
+The config is written and `grid init --answers <file>` exited 0. The last message gives the config path, the data folder and the name in Grid, from the command's own output. Nothing was written in the person's repo. If the person declines, the session goes on as before; a decline is not an error.

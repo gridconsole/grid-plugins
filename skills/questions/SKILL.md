@@ -26,6 +26,7 @@ Steps (all use `--task <task>`). Pass the task folder path `$GRID_HOME/projects/
 Bash:
 
 - Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- Put no `<`, `>`, here-document or pipe on a `grid` command: such a call stays inside Claude Code's sandbox, which cannot write the task's files. Give a JSON body in single quotes, or write it with Write to a file outside the repo and pass `--body-file <file>`.
 - Put no `VAR=value` in front of a command; use the command's own flags.
 - Never set `dangerouslyDisableSandbox`.
 

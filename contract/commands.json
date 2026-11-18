@@ -769,6 +769,11 @@
               "required": false
             },
             {
+              "name": "--body-file",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--from-brief",
               "takes": "value",
               "required": false
@@ -889,6 +894,11 @@
               "required": false
             },
             {
+              "name": "--body-file",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--from-brief",
               "takes": "value",
               "required": false
@@ -1005,6 +1015,11 @@
             },
             {
               "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body-file",
               "takes": "value",
               "required": false
             },
@@ -1179,6 +1194,11 @@
               "required": false
             },
             {
+              "name": "--body-file",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--from-brief",
               "takes": "value",
               "required": false
@@ -1296,6 +1316,11 @@
             },
             {
               "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body-file",
               "takes": "value",
               "required": false
             },
@@ -1452,6 +1477,11 @@
             },
             {
               "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body-file",
               "takes": "value",
               "required": false
             },
@@ -1632,6 +1662,11 @@
             },
             {
               "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body-file",
               "takes": "value",
               "required": false
             },
@@ -2092,6 +2127,11 @@
               "required": false
             },
             {
+              "name": "--body-file",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--id",
               "takes": "value",
               "required": false
@@ -2165,6 +2205,11 @@
               "name": "--body",
               "takes": "value",
               "required": true
+            },
+            {
+              "name": "--body-file",
+              "takes": "value",
+              "required": false
             },
             {
               "name": "--id",
@@ -2303,6 +2348,11 @@
             },
             {
               "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body-file",
               "takes": "value",
               "required": false
             },
@@ -5481,6 +5531,11 @@
           "flags": [
             {
               "name": "--body",
+              "takes": "value",
+              "required": false
+            },
+            {
+              "name": "--body-file",
               "takes": "value",
               "required": false
             },

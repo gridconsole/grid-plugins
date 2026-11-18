@@ -15,7 +15,7 @@ Steps:
 5. `budget.turns_estimate` is the planner's estimate, not a limit; finish the Job. If you end before every row holds (Claude Code's own limit, a blocker), post the result with the rows left as NOT DONE (`not met` in the result body).
 6. A new test fails on the base and passes on your change; paste the failing lines. Never edit an existing test to make it pass.
 7. Run `grid job verify <job> --task <task>` and the Job's verify command. When you prove an acceptance row, mark it at once so the task shows it met while you work: `grid job post --task <task> --job <job> --type checkpoint --body '{"job":"<job>","acceptance":{"id":"A1","state":"met","note":"<command and exit code>"}}'` (state `met`, `not met` or `pending`).
-8. Post the result with `grid job result --task <task> --job <job> --body <json>`. If it exits 3 the lease or record was rejected: do not retry.
+8. Post the result with `grid job result --task <task> --job <job> --body '<json>'`, or write the JSON to a file outside the repo and post it with `--body-file <file>` when it is long or holds a single quote. If it exits 3 the lease or record was rejected: do not retry.
 
 The result is a proof table: one line per acceptance row, each either
 
@@ -68,6 +68,7 @@ The plugin ships three Haiku agents for heavy reads; each answers short, so your
 ## Bash
 
 - Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- Put no `<`, `>`, here-document or pipe on a `grid` command: such a call stays inside Claude Code's sandbox, which cannot write the task's files. Give a JSON body in single quotes, or write it with Write to a file outside the repo and pass `--body-file <file>`.
 - `grid` and `git` are pre-approved. The Job's verify command is still run, as the Job writes it, in a call of its own (step 7).
 - Put no `VAR=value` in front of a command; use the command's own flags.
 - Use Read, Glob and Grep instead of ls, cat, find and grep. Use Write and Edit instead of sed, cp and heredocs.

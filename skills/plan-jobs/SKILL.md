@@ -27,6 +27,7 @@ Checks the orchestrator runs on each Job before posting it (the rules of 10 Nov)
 ## Bash
 
 - Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
+- Put no `<`, `>`, here-document or pipe on a `grid` command: such a call stays inside Claude Code's sandbox, which cannot write the task's files. Give a JSON body in single quotes, or write it with Write to a file outside the repo and pass `--body-file <file>`.
 - `grid` and `git` are pre-approved. A Job's verify command is still run, as the Job writes it, in a call of its own.
 - Put no `VAR=value` in front of a command; use the command's own flags.
 - Use Read, Glob and Grep instead of ls, cat, find and grep. Use Write and Edit instead of sed, cp and heredocs.
@@ -44,7 +45,7 @@ Point, do not paste. A pasted block goes stale, fills the worker's context and h
 - `after`: bare Job ids that must be done first, or objects with `job`, `kind` (`done`, `failed`, `children-done`) and `why` (8 to 160 characters). A gate is `gate:Q-7`. A review Job you post (only one asked for on top of the worker's, see the workflow rule above) names the build Job it checks and carries `review_reason`.
 - `repo`: in a project with more than one repo, a code Job names its `repo` (one of the project's repos); with none named the Job runs in the first repo of project.md.
 - Keep a Job small: one outcome, one owner, a read list of a few ranges. If it needs more, split it into Jobs joined by `after`.
-- Post it with `grid job post --task <task> --type job --body '<json>'`, the JSON body in single quotes: the shell runs backticks and `$` inside double quotes, so a backticked `grid deliver ...` in an acceptance row would run there and vanish from the body. A single quote in the text is the JSON escape `\u0027`; or write the body to a file and post it with `--body -` and a `<` redirect from that file.
+- Post it with `grid job post --task <task> --type job --body '<json>'`, the JSON body in single quotes: the shell runs backticks and `$` inside double quotes, so a backticked `grid deliver ...` in an acceptance row would run there and vanish from the body. A single quote in the text is the JSON escape `\u0027`; or write the body to a file with Write and post it with `--body-file <file>`.
 - The last Job of a task is the deliver Job: title "Deliver the task", role orchestrator, `after` names every other Job (each with a why; a Job the worker reviews is named with kind `children-done`, so delivery waits until that Job and its review are accepted, or, when the review sends it back, its rework and the rework's review), and it runs `grid deliver --task <task> --outcome <text> --json`.
 
 ## Standing rules
