@@ -5,7 +5,7 @@ description: Start a Grid task from the person's own words, or show where tasks 
 
 # Task
 
-A task is a folder in the Grid home, made and read only by the `grid task` verbs. Never write `task.md`, `intent.md` or any file of a task by hand, and never put anything in the person's repo.
+A task is a folder in the Grid home. `grid task` makes it and keeps `task.md`, `intent.md` and `history.md` in format, so change those through the verbs. Any other file of the task (research, drafts, artifacts) you write straight into the folder, and nothing in the person's repo.
 
 Owner decisions that apply here:
 

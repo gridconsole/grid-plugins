@@ -111,7 +111,7 @@ personal values, and missing values use the catalog defaults.
 | --- | --- | --- |
 | host-guard | warn | Host and Feed guard; warns by default, `block` refuses the write |
 | only-writer | warn | Task and brain ownership guard; warns by default, `block` refuses the write |
-| plan-guard | warn | Plan guard (folder name and agent role folders); warns by default, `block` refuses the write |
+| plan-guard | warn | Plan guard (a reviewer's or checker's reach outside a task folder); warns by default, `block` refuses the write |
 | home-allow | warn | Home permission fallback |
 | session-start | warn | SessionStart context |
 | stop-check | block | Stop and SubagentStop completion checks, including saved Job verification |
@@ -133,8 +133,10 @@ person does, in Grid or with the command.
 
 The plan guard does not refuse repo writes because a task's plan is not accepted.
 Whether a plan needs a person's approval is a step of the task's workflow (an
-`approve` step), and the workflow's default says who answers and when. The
-guard's other plan rule (the grid-planner's reach into a task folder) stays.
+`approve` step), and the workflow's default says who answers and when. It no
+longer fences where a planner, a curator or any other agent writes in the Grid
+home: task folders, the brain and project files are agents' to write. Its one rule
+left is that a reviewer or checker does not write outside its task folder.
 A guarded tool call over the 1 MiB input limit, which the guards cannot read,
 follows the `plan-guard` level: `block` denies it, `warn` (the default) warns and
 lets it through, `off` says nothing. With no Grid home, or settings that cannot
