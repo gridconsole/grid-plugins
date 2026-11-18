@@ -31,9 +31,11 @@ func acceptedShipJob(snap orchestrator.Snapshot) string {
 // where an unleased answer is accepted, and grid approve calls it after a leased
 // answer. A task that is not waiting, or has no accepted ship Job, gets nothing.
 // A land that fails is recorded in the task's history and said on stderr; it never
-// fails the caller, and it posts no Job. It also puts the ship Job back with its
-// person, with the failure text as its reason (reopenShipJob), so the task is in
-// Needs you again and the person's next approve runs land once more.
+// fails the caller. It puts the ship Job back with its person, with the failure text
+// as its reason (reopenShipJob), so the task is in Needs you again and the person's
+// next approve runs land once more. A merge that conflicts is the exception: it posts
+// a builder Job that rebases the delivered branch (queueRebase), the approval stands,
+// and a later pass lands once that Job is accepted (rebaseStep).
 func landAfterShip(env Env, dir string, who contract.Author) {
 	w, err := approvalWriter(env)
 	if err != nil {
@@ -82,6 +84,12 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 		return
 	}
 	store := land.Store{Resolver: resolver(env), Who: who, Getenv: env.Getenv, Project: resolved.Project, Merge: func(id string) (string, error) { return landMergeBranch(env, dir, resolved.Project, id) }}
+	// An approval that waits for a rebase Job lands once the Job is accepted.
+	if pending, err := store.RebasePending(env.Cwd, resolved.ID, job); err == nil && pending {
+		if rebaseStep(env, fs, w, store, who, dir, resolved.Project, resolved.ID, job, snap) {
+			return
+		}
+	}
 	if _, ran, err := store.AfterShip(context.Background(), env.Cwd, resolved.ID, job); err != nil || !ran {
 		if err == nil {
 			return
@@ -89,6 +97,12 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 		fmt.Fprintf(env.Stderr, "land: %s after %s: %s\n", resolved.ID, job, oneLineErr(err))
 		var failed *land.FailedError
 		if errors.As(err, &failed) {
+			// A merge that conflicts is rebased by a builder Job and lands again on its
+			// own; the person is asked again only when that cannot be done.
+			var conflict *mergeConflictError
+			if errors.As(err, &conflict) && queueRebase(env, fs, w, store, resolved.ID, job, conflict) {
+				return
+			}
 			reopenShipJob(env, fs, w, store, resolved.ID, job, failed.Text)
 		}
 	}

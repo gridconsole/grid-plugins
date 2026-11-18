@@ -537,6 +537,44 @@ func (s Store) Note(o WriteOptions) (Event, error) {
 	return event, err
 }
 
+// RecordBranch points task.md's branch: and head: at the branch and commit that
+// hold the task's delivered work now (a rebased delivery replaces the branch grid
+// deliver recorded), through the same lock, journal and receipt as Note. The task's
+// state and its approval receipt are not touched: the person approved the work, and
+// a rebase that only resolves conflicts does not ask again. head may be empty.
+func (s Store) RecordBranch(o WriteOptions, branch, head string) (Event, error) {
+	var event Event
+	if err := o.validateText(); err != nil {
+		return event, err
+	}
+	if strings.TrimSpace(branch) == "" || strings.ContainsAny(branch, "\r\n\x00") {
+		return event, errors.New("record a branch name on one line")
+	}
+	err := s.withWrite(o.Cwd, o.ID, func(t Task) error {
+		o.Action = "branch"
+		event = s.event(t, o, t.State)
+		data, err := os.ReadFile(filepath.Join(t.Path, "task.md"))
+		if err != nil {
+			return err
+		}
+		updated, err := rewriteTask(data, func(mapping *yaml.Node) error {
+			setScalar(mapping, "branch", branch, true)
+			if head != "" {
+				setScalar(mapping, "head", head, true)
+			}
+			return nil
+		}, nil)
+		if err != nil {
+			return err
+		}
+		if _, err := Fold(t.Path, string(updated), t.Intent); err != nil {
+			return err
+		}
+		return commitWrite(t.Path, event, map[string][]byte{"task.md": updated})
+	})
+	return event, err
+}
+
 func (s Store) event(t Task, o WriteOptions, next string) Event {
 	now := s.clock()
 	who := o.Who

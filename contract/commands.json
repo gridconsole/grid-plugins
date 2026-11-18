@@ -311,6 +311,11 @@
               "name": "--json",
               "takes": "none",
               "required": false
+            },
+            {
+              "name": "--project",
+              "takes": "value",
+              "required": false
             }
           ],
           "json": true,

@@ -111,6 +111,9 @@ func runTaskWrite(args []string, env Env) int {
 	if sub == "rename" || sub == "decline" {
 		fs.StringVar(&project, "project", "", "project name or id; personal selects Personal")
 	}
+	if sub == "history" {
+		fs.StringVar(&project, "project", "", "project name or id; the task must be in it")
+	}
 	pos, err := taskArgs(fs, args[1:])
 	if errors.Is(err, flag.ErrHelp) {
 		return 0
@@ -134,7 +137,13 @@ func runTaskWrite(args []string, env Env) int {
 			return taskOperandError(env, "grid task "+sub, fmt.Errorf("scope: %w", err))
 		}
 	}
-	resolved, err := resolveTaskOperand(env, pos[0])
+	// For rename and decline --project names the project the task moves to, not the one
+	// it is in; for history it is the project the task must be in.
+	scope := ""
+	if sub == "history" {
+		scope = project
+	}
+	resolved, err := resolveTaskOperandIn(env, pos[0], scope)
 	if err != nil {
 		if sub == "rename" || sub == "decline" {
 			err = fmt.Errorf("scope: %w", err)
@@ -144,6 +153,7 @@ func runTaskWrite(args []string, env Env) int {
 	pos[0] = resolved.ID
 	store := taskWriter(env)
 	if sub == "history" {
+		store.Project = scope
 		lines, err := store.History(env.Cwd, pos[0])
 		if err != nil {
 			fmt.Fprintf(env.Stderr, "grid task history: %v\n", err)

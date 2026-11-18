@@ -152,8 +152,74 @@ func (s Store) Reopened(cwd, id, job string) error {
 	return s.note(cwd, id, shipEvent+": "+shipReopenedDetail(job))
 }
 
+// shipRebasePrefix starts the detail of the "ship answered" line RebaseQueued
+// writes: the answer to job stands (a conflict-only rebase that keeps the tests green
+// needs no new approval) and land runs again once the rebase Job is accepted.
+func shipRebasePrefix(job string) string { return job + " approval kept; waits for rebase " }
+
+// RebaseQueued records that a land of the ship Job job stopped on a merge conflict
+// and the rebase Job rebase was posted: the person's approval is kept, and the next
+// acceptance pass of job runs land again (markShip) once the rebase is accepted.
+// The caller writes it after the rebase Job is on the Feed.
+func (s Store) RebaseQueued(cwd, id, job, rebase string) error {
+	return s.withShipLock(cwd, id, func(string) error {
+		return s.note(cwd, id, shipEvent+": "+shipRebasePrefix(job)+rebase+", which keeps both changes; grid land runs again once it is accepted")
+	})
+}
+
+// RebasePending reports whether the ship Job job waits for a rebase Job: the newest
+// arming line of its history is the one RebaseQueued writes, and land has not run
+// since.
+func (s Store) RebasePending(cwd, id, job string) (bool, error) {
+	pending := false
+	err := s.withShipLock(cwd, id, func(history string) error {
+		_, pending = shipState(history, job)
+		return nil
+	})
+	return pending, err
+}
+
+func (s Store) withShipLock(cwd, id string, fn func(history string) error) error {
+	t, err := s.tasks().Show(cwd, id)
+	if err != nil {
+		return err
+	}
+	lock, err := fslock.OpenNoFollow(filepath.Join(t.Path, ".land.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err = fslock.LockExclusive(lock); err != nil {
+		return err
+	}
+	history, err := os.ReadFile(filepath.Join(t.Path, "history.md"))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return fn(string(history))
+}
+
+// shipState reads the "ship answered" lines of job in history.md in order. armed is
+// true until land has run for the answer, and again after a reopen (Reopened) or a
+// queued rebase (RebaseQueued); rebasing is true when the newest of those lines is
+// the rebase one.
+func shipState(history, job string) (armed, rebasing bool) {
+	armed = true
+	for _, line := range strings.Split(history, "\n") {
+		switch {
+		case strings.Contains(line, " · "+shipEvent+" · "+job+" accepted; grid land runs · "):
+			armed, rebasing = false, false
+		case strings.Contains(line, " · "+shipEvent+" · "+shipReopenedDetail(job)+" · "):
+			armed, rebasing = true, false
+		case strings.Contains(line, " · "+shipEvent+" · "+shipRebasePrefix(job)):
+			armed, rebasing = true, true
+		}
+	}
+	return armed, rebasing
+}
+
 // markShip writes the "ship answered" line for job under .land.lock unless
-// history.md already holds it with no later reopen line for job (Reopened); first
+// history.md already holds it with no later reopen or rebase line for job; first
 // reports whether this call wrote it.
 func (s Store) markShip(dir, cwd, id, job string) (first bool, err error) {
 	lock, err := fslock.OpenNoFollow(filepath.Join(dir, ".land.lock"), os.O_CREATE|os.O_RDWR, 0600)
@@ -168,18 +234,8 @@ func (s Store) markShip(dir, cwd, id, job string) (first bool, err error) {
 	if err != nil && !os.IsNotExist(err) {
 		return false, err
 	}
-	detail := job + " accepted; grid land runs"
-	armed := true
-	for _, line := range strings.Split(string(history), "\n") {
-		switch {
-		case strings.Contains(line, " · "+shipEvent+" · "+detail+" · "):
-			armed = false
-		case strings.Contains(line, " · "+shipEvent+" · "+shipReopenedDetail(job)+" · "):
-			armed = true
-		}
-	}
-	if !armed {
+	if armed, _ := shipState(string(history), job); !armed {
 		return false, nil
 	}
-	return true, s.note(cwd, id, shipEvent+": "+detail)
+	return true, s.note(cwd, id, shipEvent+": "+job+" accepted; grid land runs")
 }

@@ -35,7 +35,7 @@ const taskUsage = `Usage:
   grid task restore <T-NN> --project <p> [--json]
   grid task status <task> <state> [--json]
   grid task lane <task> <inbox|planning|doing|delivering> [--project <p>] [--json]
-  grid task history <task> [--json]
+  grid task history <task> [--project <p>] [--json]
   grid task merge --task <task> [--project <p>] [--json]
 
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
@@ -148,6 +148,19 @@ func runTaskMerge(args []string, env Env) int {
 	return 0
 }
 
+// mergeConflictError is a merge of the task's branch into its base that stopped on
+// conflicts and was aborted. Target is the branch it was merged into, not the SHA
+// task.md base: holds, so a rebase Job can name the branch to rebase on.
+type mergeConflictError struct {
+	Branch, Target string
+	Files          []string
+}
+
+func (e *mergeConflictError) Error() string {
+	return fmt.Sprintf("merging %s into %s conflicts in %s; the merge was aborted and the checkout is as it was; merge or rebase %s on %s by hand, then run grid task merge again",
+		e.Branch, e.Target, strings.Join(e.Files, ", "), e.Branch, e.Target)
+}
+
 // taskMerge does the merge and answers the commit the base branch now points at.
 func taskMerge(env Env, id, proj string) (string, error) {
 	if env.GridHome == "" {
@@ -228,8 +241,7 @@ func taskMerge(env Env, id, proj string) (string, error) {
 			return "", fmt.Errorf("merging %s into %s failed and %s is still checked out (%v); run git checkout %s in %s", branch, target, target, err, start, repo)
 		}
 		if conflicts != "" {
-			return "", fmt.Errorf("merging %s into %s conflicts in %s; the merge was aborted and the checkout is as it was; merge or rebase %s on %s by hand, then run grid task merge again",
-				branch, target, strings.Join(strings.Fields(conflicts), ", "), branch, target)
+			return "", &mergeConflictError{Branch: branch, Target: target, Files: strings.Fields(conflicts)}
 		}
 		return "", fmt.Errorf("merging %s into %s failed (%v); the checkout is as it was; fix that, then run grid task merge again", branch, target, mergeErr)
 	}
