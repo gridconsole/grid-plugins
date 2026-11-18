@@ -228,6 +228,8 @@ func (s Store) Tick() (out Output, err error) {
 				default:
 					why = string(j.Status)
 				}
+			} else if why == "usage_limit" {
+				why = s.usageWhy(snap, j)
 			}
 			out.Rows = append(out.Rows, Row{j.ID, j.Role, j.Status, why})
 		}
@@ -299,7 +301,7 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 		return nil
 	}
 	if j.Status == contract.Parked {
-		if j.Reason == "usage_limit" && s.yaUsageReady(j) {
+		if j.Reason == "usage_limit" && s.yaUsageReady(snap, j) {
 			return s.control(j, contract.Ready, "usage capacity restored", j.Exited)
 		}
 		if j.Reason == "needs_person" {
