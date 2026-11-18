@@ -121,10 +121,13 @@ func resultBody() map[string]any {
 func TestMoves(t *testing.T) {
 	for _, tc := range []struct {
 		name, reason string
+		result       bool
 		want         contract.Status
 		attempt      int
 	}{
-		{"crash", "crash", contract.Assigned, 2}, {"missing reason", "", contract.Assigned, 2}, {"loop", "loop", contract.Assigned, 2}, {"usage_limit", "usage_limit", contract.Parked, 1}, {"cancelled", "cancelled", contract.Cancelled, 1}, {"done", "done", contract.Submitted, 1},
+		{"crash", "crash", false, contract.Assigned, 2}, {"missing reason", "", false, contract.Assigned, 2}, {"loop", "loop", false, contract.Assigned, 2}, {"usage_limit", "usage_limit", false, contract.Parked, 1}, {"cancelled", "cancelled", false, contract.Cancelled, 1}, {"done", "done", true, contract.Submitted, 1},
+		// An empty finish is retried as a new attempt, not left Submitted (empty_finish_test.go).
+		{"done with no result", "done", false, contract.Assigned, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := setup(t)
@@ -134,6 +137,9 @@ func TestMoves(t *testing.T) {
 				t.Fatal(out)
 			}
 			f.ack(t)
+			if tc.result {
+				postResult(t, f)
+			}
 			f.exit(t, tc.reason)
 			f.tick(t)
 			j := f.state(t)
@@ -329,6 +335,7 @@ func TestDeadAgentWaitsForItsLiveWorkerExit(t *testing.T) {
 			if !tc.supervisorAlive {
 				return
 			}
+			postResult(t, f)
 			f.exit(t, "done") // the worker's exit is not stale
 			f.tick(t)
 			if got := f.state(t); got.Status != contract.Submitted || got.Attempt != 1 {

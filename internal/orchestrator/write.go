@@ -131,7 +131,7 @@ type Attempt struct {
 	Code          string `json:"code,omitempty"`
 	ReasonMissing bool   `json:"reason_missing,omitempty"`
 	// NoResult says the agent ended with exit done and no result record came for
-	// this attempt: an empty finish. It is shown, never acted on.
+	// this attempt: an empty finish. The tick retries it (empty_finish.go).
 	NoResult bool `json:"no_result,omitempty"`
 	// The record times of the assign, the ack and the worker-exit. They come from
 	// the Feed records, never from the clock.

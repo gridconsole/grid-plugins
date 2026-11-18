@@ -301,7 +301,7 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 				}
 				if snap.Records[*q.Applied].Body["answer"] == "Retry" {
 					m.Failures = nil
-					return s.control(j, contract.Ready, "owner requested retry", *q.Applied)
+					return s.control(j, contract.Ready, ownerRetryReason, *q.Applied)
 				}
 			}
 		}
@@ -312,7 +312,9 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 		m.Failures = nil
 	}
 	m.Progress = progress
-	if j.Status == contract.Submitted {
+	// A Submitted Job whose attempt ended with no result is one an older tick moved here: it
+	// takes the retry below, so a task stuck that way goes on by itself.
+	if j.Status == contract.Submitted && !emptyFinish(snap, j) {
 		return nil
 	}
 	failure := ""
@@ -329,7 +331,10 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 			return s.control(j, contract.Cancelled, "worker cancelled", j.Exited)
 		case "done":
 			// A done exit with a result of its attempt folds Submitted itself and
-			// returned above; this control is for a done exit with no result.
+			// returned above. One with no result is an empty finish: retried, then parked.
+			if emptyFinish(snap, j) {
+				return s.retryEmptyFinish(snap, j, m, all)
+			}
 			return s.control(j, contract.Submitted, "awaiting judgement", j.Exited)
 		default:
 			failure = j.Exited

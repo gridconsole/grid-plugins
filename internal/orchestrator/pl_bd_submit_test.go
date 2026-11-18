@@ -66,14 +66,15 @@ func TestPlBdDoneWithResultSubmitsWithoutControl(t *testing.T) {
 	}
 }
 
-// Ruling 2: an exit done with no result keeps the tick's Submitted control.
-func TestPlBdDoneWithoutResultKeepsControl(t *testing.T) {
-	plBdWantControl(t, plBdStarted(t))
+// Ruling 2, reversed on 18 Nov: an exit done with no result is an empty finish. The tick posts no
+// Submitted control for it; it retries the attempt (empty_finish.go).
+func TestPlBdDoneWithoutResultRetries(t *testing.T) {
+	plBdWantRetry(t, plBdStarted(t))
 }
 
 // An exit done of attempt 2 with only attempt 1's result is not done with a
-// result of that attempt: the fold leaves it, and the tick posts the control.
-func TestPlBdDoneWithOlderResultKeepsControl(t *testing.T) {
+// result of that attempt: the fold leaves it, and the tick retries it.
+func TestPlBdDoneWithOlderResultRetries(t *testing.T) {
 	f := plBdStarted(t)
 	plBdResult(t, f, 1)
 	f.exit(t, "crash")
@@ -82,29 +83,35 @@ func TestPlBdDoneWithOlderResultKeepsControl(t *testing.T) {
 		t.Fatalf("crash did not give attempt 2: %s attempt %d", j.Status, j.Attempt)
 	}
 	f.ack(t)
-	plBdWantControl(t, f)
+	plBdWantRetry(t, f)
 }
 
-// plBdWantControl exits J-1 done and checks that the fold leaves it to the tick,
-// which posts one control: submitted, "awaiting judgement", re the exit.
-func plBdWantControl(t *testing.T, f *fixture) {
+// plBdWantRetry exits J-1 done and checks that the fold leaves it to the tick, which posts a
+// ready control re the exit (never submitted) and assigns the next attempt.
+func plBdWantRetry(t *testing.T, f *fixture) {
 	t.Helper()
+	attempt := f.state(t).Attempt
 	f.exit(t, "done")
 	j := f.state(t)
 	if j.Status != contract.Running {
 		t.Fatalf("before the tick: want running, got %s %q", j.Status, j.Reason)
 	}
-	before := plBdControls(t, f)
+	exit := j.Exited
+	before := len(plBdControls(t, f))
 	f.tick(t)
-	after := plBdControls(t, f)
-	if len(after) != len(before)+1 {
-		t.Fatalf("want one new control, got %d before and %d after", len(before), len(after))
+	var ready bool
+	for _, c := range plBdControls(t, f)[before:] {
+		if c.Body["status"] == "submitted" {
+			t.Fatalf("the tick submitted an empty finish: %+v", c.Body)
+		}
+		if c.Body["status"] == "ready" && c.Body["reason"] == "retry after failed attempt" && c.Re != nil && *c.Re == exit {
+			ready = true
+		}
 	}
-	c := after[len(after)-1]
-	if c.Body["status"] != "submitted" || c.Body["reason"] != "awaiting judgement" || c.Re == nil || *c.Re != j.Exited {
-		t.Fatalf("control %+v re %v, want submitted %q re %s", c.Body, c.Re, "awaiting judgement", j.Exited)
+	if !ready {
+		t.Fatalf("no ready control re the exit %s after the tick", exit)
 	}
-	if got := f.state(t); got.Status != contract.Submitted || got.Reason != "awaiting judgement" {
-		t.Fatalf("after the tick: %s %q", got.Status, got.Reason)
+	if got := f.state(t); got.Status != contract.Assigned || got.Attempt != attempt+1 {
+		t.Fatalf("after the tick: %s attempt %d, want assigned attempt %d", got.Status, got.Attempt, attempt+1)
 	}
 }

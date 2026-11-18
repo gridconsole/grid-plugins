@@ -32,6 +32,10 @@ func qtPkWords(snap Snapshot, id string) string {
 	if reason == "" {
 		reason = "crash"
 	}
+	if reason == "done" {
+		// Only an empty finish is ever a failure: the agent ended and posted no result.
+		return "ended without posting a result"
+	}
 	code := exitCodeText(r.Body["code"])
 	_, textual := r.Body["code"].(string)
 	if reason == "crash" {

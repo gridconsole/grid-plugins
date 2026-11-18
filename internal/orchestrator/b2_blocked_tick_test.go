@@ -79,10 +79,13 @@ func TestB2BlockedSurvivesTick(t *testing.T) {
 	}
 }
 
-// A done exit with no blocked post still reads as awaiting judgement.
+// A done exit with a result and no blocked post still reads as awaiting judgement. (With no
+// result it is an empty finish and is retried: TestEmptyFinishRetriesAsNewAttempt.)
 func TestB2DoneStillAwaitsJudgement(t *testing.T) {
 	f := b2Started(t)
-	b2Exit(t, f, "done")
+	f.ack(t) // the result needs the fence the ack takes
+	postResult(t, f)
+	f.exit(t, "done")
 	f.tick(t)
 	if j := f.state(t); j.Status != contract.Submitted || j.Reason != "awaiting judgement" {
 		t.Fatalf("Job = %s %q, want submitted awaiting judgement", j.Status, j.Reason)

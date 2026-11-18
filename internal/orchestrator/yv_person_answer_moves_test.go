@@ -15,6 +15,7 @@ func yvPamSubmitted(t *testing.T) *fixture {
 	f.job(t, "J-1", nil)
 	f.tick(t)
 	f.ack(t)
+	postResult(t, f)
 	f.exit(t, "done")
 	f.tick(t)
 	if got := jobStatus(t, f, "J-1"); got != contract.Submitted {

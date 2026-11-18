@@ -411,6 +411,10 @@ func (s Store) recoverMemory(snap Snapshot, j *contract.Job) *jobMemory {
 			case "usage_limit", "cancelled":
 				m.Failures = nil
 			case "done":
+				// An empty finish is a failed attempt; a done exit with a result is not.
+				if !hasResultOf(snap, j, r.Attempt) {
+					failure = id
+				}
 			default:
 				failure = id
 			}

@@ -171,23 +171,29 @@ func TestEventsTickWakeRejectedHistory(t *testing.T) {
 
 // Row 6: what recoverMemory does with the failures it has counted.
 func TestEventsTickRecoverMemory(t *testing.T) {
+	one := 1
 	crash := feed.Record{ID: "e0", Type: "worker-exit", Body: feed.Body{"reason": "crash"}}
+	done := feed.Record{ID: "e1", Type: "worker-exit", Attempt: &one, Body: feed.Body{"reason": "done"}}
+	result := feed.Record{ID: "e2", Type: "result", Attempt: &one, Body: feed.Body{}}
 	for _, tc := range []struct {
 		name         string
 		next         feed.Record
+		results      []string
 		failures     []string
 		lastFailure  string
 		failuresNone bool
 	}{
-		{"checkpoint", feed.Record{ID: "e1", Type: "checkpoint", Body: feed.Body{}}, nil, "e0", true},
-		{"usage_limit", feed.Record{ID: "e1", Type: "worker-exit", Body: feed.Body{"reason": "usage_limit"}}, nil, "e0", true},
-		{"cancelled", feed.Record{ID: "e1", Type: "worker-exit", Body: feed.Body{"reason": "cancelled"}}, nil, "e0", true},
-		{"done", feed.Record{ID: "e1", Type: "worker-exit", Body: feed.Body{"reason": "done"}}, []string{"e0"}, "e0", false},
-		{"stale control", feed.Record{ID: "e1", Type: "control", Re: eventsTickPtr("r1"), Body: feed.Body{"status": "stale"}}, []string{"e0", "r1"}, "r1", false},
+		{"checkpoint", feed.Record{ID: "e1", Type: "checkpoint", Body: feed.Body{}}, nil, nil, "e0", true},
+		{"usage_limit", feed.Record{ID: "e1", Type: "worker-exit", Body: feed.Body{"reason": "usage_limit"}}, nil, nil, "e0", true},
+		{"cancelled", feed.Record{ID: "e1", Type: "worker-exit", Body: feed.Body{"reason": "cancelled"}}, nil, nil, "e0", true},
+		// A done exit with a result of its attempt is not a failure; one with none is.
+		{"done with a result", done, []string{"e2"}, []string{"e0"}, "e0", false},
+		{"done with no result", done, nil, []string{"e0", "e1"}, "e1", false},
+		{"stale control", feed.Record{ID: "e1", Type: "control", Re: eventsTickPtr("r1"), Body: feed.Body{"status": "stale"}}, nil, []string{"e0", "r1"}, "r1", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			j := &contract.Job{ID: "J-1", History: []string{"e0", "e1"}}
-			snap := Snapshot{Records: map[string]feed.Record{"e0": crash, "e1": tc.next}}
+			j := &contract.Job{ID: "J-1", History: []string{"e0", "e1"}, Results: tc.results}
+			snap := Snapshot{Records: map[string]feed.Record{"e0": crash, "e1": tc.next, "e2": result}}
 			m := (Store{}).recoverMemory(snap, j)
 			if tc.failuresNone {
 				if len(m.Failures) != 0 {
