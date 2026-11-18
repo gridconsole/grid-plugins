@@ -81,9 +81,11 @@ func (s Store) park(snap Snapshot, j *contract.Job, m *jobMemory) error {
 	if owner == "" {
 		return fmt.Errorf("crash loop for %s: task owner is required (--owner or GRID_OWNER)", j.ID)
 	}
+	// The incident note is evidence kept for later: the person's question does not wait on it, and
+	// a note the brain refuses must not fail every pass and leave the Job unparked.
 	if s.Incident != nil {
-		if err := s.Incident(j.ID, m.Failures); err != nil {
-			return err
+		if err := s.Incident(j.ID, m.Failures); err != nil && s.Diagnostics != nil {
+			fmt.Fprintf(s.Diagnostics, "grid: the incident note for %s was not kept: %v\n", j.ID, err)
 		}
 	}
 	gate := 1
