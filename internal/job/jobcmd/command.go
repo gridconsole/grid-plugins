@@ -865,7 +865,7 @@ func gateAnswer(edge, qid string, state contract.State, decisions map[string]fee
 
 func sources(task string, e Env) (*world, error) {
 	w := &world{project: projectOf(task, e.GridHome)}
-	w.store = brain.Store{GridHome: e.GridHome, Project: w.project}
+	w.store = brain.Store{GridHome: e.GridHome, Project: w.project}.WithConfig(e.Home, nil)
 	f := &job.Files{Task: task, Notes: w.store, Repos: map[string]string{}}
 	w.files = f
 	var prototype string
