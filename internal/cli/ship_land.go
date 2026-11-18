@@ -99,11 +99,18 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 		if errors.As(err, &failed) {
 			// A merge that conflicts is rebased by a builder Job and lands again on its
 			// own; the person is asked again only when that cannot be done.
+			text := failed.Text
 			var conflict *mergeConflictError
-			if errors.As(err, &conflict) && queueRebase(env, fs, w, store, resolved.ID, job, conflict) {
-				return
+			if errors.As(err, &conflict) {
+				queued, why := queueRebase(env, fs, w, store, resolved.ID, job, conflict)
+				if queued {
+					return
+				}
+				if why != "" {
+					text = why
+				}
 			}
-			reopenShipJob(env, fs, w, store, resolved.ID, job, failed.Text)
+			reopenShipJob(env, fs, w, store, resolved.ID, job, text)
 		}
 	}
 }
