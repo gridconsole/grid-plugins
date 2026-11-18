@@ -313,7 +313,7 @@ func (s *Stream) task(dir string) error {
 	}
 	if s.PersonWait != nil {
 		if after, err := Load(fs); err == nil && hasOpenJob(after) {
-			if err := s.PersonWait(dir, waitsOnPerson(after)); err != nil {
+			if err := s.PersonWait(dir, waitsOnPerson(after, s.now())); err != nil {
 				s.diag("grid worker next: task %s: person wait: %s\n", taskID, oneLine(err))
 			}
 		}
@@ -555,17 +555,58 @@ func (s *Stream) diag(format string, args ...any) {
 
 func oneLine(err error) string { return strings.Join(strings.Fields(err.Error()), " ") }
 
-// waitsOnPerson reports whether the task has open Jobs and each is a person Job or
-// holds an open question: nothing an agent could do next.
-func waitsOnPerson(snap Snapshot) bool {
+// waitsOnPerson reports whether the task has open Jobs and each waits on a person: a
+// person Job, a Job with an open question, or a Job not yet ready whose every wait
+// (the graph's own, as Ready reports it) is on such a Job. Nothing an agent could do next.
+func waitsOnPerson(snap Snapshot, now time.Time) bool {
+	r, err := Ready(snap, now)
+	if err != nil {
+		return false
+	}
+	ready := map[string]bool{}
+	for _, id := range r.Ready {
+		ready[id] = true
+	}
+	waits := map[string][]string{}
+	for _, w := range r.Waiting {
+		waits[w.Job] = append(waits[w.Job], w.Target)
+	}
+	memo := map[string]bool{}
+	var person func(id string) bool
+	person = func(id string) bool {
+		if v, ok := memo[id]; ok {
+			return v
+		}
+		memo[id] = false // a cycle is not a person's wait
+		j := snap.State.Jobs[id]
+		v := false
+		switch {
+		case j == nil:
+		case j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected:
+			v = true // settled: nothing to wait for
+		case contract.NormalizeRole(j.Role) == "person" || len(j.OpenQuestions) > 0:
+			v = true
+		case ready[id] || (j.Status != contract.Posted && j.Status != contract.Ready) || len(waits[id]) == 0:
+		default:
+			v = true
+			for _, t := range waits[id] {
+				if t == "" || !person(t) {
+					v = false
+					break
+				}
+			}
+		}
+		memo[id] = v
+		return v
+	}
 	open := false
-	for _, j := range snap.State.Jobs {
+	for id, j := range snap.State.Jobs {
 		switch j.Status {
 		case contract.Accepted, contract.Cancelled, contract.Rejected:
 			continue
 		}
 		open = true
-		if contract.NormalizeRole(j.Role) != "person" && len(j.OpenQuestions) == 0 {
+		if !person(id) {
 			return false
 		}
 	}
