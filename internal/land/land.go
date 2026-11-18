@@ -56,6 +56,10 @@ type Store struct {
 	// Getenv answers the variables the deploy command may see (the allow list and
 	// the rule's env names). Nil reads the host, as the binary does.
 	Getenv func(string) string
+	// Merge lands the delivered branch of task id when a ship answer finds no
+	// deploy topic, and answers the commit the base now points at; "" with no error
+	// is a task with no branch. Nil merges nothing.
+	Merge func(id string) (string, error)
 }
 
 func (s Store) tasks() task.Store { return task.Store{Resolver: s.Resolver, Now: s.Now} }
