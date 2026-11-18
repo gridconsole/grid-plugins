@@ -37,9 +37,9 @@ func Person(st State, builder, from, owner, wake, point string) (Plan, error) {
 		if d := st.decisionFrom(discovered); d != nil {
 			return Plan{Note: fmt.Sprintf("the decision Job %s from %s is already on the Feed", d.ID, discovered)}
 		}
-		old := st.personFrom(discovered)
-		if old != nil && !st.oldPersonOpen(old) {
-			return Plan{Note: fmt.Sprintf("the person Job %s from %s is already on the Feed", old.ID, discovered)}
+		old := st.oldPersonFrom(discovered)
+		if p := st.personFrom(discovered); old == nil && p != nil {
+			return Plan{Note: fmt.Sprintf("the person Job %s from %s is already on the Feed", p.ID, discovered)}
 		}
 		goal += st.decisionGuide(builder, discovered, from)
 		plan := Plan{Posts: []Post{{Task: st.Task, Type: "job", Job: child, Body: decisionBody(child, builder, discovered, title, goal, src), Wake: wake}}}
@@ -147,10 +147,48 @@ func sortedIDs(jobs map[string]*contract.Job) []string {
 	return ids
 }
 
-// oldPersonOpen is whether p is a person Job of the old kind, still open: an ask whose one row says
-// the owner "decides how <builder> continues", raised before the Judge handed these to an agent.
+// Migrate is the plan that hands one open person Job of the old kind to an agent (the Judge used to
+// ask the owner how a builder continues), so no one has to run grid judge person by hand. It is
+// Person's own plan: the decision Job is raised once and the person Job is cancelled by the same
+// plan. It reports false when no such Job is left, and a caller reads the state again for the next.
+func Migrate(st State) (Plan, bool) {
+	for _, id := range sortedIDs(st.Jobs) {
+		p := st.Jobs[id]
+		if !st.oldPersonOpen(p) || p.DiscoveredFrom == nil {
+			continue
+		}
+		builder, review := *p.DiscoveredFrom, *p.DiscoveredFrom
+		if r := st.Jobs[review]; r != nil && isReviewer(r) {
+			b := st.reviewedBy(r)
+			if b == nil {
+				continue
+			}
+			builder = b.ID
+		} else {
+			review = ""
+		}
+		if plan, err := Person(st, builder, review, "", "", ""); err == nil && len(plan.Posts) > 0 {
+			return plan, true
+		}
+	}
+	return Plan{}, false
+}
+
+// oldPersonFrom is the open person Job of the old kind discovered from id.
+func (s State) oldPersonFrom(id string) *contract.Job {
+	for _, k := range sortedIDs(s.Jobs) {
+		if j := s.Jobs[k]; j.DiscoveredFrom != nil && *j.DiscoveredFrom == id && s.oldPersonOpen(j) {
+			return j
+		}
+	}
+	return nil
+}
+
+// oldPersonOpen is whether p is a person Job of the old kind, still open: an ask titled "Decide how
+// ..." whose one row says the owner "decides how <builder> continues", raised before the Judge handed
+// these to an agent. The workflow's point gate ("Judge ... before ...") is not of this kind.
 func (s State) oldPersonOpen(p *contract.Job) bool {
-	if closed(p) {
+	if closed(p) || role(p) != "person" || !strings.HasPrefix(str(s.bodyOf(p.ID)["title"]), "Decide how ") {
 		return false
 	}
 	rows, _ := s.bodyOf(p.ID)["acceptance"].([]any)
