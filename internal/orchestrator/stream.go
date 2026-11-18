@@ -308,6 +308,7 @@ func (s *Stream) task(dir string) error {
 		return s.skip(dir, taskID, SkipTickFailed, err)
 	}
 	delete(s.skipped, dir)
+	s.ocPostCurator(dir, taskID, st)
 	if s.Ticked != nil {
 		s.Ticked(dir, w)
 	}
