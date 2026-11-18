@@ -229,7 +229,7 @@ func (s Store) Tick() (out Output, err error) {
 					why = string(j.Status)
 				}
 			} else if why == "usage_limit" {
-				why = s.usageWhy(snap, j)
+				why = s.usageWhy(snap, j, m.Jobs[j.ID])
 			}
 			out.Rows = append(out.Rows, Row{j.ID, j.Role, j.Status, why})
 		}
@@ -301,7 +301,7 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 		return nil
 	}
 	if j.Status == contract.Parked {
-		if j.Reason == "usage_limit" && s.yaUsageReady(snap, j) {
+		if j.Reason == "usage_limit" && !s.now().Before(m.RetryAt) && s.yaUsageReady(snap, j) {
 			return s.control(j, contract.Ready, "usage capacity restored", j.Exited)
 		}
 		if j.Reason == "needs_person" {
@@ -333,6 +333,7 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 		switch j.ExitReason {
 		case "usage_limit":
 			m.Failures = nil
+			s.backOffUsage(snap, j, m)
 			return s.control(j, contract.Parked, "usage_limit", j.Exited)
 		case "cancelled":
 			m.Failures = nil

@@ -83,3 +83,37 @@ func TestUsageLimitRepeatWaitsForTheReset(t *testing.T) {
 		t.Fatal("not offered again after the reset")
 	}
 }
+
+// A usage_limit exit with no reset time has nothing to wait for, so it backs off as a crash does
+// (ten seconds doubling, from the Job's usage_limit exits in a row) and is not offered again on
+// every pass. It is no crash: however many there are, the cap never parks the Job on the person.
+func TestUsageLimitWithoutResetTimeBacksOff(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	f.tick(t)
+	f.ack(t)
+	f.s.UsageReady = func(string) bool { return true }
+	f.s.RetryDelay = CrashBackoff
+	for i, wait := range []time.Duration{10 * time.Second, 20 * time.Second, 40 * time.Second, 80 * time.Second} {
+		yaUrExit(t, f, nil)
+		out := f.tick(t) // parks the Job on the limit
+		want := "Waiting for the usage limit, next try " + f.now.Add(wait).Local().Format("15:04:05")
+		if got := uwRow(t, out, "J-1"); got.State != contract.Parked || got.Why != want {
+			t.Fatalf("exit %d: row %+v, want parked with why %q", i+1, got, want)
+		}
+		f.now = f.now.Add(wait - time.Second)
+		if out := f.tick(t); out.Assigned != 0 || f.state(t).Status != contract.Parked {
+			t.Fatalf("exit %d: offered again before its %s back-off: %+v", i+1, wait, f.state(t))
+		}
+		f.now = f.now.Add(time.Second)
+		if f.tick(t).Assigned != 1 {
+			t.Fatalf("exit %d: not offered again after its %s back-off", i+1, wait)
+		}
+		f.ack(t)
+	}
+	yaUrExit(t, f, nil)
+	f.tick(t)
+	if j := f.state(t); j.Status != contract.Parked || j.Reason != "usage_limit" {
+		t.Fatalf("five usage_limit exits in a row left the Job %s on %q, want parked on usage_limit", j.Status, j.Reason)
+	}
+}

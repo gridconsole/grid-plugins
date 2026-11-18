@@ -37,9 +37,9 @@ func (s Store) yaUsageReady(snap Snapshot, j *contract.Job) bool {
 	return !hasReset && !known
 }
 
-// usageRepeated reports whether the Job's last two worker exits, with no other exit between, were
-// both usage_limit with the same code.
-func usageRepeated(snap Snapshot, j *contract.Job) bool {
+// usageCodes is the code of each usage_limit worker exit at the end of the Job's History, with no
+// other exit between them, oldest first.
+func usageCodes(snap Snapshot, j *contract.Job) []string {
 	var codes []string
 	for _, id := range j.History {
 		r := snap.Records[id]
@@ -52,16 +52,36 @@ func usageRepeated(snap Snapshot, j *contract.Job) bool {
 		}
 		codes = append(codes, fmt.Sprint(r.Body["code"]))
 	}
+	return codes
+}
+
+// usageRepeated reports whether the Job's last two worker exits, with no other exit between, were
+// both usage_limit with the same code.
+func usageRepeated(snap Snapshot, j *contract.Job) bool {
+	codes := usageCodes(snap, j)
 	n := len(codes)
 	return n >= 2 && codes[n-1] == codes[n-2]
 }
 
+// backOffUsage holds a Job whose usage_limit exit names no reset time, as a failed attempt is held:
+// with no time to wait for it would be offered again on every pass. The wait grows with the Job's
+// usage_limit exits in a row. It is no crash and never counts towards the crash limit.
+func (s Store) backOffUsage(snap Snapshot, j *contract.Job, m *jobMemory) {
+	if _, hasReset := yaResetTime(j.ExitCode); !hasReset {
+		s.backOff(m, len(usageCodes(snap, j)))
+	}
+}
+
 // usageWhy is the reason a Job shows while the usage limit holds it: its own reset time when it is
-// parked on the limit, else the latest of the parked Jobs' (the host's hold lifts with the last).
-func (s Store) usageWhy(snap Snapshot, j *contract.Job) string {
+// parked on the limit (or, with none, when its back-off ends), else the latest of the parked Jobs'
+// reset times (the host's hold lifts with the last).
+func (s Store) usageWhy(snap Snapshot, j *contract.Job, m *jobMemory) string {
 	at := int64(0)
 	if j.Status == contract.Parked {
 		at, _ = yaResetTime(j.ExitCode)
+		if at == 0 && m != nil && s.now().Before(m.RetryAt) {
+			return "Waiting for the usage limit, next try " + m.RetryAt.Local().Format("15:04:05")
+		}
 	} else {
 		for _, p := range snap.State.Jobs {
 			if t, ok := yaResetTime(p.ExitCode); ok && p.Status == contract.Parked && p.Reason == "usage_limit" && t > at {
