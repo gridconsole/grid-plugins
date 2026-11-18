@@ -1,6 +1,8 @@
-Usage: grid land <task> [--dry-run] [--json]
+Usage: grid land <task> [--project <name-or-id>] [--dry-run] [--json]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
   -dry-run
     	print the plan without writes or execution
   -json
     	print JSON
+  -project string
+    	project name or id; look only in it
