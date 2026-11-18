@@ -164,7 +164,7 @@ func roleFlag(args []string, key, fallback string) string {
 				i++
 				value = args[i]
 			}
-		} else if !equal && slices.Contains([]string{"project", "act", "task", "until", "source", "source-id", "title", "sender", "recipient", "body", "to"}, name) {
+		} else if !equal && slices.Contains([]string{"project", "act", "task", "until", "source", "source-id", "title", "sender", "recipient", "body", "body-file", "to"}, name) {
 			i++
 		}
 	}

@@ -86,6 +86,7 @@ func runOrchestrator(args []string, env Env) int {
 	job := fs.String("job", id, "Job id")
 	kind := fs.String("type", "post", "registered post type")
 	body := fs.String("body", "{}", "JSON body, or - for stdin; in a shell put it in single quotes, since double quotes run backticks and $ (write a single quote as \\u0027)")
+	bodyFile := fs.String("body-file", "", bodyFileUsage)
 	reason := fs.String("reason", "", "cancellation reason")
 	attempt := fs.Int("attempt", 0, "Job attempt (or GRID_ATTEMPT)")
 	leaseFlag := fs.String("lease", env.getenv("GRID_LEASE"), "task or Job lease")
@@ -126,14 +127,24 @@ func runOrchestrator(args []string, env Env) int {
 		recordLookupError(env, err)
 		return exitCode(err)
 	}
-	var obj map[string]any
-	if verb == "post" {
+	// resolveBody puts the body text in *body: from --body-file, or stdin for "-".
+	resolveBody := func() error {
+		if *bodyFile != "" {
+			text, err := readBodyFile(env, fs, *bodyFile, 0)
+			*body = text
+			return err
+		}
 		if *body == "-" {
 			data, err := io.ReadAll(env.Stdin)
-			if err != nil {
-				return fail(err)
-			}
 			*body = string(data)
+			return err
+		}
+		return nil
+	}
+	var obj map[string]any
+	if verb == "post" {
+		if err := resolveBody(); err != nil {
+			return fail(err)
 		}
 		if err := json.Unmarshal([]byte(*body), &obj); err != nil || obj == nil {
 			return fail(errors.New("--body must be a JSON object"))
@@ -383,12 +394,8 @@ func runOrchestrator(args []string, env Env) int {
 		*attempt, _ = strconv.Atoi(env.getenv("GRID_ATTEMPT"))
 	}
 	if verb != "post" {
-		if *body == "-" {
-			b, err := io.ReadAll(env.Stdin)
-			if err != nil {
-				return fail(err)
-			}
-			*body = string(b)
+		if err := resolveBody(); err != nil {
+			return fail(err)
 		}
 		if err := json.Unmarshal([]byte(*body), &obj); err != nil || obj == nil {
 			return fail(errors.New("--body must be a JSON object"))

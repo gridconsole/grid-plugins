@@ -40,7 +40,7 @@ func runFeed(args []string, env Env) int {
 	asJSON := fs.Bool("json", false, "print JSON")
 	task := fs.String("task", "", "task folder path or display id")
 	project := fs.String("project", "", "project name or id")
-	var kind, body, re, job, id, since, after, wake, lease, epoch, reason string
+	var kind, body, bodyFile, re, job, id, since, after, wake, lease, epoch, reason string
 	var attempt int
 	write := verb == "post" || verb == "handover"
 	if verb == "post" {
@@ -52,6 +52,7 @@ func runFeed(args []string, env Env) int {
 			defaultBody = "{}"
 		}
 		fs.StringVar(&body, "body", defaultBody, "JSON object, or - for stdin")
+		fs.StringVar(&bodyFile, "body-file", "", bodyFileUsage)
 		fs.StringVar(&id, "id", "", "ULID reused on retries")
 		fs.StringVar(&re, "re", "", "record ULID this follows")
 		fs.StringVar(&job, "job", "", "Job id")
@@ -129,7 +130,13 @@ func runFeed(args []string, env Env) int {
 		}
 		return output(state)
 	}
-	if body == "-" {
+	if bodyFile != "" {
+		text, err := readBodyFile(env, fs, bodyFile, 0)
+		if err != nil {
+			return fail(err)
+		}
+		body = text
+	} else if body == "-" {
 		data, err := io.ReadAll(env.Stdin)
 		if err != nil {
 			return fail(err)

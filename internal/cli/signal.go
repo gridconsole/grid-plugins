@@ -31,6 +31,7 @@ func runSignal(args []string, env Env) int {
 		fs.StringVar(&to, "to", "", "destination project; - means the workspace inbox (Personal)")
 	}
 	var in signal.Input
+	var bodyFile string
 	var act signal.ActOptions
 	if verb == "act" {
 		fs.StringVar(&act.Act, "act", "note", "turn|add|note|snooze|dismiss|wake|reopen")
@@ -45,6 +46,7 @@ func runSignal(args []string, env Env) int {
 		fs.StringVar(&in.Sender, "sender", "", "who sent it, as the source names them")
 		fs.StringVar(&in.Recipient, "recipient", "", "the address or channel it came to")
 		fs.StringVar(&in.Body, "body", "", "external text, or - to read stdin")
+		fs.StringVar(&bodyFile, "body-file", "", bodyFileUsage)
 	}
 	if err := parsePositionals(fs, args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -119,7 +121,16 @@ func runSignal(args []string, env Env) int {
 			act.Who = env.getenv("GRID_ACTOR")
 		}
 	}
-	if in.Body == "-" {
+	if bodyFile != "" {
+		text, err := readBodyFile(env, fs, bodyFile, signal.MaxBytes+1)
+		if err != nil {
+			return failure(env, err)
+		}
+		if len(text) > signal.MaxBytes {
+			return failure(env, fmt.Errorf("signal body exceeds %d bytes", signal.MaxBytes))
+		}
+		in.Body = text
+	} else if in.Body == "-" {
 		data, err := io.ReadAll(io.LimitReader(env.Stdin, signal.MaxBytes+1))
 		if err != nil {
 			return failure(env, err)
