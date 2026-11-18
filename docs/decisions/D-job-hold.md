@@ -1,0 +1,101 @@
+# D-job-hold: a Job that waits on something else holds; it is not rejected and gets no rework
+
+Base: plugin `3a3fd239`, app `2301df188`. Plugin paths are repo-relative; app paths are prefixed `app:`.
+
+Decision only. It changes no code, schema or skill; steps 2 to 8 of T-14 build from it.
+
+## Owner rule (cited, not reopened)
+
+From the task input `inputs/jobs-fail-less.md:16`:
+
+> A Job that cannot finish because it is waiting on something else (another Job, a merge or install, a person's answer or decision, a permission) is not rejected and gets no rework. It holds: it stays open in a waiting state that names what it waits on, and continues or is re-checked by itself once that thing lands. Only a real defect in the work leads to rejection and rework.
+
+And the standing owner decisions: no Grid-made guards, caps or limits; everything is a Job; carry on by yourself until a person point. So a hold has **no timer, no expiry and no cap** on how often a Job holds or is released. None of the choices below adds one.
+
+## Today
+
+- A result row is `met`, `not met` or `dropped` (`contract/schemas/result.json:61-66`; fold words `internal/contract/types.go:200-203`). There is no way to say "this row cannot hold yet because X has not landed".
+- The reviewer rejects on any `NOT DONE` row (`skills/review-job/SKILL.md:12`), first line `ACCEPTED` or `REJECTED` (`:35`).
+- The app Judge reads only those two words (`app:internal/kernel/verdict/verdict.go:21-26`). Anything not `ACCEPTED` goes to rework while rounds remain, then to a "Decide how" person Job (`app:internal/kernel/worker/judge.go:1123-1133`).
+- `Blocked` (`internal/contract/fold.go:53-55`) is an attempt that posted `blocked` and exited; it waits for a person's approval and a new assign (V26).
+- `Parked` (`internal/contract/types.go:97`) is an open Job a person or its children must move on: a split parent, or a Job parked after repeated failures with a question file.
+
+## Decision 1: the waiting row state and what it waits on (A1)
+
+A result acceptance row gets a fourth state, **`waiting`**, distinct from `not met`. `not met` means the work is short; `waiting` means the work cannot hold until something outside the Job lands.
+
+A `waiting` row must carry **`waits_on`**, one object:
+
+```json
+{"id": "A3", "state": "waiting", "waits_on": {"kind": "landed", "ref": "J-6"}}
+```
+
+| `kind` | Waits on | `ref` |
+| --- | --- | --- |
+| `job` | another Job's change being accepted | the Job id, `J-n` or `J-n.m` |
+| `landed` | another Job's change merged and installed | the Job id whose change must land, `J-n` |
+| `question` | a person's answer or decision | the question's post id as `grid feed state` lists it under `questions`, or the person Job's id `J-n` when the question was asked as a person Job |
+| `permission` | a permission rule the Job lacks | the id of the `blocked` post that names the rule (`contract/schemas/blocked.json`) |
+
+Defaults:
+
+- One `waits_on` per row. A row that needs two things names the one that is not there yet; after release, the re-check may hold the row again on the second. No cap applies.
+- In the builder's proof table the row's line reads `WAITING on <kind> <ref>`, next to `HOLDS` and `NOT DONE`.
+- A `permission` wait is posted as today's `blocked` post first, so the rule is named once and the approval answers that post; the row then points at it.
+- The fold reads `waiting` as its own row word (`RowWaiting`), never as `not met` or `pending`.
+
+## Decision 2: the reviewer verdict word (A2)
+
+The reviewer's first line gets a third word: **`HELD`**, next to `ACCEPTED` and `REJECTED`.
+
+The reviewer writes `HELD` when every row of the Job is `HOLDS` (met), `dropped` with its decision, or `WAITING` with a `waits_on` that names an existing record of its kind, at least one row is `WAITING`, and nothing is must-fix. The second line lists the waits: `Waits: A3 on landed J-6`.
+
+A real defect wins: any `NOT DONE` row, a change outside the write list, a failed verify or a `WAITING` row whose wait is not why the row cannot hold (the ref does not exist, or the row does not depend on it) makes the verdict `REJECTED`, as today. That last case is written as must-fix on the row.
+
+`HELD` **never leads to a rework Job and never to a "Decide how J-x continues" person Job.** The Judge's `HELD` branch posts only the hold (Decision 4) and closes the review Job; a `HELD` review is not counted in the Job's review rounds (`roundsOf`), so a hold never pushes a later rejection towards the person Job either.
+
+## Decision 3: how each wait is released (A3)
+
+One component sees every release: **the plugin orchestrator, in `Ready` (`internal/orchestrator/ready.go:136-140`)**. `Ready` is already "the only Orchestrator ready predicate", and the snapshot it reads already holds every record that releases a hold: Job statuses, `Landed` (`fold.go` Loop), questions and gates, and the Loop's counted approvals. The app Judge only posts the hold; it does not release it, so there is one place that decides and the app and plugin cannot disagree.
+
+| Kind | Record that releases it | Seen by |
+| --- | --- | --- |
+| `job` | a control post moving `ref` to `accepted` (the same rule as a `done` edge) | plugin orchestrator, `Ready` |
+| `landed` | a counted `landed` post for `ref` (`Snapshot.Landed`), per `internal/jobgraph/graph.go:23-25`: an accept is not a landing | plugin orchestrator, `Ready` |
+| `question` | the question answered or defaulted (its question reads `open: false`); for a person Job ref, that person Job accepted | plugin orchestrator, `Ready` |
+| `permission` | a counted approval by a person that answers the `blocked` post `ref` and names its rules (`contract/schemas/approval.json`, V22) | plugin orchestrator, `Ready` |
+
+When every wait of a held Job is met, `Ready` lists it as released and the orchestrator posts a control moving it from `held` to `ready`, reason `hold released: <waits>`. From there it runs as any ready Job: a new attempt of the **same Job id** (no new Job, no `continues`), whose builder finishes or re-checks only the rows that waited and posts a result, and a review follows as usual. **No person takes part in the release or the re-check.** The only person in any of the four kinds is the one who answers the question or grants the permission, which is the thing being waited on, not a decision about the hold.
+
+A wait whose target can no longer land (the `ref` Job is cancelled or rejected with no continuing Job): the hold stays, `grid job blocked` shows the wait with the target's status, and the next planning pass, an agent Job, replans it. If the target continues as a rework Job (`J-6.1` with `continues: J-6`), the wait follows it. No timer turns a hold into anything else.
+
+## Decision 4: how a held Job is stored and read (A4)
+
+**A new Job status, `held`.** Neither existing status is reused.
+
+Reason in one sentence: `Blocked` is released only by a person's approval and a new assign (V26) and `Parked` is the status a person or its children must move on, so reusing either would make a hold read as a person point, which is exactly what the owner rule removes.
+
+Stored:
+
+- The app Judge, on a `HELD` verdict, posts one control for the reviewed Job: `{"status": "held", "reason": "held by <review Job>", "waits_on": [{"row": "A3", "kind": "landed", "ref": "J-6"}]}`, copied from the `WAITING` rows of the review's result. Then it closes the review Job, `verdict held`.
+- `held` is added to the control and job-record status enums (`contract/schemas/control.json:219`, `contract/schemas/job-record.json:549`) and to `contract.Status` (`internal/contract/types.go:89-100`).
+- The fold copies `waits_on` from that control onto the Job as `WaitsOn []Wait` (`row`, `kind`, `ref`), and clears it when a later control moves the Job out of `held`.
+- `StateOf(held)` reads **Started** with the reason `held`, as `Blocked` reads Started with `blocked` (`types.go:177-187`). The Job is open and in progress; it is not Needs review and not Done.
+
+Read:
+
+- `grid feed state` shows the Job with `"status": "held"`, `"state": "Started"`, `"state_reason": "held"` and `"waits_on": [{"row", "kind", "ref", "met"}]`, `met` filled by the same `Ready` pass that releases it.
+- `grid job blocked` lists a held Job with its waits as the why (`internal/cli/orchestrator.go:261-275`).
+- The app task page reads `grid feed state` through `ViewFeedJob` (`app:internal/slices/taskview/view.go:437-460`); it gains `WaitsOn` and shows the Job as "Held: waits on landed J-6 (A3)", one line per wait. It is not counted in Needs you, because no person decision is open on it.
+
+## What the following steps build
+
+| Step | Builds |
+| --- | --- |
+| Contract | `waiting` row state and `waits_on` in `result.json`; `held` in control and job-record; `RowWaiting`, `Held`, `WaitsOn` in `internal/contract` |
+| Skills | `run-job`: the `WAITING on` line; `review-job`: the `HELD` verdict and its rule |
+| Plugin orchestrator | `Ready` releases held Jobs; the release control; `grid job blocked` and `feed state` show waits |
+| App Judge | `HELD` in `internal/kernel/verdict`; the Judge's hold branch, no rework, no person Job, not counted in rounds; a test where a waiting row gives a hold and no rework Job |
+| App task page | `WaitsOn` on `ViewFeedJob` and the Held line |
+
+Nothing in this decision is left for a person: each choice above has its default, and the owner rule fixes the rest.
