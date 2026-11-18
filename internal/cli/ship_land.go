@@ -64,8 +64,13 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 	}
 	// An answer accepted while the delivery waits (an app answer the holder's tick
 	// accepts) lands nothing: the ship Job goes back to its person, and the land
-	// runs on the answer given once the rework is accepted (shipWait).
+	// runs on the answer given once the rework is accepted (shipWait). While the
+	// review of the delivery is out the answer stands and the tick that finds the
+	// delivery accepted lands it.
 	if err := shipWait(snap, job); err != nil {
+		if shipReviewing(snap, err) {
+			return
+		}
 		fmt.Fprintf(env.Stderr, "land: %s not run: %s\n", job, oneLineErr(err))
 		reopenShipWaiting(env, fs, w, job, err)
 		return

@@ -323,9 +323,14 @@ func runApprove(args []string, env Env) int {
 		if err == nil {
 			err = orchestrator.PersonReady(snap, job, time.Now())
 		}
-		// The ship Job also waits for the task's delivery to be accepted (shipWait).
+		// The ship Job also waits for the task's delivery to be accepted (shipWait),
+		// except for the review of the delivery: that answer is recorded and the land
+		// follows the acceptance.
 		if err == nil && isShipJobID(snap, job) {
-			err = shipWait(snap, job)
+			if err = shipWait(snap, job); shipReviewing(snap, err) {
+				fmt.Fprintf(env.Stderr, "grid approve: %s is answered; it lands when the review accepts the delivery\n", job)
+				err = nil
+			}
 		}
 		if err != nil {
 			fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)

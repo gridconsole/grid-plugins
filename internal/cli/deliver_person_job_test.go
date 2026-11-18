@@ -80,8 +80,8 @@ func TestDeliverPostsShipPersonJob(t *testing.T) {
 			if j.Kind != "approve" || !j.IsPerson() || j.PersonName() != tc.want || j.Continues != nil || len(j.After) != 0 {
 				t.Fatalf("person Job fields: kind %q role %q person %q continues %v after %v", j.Kind, j.Role, j.PersonName(), j.Continues, j.After)
 			}
-			want := migrate.PlanJobBody(j.ID, tc.owner)
-			if j.Title != want["title"] || j.Intent.Item != "plan.md#approve" || len(j.Acceptance) != 1 || j.Acceptance[0].Text != "The delivered work is approved to land" {
+			// The ship step has its own title (TestShipJobTitleNamesTheDeliveredWork); the rest is the plan Job's.
+			if j.Title != "Approve the delivered work" || j.Intent.Item != "plan.md#approve" || len(j.Acceptance) != 1 || j.Acceptance[0].Text != "The delivered work is approved to land" {
 				t.Fatalf("not the plan approve Job: title %q item %q acceptance %+v", j.Title, j.Intent.Item, j.Acceptance)
 			}
 			if err := orchestrator.PersonReady(snap, j.ID, time.Now()); err != nil {
