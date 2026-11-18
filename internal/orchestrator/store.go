@@ -111,6 +111,9 @@ type progressFile struct {
 	Mtime int64  `json:"mtime"`
 	Hash  string `json:"hash"`
 }
+
+// Overflow and Wakes belonged to the hourly wake cap, which is gone; nothing reads them, and they stay
+// so the files written while it ran load as before.
 type memory struct {
 	OfflineHosts map[string]bool         `json:"offline_hosts,omitempty"`
 	Files        map[string]progressFile `json:"files,omitempty"`
