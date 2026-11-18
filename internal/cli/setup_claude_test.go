@@ -151,10 +151,12 @@ func TestSetupClaudeHelpAndProjectAnswersGolden(t *testing.T) {
 	}
 }
 
-// The deny rules `grid setup` writes are the only protection of the reserved
-// kinds (task folders, project.md and the brain; the hook guard that once
-// repeated them is gone). This checks them against a fixed table of paths.
-func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
+// `grid setup` writes no deny rule for the kinds it used to reserve (task folders,
+// project.md and the brain): agents write their own task state, in any spelling
+// Claude Code folds. The rules it does write are the person's approval identity and
+// a project's setup answers, which no path of this table reaches. The table is the
+// one the reserved-kind rules were once checked against.
+func TestClaudeDenyRulesLeaveAgentStateOpen(t *testing.T) {
 	for _, location := range []string{"default", "outside home"} {
 		t.Run(location, func(t *testing.T) {
 			h := claudeHarness(t)
@@ -174,25 +176,15 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 			if err := json.Unmarshal(data, &doc); err != nil {
 				t.Fatal(err)
 			}
-			// Setup-record defenses are additional to the reserved kinds and are tested
-			// through the CLI in settings.TestClaudeReworkCLIProjectAnchors. So are
-			// the settings, lock, workflows and host-folder rules, which
-			// TestSetupWritesDenyRulesForTheHostGuardFiles checks path by path, and the
-			// setup answers rules, which settings.TestClaudeBlockDeniesTheSetupAnswerFiles checks.
+			// The kept rules are checked in settings.TestClaudeBlockDeniesTheSetupAnswerFiles
+			// and settings.TestClaudeSetupTakesRetiredDeniesOut (the kept set stays).
 			rules := slices.DeleteFunc(doc.Permissions.Deny, func(rule string) bool {
 				plain := foldedLetter.ReplaceAllString(rule, "$1")
-				return strings.Contains(rule, "~/.grid-person/**") || rule == "Edit(~/.grid/setup/**)" || rule == "Write(~/.grid/setup/**)" || hostDeny(rule) ||
+				return strings.Contains(rule, "~/.grid-person/**") ||
 					strings.HasSuffix(plain, "/setup-answers.json)") || strings.HasSuffix(plain, "/setup-pending.json)")
 			})
-			// No Grid guard repeats these rules, so the expected answer for each path
-			// is written down here: the five reserved kinds are denied, each in the
-			// spellings Claude Code folds, and nothing near them is.
-			denied := map[string]bool{
-				"projects/p/tasks/T-01-work": true, "projects/p/tasks/T-01-work/task.md": true, "projects/p/tasks/T-1/sub/deep/file": true, "projects/p/TASKS/t-22-work/brief.md": true,
-				"personal/tasks/T-01-work": true, "personal/tasks/t-02/task.md": true, "personal/tasks/T-9/sub/file": true,
-				"projects/p/knowledge": true, "projects/p/knowledge/topics/x.md": true, "projects/p/KNOWLEDGE/file": true,
-				"knowledge": true, "knowledge/topics/x.md": true, "KNOWLEDGE/x": true,
-				"projects/p/project.md": true, "projects/p/PROJECT.MD": true,
+			if len(rules) != 0 {
+				t.Errorf("deny rules beyond the approval identity and the setup answers: %q", rules)
 			}
 			paths := []string{
 				"projects/p/tasks/T-01-work", "projects/p/tasks/T-01-work/task.md", "projects/p/tasks/T-1/sub/deep/file", "projects/p/TASKS/t-22-work/brief.md",
@@ -202,64 +194,21 @@ func TestClaudeDenyRulesEqualWriterGuard(t *testing.T) {
 				"projects/p/project.md", "projects/p/PROJECT.MD",
 				"projects/p/tasks/README.md", "projects/p/tasks/T-x/task.md", "projects/p/tasks/T-/task.md", "personal/tasks/T-x/task.md",
 				"projects/p/notes/x.md", "projects/p/nested/project.md", "projects/p/project.md/nested", "projects/p/project.md.bak", "projects/p/tasks", "settings.json", "personal/project.md", "personal/knowledge/x.md",
+				"setup/answers.json", "setup/claude-block.json",
 			}
-			type probe struct {
-				path string
-				want bool
-			}
-			targets := make([]probe, 0, len(paths)*2)
 			for _, rel := range paths {
 				target := filepath.Join(h.gridHome, filepath.FromSlash(rel))
-				want := denied[rel]
 				if suffix, ok := strings.CutPrefix(rel, "projects/"); ok {
-					if location == "outside home" {
-						// Old default project paths must no longer match project denies.
-						targets = append(targets, probe{target, false})
-					}
 					target = filepath.Join(projects, filepath.FromSlash(suffix))
 				}
-				targets = append(targets, probe{target, want})
-			}
-			hits := map[string]bool{}
-			for _, p := range targets {
-				target := p.path
-				for _, tool := range []string{"Edit", "Write"} {
-					matched := false
-					for _, rule := range rules {
-						if !strings.HasPrefix(rule, "Edit(") || !strings.HasSuffix(rule, ")") {
-							t.Fatalf("unexpected file rule %s", rule)
-						}
-						pattern := strings.TrimSuffix(strings.TrimPrefix(rule, "Edit("), ")")
-						var candidate string
-						switch {
-						case strings.HasPrefix(pattern, "~/"):
-							rel, err := filepath.Rel(h.home, target)
-							if err != nil {
-								t.Fatal(err)
-							}
-							pattern, candidate = strings.TrimPrefix(pattern, "~/"), filepath.ToSlash(rel)
-						case strings.HasPrefix(pattern, "//"):
-							pattern, candidate = strings.TrimPrefix(pattern, "//"), filepath.ToSlash(target)
-							if volume := filepath.VolumeName(target); len(volume) == 2 && volume[1] == ':' {
-								candidate = strings.ToLower(volume[:1]) + candidate[len(volume):]
-							}
-							candidate = strings.TrimLeft(candidate, "/")
-						default:
-							t.Fatalf("unexpected path anchor %s", pattern)
-						}
-						if claudePatternMatches(t, pattern, candidate) {
-							matched = true
-							hits[rule] = true
-						}
+				for _, rule := range doc.Permissions.Deny {
+					if !strings.HasPrefix(rule, "Edit(") && !strings.HasPrefix(rule, "Write(") {
+						continue
 					}
-					if matched != p.want {
-						t.Errorf("%s %s: deny rules match=%v, table says %v", tool, h.norm(target), matched, p.want)
+					edit := "Edit(" + strings.SplitN(rule, "(", 2)[1]
+					if claudeRuleMatches(t, h.home, edit, target) {
+						t.Errorf("%s is denied by %s", h.norm(target), rule)
 					}
-				}
-			}
-			for _, rule := range rules {
-				if !hits[rule] {
-					t.Errorf("deny rule that no path of the table needs: %s", rule)
 				}
 			}
 		})

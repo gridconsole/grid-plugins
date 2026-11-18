@@ -18,10 +18,9 @@ func ksHrMatching(t *testing.T, h *harness, rules []string, target string) []str
 	return matching
 }
 
-// Setup writes one deny rule for the gate files of a task-like folder one level
-// below the Grid home, which the host guard refuses. It writes none for the forms
-// the host guard also refuses but Grid reads nothing at, by decision: they are
-// the person's own folders outside the Grid home.
+// Setup writes no deny rule for the gate files of a task-like folder below the Grid
+// home, the settings, lock and workflows files or the host folder: agents write them,
+// and a refusal there stalled tasks on edge cases.
 func TestKsHostRulesGateFilesBelowHome(t *testing.T) {
 	for _, location := range []string{"default", "outside home"} {
 		t.Run(location, func(t *testing.T) {
@@ -37,25 +36,15 @@ func TestKsHostRulesGateFilesBelowHome(t *testing.T) {
 			rules := claudeDenyRules(t)
 
 			task := filepath.Join(h.gridHome, "notes", "tasks", "T-01-x")
-			for _, target := range []string{
-				filepath.Join(task, "approval.json"),
-				filepath.Join(task, "questions", "q1.md"),
-			} {
-				if len(ksHrMatching(t, h, rules, target)) == 0 {
-					t.Errorf("no written rule matches %s", target)
-				}
-			}
-			if location != "outside home" {
-				return
-			}
-
-			// Not carried, by decision: nothing Grid reads sits there.
 			parent := filepath.Dir(projects)
 			for label, target := range map[string]string{
+				"approval.json below home":   filepath.Join(task, "approval.json"),
+				"question below home":        filepath.Join(task, "questions", "q1.md"),
+				"settings.json in home":      filepath.Join(h.gridHome, "settings.json"),
+				"workflows.md below home":    filepath.Join(h.gridHome, "x", "workflows.md"),
+				".host in home":              filepath.Join(h.gridHome, ".host", "hold.json"),
 				"gate file below the parent": filepath.Join(parent, "notes", "tasks", "T-01-x", "approval.json"),
 				"settings.json in parent":    filepath.Join(parent, "settings.json"),
-				"workflows.md below parent":  filepath.Join(parent, "x", "workflows.md"),
-				".host above the parent":     filepath.Join(filepath.Dir(parent), ".host", "hold.json"),
 			} {
 				if got := ksHrMatching(t, h, rules, target); len(got) != 0 {
 					t.Errorf("%s: rules match %s: %v", label, target, got)

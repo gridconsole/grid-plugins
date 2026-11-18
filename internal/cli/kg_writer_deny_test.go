@@ -25,8 +25,8 @@ const (
 	kgWriterProjectMD     = "[pP][rR][oO][jJ][eE][cC][tT].[mM][dD]"
 )
 
-// kgWriterRules is the five Claude Code deny rules that carry what the only-writer
-// hook guard used to refuse: project task folders, personal task folders, project
+// kgWriterRules is the five Claude Code deny rules setup used to write for what the
+// only-writer hook guard used to refuse: project task folders, personal task folders, project
 // knowledge, home knowledge and project.md. projects is the anchor of the projects
 // folder, home the anchor of the Grid home.
 func kgWriterRules(projects, home string) []string {
@@ -39,8 +39,10 @@ func kgWriterRules(projects, home string) []string {
 	}
 }
 
-// `grid setup --yes` writes the five rules into permissions.deny of the user
-// settings.json, with the projects in the Grid home and outside it.
+// `grid setup --yes` writes none of the five rules any more: agents write task
+// folders, the brain and project.md, with the projects in the Grid home and outside
+// it. The deny rules it writes are the person's approval identity and a project's
+// setup answers.
 func TestKgWriterDenyRulesWritten(t *testing.T) {
 	for _, location := range []string{"default", "outside home"} {
 		t.Run(location, func(t *testing.T) {
@@ -67,7 +69,12 @@ func TestKgWriterDenyRulesWritten(t *testing.T) {
 			if err := json.Unmarshal(data, &doc); err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range kgWriterRules(anchor, "~/.grid") {
+			for _, rule := range kgWriterRules(anchor, "~/.grid") {
+				if slices.Contains(doc.Permissions.Deny, rule) {
+					t.Errorf("permissions.deny still holds %s", rule)
+				}
+			}
+			for _, want := range []string{"Edit(~/.grid-person/**)", "Write(~/.grid-person/**)", "Edit(" + anchor + "/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])"} {
 				if !slices.Contains(doc.Permissions.Deny, want) {
 					t.Errorf("permissions.deny lacks %s; it has %q", want, doc.Permissions.Deny)
 				}
