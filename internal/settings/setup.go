@@ -189,7 +189,19 @@ func (s Store) ApproveSetupCommands(hash string) (approved, answers SetupAnswers
 		return nil, nil, err
 	}
 	for _, name := range []string{"setup-pending.json", "setup-answers.json"} {
-		f, err := os.OpenFile(filepath.Join(dir, name), os.O_WRONLY, 0)
+		file := filepath.Join(dir, name)
+		// A FIFO opened for writing waits for a reader, so only a regular file is opened.
+		info, err := os.Lstat(file)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		if !info.Mode().IsRegular() {
+			return nil, nil, fmt.Errorf("%s must be a regular file", name)
+		}
+		f, err := os.OpenFile(file, os.O_WRONLY, 0)
 		switch {
 		case err == nil:
 			_ = f.Close()
