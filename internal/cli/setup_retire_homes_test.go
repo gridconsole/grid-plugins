@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -130,4 +131,38 @@ func TestSetupRetiresTheOtherHomesRules(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Another home's setup record that cannot be used is that home's problem: a setup that
+// went through for its own home warns and goes on, as the session start logs and goes
+// on. Its own home's record stays an error.
+func TestSetupWarnsOfAnotherHomesBadRecord(t *testing.T) {
+	t.Run("a sibling home", func(t *testing.T) {
+		h := claudeHarness(t)
+		file, _, retired := retireHandleHome(t, h)
+		// It sorts before the valid sibling, so the run has to go on past it.
+		h.write(filepath.Join(h.gridHome, "aaa-broken", "setup", "claude-block.json"), "{not json")
+		if code := h.run(h.home, "setup", "--yes"); code != 0 {
+			t.Fatalf("code=%d: %s", code, h.errb)
+		}
+		if !strings.Contains(h.errb.String(), "aaa-broken") {
+			t.Errorf("stderr does not name the home with the bad record: %q", h.errb)
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rule := range retired {
+			if strings.Contains(string(data), rule) {
+				t.Errorf("the valid home's rule %s was not retired", rule)
+			}
+		}
+	})
+	t.Run("its own home", func(t *testing.T) {
+		h := claudeHarness(t)
+		h.write(filepath.Join(h.gridHome, "setup", "claude-block.json"), "{not json")
+		if code := h.run(h.home, "setup", "--yes"); code != 1 {
+			t.Fatalf("code=%d, want 1: %s", code, h.errb)
+		}
+	})
 }

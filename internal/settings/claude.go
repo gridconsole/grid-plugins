@@ -369,7 +369,12 @@ func RunClaudeSetup(o ClaudeSetupOptions) int {
 	o.declined = &declined
 	code, err := runClaudeSetup(o)
 	if err == nil && code == 0 && !declined && !o.Remove {
-		err = RetireClaudeRules(o)
+		var others error
+		err, others = retireClaudeRules(o)
+		if others != nil {
+			// Another home's trouble is not this setup's failure; the session start only logs it.
+			fmt.Fprintln(o.Stderr, "warning:", others)
+		}
 	}
 	if err != nil {
 		fmt.Fprintln(o.Stderr, err)
@@ -391,9 +396,16 @@ func RunClaudeSetup(o ClaudeSetupOptions) int {
 // ran, is left as it is. A run that finds nothing to take out writes nothing, so the
 // session start can call it every time.
 func RetireClaudeRules(o ClaudeSetupOptions) error {
+	own, others := retireClaudeRules(o)
+	return errors.Join(own, others)
+}
+
+// retireClaudeRules is RetireClaudeRules with the error of the session's own home kept
+// apart from those of the other homes, which name the home they come from.
+func retireClaudeRules(o ClaudeSetupOptions) (own, others error) {
 	o.RetireOnly, o.Yes, o.JSON, o.Stdout, o.Stderr = true, true, true, io.Discard, io.Discard
 	var errs []error
-	for _, home := range retireHomes(o) {
+	for i, home := range retireHomes(o) {
 		run := o
 		// A projects folder outside the Grid home is the same text in every home's record.
 		run.GridHome = home
@@ -402,11 +414,15 @@ func RetireClaudeRules(o ClaudeSetupOptions) error {
 		if errors.Is(err, errClaudeChanged) || errors.As(err, &invalid) {
 			continue
 		}
-		if err != nil {
-			errs = append(errs, err)
+		switch {
+		case err == nil:
+		case i == 0:
+			own = err
+		default:
+			errs = append(errs, fmt.Errorf("%s: %w", home, err))
 		}
 	}
-	return errors.Join(errs...)
+	return own, errors.Join(errs...)
 }
 
 // retireHomes lists the Grid homes the retire pass reads a setup record of: the
