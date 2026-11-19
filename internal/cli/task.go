@@ -289,8 +289,11 @@ func firstUnlanded(res where.Result, base string, built, rebased []string) (repo
 		}
 		return repo, b, nil
 	}
-	return "", "", errors.New("every builder branch of the task is in its target")
+	return "", "", errAllLanded
 }
+
+// errAllLanded is a task whose every builder branch is in its target already.
+var errAllLanded = errors.New("every builder branch of the task is in its target")
 
 // noTaskBranchError is a task with no branch in task.md and no accepted builder Job:
 // grid task merge has nothing to merge, and a land has nothing to land.

@@ -469,7 +469,8 @@ func rebaseStep(env Env, fs feed.Store, w feed.Writer, store land.Store, who con
 func rebaseMoved(env Env, store land.Store, proj, id, ship string) (target string, moved bool) {
 	_, tip, _ := store.RebaseTip(env.Cwd, id, ship)
 	target, now, err := taskTargetTip(env, proj, id)
-	return target, tip == "" || err == nil && !strings.HasPrefix(now, tip)
+	// Every builder branch in its target, as a person's hand merge leaves it, counts as moved.
+	return target, tip == "" || errors.Is(err, errAllLanded) || err == nil && !strings.HasPrefix(now, tip)
 }
 
 // staleBranchKey reports whether task.md names no branch or one no repo of the project holds.

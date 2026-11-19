@@ -7,10 +7,27 @@ import (
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/land"
 	"github.com/gridconsole/grid-plugins/internal/project"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
+
+// With a stale branch key, a person who merges every builder branch by hand moves
+// the land on: the target counts as moved, so a parked rebase chain is not left waiting.
+func TestRebaseMovedOnceEveryBuilderBranchIsMergedByHand(t *testing.T) {
+	m, second := conflictPartway(t)
+	ships, _ := approveJobs(t, m.store)
+	if len(ships) != 1 {
+		t.Fatalf("%d approve Jobs, want 1", len(ships))
+	}
+	shipGit(t, m.plugin, "merge", "-q", "-s", "ours", "--no-edit", second)
+	shipGit(t, m.app, "merge", "-q", "--no-ff", "--no-edit", "grid-"+m.fid+"-J-3-a1")
+	store := land.Store{Resolver: resolver(m.env), Getenv: m.env.Getenv, Project: "sample"}
+	if _, moved := rebaseMoved(m.env, store, "sample", "T-01", ships[0].ID); !moved {
+		t.Fatal("every builder branch is in its target, but the land still reads the target as unmoved")
+	}
+}
 
 // A project with no git repo here, a task.md with no branch and an accepted builder
 // Job: there is nothing to land, so approve closes the task as it did before.
