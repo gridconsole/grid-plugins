@@ -70,7 +70,8 @@ func TestLwNoReplanOnceTheJobLanded(t *testing.T) {
 	lwClose(t, f, "J-2", contract.Accepted)
 	agent := f.s.Writer
 	agent.Author.Role = "worker"
-	f.post(t, feed.Input{Type: "landed", Job: "J-2", Body: map[string]any{"main_sha": "3f2c9e1"}}, agent)
+	// The agent's own GRID_ATTEMPT rides on the post (feedDefaults); a landed post has no attempt rule.
+	f.post(t, feed.Input{Type: "landed", Job: "J-2", Attempt: 3, Body: map[string]any{"main_sha": "3f2c9e1"}}, agent)
 	if out := f.tick(t); out.Assigned != 2 {
 		t.Fatalf("tick assigned %d, want J-3 and J-4", out.Assigned)
 	}
