@@ -180,7 +180,9 @@ func (e *CycleError) Error() string { return "Job cycle: " + strings.Join(e.Path
 // Optional times enable the canonical order (ready since, created at, id).
 // Without timestamps, Ready returns lexical id order, not a scheduling history.
 // Landed holds the Jobs that have a counted landed post (contract.FoldLoop's
-// Loop.Landed); a landed edge on a Job not in it waits.
+// Loop.Landed); a landed edge on a Job not in it waits. Approved holds the ids of
+// the blocked posts a counted person's approval answers and covers, which is what
+// releases a permission wait; nothing fills it yet (see holdReady).
 type Snapshot struct {
 	Jobs       map[string]contract.Job
 	Exhausted  map[string]bool
@@ -188,6 +190,7 @@ type Snapshot struct {
 	ReadySince map[string]time.Time
 	CreatedAt  map[string]time.Time
 	Landed     map[string]bool
+	Approved   map[string]bool
 }
 
 type Wait struct {
@@ -209,6 +212,9 @@ type Readiness struct {
 	Ready   []string `json:"ready"`
 	Waiting []Wait   `json:"waiting"`
 	Notes   []Note   `json:"notes,omitempty"`
+	// Holds is, for each held or blocked Job that names waits, those waits with Met
+	// filled. It is read by the tree, not written out: grid job next stays as it was.
+	Holds map[string][]contract.HeldWait `json:"-"`
 }
 
 // VerifyPassed reports whether the Job's latest result carries a passing
@@ -338,6 +344,103 @@ func started(status contract.Status) bool {
 	return false
 }
 
+// holdReady judges a Held or Blocked Job against the waits it names
+// (docs/decisions/D-job-hold.md). It is released, to be assigned for its re-check,
+// when every wait is met; there is no count, timer or expiry, so a hold ends the
+// moment its last wait lands and not otherwise. The waits go to out.Holds with
+// their met state; the unmet ones of a Held Job are returned as Waiting entries,
+// which the tick writes as the Job's reason and grid job blocked lists. A Blocked
+// Job, which today waits for a person's approval and a new assign, gives no
+// Waiting entry, so the tick posts nothing over it as before, and is released only
+// when it names a permission wait and every wait is met; a Blocked Job that names
+// none stays for a person. Approved is what meets a permission wait, and nothing
+// fills it yet: the release of a Blocked Job needs the tick to assign with the
+// approved rules, so it stays dormant until then.
+func (g *Graph) holdReady(s Snapshot, id string, out *Readiness) ([]Wait, bool) {
+	j := s.Jobs[id]
+	var waits []Wait
+	var holds []contract.HeldWait
+	permission := false
+	for _, w := range j.WaitsOn {
+		ok, reason := g.waitMet(s, w)
+		met := ok
+		w.Met = &met
+		holds = append(holds, w)
+		permission = permission || w.Kind == contract.WaitPermission
+		if !ok && j.Status == contract.Held {
+			waits = append(waits, Wait{Job: id, Target: w.Ref, Kind: w.Kind, Reason: reason})
+		}
+	}
+	if len(holds) > 0 {
+		if out.Holds == nil {
+			out.Holds = map[string][]contract.HeldWait{}
+		}
+		out.Holds[id] = holds
+	}
+	if j.Status == contract.Blocked && !permission {
+		return nil, false
+	}
+	for _, h := range holds {
+		if !*h.Met {
+			return waits, false
+		}
+	}
+	return waits, true
+}
+
+// waitMet says whether one wait of a held Job is met, and why not when it is not.
+// A wait on a Job is met when that Job is accepted (a submitted Job whose verify
+// passed does not meet it: the wait is on the change being accepted); a wait on a
+// landing when a counted landed post names the Job; a wait on a question when its
+// gate reads open; a wait on a permission when the blocked post it names is
+// approved. A wait on a Job or a landing follows a rework: the Jobs that continue
+// the one named meet it in its place.
+func (g *Graph) waitMet(s Snapshot, w contract.HeldWait) (bool, string) {
+	row := ""
+	if w.Row != "" {
+		row = " (" + w.Row + ")"
+	}
+	switch w.Kind {
+	case contract.WaitJob:
+		if g.reached(w.Ref, func(id string) bool { return s.Jobs[id].Status == contract.Accepted }, map[string]bool{}) {
+			return true, ""
+		}
+		return false, DoneReason(w.Ref, s.Jobs[w.Ref].Status) + row
+	case contract.WaitLanded:
+		if g.reached(w.Ref, func(id string) bool { return s.Landed[id] }, map[string]bool{}) {
+			return true, ""
+		}
+		return false, "waiting for " + w.Ref + " to land" + row
+	case contract.WaitQuestion:
+		if s.OpenGates["gate:"+strings.TrimPrefix(w.Ref, "gate:")] {
+			return true, ""
+		}
+		return false, "waiting for the answer to " + w.Ref + row
+	case contract.WaitPermission:
+		if s.Approved[w.Ref] {
+			return true, ""
+		}
+		return false, "waiting for a person to approve the permission asked in " + w.Ref + row
+	}
+	return false, "waiting on " + w.Kind + " " + w.Ref + row
+}
+
+// reached says whether met holds for the Job id or for any Job that continues it
+// (a rework, not one of its own children), through any number of reworks. seen
+// ends a loop of continues.
+func (g *Graph) reached(id string, met func(string) bool, seen map[string]bool) bool {
+	if met(id) {
+		return true
+	}
+	seen[id] = true
+	for _, r := range g.ids {
+		if c := g.items[r].Continues; c != nil && *c == id && !seen[r] && !strings.HasPrefix(r, id+".") && g.reached(r, met, seen) {
+			return true
+		}
+	}
+	return false
+}
+
 // Ready lists unstarted posted/ready Jobs whose dependencies are satisfied.
 // No children is a wait, not a vacuous success before a split has happened.
 // A deliver Job also waits for every open person question (questionWaits).
@@ -349,6 +452,14 @@ func (g *Graph) Ready(s Snapshot) (Readiness, error) {
 	}
 	for _, id := range g.ids {
 		status := s.Jobs[id].Status
+		if status == contract.Held || status == contract.Blocked {
+			waits, released := g.holdReady(s, id, &out)
+			out.Waiting = append(out.Waiting, waits...)
+			if released {
+				out.Ready = append(out.Ready, id)
+			}
+			continue
+		}
 		if status != "" && status != contract.Posted && status != contract.Ready {
 			// A Job that has started is never held or stopped by a later
 			// rejection of a Job it waited on; its Feed is told instead.
