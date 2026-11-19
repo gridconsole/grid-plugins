@@ -360,11 +360,16 @@ func firstUnlanded(res where.Result, base string, built, rebased, noWrite []stri
 
 // inTarget reports whether branch adds nothing to target in repo: it is an ancestor of
 // it, or git cherry lists no '+' line for it, every commit of it being in target already as
-// an identical patch, as a hand cherry-pick or rebase leaves it. A cherry that fails
-// counts as not landed, so the branch merges as before.
+// an identical patch, as a hand cherry-pick or rebase leaves it. git cherry skips merge
+// commits, so a branch with a merge beyond target, which may carry changes of its own, is
+// never judged by it. A count or cherry that fails counts as not landed, so the branch
+// merges as before.
 func inTarget(repo, branch, target string) bool {
 	if _, err := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/heads/"+target); err == nil {
 		return true
+	}
+	if merges, err := taskMergeGit(repo, "rev-list", "--merges", "--count", "refs/heads/"+target+"..refs/heads/"+branch); err != nil || merges != "0" {
+		return false
 	}
 	out, err := taskMergeGit(repo, "cherry", "refs/heads/"+target, "refs/heads/"+branch)
 	if err != nil {
