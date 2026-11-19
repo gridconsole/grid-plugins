@@ -122,7 +122,7 @@ func rebaseJobBody(id string, c *mergeConflictError, verify map[string]any) map[
 			write = append(write, f)
 		}
 	}
-	pointer := "task.md#outcome"
+	pointer := "intent.md#request" // task.md has no Outcome heading until delivery
 	return map[string]any{
 		"id": id, "item": 1, "role": "builder",
 		"title":  fmt.Sprintf("%s%s and resolve the conflicts in %s", rebaseTitle, c.Target, files),
