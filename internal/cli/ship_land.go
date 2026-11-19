@@ -34,12 +34,14 @@ func acceptedShipJob(snap orchestrator.Snapshot) string {
 // A land that fails is recorded in the task's history and said on stderr. A merge
 // that conflicts never asks the person again: it posts a builder Job that rebases the
 // delivered branch (queueRebase), the approval stands, and a later pass lands once that
-// Job is accepted (rebaseStep); when no Job can be posted, the land is armed to run
-// again on the next pass (land.Store.Retry). Any other failure puts the ship Job back
-// with its person, with the failure text as its reason (reopenShipJob), so the task is
-// in Needs you again and the person's next approve runs land once more. A ship Job an
-// earlier version put back after a conflict is accepted again with the approval it
-// held (reacceptShipJob), so the land runs without the person.
+// Job is accepted (rebaseStep); a rebase Job the Judge ended is left to the Judge's
+// decision path, and the land runs again when main has moved; when no Job can be
+// posted, the land is armed to run again on the next pass (land.Store.Retry). Any
+// other failure puts the ship Job back with its person, with the failure text as its
+// reason (reopenShipJob), so the task is in Needs you again and the person's next
+// approve runs land once more. A ship Job an earlier version put back after a conflict
+// is accepted again with the approval it held (reacceptShipJob), so the land runs
+// without the person.
 func landAfterShip(env Env, dir string, who contract.Author) {
 	w, err := approvalWriter(env)
 	if err != nil {
@@ -130,7 +132,9 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 // landArmed reports whether the task in dir has an accepted ship Job whose land is
 // still to run: not run yet, or armed again after a conflict (land.Store.Armed). It is
 // what keeps the holder's pass on a task that has no open Job, so the land is retried
-// on the next pass, and tries it before the pass's other tasks.
+// on the next pass, and tries it before the pass's other tasks. The Feed read is the
+// one the Feed's read memo answers while the Feed is unchanged, and Armed reads
+// history.md without the land lock, so a land that is deploying never stalls the pass.
 func landArmed(env Env, dir string) bool {
 	rec, err := taskstore.Read(dir)
 	if err != nil || rec.State != "waiting" {
