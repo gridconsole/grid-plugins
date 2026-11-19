@@ -453,12 +453,17 @@ func runOrchestrator(args []string, env Env) int {
 	if unleased {
 		write = orchestrator.PostPerson
 	}
-	// A Job post says what render will say about the Job; it refuses nothing itself.
+	// A Job post says what render will say about the Job; it refuses only the planning errors of refusedFindings.
 	var findings []lint.Finding
 	var findingsErr error
 	checked := verb == "post" && *kind == "job" && *person == ""
 	if checked {
 		findings, findingsErr = postFindings(env, scope.TaskPath, obj)
+		// The planning rules refuse before anything is written to the Feed.
+		if refused := refusedFindings(findings); len(refused) > 0 {
+			printPostFindings(env.Stderr, *job, refused, nil)
+			return 1
+		}
 	}
 	record, err := write(store, writer, feed.Input{ID: *recordID, Type: typ, Body: obj, Job: *job, Attempt: *attempt, Wake: *wake, Re: *re})
 	if errors.Is(err, orchestrator.ErrDuplicateWake) {
@@ -562,6 +567,19 @@ func postFindings(env Env, taskPath string, body map[string]any) ([]lint.Finding
 		return []lint.Finding{}, err
 	}
 	return lint.CheckJSON(data, opts), nil
+}
+
+// refusedFindings are the errors of the planning rules that grid job post refuses
+// on before it writes: a row that relies on a Job missing from after, and a row
+// naming a file the Job may not write. Every other finding is told, not refused.
+func refusedFindings(findings []lint.Finding) []lint.Finding {
+	out := []lint.Finding{}
+	for _, f := range findings {
+		if f.Severity == "error" && (f.Rule == "job.after-missing" || f.Rule == "job.row-outside-write") {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // printPostFindings writes one stderr line per finding; an error says render will refuse the Job.
