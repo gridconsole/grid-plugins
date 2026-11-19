@@ -74,7 +74,7 @@ func TestSessionStartSourcesAndEnvironment(t *testing.T) {
 				t.Fatalf("exit %d", code)
 			}
 			context := contextFrom(t, out)
-			for _, want := range []string{"GRID_HOME", "GRID_PROJECTS", "Grid project: example", "Task files live under the Grid home", "terminal outside Claude Code or Codex"} {
+			for _, want := range []string{"GRID_HOME", "GRID_PROJECTS", "Grid project: example", "Task files live under the Grid home", "grid approve --agent <name>"} {
 				if !strings.Contains(context, want) {
 					t.Errorf("missing %q: %s", want, context)
 				}
@@ -282,7 +282,7 @@ func TestSessionContextHasNoAgentRoutingLine(t *testing.T) {
 		ProjectLine(r, ""),
 		"Task files live under the Grid home; use the grid verbs for task.md, the plan, the history and Jobs, and write any other task file straight into its folder.",
 		"The Grid brain holds shared topics, knowledge and decisions",
-		"Approvals come from a person through the Grid app",
+		"Approvals come from a person or an agent through the Grid app",
 	} {
 		if !strings.Contains(text, kept) {
 			t.Fatalf("session start text lost %q:\n%s", kept, text)

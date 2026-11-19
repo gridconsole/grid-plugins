@@ -16,7 +16,7 @@
 
 | Where | Old | New |
 |---|---|---|
-| internal/cli/cli.go:116 (also help.golden:20, contract/commands.json:2506) | approve a gate (a person or the app only) | approve the plan or a later approve step (a person or the app only) |
+| internal/cli/cli.go:116 (also help.golden:20, contract/commands.json:2506) | approve a gate (a person or the app only) | approve the plan or a later approve step (a person, the app or an agent) |
 | internal/cli/job_graph.go:113 | gated by classify | waits for classify |
 | internal/task/gates.go:155 | no approval for gate %q: only the plan is approved | no approval for the %q approve step: only the plan is approved |
 | internal/task/gates.go:164 | approval is for another gate | approval is for another approve step |

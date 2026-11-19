@@ -112,8 +112,8 @@ func ReceiptPending(dir string) bool {
 // ReceiptToJob reads the approval.json of one task folder once and turns it into
 // the result of a person Job of kind approve in the task's Feed, then removes the
 // file. w is the caller's Feed writer: under the task lease (the worker's pass), or
-// a person of the team with no lease (grid approve). The migration holds no lease
-// of its own and posts as the person or tool that runs it.
+// a person of the team or an agent with no lease (grid approve). The migration
+// holds no lease of its own and posts as the person or tool that runs it.
 //
 // The result carries the plan_hash, plan_digest, lands_hash and note of the
 // receipt, so the plan revision the person saw is kept; the receipt's own who and
@@ -159,7 +159,7 @@ func ReceiptToJob(dir string, w feed.Writer) (ReceiptOutcome, string, error) {
 	if receipt.Note != "" {
 		fields["note"] = receipt.Note
 	}
-	if orchestrator.PersonWriter(w) {
+	if orchestrator.PersonWriter(w) || orchestrator.AgentApprover(w) {
 		_, err = orchestrator.AnswerPersonWith(store, w, jobID, "approved", fields, time.Now())
 	} else {
 		body := map[string]any{"target": jobID, "status": "accepted", "answer": "approved"}
@@ -194,9 +194,9 @@ func hasApproveJob(store feed.Store) (bool, error) {
 }
 
 // PostPlanJob posts a new person Job of kind approve for the plan, with the next
-// free Job number, and returns its id. A person of the team with no lease posts it
-// unleased; every other writer posts it under the task lease. owner is the person
-// the Job is for.
+// free Job number, and returns its id. A person of the team or an agent with no
+// lease posts it unleased; every other writer posts it under the task lease. owner
+// is the person the Job is for.
 //
 // The number is one above the highest J-<n> of any `job` record on the Feed,
 // whatever the fold made of it (counted, held, ignored or bad), and of the Jobs
@@ -223,7 +223,7 @@ func PostPlanJob(store feed.Store, w feed.Writer, owner string) (string, error) 
 			return held
 		}
 		skipped := false
-		if orchestrator.PersonWriter(w) {
+		if orchestrator.PersonWriter(w) || orchestrator.AgentApprover(w) {
 			_, skipped, err = orchestrator.PostPersonUnless(store, w, in, taken)
 		} else {
 			_, err = orchestrator.WriteUnless(store, w, in, func() bool {

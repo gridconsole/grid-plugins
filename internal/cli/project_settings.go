@@ -88,7 +88,7 @@ func projectSettings(args []string, env Env) int {
 		}
 		fmt.Fprintf(env.Stdout, "Setup answers recorded for %s: %s\n", store.Project, answerNames(got.Recorded))
 		if got.Hash != "" {
-			fmt.Fprintf(env.Stdout, "Held for a person to approve: %s\nA person approves them with: grid project settings approve %s --hash %s\n", answerNames(got.Held), store.Project, got.Hash)
+			fmt.Fprintf(env.Stdout, "Held for approval: %s\nA person or an agent approves them with: grid project settings approve %s --hash %s\n", answerNames(got.Held), store.Project, got.Hash)
 		}
 		return 0
 	case "show":
@@ -119,8 +119,9 @@ func projectSettings(args []string, env Env) int {
 	case "cli":
 		role = "owner"
 	}
-	if env.getenv("GRID_MEMBER") == "" || contract.TierFor(role) != contract.PersonTeam {
-		return commandError(env, name, errors.New("approving setup commands is for a person of the team: set GRID_MEMBER"))
+	// An agent approves as a person of the team does (the owner, 19 Nov); a guest was refused above.
+	if _, agent := writeAuthor(env); !agent && (env.getenv("GRID_MEMBER") == "" || contract.TierFor(role) != contract.PersonTeam) {
+		return commandError(env, name, errors.New("approving setup commands is for a person of the team or an agent: set GRID_MEMBER"))
 	}
 	approved, answers, err := store.ApproveSetupCommands(*hash)
 	if err != nil {

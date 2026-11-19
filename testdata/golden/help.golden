@@ -17,7 +17,7 @@ Commands:
   mcp         stdio server with the Feed tools
   question    add, ask, withdraw, list, tick and sync task questions
   answer      record a person's answer
-  approve     approve the plan or a later approve step (a person or the app only)
+  approve     approve the plan or a later approve step (a person, the app or an agent)
   deliver     write the outcome and wait for the person
   proof       add evidence and rebuild the task proof index
   history     add a dated line to the task history

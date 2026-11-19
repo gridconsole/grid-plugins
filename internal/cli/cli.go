@@ -179,7 +179,7 @@ func commands() []command {
 		{"mcp", "stdio server with the Feed tools", runMCP},
 		{"question", "add, ask, withdraw, list, tick and sync task questions", runQuestion},
 		{"answer", "record a person's answer", runAnswer},
-		{"approve", "approve the plan or a later approve step (a person or the app only)", runApprove},
+		{"approve", "approve the plan or a later approve step (a person, the app or an agent)", runApprove},
 		{"deliver", "write the outcome and wait for the person", runDeliver},
 		{"proof", "add evidence and rebuild the task proof index", runProof},
 		{"history", "add a dated line to the task history", runHistory},

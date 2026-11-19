@@ -6,14 +6,23 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/job"
 )
 
 // PersonWriter reports whether w is a person of the team writing without a
 // lease: the one writer whose Job post and person-Job answer are taken unleased.
-// It reads only the stamped role. Agents are not in it, and the record schemas
-// do not admit a worker or agent author for a Job in any case.
+// It reads only the stamped role. Agents are not in it.
 func PersonWriter(w feed.Writer) bool {
 	return w.Lease == "" && contract.TierFor(w.Author.Role) == contract.PersonTeam
+}
+
+// AgentApprover reports whether w is an agent writing without a lease. The owner
+// let agents approve, unsigned (19 Nov): it posts and answers an approve person
+// Job as a person of the team does, and no other Job (job.json admits an agent
+// author for that Job only); its record's author is the agent's member in role
+// agent, and the caller names the agent in the answer's reason.
+func AgentApprover(w feed.Writer) bool {
+	return w.Lease == "" && w.Fence == 0 && contract.TierFor(w.Author.Role) == contract.Agent
 }
 
 // guestAnswerer reports whether w is a guest writing without a lease: the one
@@ -83,7 +92,8 @@ func openCancelRequest(snap Snapshot, j *contract.Job, target, author string) (f
 // the record is that request.
 func PostPersonUnless(store feed.Store, w feed.Writer, in feed.Input, done func() bool) (record feed.Record, skipped bool, err error) {
 	cancel := in.Type == "control" && stringValue(in.Body["status"]) == string(contract.Cancelled)
-	if !PersonWriter(w) || in.Type != "job" && !cancel {
+	agentApprove := AgentApprover(w) && in.Type == "job" && stringValue(in.Body["kind"]) == "approve" && stringValue(in.Body["role"]) == job.RolePerson
+	if !PersonWriter(w) && !agentApprove || in.Type != "job" && !cancel {
 		return record, false, errPersonOnly
 	}
 	err = (Store{Feed: store, Writer: w}).exclusive(func() error {

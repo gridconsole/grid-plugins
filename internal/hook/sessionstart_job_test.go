@@ -109,7 +109,7 @@ func TestSessionStartWithoutJobIsUnchanged(t *testing.T) {
 		"Grid task: T-07-example in project example, at " + gridhome.Tilde(task, root) + ".",
 		"Task files live under the Grid home; use the grid verbs for task.md, the plan, the history and Jobs, and write any other task file straight into its folder. Project records and task files live outside repositories.",
 		"The Grid brain holds shared topics, knowledge and decisions at home and project level.",
-		"Approvals come from a person through the Grid app or grid approve in a terminal outside Claude Code or Codex.",
+		"Approvals come from a person or an agent through the Grid app or grid approve; an agent Grid did not launch runs grid approve --agent <name>.",
 	}, "\n") + "\n" + idx.Text
 	if got != want {
 		t.Fatalf("context changed without GRID_JOB:\n%s\n--- want\n%s", got, want)

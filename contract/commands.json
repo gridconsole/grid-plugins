@@ -2780,7 +2780,7 @@
     },
     {
       "name": "approve",
-      "summary": "approve the plan or a later approve step (a person or the app only)",
+      "summary": "approve the plan or a later approve step (a person, the app or an agent)",
       "built": true,
       "subcommands": [
         {
@@ -2789,6 +2789,11 @@
             "\u003ctask\u003e"
           ],
           "flags": [
+            {
+              "name": "--agent",
+              "takes": "value",
+              "required": false
+            },
             {
               "name": "--json",
               "takes": "none",
