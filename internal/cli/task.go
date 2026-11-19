@@ -229,6 +229,9 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	// A builder Job with files to write made work this machine cannot land: the task waits.
 	writes := slices.ContainsFunc(built, func(b string) bool { return !slices.Contains(noWrite, b) })
 	if writes && !hasCheckout(res) {
+		if res.Folder != "" {
+			return "", fmt.Errorf("project %s has no git repo on this machine; run grid task merge on the machine that has its checkout", res.Project)
+		}
 		return "", noFolderError(res.Project)
 	}
 	// A project with no git checkout here has no branch to land, as before builder branches.
