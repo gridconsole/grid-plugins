@@ -132,6 +132,13 @@ func (s Store) Tick() (out Output, err error) {
 		if e != nil {
 			return e
 		}
+		if e := s.jaOldPerson(snap); e != nil {
+			return e
+		}
+		snap, e = Load(s.Feed)
+		if e != nil {
+			return e
+		}
 		if e := s.abDecisionsNeeded(snap); e != nil {
 			return e
 		}

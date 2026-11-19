@@ -101,6 +101,13 @@ type Stream struct {
 	// posts nothing. Nil posts nothing, and a curator Job already open is still left
 	// alone.
 	ClosedCurator func(dir, taskID, id string) (map[string]any, error)
+	// ProposalDirs, when set, answers the brain-proposals folders ClosedCurator reads for
+	// the task in dir besides the task folder's own (the project's and the home's). After
+	// an accepted Job of an open task finds nothing waiting, ClosedCurator is not asked
+	// again until a proposal file in one of these folders, or in the task folder, changes
+	// or a newer Job is accepted. It runs on every pass: it only joins paths. Nil watches
+	// the task folder alone.
+	ProposalDirs func(dir string) []string
 	// Ticked is called with the task folder after each tick of the task that did
 	// not fail: the tick is where an unleased answer to a person Job is accepted, so
 	// this is what runs the step that follows it (grid land after the ship person
@@ -132,6 +139,8 @@ type Stream struct {
 
 	ohSqMemo map[string]ohSqKey // task folder to the Feed key of the pass that dropped it as quiet
 	landSeen map[string]bool    // task folder to what LandPending said of it at the start of this pass
+
+	ocCuratorMemo map[string]ohSqKey // task folder to the key of the last ask of ClosedCurator after an acceptance
 }
 
 type spawnLine struct {
@@ -355,6 +364,7 @@ func (s *Stream) task(dir string) error {
 		return s.skip(dir, taskID, SkipTickFailed, err)
 	}
 	delete(s.skipped, dir)
+	s.ocPostCurator(dir, taskID, st)
 	if s.Ticked != nil {
 		s.Ticked(dir, w)
 	}

@@ -206,6 +206,7 @@ func workerStream(env Env, member, machine, role string, pid int, start string, 
 		FirstJob: firstJobOf,
 		// A closed task whose brain proposals still wait gets the curator Job deliver would post.
 		ClosedCurator: workerClosedCurator(env),
+		ProposalDirs:  workerProposalDirs(env),
 		// The tick accepts a person's answer to the ship person Job; the task then lands.
 		Ticked: func(dir string, w feed.Writer) {
 			landAfterShipAs(env, dir, contract.Author{ID: member, Role: role}, w)
@@ -291,9 +292,27 @@ func workerClosedCurator(env Env) func(dir, taskID, id string) (map[string]any, 
 		}
 		ids := make([]string, 0, len(rows))
 		for _, row := range rows {
-			ids = append(ids, row.ID)
+			ids = append(ids, proposalPointer(row))
 		}
 		return curatorJobBody(id, t.ID, ids), nil
+	}
+}
+
+// workerProposalDirs answers the stream's ProposalDirs: the home's and the project's
+// brain-proposals folders, the two workerClosedCurator's brain.Store reads besides the
+// task folder's own. The project is taken from the task folder's place in the home, as
+// workerSpawnModel does, because this runs on every pass and resolving the task is what
+// it spares; a Personal task has no project folder, as workerClosedCurator gives it none.
+func workerProposalDirs(env Env) func(dir string) []string {
+	return func(dir string) []string {
+		if env.GridHome == "" {
+			return nil
+		}
+		out := []string{filepath.Join(env.GridHome, "brain-proposals")}
+		if project := filepath.Base(filepath.Dir(filepath.Dir(dir))); project != where.Personal {
+			out = append(out, filepath.Join(env.GridHome, "projects", project, "brain-proposals"))
+		}
+		return out
 	}
 }
 

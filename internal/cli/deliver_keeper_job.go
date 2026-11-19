@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gridconsole/grid-plugins/internal/brain"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
@@ -66,8 +67,22 @@ func nextJobID(snap orchestrator.Snapshot) string {
 // plan the lint checks a curator Job's acceptance against.
 func curatorJobBody(id, taskID string, ids []string) map[string]any {
 	reads := make([]any, 0, len(ids))
+	var elsewhere []string
 	for _, p := range ids {
+		// A project or home proposal lives under the Grid home, not in the task folder.
+		if strings.HasPrefix(p, "brain:") {
+			elsewhere = append(elsewhere, p)
+			continue
+		}
 		reads = append(reads, "brain-proposals/"+p+".md")
+	}
+	where := ""
+	if len(elsewhere) > 0 {
+		var shows []string
+		for _, p := range elsewhere {
+			shows = append(shows, p+": `"+showCommand(p, taskID)+"`")
+		}
+		where = fmt.Sprintf("; the project and home proposals are listed by `grid brain keep --task %s` and read one by one: %s", taskID, strings.Join(shows, "; "))
 	}
 	noun := "proposals"
 	if len(ids) == 1 {
@@ -83,7 +98,7 @@ func curatorJobBody(id, taskID string, ids []string) map[string]any {
 		"read": reads, "write": []any{}, "out_of_scope": []any{},
 		"acceptance": []any{map[string]any{
 			"id":     "A1",
-			"text":   fmt.Sprintf("Curate the %d brain %s of %s: `grid brain keep --task %s` lists no waiting proposal; each one is accepted, merged or rejected with a reason", len(ids), noun, taskID, taskID),
+			"text":   fmt.Sprintf("Curate the %d brain %s of %s: `grid brain keep --task %s` lists no waiting proposal; each one is accepted, merged or rejected with a reason%s", len(ids), noun, taskID, taskID, where),
 			"traces": "item",
 		}},
 		"verify":     map[string]any{"kind": "file-exists", "path": "task.md"},
@@ -172,4 +187,23 @@ type deliverOutput struct {
 	taskstore.Delivery
 	CuratorJob string `json:"curator_job"`
 	PersonJob  string `json:"person_job,omitempty"`
+}
+
+// showCommand is the grid brain show line that reads a project or home proposal
+// named by its keep path, brain:<level>/brain-proposals/<name>.md. show takes
+// the proposal as brain:<level>/<name> with --proposal; the keep path is not an id.
+func showCommand(keepPath, taskID string) string {
+	level, rest, _ := strings.Cut(strings.TrimPrefix(keepPath, "brain:"), "/")
+	name := strings.TrimSuffix(strings.TrimPrefix(rest, "brain-proposals/"), ".md")
+	return fmt.Sprintf("grid brain show --proposal brain:%s/%s --task %s", level, name, taskID)
+}
+
+// proposalPointer is what the curator Job names a waiting proposal by: its id for
+// a task proposal (read from the task folder) and the keep path, brain:<level>/...,
+// for a project or home one.
+func proposalPointer(w brain.WaitingProposal) string {
+	if strings.HasPrefix(w.Path, "brain:") {
+		return w.Path
+	}
+	return w.ID
 }

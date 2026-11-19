@@ -733,10 +733,28 @@ func (s Store) legacyFiles(level string) ([]vaultFile, error) {
 }
 
 func (s Store) filesOf(level string) ([]vaultFile, error) {
-	if s.Vault() {
-		return s.vaultFiles(level)
+	if !s.Vault() {
+		return s.legacyFiles(level)
 	}
-	return s.legacyFiles(level)
+	files, err := s.vaultFiles(level)
+	if err != nil {
+		return nil, err
+	}
+	// Accept still publishes under GridHome/knowledge, so those notes stay visible.
+	legacy, err := s.legacyFiles(level)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	for _, f := range files {
+		seen[f.id] = true
+	}
+	for _, f := range legacy {
+		if !seen[f.id] {
+			files = append(files, f)
+		}
+	}
+	return files, nil
 }
 
 // --- the lookup (2.1) ---

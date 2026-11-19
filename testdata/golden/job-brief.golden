@@ -51,6 +51,8 @@ follow_up: "none"
 
 ## Context
 
+Before deciding something earlier work may answer, run `grid brain search <words>`.
+
 - brain:project/export-format · uses · The export column order and compatibility rule. · Keep the documented column order stable for readers [agent]
 
 ### Excerpt [agent] (brain:project/export-format)

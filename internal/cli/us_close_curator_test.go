@@ -85,8 +85,14 @@ func TestUsCloseHookCountsOnlyThisTasksHomeProposals(t *testing.T) {
 	if err != nil || body == nil {
 		t.Fatalf("hook answered %v, %v", body, err)
 	}
-	if got, want := usCloseReads(t, body), []string{"brain-proposals/by-task.md"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("read pointers %v, want %v", got, want)
+	// A home proposal is not in the task folder, so the Job names it by its keep path, not a read.
+	if got := usCloseReads(t, body); len(got) != 0 {
+		t.Fatalf("read pointers %v, want none", got)
+	}
+	acc, _ := body["acceptance"].([]any)
+	text, _ := acc[0].(map[string]any)["text"].(string)
+	if !strings.Contains(text, "brain:home/brain-proposals/by-task.md") || strings.Contains(text, "other-task") {
+		t.Fatalf("acceptance names the wrong proposals: %s", text)
 	}
 }
 
