@@ -45,7 +45,7 @@ func TestZzAppLostCardNotAcceptedHolds(t *testing.T) {
 		for id, st := range status {
 			jobs[id] = contract.Job{ID: id, Status: st}
 		}
-		if mustGraph(t, items).lostDecided(Snapshot{Jobs: jobs}, "J-2.1") {
+		if mustGraph(t, items).lostDecided(Snapshot{Jobs: jobs}, "J-2.1", nil) {
 			t.Errorf("card %s: the cancelled review J-2.1 is settled", card)
 		}
 		r, w := m1Deliver(t, items, status)
@@ -53,7 +53,7 @@ func TestZzAppLostCardNotAcceptedHolds(t *testing.T) {
 	}
 	other := m1Plan(zzAppLostCard("J-2.2", "J-5"))
 	jobs := map[string]contract.Job{"J-2.1": {ID: "J-2.1", Status: contract.Cancelled}, "J-2.2": {ID: "J-2.2", Status: contract.Accepted}}
-	if mustGraph(t, other).lostDecided(Snapshot{Jobs: jobs}, "J-2.1") {
+	if mustGraph(t, other).lostDecided(Snapshot{Jobs: jobs}, "J-2.1", nil) {
 		t.Error("an accepted card for another Job settles the cancelled review J-2.1")
 	}
 }

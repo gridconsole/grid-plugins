@@ -323,14 +323,15 @@ func DoneReason(target string, status contract.Status) string {
 // the target, which its answer (orchestrator yvPamControl) or its decision Job closes.
 func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 	status := s.Jobs[target].Status
+	path := map[string]bool{target: true}
 	if !closed(status) {
 		for _, child := range g.children[target] {
-			if !strings.HasPrefix(child, target+".") || s.Jobs[child].Status == contract.Cancelled && g.lostDecided(s, child) {
+			if !strings.HasPrefix(child, target+".") || s.Jobs[child].Status == contract.Cancelled && g.lostDecided(s, child, path) {
 				return false, DoneReason(target, status)
 			}
 		}
 	}
-	if !g.childrenAccepted(s, target) || len(g.holding(s, target)) == 0 {
+	if !g.childrenAccepted(s, target, path) || len(g.holding(s, target, path)) == 0 {
 		return false, "waiting for all children of " + target + " to be accepted"
 	}
 	switch status {
@@ -361,7 +362,7 @@ func (g *Graph) reworkDone(s Snapshot, id string, seen map[string]bool) (bool, s
 		seen[r] = true
 	}
 	for _, r := range reworks {
-		if !g.childrenAccepted(s, r) {
+		if !g.childrenAccepted(s, r, seen) {
 			return false, "waiting for all children of " + r + " to be accepted"
 		}
 		switch s.Jobs[r].Status {
@@ -398,14 +399,36 @@ func (g *Graph) reworksOf(id string, seen map[string]bool) []string {
 }
 
 // childrenAccepted reports whether every immediate child of id that holds an
-// edge is accepted; a Job with no children has none waiting.
-func (g *Graph) childrenAccepted(s Snapshot, id string) bool {
-	for _, child := range g.holding(s, id) {
-		if s.Jobs[child].Status != contract.Accepted {
+// edge is settled; a Job with no children has none waiting. path is as in settled.
+func (g *Graph) childrenAccepted(s Snapshot, id string, path map[string]bool) bool {
+	for _, child := range g.holding(s, id, path) {
+		if !g.settled(s, child, path) {
 			return false
 		}
 	}
 	return true
+}
+
+// settled reports whether the Job id is done as a child or as a decision: it is
+// accepted, or it was rejected and the Jobs that rework it are done (reworkDone),
+// as judge.Rework rejects a Job it reworks under a new top-level id. path holds the
+// Jobs whose walk led here and ends a loop of continues.
+func (g *Graph) settled(s Snapshot, id string, path map[string]bool) bool {
+	switch s.Jobs[id].Status {
+	case contract.Accepted:
+		return true
+	case contract.Rejected:
+		if path[id] {
+			return false
+		}
+		seen := map[string]bool{id: true}
+		for k := range path {
+			seen[k] = true
+		}
+		ok, _ := g.reworkDone(s, id, seen)
+		return ok
+	}
+	return false
 }
 
 // holding are the immediate children of id that hold a children-done edge: a
@@ -413,11 +436,12 @@ func (g *Graph) childrenAccepted(s Snapshot, id string) bool {
 // accepted (replaced), and a cancelled review holds nothing once the decision or
 // person Job for its lost verdict was accepted (lostDecided). Any other cancelled
 // person Job, such as an approve card, still holds: an approval is the person Job
-// accepted.
-func (g *Graph) holding(s Snapshot, id string) []string {
+// accepted. A decision Job counts once settled, so a reworked one counts when its
+// rework is done. path is as in settled.
+func (g *Graph) holding(s Snapshot, id string, path map[string]bool) []string {
 	out := []string{}
 	for _, child := range g.children[id] {
-		if s.Jobs[child].Status == contract.Cancelled && (g.replaced(s, child) || g.lostDecided(s, child)) {
+		if s.Jobs[child].Status == contract.Cancelled && (g.replaced(s, child, path) || g.lostDecided(s, child, path)) {
 			continue
 		}
 		out = append(out, child)
@@ -432,7 +456,7 @@ const decidePrefix = "Decide how "
 // replaced reports whether p is a person Job of the old kind that judge.Migrate
 // replaced with a decision Job, and that decision Job is accepted: a Job for an
 // agent, titled as p is and discovered from the same Job (judge.decisionFrom).
-func (g *Graph) replaced(s Snapshot, p string) bool {
+func (g *Graph) replaced(s Snapshot, p string, path map[string]bool) bool {
 	it := g.items[p]
 	if !it.IsPerson() || it.DiscoveredFrom == nil || !strings.HasPrefix(it.Title, decidePrefix) {
 		return false
@@ -440,7 +464,7 @@ func (g *Graph) replaced(s Snapshot, p string) bool {
 	for _, d := range g.ids {
 		dec := g.items[d]
 		if d != p && contract.NormalizeRole(dec.Role) == "orchestrator" && strings.HasPrefix(dec.Title, decidePrefix) &&
-			dec.DiscoveredFrom != nil && *dec.DiscoveredFrom == *it.DiscoveredFrom && s.Jobs[d].Status == contract.Accepted {
+			dec.DiscoveredFrom != nil && *dec.DiscoveredFrom == *it.DiscoveredFrom && g.settled(s, d, path) {
 			return true
 		}
 	}
@@ -452,7 +476,7 @@ func (g *Graph) replaced(s Snapshot, p string) bool {
 // and titled as judge.lost titles it ("Decide how <J> continues without its review"),
 // or the person Job the app's Judge posted with that title before it posted a
 // decision Job (app judge.go reviewLost), which judge.Migrate leaves as it is.
-func (g *Graph) lostDecided(s Snapshot, r string) bool {
+func (g *Graph) lostDecided(s Snapshot, r string, path map[string]bool) bool {
 	it := g.items[r]
 	if !isReview(it) || it.DiscoveredFrom == nil {
 		return false
@@ -461,7 +485,7 @@ func (g *Graph) lostDecided(s Snapshot, r string) bool {
 	for _, d := range g.ids {
 		dec := g.items[d]
 		if (isDecision(dec) || dec.IsPerson()) && dec.Title == decidePrefix+b+" continues without its review" &&
-			dec.DiscoveredFrom != nil && *dec.DiscoveredFrom == b && s.Jobs[d].Status == contract.Accepted {
+			dec.DiscoveredFrom != nil && *dec.DiscoveredFrom == b && g.settled(s, d, path) {
 			return true
 		}
 	}
