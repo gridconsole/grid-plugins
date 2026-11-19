@@ -50,6 +50,20 @@ func TestApproveWaitsWhenTheProjectHasNoFolderHereAndABuilderWritesFiles(t *test
 	m.waits(t, "project sample has no folder on this machine")
 }
 
+// A project whose folder here is no git repo, no branch in task.md and an accepted
+// builder Job with files to write: the land fails as for a project with no folder here.
+func TestApproveWaitsWhenTheProjectHasNoRepoHereAndABuilderWritesFiles(t *testing.T) {
+	m := multiRepoFixture(t)
+	m.builder(t, m.plugin, "main", "p1.txt")
+	if err := project.Write(m.env.GridHome, project.Record{Name: "sample", ID: "example",
+		Folders: []project.Folder{{Machine: m.env.Machine, Path: m.env.Cwd}}}); err != nil {
+		t.Fatal(err)
+	}
+	m.setTaskKey(t, "branch: grid-"+m.fid+"-J-9-a1\n", "")
+	m.approve(t)
+	m.waits(t, "project sample has no folder on this machine")
+}
+
 // task.md names a branch no repo holds whose Job has files to write: that branch may
 // hold work of its own, so the land fails on it and no builder branch lands.
 func TestApproveFailsOnAMissingTaskBranchOfAJobThatWritesFiles(t *testing.T) {
