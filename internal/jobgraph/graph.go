@@ -350,6 +350,7 @@ func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 	}
 	switch status {
 	case contract.Cancelled, contract.Rejected:
+		// A cancelled target that another Job continues was replaced by it; the chain walk names a dead end.
 		return g.reworkDone(s, target, map[string]bool{target: true})
 	}
 	return true, ""

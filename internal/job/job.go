@@ -206,3 +206,16 @@ var PlannedFields = []string{"id", "item", "title", "role", "skills", "risk", "i
 // (review is a retired optional field: a Job may still carry it, and nothing
 // reads it.)
 var RetiredFields = []string{"max_rounds"}
+
+// HeadBasePrefix starts a base that names the accepted head of another Job instead
+// of a branch: head:J-3 is the branch of the Job that ends J-3's continues chain.
+const HeadBasePrefix = "head:"
+
+// HeadBaseTarget answers the Job id a base of the form head:J-n names, and whether
+// base has that form.
+func HeadBaseTarget(base string) (string, bool) {
+	if !strings.HasPrefix(base, HeadBasePrefix) {
+		return "", false
+	}
+	return strings.TrimPrefix(base, HeadBasePrefix), true
+}
