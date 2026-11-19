@@ -177,9 +177,10 @@ func TestSetupSandboxFlag(t *testing.T) {
 	if rules := claudeDenyRules(t); len(rules) != 0 {
 		t.Fatalf("plain setup wrote deny rules: %v", rules)
 	}
-	// With it, exactly sandbox.enabled is written; a second run changes nothing.
+	// With it, exactly sandbox.enabled and sandbox.network.allowLocalBinding are
+	// written; a second run changes nothing.
 	run(0, "setup", "--sandbox", "--yes")
-	if raw, ok := sandbox(); !ok || compact(raw) != `{"enabled":true}` {
+	if raw, ok := sandbox(); !ok || compact(raw) != `{"enabled":true,"network":{"allowLocalBinding":true}}` {
 		t.Fatalf("sandbox=%s", raw)
 	}
 	before, _ := os.ReadFile(file)
@@ -188,7 +189,7 @@ func TestSetupSandboxFlag(t *testing.T) {
 		Present []string
 		Written bool
 	}
-	if err := json.Unmarshal(h.out.Bytes(), &result); err != nil || result.Written || !slices.Contains(result.Present, "sandbox.enabled: true") {
+	if err := json.Unmarshal(h.out.Bytes(), &result); err != nil || result.Written || !slices.Contains(result.Present, "sandbox.enabled: true") || !slices.Contains(result.Present, "sandbox.network.allowLocalBinding: true") {
 		t.Fatalf("second run: %s %v", h.out, err)
 	}
 	after, _ := os.ReadFile(file)
@@ -216,7 +217,7 @@ func TestSetupSandboxFlag(t *testing.T) {
 	// Setup owns only the key it wrote. The person's other sandbox keys stay.
 	h.write(file, `{"sandbox":{"enabled":false,"excludedCommands":["docker"]}}`)
 	run(0, "setup", "--sandbox", "--yes")
-	if raw, _ := sandbox(); compact(raw) != `{"enabled":true,"excludedCommands":["docker"]}` {
+	if raw, _ := sandbox(); compact(raw) != `{"enabled":true,"excludedCommands":["docker"],"network":{"allowLocalBinding":true}}` {
 		t.Fatalf("sandbox=%s", raw)
 	}
 	run(0, "setup", "--remove", "--yes")
@@ -231,6 +232,45 @@ func TestSetupSandboxFlag(t *testing.T) {
 	run(0, "setup", "--remove", "--yes")
 	if raw, _ := sandbox(); compact(raw) != `{"enabled":true}` {
 		t.Fatalf("remove touched a sandbox setup did not write: %s", raw)
+	}
+
+	// A person's allowLocalBinding false wins, and their other network keys stay.
+	person := `{"sandbox":{"network":{"allowedDomains":["a.test"],"allowLocalBinding":false}}}`
+	h.write(file, person)
+	run(0, "setup", "--sandbox", "--yes")
+	if raw, _ := sandbox(); compact(raw) != `{"enabled":true,"network":{"allowLocalBinding":false,"allowedDomains":["a.test"]}}` {
+		t.Fatalf("person false overridden: %s", raw)
+	}
+	run(0, "setup", "--remove", "--yes")
+	if raw, _ := sandbox(); compact(raw) != `{"network":{"allowLocalBinding":false,"allowedDomains":["a.test"]}}` {
+		t.Fatalf("remove touched the person's false: %s", raw)
+	}
+	// A person's true is theirs too: setup writes nothing for it and remove leaves it.
+	h.write(file, `{"sandbox":{"network":{"allowLocalBinding":true}}}`)
+	run(0, "setup", "--sandbox", "--yes")
+	run(0, "setup", "--remove", "--yes")
+	if raw, _ := sandbox(); compact(raw) != `{"network":{"allowLocalBinding":true}}` {
+		t.Fatalf("remove touched the person's true: %s", raw)
+	}
+	// Remove takes setup's key out of a network object the person shares, and an
+	// object setup made alone goes with it.
+	h.write(file, `{"sandbox":{"network":{"allowedDomains":["a.test"]}}}`)
+	run(0, "setup", "--sandbox", "--yes")
+	run(0, "setup", "--remove", "--yes")
+	if raw, _ := sandbox(); compact(raw) != `{"network":{"allowedDomains":["a.test"]}}` {
+		t.Fatalf("remove left setup's key or lost the person's: %s", raw)
+	}
+	h.write(file, `{}`)
+	run(0, "setup", "--sandbox", "--yes")
+	run(0, "setup", "--remove", "--yes")
+	if raw, ok := sandbox(); ok {
+		t.Fatalf("remove left an empty network or sandbox: %s", raw)
+	}
+	// Plain setup writes no network key.
+	h.write(file, `{}`)
+	run(0, "setup", "--yes")
+	if raw, ok := sandbox(); ok {
+		t.Fatalf("plain setup wrote sandbox: %s", raw)
 	}
 
 	// A malformed sandbox entry is refused only when the flag asks for it.
