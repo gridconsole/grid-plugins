@@ -3,11 +3,11 @@ name: deliver
 description: Finish a task with proof and an Outcome so the person can review it. Use when the work of a Grid task is done, the person says "deliver it", "wrap it up" or "what did we get", or the last workflow step is complete.
 ---
 
-Delivery writes down what exists and what proves it. It never approves, never closes the task and never asks the person about the brain.
+Delivery writes down what exists and what proves it. It writes no approval itself, never closes the task and never asks the person about the brain.
 
 Rules that apply here:
 - "No Grid-made guards, caps or limits": the only refusals are the ones `grid deliver` itself returns. Do not add your own.
-- "A person step is a Job for a person": `grid deliver` writes the Outcome and sets the task to wait for the person's review (`step: ship`); the person's answer is a Job for a person. Never write an approval.
+- "A person step is a Job for a person": `grid deliver` writes the Outcome and sets the task to wait for the person's review (`step: ship`); the answer is that Job's, given with `grid approve` by a person or an agent (agents may approve). Delivery itself never writes an approval.
 - "The brain needs no attention from the person": a subagent curates proposals; you never ask the person.
 - "Every link carries a why."
 - "A row you could not prove is NOT DONE": never write an Outcome that claims it.
@@ -22,4 +22,4 @@ Steps (all use `--task <task>`). Pass the task folder path `$GRID_HOME/projects/
 6. Dry run: `grid deliver --outcome '<text>' <files> --dry-run --task <task>`. Read the refusal, if any, and fix its cause: a plan item that lacks proof (run `grid proof add`), a plan with no items or no plan.md, a deliverable file that cannot be imported, a task that is closed, stopped, paused or already waiting. Waiting proposals and plan approval are not refusals.
 7. `grid deliver --outcome '<text>' --file <deliverable> ... --task <task>`. The Outcome's first line is the summary: what was delivered, in the person's terms, with the main path. Name every plan item and its proof, and every NOT DONE row. The deliver Job runs `grid deliver` from its own worktree, so the task's branch and base are recorded in task.md (`branch:` and `base:`) with no flag; `--branch` and `--base` override them.
 
-Done looks like: `grid deliver` exits 0, `state: waiting` and `step: ship` in task.md, one proof record per plan item, and the curator Job posted when proposals wait. The person approves or sends it back; tasks carry on by themselves until that point.
+Done looks like: `grid deliver` exits 0, `state: waiting` and `step: ship` in task.md, one proof record per plan item, and the curator Job posted when proposals wait. A person or an agent approves it, or a person sends it back; tasks carry on by themselves until that point.
