@@ -240,6 +240,11 @@ func taskMerge(env Env, id, proj string) (string, error) {
 				sha, landed, err = taskMergeOne(res, name, r, base)
 			}
 		}
+		// A builder Job that wrote no code (brain proposals only) made no branch in any repo.
+		if errors.As(err, &missing) {
+			fmt.Fprintf(env.Stderr, "grid task merge: skipped %s: no repo of project %s holds it, so the accepted builder Job has nothing to land\n", b, res.Project)
+			continue
+		}
 		if err != nil {
 			return "", err
 		}
@@ -277,6 +282,10 @@ func firstUnlanded(res where.Result, base string, built, rebased []string) (repo
 	}
 	for _, b := range built {
 		repo, err := taskMergeRepo(res, b)
+		var missing *branchMissingError
+		if errors.As(err, &missing) {
+			continue // no repo holds it: nothing to land, as taskMerge skips it
+		}
 		if err != nil {
 			return "", "", err
 		}
