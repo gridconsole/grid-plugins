@@ -170,8 +170,9 @@ const (
 	OrphanNeverPickedUp = "never_picked_up"
 	OrphanNeverAcked    = "never_acked"
 	OrphanNoExit        = "no_exit"
-	// OrphanDeadWait is a Posted or Ready Job that waits through a done edge on a
-	// Job that was rejected or cancelled, or a Held Job whose job or landed wait can
+	// OrphanDeadWait is a Posted or Ready Job that waits through a done or
+	// children-done edge on a Job whose continues chain ends rejected or
+	// cancelled with nothing open, or a Held Job whose job or landed wait can
 	// no longer be met (heldDeadWaits): it is never released by itself.
 	OrphanDeadWait = "dead_wait"
 	// OrphanNeverJudged is a Submitted Job past its lease that no Judge has taken:
@@ -215,9 +216,10 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 	// open: no unmet after, so the Job has a ready time. A person's Job is held
 	// back from Ready by a wait with no target; a started Job was ready to start.
 	open := map[string]bool{}
-	// dead: the first wait of a Job through a done edge on a Rejected or
-	// Cancelled Job, which nothing will release by itself.
-	dead := map[string]jobgraph.Wait{}
+	// dead: the first wait of a Job through a done or children-done edge on a
+	// Job whose continues chain is dead, which nothing will release by itself.
+	dead := map[string]deadWaitOf{}
+	chain := chainSnapshot(s)
 	if err == nil {
 		for _, id := range readiness.Ready {
 			ready[id], open[id] = true, true
@@ -226,8 +228,10 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 			if w.Target == "" && w.Reason != "usage_limit" && w.Reason != "review_capacity" {
 				open[w.Job] = true
 			}
-			if _, named := dead[w.Job]; !named && deadDoneWait(s, w) {
-				dead[w.Job] = w
+			if _, named := dead[w.Job]; !named {
+				if d, isDead := deadEdgeWait(s, chain, w); isDead {
+					dead[w.Job] = d
+				}
 			}
 		}
 	}
@@ -284,8 +288,8 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 			}
 		}
 		row.Orphan = orphanOf(j, row.Attempts, ready[id], since[id], until, to, hasResult, now)
-		if w, isDead := dead[id]; isDead && row.Orphan == nil && (j.Status == contract.Posted || j.Status == contract.Ready) {
-			row.Orphan = &Orphan{Kind: OrphanDeadWait, Since: contract.FormatTime(closedAt(s, w.Target)), Detail: w.Reason}
+		if d, isDead := dead[id]; isDead && row.Orphan == nil && (j.Status == contract.Posted || j.Status == contract.Ready) {
+			row.Orphan = &Orphan{Kind: OrphanDeadWait, Since: contract.FormatTime(closedAt(s, d.End)), Detail: d.Reason}
 		}
 		if waits := heldDeadWaits(s, j); len(waits) > 0 && row.Orphan == nil {
 			w := waits[0]
@@ -344,18 +348,48 @@ func neverJudged(s Snapshot, j *contract.Job, acked map[string]bool, now time.Ti
 	return &Orphan{Kind: OrphanNeverJudged, Since: contract.FormatTime(lease), Detail: "submitted, and no wake of its result acknowledged after its lease ran out; the review and any rework are posted by the app's Judge"}
 }
 
-// deadDoneWait reports whether w is a wait through a done edge on a Job that
-// was rejected or cancelled. Such a Job is never released by itself, so the
-// wait never ends. A gate, a failed edge and a live target are not dead.
-func deadDoneWait(s Snapshot, w jobgraph.Wait) bool {
-	if w.Target == "" || strings.HasPrefix(w.Target, "gate:") {
-		return false
+// deadWaitOf is a wait nothing can release: its reason, and the dead end of the
+// target's continues chain, the Job whose close dates the wait.
+type deadWaitOf struct {
+	End    string
+	Reason string
+}
+
+// chainSnapshot is the Jobs of s as jobgraph reads them to follow a continues chain.
+func chainSnapshot(s Snapshot) jobgraph.Snapshot {
+	jobs := make(map[string]contract.Job, len(s.State.Jobs))
+	for id, j := range s.State.Jobs {
+		jobs[id] = *j
+	}
+	return jobgraph.Snapshot{Jobs: jobs}
+}
+
+// deadEdgeWait reports whether w is a wait through a done or children-done edge
+// whose target's continues chain is dead (jobgraph.Head): it ends rejected or
+// cancelled with no Job continuing it and none open. Such a wait never ends. A
+// gate, a failed or landed edge, and a target whose chain is accepted or open are
+// not dead. The reason is the graph's for a done edge; a children-done edge gets
+// the same words, since its own reason may only name unaccepted children.
+func deadEdgeWait(s Snapshot, chain jobgraph.Snapshot, w jobgraph.Wait) (deadWaitOf, bool) {
+	if w.Target == "" || strings.HasPrefix(w.Target, "gate:") || w.Kind != "" && w.Kind != jobgraph.Done && w.Kind != jobgraph.ChildrenDone {
+		return deadWaitOf{}, false
 	}
 	target := s.State.Jobs[w.Target]
 	if target == nil || target.Status != contract.Rejected && target.Status != contract.Cancelled {
-		return false
+		return deadWaitOf{}, false
 	}
-	return w.Reason == jobgraph.DoneReason(w.Target, target.Status)
+	end, state := jobgraph.Head(chain, w.Target)
+	if state != jobgraph.HeadDead {
+		return deadWaitOf{}, false
+	}
+	reason := w.Reason
+	if w.Kind == jobgraph.ChildrenDone {
+		reason = jobgraph.DoneReason(w.Target, target.Status)
+		if e := s.State.Jobs[end]; end != w.Target && e != nil {
+			reason += "; its rework chain ends in " + end + ", which was " + string(e.Status)
+		}
+	}
+	return deadWaitOf{End: end, Reason: reason}, true
 }
 
 // deadWait is a job or landed wait of a Held Job that can no longer be met: the

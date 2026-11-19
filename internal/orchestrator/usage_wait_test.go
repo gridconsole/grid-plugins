@@ -31,7 +31,11 @@ func TestUsageLimitRowsSayWhenItResets(t *testing.T) {
 	yaUrExit(t, f, reset.Unix())
 	f.job(t, "J-2", nil)
 	out := f.tick(t)
-	want := "Waiting for the usage limit, resets " + reset.Local().Format("15:04")
+	layout := "15:04"
+	if rl, nl := reset.Local(), f.now.Local(); rl.YearDay() != nl.YearDay() || rl.Year() != nl.Year() {
+		layout = "Mon 15:04" // a reset on another day names the weekday
+	}
+	want := "Waiting for the usage limit, resets " + reset.Local().Format(layout)
 	if got := uwRow(t, out, "J-1"); got.State != contract.Parked || got.Why != want {
 		t.Fatalf("parked row %+v, want why %q", got, want)
 	}
