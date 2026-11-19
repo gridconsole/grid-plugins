@@ -188,18 +188,19 @@ var rebaseLine = regexp.MustCompile(`waits for rebase (\S+?)(?: \(` + rebaseTipM
 // the ship Job job. Both are "" when job has none, and tip is "" for a line written
 // before the tip was kept; a tip is at most tipLen characters, so compare it as a prefix.
 func (s Store) RebaseTip(cwd, id, job string) (rebase, tip string, err error) {
-	err = s.withShipLock(cwd, id, func(history string) error {
-		for _, line := range strings.Split(history, "\n") {
-			if !strings.Contains(line, " · "+shipEvent+" · "+shipRebasePrefix(job)) {
-				continue
-			}
-			if m := rebaseLine.FindStringSubmatch(line); m != nil {
-				rebase, tip = m[1], m[2]
-			}
+	history, err := s.shipHistory(cwd, id)
+	if err != nil {
+		return "", "", err
+	}
+	for _, line := range strings.Split(history, "\n") {
+		if !strings.Contains(line, " · "+shipEvent+" · "+shipRebasePrefix(job)) {
+			continue
 		}
-		return nil
-	})
-	return rebase, tip, err
+		if m := rebaseLine.FindStringSubmatch(line); m != nil {
+			rebase, tip = m[1], m[2]
+		}
+	}
+	return rebase, tip, nil
 }
 
 // shipRetryDetail is the detail of the "ship answered" line Retry writes.
@@ -220,24 +221,41 @@ func (s Store) Retry(cwd, id, job string) error {
 // Armed reports whether the answer to the ship Job job still has a land to run: it has
 // not run yet, or it was reopened, queued a rebase or is to retry (shipState).
 func (s Store) Armed(cwd, id, job string) (bool, error) {
-	armed := false
-	err := s.withShipLock(cwd, id, func(history string) error {
-		armed, _ = shipState(history, job)
-		return nil
-	})
-	return armed, err
+	history, err := s.shipHistory(cwd, id)
+	if err != nil {
+		return false, err
+	}
+	armed, _ := shipState(history, job)
+	return armed, nil
 }
 
 // RebasePending reports whether the ship Job job waits for a rebase Job: the newest
 // arming line of its history is the one RebaseQueued writes, and land has not run
 // since.
 func (s Store) RebasePending(cwd, id, job string) (bool, error) {
-	pending := false
-	err := s.withShipLock(cwd, id, func(history string) error {
-		_, pending = shipState(history, job)
-		return nil
-	})
-	return pending, err
+	history, err := s.shipHistory(cwd, id)
+	if err != nil {
+		return false, err
+	}
+	_, pending := shipState(history, job)
+	return pending, nil
+}
+
+// shipHistory is history.md of the task id as it is now, read without .land.lock. A land
+// holds that lock through its deploy command, up to ten minutes, and the worker's pass
+// asks every waiting task what it is armed for, so a read that waited would stall the
+// whole pass. AppendHistory renames a whole new file into place, so the read sees a line
+// or not; markShip, under the lock, still lets one land run once.
+func (s Store) shipHistory(cwd, id string) (string, error) {
+	t, err := s.tasks().Show(cwd, id)
+	if err != nil {
+		return "", err
+	}
+	history, err := os.ReadFile(filepath.Join(t.Path, "history.md"))
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	return string(history), nil
 }
 
 func (s Store) withShipLock(cwd, id string, fn func(history string) error) error {

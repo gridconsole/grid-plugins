@@ -3,9 +3,13 @@ package land_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/fslock"
 	"github.com/gridconsole/grid-plugins/internal/land"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
@@ -74,5 +78,57 @@ func TestShipRebaseTipIsKeptWithTheQueuedRebase(t *testing.T) {
 	}
 	if pending, err := (land.Store{Resolver: s.Resolver}).RebasePending("", "T-01", "J-6"); err != nil || !pending {
 		t.Fatalf("RebasePending = %t, %v; want true after a queued rebase", pending, err)
+	}
+}
+
+// A land holds .land.lock through its deploy command, up to ten minutes, and the worker's pass asks
+// every waiting task whether its land is armed: the questions that only read history.md answer at once
+// while another holder keeps the lock, and none of them waits for it.
+func TestShipArmedReadsWhileALandHoldsTheLock(t *testing.T) {
+	s, dir, _ := r7Fixture(t, nil)
+	if err := s.RebaseQueued("", "T-01", "J-6", "J-9", "0123456789abcdef"); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := fslock.OpenNoFollow(filepath.Join(dir, ".land.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fslock.LockExclusive(lock); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { fslock.Unlock(lock); lock.Close() })
+	waited := make(chan string, 4)
+	t.Cleanup(fslock.OnBlockForTest(func(path string) {
+		if filepath.Base(path) == ".land.lock" {
+			select {
+			case waited <- path:
+			default:
+			}
+		}
+	}))
+	type answer struct {
+		armed, pending bool
+		rebase, tip    string
+		err            error
+	}
+	got := make(chan answer, 1)
+	go func() {
+		var a answer
+		if a.armed, a.err = s.Armed("", "T-01", "J-6"); a.err == nil {
+			if a.pending, a.err = s.RebasePending("", "T-01", "J-6"); a.err == nil {
+				a.rebase, a.tip, a.err = s.RebaseTip("", "T-01", "J-6")
+			}
+		}
+		got <- a
+	}()
+	select {
+	case a := <-got:
+		if a.err != nil || !a.armed || !a.pending || a.rebase != "J-9" || a.tip != "0123456789ab" {
+			t.Fatalf("answers while the lock was held = %+v; want armed, pending, J-9 at 0123456789ab", a)
+		}
+	case path := <-waited:
+		t.Fatalf("a read of the ship state waited for %s, which a land holds through its deploy command", path)
+	case <-time.After(30 * time.Second):
+		t.Fatal("no answer while the lock was held")
 	}
 }
