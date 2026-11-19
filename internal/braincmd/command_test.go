@@ -314,3 +314,49 @@ func TestDecidedHomeProposalDoesNotMove(t *testing.T) {
 		}
 	}
 }
+
+// A content refusal on the --project path is recorded at home, as a plain accept does.
+func TestContentRefusalWithProjectRecordsTheRejection(t *testing.T) {
+	h, project := projectHarness(t)
+	h.propose(t, "--external")
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 1 {
+		t.Fatalf("exit %d, want 1: %s", code, &h.err)
+	}
+	b, err := os.ReadFile(filepath.Join(h.env.GridHome, "brain-proposals", "checks.md"))
+	if err != nil || !strings.Contains(string(b), "status: rejected") {
+		t.Fatalf("home proposal not rejected: %v\n%s", err, b)
+	}
+	if _, err := os.Stat(filepath.Join(project, "brain-proposals", "checks.md")); !os.IsNotExist(err) {
+		t.Fatal("proposal was moved into the project")
+	}
+}
+
+// An accept that fails after the move puts the proposal back home as proposed.
+func TestAcceptFailingAfterTheMoveMovesTheProposalBack(t *testing.T) {
+	h, project := projectHarness(t)
+	h.propose(t)
+	blocker := filepath.Join(project, "knowledge", "versions")
+	if err := os.MkdirAll(filepath.Dir(blocker), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blocker, []byte("not a folder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code == 0 {
+		t.Fatal("accept with a blocked version folder succeeded")
+	}
+	home := filepath.Join(h.env.GridHome, "brain-proposals", "checks.md")
+	b, err := os.ReadFile(home)
+	if err != nil || !strings.Contains(string(b), "status: proposed") || !strings.Contains(string(b), "level: home") {
+		t.Fatalf("proposal not back home as proposed: %v\n%s", err, b)
+	}
+	if _, err := os.Stat(filepath.Join(project, "brain-proposals", "checks.md")); !os.IsNotExist(err) {
+		t.Fatal("proposal left in the project")
+	}
+	if err := os.Remove(blocker); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 0 {
+		t.Fatalf("retry exit %d: %s", code, &h.err)
+	}
+}

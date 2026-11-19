@@ -1,6 +1,7 @@
 package brain
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,12 @@ import (
 // when the accept fails, so the curator's brain:home id keeps working.
 func (s Store) AcceptHomeInProject(name string) (Entry, error) {
 	if err := s.moveProposal(name, "home", "project", true); err != nil {
+		// A content refusal is recorded where the proposal is, as a plain home
+		// accept does, so a curator that always passes --project can clear it.
+		var g gateRefusal
+		if errors.As(err, &g) {
+			return s.Accept("home", name)
+		}
 		return Entry{}, err
 	}
 	e, err := s.Accept("project", name)
@@ -86,10 +93,13 @@ func (s Store) moveProposal(name, fromLevel, toLevel string, check bool) error {
 	})
 }
 
+// gateRefusal is a content-gate refusal, which accept records as a rejection.
+type gateRefusal struct{ error }
+
 // acceptable runs the checks decide runs before it publishes n at level.
 func acceptable(root *os.Root, level string, n Note) error {
 	if reason := gate(root, n); reason != "" {
-		return fmt.Errorf("proposal rejected: %s", reason)
+		return gateRefusal{fmt.Errorf("proposal rejected: %s", reason)}
 	}
 	entries, _, err := scan(root, level)
 	if err != nil {
