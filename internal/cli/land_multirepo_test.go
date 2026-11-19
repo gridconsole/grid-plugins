@@ -183,3 +183,66 @@ func TestApproveLandsTheBranchOfAGridBuilderJob(t *testing.T) {
 		t.Fatalf("p1.txt is not on main of plugin after approve; stderr %s; history:\n%s", m.stderr, shipHistory(t, m.dir))
 	}
 }
+
+// conflictPartway is three builder branches, plugin J-1 and J-2 both adding c.txt and
+// app J-3, approved: J-1 lands and J-2 conflicts, so the land waits for its rebase Job.
+func conflictPartway(t *testing.T) (multiRepoLand, string) {
+	t.Helper()
+	m := multiRepoFixture(t)
+	m.builder(t, m.plugin, "main", "p1.txt", "c.txt")
+	second := m.builder(t, m.plugin, "main", "c.txt")
+	m.builder(t, m.app, "main", "a3.txt")
+	m.approve(t)
+	return m, second
+}
+
+// A conflict partway through a land loses no work: once the rebase Job of the
+// conflicting branch is accepted, the land goes on with the branches after it, the
+// rebased branch in its original's place, and only then is the task closed.
+func TestApproveLandsTheBranchesAfterAConflictOnceTheRebaseIsAccepted(t *testing.T) {
+	m, second := conflictPartway(t)
+	if rec, _ := task.Read(m.dir); rec.State == "closed" {
+		t.Fatalf("task closed on a conflict; history:\n%s", shipHistory(t, m.dir))
+	}
+	if _, err := os.Stat(filepath.Join(m.app, "a3.txt")); err == nil {
+		t.Fatal("a3.txt landed past the conflict")
+	}
+	rebases, _ := rebaseJobs(t, m.store)
+	if len(rebases) != 1 {
+		t.Fatalf("%d rebase Jobs, want 1; stderr %s", len(rebases), m.stderr)
+	}
+	rebased := "grid-" + m.fid + "-" + rebases[0].ID + "-a1"
+	shipGit(t, m.plugin, "checkout", "-q", "-b", rebased, "main")
+	shipGit(t, m.plugin, "merge", "-q", "-s", "ours", "--no-edit", second)
+	if err := os.WriteFile(filepath.Join(m.plugin, "c.txt"), []byte("J-1 c.txt\nJ-2 c.txt\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	shipGit(t, m.plugin, "commit", "-q", "-am", "resolve c.txt keeping both changes")
+	shipGit(t, m.plugin, "checkout", "-q", "main")
+	setJobStatus(t, m.env, m.store, rebases[0].ID, contract.Accepted, "the conflicts are resolved")
+	landAfterShip(m.env, m.dir, contract.Author{ID: "local", Role: "owner"})
+
+	if rec, err := task.Read(m.dir); err != nil || rec.State != "closed" {
+		t.Fatalf("task state %q %v after the rebase was accepted, want closed; stderr %s; history:\n%s", rec.State, err, m.stderr, shipHistory(t, m.dir))
+	}
+	if got := shipGit(t, m.plugin, "show", "main:c.txt"); got != "J-1 c.txt\nJ-2 c.txt" {
+		t.Fatalf("plugin main:c.txt is %q, want both changes", got)
+	}
+	shipGit(t, m.plugin, "merge-base", "--is-ancestor", second, "main")
+	if _, err := os.Stat(filepath.Join(m.app, "a3.txt")); err != nil {
+		t.Fatal("a3.txt, the branch after the conflict, is not on main of app")
+	}
+}
+
+// task.md names a branch no repo holds: the target the land waits on is the one of
+// the first builder branch not landed yet, so a parked rebase sees its target move.
+func TestTaskTargetTipIgnoresAStaleBranchKey(t *testing.T) {
+	m := multiRepoFixture(t)
+	first := m.builder(t, m.plugin, "main", "p1.txt")
+	m.builder(t, m.app, "main", "a2.txt")
+	shipGit(t, m.plugin, "merge", "-q", "--no-ff", "--no-edit", first)
+	target, tip, err := taskTargetTip(m.env, "sample", "T-01")
+	if err != nil || target != "main" || tip != shipGit(t, m.app, "rev-parse", "main") {
+		t.Fatalf("target %q tip %q %v, want main of app at %s", target, tip, err, shipGit(t, m.app, "rev-parse", "main"))
+	}
+}

@@ -476,6 +476,15 @@ func taskTargetTip(env Env, proj, id string) (target, tip string, err error) {
 		return "", "", err
 	}
 	repo, err := taskMergeRepo(res, branch)
+	var missing *branchMissingError
+	if branch == "" || errors.As(err, &missing) {
+		// A branch no repo holds: the land waits on the first builder branch not in.
+		built, rebased, berr := builderBranches(res.TaskPath)
+		if berr != nil {
+			return "", "", berr
+		}
+		repo, branch, err = firstUnlanded(res, base, built, rebased)
+	}
 	if err != nil {
 		return "", "", err
 	}
