@@ -509,8 +509,7 @@ func taskTargetTip(env Env, proj, id string) (target, tip string, err error) {
 	landed := false
 	if !stale && err == nil {
 		if t := taskMergeTarget(repo, base); t != "" {
-			_, aerr := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/heads/"+t)
-			landed = aerr == nil
+			landed = inTarget(repo, branch, t)
 		}
 	}
 	if stale || landed {

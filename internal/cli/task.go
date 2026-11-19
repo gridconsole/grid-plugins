@@ -338,10 +338,6 @@ func rebasedOf(res where.Result, branch string, rebased []string) string {
 // in its target yet, by itself or by its rebased branch, and the repo that holds it:
 // the branch a land stops on.
 func firstUnlanded(res where.Result, base string, built, rebased, noWrite []string) (repo, branch string, err error) {
-	in := func(repo, b, target string) bool {
-		_, err := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+b, "refs/heads/"+target)
-		return err == nil
-	}
 	for _, b := range built {
 		repo, err := taskMergeRepo(res, b)
 		if noWork(err, b, noWrite) {
@@ -351,15 +347,35 @@ func firstUnlanded(res where.Result, base string, built, rebased, noWrite []stri
 			return "", "", err
 		}
 		target := taskMergeTarget(repo, base)
-		if target == "" || in(repo, b, target) {
+		if target == "" || inTarget(repo, b, target) {
 			continue
 		}
-		if r := rebasedOf(res, b, rebased); r != "" && in(repo, r, target) {
+		if r := rebasedOf(res, b, rebased); r != "" && inTarget(repo, r, target) {
 			continue
 		}
 		return repo, b, nil
 	}
 	return "", "", errAllLanded
+}
+
+// inTarget reports whether branch adds nothing to target in repo: it is an ancestor of
+// it, or git cherry lists no '+' line for it, every commit of it being in target already as
+// an identical patch, as a hand cherry-pick or rebase leaves it. A cherry that fails
+// counts as not landed, so the branch merges as before.
+func inTarget(repo, branch, target string) bool {
+	if _, err := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/heads/"+target); err == nil {
+		return true
+	}
+	out, err := taskMergeGit(repo, "cherry", "refs/heads/"+target, "refs/heads/"+branch)
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "+") {
+			return false
+		}
+	}
+	return true
 }
 
 // branchJobID is the Job id in a branch the worker names grid-<feed id>-<job>-a<n>.
@@ -444,7 +460,7 @@ func taskMergeOne(res where.Result, name, branch, base string) (string, bool, er
 		return "", false, fmt.Errorf("the task's branch %s is its base branch; nothing to merge", branch)
 	}
 	// A branch already in the base needs no commit; the base's tip holds it.
-	if _, err := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/heads/"+target); err == nil {
+	if inTarget(repo, branch, target) {
 		tip, err := taskMergeGit(repo, "rev-parse", "refs/heads/"+target)
 		return tip, false, err
 	}
