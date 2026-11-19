@@ -36,10 +36,11 @@ func acceptedShipJob(snap orchestrator.Snapshot) string {
 // recorded in the task's history and said on stderr. A merge that conflicts never
 // asks the person again: it posts a builder Job that rebases the delivered branch
 // (queueRebase), the approval stands, and a later pass lands once that Job is accepted
-// (rebaseStep); a rebase Job the Judge ended is left to the Judge's decision path, and
-// the land runs again when main has moved; when no Job can be posted, the land is
-// armed to run again on the next pass (land.Store.Retry). Any other failure puts the
-// ship Job back with its person, with the failure text as its reason (reopenShipJob),
+// (rebaseStep); a rebase Job the Judge ended is left to the Judge's decision path, an
+// accepted one that still cannot land on the same main gets one agent decision Job
+// (decideRebase), and the land runs again when main has moved; when no Job can be
+// posted, the land is armed to run again on the next pass (land.Store.Retry). Any other
+// failure puts the ship Job back with its person, with the failure text as its reason (reopenShipJob),
 // so the task is in Needs you again and the person's next approve runs land once more.
 // A ship Job an earlier version put back after a conflict is accepted again with the
 // approval it held (reacceptShipJob), so the land runs without the person.
@@ -103,7 +104,7 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 	}
 	// An approval that waits for a rebase Job lands once the Job is accepted.
 	if pending, err := store.RebasePending(env.Cwd, resolved.ID, job); err == nil && pending {
-		if rebaseStep(env, store, who, dir, resolved.Project, resolved.ID, job, snap) {
+		if rebaseStep(env, fs, w, store, who, resolved.Project, resolved.ID, job, snap) {
 			return
 		}
 	}

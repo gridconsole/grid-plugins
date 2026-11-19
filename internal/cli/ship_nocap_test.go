@@ -14,7 +14,6 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/job"
-	"github.com/gridconsole/grid-plugins/internal/judge"
 	"github.com/gridconsole/grid-plugins/internal/land"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
@@ -137,77 +136,6 @@ func postReview(t *testing.T, env Env, store feed.Store, of string) string {
 		t.Fatalf("post review %s: %v", id, err)
 	}
 	return id
-}
-
-// A rebase Job is accepted but main did not move and its branch still conflicts: the same
-// conflict is that Job's failure, so the next Job continues it (a rework, discovered from
-// the review of the Job, which the Judge counts as one more round of the chain) and is not
-// a new try; the person is not asked, and once the rework is accepted the task lands.
-func TestShipConflictWithMainUnmovedPostsAReworkOfTheRebaseJob(t *testing.T) {
-	env, dir, repo, _, store, stderr := shipMergeFixture(t, false, true)
-	landFirst(t, repo)
-	ship, _ := openApproveJob(t, store)
-	if code := Run([]string{"approve", "T-01"}, env); code != 0 {
-		t.Fatalf("approve: %d %s", code, stderr)
-	}
-	fid, _, err := task.FeedIdentity(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Each builder leaves a branch that is the delivered one again: it conflicts with the same main.
-	var reviews []string
-	var rebases []job.Job
-	for try := 0; try < 2; try++ {
-		rebases = rebases2(t, store)
-		if len(rebases) != try+1 {
-			t.Fatalf("%d rebase Jobs on try %d, want %d; stderr %s; history:\n%s", len(rebases), try+1, try+1, stderr, shipHistory(t, dir))
-		}
-		reviews = append(reviews, postReview(t, env, store, rebases[try].ID))
-		shipGit(t, repo, "branch", "grid-"+fid+"-"+rebases[try].ID+"-a1", "lane")
-		setJobStatus(t, env, store, rebases[try].ID, contract.Accepted, "resolved")
-		landAfterShip(env, dir, landOwner)
-	}
-	rebases, snap := rebaseJobs(t, store)
-	if len(rebases) != 3 || len(rebaseRoots(snap.Items)) != 1 {
-		t.Fatalf("%d rebase Jobs, %d roots after the same conflict twice, want two reworks and no new root; stderr %s; history:\n%s", len(rebases), len(rebaseRoots(snap.Items)), stderr, shipHistory(t, dir))
-	}
-	for i := 1; i < 3; i++ {
-		r := rebases[i]
-		if r.Continues == nil || *r.Continues != rebases[i-1].ID || r.DiscoveredFrom == nil || *r.DiscoveredFrom != reviews[i-1] {
-			t.Fatalf("rework %s continues %v, discovered from %v; want %s and the review %s", r.ID, r.Continues, r.DiscoveredFrom, rebases[i-1].ID, reviews[i-1])
-		}
-		if r.ReviewRounds != i {
-			t.Fatalf("rework %s has review_rounds %d, want %d: the rounds of its chain", r.ID, r.ReviewRounds, i)
-		}
-	}
-	noPersonJob(t, store, ship.ID, stderr)
-
-	// The Judge counts the reworks as one chain: the review of the last holds every round.
-	last := postReview(t, env, store, rebases[2].ID)
-	snap, err = orchestrator.Load(store)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rep, err := judge.Verdict(judge.State{Task: store.TaskID, Jobs: snap.State.Jobs, Bodies: snap.Bodies, Records: snap.Records, IDs: snap.JobIDs}, last)
-	if err != nil || rep.Reviewed != rebases[2].ID || rep.RoundsUsed != 3 {
-		t.Fatalf("the Judge reads review %s as of %s in round %d (%v), want %s and round 3", last, rep.Reviewed, rep.RoundsUsed, err, rebases[2].ID)
-	}
-
-	// A pass while the last rework is out posts nothing more.
-	landAfterShip(env, dir, landOwner)
-	if again, _ := rebaseJobs(t, store); len(again) != 3 {
-		t.Fatalf("%d rebase Jobs after another pass, want 3", len(again))
-	}
-
-	rebaseBuilder(t, dir, repo, rebases[2].ID, "lane")
-	setJobStatus(t, env, store, rebases[2].ID, contract.Accepted, "resolved")
-	landAfterShip(env, dir, landOwner)
-	if rec, err := task.Read(dir); err != nil || rec.State != "closed" {
-		t.Fatalf("task state %q %v after the rework was accepted, want closed; stderr %s; history:\n%s", rec.State, err, stderr, shipHistory(t, dir))
-	}
-	if got := shipGit(t, repo, "show", "main:a.txt"); got != "first\nlane" {
-		t.Fatalf("main:a.txt is %q, want both changes", got)
-	}
 }
 
 // A rebase Job cancelled before it ran, with no review and no decision, does not send the ship
@@ -365,7 +293,8 @@ func TestShipConflictRetryArmedOnAJudgedRebaseJobPostsNothing(t *testing.T) {
 
 // rebaseJudged tells a rebase Job the Judge owns (rejected, or cancelled after it ran, after a
 // review or with a decision raised) from one the land may retry (cancelled before it ran with no
-// review and no decision), and an accepted or open one is neither.
+// review and no decision), and an accepted or open one is neither, unless the land raised its
+// decision Job from the accepted one.
 func TestRebaseJudgedIsTheJudgesJobNotOneTheLandMayRetry(t *testing.T) {
 	from := func(id string) *string { return &id }
 	review := job.Job{ID: "J-3", Role: "reviewer", Title: "Review J-2", DiscoveredFrom: from("J-2")}
@@ -387,6 +316,8 @@ func TestRebaseJudgedIsTheJudgesJobNotOneTheLandMayRetry(t *testing.T) {
 		{"cancelled with a decision from its review", contract.Cancelled, nil, []job.Job{review, decision("J-3")}, true},
 		{"cancelled with a decision about another Job", contract.Cancelled, nil, []job.Job{decision("J-9")}, false},
 		{"accepted", contract.Accepted, []string{"R-1"}, []job.Job{review}, false},
+		{"accepted with a decision from it of another title", contract.Accepted, []string{"R-1"}, []job.Job{decision("J-2")}, false},
+		{"accepted with the land's decision from it", contract.Accepted, []string{"R-1"}, []job.Job{{ID: "J-4", Role: "orchestrator", Title: landDecisionTitle("J-2"), DiscoveredFrom: from("J-2")}}, true},
 		{"open", contract.Ready, nil, nil, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
