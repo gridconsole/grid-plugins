@@ -3,6 +3,7 @@ package settings
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -274,4 +275,111 @@ func TestRetireClaudeRules(t *testing.T) {
 			t.Fatalf("denies %v", got)
 		}
 	})
+}
+
+// inHandleHome is the form a rule takes for the Grid home ~/.grid/abdullahi, a
+// handle's folder one level below the data folder, instead of ~/.grid.
+func inHandleHome(values []string) []string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = strings.Replace(v, "(~/.grid/", "(~/.grid/abdullahi/", 1)
+	}
+	return out
+}
+
+// seedTwoHomes leaves what setup wrote under two Grid homes of one person: the data
+// folder and a handle's folder below it, each with its own record, both naming the
+// one settings file, which holds both forms of every rule and the person's own.
+func (f *claudeFixture) seedTwoHomes() (handleHome, handleRecord string, mine []string) {
+	f.t.Helper()
+	handleHome = filepath.Join(f.o.GridHome, "abdullahi")
+	handleRecord = filepath.Join(handleHome, "setup", "claude-block.json")
+	mine = []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)", "Edit(~/.grid/abdullahi/notes-i-keep/**)"}
+	dataForms := slices.Concat(legacyDenies, retiredDenies, keptDenies)
+	handleForms := inHandleHome(slices.Concat(legacyDenies, retiredDenies, keptDenies))
+	denies, err := json.Marshal(slices.Concat(mine, dataForms, handleForms))
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	f.write(f.path, `{"theme":"dark","permissions":{"deny":`+string(denies)+`}}`)
+	for path, forms := range map[string][]string{f.record: dataForms, handleRecord: handleForms} {
+		record := claudeRecord{Path: f.path, Rules: append(denyRules(forms), ClaudeRule{"permissions", "allow", "Bash(grid *)"})}
+		data, err := json.Marshal(record)
+		if err != nil {
+			f.t.Fatal(err)
+		}
+		f.write(path, string(data))
+	}
+	return handleHome, handleRecord, mine
+}
+
+func (f *claudeFixture) recordRulesAt(path string) []ClaudeRule {
+	f.t.Helper()
+	var record claudeRecord
+	if err := json.Unmarshal(f.read(path), &record); err != nil {
+		f.t.Fatal(err)
+	}
+	return record.Rules
+}
+
+// A person's settings file can hold both forms of the rules at once: the data
+// folder's (~/.grid/...) and the handle's (~/.grid/<handle>/...). A session in
+// either home retires both, whichever record names the file.
+func TestRetireClaudeRulesRetiresEveryHomesForm(t *testing.T) {
+	for _, session := range []string{"data folder", "handle folder"} {
+		for _, projects := range []bool{false, true} {
+			t.Run(session+map[bool]string{false: "", true: " with its projects folder set"}[projects], func(t *testing.T) {
+				f := newClaudeFixture(t)
+				handleHome, handleRecord, mine := f.seedTwoHomes()
+				if session == "handle folder" {
+					f.o.GridHome = handleHome
+				}
+				if projects {
+					// GRID_PROJECTS names the session home's folder; the other home's forms
+					// still use its own <home>/projects.
+					f.o.Projects = filepath.Join(f.o.GridHome, "projects")
+				}
+				if err := RetireClaudeRules(f.o); err != nil {
+					t.Fatal(err)
+				}
+				want := slices.Concat(mine, keptDenies, inHandleHome(keptDenies))
+				got := f.denies()
+				if left := slices.DeleteFunc(slices.Clone(got), func(v string) bool { return slices.Contains(want, v) }); len(left) > 0 {
+					t.Fatalf("%d retired rules survive, first %s", len(left), left[0])
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("denies %v, want %v", got, want)
+				}
+				for _, path := range []string{f.record, handleRecord} {
+					for _, rule := range f.recordRulesAt(path) {
+						if rule.Section == "permissions" && rule.Key == "deny" && !slices.Contains(want, rule.Value) {
+							t.Fatalf("record %s still owns %s", path, rule.Value)
+						}
+					}
+				}
+				before, _ := os.Stat(f.path)
+				if err := RetireClaudeRules(f.o); err != nil {
+					t.Fatal(err)
+				}
+				if after, _ := os.Stat(f.path); !after.ModTime().Equal(before.ModTime()) {
+					t.Fatal("a run with nothing to retire rewrote the settings")
+				}
+			})
+		}
+	}
+}
+
+// Only a session in the data folder, or in a folder directly below it, reads the
+// records of the other homes: one with its Grid home elsewhere reads its own.
+func TestRetireClaudeRulesLeavesAnUnrelatedHomesRecord(t *testing.T) {
+	f := newClaudeFixture(t)
+	f.seedTwoHomes()
+	f.o.GridHome = filepath.Join(f.o.Home, "elsewhere", "grid")
+	before := f.read(f.path)
+	if err := RetireClaudeRules(f.o); err != nil {
+		t.Fatal(err)
+	}
+	if string(f.read(f.path)) != string(before) {
+		t.Fatal("a session outside the data folder changed the settings of a record it does not own")
+	}
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/gridconfig"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
 
@@ -354,21 +355,73 @@ func RunClaudeSetup(o ClaudeSetupOptions) int {
 	return code
 }
 
-// RetireClaudeRules takes the rules claudeRetired lists out of the settings file the
+// RetireClaudeRules takes the rules claudeRetired lists out of the settings file each
 // setup record names and out of the record, with no prompt and no output, and adds
-// nothing. Without a record it does nothing, so only a machine where setup wrote the
+// nothing. It does this for every Grid home that holds a record (retireHomes), since
+// each home's setup wrote its own form of the rules, and one settings file can hold
+// them all. Without a record it does nothing, so only a machine where setup wrote the
 // rules is touched. A settings file that is not valid JSON, or that changed while it
 // ran, is left as it is. A run that finds nothing to take out writes nothing, so the
 // session start can call it every time.
 func RetireClaudeRules(o ClaudeSetupOptions) error {
 	o.RetireOnly, o.Yes, o.JSON, o.Stdout, o.Stderr = true, true, true, io.Discard, io.Discard
-	_, err := runClaudeSetup(o)
-	var invalid claudeInvalid
-	if errors.Is(err, errClaudeChanged) || errors.As(err, &invalid) {
-		return nil
+	var errs []error
+	for _, home := range retireHomes(o) {
+		run := o
+		run.GridHome = home
+		if home != o.GridHome {
+			// GRID_PROJECTS names the session home's projects folder only.
+			run.Projects = ""
+		}
+		_, err := runClaudeSetup(run)
+		var invalid claudeInvalid
+		if errors.Is(err, errClaudeChanged) || errors.As(err, &invalid) {
+			continue
+		}
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return err
+	return errors.Join(errs...)
 }
+
+// retireHomes lists the Grid homes the retire pass reads a setup record of: the
+// session's own, then the data folder (~/.grid) and the folders directly in it (a
+// handle's home) that hold a record, when the session's home is the data folder or
+// sits directly in it. A home outside the data folder reads its own and the folders
+// directly in it, so a session never reaches records it does not belong beside.
+func retireHomes(o ClaudeSetupOptions) []string {
+	homes := []string{o.GridHome}
+	if o.GridHome == "" {
+		return homes
+	}
+	roots := []string{o.GridHome}
+	if data := gridconfig.DataRoot(o.Home); data != "" && (samePath(o.GridHome, data) || samePath(filepath.Dir(o.GridHome), data)) {
+		roots = append(roots, data)
+	}
+	seen := []string{gridhome.Real(o.GridHome)}
+	add := func(dir string) {
+		if st, err := os.Stat(filepath.Join(dir, "setup", "claude-block.json")); err != nil || !st.Mode().IsRegular() {
+			return
+		}
+		if real := gridhome.Real(dir); !slices.Contains(seen, real) {
+			seen = append(seen, real)
+			homes = append(homes, dir)
+		}
+	}
+	for _, root := range roots {
+		add(root)
+		entries, _ := os.ReadDir(root)
+		for _, e := range entries {
+			if e.IsDir() {
+				add(filepath.Join(root, e.Name()))
+			}
+		}
+	}
+	return homes
+}
+
+func samePath(a, b string) bool { return gridhome.Real(a) == gridhome.Real(b) }
 
 // ClaudeSettingsPath locates the setup destination without consulting XDG paths.
 func ClaudeSettingsPath(home, configDir string) (string, error) {

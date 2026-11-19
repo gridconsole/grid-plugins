@@ -254,9 +254,10 @@ func syncAgents(o Options) {
 
 // retireDenyRules takes the deny rules an earlier setup wrote for task folders, the
 // brain, project.md and the settings files out of the person's Claude settings and
-// the setup record, so a plugin update frees an agent that setup had blocked without
-// the person running setup again. It writes nothing when there is nothing to take
-// out, and a failure is logged and never reaches the session.
+// the setup records (the session home's, and the data folder's and its handles' too,
+// since each wrote its own form), so a plugin update frees an agent that setup had
+// blocked without the person running setup again. It writes nothing when there is
+// nothing to take out, and a failure is logged and never reaches the session.
 func retireDenyRules(o Options, cwd string) {
 	projects := o.Getenv("GRID_PROJECTS")
 	if projects != "" && !filepath.IsAbs(projects) {
