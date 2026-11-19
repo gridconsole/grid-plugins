@@ -256,13 +256,14 @@ func runTaskWrite(args []string, env Env) int {
 	return taskWriteResult(env, event, err, *asJSON, resolved.Path)
 }
 
-const approveUsage = `Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--json]
+const approveUsage = `Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--agent <name>] [--json]
        grid approve <task> --plan-hash <hash> --send-back <words> [--json]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 --plan-hash accepts the 6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json.
 workflow.md with plan_hash_token: digest requires the 64-hex digest.
 --send-back sends the open plan approve Job back with your words instead of approving
 the plan; it needs the current --plan-hash and takes no --note.
+--agent names the agent that approves when Grid did not launch it, as GRID_AGENT does.
 `
 
 func runApprove(args []string, env Env) int {
@@ -272,6 +273,7 @@ func runApprove(args []string, env Env) int {
 	hash := fs.String("plan-hash", "", "6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json; workflow.md plan_hash_token: digest requires the digest")
 	note := fs.String("note", "", "approval note")
 	sendBack := fs.String("send-back", "", "send the open plan approve Job back with these words instead of approving; needs --plan-hash, takes no --note")
+	agentName := fs.String("agent", "", "the agent that approves, for an agent Grid did not launch; sets GRID_AGENT")
 	asJSON := fs.Bool("json", false, "print JSON")
 	pos, err := taskArgs(fs, args)
 	if errors.Is(err, flag.ErrHelp) {
@@ -286,6 +288,20 @@ func runApprove(args []string, env Env) int {
 	}
 	given := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	if given["agent"] {
+		name := strings.TrimSpace(*agentName)
+		if name == "" {
+			return taskWriteResult(env, task.Event{}, fmt.Errorf("%w: --agent needs the agent's name", task.ErrEditUsage), false, "")
+		}
+		// A flag, not an env prefix: an agent's shell may refuse VAR=value commands.
+		base := env.getenv
+		env.Getenv = func(key string) string {
+			if key == "GRID_AGENT" {
+				return name
+			}
+			return base(key)
+		}
+	}
 	if given["send-back"] {
 		var usage error
 		switch {

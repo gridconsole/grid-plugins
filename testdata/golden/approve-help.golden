@@ -1,10 +1,13 @@
-Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--json]
+Usage: grid approve <task> [--plan-hash <hash>] [--note <text>] [--agent <name>] [--json]
        grid approve <task> --plan-hash <hash> --send-back <words> [--json]
 <task> is an id, exact folder name, or folder path inside a project tasks directory.
 --plan-hash accepts the 6-hex plan_hash or 64-hex plan_digest from grid plan hash --json or grid task show --json.
 workflow.md with plan_hash_token: digest requires the 64-hex digest.
 --send-back sends the open plan approve Job back with your words instead of approving
 the plan; it needs the current --plan-hash and takes no --note.
+--agent names the agent that approves when Grid did not launch it, as GRID_AGENT does.
+  -agent string
+    	the agent that approves, for an agent Grid did not launch; sets GRID_AGENT
   -json
     	print JSON
   -note string

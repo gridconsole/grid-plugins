@@ -72,6 +72,23 @@ func TestAgentApproveFromAMarkedShell(t *testing.T) {
 	}
 }
 
+// grid approve --agent is the flag form of GRID_AGENT, for an agent whose shell
+// refuses an env prefix.
+func TestAgentApproveWithTheAgentFlag(t *testing.T) {
+	h, path, store, text := approveJobHarness(t)
+	h.env.Getenv = func(key string) string { return map[string]string{"USER": "sam"}[key] }
+	if code := h.run(path, "approve", path, "--agent", " ", "--plan-hash", plan.Hash(text)); code != 2 {
+		t.Fatalf("empty --agent exit %d: %s", code, h.errb)
+	}
+	if code := h.run(path, "approve", path, "--agent", "claude", "--plan-hash", plan.Hash(text)); code != 0 {
+		t.Fatalf("agent approve exit %d: %s", code, h.errb)
+	}
+	answers := arAnswers(t, store)
+	if len(answers) != 1 || answers[0].Author.ID != "sam" || answers[0].Author.Role != "agent" || answers[0].Body["reason"] != "approved by agent claude" {
+		t.Fatalf("answers %+v", answers)
+	}
+}
+
 // Guests stay answer-and-comment only (an owner decision about guest people), so
 // a guest is refused even with an agent mark in its environment.
 func TestAgentApproveLeavesAGuestRefused(t *testing.T) {

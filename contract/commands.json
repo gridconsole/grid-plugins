@@ -2790,6 +2790,11 @@
           ],
           "flags": [
             {
+              "name": "--agent",
+              "takes": "value",
+              "required": false
+            },
+            {
               "name": "--json",
               "takes": "none",
               "required": false
