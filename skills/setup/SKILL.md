@@ -40,7 +40,7 @@ Stop when another file would not change a proposal. Every proposal rests on some
 
 `grid setup` with no project previews the Claude Code settings entries Grid owns and asks before it writes; `--yes` writes without asking and `--remove` takes them out again. Run it only when the person asked for first-run setup, and show them the preview.
 
-`grid setup --sandbox` adds Claude Code's own sandbox (`sandbox.enabled: true`) for this user, on top of the allow and deny rules. It shows in the same preview and is written only on the person's yes (or `--yes`).
+`grid setup --sandbox` adds Claude Code's own sandbox (`sandbox.enabled: true`) for this user, on top of the allow rules. It shows in the same preview and is written only on the person's yes (or `--yes`).
 Taking the setup out again also takes the sandbox entry out with the rest.
 
 ## 5. Ask only the gaps
