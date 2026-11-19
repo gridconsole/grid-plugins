@@ -234,6 +234,19 @@ func TestApproveLandsTheBranchesAfterAConflictOnceTheRebaseIsAccepted(t *testing
 	}
 }
 
+// In a project of several repos the rebase Job names the repo that holds the
+// conflicting branch, so its worker runs in that checkout.
+func TestRebaseJobNamesTheRepoOfTheConflict(t *testing.T) {
+	m, _ := conflictPartway(t)
+	rebases, snap := rebaseJobs(t, m.store)
+	if len(rebases) != 1 {
+		t.Fatalf("%d rebase Jobs, want 1; stderr %s", len(rebases), m.stderr)
+	}
+	if repo := snap.State.Jobs[rebases[0].ID].Repo; repo != "plugin" {
+		t.Fatalf("rebase Job repo %q, want plugin", repo)
+	}
+}
+
 // task.md names a branch no repo holds: the target the land waits on is the one of
 // the first builder branch not landed yet, so a parked rebase sees its target move.
 func TestTaskTargetTipIgnoresAStaleBranchKey(t *testing.T) {

@@ -123,7 +123,7 @@ func rebaseJobBody(id string, c *mergeConflictError, verify map[string]any) map[
 		}
 	}
 	pointer := "intent.md#request" // task.md has no Outcome heading until delivery
-	return map[string]any{
+	body := map[string]any{
 		"id": id, "item": 1, "role": "builder",
 		"title":  fmt.Sprintf("%s%s and resolve the conflicts in %s", rebaseTitle, c.Target, files),
 		"skills": []any{}, "risk": []any{},
@@ -140,6 +140,10 @@ func rebaseJobBody(id string, c *mergeConflictError, verify map[string]any) map[
 		"attempt": 1, "continues": nil, "discovered_from": nil, "close_reason": nil, "checkpoint": nil,
 		"review_rounds": 0, "level_raised": nil, "worktree": nil, "posts_back": []any{"result", "question"},
 	}
+	if c.Repo != "" {
+		body["repo"] = c.Repo
+	}
+	return body
 }
 
 // postRebaseJob posts the rebase Job of the conflict c as the task writer w and

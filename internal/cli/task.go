@@ -160,6 +160,20 @@ type mergeConflictError struct {
 	TargetSHA      string   // the commit Target pointed at when the merge stopped, "" when unread
 	Files          []string // the files that conflict
 	Changed        []string // every file the branch changed since it left Target, conflicting or not
+	Repo           string   // the repo a Job names for the checkout, "" in a project of one repo
+}
+
+// jobRepo is the repo a Job names for the checkout repo: its path in the project's
+// folder, and "" when the project has one repo, which a Job leaves out.
+func jobRepo(res where.Result, repo string) string {
+	if len(res.Repos) < 2 || res.Folder == "" {
+		return ""
+	}
+	rel, err := filepath.Rel(res.Folder, repo)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return ""
+	}
+	return filepath.ToSlash(rel)
 }
 
 func (e *mergeConflictError) Error() string {
@@ -381,7 +395,7 @@ func taskMergeOne(res where.Result, name, branch, base string) (string, bool, er
 		if conflicts != "" {
 			changed, _ := taskMergeGit(repo, "diff", "--name-only", target+"..."+branch)
 			tip, _ := taskMergeGit(repo, "rev-parse", "refs/heads/"+target)
-			return "", false, &mergeConflictError{Branch: branch, Target: target, TargetSHA: tip, Files: strings.Fields(conflicts), Changed: strings.Fields(changed)}
+			return "", false, &mergeConflictError{Branch: branch, Target: target, TargetSHA: tip, Files: strings.Fields(conflicts), Changed: strings.Fields(changed), Repo: jobRepo(res, repo)}
 		}
 		return "", false, fmt.Errorf("merging %s into %s failed (%v); the checkout is as it was; fix that, then run grid task merge again", branch, target, mergeErr)
 	}
