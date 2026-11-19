@@ -44,7 +44,7 @@ func TestJudgeReviewCancelledAtSpawnRaisesOneDecisionJob(t *testing.T) {
 		t.Fatalf("%d decision Jobs after three calls (posts %+v), want exactly one and no person Job", len(got), all)
 	}
 	p := got[0]
-	goal := str(p.Body["intent"].(map[string]any)["goal"])
+	goal := pjReasonText(p.Body)
 	if p.Body["discovered_from"] != "J-4" || p.Body["role"] != "orchestrator" {
 		t.Fatalf("decision Job %+v, want an orchestrator Job discovered from J-4", p)
 	}
@@ -94,7 +94,7 @@ func TestPjVbDecisionAfterASecondRejectionAndStuck(t *testing.T) {
 	if len(got) != 1 || got[0].Job != "J-1.3" || got[0].Body["discovered_from"] != "J-1.2" {
 		t.Fatalf("posts %+v, want the decision Job J-1.3 discovered from J-1.2", plan.Posts)
 	}
-	if goal := str(got[0].Body["intent"].(map[string]any)["goal"]); !strings.Contains(goal, "rejected it again after its rework") || !strings.Contains(goal, "still fails") {
+	if goal := pjReasonText(got[0].Body); !strings.Contains(goal, "rejected it again after its rework") || !strings.Contains(goal, "still fails") {
 		t.Fatalf("goal %q, want the second rejection and the reviewer's text", goal)
 	}
 	pjVbApply(t, &st, plan.Posts)
@@ -110,7 +110,7 @@ func TestPjVbDecisionAfterASecondRejectionAndStuck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pjDecisions(plan.Posts); len(got) != 1 || !strings.Contains(str(got[0].Body["intent"].(map[string]any)["goal"]), "the page needs a login") {
+	if got := pjDecisions(plan.Posts); len(got) != 1 || !strings.Contains(pjReasonText(got[0].Body), "the page needs a login") {
 		t.Fatalf("posts %+v, want one decision Job carrying the reviewer's reason", plan.Posts)
 	}
 }
