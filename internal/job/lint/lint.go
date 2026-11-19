@@ -261,6 +261,7 @@ func (c *checker) validate(j job.Job, o Options) {
 			c.add("job.after-why", "after", "Dependency kind needs a reason", "Explain why this dependency starts the Job.")
 		}
 	}
+	c.headBase(j)
 	c.reviewTwice(j)
 	c.pastedRule(j, o)
 	for _, group := range []struct {
@@ -535,4 +536,23 @@ func HasErrors(fs []Finding) bool {
 		}
 	}
 	return false
+}
+
+// headBase refuses a base of head:J-n that is not a Job id or whose J-n the Job
+// does not wait on: the head of a chain is only known once J-n is done.
+func (c *checker) headBase(j job.Job) {
+	id, ok := job.HeadBaseTarget(j.Base)
+	if !ok {
+		return
+	}
+	if !job.ValidID(id) {
+		c.add("job.base-head", "base", "Base "+j.Base+" does not name a Job id", "Use head:J-<number>.")
+		return
+	}
+	for _, d := range j.After {
+		if d.Job == id {
+			return
+		}
+	}
+	c.add("job.base-head", "base", "Base "+j.Base+" names "+id+", which the Job does not wait on", "Add "+id+" to after, so the Job starts once the head of "+id+" is accepted.")
 }
