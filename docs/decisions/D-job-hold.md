@@ -77,7 +77,7 @@ Follow-ups, still open and not built:
 - A declined permission: the Job is `Blocked`, not held, and only an approval meets its wait.
 - A hold on a wait that is already met is released and starts again, with no cap on how often that loops.
 - A dead Job with both a Posted and a held waiter gets two re-plans, one from each rule.
-- `grid job blocked` reads "to be accepted" for a wait on a Job not on the Feed and for a wait cycle; only `grid job tree` names them.
+- `grid job blocked` reads only "to be accepted" or "to land" for a wait on a Job not on the Feed and for a wait cycle; only `grid job tree` names them.
 
 ## Decision 4: how a held Job is stored and read (A4)
 
