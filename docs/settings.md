@@ -25,7 +25,7 @@ does not freeze an inherited model. Commands do not create projects.
 | Agent model | `haiku`, `sonnet`, `opus`, `fable`, `<name>[1m]` or a `claude-` model id |
 | Agent effort | `low`, `medium`, `high`, `xhigh`, `max` |
 | Skill state | `enable`, `disable` (stored as JSON booleans) |
-| Hook level | `off`, `warn`, `block`; any hook takes any level, and `job-lint` and `stop-check` default to `block`, every other hook to `warn` |
+| Hook level | `off`, `warn`, `block`; any hook takes any level, and `stop-check` default to `block`, every other hook to `warn` |
 
 Model arguments accept any letter case and are stored in lower case. Efforts,
 names and levels use the spelling in the tables. `agent set` requires at least
@@ -118,7 +118,7 @@ personal values, and missing values use the catalog defaults.
 | history-log | warn | File, Bash, subagent, brain-read history entries |
 | usage-log | warn | Usage totals and session/subagent transcript references |
 | session-end | warn | Worker exit records and SessionEnd terminal state |
-| job-lint | block | `grid job render`: `block` refuses a Job with lint errors, `warn` says each finding on stderr and renders, `off` does not lint; settings that cannot be read keep the refusal |
+| job-lint | warn | `grid job render`: `warn` (and `block`) says each lint finding on stderr and renders, `off` does not lint; render never refuses on lint |
 | needs-you, session-check | warn | No runtime counterpart; have no effect yet |
 
 No guard level is fixed. host-guard, only-writer and plan-guard read

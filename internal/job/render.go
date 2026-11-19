@@ -123,7 +123,15 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		}
 		s, e := o.Resolver.Resolve(p)
 		if e != nil {
-			return s, e
+			if _, replay := o.Resolver.(Replay); replay || strings.HasPrefix(p, "brain:") {
+				return s, e
+			}
+			// An unreadable file or anchor is shown with why, never a reason to refuse the render.
+			note := "could not be read: " + oneLine(e.Error())
+			if utf8.RuneCountInString(note) > 300 {
+				note = string([]rune(note)[:300])
+			}
+			s = Source{State: "unreadable", Summary: note, Text: note}
 		}
 		s.Pointer = p
 		s.Shown = "" // a replayed snapshot's mode is rebuilt from this render's uses

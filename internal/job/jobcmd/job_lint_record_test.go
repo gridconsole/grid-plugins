@@ -7,14 +7,13 @@ import (
 	"testing"
 )
 
-// A render that job-lint refuses leaves a line in the hook events log naming the
-// task and the first lint error; at warn the line says warned; at off nothing is
-// written. The render's own answer is the one the existing level test pins.
+// A render whose lint finds errors leaves a warned line in the hook events log
+// naming the task and the first lint error, except at off, where nothing is written.
 func TestRenderRecordsTheJobLintRefusal(t *testing.T) {
 	for _, tt := range []struct {
 		level   string
 		outcome string // "" means no line
-	}{{"block", "blocked"}, {"warn", "warned"}, {"off", ""}} {
+	}{{"block", "warned"}, {"warn", "warned"}, {"off", ""}} {
 		t.Run(tt.level, func(t *testing.T) {
 			e, run := invalidJobFixture(t)
 			body := `{"hooks":{"job-lint":"` + tt.level + `"}}`

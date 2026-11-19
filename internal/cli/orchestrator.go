@@ -564,7 +564,7 @@ func postFindings(env Env, taskPath string, body map[string]any) ([]lint.Finding
 	return lint.CheckJSON(data, opts), nil
 }
 
-// printPostFindings writes one stderr line per finding; an error says render will refuse the Job.
+// printPostFindings writes one stderr line per finding; an error says render goes on with a warning (render never refuses on lint).
 func printPostFindings(w io.Writer, job string, findings []lint.Finding, err error) {
 	if err != nil {
 		fmt.Fprintf(w, "grid job post: %s: the findings could not be checked: %v\n", job, err)
@@ -573,7 +573,7 @@ func printPostFindings(w io.Writer, job string, findings []lint.Finding, err err
 	for _, f := range findings {
 		tail := ""
 		if f.Severity == "error" {
-			tail = " (render will refuse this Job)"
+			tail = " (render goes on with a warning)"
 		}
 		fmt.Fprintf(w, "grid job post: %s: %s: %s%s\n", job, f.Rule, f.Message, tail)
 	}

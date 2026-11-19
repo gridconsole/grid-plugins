@@ -149,8 +149,13 @@ func TestPjVbJudgePersonForACancelledReviewIsRaisedOnce(t *testing.T) {
 		t.Fatalf("%d decision Jobs after three calls, want exactly one: %+v", len(persons), persons)
 	}
 	p := persons[0].Body
-	intent, _ := p["intent"].(map[string]any)
-	goal, _ := intent["goal"].(string)
+	// intent.goal is a pointer; the reason is in the acceptance rows.
+	goal := ""
+	rows, _ := p["acceptance"].([]any)
+	for _, r := range rows {
+		row, _ := r.(map[string]any)
+		goal += fmt.Sprint(row["text"]) + "\n"
+	}
 	if p["discovered_from"] != "J-4" {
 		t.Fatalf("decision Job %v, want it discovered from J-4", p)
 	}

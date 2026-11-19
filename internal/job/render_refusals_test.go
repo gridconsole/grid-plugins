@@ -172,22 +172,15 @@ func TestRenderRefusesBadBrainSummary(t *testing.T) {
 	})
 }
 
+// A brain pointer that cannot be resolved still refuses the render. A file or
+// anchor pointer does not: TestRenderShowsAnUnreadablePointerAndRenders covers it.
 func TestRenderPassesResolverErrorsThrough(t *testing.T) {
 	boom := errors.New("resolver boom")
-	cont := "J-0"
 	cases := []struct {
 		name string
 		key  string
 		edit func(*job.Job)
 	}{
-		{"intent owner", "owner.md", func(*job.Job) {}},
-		{"intent item", "item.md", func(*job.Job) {}},
-		{"intent goal", "goal.md", func(*job.Job) {}},
-		{"relation", "repo:rel.go", func(j *job.Job) {
-			j.Links = []job.Link{{To: "repo:rel.go", Rel: "uses", Why: "Related file"}}
-		}},
-		{"continues", "job:J-0#acceptance", func(j *job.Job) { j.Continues = &cont }},
-		{"read", "repo:read.go", func(j *job.Job) { j.Read = []string{"repo:read.go"} }},
 		{"decision", "brain:project/d", func(j *job.Job) { j.Decisions = []string{"brain:project/d"} }},
 	}
 	for _, c := range cases {
@@ -334,4 +327,37 @@ func TestReplayResolveRefusesAndAliases(t *testing.T) {
 			t.Fatalf("%+v %v", s, e)
 		}
 	})
+}
+
+// An intent, relation, read or continues pointer whose file or anchor cannot be
+// resolved is shown with a "could not be read" note and the render succeeds.
+func TestRenderShowsAnUnreadablePointerAndRenders(t *testing.T) {
+	cont := "J-0"
+	for _, c := range []struct {
+		name, key string
+		edit      func(*job.Job)
+	}{
+		{"intent owner", "owner.md", func(*job.Job) {}},
+		{"intent item", "item.md", func(*job.Job) {}},
+		{"intent goal", "goal.md", func(*job.Job) {}},
+		{"relation", "repo:rel.go", func(j *job.Job) {
+			j.Links = []job.Link{{To: "repo:rel.go", Rel: "uses", Why: "Related file"}}
+		}},
+		{"continues", "job:J-0#acceptance", func(j *job.Job) { j.Continues = &cont }},
+		{"read", "repo:read.go", func(j *job.Job) { j.Read = []string{"repo:read.go"} }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			j := rrJob()
+			c.edit(&j)
+			res := rrResolverWith(nil)
+			res.fail[c.key] = errors.New("no such anchor")
+			got, e := job.Render(j, job.RenderOptions{Resolver: res})
+			if e != nil {
+				t.Fatalf("render refused: %v", e)
+			}
+			if !strings.Contains(got.Brief, c.key) || !strings.Contains(got.Brief, "could not be read: no such anchor") {
+				t.Fatalf("brief lacks the pointer or its note:\n%s", got.Brief)
+			}
+		})
+	}
 }

@@ -88,7 +88,7 @@ func curatorJobBody(id, taskID string, ids []string) map[string]any {
 	if len(ids) == 1 {
 		noun = "proposal"
 	}
-	pointer := "task.md#outcome"
+	pointer := "intent.md#request" // task.md has no Outcome heading until delivery
 	return map[string]any{
 		"id": id, "item": 1, "role": curatorRole,
 		"title":  fmt.Sprintf("Curate %d brain %s of %s", len(ids), noun, taskID),

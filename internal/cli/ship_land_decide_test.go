@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -113,8 +114,11 @@ func TestShipAcceptedRebaseWithNoBranchRaisesOneDecision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if intent, ok := snap.Bodies[d.ID]["intent"].(map[string]any); ok {
-		text, _ = intent["goal"].(string)
+	// intent.goal is a pointer; the reason is in the acceptance rows.
+	rows, _ := snap.Bodies[d.ID]["acceptance"].([]any)
+	for _, r := range rows {
+		row, _ := r.(map[string]any)
+		text += fmt.Sprint(row["text"]) + "\n"
 	}
 	for _, want := range []string{"grid-", head + "-a", "parks the land until main moves", rebaseTitle} {
 		if !strings.Contains(text, want) {

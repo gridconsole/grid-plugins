@@ -29,7 +29,7 @@ func TestJudgeDecideRaisesOneDecisionFromTheBuilder(t *testing.T) {
 	if got[0].Job == lost.Posts[0].Job || !strings.HasPrefix(got[0].Job, "J-4.") {
 		t.Fatalf("the decision Job is %s, want a new child of J-4 beside %s", got[0].Job, lost.Posts[0].Job)
 	}
-	goal := str(got[0].Body["intent"].(map[string]any)["goal"])
+	goal := pjReasonText(got[0].Body)
 	for _, want := range []string{"the land still conflicts", "fresh rework", "Cancel J-4", "grid question ask"} {
 		if !strings.Contains(goal, want) {
 			t.Fatalf("goal %q does not name %q", goal, want)

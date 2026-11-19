@@ -87,7 +87,7 @@ func TestDeliverPostsOneCuratorJobForWaitingProposals(t *testing.T) {
 	if j.ID != "J-1" || len(j.Skills) != 1 || j.Skills[0] != "brain-keeper" || len(j.After) != 0 {
 		t.Fatalf("job fields: %+v", j)
 	}
-	if !strings.Contains(j.Title, "2") || !strings.HasPrefix(j.Intent.Item, "task.md#") {
+	if !strings.Contains(j.Title, "2") || !strings.HasPrefix(j.Intent.Item, "intent.md#") {
 		t.Fatalf("title or intent does not name the count and the task: %q %+v", j.Title, j.Intent)
 	}
 	if got := strings.Join(j.Read, ","); got != "brain-proposals/first-fact.md,brain-proposals/second-fact.md" {

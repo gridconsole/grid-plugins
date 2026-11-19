@@ -1,1 +1,1 @@
-{"history-log":"warn","home-allow":"warn","host-guard":"warn","job-lint":"block","needs-you":"warn","only-writer":"warn","plan-guard":"warn","session-check":"warn","session-end":"warn","session-start":"warn","stop-check":"block","usage-log":"warn"}
+{"history-log":"warn","home-allow":"warn","host-guard":"warn","job-lint":"warn","needs-you":"warn","only-writer":"warn","plan-guard":"warn","session-check":"warn","session-end":"warn","session-start":"warn","stop-check":"block","usage-log":"warn"}

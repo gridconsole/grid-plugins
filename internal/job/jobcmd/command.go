@@ -173,9 +173,8 @@ func Run(args []string, e Env) int {
 			return fail(err, 1)
 		}
 		skeleton := meta + "\n## Intent\n## Job\n## Context\n## Out of scope\n## Open\n## Acceptance\n## Outcome\n## Verdict\n## Follow-up\n"
-		// The job-lint level says what lint errors do here: block refuses (the default),
-		// warn says them on stderr and renders, off does not lint. Settings that cannot
-		// be read keep the refusal.
+		// Lint findings at render never refuse: they are said on stderr and recorded as
+		// warned, and the Job renders. Only an explicit job-lint level of off skips lint.
 		lintLevel, levelErr := jobLintLevel(e.GridHome, w.project)
 		if levelErr != nil {
 			fmt.Fprintf(e.Stderr, "grid job render: hook settings cannot be read: %v\n", levelErr)
@@ -184,10 +183,7 @@ func Run(args []string, e Env) int {
 		if lintLevel != "off" {
 			findings = lint.Check(skeleton, w.lintOptions())
 			if lint.HasErrors(findings) {
-				recordJobLint(e.GridHome, task, lintLevel, findings)
-				if lintLevel != "warn" {
-					return output(e, f, report{ID: j.ID, Findings: findings}, 1)
-				}
+				recordJobLint(e.GridHome, task, findings)
 				for _, fd := range findings {
 					fmt.Fprintf(e.Stderr, "grid job render: %s: %s: %s (job-lint is warn, rendering anyway)\n", j.ID, fd.Rule, fd.Message)
 				}
@@ -904,31 +900,28 @@ func sources(task string, e Env) (*world, error) {
 }
 
 // jobLintLevel reads the job-lint hook level the way the guards do: the project's
-// value over the personal one, the catalog default (block) when none is stored. A
-// settings error returns block, so an unreadable file never turns the refusal off.
+// value over the personal one, the catalog default (warn) when none is stored. A
+// settings error returns warn: render never refuses on lint, so only an explicit
+// off skips it.
 func jobLintLevel(gridHome, project string) (string, error) {
 	if gridHome == "" {
-		return "block", nil
+		return "warn", nil
 	}
 	levels, err := settings.ReadHookLevels(gridHome, project)
 	if err != nil {
-		return "block", err
+		return "warn", err
 	}
 	if l := levels["job-lint"]; l != "" {
 		return l, nil
 	}
-	return "block", nil
+	return "warn", nil
 }
 
 // recordJobLint appends the job-lint line of a render whose lint found errors to
-// the hook events log: blocked when the level refuses the Job, warned at warn. It
-// names the task folder's id and the first error. A failure to write is ignored,
-// as for every hook record.
-func recordJobLint(gridHome, taskDir, level string, findings []lint.Finding) {
-	outcome, reason := hookevents.Blocked, ""
-	if level == "warn" {
-		outcome = hookevents.Warned
-	}
+// the hook events log as warned. It names the task folder's id and the first
+// error. A failure to write is ignored, as for every hook record.
+func recordJobLint(gridHome, taskDir string, findings []lint.Finding) {
+	outcome, reason := hookevents.Warned, ""
 	for _, fd := range findings {
 		if fd.Severity == "error" {
 			reason = fd.Rule + ": " + fd.Message

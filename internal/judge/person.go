@@ -271,12 +271,15 @@ func decisionBody(id, builder, from, title, goal string, src map[string]any) map
 	delete(body, "kind")
 	if intent, ok := body["intent"].(map[string]any); ok {
 		intent["owner"] = intent["item"]
+		// A precise pointer, so the Job lints clean; the prose of goal is an acceptance row below.
+		intent["goal"] = "job:" + from + "#verdict"
 	}
 	body["skills"] = []any{"questions"}
 	body["read"] = []any{"intent.md#request", "task.md"}
 	body["acceptance"] = []any{
 		map[string]any{"id": "A1", "text": "How " + builder + " continues is decided and carried out: a fresh rework, accept with the reason, re-plan or split, or cancel", "traces": "item"},
 		map[string]any{"id": "A2", "text": "A real question with 2-4 options and a recommended default is posted only when the decision needs a person; otherwise none is", "traces": "item"},
+		map[string]any{"id": "A3", "text": goal, "traces": "item"},
 	}
 	body["budget"] = map[string]any{"turns_estimate": 6, "reads_before_first_edit": 2}
 	body["on_blocked"] = "ask-and-continue"

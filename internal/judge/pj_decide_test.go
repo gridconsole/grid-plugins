@@ -61,7 +61,7 @@ func TestJudgeFourCasesPostAnAgentDecisionNotAPersonJob(t *testing.T) {
 			if len(got) != 1 || got[0].Body["discovered_from"] != from {
 				t.Fatalf("posts %+v, want one orchestrator decision Job discovered from %s", plan.Posts, from)
 			}
-			goal := str(got[0].Body["intent"].(map[string]any)["goal"])
+			goal := pjReasonText(got[0].Body)
 			for _, want := range []string{builder, text, "fresh rework", "Re-plan or split", "Cancel", "grid question ask", "recommended"} {
 				if !strings.Contains(goal, want) {
 					t.Fatalf("goal %q does not name %q", goal, want)
