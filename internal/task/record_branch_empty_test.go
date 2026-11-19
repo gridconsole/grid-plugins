@@ -27,6 +27,9 @@ func TestRecordBranchSkipsABranchWithNoCommits(t *testing.T) {
 	if branch, base := recordBranch(DeliverOptions{Cwd: repo}); branch != "" || base == "" {
 		t.Fatalf("recorded branch %q base %q, want no branch and the base", branch, base)
 	}
+	if branch, base := recordBranch(DeliverOptions{Cwd: repo, Base: "main"}); branch != "" || base != "main" {
+		t.Fatalf("with --base main recorded branch %q base %q, want no branch and main", branch, base)
+	}
 	testgit.Run(t, repo, "commit", "-q", "--allow-empty", "-m", "work")
 	if branch, _ := recordBranch(DeliverOptions{Cwd: repo}); branch != "grid-x-J-5-a1" {
 		t.Fatalf("recorded branch %q, want grid-x-J-5-a1", branch)

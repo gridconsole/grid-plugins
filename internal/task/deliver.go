@@ -292,8 +292,11 @@ func recordBranch(o DeliverOptions) (branch, base string) {
 			}
 		}
 	}
-	if head, ok := gitx.HeadSHA(o.Cwd); fromCwd && ok && head == base {
-		branch = ""
+	// A base given as a branch name is compared at the commit HEAD left it.
+	if head, ok := gitx.HeadSHA(o.Cwd); fromCwd && ok && base != "" {
+		if fork, ok := gitx.MergeBase(o.Cwd, "HEAD", base); ok && head == fork {
+			branch = ""
+		}
 	}
 	return branch, base
 }
