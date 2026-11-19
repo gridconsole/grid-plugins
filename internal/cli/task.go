@@ -214,40 +214,43 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	if branch != "" {
 		_, repoErr = taskMergeRepo(res, branch)
 	}
-	if branch != "" && !errors.As(repoErr, &missing) {
-		sha, _, err := taskMergeOne(res, name, branch, base)
-		return sha, err
-	}
-	// A branch no repo holds is the delivering Job's own when that Job is accepted
-	// with no files to write and task.md's head is its base: the work is on the
-	// branches of the task's accepted builder Jobs, landed in Feed order. A rebased
-	// branch of one of them lands with the rest, in its original's place.
+	// The work is on task.md's branch, landed first when a repo here holds it, and on the
+	// branches of the task's accepted builder Jobs, landed after it in Feed order: a
+	// builder branch task.md's branch holds is in the base by then and lands nothing. A
+	// rebased branch of one of them lands with the rest, in its original's place.
+	present := branch != "" && !errors.As(repoErr, &missing)
 	built, rebased, noWrite, err := builderBranches(res.TaskPath)
 	if err != nil {
 		return "", err
 	}
+	merged := ""
+	if present {
+		if merged, _, err = taskMergeOne(res, name, branch, base); err != nil {
+			return "", err
+		}
+	}
 	// A builder Job with files to write made work this machine cannot land: the task waits.
 	writes := slices.ContainsFunc(built, func(b string) bool { return !slices.Contains(noWrite, b) })
-	if writes && !hasCheckout(res) {
+	if !present && writes && !hasCheckout(res) {
 		if res.Folder != "" {
 			return "", fmt.Errorf("project %s has no git repo on this machine; run grid task merge on the machine that has its checkout", res.Project)
 		}
 		return "", noFolderError(res.Project)
 	}
 	// A project with no git checkout here has no branch to land, as before builder branches.
-	if len(built) == 0 || branch == "" && !hasCheckout(res) {
+	if !present && (len(built) == 0 || branch == "" && !hasCheckout(res)) {
 		if branch == "" {
 			return "", noTaskBranchError(name)
 		}
 		return "", repoErr
 	}
-	// Only the branch of an accepted Job with no files to write, delivered with head at
-	// its base, is passed over: any other may hold commits of its own.
-	if branch != "" && (!slices.Contains(noWrite, branch) || head == "" || head != base) {
+	// A branch no repo holds is passed over only when it is the branch of an accepted Job
+	// with no files to write, delivered with head at its base: any other may hold commits
+	// of its own.
+	if !present && branch != "" && (!slices.Contains(noWrite, branch) || head == "" || head != base) {
 		return "", repoErr
 	}
-	merged := ""
-	var skipped []string
+	var skipped, unheld []string
 	for _, b := range built {
 		sha, landed, err := taskMergeOne(res, name, b, base)
 		var conflict *mergeConflictError
@@ -261,6 +264,12 @@ func taskMerge(env Env, id, proj string) (string, error) {
 			skipped = append(skipped, b)
 			continue
 		}
+		// With task.md's branch landed, a builder branch made on another machine does not stop the land.
+		if present && errors.As(err, &missing) {
+			fmt.Fprintf(env.Stderr, "grid task merge: passed over %s: no repo of project %s holds it, though its builder Job has files to write; task.md's branch %s landed\n", b, res.Project, branch)
+			unheld = append(unheld, b)
+			continue
+		}
 		if err != nil {
 			return "", err
 		}
@@ -269,14 +278,17 @@ func taskMerge(env Env, id, proj string) (string, error) {
 		}
 	}
 	// task.md names a branch no repo holds and no builder branch stands in for it.
-	if branch != "" && len(skipped) == len(built) {
+	if !present && branch != "" && len(skipped) == len(built) {
 		return "", repoErr
 	}
 	var notes []string
 	for _, b := range skipped {
 		notes = append(notes, fmt.Sprintf("grid task merge skipped %s: no repo of project %s holds it and its builder Job has no files to write", b, res.Project))
 	}
-	if branch != "" {
+	for _, b := range unheld {
+		notes = append(notes, fmt.Sprintf("grid task merge passed over %s: no repo of project %s holds it, though its builder Job has files to write; task.md's branch %s landed", b, res.Project, branch))
+	}
+	if !present && branch != "" {
 		fmt.Fprintf(env.Stderr, "grid task merge: passed over %s, the branch task.md names: no repo of project %s holds it, and its Job has no files to write, so it has nothing to land\n", branch, res.Project)
 		notes = append(notes, fmt.Sprintf("grid task merge passed over %s, the branch task.md names: no repo of project %s holds it and its Job has no files to write", branch, res.Project))
 	}
