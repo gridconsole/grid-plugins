@@ -9,7 +9,7 @@ import (
 const imLintSkillPath = "../../skills/plan-jobs/SKILL.md"
 
 // imLintRefuseTail is the error tail internal/cli/orchestrator.go:471 prints after a post.
-const imLintRefuseTail = "render will refuse this Job"
+const imLintRefuseTail = "render goes on with a warning"
 
 func imLintSkill(t *testing.T) string {
 	t.Helper()

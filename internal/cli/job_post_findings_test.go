@@ -122,7 +122,7 @@ func TestJobPostPrintsFindingsOnStderr(t *testing.T) {
 	if code := postFindingsJob(t, h, path, findingsJob("J-2", findingsBadRead)); code != 0 {
 		t.Fatalf("post exit %d: %s", code, h.errb)
 	}
-	want := "grid job post: J-2: job.read-range: Read pointer has no range: task:intent.md (render will refuse this Job)\n"
+	want := "grid job post: J-2: job.read-range: Read pointer has no range: task:intent.md (render goes on with a warning)\n"
 	if !strings.Contains(h.errb.String(), want) {
 		t.Fatalf("stderr lacks %q:\n%s", want, h.errb)
 	}
@@ -133,7 +133,7 @@ func TestJobPostPrintsFindingsOnStderr(t *testing.T) {
 		if !strings.HasPrefix(line, "grid job post: J-2: ") {
 			t.Fatalf("stderr line without the prefix: %q", line)
 		}
-		if strings.Contains(line, "render will refuse") && !strings.Contains(line, "job.") {
+		if strings.Contains(line, "render goes on") && !strings.Contains(line, "job.") {
 			t.Fatalf("refusal without a rule: %q", line)
 		}
 	}
@@ -152,7 +152,7 @@ func TestJobPostCleanRecordMatchesJobLint(t *testing.T) {
 	if lint.HasErrors(*out.Findings) {
 		t.Fatalf("clean record has an error finding: %+v", *out.Findings)
 	}
-	if strings.Contains(h.errb.String(), "render will refuse") {
+	if strings.Contains(h.errb.String(), "render goes on") {
 		t.Fatalf("stderr: %s", h.errb)
 	}
 	if st := storedJob(t, store, "J-2"); st.Type != "job" {
@@ -183,7 +183,7 @@ func TestJobPostCleanRecordMatchesJobLint(t *testing.T) {
 func TestJobPostWarningHasNoRefusalText(t *testing.T) {
 	var b strings.Builder
 	printPostFindings(&b, "J-2", []lint.Finding{{Rule: "job.x", Severity: "warning", Message: "careful"}, {Rule: "job.y", Severity: "error", Message: "bad"}}, nil)
-	want := "grid job post: J-2: job.x: careful\ngrid job post: J-2: job.y: bad (render will refuse this Job)\n"
+	want := "grid job post: J-2: job.x: careful\ngrid job post: J-2: job.y: bad (render goes on with a warning)\n"
 	if b.String() != want {
 		t.Fatalf("got %q want %q", b.String(), want)
 	}
