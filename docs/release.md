@@ -1,7 +1,7 @@
 # Publishing the plugin
 
-**Owner runs this; not done by agents.** Agents build and test on the VM only. Nothing here is pushed,
-published or deployed by `make dist` or by any lane.
+**One command, run by the owner after a merge to main: `make publish`.** Agents build and test on the VM
+only; nothing is pushed by `make dist` or by any lane.
 
 People install the plugin on any machine, with no Go, Node or build step:
 
@@ -12,113 +12,71 @@ claude plugin install grid@grid
 
 `claude plugin update` picks up a new release because every publish stamps a higher version:
 `0.2.<commit count>`, the number of commits reachable from HEAD of the source repo
-(`git rev-list --count HEAD`). The stamp is made in one place, `make dist`, and goes into
-`.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`
-and into `grid version` of every binary.
+(`git rev-list --count HEAD`). The stamp is made in `make dist`, and goes into
+`plugins/grid/.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, the plugin's own
+`marketplace.json` and into `grid version` of every binary. `publish.sh` stamps the same version into
+the `version` field of the root `.claude-plugin/marketplace.json`.
 
-## What goes into the public repo
+## The public repo
 
-The public repo's root is the plugin root: exactly the contents of `dist/plugin`, nothing else.
+`github` (https://github.com/gridconsole/grid-plugins.git) holds only snapshot commits on `main`, each
+"Publish <version> from <sha>." (the sha is the source commit). The root has exactly:
 
 ```text
-.claude-plugin/plugin.json  .claude-plugin/marketplace.json  .codex-plugin/plugin.json
-.mcp.json  hooks/hooks.json  LICENSE  README.md
-bin/grid                      sh entry: macOS, Linux, and Windows under Git Bash
-bin/grid.cmd                  Windows cmd entry
-bin/grid-darwin-arm64  bin/grid-darwin-amd64  bin/grid-linux-amd64  bin/grid-linux-arm64
-bin/grid-windows-amd64.exe
-skills/  agents/  agent-templates/
+.claude-plugin/marketplace.json   hand-kept in the public repo; only its version field is stamped
+.gitignore  LICENSE  README.md    hand-kept in the public repo
+plugins/grid/                     the contents of dist/plugin after make dist
 ```
 
-The hooks and `.mcp.json` run `${CLAUDE_PLUGIN_ROOT}/bin/grid`; the entry picks the binary for the
-machine from `uname` (or runs the `.exe` on Windows), so no Go is needed at install time.
+`plugins/grid` holds `.claude-plugin/`, `.codex-plugin/`, `.mcp.json`, `hooks/`, `LICENSE`, `README.md`,
+`bin/` (the `grid` sh entry, `grid.cmd` and the five binaries), `skills/`, `agents/` and
+`agent-templates/`. The hooks and `.mcp.json` run `${CLAUDE_PLUGIN_ROOT}/bin/grid`; the entry picks the
+binary for the machine from `uname`, so no Go is needed at install time.
 
-## What stays out
+Everything else (`evals/`, `internal/`, `cmd/`, `contract/`, `docs/`, `views/`, `topics/`, `go.mod`,
+the `Makefile`) stays in the source repo.
 
-Everything that is not in `dist/plugin` stays in the internal source repo, because `make dist`
-copies only `skills/`, `agents/`, `agent-templates/` and `LICENSE` beside the generated files and
-the binaries, and writes the public `README.md` from `internal/packaging/plugin-readme.md`. The
-source `README.md` is the developer's page and does not ship. In particular these never reach the public repo:
+## What `make publish` does
 
-- `evals/` and `corpus/`, `golden/`, `recordings/`, `fixtures/`, `testdata/`: internal. The evals
-  hold task material that is not for publication (see D-privacy-audit).
-- `internal/`, `cmd/`, `contract/`, `docs/` (including `docs/lanes/`), `views/`, `topics/`,
-  `record.sh`, `go.mod`, `go.sum`, `Makefile`: the source and its working papers.
-- `dist/SHA256SUMS` stays beside `dist/plugin`, not inside it.
+`scripts/publish.sh`:
 
-Step 3 below checks the tree before it is committed.
+1. Requires a clean tree on `main` (or on `fix-run-task` at the same sha as `main`) and runs `make dist`.
+2. Keeps a clone of github `main` in `.cache/publish` (gitignored) and resets it to `github/main`.
+3. Replaces `plugins/grid` with `dist/plugin` and stamps the root `marketplace.json` version.
+4. Refuses when the root layout is not exactly `.claude-plugin .gitignore LICENSE README.md plugins`,
+   or when a text file holds a home path (`/Users/`, `/home/`), an IP address, `gmail`, `/srv/gridwork`
+   or a key or token pattern. Nothing is committed then.
+5. When nothing changed it says so and exits 0.
+6. Otherwise commits "Publish <version> from <short sha>." with the configured git identity and pushes
+   `main` as a plain fast-forward with `http.postBuffer=524288000`. It never forces.
 
-## Steps
+`PUBLISH_PUSH=0 make publish` commits in `.cache/publish` without pushing, to look at the result first.
 
-Run in a full clone of the source repo (a shallow clone counts too few commits and stamps a version
-lower than the last release, so `claude plugin update` would not move), on the commit to publish,
-with go.mod's Go version installed.
+Each release adds about 85 MB of binaries to the public history. The version comes from the source
+repo's commit count, so the public history may be squashed at any time without lowering it. Use a full
+clone of the source (a shallow clone counts too few commits and stamps a lower version).
 
-1. Check the source is clean and green:
+## Check the install
 
-   ```sh
-   git status --short                # prints nothing
-   git rev-list --count HEAD         # N: this release will be 0.2.N
-   make test lint
-   ```
+From a machine, or a scratch HOME, that has no Go. `H` is set once and used on both `claude` lines, so
+your real `~/.claude` is not touched:
 
-2. Build the release. This writes `dist/plugin` and `dist/SHA256SUMS`, and compiles all five
-   binaries (darwin arm64 and amd64, linux amd64 and arm64, windows amd64):
+```sh
+H=$(mktemp -d)
+HOME=$H claude plugin marketplace add gridconsole/grid-plugins
+HOME=$H claude plugin install grid@grid
+```
 
-   ```sh
-   make dist
-   (cd dist && sha256sum -c SHA256SUMS)       # macOS: shasum -a 256 -c SHA256SUMS
-   grep '"version"' dist/plugin/.claude-plugin/plugin.json   # "0.2.N"
-   ```
+Claude Code copies an installed plugin to `<HOME>/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`:
 
-3. Check what will be public. The listing must match the tree above, and nothing may name a
-   person, a host or a local path:
+```sh
+G="$H/.claude/plugins/cache/grid/grid/0.2.N/bin/grid"      # N: the published version
+PATH=/usr/bin:/bin "$G" version                             # prints: grid 0.2.N
+```
 
-   ```sh
-   ls -A dist/plugin dist/plugin/bin                           # README.md and LICENSE at the root
-   grep -rIn '/home/\|/Users/\|/srv/\|@gmail' dist/plugin     # prints nothing
-   ```
-
-4. Put `dist/plugin` at the root of the public repo and push (this is the publish). This replaces
-   the whole tree of the public repo's default branch, so it assumes that repo holds only releases;
-   if it also holds the source, decide that first (the install command above reads the default branch):
-
-   ```sh
-   N=$(git rev-list --count HEAD)
-   PUB=$(mktemp -d)
-   git clone git@github.com:gridconsole/grid-plugins.git "$PUB"
-   find "$PUB" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-   cp -R dist/plugin/. "$PUB"/
-   git -C "$PUB" add -A
-   git -C "$PUB" commit -m "Release 0.2.$N"
-   git -C "$PUB" push origin HEAD
-   ```
-
-   `cp -R` keeps the executable bits, and git stores them. Each release adds about 85 MB of binaries
-   to the public history. The version comes from the source repo's commit count, not from the public
-   repo's, so the public history may be squashed to one commit at any time without lowering it.
-
-5. Check the install from a machine, or a scratch HOME, that has no Go. `H` is set once and used on
-   both `claude` lines, so the marketplace and the install land in the same scratch HOME and your
-   real `~/.claude` is not touched:
-
-   ```sh
-   H=$(mktemp -d)
-   HOME=$H claude plugin marketplace add gridconsole/grid-plugins
-   HOME=$H claude plugin install grid@grid
-   ```
-
-   Claude Code copies an installed plugin to `<HOME>/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`,
-   so the installed entry is:
-
-   ```sh
-   G="$H/.claude/plugins/cache/grid/grid/0.2.$N/bin/grid"      # N from step 1
-   PATH=/usr/bin:/bin "$G" version                              # prints: grid 0.2.N
-   ```
-
-   `PATH=/usr/bin:/bin` leaves out Go, so a pass shows the entry ran the shipped binary. If the path
-   above does not exist (the cache layout is Claude Code's, not this repo's), find the entry with
-   `find "$H/.claude/plugins" -path '*/bin/grid' -type f`. On an existing install,
-   `claude plugin update grid@grid` moves it to 0.2.N.
+`PATH=/usr/bin:/bin` leaves out Go, so a pass shows the entry ran the shipped binary. If the path does
+not exist (the cache layout is Claude Code's), find the entry with
+`find "$H/.claude/plugins" -path '*/bin/grid' -type f`. On an existing install,
+`claude plugin update grid@grid` moves it to 0.2.N.
 
 `make dist RELEASE=0.2.N` overrides the stamp for a source archive that has no git history.
