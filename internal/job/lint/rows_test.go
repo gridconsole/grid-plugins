@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/job/lint"
 )
 
@@ -106,4 +107,28 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+type intentResolver map[string]string
+
+func (r intentResolver) Resolve(p string) (job.Source, error) {
+	return job.Source{Pointer: p, Text: r[p]}, nil
+}
+
+func TestAfterMissingIntentText(t *testing.T) {
+	body := rowsRecord(t, map[string]any{"acceptance": rowsAcceptance("The panel renders")})
+	var rec map[string]any
+	if err := json.Unmarshal(body, &rec); err != nil {
+		t.Fatal(err)
+	}
+	intent := rec["intent"].(map[string]any)
+	r := intentResolver{}
+	for _, k := range []string{"owner", "item", "goal"} {
+		r[intent[k].(string)] = "Plain text"
+	}
+	r[intent["item"].(string)] = "Step 6 builds on the lint from J-3"
+	fs := lint.CheckJSON(body, lint.Options{Resolver: r})
+	if got := vcRepoRule(fs, "job.after-missing"); len(got) != 1 {
+		t.Fatalf("want one job.after-missing for a Job named only in the resolved intent text: %+v", fs)
+	}
 }
