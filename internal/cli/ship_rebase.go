@@ -100,7 +100,7 @@ func rebaseCount(items []job.Job) int {
 func rebaseVerify(items []job.Job, c *mergeConflictError) map[string]any {
 	found := map[string]any{"kind": "file-exists", "path": c.Files[0]}
 	for _, it := range items {
-		if strings.EqualFold(strings.TrimSpace(it.Role), "builder") && strings.TrimSpace(it.Verify.Command) != "" && it.Verify.MinTests > 0 {
+		if contract.NormalizeRole(it.Role) == "builder" && strings.TrimSpace(it.Verify.Command) != "" && it.Verify.MinTests > 0 {
 			found = map[string]any{"command": it.Verify.Command, "min_tests": it.Verify.MinTests}
 		}
 	}
