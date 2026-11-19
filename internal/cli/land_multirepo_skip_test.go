@@ -27,8 +27,8 @@ func (m multiRepoLand) lostBranch(t *testing.T, repo string) string {
 }
 
 // An accepted builder Job with an empty write list whose branch no repo holds has nothing
-// to land: approve skips it, says so on stderr, lands the builder branches after it and
-// closes the task.
+// to land: approve skips it, says so on stderr and in the task's history, lands the
+// builder branches after it and closes the task.
 func TestApproveSkipsABuilderBranchNoRepoHolds(t *testing.T) {
 	m := multiRepoFixture(t)
 	none := m.noBranch(t, m.plugin)
@@ -42,6 +42,9 @@ func TestApproveSkipsABuilderBranchNoRepoHolds(t *testing.T) {
 	}
 	if out := m.stderr.String(); !strings.Contains(out, "skipped "+none) {
 		t.Fatalf("stderr does not say the branch %s was skipped:\n%s", none, out)
+	}
+	if h := shipHistory(t, m.dir); !strings.Contains(h, "skipped "+none) {
+		t.Fatalf("history does not say the branch %s was skipped:\n%s", none, h)
 	}
 }
 

@@ -231,7 +231,8 @@ func taskMerge(env Env, id, proj string) (string, error) {
 		}
 		return "", repoErr
 	}
-	merged, skipped := "", 0
+	merged := ""
+	var skipped []string
 	for _, b := range built {
 		sha, landed, err := taskMergeOne(res, name, b, base)
 		var conflict *mergeConflictError
@@ -242,7 +243,7 @@ func taskMerge(env Env, id, proj string) (string, error) {
 		}
 		if noWork(err, b, noWrite) {
 			fmt.Fprintf(env.Stderr, "grid task merge: skipped %s: no repo of project %s holds it, and the accepted builder Job has no files to write, so it has nothing to land\n", b, res.Project)
-			skipped++
+			skipped = append(skipped, b)
 			continue
 		}
 		if err != nil {
@@ -253,8 +254,17 @@ func taskMerge(env Env, id, proj string) (string, error) {
 		}
 	}
 	// task.md names a branch no repo holds and no builder branch stands in for it.
-	if branch != "" && skipped == len(built) {
+	if branch != "" && len(skipped) == len(built) {
 		return "", repoErr
+	}
+	// The branches are landed by now, so a history line that fails is told on stderr only.
+	for _, b := range skipped {
+		line := fmt.Sprintf("grid task merge skipped %s: no repo of project %s holds it and its builder Job has no files to write", b, res.Project)
+		tasks := taskWriter(env)
+		tasks.Project = res.Project
+		if _, err := tasks.Note(writeOptions(env, name, "note", line)); err != nil {
+			fmt.Fprintf(env.Stderr, "grid task merge: the skip of %s is not in the task's history: %s\n", b, oneLineErr(err))
+		}
 	}
 	return merged, nil
 }
