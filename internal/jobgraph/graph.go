@@ -234,7 +234,7 @@ func (e *CycleError) Error() string { return "Job cycle: " + strings.Join(e.Path
 // Landed holds the Jobs that have a counted landed post (contract.FoldLoop's
 // Loop.Landed); a landed edge on a Job not in it waits. Approved holds the ids of
 // the blocked posts a counted person's approval answers and covers, which is what
-// releases a permission wait; nothing fills it yet (see holdReady).
+// releases a permission wait (orchestrator Load fills it).
 type Snapshot struct {
 	Jobs       map[string]contract.Job
 	Exhausted  map[string]bool
@@ -551,9 +551,8 @@ func started(status contract.Status) bool {
 // Job, which today waits for a person's approval and a new assign, gives no
 // Waiting entry, so the tick posts nothing over it as before, and is released only
 // when it names a permission wait and every wait is met; a Blocked Job that names
-// none stays for a person. Approved is what meets a permission wait, and nothing
-// fills it yet: the release of a Blocked Job needs the tick to assign with the
-// approved rules, so it stays dormant until then.
+// none stays for a person. Approved is what meets a permission wait; the tick
+// then assigns the released Job with the approved rules.
 func (g *Graph) holdReady(s Snapshot, id string, out *Readiness) ([]Wait, bool) {
 	j := s.Jobs[id]
 	var waits []Wait
