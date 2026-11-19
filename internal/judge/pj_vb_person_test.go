@@ -25,9 +25,9 @@ func pjVbPersons(posts []Post) (out []Post) {
 }
 
 // Ported from the app's judge_cancelled_review_test.go:66: a review cancelled at spawn leaves its
-// builder with no verdict; three calls (two wakes and none) raise exactly one person Job for the
-// owner, discovered from the builder, naming the reason and the two choices. Nothing accepts J-4.
-func TestJudgeReviewCancelledAtSpawnRaisesOnePersonJob(t *testing.T) {
+// builder with no verdict; three calls (two wakes and none) raise exactly one decision Job for an
+// agent (no person Job), discovered from the builder, naming the reason and the choices. Nothing accepts J-4.
+func TestJudgeReviewCancelledAtSpawnRaisesOneDecisionJob(t *testing.T) {
 	st := pjVbCancelled()
 	st.Jobs["J-4.1"].ExitCode = json.RawMessage(`"prepare_failed: the agent could not be built"`)
 	var all []Post
@@ -39,16 +39,16 @@ func TestJudgeReviewCancelledAtSpawnRaisesOnePersonJob(t *testing.T) {
 		pjVbApply(t, &st, plan.Posts)
 		all = append(all, plan.Posts...)
 	}
-	got := pjVbPersons(all)
-	if len(got) != 1 {
-		t.Fatalf("%d person Jobs after three calls (posts %+v), want exactly one", len(got), all)
+	got := pjDecisions(all)
+	if len(got) != 1 || len(pjVbPersons(all)) != 0 {
+		t.Fatalf("%d decision Jobs after three calls (posts %+v), want exactly one and no person Job", len(got), all)
 	}
 	p := got[0]
 	goal := str(p.Body["intent"].(map[string]any)["goal"])
-	if p.Person != "owner-1" || p.Body["discovered_from"] != "J-4" || p.Body["role"] != "Person" {
-		t.Fatalf("person Job %+v, want a Person Job for owner-1 discovered from J-4", p)
+	if p.Body["discovered_from"] != "J-4" || p.Body["role"] != "orchestrator" {
+		t.Fatalf("decision Job %+v, want an orchestrator Job discovered from J-4", p)
 	}
-	for _, want := range []string{"J-4", "J-4.1", "prepare_failed: the agent could not be built", "accept J-4 without a review", "ask for rework"} {
+	for _, want := range []string{"J-4", "J-4.1", "prepare_failed: the agent could not be built", "Accept J-4", "fresh rework"} {
 		if !strings.Contains(goal, want) {
 			t.Fatalf("goal %q does not name %q", goal, want)
 		}
@@ -82,17 +82,17 @@ func TestJudgeReviewCancelledAfterAVerdictRaisesNoPersonJob(t *testing.T) {
 	}
 }
 
-// The person Job after a second rejection carries the reviewer's text and comes from the review;
+// The decision Job after a second rejection carries the reviewer's text and comes from the review;
 // STUCK raises one with the reviewer's reason; each is raised once.
-func TestPjVbPersonAfterASecondRejectionAndStuck(t *testing.T) {
+func TestPjVbDecisionAfterASecondRejectionAndStuck(t *testing.T) {
 	st := pjVbChain()
 	plan, err := Person(st, "J-2", "J-1.2", "owner-1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := pjVbPersons(plan.Posts)
+	got := pjDecisions(plan.Posts)
 	if len(got) != 1 || got[0].Job != "J-1.3" || got[0].Body["discovered_from"] != "J-1.2" {
-		t.Fatalf("posts %+v, want the person Job J-1.3 discovered from J-1.2", plan.Posts)
+		t.Fatalf("posts %+v, want the decision Job J-1.3 discovered from J-1.2", plan.Posts)
 	}
 	if goal := str(got[0].Body["intent"].(map[string]any)["goal"]); !strings.Contains(goal, "rejected it again after its rework") || !strings.Contains(goal, "still fails") {
 		t.Fatalf("goal %q, want the second rejection and the reviewer's text", goal)
@@ -110,7 +110,7 @@ func TestPjVbPersonAfterASecondRejectionAndStuck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pjVbPersons(plan.Posts); len(got) != 1 || !strings.Contains(str(got[0].Body["intent"].(map[string]any)["goal"]), "the page needs a login") {
-		t.Fatalf("posts %+v, want one person Job carrying the reviewer's reason", plan.Posts)
+	if got := pjDecisions(plan.Posts); len(got) != 1 || !strings.Contains(str(got[0].Body["intent"].(map[string]any)["goal"]), "the page needs a login") {
+		t.Fatalf("posts %+v, want one decision Job carrying the reviewer's reason", plan.Posts)
 	}
 }

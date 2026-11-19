@@ -6,7 +6,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -151,11 +150,10 @@ func TestSetupClaudeHelpAndProjectAnswersGolden(t *testing.T) {
 	}
 }
 
-// `grid setup` writes no deny rule for the kinds it used to reserve (task folders,
-// project.md and the brain): agents write their own task state, in any spelling
-// Claude Code folds. The rules it does write are the person's approval identity and
-// a project's setup answers, which no path of this table reaches. The table is the
-// one the reserved-kind rules were once checked against.
+// `grid setup` writes no deny rule: agents write their own task state (task folders,
+// project.md and the brain, in any spelling Claude Code folds), a project's setup
+// answers and the person's approval identity. The table is the one the deny rules it
+// used to write were checked against.
 func TestClaudeDenyRulesLeaveAgentStateOpen(t *testing.T) {
 	for _, location := range []string{"default", "outside home"} {
 		t.Run(location, func(t *testing.T) {
@@ -176,15 +174,10 @@ func TestClaudeDenyRulesLeaveAgentStateOpen(t *testing.T) {
 			if err := json.Unmarshal(data, &doc); err != nil {
 				t.Fatal(err)
 			}
-			// The kept rules are checked in settings.TestClaudeBlockDeniesTheSetupAnswerFiles
-			// and settings.TestClaudeSetupTakesRetiredDeniesOut (the kept set stays).
-			rules := slices.DeleteFunc(doc.Permissions.Deny, func(rule string) bool {
-				plain := foldedLetter.ReplaceAllString(rule, "$1")
-				return strings.Contains(rule, "~/.grid-person/**") ||
-					strings.HasSuffix(plain, "/setup-answers.json)") || strings.HasSuffix(plain, "/setup-pending.json)")
-			})
-			if len(rules) != 0 {
-				t.Errorf("deny rules beyond the approval identity and the setup answers: %q", rules)
+			// settings.TestClaudeBlockLeavesTheSetupAnswerFilesToAgents checks the block
+			// itself and settings.TestClaudeSetupTakesRetiredDeniesOut the retirement.
+			if len(doc.Permissions.Deny) != 0 {
+				t.Errorf("setup wrote deny rules: %q", doc.Permissions.Deny)
 			}
 			paths := []string{
 				"projects/p/tasks/T-01-work", "projects/p/tasks/T-01-work/task.md", "projects/p/tasks/T-1/sub/deep/file", "projects/p/TASKS/t-22-work/brief.md",

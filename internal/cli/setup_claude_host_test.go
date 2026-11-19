@@ -4,13 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
 )
-
-var foldedLetter = regexp.MustCompile(`\[([a-z])[A-Z]\]`)
 
 func claudeSettingsDoc(t *testing.T) map[string]json.RawMessage {
 	t.Helper()
@@ -172,13 +169,13 @@ func TestSetupSandboxFlag(t *testing.T) {
 		return string(b)
 	}
 
-	// Without the flag the sandbox is not written, and the deny rules are.
+	// Without the flag the sandbox is not written, and no deny rule is either.
 	run(0, "setup", "--yes")
 	if raw, ok := sandbox(); ok {
 		t.Fatalf("plain setup wrote sandbox: %s", raw)
 	}
-	if len(claudeDenyRules(t)) == 0 {
-		t.Fatal("plain setup wrote no deny rules")
+	if rules := claudeDenyRules(t); len(rules) != 0 {
+		t.Fatalf("plain setup wrote deny rules: %v", rules)
 	}
 	// With it, exactly sandbox.enabled is written; a second run changes nothing.
 	run(0, "setup", "--sandbox", "--yes")

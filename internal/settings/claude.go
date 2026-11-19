@@ -333,6 +333,7 @@ type ClaudeSetupOptions struct {
 	Stdout, Stderr            io.Writer
 	terminal                  func(io.Reader) bool
 	beforeRename              func()
+	declined                  *bool // set when nothing was confirmed: the person said no, could not be asked, or gave no --yes with nothing to ask about
 }
 
 type claudeResult struct {
@@ -358,9 +359,23 @@ func (e claudeInvalid) Error() string {
 // opsDefaultsLine states the owner's ops defaults in the setup summary.
 const opsDefaultsLine = "No telemetry. Crash reports and a daily copy (7 days) stay in your Grid home. Old sessions are not imported."
 
-// RunClaudeSetup previews, confirms, and applies only entries owned by setup.
+// RunClaudeSetup previews, confirms, and applies only entries owned by setup. Once the
+// person confirmed (--yes, or a y), and did not ask for removal, it then retires what
+// the session start retires (RetireClaudeRules): the old deny rules of every Grid home
+// with a setup record, since one settings file holds them all. A preview, or a run
+// nobody confirmed, writes nothing.
 func RunClaudeSetup(o ClaudeSetupOptions) int {
+	var declined bool
+	o.declined = &declined
 	code, err := runClaudeSetup(o)
+	if err == nil && code == 0 && !declined && !o.Remove {
+		var others error
+		err, others = retireClaudeRules(o)
+		if others != nil {
+			// Another home's trouble is not this setup's failure; the session start only logs it.
+			fmt.Fprintln(o.Stderr, "warning:", others)
+		}
+	}
 	if err != nil {
 		fmt.Fprintln(o.Stderr, err)
 		var invalid claudeInvalid
@@ -381,9 +396,16 @@ func RunClaudeSetup(o ClaudeSetupOptions) int {
 // ran, is left as it is. A run that finds nothing to take out writes nothing, so the
 // session start can call it every time.
 func RetireClaudeRules(o ClaudeSetupOptions) error {
+	own, others := retireClaudeRules(o)
+	return errors.Join(own, others)
+}
+
+// retireClaudeRules is RetireClaudeRules with the error of the session's own home kept
+// apart from those of the other homes, which name the home they come from.
+func retireClaudeRules(o ClaudeSetupOptions) (own, others error) {
 	o.RetireOnly, o.Yes, o.JSON, o.Stdout, o.Stderr = true, true, true, io.Discard, io.Discard
 	var errs []error
-	for _, home := range retireHomes(o) {
+	for i, home := range retireHomes(o) {
 		run := o
 		// A projects folder outside the Grid home is the same text in every home's record.
 		run.GridHome = home
@@ -392,11 +414,15 @@ func RetireClaudeRules(o ClaudeSetupOptions) error {
 		if errors.Is(err, errClaudeChanged) || errors.As(err, &invalid) {
 			continue
 		}
-		if err != nil {
-			errs = append(errs, err)
+		switch {
+		case err == nil:
+		case i == 0:
+			own = err
+		default:
+			errs = append(errs, fmt.Errorf("%s: %w", home, err))
 		}
 	}
-	return errors.Join(errs...)
+	return own, errors.Join(errs...)
 }
 
 // retireHomes lists the Grid homes the retire pass reads a setup record of: the
@@ -496,6 +522,13 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 			fmt.Fprintln(o.Stdout, message)
 		}
 		return 0, nil
+	}
+	// RunClaudeSetup reads declined: the person was asked and did not approve.
+	decline := func() (int, error) {
+		if o.declined != nil {
+			*o.declined = true
+		}
+		return finish("Nothing written.")
 	}
 	if o.Remove && !recordFile.exists {
 		return finish("Nothing to remove.")
@@ -644,6 +677,9 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		fmt.Fprintln(o.Stdout, opsDefaultsLine)
 	}
 	if len(changes) == 0 && len(retire) == 0 && !trim && !o.Remove {
+		if !o.Yes {
+			return decline() // no question to ask, so nothing is confirmed either
+		}
 		return finish("Nothing written.")
 	}
 	if !o.Yes {
@@ -652,7 +688,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 			terminal = claudeTerminal
 		}
 		if o.JSON || !terminal(o.Stdin) {
-			return finish("Nothing written.")
+			return decline()
 		}
 		prompt := "Write these? [y/N] "
 		if o.Remove {
@@ -663,7 +699,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		switch strings.ToLower(strings.TrimSpace(answer)) {
 		case "y", "yes":
 		default:
-			return finish("Nothing written.")
+			return decline()
 		}
 	}
 	if o.BeforeWrite != nil {
