@@ -64,7 +64,7 @@ func TestStRejectedLostDecisionReworkedSettlesTheReview(t *testing.T) {
 	base := []string{"J-2.1", "cancelled", "J-2.2", "rejected", "J-2.2.1", "accepted"}
 	m1Run(t, []m1Case{
 		{"decision's rework accepted, J-2 accepted", items, m1Status(append(base, "J-2", "accepted", "J-6", "accepted", "J-2.2.2", "accepted")...), ""},
-		{"decision's rework accepted, J-2 submitted", items, m1Status(append(base, "J-2", "submitted", "J-6", "accepted", "J-2.2.2", "accepted")...), "waiting for J-2 to be accepted"},
+		{"decision's rework accepted, J-2 submitted", items, m1Status(append(base, "J-2", "submitted", "J-6", "accepted", "J-2.2.2", "accepted")...), "waiting for J-2 to be accepted; decision J-2.2 chose to carry on"},
 		{"decision's rework running, J-2 accepted", items, m1Status(append(base, "J-2", "accepted", "J-6", "running", "J-2.2.2", "posted")...), "waiting for all children of J-2 to be accepted"},
 	})
 }

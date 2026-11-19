@@ -321,10 +321,17 @@ func DoneReason(target string, status contract.Status) string {
 // review, person or decision Job) waits for its own accept, and so does one whose
 // review was lost and decided (lostDecided): the decision settles the review, not
 // the target, which its answer (orchestrator yvPamControl) or its decision Job closes.
+// An open target with a settled decision on it (decides) waits for its own accept too,
+// as judge.Person leaves the build submitted after a stuck or no-verdict review.
 func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 	status := s.Jobs[target].Status
 	path := map[string]bool{target: true}
 	if !closed(status) {
+		for _, child := range g.children[target] {
+			if g.decides(s, child, target, path) {
+				return false, DoneReason(target, status) + "; decision " + child + " chose to carry on"
+			}
+		}
 		for _, child := range g.children[target] {
 			if !strings.HasPrefix(child, target+".") || s.Jobs[child].Status == contract.Cancelled && g.lostDecided(s, child, path) {
 				return false, DoneReason(target, status)
@@ -429,6 +436,16 @@ func (g *Graph) settled(s Snapshot, id string, path map[string]bool) bool {
 		return ok
 	}
 	return false
+}
+
+// decides reports whether d is a settled decision on b: a decision Job, or the person
+// Job before it, titled for b as judge.Person titles it ("Decide how <b> continues", or
+// "... without its review" after a lost review). The title names b, not the id, as
+// judge.Person numbers it under the first build (GridV2 T-13 J-3.4 judges J-9).
+func (g *Graph) decides(s Snapshot, d, b string, path map[string]bool) bool {
+	dec := g.items[d]
+	title := decidePrefix + b + " continues"
+	return (isDecision(dec) || dec.IsPerson()) && (dec.Title == title || dec.Title == title+" without its review") && g.settled(s, d, path)
 }
 
 // holding are the immediate children of id that hold a children-done edge: a

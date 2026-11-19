@@ -20,8 +20,8 @@ func TestStLostReviewDecidedWaitsForTheOpenBuild(t *testing.T) {
 		lost job.Job
 	}{{"app card", card}, {"decision Job", decision}} {
 		m1Run(t, []m1Case{
-			{tc.name + " accepted, J-2 submitted", m1Plan(tc.lost), m1Status("J-2", "submitted", "J-2.1", "cancelled", "J-2.2", "accepted"), "waiting for J-2 to be accepted"},
-			{tc.name + " accepted, J-2 parked", m1Plan(tc.lost), m1Status("J-2", "parked", "J-2.1", "cancelled", "J-2.2", "accepted"), "waiting for J-2 to be accepted"},
+			{tc.name + " accepted, J-2 submitted", m1Plan(tc.lost), m1Status("J-2", "submitted", "J-2.1", "cancelled", "J-2.2", "accepted"), "waiting for J-2 to be accepted; decision J-2.2 chose to carry on"},
+			{tc.name + " accepted, J-2 parked", m1Plan(tc.lost), m1Status("J-2", "parked", "J-2.1", "cancelled", "J-2.2", "accepted"), "waiting for J-2 to be accepted; decision J-2.2 chose to carry on"},
 			{tc.name + " accepted, J-2 accepted", m1Plan(tc.lost), m1Status("J-2", "accepted", "J-2.1", "cancelled", "J-2.2", "accepted"), ""},
 			{tc.name + " running, J-2 submitted", m1Plan(tc.lost), m1Status("J-2", "submitted", "J-2.1", "cancelled", "J-2.2", "running"), "waiting for all children of J-2 to be accepted"},
 		})
