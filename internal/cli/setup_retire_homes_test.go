@@ -59,6 +59,12 @@ func retireHandleHome(t *testing.T, h *harness) (settingsFile, record string, re
 // session start does: a person's one settings file holds every home's forms, and a
 // retired deny rule left there still blocks the agents of the other home.
 func TestSetupRetiresTheOtherHomesRules(t *testing.T) {
+	alreadySetUp := func(t *testing.T, h *harness) {
+		// The home's own rules are in place; the other home's forms are put back.
+		if code := h.run(h.home, "setup", "--yes"); code != 0 {
+			t.Fatalf("code=%d: %s", code, h.errb)
+		}
+	}
 	for _, tt := range []struct {
 		name   string
 		before func(*testing.T, *harness) // runs before the setup under test
@@ -66,13 +72,11 @@ func TestSetupRetiresTheOtherHomesRules(t *testing.T) {
 		retire bool
 	}{
 		{"fresh setup", func(*testing.T, *harness) {}, []string{"setup", "--yes"}, true},
-		{"setup already done", func(t *testing.T, h *harness) {
-			// The home's own rules are in place; the other home's forms are put back.
-			if code := h.run(h.home, "setup", "--yes"); code != 0 {
-				t.Fatalf("code=%d: %s", code, h.errb)
-			}
-		}, []string{"setup", "--yes"}, true},
+		{"setup already done", alreadySetUp, []string{"setup", "--yes"}, true},
 		{"declined", func(*testing.T, *harness) {}, []string{"setup"}, false},
+		// Nothing to write, so no question is asked and nothing is confirmed.
+		{"setup already done, no --yes and no terminal", alreadySetUp, []string{"setup"}, false},
+		{"setup already done, a preview", alreadySetUp, []string{"setup", "--json"}, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := claudeHarness(t)
@@ -95,7 +99,7 @@ func TestSetupRetiresTheOtherHomesRules(t *testing.T) {
 			}
 			if !tt.retire {
 				if string(after) != string(before) {
-					t.Fatalf("a declined setup changed the settings: %s", after)
+					t.Fatalf("a setup nobody confirmed changed the settings: %s", after)
 				}
 				return
 			}

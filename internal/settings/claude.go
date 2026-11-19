@@ -333,7 +333,7 @@ type ClaudeSetupOptions struct {
 	Stdout, Stderr            io.Writer
 	terminal                  func(io.Reader) bool
 	beforeRename              func()
-	declined                  *bool // set when the person was asked and said no, or could not be asked
+	declined                  *bool // set when nothing was confirmed: the person said no, could not be asked, or gave no --yes with nothing to ask about
 }
 
 type claudeResult struct {
@@ -359,10 +359,11 @@ func (e claudeInvalid) Error() string {
 // opsDefaultsLine states the owner's ops defaults in the setup summary.
 const opsDefaultsLine = "No telemetry. Crash reports and a daily copy (7 days) stay in your Grid home. Old sessions are not imported."
 
-// RunClaudeSetup previews, confirms, and applies only entries owned by setup. Unless
-// the person declined, or asked for removal, it then retires what the session start
-// retires (RetireClaudeRules): the old deny rules of every Grid home with a setup
-// record, since one settings file holds them all.
+// RunClaudeSetup previews, confirms, and applies only entries owned by setup. Once the
+// person confirmed (--yes, or a y), and did not ask for removal, it then retires what
+// the session start retires (RetireClaudeRules): the old deny rules of every Grid home
+// with a setup record, since one settings file holds them all. A preview, or a run
+// nobody confirmed, writes nothing.
 func RunClaudeSetup(o ClaudeSetupOptions) int {
 	var declined bool
 	o.declined = &declined
@@ -660,6 +661,9 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		fmt.Fprintln(o.Stdout, opsDefaultsLine)
 	}
 	if len(changes) == 0 && len(retire) == 0 && !trim && !o.Remove {
+		if !o.Yes {
+			return decline() // no question to ask, so nothing is confirmed either
+		}
 		return finish("Nothing written.")
 	}
 	if !o.Yes {
