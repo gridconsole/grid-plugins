@@ -506,11 +506,11 @@ func taskTargetTip(env Env, proj, id string) (target, tip string, err error) {
 	var missing *branchMissingError
 	if branch == "" || errors.As(err, &missing) {
 		// A branch no repo holds: the land waits on the first builder branch not in.
-		built, rebased, berr := builderBranches(res.TaskPath)
+		built, rebased, noWrite, berr := builderBranches(res.TaskPath)
 		if berr != nil {
 			return "", "", berr
 		}
-		repo, branch, err = firstUnlanded(res, base, built, rebased)
+		repo, branch, err = firstUnlanded(res, base, built, rebased, noWrite)
 	}
 	if err != nil {
 		return "", "", err

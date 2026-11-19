@@ -220,7 +220,7 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	// A branch no repo holds is the delivering Job's own: the work is on the
 	// branches of the task's accepted builder Jobs, landed in Feed order. A rebased
 	// branch of one of them lands with the rest, in its original's place.
-	built, rebased, err := builderBranches(res.TaskPath)
+	built, rebased, noWrite, err := builderBranches(res.TaskPath)
 	if err != nil {
 		return "", err
 	}
@@ -231,7 +231,7 @@ func taskMerge(env Env, id, proj string) (string, error) {
 		}
 		return "", repoErr
 	}
-	merged := ""
+	merged, skipped := "", 0
 	for _, b := range built {
 		sha, landed, err := taskMergeOne(res, name, b, base)
 		var conflict *mergeConflictError
@@ -240,9 +240,9 @@ func taskMerge(env Env, id, proj string) (string, error) {
 				sha, landed, err = taskMergeOne(res, name, r, base)
 			}
 		}
-		// A builder Job that wrote no code (brain proposals only) made no branch in any repo.
-		if errors.As(err, &missing) {
-			fmt.Fprintf(env.Stderr, "grid task merge: skipped %s: no repo of project %s holds it, so the accepted builder Job has nothing to land\n", b, res.Project)
+		if noWork(err, b, noWrite) {
+			fmt.Fprintf(env.Stderr, "grid task merge: skipped %s: no repo of project %s holds it, and the accepted builder Job has no files to write, so it has nothing to land\n", b, res.Project)
+			skipped++
 			continue
 		}
 		if err != nil {
@@ -251,6 +251,10 @@ func taskMerge(env Env, id, proj string) (string, error) {
 		if landed {
 			merged = sha
 		}
+	}
+	// task.md names a branch no repo holds and no builder branch stands in for it.
+	if branch != "" && skipped == len(built) {
+		return "", repoErr
 	}
 	return merged, nil
 }
@@ -275,16 +279,15 @@ func rebasedOf(res where.Result, branch string, rebased []string) string {
 // firstUnlanded is the first builder branch of the task, in Feed order, that is not
 // in its target yet, by itself or by its rebased branch, and the repo that holds it:
 // the branch a land stops on.
-func firstUnlanded(res where.Result, base string, built, rebased []string) (repo, branch string, err error) {
+func firstUnlanded(res where.Result, base string, built, rebased, noWrite []string) (repo, branch string, err error) {
 	in := func(repo, b, target string) bool {
 		_, err := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+b, "refs/heads/"+target)
 		return err == nil
 	}
 	for _, b := range built {
 		repo, err := taskMergeRepo(res, b)
-		var missing *branchMissingError
-		if errors.As(err, &missing) {
-			continue // no repo holds it: nothing to land, as taskMerge skips it
+		if noWork(err, b, noWrite) {
+			continue // as taskMerge skips it
 		}
 		if err != nil {
 			return "", "", err
@@ -312,17 +315,27 @@ func (e noTaskBranchError) Error() string {
 	return fmt.Sprintf("task %s has no branch in task.md; run grid deliver in the task's checkout to record it, then run grid task merge again", string(e))
 }
 
+// noWork reports whether err says builder branch b is in no repo and its Job has an
+// empty write list (noWrite holds those branches, as builderBranches reads them): a Job
+// that only wrote brain proposals made no branch and has nothing to land. A Job that was
+// to write files and has no branch lost its work, so that stays an error.
+func noWork(err error, b string, noWrite []string) bool {
+	var missing *branchMissingError
+	return errors.As(err, &missing) && slices.Contains(noWrite, b)
+}
+
 // builderBranches is the branch of each accepted builder Job of the task, in Feed
 // order, named as the worker names an attempt's branch; rebased is the branches of
-// its accepted rebase Jobs, which stand in for the branch they rebased.
-func builderBranches(taskPath string) (built, rebased []string, err error) {
+// its accepted rebase Jobs, which stand in for the branch they rebased, and noWrite
+// the branches in built whose Job has an empty write list.
+func builderBranches(taskPath string) (built, rebased, noWrite []string, err error) {
 	fid, _, err := task.FeedIdentity(taskPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	snap, err := orchestrator.Load(feed.Store{TaskDir: taskPath, TaskID: fid, Warn: io.Discard})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, it := range byJobNumber(snap.Items) {
 		j := snap.State.Jobs[it.ID]
@@ -334,9 +347,12 @@ func builderBranches(taskPath string) (built, rebased []string, err error) {
 			rebased = append(rebased, b)
 		} else {
 			built = append(built, b)
+			if len(it.Write) == 0 {
+				noWrite = append(noWrite, b)
+			}
 		}
 	}
-	return built, rebased, nil
+	return built, rebased, noWrite, nil
 }
 
 // taskMergeOne merges branch into its base in the repo that holds it and answers the

@@ -26,6 +26,7 @@ type multiRepoLand struct {
 	store       feed.Store
 	stderr      *bytes.Buffer
 	role        string // the builder Jobs' role; empty is builder
+	noWrite     bool   // the builder Jobs have an empty write list
 }
 
 func multiRepoFixture(t *testing.T) multiRepoLand {
@@ -99,6 +100,9 @@ func (m multiRepoLand) builder(t *testing.T, repo, from string, files ...string)
 	body["title"], body["repo"] = "Build "+id, filepath.Base(repo)
 	if m.role != "" {
 		body["role"] = m.role
+	}
+	if m.noWrite {
+		body["write"] = []any{}
 	}
 	w, err := taskJobWriter(m.env)
 	if err != nil {
