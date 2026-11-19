@@ -18,13 +18,13 @@ import (
 // J-50). These cases use the m1 shapes.
 
 // stPerson is the old person Job the Judge raised after review r; stDecision is
-// the decision Job judge.Migrate posts for it.
+// the decision Job judge.Migrate posts for it. Both carry the Judge's title.
 func stPerson(id, r string) job.Job {
-	return job.Job{ID: id, Role: job.RolePerson, DiscoveredFrom: m1Ptr(r)}
+	return job.Job{ID: id, Role: job.RolePerson, Title: "Decide how the work " + r + " reviewed continues", DiscoveredFrom: m1Ptr(r)}
 }
 
 func stDecision(id, r string) job.Job {
-	return job.Job{ID: id, Role: "orchestrator", DiscoveredFrom: m1Ptr(r)}
+	return job.Job{ID: id, Role: "orchestrator", Title: "Decide how the work " + r + " reviewed continues", DiscoveredFrom: m1Ptr(r)}
 }
 
 // stWaits is J-3's readiness and waits when J-3 waits on target with children-done.

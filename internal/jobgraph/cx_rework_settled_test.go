@@ -39,3 +39,19 @@ func TestCxDecidedReworkSettlesTheEdge(t *testing.T) {
 		{"fresh rework and its review accepted", items, m1Status(append(base, "J-5", "accepted", "J-2.5", "accepted")...), ""},
 	})
 }
+
+// An approval is the person Job accepted (orchestrator personAnswers), so a
+// cancelled approve card holds the edge unless a decision Job replaced it and is
+// accepted: judge.Migrate replaces only a person Job titled "Decide how ...".
+func TestCxCancelledPersonHoldsUnlessItsDecisionIsAccepted(t *testing.T) {
+	point := job.Job{ID: "J-2.2", Role: job.RolePerson, Title: "Judge J-2 before ship", DiscoveredFrom: m1Ptr("J-2")}
+	lost := job.Job{ID: "J-2.3", Role: "orchestrator", Title: "Decide how J-2 continues without its review", DiscoveredFrom: m1Ptr("J-2")}
+	decided := m1Plan(stPerson("J-2.2", "J-2.1"), stDecision("J-2.3", "J-2.1"))
+	done := []string{"J-2", "accepted", "J-2.1", "accepted", "J-2.2", "cancelled"}
+	m1Run(t, []m1Case{
+		{"approve card cancelled, no decision Job", m1Plan(job.Job{ID: "J-2.2", Role: job.RolePerson, DiscoveredFrom: m1Ptr("J-2")}), m1Status(done...), "waiting for all children of J-2 to be accepted"},
+		{"approve card cancelled, another decision Job accepted", m1Plan(point, lost), m1Status(append(done, "J-2.3", "accepted")...), "waiting for all children of J-2 to be accepted"},
+		{"old person Job cancelled, its decision Job running", decided, m1Status(append(done, "J-2.3", "running")...), "waiting for all children of J-2 to be accepted"},
+		{"old person Job cancelled, its decision Job accepted", decided, m1Status(append(done, "J-2.3", "accepted")...), ""},
+	})
+}

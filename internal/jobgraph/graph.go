@@ -364,17 +364,40 @@ func (g *Graph) childrenAccepted(s Snapshot, id string) bool {
 }
 
 // holding are the immediate children of id that hold a children-done edge: a
-// person Job that was cancelled (judge.Migrate replaces it with a decision Job,
-// also a child) holds nothing.
+// cancelled person Job holds nothing once a decision Job replaced it and was
+// accepted (replaced). Any other cancelled person Job, such as an approve card,
+// still holds: an approval is the person Job accepted.
 func (g *Graph) holding(s Snapshot, id string) []string {
 	out := []string{}
 	for _, child := range g.children[id] {
-		if g.items[child].IsPerson() && s.Jobs[child].Status == contract.Cancelled {
+		if s.Jobs[child].Status == contract.Cancelled && g.replaced(s, child) {
 			continue
 		}
 		out = append(out, child)
 	}
 	return out
+}
+
+// decidePrefix starts the title of the Judge's old person Job and of the decision
+// Job that replaces it ("Decide how <J> continues", judge.Person).
+const decidePrefix = "Decide how "
+
+// replaced reports whether p is a person Job of the old kind that judge.Migrate
+// replaced with a decision Job, and that decision Job is accepted: a Job for an
+// agent, titled as p is and discovered from the same Job (judge.decisionFrom).
+func (g *Graph) replaced(s Snapshot, p string) bool {
+	it := g.items[p]
+	if !it.IsPerson() || it.DiscoveredFrom == nil || !strings.HasPrefix(it.Title, decidePrefix) {
+		return false
+	}
+	for _, d := range g.ids {
+		dec := g.items[d]
+		if d != p && contract.NormalizeRole(dec.Role) == "orchestrator" && strings.HasPrefix(dec.Title, decidePrefix) &&
+			dec.DiscoveredFrom != nil && *dec.DiscoveredFrom == *it.DiscoveredFrom && s.Jobs[d].Status == contract.Accepted {
+			return true
+		}
+	}
+	return false
 }
 
 // started is a Job that a worker holds or has handed in: it reads as Started or
