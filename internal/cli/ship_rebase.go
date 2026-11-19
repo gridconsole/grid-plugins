@@ -504,13 +504,25 @@ func taskTargetTip(env Env, proj, id string) (target, tip string, err error) {
 	}
 	repo, err := taskMergeRepo(res, branch)
 	var missing *branchMissingError
-	if branch == "" || errors.As(err, &missing) {
+	stale := branch == "" || errors.As(err, &missing)
+	// task.md's branch already in its target: the land goes on with the builder branches after it.
+	landed := false
+	if !stale && err == nil {
+		if t := taskMergeTarget(repo, base); t != "" {
+			_, aerr := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/heads/"+t)
+			landed = aerr == nil
+		}
+	}
+	if stale || landed {
 		// A branch no repo holds: the land waits on the first builder branch not in.
 		built, rebased, noWrite, berr := builderBranches(res.TaskPath)
 		if berr != nil {
 			return "", "", berr
 		}
-		repo, branch, err = firstUnlanded(res, base, built, rebased, noWrite)
+		r, b, ferr := firstUnlanded(res, base, built, rebased, noWrite)
+		if stale || !errors.Is(ferr, errAllLanded) {
+			repo, branch, err = r, b, ferr
+		}
 	}
 	if err != nil {
 		return "", "", err

@@ -122,3 +122,20 @@ func TestApproveLandsPastAConflictAfterTheTaskBranchHere(t *testing.T) {
 		t.Fatalf("plugin main:c.txt is %q, want both changes", got)
 	}
 }
+
+// task.md's branch is here and already in its target: the target the land waits on is
+// the one of the first builder branch not landed yet, in its own repo.
+func TestTaskTargetTipLooksPastATaskBranchAlreadyLanded(t *testing.T) {
+	m := multiRepoFixture(t)
+	shipGit(t, m.app, "branch", "grid-"+m.fid+"-J-9-a1", "main")
+	multiRepoCommit(t, m.plugin, "p0.txt", "plugin main moves on")
+	m.builder(t, m.plugin, "main", "p1.txt")
+	want := shipGit(t, m.plugin, "rev-parse", "main")
+	if want == shipGit(t, m.app, "rev-parse", "main") {
+		t.Fatal("main of app and of plugin are one commit")
+	}
+	target, tip, err := taskTargetTip(m.env, "sample", "T-01")
+	if err != nil || target != "main" || tip != want {
+		t.Fatalf("target %q tip %q %v, want main of plugin at %s", target, tip, err, want)
+	}
+}
