@@ -181,8 +181,9 @@ func TestHoldBlockedPermissionJobKeepsItsWaitThroughTheTick(t *testing.T) {
 }
 
 // grid job tree shows a held Job as held, with each wait and whether it is met,
-// and reports no orphan for it: not never_picked_up, not dead_wait, even when the
-// Job it waits on was rejected and nothing will release it by itself.
+// and reports no orphan for a landed wait: not never_picked_up, not dead_wait,
+// even when the Job it waits on was rejected (a dead job wait is
+// TestHoldTreeShowsDeadWait).
 func TestHoldTreeShowsHeldOnItsWaitWithNoOrphan(t *testing.T) {
 	f := jhHeldFixture(t)
 	wait := contract.HeldWait{Row: "A2", Kind: contract.WaitLanded, Ref: "J-1"}

@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -48,11 +49,17 @@ func (s Store) gkReplan(snap Snapshot) error {
 }
 
 // gkWaiting lists the Jobs that are still Posted or Ready and hold a done edge
-// (a bare id or kind done, as jobgraph reads it) to target.
+// (a bare id or kind done, as jobgraph reads it) to target, and the Held Jobs
+// whose job wait can no longer be met and ends at target (heldDeadWaits).
 func gkWaiting(snap Snapshot, target string) []string {
 	var out []string
 	for _, it := range snap.Items {
-		if st := snap.State.Jobs[it.ID]; st == nil || st.Status != contract.Posted && st.Status != contract.Ready {
+		st := snap.State.Jobs[it.ID]
+		if slices.ContainsFunc(heldDeadWaits(snap, st), func(w deadWait) bool { return w.end == target }) {
+			out = append(out, it.ID)
+			continue
+		}
+		if st == nil || st.Status != contract.Posted && st.Status != contract.Ready {
 			continue
 		}
 		for _, e := range it.After {
