@@ -422,22 +422,14 @@ func taskMergeRepo(res where.Result, branch string) (string, error) {
 	if res.Folder == "" {
 		return "", fmt.Errorf("project %s has no folder on this machine; run grid task merge on the machine that has its checkout", res.Project)
 	}
-	dirs := []string{res.Folder}
-	for _, r := range res.Repos {
-		if !filepath.IsAbs(r) {
-			r = filepath.Join(res.Folder, r)
-		}
-		if filepath.Clean(r) != filepath.Clean(res.Folder) {
-			dirs = append(dirs, r)
-		}
-	}
+	dirs := taskMergeDirs(res)
 	var found []string
 	for _, dir := range dirs {
 		root, err := taskMergeGit(dir, "rev-parse", "--show-toplevel")
 		if err != nil || root == "" {
 			continue
 		}
-		if _, err := taskMergeGit(root, "rev-parse", "-q", "--verify", "refs/heads/"+branch); err == nil && !slices.Contains(found, root) {
+		if localBranch(root, branch) && !slices.Contains(found, root) {
 			found = append(found, root)
 		}
 	}
@@ -450,6 +442,36 @@ func taskMergeRepo(res where.Result, branch string) (string, error) {
 	return "", fmt.Errorf("branch %s is in more than one repo of project %s (%s); merge it there with git", branch, res.Project, strings.Join(found, ", "))
 }
 
+// taskMergeDirs is the project's folder on this machine and the folders of its repos.
+func taskMergeDirs(res where.Result) []string {
+	if res.Folder == "" {
+		return nil
+	}
+	dirs := []string{res.Folder}
+	for _, r := range res.Repos {
+		if !filepath.IsAbs(r) {
+			r = filepath.Join(res.Folder, r)
+		}
+		if filepath.Clean(r) != filepath.Clean(res.Folder) {
+			dirs = append(dirs, r)
+		}
+	}
+	return dirs
+}
+
+// localBranch reports whether name, from task data, is a branch name and a local
+// branch of repo: rev-parse --verify would also take refs/heads/main~1.
+func localBranch(repo, name string) bool {
+	if name == "" {
+		return false
+	}
+	if _, err := taskMergeGit(repo, "check-ref-format", "--branch", name); err != nil {
+		return false
+	}
+	_, err := taskMergeGit(repo, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
+	return err == nil
+}
+
 // branchMissingError is a branch that no checkout of the project holds.
 type branchMissingError struct{ text string }
 
@@ -458,13 +480,11 @@ func (e *branchMissingError) Error() string { return e.text }
 // taskMergeTarget is the branch the task's branch goes into: task.md's base when
 // it names a branch of the checkout, else the first of main and master there.
 func taskMergeTarget(repo, base string) string {
-	if base != "" {
-		if _, err := taskMergeGit(repo, "rev-parse", "-q", "--verify", "refs/heads/"+base); err == nil {
-			return base
-		}
+	if localBranch(repo, base) {
+		return base
 	}
 	for _, name := range taskMergeBases {
-		if _, err := taskMergeGit(repo, "rev-parse", "-q", "--verify", "refs/heads/"+name); err == nil {
+		if localBranch(repo, name) {
 			return name
 		}
 	}
