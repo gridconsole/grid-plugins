@@ -185,3 +185,61 @@ func TestShipRebaseAcceptedByALostReviewDecisionLands(t *testing.T) {
 		t.Fatalf("main:a.txt is %q, want both changes", got)
 	}
 }
+
+// A land parked on an accepted rebase Job runs again once main moves, with the branch of that Job
+// or without one: the delivery still conflicts with the new main, so the land posts a fresh root
+// rebase Job, and the person is not asked.
+func TestShipParkedRebaseRunsOnceMainMoved(t *testing.T) {
+	for _, branch := range []string{"", "lane"} {
+		t.Run("branch "+branch, func(t *testing.T) {
+			env, dir, repo, store, ship, head, stderr := acceptedRebase(t, branch)
+			landAfterShip(env, dir, landOwner)
+			if d := decisionsFrom(t, store, head); len(d) != 1 {
+				t.Fatalf("%d decision Jobs from %s, want one; stderr %s", len(d), head, stderr)
+			}
+			landAnother(t, repo, "moved", "moved")
+			landAfterShip(env, dir, landOwner)
+			again, snap := rebaseJobs(t, store)
+			if len(again) != 2 || len(rebaseRoots(snap.Items)) != 2 {
+				t.Fatalf("%d rebase Jobs, %d roots after main moved, want a second root; stderr %s; history:\n%s", len(again), len(rebaseRoots(snap.Items)), stderr, shipHistory(t, dir))
+			}
+			noPersonJob(t, store, ship.ID, stderr)
+		})
+	}
+}
+
+// A land parked on an accepted rebase Job resumes when its decision Job posts a rework of it: once
+// the rework is accepted the task lands, on the same main.
+func TestShipParkedRebaseLandsAfterTheDecisionsRework(t *testing.T) {
+	env, dir, repo, store, _, head, stderr := acceptedRebase(t, "lane")
+	landAfterShip(env, dir, landOwner)
+	snap, err := orchestrator.Load(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := decisionsFrom(t, store, head); len(d) != 1 {
+		t.Fatalf("%d decision Jobs from %s, want one; stderr %s", len(d), head, stderr)
+	}
+	body := map[string]any{}
+	for k, v := range snap.Bodies[head] {
+		body[k] = v
+	}
+	rework := nextJobID(snap)
+	body["id"], body["continues"] = rework, head
+	w, err := taskJobWriter(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orchestrator.Write(store, w, feed.Input{Type: "job", Job: rework, Body: body}); err != nil {
+		t.Fatal(err)
+	}
+	fakeBuilder(t, dir, repo, rework)
+	setJobStatus(t, env, store, rework, contract.Accepted, "reworked")
+	landAfterShip(env, dir, landOwner)
+	if rec, err := task.Read(dir); err != nil || rec.State != "closed" {
+		t.Fatalf("task state %q %v after the rework was accepted, want closed; stderr %s; history:\n%s", rec.State, err, stderr, shipHistory(t, dir))
+	}
+	if got := shipGit(t, repo, "show", "main:a.txt"); got != "first\nlane" {
+		t.Fatalf("main:a.txt is %q, want both changes", got)
+	}
+}

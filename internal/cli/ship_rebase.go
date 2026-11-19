@@ -202,9 +202,9 @@ func shortTip(tip string) string { return tip[:min(len(tip), 12)] }
 // reworkRebaseJob makes body, a rebase Job, the rework of the rebase Job head, which
 // ended before it was accepted and not in the Judge's hands (cancelled before it ran),
 // while the delivered branch still conflicts with the target at the commit the last
-// rebase was queued on. It is a rework as the Judge makes one: it continues head and is
-// discovered from the newest review of head, so the Judge counts the review rounds over
-// the whole chain (judge.State.roundsOf).
+// rebase was queued on. It is a rework as the Judge makes one: it continues head and
+// carries the review rounds of the whole chain (judge.State.roundsOf); such a head has no
+// review of its own (one with a review is rebaseJudged), so it is discovered from none.
 func reworkRebaseJob(body map[string]any, c *mergeConflictError, head string, snap orchestrator.Snapshot) {
 	rows, _ := body["acceptance"].([]any)
 	tip := shortTip(c.TargetSHA)
