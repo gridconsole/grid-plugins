@@ -348,13 +348,7 @@ func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 		return false, "waiting for all children of " + target + " to be accepted"
 	}
 	switch status {
-	case contract.Cancelled:
-		// A cancelled target that another Job continues was replaced by it, as a cancelled rework is in reworkDone.
-		if len(g.reworksOf(target, map[string]bool{target: true})) == 0 {
-			return false, "waiting for " + target + " to be accepted, but it was cancelled"
-		}
-		return g.reworkDone(s, target, map[string]bool{target: true})
-	case contract.Rejected:
+	case contract.Cancelled, contract.Rejected:
 		return g.reworkDone(s, target, map[string]bool{target: true})
 	}
 	return true, ""
@@ -367,36 +361,158 @@ func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 // each is accepted with its own children accepted, or was rejected and is made
 // good by its own reworks in turn. seen ends a loop of continues.
 func (g *Graph) reworkDone(s Snapshot, id string, seen map[string]bool) (bool, string) {
-	reworks := g.reworksOf(id, seen)
-	if len(reworks) == 0 {
-		return false, "waiting for a Job that reworks " + id + ", which was rejected"
+	w := chainWalk{
+		continuers: func(of string) []string {
+			out := []string{}
+			for _, r := range g.ids {
+				if c := g.items[r].Continues; c != nil && *c == of {
+					out = append(out, r)
+				}
+			}
+			return out
+		},
+		status: func(j string) contract.Status { return s.Jobs[j].Status },
+		gate: func(link string, seen map[string]bool) string {
+			if !g.childrenAccepted(s, link, seen) {
+				return "waiting for all children of " + link + " to be accepted"
+			}
+			return ""
+		},
 	}
-	for _, r := range reworks {
-		seen[r] = true
+	_, state, reason := w.run(id, "", seen)
+	return state == HeadAccepted, reason
+}
+
+// HeadState is where a continues chain stands: accepted at its end, still open,
+// or dead.
+type HeadState string
+
+const (
+	HeadAccepted HeadState = "accepted"
+	HeadOpen     HeadState = "open"
+	HeadDead     HeadState = "dead"
+)
+
+// Head follows the continues chain of id and returns its accepted end. A Job
+// that continues id is a rework, and so is one that continues a rework: a
+// rejected or cancelled Job that a later Job continues is a link of the chain,
+// not its end. A proposed child (id prefix id+".") is not a link. The state is
+// accepted when every end of the chain is accepted (head is the last of them in
+// id order), dead when an end is rejected or cancelled with no Job continuing
+// it (head is that end), and open while a Job in the chain is not closed (head
+// is that Job). An accepted Job is the end of its chain.
+func Head(s Snapshot, id string) (string, HeadState) {
+	ids := make([]string, 0, len(s.Jobs))
+	for j := range s.Jobs {
+		ids = append(ids, j)
 	}
-	for _, r := range reworks {
-		if !g.childrenAccepted(s, r, seen) {
-			return false, "waiting for all children of " + r + " to be accepted"
+	sort.Strings(ids)
+	w := chainWalk{
+		continuers: func(of string) []string {
+			out := []string{}
+			for _, r := range ids {
+				if c := s.Jobs[r].Continues; c != nil && *c == of {
+					out = append(out, r)
+				}
+			}
+			return out
+		},
+		status: func(j string) contract.Status { return s.Jobs[j].Status },
+	}
+	head, state, _ := w.run(id, "", map[string]bool{id: true})
+	return head, state
+}
+
+// chainWalk walks a continues chain. gate, when set, returns a reason when a
+// rework link is not yet fit to count (its children are not accepted).
+type chainWalk struct {
+	continuers func(of string) []string
+	status     func(id string) contract.Status
+	gate       func(link string, seen map[string]bool) string
+}
+
+// run walks from id; parent is the Job id reworks, empty for the first Job.
+// seen ends a loop of continues. It returns the head, the state, and the
+// reason the chain waits when it is not accepted.
+func (w chainWalk) run(id, parent string, seen map[string]bool) (string, HeadState, string) {
+	switch w.status(id) {
+	case contract.Accepted:
+		return id, HeadAccepted, ""
+	case contract.Rejected, contract.Cancelled:
+		reworks := []string{}
+		for _, r := range w.continuers(id) {
+			if !seen[r] && !strings.HasPrefix(r, id+".") {
+				reworks = append(reworks, r)
+			}
 		}
-		switch s.Jobs[r].Status {
-		case contract.Accepted:
-		case contract.Rejected:
-			if ok, reason := g.reworkDone(s, r, seen); !ok {
-				return false, reason
+		if len(reworks) == 0 {
+			switch {
+			case w.status(id) == contract.Rejected:
+				return id, HeadDead, "waiting for a Job that reworks " + id + ", which was rejected"
+			case parent == "":
+				return id, HeadDead, "waiting for " + id + " to be accepted, but it was cancelled"
 			}
-		case contract.Cancelled:
-			// A cancelled rework that another Job continues was replaced by it, which makes it good in turn.
-			if len(g.reworksOf(r, seen)) == 0 {
-				return false, "waiting for " + r + ", which reworks " + id + ", to be accepted, but it was cancelled"
-			}
-			if ok, reason := g.reworkDone(s, r, seen); !ok {
-				return false, reason
-			}
-		default:
-			return false, "waiting for " + r + ", which reworks " + id + ", to be accepted"
+			return id, HeadDead, "waiting for " + id + ", which reworks " + parent + ", to be accepted, but it was cancelled"
 		}
+		for _, r := range reworks {
+			seen[r] = true
+		}
+		head := ""
+		for _, r := range reworks {
+			if w.gate != nil {
+				if reason := w.gate(r, seen); reason != "" {
+					return r, HeadOpen, reason
+				}
+			}
+			h, state, reason := w.run(r, id, seen)
+			if state != HeadAccepted {
+				return h, state, reason
+			}
+			head = h
+		}
+		return head, HeadAccepted, ""
 	}
-	return true, ""
+	if parent == "" {
+		return id, HeadOpen, "waiting for " + id + " to be accepted"
+	}
+	return id, HeadOpen, "waiting for " + id + ", which reworks " + parent + ", to be accepted"
+}
+
+// doneEdge reports whether a done edge on target is met. A rejected or
+// cancelled target is met when the accepted end of its continues chain is; the
+// reason names the dead end or the open link otherwise. A target that is still
+// open keeps the reason DoneReason gives.
+func (g *Graph) doneEdge(s Snapshot, target string) (bool, string) {
+	status := s.Jobs[target].Status
+	if Released(s.Jobs[target]) {
+		return true, ""
+	}
+	reason := DoneReason(target, status)
+	if status != contract.Rejected && status != contract.Cancelled {
+		return false, reason
+	}
+	w := chainWalk{
+		continuers: func(of string) []string {
+			out := []string{}
+			for _, r := range g.ids {
+				if c := g.items[r].Continues; c != nil && *c == of {
+					out = append(out, r)
+				}
+			}
+			return out
+		},
+		status: func(j string) contract.Status { return s.Jobs[j].Status },
+	}
+	head, state, _ := w.run(target, "", map[string]bool{target: true})
+	switch {
+	case state == HeadAccepted:
+		return true, ""
+	case head == target:
+		return false, reason
+	case state == HeadDead:
+		return false, reason + "; its rework chain ends in " + head + ", which was " + string(s.Jobs[head].Status)
+	}
+	return false, reason + "; " + head + " in its rework chain is not accepted"
 }
 
 // reworksOf are the Jobs that continue id and are not its own children, leaving
@@ -679,8 +795,7 @@ func (g *Graph) Ready(s Snapshot) (Readiness, error) {
 				satisfied = s.OpenGates[e.Job]
 				reason = "waiting on gate " + strings.TrimPrefix(e.Job, "gate:")
 			case kind == Done:
-				satisfied = Released(s.Jobs[e.Job])
-				reason = DoneReason(e.Job, s.Jobs[e.Job].Status)
+				satisfied, reason = g.doneEdge(s, e.Job)
 			case kind == Failed:
 				status := s.Jobs[e.Job].Status
 				satisfied = (status == contract.Rejected || status == contract.Cancelled) && s.Exhausted[e.Job]
