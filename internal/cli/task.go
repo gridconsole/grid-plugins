@@ -436,11 +436,6 @@ func taskMergeOne(res where.Result, name, branch, base string) (string, bool, er
 	if err != nil {
 		return "", false, err
 	}
-	if st, err := taskMergeGit(repo, "status", "--porcelain"); err != nil {
-		return "", false, err
-	} else if st != "" {
-		return "", false, fmt.Errorf("the checkout %s has uncommitted changes; commit or stash them, then run grid task merge again", repo)
-	}
 	target := taskMergeTarget(repo, base)
 	if target == "" {
 		return "", false, fmt.Errorf("no base branch for %s in %s: base %q is not a branch there and neither main nor master exists; record the base with grid deliver --base <branch>, then run grid task merge again", branch, repo, base)
@@ -452,6 +447,12 @@ func taskMergeOne(res where.Result, name, branch, base string) (string, bool, er
 	if _, err := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/heads/"+target); err == nil {
 		tip, err := taskMergeGit(repo, "rev-parse", "refs/heads/"+target)
 		return tip, false, err
+	}
+	// Untracked files do not stop a merge: git merge refuses by itself one that would overwrite them.
+	if st, err := taskMergeGit(repo, "status", "--porcelain", "--untracked-files=no"); err != nil {
+		return "", false, err
+	} else if st != "" {
+		return "", false, fmt.Errorf("the checkout %s has uncommitted changes; commit or stash them, then run grid task merge again", repo)
 	}
 	start, err := taskMergeGit(repo, "symbolic-ref", "--short", "-q", "HEAD")
 	if err != nil || start == "" {
