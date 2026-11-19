@@ -62,12 +62,35 @@
                         "enum": [
                           "met",
                           "not met",
-                          "dropped"
+                          "dropped",
+                          "waiting"
                         ]
                       },
                       "decision": {
                         "type": "string",
                         "minLength": 1
+                      },
+                      "waits_on": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "job",
+                              "landed",
+                              "question",
+                              "permission"
+                            ]
+                          },
+                          "ref": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "ref"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -87,6 +110,20 @@
                         "then": {
                           "required": [
                             "decision"
+                          ]
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "state": {
+                              "const": "waiting"
+                            }
+                          }
+                        },
+                        "then": {
+                          "required": [
+                            "waits_on"
                           ]
                         }
                       }

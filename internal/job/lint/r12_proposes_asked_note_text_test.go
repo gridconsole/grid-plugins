@@ -29,7 +29,7 @@ func TestR12AskedNotePathIsNamed(t *testing.T) {
 			"has an acceptance row of its own that names it",
 			"proposes it with `grid brain propose --task <task>` and lists it in the result's `knowledge`",
 			"a file never stands in for the proposal",
-			"passed the eight checks",
+			"passed the twelve checks",
 		}},
 		{runJobSkillPath, []string{
 			"When the Job asks for a note, a decision or knowledge to keep",

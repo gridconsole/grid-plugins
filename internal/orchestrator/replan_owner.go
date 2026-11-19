@@ -75,7 +75,12 @@ func guAskedOwner(snap Snapshot, replan string) bool {
 // --person` sets: role Person, intent.owner the owner. Kind ask is the kind of a
 // person Job that a person answers. It carries no job: pointer, like it.
 func ReplanOwnerJobBody(id, owner, replan, dead string, replanStatus, deadStatus contract.Status, waiting []string) map[string]any {
-	reason := jobgraph.DoneReason(dead, deadStatus)
+	return replanOwnerJobBody(id, owner, replan, dead, replanStatus, jobgraph.DoneReason(dead, deadStatus), waiting)
+}
+
+// replanOwnerJobBody is ReplanOwnerJobBody with reason the text of what each Job
+// in waiting waits for.
+func replanOwnerJobBody(id, owner, replan, dead string, replanStatus contract.Status, reason string, waiting []string) map[string]any {
 	each := make([]string, 0, len(waiting))
 	for _, w := range waiting {
 		each = append(each, w+" ("+reason+")")

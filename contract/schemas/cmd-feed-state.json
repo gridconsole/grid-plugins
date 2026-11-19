@@ -59,8 +59,31 @@
                             "pending",
                             "met",
                             "not met",
-                            "dropped"
+                            "dropped",
+                            "waiting"
                           ]
+                        },
+                        "waits_on": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "enum": [
+                                "job",
+                                "landed",
+                                "question",
+                                "permission"
+                              ]
+                            },
+                            "ref": {
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "ref"
+                          ],
+                          "type": "object"
                         }
                       },
                       "required": [
@@ -380,7 +403,40 @@
               "title": {
                 "type": "string"
               },
-              "verified": {}
+              "verified": {},
+              "waits_on": {
+                "description": "What a held or blocked Job waits on, one entry for each waiting row (docs/decisions/D-job-hold.md). met is present only where a reader that evaluated the wait filled it.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "job",
+                        "landed",
+                        "question",
+                        "permission"
+                      ]
+                    },
+                    "met": {
+                      "type": "boolean"
+                    },
+                    "ref": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "row": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "row",
+                    "kind",
+                    "ref"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
             },
             "required": [
               "id",

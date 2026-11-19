@@ -48,7 +48,8 @@ func (s Store) gkReplan(snap Snapshot) error {
 }
 
 // gkWaiting lists the Jobs that are still Posted or Ready and hold a done edge
-// (a bare id or kind done, as jobgraph reads it) to target.
+// (a bare id or kind done, as jobgraph reads it) to target. A Held Job is
+// re-planned by jhReplanHeld.
 func gkWaiting(snap Snapshot, target string) []string {
 	var out []string
 	for _, it := range snap.Items {
@@ -77,8 +78,9 @@ func gkReplanned(snap Snapshot, cancelled string) bool {
 
 // gkNextJobID is the next free top-level J-<n>, counting the Jobs of the fold
 // and the id of every job record the Feed holds, even one the fold holds out of
-// State (snap.JobIDs). The rule is that of nextJobID in internal/cli, which this
-// package cannot import.
+// State (snap.JobIDs), and skipping an id that a job or landed wait of a Held Job
+// names. It is the rule of nextJobID in internal/cli, which this package cannot
+// import, plus that skip.
 func gkNextJobID(snap Snapshot) string {
 	highest := 0
 	count := func(id string) {
@@ -95,7 +97,23 @@ func gkNextJobID(snap Snapshot) string {
 	for _, id := range snap.JobIDs {
 		count(id)
 	}
-	return "J-" + strconv.Itoa(highest+1)
+	// A new Job on the id a Held Job's wait names but the Feed lacks would meet
+	// that wait in its place (jhReplanHeld).
+	waited := map[string]bool{}
+	for _, j := range snap.State.Jobs {
+		if j.Status == contract.Held {
+			for _, w := range j.WaitsOn {
+				if w.Kind == contract.WaitJob || w.Kind == contract.WaitLanded {
+					waited[w.Ref] = true
+				}
+			}
+		}
+	}
+	next := highest + 1
+	for waited["J-"+strconv.Itoa(next)] {
+		next++
+	}
+	return "J-" + strconv.Itoa(next)
 }
 
 // gqCauseMax is the most bytes of a cause the re-plan Job text holds.
