@@ -103,23 +103,14 @@ func TestShipAnswerNoDeployTopicMergesTheDeliveredBranch(t *testing.T) {
 	}
 }
 
-// A merge that conflicts lands nothing: main is as it was, the task stays waiting
-// with the failure in its history, and the ship Job is back with its person. The
-// task has used its rebase Jobs (ship_rebase_test.go: a first conflict posts one), so
-// the conflict goes to the person.
-func TestShipAnswerNoDeployTopicConflictReopensTheShipJob(t *testing.T) {
+// A merge that conflicts lands nothing: main is as it was and the checkout is clean,
+// the task stays waiting with the failure in its history, and the person is not asked
+// again: the ship Job stays accepted and a rebase Job is posted (ship_rebase_test.go
+// holds the rest of the flow).
+func TestShipAnswerNoDeployTopicConflictKeepsTheApprovalAndPostsARebaseJob(t *testing.T) {
 	env, dir, repo, _, store, stderr := shipMergeFixture(t, true, true)
 	before := shipGit(t, repo, "rev-parse", "main")
 	ship, _ := openApproveJob(t, store)
-	w, err := taskJobWriter(env)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < rebaseTries; i++ {
-		if id, err := postRebaseJob(env, store, w, &mergeConflictError{Branch: "lane", Target: "main", Files: []string{"a.txt"}}); err != nil || id == "" {
-			t.Fatalf("seed rebase Job %d: %q %v", i+1, id, err)
-		}
-	}
 	if code := Run([]string{"approve", "T-01"}, env); code != 0 {
 		t.Fatalf("a merge that fails must not fail the answer: %d %s", code, stderr)
 	}
@@ -139,8 +130,11 @@ func TestShipAnswerNoDeployTopicConflictReopensTheShipJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := string(st.Jobs[ship.ID].Status); s != "posted" {
-		t.Fatalf("ship Job %s is %s after a failed merge, want posted (back with its person); stderr %s", ship.ID, s, stderr)
+	if s := string(st.Jobs[ship.ID].Status); s != "accepted" {
+		t.Fatalf("ship Job %s is %s after a conflict, want accepted (the approval stands); stderr %s", ship.ID, s, stderr)
+	}
+	if rebases, _ := rebaseJobs(t, store); len(rebases) != 1 {
+		t.Fatalf("%d rebase Jobs after the conflict, want 1; stderr %s", len(rebases), stderr)
 	}
 }
 

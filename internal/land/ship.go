@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/fslock"
@@ -20,10 +21,11 @@ const shipEvent = "ship answered"
 // task id: it runs land once for that Job and records the result. The approval
 // land asks for is the task's one approval, the result of its plan Job (Run,
 // ApprovalForGate). A "ship answered" history line naming job is written first,
-// under .land.lock, so a second call for the same Job does nothing (ran is false).
-// A land that stops before its command runs gets a "land failed" history line
-// with the reason; a command that fails has Run's own line. A land that passed
-// closes the task. A project with no deploy topic (ErrNoDeployTopic) has no
+// under .land.lock, so a second call for the same Job does nothing (ran is false); a
+// call that finds the lock held by another process does nothing either, and the next
+// pass tries again. A land that stops before its command runs gets a "land failed"
+// history line with the reason; a command that fails has Run's own line. A land that
+// passed closes the task. A project with no deploy topic (ErrNoDeployTopic) has no
 // command to run: Merge, when set, merges the task's delivered branch into its
 // base first (a merge that fails is a "land failed" line and a *FailedError, the
 // task stays waiting), then a "ship answered" line says so and the task closes on
@@ -160,23 +162,101 @@ func shipRebasePrefix(job string) string { return job + " approval kept; waits f
 // RebaseQueued records that a land of the ship Job job stopped on a merge conflict
 // and the rebase Job rebase was posted: the person's approval is kept, and the next
 // acceptance pass of job runs land again (markShip) once the rebase is accepted.
-// The caller writes it after the rebase Job is on the Feed.
-func (s Store) RebaseQueued(cwd, id, job, rebase string) error {
+// tip is the commit the target branch pointed at when the conflict was seen ("" when
+// unknown), kept as its first tipLen characters since a history detail is short;
+// RebaseTip reads it back, so a later conflict can tell whether the target moved
+// since. The caller writes it after the rebase Job is on the Feed.
+func (s Store) RebaseQueued(cwd, id, job, rebase, tip string) error {
 	return s.withShipLock(cwd, id, func(string) error {
-		return s.note(cwd, id, shipEvent+": "+shipRebasePrefix(job)+rebase+", which keeps both changes; grid land runs again once it is accepted")
+		at := ""
+		if tip != "" {
+			at = " (" + rebaseTipMark + tip[:min(len(tip), tipLen)] + ")"
+		}
+		return s.note(cwd, id, shipEvent+": "+shipRebasePrefix(job)+rebase+at+", which keeps both changes; grid land runs again once it is accepted")
 	})
+}
+
+// rebaseTipMark starts the target tip RebaseQueued puts in its line, and tipLen is how
+// many characters of the commit it keeps.
+const (
+	rebaseTipMark = "target tip "
+	tipLen        = 12
+)
+
+var rebaseLine = regexp.MustCompile(`waits for rebase (\S+?)(?: \(` + rebaseTipMark + `([0-9a-f]+)\))?, which keeps both changes`)
+
+// RebaseTip is the rebase Job and the target tip of the newest RebaseQueued line of
+// the ship Job job. Both are "" when job has none, and tip is "" for a line written
+// before the tip was kept; a tip is at most tipLen characters, so compare it as a prefix.
+func (s Store) RebaseTip(cwd, id, job string) (rebase, tip string, err error) {
+	history, err := s.shipHistory(cwd, id)
+	if err != nil {
+		return "", "", err
+	}
+	for _, line := range strings.Split(history, "\n") {
+		if !strings.Contains(line, " · "+shipEvent+" · "+shipRebasePrefix(job)) {
+			continue
+		}
+		if m := rebaseLine.FindStringSubmatch(line); m != nil {
+			rebase, tip = m[1], m[2]
+		}
+	}
+	return rebase, tip, nil
+}
+
+// shipRetryDetail is the detail of the "ship answered" line Retry writes.
+func shipRetryDetail(job string) string {
+	return job + " land failed; the approval stands and grid land runs again on the next pass"
+}
+
+// Retry records that a land of the ship Job job failed and the person's approval
+// stands: the next pass runs land again (markShip) with no new answer, and Armed
+// reports true until it has. The caller writes it instead of putting the ship Job
+// back with its person, and only for a failure that is not a deploy command's own.
+func (s Store) Retry(cwd, id, job string) error {
+	return s.withShipLock(cwd, id, func(string) error {
+		return s.note(cwd, id, shipEvent+": "+shipRetryDetail(job))
+	})
+}
+
+// Armed reports whether the answer to the ship Job job still has a land to run: it has
+// not run yet, or it was reopened, queued a rebase or is to retry (shipState).
+func (s Store) Armed(cwd, id, job string) (bool, error) {
+	history, err := s.shipHistory(cwd, id)
+	if err != nil {
+		return false, err
+	}
+	armed, _ := shipState(history, job)
+	return armed, nil
 }
 
 // RebasePending reports whether the ship Job job waits for a rebase Job: the newest
 // arming line of its history is the one RebaseQueued writes, and land has not run
 // since.
 func (s Store) RebasePending(cwd, id, job string) (bool, error) {
-	pending := false
-	err := s.withShipLock(cwd, id, func(history string) error {
-		_, pending = shipState(history, job)
-		return nil
-	})
-	return pending, err
+	history, err := s.shipHistory(cwd, id)
+	if err != nil {
+		return false, err
+	}
+	_, pending := shipState(history, job)
+	return pending, nil
+}
+
+// shipHistory is history.md of the task id as it is now, read without .land.lock. A land
+// holds that lock through its deploy command, up to ten minutes, and the worker's pass
+// asks every waiting task what it is armed for, so a read that waited would stall the
+// whole pass. AppendHistory renames a whole new file into place, so the read sees a line
+// or not; markShip, under the lock, still lets one land run once.
+func (s Store) shipHistory(cwd, id string) (string, error) {
+	t, err := s.tasks().Show(cwd, id)
+	if err != nil {
+		return "", err
+	}
+	history, err := os.ReadFile(filepath.Join(t.Path, "history.md"))
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	return string(history), nil
 }
 
 func (s Store) withShipLock(cwd, id string, fn func(history string) error) error {
@@ -200,16 +280,17 @@ func (s Store) withShipLock(cwd, id string, fn func(history string) error) error
 }
 
 // shipState reads the "ship answered" lines of job in history.md in order. armed is
-// true until land has run for the answer, and again after a reopen (Reopened) or a
-// queued rebase (RebaseQueued); rebasing is true when the newest of those lines is
-// the rebase one.
+// true until land has run for the answer, and again after a reopen (Reopened), a
+// retry (Retry) or a queued rebase (RebaseQueued); rebasing is true when the newest of
+// those lines is the rebase one.
 func shipState(history, job string) (armed, rebasing bool) {
 	armed = true
 	for _, line := range strings.Split(history, "\n") {
 		switch {
 		case strings.Contains(line, " · "+shipEvent+" · "+job+" accepted; grid land runs · "):
 			armed, rebasing = false, false
-		case strings.Contains(line, " · "+shipEvent+" · "+shipReopenedDetail(job)+" · "):
+		case strings.Contains(line, " · "+shipEvent+" · "+shipReopenedDetail(job)+" · "),
+			strings.Contains(line, " · "+shipEvent+" · "+shipRetryDetail(job)+" · "):
 			armed, rebasing = true, false
 		case strings.Contains(line, " · "+shipEvent+" · "+shipRebasePrefix(job)):
 			armed, rebasing = true, true
@@ -219,15 +300,19 @@ func shipState(history, job string) (armed, rebasing bool) {
 }
 
 // markShip writes the "ship answered" line for job under .land.lock unless
-// history.md already holds it with no later reopen or rebase line for job; first
-// reports whether this call wrote it.
+// history.md already holds it with no later reopen, retry or rebase line for job; first
+// reports whether this call wrote it. A lock another process holds is not waited for,
+// since a land holds it through its deploy command: first is false and nothing is written.
 func (s Store) markShip(dir, cwd, id, job string) (first bool, err error) {
 	lock, err := fslock.OpenNoFollow(filepath.Join(dir, ".land.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return false, err
 	}
 	defer lock.Close()
-	if err = fslock.LockExclusive(lock); err != nil {
+	if err = fslock.TryLockExclusive(lock); err != nil {
+		if errors.Is(err, fslock.ErrLocked) {
+			return false, nil // a land is running; the answer stays armed for a later pass
+		}
 		return false, err
 	}
 	history, err := os.ReadFile(filepath.Join(dir, "history.md"))

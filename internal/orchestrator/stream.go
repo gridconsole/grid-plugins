@@ -114,6 +114,13 @@ type Stream struct {
 	// Job). w is the pass's task-lease writer, which puts the ship Job back with its
 	// person when that land fails. It reports nothing back; nil does nothing.
 	Ticked func(dir string, w feed.Writer)
+	// LandPending, when set, reports whether the task in dir has a land to run though
+	// no Job of it is open: an approved delivery whose land stopped on a conflict or
+	// has not run (the step Ticked runs). Such a task is not left alone when its Jobs
+	// are all closed, and the pass visits it before the other tasks, so a land that
+	// waited for a rebase Job runs before another task's land moves the target again.
+	// Nil leaves a task with no open Job alone, as before.
+	LandPending func(dir string) bool
 	// PersonWait, when set, is called with the task folder after each tick, with whether
 	// every open Job of the task waits on a person (a person Job or an open question), so
 	// task.md can show waiting instead of running. An error is one Diag line.
@@ -131,6 +138,7 @@ type Stream struct {
 	listErr string
 
 	ohSqMemo map[string]ohSqKey // task folder to the Feed key of the pass that dropped it as quiet
+	landSeen map[string]bool    // task folder to what LandPending said of it at the start of this pass
 
 	ocCuratorMemo map[string]ohSqKey // task folder to the key of the last ask of ClosedCurator after an acceptance
 }
@@ -216,7 +224,7 @@ func (s *Stream) Pass(ctx context.Context) error {
 		return nil
 	}
 	s.listErr = ""
-	for _, dir := range dirs {
+	for _, dir := range s.landFirst(dirs) {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -225,6 +233,41 @@ func (s *Stream) Pass(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// landFirst is dirs with the tasks whose land is pending (LandPending) first, each
+// group in the order given. It asks each task once, and landPending reuses the answer
+// for the rest of the pass.
+func (s *Stream) landFirst(dirs []string) []string {
+	s.landSeen = nil
+	if s.LandPending == nil {
+		return dirs
+	}
+	s.landSeen = map[string]bool{}
+	var first, rest []string
+	for _, dir := range dirs {
+		pending := s.LandPending(dir)
+		if abs, err := filepath.Abs(dir); err == nil {
+			s.landSeen[abs] = pending
+		}
+		if pending {
+			first = append(first, dir)
+		} else {
+			rest = append(rest, dir)
+		}
+	}
+	return append(first, rest...)
+}
+
+// landPending is LandPending for dir, as landFirst found it earlier in this pass.
+func (s *Stream) landPending(dir string) bool {
+	if s.LandPending == nil {
+		return false
+	}
+	if v, ok := s.landSeen[dir]; ok {
+		return v
+	}
+	return s.LandPending(dir)
 }
 
 func (s *Stream) task(dir string) error {
@@ -253,6 +296,10 @@ func (s *Stream) task(dir string) error {
 	// again without a Load. The key is taken here, before Load, so a write that lands
 	// after it shows in the next key.
 	key, quiet := s.ohSqCheck(dir, fs, pending)
+	// A land armed without a write to the Feed is not seen in the key.
+	if quiet && s.landPending(dir) {
+		quiet = false
+	}
 	if quiet {
 		delete(s.skipped, dir)
 		return nil
@@ -270,7 +317,7 @@ func (s *Stream) task(dir string) error {
 	}
 	// A task whose Jobs are all closed is left alone unless this stream still
 	// holds its lease: then one more pass delivers the last wake and releases it.
-	if !pending && !hasOpenJob(snap) && !s.holds(ts) {
+	if !pending && !hasOpenJob(snap) && !s.holds(ts) && !s.landPending(dir) {
 		s.ohSqStore(dir, key, snap)
 		delete(s.skipped, dir)
 		return nil

@@ -211,6 +211,8 @@ func workerStream(env Env, member, machine, role string, pid int, start string, 
 		Ticked: func(dir string, w feed.Writer) {
 			landAfterShipAs(env, dir, contract.Author{ID: member, Role: role}, w)
 		},
+		// An approved delivery whose land has not run, or stopped on a conflict, stays in the pass with no open Job.
+		LandPending: func(dir string) bool { return landArmed(env, dir) },
 		// A task waiting only on a person shows waiting; an agent Job ready again shows running.
 		PersonWait: func(dir string, onPerson bool) error {
 			resolved, err := resolveTaskOperand(env, dir)
