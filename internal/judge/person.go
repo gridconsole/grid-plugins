@@ -92,6 +92,26 @@ func Person(st State, builder, from, owner, wake, point string) (Plan, error) {
 	return decide(root, from, "Decide how "+builder+" continues", goal), nil
 }
 
+// Decide is the agent decision Job raised from builder itself for a reason no review gave, titled
+// title ("Decide how <builder> continues: ..."): the land's, when a rebase Job it accepted still
+// cannot land on the same target (internal/cli ship_rebase.go). goal says why, and the guide of
+// every decision Job follows it. It is raised once per title: a decision Job from builder with that
+// title already on the Feed posts nothing, and one of another title (a lost review's) does not count.
+func Decide(st State, builder, title, goal string) (Plan, error) {
+	_, src, err := st.jobOf(builder)
+	if err != nil {
+		return Plan{}, err
+	}
+	for _, k := range sortedIDs(st.Jobs) {
+		if j := st.Jobs[k]; role(j) == "orchestrator" && j.DiscoveredFrom != nil && *j.DiscoveredFrom == builder && str(st.bodyOf(k)["title"]) == title {
+			return Plan{Note: fmt.Sprintf("the decision Job %s from %s is already on the Feed", k, builder)}, nil
+		}
+	}
+	child := st.childID(builder)
+	goal += st.decisionGuide(builder, builder, "")
+	return Plan{Posts: []Post{{Task: st.Task, Type: "job", Job: child, Body: decisionBody(child, builder, builder, title, goal, src)}}}, nil
+}
+
 // lost is the decision Job for a review cancelled before it ran (the app's reviewLost).
 func (s State) lost(builder string, r *contract.Job, raise func(child, discovered, title, goal string) Plan) Plan {
 	goal := fmt.Sprintf("The review %s of %s was cancelled before it ran, so %s has no verdict and is not accepted. "+
