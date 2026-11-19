@@ -474,6 +474,12 @@ func Run(args []string, env Env) int {
 	case "accept":
 		var id string
 		id, writeLevel, err = proposalID(f.Arg(0), writeLevel, *level)
+		// A project or task named with a home id files the note in that project.
+		if err == nil && writeLevel == "home" && strings.HasPrefix(f.Arg(0), "brain:home/") && (*project != "" || proposeTask.Path != "") && store.Project != "" && reject == "" {
+			if err = store.MoveProposalToProject(id); err == nil {
+				writeLevel = "project"
+			}
+		}
 		if err == nil {
 			if reject != "" {
 				result, err = store.Reject(writeLevel, id, reject)

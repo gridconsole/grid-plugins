@@ -203,3 +203,28 @@ func TestUnregisteredProjectDoesNotCreateBrain(t *testing.T) {
 		t.Fatalf("qualified home id must work outside a registered project: %s", &h.err)
 	}
 }
+
+// A project named with a home proposal id files the note in that project.
+func TestAcceptHomeProposalWithProjectFilesInProject(t *testing.T) {
+	h := newHarness(t)
+	project := filepath.Join(h.env.GridHome, "projects", "example")
+	if err := os.MkdirAll(project, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "project.md"), []byte("---\nid: 01EXAMPLE\n---\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.propose(t)
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 0 {
+		t.Fatalf("accept: %d %s", code, &h.err)
+	}
+	if _, err := os.Stat(filepath.Join(project, "knowledge", "decisions", "checks.md")); err != nil {
+		t.Fatalf("note not filed in the project: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(h.env.GridHome, "knowledge", "decisions", "checks.md")); !os.IsNotExist(err) {
+		t.Fatal("note was filed at home level")
+	}
+	if _, err := os.Stat(filepath.Join(h.env.GridHome, "brain-proposals", "checks.md")); !os.IsNotExist(err) {
+		t.Fatal("home proposal was left behind")
+	}
+}

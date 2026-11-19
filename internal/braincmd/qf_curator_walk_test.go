@@ -328,7 +328,8 @@ func TestQfCuratorWalk(t *testing.T) {
 	if e, err := s.Show("brain:project/target"); err != nil || !strings.Contains(e.Note.Body, "Run checks before landing dup.") {
 		t.Fatalf("dup was not merged into target: %v", err)
 	}
-	if e, err := (brain.Store{GridHome: env.GridHome}).Show("brain:home/hm"); err != nil || e.Note.Status != "accepted" {
+	// the walk names the project, so the home row is filed in it
+	if e, err := s.Show("brain:project/hm"); err != nil || e.Note.Status != "accepted" {
 		t.Fatalf("home row: %+v %v", e.Note.Status, err)
 	}
 	for _, name := range []string{"weak", "chk-no"} {
