@@ -16,17 +16,19 @@ import (
 )
 
 // multiRepoLand is a delivered task T-01 of a project whose folder is not a repo but
-// holds the repos app and plugin, as GridV2 T-17: task.md names the delivering Job's
-// own branch, which exists nowhere, and the work is on the branches of accepted
-// builder Jobs.
+// holds the repos app and plugin, as GridV2 T-17: task.md names the branch of the
+// delivering Job J-9, which exists nowhere, and the work is on the branches of
+// accepted builder Jobs. approve posts J-9 after the builders, as T-17's deliver Job
+// J-5 came after its builders, accepted and with nothing to write.
 type multiRepoLand struct {
-	env         Env
-	dir, fid    string
-	app, plugin string
-	store       feed.Store
-	stderr      *bytes.Buffer
-	role        string // the builder Jobs' role; empty is builder
-	noWrite     bool   // the builder Jobs have an empty write list
+	env          Env
+	dir, fid     string
+	app, plugin  string
+	store        feed.Store
+	stderr       *bytes.Buffer
+	role         string   // the builder Jobs' role; empty is builder
+	noWrite      bool     // the builder Jobs have an empty write list
+	deliverWrite []string // the delivering Job's write list; empty, as grid deliver's own Job
 }
 
 func multiRepoFixture(t *testing.T) multiRepoLand {
@@ -121,8 +123,29 @@ func (m multiRepoLand) builder(t *testing.T, repo, from string, files ...string)
 	return branch
 }
 
+// deliver posts the delivering Job J-9, whose branch task.md names, accepted: an
+// orchestrator Job that writes m.deliverWrite.
+func (m multiRepoLand) deliver(t *testing.T) {
+	t.Helper()
+	body := rebaseJobBody("J-9", &mergeConflictError{Branch: "x", Target: "main", Files: []string{"a.txt"}}, map[string]any{"kind": "file-exists", "path": "a.txt"})
+	write := []any{}
+	for _, f := range m.deliverWrite {
+		write = append(write, f)
+	}
+	body["title"], body["role"], body["write"] = "Deliver the task", "orchestrator", write
+	w, err := taskJobWriter(m.env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orchestrator.Write(m.store, w, feed.Input{Type: "job", Job: "J-9", Body: body}); err != nil {
+		t.Fatalf("post J-9: %v", err)
+	}
+	setJobStatus(t, m.env, m.store, "J-9", contract.Accepted, "delivered")
+}
+
 func (m multiRepoLand) approve(t *testing.T) {
 	t.Helper()
+	m.deliver(t)
 	if posted, err := postShipPersonJob(m.env, m.dir); err != nil || posted == "" {
 		t.Fatalf("ship person Job not posted: %q %v", posted, err)
 	}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -217,18 +218,28 @@ func taskMerge(env Env, id, proj string) (string, error) {
 		sha, _, err := taskMergeOne(res, name, branch, base)
 		return sha, err
 	}
-	// A branch no repo holds is the delivering Job's own: the work is on the
-	// branches of the task's accepted builder Jobs, landed in Feed order. A rebased
-	// branch of one of them lands with the rest, in its original's place.
+	// A branch no repo holds is the delivering Job's own when that Job is accepted
+	// with no files to write: the work is on the branches of the task's accepted
+	// builder Jobs, landed in Feed order. A rebased branch of one of them lands with
+	// the rest, in its original's place.
 	built, rebased, noWrite, err := builderBranches(res.TaskPath)
 	if err != nil {
 		return "", err
+	}
+	// A builder Job with files to write made work this machine cannot land: the task waits.
+	writes := slices.ContainsFunc(built, func(b string) bool { return !slices.Contains(noWrite, b) })
+	if writes && !hasCheckout(res) {
+		return "", noFolderError(res.Project)
 	}
 	// A project with no git checkout here has no branch to land, as before builder branches.
 	if len(built) == 0 || branch == "" && !hasCheckout(res) {
 		if branch == "" {
 			return "", noTaskBranchError(name)
 		}
+		return "", repoErr
+	}
+	// Only the branch of an accepted Job with no files to write is passed over; any other may hold commits of its own.
+	if branch != "" && !slices.Contains(noWrite, branch) {
 		return "", repoErr
 	}
 	merged := ""
@@ -257,16 +268,42 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	if branch != "" && len(skipped) == len(built) {
 		return "", repoErr
 	}
-	// The branches are landed by now, so a history line that fails is told on stderr only.
+	var notes []string
 	for _, b := range skipped {
-		line := fmt.Sprintf("grid task merge skipped %s: no repo of project %s holds it and its builder Job has no files to write", b, res.Project)
-		tasks := taskWriter(env)
-		tasks.Project = res.Project
-		if _, err := tasks.Note(writeOptions(env, name, "note", line)); err != nil {
-			fmt.Fprintf(env.Stderr, "grid task merge: the skip of %s is not in the task's history: %s\n", b, oneLineErr(err))
+		notes = append(notes, fmt.Sprintf("grid task merge skipped %s: no repo of project %s holds it and its builder Job has no files to write", b, res.Project))
+	}
+	if branch != "" {
+		fmt.Fprintf(env.Stderr, "grid task merge: passed over %s, the branch task.md names: no repo of project %s holds it, and its Job has no files to write, so it has nothing to land\n", branch, res.Project)
+		notes = append(notes, fmt.Sprintf("grid task merge passed over %s, the branch task.md names: no repo of project %s holds it and its Job has no files to write", branch, res.Project))
+	}
+	// The branches are landed by now, so a history line that fails is told on stderr only.
+	for _, line := range notes {
+		if err := noteOnce(env, res, name, line); err != nil {
+			fmt.Fprintf(env.Stderr, "grid task merge: %q is not in the task's history: %s\n", line, oneLineErr(err))
 		}
 	}
 	return merged, nil
+}
+
+// noteOnce writes line to the task's history unless an earlier merge of the task wrote it.
+func noteOnce(env Env, res where.Result, name, line string) error {
+	history, err := os.ReadFile(filepath.Join(res.TaskPath, "history.md"))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	// Each history line holds its note JSON-encoded.
+	if quoted, _ := json.Marshal(line); bytes.Contains(history, quoted[1:len(quoted)-1]) {
+		return nil
+	}
+	tasks := taskWriter(env)
+	tasks.Project = res.Project
+	_, err = tasks.Note(writeOptions(env, name, "note", line))
+	return err
+}
+
+// noFolderError is a project with no checkout on this machine to land in.
+func noFolderError(proj string) error {
+	return fmt.Errorf("project %s has no folder on this machine; run grid task merge on the machine that has its checkout", proj)
 }
 
 // rebasedOf is the newest accepted rebase branch in the repo of branch that holds
@@ -337,7 +374,7 @@ func noWork(err error, b string, noWrite []string) bool {
 // builderBranches is the branch of each accepted builder Job of the task, in Feed
 // order, named as the worker names an attempt's branch; rebased is the branches of
 // its accepted rebase Jobs, which stand in for the branch they rebased, and noWrite
-// the branches in built whose Job has an empty write list.
+// the branches of its accepted Jobs of any role whose write list is empty.
 func builderBranches(taskPath string) (built, rebased, noWrite []string, err error) {
 	fid, _, err := task.FeedIdentity(taskPath)
 	if err != nil {
@@ -349,17 +386,20 @@ func builderBranches(taskPath string) (built, rebased, noWrite []string, err err
 	}
 	for _, it := range byJobNumber(snap.Items) {
 		j := snap.State.Jobs[it.ID]
-		if j == nil || j.Status != contract.Accepted || contract.NormalizeRole(j.Role) != "builder" {
+		if j == nil || j.Status != contract.Accepted {
 			continue
 		}
 		b := runner.Branch(runner.Spawn{Task: fid, ID: it.ID, Attempt: max(j.Attempt, 1)})
+		if len(it.Write) == 0 {
+			noWrite = append(noWrite, b)
+		}
+		if contract.NormalizeRole(j.Role) != "builder" {
+			continue
+		}
 		if isRebaseJob(it) {
 			rebased = append(rebased, b)
 		} else {
 			built = append(built, b)
-			if len(it.Write) == 0 {
-				noWrite = append(noWrite, b)
-			}
 		}
 	}
 	return built, rebased, noWrite, nil
@@ -459,7 +499,7 @@ func taskMergeKeys(taskPath string) (branch, base string, err error) {
 // folder on this machine, or the one of its repos that has the branch.
 func taskMergeRepo(res where.Result, branch string) (string, error) {
 	if res.Folder == "" {
-		return "", fmt.Errorf("project %s has no folder on this machine; run grid task merge on the machine that has its checkout", res.Project)
+		return "", noFolderError(res.Project)
 	}
 	dirs := taskMergeDirs(res)
 	var found []string

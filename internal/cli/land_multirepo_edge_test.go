@@ -30,10 +30,12 @@ func TestRebaseMovedOnceEveryBuilderBranchIsMergedByHand(t *testing.T) {
 }
 
 // A project with no git repo here, a task.md with no branch and an accepted builder
-// Job: there is nothing to land, so approve closes the task as it did before.
+// Job with no files to write: there is nothing to land, so approve closes the task as
+// it did before.
 func TestApproveOnAProjectWithNoRepoLandsNothing(t *testing.T) {
 	m := multiRepoFixture(t)
-	m.builder(t, m.plugin, "main", "p1.txt")
+	m.noWrite = true
+	m.builder(t, m.plugin, "main")
 	if err := project.Write(m.env.GridHome, project.Record{Name: "sample", ID: "example",
 		Folders: []project.Folder{{Machine: m.env.Machine, Path: m.env.Cwd}}}); err != nil {
 		t.Fatal(err)
