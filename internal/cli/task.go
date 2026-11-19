@@ -205,7 +205,7 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	if n := taskMergeID.FindString(name); n != "" {
 		name = n
 	}
-	branch, base, err := taskMergeKeys(res.TaskPath)
+	branch, base, head, err := taskMergeHead(res.TaskPath)
 	if err != nil {
 		return "", err
 	}
@@ -219,9 +219,9 @@ func taskMerge(env Env, id, proj string) (string, error) {
 		return sha, err
 	}
 	// A branch no repo holds is the delivering Job's own when that Job is accepted
-	// with no files to write: the work is on the branches of the task's accepted
-	// builder Jobs, landed in Feed order. A rebased branch of one of them lands with
-	// the rest, in its original's place.
+	// with no files to write and task.md's head is its base: the work is on the
+	// branches of the task's accepted builder Jobs, landed in Feed order. A rebased
+	// branch of one of them lands with the rest, in its original's place.
 	built, rebased, noWrite, err := builderBranches(res.TaskPath)
 	if err != nil {
 		return "", err
@@ -241,8 +241,9 @@ func taskMerge(env Env, id, proj string) (string, error) {
 		}
 		return "", repoErr
 	}
-	// Only the branch of an accepted Job with no files to write is passed over; any other may hold commits of its own.
-	if branch != "" && !slices.Contains(noWrite, branch) {
+	// Only the branch of an accepted Job with no files to write, delivered with head at
+	// its base, is passed over: any other may hold commits of its own.
+	if branch != "" && (!slices.Contains(noWrite, branch) || head == "" || head != base) {
 		return "", repoErr
 	}
 	merged := ""
@@ -480,22 +481,29 @@ func taskMergeOne(res where.Result, name, branch, base string) (string, bool, er
 
 // taskMergeKeys reads the branch: and base: keys grid deliver wrote to task.md.
 func taskMergeKeys(taskPath string) (branch, base string, err error) {
+	branch, base, _, err = taskMergeHead(taskPath)
+	return branch, base, err
+}
+
+// taskMergeHead reads the branch:, base: and head: keys grid deliver wrote to task.md.
+func taskMergeHead(taskPath string) (branch, base, head string, err error) {
 	data, err := os.ReadFile(filepath.Join(taskPath, "task.md"))
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	front, _, err := mdfile.Split(data)
 	if err != nil {
-		return "", "", fmt.Errorf("task.md: %w", err)
+		return "", "", "", fmt.Errorf("task.md: %w", err)
 	}
 	var keys struct {
 		Branch string `yaml:"branch"`
 		Base   string `yaml:"base"`
+		Head   string `yaml:"head"`
 	}
 	if err := mdfile.Load(front, &keys, false); err != nil {
-		return "", "", fmt.Errorf("task.md: %w", err)
+		return "", "", "", fmt.Errorf("task.md: %w", err)
 	}
-	return strings.TrimSpace(keys.Branch), strings.TrimSpace(keys.Base), nil
+	return strings.TrimSpace(keys.Branch), strings.TrimSpace(keys.Base), strings.TrimSpace(keys.Head), nil
 }
 
 // taskMergeRepo is the checkout that holds the task's branch: the project's

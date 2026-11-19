@@ -63,7 +63,9 @@ func multiRepoFixture(t *testing.T) multiRepoLand {
 	}
 	m.fid, m.store = fid, feed.Store{TaskDir: dir, TaskID: fid}
 	b, _ := os.ReadFile(filepath.Join(dir, "task.md"))
-	keys := "state: waiting\nbranch: grid-" + fid + "-J-9-a1\nbase: " + shipGit(t, m.app, "rev-parse", "main")
+	// head is base, as deliver records a delivering Job's branch with no commit of its own.
+	base := shipGit(t, m.app, "rev-parse", "main")
+	keys := "state: waiting\nbranch: grid-" + fid + "-J-9-a1\nbase: " + base + "\nhead: " + base
 	if err := os.WriteFile(filepath.Join(dir, "task.md"), []byte(strings.Replace(string(b), "state: open", keys, 1)), 0600); err != nil {
 		t.Fatal(err)
 	}

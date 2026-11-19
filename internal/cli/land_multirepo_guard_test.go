@@ -78,11 +78,11 @@ func TestApproveFailsOnAMissingTaskBranchOfAJobThatWritesFiles(t *testing.T) {
 	}
 }
 
-// task.md names a branch of no Job, recorded with grid deliver --branch, that holds a
-// commit of its own in a repo the project record does not list: the land fails on it
-// and the task stays waiting, instead of closing with that commit unlanded.
-func TestApproveFailsOnAMissingTaskBranchOfNoJob(t *testing.T) {
-	m := multiRepoFixture(t)
+// unlistedBranch makes branch, with a commit of its own, in a repo of the project's
+// folder that the project record does not list, records it in task.md as grid deliver
+// does, with head at its tip, and answers that tip.
+func (m multiRepoLand) unlistedBranch(t *testing.T, branch string) string {
+	t.Helper()
 	other := filepath.Join(m.env.Cwd, "unlisted")
 	if err := os.MkdirAll(other, 0o700); err != nil {
 		t.Fatal(err)
@@ -92,15 +92,60 @@ func TestApproveFailsOnAMissingTaskBranchOfNoJob(t *testing.T) {
 	shipGit(t, other, "config", "user.email", "grid@example.invalid")
 	shipGit(t, other, "config", "commit.gpgsign", "false")
 	multiRepoCommit(t, other, "seed.txt", "seed")
-	shipGit(t, other, "checkout", "-q", "-b", "lane")
+	shipGit(t, other, "checkout", "-q", "-b", branch)
 	multiRepoCommit(t, other, "deliver-only.txt", "work only the delivering branch holds")
-	m.setTaskKey(t, "branch: grid-"+m.fid+"-J-9-a1\n", "branch: lane\nhead: "+shipGit(t, other, "rev-parse", "HEAD")+"\n")
+	head := shipGit(t, other, "rev-parse", "HEAD")
+	_, base, err := taskMergeKeys(m.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.setTaskKey(t, "branch: grid-"+m.fid+"-J-9-a1\n", "branch: "+branch+"\n")
+	m.setTaskKey(t, "head: "+base+"\n", "head: "+head+"\n")
+	return head
+}
+
+// failsUnlanded approves the task with a builder branch of app and fails the test
+// unless the land fails on the missing task.md branch and lands nothing.
+func (m multiRepoLand) failsUnlanded(t *testing.T, branch string) {
+	t.Helper()
 	m.builder(t, m.app, "main", "a1.txt")
 	m.approve(t)
-	m.waits(t, "branch lane is not in the checkout of project sample")
+	m.waits(t, "branch "+branch+" is not in the checkout of project sample")
 	if _, err := os.Stat(filepath.Join(m.app, "a1.txt")); err == nil {
 		t.Fatal("a1.txt landed on a land that failed")
 	}
+}
+
+// task.md names a branch of no Job, recorded with grid deliver --branch, that holds a
+// commit of its own in a repo the project record does not list: the land fails on it
+// and the task stays waiting, instead of closing with that commit unlanded.
+func TestApproveFailsOnAMissingTaskBranchOfNoJob(t *testing.T) {
+	m := multiRepoFixture(t)
+	m.unlistedBranch(t, "lane")
+	m.failsUnlanded(t, "lane")
+}
+
+// task.md names the branch of the accepted delivering Job J-9, which has no files to
+// write, but its head is not its base: the branch held a commit of its own when it was
+// delivered, so the land fails on it and the task stays waiting.
+func TestApproveFailsOnAMissingTaskBranchWithAHeadPastItsBase(t *testing.T) {
+	m := multiRepoFixture(t)
+	nine := "grid-" + m.fid + "-J-9-a1"
+	m.unlistedBranch(t, nine)
+	m.failsUnlanded(t, nine)
+}
+
+// task.md names the branch of the accepted delivering Job J-9, which has no files to
+// write, and no head: nothing shows that branch held no commit of its own, so the land
+// fails on it.
+func TestApproveFailsOnAMissingTaskBranchWithNoHead(t *testing.T) {
+	m := multiRepoFixture(t)
+	_, base, err := taskMergeKeys(m.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.setTaskKey(t, "head: "+base+"\n", "")
+	m.failsUnlanded(t, "grid-"+m.fid+"-J-9-a1")
 }
 
 // A merge says once in the task's history which branches it passed over, the
