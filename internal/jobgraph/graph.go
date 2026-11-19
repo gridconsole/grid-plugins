@@ -373,7 +373,7 @@ func (g *Graph) reworkDone(s Snapshot, id string, seen map[string]bool) (bool, s
 			return out
 		},
 		status: func(j string) contract.Status { return s.Jobs[j].Status },
-		gate: func(link string) string {
+		gate: func(link string, seen map[string]bool) string {
 			if !g.childrenAccepted(s, link, seen) {
 				return "waiting for all children of " + link + " to be accepted"
 			}
@@ -429,7 +429,7 @@ func Head(s Snapshot, id string) (string, HeadState) {
 type chainWalk struct {
 	continuers func(of string) []string
 	status     func(id string) contract.Status
-	gate       func(link string) string
+	gate       func(link string, seen map[string]bool) string
 }
 
 // run walks from id; parent is the Job id reworks, empty for the first Job.
@@ -461,7 +461,7 @@ func (w chainWalk) run(id, parent string, seen map[string]bool) (string, HeadSta
 		head := ""
 		for _, r := range reworks {
 			if w.gate != nil {
-				if reason := w.gate(r); reason != "" {
+				if reason := w.gate(r, seen); reason != "" {
 					return r, HeadOpen, reason
 				}
 			}
