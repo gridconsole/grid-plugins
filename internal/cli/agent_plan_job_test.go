@@ -2,6 +2,8 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/feed"
@@ -42,6 +44,59 @@ func TestAgentApprovePostsThePlanJob(t *testing.T) {
 	}
 	accepts := arAccepts(t, store, "J-2")
 	if len(accepts) != 1 || accepts[0]["reason"] != "approved by agent J-1" || accepts[0]["plan_digest"] != plan.Digest(arPlan) {
+		t.Fatalf("accepting controls %v", accepts)
+	}
+	if a, err := taskstore.ApprovalFromJob(path); err != nil || a.Job != "J-2" || a.PlanDigest != plan.Digest(arPlan) {
+		t.Fatalf("approval %+v %v", a, err)
+	}
+}
+
+// An agent approving a plan that changed after its approve Job was accepted
+// posts a new approve Job for the new plan, as a person without a lease does.
+func TestAgentApprovesAChangedPlanWithANewJob(t *testing.T) {
+	h, path, _, text := approveJobHarness(t)
+	agent := agentJobEnv(path, os.Getenv("GRID_LEASE_EPOCH"))
+	h.env.Getenv = agent
+	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(text)); code != 0 {
+		t.Fatalf("agent approve exit %d: %s", code, h.errb)
+	}
+	h.env.Getenv = nil
+	if code := h.run(path, "job", "next"); code != 0 {
+		t.Fatalf("tick: %d %s", code, h.errb)
+	}
+	changed := text + "\nOne more step.\n"
+	if err := os.WriteFile(filepath.Join(path, "plan.md"), []byte(changed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.env.Getenv = agent
+	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(changed)); code != 0 {
+		t.Fatalf("agent approve of the changed plan exit %d: %s", code, h.errb)
+	}
+	h.env.Getenv = nil
+	if code := h.run(path, "job", "next"); code != 0 {
+		t.Fatalf("tick: %d %s", code, h.errb)
+	}
+	if a, err := taskstore.ApprovalFromJob(path); err != nil || a.Job != "J-3" || a.PlanDigest != plan.Digest(changed) {
+		t.Fatalf("approval %+v %v", a, err)
+	}
+}
+
+// An agent's grid approve on a task with an old approval.json and no approve Job
+// moves the receipt into a new approve Job, as a person's does, instead of being
+// refused.
+func TestAgentApproveMovesAnOldReceipt(t *testing.T) {
+	h, path, store := arWaitingTask(t)
+	arWriteReceipt(t, path)
+	h.env.Getenv = agentJobEnv(path, os.Getenv("GRID_LEASE_EPOCH"))
+	if code := h.run(path, "approve", path, "--plan-hash", plan.Hash(arPlan)); code != 0 {
+		t.Fatalf("agent approve exit %d: %s", code, h.errb)
+	}
+	h.env.Getenv = nil
+	if code := h.run(path, "job", "next"); code != 0 {
+		t.Fatalf("tick: %d %s", code, h.errb)
+	}
+	accepts := arAccepts(t, store, "J-2")
+	if len(accepts) != 1 || !strings.Contains(accepts[0]["reason"].(string), "moved from approval.json") {
 		t.Fatalf("accepting controls %v", accepts)
 	}
 	if a, err := taskstore.ApprovalFromJob(path); err != nil || a.Job != "J-2" || a.PlanDigest != plan.Digest(arPlan) {
