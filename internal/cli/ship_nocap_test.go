@@ -363,6 +363,46 @@ func TestShipConflictRetryArmedOnAJudgedRebaseJobPostsNothing(t *testing.T) {
 	noPersonJob(t, store, ship.ID, stderr)
 }
 
+// rebaseJudged tells a rebase Job the Judge owns (rejected, or cancelled after it ran, after a
+// review or with a decision raised) from one the land may retry (cancelled before it ran with no
+// review and no decision), and an accepted or open one is neither.
+func TestRebaseJudgedIsTheJudgesJobNotOneTheLandMayRetry(t *testing.T) {
+	from := func(id string) *string { return &id }
+	review := job.Job{ID: "J-3", Role: "reviewer", Title: "Review J-2", DiscoveredFrom: from("J-2")}
+	decision := func(from string) job.Job {
+		return job.Job{ID: "J-4", Role: "orchestrator", Title: "Decide how J-2 continues", DiscoveredFrom: &from}
+	}
+	for _, tc := range []struct {
+		name    string
+		status  contract.Status
+		results []string
+		extra   []job.Job
+		want    bool
+	}{
+		{"rejected", contract.Rejected, nil, nil, true},
+		{"cancelled before it ran", contract.Cancelled, nil, nil, false},
+		{"cancelled after a result", contract.Cancelled, []string{"R-1"}, nil, true},
+		{"cancelled with a review", contract.Cancelled, nil, []job.Job{review}, true},
+		{"cancelled with a decision from it", contract.Cancelled, nil, []job.Job{decision("J-2")}, true},
+		{"cancelled with a decision from its review", contract.Cancelled, nil, []job.Job{review, decision("J-3")}, true},
+		{"cancelled with a decision about another Job", contract.Cancelled, nil, []job.Job{decision("J-9")}, false},
+		{"accepted", contract.Accepted, []string{"R-1"}, []job.Job{review}, false},
+		{"open", contract.Ready, nil, nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			items := append([]job.Job{{ID: "J-2", Role: "builder", Title: rebaseTitle + "main"}}, tc.extra...)
+			jobs := map[string]*contract.Job{"J-2": {ID: "J-2", Status: tc.status, Results: tc.results}}
+			for _, it := range tc.extra {
+				jobs[it.ID] = &contract.Job{ID: it.ID, Status: contract.Accepted}
+			}
+			snap := orchestrator.Snapshot{Items: items, State: contract.State{Jobs: jobs}}
+			if got := rebaseJudged(snap, "J-2"); got != tc.want {
+				t.Fatalf("rebaseJudged = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
 // orchestrator.Load lists Jobs by their ids as text, so J-10 comes before J-9: the newest rebase
 // Job is the one with the greater number, and of two reworks of a Job the later is the head.
 func TestRebaseRootsAreInTheOrderOfTheirNumbers(t *testing.T) {

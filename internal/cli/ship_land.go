@@ -132,9 +132,8 @@ func landAfterShipAs(env Env, dir string, who contract.Author, w feed.Writer) {
 // landArmed reports whether the task in dir has an accepted ship Job whose land is
 // still to run: not run yet, or armed again after a conflict (land.Store.Armed). It is
 // what keeps the holder's pass on a task that has no open Job, so the land is retried
-// on the next pass, and tries it before the pass's other tasks. The Feed read is the
-// one the Feed's read memo answers while the Feed is unchanged, and Armed reads
-// history.md without the land lock, so a land that is deploying never stalls the pass.
+// on the next pass, and tries it before the pass's other tasks. Armed reads history.md
+// without the land lock, so a land that is deploying elsewhere does not stall this check.
 func landArmed(env Env, dir string) bool {
 	rec, err := taskstore.Read(dir)
 	if err != nil || rec.State != "waiting" {
