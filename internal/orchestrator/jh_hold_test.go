@@ -193,17 +193,6 @@ func TestHoldTreeShowsHeldOnItsWaitWithNoOrphan(t *testing.T) {
 		snap := jhSnapshot(t, f, contract.Held, wait)
 		if target != "" {
 			snap.State.Jobs["J-1"].Status = target
-			var row TreeJob
-			for _, r := range TreeAt(snap, later) {
-				if r.ID == "J-2" {
-					row = r
-				}
-			}
-			if row.Orphan == nil || row.Orphan.Kind != OrphanDeadWait {
-				t.Fatalf("%s that never landed: orphan %+v, want dead_wait", name, row.Orphan)
-			}
-			// A target that landed meets the wait (TestHoldLandedWaitOnACancelledJobThatLandedIsMet).
-			continue
 		}
 		var row TreeJob
 		for _, r := range TreeAt(snap, later) {
@@ -214,8 +203,14 @@ func TestHoldTreeShowsHeldOnItsWaitWithNoOrphan(t *testing.T) {
 		if row.Job == nil || row.Status != contract.Held || row.State != contract.StateStarted || row.StateReason != "held" {
 			t.Fatalf("%s: row = %+v, want held, Started, held", name, row.Job)
 		}
-		if row.Orphan != nil {
+		// A dead target here never landed; one that landed meets the wait
+		// (TestHoldLandedWaitOnACancelledJobThatLandedIsMet).
+		dead := target != ""
+		if !dead && row.Orphan != nil {
 			t.Fatalf("%s: a held Job reads as orphan %+v", name, row.Orphan)
+		}
+		if dead && (row.Orphan == nil || row.Orphan.Kind != OrphanDeadWait) {
+			t.Fatalf("%s that never landed: orphan %+v, want dead_wait", name, row.Orphan)
 		}
 		if len(row.WaitsOn) != 1 || row.WaitsOn[0].Met == nil || *row.WaitsOn[0].Met {
 			t.Fatalf("%s: waits %+v, want the landed wait shown as not met", name, row.WaitsOn)
@@ -224,7 +219,7 @@ func TestHoldTreeShowsHeldOnItsWaitWithNoOrphan(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(data), `"waits_on":[{"row":"A2","kind":"landed","ref":"J-1","met":false}]`) || strings.Contains(string(data), `"orphan"`) {
+		if !strings.Contains(string(data), `"waits_on":[{"row":"A2","kind":"landed","ref":"J-1","met":false}]`) || strings.Contains(string(data), `"orphan"`) != dead {
 			t.Fatalf("%s: row JSON = %s", name, data)
 		}
 	}
