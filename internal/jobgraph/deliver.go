@@ -1,7 +1,9 @@
 package jobgraph
 
 import (
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -72,7 +74,7 @@ func DeliveryWait(items []job.Job, s Snapshot) (Wait, bool) {
 		case "", contract.Posted, contract.Ready, contract.Cancelled, contract.Accepted:
 			continue
 		case contract.Rejected:
-			if ok, reason := g.reworkDone(s, id, map[string]bool{id: true}); !ok {
+			if ok, reason := g.reworkDone(s, id, map[string]bool{id: true}); !ok && !g.superseded(s, id) {
 				return Wait{Job: id, Target: id, Reason: reason}, false
 			}
 			continue
@@ -80,4 +82,43 @@ func DeliveryWait(items []job.Job, s Snapshot) (Wait, bool) {
 		return Wait{Job: id, Target: id, Reason: DoneReason(id, status)}, false
 	}
 	return Wait{}, true
+}
+
+// superseded reports whether the rejected deliver Job id and every Job that reworks
+// it, in turn, ended rejected or cancelled, and a deliver Job posted after the last
+// of them, by Job number, is accepted: a decision Job that re-planned the rework
+// posts that delivery with no continues link (atos T-01), and it is the delivery
+// the review accepted. A rework still open is not superseded.
+func (g *Graph) superseded(s Snapshot, id string) bool {
+	chain, last := map[string]bool{id: true}, id
+	for next := []string{id}; len(next) > 0; {
+		r := next[0]
+		next = next[1:]
+		if st := s.Jobs[r].Status; st != contract.Rejected && st != contract.Cancelled {
+			return false
+		}
+		if slices.Compare(jobNumber(r), jobNumber(last)) > 0 {
+			last = r
+		}
+		for _, c := range g.reworksOf(r, chain) {
+			chain[c] = true
+			next = append(next, c)
+		}
+	}
+	for _, d := range g.ids {
+		if !chain[d] && IsDeliver(g.items[d]) && s.Jobs[d].Status == contract.Accepted && slices.Compare(jobNumber(d), jobNumber(last)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// jobNumber is the numbers of a J-n.m id, in the order the Jobs were numbered.
+func jobNumber(id string) []int {
+	var out []int
+	for _, p := range strings.Split(strings.TrimPrefix(id, "J-"), ".") {
+		n, _ := strconv.Atoi(p)
+		out = append(out, n)
+	}
+	return out
 }
