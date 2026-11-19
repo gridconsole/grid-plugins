@@ -20,7 +20,19 @@ Steps:
 The result is a proof table: one line per acceptance row, each either
 
 - `HOLDS` with the command and its exit code, or a `path:line`; or
+- `WAITING on <kind> <ref>` for a row that cannot hold yet because something outside the Job has not landed; or
 - `NOT DONE` with why.
+
+`WAITING` is not `NOT DONE`. Use it only when the work is done or doable and the row waits on one of these, named in `waits_on`:
+
+| `kind` | Waits on | `ref` |
+| --- | --- | --- |
+| `job` | another Job's change being accepted | the Job id, `J-n` or `J-n.m` |
+| `landed` | another Job's change merged and installed | the Job id, `J-n` |
+| `question` | a person's answer or decision | the question id, `Q-n` |
+| `permission` | a permission rule the Job lacks | the id of the `blocked` post that names the rule |
+
+A row waits on one thing; if it needs two, name the one that is not there yet. Check that the wait is real before you write it: the thing exists and has not landed yet. A row you could not do for any other reason, or that waits on something you can do yourself, is `NOT DONE`. A `WAITING` row is not a way to skip work. For a permission, post `blocked` naming the rule first, then the result, then exit. The Job holds and carries on by itself once the wait lands, in a new attempt of the same Job that finishes only the rows that waited.
 
 Then what changed, in a few lines, each verify command with its exit code, and what is NOT VERIFIED. A row you could not prove is NOT DONE; never write HOLDS for a row you did not check. Add evidence with `grid proof add <item> <file> --task <task>`. If blocked, post the result with the blocker named and follow the Job's `on_blocked`.
 
@@ -44,7 +56,7 @@ Post a result before you end, also when blocked or when nothing changed. A valid
 }
 ```
 
-`state` is `met`, `not met` or `dropped`; a `dropped` row needs a `decision`. Row ids are `A1`, `A2` and so on, as the Job numbers them. Put what is NOT VERIFIED in `outcome` or `evidence`.
+`state` is `met`, `not met`, `waiting` or `dropped`; a `dropped` row needs a `decision`. A `waiting` row carries `waits_on`, as in `{"id": "A3", "state": "waiting", "waits_on": {"kind": "landed", "ref": "J-6"}}`; a row in any other state carries none. Row ids are `A1`, `A2` and so on, as the Job numbers them. Put what is NOT VERIFIED in `outcome` or `evidence`.
 
 If blocked, post the result with the blocker named in `outcome` and the rows you could not finish as `not met`; follow the Job's `on_blocked`.
 
