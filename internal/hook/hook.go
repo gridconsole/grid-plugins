@@ -149,7 +149,7 @@ func sessionStart(o Options) {
 		brainProject = ""
 	}
 	var brainText *string
-	if idx, err := (brain.Store{GridHome: o.Resolver.GridHome, Project: brainProject}).Index(); err == nil {
+	if idx, err := (brain.Store{GridHome: o.Resolver.GridHome, Project: brainProject}).WithConfig(o.Resolver.Home, o.Getenv).Index(); err == nil {
 		brainText = &idx.Text
 	} else {
 		o.log("brain index", err)

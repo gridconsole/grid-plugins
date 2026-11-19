@@ -302,6 +302,7 @@ func Render(j Job, o RenderOptions) (Rendered, error) {
 		r.Inputs.DisableSkillShellExecution = true
 	}
 	b.WriteString(answers)
+	b.WriteString(brainSearchLine)
 	b.WriteString(brain)
 	sort.Slice(relations, func(a, b int) bool {
 		x, y := relations[a], relations[b]
@@ -543,6 +544,9 @@ func answersBlock(as []Answer) (string, bool) {
 	}
 	return b.String(), anyFenced
 }
+// brainSearchLine tells the agent how to reach notes the Job does not link.
+const brainSearchLine = "Before deciding something earlier work may answer, run `grid brain search <words>`.\n\n"
+
 func sourceBlock(label string, s Source) string {
 	header := fmt.Sprintf("### %s [%s] (%s)\n\n", label, s.Tier, s.Pointer)
 	if marked(s.Tier) {

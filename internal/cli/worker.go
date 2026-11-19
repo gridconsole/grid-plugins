@@ -290,7 +290,7 @@ func workerClosedCurator(env Env) func(dir, taskID, id string) (map[string]any, 
 		}
 		ids := make([]string, 0, len(rows))
 		for _, row := range rows {
-			ids = append(ids, row.ID)
+			ids = append(ids, proposalPointer(row))
 		}
 		return curatorJobBody(id, t.ID, ids), nil
 	}
