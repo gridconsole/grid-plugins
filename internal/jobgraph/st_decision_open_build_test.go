@@ -47,3 +47,19 @@ func TestStDecisionOnAReworkWaitsForIt(t *testing.T) {
 		{"J-4 accepted", items, m1Status(append(base, "J-4", "accepted")...), ""},
 	})
 }
+
+// A rejected child is made good by its rework only when the rework keeps the
+// child's role, and a person Job's kind: a rejected approval is not made good by
+// a builder that continues it.
+func TestStReworkKeepsTheKindOfWhatItReplaces(t *testing.T) {
+	approval := job.Job{ID: "J-2.2", Role: job.RolePerson, Kind: "approve", Title: "Approve the plan"}
+	builder := job.Job{ID: "J-5", Role: "builder", Continues: m1Ptr("J-2.2")}
+	again := job.Job{ID: "J-5", Role: job.RolePerson, Kind: "approve", Title: "Approve the plan", Continues: m1Ptr("J-2.2")}
+	ask := job.Job{ID: "J-5", Role: job.RolePerson, Kind: "ask", Title: "Approve the plan", Continues: m1Ptr("J-2.2")}
+	done := m1Status("J-2", "accepted", "J-2.1", "accepted", "J-2.2", "rejected", "J-5", "accepted")
+	m1Run(t, []m1Case{
+		{"approval continued by a builder", m1Plan(approval, builder), done, "waiting for all children of J-2 to be accepted"},
+		{"approval continued by an ask", m1Plan(approval, ask), done, "waiting for all children of J-2 to be accepted"},
+		{"approval continued by an approval", m1Plan(approval, again), done, ""},
+	})
+}

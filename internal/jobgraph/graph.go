@@ -425,7 +425,7 @@ func (g *Graph) settled(s Snapshot, id string, path map[string]bool) bool {
 	case contract.Accepted:
 		return true
 	case contract.Rejected:
-		if path[id] {
+		if path[id] || !g.kept(id, id, map[string]bool{id: true}) {
 			return false
 		}
 		seen := map[string]bool{id: true}
@@ -436,6 +436,23 @@ func (g *Graph) settled(s Snapshot, id string, path map[string]bool) bool {
 		return ok
 	}
 	return false
+}
+
+// kept reports whether every Job that reworks id, and every Job that reworks those in
+// turn, keeps the role of root and, for a person Job, its kind: a rejected approval is
+// not made good by a Job of another kind that continues it. seen ends a loop of continues.
+func (g *Graph) kept(root, id string, seen map[string]bool) bool {
+	for _, r := range g.reworksOf(id, seen) {
+		a, b := g.items[root], g.items[r]
+		if contract.NormalizeRole(a.Role) != contract.NormalizeRole(b.Role) || a.IsPerson() && a.Kind != b.Kind {
+			return false
+		}
+		seen[r] = true
+		if !g.kept(root, r, seen) {
+			return false
+		}
+	}
+	return true
 }
 
 // decides reports whether d is a settled decision on b: a decision Job, or the person
