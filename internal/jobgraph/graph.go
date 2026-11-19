@@ -408,9 +408,10 @@ func (g *Graph) childrenAccepted(s Snapshot, id string) bool {
 
 // holding are the immediate children of id that hold a children-done edge: a
 // cancelled person Job holds nothing once a decision Job replaced it and was
-// accepted (replaced), and a cancelled review holds nothing once the decision Job
-// for its lost verdict was accepted (lostDecided). Any other cancelled person Job,
-// such as an approve card, still holds: an approval is the person Job accepted.
+// accepted (replaced), and a cancelled review holds nothing once the decision or
+// person Job for its lost verdict was accepted (lostDecided). Any other cancelled
+// person Job, such as an approve card, still holds: an approval is the person Job
+// accepted.
 func (g *Graph) holding(s Snapshot, id string) []string {
 	out := []string{}
 	for _, child := range g.children[id] {
@@ -446,7 +447,9 @@ func (g *Graph) replaced(s Snapshot, p string) bool {
 
 // lostDecided reports whether r is a review whose verdict was lost and the Judge's
 // decision Job for it is accepted: a decision Job discovered from the reviewed Job
-// and titled as judge.lost titles it ("Decide how <J> continues without its review").
+// and titled as judge.lost titles it ("Decide how <J> continues without its review"),
+// or the person Job the app's Judge posted with that title before it posted a
+// decision Job (app judge.go reviewLost), which judge.Migrate leaves as it is.
 func (g *Graph) lostDecided(s Snapshot, r string) bool {
 	it := g.items[r]
 	if !isReview(it) || it.DiscoveredFrom == nil {
@@ -455,7 +458,7 @@ func (g *Graph) lostDecided(s Snapshot, r string) bool {
 	b := *it.DiscoveredFrom
 	for _, d := range g.ids {
 		dec := g.items[d]
-		if isDecision(dec) && dec.Title == decidePrefix+b+" continues without its review" &&
+		if (isDecision(dec) || dec.IsPerson()) && dec.Title == decidePrefix+b+" continues without its review" &&
 			dec.DiscoveredFrom != nil && *dec.DiscoveredFrom == b && s.Jobs[d].Status == contract.Accepted {
 			return true
 		}
