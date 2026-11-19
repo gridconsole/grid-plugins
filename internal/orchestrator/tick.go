@@ -184,17 +184,8 @@ func (s Store) Tick() (out Output, err error) {
 		}
 		for _, id := range ready.Ready {
 			j := snap.State.Jobs[id]
-			if m.OfflineHosts[workerHost(to)] {
-				if j.Reason != "host_offline" {
-					if e := s.control(j, "", "host_offline", ""); e != nil {
-						return e
-					}
-				}
-				continue
-			}
-			if mem := m.Jobs[id]; mem != nil && s.now().Before(mem.RetryAt) {
-				// A failed attempt waits out its back-off, so a crash loop is not a storm of starts.
-				if why := retryWhy(mem.RetryAt); j.Reason != why {
+			if why := m.hold(to, id, s.now()); why != "" {
+				if j.Reason != why {
 					if e := s.control(j, "", why, ""); e != nil {
 						return e
 					}
@@ -433,6 +424,34 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 	}
 	s.backOff(m, len(m.Failures))
 	return s.control(j, contract.Ready, "retry after failed attempt", failure)
+}
+
+// hold is why the tick does not assign the ready Job id to the worker to: the worker's host is
+// offline, or the Job waits out its back-off, so a crash loop is not a storm of starts.
+func (m memory) hold(to, id string, now time.Time) string {
+	if m.OfflineHosts[workerHost(to)] {
+		return "host_offline"
+	}
+	if mem := m.Jobs[id]; mem != nil && now.Before(mem.RetryAt) {
+		return retryWhy(mem.RetryAt)
+	}
+	return ""
+}
+
+// Holds is why the tick holds each of the ready Jobs it would assign to the worker to, read from
+// the orchestrator's memory without its lock and without writing; a Job it does not hold is not in it.
+func (s Store) Holds(to string, ready []string) (map[string]string, error) {
+	m, err := s.readMemory()
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, id := range ready {
+		if why := m.hold(to, id, s.now()); why != "" {
+			out[id] = why
+		}
+	}
+	return out, nil
 }
 func workerHost(worker string) string {
 	return worker[strings.LastIndexByte(worker, '@')+1:]

@@ -254,11 +254,22 @@ func runOrchestrator(args []string, env Env) int {
 			}
 			return 0
 		}
+		// The tick assigns to the task's holder, so its holds are read for the holder (orchestrator tick.go).
+		holder := ""
+		if t, err := (lease.TaskStore{Feed: store}).Read("task"); err == nil && t.Holder != nil {
+			holder = *t.Holder
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fail(err)
+		}
+		snap.Assignee = holder
 		ready, err := orchestrator.Ready(snap, time.Now())
 		if err != nil {
 			return fail(err)
 		}
-		waits := map[string]string{}
+		waits, err := orchestrator.Store{Feed: store}.Holds(holder, ready.Ready)
+		if err != nil {
+			return fail(err)
+		}
 		for _, w := range ready.Waiting {
 			if waits[w.Job] == "" {
 				waits[w.Job] = w.Reason
@@ -266,13 +277,18 @@ func runOrchestrator(args []string, env Env) int {
 		}
 		rows := []orchestrator.Row{}
 		for _, r := range orchestrator.Tree(snap) {
+			// A Posted or Ready Job shows only its live wait: the reason in state.json is the last tick's and outlives a release.
 			why := waits[r.ID]
-			if r.Status == contract.Parked || why == "" && (r.Status == contract.Posted || r.Status == contract.Ready) && r.Reason != "ready" {
+			if r.Status == contract.Parked {
 				why = r.Reason
 			}
 			if why != "" {
 				rows = append(rows, orchestrator.Row{ID: r.ID, Role: r.Role, State: r.Status, Why: why})
 			}
+		}
+		if len(rows) == 0 && !*asJSON {
+			fmt.Fprintln(env.Stdout, "Nothing blocked.")
+			return 0
 		}
 		return orchestratorRows(env, rows, *asJSON)
 	}

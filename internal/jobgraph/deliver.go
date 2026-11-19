@@ -60,11 +60,9 @@ func DeliveryWait(items []job.Job, s Snapshot) (Wait, bool) {
 		}
 		g.items[it.ID] = it
 		g.ids = append(g.ids, it.ID)
-		if i := strings.LastIndexByte(it.ID, '.'); i >= 0 {
-			g.children[it.ID[:i]] = append(g.children[it.ID[:i]], it.ID)
-		}
 	}
 	sort.Strings(g.ids)
+	g.link()
 	for _, id := range g.ids {
 		if !IsDeliver(g.items[id]) {
 			continue
