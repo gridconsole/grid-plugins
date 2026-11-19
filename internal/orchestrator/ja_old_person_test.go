@@ -66,3 +66,34 @@ func TestTickConvertsAnOldDecidePersonJobOnce(t *testing.T) {
 		t.Fatalf("a second tick wrote %d records, want none", after-before)
 	}
 }
+
+// An old person card whose decision Job is already on the Feed is cancelled by the tick, with no
+// second decision Job; the next tick writes nothing.
+func TestTickCancelsAnOldDecideCardWhenTheDecisionJobExists(t *testing.T) {
+	f := setup(t)
+	f.job(t, "J-1", nil)
+	rev := jobBody(t, "J-1.1")
+	rev["role"] = "reviewer"
+	rev["discovered_from"] = "J-1"
+	f.post(t, feed.Input{Type: "job", Body: rev, Job: "J-1.1"}, f.s.Writer)
+	f.post(t, feed.Input{Type: "control", Body: map[string]any{"target": "J-1.1", "status": "cancelled", "reason": "prepare_failed", "close_reason": "prepare_failed"}}, f.s.Writer)
+	f.post(t, feed.Input{Type: "job", Body: oldPersonBody(t, "J-1.2", "Decide how J-1 continues without its review", "J-1"), Job: "J-1.2"}, f.s.Writer)
+	dec := jobBody(t, "J-1.3")
+	dec["role"] = "orchestrator"
+	dec["title"] = "Decide how J-1 continues without its review"
+	dec["discovered_from"] = "J-1"
+	f.post(t, feed.Input{Type: "job", Body: dec, Job: "J-1.3"}, f.s.Writer)
+
+	f.tick(t)
+	if got := jobStatus(t, f, "J-1.2"); got != contract.Cancelled {
+		t.Fatalf("the old person Job is %s, want cancelled", got)
+	}
+	if got := jaDecisions(t, f); len(got) != 1 {
+		t.Fatalf("decision Jobs %v, want only the existing one", got)
+	}
+	before := recordCount(t, f)
+	f.tick(t)
+	if after := recordCount(t, f); after != before {
+		t.Fatalf("a second tick wrote %d records, want none", after-before)
+	}
+}

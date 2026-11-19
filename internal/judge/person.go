@@ -150,7 +150,7 @@ func sortedIDs(jobs map[string]*contract.Job) []string {
 // Migrate is the plan that hands one open person Job of the old kind to an agent (the Judge used to
 // ask the owner how a builder continues), so no one has to run grid judge person by hand. It is
 // Person's own plan: the decision Job is raised once and the person Job is cancelled by the same
-// plan. It reports false when no such Job is left, and a caller reads the state again for the next.
+// plan. When Person posts nothing the person Job is still cancelled, naming why. It reports false when no such Job is left, and a caller reads the state again for the next.
 func Migrate(st State) (Plan, bool) {
 	for _, id := range sortedIDs(st.Jobs) {
 		p := st.Jobs[id]
@@ -161,15 +161,21 @@ func Migrate(st State) (Plan, bool) {
 		if r := st.Jobs[review]; r != nil && isReviewer(r) {
 			b := st.reviewedBy(r)
 			if b == nil {
-				continue
+				return Plan{Posts: []Post{Control(st.Task, p.ID, string(contract.Cancelled), "the review "+review+" has no builder to decide on", "", nil)}}, true
 			}
 			builder = b.ID
 		} else {
 			review = ""
 		}
-		if plan, err := Person(st, builder, review, "", "", ""); err == nil && len(plan.Posts) > 0 {
-			return plan, true
+		plan, err := Person(st, builder, review, "", "", "")
+		if err != nil {
+			continue
 		}
+		if len(plan.Posts) == 0 {
+			// A verdict or an existing decision Job already settles it: close the old card with Person's reason.
+			plan = Plan{Posts: []Post{Control(st.Task, p.ID, string(contract.Cancelled), "no decision needed from the owner: "+plan.Note, "", nil)}}
+		}
+		return plan, true
 	}
 	return Plan{}, false
 }
