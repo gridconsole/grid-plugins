@@ -143,7 +143,7 @@ func TestFu2ApproveJobWaitingRoles(t *testing.T) {
 	t.Run("agent", func(t *testing.T) {
 		h, path, store, text := waitingApproveHarness(t)
 		// Agents approve since 19 Nov: with GRID_AGENT=1 approvalWriter returns an agent
-		// writer, the task has an open approve Job for it to answer (agentApproveJob), and
+		// writer, the task has an open approve Job for it to answer, and
 		// the run is refused by the wait itself, as before: exit 3, the stderr line,
 		// nothing written. The object is the wait reason only; it opens nothing.
 		t.Setenv("GRID_AGENT", "1")

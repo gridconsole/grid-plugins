@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -70,29 +69,6 @@ func TestAgentApproveFromAMarkedShell(t *testing.T) {
 	answers := arAnswers(t, store)
 	if len(answers) != 1 || answers[0].Author.ID != "sam" || answers[0].Author.Role != "agent" || answers[0].Body["reason"] != "approved by agent claude" {
 		t.Fatalf("answers %+v", answers)
-	}
-}
-
-// An agent cannot post an approve Job (job.json admits no agent author), so on a
-// task with none its approval is refused before anything is written.
-func TestAgentApproveWithoutAnApproveJobWritesNothing(t *testing.T) {
-	h, path, store := arWaitingTask(t)
-	h.env.Getenv = agentJobEnv(path, os.Getenv("GRID_LEASE_EPOCH"))
-	before, _ := os.ReadFile(filepath.Join(path, "history.md"))
-	if code := h.run(path, "approve", path); code != 3 || !strings.Contains(h.errb.String(), "no open approve Job") {
-		t.Fatalf("exit %d: %s", code, h.errb)
-	}
-	if jobs := arApproveJobs(t, store); len(jobs) != 0 {
-		t.Fatalf("approve Jobs %v", jobs)
-	}
-	if got := arAnswers(t, store); len(got) != 0 {
-		t.Fatalf("answers %+v", got)
-	}
-	if _, err := os.Lstat(filepath.Join(path, "approval.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("approval.json: %v", err)
-	}
-	if after, _ := os.ReadFile(filepath.Join(path, "history.md")); string(after) != string(before) {
-		t.Fatalf("history: %s", after)
 	}
 }
 

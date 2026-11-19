@@ -69,9 +69,9 @@ func answered(snap orchestrator.Snapshot, j *contract.Job, e taskstore.Event) bo
 
 // recordApproval records e as the result of the task's approve person Job and
 // nothing else: the Feed is the only record of an approval. With no Job yet (job
-// is ""), or only an accepted one that a person without a lease cannot answer
-// again, it posts a new approve Job first, giving the task a Feed identity when it
-// has none. A leased writer posts the accepting control in one write; a person
+// is ""), or only an accepted one that a person or an agent without a lease cannot
+// answer again, it posts a new approve Job first, giving the task a Feed identity
+// when it has none. A leased writer posts the accepting control in one write; a person
 // or an agent without a lease posts an answer carrying plan_hash, plan_digest,
 // lands_hash and note, which the holder's next pass turns into the control; an
 // agent's also carries the reason that names it. A plan that already holds this
@@ -143,25 +143,4 @@ func agentApprovalReason(env Env, dir string) string {
 		job += " of " + filepath.Base(task)
 	}
 	return "approved by agent " + job
-}
-
-// agentApproveJob refuses an agent's approval of the task in dir before anything is
-// written when it has nothing to answer: an agent answers the open approve Job, or
-// presses again on one already accepted for this plan, and posts none of its own
-// (job.json admits no agent author).
-func agentApproveJob(env Env, dir string) error {
-	store, job := planPersonJob(env, dir)
-	if job == "" {
-		return errors.New("the task has no open approve Job for an agent to answer: the orchestrator or a person posts it")
-	}
-	snap, err := orchestrator.Load(store)
-	if err != nil {
-		return err
-	}
-	if j := snap.State.Jobs[job]; j != nil && j.Status == contract.Accepted {
-		if _, err := taskstore.ApprovalFromJob(dir); err != nil {
-			return errors.New("the task has no open approve Job for an agent to answer: its approve Job is accepted for an earlier plan")
-		}
-	}
-	return nil
 }
