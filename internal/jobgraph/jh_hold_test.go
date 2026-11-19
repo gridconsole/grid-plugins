@@ -127,7 +127,7 @@ func TestHoldReleasedWhenPermissionGranted(t *testing.T) {
 		t.Fatal("not released when its blocked post is approved")
 	}
 	for name, waits := range map[string][]contract.HeldWait{
-		"no wait named":         nil,
+		"no wait named":          nil,
 		"only a Job it waits on": {{Row: "A1", Kind: contract.WaitJob, Ref: "J-6"}},
 	} {
 		g, s := jhHeld(t, contract.Blocked, waits...)
