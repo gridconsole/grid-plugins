@@ -249,7 +249,7 @@ func builderBranches(taskPath string) ([]string, error) {
 	}
 	var out []string
 	for _, it := range snap.Items {
-		if j := snap.State.Jobs[it.ID]; j != nil && j.Status == contract.Accepted && strings.EqualFold(strings.TrimSpace(j.Role), "builder") {
+		if j := snap.State.Jobs[it.ID]; j != nil && j.Status == contract.Accepted && contract.NormalizeRole(j.Role) == "builder" {
 			out = append(out, runner.Branch(runner.Spawn{Task: fid, ID: it.ID, Attempt: max(j.Attempt, 1)}))
 		}
 	}

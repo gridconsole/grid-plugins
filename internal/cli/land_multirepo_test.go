@@ -25,6 +25,7 @@ type multiRepoLand struct {
 	app, plugin string
 	store       feed.Store
 	stderr      *bytes.Buffer
+	role        string // the builder Jobs' role; empty is builder
 }
 
 func multiRepoFixture(t *testing.T) multiRepoLand {
@@ -96,6 +97,9 @@ func (m multiRepoLand) builder(t *testing.T, repo, from string, files ...string)
 	id := nextJobID(snap)
 	body := rebaseJobBody(id, &mergeConflictError{Branch: "x", Target: "main", Files: []string{"a.txt"}}, map[string]any{"kind": "file-exists", "path": "a.txt"})
 	body["title"], body["repo"] = "Build "+id, filepath.Base(repo)
+	if m.role != "" {
+		body["role"] = m.role
+	}
 	w, err := taskJobWriter(m.env)
 	if err != nil {
 		t.Fatal(err)
@@ -165,5 +169,17 @@ func TestApproveWithNoCommitsLandsNothing(t *testing.T) {
 	}
 	if shipGit(t, m.app, "rev-parse", "main") != app || shipGit(t, m.plugin, "rev-parse", "main") != plugin {
 		t.Fatal("a main moved for a task with no commits")
+	}
+}
+
+// A builder Job whose role carries the plugin prefix, grid-builder, as job lint accepts
+// it, is a builder Job: its branch lands.
+func TestApproveLandsTheBranchOfAGridBuilderJob(t *testing.T) {
+	m := multiRepoFixture(t)
+	m.role = "grid-builder"
+	m.builder(t, m.plugin, "main", "p1.txt")
+	m.approve(t)
+	if _, err := os.Stat(filepath.Join(m.plugin, "p1.txt")); err != nil {
+		t.Fatalf("p1.txt is not on main of plugin after approve; stderr %s; history:\n%s", m.stderr, shipHistory(t, m.dir))
 	}
 }
