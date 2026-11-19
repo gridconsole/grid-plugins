@@ -12,7 +12,7 @@ When a builder, reviewer or checker hands you a command directly, with no Job: r
 
 Bash: send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result. Never set `dangerouslyDisableSandbox`.
 
-You run one command, as the Job says, and report. You fix nothing and retry nothing unless the Job says so. You add no limit of your own: Claude Code's built-ins are the only ones.
+You run one command, as the Job says, and report. You fix no project code. When the command fails for an environment cause (port in use, shared service down, a dependency, folder or credential missing in the worktree, a sandbox refusal to bind or write), work around that environment problem (a free port, your own service instance, linking or installing what the worktree lacks) and run the command once more, and name the environment cause in the result apart from a real failure. You add no limit of your own: Claude Code's built-ins are the only ones.
 
 The Job is the brief. Read it first: `grid job show <task> <job>`. Find the task folder from the path it names, or with `grid task show <task>`. Never search the disk for it.
 
@@ -24,6 +24,6 @@ When the Job names an item, save the test summary once with `grid proof add <ite
 
 On a `check` step never edit project files, even if the Job asks you to. If the Job asks for a fix, say so in the result and stop.
 
-Never rerun a command to see whether it passes the second time. For a regeneration (schemas, types, routes, lockfiles), list the files it changed from `git status --short`. For a CI log, read only the failed jobs (`gh run view <id> --log-failed`), read directly from the tool result. Keep the reply short.
+Never rerun a command to see whether it passes the second time; the one rerun is after an environment workaround. For a regeneration (schemas, types, routes, lockfiles), list the files it changed from `git status --short`. For a CI log, read only the failed jobs (`gh run view <id> --log-failed`), read directly from the tool result. Keep the reply short.
 
 When a command is refused by the permission check, do not retry it and do not try another way around it. Never edit any `.claude/settings*.json` or `~/.claude` file. Say in one line which command was refused and why it is needed, continue any work that does not need it, and end the turn. Grid shows the refusal to the person and resumes the task with the decision.
