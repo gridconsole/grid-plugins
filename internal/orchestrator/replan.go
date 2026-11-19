@@ -76,11 +76,11 @@ func gkReplanned(snap Snapshot, cancelled string) bool {
 	return false
 }
 
-// gkNextJobID is the next free top-level J-<n>, counting the Jobs of the fold,
-// the id of every job record the Feed holds, even one the fold holds out of State
-// (snap.JobIDs), and the Job each job or landed wait of a Held Job names. It is
-// the rule of nextJobID in internal/cli, which this package cannot import, plus
-// those waits.
+// gkNextJobID is the next free top-level J-<n>, counting the Jobs of the fold
+// and the id of every job record the Feed holds, even one the fold holds out of
+// State (snap.JobIDs), and skipping an id that a job or landed wait of a Held Job
+// names. It is the rule of nextJobID in internal/cli, which this package cannot
+// import, plus that skip.
 func gkNextJobID(snap Snapshot) string {
 	highest := 0
 	count := func(id string) {
@@ -99,16 +99,21 @@ func gkNextJobID(snap Snapshot) string {
 	}
 	// A new Job on the id a Held Job's wait names but the Feed lacks would meet
 	// that wait in its place (jhReplanHeld).
+	waited := map[string]bool{}
 	for _, j := range snap.State.Jobs {
 		if j.Status == contract.Held {
 			for _, w := range j.WaitsOn {
 				if w.Kind == contract.WaitJob || w.Kind == contract.WaitLanded {
-					count(w.Ref)
+					waited[w.Ref] = true
 				}
 			}
 		}
 	}
-	return "J-" + strconv.Itoa(highest+1)
+	next := highest + 1
+	for waited["J-"+strconv.Itoa(next)] {
+		next++
+	}
+	return "J-" + strconv.Itoa(next)
 }
 
 // gqCauseMax is the most bytes of a cause the re-plan Job text holds.

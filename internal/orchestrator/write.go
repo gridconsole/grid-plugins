@@ -360,7 +360,7 @@ func deadDoneWait(s Snapshot, w jobgraph.Wait) bool {
 
 // deadWait is a job or landed wait of a Held Job that can no longer be met: the
 // chain it waits on is dead at end, the last Job of that chain; or missing, the
-// Job a job wait names is not on the Feed; or cycle, the Jobs that wait on each
+// Job it names is not on the Feed; or cycle, the Jobs that wait on each
 // other in a cycle with the held Job, by Job number. lead marks the one wait of
 // that cycle that its single re-plan names (waitCycleLead).
 type deadWait struct {
@@ -407,10 +407,9 @@ func (w deadWait) since(s Snapshot, held string) time.Time {
 // heldDeadWaits lists the job and landed waits of the Held Job j that can no
 // longer be met: every Job of the chain, the Job waited on and the Jobs that
 // continue it (a rework, not a child), was rejected or cancelled, and for a
-// landed wait none of them landed; a job wait names a Job that is not on the
+// landed wait none of them landed; the wait names a Job that is not on the
 // Feed; or the Job waited on waits on j in turn (waitCycle). A chain with a live
-// or accepted Job, a landed wait on a Job not on the Feed, and a question or
-// permission wait are not dead.
+// or accepted Job, and a question or permission wait, are not dead.
 func heldDeadWaits(s Snapshot, j *contract.Job) []deadWait {
 	if j == nil || j.Status != contract.Held {
 		return nil
@@ -420,7 +419,7 @@ func heldDeadWaits(s Snapshot, j *contract.Job) []deadWait {
 		if w.Kind != contract.WaitJob && w.Kind != contract.WaitLanded {
 			continue
 		}
-		if w.Kind == contract.WaitJob && s.State.Jobs[w.Ref] == nil && !slices.Contains(s.JobIDs, w.Ref) {
+		if s.State.Jobs[w.Ref] == nil && !slices.Contains(s.JobIDs, w.Ref) {
 			out = append(out, deadWait{HeldWait: w, end: w.Ref, missing: true})
 			continue
 		}

@@ -419,15 +419,20 @@ func TestHoldDeadWaitEndIsTheNewestContinuer(t *testing.T) {
 	}
 }
 
-// A job wait on a Job that is not on the Feed can never be met: J-1 held on it
-// gets one re-plan, reads dead_wait in the tree, and its cancelled re-plan asks
-// the owner. The re-plan does not take the missing id, J-2 being the next free
-// one, which would meet the wait in its place.
+// A job or landed wait on a Job that is not on the Feed can never be met: J-1 held
+// on it gets one re-plan, reads dead_wait in the tree, and its cancelled re-plan
+// asks the owner. The re-plan takes the next free id and skips the missing one
+// (J-2 being next would meet the wait in its place), without jumping past it.
 func TestHoldJobWaitOnAJobNotOnTheFeedIsReplanned(t *testing.T) {
-	for _, missing := range []string{"J-99", "J-2"} {
-		t.Run(missing, func(t *testing.T) {
+	for _, tc := range []struct{ kind, missing, replan string }{
+		{contract.WaitJob, "J-99", "J-2"},
+		{contract.WaitJob, "J-2", "J-3"},
+		{contract.WaitLanded, "J-99", "J-2"},
+	} {
+		t.Run(tc.kind+" "+tc.missing, func(t *testing.T) {
+			missing := tc.missing
 			f := b2Started(t)
-			jhFinished(t, f, contract.HeldWait{Row: "A1", Kind: contract.WaitJob, Ref: missing})
+			jhFinished(t, f, contract.HeldWait{Row: "A1", Kind: tc.kind, Ref: missing})
 			for range 3 {
 				f.tick(t)
 			}
@@ -439,8 +444,8 @@ func TestHoldJobWaitOnAJobNotOnTheFeedIsReplanned(t *testing.T) {
 					t.Fatalf("re-plan reads %q, want J-1's wait on %s named as not on the Feed", text, missing)
 				}
 			}
-			if len(jobs) != 1 || replan == missing {
-				t.Fatalf("orchestrator Jobs = %v, want one re-plan of J-1's wait on %s, not on that id", jobs, missing)
+			if len(jobs) != 1 || replan != tc.replan {
+				t.Fatalf("orchestrator Jobs = %v, want one re-plan of J-1's wait on %s, as %s", jobs, missing, tc.replan)
 			}
 			if r := jhTreeRow(t, f, "J-1"); r.Orphan == nil || r.Orphan.Kind != OrphanDeadWait || !strings.Contains(r.Orphan.Detail, missing+", which is not on the Feed") {
 				t.Fatalf("held on %s, J-1 reads orphan %+v, want dead_wait on %s", missing, r.Orphan, missing)

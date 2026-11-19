@@ -81,6 +81,16 @@ func jhReleasedAttempt(t *testing.T, f *fixture, jobs int) map[string]any {
 // anywhere else by the tick, however many times it runs.
 func TestHoldTickPostsNothingOverAHeldJob(t *testing.T) {
 	f := b2Started(t)
+	// J-6 is on the Feed, accepted and not landed: a landed wait on a Job not on
+	// the Feed is a dead wait, which the tick re-plans.
+	f.job(t, "J-6", nil)
+	snap, err := Load(f.s.Feed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.control(snap.State.Jobs["J-6"], contract.Accepted, "accepted", ""); err != nil {
+		t.Fatal(err)
+	}
 	jhFinished(t, f, contract.HeldWait{Row: "A1", Kind: contract.WaitLanded, Ref: "J-6"})
 	if j := f.state(t); j.Exited == "" || len(j.Results) == 0 {
 		t.Fatalf("J-1 exited %q with %d results, want a done exit and a result", j.Exited, len(j.Results))
