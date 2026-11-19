@@ -13,6 +13,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/jobgraph"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
@@ -123,8 +124,9 @@ type Stream struct {
 	LandPending func(dir string) bool
 	// PersonWait, when set, is called with the task folder after each tick, with whether
 	// every open Job of the task waits on a person (a person Job or an open question), so
-	// task.md can show waiting instead of running. An error is one Diag line.
-	PersonWait func(dir string, onPerson bool) error
+	// task.md can show waiting instead of running, and with note, the line that says what
+	// it waits on (waitNote). An error is one Diag line.
+	PersonWait func(dir string, onPerson bool, note string) error
 
 	Out  io.Writer // JSON lines
 	Diag io.Writer // one readable line per skip; nil discards
@@ -370,7 +372,8 @@ func (s *Stream) task(dir string) error {
 	}
 	if s.PersonWait != nil {
 		if after, err := Load(fs); err == nil && hasOpenJob(after) {
-			if err := s.PersonWait(dir, waitsOnPerson(after, s.now())); err != nil {
+			onPerson := waitsOnPerson(after, s.now())
+			if err := s.PersonWait(dir, onPerson, waitNote(after, s.now(), onPerson)); err != nil {
 				s.diag("grid worker next: task %s: person wait: %s\n", taskID, oneLine(err))
 			}
 		}
@@ -612,9 +615,11 @@ func (s *Stream) diag(format string, args ...any) {
 
 func oneLine(err error) string { return strings.Join(strings.Fields(err.Error()), " ") }
 
-// waitsOnPerson reports whether the task has open Jobs and each waits on a person: a
-// person Job, a Job with an open question, or a Job not yet ready whose every wait
-// (the graph's own, as Ready reports it) is on such a Job. Nothing an agent could do next.
+// waitsOnPerson reports whether the task has open Jobs, a person Job or a Job with an
+// open question among them, and each waits on a person: such a Job, or a Job not yet
+// ready whose every wait (the graph's own, as Ready reports it) is on such a Job or a
+// closed one. Nothing an agent could do next. A wait for a Job to land is no person's
+// wait: no answer posts the landed record (GridV2 T-12).
 func waitsOnPerson(snap Snapshot, now time.Time) bool {
 	r, err := Ready(snap, now)
 	if err != nil {
@@ -624,10 +629,11 @@ func waitsOnPerson(snap Snapshot, now time.Time) bool {
 	for _, id := range r.Ready {
 		ready[id] = true
 	}
-	waits := map[string][]string{}
+	waits := map[string][]jobgraph.Wait{}
 	for _, w := range r.Waiting {
-		waits[w.Job] = append(waits[w.Job], w.Target)
+		waits[w.Job] = append(waits[w.Job], w)
 	}
+	asked := false
 	memo := map[string]bool{}
 	var person func(id string) bool
 	person = func(id string) bool {
@@ -642,12 +648,12 @@ func waitsOnPerson(snap Snapshot, now time.Time) bool {
 		case j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected:
 			v = true // settled: nothing to wait for
 		case contract.NormalizeRole(j.Role) == "person" || len(j.OpenQuestions) > 0:
-			v = true
+			v, asked = true, true
 		case ready[id] || (j.Status != contract.Posted && j.Status != contract.Ready) || len(waits[id]) == 0:
 		default:
 			v = true
-			for _, t := range waits[id] {
-				if t == "" || !person(t) {
+			for _, w := range waits[id] {
+				if w.Target == "" || w.Kind == jobgraph.Landed || !person(w.Target) {
 					v = false
 					break
 				}
@@ -667,7 +673,36 @@ func waitsOnPerson(snap Snapshot, now time.Time) bool {
 			return false
 		}
 	}
-	return open
+	return open && asked
+}
+
+// waitNote is the line task.md shows for who the task waits on, given waitsOnPerson:
+// a person; else an agent Job ready or started; else the first wait on a Job that is
+// closed or not on the Feed, which no open Job will meet, by Job id.
+func waitNote(snap Snapshot, now time.Time, onPerson bool) string {
+	if onPerson {
+		return "open Jobs wait on a person"
+	}
+	const agent = "an agent Job is open again"
+	r, err := Ready(snap, now)
+	if err != nil || len(r.Ready) > 0 {
+		return agent
+	}
+	for _, j := range snap.State.Jobs {
+		switch j.Status {
+		case contract.Posted, contract.Ready, contract.Accepted, contract.Cancelled, contract.Rejected:
+		default:
+			if contract.NormalizeRole(j.Role) != "person" {
+				return agent
+			}
+		}
+	}
+	for _, w := range r.Waiting {
+		if t := snap.State.Jobs[w.Target]; t == nil || t.Status == contract.Accepted || t.Status == contract.Cancelled || t.Status == contract.Rejected {
+			return w.Job + " is " + w.Reason
+		}
+	}
+	return agent
 }
 
 func hasOpenJob(snap Snapshot) bool {
