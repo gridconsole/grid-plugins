@@ -279,16 +279,24 @@ func DoneReason(target string, status contract.Status) string {
 // child this relies on the order the app's Judge uses, build closed first and the
 // review accepted after; a review accepted while the build is still submitted
 // would make the edge met on an unaccepted build. s5_children_done_open_target_test.go
-// pins it.
+// pins it. A target whose review is numbered under another Job (a rework's) has
+// its person and decision Jobs there too, so it waits for its own accept.
 func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 	if !g.childrenAccepted(s, target) || len(g.holding(s, target)) == 0 {
 		return false, "waiting for all children of " + target + " to be accepted"
 	}
-	switch s.Jobs[target].Status {
+	switch status := s.Jobs[target].Status; status {
+	case contract.Accepted:
 	case contract.Cancelled:
 		return false, "waiting for " + target + " to be accepted, but it was cancelled"
 	case contract.Rejected:
 		return g.reworkDone(s, target, map[string]bool{target: true})
+	default:
+		for _, child := range g.children[target] {
+			if !strings.HasPrefix(child, target+".") {
+				return false, DoneReason(target, status)
+			}
+		}
 	}
 	return true, ""
 }
