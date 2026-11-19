@@ -150,3 +150,21 @@ func TestApproveLandsBuilderBranchesOfOneRepoInAFolderThatIsNoRepo(t *testing.T)
 	m.approve(t)
 	m.closedWith(t, map[string][]string{m.app: {"a1.txt", "a2.txt", "a3.txt", "a4.txt"}})
 }
+
+// T-18 as it stands: every builder branch is in main of app already and task.md names the
+// delivering Job's branch, also in main: approve lands nothing new and closes the task.
+func TestApproveClosesATaskWhoseBranchesAreAllInMainOfOneRepo(t *testing.T) {
+	m := multiRepoFixture(t)
+	base := shipGit(t, m.app, "rev-parse", "main")
+	for _, f := range []string{"a1.txt", "a2.txt"} {
+		shipGit(t, m.app, "merge", "-q", "--no-ff", "--no-edit", m.builder(t, m.app, "main", f))
+	}
+	shipGit(t, m.app, "branch", "grid-"+m.fid+"-J-9-a1", "main")
+	m.setTaskKey(t, "head: "+base, "head: "+shipGit(t, m.app, "rev-parse", "main"))
+	tip := shipGit(t, m.app, "rev-parse", "main")
+	m.approve(t)
+	m.closedWith(t, map[string][]string{m.app: {"a1.txt", "a2.txt"}})
+	if now := shipGit(t, m.app, "rev-parse", "main"); now != tip {
+		t.Fatalf("main of app moved from %s to %s on a land with nothing new", tip, now)
+	}
+}
