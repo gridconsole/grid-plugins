@@ -90,3 +90,17 @@ func TestStReworkReviewIsTheReworksChild(t *testing.T) {
 		{"rework, no review yet", unreviewed, m1Status(done...), "waiting for all children of J-4 to be accepted"},
 	})
 }
+
+// A cancelled rework that another Job continues is made good by that Job, as a
+// rejected one is by its rework; with none it still waits as cancelled.
+func TestStCancelledReworkFollowsItsReplacement(t *testing.T) {
+	replaced := m1Plan(m1Rework("J-4", "J-2", "J-2.1"), m1Review("J-2.2", "J-4"), stPerson("J-2.3", "J-2.2"), stDecision("J-2.4", "J-2.2"),
+		job.Job{ID: "J-5", Role: "builder", After: []Edge{{Job: "J-1"}}, Continues: m1Ptr("J-4"), DiscoveredFrom: m1Ptr("J-2.4")})
+	reviewed := append(append([]job.Job{}, replaced...), m1Review("J-2.5", "J-5"))
+	base := []string{"J-2", "rejected", "J-2.1", "accepted", "J-4", "cancelled", "J-2.2", "accepted", "J-2.3", "cancelled", "J-2.4", "accepted"}
+	m1Run(t, []m1Case{
+		{"replacement posted", replaced, m1Status(append(base, "J-5", "posted")...), "waiting for J-5, which reworks J-4, to be accepted"},
+		{"replacement accepted, its review accepted", reviewed, m1Status(append(base, "J-5", "accepted", "J-2.5", "accepted")...), ""},
+		{"no replacement", m1Plan(m1Rework("J-4", "J-2", "J-2.1")), m1Status("J-2", "rejected", "J-2.1", "accepted", "J-4", "cancelled"), "waiting for J-4, which reworks J-2, to be accepted, but it was cancelled"},
+	})
+}

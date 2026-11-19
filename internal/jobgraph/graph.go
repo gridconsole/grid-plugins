@@ -300,12 +300,7 @@ func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 // each is accepted with its own children accepted, or was rejected and is made
 // good by its own reworks in turn. seen ends a loop of continues.
 func (g *Graph) reworkDone(s Snapshot, id string, seen map[string]bool) (bool, string) {
-	reworks := []string{}
-	for _, r := range g.ids {
-		if c := g.items[r].Continues; c != nil && *c == id && !seen[r] && !strings.HasPrefix(r, id+".") {
-			reworks = append(reworks, r)
-		}
-	}
+	reworks := g.reworksOf(id, seen)
 	if len(reworks) == 0 {
 		return false, "waiting for a Job that reworks " + id + ", which was rejected"
 	}
@@ -323,12 +318,30 @@ func (g *Graph) reworkDone(s Snapshot, id string, seen map[string]bool) (bool, s
 				return false, reason
 			}
 		case contract.Cancelled:
-			return false, "waiting for " + r + ", which reworks " + id + ", to be accepted, but it was cancelled"
+			// A cancelled rework that another Job continues was replaced by it, which makes it good in turn.
+			if len(g.reworksOf(r, seen)) == 0 {
+				return false, "waiting for " + r + ", which reworks " + id + ", to be accepted, but it was cancelled"
+			}
+			if ok, reason := g.reworkDone(s, r, seen); !ok {
+				return false, reason
+			}
 		default:
 			return false, "waiting for " + r + ", which reworks " + id + ", to be accepted"
 		}
 	}
 	return true, ""
+}
+
+// reworksOf are the Jobs that continue id and are not its own children, leaving
+// out those in seen.
+func (g *Graph) reworksOf(id string, seen map[string]bool) []string {
+	reworks := []string{}
+	for _, r := range g.ids {
+		if c := g.items[r].Continues; c != nil && *c == id && !seen[r] && !strings.HasPrefix(r, id+".") {
+			reworks = append(reworks, r)
+		}
+	}
+	return reworks
 }
 
 // childrenAccepted reports whether every immediate child of id that holds an
