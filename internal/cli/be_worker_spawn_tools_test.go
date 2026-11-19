@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -99,6 +100,27 @@ func TestBeAgentToolsForms(t *testing.T) {
 	} {
 		if got := beAgentTools(tc.md); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: beAgentTools = %q, want %q", name, got, tc.want)
+		}
+	}
+}
+
+// A browser-role Job spawns with both browser tool families, and no other role does.
+func TestBeSpawnToolsBrowserRolesOnly(t *testing.T) {
+	h, _ := goUnsetFixture(t)
+	browser := func(tool string) bool {
+		return strings.HasPrefix(tool, "mcp__claude-in-chrome__") || strings.HasPrefix(tool, "mcp__Claude_Browser__")
+	}
+	for _, role := range []string{"operator", "grid-operator", "checker", "grid-checker"} {
+		got := beSpawnTools(t, h, role)
+		for _, want := range []string{"mcp__claude-in-chrome__*", "mcp__Claude_Browser__*"} {
+			if !slices.Contains(got, want) {
+				t.Errorf("workerSpawnTools(%q) = %q, want it to hold %s", role, got, want)
+			}
+		}
+	}
+	for _, role := range []string{"builder", "reviewer", "orchestrator", "curator", "runner", "scout", "library", "researcher", "designer"} {
+		if got := beSpawnTools(t, h, role); slices.ContainsFunc(got, browser) {
+			t.Errorf("workerSpawnTools(%q) = %q, want no browser tool", role, got)
 		}
 	}
 }
