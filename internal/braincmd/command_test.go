@@ -418,3 +418,56 @@ func TestReacceptWithProject(t *testing.T) {
 		t.Fatal("rejected proposal was accepted")
 	}
 }
+
+// The identical --project accept, repeated, exits 0 both times.
+func TestRepeatedProjectAcceptExitsZeroTwice(t *testing.T) {
+	h, _ := projectHarness(t)
+	h.propose(t)
+	for i := 0; i < 2; i++ {
+		if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 0 {
+			t.Fatalf("accept %d: exit %d: %s", i+1, code, &h.err)
+		}
+	}
+}
+
+// Rolling a failed --project accept back removes the note it published, so a
+// later home accept cannot file the note at both levels.
+func TestRollbackRemovesThePublishedProjectNote(t *testing.T) {
+	h, project := projectHarness(t)
+	h.propose(t)
+	log := filepath.Join(project, "knowledge", "log.md")
+	if err := os.MkdirAll(log, 0o700); err != nil { // a folder where the audit log goes
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code == 0 {
+		t.Fatal("accept with a blocked audit log succeeded")
+	}
+	if _, err := os.Stat(filepath.Join(project, "knowledge", "decisions", "checks.md")); !os.IsNotExist(err) {
+		t.Fatalf("published project note left behind: %v", err)
+	}
+	if b, err := os.ReadFile(filepath.Join(h.env.GridHome, "brain-proposals", "checks.md")); err != nil || !strings.Contains(string(b), "status: proposed") {
+		t.Fatalf("proposal not back home as proposed: %v", err)
+	}
+}
+
+// A supersedes link to a home note still marks it when the note is filed with --project.
+func TestProjectAcceptMarksTheSupersededHomeNote(t *testing.T) {
+	h, _ := projectHarness(t)
+	if code := h.run("propose", "--level", "home", "--name", "old1", "--topic", "decisions", "--description", "d.", "--summary", "s.", "--source", "x", "--body", "old."); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if code := h.run("accept", "brain:home/old1"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	link := `{"to":"brain:home/old1","rel":"supersedes","summary":"The old rule.","why":"The new rule replaces the old one."}`
+	if code := h.run("propose", "--level", "home", "--name", "new1", "--topic", "decisions", "--description", "d.", "--summary", "s.", "--source", "x", "--body", "new.", "--link", link); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if code := h.run("accept", "brain:home/new1", "--project", "example"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	b, err := os.ReadFile(filepath.Join(h.env.GridHome, "knowledge", "decisions", "old1.md"))
+	if err != nil || !strings.Contains(string(b), "superseded_by: brain:project/new1") {
+		t.Fatalf("old home note not marked: %v\n%s", err, b)
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/safefile"
 )
@@ -29,14 +31,25 @@ func (s Store) AcceptHomeInProject(name string) (Entry, error) {
 			}
 			return Entry{}, fmt.Errorf("cannot file %q in project %q, nothing was changed: %s", name, s.Project, g.reason)
 		}
+		if errors.Is(err, fs.ErrNotExist) {
+			// A repeated identical accept: the project already holds it as accepted.
+			if p, perr := s.readProject(name); perr == nil && p.Status == "accepted" {
+				return s.entry(p, false), nil
+			}
+		}
 		return Entry{}, err
 	}
+	existed := s.projectNoteExists(name)
 	e, err := s.Accept("project", name)
-	if err != nil {
-		if p, perr := s.readProject(name); perr == nil && p.Status == "proposed" {
-			if berr := s.moveProposal(name, "project", "home", false); berr != nil {
-				return e, fmt.Errorf("%w (and moving the proposal back home failed: %v)", err, berr)
-			}
+	if err == nil {
+		return e, s.supersedeHome(e.Note)
+	}
+	if p, perr := s.readProject(name); perr == nil && p.Status == "proposed" {
+		if !existed {
+			s.removeProjectNote(p)
+		}
+		if berr := s.moveProposal(name, "project", "home", false); berr != nil {
+			return e, fmt.Errorf("%w (and moving the proposal back home failed: %v)", err, berr)
 		}
 	}
 	return e, err
@@ -50,6 +63,64 @@ func (s Store) homeGateRefuses(name string) bool {
 	defer root.Close()
 	n, _, err := readProposalBytes(root, "home", name)
 	return err == nil && gate(root, n) != ""
+}
+
+func (s Store) projectNoteExists(name string) bool {
+	n, err := s.readProject(name)
+	if err != nil {
+		return false
+	}
+	root, err := s.scope("project", false)
+	if err != nil {
+		return false
+	}
+	defer root.Close()
+	_, err = safefile.Read(root, filepath.Join("knowledge", n.Topic, name+".md"))
+	return err == nil
+}
+
+// removeProjectNote drops a note a failed accept published, so a later home
+// accept cannot file it at both levels.
+func (s Store) removeProjectNote(n Note) {
+	root, err := s.scope("project", false)
+	if err != nil {
+		return
+	}
+	defer root.Close()
+	_ = locked(root, func() error { return root.Remove(filepath.Join("knowledge", n.Topic, n.Name+".md")) })
+}
+
+// supersedeHome marks the home notes that n supersedes as replaced by n's project id.
+func (s Store) supersedeHome(n Note) error {
+	var names []string
+	for _, l := range n.Links {
+		to, _, _ := strings.Cut(l.To, "#")
+		if name, ok := strings.CutPrefix(to, "brain:home/"); ok && l.Rel == "supersedes" {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	root, err := s.scope("home", false)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return locked(root, func() error {
+		notes, _, err := scan(root, "home")
+		if err != nil {
+			return err
+		}
+		for _, old := range notes {
+			if slices.Contains(names, old.Name) {
+				if err := markSuperseded(root, old, n, ""); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
 }
 
 func (s Store) readProject(name string) (Note, error) {
