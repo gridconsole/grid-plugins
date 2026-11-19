@@ -299,8 +299,10 @@ func TestDecidedHomeProposalDoesNotMove(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if code := h.run("accept", "brain:home/checks", "--project", "example"); code == 0 {
-			t.Fatalf("%v: decided proposal was accepted into the project", decide)
+		// An accepted proposal is a curator retry and exits 0; a rejected one is an error.
+		wantOK := len(decide) == 2
+		if code := h.run("accept", "brain:home/checks", "--project", "example"); (code == 0) != wantOK {
+			t.Fatalf("%v: exit %d, want ok=%v", decide, code, wantOK)
 		}
 		after, err := os.ReadFile(home)
 		if err != nil || string(after) != string(before) {
@@ -358,5 +360,61 @@ func TestAcceptFailingAfterTheMoveMovesTheProposalBack(t *testing.T) {
 	}
 	if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 0 {
 		t.Fatalf("retry exit %d: %s", code, &h.err)
+	}
+}
+
+// A topic that only the home level defines: the project gate refuses it, the home
+// gate does not, so nothing may be published or recorded.
+func TestProjectOnlyGateRefusalLeavesTheHomeProposalUntouched(t *testing.T) {
+	h, project := projectHarness(t)
+	if err := os.MkdirAll(filepath.Join(h.env.GridHome, "topics", "notes"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	def := "---\nname: notes\nkind: knowledge\nlevel: home\ndescription: A custom topic.\n---\n# notes\n"
+	if err := os.WriteFile(filepath.Join(h.env.GridHome, "topics", "notes", "TOPIC.md"), []byte(def), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("propose", "--level", "home", "--name", "n1", "--topic", "notes", "--description", "d.", "--summary", "s.", "--source", "x", "--body", "b."); code != 0 {
+		t.Fatal(&h.err)
+	}
+	home := filepath.Join(h.env.GridHome, "brain-proposals", "n1.md")
+	before, err := os.ReadFile(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/n1", "--project", "example"); code == 0 || !strings.Contains(h.err.String(), "nothing was changed") {
+		t.Fatalf("exit %d, stderr %q", code, &h.err)
+	}
+	after, err := os.ReadFile(home)
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("home proposal changed: %v", err)
+	}
+	for _, p := range []string{filepath.Join(h.env.GridHome, "knowledge", "notes", "n1.md"), filepath.Join(project, "knowledge", "notes", "n1.md"), filepath.Join(project, "brain-proposals", "n1.md")} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("%s exists", p)
+		}
+	}
+}
+
+// A curator retry of an accepted proposal exits 0 and changes nothing; a rejected one stays an error.
+func TestReacceptWithProject(t *testing.T) {
+	h, project := projectHarness(t)
+	h.propose(t)
+	if code := h.run("accept", "brain:home/checks"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 0 {
+		t.Fatalf("re-accept exit %d: %s", code, &h.err)
+	}
+	if _, err := os.Stat(filepath.Join(project, "knowledge", "decisions", "checks.md")); !os.IsNotExist(err) {
+		t.Fatal("re-accept filed the note in the project")
+	}
+	h2, _ := projectHarness(t)
+	h2.propose(t)
+	if code := h2.run("accept", "brain:home/checks", "--reject", "no"); code != 0 {
+		t.Fatal(&h2.err)
+	}
+	if code := h2.run("accept", "brain:home/checks", "--project", "example"); code == 0 {
+		t.Fatal("rejected proposal was accepted")
 	}
 }

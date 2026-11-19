@@ -3,8 +3,11 @@ package brain
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/gridconsole/grid-plugins/internal/safefile"
 )
 
 // AcceptHomeInProject files a waiting home proposal in the store's project: it
@@ -12,11 +15,19 @@ import (
 // when the accept fails, so the curator's brain:home id keeps working.
 func (s Store) AcceptHomeInProject(name string) (Entry, error) {
 	if err := s.moveProposal(name, "home", "project", true); err != nil {
-		// A content refusal is recorded where the proposal is, as a plain home
-		// accept does, so a curator that always passes --project can clear it.
 		var g gateRefusal
-		if errors.As(err, &g) {
+		var done alreadyAccepted
+		switch {
+		case errors.As(err, &done):
+			// A curator retry: as on base, accepting again changes nothing.
 			return s.Accept("home", name)
+		case errors.As(err, &g):
+			// Record the rejection at home only when the home gate refuses it too;
+			// a refusal that is only the project's leaves the proposal untouched.
+			if s.homeGateRefuses(name) {
+				return s.Accept("home", name)
+			}
+			return Entry{}, fmt.Errorf("cannot file %q in project %q, nothing was changed: %s", name, s.Project, g.reason)
 		}
 		return Entry{}, err
 	}
@@ -29,6 +40,16 @@ func (s Store) AcceptHomeInProject(name string) (Entry, error) {
 		}
 	}
 	return e, err
+}
+
+func (s Store) homeGateRefuses(name string) bool {
+	root, err := s.scope("home", false)
+	if err != nil {
+		return false
+	}
+	defer root.Close()
+	n, _, err := readProposalBytes(root, "home", name)
+	return err == nil && gate(root, n) != ""
 }
 
 func (s Store) readProject(name string) (Note, error) {
@@ -74,6 +95,9 @@ func (s Store) moveProposal(name, fromLevel, toLevel string, check bool) error {
 			}
 			n.Level = toLevel
 			if check {
+				if n.Status == "accepted" {
+					return alreadyAccepted{name}
+				}
 				if n.Status != "proposed" {
 					return fmt.Errorf("proposal %q is %s and cannot be moved", name, n.Status)
 				}
@@ -94,12 +118,21 @@ func (s Store) moveProposal(name, fromLevel, toLevel string, check bool) error {
 }
 
 // gateRefusal is a content-gate refusal, which accept records as a rejection.
-type gateRefusal struct{ error }
+type gateRefusal struct{ reason string }
+
+func (g gateRefusal) Error() string { return "proposal rejected: " + g.reason }
+
+// alreadyAccepted marks a home proposal that is already filed.
+type alreadyAccepted struct{ name string }
+
+func (a alreadyAccepted) Error() string {
+	return fmt.Sprintf("proposal %q is already accepted", a.name)
+}
 
 // acceptable runs the checks decide runs before it publishes n at level.
 func acceptable(root *os.Root, level string, n Note) error {
 	if reason := gate(root, n); reason != "" {
-		return gateRefusal{fmt.Errorf("proposal rejected: %s", reason)}
+		return gateRefusal{reason}
 	}
 	entries, _, err := scan(root, level)
 	if err != nil {
@@ -111,13 +144,18 @@ func acceptable(root *os.Root, level string, n Note) error {
 		}
 	}
 	path := filepath.Join("knowledge", n.Topic, n.Name+".md")
-	if before, err := os.ReadFile(filepath.Join(root.Name(), path)); err == nil {
-		old, err := Parse(before)
-		a := n
-		a.Status, a.Reason, a.Updated = "accepted", "", old.Updated
-		if err != nil || !sameFiled(old, a) {
-			return fmt.Errorf("note %q already exists with different content", n.Name)
-		}
+	before, err := safefile.Read(root, path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	old, err := Parse(before)
+	a := n
+	a.Status, a.Reason, a.Updated = "accepted", "", old.Updated
+	if err != nil || !sameFiled(old, a) {
+		return fmt.Errorf("note %q already exists with different content", n.Name)
 	}
 	return nil
 }
