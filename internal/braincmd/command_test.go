@@ -242,3 +242,75 @@ func TestProposeInUnregisteredFolderPointsHomeOnlyAtGlobalKnowledge(t *testing.T
 		t.Fatalf("exit %d, stderr %q", code, &h.err)
 	}
 }
+
+func projectHarness(t *testing.T) (*harness, string) {
+	h := newHarness(t)
+	project := filepath.Join(h.env.GridHome, "projects", "example")
+	if err := os.MkdirAll(project, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "project.md"), []byte("---\nid: 01EXAMPLE\n---\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return h, project
+}
+
+// An accept that fails after the move leaves the home proposal where it was.
+func TestFailedAcceptWithProjectKeepsTheHomeProposal(t *testing.T) {
+	h, project := projectHarness(t)
+	if code := h.run("propose", "--project", "example", "--name", "checks", "--topic", "decisions", "--description", "Before project checks.", "--summary", "Project checks.", "--source", "x", "--body", "Other content."); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if code := h.run("accept", "checks", "--project", "example"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	// Only the note collides, not the accepted proposal record.
+	if err := os.Remove(filepath.Join(project, "brain-proposals", "checks.md")); err != nil {
+		t.Fatal(err)
+	}
+	h.propose(t)
+	home := filepath.Join(h.env.GridHome, "brain-proposals", "checks.md")
+	var first string
+	for i := 0; i < 2; i++ {
+		if code := h.run("accept", "brain:home/checks", "--project", "example"); code == 0 {
+			t.Fatal("accept over a note with different content succeeded")
+		}
+		if _, err := os.Stat(home); err != nil {
+			t.Fatalf("attempt %d: home proposal gone: %v", i, err)
+		}
+		if i == 0 {
+			first = h.err.String()
+		} else if h.err.String() != first {
+			t.Fatalf("retry error %q, first %q", h.err.String(), first)
+		}
+	}
+}
+
+// A home proposal that is already accepted or rejected does not move.
+func TestDecidedHomeProposalDoesNotMove(t *testing.T) {
+	for _, decide := range [][]string{{"accept", "brain:home/checks"}, {"accept", "brain:home/checks", "--reject", "no"}} {
+		h, project := projectHarness(t)
+		h.propose(t)
+		if code := h.run(decide...); code != 0 {
+			t.Fatal(&h.err)
+		}
+		home := filepath.Join(h.env.GridHome, "brain-proposals", "checks.md")
+		before, err := os.ReadFile(home)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if code := h.run("accept", "brain:home/checks", "--project", "example"); code == 0 {
+			t.Fatalf("%v: decided proposal was accepted into the project", decide)
+		}
+		after, err := os.ReadFile(home)
+		if err != nil || string(after) != string(before) {
+			t.Fatalf("%v: home proposal changed: %v", decide, err)
+		}
+		if _, err := os.Stat(filepath.Join(project, "brain-proposals", "checks.md")); !os.IsNotExist(err) {
+			t.Fatalf("%v: proposal was copied into the project", decide)
+		}
+		if _, err := os.Stat(filepath.Join(project, "knowledge", "decisions", "checks.md")); !os.IsNotExist(err) {
+			t.Fatalf("%v: note was filed in the project", decide)
+		}
+	}
+}
