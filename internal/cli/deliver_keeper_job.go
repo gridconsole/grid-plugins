@@ -78,7 +78,11 @@ func curatorJobBody(id, taskID string, ids []string) map[string]any {
 	}
 	where := ""
 	if len(elsewhere) > 0 {
-		where = fmt.Sprintf("; the project and home proposals (%s) are read with `grid brain keep --task %s` and `grid brain show`", strings.Join(elsewhere, ", "), taskID)
+		var shows []string
+		for _, p := range elsewhere {
+			shows = append(shows, p+": `"+showCommand(p, taskID)+"`")
+		}
+		where = fmt.Sprintf("; the project and home proposals are listed by `grid brain keep --task %s` and read one by one: %s", taskID, strings.Join(shows, "; "))
 	}
 	noun := "proposals"
 	if len(ids) == 1 {
@@ -183,6 +187,15 @@ type deliverOutput struct {
 	taskstore.Delivery
 	CuratorJob string `json:"curator_job"`
 	PersonJob  string `json:"person_job,omitempty"`
+}
+
+// showCommand is the grid brain show line that reads a project or home proposal
+// named by its keep path, brain:<level>/brain-proposals/<name>.md. show takes
+// the proposal as brain:<level>/<name> with --proposal; the keep path is not an id.
+func showCommand(keepPath, taskID string) string {
+	level, rest, _ := strings.Cut(strings.TrimPrefix(keepPath, "brain:"), "/")
+	name := strings.TrimSuffix(strings.TrimPrefix(rest, "brain-proposals/"), ".md")
+	return fmt.Sprintf("grid brain show --proposal brain:%s/%s --task %s", level, name, taskID)
 }
 
 // proposalPointer is what the curator Job names a waiting proposal by: its id for
