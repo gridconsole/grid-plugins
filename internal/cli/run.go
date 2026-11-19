@@ -16,6 +16,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/account"
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/job"
 	"github.com/gridconsole/grid-plugins/internal/job/jobcmd"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/runner"
@@ -151,6 +152,12 @@ func gridRunBase(env Env, sp runner.Spawn) string {
 			if b, ok := rec.Body["base"].(string); ok {
 				base = b
 			}
+		}
+	}
+	if _, ok := job.HeadBaseTarget(base); ok {
+		// An unresolved head:J-n stays as it is: git refuses it, so the Job never starts from HEAD.
+		if resolved, err := orchestrator.ResolveBase(snap, sp.Task, base); err == nil {
+			return resolved
 		}
 	}
 	return base
