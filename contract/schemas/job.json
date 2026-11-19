@@ -21,7 +21,8 @@
                 "lead",
                 "owner",
                 "member",
-                "cli"
+                "cli",
+                "agent"
               ]
             }
           }
@@ -51,6 +52,39 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^J-[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "author": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "agent"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "properties": {
+              "kind": {
+                "const": "approve"
+              },
+              "role": {
+                "const": "Person"
+              }
+            },
+            "required": [
+              "kind",
+              "role"
+            ]
+          }
         }
       }
     }
