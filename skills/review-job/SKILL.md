@@ -9,13 +9,20 @@ Read the Job with `grid job show <task> <job>` and the builder's result. Owner d
 Steps:
 
 1. Open the proof table first. Each acceptance row of the Job must have one line, `HOLDS`, `WAITING on <kind> <ref>` or `NOT DONE`.
-2. A `NOT DONE` row, or a row with no line, rejects the Job at once. Write the verdict without reading further; the must-fix is that row.
+2. A `NOT DONE` row, or a row with no line, is a must-fix on that row. The exception is a row marked `NOT DONE (environment: <cause>)`: do not reject it; check it yourself by the environment rule below.
 3. A `WAITING` row is not a `NOT DONE` row. Check that its wait is real: `waits_on` names a `kind` (`job`, `landed`, `question` or `permission`) and a `ref` that exists, the row truly cannot hold without it, and the thing it names has not already landed (a `job` ref already accepted, a `landed` ref already landed, a `question` already answered, a `permission` already granted). A wait that fails any of these hides a defect: reject the row as `NOT DONE`, with a must-fix on it.
 4. When every row is `HOLDS`, `dropped` with its decision, or a real `WAITING`, at least one is `WAITING`, and nothing else is must-fix, the verdict is `HELD`, not `REJECTED`, with `"must_fix": []`. A hold gets no rework Job and no "Decide how" person Job; the Job carries on by itself once the wait lands.
 5. Otherwise check each `HOLDS` row against the files and command output named in its line. Do not rerun a check the builder pasted with its exit code on the same head; rerun only read-only checks that were not shown.
 6. A `HOLDS` row with no command and exit code or `path:line` is not proof: reject it as a row with no proof.
-7. A change outside the Job's write list, a failing or skipped verify, or an existing test edited to pass breaks the Job: must-fix, also when the other open rows are `WAITING`.
+7. A change outside the Job's write list, a failing or skipped verify, or an existing test edited to pass breaks the Job: must-fix, also when the other open rows are `WAITING`. A verify that failed only for an environment cause is not that: check it by the environment rule below.
 8. Anything else is a one-line note. A note never blocks and nobody starts work on it unless a person asks.
+
+Environment rule: you judge whether the work is done, not the environment.
+
+- Sort every failing or unrunnable check, yours or the builder's, into a code cause or an environment cause. An environment cause is a port in use, a shared service down, a missing dependency, a folder or credential missing in the worktree, or a sandbox refusal to bind or write. Name the error lines as the proof of the cause.
+- For an environment cause, fix it or work around it without touching the Job's files: a free port, your own service instance, a run in a checkout that has the dependencies. Rerun the check and judge the row on that output.
+- A row you still cannot run after trying a workaround is judged from the code and the builder's evidence. The environment cause is a note, plus a fix Job in `proposed_jobs` when it will recur. It is never a must-fix, never a rework and never a question to a person.
+- A real wait on a Job, a landing, a question or a permission stays `WAITING` (step 3); an environment failure is never turned into a hold.
 
 Reading code, as the run-job skill's Helpers section says:
 
