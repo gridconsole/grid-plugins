@@ -321,7 +321,7 @@ func Run(args []string, env Env) int {
 			store.Project = res.Project
 			writesProject := verb == "propose" || (verb == "accept" && !strings.HasPrefix(f.Arg(0), "brain:home/")) || (verb == "index" && !readOnly)
 			if !res.Record && res.Rule != where.RuleTask && writesProject {
-				return fail(fmt.Errorf("project %q has no Grid record; create its first task or use --level home", res.Project))
+				return fail(fmt.Errorf("project %q has no Grid record; create its first task, or use --level home only for knowledge that holds in every project", res.Project))
 			}
 		}
 	}
@@ -474,6 +474,11 @@ func Run(args []string, env Env) int {
 	case "accept":
 		var id string
 		id, writeLevel, err = proposalID(f.Arg(0), writeLevel, *level)
+		// A project named with a home id files the note in that project.
+		if err == nil && writeLevel == "home" && strings.HasPrefix(f.Arg(0), "brain:home/") && *project != "" && store.Project != "" && reject == "" {
+			result, err = store.AcceptHomeInProject(id)
+			break
+		}
 		if err == nil {
 			if reject != "" {
 				result, err = store.Reject(writeLevel, id, reject)

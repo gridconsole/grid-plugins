@@ -203,3 +203,311 @@ func TestUnregisteredProjectDoesNotCreateBrain(t *testing.T) {
 		t.Fatalf("qualified home id must work outside a registered project: %s", &h.err)
 	}
 }
+
+// A project named with a home proposal id files the note in that project.
+func TestAcceptHomeProposalWithProjectFilesInProject(t *testing.T) {
+	h := newHarness(t)
+	project := filepath.Join(h.env.GridHome, "projects", "example")
+	if err := os.MkdirAll(project, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "project.md"), []byte("---\nid: 01EXAMPLE\n---\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.propose(t)
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 0 {
+		t.Fatalf("accept: %d %s", code, &h.err)
+	}
+	if _, err := os.Stat(filepath.Join(project, "knowledge", "decisions", "checks.md")); err != nil {
+		t.Fatalf("note not filed in the project: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(h.env.GridHome, "knowledge", "decisions", "checks.md")); !os.IsNotExist(err) {
+		t.Fatal("note was filed at home level")
+	}
+	if _, err := os.Stat(filepath.Join(h.env.GridHome, "brain-proposals", "checks.md")); !os.IsNotExist(err) {
+		t.Fatal("home proposal was left behind")
+	}
+}
+
+// A proposal from a folder with no Grid record must not read as an invitation to
+// file project knowledge at home: the recording notes were filed at home that way.
+func TestProposeInUnregisteredFolderPointsHomeOnlyAtGlobalKnowledge(t *testing.T) {
+	h := newHarness(t)
+	h.env.Cwd = filepath.Join(h.env.Home, "work")
+	if err := os.MkdirAll(filepath.Join(h.env.Cwd, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	code := h.run("propose", "--name", "checks", "--topic", "decisions", "--description", "Before checks.", "--summary", "Checks.", "--source", "x", "--body", "Run.")
+	if code != 1 || !strings.Contains(h.err.String(), "only for knowledge that holds in every project") {
+		t.Fatalf("exit %d, stderr %q", code, &h.err)
+	}
+}
+
+func projectHarness(t *testing.T) (*harness, string) {
+	h := newHarness(t)
+	project := filepath.Join(h.env.GridHome, "projects", "example")
+	if err := os.MkdirAll(project, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "project.md"), []byte("---\nid: 01EXAMPLE\n---\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return h, project
+}
+
+// An accept that fails after the move leaves the home proposal where it was.
+func TestFailedAcceptWithProjectKeepsTheHomeProposal(t *testing.T) {
+	h, project := projectHarness(t)
+	if code := h.run("propose", "--project", "example", "--name", "checks", "--topic", "decisions", "--description", "Before project checks.", "--summary", "Project checks.", "--source", "x", "--body", "Other content."); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if code := h.run("accept", "checks", "--project", "example"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	// Only the note collides, not the accepted proposal record.
+	if err := os.Remove(filepath.Join(project, "brain-proposals", "checks.md")); err != nil {
+		t.Fatal(err)
+	}
+	h.propose(t)
+	home := filepath.Join(h.env.GridHome, "brain-proposals", "checks.md")
+	var first string
+	for i := 0; i < 2; i++ {
+		if code := h.run("accept", "brain:home/checks", "--project", "example"); code == 0 {
+			t.Fatal("accept over a note with different content succeeded")
+		}
+		if _, err := os.Stat(home); err != nil {
+			t.Fatalf("attempt %d: home proposal gone: %v", i, err)
+		}
+		if i == 0 {
+			first = h.err.String()
+		} else if h.err.String() != first {
+			t.Fatalf("retry error %q, first %q", h.err.String(), first)
+		}
+	}
+}
+
+// A home proposal that is already accepted or rejected does not move.
+func TestDecidedHomeProposalDoesNotMove(t *testing.T) {
+	for _, decide := range [][]string{{"accept", "brain:home/checks"}, {"accept", "brain:home/checks", "--reject", "no"}} {
+		h, project := projectHarness(t)
+		h.propose(t)
+		if code := h.run(decide...); code != 0 {
+			t.Fatal(&h.err)
+		}
+		home := filepath.Join(h.env.GridHome, "brain-proposals", "checks.md")
+		before, err := os.ReadFile(home)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// An accepted proposal is a curator retry and exits 0; a rejected one is an error.
+		wantOK := len(decide) == 2
+		if code := h.run("accept", "brain:home/checks", "--project", "example"); (code == 0) != wantOK {
+			t.Fatalf("%v: exit %d, want ok=%v", decide, code, wantOK)
+		}
+		after, err := os.ReadFile(home)
+		if err != nil || string(after) != string(before) {
+			t.Fatalf("%v: home proposal changed: %v", decide, err)
+		}
+		if _, err := os.Stat(filepath.Join(project, "brain-proposals", "checks.md")); !os.IsNotExist(err) {
+			t.Fatalf("%v: proposal was copied into the project", decide)
+		}
+		if _, err := os.Stat(filepath.Join(project, "knowledge", "decisions", "checks.md")); !os.IsNotExist(err) {
+			t.Fatalf("%v: note was filed in the project", decide)
+		}
+	}
+}
+
+// A content refusal on the --project path is recorded at home, as a plain accept does.
+func TestContentRefusalWithProjectRecordsTheRejection(t *testing.T) {
+	h, project := projectHarness(t)
+	h.propose(t, "--external")
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 1 {
+		t.Fatalf("exit %d, want 1: %s", code, &h.err)
+	}
+	b, err := os.ReadFile(filepath.Join(h.env.GridHome, "brain-proposals", "checks.md"))
+	if err != nil || !strings.Contains(string(b), "status: rejected") {
+		t.Fatalf("home proposal not rejected: %v\n%s", err, b)
+	}
+	if _, err := os.Stat(filepath.Join(project, "brain-proposals", "checks.md")); !os.IsNotExist(err) {
+		t.Fatal("proposal was moved into the project")
+	}
+}
+
+// An accept that fails after the move puts the proposal back home as proposed.
+func TestAcceptFailingAfterTheMoveMovesTheProposalBack(t *testing.T) {
+	h, project := projectHarness(t)
+	h.propose(t)
+	blocker := filepath.Join(project, "knowledge", "versions")
+	if err := os.MkdirAll(filepath.Dir(blocker), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blocker, []byte("not a folder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code == 0 {
+		t.Fatal("accept with a blocked version folder succeeded")
+	}
+	home := filepath.Join(h.env.GridHome, "brain-proposals", "checks.md")
+	b, err := os.ReadFile(home)
+	if err != nil || !strings.Contains(string(b), "status: proposed") || !strings.Contains(string(b), "level: home") {
+		t.Fatalf("proposal not back home as proposed: %v\n%s", err, b)
+	}
+	if _, err := os.Stat(filepath.Join(project, "brain-proposals", "checks.md")); !os.IsNotExist(err) {
+		t.Fatal("proposal left in the project")
+	}
+	if err := os.Remove(blocker); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 0 {
+		t.Fatalf("retry exit %d: %s", code, &h.err)
+	}
+}
+
+// A topic that only the home level defines: the project gate refuses it, the home
+// gate does not, so nothing may be published or recorded.
+func TestProjectOnlyGateRefusalLeavesTheHomeProposalUntouched(t *testing.T) {
+	h, project := projectHarness(t)
+	if err := os.MkdirAll(filepath.Join(h.env.GridHome, "topics", "notes"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	def := "---\nname: notes\nkind: knowledge\nlevel: home\ndescription: A custom topic.\n---\n# notes\n"
+	if err := os.WriteFile(filepath.Join(h.env.GridHome, "topics", "notes", "TOPIC.md"), []byte(def), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("propose", "--level", "home", "--name", "n1", "--topic", "notes", "--description", "d.", "--summary", "s.", "--source", "x", "--body", "b."); code != 0 {
+		t.Fatal(&h.err)
+	}
+	home := filepath.Join(h.env.GridHome, "brain-proposals", "n1.md")
+	before, err := os.ReadFile(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/n1", "--project", "example"); code == 0 || !strings.Contains(h.err.String(), "nothing was changed") {
+		t.Fatalf("exit %d, stderr %q", code, &h.err)
+	}
+	after, err := os.ReadFile(home)
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("home proposal changed: %v", err)
+	}
+	for _, p := range []string{filepath.Join(h.env.GridHome, "knowledge", "notes", "n1.md"), filepath.Join(project, "knowledge", "notes", "n1.md"), filepath.Join(project, "brain-proposals", "n1.md")} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("%s exists", p)
+		}
+	}
+}
+
+// A curator retry of an accepted proposal exits 0 and changes nothing; a rejected one stays an error.
+func TestReacceptWithProject(t *testing.T) {
+	h, project := projectHarness(t)
+	h.propose(t)
+	if code := h.run("accept", "brain:home/checks"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 0 {
+		t.Fatalf("re-accept exit %d: %s", code, &h.err)
+	}
+	if _, err := os.Stat(filepath.Join(project, "knowledge", "decisions", "checks.md")); !os.IsNotExist(err) {
+		t.Fatal("re-accept filed the note in the project")
+	}
+	h2, _ := projectHarness(t)
+	h2.propose(t)
+	if code := h2.run("accept", "brain:home/checks", "--reject", "no"); code != 0 {
+		t.Fatal(&h2.err)
+	}
+	if code := h2.run("accept", "brain:home/checks", "--project", "example"); code == 0 {
+		t.Fatal("rejected proposal was accepted")
+	}
+}
+
+// The identical --project accept, repeated, exits 0 both times.
+func TestRepeatedProjectAcceptExitsZeroTwice(t *testing.T) {
+	h, _ := projectHarness(t)
+	h.propose(t)
+	for i := 0; i < 2; i++ {
+		if code := h.run("accept", "brain:home/checks", "--project", "example"); code != 0 {
+			t.Fatalf("accept %d: exit %d: %s", i+1, code, &h.err)
+		}
+	}
+}
+
+// Rolling a failed --project accept back removes the note it published, so a
+// later home accept cannot file the note at both levels.
+func TestRollbackRemovesThePublishedProjectNote(t *testing.T) {
+	h, project := projectHarness(t)
+	h.propose(t)
+	log := filepath.Join(project, "knowledge", "log.md")
+	if err := os.MkdirAll(log, 0o700); err != nil { // a folder where the audit log goes
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/checks", "--project", "example"); code == 0 {
+		t.Fatal("accept with a blocked audit log succeeded")
+	}
+	if _, err := os.Stat(filepath.Join(project, "knowledge", "decisions", "checks.md")); !os.IsNotExist(err) {
+		t.Fatalf("published project note left behind: %v", err)
+	}
+	if b, err := os.ReadFile(filepath.Join(h.env.GridHome, "brain-proposals", "checks.md")); err != nil || !strings.Contains(string(b), "status: proposed") {
+		t.Fatalf("proposal not back home as proposed: %v", err)
+	}
+}
+
+// A supersedes link to a home note still marks it when the note is filed with --project.
+func TestProjectAcceptMarksTheSupersededHomeNote(t *testing.T) {
+	h, _ := projectHarness(t)
+	if code := h.run("propose", "--level", "home", "--name", "old1", "--topic", "decisions", "--description", "d.", "--summary", "s.", "--source", "x", "--body", "old."); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if code := h.run("accept", "brain:home/old1"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	link := `{"to":"brain:home/old1","rel":"supersedes","summary":"The old rule.","why":"The new rule replaces the old one."}`
+	if code := h.run("propose", "--level", "home", "--name", "new1", "--topic", "decisions", "--description", "d.", "--summary", "s.", "--source", "x", "--body", "new.", "--link", link); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if code := h.run("accept", "brain:home/new1", "--project", "example"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	b, err := os.ReadFile(filepath.Join(h.env.GridHome, "knowledge", "decisions", "old1.md"))
+	if err != nil || !strings.Contains(string(b), "superseded_by: brain:project/new1") {
+		t.Fatalf("old home note not marked: %v\n%s", err, b)
+	}
+}
+
+// The home supersede runs again on a retry: if it fails once, the link is not lost.
+func TestProjectAcceptRetriesTheHomeSupersede(t *testing.T) {
+	h, _ := projectHarness(t)
+	if code := h.run("propose", "--level", "home", "--name", "old1", "--topic", "decisions", "--description", "d.", "--summary", "s.", "--source", "x", "--body", "old."); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if code := h.run("accept", "brain:home/old1"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	link := `{"to":"brain:home/old1","rel":"supersedes","summary":"The old rule.","why":"The new rule replaces the old one."}`
+	if code := h.run("propose", "--level", "home", "--name", "new1", "--topic", "decisions", "--description", "d.", "--summary", "s.", "--source", "x", "--body", "new.", "--link", link); code != 0 {
+		t.Fatal(&h.err)
+	}
+	// The old note's version folder is unreadable, so the supersede fails before it writes anything.
+	versions := filepath.Join(h.env.GridHome, "knowledge", "versions", "decisions", "old1")
+	saved := versions + ".saved"
+	if err := os.Rename(versions, saved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(versions, []byte("not a folder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/new1", "--project", "example"); code == 0 {
+		t.Fatal("accept with a blocked home version folder succeeded")
+	}
+	if err := os.Remove(versions); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(saved, versions); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/new1", "--project", "example"); code != 0 {
+		t.Fatalf("retry exit %d: %s", code, &h.err)
+	}
+	b, err := os.ReadFile(filepath.Join(h.env.GridHome, "knowledge", "decisions", "old1.md"))
+	if err != nil || !strings.Contains(string(b), "superseded_by: brain:project/new1") {
+		t.Fatalf("link lost after the retry: %v\n%s", err, b)
+	}
+}

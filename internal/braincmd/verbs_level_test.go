@@ -59,7 +59,7 @@ func TestVLRevertFromAFolderWithNoGridRecord(t *testing.T) {
 	if err := os.MkdirAll(h.env.Cwd, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	vlFail(t, h, 1, "brain: project \"work\" has no Grid record; create its first task or use --level home\n",
+	vlFail(t, h, 1, "brain: project \"work\" has no Grid record; create its first task, or use --level home only for knowledge that holds in every project\n",
 		"revert", "decisions/checks", "--to", "1")
 }
 

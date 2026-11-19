@@ -84,7 +84,7 @@ func levelStore(env Env, level, project string, writes bool) (brain.Store, strin
 		if res.Rule != where.RulePersonal && res.Project != where.Personal {
 			store.Project = res.Project
 			if writes && !res.Record && res.Rule != where.RuleTask {
-				return store, "", fmt.Errorf("project %q has no Grid record; create its first task or use --level home", res.Project)
+				return store, "", fmt.Errorf("project %q has no Grid record; create its first task, or use --level home only for knowledge that holds in every project", res.Project)
 			}
 		}
 	}
