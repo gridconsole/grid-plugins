@@ -302,7 +302,8 @@ Disagreements and defaults chosen:
   Role names and the tier field's wire location were otherwise unspecified.
 - Each type has `x-class` and `x-roles` annotations plus enforced role constraints.
   The exact role matrix is absent from the current docs: lead, owner, member and
-  cli may plan/control; worker, agent and cli may write leased Job evidence;
+  cli may plan/control, and agent may post an approve person Job (job.json);
+  worker, agent and cli may write leased Job evidence;
   reviewer, lead, cli, worker and agent may post found; host, cli and lead may post host; only cli posts
   usage notices. Guest/external authors may answer, post messages or submit
   knowledge marked `external: true`, never Jobs or proposed work. A guest answer
@@ -1090,11 +1091,12 @@ checks the previous digest, so a short-hash collision requires an explicit
 review and `--plan-hash` to replace the approval. `approval.json` carries no
 `gate` field.
 
-`grid approve` takes `--plan-hash`, `--note` and `--json`, and no flag names a
-step: the approval is the plan Job's result whatever the step is called.
+`grid approve` takes `--plan-hash`, `--note`, `--agent` and `--json`, and no flag
+names a step: the approval is the plan Job's result whatever the step is called.
 Without `--plan-hash` it approves the current plan, and refuses with `Changed
 since you approved` when the result it finds no longer matches. An agent answers
-the open approve Job (docs/delivery.md); with none it gets exit 3. A repeat
+the open approve Job (docs/delivery.md); with none it posts the plan approve Job
+and answers it. `--agent <name>` sets `GRID_AGENT` for the run. A repeat
 approve whose result already matches the current hash, digest and lands hash
 (and the `--plan-hash` token, when one is given) writes nothing: no rewrite of `approval.json` and no
 second history line. It exits 0 and prints the stored approval. While the plan

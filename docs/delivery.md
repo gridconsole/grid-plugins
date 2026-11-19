@@ -183,16 +183,18 @@ existing unsupported-platform error.
 
 `grid approve` is for a person of the team or an agent (the owner, 19 Nov; no
 signing). An agent's shell (an agent `GRID_ROLE`, or a worker mark such as
-`GRID_AGENT` with no `GRID_ACTOR`) answers the task's open approve Job unleased:
+`GRID_AGENT` with no `GRID_ACTOR`) answers the task's approve Job unleased:
 the answer's author is its member in role `agent`, its reason `approved by agent
 <GRID_JOB>` (else the agent's worker id), and the holder's next pass accepts it.
-With no open approve Job it exits **3** and writes nothing. A person's shell exits
-**3** and writes nothing when `GRID_MEMBER` is not set, and a guest always does.
+With no open approve Job it posts the plan approve Job itself, unleased in role
+`agent` (job.json admits an agent author for that Job only), and answers it. A
+person's shell exits **3** and writes nothing when `GRID_MEMBER` is not set, and
+a guest always does.
 It records a person's approval as `GRID_MEMBER`, and it does not look at the
 process ancestry. `grid task status` is not person-only: it records its caller (a
 person's shell as the local owner, a worker shell as the worker), and
 `agents/orchestrator.md:27,48` has the orchestrator agent run it. A person runs
 `grid approve` from the Grid app or a terminal that exports `GRID_MEMBER`; an
-agent Grid did not launch runs `GRID_AGENT=<name> grid approve`. `grid deliver`
-still moves the task to waiting at step `ship` in-process and does not require a
-person.
+agent Grid did not launch runs `grid approve --agent <name>`, which sets
+`GRID_AGENT` for the run. `grid deliver` still moves the task to waiting at step
+`ship` in-process and does not require a person.
