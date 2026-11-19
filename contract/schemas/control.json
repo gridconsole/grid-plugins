@@ -219,12 +219,43 @@
                         "parked",
                         "rejected",
                         "conflict",
-                        "cancelled"
+                        "cancelled",
+                        "held"
                       ]
                     },
                     "reason": {
                       "type": "string",
                       "minLength": 1
+                    },
+                    "waits_on": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "row": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "kind": {
+                            "enum": [
+                              "job",
+                              "landed",
+                              "question",
+                              "permission"
+                            ]
+                          },
+                          "ref": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "row",
+                          "kind",
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      }
                     },
                     "close_reason": {
                       "type": "string",
