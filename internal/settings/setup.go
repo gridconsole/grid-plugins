@@ -178,11 +178,10 @@ func (s Store) PendingSetup() (answers, pending SetupAnswers, hash string, err e
 }
 
 // ApproveSetupCommands writes the held command keys into the recorded answers when hash is
-// the hash of what waits, so a person approves exactly what they read.
+// the hash of what waits, so a person or an agent approves exactly what they read.
 //
-// A Grid-launched agent's sandbox denies writes to both files, and the role and member are
-// the agent's own to set, so a file that cannot be opened for writing refuses before anything
-// else: approving is for a person in a terminal outside Claude Code or Codex.
+// A file that cannot be opened for writing, as under a sandbox that denies the Grid home,
+// refuses before anything else, so a refused approve changes nothing.
 func (s Store) ApproveSetupCommands(hash string) (approved, answers SetupAnswers, err error) {
 	dir, err := s.setupDirectory()
 	if err != nil {
@@ -206,7 +205,7 @@ func (s Store) ApproveSetupCommands(hash string) (approved, answers SetupAnswers
 		case err == nil:
 			_ = f.Close()
 		case errors.Is(err, os.ErrPermission):
-			return nil, nil, fmt.Errorf("%s cannot be written here: approving setup commands is for a person in a terminal outside Claude Code or Codex", name)
+			return nil, nil, fmt.Errorf("%s cannot be written here: approve the setup commands where the Grid home can be written", name)
 		case !errors.Is(err, os.ErrNotExist):
 			return nil, nil, err
 		}

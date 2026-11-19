@@ -158,15 +158,12 @@ func TestProjectSettingsApproveWritesTheHeldCommands(t *testing.T) {
 	got := h.psRecord(psAnswers)
 	before := h.psFile("setup-answers.json")
 
-	// An agent cannot approve; nor can a person with a hash that is not the pending one.
-	if code := h.run(h.home, "project", "settings", "approve", "example", "--hash", got.Hash); code == 0 {
-		t.Fatal("an agent approved the held commands")
-	}
-	// The app launches an agent with GRID_ROLE=worker and its holder's member id.
-	h.env.Getenv = psEnv(h, "worker", "sam")
+	// Agents approve since 19 Nov (TestAgentApprovesTheHeldSetupCommands). A person's shell
+	// with no member id cannot; nor can a person with a hash that is not the pending one.
+	h.env.Getenv = psEnv(h, "", "")
 	h.errb.Reset()
-	if code := h.run(h.home, "project", "settings", "approve", "example", "--hash", got.Hash); code == 0 || !strings.Contains(h.errb.String(), "for a person of the team") {
-		t.Fatalf("a Grid-launched agent approve exit %d: %s", code, h.errb)
+	if code := h.run(h.home, "project", "settings", "approve", "example", "--hash", got.Hash); code == 0 || !strings.Contains(h.errb.String(), "set GRID_MEMBER") {
+		t.Fatalf("approve with no member id exit %d: %s", code, h.errb)
 	}
 	h.env.Getenv = psEnv(h, "", "sam")
 	if code := h.run(h.home, "project", "settings", "approve", "example", "--hash", strings.Repeat("0", 64)); code == 0 {
@@ -203,8 +200,9 @@ func TestProjectSettingsApproveWritesTheHeldCommands(t *testing.T) {
 }
 
 // 18 Nov review: GRID_ROLE and GRID_MEMBER are an agent's own to set, so with no setup record
-// `GRID_ROLE=owner GRID_MEMBER=x grid project settings approve` passed inside the sandbox. The
-// sandbox denies writes to both setup files whatever the record; read-only files stand in for it.
+// `GRID_ROLE=owner GRID_MEMBER=x grid project settings approve` passed inside the sandbox. Agents
+// may approve since 19 Nov, but a sandbox that denies writes to the setup files still refuses
+// before anything changes; read-only files stand in for it.
 func TestProjectSettingsApproveRefusesInsideTheSandbox(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("chmod does not deny writes as root")
@@ -226,7 +224,7 @@ func TestProjectSettingsApproveRefusesInsideTheSandbox(t *testing.T) {
 	}
 	h.env.Getenv = psEnv(h, "owner", "x")
 	h.errb.Reset()
-	if code := h.run(h.home, "project", "settings", "approve", "example", "--hash", got.Hash); code == 0 || !strings.Contains(h.errb.String(), "outside Claude Code or Codex") {
+	if code := h.run(h.home, "project", "settings", "approve", "example", "--hash", got.Hash); code == 0 || !strings.Contains(h.errb.String(), "cannot be written here") {
 		t.Fatalf("a spoofed owner inside the sandbox: approve exit %d: %s", code, h.errb)
 	}
 	for name, want := range before {
