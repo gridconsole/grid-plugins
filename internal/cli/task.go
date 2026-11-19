@@ -250,7 +250,7 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	if !present && branch != "" && (!slices.Contains(noWrite, branch) || head == "" || head != base) {
 		return "", repoErr
 	}
-	var skipped, unheld []string
+	var skipped []string
 	for _, b := range built {
 		sha, landed, err := taskMergeOne(res, name, b, base)
 		var conflict *mergeConflictError
@@ -264,11 +264,9 @@ func taskMerge(env Env, id, proj string) (string, error) {
 			skipped = append(skipped, b)
 			continue
 		}
-		// With task.md's branch landed, a builder branch made on another machine does not stop the land.
-		if present && errors.As(err, &missing) {
-			fmt.Fprintf(env.Stderr, "grid task merge: passed over %s: no repo of project %s holds it, though its builder Job has files to write; task.md's branch %s landed\n", b, res.Project, branch)
-			unheld = append(unheld, b)
-			continue
+		// A builder Job with files to write whose branch is not here may hold work no other branch has: the task waits.
+		if errors.As(err, &missing) {
+			return "", fmt.Errorf("%w; it is the branch of builder Job %s, which has files to write, so the task waits until that branch is here", err, branchJob(b))
 		}
 		if err != nil {
 			return "", err
@@ -284,9 +282,6 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	var notes []string
 	for _, b := range skipped {
 		notes = append(notes, fmt.Sprintf("grid task merge skipped %s: no repo of project %s holds it and its builder Job has no files to write", b, res.Project))
-	}
-	for _, b := range unheld {
-		notes = append(notes, fmt.Sprintf("grid task merge passed over %s: no repo of project %s holds it, though its builder Job has files to write; task.md's branch %s landed", b, res.Project, branch))
 	}
 	if !present && branch != "" {
 		fmt.Fprintf(env.Stderr, "grid task merge: passed over %s, the branch task.md names: no repo of project %s holds it, and its Job has no files to write, so it has nothing to land\n", branch, res.Project)
@@ -365,6 +360,17 @@ func firstUnlanded(res where.Result, base string, built, rebased, noWrite []stri
 		return repo, b, nil
 	}
 	return "", "", errAllLanded
+}
+
+// branchJobID is the Job id in a branch the worker names grid-<feed id>-<job>-a<n>.
+var branchJobID = regexp.MustCompile(`-(J-[1-9][0-9]*(?:\.[1-9][0-9]*)*)-a[1-9][0-9]*$`)
+
+// branchJob is the Job whose attempt made branch, or the branch itself when it is not named so.
+func branchJob(branch string) string {
+	if m := branchJobID.FindStringSubmatch(branch); m != nil {
+		return m[1]
+	}
+	return branch
 }
 
 // errAllLanded is a task whose every builder branch is in its target already.

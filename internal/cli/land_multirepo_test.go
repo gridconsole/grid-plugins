@@ -289,10 +289,10 @@ func TestTaskTargetTipIgnoresAStaleBranchKey(t *testing.T) {
 	}
 }
 
-// A single-repo delivery whose rebase is accepted lands the rebased branch alone, as
-// before: an accepted builder Job whose branch is not in this checkout (its builder ran
-// on another machine) does not stop it.
-func TestShipConflictLandsTheRebasedBranchPastABuilderBranchNotHere(t *testing.T) {
+// A single-repo delivery whose rebase is accepted lands the rebased branch, but an
+// accepted builder Job with files to write whose branch is not in this checkout (its
+// builder ran on another machine) may hold work of its own: the task waits on it.
+func TestShipConflictWaitsOnABuilderBranchNotHere(t *testing.T) {
 	env, dir, repo, _, store, stderr := shipMergeFixture(t, false, true)
 	landFirst(t, repo)
 	snap, err := orchestrator.Load(store)
@@ -320,8 +320,15 @@ func TestShipConflictLandsTheRebasedBranchPastABuilderBranchNotHere(t *testing.T
 	branch := fakeBuilder(t, dir, repo, rebases[0].ID)
 	setJobStatus(t, env, store, rebases[0].ID, contract.Accepted, "the conflicts are resolved")
 	landAfterShip(env, dir, contract.Author{ID: "local", Role: "owner"})
-	if rec, err := task.Read(dir); err != nil || rec.State != "closed" {
-		t.Fatalf("task state %q %v after the rebase was accepted, want closed; stderr %s; history:\n%s", rec.State, err, stderr, shipHistory(t, dir))
+	if rec, err := task.Read(dir); err != nil || rec.State == "closed" {
+		t.Fatalf("task state %q %v after the rebase was accepted, want it not closed; stderr %s; history:\n%s", rec.State, err, stderr, shipHistory(t, dir))
+	}
+	fid, _, err := task.FeedIdentity(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := stderr.String(); !strings.Contains(out, "branch grid-"+fid+"-"+id+"-a1 is not in the checkout") || !strings.Contains(out, "builder Job "+id) {
+		t.Fatalf("stderr does not name the missing branch of builder Job %s:\n%s", id, out)
 	}
 	if parents := strings.Fields(shipGit(t, repo, "rev-list", "--parents", "-n", "1", "main")); len(parents) != 3 || parents[2] != shipGit(t, repo, "rev-parse", branch) {
 		t.Fatalf("main is %v, want a merge commit whose second parent is %s", parents, branch)

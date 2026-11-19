@@ -69,24 +69,17 @@ func TestApproveLandsATaskBranchThatHoldsTheBuilderBranch(t *testing.T) {
 }
 
 // task.md's branch is here and an accepted builder Job with files to write has a branch
-// no repo holds: the land goes on, and says once on stderr and in history that it passed
-// that branch over.
-func TestApproveSaysItPassedOverABuilderBranchNotHere(t *testing.T) {
+// no repo holds: that Job's work may be on no other branch, so the land does not pass it
+// over; the task waits, and stderr names the branch and the Job.
+func TestApproveWaitsOnABuilderBranchNotHereAfterTheTaskBranch(t *testing.T) {
 	m := multiRepoFixture(t)
 	lost := m.lostBranch(t, m.plugin)
 	m.builder(t, m.app, "main", "a1.txt")
 	shipGit(t, m.app, "branch", "grid-"+m.fid+"-J-9-a1", "main")
 	m.approve(t)
-	m.closedWith(t, map[string][]string{m.app: {"a1.txt"}})
-	want := "passed over " + lost
-	if !strings.Contains(m.stderr.String(), want) {
-		t.Errorf("stderr does not say %q: %s", want, m.stderr)
-	}
-	if _, err := taskMerge(m.env, "T-01", "sample"); err != nil {
-		t.Fatalf("a second merge: %v", err)
-	}
-	if h := shipHistory(t, m.dir); strings.Count(h, want) != 1 {
-		t.Errorf("history says %q %d times, want once:\n%s", want, strings.Count(h, want), h)
+	m.waits(t, "branch "+lost+" is not in the checkout of project sample")
+	if out := m.stderr.String(); !strings.Contains(out, "builder Job J-1") {
+		t.Fatalf("stderr does not name builder Job J-1:\n%s", out)
 	}
 }
 
@@ -138,4 +131,22 @@ func TestTaskTargetTipLooksPastATaskBranchAlreadyLanded(t *testing.T) {
 	if err != nil || target != "main" || tip != want {
 		t.Fatalf("target %q tip %q %v, want main of plugin at %s", target, tip, err, want)
 	}
+}
+
+// T-18: the project folder is not a repo and holds app, which has the branch of every
+// accepted builder Job, some merged into main already and some one commit ahead of it,
+// and task.md names the newest of them: approve lands the ones ahead and closes the task.
+func TestApproveLandsBuilderBranchesOfOneRepoInAFolderThatIsNoRepo(t *testing.T) {
+	m := multiRepoFixture(t)
+	base := shipGit(t, m.app, "rev-parse", "main")
+	first := m.builder(t, m.app, "main", "a1.txt")
+	shipGit(t, m.app, "merge", "-q", "--no-ff", "--no-edit", first)
+	m.builder(t, m.app, "main", "a2.txt")
+	third := m.builder(t, m.app, "main", "a3.txt")
+	shipGit(t, m.app, "merge", "-q", "--no-ff", "--no-edit", third)
+	last := m.builder(t, m.app, "main", "a4.txt")
+	m.setTaskKey(t, "branch: grid-"+m.fid+"-J-9-a1\n", "branch: "+last+"\n")
+	m.setTaskKey(t, "head: "+base, "head: "+shipGit(t, m.app, "rev-parse", last))
+	m.approve(t)
+	m.closedWith(t, map[string][]string{m.app: {"a1.txt", "a2.txt", "a3.txt", "a4.txt"}})
 }
