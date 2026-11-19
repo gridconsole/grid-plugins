@@ -24,6 +24,13 @@ Checks the orchestrator runs on each Job before posting it (the rules of 10 Nov)
 7. Verify: a test command with a positive `min_tests`, or `kind: file-exists` or `kind: reviewer-check` for non-code work. Before you name a whole-suite verify (`go test ./...`), run it once on the base; when it is already red, name the tests the change touches in verify and write the pre-existing failure in the Job's out of scope, so no builder is rejected for it.
 8. Note to keep: when the owner's request or the plan step asks for a note, a decision or knowledge to keep ("leave a note for whoever works on it next", "record why we chose it", "write down how X is handled"), the Job that does the work has an acceptance row of its own that names it: what it says and its topic (`conventions` for a practice or a lesson, `decisions` for a choice and its reason; `grid brain topics` lists them). The row says the builder proposes it with `grid brain propose --task <task>` and lists it in the result's `knowledge`. A file the request also names (a README, a doc) is a second row; a file never stands in for the proposal. Without that row the builder reads the ask as a file to write, and no curator Job follows (eval round 12, E3).
 
+Four more checks, so a Job waits on what it depends on instead of failing. A Job that fails one is rewritten, not posted:
+
+9. Waits on its dependencies: when a Job's acceptance relies on another Job's change (its files, its output, a test that only passes with it), the Job lists that Job in `after` with a why. Lint refuses it with `job.after-missing` when it does not.
+10. Live UI check is its own Job: a check on the live dev UI is never a row of a build Job. It is a `grid-checker` Job of its own, posted after the merge and install of the builder's change: its `after` names the build Job with kind `landed` (met only by a counted landed post, `internal/jobgraph/graph.go:23-25`; an accept is not a landing). Lint refuses a UI row in a build Job with `job.live-ui-row`.
+11. Decisions first: an open owner decision (a contract or data shape the owner's words leave open) is asked as a question before the build Job is posted (see the `questions` skill), and the build Job waits on it with `gate:Q-n` in `after`. A decision the owner's words already settle is not asked.
+12. Rows inside write: each acceptance row must be reachable within the Job's `write` list. A row that needs a file outside `write` goes to another Job or the file joins `write`. `grid job post` refuses it with `job.row-outside-write`.
+
 ## Bash
 
 - Send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result.
@@ -137,4 +144,4 @@ Then run, in this order:
 - `grid plan check` for a plan;
 - `grid job post --task <task> --type job --body <json>` once each check exits 0, after the Jobs it names in `after`.
 
-Done: every Job posted passed the eight checks and `grid job tree --task <task>` shows it.
+Done: every Job posted passed the twelve checks and `grid job tree --task <task>` shows it.

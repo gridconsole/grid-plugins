@@ -261,6 +261,8 @@ func (c *checker) validate(j job.Job, o Options) {
 			c.add("job.after-why", "after", "Dependency kind needs a reason", "Explain why this dependency starts the Job.")
 		}
 	}
+	c.liveUI(j)
+	c.rowOutsideWrite(j)
 	c.reviewTwice(j)
 	c.pastedRule(j, o)
 	for _, group := range []struct {
@@ -273,6 +275,7 @@ func (c *checker) validate(j job.Job, o Options) {
 	}
 	c.jobRepo(j.Repo, o.Repos)
 	itemText := j.Title
+	intentText := ""
 	if o.Resolver != nil {
 		for _, p := range []string{j.Intent.Owner, j.Intent.Item, j.Intent.Goal} {
 			if p == "" {
@@ -281,7 +284,10 @@ func (c *checker) validate(j job.Job, o Options) {
 			s, e := o.Resolver.Resolve(p)
 			if e != nil {
 				c.sourceError("job.pointer", "intent", e, "Repair the pointer to the intended source lines.")
-			} else if p == j.Intent.Item {
+				continue
+			}
+			intentText += " " + s.Text
+			if p == j.Intent.Item {
 				itemText = s.Text
 			}
 		}
@@ -309,6 +315,7 @@ func (c *checker) validate(j job.Job, o Options) {
 			}
 		}
 	}
+	c.afterMissing(j, intentText)
 	// An orchestrator Job plans the work; its item is the person's own request,
 	// not a plan step, so it has no plan words to cover.
 	if strings.EqualFold(strings.TrimSpace(j.Role), "orchestrator") {
