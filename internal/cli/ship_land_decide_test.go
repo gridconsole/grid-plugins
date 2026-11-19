@@ -125,6 +125,9 @@ func TestShipAcceptedRebaseWithNoBranchRaisesOneDecision(t *testing.T) {
 
 // The rebase Job is accepted and its branch is found, but it still conflicts with the same main:
 // one decision Job, no rework, and a second pass neither posts nor runs the land.
+// With TestShipParkedRebaseLandsAfterTheDecisionsRework it covers the removed
+// TestShipConflictWithMainUnmovedPostsAReworkOfTheRebaseJob, whose automatic rework
+// this replaces; the Judge's round count stays pinned in internal/judge/pj_vb_verdict_test.go.
 func TestShipAcceptedRebaseStillConflictingRaisesOneDecision(t *testing.T) {
 	env, dir, repo, store, ship, head, stderr := acceptedRebase(t, "lane")
 	landParked(t, env, dir, repo, store, ship, head, stderr)
