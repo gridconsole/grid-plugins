@@ -276,8 +276,8 @@ func DoneReason(target string, status contract.Status) string {
 // that is still open (a parked split parent, say) is not asked for more. A target
 // closed without its work does not meet the edge, however its children ended: a
 // review child is accepted even when its verdict rejected the work (end review
-// 0612Z M1). A cancelled target waits; a rejected one meets the edge through the
-// Jobs that rework it (reworkDone). Cycle does not follow reworks: they are
+// 0612Z M1). A cancelled target waits unless another Job continues it; a rejected
+// one, or a cancelled one so continued, meets the edge through those Jobs (reworkDone). Cycle does not follow reworks: they are
 // posted after the plan, when the review rejects.
 //
 // An open target meets the edge on its children alone (end review 0812Z S5): a

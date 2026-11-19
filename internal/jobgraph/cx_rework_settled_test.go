@@ -25,6 +25,7 @@ func TestCxOpenReworkWaitsForItsOwnAccept(t *testing.T) {
 		{"review rejected, person Job open", asked, m1Status(append(rejected, "J-2.3", "posted")...), "waiting for J-4 to be accepted"},
 		{"review rejected, decision Job running", decided, m1Status(append(rejected, "J-2.3", "cancelled", "J-2.4", "running")...), "waiting for J-4 to be accepted"},
 		{"review rejected, nothing raised yet", reviewed, m1Status(rejected...), "waiting for J-4 to be accepted"},
+		{"decision Job accepted, J-4 not yet closed", decided, m1Status(append(rejected, "J-2.3", "cancelled", "J-2.4", "accepted")...), "waiting for J-4 to be accepted"},
 		{"review passed, rework accepted", reviewed, m1Status("J-2", "rejected", "J-2.1", "accepted", "J-4", "accepted", "J-2.2", "accepted"), ""},
 	})
 }
