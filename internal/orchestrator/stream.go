@@ -678,7 +678,8 @@ func waitsOnPerson(snap Snapshot, now time.Time) bool {
 
 // waitNote is the line task.md shows for who the task waits on, given waitsOnPerson:
 // a person; else an agent Job ready or started; else the first wait on a Job that is
-// closed or not on the Feed, which no open Job will meet, by Job id.
+// closed or not on the Feed, which no open Job will meet, by Job id, a land wait
+// first, as nothing posts a landed record by itself (GridV2 T-12).
 func waitNote(snap Snapshot, now time.Time, onPerson bool) string {
 	if onPerson {
 		return "open Jobs wait on a person"
@@ -697,9 +698,11 @@ func waitNote(snap Snapshot, now time.Time, onPerson bool) string {
 			}
 		}
 	}
-	for _, w := range r.Waiting {
-		if t := snap.State.Jobs[w.Target]; t == nil || t.Status == contract.Accepted || t.Status == contract.Cancelled || t.Status == contract.Rejected {
-			return w.Job + " is " + w.Reason
+	for _, landed := range []bool{true, false} {
+		for _, w := range r.Waiting {
+			if t := snap.State.Jobs[w.Target]; (w.Kind == jobgraph.Landed) == landed && (t == nil || t.Status == contract.Accepted || t.Status == contract.Cancelled || t.Status == contract.Rejected) {
+				return w.Job + " is " + w.Reason
+			}
 		}
 	}
 	return agent
