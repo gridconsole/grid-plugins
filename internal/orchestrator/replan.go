@@ -78,8 +78,9 @@ func gkReplanned(snap Snapshot, cancelled string) bool {
 
 // gkNextJobID is the next free top-level J-<n>, counting the Jobs of the fold,
 // the id of every job record the Feed holds, even one the fold holds out of State
-// (snap.JobIDs), and the Job each job or landed wait of a Held Job names. The rule is that of nextJobID in internal/cli, which this
-// package cannot import.
+// (snap.JobIDs), and the Job each job or landed wait of a Held Job names. It is
+// the rule of nextJobID in internal/cli, which this package cannot import, plus
+// those waits.
 func gkNextJobID(snap Snapshot) string {
 	highest := 0
 	count := func(id string) {

@@ -497,6 +497,16 @@ func TestHoldWaitCycleIsReplannedOnce(t *testing.T) {
 					t.Fatalf("%s = %s orphan %+v, want held and dead_wait on the wait cycle", id, r.Status, r.Orphan)
 				}
 			}
+			var replan string
+			for id := range jobs {
+				replan = id
+			}
+			guDpClose(t, f, replan, contract.Cancelled)
+			f.tick(t)
+			f.tick(t)
+			if people, _ := guDpPeople(t, f); len(people) != 1 {
+				t.Fatalf("person Jobs = %v after the cycle's re-plan was cancelled, want one for the owner", people)
+			}
 		})
 	}
 }
