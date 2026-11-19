@@ -16,6 +16,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/atomicfile"
 	"github.com/gridconsole/grid-plugins/internal/fslock"
+	"github.com/gridconsole/grid-plugins/internal/gridconfig"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 )
 
@@ -27,11 +28,13 @@ type ClaudeRule struct {
 	Value   string `json:"value"`
 }
 
-// ClaudeBlock holds the Claude Code deny rules for what only grid writes:
-// project tasks, personal tasks, project knowledge, home knowledge, and
-// project.md. No Grid hook guard repeats them.
+// ClaudeBlock holds the Claude Code rules setup writes: allow rules for grid and the
+// Grid home, and the auto mode context. It writes no deny rule: task folders, the
+// brain, project.md, the settings files, the host folder, a project's setup answers
+// and held commands and the person's approval identity (~/.grid-person) are all
+// agents' to write (claudeRetired lists the rules earlier setups wrote there).
 func ClaudeBlock(home, gridHome string) ([]ClaudeRule, error) {
-	return claudeBlock(home, gridHome, "")
+	return claudeBlock(home, gridHome)
 }
 
 // brainRootOf is the brain folder the Grid config names for the data folder
@@ -78,7 +81,7 @@ func claudeBrainRules(home, gridHome string, getenv func(string) string) ([]Clau
 	}, nil
 }
 
-func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
+func claudeBlock(home, gridHome string) ([]ClaudeRule, error) {
 	rules, anchor, err := claudeAllowRules(home, gridHome)
 	if err != nil {
 		return nil, err
@@ -88,13 +91,62 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 		return nil, err
 	}
 	rules = append(rules, brainRules...)
+	return append(rules,
+		ClaudeRule{"autoMode", "environment", "$defaults"},
+		ClaudeRule{"autoMode", "environment", "The Grid home at " + anchor + " is trusted for Grid operations."}), nil
+}
+
+// claudeProjectsAnchor is the permission anchor of the projects folder: the
+// projects argument, or <gridHome>/projects when it is empty.
+func claudeProjectsAnchor(home, gridHome, projects string) (string, error) {
 	home, gridHome = gridhome.Real(home), gridhome.Real(gridHome)
 	if projects == "" {
 		projects = filepath.Join(gridHome, "projects")
 	}
-	projectAnchor, err := claudeProjectAnchor(home, gridhome.Real(projects))
+	return claudeProjectAnchor(home, gridhome.Real(projects))
+}
+
+// claudeRetired lists the deny rules earlier setups wrote and Grid no longer asks
+// for: agents write task folders, the brain, project.md, the settings and lock
+// files, workflows.md, the host folder and the setup folder (they are Grid's state,
+// and a deny on them stalled tasks on edge cases), and a project's setup answers
+// and held commands and the person's approval identity (agents approve too). The
+// values are the earlier builder's, to the character, because a rule is taken out
+// only by exact match.
+// Setup and the session start remove them from the settings file and the setup
+// record; the app reads that record for the rules it adds to a launched agent.
+//
+// A person who set GRID_PROJECTS after an earlier setup left the rules of the default
+// projects folder behind, so a custom folder retires both forms.
+func claudeRetired(home, gridHome, projects string) ([]ClaudeRule, error) {
+	rules, err := claudeRetiredFor(home, gridHome, projects)
+	if err != nil || projects == "" {
+		return rules, err
+	}
+	more, err := claudeRetiredFor(home, gridHome, "")
 	if err != nil {
 		return nil, err
+	}
+	for _, rule := range more {
+		if !slices.Contains(rules, rule) {
+			rules = append(rules, rule)
+		}
+	}
+	return rules, nil
+}
+
+func claudeRetiredFor(home, gridHome, projects string) ([]ClaudeRule, error) {
+	_, anchor, err := claudeAllowRules(home, gridHome)
+	if err != nil {
+		return nil, err
+	}
+	projectAnchor, err := claudeProjectsAnchor(home, gridHome, projects)
+	if err != nil {
+		return nil, err
+	}
+	var rules []ClaudeRule
+	edit := func(path string) {
+		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + path + ")"})
 	}
 	for _, path := range []string{
 		projectAnchor + "/*/" + claudeFold("tasks") + "/[Tt]-[0-9]*/**",
@@ -104,10 +156,16 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 		anchor + "/" + claudeFold("knowledge") + "/**",
 		projectAnchor + "/*/" + claudeFold("project.md"),
 	} {
-		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + path + ")"})
+		edit(path)
 	}
-	// The store keeps a project's setup answers and held commands in <home>/projects/<name>/;
-	// grid project settings record is an agent's only way to write them.
+	for _, path := range claudeHostPaths(anchor, projectAnchor) {
+		edit(path)
+	}
+	rules = append(rules,
+		ClaudeRule{"permissions", "deny", "Edit(" + anchor + "/setup/**)"},
+		ClaudeRule{"permissions", "deny", "Write(" + anchor + "/setup/**)"})
+	// A project's setup answers and held commands (<home>/projects/<name>/ and the
+	// projects folder), and the person's approval identity.
 	for _, dir := range slices.Compact([]string{anchor + "/" + claudeFold("projects"), projectAnchor}) {
 		for _, name := range []string{"setup-answers.json", "setup-pending.json"} {
 			path := dir + "/*/" + claudeFold(name)
@@ -116,43 +174,33 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 				ClaudeRule{"permissions", "deny", "Write(" + path + ")"})
 		}
 	}
-	for _, path := range claudeHostPaths(anchor, projectAnchor) {
-		rules = append(rules, ClaudeRule{"permissions", "deny", "Edit(" + path + ")"})
-	}
-	return append(rules,
+	rules = append(rules,
 		ClaudeRule{"permissions", "deny", "Edit(~/.grid-person/**)"},
-		ClaudeRule{"permissions", "deny", "Write(~/.grid-person/**)"},
-		ClaudeRule{"permissions", "deny", "Edit(" + anchor + "/setup/**)"},
-		ClaudeRule{"permissions", "deny", "Write(" + anchor + "/setup/**)"},
-		ClaudeRule{"autoMode", "environment", "$defaults"},
-		ClaudeRule{"autoMode", "environment", "The Grid home at " + anchor + " is trusted for Grid operations."}), nil
+		ClaudeRule{"permissions", "deny", "Write(~/.grid-person/**)"})
+	// The first releases wrote these forms of the task, knowledge and project.md rules
+	// (the first with no case folding, the second folding only some names).
+	for _, path := range []string{
+		anchor + "/projects/*/tasks/[Tt]-[0-9]*/**",
+		anchor + "/personal/tasks/[Tt]-[0-9]*/**",
+		anchor + "/projects/*/knowledge/**",
+		anchor + "/knowledge/**",
+		anchor + "/projects/*/project.md",
+		anchor + "/projects/*/" + claudeFold("tasks") + "/[Tt]-[0-9]*/**",
+		anchor + "/projects/*/" + claudeFold("knowledge") + "/**",
+		anchor + "/" + claudeFold("knowledge") + "/**",
+		anchor + "/projects/*/" + claudeFold("project.md"),
+	} {
+		edit(path)
+	}
+	return rules, nil
 }
 
-// claudeHostPaths lists the Grid settings, lock and workflows files and the host
-// folder as Claude Code deny patterns. Edit rules cover Write, MultiEdit and
-// NotebookEdit too. Claude Code enforces them; Grid runs no hook on these paths
-// and refuses nothing itself. Each pattern carries:
-//   - settings.json, .settings.lock and workflows.md in the Grid home, one folder
-//     below it, at <home>/projects/<name>/, in <projects>/ and in
-//     <projects>/<name>/, in lower and upper case;
-//   - the host folder: <home>/.host/** and .host beside the projects folder (the
-//     same folder in the default layout).
-//
-// The task gate files (approval*.json, questions/, task.md, workflow.md) and the
-// task Feed sit under the task-folder deny rules in claudeBlock and are not
-// repeated; that includes the gate files one level below the Grid home,
-// <home>/<any>/tasks/T-n/, which the rule <home>/*/tasks/T-n/** in claudeBlock
-// carries.
-//
-// Not carried, by decision (owner question Q4, default: not carried): the legacy
-// .host two levels above the projects folder (~/.host in the default layout,
-// outside the Grid home); settings.json, .settings.lock and workflows.md
-// directly in, or one folder below, the parent of a projects folder that sits
-// outside the Grid home; the same three at <projects>/projects/<name>/; and gate
-// files under <parent>/<any>/tasks/T-n/ for a projects folder outside the Grid
-// home. Grid reads nothing there (no Go file but this one names .host; the only
-// reader of a projects folder's parent, internal/workflow/gates.go, reads the
-// Grid home layout only), and those are the person's own folders.
+// claudeHostPaths lists the paths earlier setups denied for the Grid settings, lock
+// and workflows files and the host folder: settings.json, .settings.lock and
+// workflows.md in the Grid home, one folder below it, at <home>/projects/<name>/,
+// in <projects>/ and in <projects>/<name>/, in lower and upper case; and the host
+// folder, <home>/.host/** and .host beside the projects folder (the same folder in
+// the default layout). Only claudeRetired uses it.
 func claudeHostPaths(anchor, projectAnchor string) []string {
 	var paths []string
 	add := func(p string) {
@@ -280,10 +328,12 @@ type ClaudeSetupOptions struct {
 	Projects                  string // absolute GRID_PROJECTS; empty selects <GridHome>/projects
 	Yes, Remove, JSON         bool
 	Sandbox                   bool // also switch on Claude Code's own sandbox (sandbox.enabled); a plain setup never writes or reads it
+	RetireOnly                bool // only take out the rules claudeRetired lists, and only when the setup record exists; never add
 	Stdin                     io.Reader
 	Stdout, Stderr            io.Writer
 	terminal                  func(io.Reader) bool
 	beforeRename              func()
+	declined                  *bool // set when nothing was confirmed: the person said no, could not be asked, or gave no --yes with nothing to ask about
 }
 
 type claudeResult struct {
@@ -309,9 +359,23 @@ func (e claudeInvalid) Error() string {
 // opsDefaultsLine states the owner's ops defaults in the setup summary.
 const opsDefaultsLine = "No telemetry. Crash reports and a daily copy (7 days) stay in your Grid home. Old sessions are not imported."
 
-// RunClaudeSetup previews, confirms, and applies only entries owned by setup.
+// RunClaudeSetup previews, confirms, and applies only entries owned by setup. Once the
+// person confirmed (--yes, or a y), and did not ask for removal, it then retires what
+// the session start retires (RetireClaudeRules): the old deny rules of every Grid home
+// with a setup record, since one settings file holds them all. A preview, or a run
+// nobody confirmed, writes nothing.
 func RunClaudeSetup(o ClaudeSetupOptions) int {
+	var declined bool
+	o.declined = &declined
 	code, err := runClaudeSetup(o)
+	if err == nil && code == 0 && !declined && !o.Remove {
+		var others error
+		err, others = retireClaudeRules(o)
+		if others != nil {
+			// Another home's trouble is not this setup's failure; the session start only logs it.
+			fmt.Fprintln(o.Stderr, "warning:", others)
+		}
+	}
 	if err != nil {
 		fmt.Fprintln(o.Stderr, err)
 		var invalid claudeInvalid
@@ -322,6 +386,82 @@ func RunClaudeSetup(o ClaudeSetupOptions) int {
 	}
 	return code
 }
+
+// RetireClaudeRules takes the rules claudeRetired lists out of the settings file each
+// setup record names and out of the record, with no prompt and no output, and adds
+// nothing. It does this for every Grid home that holds a record (retireHomes), since
+// each home's setup wrote its own form of the rules, and one settings file can hold
+// them all. Without a record it does nothing, so only a machine where setup wrote the
+// rules is touched. A settings file that is not valid JSON, or that changed while it
+// ran, is left as it is. A run that finds nothing to take out writes nothing, so the
+// session start can call it every time.
+func RetireClaudeRules(o ClaudeSetupOptions) error {
+	own, others := retireClaudeRules(o)
+	return errors.Join(own, others)
+}
+
+// retireClaudeRules is RetireClaudeRules with the error of the session's own home kept
+// apart from those of the other homes, which name the home they come from.
+func retireClaudeRules(o ClaudeSetupOptions) (own, others error) {
+	o.RetireOnly, o.Yes, o.JSON, o.Stdout, o.Stderr = true, true, true, io.Discard, io.Discard
+	var errs []error
+	for i, home := range retireHomes(o) {
+		run := o
+		// A projects folder outside the Grid home is the same text in every home's record.
+		run.GridHome = home
+		_, err := runClaudeSetup(run)
+		var invalid claudeInvalid
+		if errors.Is(err, errClaudeChanged) || errors.As(err, &invalid) {
+			continue
+		}
+		switch {
+		case err == nil:
+		case i == 0:
+			own = err
+		default:
+			errs = append(errs, fmt.Errorf("%s: %w", home, err))
+		}
+	}
+	return own, errors.Join(errs...)
+}
+
+// retireHomes lists the Grid homes the retire pass reads a setup record of: the
+// session's own, then the data folder (~/.grid) and the folders directly in it (a
+// handle's home) that hold a record, when the session's home is the data folder or
+// sits directly in it. A home outside the data folder reads its own and the folders
+// directly in it, so a session never reaches records it does not belong beside.
+func retireHomes(o ClaudeSetupOptions) []string {
+	homes := []string{o.GridHome}
+	if o.GridHome == "" {
+		return homes
+	}
+	roots := []string{o.GridHome}
+	if data := gridconfig.DataRoot(o.Home); data != "" && (samePath(o.GridHome, data) || samePath(filepath.Dir(o.GridHome), data)) {
+		roots = append(roots, data)
+	}
+	seen := []string{gridhome.Real(o.GridHome)}
+	add := func(dir string) {
+		if st, err := os.Stat(filepath.Join(dir, "setup", "claude-block.json")); err != nil || !st.Mode().IsRegular() {
+			return
+		}
+		if real := gridhome.Real(dir); !slices.Contains(seen, real) {
+			seen = append(seen, real)
+			homes = append(homes, dir)
+		}
+	}
+	for _, root := range roots {
+		add(root)
+		entries, _ := os.ReadDir(root)
+		for _, e := range entries {
+			if e.IsDir() {
+				add(filepath.Join(root, e.Name()))
+			}
+		}
+	}
+	return homes
+}
+
+func samePath(a, b string) bool { return gridhome.Real(a) == gridhome.Real(b) }
 
 // ClaudeSettingsPath locates the setup destination without consulting XDG paths.
 func ClaudeSettingsPath(home, configDir string) (string, error) {
@@ -348,10 +488,21 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	if err != nil {
 		return 1, err
 	}
+	if o.RetireOnly && !recordFile.exists {
+		return 0, nil
+	}
 	record := claudeRecord{Path: path}
 	if recordFile.exists {
-		if err := json.Unmarshal(recordFile.data, &record); err != nil || record.Path != path || len(record.Rules) == 0 {
+		if err := json.Unmarshal(recordFile.data, &record); err != nil || (record.Path != path && !o.RetireOnly) || len(record.Rules) == 0 {
 			return 1, errors.New("Setup record is invalid or belongs to another settings file. Nothing written.")
+		}
+		// The record names the file setup wrote to, which is the one to clean, whichever
+		// account's session starts the run.
+		if o.RetireOnly {
+			if !filepath.IsAbs(record.Path) || filepath.Base(record.Path) != "settings.json" {
+				return 0, nil
+			}
+			path = record.Path
 		}
 		for _, r := range record.Rules {
 			if o.Remove {
@@ -372,6 +523,13 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		}
 		return 0, nil
 	}
+	// RunClaudeSetup reads declined: the person was asked and did not approve.
+	decline := func() (int, error) {
+		if o.declined != nil {
+			*o.declined = true
+		}
+		return finish("Nothing written.")
+	}
 	if o.Remove && !recordFile.exists {
 		return finish("Nothing to remove.")
 	}
@@ -386,7 +544,11 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	if err != nil {
 		return 2, claudeInvalid{path}
 	}
-	block, err := claudeBlock(o.Home, o.GridHome, o.Projects)
+	block, err := claudeBlock(o.Home, o.GridHome)
+	if err != nil {
+		return 1, err
+	}
+	retired, err := claudeRetired(o.Home, o.GridHome, o.Projects)
 	if err != nil {
 		return 1, err
 	}
@@ -397,13 +559,35 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		block = append(block, claudeSandboxRule)
 	}
 	rules := block
+	if o.RetireOnly {
+		rules = nil
+	}
+	// Rules Grid no longer asks for leave the settings file whenever setup runs
+	// without --remove (removal takes them like any other owned rule) and at every
+	// session start; the record loses them too, since the app adds what it holds to
+	// the agents it launches.
+	var retire []ClaudeRule
+	trim := false
+	if !o.Remove {
+		for _, rule := range retired {
+			values, _, err := claudeValues(doc, rule)
+			if err != nil {
+				return 2, claudeInvalid{path}
+			}
+			if slices.Contains(values, rule.Value) {
+				retire = append(retire, rule)
+			}
+		}
+		trim = slices.ContainsFunc(record.Rules, func(r ClaudeRule) bool { return slices.Contains(retired, r) })
+	}
 	if o.Remove {
 		// The writable record is evidence of installation, never authority to
 		// remove arbitrary settings. Match section, key, and value exactly,
 		// using the same path normalization and block builder as installation.
 		rules = nil
+		owned := append(slices.Clone(block), retired...)
 		for _, rule := range record.Rules {
-			if slices.Contains(block, rule) {
+			if slices.Contains(owned, rule) {
 				rules = append(rules, rule)
 			} else {
 				fmt.Fprintf(o.Stderr, "not a Grid rule, left in place: %s\n", rule.Value)
@@ -473,6 +657,9 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		for _, value := range result.Present {
 			fmt.Fprintf(o.Stdout, "= %s\n", value)
 		}
+		for _, rule := range retire {
+			fmt.Fprintf(o.Stdout, "- %s\n", rule.Value)
+		}
 		block, _ := parseClaudeObject([]byte("{}"))
 		for _, rule := range rules {
 			if rule.Value == "$defaults" && !slices.Contains(result.Added, rule.Value) && !slices.Contains(result.Present, rule.Value) {
@@ -489,7 +676,10 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		fmt.Fprintln(o.Stdout, pretty.String())
 		fmt.Fprintln(o.Stdout, opsDefaultsLine)
 	}
-	if len(changes) == 0 && !o.Remove {
+	if len(changes) == 0 && len(retire) == 0 && !trim && !o.Remove {
+		if !o.Yes {
+			return decline() // no question to ask, so nothing is confirmed either
+		}
 		return finish("Nothing written.")
 	}
 	if !o.Yes {
@@ -498,7 +688,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 			terminal = claudeTerminal
 		}
 		if o.JSON || !terminal(o.Stdin) {
-			return finish("Nothing written.")
+			return decline()
 		}
 		prompt := "Write these? [y/N] "
 		if o.Remove {
@@ -509,7 +699,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		switch strings.ToLower(strings.TrimSpace(answer)) {
 		case "y", "yes":
 		default:
-			return finish("Nothing written.")
+			return decline()
 		}
 	}
 	if o.BeforeWrite != nil {
@@ -519,6 +709,11 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	}
 	for _, rule := range changes {
 		if err := changeClaudeRule(&doc, rule, o.Remove); err != nil {
+			return 1, err
+		}
+	}
+	for _, rule := range retire {
+		if err := changeClaudeRule(&doc, rule, true); err != nil {
 			return 1, err
 		}
 	}
@@ -542,15 +737,17 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	// later installs retain earlier ownership and add only newly missing entries.
 	nextRecord := record
 	if !o.Remove {
-		nextRecord.Rules = slices.Clone(record.Rules)
+		nextRecord.Rules = slices.DeleteFunc(slices.Clone(record.Rules), func(r ClaudeRule) bool { return slices.Contains(retired, r) })
 		for _, rule := range changes {
 			if !slices.Contains(nextRecord.Rules, rule) {
 				nextRecord.Rules = append(nextRecord.Rules, rule)
 			}
 		}
 	}
+	// setup refuses a record with no rule, so one that lost its last rule goes.
+	dropRecord := o.Remove || len(nextRecord.Rules) == 0
 	var settingsStage, recordStage string
-	if len(changes) > 0 {
+	if len(changes) > 0 || len(retire) > 0 {
 		data, encodeErr := encodeClaudeJSON(json.RawMessage(doc.bytes()))
 		if encodeErr != nil {
 			return 1, encodeErr
@@ -561,7 +758,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 		}
 		defer os.Remove(settingsStage)
 	}
-	if !o.Remove {
+	if !dropRecord {
 		data, err := encodeClaudeJSON(nextRecord)
 		if err != nil {
 			return 1, err
@@ -587,8 +784,11 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 			return 1, err
 		}
 	}
-	if o.Remove {
+	if dropRecord {
 		err = os.Remove(recordFile.target)
+		if errors.Is(err, os.ErrNotExist) {
+			err = nil
+		}
 	} else {
 		err = atomicfile.Rename(recordStage, recordFile.target)
 	}

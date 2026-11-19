@@ -279,18 +279,11 @@ func TestPlanGuardJobNamedPathSubagent(t *testing.T) {
 	}, "grid-reviewer", false)
 }
 
-// The Job silences the reviewer and checker fence only. A brain file the Job names
-// is still a brain file: the brain fence answers for a reviewer as before.
-func TestPlanGuardJobNamedPathKeepsOtherFences(t *testing.T) {
+// A builder is not fenced by the reviewer and checker rule at all, named or not.
+func TestPlanGuardJobNamedPathLeavesABuilderAlone(t *testing.T) {
 	f := setup(t)
 	note := filepath.Join(f.grid, "knowledge", "note.md")
 	tr := jpWrite(t, filepath.Join(f.root, "tr", "main.jsonl"), jpLine(t, "user", "Write "+note))
-	d := EvaluatePlan(jpInput(f, "grid:grid-reviewer", note, tr), f.root, f.env)
-	want := "plan-guard: Only a grid-curator (or a grid-planner) writes the brain; a grid-reviewer writes a proposal in its task's brain-proposals/ folder instead of " + note + "." + off
-	if d.Behavior != "" || len(d.Warnings) != 1 || d.Warnings[0] != want {
-		t.Fatalf("want the brain warning %q, got %+v", want, d)
-	}
-	// A builder is not fenced by this rule at all, named or not.
 	other := filepath.Join(f.repo, "file.go")
 	in := jpInput(f, "grid:grid-builder", other, tr)
 	if d := EvaluatePlan(in, f.root, f.env); d.Behavior != "" || len(d.Warnings) != 0 {

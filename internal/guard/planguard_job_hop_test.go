@@ -123,22 +123,6 @@ func TestHopNamedFileNamesTarget(t *testing.T) {
 	})
 }
 
-// The hop reads the Job's file; it does not widen the other fences. A brain file
-// the brief names is still a brain file.
-func TestHopKeepsOtherFences(t *testing.T) {
-	f := setup(t)
-	note := filepath.Join(f.grid, "knowledge", "note.md")
-	brief := hopBrief(f)
-	f.write(brief, "Edit "+note+"\n")
-	in := f.input("Edit", note)
-	in.AgentType = "grid:grid-reviewer"
-	in.TranscriptPath = jpWrite(t, filepath.Join(f.root, "tr", "main.jsonl"), jpLine(t, "user", hopJob(brief)))
-	want := "plan-guard: Only a grid-curator (or a grid-planner) writes the brain; a grid-reviewer writes a proposal in its task's brain-proposals/ folder instead of " + note + "." + off
-	if d := EvaluatePlan(in, f.root, f.env); d.Behavior != "" || len(d.Warnings) != 1 || d.Warnings[0] != want {
-		t.Fatalf("want the brain warning %q, got %+v", want, d)
-	}
-}
-
 // A2: a folder the file names with a trailing slash covers the files directly in
 // it, not the ones in a subfolder, and not when the slash is missing. The Job's
 // own text naming a folder still covers nothing (TestPlanGuardJobNamedPathMatchesWholePaths).

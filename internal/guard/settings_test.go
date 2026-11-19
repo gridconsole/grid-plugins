@@ -21,7 +21,9 @@ func TestGuardsFollowTheirLevel(t *testing.T) {
 		input func(*fixture) hookio.Input
 	}{
 		{"plan-guard", EvaluatePlan, func(f *fixture) hookio.Input {
-			return f.input("Write", filepath.Join(f.projects, "example", "tasks.", "T-03", "notes.md"))
+			in := f.input("Write", filepath.Join(f.repo, "file.go"))
+			in.AgentType = "grid:grid-reviewer"
+			return in
 		}},
 	} {
 		for _, level := range []string{"none", "off", "warn", "block", "malformed"} {

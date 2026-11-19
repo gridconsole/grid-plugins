@@ -1,0 +1,420 @@
+package settings
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+)
+
+// retiredDenies are the deny rules setup wrote before agents were allowed to write
+// task folders, the brain, project.md, the settings files, the setup folder, a
+// project's setup answers and held commands and the person's approval identity, as
+// the earlier builder wrote them (home ~/.grid, projects folder <home>/projects).
+var retiredDenies = []string{
+	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
+	"Edit(~/.grid/[pP][eE][rR][sS][oO][nN][aA][lL]/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
+	"Edit(~/.grid/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
+	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
+	"Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
+	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])",
+	"Edit(~/.grid/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])",
+	"Edit(~/.grid/*/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])",
+	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][tT][iI][nN][gG][sS].[jJ][sS][oO][nN])",
+	"Edit(~/.grid/.[sS][eE][tT][tT][iI][nN][gG][sS].[lL][oO][cC][kK])",
+	"Edit(~/.grid/*/.[sS][eE][tT][tT][iI][nN][gG][sS].[lL][oO][cC][kK])",
+	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/.[sS][eE][tT][tT][iI][nN][gG][sS].[lL][oO][cC][kK])",
+	"Edit(~/.grid/[wW][oO][rR][kK][fF][lL][oO][wW][sS].[mM][dD])",
+	"Edit(~/.grid/*/[wW][oO][rR][kK][fF][lL][oO][wW][sS].[mM][dD])",
+	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[wW][oO][rR][kK][fF][lL][oO][wW][sS].[mM][dD])",
+	"Edit(~/.grid/.[hH][oO][sS][tT]/**)",
+	"Edit(~/.grid/setup/**)",
+	"Write(~/.grid/setup/**)",
+	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])",
+	"Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])",
+	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])",
+	"Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])",
+	"Edit(~/.grid-person/**)",
+	"Write(~/.grid-person/**)",
+}
+
+// legacyDenies are the forms the first releases wrote for the task, knowledge and
+// project.md rules.
+var legacyDenies = []string{
+	"Edit(~/.grid/projects/*/tasks/[Tt]-[0-9]*/**)",
+	"Edit(~/.grid/personal/tasks/[Tt]-[0-9]*/**)",
+	"Edit(~/.grid/projects/*/knowledge/**)",
+	"Edit(~/.grid/knowledge/**)",
+	"Edit(~/.grid/projects/*/project.md)",
+	"Edit(~/.grid/projects/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
+	"Edit(~/.grid/projects/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
+	"Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
+	"Edit(~/.grid/projects/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])",
+}
+
+func denyRules(values []string) []ClaudeRule {
+	var rules []ClaudeRule
+	for _, v := range values {
+		rules = append(rules, ClaudeRule{"permissions", "deny", v})
+	}
+	return rules
+}
+
+func (f *claudeFixture) denies() []string {
+	f.t.Helper()
+	doc, err := parseClaudeObject(f.read(f.path))
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	values, _, err := claudeValues(doc, ClaudeRule{"permissions", "deny", ""})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return values
+}
+
+func (f *claudeFixture) recordRules() []ClaudeRule {
+	f.t.Helper()
+	var record claudeRecord
+	if err := json.Unmarshal(f.read(f.record), &record); err != nil {
+		f.t.Fatal(err)
+	}
+	return record.Rules
+}
+
+// seedOldSetup leaves what an earlier setup wrote, plus the person's own rules: the
+// settings file carries every old deny, the record owns them.
+func (f *claudeFixture) seedOldSetup() {
+	f.t.Helper()
+	mine := []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)"}
+	denies, err := json.Marshal(slices.Concat(mine, legacyDenies, retiredDenies))
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	f.write(f.path, `{"theme":"dark","permissions":{"allow":["Bash(grid *)","Read(~/mine/**)"],"deny":`+string(denies)+`}}`)
+	record := claudeRecord{Path: f.path, Rules: denyRules(slices.Concat(legacyDenies, retiredDenies))}
+	record.Rules = append(record.Rules, ClaudeRule{"permissions", "allow", "Bash(grid *)"})
+	data, err := json.Marshal(record)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	f.write(f.record, string(data))
+}
+
+func TestClaudeRetiredIsTheEarlierBlock(t *testing.T) {
+	f := newClaudeFixture(t)
+	retired, err := claudeRetired(f.o.Home, f.o.GridHome, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(retired, denyRules(append(slices.Clone(retiredDenies), legacyDenies...))) {
+		t.Fatalf("retired rules differ from the earlier setup's:\n%v", retired)
+	}
+	block, err := claudeBlock(f.o.Home, f.o.GridHome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range block {
+		if rule.Section == "permissions" && rule.Key == "deny" {
+			t.Fatalf("setup writes a deny rule: %s", rule.Value)
+		}
+		if slices.Contains(retired, rule) {
+			t.Fatalf("setup still writes a retired rule: %s", rule.Value)
+		}
+	}
+}
+
+func TestClaudeSetupTakesRetiredDeniesOut(t *testing.T) {
+	for _, asJSON := range []bool{false, true} {
+		t.Run(map[bool]string{false: "plain", true: "json"}[asJSON], func(t *testing.T) {
+			f := newClaudeFixture(t)
+			f.seedOldSetup()
+			f.o.Yes, f.o.JSON = true, asJSON
+			f.wantCode(0)
+			want := []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)"}
+			if got := f.denies(); !reflect.DeepEqual(got, want) {
+				t.Fatalf("denies %v, want %v", got, want)
+			}
+			doc, _ := parseClaudeObject(f.read(f.path))
+			if theme := string(doc.get("theme")); theme != `"dark"` {
+				t.Fatalf("unrelated setting changed: %s", theme)
+			}
+			for _, rule := range f.recordRules() {
+				if slices.Contains(denyRules(retiredDenies), rule) {
+					t.Fatalf("record still owns a retired rule: %s", rule.Value)
+				}
+			}
+			f.wantCode(0) // a second run has nothing left to do
+			if f.denies()[0] != "Read(~/.ssh/**)" || len(f.denies()) != len(want) {
+				t.Fatalf("second run changed the denies: %v", f.denies())
+			}
+		})
+	}
+}
+
+func TestClaudeSetupPreviewListsRetiredDenies(t *testing.T) {
+	f := newClaudeFixture(t)
+	f.seedOldSetup()
+	f.wantCode(0) // not a terminal and no --yes: shows what it would do, writes nothing
+	for _, value := range retiredDenies {
+		if !slices.Contains(f.denies(), value) {
+			t.Fatalf("preview run removed %s", value)
+		}
+		if !strings.Contains(f.out.String(), "- "+value+"\n") {
+			t.Fatalf("preview does not list %s:\n%s", value, &f.out)
+		}
+	}
+}
+
+func TestClaudeRemoveTakesRetiredDeniesToo(t *testing.T) {
+	f := newClaudeFixture(t)
+	f.seedOldSetup()
+	f.o.Yes, f.o.Remove = true, true
+	f.wantCode(0)
+	if got, want := f.denies(), []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("denies %v, want %v", got, want)
+	}
+	if _, err := os.Stat(f.record); !os.IsNotExist(err) {
+		t.Fatalf("record stays after removal: %v", err)
+	}
+}
+
+func TestRetireClaudeRules(t *testing.T) {
+	retire := func(f *claudeFixture) {
+		t.Helper()
+		if err := RetireClaudeRules(f.o); err != nil {
+			t.Fatal(err)
+		}
+		if f.out.Len() != 0 || f.err.Len() != 0 {
+			t.Fatalf("output: %q %q", &f.out, &f.err)
+		}
+	}
+	t.Run("takes the retired rules out of the settings and the record", func(t *testing.T) {
+		f := newClaudeFixture(t)
+		f.seedOldSetup()
+		retire(f)
+		want := []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)"}
+		if got := f.denies(); !reflect.DeepEqual(got, want) {
+			t.Fatalf("denies %v, want %v", got, want)
+		}
+		for _, rule := range f.recordRules() {
+			if slices.Contains(denyRules(slices.Concat(legacyDenies, retiredDenies)), rule) {
+				t.Fatalf("record still owns %s", rule.Value)
+			}
+		}
+		before, _ := os.Stat(f.path)
+		retire(f)
+		after, _ := os.Stat(f.path)
+		if !after.ModTime().Equal(before.ModTime()) {
+			t.Fatal("a run with nothing to retire rewrote the settings")
+		}
+	})
+	t.Run("deletes a record that held only retired rules", func(t *testing.T) {
+		f := newClaudeFixture(t)
+		f.seedOldSetup()
+		data, _ := json.Marshal(claudeRecord{Path: f.path, Rules: denyRules(retiredDenies)})
+		f.write(f.record, string(data))
+		retire(f)
+		if _, err := os.Stat(f.record); !os.IsNotExist(err) {
+			t.Fatalf("empty record stays: %v", err)
+		}
+		if got := len(f.denies()); got != 2 {
+			t.Fatalf("%d denies left: %v", got, f.denies())
+		}
+	})
+	t.Run("does nothing without a setup record", func(t *testing.T) {
+		f := newClaudeFixture(t)
+		f.seedOldSetup()
+		if err := os.Remove(f.record); err != nil {
+			t.Fatal(err)
+		}
+		before := f.read(f.path)
+		retire(f)
+		if string(f.read(f.path)) != string(before) {
+			t.Fatal("settings changed without a record")
+		}
+	})
+	t.Run("cleans the file the record names, whichever account runs it", func(t *testing.T) {
+		f := newClaudeFixture(t)
+		f.seedOldSetup()
+		f.o.ConfigDir = f.o.Home + "/.claude-other"
+		retire(f)
+		if got := len(f.denies()); got != 2 {
+			t.Fatalf("%d denies left: %v", got, f.denies())
+		}
+		if _, err := os.Stat(f.o.ConfigDir + "/settings.json"); !os.IsNotExist(err) {
+			t.Fatalf("the running account's settings were created: %v", err)
+		}
+	})
+	t.Run("leaves an invalid settings file alone", func(t *testing.T) {
+		f := newClaudeFixture(t)
+		f.seedOldSetup()
+		f.write(f.path, `{"permissions":`)
+		retire(f)
+		if string(f.read(f.path)) != `{"permissions":` {
+			t.Fatalf("settings changed: %s", f.read(f.path))
+		}
+	})
+	t.Run("never adds a rule", func(t *testing.T) {
+		f := newClaudeFixture(t)
+		f.seedOldSetup()
+		f.write(f.path, `{"permissions":{"deny":["Read(~/.ssh/**)"]}}`)
+		retire(f)
+		if got := f.denies(); !reflect.DeepEqual(got, []string{"Read(~/.ssh/**)"}) {
+			t.Fatalf("denies %v", got)
+		}
+	})
+}
+
+// inHandleHome is the form a rule takes for the Grid home ~/.grid/abdullahi, a
+// handle's folder one level below the data folder, instead of ~/.grid.
+func inHandleHome(values []string) []string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = strings.Replace(v, "(~/.grid/", "(~/.grid/abdullahi/", 1)
+	}
+	return out
+}
+
+// seedTwoHomes leaves what setup wrote under two Grid homes of one person: the data
+// folder and a handle's folder below it, each with its own record, both naming the
+// one settings file, which holds both forms of every rule and the person's own.
+func (f *claudeFixture) seedTwoHomes() (handleHome, handleRecord string, mine []string) {
+	f.t.Helper()
+	handleHome = filepath.Join(f.o.GridHome, "abdullahi")
+	handleRecord = filepath.Join(handleHome, "setup", "claude-block.json")
+	mine = []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)", "Edit(~/.grid/abdullahi/notes-i-keep/**)"}
+	dataForms := slices.Concat(legacyDenies, retiredDenies)
+	handleForms := inHandleHome(dataForms)
+	denies, err := json.Marshal(slices.Concat(mine, dataForms, handleForms))
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	f.write(f.path, `{"theme":"dark","permissions":{"deny":`+string(denies)+`}}`)
+	for path, forms := range map[string][]string{f.record: dataForms, handleRecord: handleForms} {
+		record := claudeRecord{Path: f.path, Rules: append(denyRules(forms), ClaudeRule{"permissions", "allow", "Bash(grid *)"})}
+		data, err := json.Marshal(record)
+		if err != nil {
+			f.t.Fatal(err)
+		}
+		f.write(path, string(data))
+	}
+	return handleHome, handleRecord, mine
+}
+
+func (f *claudeFixture) recordRulesAt(path string) []ClaudeRule {
+	f.t.Helper()
+	var record claudeRecord
+	if err := json.Unmarshal(f.read(path), &record); err != nil {
+		f.t.Fatal(err)
+	}
+	return record.Rules
+}
+
+// A person's settings file can hold both forms of the rules at once: the data
+// folder's (~/.grid/...) and the handle's (~/.grid/<handle>/...). A session in
+// either home retires both, whichever record names the file.
+func TestRetireClaudeRulesRetiresEveryHomesForm(t *testing.T) {
+	for _, session := range []string{"data folder", "handle folder"} {
+		for _, projects := range []bool{false, true} {
+			t.Run(session+map[bool]string{false: "", true: " with its projects folder set"}[projects], func(t *testing.T) {
+				f := newClaudeFixture(t)
+				handleHome, handleRecord, mine := f.seedTwoHomes()
+				if session == "handle folder" {
+					f.o.GridHome = handleHome
+				}
+				if projects {
+					// GRID_PROJECTS names the session home's folder; the other home's forms
+					// still use its own <home>/projects.
+					f.o.Projects = filepath.Join(f.o.GridHome, "projects")
+				}
+				if err := RetireClaudeRules(f.o); err != nil {
+					t.Fatal(err)
+				}
+				want := mine
+				got := f.denies()
+				if left := slices.DeleteFunc(slices.Clone(got), func(v string) bool { return slices.Contains(want, v) }); len(left) > 0 {
+					t.Fatalf("%d retired rules survive, first %s", len(left), left[0])
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("denies %v, want %v", got, want)
+				}
+				for _, path := range []string{f.record, handleRecord} {
+					for _, rule := range f.recordRulesAt(path) {
+						if rule.Section == "permissions" && rule.Key == "deny" && !slices.Contains(want, rule.Value) {
+							t.Fatalf("record %s still owns %s", path, rule.Value)
+						}
+					}
+				}
+				before, _ := os.Stat(f.path)
+				if err := RetireClaudeRules(f.o); err != nil {
+					t.Fatal(err)
+				}
+				if after, _ := os.Stat(f.path); !after.ModTime().Equal(before.ModTime()) {
+					t.Fatal("a run with nothing to retire rewrote the settings")
+				}
+			})
+		}
+	}
+}
+
+// Only a session in the data folder, or in a folder directly below it, reads the
+// records of the other homes: one with its Grid home elsewhere reads its own.
+func TestRetireClaudeRulesLeavesAnUnrelatedHomesRecord(t *testing.T) {
+	f := newClaudeFixture(t)
+	f.seedTwoHomes()
+	f.o.GridHome = filepath.Join(f.o.Home, "elsewhere", "grid")
+	before := f.read(f.path)
+	if err := RetireClaudeRules(f.o); err != nil {
+		t.Fatal(err)
+	}
+	if string(f.read(f.path)) != string(before) {
+		t.Fatal("a session outside the data folder changed the settings of a record it does not own")
+	}
+}
+
+// GRID_PROJECTS names a folder for the whole machine, so the rules setup wrote for a
+// projects folder outside the Grid home are the same text in every home's record. A
+// session whose own home holds no record still retires them from the record of
+// another home.
+func TestRetireClaudeRulesRetiresACustomProjectsFolderOfAnotherHome(t *testing.T) {
+	f := newClaudeFixture(t)
+	handleHome, handleRecord, mine := f.seedTwoHomes()
+	if err := os.Remove(handleRecord); err != nil {
+		t.Fatal(err)
+	}
+	projects := filepath.Join(f.o.Home, "work")
+	custom, err := claudeRetired(f.o.Home, f.o.GridHome, projects)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var forms []string
+	for _, rule := range custom {
+		if strings.Contains(rule.Value, "(~/work/") {
+			forms = append(forms, rule.Value)
+		}
+	}
+	if len(forms) == 0 {
+		t.Fatal("no retired rule is anchored on the projects folder")
+	}
+	denies, err := json.Marshal(slices.Concat(mine, forms))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.write(f.path, `{"permissions":{"deny":`+string(denies)+`}}`)
+	record, err := json.Marshal(claudeRecord{Path: f.path, Rules: denyRules(forms)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.write(f.record, string(record))
+	f.o.GridHome, f.o.Projects = handleHome, projects
+	if err := RetireClaudeRules(f.o); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.denies(); !reflect.DeepEqual(got, mine) {
+		t.Fatalf("denies %v, want %v", got, mine)
+	}
+}

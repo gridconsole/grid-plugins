@@ -124,20 +124,19 @@ func TestExDenyBlockHealthy(t *testing.T) {
 	exDenyUnchanged(t, o.SettingsPath, before)
 }
 
-func TestExDenyBlockMissingRule(t *testing.T) {
+// Setup writes no deny rule now, so the deny block has nothing to miss: a settings
+// file without any deny rule is healthy. Missing rules are reported by the allow
+// block, which TestDoctorAllowBlockCLI (internal/cli/doctor_allow_test.go) covers.
+func TestExDenyBlockNeedsNoDenyRules(t *testing.T) {
 	o := exDenyEnv(t)
-	const rule = "Edit(~/.grid-person/**)"
-	o.SettingsPath = exDenySettings(t, o, "", rule)
+	o.SettingsPath = exDenySettings(t, o, "")
 	exDenyAge(t, o.SettingsPath)
 	before := exDenyTake(t, o.SettingsPath)
 	rep := Run(o)
-	assertChecks(t, rep, map[string]string{"allow block": "", "deny block": "!missing rules: " + rule}, false)
+	assertChecks(t, rep, map[string]string{"allow block": "", "deny block": "all setup deny rules are present"}, true)
 	deny := exDenyCheck(t, rep, "deny block")
-	if deny.Detail != "missing rules: "+rule || deny.Fix != "Run grid setup" {
+	if !deny.OK || deny.Fix != "" {
 		t.Fatalf("unexpected deny check: %+v", deny)
-	}
-	if allow := exDenyCheck(t, rep, "allow block"); !allow.OK || allow.Fix != "" {
-		t.Fatalf("allow block changed: %+v", allow)
 	}
 	exDenyUnchanged(t, o.SettingsPath, before)
 }
@@ -205,15 +204,15 @@ func TestExDenyBlockSkipsUnavailableHome(t *testing.T) {
 	}
 }
 
-// Options.Projects reaches the reader: a settings file written for the default
-// projects folder lacks the rules of another one.
-func TestExDenyBlockUsesProjects(t *testing.T) {
+// A settings file written for the default projects folder is healthy for another one:
+// no rule is anchored on the projects folder any more.
+func TestExDenyBlockIgnoresProjects(t *testing.T) {
 	o := exDenyEnv(t)
 	o.SettingsPath = exDenySettings(t, o, "")
 	o.Projects = filepath.Join(o.Home, "work")
 	deny := exDenyCheck(t, Run(o), "deny block")
-	if deny.OK || !strings.HasPrefix(deny.Detail, "missing rules: ") || !strings.Contains(deny.Detail, "~/work/*/") {
-		t.Fatalf("expected rules for the projects folder to be missing: %+v", deny)
+	if !deny.OK || deny.Fix != "" {
+		t.Fatalf("a projects folder should need no rule: %+v", deny)
 	}
 }
 
@@ -284,24 +283,14 @@ func TestExDenyBlockNoSetupRulesIsOneFailure(t *testing.T) {
 	exDenyUnchanged(t, o.SettingsPath, before)
 }
 
-// Setup's allow rules are in a readable file but every deny rule was removed:
-// the deny block still fails, and the allow block does not.
-func TestExDenyBlockAllDenyRulesRemovedFails(t *testing.T) {
+// Setup's allow rules are in a readable file and no deny rule is: the deny block is
+// still ok, and so is the allow block.
+func TestExDenyBlockAllowRulesOnlyIsHealthy(t *testing.T) {
 	o := exDenyEnv(t)
-	rules, err := settings.ClaudeBlock(o.Home, o.GridHome)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var deny []string
-	for _, r := range rules {
-		if r.Section == "permissions" && r.Key == "deny" {
-			deny = append(deny, r.Value)
-		}
-	}
-	o.SettingsPath = exDenySettings(t, o, "", deny...)
+	o.SettingsPath = exDenySettings(t, o, "")
 	rep := Run(o)
 	check := exDenyCheck(t, rep, "deny block")
-	if rep.OK || check.OK || !strings.HasPrefix(check.Detail, "missing rules: ") || check.Fix != "Run grid setup" {
+	if !rep.OK || !check.OK || check.Fix != "" {
 		t.Fatalf("deny block %+v, report ok %v", check, rep.OK)
 	}
 	if allow := exDenyCheck(t, rep, "allow block"); !allow.OK {
@@ -309,31 +298,26 @@ func TestExDenyBlockAllDenyRulesRemovedFails(t *testing.T) {
 	}
 }
 
+// The reader judges only deny rules, and setup has none: allow rules are not counted, and
+// a deny rule an earlier setup wrote is neither present nor missing.
 func TestExDenyReaderOnlyDenyRules(t *testing.T) {
 	o := exDenyEnv(t)
-	// Only allow rules: every deny rule is missing, and the allow rules are not counted.
 	rules, err := settings.ClaudeBlock(o.Home, o.GridHome)
 	if err != nil {
 		t.Fatal(err)
 	}
 	allow := []string{}
-	denyCount := 0
 	for _, r := range rules {
+		if r.Section == "permissions" && r.Key == "deny" {
+			t.Fatalf("setup writes a deny rule: %q", r.Value)
+		}
 		if r.Section == "permissions" && r.Key == "allow" {
 			allow = append(allow, r.Value)
 		}
-		if r.Section == "permissions" && r.Key == "deny" {
-			denyCount++
-		}
 	}
-	data, _ := json.Marshal(map[string]any{"permissions": map[string]any{"allow": allow}})
+	data, _ := json.Marshal(map[string]any{"permissions": map[string]any{"allow": allow, "deny": []string{"Edit(~/.grid-person/**)"}}})
 	status := settings.ReadClaudeDenyStatus(exDenyWrite(t, data), o.Home, o.GridHome, "")
-	if status.Reason != "" || len(status.Present) != 0 || len(status.Missing) != denyCount || denyCount == 0 {
-		t.Fatalf("deny status %+v for %d deny rules", status, denyCount)
-	}
-	for _, m := range status.Missing {
-		if !strings.HasPrefix(m, "Edit(") && !strings.HasPrefix(m, "Write(") {
-			t.Fatalf("a non-deny rule was reported: %q", m)
-		}
+	if status.Reason != "" || len(status.Present) != 0 || len(status.Missing) != 0 {
+		t.Fatalf("deny status %+v", status)
 	}
 }

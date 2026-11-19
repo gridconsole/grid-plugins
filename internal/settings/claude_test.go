@@ -131,7 +131,7 @@ func TestClaudePreservesKeysValuesOrderAndMode(t *testing.T) {
 	}
 	bp, _ := parseClaudeObject(before.get("permissions"))
 	ap, _ := parseClaudeObject(after.get("permissions"))
-	if !reflect.DeepEqual(keys(ap), []string{"ask", "allow", "extra", "deny"}) {
+	if !reflect.DeepEqual(keys(ap), []string{"ask", "allow", "extra"}) {
 		t.Fatal("permission order changed")
 	}
 	for _, key := range []string{"ask", "extra"} {
@@ -399,7 +399,7 @@ func TestClaudeCustomGridHomeAndInvalidRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range rules {
-		if r.Value == "Bash(grid *)" || r.Value == "$defaults" || strings.Contains(r.Value, "~/.grid-person/**") {
+		if r.Value == "Bash(grid *)" || r.Value == "$defaults" {
 			continue
 		}
 		if !strings.Contains(r.Value, "~/data/grid") {
@@ -483,7 +483,7 @@ func TestClaudeProjectPatternCharactersRefused(t *testing.T) {
 					parent = root
 				}
 				projects := filepath.Join(parent, "work"+character)
-				if _, err := claudeBlock(home, filepath.Join(home, ".grid"), projects); err == nil || err.Error() != "Grid projects contains permission pattern characters" {
+				if _, err := claudeRetired(home, filepath.Join(home, ".grid"), projects); err == nil || err.Error() != "Grid projects contains permission pattern characters" {
 					t.Fatalf("unsafe project anchor: %v", err)
 				}
 			})

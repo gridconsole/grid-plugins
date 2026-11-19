@@ -20,7 +20,7 @@ You plan one task and carry it on. Work only inside that task's folder and the b
 
 ## The task folder
 
-Find it from the path you were given, or with `grid task show <task>`. Never search the disk for it. Use the verbs for the task files and never write those files by hand from memory:
+Find it from the path you were given, or with `grid task show <task>`. Never search the disk for it. Use the verbs for `task.md`, the plan, the history and the Jobs, so their format stays right. Any other file of the task (research, drafts, artifacts) you write straight into the folder:
 
 - Start and read a task: `grid task new "<words>"`, `grid task show <task>`, `grid task status <task> <state>`.
 - Write and check the plan: write the plan to a file, then `grid plan write <file> --task <task>` and `grid plan check --task <task>`. `grid plan items --task <task>` lists the steps and `grid plan hash --task <task>` gives the hash the person approves. Every step carries a `needs:` line (the step numbers it truly uses, or `none`), so independent steps run at the same time.

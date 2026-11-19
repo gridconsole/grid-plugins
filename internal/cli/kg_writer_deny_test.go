@@ -15,45 +15,21 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
 
-// The case-folded path segments ClaudeBlock writes (claudeFold in
-// internal/settings/claude.go), spelled out so a change to them shows here.
-const (
-	kgWriterProjects      = "[pP][rR][oO][jJ][eE][cC][tT][sS]"
-	kgWriterTasks         = "[tT][aA][sS][kK][sS]"
-	kgWriterPersonalTasks = "[pP][eE][rR][sS][oO][nN][aA][lL]/[tT][aA][sS][kK][sS]"
-	kgWriterKnowledge     = "[kK][nN][oO][wW][lL][eE][dD][gG][eE]"
-	kgWriterProjectMD     = "[pP][rR][oO][jJ][eE][cC][tT].[mM][dD]"
-)
-
-// kgWriterRules is the five Claude Code deny rules that carry what the only-writer
-// hook guard used to refuse: project task folders, personal task folders, project
-// knowledge, home knowledge and project.md. projects is the anchor of the projects
-// folder, home the anchor of the Grid home.
-func kgWriterRules(projects, home string) []string {
-	return []string{
-		"Edit(" + projects + "/*/" + kgWriterTasks + "/[Tt]-[0-9]*/**)",
-		"Edit(" + home + "/" + kgWriterPersonalTasks + "/[Tt]-[0-9]*/**)",
-		"Edit(" + projects + "/*/" + kgWriterKnowledge + "/**)",
-		"Edit(" + home + "/" + kgWriterKnowledge + "/**)",
-		"Edit(" + projects + "/*/" + kgWriterProjectMD + ")",
-	}
-}
-
-// `grid setup --yes` writes the five rules into permissions.deny of the user
-// settings.json, with the projects in the Grid home and outside it.
-func TestKgWriterDenyRulesWritten(t *testing.T) {
+// `grid setup --yes` writes no deny rule: agents write task folders, the brain,
+// project.md, a project's setup answers and the person's approval identity, with the
+// projects in the Grid home and outside it. The settings package pins what it
+// retires of the rules earlier setups wrote there.
+func TestKgWriterDenyRulesNotWritten(t *testing.T) {
 	for _, location := range []string{"default", "outside home"} {
 		t.Run(location, func(t *testing.T) {
 			h := claudeHarness(t)
 			projects := filepath.Join(h.gridHome, "projects")
-			anchor := "~/.grid/" + kgWriterProjects
 			if location == "outside home" {
 				root, err := filepath.EvalSymlinks(h.root)
 				if err != nil {
 					t.Fatal(err)
 				}
 				projects = filepath.Join(root, "work")
-				anchor = "//" + strings.TrimLeft(filepath.ToSlash(projects), "/")
 			}
 			t.Setenv("GRID_PROJECTS", projects)
 			if code := h.run(h.home, "setup", "--yes"); code != 0 {
@@ -67,10 +43,8 @@ func TestKgWriterDenyRulesWritten(t *testing.T) {
 			if err := json.Unmarshal(data, &doc); err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range kgWriterRules(anchor, "~/.grid") {
-				if !slices.Contains(doc.Permissions.Deny, want) {
-					t.Errorf("permissions.deny lacks %s; it has %q", want, doc.Permissions.Deny)
-				}
+			if len(doc.Permissions.Deny) != 0 {
+				t.Errorf("permissions.deny holds %q", doc.Permissions.Deny)
 			}
 		})
 	}

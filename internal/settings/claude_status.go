@@ -62,16 +62,16 @@ func ReadClaudeAllowStatus(path, home, gridHome string) ClaudeAllowStatus {
 	return claudeRuleStatus(doc, rules)
 }
 
-// ReadClaudeDenyStatus checks the permissions.deny rules of the setup block for
-// the Grid home and the projects folder (absolute GRID_PROJECTS, or empty for
-// <gridHome>/projects, as setup resolves it). It never writes anything and
-// gives the same path-free reasons as ReadClaudeAllowStatus.
-func ReadClaudeDenyStatus(path, home, gridHome, projects string) ClaudeDenyStatus {
+// ReadClaudeDenyStatus checks the permissions.deny rules of the setup block. Setup
+// writes none now, so it finds none missing; the projects folder argument is kept
+// for the callers that still pass it. It never writes anything and gives the same
+// path-free reasons as ReadClaudeAllowStatus.
+func ReadClaudeDenyStatus(path, home, gridHome, _ string) ClaudeDenyStatus {
 	doc, reason, _ := readClaudeSettings(path)
 	if reason != "" {
 		return ClaudeDenyStatus{Reason: reason}
 	}
-	block, err := claudeBlock(home, gridHome, projects)
+	block, err := claudeBlock(home, gridHome)
 	if err != nil {
 		return ClaudeDenyStatus{Reason: err.Error()}
 	}

@@ -20,7 +20,7 @@ func TestKrPlanGuardOffHintNamesTheCommand(t *testing.T) {
 	f := setup(t)
 	given := filepath.Join(f.repo, "file.go")
 	in := f.input("Write", given)
-	in.AgentType = "grid:grid-planner"
+	in.AgentType = "grid:grid-reviewer"
 	d := EvaluatePlan(in, f.root, f.env)
 	if d.Behavior != "" {
 		t.Fatalf("default plan-guard refused the write: %+v", d)
@@ -40,7 +40,7 @@ func TestKrPlanGuardOffCommandTurnsTheGuardOff(t *testing.T) {
 	}
 	given := filepath.Join(f.repo, "file.go")
 	in := f.input("Write", given)
-	in.AgentType = "grid:grid-planner"
+	in.AgentType = "grid:grid-reviewer"
 	if d := EvaluatePlan(in, f.root, f.env); len(d.Warnings) != 1 {
 		t.Fatalf("before the setting the planner write should warn once, got %+v", d)
 	}

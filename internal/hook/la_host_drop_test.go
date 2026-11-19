@@ -45,10 +45,9 @@ func laHdRun(t *testing.T, level, tool, rel string) string {
 	return out.String()
 }
 
-// The Grid host folder is carried by the deny rule `grid setup` writes
-// (Edit(<anchor>/.host/**), claudeHostPaths); the hook no longer refuses it, even
-// where the person set the retired host-guard level to block. The rule is proven
-// in TestSetupWritesDenyRulesForTheHostGuardFiles (internal/cli).
+// The hook no longer refuses a write to the Grid host folder, even where the person
+// set the retired host-guard level to block, and `grid setup` writes no deny rule for
+// it either (TestSetupWritesNoDenyRulesForAgentState in internal/cli).
 func TestLaHostDropHookNoLongerRefuses(t *testing.T) {
 	for _, level := range []string{"block", "warn", "off"} {
 		for _, rel := range []string{".host/x", ".host/approval/x.json", ".HOST/x"} {

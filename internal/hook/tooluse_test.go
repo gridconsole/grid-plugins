@@ -29,8 +29,9 @@ func TestGuardDispatch(t *testing.T) {
 				cwd := filepath.Join(root, "repo")
 				data := filepath.Join(root, "data")
 				// A task folder, its Feed, the brain and a project record are not refused by a
-				// Grid guard: the deny rules `grid setup` writes carry them. The Feed is proven
-				// carried in TestLaHookFeedCarriedBySetupRule (la_hook_feed_rule_test.go).
+				// Grid guard, and `grid setup` writes no deny rule for them: agents write their
+				// task state. The Feed is proven free in TestLaHookFeedIsNotDeniedBySetup
+				// (la_hook_feed_rule_test.go).
 				in := hookio.Input{ToolName: tt.tool, Cwd: cwd, ToolInput: map[string]any{"file_path": filepath.Join(grid, tt.rel), "content": "text"}}
 				stdin, _ := json.Marshal(in)
 				var out bytes.Buffer
@@ -118,9 +119,11 @@ func foldsCase(t *testing.T, dir string) bool {
 	return err == nil
 }
 
-// A builder must not reach the brain or a project record through another
-// spelling of the Grid home on a case-folding volume.
-func TestCaseAliasesOfTheGridHomeAreDenied(t *testing.T) {
+// caseAliasHome builds a Grid home with a project, its knowledge folder and the
+// home's knowledge folder on a case-folding volume, with plan-guard at block so the
+// rows below prove what the strictest level does.
+func caseAliasHome(t *testing.T) (grid, home, cwd string) {
+	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -128,9 +131,9 @@ func TestCaseAliasesOfTheGridHomeAreDenied(t *testing.T) {
 	if !foldsCase(t, root) {
 		t.Skip("case-sensitive filesystem: another spelling names a different path")
 	}
-	home := filepath.Join(root, "home")
-	grid := filepath.Join(home, ".grid")
-	cwd := filepath.Join(root, "repo")
+	home = filepath.Join(root, "home")
+	grid = filepath.Join(home, ".grid")
+	cwd = filepath.Join(root, "repo")
 	for _, d := range []string{filepath.Join(grid, "projects", "example", "knowledge"), filepath.Join(grid, "knowledge"), cwd} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
@@ -139,10 +142,33 @@ func TestCaseAliasesOfTheGridHomeAreDenied(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(grid, "projects", "example", "project.md"), []byte("---\nname: example\n---\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// plan-guard warns by default (verdicts-11nov v-4); these rows pin the deny it gives at block.
+	// plan-guard warns by default (verdicts-11nov v-4); these rows run it at block.
 	if err := (settings.Store{Home: grid}).SetHook("plan-guard", "block"); err != nil {
 		t.Fatal(err)
 	}
+	return grid, home, cwd
+}
+
+// caseAliasWrite is what the hook answers a builder's Write to path.
+func caseAliasWrite(t *testing.T, event, grid, home, cwd, path string) string {
+	t.Helper()
+	in := hookio.Input{AgentType: "grid:grid-builder", ToolName: "Write", Cwd: cwd, ToolInput: map[string]any{"file_path": path, "content": "text"}}
+	stdin, _ := json.Marshal(in)
+	var out bytes.Buffer
+	Run(Options{
+		Event: event, Stdin: bytes.NewReader(stdin), Stdout: &out, Cwd: cwd,
+		Resolver: where.Resolver{GridHome: grid, Home: home},
+		Getenv:   func(string) string { return "" },
+	})
+	return out.String()
+}
+
+// A builder writes the brain and a project record through another spelling of the
+// Grid home on a case-folding volume as freely as through the first: agents write
+// both, and the spelling is read as the Grid home, not as a path outside it. The
+// project record was once refused here; plan-guard no longer refuses it.
+func TestCaseAliasesOfTheGridHomeAreAllowed(t *testing.T) {
+	grid, home, cwd := caseAliasHome(t)
 	for _, event := range []string{"pretooluse", "permissionrequest"} {
 		for _, tt := range []struct{ name, path string }{
 			{"project knowledge", filepath.Join(grid, "PROJECTS", "example", "knowledge", "n.md")},
@@ -150,16 +176,9 @@ func TestCaseAliasesOfTheGridHomeAreDenied(t *testing.T) {
 			{"home knowledge", filepath.Join(home, ".GRID", "knowledge", "n.md")},
 		} {
 			t.Run(event+"/"+tt.name, func(t *testing.T) {
-				in := hookio.Input{AgentType: "grid:grid-builder", ToolName: "Write", Cwd: cwd, ToolInput: map[string]any{"file_path": tt.path, "content": "text"}}
-				stdin, _ := json.Marshal(in)
-				var out bytes.Buffer
-				Run(Options{
-					Event: event, Stdin: bytes.NewReader(stdin), Stdout: &out, Cwd: cwd,
-					Resolver: where.Resolver{GridHome: grid, Home: home},
-					Getenv:   func(string) string { return "" },
-				})
-				if !strings.Contains(out.String(), `"deny"`) {
-					t.Fatalf("not denied: %s", out.Bytes())
+				out := caseAliasWrite(t, event, grid, home, cwd, tt.path)
+				if strings.Contains(out, `"deny"`) || !strings.Contains(out, `"allow"`) {
+					t.Fatalf("not allowed: %s", out)
 				}
 			})
 		}

@@ -59,18 +59,9 @@ func TestPlanGuardEditPlanReadyNoRecallRead(t *testing.T) {
 	checkAdapter(t, PlanGuard, w, f.env, d)
 }
 
-// The deletion did not widen plan.go: the folder-name check and a role fence
-// still deny at block level (inputs of "tasks folder odd sibling" and
-// "reviewer remains inside projects" in TestPlanHeaderRules).
+// The deletion did not widen plan.go: the reviewer and checker fence still denies
+// at block level (the "reviewer remains inside projects" row in TestPlanHeaderRules).
 func TestPlanGuardOtherRulesStillDeny(t *testing.T) {
-	t.Run("folder name", func(t *testing.T) {
-		f := setup(t)
-		planBlock(f)
-		i := f.input("Write", filepath.Join(f.projects, "example", "tasks.", "T-03", "notes.md"))
-		d := EvaluatePlan(i, f.root, f.env)
-		expect(t, d, "deny")
-		checkAdapter(t, PlanGuard, i, f.env, d)
-	})
 	t.Run("reviewer fence", func(t *testing.T) {
 		f := setup(t)
 		planBlock(f)

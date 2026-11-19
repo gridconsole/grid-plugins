@@ -20,10 +20,6 @@ func TestKr3PlanGuardEveryRefusalEndsWithTheOffHint(t *testing.T) {
 			func(f *fixture) string { return filepath.Join(f.repo, "file.go") }},
 		{"checker outside the projects root", "grid:grid-checker",
 			func(f *fixture) string { return filepath.Join(f.repo, "file.go") }},
-		{"builder writing the brain", "grid:grid-builder",
-			func(f *fixture) string { return filepath.Join(f.grid, "knowledge", "note.md") }},
-		{"folder name beside tasks", "",
-			func(f *fixture) string { return filepath.Join(f.projects, "example", "tasks.", "T-03", "notes.md") }},
 	} {
 		t.Run(tc.name+"/default", func(t *testing.T) {
 			f := setup(t)

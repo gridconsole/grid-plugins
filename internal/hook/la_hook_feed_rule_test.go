@@ -55,11 +55,11 @@ func laHookMatching(t *testing.T, patterns []string, p string) []string {
 	return matched
 }
 
-// A task Feed holds the answer and approval records. No Grid hook guard refuses
-// a write to it any more; the deny rules `grid setup` writes into Claude Code's
-// permissions carry it, under the projects folder, under Personal and under any
-// other folder one level below the Grid home.
-func TestLaHookFeedCarriedBySetupRule(t *testing.T) {
+// A task Feed holds the answer and approval records, and agents write their own task
+// state: no Grid hook guard refuses a write to it, and no deny rule `grid setup`
+// writes into Claude Code's permissions carries it, under the projects folder, under
+// Personal or under any other folder one level below the Grid home.
+func TestLaHookFeedIsNotDeniedBySetup(t *testing.T) {
 	home := gridhome.Real(t.TempDir())
 	grid := filepath.Join(home, ".grid")
 	rules, err := settings.ClaudeBlock(home, grid)
@@ -67,9 +67,6 @@ func TestLaHookFeedCarriedBySetupRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	patterns := laHookDenyPatterns(rules)
-	if len(patterns) == 0 {
-		t.Fatal("setup wrote no deny Edit rule")
-	}
 	const base = "~/.grid/"
 	feeds := []struct{ name, path string }{
 		{"project task", base + "projects/example/tasks/T-01/feed/record.jsonl"},
@@ -78,27 +75,19 @@ func TestLaHookFeedCarriedBySetupRule(t *testing.T) {
 	}
 	for _, tt := range feeds {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := laHookMatching(t, patterns, tt.path); len(got) == 0 {
-				t.Fatalf("no deny Edit rule carries %s; rules: %q", tt.path, patterns)
+			if got := laHookMatching(t, patterns, tt.path); len(got) != 0 {
+				t.Fatalf("deny Edit rules carry %s: %q", tt.path, got)
 			}
 		})
 	}
-	// The third path sits under no projects or personal rule: one rule carries it,
-	// and it carries nothing outside a task folder.
-	t.Run("one level below the home has one carrier", func(t *testing.T) {
-		got := laHookMatching(t, patterns, feeds[2].path)
-		if len(got) != 1 {
-			t.Fatalf("want one rule for %s, got %q", feeds[2].path, got)
-		}
-		if outside := laHookMatching(t, got, base+"projects/example/notes.md"); len(outside) != 0 {
-			t.Fatalf("the rule %q also carries a path outside a task folder", got[0])
-		}
-	})
-	// Not vacuous: a path outside any task folder is carried by no rule.
-	t.Run("outside a task folder is carried by none", func(t *testing.T) {
-		outside := base + "projects/example/notes.md"
-		if got := laHookMatching(t, patterns, outside); len(got) != 0 {
-			t.Fatalf("%s is carried by %q", outside, got)
+	// Not vacuous: the matcher does carry each Feed path under the task folder rules
+	// earlier setups wrote.
+	t.Run("the old task folder rules carried them", func(t *testing.T) {
+		old := []string{base + "projects/*/tasks/[Tt]-[0-9]*/**", base + "personal/tasks/[Tt]-[0-9]*/**", base + "*/tasks/[Tt]-[0-9]*/**"}
+		for _, tt := range feeds {
+			if got := laHookMatching(t, old, tt.path); len(got) == 0 {
+				t.Fatalf("the matcher carries %s by none of %q", tt.path, old)
+			}
 		}
 	})
 }

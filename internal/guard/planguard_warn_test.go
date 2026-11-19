@@ -67,7 +67,7 @@ func TestPlanGuardRemovedApprovalLineDenies(t *testing.T) {
 	}
 }
 
-// Every role fence and the folder-name check answers through the plan-guard
+// The reviewer and checker fence answers through the plan-guard
 // level: no setting is a warning that starts `plan-guard:` and no deny; block
 // gives back the same deny text the fence had when it blocked by default.
 func TestPlanGuardFencesWarnByDefaultAndDenyAtBlock(t *testing.T) {
@@ -82,25 +82,10 @@ func TestPlanGuardFencesWarnByDefaultAndDenyAtBlock(t *testing.T) {
 			func(f *fixture, given string) string {
 				return "A grid-reviewer writes only its Verdict inside a task folder; " + given + " is outside it." + off
 			}},
-		{"folder name beside tasks", "",
-			func(f *fixture) string { return filepath.Join(f.projects, "example", "tasks.", "T-03", "notes.md") },
-			func(f *fixture, given string) string {
-				return "A folder beside a project's tasks folder keeps a plain name (printable ASCII, no colon, no dot or space at the end, not tasks in other letters): on macOS or Windows it can be the tasks folder under another spelling, so " + given + " is not written." + off
-			}},
-		{"builder writing the brain", "grid:grid-builder",
-			func(f *fixture) string { return filepath.Join(f.grid, "knowledge", "note.md") },
-			func(f *fixture, given string) string {
-				return "Only a grid-curator (or a grid-planner) writes the brain; a grid-builder writes a proposal in its task's brain-proposals/ folder instead of " + given + "." + off
-			}},
-		{"curator outside the brain", "grid:grid-curator",
+		{"checker outside the projects root", "grid:grid-checker",
 			func(f *fixture) string { return filepath.Join(f.repo, "file.go") },
 			func(f *fixture, given string) string {
-				return "A curator writes only the brain (a project's knowledge/ folder or the Grid home's) and its task folder. Write inside " + f.task + ", not " + given + "." + off
-			}},
-		{"planner outside its folders", "grid:grid-planner",
-			func(f *fixture) string { return filepath.Join(f.repo, "file.go") },
-			func(f *fixture, given string) string {
-				return "A planner writes only inside a task folder (its own, or one whose plan is not accepted yet), an artifacts folder or a brain folder. Write inside " + f.task + ", not " + given + "." + off
+				return "A grid-checker writes only its Verdict inside a task folder; " + given + " is outside it." + off
 			}},
 	} {
 		t.Run(tc.name+"/default", func(t *testing.T) {
@@ -133,6 +118,36 @@ func TestPlanGuardFencesWarnByDefaultAndDenyAtBlock(t *testing.T) {
 			expect(t, d, hookio.Deny("").Behavior)
 			if d.Reason != tc.want(f, given) || len(d.Warnings) != 0 {
 				t.Fatalf("deny text %q (warnings %v), want %q", d.Reason, d.Warnings, tc.want(f, given))
+			}
+		})
+	}
+}
+
+// No fence reaches a task folder, the brain, project.md or a folder name: these are
+// agents' own state, and a refusal there stalled tasks on edge cases. At block too.
+func TestPlanGuardLeavesTaskStateToAgents(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		agent string
+		path  func(*fixture) string
+	}{
+		{"builder writing the brain", "grid:grid-builder", func(f *fixture) string { return filepath.Join(f.grid, "knowledge", "note.md") }},
+		{"builder writing project knowledge", "grid:grid-builder", func(f *fixture) string { return filepath.Join(f.projects, "example", "Knowledge", "note.md") }},
+		{"folder name beside tasks", "", func(f *fixture) string { return filepath.Join(f.projects, "example", "tasks.", "T-03", "notes.md") }},
+		{"tasks folder in other letters", "", func(f *fixture) string { return filepath.Join(f.projects, "fresh", "TASKS", "T-03", "notes.md") }},
+		{"curator writing a repo file", "grid:grid-curator", func(f *fixture) string { return filepath.Join(f.repo, "file.go") }},
+		{"planner writing a repo file", "grid:grid-planner", func(f *fixture) string { return filepath.Join(f.repo, "file.go") }},
+		{"planner writing another task's folder", "grid-planner", func(f *fixture) string { return filepath.Join(f.otherTask(accepted), "notes.md") }},
+		{"builder writing project.md", "grid:grid-builder", func(f *fixture) string { return filepath.Join(f.projects, "example", "project.md") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := setup(t)
+			planBlock(f)
+			in := f.input("Write", tc.path(f))
+			in.AgentType = tc.agent
+			in.Cwd = f.repo
+			if d := EvaluatePlan(in, f.root, f.env); d.Behavior != "" || len(d.Warnings) != 0 {
+				t.Fatalf("want no answer, got %+v", d)
 			}
 		})
 	}
