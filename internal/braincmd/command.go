@@ -321,7 +321,7 @@ func Run(args []string, env Env) int {
 			store.Project = res.Project
 			writesProject := verb == "propose" || (verb == "accept" && !strings.HasPrefix(f.Arg(0), "brain:home/")) || (verb == "index" && !readOnly)
 			if !res.Record && res.Rule != where.RuleTask && writesProject {
-				return fail(fmt.Errorf("project %q has no Grid record; create its first task or use --level home", res.Project))
+				return fail(fmt.Errorf("project %q has no Grid record; create its first task, or use --level home only for knowledge that holds in every project", res.Project))
 			}
 		}
 	}

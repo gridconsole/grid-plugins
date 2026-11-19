@@ -228,3 +228,17 @@ func TestAcceptHomeProposalWithProjectFilesInProject(t *testing.T) {
 		t.Fatal("home proposal was left behind")
 	}
 }
+
+// A proposal from a folder with no Grid record must not read as an invitation to
+// file project knowledge at home: the recording notes were filed at home that way.
+func TestProposeInUnregisteredFolderPointsHomeOnlyAtGlobalKnowledge(t *testing.T) {
+	h := newHarness(t)
+	h.env.Cwd = filepath.Join(h.env.Home, "work")
+	if err := os.MkdirAll(filepath.Join(h.env.Cwd, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	code := h.run("propose", "--name", "checks", "--topic", "decisions", "--description", "Before checks.", "--summary", "Checks.", "--source", "x", "--body", "Run.")
+	if code != 1 || !strings.Contains(h.err.String(), "only for knowledge that holds in every project") {
+		t.Fatalf("exit %d, stderr %q", code, &h.err)
+	}
+}
