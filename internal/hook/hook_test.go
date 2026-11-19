@@ -74,7 +74,7 @@ func TestSessionStartSourcesAndEnvironment(t *testing.T) {
 				t.Fatalf("exit %d", code)
 			}
 			context := contextFrom(t, out)
-			for _, want := range []string{"GRID_HOME", "GRID_PROJECTS", "Grid project: example", "Task files live under the Grid home", "GRID_AGENT=<name> grid approve"} {
+			for _, want := range []string{"GRID_HOME", "GRID_PROJECTS", "Grid project: example", "Task files live under the Grid home", "grid approve --agent <name>"} {
 				if !strings.Contains(context, want) {
 					t.Errorf("missing %q: %s", want, context)
 				}

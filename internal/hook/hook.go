@@ -457,7 +457,7 @@ func sessionContext(r where.Result, resolver where.Resolver, note string) string
 		ProjectLine(r, resolver.Home) + note,
 		"Task files live under the Grid home; use the grid verbs for task.md, the plan, the history and Jobs, and write any other task file straight into its folder. Project records and task files live outside repositories.",
 		"The Grid brain holds shared topics, knowledge and decisions at home and project level.",
-		"Approvals come from a person or an agent through the Grid app or grid approve; an agent Grid did not launch runs GRID_AGENT=<name> grid approve.",
+		"Approvals come from a person or an agent through the Grid app or grid approve; an agent Grid did not launch runs grid approve --agent <name>.",
 	}, "\n")
 	return boundContext(text)
 }
