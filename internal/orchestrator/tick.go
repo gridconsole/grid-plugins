@@ -172,7 +172,8 @@ func (s Store) Tick() (out Output, err error) {
 			}
 		}
 		for _, id := range ids(snap) {
-			if why := waits[id]; why != "" && snap.State.Jobs[id].Reason != why {
+			// A held Job's waits are in its own record and the tree, so the tick writes no reason over it.
+			if why := waits[id]; why != "" && snap.State.Jobs[id].Status != contract.Held && snap.State.Jobs[id].Reason != why {
 				if e := s.control(snap.State.Jobs[id], "", why, ""); e != nil {
 					return e
 				}
@@ -200,7 +201,7 @@ func (s Store) Tick() (out Output, err error) {
 				}
 				continue
 			}
-			if e := s.assign(j, to); e != nil {
+			if e := s.assign(j, to, snap.Grants); e != nil {
 				return e
 			}
 			if m.Jobs[id] == nil {
@@ -255,13 +256,17 @@ func (s Store) Tick() (out Output, err error) {
 	})
 	return
 }
-func (s Store) assign(j *contract.Job, to string) error {
+func (s Store) assign(j *contract.Job, to string, grants map[string]Grant) error {
 	attempt := j.Attempt + 1
 	if j.ExitReason == "usage_limit" {
 		attempt = j.Attempt
 	}
 	if j.Status != contract.Ready {
-		if err := s.control(j, contract.Ready, "ready", ""); err != nil {
+		reason := "ready"
+		if j.Status == contract.Held || j.Status == contract.Blocked {
+			reason = "hold released"
+		}
+		if err := s.control(j, contract.Ready, reason, ""); err != nil {
 			return err
 		}
 	}
@@ -270,7 +275,21 @@ func (s Store) assign(j *contract.Job, to string) error {
 		return err
 	}
 	a := contract.Assignment{Job: j.ID, Attempt: attempt, To: to, Fence: grant.Fence, Until: contract.FormatTime(s.now().Add(session.LeaseDuration))}
-	_, err = s.Feed.Post(feed.Input{Type: "control", Body: map[string]any{"assign": a}}, s.Writer)
+	// A released permission wait carries the rule its approval covers and that approval as the grant.
+	body := struct {
+		contract.Assignment
+		Allow []string `json:"allow,omitempty"`
+		Grant string   `json:"grant,omitempty"`
+	}{Assignment: a}
+	if j.Status == contract.Blocked {
+		for _, w := range j.WaitsOn {
+			if g, ok := grants[w.Ref]; w.Kind == contract.WaitPermission && ok {
+				body.Allow, body.Grant = []string{g.Rule}, g.Approval
+				break
+			}
+		}
+	}
+	_, err = s.Feed.Post(feed.Input{Type: "control", Body: map[string]any{"assign": body}}, s.Writer)
 	return err
 }
 func (s Store) spawn(j *contract.Job) error {
@@ -303,8 +322,9 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 	if j.Status == contract.Ready && j.ExitReason == "cancelled" && ycWorkerStopped(j.ExitCode) {
 		m.Failures = nil
 	}
-	if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected || j.Status == contract.Posted || j.Status == contract.Ready || j.Status == contract.Blocked {
-		// Blocked waits for a person; the tick posts no control over it, whatever the exit reason.
+	if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected || j.Status == contract.Posted || j.Status == contract.Ready || j.Status == contract.Blocked || j.Status == contract.Held {
+		// Blocked waits for a person and Held for what it names; the tick posts no
+		// control over either here, whatever the exit reason. Ready releases a hold.
 		return nil
 	}
 	if j.Status == contract.Parked {
