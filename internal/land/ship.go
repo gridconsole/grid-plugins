@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/fslock"
@@ -160,11 +161,71 @@ func shipRebasePrefix(job string) string { return job + " approval kept; waits f
 // RebaseQueued records that a land of the ship Job job stopped on a merge conflict
 // and the rebase Job rebase was posted: the person's approval is kept, and the next
 // acceptance pass of job runs land again (markShip) once the rebase is accepted.
-// The caller writes it after the rebase Job is on the Feed.
-func (s Store) RebaseQueued(cwd, id, job, rebase string) error {
+// tip is the commit the target branch pointed at when the conflict was seen ("" when
+// unknown), kept as its first tipLen characters since a history detail is short;
+// RebaseTip reads it back, so a later conflict can tell whether the target moved
+// since. The caller writes it after the rebase Job is on the Feed.
+func (s Store) RebaseQueued(cwd, id, job, rebase, tip string) error {
 	return s.withShipLock(cwd, id, func(string) error {
-		return s.note(cwd, id, shipEvent+": "+shipRebasePrefix(job)+rebase+", which keeps both changes; grid land runs again once it is accepted")
+		at := ""
+		if tip != "" {
+			at = " (" + rebaseTipMark + tip[:min(len(tip), tipLen)] + ")"
+		}
+		return s.note(cwd, id, shipEvent+": "+shipRebasePrefix(job)+rebase+at+", which keeps both changes; grid land runs again once it is accepted")
 	})
+}
+
+// rebaseTipMark starts the target tip RebaseQueued puts in its line, and tipLen is how
+// many characters of the commit it keeps.
+const (
+	rebaseTipMark = "target tip "
+	tipLen        = 12
+)
+
+var rebaseLine = regexp.MustCompile(`waits for rebase (\S+?)(?: \(` + rebaseTipMark + `([0-9a-f]+)\))?, which keeps both changes`)
+
+// RebaseTip is the rebase Job and the target tip of the newest RebaseQueued line of
+// the ship Job job. Both are "" when job has none, and tip is "" for a line written
+// before the tip was kept; a tip is at most tipLen characters, so compare it as a prefix.
+func (s Store) RebaseTip(cwd, id, job string) (rebase, tip string, err error) {
+	err = s.withShipLock(cwd, id, func(history string) error {
+		for _, line := range strings.Split(history, "\n") {
+			if !strings.Contains(line, " · "+shipEvent+" · "+shipRebasePrefix(job)) {
+				continue
+			}
+			if m := rebaseLine.FindStringSubmatch(line); m != nil {
+				rebase, tip = m[1], m[2]
+			}
+		}
+		return nil
+	})
+	return rebase, tip, err
+}
+
+// shipRetryDetail is the detail of the "ship answered" line Retry writes.
+func shipRetryDetail(job string) string {
+	return job + " land failed; the approval stands and grid land runs again on the next pass"
+}
+
+// Retry records that a land of the ship Job job failed and the person's approval
+// stands: the next pass runs land again (markShip) with no new answer, and Armed
+// reports true until it has. The caller writes it instead of putting the ship Job
+// back with its person, and only for a failure that is not a deploy command's own.
+func (s Store) Retry(cwd, id, job string) error {
+	return s.withShipLock(cwd, id, func(string) error {
+		return s.note(cwd, id, shipEvent+": "+shipRetryDetail(job))
+	})
+}
+
+// Armed reports whether the answer to the ship Job job still has a land to run: it has
+// not run yet, or it was reopened, queued a rebase or is to retry (shipState).
+func (s Store) Armed(cwd, id, job string) (bool, error) {
+	armed := false
+	err := s.withShipLock(cwd, id, func(history string) error {
+		armed, _ = shipState(history, job)
+		return nil
+	})
+	return armed, err
 }
 
 // RebasePending reports whether the ship Job job waits for a rebase Job: the newest
@@ -200,16 +261,17 @@ func (s Store) withShipLock(cwd, id string, fn func(history string) error) error
 }
 
 // shipState reads the "ship answered" lines of job in history.md in order. armed is
-// true until land has run for the answer, and again after a reopen (Reopened) or a
-// queued rebase (RebaseQueued); rebasing is true when the newest of those lines is
-// the rebase one.
+// true until land has run for the answer, and again after a reopen (Reopened), a
+// retry (Retry) or a queued rebase (RebaseQueued); rebasing is true when the newest of
+// those lines is the rebase one.
 func shipState(history, job string) (armed, rebasing bool) {
 	armed = true
 	for _, line := range strings.Split(history, "\n") {
 		switch {
 		case strings.Contains(line, " · "+shipEvent+" · "+job+" accepted; grid land runs · "):
 			armed, rebasing = false, false
-		case strings.Contains(line, " · "+shipEvent+" · "+shipReopenedDetail(job)+" · "):
+		case strings.Contains(line, " · "+shipEvent+" · "+shipReopenedDetail(job)+" · "),
+			strings.Contains(line, " · "+shipEvent+" · "+shipRetryDetail(job)+" · "):
 			armed, rebasing = true, false
 		case strings.Contains(line, " · "+shipEvent+" · "+shipRebasePrefix(job)):
 			armed, rebasing = true, true
@@ -219,7 +281,7 @@ func shipState(history, job string) (armed, rebasing bool) {
 }
 
 // markShip writes the "ship answered" line for job under .land.lock unless
-// history.md already holds it with no later reopen or rebase line for job; first
+// history.md already holds it with no later reopen, retry or rebase line for job; first
 // reports whether this call wrote it.
 func (s Store) markShip(dir, cwd, id, job string) (first bool, err error) {
 	lock, err := fslock.OpenNoFollow(filepath.Join(dir, ".land.lock"), os.O_CREATE|os.O_RDWR, 0600)

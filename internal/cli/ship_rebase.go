@@ -23,17 +23,13 @@ import (
 // of it the same title.
 const rebaseTitle = "Rebase the delivered branch on "
 
-// rebaseTries is how many rebase Jobs one task gets; a conflict after that goes back
-// to the person as a failed land.
-const rebaseTries = 2
-
 // isRebaseJob reports whether it is a rebase Job or a rework of one.
 func isRebaseJob(it job.Job) bool {
 	return !it.IsPerson() && strings.HasPrefix(strings.TrimSpace(it.Title), rebaseTitle)
 }
 
 // rebaseRoots is the id of each rebase Job that is not a rework, in Feed order: one
-// per try.
+// per time the target moved under the delivered branch.
 func rebaseRoots(items []job.Job) []string {
 	var roots []string
 	for _, it := range items {
@@ -62,6 +58,27 @@ func rebaseHead(items []job.Job, root string) string {
 		head = n
 	}
 	return head
+}
+
+// lastRebaseHead is the newest rebase Job of the Feed, a rework followed to its end, or
+// "" when the Feed has none.
+func lastRebaseHead(items []job.Job) string {
+	roots := rebaseRoots(items)
+	if len(roots) == 0 {
+		return ""
+	}
+	return rebaseHead(items, roots[len(roots)-1])
+}
+
+// rebaseCount is how many rebase Jobs the Feed holds, roots and reworks.
+func rebaseCount(items []job.Job) int {
+	n := 0
+	for _, it := range items {
+		if isRebaseJob(it) {
+			n++
+		}
+	}
+	return n
 }
 
 // rebaseVerify is the verify of the rebase Job: the test command of the task's
@@ -114,21 +131,23 @@ func rebaseJobBody(id string, c *mergeConflictError, verify map[string]any) map[
 }
 
 // postRebaseJob posts the rebase Job of the conflict c as the task writer w and
-// returns its id, or "" when the task has used its tries (rebaseTries). A task write
-// under the lease, as every Job a delivery posts is; the id is chosen again when
-// another writer took it first.
-func postRebaseJob(env Env, store feed.Store, w feed.Writer, c *mergeConflictError) (string, error) {
+// returns its id. A task write under the lease, as every Job a delivery posts is; the
+// id is chosen again when another writer took it first. again is true when the target
+// has not moved since the last rebase Job was queued: the conflict is then the last
+// Job's own failure, so the Job posted is a rework of it (it continues it, with the
+// conflict as one more acceptance row), which the Judge reviews as it does any rework.
+func postRebaseJob(env Env, store feed.Store, w feed.Writer, c *mergeConflictError, again bool) (string, error) {
 	for try := 0; try < 3; try++ {
 		snap, err := orchestrator.Load(store)
 		if err != nil {
 			return "", err
 		}
-		tries := len(rebaseRoots(snap.Items))
-		if tries >= rebaseTries {
-			return "", nil
-		}
+		count := rebaseCount(snap.Items)
 		id := nextJobID(snap)
 		body := rebaseJobBody(id, c, rebaseVerify(snap.Items, c))
+		if head := lastRebaseHead(snap.Items); again && head != "" {
+			reworkRebaseJob(body, c, head, snap.State.Jobs[head])
+		}
 		data, err := json.Marshal(body)
 		if err != nil {
 			return "", err
@@ -139,7 +158,7 @@ func postRebaseJob(env Env, store feed.Store, w feed.Writer, c *mergeConflictErr
 		skipped := false
 		_, err = orchestrator.WriteUnless(store, w, feed.Input{Type: "job", Job: id, Body: body}, func() bool {
 			s, err := orchestrator.Load(store)
-			if err == nil && (len(rebaseRoots(s.Items)) != tries || s.State.Jobs[id] != nil || slices.Contains(s.JobIDs, id)) {
+			if err == nil && (rebaseCount(s.Items) != count || s.State.Jobs[id] != nil || slices.Contains(s.JobIDs, id)) {
 				skipped = true
 			}
 			return skipped
@@ -154,52 +173,64 @@ func postRebaseJob(env Env, store feed.Store, w feed.Writer, c *mergeConflictErr
 	return "", errors.New("the Feed changed while the Job was being posted")
 }
 
+// reworkRebaseJob makes body, a rebase Job, the rework of the rebase Job head, whose
+// branch still conflicts with the target at the commit the last rebase was made on.
+func reworkRebaseJob(body map[string]any, c *mergeConflictError, head string, prev *contract.Job) {
+	rows, _ := body["acceptance"].([]any)
+	tip := c.TargetSHA
+	if len(tip) > 12 {
+		tip = tip[:12]
+	}
+	body["acceptance"] = append(rows, map[string]any{"id": "A3", "traces": "item", "text": fmt.Sprintf("Must-fix from the land: after rebase Job %s, %s still conflicts in %s with %s at %s, and %s has not moved since that rebase. Rebase %s on %s again and check that it merges into %s with no conflict before you finish.", head, c.Branch, strings.Join(c.Files, ", "), c.Target, tip, c.Target, c.Branch, c.Target, c.Target)})
+	body["continues"] = head
+	if prev != nil {
+		body["review_rounds"] = prev.ReviewRounds + 1
+	}
+}
+
 // queueRebase answers a land that stopped on the merge conflict c: it posts the
 // rebase Job, records that the person's approval of the ship Job ship waits for it
 // (land.Store.RebaseQueued), and reports true. It reports false when no rebase Job
-// can be posted (no task lease, the tries are used, the post failed), so the caller
-// puts the ship Job back with its person, with why as its reason when it is not "".
-func queueRebase(env Env, fs feed.Store, w feed.Writer, store land.Store, id, ship string, c *mergeConflictError) (queued bool, why string) {
-	if w.Lease != "task" || len(c.Files) == 0 {
-		return false, ""
+// can be posted (no task lease, the post failed), so the caller arms the land to run
+// again on the next pass (land.Store.Retry) with the approval standing.
+//
+// What ends a chain of rebase Jobs is that the target has moved: a conflict with the
+// target at the commit the last rebase Job was queued on is that Job's own failure,
+// and gets a rework of it, not a new try; a new try needs the target to have moved
+// under it, which another task's land does, and the tasks are finite.
+func queueRebase(env Env, fs feed.Store, w feed.Writer, store land.Store, id, ship string, c *mergeConflictError) (queued bool) {
+	if w.Lease != "task" {
+		fmt.Fprintf(env.Stderr, "land: %s: %s conflicts with %s in %s; no task lease to post the rebase Job, the next pass retries\n", ship, c.Branch, c.Target, strings.Join(c.Files, ", "))
+		return false
 	}
-	rebase, err := postRebaseJob(env, fs, w, c)
+	_, tip, _ := store.RebaseTip(env.Cwd, id, ship)
+	again := tip != "" && strings.HasPrefix(c.TargetSHA, tip)
+	rebase, err := postRebaseJob(env, fs, w, c, again)
 	if err != nil {
-		fmt.Fprintf(env.Stderr, "land: %s: the rebase Job was not posted: %s\n", ship, oneLineErr(err))
-		return false, rebaseRetryText(c, false)
-	}
-	if rebase == "" {
-		fmt.Fprintf(env.Stderr, "land: %s: %d rebase Jobs were tried; %s still conflicts\n", ship, rebaseTries, c.Branch)
-		return false, rebaseRetryText(c, true)
+		fmt.Fprintf(env.Stderr, "land: %s: the rebase Job was not posted, the next pass retries: %s\n", ship, oneLineErr(err))
+		return false
 	}
 	refoldAfterWrite(env, fs)
-	if err := store.RebaseQueued(env.Cwd, id, ship, rebase); err != nil {
+	if err := store.RebaseQueued(env.Cwd, id, ship, rebase, c.TargetSHA); err != nil {
 		fmt.Fprintf(env.Stderr, "land: %s: rebase Job %s posted, but its history line failed: %s\n", ship, rebase, oneLineErr(err))
-		return false, rebaseRetryText(c, false)
+		return false
 	}
 	fmt.Fprintf(env.Stderr, "land: %s: %s conflicts with %s in %s; rebase Job %s posted, the approval stands\n", ship, c.Branch, c.Target, strings.Join(c.Files, ", "), rebase)
-	return true, ""
-}
-
-// rebaseRetryText is the reason the ship Job goes back with when the conflict c got no
-// rebase Job: what happened in plain words and that approving again retries the land.
-// The steps by hand stay in the merge's own error, which the history line keeps.
-func rebaseRetryText(c *mergeConflictError, triesUsed bool) string {
-	files := strings.Join(c.Files, ", ")
-	if triesUsed {
-		return fmt.Sprintf("%s moved again and the work still conflicts in %s after %d rebase tries; approve again to retry the land", c.Target, files, rebaseTries)
-	}
-	return fmt.Sprintf("%s moved and the work conflicts in %s; no agent could be given the rebase, so approve again to retry the land", c.Target, files)
+	return true
 }
 
 // rebaseStep is a pass over a ship Job whose approval waits for its rebase Job. It
 // reports true when the pass is over: the rebase is still out, or it failed and the
-// ship Job went back to its person with the reason. It reports false when the rebase
-// Job is accepted and task.md names its branch, so land runs again on the approval.
-func rebaseStep(env Env, fs feed.Store, w feed.Writer, store land.Store, who contract.Author, dir, proj, id, ship string, snap orchestrator.Snapshot) bool {
+// land is armed to run again (land.Store.Retry), which finds the conflict again and
+// posts a rework of the failed Job or a new try; the person is not asked. It reports
+// false when the rebase Job is accepted and task.md names its branch, so land runs
+// again on the approval.
+func rebaseStep(env Env, store land.Store, who contract.Author, dir, proj, id, ship string, snap orchestrator.Snapshot) bool {
 	fail := func(text string) bool {
-		fmt.Fprintf(env.Stderr, "land: %s: %s\n", ship, text)
-		reopenShipJob(env, fs, w, store, id, ship, text)
+		fmt.Fprintf(env.Stderr, "land: %s: %s; the land runs again on the next pass\n", ship, text)
+		if err := store.Retry(env.Cwd, id, ship); err != nil {
+			fmt.Fprintf(env.Stderr, "land: %s: the retry was not recorded: %s\n", ship, oneLineErr(err))
+		}
 		return true
 	}
 	roots := rebaseRoots(snap.Items)
