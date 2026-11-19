@@ -14,6 +14,8 @@ import (
 // In the built-in workflow nothing posts the plan approve Job before someone
 // approves. An agent's grid approve on such a task posts it itself, unleased in
 // role agent, and answers it; the holder's next pass accepts the plan.
+// It covers the removed TestAgentApproveWithoutAnApproveJobWritesNothing,
+// whose refusal no longer exists.
 func TestAgentApprovePostsThePlanJob(t *testing.T) {
 	h, path, store := arWaitingTask(t)
 	h.env.Getenv = agentJobEnv(path, os.Getenv("GRID_LEASE_EPOCH"))
