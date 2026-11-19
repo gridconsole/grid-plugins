@@ -19,6 +19,31 @@ type controlBody struct {
 	Attempt     int         `json:"attempt"`
 	Answer      string      `json:"answer"`
 	Order       *int        `json:"order"`
+	WaitsOn     []HeldWait  `json:"waits_on"`
+}
+
+// applyHold sets the Job's waits from a control that moves its status: a control
+// to held keeps the waits it names, one to any other status clears them, and one
+// with no status (the tick's reason-only control) leaves them as they were.
+func applyHold(j *Job, b controlBody) {
+	switch {
+	case b.Status == Held:
+		j.WaitsOn = append([]HeldWait(nil), b.WaitsOn...)
+	case b.Status != "":
+		j.WaitsOn = nil
+	}
+}
+
+// rowWaits lists the waits of the Job's rows that are waiting, in row order: what
+// a Blocked Job's waiting rows name.
+func rowWaits(j *Job) []HeldWait {
+	var out []HeldWait
+	for _, r := range j.Acceptance {
+		if r.State == RowWaiting && r.WaitsOn != nil {
+			out = append(out, HeldWait{Row: r.ID, Kind: r.WaitsOn.Kind, Ref: r.WaitsOn.Ref})
+		}
+	}
+	return out
 }
 
 type question struct {
@@ -449,6 +474,7 @@ func foldLoop(posts []Post, info map[string]boardInfo, grants []Grant) (State, L
 			j.Attempt, j.Status, j.LeaseExpires = a.Attempt, Assigned, a.Until
 			j.Exited, j.ExitReason, j.Reason = "", "", ""
 			j.ExitCode, j.ExitReasonMissing = nil, false
+			j.WaitsOn = nil
 			j.History = append(j.History, p.ID)
 			moved[id] = false
 			acknowledged := false
@@ -511,6 +537,7 @@ func foldLoop(posts []Post, info map[string]boardInfo, grants []Grant) (State, L
 			j.CloseReason = b.CloseReason
 			moved[id] = true
 		}
+		applyHold(j, b)
 		j.Reason = b.Reason
 		j.History = append(j.History, p.ID)
 	}
@@ -741,6 +768,7 @@ func foldAttempts(jobs map[string]*Job, active []Post, seen map[string]Post, mov
 			var b struct{ Rule string }
 			_ = json.Unmarshal(a.blocked.Body, &b)
 			j.Status, j.Reason = Blocked, "blocked on "+b.Rule
+			j.WaitsOn = rowWaits(j)
 		case a.exit != nil && exit.Reason == "done" && resultOf(j, seen, j.Attempt):
 			j.Status, j.Reason = Submitted, "awaiting judgement"
 		case a.started && j.Status == Assigned:
@@ -804,7 +832,7 @@ func applySide(j *Job, p Post) string {
 			return "Job has no acceptance row " + mark.Acceptance.ID
 		}
 		j.History = append(j.History, p.ID)
-		row.State, row.Note = rowState(mark.Acceptance.State), mark.Acceptance.Note
+		row.State, row.Note, row.WaitsOn = rowState(mark.Acceptance.State), mark.Acceptance.Note, nil
 		return ""
 	}
 	j.History = append(j.History, p.ID)
@@ -817,14 +845,20 @@ func applySide(j *Job, p Post) string {
 			ProposedJobs    []ProposedJob   `json:"proposed_jobs"`
 			DecisionsNeeded []string        `json:"decisions_needed"`
 			Verified        json.RawMessage `json:"verified"`
-			Acceptance      []struct{ ID, State, Decision string }
+			Acceptance      []struct {
+				ID, State, Decision string
+				WaitsOn             *Wait `json:"waits_on"`
+			}
 		}
 		_ = json.Unmarshal(p.Body, &b)
 		// The result's row states are the latest marks; a row the record lacks
-		// is not added.
+		// is not added. Only a waiting row keeps its waits_on.
 		for _, a := range b.Acceptance {
 			if row := rowOf(j, a.ID); row != nil {
-				row.State, row.Note = rowState(a.State), a.Decision
+				row.State, row.Note, row.WaitsOn = rowState(a.State), a.Decision, nil
+				if row.State == RowWaiting {
+					row.WaitsOn = a.WaitsOn
+				}
 			}
 		}
 		j.ProposedJobs = append(j.ProposedJobs, b.ProposedJobs...)

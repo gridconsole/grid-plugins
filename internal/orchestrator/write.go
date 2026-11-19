@@ -232,6 +232,13 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 	for _, id := range ids(s) {
 		j := s.State.Jobs[id]
 		row := TreeJob{Job: j, Attempts: []Attempt{}}
+		// A held Job shows each wait with whether it is met now; the copy leaves the
+		// folded state as it was.
+		if holds := readiness.Holds[id]; len(holds) > 0 {
+			shown := *j
+			shown.WaitsOn = holds
+			row.Job = &shown
+		}
 		var until time.Time
 		var to string
 		hasResult := false
@@ -359,6 +366,12 @@ func closedAt(s Snapshot, id string) time.Time {
 // orphanOf judges one Job on its latest attempt only. A closed Job has none.
 func orphanOf(j *contract.Job, attempts []Attempt, ready bool, readySince, until time.Time, to string, hasResult bool, now time.Time) *Orphan {
 	if j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected {
+		return nil
+	}
+	// A held Job waits on something outside it, and the tick releases it when that
+	// lands: nobody is meant to be working it, so it is no orphan, whatever its last
+	// attempt read.
+	if j.Status == contract.Held {
 		return nil
 	}
 	if len(attempts) == 0 {

@@ -97,6 +97,11 @@ const (
 	Parked    Status = "parked"
 	Rejected  Status = "rejected"
 	Cancelled Status = "cancelled"
+	// Held is a Job the reviewer confirmed waits on something outside it (Job,
+	// landing or question): open, with no person point and no rework. A control
+	// from the Judge sets it with the waits it copies from the waiting rows; a
+	// wait on a permission stays Blocked (docs/decisions/D-job-hold.md).
+	Held Status = "held"
 )
 
 type Assignment struct {
@@ -157,9 +162,13 @@ type Job struct {
 	// Acceptance holds the Job record's acceptance rows in record order, each with
 	// the latest state a checkpoint or result of the Job set; a row nothing has
 	// marked reads pending.
-	Acceptance  []AcceptanceRow `json:"acceptance"`
-	State       string          `json:"state,omitempty"`
-	StateReason string          `json:"state_reason,omitempty"`
+	Acceptance []AcceptanceRow `json:"acceptance"`
+	// WaitsOn is what a Held Job waits on, copied from the control that held it, or
+	// what a Blocked Job's waiting rows name. A later assign or a control that moves
+	// the Job to another status clears it; a control with no status leaves it.
+	WaitsOn     []HeldWait `json:"waits_on,omitempty"`
+	State       string     `json:"state,omitempty"`
+	StateReason string     `json:"state_reason,omitempty"`
 
 	ExitCode          json.RawMessage `json:"exit_code,omitempty"`
 	ExitReasonMissing bool            `json:"exit_reason_missing,omitempty"`
@@ -177,13 +186,16 @@ const (
 // StateOf maps a stored status to one of the four states. Cancelled reads as
 // Done with the reason "cancelled". integrated (in the control schema, not the
 // Status constants) reads as Needs review; Blocked reads as Started with the
-// reason "blocked"; any other status reads as Not started.
+// reason "blocked" and Held as Started with the reason "held"; any other status
+// reads as Not started.
 func StateOf(s Status) (state, reason string) {
 	switch s {
 	case Assigned, Running:
 		return StateStarted, ""
 	case Blocked:
 		return StateStarted, "blocked"
+	case Held:
+		return StateStarted, "held"
 	case Submitted, "integrated":
 		return StateNeedsReview, ""
 	case Accepted:
@@ -220,6 +232,16 @@ const (
 type Wait struct {
 	Kind string `json:"kind"`
 	Ref  string `json:"ref"`
+}
+
+// HeldWait is one thing a held Job waits on: the acceptance row that cannot hold
+// yet, and what it waits on. Met is the answer of whoever evaluates the wait (the
+// orchestrator's tree and Ready); the fold never sets it, so it is nil there.
+type HeldWait struct {
+	Row  string `json:"row"`
+	Kind string `json:"kind"`
+	Ref  string `json:"ref"`
+	Met  *bool  `json:"met,omitempty"`
 }
 
 // AcceptanceRow is one acceptance row of a Job as the fold reads it. Note is the

@@ -40,6 +40,13 @@ type Snapshot struct {
 	// Landed is the Job ids the fold holds a landed post for: what a landed
 	// after edge waits for.
 	Landed map[string]bool
+	// Approved is the ids of the blocked posts a counted person's approval answers
+	// and covers: what meets a permission wait of a Blocked Job. Load leaves it
+	// empty. Ready would release such a Job into an assign that carries no allow or
+	// grant (the tick's assign posts neither), and its next attempt would block on
+	// the same rule again, so the release stays off until the tick passes the
+	// approved rules (docs/decisions/D-job-hold.md, Decision 3).
+	Approved map[string]bool
 }
 
 func Load(store feed.Store) (Snapshot, error) {
@@ -148,7 +155,7 @@ func readyAt(s Snapshot, now time.Time) (jobgraph.Readiness, map[string]time.Tim
 	if err != nil {
 		return jobgraph.Readiness{}, nil, err
 	}
-	input := jobgraph.Snapshot{Jobs: map[string]contract.Job{}, Exhausted: map[string]bool{}, OpenGates: map[string]bool{}, ReadySince: map[string]time.Time{}, CreatedAt: s.Created, Landed: s.Landed}
+	input := jobgraph.Snapshot{Jobs: map[string]contract.Job{}, Exhausted: map[string]bool{}, OpenGates: map[string]bool{}, ReadySince: map[string]time.Time{}, CreatedAt: s.Created, Landed: s.Landed, Approved: s.Approved}
 	settled := map[string]time.Time{}
 	for id, j := range s.State.Jobs {
 		input.Jobs[id] = *j
