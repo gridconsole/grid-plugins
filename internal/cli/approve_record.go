@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,12 +13,19 @@ import (
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 )
 
-// approvalWriter is the Feed writer of a person's approval. A caller that holds a
+// approvalWriter is the Feed writer of an approval. An agent's shell (writeAuthor)
+// writes unleased as its member, role agent, whatever Job lease its session holds:
+// the owner let agents approve, unsigned (19 Nov). A caller that holds a
 // task lease epoch writes under it. A person of the team with no epoch writes
 // unleased, as grid job post --person does, so the worker that holds the task
-// lease never blocks the approval. Anyone else gets an error and nothing is
-// written: grid approve is for a person.
+// lease never blocks the approval. Anyone else, a guest among them, gets an error
+// and nothing is written.
 func approvalWriter(env Env) (feed.Writer, error) {
+	if _, agent := writeAuthor(env); agent {
+		w, err := feedWriter(env, "", "")
+		w.Author.Role = "agent"
+		return w, err
+	}
 	if epoch := env.getenv("GRID_LEASE_EPOCH"); epoch != "" {
 		return orchestratorWriter(env, "task", epoch)
 	}
@@ -64,14 +72,16 @@ func answered(snap orchestrator.Snapshot, j *contract.Job, e taskstore.Event) bo
 // is ""), or only an accepted one that a person without a lease cannot answer
 // again, it posts a new approve Job first, giving the task a Feed identity when it
 // has none. A leased writer posts the accepting control in one write; a person
-// without a lease posts an answer carrying plan_hash, plan_digest, lands_hash and
-// note, which the holder's next pass turns into the control. A plan that already
-// holds this approval gets nothing new. The caller holds no task or plan lock.
+// or an agent without a lease posts an answer carrying plan_hash, plan_digest,
+// lands_hash and note, which the holder's next pass turns into the control; an
+// agent's also carries the reason that names it. A plan that already holds this
+// approval gets nothing new. The caller holds no task or plan lock.
 func recordApproval(env Env, dir string, store feed.Store, w feed.Writer, job, answer string, e taskstore.Event) error {
 	if answer = strings.TrimSpace(answer); answer == "" {
 		answer = "approved"
 	}
-	unleased := orchestrator.PersonWriter(w)
+	agent := orchestrator.AgentApprover(w)
+	unleased := orchestrator.PersonWriter(w) || agent
 	if job != "" && unleased {
 		snap, err := orchestrator.Load(store)
 		if err != nil {
@@ -112,6 +122,46 @@ func recordApproval(env Env, dir string, store feed.Store, w feed.Writer, job, a
 	if e.Note != "" {
 		fields["note"] = e.Note
 	}
+	if agent {
+		fields["reason"] = agentApprovalReason(env, dir)
+	}
 	_, err := orchestrator.AnswerPersonWith(store, w, job, answer, fields, time.Now())
 	return err
+}
+
+// agentApprovalReason is the reason an agent's approval carries into the result,
+// so the task page can say which agent approved: "approved by agent J-3", with the
+// task folder when the agent's Job is another task's, else the agent's worker id
+// (writeAuthor). The record's author is the member, as the Feed requires.
+func agentApprovalReason(env Env, dir string) string {
+	job := env.getenv("GRID_JOB")
+	if job == "" {
+		who, _ := writeAuthor(env)
+		return "approved by agent " + who.ID
+	}
+	if task := env.getenv("GRID_TASK"); task != "" && filepath.Base(task) != filepath.Base(dir) {
+		job += " of " + filepath.Base(task)
+	}
+	return "approved by agent " + job
+}
+
+// agentApproveJob refuses an agent's approval of the task in dir before anything is
+// written when it has nothing to answer: an agent answers the open approve Job, or
+// presses again on one already accepted for this plan, and posts none of its own
+// (job.json admits no agent author).
+func agentApproveJob(env Env, dir string) error {
+	store, job := planPersonJob(env, dir)
+	if job == "" {
+		return errors.New("the task has no open approve Job for an agent to answer: the orchestrator or a person posts it")
+	}
+	snap, err := orchestrator.Load(store)
+	if err != nil {
+		return err
+	}
+	if j := snap.State.Jobs[job]; j != nil && j.Status == contract.Accepted {
+		if _, err := taskstore.ApprovalFromJob(dir); err != nil {
+			return errors.New("the task has no open approve Job for an agent to answer: its approve Job is accepted for an earlier plan")
+		}
+	}
+	return nil
 }

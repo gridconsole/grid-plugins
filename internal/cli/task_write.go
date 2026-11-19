@@ -322,6 +322,12 @@ func runApprove(args []string, env Env) int {
 	if given["send-back"] {
 		return sendBackPlan(env, resolved.Path, o, w, *hash, *sendBack, *asJSON)
 	}
+	if orchestrator.AgentApprover(w) {
+		if err := agentApproveJob(env, resolved.Path); err != nil {
+			fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
+			return 3
+		}
+	}
 	if _, _, err := migrate.ReceiptToJob(resolved.Path, w); err != nil {
 		fmt.Fprintf(env.Stderr, "grid approve: %v\n", err)
 		return 1

@@ -142,10 +142,9 @@ func TestFu2ApproveJobWaitingRoles(t *testing.T) {
 	}
 	t.Run("agent", func(t *testing.T) {
 		h, path, store, text := waitingApproveHarness(t)
-		// runApprove has no agent refusal ahead of the Job wait (workerMarked is read
-		// only by person check and agentShell; approvalWriter, approve_record.go:20-38,
-		// looks at GRID_ROLE and GRID_MEMBER only). So with GRID_AGENT=1 the run is
-		// refused by the wait itself, as before this change: exit 3, the stderr line,
+		// Agents approve since 19 Nov: with GRID_AGENT=1 approvalWriter returns an agent
+		// writer, the task has an open approve Job for it to answer (agentApproveJob), and
+		// the run is refused by the wait itself, as before: exit 3, the stderr line,
 		// nothing written. The object is the wait reason only; it opens nothing.
 		t.Setenv("GRID_AGENT", "1")
 		code := h.run(path, "approve", path, "--plan-hash", plan.Hash(text), "--json")
