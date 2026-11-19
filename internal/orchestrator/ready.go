@@ -41,12 +41,19 @@ type Snapshot struct {
 	// after edge waits for.
 	Landed map[string]bool
 	// Approved is the ids of the blocked posts a counted person's approval answers
-	// and covers: what meets a permission wait of a Blocked Job. Load leaves it
-	// empty. Ready would release such a Job into an assign that carries no allow or
-	// grant (the tick's assign posts neither), and its next attempt would block on
-	// the same rule again, so the release stays off until the tick passes the
-	// approved rules (docs/decisions/D-job-hold.md, Decision 3).
+	// and covers: what meets a permission wait of a Blocked Job. Load fills it from
+	// the Feed, and Grants names the approval and the rule for each, so the tick's
+	// assign carries the approved rule (docs/decisions/D-job-hold.md, Decision 3).
 	Approved map[string]bool
+	Grants   map[string]Grant
+}
+
+// Grant is the counted approval that covers one blocked post: the approval's id,
+// which the next assign names as its grant, and the rule the blocked post named,
+// which that assign allows.
+type Grant struct {
+	Approval string
+	Rule     string
 }
 
 func Load(store feed.Store) (Snapshot, error) {
@@ -104,7 +111,42 @@ func Load(store feed.Store) (Snapshot, error) {
 		}
 	}
 	sort.Slice(s.Items, func(i, j int) bool { return s.Items[i].ID < s.Items[j].ID })
+	s.Approved, s.Grants = approvedBlocks(s.Records)
 	return s, nil
+}
+
+// approvedBlocks finds the blocked posts a counted approval by a person covers:
+// an approve decision for the blocked post's Job, answering it (re), that lists
+// the rule the blocked post names. It is the same reading the fold's foldGrants
+// takes of an assign's grant, so the assign the tick posts for it counts.
+func approvedBlocks(records map[string]feed.Record) (map[string]bool, map[string]Grant) {
+	approved, grants := map[string]bool{}, map[string]Grant{}
+	ids := make([]string, 0, len(records))
+	for id := range records {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		ap := records[id]
+		if ap.Type != "approval" || ap.Re == nil || ap.Job == nil || contract.TierFor(ap.Author.Role) != contract.PersonTeam || ap.Body["decision"] != "approve" {
+			continue
+		}
+		blocked, ok := records[*ap.Re]
+		if !ok || blocked.Type != "blocked" || blocked.Job == nil || *blocked.Job != *ap.Job {
+			continue
+		}
+		rule := stringValue(blocked.Body["rule"])
+		rules, _ := ap.Body["rules"].([]any)
+		for _, r := range rules {
+			if rule != "" && r == rule {
+				approved[blocked.ID] = true
+				if _, taken := grants[blocked.ID]; !taken {
+					grants[blocked.ID] = Grant{Approval: ap.ID, Rule: rule}
+				}
+			}
+		}
+	}
+	return approved, grants
 }
 
 // splitMissingTargets returns the Jobs the graph can take and the Jobs held out
