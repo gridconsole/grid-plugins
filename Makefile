@@ -4,13 +4,17 @@ VERSION ?= $(shell go run ./internal/packaging/cmd -describe)
 RELEASE ?= $(shell go run ./internal/packaging/cmd -release)
 LDFLAGS := -buildid= -X $(PKG)/internal/version.Version=$(VERSION)
 
-.PHONY: build dist generate test test-clean lint cross golden eval-check clean
+.PHONY: build dist publish generate test test-clean lint cross golden eval-check clean
 
 build:
 	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(LDFLAGS)" -o dist/grid ./cmd/grid
 
 dist:
 	go run ./internal/packaging/cmd -dist -version "$(RELEASE)"
+
+# Syncs the public repo with this checkout (clean main); PUBLISH_PUSH=0 commits without pushing.
+publish:
+	sh scripts/publish.sh
 
 generate:
 	go run ./internal/packaging/cmd
