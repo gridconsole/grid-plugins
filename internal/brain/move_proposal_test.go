@@ -22,7 +22,7 @@ func TestMoveProposalAndKeeperGateDoNotDeadlock(t *testing.T) {
 		if _, err := s.Propose(Note{Name: name, Topic: "decisions", Description: "Before checks.", Summary: "Checks.", Source: "x", Body: "Run.", Level: "home"}, Origin{Kind: "session", ID: "s"}); err != nil {
 			t.Fatal(err)
 		}
-		go func() { done <- s.moveProposal(name, "home", "project", true) }()
+		go func() { done <- s.moveProposal(name, "home", "project", true, nil) }()
 		go func() { done <- s.WithKeeperGate(taskDir, func() error { return nil }) }()
 		for j := 0; j < 2; j++ {
 			select {

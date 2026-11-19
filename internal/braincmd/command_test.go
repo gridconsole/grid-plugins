@@ -471,3 +471,43 @@ func TestProjectAcceptMarksTheSupersededHomeNote(t *testing.T) {
 		t.Fatalf("old home note not marked: %v\n%s", err, b)
 	}
 }
+
+// The home supersede runs again on a retry: if it fails once, the link is not lost.
+func TestProjectAcceptRetriesTheHomeSupersede(t *testing.T) {
+	h, _ := projectHarness(t)
+	if code := h.run("propose", "--level", "home", "--name", "old1", "--topic", "decisions", "--description", "d.", "--summary", "s.", "--source", "x", "--body", "old."); code != 0 {
+		t.Fatal(&h.err)
+	}
+	if code := h.run("accept", "brain:home/old1"); code != 0 {
+		t.Fatal(&h.err)
+	}
+	link := `{"to":"brain:home/old1","rel":"supersedes","summary":"The old rule.","why":"The new rule replaces the old one."}`
+	if code := h.run("propose", "--level", "home", "--name", "new1", "--topic", "decisions", "--description", "d.", "--summary", "s.", "--source", "x", "--body", "new.", "--link", link); code != 0 {
+		t.Fatal(&h.err)
+	}
+	// The old note's version folder is unreadable, so the supersede fails before it writes anything.
+	versions := filepath.Join(h.env.GridHome, "knowledge", "versions", "decisions", "old1")
+	saved := versions + ".saved"
+	if err := os.Rename(versions, saved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(versions, []byte("not a folder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/new1", "--project", "example"); code == 0 {
+		t.Fatal("accept with a blocked home version folder succeeded")
+	}
+	if err := os.Remove(versions); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(saved, versions); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("accept", "brain:home/new1", "--project", "example"); code != 0 {
+		t.Fatalf("retry exit %d: %s", code, &h.err)
+	}
+	b, err := os.ReadFile(filepath.Join(h.env.GridHome, "knowledge", "decisions", "old1.md"))
+	if err != nil || !strings.Contains(string(b), "superseded_by: brain:project/new1") {
+		t.Fatalf("link lost after the retry: %v\n%s", err, b)
+	}
+}

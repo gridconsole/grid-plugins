@@ -16,7 +16,9 @@ import (
 // moves the proposal there, accepts it at project level, and moves it back home
 // when the accept fails, so the curator's brain:home id keeps working.
 func (s Store) AcceptHomeInProject(name string) (Entry, error) {
-	if err := s.moveProposal(name, "home", "project", true); err != nil {
+	// existed is read under the project lock by the move's own check.
+	var existed bool
+	if err := s.moveProposal(name, "home", "project", true, &existed); err != nil {
 		var g gateRefusal
 		var done alreadyAccepted
 		switch {
@@ -34,12 +36,12 @@ func (s Store) AcceptHomeInProject(name string) (Entry, error) {
 		if errors.Is(err, fs.ErrNotExist) {
 			// A repeated identical accept: the project already holds it as accepted.
 			if p, perr := s.readProject(name); perr == nil && p.Status == "accepted" {
-				return s.entry(p, false), nil
+				// markSuperseded is safe to run again, so a stop before the first run is retried.
+				return s.entry(p, false), s.supersedeHome(p)
 			}
 		}
 		return Entry{}, err
 	}
-	existed := s.projectNoteExists(name)
 	e, err := s.Accept("project", name)
 	if err == nil {
 		return e, s.supersedeHome(e.Note)
@@ -48,7 +50,7 @@ func (s Store) AcceptHomeInProject(name string) (Entry, error) {
 		if !existed {
 			s.removeProjectNote(p)
 		}
-		if berr := s.moveProposal(name, "project", "home", false); berr != nil {
+		if berr := s.moveProposal(name, "project", "home", false, nil); berr != nil {
 			return e, fmt.Errorf("%w (and moving the proposal back home failed: %v)", err, berr)
 		}
 	}
@@ -65,20 +67,6 @@ func (s Store) homeGateRefuses(name string) bool {
 	return err == nil && gate(root, n) != ""
 }
 
-func (s Store) projectNoteExists(name string) bool {
-	n, err := s.readProject(name)
-	if err != nil {
-		return false
-	}
-	root, err := s.scope("project", false)
-	if err != nil {
-		return false
-	}
-	defer root.Close()
-	_, err = safefile.Read(root, filepath.Join("knowledge", n.Topic, name+".md"))
-	return err == nil
-}
-
 // removeProjectNote drops a note a failed accept published, so a later home
 // accept cannot file it at both levels.
 func (s Store) removeProjectNote(n Note) {
@@ -87,7 +75,22 @@ func (s Store) removeProjectNote(n Note) {
 		return
 	}
 	defer root.Close()
-	_ = locked(root, func() error { return root.Remove(filepath.Join("knowledge", n.Topic, n.Name+".md")) })
+	path := filepath.Join("knowledge", n.Topic, n.Name+".md")
+	_ = locked(root, func() error {
+		// Only the note this attempt wrote: one a concurrent decide filed with
+		// other content stays.
+		b, err := safefile.Read(root, path)
+		if err != nil {
+			return err
+		}
+		old, err := Parse(b)
+		a := n
+		a.Status, a.Reason, a.Updated = "accepted", "", old.Updated
+		if err != nil || !sameFiled(old, a) {
+			return nil
+		}
+		return root.Remove(path)
+	})
 }
 
 // supersedeHome marks the home notes that n supersedes as replaced by n's project id.
@@ -136,7 +139,7 @@ func (s Store) readProject(name string) (Note, error) {
 // moveProposal moves a proposal between the home and project stores under both
 // locks, project first, the order WithKeeperGate takes them. With check set it
 // refuses unless the proposal is waiting and the accept would pass its gates.
-func (s Store) moveProposal(name, fromLevel, toLevel string, check bool) error {
+func (s Store) moveProposal(name, fromLevel, toLevel string, check bool, existed *bool) error {
 	if !ValidName(name) {
 		return fmt.Errorf("proposal id must be a plain name")
 	}
@@ -172,7 +175,7 @@ func (s Store) moveProposal(name, fromLevel, toLevel string, check bool) error {
 				if n.Status != "proposed" {
 					return fmt.Errorf("proposal %q is %s and cannot be moved", name, n.Status)
 				}
-				if err := acceptable(to, toLevel, n); err != nil {
+				if err := acceptable(to, toLevel, n, existed); err != nil {
 					return err
 				}
 			}
@@ -201,7 +204,7 @@ func (a alreadyAccepted) Error() string {
 }
 
 // acceptable runs the checks decide runs before it publishes n at level.
-func acceptable(root *os.Root, level string, n Note) error {
+func acceptable(root *os.Root, level string, n Note, existed *bool) error {
 	if reason := gate(root, n); reason != "" {
 		return gateRefusal{reason}
 	}
@@ -221,6 +224,9 @@ func acceptable(root *os.Root, level string, n Note) error {
 	}
 	if err != nil {
 		return err
+	}
+	if existed != nil {
+		*existed = true
 	}
 	old, err := Parse(before)
 	a := n
