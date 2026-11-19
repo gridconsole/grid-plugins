@@ -275,10 +275,13 @@ func (d delivery) write(t Task) ([]artifact.Record, error) {
 // recordBranch is the branch and base a delivery writes to task.md. A value the
 // caller gave wins; otherwise the branch is the one checked out in the git repo
 // holding Cwd, and the base is where HEAD left the first of main and master that
-// exists there. A missing answer is "" and writes no key.
+// exists there. A missing answer is "" and writes no key. A checked-out branch with
+// no commit past the base is not recorded: it is the delivering Job's own attempt
+// branch, and the work is on the branches of the task's builder Jobs.
 func recordBranch(o DeliverOptions) (branch, base string) {
 	branch, base = strings.TrimSpace(o.Branch), strings.TrimSpace(o.Base)
-	if branch == "" {
+	fromCwd := branch == ""
+	if fromCwd {
 		branch, _ = gitx.CurrentBranch(o.Cwd)
 	}
 	if base == "" {
@@ -288,6 +291,9 @@ func recordBranch(o DeliverOptions) (branch, base string) {
 				break
 			}
 		}
+	}
+	if head, ok := gitx.HeadSHA(o.Cwd); fromCwd && ok && head == base {
+		branch = ""
 	}
 	return branch, base
 }
