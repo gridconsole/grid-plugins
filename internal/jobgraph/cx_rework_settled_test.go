@@ -3,6 +3,7 @@ package jobgraph
 import (
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/job"
 )
 
@@ -69,4 +70,34 @@ func TestCxCancelledPersonHoldsUnlessItsDecisionIsAccepted(t *testing.T) {
 		{"old person Job cancelled, its decision Job running", decided, m1Status(append(done, "J-2.3", "running")...), "waiting for all children of J-2 to be accepted"},
 		{"old person Job cancelled, its decision Job accepted", decided, m1Status(append(done, "J-2.3", "accepted")...), ""},
 	})
+}
+
+// DeliveryWait walks a rejected deliver Job's reworks as Ready does, so a rework's
+// review, numbered under the first deliver Job, holds the land until accepted.
+func TestCxDeliveryWaitHoldsForTheReworksReview(t *testing.T) {
+	items := []job.Job{
+		{ID: "J-3", Role: "orchestrator", Title: DeliverTitle},
+		m1Review("J-3.1", "J-3"),
+		{ID: "J-4", Role: "orchestrator", Title: DeliverTitle, Continues: m1Ptr("J-3"), DiscoveredFrom: m1Ptr("J-3.1")},
+		m1Review("J-3.2", "J-4"),
+	}
+	for _, tc := range []struct {
+		name, review string
+		want         Wait
+		ok           bool
+	}{
+		{"rework's review running", "running", Wait{Job: "J-3", Target: "J-3", Reason: "waiting for all children of J-4 to be accepted"}, false},
+		{"rework's review accepted", "accepted", Wait{}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status := m1Status("J-3", "rejected", "J-3.1", "accepted", "J-4", "accepted", "J-3.2", tc.review)
+			jobs := map[string]contract.Job{}
+			for id, st := range status {
+				jobs[id] = contract.Job{ID: id, Status: st}
+			}
+			if got, ok := DeliveryWait(items, Snapshot{Jobs: jobs}); ok != tc.ok || got != tc.want {
+				t.Fatalf("DeliveryWait = %+v, %v; want %+v, %v", got, ok, tc.want, tc.ok)
+			}
+		})
+	}
 }

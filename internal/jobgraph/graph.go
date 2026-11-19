@@ -53,29 +53,9 @@ func New(items []job.Job) (*Graph, error) {
 		item.Write = append([]string(nil), item.Write...)
 		g.items[item.ID] = item
 		g.ids = append(g.ids, item.ID)
-		if i := strings.LastIndexByte(item.ID, '.'); i >= 0 {
-			parent := item.ID[:i]
-			g.children[parent] = append(g.children[parent], item.ID)
-		}
 	}
 	sort.Strings(g.ids)
-	// A rework's review is numbered under the first build (app judge.go startReview), so it is
-	// also a child of the Job it is discovered from.
-	for _, id := range g.ids {
-		it := g.items[id]
-		role := contract.NormalizeRole(it.Role)
-		if it.DiscoveredFrom == nil || role != "reviewer" && role != "checker" {
-			continue
-		}
-		if from := *it.DiscoveredFrom; from != id && !strings.HasPrefix(id, from+".") {
-			if _, ok := g.items[from]; ok {
-				g.children[from] = append(g.children[from], id)
-			}
-		}
-	}
-	for parent := range g.children {
-		sort.Strings(g.children[parent])
-	}
+	g.link()
 	for _, id := range g.ids {
 		for _, e := range g.items[id].After {
 			if strings.HasPrefix(e.Job, "gate:") {
@@ -100,6 +80,32 @@ func New(items []job.Job) (*Graph, error) {
 		}
 	}
 	return g, nil
+}
+
+// link fills children from g.ids: each Job is a child of the Job its id is
+// numbered under, and a rework's review, numbered under the first build (app
+// judge.go startReview), is also a child of the Job it is discovered from.
+func (g *Graph) link() {
+	for _, id := range g.ids {
+		if i := strings.LastIndexByte(id, '.'); i >= 0 {
+			g.children[id[:i]] = append(g.children[id[:i]], id)
+		}
+	}
+	for _, id := range g.ids {
+		it := g.items[id]
+		role := contract.NormalizeRole(it.Role)
+		if it.DiscoveredFrom == nil || role != "reviewer" && role != "checker" {
+			continue
+		}
+		if from := *it.DiscoveredFrom; from != id && !strings.HasPrefix(id, from+".") {
+			if _, ok := g.items[from]; ok {
+				g.children[from] = append(g.children[from], id)
+			}
+		}
+	}
+	for parent := range g.children {
+		sort.Strings(g.children[parent])
+	}
 }
 
 // Block is the inverse of an after edge. Gates remain explicit blockers.
