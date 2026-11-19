@@ -122,7 +122,7 @@ func TestPjVbJudgeReviewSameWakePostsNothing(t *testing.T) {
 }
 
 // Row 5 on a real Feed: the review J-4.1 of J-4 is cancelled before it ran; three calls of
-// `grid judge person J-4 --from J-4.1` (two wakes and none) raise exactly one person Job.
+// `grid judge person J-4 --from J-4.1` (two wakes and none) raise exactly one agent decision Job.
 func TestPjVbJudgePersonForACancelledReviewIsRaisedOnce(t *testing.T) {
 	h, task, event := pjVbFeed(t)
 	pjVbRun(t, h, task, "job", "post", "J-4.1", "--type", "job", "--json", "--body", pjVbBody(t, "J-4.1", map[string]any{
@@ -139,19 +139,22 @@ func TestPjVbJudgePersonForACancelledReviewIsRaisedOnce(t *testing.T) {
 	var persons []feed.Record
 	for _, r := range pjVbRecords(t, task) {
 		if r.Type == "job" && r.Body["role"] == "Person" {
+			t.Fatalf("a person Job %+v, want none", r)
+		}
+		if r.Type == "job" && r.Body["role"] == "orchestrator" {
 			persons = append(persons, r)
 		}
 	}
 	if len(persons) != 1 {
-		t.Fatalf("%d person Jobs after three calls, want exactly one: %+v", len(persons), persons)
+		t.Fatalf("%d decision Jobs after three calls, want exactly one: %+v", len(persons), persons)
 	}
 	p := persons[0].Body
 	intent, _ := p["intent"].(map[string]any)
 	goal, _ := intent["goal"].(string)
-	if p["discovered_from"] != "J-4" || intent["owner"] != "owner-1" {
-		t.Fatalf("person Job %v, want owner-1 and discovered from J-4", p)
+	if p["discovered_from"] != "J-4" {
+		t.Fatalf("decision Job %v, want it discovered from J-4", p)
 	}
-	for _, want := range []string{"J-4.1", "prepare_failed: the agent could not be built", "accept J-4 without a review", "ask for rework"} {
+	for _, want := range []string{"J-4.1", "prepare_failed: the agent could not be built", "Accept J-4", "fresh rework"} {
 		if !strings.Contains(goal, want) {
 			t.Fatalf("goal %q does not name %q", goal, want)
 		}

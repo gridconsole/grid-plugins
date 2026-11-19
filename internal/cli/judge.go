@@ -27,9 +27,11 @@ gave it, and decides nothing itself.
   rework <job> --from <review>  post the rework Job, which continues <job>, and the control that
                                 rejects <job> as reworked by it; with --remote <remote> its base is
                                 the SHA of refs/grid/<T>/head there now, else of the target's tip
-  person <job>                  post the person Job for the task owner: --from <review> after a
-                                second rejection, STUCK, or a review cancelled before it ran;
-                                --point <step> for a person point of the workflow
+  person <job>                  --from <review> after a second rejection, STUCK, no verdict or a review
+                                cancelled before it ran: post the decision Job for an agent (it
+                                asks the owner only a real question), and cancel an old person Job
+                                still open for it; --point <step> for a person point of the
+                                workflow: post the person Job for the task owner
 
 --wake <event>/<n> names the event a call answers: a second call with a wake already
 answered posts nothing and exits 0. A post's id comes from what it says, so a call that
