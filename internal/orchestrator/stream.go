@@ -13,6 +13,7 @@ import (
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/jobgraph"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/session"
 	"github.com/gridconsole/grid-plugins/internal/taskfile"
@@ -628,6 +629,7 @@ func waitsOnPerson(snap Snapshot, now time.Time) bool {
 	for _, w := range r.Waiting {
 		waits[w.Job] = append(waits[w.Job], w.Target)
 	}
+	chain := chainSnapshot(snap)
 	memo := map[string]bool{}
 	var person func(id string) bool
 	person = func(id string) bool {
@@ -639,8 +641,17 @@ func waitsOnPerson(snap Snapshot, now time.Time) bool {
 		v := false
 		switch {
 		case j == nil:
-		case j.Status == contract.Accepted || j.Status == contract.Cancelled || j.Status == contract.Rejected:
+		case j.Status == contract.Accepted:
 			v = true // settled: nothing to wait for
+		case j.Status == contract.Cancelled || j.Status == contract.Rejected:
+			// A closed target is a person wait only through the end of its chain:
+			// accepted is settled, open is that Job's own wait, dead is a dead wait.
+			switch head, state := jobgraph.Head(chain, id); state {
+			case jobgraph.HeadAccepted:
+				v = true
+			case jobgraph.HeadOpen:
+				v = head != id && person(head)
+			}
 		case contract.NormalizeRole(j.Role) == "person" || len(j.OpenQuestions) > 0:
 			v = true
 		case ready[id] || (j.Status != contract.Posted && j.Status != contract.Ready) || len(waits[id]) == 0:

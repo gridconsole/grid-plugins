@@ -10,7 +10,8 @@ import (
 )
 
 // guReplanRejected posts one orchestrator Job for each Job that was closed
-// Rejected while other Jobs still wait on it with a done edge. A rejected Job
+// Rejected while other Jobs still wait on it with a done or children-done edge
+// and its continues chain is dead (an open or accepted chain gets none). A rejected Job
 // never releases a done edge (jobgraph.Released), and no other pass reacts to
 // it, so those Jobs would read "waiting for J-1, which was rejected" for ever.
 // It is gkReplan for the Rejected status: the same record says the Job was
@@ -23,7 +24,7 @@ func (s Store) guReplanRejected(snap Snapshot) error {
 		if j := snap.State.Jobs[id]; j.Status != contract.Rejected {
 			continue
 		}
-		waiting := gkWaiting(snap, id)
+		waiting := gkDeadWaiting(snap, id)
 		if len(waiting) == 0 || gkReplanned(snap, id) {
 			continue
 		}
