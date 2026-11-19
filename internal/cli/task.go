@@ -390,7 +390,9 @@ func noWork(err error, b string, noWrite []string) bool {
 // builderBranches is the branch of each accepted builder Job of the task, in Feed
 // order, named as the worker names an attempt's branch; rebased is the branches of
 // its accepted rebase Jobs, which stand in for the branch they rebased, and noWrite
-// the branches of its accepted Jobs of any role whose write list is empty.
+// the branches of its accepted Jobs of any role whose write list is empty. Only builder
+// Jobs commit to their branch: an orchestrator's or researcher's write list names task
+// files (plan.md, research.md), not repo code, so their branches are not landed.
 func builderBranches(taskPath string) (built, rebased, noWrite []string, err error) {
 	fid, _, err := task.FeedIdentity(taskPath)
 	if err != nil {
