@@ -28,14 +28,13 @@ type ClaudeRule struct {
 	Value   string `json:"value"`
 }
 
-// ClaudeBlock holds the Claude Code rules setup writes. Its only denies are the two
-// things a person alone approves: the person's own approval identity
-// (~/.grid-person) and a project's held setup commands (setup-answers.json and
-// setup-pending.json). Task folders, the brain, project.md, the settings files and
-// the host folder are agents' to write, so nothing denies them (claudeRetired lists
-// the rules earlier setups wrote there).
+// ClaudeBlock holds the Claude Code rules setup writes: allow rules for grid and the
+// Grid home, and the auto mode context. It writes no deny rule: task folders, the
+// brain, project.md, the settings files, the host folder, a project's setup answers
+// and held commands and the person's approval identity (~/.grid-person) are all
+// agents' to write (claudeRetired lists the rules earlier setups wrote there).
 func ClaudeBlock(home, gridHome string) ([]ClaudeRule, error) {
-	return claudeBlock(home, gridHome, "")
+	return claudeBlock(home, gridHome)
 }
 
 // brainRootOf is the brain folder the Grid config names for the data folder
@@ -82,7 +81,7 @@ func claudeBrainRules(home, gridHome string, getenv func(string) string) ([]Clau
 	}, nil
 }
 
-func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
+func claudeBlock(home, gridHome string) ([]ClaudeRule, error) {
 	rules, anchor, err := claudeAllowRules(home, gridHome)
 	if err != nil {
 		return nil, err
@@ -92,24 +91,7 @@ func claudeBlock(home, gridHome, projects string) ([]ClaudeRule, error) {
 		return nil, err
 	}
 	rules = append(rules, brainRules...)
-	projectAnchor, err := claudeProjectsAnchor(home, gridHome, projects)
-	if err != nil {
-		return nil, err
-	}
-	// The store keeps a project's setup answers and held commands in <home>/projects/<name>/;
-	// grid project settings record is an agent's only way to write them, and a command in
-	// them runs only once a person approves its hash.
-	for _, dir := range slices.Compact([]string{anchor + "/" + claudeFold("projects"), projectAnchor}) {
-		for _, name := range []string{"setup-answers.json", "setup-pending.json"} {
-			path := dir + "/*/" + claudeFold(name)
-			rules = append(rules,
-				ClaudeRule{"permissions", "deny", "Edit(" + path + ")"},
-				ClaudeRule{"permissions", "deny", "Write(" + path + ")"})
-		}
-	}
 	return append(rules,
-		ClaudeRule{"permissions", "deny", "Edit(~/.grid-person/**)"},
-		ClaudeRule{"permissions", "deny", "Write(~/.grid-person/**)"},
 		ClaudeRule{"autoMode", "environment", "$defaults"},
 		ClaudeRule{"autoMode", "environment", "The Grid home at " + anchor + " is trusted for Grid operations."}), nil
 }
@@ -127,8 +109,10 @@ func claudeProjectsAnchor(home, gridHome, projects string) (string, error) {
 // claudeRetired lists the deny rules earlier setups wrote and Grid no longer asks
 // for: agents write task folders, the brain, project.md, the settings and lock
 // files, workflows.md, the host folder and the setup folder (they are Grid's state,
-// and a deny on them stalled tasks on edge cases). The values are the earlier
-// builder's, to the character, because a rule is taken out only by exact match.
+// and a deny on them stalled tasks on edge cases), and a project's setup answers
+// and held commands and the person's approval identity (agents approve too). The
+// values are the earlier builder's, to the character, because a rule is taken out
+// only by exact match.
 // Setup and the session start remove them from the settings file and the setup
 // record; the app reads that record for the rules it adds to a launched agent.
 func claudeRetired(home, gridHome, projects string) ([]ClaudeRule, error) {
@@ -160,6 +144,19 @@ func claudeRetired(home, gridHome, projects string) ([]ClaudeRule, error) {
 	rules = append(rules,
 		ClaudeRule{"permissions", "deny", "Edit(" + anchor + "/setup/**)"},
 		ClaudeRule{"permissions", "deny", "Write(" + anchor + "/setup/**)"})
+	// A project's setup answers and held commands (<home>/projects/<name>/ and the
+	// projects folder), and the person's approval identity.
+	for _, dir := range slices.Compact([]string{anchor + "/" + claudeFold("projects"), projectAnchor}) {
+		for _, name := range []string{"setup-answers.json", "setup-pending.json"} {
+			path := dir + "/*/" + claudeFold(name)
+			rules = append(rules,
+				ClaudeRule{"permissions", "deny", "Edit(" + path + ")"},
+				ClaudeRule{"permissions", "deny", "Write(" + path + ")"})
+		}
+	}
+	rules = append(rules,
+		ClaudeRule{"permissions", "deny", "Edit(~/.grid-person/**)"},
+		ClaudeRule{"permissions", "deny", "Write(~/.grid-person/**)"})
 	// The first releases wrote these forms of the task, knowledge and project.md rules
 	// (the first with no case folding, the second folding only some names).
 	for _, path := range []string{
@@ -497,7 +494,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	if err != nil {
 		return 2, claudeInvalid{path}
 	}
-	block, err := claudeBlock(o.Home, o.GridHome, o.Projects)
+	block, err := claudeBlock(o.Home, o.GridHome)
 	if err != nil {
 		return 1, err
 	}

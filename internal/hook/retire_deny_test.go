@@ -12,16 +12,16 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/settings"
 )
 
-// oldSetup leaves what an earlier setup wrote under the fixture's home: two deny rules
-// it no longer writes, one it still writes, and the person's own, with a record that
-// owns the Grid ones.
+// oldSetup leaves what an earlier setup wrote under the fixture's home: three deny
+// rules it no longer writes (one of them the person's approval identity), and the
+// person's own, with a record that owns the Grid ones.
 func oldSetup(t *testing.T, root string) (settingsFile, record string) {
 	t.Helper()
 	settingsFile = filepath.Join(root, ".claude", "settings.json")
 	record = filepath.Join(root, "data", "setup", "claude-block.json")
-	old := []string{"Edit(~/data/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)", "Edit(~/data/setup/**)"}
-	kept := "Edit(~/.grid-person/**)"
-	rules := []settings.ClaudeRule{{Section: "permissions", Key: "deny", Value: old[0]}, {Section: "permissions", Key: "deny", Value: old[1]}, {Section: "permissions", Key: "deny", Value: kept}}
+	old := []string{"Edit(~/data/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)", "Edit(~/data/setup/**)", "Edit(~/.grid-person/**)"}
+	kept := "Edit(~/notes-i-keep/**)"
+	rules := []settings.ClaudeRule{{Section: "permissions", Key: "deny", Value: old[0]}, {Section: "permissions", Key: "deny", Value: old[1]}, {Section: "permissions", Key: "deny", Value: old[2]}, {Section: "permissions", Key: "deny", Value: kept}}
 	data, _ := json.Marshal(map[string]any{"path": settingsFile, "rules": rules})
 	write := func(path, text string) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -32,7 +32,7 @@ func oldSetup(t *testing.T, root string) (settingsFile, record string) {
 		}
 	}
 	write(record, string(data))
-	write(settingsFile, `{"permissions":{"deny":["Read(~/.ssh/**)","`+old[0]+`","`+old[1]+`","`+kept+`"]}}`)
+	write(settingsFile, `{"permissions":{"deny":["Read(~/.ssh/**)","`+old[0]+`","`+old[1]+`","`+old[2]+`","`+kept+`"]}}`)
 	return settingsFile, record
 }
 
@@ -60,14 +60,14 @@ func TestSessionStartRetiresOldDenyRules(t *testing.T) {
 		}
 	}
 	run()
-	if got, want := denyList(t, file), []string{"Read(~/.ssh/**)", "Edit(~/.grid-person/**)"}; !reflect.DeepEqual(got, want) {
+	if got, want := denyList(t, file), []string{"Read(~/.ssh/**)", "Edit(~/notes-i-keep/**)"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("denies %v, want %v", got, want)
 	}
 	data, err := os.ReadFile(record)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), "knowledge") || strings.Contains(string(data), "setup/**") || !strings.Contains(string(data), ".grid-person") {
+	if strings.Contains(string(data), "knowledge") || strings.Contains(string(data), "setup/**") || strings.Contains(string(data), ".grid-person") || !strings.Contains(string(data), "notes-i-keep") {
 		t.Fatalf("record: %s", data)
 	}
 	before, _ := os.Stat(file)
@@ -90,7 +90,7 @@ func TestSessionStartRetireFollowsTheHookLevel(t *testing.T) {
 	}
 	o.Stdin = strings.NewReader(`{}`)
 	Run(o)
-	if got := denyList(t, file); len(got) != 4 {
+	if got := denyList(t, file); len(got) != 5 {
 		t.Fatalf("an off session start changed the settings: %v", got)
 	}
 }

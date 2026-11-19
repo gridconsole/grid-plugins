@@ -5,21 +5,32 @@ import (
 	"testing"
 )
 
-func TestPersonDirectoryDenyRules(t *testing.T) {
+// The person's approval identity is an agent's to write: setup denies neither tool on
+// ~/.grid-person, and the rules earlier setups wrote there are retired.
+func TestPersonDirectoryHasNoDenyRules(t *testing.T) {
 	home := t.TempDir()
-	rules, err := ClaudeBlock(home, filepath.Join(home, ".grid"))
+	grid := filepath.Join(home, ".grid")
+	rules, err := ClaudeBlock(home, grid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retired, err := claudeRetired(home, grid, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tool := range []string{"Edit", "Write"} {
-		found := false
-		for _, rule := range rules {
-			if rule.Section == "permissions" && rule.Key == "deny" && rule.Value == tool+"(~/.grid-person/**)" {
-				found = true
+		rule := ClaudeRule{"permissions", "deny", tool + "(~/.grid-person/**)"}
+		for _, r := range rules {
+			if r == rule {
+				t.Errorf("setup still writes %s", r.Value)
 			}
 		}
+		found := false
+		for _, r := range retired {
+			found = found || r == rule
+		}
 		if !found {
-			t.Errorf("missing %s person-directory deny", tool)
+			t.Errorf("%s is not retired", rule.Value)
 		}
 	}
 }

@@ -66,20 +66,26 @@ func TestRecordAgentSetupRefusesWithoutAProject(t *testing.T) {
 	}
 }
 
-// 18 Nov review: the deny block named neither setup file, so an agent's Write tool could put a
-// command key straight into setup-answers.json and skip the hold. The store writes both files
-// in <Grid home>/projects/<name>/ whatever folder GRID_PROJECTS names.
-func TestClaudeBlockDeniesTheSetupAnswerFiles(t *testing.T) {
+// A project's setup answers and held commands are an agent's to write: the owner let
+// agents approve, so setup denies neither file any more. The deny rules earlier setups
+// wrote for them are retired, in the projects folder GRID_PROJECTS names and in
+// <Grid home>/projects/<name>/ where the store writes both files.
+func TestClaudeBlockLeavesTheSetupAnswerFilesToAgents(t *testing.T) {
 	home := gridhome.Real(t.TempDir())
 	gridHome := filepath.Join(home, ".grid")
+	block, err := claudeBlock(home, gridHome)
+	must(t, err)
 	for _, projects := range []string{"", filepath.Join(home, "work", "projects"), gridhome.Real(t.TempDir())} {
-		rules, err := claudeBlock(home, gridHome, projects)
+		retired, err := claudeRetired(home, gridHome, projects)
 		must(t, err)
 		for _, name := range []string{"setup-answers.json", "setup-pending.json"} {
 			file := filepath.ToSlash(filepath.Join(gridHome, "projects", "example", name))
 			for _, tool := range []string{"Edit", "Write"} {
-				if !claudeDenies(rules, home, tool, file) {
-					t.Errorf("projects folder %q: no %s deny rule covers %s", projects, tool, file)
+				if claudeDenies(block, home, tool, file) {
+					t.Errorf("projects folder %q: setup denies %s of %s", projects, tool, file)
+				}
+				if !claudeDenies(retired, home, tool, file) {
+					t.Errorf("projects folder %q: no retired %s deny rule covers %s", projects, tool, file)
 				}
 			}
 		}

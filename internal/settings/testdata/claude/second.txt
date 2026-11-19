@@ -1,12 +1,6 @@
 = Bash(grid *)
 = Read(~/.grid/**)
 = Edit(~/.grid/**)
-= Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])
-= Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])
-= Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])
-= Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])
-= Edit(~/.grid-person/**)
-= Write(~/.grid-person/**)
 = $defaults
 = The Grid home at ~/.grid is trusted for Grid operations.
 {
@@ -15,14 +9,6 @@
       "Bash(grid *)",
       "Read(~/.grid/**)",
       "Edit(~/.grid/**)"
-    ],
-    "deny": [
-      "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])",
-      "Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])",
-      "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])",
-      "Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])",
-      "Edit(~/.grid-person/**)",
-      "Write(~/.grid-person/**)"
     ]
   },
   "autoMode": {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -37,6 +36,25 @@ func TestClaudeReworkCLIProjectAnchors(t *testing.T) {
 			case "relative":
 				projects, anchor = "work", "~/work"
 			}
+			// An earlier setup denied a project's setup answers and held commands here;
+			// setup takes those rules out and writes no deny of its own.
+			var old []string
+			for _, suffix := range []string{"/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN]", "/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN]"} {
+				for _, tool := range []string{"Edit", "Write"} {
+					old = append(old, tool+"("+anchor+suffix+")")
+				}
+			}
+			seeded, err := json.Marshal(map[string]any{"permissions": map[string]any{"deny": append([]string{"Read(~/.ssh/**)"}, old...)}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			settingsPath := filepath.Join(home, ".claude", "settings.json")
+			if err := os.MkdirAll(filepath.Dir(settingsPath), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(settingsPath, seeded, 0o600); err != nil {
+				t.Fatal(err)
+			}
 			var out, stderr bytes.Buffer
 			env := cli.Env{Home: home, GridHome: filepath.Join(home, ".grid"), Cwd: home, Stdin: strings.NewReader(""), Stdout: &out, Stderr: &stderr,
 				Getenv: func(key string) string {
@@ -49,7 +67,7 @@ func TestClaudeReworkCLIProjectAnchors(t *testing.T) {
 			if code := cli.Run([]string{"setup", "--yes"}, env); code != 0 {
 				t.Fatalf("code=%d: %s", code, &stderr)
 			}
-			data, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
+			data, err := os.ReadFile(settingsPath)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -57,18 +75,10 @@ func TestClaudeReworkCLIProjectAnchors(t *testing.T) {
 			if err := json.Unmarshal(data, &doc); err != nil {
 				t.Fatal(err)
 			}
-			for _, suffix := range []string{"/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN]", "/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN]"} {
-				for _, tool := range []string{"Edit", "Write"} {
-					if !slices.Contains(doc.Permissions.Deny, tool+"("+anchor+suffix+")") {
-						t.Errorf("missing project deny %s(%s%s) in %v", tool, anchor, suffix, doc.Permissions.Deny)
-					}
-				}
-			}
-			// Agents write task folders, the brain, project.md and the setup folder.
-			for _, deny := range doc.Permissions.Deny {
-				if strings.Contains(deny, "[tT][aA][sS][kK][sS]") || strings.Contains(deny, "[kK][nN][oO][wW][lL][eE][dD][gG][eE]") || strings.Contains(deny, "[pP][rR][oO][jJ][eE][cC][tT].[mM][dD]") || strings.Contains(deny, "/setup/**") {
-					t.Errorf("setup still denies agents their own state: %s", deny)
-				}
+			// Agents write task folders, the brain, project.md, the setup folder and a
+			// project's setup answers; only the person's own rule stays.
+			if want := []string{"Read(~/.ssh/**)"}; !slices.Equal(doc.Permissions.Deny, want) {
+				t.Errorf("denies %v, want %v", doc.Permissions.Deny, want)
 			}
 		})
 	}
@@ -103,8 +113,7 @@ func TestClaudeCLIHomePatternCharacters(t *testing.T) {
 					t.Fatal(err)
 				}
 				if len(args) == 2 {
-					if !slices.Contains(doc.Permissions.Allow, "Edit(~/.grid/**)") ||
-						!slices.Contains(doc.Permissions.Deny, "Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])") {
+					if !slices.Contains(doc.Permissions.Allow, "Edit(~/.grid/**)") || len(doc.Permissions.Deny) != 0 {
 						t.Fatal("missing home-relative rules")
 					}
 				} else if len(doc.Permissions.Allow)+len(doc.Permissions.Deny) != 0 {
@@ -115,36 +124,7 @@ func TestClaudeCLIHomePatternCharacters(t *testing.T) {
 	}
 }
 
-func TestClaudeReworkBlockCaseFolding(t *testing.T) {
-	home := t.TempDir()
-	rules, err := settings.ClaudeBlock(home, filepath.Join(home, ".grid"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, target := range []string{"Projects/p/Setup-Answers.json", "PROJECTS/p/SETUP-PENDING.JSON", "projects/p/setup-answers.JSON"} {
-		matched := false
-		for _, rule := range rules {
-			if rule.Key != "deny" || !strings.HasPrefix(rule.Value, "Edit(~/.grid/") {
-				continue
-			}
-			pattern := strings.TrimSuffix(strings.TrimPrefix(rule.Value, "Edit(~/.grid/"), ")")
-			// Each test target has only one level below a recursive pattern.
-			if strings.HasSuffix(pattern, "**") {
-				pattern = strings.TrimSuffix(pattern, "**") + "*"
-			}
-			ok, err := path.Match(pattern, target)
-			if err != nil {
-				t.Fatal(err)
-			}
-			matched = matched || ok
-		}
-		if !matched {
-			t.Errorf("case variant is unprotected: %s", target)
-		}
-	}
-}
-
-func TestClaudeReworkSetupDenyUsesRealGridHome(t *testing.T) {
+func TestClaudeReworkSetupRulesUseRealGridHome(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink privilege required")
 	}
@@ -161,9 +141,9 @@ func TestClaudeReworkSetupDenyUsesRealGridHome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tool := range []string{"Edit", "Write"} {
-		if !slices.Contains(rules, settings.ClaudeRule{Section: "permissions", Key: "deny", Value: tool + "(~/data/grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])"}) {
-			t.Errorf("missing %s protection anchored to real Grid home", tool)
+	for _, tool := range []string{"Read", "Edit"} {
+		if !slices.Contains(rules, settings.ClaudeRule{Section: "permissions", Key: "allow", Value: tool + "(~/data/grid/**)"}) {
+			t.Errorf("missing %s allow rule anchored to real Grid home", tool)
 		}
 	}
 }

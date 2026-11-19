@@ -11,8 +11,9 @@ import (
 )
 
 // retiredDenies are the deny rules setup wrote before agents were allowed to write
-// task folders, the brain, project.md, the settings files and the setup folder,
-// as the earlier builder wrote them (home ~/.grid, projects folder <home>/projects).
+// task folders, the brain, project.md, the settings files, the setup folder, a
+// project's setup answers and held commands and the person's approval identity, as
+// the earlier builder wrote them (home ~/.grid, projects folder <home>/projects).
 var retiredDenies = []string{
 	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
 	"Edit(~/.grid/[pP][eE][rR][sS][oO][nN][aA][lL]/[tT][aA][sS][kK][sS]/[Tt]-[0-9]*/**)",
@@ -32,6 +33,12 @@ var retiredDenies = []string{
 	"Edit(~/.grid/.[hH][oO][sS][tT]/**)",
 	"Edit(~/.grid/setup/**)",
 	"Write(~/.grid/setup/**)",
+	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])",
+	"Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])",
+	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])",
+	"Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])",
+	"Edit(~/.grid-person/**)",
+	"Write(~/.grid-person/**)",
 }
 
 // legacyDenies are the forms the first releases wrote for the task, knowledge and
@@ -46,17 +53,6 @@ var legacyDenies = []string{
 	"Edit(~/.grid/projects/*/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
 	"Edit(~/.grid/[kK][nN][oO][wW][lL][eE][dD][gG][eE]/**)",
 	"Edit(~/.grid/projects/*/[pP][rR][oO][jJ][eE][cC][tT].[mM][dD])",
-}
-
-// keptDenies are the denies that stay: a project's setup answers and held commands,
-// and the person's approval identity.
-var keptDenies = []string{
-	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])",
-	"Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[aA][nN][sS][wW][eE][rR][sS].[jJ][sS][oO][nN])",
-	"Edit(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])",
-	"Write(~/.grid/[pP][rR][oO][jJ][eE][cC][tT][sS]/*/[sS][eE][tT][uU][pP]-[pP][eE][nN][dD][iI][nN][gG].[jJ][sS][oO][nN])",
-	"Edit(~/.grid-person/**)",
-	"Write(~/.grid-person/**)",
 }
 
 func denyRules(values []string) []ClaudeRule {
@@ -94,12 +90,12 @@ func (f *claudeFixture) recordRules() []ClaudeRule {
 func (f *claudeFixture) seedOldSetup() {
 	f.t.Helper()
 	mine := []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)"}
-	denies, err := json.Marshal(slices.Concat(mine, legacyDenies, retiredDenies, keptDenies))
+	denies, err := json.Marshal(slices.Concat(mine, legacyDenies, retiredDenies))
 	if err != nil {
 		f.t.Fatal(err)
 	}
 	f.write(f.path, `{"theme":"dark","permissions":{"allow":["Bash(grid *)","Read(~/mine/**)"],"deny":`+string(denies)+`}}`)
-	record := claudeRecord{Path: f.path, Rules: denyRules(slices.Concat(legacyDenies, retiredDenies, keptDenies))}
+	record := claudeRecord{Path: f.path, Rules: denyRules(slices.Concat(legacyDenies, retiredDenies))}
 	record.Rules = append(record.Rules, ClaudeRule{"permissions", "allow", "Bash(grid *)"})
 	data, err := json.Marshal(record)
 	if err != nil {
@@ -117,21 +113,17 @@ func TestClaudeRetiredIsTheEarlierBlock(t *testing.T) {
 	if !reflect.DeepEqual(retired, denyRules(append(slices.Clone(retiredDenies), legacyDenies...))) {
 		t.Fatalf("retired rules differ from the earlier setup's:\n%v", retired)
 	}
-	block, err := claudeBlock(f.o.Home, f.o.GridHome, "")
+	block, err := claudeBlock(f.o.Home, f.o.GridHome)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var deny []string
 	for _, rule := range block {
 		if rule.Section == "permissions" && rule.Key == "deny" {
-			deny = append(deny, rule.Value)
+			t.Fatalf("setup writes a deny rule: %s", rule.Value)
 		}
 		if slices.Contains(retired, rule) {
 			t.Fatalf("setup still writes a retired rule: %s", rule.Value)
 		}
-	}
-	if !reflect.DeepEqual(deny, keptDenies) {
-		t.Fatalf("setup denies %v, want only %v", deny, keptDenies)
 	}
 }
 
@@ -142,7 +134,7 @@ func TestClaudeSetupTakesRetiredDeniesOut(t *testing.T) {
 			f.seedOldSetup()
 			f.o.Yes, f.o.JSON = true, asJSON
 			f.wantCode(0)
-			want := append([]string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)"}, keptDenies...)
+			want := []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)"}
 			if got := f.denies(); !reflect.DeepEqual(got, want) {
 				t.Fatalf("denies %v, want %v", got, want)
 			}
@@ -204,7 +196,7 @@ func TestRetireClaudeRules(t *testing.T) {
 		f := newClaudeFixture(t)
 		f.seedOldSetup()
 		retire(f)
-		want := append([]string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)"}, keptDenies...)
+		want := []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)"}
 		if got := f.denies(); !reflect.DeepEqual(got, want) {
 			t.Fatalf("denies %v, want %v", got, want)
 		}
@@ -229,7 +221,7 @@ func TestRetireClaudeRules(t *testing.T) {
 		if _, err := os.Stat(f.record); !os.IsNotExist(err) {
 			t.Fatalf("empty record stays: %v", err)
 		}
-		if got := len(f.denies()); got != 2+len(keptDenies) {
+		if got := len(f.denies()); got != 2 {
 			t.Fatalf("%d denies left: %v", got, f.denies())
 		}
 	})
@@ -250,7 +242,7 @@ func TestRetireClaudeRules(t *testing.T) {
 		f.seedOldSetup()
 		f.o.ConfigDir = f.o.Home + "/.claude-other"
 		retire(f)
-		if got := len(f.denies()); got != 2+len(keptDenies) {
+		if got := len(f.denies()); got != 2 {
 			t.Fatalf("%d denies left: %v", got, f.denies())
 		}
 		if _, err := os.Stat(f.o.ConfigDir + "/settings.json"); !os.IsNotExist(err) {
@@ -295,8 +287,8 @@ func (f *claudeFixture) seedTwoHomes() (handleHome, handleRecord string, mine []
 	handleHome = filepath.Join(f.o.GridHome, "abdullahi")
 	handleRecord = filepath.Join(handleHome, "setup", "claude-block.json")
 	mine = []string{"Read(~/.ssh/**)", "Edit(~/.grid/tasks-i-keep/**)", "Edit(~/.grid/abdullahi/notes-i-keep/**)"}
-	dataForms := slices.Concat(legacyDenies, retiredDenies, keptDenies)
-	handleForms := inHandleHome(slices.Concat(legacyDenies, retiredDenies, keptDenies))
+	dataForms := slices.Concat(legacyDenies, retiredDenies)
+	handleForms := inHandleHome(dataForms)
 	denies, err := json.Marshal(slices.Concat(mine, dataForms, handleForms))
 	if err != nil {
 		f.t.Fatal(err)
@@ -342,7 +334,7 @@ func TestRetireClaudeRulesRetiresEveryHomesForm(t *testing.T) {
 				if err := RetireClaudeRules(f.o); err != nil {
 					t.Fatal(err)
 				}
-				want := slices.Concat(mine, keptDenies, inHandleHome(keptDenies))
+				want := mine
 				got := f.denies()
 				if left := slices.DeleteFunc(slices.Clone(got), func(v string) bool { return slices.Contains(want, v) }); len(left) > 0 {
 					t.Fatalf("%d retired rules survive, first %s", len(left), left[0])

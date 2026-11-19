@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,65 +69,6 @@ func TestExDenyDoctorAfterSetup(t *testing.T) {
 	}
 	code, out = exDenyDoctor(t, h, path)
 	if code != 0 || !exDenyHasLine(out, "ok deny block:") || !exDenyHasLine(out, "ok sandbox: on (grid setup --sandbox)") {
-		t.Fatalf("exit %d: %s", code, out)
-	}
-}
-
-func TestExDenyDoctorMissingDenyRule(t *testing.T) {
-	const rule = "Edit(~/.grid-person/**)"
-	h, path := exDenyHarness(t)
-	var doc map[string]map[string]any
-	if err := json.Unmarshal(exDenyRead(t, path).data, &doc); err != nil {
-		t.Fatal(err)
-	}
-	kept := []any{}
-	for _, v := range doc["permissions"]["deny"].([]any) {
-		if v != rule {
-			kept = append(kept, v)
-		}
-	}
-	if len(kept) != len(doc["permissions"]["deny"].([]any))-1 {
-		t.Fatalf("setup did not write %s", rule)
-	}
-	doc["permissions"]["deny"] = kept
-	data, err := json.Marshal(doc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	code, out := exDenyDoctor(t, h, path)
-	if code == 0 || !strings.Contains(out, "fail deny block: missing rules: "+rule+"\nfix: Run grid setup\n") {
-		t.Fatalf("exit %d: %s", code, out)
-	}
-	if !exDenyHasLine(out, "ok allow block: all setup allow rules are present") {
-		t.Fatalf("exit %d: %s", code, out)
-	}
-	// The JSON report names the check and its fix.
-	code, out = exDenyDoctor(t, h, path, "--json")
-	var rep struct {
-		OK     bool `json:"ok"`
-		Checks []struct {
-			Name, Detail, Fix string
-			OK                bool
-		} `json:"checks"`
-	}
-	if err := json.Unmarshal([]byte(out), &rep); err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, c := range rep.Checks {
-		switch c.Name {
-		case "deny block":
-			found = !c.OK && c.Detail == "missing rules: "+rule && c.Fix == "Run grid setup"
-		case "allow block":
-			if !c.OK {
-				t.Fatalf("allow block changed: %+v", c)
-			}
-		}
-	}
-	if code == 0 || rep.OK || !found {
 		t.Fatalf("exit %d: %s", code, out)
 	}
 }
