@@ -448,6 +448,10 @@ func rebaseStep(env Env, fs feed.Store, w feed.Writer, store land.Store, who con
 		fmt.Fprintf(env.Stderr, "land: %s: %s; rebase Job %s is left to its decision Job, the approval waits for it\n", ship, oneLineErr(err), head)
 		return true
 	}
+	// task.md naming no branch here lands the builder branches, the rebased one in its original's place.
+	if staleBranchKey(env, proj, id) {
+		return false
+	}
 	// The task's project decides which T-NN this is, as it does for land.
 	tasks := taskWriter(env)
 	tasks.Project = proj
@@ -466,6 +470,24 @@ func rebaseMoved(env Env, store land.Store, proj, id, ship string) (target strin
 	_, tip, _ := store.RebaseTip(env.Cwd, id, ship)
 	target, now, err := taskTargetTip(env, proj, id)
 	return target, tip == "" || err == nil && !strings.HasPrefix(now, tip)
+}
+
+// staleBranchKey reports whether task.md names no branch or one no repo of the project holds.
+func staleBranchKey(env Env, proj, id string) bool {
+	res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: id, Project: proj})
+	if err != nil {
+		return false
+	}
+	branch, _, err := taskMergeKeys(res.TaskPath)
+	if err != nil {
+		return false
+	}
+	if branch == "" {
+		return true
+	}
+	var missing *branchMissingError
+	_, err = taskMergeRepo(res, branch)
+	return errors.As(err, &missing)
 }
 
 // taskTargetTip is the branch the task's delivered branch lands on and the commit it

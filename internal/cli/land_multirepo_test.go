@@ -259,3 +259,42 @@ func TestTaskTargetTipIgnoresAStaleBranchKey(t *testing.T) {
 		t.Fatalf("target %q tip %q %v, want main of app at %s", target, tip, err, shipGit(t, m.app, "rev-parse", "main"))
 	}
 }
+
+// A single-repo delivery whose rebase is accepted lands the rebased branch alone, as
+// before: an accepted builder Job whose branch is not in this checkout (its builder ran
+// on another machine) does not stop it.
+func TestShipConflictLandsTheRebasedBranchPastABuilderBranchNotHere(t *testing.T) {
+	env, dir, repo, _, store, stderr := shipMergeFixture(t, false, true)
+	landFirst(t, repo)
+	snap, err := orchestrator.Load(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := nextJobID(snap)
+	body := rebaseJobBody(id, &mergeConflictError{Branch: "x", Target: "main", Files: []string{"a.txt"}}, map[string]any{"kind": "file-exists", "path": "a.txt"})
+	body["title"] = "Build elsewhere"
+	w, err := taskJobWriter(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orchestrator.Write(store, w, feed.Input{Type: "job", Job: id, Body: body}); err != nil {
+		t.Fatalf("post %s: %v", id, err)
+	}
+	setJobStatus(t, env, store, id, contract.Accepted, "review accepted")
+	if code := Run([]string{"approve", "T-01"}, env); code != 0 {
+		t.Fatalf("approve: %d %s", code, stderr)
+	}
+	rebases, _ := rebaseJobs(t, store)
+	if len(rebases) != 1 {
+		t.Fatalf("%d rebase Jobs after the conflict, want 1; stderr %s", len(rebases), stderr)
+	}
+	branch := fakeBuilder(t, dir, repo, rebases[0].ID)
+	setJobStatus(t, env, store, rebases[0].ID, contract.Accepted, "the conflicts are resolved")
+	landAfterShip(env, dir, contract.Author{ID: "local", Role: "owner"})
+	if rec, err := task.Read(dir); err != nil || rec.State != "closed" {
+		t.Fatalf("task state %q %v after the rebase was accepted, want closed; stderr %s; history:\n%s", rec.State, err, stderr, shipHistory(t, dir))
+	}
+	if parents := strings.Fields(shipGit(t, repo, "rev-list", "--parents", "-n", "1", "main")); len(parents) != 3 || parents[2] != shipGit(t, repo, "rev-parse", branch) {
+		t.Fatalf("main is %v, want a merge commit whose second parent is %s", parents, branch)
+	}
+}

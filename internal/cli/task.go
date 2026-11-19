@@ -213,26 +213,22 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	if branch != "" {
 		_, repoErr = taskMergeRepo(res, branch)
 	}
+	if branch != "" && !errors.As(repoErr, &missing) {
+		sha, _, err := taskMergeOne(res, name, branch, base)
+		return sha, err
+	}
 	// A branch no repo holds is the delivering Job's own: the work is on the
 	// branches of the task's accepted builder Jobs, landed in Feed order. A rebased
 	// branch of one of them lands with the rest, in its original's place.
-	stale := branch == "" || errors.As(repoErr, &missing)
 	built, rebased, err := builderBranches(res.TaskPath)
-	if err != nil && stale {
+	if err != nil {
 		return "", err
-	}
-	if !stale && !slices.Contains(rebased, branch) {
-		built = nil
 	}
 	if len(built) == 0 {
 		if branch == "" {
 			return "", noTaskBranchError(name)
 		}
-		if stale {
-			return "", repoErr
-		}
-		sha, _, err := taskMergeOne(res, name, branch, base)
-		return sha, err
+		return "", repoErr
 	}
 	merged := ""
 	for _, b := range built {
@@ -247,15 +243,6 @@ func taskMerge(env Env, id, proj string) (string, error) {
 			return "", err
 		}
 		if landed {
-			merged = sha
-		}
-	}
-	if !stale {
-		sha, landed, err := taskMergeOne(res, name, branch, base)
-		if err != nil {
-			return "", err
-		}
-		if landed || merged == "" {
 			merged = sha
 		}
 	}
