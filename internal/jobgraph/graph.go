@@ -59,6 +59,20 @@ func New(items []job.Job) (*Graph, error) {
 		}
 	}
 	sort.Strings(g.ids)
+	// A rework's review is numbered under the first build (app judge.go startReview), so it is
+	// also a child of the Job it is discovered from.
+	for _, id := range g.ids {
+		it := g.items[id]
+		role := contract.NormalizeRole(it.Role)
+		if it.DiscoveredFrom == nil || role != "reviewer" && role != "checker" {
+			continue
+		}
+		if from := *it.DiscoveredFrom; from != id && !strings.HasPrefix(id, from+".") {
+			if _, ok := g.items[from]; ok {
+				g.children[from] = append(g.children[from], id)
+			}
+		}
+	}
 	for parent := range g.children {
 		sort.Strings(g.children[parent])
 	}

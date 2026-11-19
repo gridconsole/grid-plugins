@@ -73,3 +73,20 @@ func TestStCancelledPersonChildDoesNotHoldTheEdge(t *testing.T) {
 		{"open build, only child a cancelled person Job", lone, m1Status("J-2", "running", "J-2.1", "cancelled"), "waiting for all children of J-2 to be accepted"},
 	})
 }
+
+// A rework's review is numbered under the first build and discovered from the
+// rework: it is the rework's child for a children-done edge on the rework.
+func TestStReworkReviewIsTheReworksChild(t *testing.T) {
+	// atos T-01: J-10 was posted from the review with no continues; recording T-11 J-30 continues the build.
+	free := job.Job{ID: "J-4", Role: "builder", After: []Edge{{Job: "J-1"}}, DiscoveredFrom: m1Ptr("J-2.1")}
+	loose := m1Plan(free, m1Review("J-2.2", "J-4"))
+	rework := m1Plan(m1Rework("J-4", "J-2", "J-2.1"), m1Review("J-2.2", "J-4"))
+	unreviewed := m1Plan(m1Rework("J-4", "J-2", "J-2.1"))
+	done := []string{"J-2", "rejected", "J-2.1", "accepted", "J-4", "accepted"}
+	stRun(t, "J-4", []m1Case{
+		{"Job from a review, its review accepted", loose, m1Status(append(done, "J-2.2", "accepted")...), ""},
+		{"rework, its review accepted", rework, m1Status(append(done, "J-2.2", "accepted")...), ""},
+		{"rework, its review running", rework, m1Status(append(done, "J-2.2", "running")...), "waiting for all children of J-4 to be accepted"},
+		{"rework, no review yet", unreviewed, m1Status(done...), "waiting for all children of J-4 to be accepted"},
+	})
+}
