@@ -163,37 +163,22 @@ func caseAliasWrite(t *testing.T, event, grid, home, cwd, path string) string {
 	return out.String()
 }
 
-// A builder writes the brain through another spelling of the Grid home on a
-// case-folding volume as freely as through the first: agents write the brain, and
-// the spelling is read as the Grid home, not as a path outside it.
+// A builder writes the brain and a project record through another spelling of the
+// Grid home on a case-folding volume as freely as through the first: agents write
+// both, and the spelling is read as the Grid home, not as a path outside it. The
+// project record was once refused here; plan-guard no longer refuses it.
 func TestCaseAliasesOfTheGridHomeAreAllowed(t *testing.T) {
 	grid, home, cwd := caseAliasHome(t)
 	for _, event := range []string{"pretooluse", "permissionrequest"} {
 		for _, tt := range []struct{ name, path string }{
 			{"project knowledge", filepath.Join(grid, "PROJECTS", "example", "knowledge", "n.md")},
+			{"project record", filepath.Join(grid, "PROJECTS", "example", "project.md")},
 			{"home knowledge", filepath.Join(home, ".GRID", "knowledge", "n.md")},
 		} {
 			t.Run(event+"/"+tt.name, func(t *testing.T) {
 				out := caseAliasWrite(t, event, grid, home, cwd, tt.path)
 				if strings.Contains(out, `"deny"`) || !strings.Contains(out, `"allow"`) {
 					t.Fatalf("not allowed: %s", out)
-				}
-			})
-		}
-	}
-}
-
-// A builder must not reach a project record through another spelling of the Grid
-// home on a case-folding volume.
-func TestCaseAliasesOfTheGridHomeAreDenied(t *testing.T) {
-	grid, home, cwd := caseAliasHome(t)
-	for _, event := range []string{"pretooluse", "permissionrequest"} {
-		for _, tt := range []struct{ name, path string }{
-			{"project record", filepath.Join(grid, "PROJECTS", "example", "project.md")},
-		} {
-			t.Run(event+"/"+tt.name, func(t *testing.T) {
-				if out := caseAliasWrite(t, event, grid, home, cwd, tt.path); !strings.Contains(out, `"deny"`) {
-					t.Fatalf("not denied: %s", out)
 				}
 			})
 		}
