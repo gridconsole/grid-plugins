@@ -236,8 +236,8 @@ func (c *checker) validate(j job.Job, o Options) {
 		if a.Traces != "item" && a.Traces != "owner" && !decisions[a.Traces] {
 			c.add("job.acceptance-trace", "acceptance", "Uncited trace on "+a.ID, "Trace to item, owner, or an id in decisions.")
 		}
-		if a.State != "" && a.State != "not met" && !wordSet("met not-met dropped pending")[a.State] {
-			c.add("job.acceptance-state", "acceptance", "Unknown state on "+a.ID, "Use pending, met, not-met or dropped.")
+		if a.State != "" && a.State != "not met" && !wordSet("met not-met dropped pending waiting")[a.State] {
+			c.add("job.acceptance-state", "acceptance", "Unknown state on "+a.ID, "Use pending, met, not-met, dropped or waiting.")
 		}
 		if a.State == "dropped" {
 			if !decisions[a.Traces] {

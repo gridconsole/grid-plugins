@@ -196,19 +196,39 @@ func StateOf(s Status) (state, reason string) {
 
 // The states an acceptance row reads in. A worker may write not-met, the word job
 // lint knows; the fold reads it as not met, the word of the result schema.
+// RowWaiting is a row that cannot hold until something outside the Job lands
+// (docs/decisions/D-job-hold.md); it is never not met.
 const (
 	RowPending = "pending"
 	RowMet     = "met"
 	RowNotMet  = "not met"
 	RowDropped = "dropped"
+	RowWaiting = "waiting"
 )
 
+// The kinds of thing a waiting row waits on, with the ref each names: another
+// Job accepted (J-n), another Job landed (J-n), a question answered (Q-n), or a
+// permission granted (the id of the blocked post that names the rule).
+const (
+	WaitJob        = "job"
+	WaitLanded     = "landed"
+	WaitQuestion   = "question"
+	WaitPermission = "permission"
+)
+
+// Wait is what a waiting row waits on.
+type Wait struct {
+	Kind string `json:"kind"`
+	Ref  string `json:"ref"`
+}
+
 // AcceptanceRow is one acceptance row of a Job as the fold reads it. Note is the
-// note that came with the latest mark.
+// note that came with the latest mark; WaitsOn is set only on a waiting row.
 type AcceptanceRow struct {
-	ID    string `json:"id"`
-	State string `json:"state"`
-	Note  string `json:"note,omitempty"`
+	ID      string `json:"id"`
+	State   string `json:"state"`
+	Note    string `json:"note,omitempty"`
+	WaitsOn *Wait  `json:"waits_on,omitempty"`
 }
 
 // rowState reads a written row state in the fold's words: not-met is not met and

@@ -73,7 +73,8 @@
                         "pending",
                         "met",
                         "not met",
-                        "not-met"
+                        "not-met",
+                        "waiting"
                       ]
                     },
                     "note": {
