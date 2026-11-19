@@ -508,7 +508,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 			if o.Remove {
 				continue // Removal reports every non-block entry below.
 			}
-			if !(r.Section == "permissions" && (r.Key == "allow" || r.Key == "deny") || r.Section == "autoMode" && r.Key == "environment" || r == claudeSandboxRule) || r.Value == "" {
+			if !(r.Section == "permissions" && (r.Key == "allow" || r.Key == "deny") || r.Section == "autoMode" && r.Key == "environment" || claudeBoolRule(r)) || r.Value == "" {
 				return 1, errors.New("Setup record contains an invalid rule. Nothing written.")
 			}
 		}
@@ -556,7 +556,7 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	// entry recorded by an earlier --sandbox run can be taken out; it is read
 	// then only when the record names it.
 	if o.Sandbox || o.Remove {
-		block = append(block, claudeSandboxRule)
+		block = append(block, claudeSandboxRule, claudeLocalBindingRule)
 	}
 	rules := block
 	if o.RetireOnly {
@@ -596,13 +596,25 @@ func runClaudeSetup(o ClaudeSetupOptions) (int, error) {
 	}
 	changes := []ClaudeRule{}
 	for _, rule := range rules {
-		if rule == claudeSandboxRule {
+		if claudeBoolRule(rule) {
 			// A boolean, not an array entry: on means already true.
-			on, err := claudeSandboxOn(doc)
+			var on bool
+			var err error
+			label := claudeLabel(rule)
+			if rule == claudeLocalBindingRule {
+				var value string
+				value, err = claudeLocalBinding(doc)
+				on = value == "true"
+				// A person's false wins: not written, and not ours to remove.
+				if err == nil && value == "false" {
+					continue
+				}
+			} else {
+				on, err = claudeSandboxOn(doc)
+			}
 			if err != nil {
 				return 2, claudeInvalid{path}
 			}
-			label := claudeLabel(rule)
 			switch {
 			case o.Remove && on:
 				changes = append(changes, rule)
@@ -1010,16 +1022,98 @@ func claudeValues(doc claudeObject, r ClaudeRule) ([]string, bool, error) {
 }
 
 // claudeSandboxRule switches on Claude Code's own sandbox: "sandbox": {"enabled": true}.
-// It is the only sandbox key setup writes (never allowUnsandboxedCommands or
-// failIfUnavailable). It is a boolean, so it takes its own paths, not the array ones.
+// With claudeLocalBindingRule it is one of the two sandbox keys setup writes (never
+// allowUnsandboxedCommands or failIfUnavailable). It is a boolean, so it takes its
+// own paths, not the array ones.
 var claudeSandboxRule = ClaudeRule{"sandbox", "enabled", "true"}
+
+// claudeLocalBindingRule sets "sandbox": {"network": {"allowLocalBinding": true}}.
+// Without it a sandboxed session cannot listen on 127.0.0.1, so local databases and
+// dev servers do not start (seen in thv T-15). A value the person already set, true
+// or false, is theirs and is never changed or removed.
+var claudeLocalBindingRule = ClaudeRule{"sandbox", "network.allowLocalBinding", "true"}
+
+// claudeBoolRule reports whether r is one of the boolean sandbox rules.
+func claudeBoolRule(r ClaudeRule) bool {
+	return r == claudeSandboxRule || r == claudeLocalBindingRule
+}
 
 // claudeLabel is how a rule is shown in previews and in the JSON result.
 func claudeLabel(r ClaudeRule) string {
-	if r == claudeSandboxRule {
+	switch r {
+	case claudeSandboxRule:
 		return "sandbox.enabled: true"
+	case claudeLocalBindingRule:
+		return "sandbox.network.allowLocalBinding: true"
 	}
 	return r.Value
+}
+
+// claudeLocalBinding returns the raw sandbox.network.allowLocalBinding value, or ""
+// when absent. A sandbox or network that is not an object, or a value that is not
+// a boolean, is invalid.
+func claudeLocalBinding(doc claudeObject) (string, error) {
+	raw := doc.get("sandbox")
+	if raw == nil {
+		return "", nil
+	}
+	obj, err := parseClaudeObject(raw)
+	if err != nil {
+		return "", err
+	}
+	raw = obj.get("network")
+	if raw == nil {
+		return "", nil
+	}
+	network, err := parseClaudeObject(raw)
+	if err != nil {
+		return "", err
+	}
+	switch value := string(bytes.TrimSpace(network.get("allowLocalBinding"))); value {
+	case "", "true", "false":
+		return value, nil
+	}
+	return "", errors.New("expected boolean")
+}
+
+func changeClaudeLocalBinding(doc *claudeObject, remove bool) error {
+	raw := doc.get("sandbox")
+	if raw == nil {
+		if remove {
+			return nil
+		}
+		raw = []byte("{}")
+	}
+	obj, err := parseClaudeObject(raw)
+	if err != nil {
+		return err
+	}
+	raw = obj.get("network")
+	if raw == nil {
+		if remove {
+			return nil
+		}
+		raw = []byte("{}")
+	}
+	network, err := parseClaudeObject(raw)
+	if err != nil {
+		return err
+	}
+	if !remove {
+		network.set("allowLocalBinding", []byte("true"))
+		obj.set("network", network.bytes())
+	} else {
+		network = slices.DeleteFunc(network, func(f claudeField) bool { return f.key == "allowLocalBinding" })
+		if len(network) > 0 {
+			obj.set("network", network.bytes())
+		} else if obj = slices.DeleteFunc(obj, func(f claudeField) bool { return f.key == "network" }); len(obj) == 0 {
+			// Setup made both objects; leave no empty one behind.
+			*doc = slices.DeleteFunc(*doc, func(f claudeField) bool { return f.key == "sandbox" })
+			return nil
+		}
+	}
+	doc.set("sandbox", obj.bytes())
+	return nil
 }
 
 // claudeSandboxOn reports whether sandbox.enabled is true. An absent key is off;
@@ -1068,6 +1162,9 @@ func changeClaudeSandbox(doc *claudeObject, remove bool) error {
 func changeClaudeRule(doc *claudeObject, r ClaudeRule, remove bool) error {
 	if r == claudeSandboxRule {
 		return changeClaudeSandbox(doc, remove)
+	}
+	if r == claudeLocalBindingRule {
+		return changeClaudeLocalBinding(doc, remove)
 	}
 	raw := doc.get(r.Section)
 	if raw == nil {
