@@ -549,7 +549,8 @@
         "parked",
         "rejected",
         "conflict",
-        "cancelled"
+        "cancelled",
+        "held"
       ]
     },
     "review_override": {
