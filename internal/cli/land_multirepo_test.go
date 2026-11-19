@@ -1,0 +1,169 @@
+package cli
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/gridhome"
+	"github.com/gridconsole/grid-plugins/internal/orchestrator"
+	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/task"
+)
+
+// multiRepoLand is a delivered task T-01 of a project whose folder is not a repo but
+// holds the repos app and plugin, as GridV2 T-17: task.md names the delivering Job's
+// own branch, which exists nowhere, and the work is on the branches of accepted
+// builder Jobs.
+type multiRepoLand struct {
+	env         Env
+	dir, fid    string
+	app, plugin string
+	store       feed.Store
+	stderr      *bytes.Buffer
+}
+
+func multiRepoFixture(t *testing.T) multiRepoLand {
+	t.Helper()
+	env, dir := landFixture(t)
+	home := env.GridHome
+	if err := os.RemoveAll(filepath.Join(home, "projects", "sample", "knowledge", "deploy")); err != nil {
+		t.Fatal(err)
+	}
+	folder := gridhome.Real(t.TempDir())
+	m := multiRepoLand{dir: dir, app: filepath.Join(folder, "app"), plugin: filepath.Join(folder, "plugin")}
+	for _, repo := range []string{m.app, m.plugin} {
+		if err := os.MkdirAll(repo, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		shipGit(t, repo, "init", "-q", "-b", "main")
+		shipGit(t, repo, "config", "user.name", "Grid Test")
+		shipGit(t, repo, "config", "user.email", "grid@example.invalid")
+		shipGit(t, repo, "config", "commit.gpgsign", "false")
+		multiRepoCommit(t, repo, "seed.txt", "seed")
+	}
+	leasedEnv(t, &env, dir)
+	if err := project.Write(home, project.Record{Name: "sample", ID: "example",
+		Folders: []project.Folder{{Machine: env.Machine, Path: folder}},
+		Repos:   []project.Repo{{Path: "app"}, {Path: "plugin"}}}); err != nil {
+		t.Fatal(err)
+	}
+	env.Cwd = folder
+	fid, err := feed.EnsureTaskID(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.fid, m.store = fid, feed.Store{TaskDir: dir, TaskID: fid}
+	b, _ := os.ReadFile(filepath.Join(dir, "task.md"))
+	keys := "state: waiting\nbranch: grid-" + fid + "-J-9-a1\nbase: " + shipGit(t, m.app, "rev-parse", "main")
+	if err := os.WriteFile(filepath.Join(dir, "task.md"), []byte(strings.Replace(string(b), "state: open", keys, 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	lease := env.Getenv
+	env.Getenv = func(key string) string {
+		if key == "PATH" || key == "HOME" {
+			return os.Getenv(key)
+		}
+		return lease(key)
+	}
+	m.stderr = &bytes.Buffer{}
+	env.Stdout, env.Stderr = &bytes.Buffer{}, m.stderr
+	m.env = env
+	return m
+}
+
+func multiRepoCommit(t *testing.T, repo, file, text string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(repo, file), []byte(text+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	shipGit(t, repo, "add", file)
+	shipGit(t, repo, "commit", "-q", "-m", text)
+}
+
+// builder posts an accepted builder Job of repo and makes its branch there,
+// grid-<feed id>-<job>-a1, off from with the commits files.
+func (m multiRepoLand) builder(t *testing.T, repo, from string, files ...string) string {
+	t.Helper()
+	snap, err := orchestrator.Load(m.store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := nextJobID(snap)
+	body := rebaseJobBody(id, &mergeConflictError{Branch: "x", Target: "main", Files: []string{"a.txt"}}, map[string]any{"kind": "file-exists", "path": "a.txt"})
+	body["title"], body["repo"] = "Build "+id, filepath.Base(repo)
+	w, err := taskJobWriter(m.env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orchestrator.Write(m.store, w, feed.Input{Type: "job", Job: id, Body: body}); err != nil {
+		t.Fatalf("post %s: %v", id, err)
+	}
+	setJobStatus(t, m.env, m.store, id, contract.Accepted, "review accepted")
+	branch := "grid-" + m.fid + "-" + id + "-a1"
+	shipGit(t, repo, "checkout", "-q", "-b", branch, from)
+	for _, f := range files {
+		multiRepoCommit(t, repo, f, id+" "+f)
+	}
+	shipGit(t, repo, "checkout", "-q", "main")
+	return branch
+}
+
+func (m multiRepoLand) approve(t *testing.T) {
+	t.Helper()
+	if posted, err := postShipPersonJob(m.env, m.dir); err != nil || posted == "" {
+		t.Fatalf("ship person Job not posted: %q %v", posted, err)
+	}
+	if code := Run([]string{"approve", "T-01"}, m.env); code != 0 {
+		t.Fatalf("approve: %d %s", code, m.stderr)
+	}
+}
+
+// T-17: approve lands every accepted builder branch, in Feed order and in its own
+// repo, when task.md names a branch no repo holds; a second merge lands nothing new.
+func TestApproveLandsEveryBuilderBranchAcrossRepos(t *testing.T) {
+	m := multiRepoFixture(t)
+	first := m.builder(t, m.plugin, "main", "p1.txt")
+	m.builder(t, m.app, "main", "a1.txt")
+	m.builder(t, m.plugin, first, "p3.txt")
+	m.approve(t)
+	if rec, err := task.Read(m.dir); err != nil || rec.State != "closed" {
+		t.Fatalf("task state %q %v after approve, want closed; stderr %s; history:\n%s", rec.State, err, m.stderr, shipHistory(t, m.dir))
+	}
+	for repo, files := range map[string][]string{m.plugin: {"p1.txt", "p3.txt"}, m.app: {"a1.txt"}} {
+		for _, f := range files {
+			if _, err := os.Stat(filepath.Join(repo, f)); err != nil {
+				t.Errorf("%s is not on main of %s after approve", f, filepath.Base(repo))
+			}
+		}
+		if head := shipGit(t, repo, "symbolic-ref", "--short", "HEAD"); head != "main" {
+			t.Errorf("%s is on %s, want main", filepath.Base(repo), head)
+		}
+	}
+	tips := shipGit(t, m.app, "rev-parse", "main") + shipGit(t, m.plugin, "rev-parse", "main")
+	if _, err := taskMerge(m.env, "T-01", "sample"); err != nil {
+		t.Fatalf("a second merge after the land: %v", err)
+	}
+	if again := shipGit(t, m.app, "rev-parse", "main") + shipGit(t, m.plugin, "rev-parse", "main"); again != tips {
+		t.Fatal("a second merge moved main")
+	}
+}
+
+// A task whose builder Jobs made no commits has nothing to land: approve closes it
+// and no main moves.
+func TestApproveWithNoCommitsLandsNothing(t *testing.T) {
+	m := multiRepoFixture(t)
+	m.builder(t, m.plugin, "main")
+	app, plugin := shipGit(t, m.app, "rev-parse", "main"), shipGit(t, m.plugin, "rev-parse", "main")
+	m.approve(t)
+	if rec, err := task.Read(m.dir); err != nil || rec.State != "closed" {
+		t.Fatalf("task state %q %v after approve, want closed; stderr %s; history:\n%s", rec.State, err, m.stderr, shipHistory(t, m.dir))
+	}
+	if shipGit(t, m.app, "rev-parse", "main") != app || shipGit(t, m.plugin, "rev-parse", "main") != plugin {
+		t.Fatal("a main moved for a task with no commits")
+	}
+}
