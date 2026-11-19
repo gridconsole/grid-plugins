@@ -1,10 +1,12 @@
 package orchestrator
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -287,11 +289,11 @@ func TreeAt(s Snapshot, now time.Time) []TreeJob {
 		}
 		if waits := heldDeadWaits(s, j); len(waits) > 0 && row.Orphan == nil {
 			w := waits[0]
-			detail := jobgraph.DoneReason(w.end, s.State.Jobs[w.end].Status)
+			detail := w.waiting(s)
 			if w.Row != "" {
 				detail += " (" + w.Row + ")"
 			}
-			row.Orphan = &Orphan{Kind: OrphanDeadWait, Since: contract.FormatTime(closedAt(s, w.end)), Detail: detail}
+			row.Orphan = &Orphan{Kind: OrphanDeadWait, Since: contract.FormatTime(w.since(s, id)), Detail: detail}
 		}
 		if row.Orphan == nil {
 			row.Orphan = neverJudged(s, j, acked, now)
@@ -356,18 +358,59 @@ func deadDoneWait(s Snapshot, w jobgraph.Wait) bool {
 	return w.Reason == jobgraph.DoneReason(w.Target, target.Status)
 }
 
-// deadWait is a job or landed wait of a Held Job that can no longer be met, with
-// end the last Job of the chain it waits on.
+// deadWait is a job or landed wait of a Held Job that can no longer be met: the
+// chain it waits on is dead at end, the last Job of that chain; or missing, the
+// Job a job wait names is not on the Feed; or cycle, the Jobs that wait on each
+// other in a cycle with the held Job, by Job number. lead marks the one wait of
+// that cycle that its single re-plan names (waitCycleLead).
 type deadWait struct {
 	contract.HeldWait
-	end string
+	end     string
+	missing bool
+	cycle   []string
+	lead    bool
+}
+
+// tag says in a few words why w can no longer be met: where its chain ended, that
+// its Job is not on the Feed, or the cycle it is in.
+func (w deadWait) tag() string {
+	switch {
+	case w.cycle != nil:
+		return "in the wait cycle " + strings.Join(w.cycle, ", ")
+	case w.missing:
+		return w.Ref + " is not on the Feed"
+	}
+	return "dead at " + w.end
+}
+
+// waiting is what the held Job waits for, as grid job tree and the owner's ask
+// read it.
+func (w deadWait) waiting(s Snapshot) string {
+	switch {
+	case w.cycle != nil:
+		return "waiting for " + w.Ref + ", " + w.tag()
+	case w.missing:
+		return "waiting for " + w.Ref + ", which is not on the Feed"
+	}
+	return jobgraph.DoneReason(w.end, s.State.Jobs[w.end].Status)
+}
+
+// since is when w could no longer be met as far as the Feed tells: when the end
+// of its chain closed, or for a missing Job or a cycle when held was held.
+func (w deadWait) since(s Snapshot, held string) time.Time {
+	if w.cycle != nil || w.missing {
+		return closedAt(s, held)
+	}
+	return closedAt(s, w.end)
 }
 
 // heldDeadWaits lists the job and landed waits of the Held Job j that can no
 // longer be met: every Job of the chain, the Job waited on and the Jobs that
 // continue it (a rework, not a child), was rejected or cancelled, and for a
-// landed wait none of them landed. A wait on a Job not on the Feed, a chain with
-// a live or accepted Job, and a question or permission wait are not dead.
+// landed wait none of them landed; a job wait names a Job that is not on the
+// Feed; or the Job waited on waits on j in turn (waitCycle). A chain with a live
+// or accepted Job, a landed wait on a Job not on the Feed, and a question or
+// permission wait are not dead.
 func heldDeadWaits(s Snapshot, j *contract.Job) []deadWait {
 	if j == nil || j.Status != contract.Held {
 		return nil
@@ -377,8 +420,17 @@ func heldDeadWaits(s Snapshot, j *contract.Job) []deadWait {
 		if w.Kind != contract.WaitJob && w.Kind != contract.WaitLanded {
 			continue
 		}
+		if w.Kind == contract.WaitJob && s.State.Jobs[w.Ref] == nil && !slices.Contains(s.JobIDs, w.Ref) {
+			out = append(out, deadWait{HeldWait: w, end: w.Ref, missing: true})
+			continue
+		}
 		if end, dead := deadChainEnd(s, w.Ref, w.Kind == contract.WaitLanded, map[string]bool{}); dead {
-			out = append(out, deadWait{w, end})
+			out = append(out, deadWait{HeldWait: w, end: end})
+			continue
+		}
+		if cycle := waitCycle(s, j.ID, w.Ref); cycle != nil {
+			held, ref := waitCycleLead(s, cycle)
+			out = append(out, deadWait{HeldWait: w, cycle: cycle, lead: held == j.ID && ref == w.Ref})
 		}
 	}
 	return out
@@ -387,7 +439,7 @@ func heldDeadWaits(s Snapshot, j *contract.Job) []deadWait {
 // deadChainEnd reports whether id and every Job that continues it were rejected or
 // cancelled, and, with landing, that none of them landed (jobgraph meets a landed
 // wait on any Job of the chain, whatever its status). It names the last Job of
-// that chain. seen ends a loop of continues.
+// that chain, the newest by Job number. seen ends a loop of continues.
 func deadChainEnd(s Snapshot, id string, landing bool, seen map[string]bool) (string, bool) {
 	j := s.State.Jobs[id]
 	if j == nil || seen[id] || j.Status != contract.Rejected && j.Status != contract.Cancelled || landing && s.Landed[id] {
@@ -401,10 +453,105 @@ func deadChainEnd(s Snapshot, id string, landing bool, seen map[string]bool) (st
 			if !dead {
 				return "", false
 			}
-			end = e
+			if byJobNumber(e, end) > 0 {
+				end = e
+			}
 		}
 	}
 	return end, true
+}
+
+// byJobNumber orders Job ids by their J-<n> number, then as strings: J-9 before
+// J-19, which Snapshot.Items, sorted as strings, puts first.
+func byJobNumber(a, b string) int {
+	number := func(id string) int {
+		n, _ := strconv.Atoi(strings.TrimPrefix(strings.SplitN(id, ".", 2)[0], "J-"))
+		return n
+	}
+	return cmp.Or(cmp.Compare(number(a), number(b)), strings.Compare(a, b))
+}
+
+// waitEdges is what each open Job waits on: the Job of each job or landed wait of
+// a Held Job, and the Job each after edge of a Posted Job names (not a gate, and
+// not a children-done edge, which waits on the Job's children). A wait is taken
+// as it names its Job, not through the Jobs that continue it.
+func waitEdges(s Snapshot) map[string][]string {
+	out := map[string][]string{}
+	for _, it := range s.Items {
+		switch j := s.State.Jobs[it.ID]; {
+		case j == nil:
+		case j.Status == contract.Held:
+			for _, w := range j.WaitsOn {
+				if w.Kind == contract.WaitJob || w.Kind == contract.WaitLanded {
+					out[it.ID] = append(out[it.ID], w.Ref)
+				}
+			}
+		case j.Status == contract.Posted:
+			for _, e := range it.After {
+				if !strings.HasPrefix(e.Job, "gate:") && e.Kind != jobgraph.ChildrenDone {
+					out[it.ID] = append(out[it.ID], e.Job)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// reachable is every Job that start waits on, itself included, through edges.
+func reachable(edges map[string][]string, start string) map[string]bool {
+	seen := map[string]bool{start: true}
+	for todo := []string{start}; len(todo) > 0; {
+		id := todo[len(todo)-1]
+		todo = todo[:len(todo)-1]
+		for _, next := range edges[id] {
+			if !seen[next] {
+				seen[next] = true
+				todo = append(todo, next)
+			}
+		}
+	}
+	return seen
+}
+
+// waitCycle is the Jobs, by Job number, that wait on each other in a cycle with
+// the Held Job held, whose wait on ref waits on held in turn (waitEdges), or nil
+// when ref does not. A Job that only waits on the cycle is not in it.
+func waitCycle(s Snapshot, held, ref string) []string {
+	edges := waitEdges(s)
+	if !reachable(edges, ref)[held] {
+		return nil
+	}
+	back := map[string][]string{}
+	for from, tos := range edges {
+		for _, to := range tos {
+			back[to] = append(back[to], from)
+		}
+	}
+	waitsOnHeld := reachable(back, held)
+	var out []string
+	for id := range reachable(edges, held) {
+		if waitsOnHeld[id] {
+			out = append(out, id)
+		}
+	}
+	slices.SortFunc(out, byJobNumber)
+	return out
+}
+
+// waitCycleLead is the held Job and wait that the one re-plan of a wait cycle
+// names: the first Held Job of the cycle by Job number, and its first job or
+// landed wait on a Job of the cycle.
+func waitCycleLead(s Snapshot, cycle []string) (string, string) {
+	for _, id := range cycle {
+		if j := s.State.Jobs[id]; j != nil && j.Status == contract.Held {
+			for _, w := range j.WaitsOn {
+				if (w.Kind == contract.WaitJob || w.Kind == contract.WaitLanded) && slices.Contains(cycle, w.Ref) {
+					return id, w.Ref
+				}
+			}
+		}
+	}
+	return "", ""
 }
 
 // closedAt is when a Job reached its present status: the latest control in its

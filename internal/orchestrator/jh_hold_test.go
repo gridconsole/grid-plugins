@@ -252,6 +252,8 @@ func TestHoldTreeNoOrphanAfterAnAttempt(t *testing.T) {
 	}
 	snap.State.Jobs["J-1"].Status = contract.Held
 	snap.State.Jobs["J-1"].WaitsOn = []contract.HeldWait{{Row: "A1", Kind: contract.WaitJob, Ref: "J-9"}}
+	// J-9 is on the Feed and open: a wait on a Job not on the Feed reads dead_wait.
+	snap.State.Jobs["J-9"] = &contract.Job{ID: "J-9", Status: contract.Posted}
 	for _, r := range TreeAt(snap, later) {
 		if r.Orphan != nil {
 			t.Fatalf("held Job reads orphan %+v", r.Orphan)
