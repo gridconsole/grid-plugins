@@ -448,15 +448,28 @@ func taskMergeOne(res where.Result, name, branch, base string) (string, bool, er
 		tip, err := taskMergeGit(repo, "rev-parse", "refs/heads/"+target)
 		return tip, false, err
 	}
+	// git checks a branch out in one worktree only: the merge runs in the worktree that has
+	// the target checked out, else in the main one, which checks it out for the merge.
+	dir := repo
+	wts, err := gitWorktrees(repo)
+	if err != nil {
+		return "", false, err
+	}
+	for _, wt := range wts {
+		if wt.branch == target {
+			dir = wt.path
+			break
+		}
+	}
 	// Untracked files do not stop a merge: git merge refuses by itself one that would overwrite them.
-	if st, err := taskMergeGit(repo, "status", "--porcelain", "--untracked-files=no"); err != nil {
+	if st, err := taskMergeGit(dir, "status", "--porcelain", "--untracked-files=no"); err != nil {
 		return "", false, err
 	} else if st != "" {
-		return "", false, fmt.Errorf("the checkout %s has uncommitted changes; commit or stash them, then run grid task merge again", repo)
+		return "", false, fmt.Errorf("the checkout %s has uncommitted changes; commit or stash them, then run grid task merge again", dir)
 	}
-	start, err := taskMergeGit(repo, "symbolic-ref", "--short", "-q", "HEAD")
+	start, err := taskMergeGit(dir, "symbolic-ref", "--short", "-q", "HEAD")
 	if err != nil || start == "" {
-		if start, err = taskMergeGit(repo, "rev-parse", "HEAD"); err != nil {
+		if start, err = taskMergeGit(dir, "rev-parse", "HEAD"); err != nil {
 			return "", false, err
 		}
 	}
@@ -464,24 +477,24 @@ func taskMergeOne(res where.Result, name, branch, base string) (string, bool, er
 		if start == target {
 			return nil
 		}
-		_, err := taskMergeGit(repo, "checkout", "-q", start)
+		_, err := taskMergeGit(dir, "checkout", "-q", start)
 		return err
 	}
 	if start != target {
-		if _, err := taskMergeGit(repo, "checkout", "-q", target); err != nil {
-			return "", false, fmt.Errorf("cannot check out %s in %s (%v); the checkout is as it was", target, repo, err)
+		if _, err := taskMergeGit(dir, "checkout", "-q", target); err != nil {
+			return "", false, fmt.Errorf("cannot check out %s in %s (%v); the checkout is as it was", target, dir, err)
 		}
 	}
 	msg := fmt.Sprintf("Merge branch '%s' (%s)", branch, name)
-	if _, mergeErr := taskMergeGit(repo, "merge", "--no-ff", "--no-edit", "-m", msg, "refs/heads/"+branch); mergeErr != nil {
-		conflicts, _ := taskMergeGit(repo, "diff", "--name-only", "--diff-filter=U")
-		if _, err := taskMergeGit(repo, "rev-parse", "-q", "--verify", "MERGE_HEAD"); err == nil {
-			if _, err := taskMergeGit(repo, "merge", "--abort"); err != nil {
-				return "", false, fmt.Errorf("merging %s into %s failed and the merge could not be aborted (%v); run git merge --abort in %s", branch, target, err, repo)
+	if _, mergeErr := taskMergeGit(dir, "merge", "--no-ff", "--no-edit", "-m", msg, "refs/heads/"+branch); mergeErr != nil {
+		conflicts, _ := taskMergeGit(dir, "diff", "--name-only", "--diff-filter=U")
+		if _, err := taskMergeGit(dir, "rev-parse", "-q", "--verify", "MERGE_HEAD"); err == nil {
+			if _, err := taskMergeGit(dir, "merge", "--abort"); err != nil {
+				return "", false, fmt.Errorf("merging %s into %s failed and the merge could not be aborted (%v); run git merge --abort in %s", branch, target, err, dir)
 			}
 		}
 		if err := back(); err != nil {
-			return "", false, fmt.Errorf("merging %s into %s failed and %s is still checked out (%v); run git checkout %s in %s", branch, target, target, err, start, repo)
+			return "", false, fmt.Errorf("merging %s into %s failed and %s is still checked out (%v); run git checkout %s in %s", branch, target, target, err, start, dir)
 		}
 		if conflicts != "" {
 			changed, _ := taskMergeGit(repo, "diff", "--name-only", target+"..."+branch)
@@ -490,12 +503,12 @@ func taskMergeOne(res where.Result, name, branch, base string) (string, bool, er
 		}
 		return "", false, fmt.Errorf("merging %s into %s failed (%v); the checkout is as it was; fix that, then run grid task merge again", branch, target, mergeErr)
 	}
-	merged, err := taskMergeGit(repo, "rev-parse", "HEAD")
+	merged, err := taskMergeGit(dir, "rev-parse", "HEAD")
 	if err != nil {
 		return "", false, err
 	}
 	if err := back(); err != nil {
-		return "", false, fmt.Errorf("merged %s into %s as %s, but %s is still checked out (%v); run git checkout %s in %s", branch, target, merged, target, err, start, repo)
+		return "", false, fmt.Errorf("merged %s into %s as %s, but %s is still checked out (%v); run git checkout %s in %s", branch, target, merged, target, err, start, dir)
 	}
 	return merged, true, nil
 }
@@ -528,29 +541,71 @@ func taskMergeHead(taskPath string) (branch, base, head string, err error) {
 }
 
 // taskMergeRepo is the checkout that holds the task's branch: the project's
-// folder on this machine, or the one of its repos that has the branch.
+// folder on this machine, or the one of its repos that has the branch. A repo and its
+// worktrees share their branches, so they count as one repo, by their common git
+// folder, and the checkout is the one of its main worktree.
 func taskMergeRepo(res where.Result, branch string) (string, error) {
 	if res.Folder == "" {
 		return "", noFolderError(res.Project)
 	}
 	dirs := taskMergeDirs(res)
-	var found []string
+	var found, seen []string
 	for _, dir := range dirs {
-		root, err := taskMergeGit(dir, "rev-parse", "--show-toplevel")
-		if err != nil || root == "" {
+		common, err := taskMergeGit(dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+		if err != nil || common == "" || slices.Contains(seen, gridhome.Real(common)) {
 			continue
 		}
-		if localBranch(root, branch) && !slices.Contains(found, root) {
-			found = append(found, root)
+		seen = append(seen, gridhome.Real(common))
+		if localBranch(dir, branch) {
+			found = append(found, dir)
 		}
 	}
 	switch len(found) {
 	case 1:
-		return found[0], nil
+		return mainCheckout(found[0])
 	case 0:
 		return "", &branchMissingError{fmt.Sprintf("branch %s is not in the checkout of project %s (%s); run grid task merge where the branch was made, or record it with grid deliver --branch <name>", branch, res.Project, strings.Join(dirs, ", "))}
 	}
 	return "", fmt.Errorf("branch %s is in more than one repo of project %s (%s); merge it there with git", branch, res.Project, strings.Join(found, ", "))
+}
+
+// mainCheckout is the checkout of the main worktree of the repo at dir, or the one at
+// dir when the main worktree is bare.
+func mainCheckout(dir string) (string, error) {
+	if wts, err := gitWorktrees(dir); err == nil && len(wts) > 0 && !wts[0].bare {
+		return wts[0].path, nil
+	}
+	return taskMergeGit(dir, "rev-parse", "--show-toplevel")
+}
+
+// gitWorktree is one checkout of a repo: its folder, the branch it has checked out
+// ("" when detached) and whether it is bare.
+type gitWorktree struct {
+	path, branch string
+	bare         bool
+}
+
+// gitWorktrees lists the worktrees of the repo at dir, the main one first.
+func gitWorktrees(dir string) ([]gitWorktree, error) {
+	out, err := taskMergeGit(dir, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	var wts []gitWorktree
+	for _, line := range strings.Split(out, "\n") {
+		path, isPath := strings.CutPrefix(line, "worktree ")
+		name, isBranch := strings.CutPrefix(line, "branch refs/heads/")
+		switch {
+		case isPath:
+			wts = append(wts, gitWorktree{path: path})
+		case len(wts) == 0:
+		case isBranch:
+			wts[len(wts)-1].branch = name
+		case line == "bare":
+			wts[len(wts)-1].bare = true
+		}
+	}
+	return wts, nil
 }
 
 // taskMergeDirs is the project's folder on this machine and the folders of its repos.
