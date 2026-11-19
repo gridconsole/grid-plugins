@@ -83,8 +83,8 @@ func New(items []job.Job) (*Graph, error) {
 }
 
 // link fills children from g.ids: each Job is a child of the Job its id is
-// numbered under, and a rework's review, numbered under the first build (app
-// judge.go startReview), is also a child of the Job it is discovered from.
+// numbered under, and a Job the Judge numbers under the first build of a rework
+// is also a child of the Job it judges (judged).
 func (g *Graph) link() {
 	for _, id := range g.ids {
 		if i := strings.LastIndexByte(id, '.'); i >= 0 {
@@ -92,20 +92,49 @@ func (g *Graph) link() {
 		}
 	}
 	for _, id := range g.ids {
-		it := g.items[id]
-		role := contract.NormalizeRole(it.Role)
-		if it.DiscoveredFrom == nil || role != "reviewer" && role != "checker" {
-			continue
-		}
-		if from := *it.DiscoveredFrom; from != id && !strings.HasPrefix(id, from+".") {
-			if _, ok := g.items[from]; ok {
-				g.children[from] = append(g.children[from], id)
-			}
+		if parent := g.judged(id); parent != "" {
+			g.children[parent] = append(g.children[parent], id)
 		}
 	}
 	for parent := range g.children {
 		sort.Strings(g.children[parent])
 	}
+}
+
+// judged is the Job that id judges when id is not numbered under it, or "". A
+// review or check judges the Job it is discovered from (app judge.go startReview);
+// a person or decision Job judges the Job it is discovered from, or the Job its
+// review judges, and judge.Person numbers it under the first build (person.go
+// childID(rootOf)). Reworks and other Jobs are not linked.
+func (g *Graph) judged(id string) string {
+	it := g.items[id]
+	if it.DiscoveredFrom == nil {
+		return ""
+	}
+	from := *it.DiscoveredFrom
+	switch {
+	case isReview(it):
+	case it.IsPerson() || isDecision(it):
+		if r, ok := g.items[from]; ok && isReview(r) && r.DiscoveredFrom != nil {
+			from = *r.DiscoveredFrom
+		}
+	default:
+		return ""
+	}
+	if _, ok := g.items[from]; !ok || from == id || strings.HasPrefix(id, from+".") {
+		return ""
+	}
+	return from
+}
+
+func isReview(it job.Job) bool {
+	role := contract.NormalizeRole(it.Role)
+	return role == "reviewer" || role == "checker"
+}
+
+// isDecision is a decision Job the Judge posts for an agent (judge.decisionBody).
+func isDecision(it job.Job) bool {
+	return contract.NormalizeRole(it.Role) == "orchestrator" && strings.HasPrefix(it.Title, decidePrefix)
 }
 
 // Block is the inverse of an after edge. Gates remain explicit blockers.
@@ -285,14 +314,21 @@ func DoneReason(target string, status contract.Status) string {
 // child this relies on the order the app's Judge uses, build closed first and the
 // review accepted after; a review accepted while the build is still submitted
 // would make the edge met on an unaccepted build. s5_children_done_open_target_test.go
-// pins it. A target whose review is numbered under another Job (a rework's) has
-// its person and decision Jobs there too, so it waits for its own accept.
+// pins it. An open target with a child numbered under another Job (a rework's
+// review, person or decision Job) waits for its own accept.
 func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
+	status := s.Jobs[target].Status
+	if !closed(status) {
+		for _, child := range g.children[target] {
+			if !strings.HasPrefix(child, target+".") {
+				return false, DoneReason(target, status)
+			}
+		}
+	}
 	if !g.childrenAccepted(s, target) || len(g.holding(s, target)) == 0 {
 		return false, "waiting for all children of " + target + " to be accepted"
 	}
-	switch status := s.Jobs[target].Status; status {
-	case contract.Accepted:
+	switch status {
 	case contract.Cancelled:
 		// A cancelled target that another Job continues was replaced by it, as a cancelled rework is in reworkDone.
 		if len(g.reworksOf(target, map[string]bool{target: true})) == 0 {
@@ -301,12 +337,6 @@ func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 		return g.reworkDone(s, target, map[string]bool{target: true})
 	case contract.Rejected:
 		return g.reworkDone(s, target, map[string]bool{target: true})
-	default:
-		for _, child := range g.children[target] {
-			if !strings.HasPrefix(child, target+".") {
-				return false, DoneReason(target, status)
-			}
-		}
 	}
 	return true, ""
 }
@@ -375,12 +405,13 @@ func (g *Graph) childrenAccepted(s Snapshot, id string) bool {
 
 // holding are the immediate children of id that hold a children-done edge: a
 // cancelled person Job holds nothing once a decision Job replaced it and was
-// accepted (replaced). Any other cancelled person Job, such as an approve card,
-// still holds: an approval is the person Job accepted.
+// accepted (replaced), and a cancelled review holds nothing once the decision Job
+// for its lost verdict was accepted (lostDecided). Any other cancelled person Job,
+// such as an approve card, still holds: an approval is the person Job accepted.
 func (g *Graph) holding(s Snapshot, id string) []string {
 	out := []string{}
 	for _, child := range g.children[id] {
-		if s.Jobs[child].Status == contract.Cancelled && g.replaced(s, child) {
+		if s.Jobs[child].Status == contract.Cancelled && (g.replaced(s, child) || g.lostDecided(s, child)) {
 			continue
 		}
 		out = append(out, child)
@@ -404,6 +435,25 @@ func (g *Graph) replaced(s Snapshot, p string) bool {
 		dec := g.items[d]
 		if d != p && contract.NormalizeRole(dec.Role) == "orchestrator" && strings.HasPrefix(dec.Title, decidePrefix) &&
 			dec.DiscoveredFrom != nil && *dec.DiscoveredFrom == *it.DiscoveredFrom && s.Jobs[d].Status == contract.Accepted {
+			return true
+		}
+	}
+	return false
+}
+
+// lostDecided reports whether r is a review whose verdict was lost and the Judge's
+// decision Job for it is accepted: a decision Job discovered from the reviewed Job
+// and titled as judge.lost titles it ("Decide how <J> continues without its review").
+func (g *Graph) lostDecided(s Snapshot, r string) bool {
+	it := g.items[r]
+	if !isReview(it) || it.DiscoveredFrom == nil {
+		return false
+	}
+	b := *it.DiscoveredFrom
+	for _, d := range g.ids {
+		dec := g.items[d]
+		if isDecision(dec) && dec.Title == decidePrefix+b+" continues without its review" &&
+			dec.DiscoveredFrom != nil && *dec.DiscoveredFrom == b && s.Jobs[d].Status == contract.Accepted {
 			return true
 		}
 	}

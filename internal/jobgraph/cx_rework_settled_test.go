@@ -1,6 +1,7 @@
 package jobgraph
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
@@ -97,6 +98,110 @@ func TestCxDeliveryWaitHoldsForTheReworksReview(t *testing.T) {
 				jobs[id] = contract.Job{ID: id, Status: st}
 			}
 			if got, ok := DeliveryWait(items, Snapshot{Jobs: jobs}); ok != tc.ok || got != tc.want {
+				t.Fatalf("DeliveryWait = %+v, %v; want %+v, %v", got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
+
+func cxSnapshot(status map[string]contract.Status) Snapshot {
+	jobs := map[string]contract.Job{}
+	for id, st := range status {
+		jobs[id] = contract.Job{ID: id, Status: st}
+	}
+	return Snapshot{Jobs: jobs}
+}
+
+// cxPoint is the card grid judge person --point raises for a rework: numbered
+// under the first build (person.go childID(rootOf)) and discovered from the rework.
+func cxPoint(id, rework string) job.Job {
+	return job.Job{ID: id, Role: job.RolePerson, Kind: QuestionKind, Title: "Judge " + rework + " before ship", DiscoveredFrom: m1Ptr(rework)}
+}
+
+// cxLost is the decision Job judge.lost raises when the review of b was cancelled before it ran.
+func cxLost(id, b string) job.Job {
+	return job.Job{ID: id, Role: "orchestrator", Title: "Decide how " + b + " continues without its review", DiscoveredFrom: m1Ptr(b)}
+}
+
+// Review 19 Nov, must-fix 1: the point card for an accepted rework holds any Job
+// with a children-done edge on it (J-3 here is not a deliver Job), whether the
+// card is open or cancelled: an approval is the card accepted.
+func TestCxPointCardForReworkHoldsTheEdge(t *testing.T) {
+	items := m1Plan(m1Rework("J-4", "J-2", "J-2.1"), m1Review("J-2.2", "J-4"), cxPoint("J-2.3", "J-4"))
+	done := []string{"J-2", "rejected", "J-2.1", "accepted", "J-4", "accepted", "J-2.2", "accepted"}
+	stRun(t, "J-4", []m1Case{
+		{"card open", items, m1Status(append(done, "J-2.3", "posted")...), "waiting for all children of J-4 to be accepted"},
+		{"card cancelled", items, m1Status(append(done, "J-2.3", "cancelled")...), "waiting for all children of J-4 to be accepted"},
+		{"card accepted", items, m1Status(append(done, "J-2.3", "accepted")...), ""},
+	})
+}
+
+// The reviewer's fixture: the deliver Job J-3 with a children-done edge on J-4 and
+// the point card cancelled. On 0c62f969 J-3 waited; it must still wait.
+func TestCxCancelledPointCardHoldsTheDeliverOnTheRework(t *testing.T) {
+	items := m1Plan(m1Rework("J-4", "J-2", "J-2.1"), m1Review("J-2.2", "J-4"), cxPoint("J-2.3", "J-4"))
+	items[3].Title = DeliverTitle
+	st := m1Status("J-2", "rejected", "J-2.1", "accepted", "J-4", "accepted", "J-2.2", "accepted", "J-2.3", "cancelled")
+	ready, waits := stWaits(t, items, "J-4", st)
+	want := []Wait{{Job: "J-3", Target: "J-4", Kind: ChildrenDone, Reason: "waiting for all children of J-4 to be accepted"}}
+	if ready || !reflect.DeepEqual(waits, want) {
+		t.Fatalf("ready %v, waits %+v, want %+v", ready, waits, want)
+	}
+}
+
+// A cancelled rework continued by J-5: the decision Job raised from J-4's review
+// (numbered under the first build) still running holds the edge on J-4.
+func TestCxRunningDecisionHoldsTheReplacedRework(t *testing.T) {
+	items := m1Plan(m1Rework("J-4", "J-2", "J-2.1"), m1Review("J-2.2", "J-4"), stDecision("J-2.3", "J-2.2"),
+		job.Job{ID: "J-5", Role: "builder", After: []Edge{{Job: "J-1"}}, Continues: m1Ptr("J-4"), DiscoveredFrom: m1Ptr("J-2.3")}, m1Review("J-2.4", "J-5"))
+	base := []string{"J-2", "rejected", "J-2.1", "accepted", "J-4", "cancelled", "J-2.2", "accepted", "J-5", "accepted", "J-2.4", "accepted"}
+	stRun(t, "J-4", []m1Case{
+		{"decision running", items, m1Status(append(base, "J-2.3", "running")...), "waiting for all children of J-4 to be accepted"},
+		{"decision accepted", items, m1Status(append(base, "J-2.3", "accepted")...), ""},
+	})
+}
+
+// Review 19 Nov, must-fix 2: a rework whose review was cancelled before it ran is
+// released once the decision Job for the lost review is accepted, and J-4 is.
+func TestCxLostReviewDecidedReleasesTheRework(t *testing.T) {
+	items := m1Plan(m1Rework("J-4", "J-2", "J-2.1"), m1Review("J-2.2", "J-4"), cxLost("J-4.1", "J-4"))
+	other := m1Plan(m1Rework("J-4", "J-2", "J-2.1"), m1Review("J-2.2", "J-4"), cxLost("J-4.1", "J-2"))
+	base := []string{"J-2", "rejected", "J-2.1", "accepted", "J-4", "accepted", "J-2.2", "cancelled"}
+	stRun(t, "J-4", []m1Case{
+		{"decision accepted", items, m1Status(append(base, "J-4.1", "accepted")...), ""},
+		{"decision running", items, m1Status(append(base, "J-4.1", "running")...), "waiting for all children of J-4 to be accepted"},
+		{"decision for another Job accepted", other, m1Status(append(base, "J-4.1", "accepted")...), "waiting for all children of J-4 to be accepted"},
+	})
+}
+
+// DeliveryWait reads the same links as Ready: a rework deliver's point card holds
+// the land, and a lost review whose decision was accepted does not.
+func TestCxDeliveryWaitAgreesOnCardsAndLostReviews(t *testing.T) {
+	rework := []job.Job{
+		{ID: "J-3", Role: "orchestrator", Title: DeliverTitle},
+		m1Review("J-3.1", "J-3"),
+		{ID: "J-4", Role: "orchestrator", Title: DeliverTitle, Continues: m1Ptr("J-3"), DiscoveredFrom: m1Ptr("J-3.1")},
+		m1Review("J-3.2", "J-4"),
+	}
+	carded := append(append([]job.Job{}, rework...), cxPoint("J-3.3", "J-4"))
+	lost := append(append([]job.Job{}, rework...), cxLost("J-4.1", "J-4"))
+	held := Wait{Job: "J-3", Target: "J-3", Reason: "waiting for all children of J-4 to be accepted"}
+	done := []string{"J-3", "rejected", "J-3.1", "accepted", "J-4", "accepted"}
+	for _, tc := range []struct {
+		name   string
+		items  []job.Job
+		status map[string]contract.Status
+		want   Wait
+		ok     bool
+	}{
+		{"card open", carded, m1Status(append(done, "J-3.2", "accepted", "J-3.3", "posted")...), held, false},
+		{"card cancelled", carded, m1Status(append(done, "J-3.2", "accepted", "J-3.3", "cancelled")...), held, false},
+		{"card accepted", carded, m1Status(append(done, "J-3.2", "accepted", "J-3.3", "accepted")...), Wait{}, true},
+		{"lost review, decision accepted", lost, m1Status(append(done, "J-3.2", "cancelled", "J-4.1", "accepted")...), Wait{}, true},
+		{"lost review, decision running", lost, m1Status(append(done, "J-3.2", "cancelled", "J-4.1", "running")...), held, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, ok := DeliveryWait(tc.items, cxSnapshot(tc.status)); ok != tc.ok || got != tc.want {
 				t.Fatalf("DeliveryWait = %+v, %v; want %+v, %v", got, ok, tc.want, tc.ok)
 			}
 		})
