@@ -75,7 +75,9 @@ func (s Store) personAnswers(snap Snapshot) error {
 			// itself keeps the agent as its author.
 			who, _ := contract.PostedAs(r.Type, r.Author, r.Task, r.At, r.Body, item.Kind, s.Grants)
 			granted := who != r.Author
-			if !granted && (r.Lease != nil || r.Fence != 0 || contract.TierFor(r.Author.Role) != contract.PersonTeam && !contract.GuestAddressee(r.Author.Role, r.Author.ID, false, item.Role, item.PersonName(), item.Kind)) {
+			// An agent's unleased answer to an approve Job counts as a person's (AgentApprover).
+			agentApproval := item.Kind == "approve" && contract.TierFor(r.Author.Role) == contract.Agent
+			if !granted && (r.Lease != nil || r.Fence != 0 || contract.TierFor(r.Author.Role) != contract.PersonTeam && !agentApproval && !contract.GuestAddressee(r.Author.Role, r.Author.ID, false, item.Role, item.PersonName(), item.Kind)) {
 				continue
 			}
 			if text, _ := r.Body["answer"].(string); strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > maxPersonAnswer {
@@ -392,10 +394,12 @@ func sentBackControl(id, who, answer string, hash any) map[string]any {
 // puts them in the accepting control; an unleased person puts them in the answer,
 // and the holder's next pass copies them into the control (personAnswers).
 func AnswerPersonWith(store feed.Store, w feed.Writer, id, answer string, fields map[string]any, now time.Time) (record feed.Record, err error) {
-	// A guest with no lease is taken only for the Job that names it (checked below
-	// against the Feed); every other writer needs the task lease or the team role.
+	// A guest with no lease is taken only for the Job that names it, and an agent with
+	// none only for an approve Job (both checked below against the Feed); every other
+	// writer needs the task lease or the team role.
 	guest := guestAnswerer(w)
-	unleased := PersonWriter(w) || guest
+	agent := AgentApprover(w)
+	unleased := PersonWriter(w) || guest || agent
 	if w.Lease != "task" && !unleased {
 		return record, feed.ErrStaleLease
 	}
@@ -423,16 +427,19 @@ func AnswerPersonWith(store feed.Store, w feed.Writer, id, answer string, fields
 		if guest && !guestAddressed(snap, w, id) {
 			return feed.ErrStaleLease
 		}
-		if e := PersonOpen(snap, id, now); e != nil {
-			return e
-		}
-		j := snap.State.Jobs[id]
 		kind := ""
 		for _, item := range snap.Items {
 			if item.ID == id {
 				kind = item.Kind
 			}
 		}
+		if agent && kind != "approve" {
+			return feed.ErrStaleLease
+		}
+		if e := PersonOpen(snap, id, now); e != nil {
+			return e
+		}
+		j := snap.State.Jobs[id]
 		back := sendsBack(fields, w.Author.Role, kind)
 		if unleased {
 			// A person writes no closing control without the lease; the answer waits

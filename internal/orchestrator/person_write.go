@@ -16,6 +16,13 @@ func PersonWriter(w feed.Writer) bool {
 	return w.Lease == "" && contract.TierFor(w.Author.Role) == contract.PersonTeam
 }
 
+// AgentApprover reports whether w is an agent writing without a lease. The owner
+// let agents approve, unsigned (19 Nov): it answers an approve person Job as a
+// person of the team does, and no other Job; its record keeps the agent as author.
+func AgentApprover(w feed.Writer) bool {
+	return w.Lease == "" && w.Fence == 0 && contract.TierFor(w.Author.Role) == contract.Agent
+}
+
 // guestAnswerer reports whether w is a guest writing without a lease: the one
 // writer outside the team that may answer a person Job, and only the Job that
 // names it (guestAddressed). PostPerson stays with PersonWriter.
