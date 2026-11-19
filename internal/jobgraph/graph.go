@@ -112,6 +112,9 @@ func (g *Graph) judged(id string) string {
 		return ""
 	}
 	from := *it.DiscoveredFrom
+	if strings.HasPrefix(id, from+".") {
+		return ""
+	}
 	switch {
 	case isReview(it):
 	case it.IsPerson() || isDecision(it):

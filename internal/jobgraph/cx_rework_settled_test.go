@@ -12,8 +12,8 @@ import (
 // only when the rework is settled: its review passed, which the Judge shows by
 // accepting the rework before the review, or a decision Job continued the work
 // and that continuation is settled. The Judge numbers the rework's review, person
-// Job and decision Job under the first build, so a rejected review, an open
-// person Job or a running decision Job is not among the rework's own children.
+// Job and decision Job under the first build; link makes each a child of the
+// rework too, so an open one holds the edge on the rework.
 
 // A rework whose review rejected it after the rounds were used stays submitted:
 // the Judge accepts the review and raises a person Job (now a decision Job).
