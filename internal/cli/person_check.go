@@ -14,7 +14,7 @@ const (
 	personCheckRole   = "agent_role"
 )
 
-const personCheckHint = "approvals need a person; this caller is an agent"
+const personCheckHint = "this caller is an agent, not a person"
 
 // personCheckReason answers from the environment the caller already carries and
 // from the same role tiers the stores use: an empty role or the local cli is the
@@ -32,7 +32,8 @@ func personCheckReason(env Env) string {
 }
 
 // runPersonCheck is `grid person check [--json]`, the app's startup question
-// whether approvals may be offered. It reads the environment only and writes
+// whether its caller is a person, which the app asks before a person's writes
+// (agents approve with grid approve since 19 Nov). It reads the environment only and writes
 // nothing; it is an answer, and no other command consults it.
 // Exit 0 with {"ok":true} for a person, exit 3 with the person_required object
 // for an agent.
