@@ -30,18 +30,19 @@ func acceptedShipJob(snap orchestrator.Snapshot) string {
 // accepted: grid land for the task, once per ship Job (land.Store.AfterShip), as
 // who. The holder's pass of grid worker next calls it after its tick, which is
 // where an unleased answer is accepted, and grid approve calls it after a leased
-// answer. A task that is not waiting, or has no accepted ship Job, gets nothing.
-// A land that fails is recorded in the task's history and said on stderr. A merge
-// that conflicts never asks the person again: it posts a builder Job that rebases the
-// delivered branch (queueRebase), the approval stands, and a later pass lands once that
-// Job is accepted (rebaseStep); a rebase Job the Judge ended is left to the Judge's
-// decision path, and the land runs again when main has moved; when no Job can be
-// posted, the land is armed to run again on the next pass (land.Store.Retry). Any
-// other failure puts the ship Job back with its person, with the failure text as its
-// reason (reopenShipJob), so the task is in Needs you again and the person's next
-// approve runs land once more. A ship Job an earlier version put back after a conflict
-// is accepted again with the approval it held (reacceptShipJob), so the land runs
-// without the person.
+// answer. A task that is not waiting, or has no accepted ship Job, gets nothing, and a
+// task whose land lock another process holds (a deploy running) is not waited for: the
+// pass goes on and a later pass lands it (land.Store.AfterShip). A land that fails is
+// recorded in the task's history and said on stderr. A merge that conflicts never
+// asks the person again: it posts a builder Job that rebases the delivered branch
+// (queueRebase), the approval stands, and a later pass lands once that Job is accepted
+// (rebaseStep); a rebase Job the Judge ended is left to the Judge's decision path, and
+// the land runs again when main has moved; when no Job can be posted, the land is
+// armed to run again on the next pass (land.Store.Retry). Any other failure puts the
+// ship Job back with its person, with the failure text as its reason (reopenShipJob),
+// so the task is in Needs you again and the person's next approve runs land once more.
+// A ship Job an earlier version put back after a conflict is accepted again with the
+// approval it held (reacceptShipJob), so the land runs without the person.
 func landAfterShip(env Env, dir string, who contract.Author) {
 	w, err := approvalWriter(env)
 	if err != nil {

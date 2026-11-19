@@ -132,3 +132,61 @@ func TestShipArmedReadsWhileALandHoldsTheLock(t *testing.T) {
 		t.Fatal("no answer while the lock was held")
 	}
 }
+
+// The worker's tick calls AfterShip for every task whose answer it accepts, and a land of
+// that task elsewhere holds .land.lock through its deploy command: a call that finds the
+// lock held does nothing and does not wait, and the next one with the lock free lands once.
+func TestShipAfterShipDoesNotWaitForALandThatHoldsTheLock(t *testing.T) {
+	s, dir, _ := r7Fixture(t, nil)
+	merges := 0
+	s.Merge = func(string) (string, error) {
+		merges++
+		return "fedcba9876543210fedcba9876543210fedcba98", nil
+	}
+	lock, err := fslock.OpenNoFollow(filepath.Join(dir, ".land.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fslock.LockExclusive(lock); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { fslock.Unlock(lock); lock.Close() })
+	waited := make(chan string, 4)
+	t.Cleanup(fslock.OnBlockForTest(func(path string) {
+		if filepath.Base(path) == ".land.lock" {
+			select {
+			case waited <- path:
+			default:
+			}
+		}
+	}))
+	type answer struct {
+		ran bool
+		err error
+	}
+	got := make(chan answer, 1)
+	go func() {
+		_, ran, err := s.AfterShip(context.Background(), "", "T-01", "J-6")
+		got <- answer{ran, err}
+	}()
+	select {
+	case a := <-got:
+		if a.err != nil || a.ran || merges != 0 {
+			t.Fatalf("AfterShip while the lock was held = ran %t, %v, %d merges; want nothing done", a.ran, a.err, merges)
+		}
+	case path := <-waited:
+		t.Fatalf("AfterShip waited for %s, which a land holds through its deploy command", path)
+	case <-time.After(30 * time.Second):
+		t.Fatal("AfterShip did not return while the lock was held")
+	}
+	if h := r7History(t, dir); strings.Contains(h, "grid land runs") {
+		t.Fatalf("history has the ship answered line while another land held the lock:\n%s", h)
+	}
+	if armed, err := s.Armed("", "T-01", "J-6"); err != nil || !armed {
+		t.Fatalf("Armed after the skipped call = %t, %v; want true so the next pass lands it", armed, err)
+	}
+	fslock.Unlock(lock)
+	if _, ran, err := s.AfterShip(context.Background(), "", "T-01", "J-6"); err != nil || !ran || merges != 1 {
+		t.Fatalf("AfterShip with the lock free = ran %t, %v, %d merges; want one land", ran, err, merges)
+	}
+}

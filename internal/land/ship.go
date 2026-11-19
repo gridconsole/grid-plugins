@@ -21,10 +21,11 @@ const shipEvent = "ship answered"
 // task id: it runs land once for that Job and records the result. The approval
 // land asks for is the task's one approval, the result of its plan Job (Run,
 // ApprovalForGate). A "ship answered" history line naming job is written first,
-// under .land.lock, so a second call for the same Job does nothing (ran is false).
-// A land that stops before its command runs gets a "land failed" history line
-// with the reason; a command that fails has Run's own line. A land that passed
-// closes the task. A project with no deploy topic (ErrNoDeployTopic) has no
+// under .land.lock, so a second call for the same Job does nothing (ran is false); a
+// call that finds the lock held by another process does nothing either, and the next
+// pass tries again. A land that stops before its command runs gets a "land failed"
+// history line with the reason; a command that fails has Run's own line. A land that
+// passed closes the task. A project with no deploy topic (ErrNoDeployTopic) has no
 // command to run: Merge, when set, merges the task's delivered branch into its
 // base first (a merge that fails is a "land failed" line and a *FailedError, the
 // task stays waiting), then a "ship answered" line says so and the task closes on
@@ -300,14 +301,18 @@ func shipState(history, job string) (armed, rebasing bool) {
 
 // markShip writes the "ship answered" line for job under .land.lock unless
 // history.md already holds it with no later reopen, retry or rebase line for job; first
-// reports whether this call wrote it.
+// reports whether this call wrote it. A lock another process holds is not waited for,
+// since a land holds it through its deploy command: first is false and nothing is written.
 func (s Store) markShip(dir, cwd, id, job string) (first bool, err error) {
 	lock, err := fslock.OpenNoFollow(filepath.Join(dir, ".land.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return false, err
 	}
 	defer lock.Close()
-	if err = fslock.LockExclusive(lock); err != nil {
+	if err = fslock.TryLockExclusive(lock); err != nil {
+		if errors.Is(err, fslock.ErrLocked) {
+			return false, nil // a land is running; the answer stays armed for a later pass
+		}
 		return false, err
 	}
 	history, err := os.ReadFile(filepath.Join(dir, "history.md"))
