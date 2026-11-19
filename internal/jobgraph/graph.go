@@ -267,7 +267,7 @@ func DoneReason(target string, status contract.Status) string {
 // would make the edge met on an unaccepted build. s5_children_done_open_target_test.go
 // pins it.
 func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
-	if !g.childrenAccepted(s, target) || len(g.children[target]) == 0 {
+	if !g.childrenAccepted(s, target) || len(g.holding(s, target)) == 0 {
 		return false, "waiting for all children of " + target + " to be accepted"
 	}
 	switch s.Jobs[target].Status {
@@ -317,15 +317,29 @@ func (g *Graph) reworkDone(s Snapshot, id string, seen map[string]bool) (bool, s
 	return true, ""
 }
 
-// childrenAccepted reports whether every immediate child of id is accepted; a
-// Job with no children has none waiting.
+// childrenAccepted reports whether every immediate child of id that holds an
+// edge is accepted; a Job with no children has none waiting.
 func (g *Graph) childrenAccepted(s Snapshot, id string) bool {
-	for _, child := range g.children[id] {
+	for _, child := range g.holding(s, id) {
 		if s.Jobs[child].Status != contract.Accepted {
 			return false
 		}
 	}
 	return true
+}
+
+// holding are the immediate children of id that hold a children-done edge: a
+// person Job that was cancelled (judge.Migrate replaces it with a decision Job,
+// also a child) holds nothing.
+func (g *Graph) holding(s Snapshot, id string) []string {
+	out := []string{}
+	for _, child := range g.children[id] {
+		if g.items[child].IsPerson() && s.Jobs[child].Status == contract.Cancelled {
+			continue
+		}
+		out = append(out, child)
+	}
+	return out
 }
 
 // started is a Job that a worker holds or has handed in: it reads as Started or
