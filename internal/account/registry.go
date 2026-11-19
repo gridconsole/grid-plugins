@@ -331,6 +331,9 @@ func Status(env Env, register bool) ([]Account, error) {
 	if env.GridHome == "" {
 		return nil, errors.New("cannot find the Grid home; set GRID_HOME")
 	}
+	// The scan is the slow part and reads no registry state, so it runs before the
+	// lock; registerNew decides from the records loaded under the lock.
+	folders := Scan(env)
 	if register {
 		unlock, err := lockRegistry(env)
 		if err != nil {
@@ -342,7 +345,6 @@ func Status(env Env, register bool) ([]Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	folders := Scan(env)
 	if register {
 		var changed bool
 		if recs, changed, err = registerNew(env, recs, folders); err != nil {

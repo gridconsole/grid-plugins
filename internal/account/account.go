@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -153,22 +154,37 @@ func folderList(env Env) []folderRef {
 	return out
 }
 
+// maxChecks bounds how many folders Scan checks at once: a check can start the
+// provider's own command.
+const maxChecks = 8
+
 // Scan lists the folders with their login email and whether they are signed in.
 // It never opens .credentials.json or the Keychain item; `claude auth status`
-// may, which is Claude Code reading its own store.
+// may, which is Claude Code reading its own store. The folders are checked side
+// by side, so a slow one costs its own time and no more; the answer keeps the
+// order folderList gives.
 func Scan(env Env) []Folder {
 	refs := folderList(env)
-	out := make([]Folder, 0, len(refs))
-	for _, r := range refs {
-		f := Folder{Kind: r.kind, Dir: r.dir, Home: r.home}
-		switch r.kind {
-		case Claude:
-			f.Email, f.Plan, f.SignedIn = readClaude(env, r)
-		case Codex:
-			f.Email, f.Plan, f.SignedIn = readCodex(env, r)
-		}
-		out = append(out, f)
+	out := make([]Folder, len(refs))
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, maxChecks)
+	for i, r := range refs {
+		wg.Add(1)
+		slots <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-slots }()
+			f := Folder{Kind: r.kind, Dir: r.dir, Home: r.home}
+			switch r.kind {
+			case Claude:
+				f.Email, f.Plan, f.SignedIn = readClaude(env, r)
+			case Codex:
+				f.Email, f.Plan, f.SignedIn = readCodex(env, r)
+			}
+			out[i] = f
+		}()
 	}
+	wg.Wait()
 	return out
 }
 
