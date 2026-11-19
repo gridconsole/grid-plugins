@@ -1,12 +1,20 @@
 package cli
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
+	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/plan"
 	taskstore "github.com/gridconsole/grid-plugins/internal/task"
 )
@@ -119,5 +127,82 @@ func TestAgentApprovesTheHeldSetupCommands(t *testing.T) {
 	}
 	if h.psFile("setup-pending.json") != nil {
 		t.Fatal("approve left setup-pending.json")
+	}
+}
+
+// Delivered work: an agent answers the ship person Job grid deliver posted, and
+// the holder's next pass of grid worker next accepts it and lands the task, as
+// for a person with no lease (TestShipUnleasedAnswerLandsInWorkerPass).
+func TestAgentShipAnswerLandsInWorkerPass(t *testing.T) {
+	env, dir, laneSHA, store, stderr := shipLandFixture(t, "git merge -q --ff-only lane")
+	agent := env
+	agent.Getenv = func(key string) string {
+		switch key {
+		case "GRID_AGENT":
+			return "codex"
+		case "GRID_MEMBER":
+			return "dana"
+		case "PATH", "HOME":
+			return os.Getenv(key)
+		}
+		return ""
+	}
+	if code := Run([]string{"approve", "T-01"}, agent); code != 0 {
+		t.Fatalf("agent approve: %d %s", code, stderr)
+	}
+	answers := arAnswers(t, store)
+	if len(answers) != 1 || answers[0].Author.ID != "dana" || answers[0].Author.Role != "agent" || answers[0].Body["reason"] != "approved by agent codex" {
+		t.Fatalf("answers %+v", answers)
+	}
+
+	worker := env
+	worker.Getenv = func(key string) string {
+		switch key {
+		case "GRID_MEMBER":
+			return "dana"
+		case "GRID_ROLE":
+			return "member"
+		case "PATH", "HOME":
+			return os.Getenv(key)
+		}
+		return ""
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stop := time.AfterFunc(5*time.Second, cancel)
+	defer stop.Stop()
+	worker.Context = ctx
+	worker.Stdout = &bytes.Buffer{}
+	go func() {
+		for ctx.Err() == nil {
+			if strings.Contains(shipHistory(t, dir), " · land landed · ") {
+				cancel()
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+	pid, start := taskLeaseIdentity(t)
+	holder := "dana@" + env.Machine
+	tenure, err := json.Marshal(lease.Tenure{
+		Lease: feed.Lease{Lease: "task", Holder: &holder, Gen: 0, Fence: 1},
+		Since: contract.FormatTime(time.Now()), PID: &pid, PIDStart: &start,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(store.Dir(), "lease", "task.json"), append(tenure, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"--member", holder, "--role", "member",
+		"worker", "next", "--json", "--pid", strconv.Itoa(pid), "--pid-start", start}
+	if code := Run(args, worker); code != 130 {
+		t.Fatalf("worker next: exit %d, want 130 (stopped after the land); stderr %s", code, stderr)
+	}
+	if _, snap := approveJobs(t, store); acceptedShipJob(snap) == "" {
+		t.Fatalf("no ship Job is accepted after the worker pass; stderr %s", stderr)
+	}
+	if got := shipGit(t, env.GridHome, "rev-parse", "main"); got != laneSHA {
+		t.Fatalf("main is %s after the worker pass, want the delivered %s; stderr %s", got, laneSHA, stderr)
 	}
 }

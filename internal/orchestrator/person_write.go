@@ -18,7 +18,8 @@ func PersonWriter(w feed.Writer) bool {
 
 // AgentApprover reports whether w is an agent writing without a lease. The owner
 // let agents approve, unsigned (19 Nov): it answers an approve person Job as a
-// person of the team does, and no other Job; its record keeps the agent as author.
+// person of the team does, and no other Job; its record's author is the agent's
+// member in role agent, and the caller names the agent in the answer's reason.
 func AgentApprover(w feed.Writer) bool {
 	return w.Lease == "" && w.Fence == 0 && contract.TierFor(w.Author.Role) == contract.Agent
 }
