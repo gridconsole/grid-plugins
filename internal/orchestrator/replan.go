@@ -16,7 +16,8 @@ import (
 const gkReplanRole = "orchestrator"
 
 // gkReplan posts one orchestrator Job for each Job its worker cancelled while
-// other Jobs still wait on it with a done edge. Without it those Jobs wait for
+// other Jobs still wait on it with a done or children-done edge while its
+// continues chain is dead (a chain with an open or accepted end gets none). Without it those Jobs wait for
 // ever: a done edge is released only by an accepted Job (jobgraph.Released) and
 // nothing else reacts to the cancel. The Job is posted once: the re-plan Job
 // already on the Feed (role orchestrator, discovered_from the cancelled Job) is
@@ -30,7 +31,7 @@ func (s Store) gkReplan(snap Snapshot) error {
 		if j.Status != contract.Cancelled || j.ExitReason != "cancelled" {
 			continue
 		}
-		waiting := gkWaiting(snap, id)
+		waiting := gkDeadWaiting(snap, id)
 		if len(waiting) == 0 || gkReplanned(snap, id) {
 			continue
 		}
@@ -57,6 +58,29 @@ func gkWaiting(snap Snapshot, target string) []string {
 		}
 		for _, e := range it.After {
 			if e.Job == target && (e.Kind == "" || e.Kind == jobgraph.Done) {
+				out = append(out, it.ID)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// gkDeadWaiting lists the Jobs that are still Posted or Ready and hold a done or
+// children-done edge to target when the continues chain of target is dead
+// (jobgraph.Head): it ends rejected or cancelled with nothing open, so nothing
+// releases them. It lists none while the chain is open or accepted.
+func gkDeadWaiting(snap Snapshot, target string) []string {
+	if _, state := jobgraph.Head(chainSnapshot(snap), target); state != jobgraph.HeadDead {
+		return nil
+	}
+	var out []string
+	for _, it := range snap.Items {
+		if st := snap.State.Jobs[it.ID]; st == nil || st.Status != contract.Posted && st.Status != contract.Ready {
+			continue
+		}
+		for _, e := range it.After {
+			if e.Job == target && (e.Kind == "" || e.Kind == jobgraph.Done || e.Kind == jobgraph.ChildrenDone) {
 				out = append(out, it.ID)
 				break
 			}
