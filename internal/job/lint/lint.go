@@ -261,6 +261,9 @@ func (c *checker) validate(j job.Job, o Options) {
 			c.add("job.after-why", "after", "Dependency kind needs a reason", "Explain why this dependency starts the Job.")
 		}
 	}
+	c.afterMissing(j)
+	c.liveUI(j)
+	c.rowOutsideWrite(j)
 	c.reviewTwice(j)
 	c.pastedRule(j, o)
 	for _, group := range []struct {
