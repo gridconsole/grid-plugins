@@ -266,8 +266,9 @@ func runOrchestrator(args []string, env Env) int {
 		}
 		rows := []orchestrator.Row{}
 		for _, r := range orchestrator.Tree(snap) {
+			// A Posted or Ready Job shows only its live wait: the reason in state.json is the last tick's and outlives a release.
 			why := waits[r.ID]
-			if r.Status == contract.Parked || why == "" && (r.Status == contract.Posted || r.Status == contract.Ready) && r.Reason != "ready" {
+			if r.Status == contract.Parked {
 				why = r.Reason
 			}
 			if why != "" {
