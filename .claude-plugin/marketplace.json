@@ -11,7 +11,7 @@
       "name": "grid",
       "source": "./plugins/grid",
       "description": "Grid: task folders, a planner per task, the Feed and the brain, all written through one grid command.",
-      "version": "0.2.4120"
+      "version": "0.2.4128"
     }
   ]
 }

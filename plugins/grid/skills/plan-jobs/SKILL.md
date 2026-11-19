@@ -71,7 +71,7 @@ go test ./internal/plan/
 ## Where it stands
 ```
 
-Run `grid job lint <file> --task <task>` and post only a Job with no errors. A post that prints "render will refuse this Job" is fixed and posted again as a new Job. A step's `who` (its agent, without `grid-`; `worker` is builder) is the Job's role, and `grid job lint` warns with `job.role-agent` when no agent runs a role.
+Run `grid job lint <file> --task <task>` and post only a Job with no errors. A post that prints "render goes on with a warning" is fixed and posted again as a new Job. A step's `who` (its agent, without `grid-`; `worker` is builder) is the Job's role, and `grid job lint` warns with `job.role-agent` when no agent runs a role.
 
 One full example. It lints clean once the note and file it points at exist:
 
