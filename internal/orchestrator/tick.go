@@ -206,6 +206,15 @@ func (s Store) Tick() (out Output, err error) {
 				}
 				continue
 			}
+			if _, err := ResolveBase(snap, s.Feed.TaskID, j.Base); err != nil {
+				// A head:J-n base with no accepted head leaves the Job unspawned; it never starts from HEAD.
+				if why := headBaseWait(err); j.Reason != why {
+					if e := s.control(j, "", why, ""); e != nil {
+						return e
+					}
+				}
+				continue
+			}
 			if e := s.assign(j, to, snap.Grants); e != nil {
 				return e
 			}
@@ -226,7 +235,10 @@ func (s Store) Tick() (out Output, err error) {
 					return e
 				}
 				if j.Assign != nil {
-					out.Spawns = append(out.Spawns, Spawn{j.ID, j.Assign.Attempt, j.Assign.To, j.Assign.Fence, j.Generation, j.AssignPost, j.Role, j.Repo, j.Model, j.Effort, j.Base})
+					base, err := ResolveBase(snap, s.Feed.TaskID, j.Base)
+					if err == nil {
+						out.Spawns = append(out.Spawns, Spawn{j.ID, j.Assign.Attempt, j.Assign.To, j.Assign.Fence, j.Generation, j.AssignPost, j.Role, j.Repo, j.Model, j.Effort, base})
+					}
 				}
 			} else if e := os.Remove(filepath.Join(s.Feed.TaskDir, "spawned", j.ID+".json")); e != nil && !errors.Is(e, os.ErrNotExist) {
 				return e

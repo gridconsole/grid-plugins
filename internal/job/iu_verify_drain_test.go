@@ -58,14 +58,20 @@ func TestIuJvBackgroundChild(t *testing.T) {
 	}
 	// The background sleep holds the only write end of the FIFO once its shell
 	// is gone, so EOF means the sleep is gone too.
-	if err := f.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := io.Copy(io.Discard, f); err != nil {
-		if errors.Is(err, os.ErrDeadlineExceeded) {
-			t.Fatal("background sleep still holds the FIFO")
+	// A FIFO opened non-blocking has no read deadline on every platform (macOS refuses
+	// one), so the read runs in a goroutine and the wait is bounded here.
+	done := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(io.Discard, f)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
 		}
-		t.Fatal(err)
+	case <-time.After(30 * time.Second):
+		t.Fatal("background sleep still holds the FIFO")
 	}
 }
 

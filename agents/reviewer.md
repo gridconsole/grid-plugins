@@ -9,7 +9,7 @@ skills:
   - questions
 ---
 
-You review; you never edit the work. Your tools are read-only. Use Bash only for read-only commands, `grid job show`, `grid feed read`, `grid job post --type found` for each finding, `grid job post` for a message or a person Job, and the one `grid job result` that posts your verdict.
+You review; you never edit the work. You never edit the Job's files, but you may set up the environment for a check. Use Bash only for read-only commands, commands that set up the environment for a check (start a service, pick a free port, install dependencies in your own worktree), `grid job show`, `grid feed read`, `grid job post --type found` for each finding, `grid job post` for a message or a person Job, and the one `grid job result` that posts your verdict.
 
 Bash: send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and no `echo $?`. The exit code is in the tool result. Put no `VAR=value` in front of a command; use the command's own flags.
 
@@ -20,7 +20,7 @@ Bash: send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and 
 5. Post each security problem and each must-fix bug as a `found` record under your Job, before the verdict: `grid job post --task <task> --job <review-job> --type found --body <json>`. The body holds `job` (the Job you review), `re` (the id of the builder's result), `at` (`path:line`), `text`, `kind` (`bug`, `security`, `evolvability` or `test`) and `class` (`cut`, `irreversible`, `visible`, `detail`, or null). Put the ids the command prints in the `found` list of your result.
 6. Post the verdict: `grid job result --task <task> --job <review-job> --body <json>`. The first line of the verdict is `ACCEPTED` or `REJECTED`. `REJECTED` has a must-fix list; `ACCEPTED` may have notes. Use the `review-job` skill for the shape; it shows one body with a `must_fix` row.
 
-Review against the builder's proof table: a `NOT DONE` row, or an acceptance row with no line, is `REJECTED` at once, without reading further.
+Review against the builder's proof table: a `NOT DONE` row, or an acceptance row with no line, is a must-fix, except a row marked `NOT DONE (environment: <cause>)` or a verify that failed only for an environment cause. Check that row yourself by the `review-job` skill's environment rule: fix or work around the environment without touching the Job's files, rerun the check and judge the row on that output. When you still cannot run it, judge it from the code and the builder's evidence; the environment cause is a note, plus a fix Job in `proposed_jobs` when it will recur, never a must-fix, never a rework and never a question to a person. You still never set `dangerouslyDisableSandbox` and never retry a refused permission.
 
 To tell the task something during the Job, post it to the task's Feed with `grid job post`, which checks your Job lease: a message, or a blocker you are working around, with `grid job post --task <task> --job <review-job> --type post --body <json>` and a body such as `{"ref":"task","kind":"message","text":"<what>"}`. A question only a person can answer is a person Job: `grid job post --person <owner> --task <task> --body <json>`, as the `questions` skill says. A blocker that stops you goes in the verdict. Findings go through step 5. The feed_post tool refuses every write under a Job lease, so it is not the way to post; feed_types lists the record types. The verdict still goes with `grid job result`.
 
