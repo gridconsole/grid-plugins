@@ -66,8 +66,11 @@ A result does not accept or reject a Job: control posts do that
 | `evidence` | What proves the work: a command with its exit code, or a `path:line`, one string each. | A reviewer. The fold does not read it. |
 | `acceptance` | One item per acceptance row of the Job. | A reviewer and the lead. The fold does not read it. |
 | `acceptance.id` | The row id as the Job numbers it: `A1`, `A2` and so on. | The reviewer matching the row. |
-| `acceptance.state` | Where the row stands. One of `met` (the row holds), `not met` (it does not, or was not finished) or `dropped` (it was set aside). A `dropped` row must carry a `decision`; the other two states may leave it out. | The reviewer. |
+| `acceptance.state` | Where the row stands. One of `met` (the row holds), `not met` (it does not, or was not finished), `dropped` (it was set aside) or `waiting` (the work cannot hold until something outside the Job lands; `docs/decisions/D-job-hold.md`). A `dropped` row must carry a `decision` and a `waiting` row must carry `waits_on`; `met` and `not met` may leave both out. `waiting` is not `not met`: `not met` says the work is short, `waiting` says it waits on someone else. | The reviewer. |
 | `acceptance.decision` | Why a row was dropped, in one sentence. Required when `state` is `dropped`. | The reviewer and the lead. |
+| `acceptance.waits_on` | What a `waiting` row waits on: one object with `kind` and `ref`, both required, no other key. Required when `state` is `waiting`. A row that needs two things names the one that is not there yet. | The reviewer, and the orchestrator that releases the hold. |
+| `acceptance.waits_on.kind` | One of `job` (another Job's change accepted), `landed` (another Job's change merged and installed), `question` (a person's answer or decision) or `permission` (a permission rule the Job lacks). | The reviewer and the orchestrator. |
+| `acceptance.waits_on.ref` | The thing waited on: the Job id `J-n` for `job` and `landed`, the question's gate id `Q-n` for `question`, and the id of the `blocked` post that names the rule for `permission`. | The reviewer and the orchestrator. |
 | `verified` | A check made by someone other than the author, or `null` when there was none. | The fold copies it onto the Job as `Verified` (`fold.go:360`). |
 | `verified.level` | How strong the check was. One of `L1`, `L2` or `L3`. `L1` also needs `verified.job`. | The fold only copies it; the lead reads it. |
 | `verified.pass` | The outcome of the check: a boolean, or one of `pass` or `unsure`. | The lead. |
@@ -87,7 +90,8 @@ A result does not accept or reject a Job: control posts do that
 | `decisions_needed` | Questions only a person or the lead can answer, one string each. | The fold: a non-empty list sets the Job's `NeedsLead` flag (`fold.go:359`, `:361`), and the orchestrator does not widen the plan while it is set (`events.go:148`). |
 | `knowledge` | Facts worth keeping for the project, one string each. | A person and the brain keeper. The fold does not read it. |
 
-Three enums sit in the body. `acceptance.state` takes `met`, `not met` or `dropped`.
+Five enums sit in the body. `acceptance.state` takes `met`, `not met`, `dropped` or
+`waiting`. `acceptance.waits_on.kind` takes `job`, `landed`, `question` or `permission`.
 `verified.level` takes `L1`, `L2` or `L3`. `verified.by` takes `sonnet` or
 `grid-reviewer`. `verified.pass` takes a boolean, or `pass` or `unsure`.
 

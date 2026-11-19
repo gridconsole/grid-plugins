@@ -59,8 +59,31 @@
                             "pending",
                             "met",
                             "not met",
-                            "dropped"
+                            "dropped",
+                            "waiting"
                           ]
+                        },
+                        "waits_on": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "enum": [
+                                "job",
+                                "landed",
+                                "question",
+                                "permission"
+                              ]
+                            },
+                            "ref": {
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "ref"
+                          ],
+                          "type": "object"
                         }
                       },
                       "required": [
