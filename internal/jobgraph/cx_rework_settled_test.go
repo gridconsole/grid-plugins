@@ -40,6 +40,21 @@ func TestCxDecidedReworkSettlesTheEdge(t *testing.T) {
 	})
 }
 
+// The decision Job re-planned: it cancelled J-4 and posted J-5, which continues
+// it. The edge on J-4 meets through J-5 as reworkDone walks a cancelled rework.
+func TestCxCancelledReplacedTargetFollowsItsReplacement(t *testing.T) {
+	running := m1Plan(m1Rework("J-4", "J-2", "J-2.1"), m1Review("J-2.2", "J-4"), stPerson("J-2.3", "J-2.2"), stDecision("J-2.4", "J-2.2"),
+		job.Job{ID: "J-5", Role: "builder", After: []Edge{{Job: "J-1"}}, Continues: m1Ptr("J-4"), DiscoveredFrom: m1Ptr("J-2.4")})
+	reviewed := append(append([]job.Job{}, running...), m1Review("J-2.5", "J-5"))
+	base := []string{"J-2", "rejected", "J-2.1", "accepted", "J-4", "cancelled", "J-2.2", "accepted", "J-2.3", "cancelled", "J-2.4", "accepted"}
+	stRun(t, "J-4", []m1Case{
+		{"replacement running", running, m1Status(append(base, "J-5", "running")...), "waiting for J-5, which reworks J-4, to be accepted"},
+		{"replacement accepted, its review running", reviewed, m1Status(append(base, "J-5", "accepted", "J-2.5", "running")...), "waiting for all children of J-5 to be accepted"},
+		{"replacement and its review accepted", reviewed, m1Status(append(base, "J-5", "accepted", "J-2.5", "accepted")...), ""},
+		{"no replacement", m1Plan(m1Rework("J-4", "J-2", "J-2.1"), m1Review("J-2.2", "J-4")), m1Status("J-2", "rejected", "J-2.1", "accepted", "J-4", "cancelled", "J-2.2", "accepted"), "waiting for J-4 to be accepted, but it was cancelled"},
+	})
+}
+
 // An approval is the person Job accepted (orchestrator personAnswers), so a
 // cancelled approve card holds the edge unless a decision Job replaced it and is
 // accepted: judge.Migrate replaces only a person Job titled "Decide how ...".

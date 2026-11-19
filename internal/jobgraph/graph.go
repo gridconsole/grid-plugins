@@ -288,7 +288,11 @@ func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 	switch status := s.Jobs[target].Status; status {
 	case contract.Accepted:
 	case contract.Cancelled:
-		return false, "waiting for " + target + " to be accepted, but it was cancelled"
+		// A cancelled target that another Job continues was replaced by it, as a cancelled rework is in reworkDone.
+		if len(g.reworksOf(target, map[string]bool{target: true})) == 0 {
+			return false, "waiting for " + target + " to be accepted, but it was cancelled"
+		}
+		return g.reworkDone(s, target, map[string]bool{target: true})
 	case contract.Rejected:
 		return g.reworkDone(s, target, map[string]bool{target: true})
 	default:
