@@ -158,8 +158,8 @@ func landArmed(env Env, dir string) bool {
 
 // conflictReopenedShipJob is the ship Job an earlier version put back with its person
 // after a land that stopped on a merge conflict or on its rebase: a posted ship Job
-// whose reason says "land failed:" with a conflict or a rebase. A deploy command's own
-// failure is not it.
+// whose reopening says "land failed:" with a conflict or a rebase. A deploy command's
+// own failure is not it.
 func conflictReopenedShipJob(snap orchestrator.Snapshot) string {
 	found := ""
 	for _, it := range snap.Items {
@@ -167,7 +167,7 @@ func conflictReopenedShipJob(snap orchestrator.Snapshot) string {
 		if j == nil || j.Status != contract.Posted || !isShipJob(it) {
 			continue
 		}
-		reason, ok := strings.CutPrefix(j.Reason, "land failed: ")
+		reason, ok := strings.CutPrefix(reopeningReason(snap, it.ID), "land failed: ")
 		if !ok || strings.Contains(reason, "grid land exited") || strings.Contains(reason, "grid land timed out") {
 			continue
 		}
@@ -176,6 +176,22 @@ func conflictReopenedShipJob(snap orchestrator.Snapshot) string {
 		}
 	}
 	return found
+}
+
+// reopeningReason is the reason of the newest control that set the Job id posted again
+// (reopenShipJob). The Job's own reason is not it: the tick that follows writes "waiting
+// for <person>" over it, so the card is told from the Feed's records.
+func reopeningReason(snap orchestrator.Snapshot, id string) string {
+	reason, latest := "", ""
+	for _, r := range snap.Records {
+		if r.Type != "control" || r.Body["target"] != id || r.Body["status"] != string(contract.Posted) || r.ID <= latest {
+			continue
+		}
+		if text, ok := r.Body["reason"].(string); ok {
+			reason, latest = text, r.ID
+		}
+	}
+	return reason
 }
 
 // reacceptShipJob takes back the reopening of the ship Job job, which an earlier

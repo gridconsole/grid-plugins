@@ -146,7 +146,7 @@ func postRebaseJob(env Env, store feed.Store, w feed.Writer, c *mergeConflictErr
 		id := nextJobID(snap)
 		body := rebaseJobBody(id, c, rebaseVerify(snap.Items, c))
 		if head := lastRebaseHead(snap.Items); again && head != "" {
-			reworkRebaseJob(body, c, head, snap.State.Jobs[head])
+			reworkRebaseJob(body, c, head, snap)
 		}
 		data, err := json.Marshal(body)
 		if err != nil {
@@ -174,8 +174,12 @@ func postRebaseJob(env Env, store feed.Store, w feed.Writer, c *mergeConflictErr
 }
 
 // reworkRebaseJob makes body, a rebase Job, the rework of the rebase Job head, whose
-// branch still conflicts with the target at the commit the last rebase was made on.
-func reworkRebaseJob(body map[string]any, c *mergeConflictError, head string, prev *contract.Job) {
+// branch still conflicts with the target at the commit the last rebase was made on. It
+// is a rework as the Judge makes one: it continues head and is discovered from the
+// newest review of head, so the Judge counts the review rounds over the whole chain
+// (judge.State.roundsOf) and its limit for a Job that keeps failing review ends the
+// chain, not a counter of ours.
+func reworkRebaseJob(body map[string]any, c *mergeConflictError, head string, snap orchestrator.Snapshot) {
 	rows, _ := body["acceptance"].([]any)
 	tip := c.TargetSHA
 	if len(tip) > 12 {
@@ -183,9 +187,62 @@ func reworkRebaseJob(body map[string]any, c *mergeConflictError, head string, pr
 	}
 	body["acceptance"] = append(rows, map[string]any{"id": "A3", "traces": "item", "text": fmt.Sprintf("Must-fix from the land: after rebase Job %s, %s still conflicts in %s with %s at %s, and %s has not moved since that rebase. Rebase %s on %s again and check that it merges into %s with no conflict before you finish.", head, c.Branch, strings.Join(c.Files, ", "), c.Target, tip, c.Target, c.Branch, c.Target, c.Target)})
 	body["continues"] = head
-	if prev != nil {
-		body["review_rounds"] = prev.ReviewRounds + 1
+	if reviews := rebaseReviews(snap, head); len(reviews) > 0 {
+		body["discovered_from"] = reviews[len(reviews)-1]
 	}
+	body["review_rounds"] = rebaseRounds(snap, head)
+}
+
+// isReviewJob reports whether it is a review Job: a reviewer or a checker, as the Judge
+// reads one (judge.isReviewer).
+func isReviewJob(it job.Job) bool {
+	role := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(it.Role)), "grid-")
+	return role == "reviewer" || role == "checker"
+}
+
+// rebaseReviews is the review Jobs of the Job id, oldest first, as the Judge reads them
+// (judge.State.reviewsOf): reviews discovered from it or posted after it, except one that
+// still waits on it.
+func rebaseReviews(snap orchestrator.Snapshot, id string) []string {
+	var out []string
+	for _, it := range snap.Items {
+		st := snap.State.Jobs[it.ID]
+		if !isReviewJob(it) || it.ID == id || st == nil {
+			continue
+		}
+		waits := slices.ContainsFunc(it.After, func(d job.Dependency) bool { return d.Job == id })
+		if waits && (st.Status == contract.Posted || st.Status == contract.Ready) {
+			continue
+		}
+		if waits || it.DiscoveredFrom != nil && *it.DiscoveredFrom == id {
+			out = append(out, it.ID)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// rebaseRounds is the review rounds over the chain of the Job head, as the Judge counts
+// them (judge.State.roundsOf): the reviews of head and of each Job it continues, for as
+// long as the Job was discovered from a review.
+func rebaseRounds(snap orchestrator.Snapshot, head string) int {
+	byID := map[string]job.Job{}
+	for _, it := range snap.Items {
+		if _, ok := byID[it.ID]; !ok {
+			byID[it.ID] = it
+		}
+	}
+	n := 0
+	for id, seen := head, map[string]bool{}; id != "" && !seen[id]; {
+		seen[id] = true
+		n += len(rebaseReviews(snap, id))
+		it := byID[id]
+		if it.DiscoveredFrom == nil || it.Continues == nil || !isReviewJob(byID[*it.DiscoveredFrom]) {
+			break
+		}
+		id = *it.Continues
+	}
+	return n
 }
 
 // queueRebase answers a land that stopped on the merge conflict c: it posts the

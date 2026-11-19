@@ -14,6 +14,7 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/judge"
 	"github.com/gridconsole/grid-plugins/internal/land"
 	"github.com/gridconsole/grid-plugins/internal/lease"
 	"github.com/gridconsole/grid-plugins/internal/orchestrator"
@@ -117,10 +118,31 @@ func landGrants(t *testing.T, store feed.Store, id string) []feed.Entry {
 	return out
 }
 
+// postReview posts the review Job the Judge posts for the builder Job of: a reviewer
+// discovered from it. It returns the review's id.
+func postReview(t *testing.T, env Env, store feed.Store, of string) string {
+	t.Helper()
+	snap, err := orchestrator.Load(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := nextJobID(snap)
+	body := rebaseJobBody(id, &mergeConflictError{Branch: "lane", Target: "main", Files: []string{"a.txt"}}, map[string]any{"kind": "file-exists", "path": "a.txt"})
+	body["role"], body["title"], body["discovered_from"] = "reviewer", "Review "+of, of
+	w, err := taskJobWriter(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orchestrator.Write(store, w, feed.Input{Type: "job", Job: id, Body: body}); err != nil {
+		t.Fatalf("post review %s: %v", id, err)
+	}
+	return id
+}
+
 // A rebase Job is accepted but main did not move and its branch still conflicts: the same
-// conflict is that Job's failure, so the next Job continues it (a rework the Judge
-// reviews) and is not a new try; the person is not asked, and once the rework is
-// accepted the task lands.
+// conflict is that Job's failure, so the next Job continues it (a rework, discovered from
+// the review of the Job, which the Judge counts as one more round of the chain) and is not
+// a new try; the person is not asked, and once the rework is accepted the task lands.
 func TestShipConflictWithMainUnmovedPostsAReworkOfTheRebaseJob(t *testing.T) {
 	env, dir, repo, _, store, stderr := shipMergeFixture(t, false, true)
 	landFirst(t, repo)
@@ -128,39 +150,57 @@ func TestShipConflictWithMainUnmovedPostsAReworkOfTheRebaseJob(t *testing.T) {
 	if code := Run([]string{"approve", "T-01"}, env); code != 0 {
 		t.Fatalf("approve: %d %s", code, stderr)
 	}
-	rebases, _ := rebaseJobs(t, store)
-	if len(rebases) != 1 {
-		t.Fatalf("%d rebase Jobs after the conflict, want 1; stderr %s", len(rebases), stderr)
-	}
-	// The builder left a branch that is the delivered one again: it conflicts with the same main.
 	fid, _, err := task.FeedIdentity(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	shipGit(t, repo, "branch", "grid-"+fid+"-"+rebases[0].ID+"-a1", "lane")
-	setJobStatus(t, env, store, rebases[0].ID, contract.Accepted, "resolved")
-	landAfterShip(env, dir, landOwner)
-
+	// Each builder leaves a branch that is the delivered one again: it conflicts with the same main.
+	var reviews []string
+	var rebases []job.Job
+	for try := 0; try < 2; try++ {
+		rebases = rebases2(t, store)
+		if len(rebases) != try+1 {
+			t.Fatalf("%d rebase Jobs on try %d, want %d; stderr %s; history:\n%s", len(rebases), try+1, try+1, stderr, shipHistory(t, dir))
+		}
+		reviews = append(reviews, postReview(t, env, store, rebases[try].ID))
+		shipGit(t, repo, "branch", "grid-"+fid+"-"+rebases[try].ID+"-a1", "lane")
+		setJobStatus(t, env, store, rebases[try].ID, contract.Accepted, "resolved")
+		landAfterShip(env, dir, landOwner)
+	}
 	rebases, snap := rebaseJobs(t, store)
-	if len(rebases) != 2 || len(rebaseRoots(snap.Items)) != 1 {
-		t.Fatalf("%d rebase Jobs, %d roots after the same conflict, want a rework of the first and no new root; stderr %s; history:\n%s", len(rebases), len(rebaseRoots(snap.Items)), stderr, shipHistory(t, dir))
+	if len(rebases) != 3 || len(rebaseRoots(snap.Items)) != 1 {
+		t.Fatalf("%d rebase Jobs, %d roots after the same conflict twice, want two reworks and no new root; stderr %s; history:\n%s", len(rebases), len(rebaseRoots(snap.Items)), stderr, shipHistory(t, dir))
 	}
-	if c := rebases[1].Continues; c == nil || *c != rebases[0].ID {
-		t.Fatalf("the second rebase Job continues %v, want %s", c, rebases[0].ID)
-	}
-	if rebases[1].ReviewRounds != 1 {
-		t.Fatalf("the rework has review_rounds %d, want 1", rebases[1].ReviewRounds)
+	for i := 1; i < 3; i++ {
+		r := rebases[i]
+		if r.Continues == nil || *r.Continues != rebases[i-1].ID || r.DiscoveredFrom == nil || *r.DiscoveredFrom != reviews[i-1] {
+			t.Fatalf("rework %s continues %v, discovered from %v; want %s and the review %s", r.ID, r.Continues, r.DiscoveredFrom, rebases[i-1].ID, reviews[i-1])
+		}
+		if r.ReviewRounds != i {
+			t.Fatalf("rework %s has review_rounds %d, want %d: the rounds of its chain", r.ID, r.ReviewRounds, i)
+		}
 	}
 	noPersonJob(t, store, ship.ID, stderr)
 
-	// A pass while the rework is out posts nothing more.
-	landAfterShip(env, dir, landOwner)
-	if again, _ := rebaseJobs(t, store); len(again) != 2 {
-		t.Fatalf("%d rebase Jobs after another pass, want 2", len(again))
+	// The Judge counts the reworks as one chain: the review of the last holds every round.
+	last := postReview(t, env, store, rebases[2].ID)
+	snap, err = orchestrator.Load(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := judge.Verdict(judge.State{Task: store.TaskID, Jobs: snap.State.Jobs, Bodies: snap.Bodies, Records: snap.Records, IDs: snap.JobIDs}, last)
+	if err != nil || rep.Reviewed != rebases[2].ID || rep.RoundsUsed != 3 {
+		t.Fatalf("the Judge reads review %s as of %s in round %d (%v), want %s and round 3", last, rep.Reviewed, rep.RoundsUsed, err, rebases[2].ID)
 	}
 
-	rebaseBuilder(t, dir, repo, rebases[1].ID, "lane")
-	setJobStatus(t, env, store, rebases[1].ID, contract.Accepted, "resolved")
+	// A pass while the last rework is out posts nothing more.
+	landAfterShip(env, dir, landOwner)
+	if again, _ := rebaseJobs(t, store); len(again) != 3 {
+		t.Fatalf("%d rebase Jobs after another pass, want 3", len(again))
+	}
+
+	rebaseBuilder(t, dir, repo, rebases[2].ID, "lane")
+	setJobStatus(t, env, store, rebases[2].ID, contract.Accepted, "resolved")
 	landAfterShip(env, dir, landOwner)
 	if rec, err := task.Read(dir); err != nil || rec.State != "closed" {
 		t.Fatalf("task state %q %v after the rework was accepted, want closed; stderr %s; history:\n%s", rec.State, err, stderr, shipHistory(t, dir))
@@ -401,6 +441,88 @@ func TestShipReopenedCardOfAnEarlierVersionLandsWithoutThePerson(t *testing.T) {
 		t.Fatalf("task state %q %v after the third rebase, want closed; stderr %s; history:\n%s", rec.State, err, stderr, shipHistory(t, dir))
 	}
 	shipGit(t, repo, "merge-base", "--is-ancestor", laneSHA, "main")
+}
+
+// The card of the pickup-test kind reaches the holder's pass the way the real one did: a
+// person's answer with no lease, accepted by the holder's tick, landed from the stream. The
+// earlier version put it back with its person under the stream's own writer; the next
+// pass takes it back under that writer too, and the approval it carries lands the task.
+func TestShipReopenedCardIsTakenBackByTheHoldersPass(t *testing.T) {
+	env, dir, repo, _, store, stderr := shipMergeFixture(t, false, true)
+	landFirst(t, repo)
+	ship, _ := openApproveJob(t, store)
+	person := env
+	person.Getenv = func(key string) string {
+		switch key {
+		case "GRID_MEMBER":
+			return "dana"
+		case "PATH", "HOME":
+			return os.Getenv(key)
+		}
+		return ""
+	}
+	if code := Run([]string{"approve", "T-01"}, person); code != 0 {
+		t.Fatalf("unleased approve: %d %s", code, stderr)
+	}
+	freeTaskLease(t, store)
+
+	worker := env
+	worker.Getenv = func(key string) string {
+		switch key {
+		case "GRID_MEMBER":
+			return "dana"
+		case "GRID_ROLE":
+			return "member"
+		case "PATH", "HOME":
+			return os.Getenv(key)
+		}
+		return ""
+	}
+	pid, start := taskLeaseIdentity(t)
+	var out, diag bytes.Buffer
+	s := workerStream(worker, "dana", env.Machine, "member", pid, start, &out, &diag)
+	fs := feed.Store{TaskDir: dir, TaskID: store.TaskID, Warn: stderr}
+	text := "main moved again and the work still conflicts in a.txt after 2 rebase tries; approve again to retry the land"
+	landed := s.Ticked
+	s.Ticked = func(d string, w feed.Writer) {
+		landed(d, w) // the tick accepted the answer; the land conflicts and queues the rebase
+		rebases, _ := rebaseJobs(t, store)
+		if len(rebases) != 1 {
+			t.Errorf("%d rebase Jobs after the first land, want 1", len(rebases))
+			return
+		}
+		// What the earlier version left: its tries used, the card back with the person.
+		body := map[string]any{"target": rebases[0].ID, "status": string(contract.Cancelled), "reason": "done", "close_reason": "done"}
+		if _, err := orchestrator.Write(fs, w, feed.Input{Type: "control", Body: body}); err != nil {
+			t.Errorf("cancel: %v", err)
+			return
+		}
+		reopenShipJob(worker, fs, w, land.Store{Resolver: resolver(worker), Project: "sample"}, "T-01", ship.ID, text)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := s.Pass(ctx); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := orchestrator.Load(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st := snap.State.Jobs[ship.ID]; st == nil || st.Status != contract.Posted || !strings.Contains(st.Reason, "after 2 rebase tries") {
+		t.Fatalf("the card is %+v, want the earlier version's open card; stderr %s; diag %s", st, stderr, &diag)
+	}
+
+	s.Ticked = landed // the next tick, with the code as it is now
+	if err := s.Pass(ctx); err != nil {
+		t.Fatal(err)
+	}
+	noPersonJob(t, store, ship.ID, stderr)
+	if again, _ := rebaseJobs(t, store); len(again) != 2 {
+		t.Fatalf("%d rebase Jobs after the pass took the card back, want 2; stderr %s; diag %s; history:\n%s", len(again), stderr, &diag, shipHistory(t, dir))
+	}
+	if n := len(landGrants(t, store, ship.ID)); n != 2 {
+		t.Fatalf("%d accepting controls on the ship Job, want the tick's and the one that takes the card back", n)
+	}
 }
 
 // A ship Job put back after a deploy command failed is not taken back: that failure is a
