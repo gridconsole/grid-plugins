@@ -56,20 +56,19 @@ func jhReleased(t *testing.T, snap Snapshot, now time.Time) (bool, []string) {
 	return slices.Contains(r.Ready, "J-2"), why
 }
 
-// jhHeldFixture posts J-1 and J-2, and counts the Jobs the Feed holds, so a test
-// can say no Job was posted while the hold was read and released.
-func jhHeldFixture(t *testing.T) (*fixture, int) {
+// jhHeldFixture posts J-1 and J-2.
+func jhHeldFixture(t *testing.T) *fixture {
 	t.Helper()
 	f := setup(t)
 	f.job(t, "J-1", nil)
 	f.job(t, "J-2", nil)
-	return f, jhPosts(t, f, "job")
+	return f
 }
 
-// A Job held on another Job is offered again once that Job is accepted, with no
-// Job posted for a person.
+// A Job held on another Job is offered again once that Job is accepted. Ready
+// only reads; what the tick does with a released hold is not run here.
 func TestHoldReadyReleasesWhenJobAccepted(t *testing.T) {
-	f, jobs := jhHeldFixture(t)
+	f := jhHeldFixture(t)
 	wait := contract.HeldWait{Row: "A2", Kind: contract.WaitJob, Ref: "J-1"}
 	if released, why := jhReleased(t, jhSnapshot(t, f, contract.Held, wait), f.now); released || len(why) != 1 {
 		t.Fatalf("J-1 not accepted: released %v waits %v, want held on one wait", released, why)
@@ -80,15 +79,12 @@ func TestHoldReadyReleasesWhenJobAccepted(t *testing.T) {
 	if released, why := jhReleased(t, jhSnapshot(t, f, contract.Held, wait), f.now); !released || len(why) != 0 {
 		t.Fatalf("J-1 accepted: released %v waits %v, want released", released, why)
 	}
-	if got := jhPosts(t, f, "job"); got != jobs {
-		t.Fatalf("%d Jobs on the Feed, want %d: a release must post no Job", got, jobs)
-	}
 }
 
 // A Job held on a landing is offered again once a counted landed post names the
 // Job it waits on; its accept alone does not.
 func TestHoldReadyReleasesWhenLanded(t *testing.T) {
-	f, jobs := jhHeldFixture(t)
+	f := jhHeldFixture(t)
 	wait := contract.HeldWait{Row: "A2", Kind: contract.WaitLanded, Ref: "J-1"}
 	if err := f.s.control(f.state(t), contract.Accepted, "accepted", ""); err != nil {
 		t.Fatal(err)
@@ -101,14 +97,11 @@ func TestHoldReadyReleasesWhenLanded(t *testing.T) {
 	if released, why := jhReleased(t, jhSnapshot(t, f, contract.Held, wait), f.now); !released || len(why) != 0 {
 		t.Fatalf("J-1 landed: released %v waits %v, want released", released, why)
 	}
-	if got := jhPosts(t, f, "job"); got != jobs {
-		t.Fatalf("%d Jobs on the Feed, want %d: a release must post no Job", got, jobs)
-	}
 }
 
 // A Job held on a question is offered again once the person answers it.
 func TestHoldReadyReleasesWhenQuestionAnswered(t *testing.T) {
-	f, jobs := jhHeldFixture(t)
+	f := jhHeldFixture(t)
 	wait := contract.HeldWait{Row: "A4", Kind: contract.WaitQuestion, Ref: "Q-1"}
 	q := f.post(t, feed.Input{Type: "question", Body: map[string]any{"question": "Which way?", "who": "owner", "gate": map[string]any{"id": "Q-1", "kind": "person"}}}, f.s.Writer)
 	if released, why := jhReleased(t, jhSnapshot(t, f, contract.Held, wait), f.now); released || len(why) != 1 {
@@ -118,16 +111,13 @@ func TestHoldReadyReleasesWhenQuestionAnswered(t *testing.T) {
 	if released, why := jhReleased(t, jhSnapshot(t, f, contract.Held, wait), f.now); !released || len(why) != 0 {
 		t.Fatalf("question answered: released %v waits %v, want released", released, why)
 	}
-	if got := jhPosts(t, f, "job"); got != jobs {
-		t.Fatalf("%d Jobs on the Feed, want %d: a release must post no Job", got, jobs)
-	}
 }
 
 // A Blocked Job that waits on a permission is offered again once the approval of
 // its blocked post is in the snapshot. Load fills no approval yet, so on a real
 // Feed such a Job stays Blocked until the tick can assign with the approved rules.
 func TestHoldReadyReleasesWhenPermissionGranted(t *testing.T) {
-	f, jobs := jhHeldFixture(t)
+	f := jhHeldFixture(t)
 	wait := contract.HeldWait{Row: "A5", Kind: contract.WaitPermission, Ref: "01HBLOCKEDPOST"}
 	snap := jhSnapshot(t, f, contract.Blocked, wait)
 	if released, why := jhReleased(t, snap, f.now); released || len(why) != 0 {
@@ -137,8 +127,56 @@ func TestHoldReadyReleasesWhenPermissionGranted(t *testing.T) {
 	if released, _ := jhReleased(t, snap, f.now); !released {
 		t.Fatal("not released when the blocked post is approved")
 	}
-	if got := jhPosts(t, f, "job"); got != jobs {
-		t.Fatalf("%d Jobs on the Feed, want %d: a release must post no Job", got, jobs)
+}
+
+// A Blocked Job whose result has a row waiting on a permission, posted on a real
+// Feed with no in-memory change, folds with that wait. The tick then posts no
+// control and no Job over it, Ready neither offers nor lists it, and the tree shows
+// the wait as not met. The approval is set on the snapshot by hand, because Load
+// fills none.
+func TestHoldBlockedPermissionJobKeepsItsWaitThroughTheTick(t *testing.T) {
+	f := b2Started(t)
+	launcher := b2Writer(f) // taken before the ack puts the worker's fence on f.worker
+	f.ack(t)
+	j := f.state(t)
+	blocked := f.post(t, feed.Input{Type: "blocked", Job: j.ID, Attempt: j.Attempt, Body: map[string]any{"need": "permission", "rule": "Bash(make deploy-prod)", "command": "make deploy-prod"}}, f.worker)
+	body := resultBody()
+	body["acceptance"] = []any{map[string]any{"id": "A1", "state": "waiting", "waits_on": map[string]any{"kind": contract.WaitPermission, "ref": blocked.ID}}}
+	if _, err := Write(f.s.Feed, f.worker, feed.Input{Type: "result", Job: j.ID, Attempt: j.Attempt, Body: body}); err != nil {
+		t.Fatal(err)
+	}
+	f.post(t, feed.Input{Type: "exit", Job: j.ID, Attempt: j.Attempt, Body: map[string]any{"reason": "done", "code": 0}}, launcher)
+	want := contract.HeldWait{Row: "A1", Kind: contract.WaitPermission, Ref: blocked.ID}
+	if got := f.state(t); got.Status != contract.Blocked || len(got.WaitsOn) != 1 || got.WaitsOn[0] != want {
+		t.Fatalf("Job = %s waits %+v, want blocked on %+v", got.Status, got.WaitsOn, want)
+	}
+	controls, jobs := b2Controls(t, f), jhPosts(t, f, "job")
+	f.tick(t)
+	if b2Controls(t, f) != controls || jhPosts(t, f, "job") != jobs {
+		t.Fatal("the tick posted a control or a Job over a Blocked Job that waits on a permission")
+	}
+	snap, err := Load(f.s.Feed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := Ready(snap, f.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(r.Ready, "J-1") || len(r.Waiting) != 0 {
+		t.Fatalf("Ready = %v waiting %+v, want the Blocked Job neither offered nor listed", r.Ready, r.Waiting)
+	}
+	if holds := r.Holds["J-1"]; len(holds) != 1 || holds[0].Met == nil || *holds[0].Met {
+		t.Fatalf("Holds = %+v, want the permission wait not met", holds)
+	}
+	for _, row := range TreeAt(snap, f.now) {
+		if row.ID == "J-1" && (len(row.WaitsOn) != 1 || row.WaitsOn[0].Ref != blocked.ID || row.WaitsOn[0].Met == nil || *row.WaitsOn[0].Met) {
+			t.Fatalf("tree waits %+v, want the permission wait not met", row.WaitsOn)
+		}
+	}
+	snap.Approved = map[string]bool{blocked.ID: true}
+	if r, err = Ready(snap, f.now); err != nil || !slices.Contains(r.Ready, "J-1") {
+		t.Fatalf("Ready = %v err %v, want J-1 offered once its blocked post is approved", r.Ready, err)
 	}
 }
 
@@ -146,7 +184,7 @@ func TestHoldReadyReleasesWhenPermissionGranted(t *testing.T) {
 // and reports no orphan for it: not never_picked_up, not dead_wait, even when the
 // Job it waits on was rejected and nothing will release it by itself.
 func TestHoldTreeShowsHeldOnItsWaitWithNoOrphan(t *testing.T) {
-	f, _ := jhHeldFixture(t)
+	f := jhHeldFixture(t)
 	wait := contract.HeldWait{Row: "A2", Kind: contract.WaitLanded, Ref: "J-1"}
 	later := f.now.Add(1000 * time.Hour)
 	for name, target := range map[string]contract.Status{"live target": "", "rejected target": contract.Rejected, "cancelled target": contract.Cancelled} {
