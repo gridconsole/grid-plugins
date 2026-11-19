@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,11 +29,21 @@ func isRebaseJob(it job.Job) bool {
 	return !it.IsPerson() && strings.HasPrefix(strings.TrimSpace(it.Title), rebaseTitle)
 }
 
+// byJobNumber is items in the order the Feed posted them, by the number of their J-<n> ids.
+// orchestrator.Load lists them by id as text, which puts J-10 before J-9.
+func byJobNumber(items []job.Job) []job.Job {
+	out := slices.Clone(items)
+	slices.SortStableFunc(out, func(a, b job.Job) int {
+		return cmp.Or(cmp.Compare(reopenJobNumber(a.ID), reopenJobNumber(b.ID)), strings.Compare(a.ID, b.ID))
+	})
+	return out
+}
+
 // rebaseRoots is the id of each rebase Job that is not a rework, in Feed order: one
 // per time the target moved under the delivered branch.
 func rebaseRoots(items []job.Job) []string {
 	var roots []string
-	for _, it := range items {
+	for _, it := range byJobNumber(items) {
 		if isRebaseJob(it) && (it.Continues == nil || *it.Continues == "") && !slices.Contains(roots, it.ID) {
 			roots = append(roots, it.ID)
 		}
@@ -44,7 +55,7 @@ func rebaseRoots(items []job.Job) []string {
 // Job itself, or the last rework that continues it, and theirs in turn.
 func rebaseHead(items []job.Job, root string) string {
 	next := map[string]string{}
-	for _, it := range items {
+	for _, it := range byJobNumber(items) {
 		if it.Continues != nil && *it.Continues != "" {
 			next[*it.Continues] = it.ID
 		}
@@ -136,24 +147,29 @@ func rebaseJobBody(id string, c *mergeConflictError, verify map[string]any) map[
 // has not moved since the last rebase Job was queued: the conflict is then the last
 // Job's own failure, so the Job posted is a rework of it (it continues it, with the
 // conflict as one more acceptance row), which the Judge reviews as it does any rework.
-func postRebaseJob(env Env, store feed.Store, w feed.Writer, c *mergeConflictError, again bool) (string, error) {
+// When that last Job ended in the Judge's hands (rebaseJudged) nothing is posted: posted
+// is false and id is that Job, which the Judge's decision path continues or ends.
+func postRebaseJob(env Env, store feed.Store, w feed.Writer, c *mergeConflictError, again bool) (id string, posted bool, err error) {
 	for try := 0; try < 3; try++ {
 		snap, err := orchestrator.Load(store)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		count := rebaseCount(snap.Items)
 		id := nextJobID(snap)
 		body := rebaseJobBody(id, c, rebaseVerify(snap.Items, c))
 		if head := lastRebaseHead(snap.Items); again && head != "" {
+			if rebaseJudged(snap, head) {
+				return head, false, nil
+			}
 			reworkRebaseJob(body, c, head, snap)
 		}
 		data, err := json.Marshal(body)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		if err := contract.Validate("job-record", data); err != nil {
-			return "", err
+			return "", false, err
 		}
 		skipped := false
 		_, err = orchestrator.WriteUnless(store, w, feed.Input{Type: "job", Job: id, Body: body}, func() bool {
@@ -164,13 +180,13 @@ func postRebaseJob(env Env, store feed.Store, w feed.Writer, c *mergeConflictErr
 			return skipped
 		})
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		if !skipped {
-			return id, nil
+			return id, true, nil
 		}
 	}
-	return "", errors.New("the Feed changed while the Job was being posted")
+	return "", false, errors.New("the Feed changed while the Job was being posted")
 }
 
 // reworkRebaseJob makes body, a rebase Job, the rework of the rebase Job head, whose
@@ -254,7 +270,9 @@ func rebaseRounds(snap orchestrator.Snapshot, head string) int {
 // What ends a chain of rebase Jobs is that the target has moved: a conflict with the
 // target at the commit the last rebase Job was queued on is that Job's own failure,
 // and gets a rework of it, not a new try; a new try needs the target to have moved
-// under it, which another task's land does, and the tasks are finite.
+// under it, which another task's land does, and the tasks are finite. A last Job the
+// Judge owns (rebaseJudged) gets no rework from the land: the approval waits for the
+// Judge's decision path, and for the target to move.
 func queueRebase(env Env, fs feed.Store, w feed.Writer, store land.Store, id, ship string, c *mergeConflictError) (queued bool) {
 	if w.Lease != "task" {
 		fmt.Fprintf(env.Stderr, "land: %s: %s conflicts with %s in %s; no task lease to post the rebase Job, the next pass retries\n", ship, c.Branch, c.Target, strings.Join(c.Files, ", "))
@@ -262,26 +280,63 @@ func queueRebase(env Env, fs feed.Store, w feed.Writer, store land.Store, id, sh
 	}
 	_, tip, _ := store.RebaseTip(env.Cwd, id, ship)
 	again := tip != "" && strings.HasPrefix(c.TargetSHA, tip)
-	rebase, err := postRebaseJob(env, fs, w, c, again)
+	rebase, posted, err := postRebaseJob(env, fs, w, c, again)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "land: %s: the rebase Job was not posted, the next pass retries: %s\n", ship, oneLineErr(err))
 		return false
 	}
-	refoldAfterWrite(env, fs)
+	if posted {
+		refoldAfterWrite(env, fs)
+	}
 	if err := store.RebaseQueued(env.Cwd, id, ship, rebase, c.TargetSHA); err != nil {
 		fmt.Fprintf(env.Stderr, "land: %s: rebase Job %s posted, but its history line failed: %s\n", ship, rebase, oneLineErr(err))
 		return false
+	}
+	if !posted {
+		fmt.Fprintf(env.Stderr, "land: %s: %s conflicts with %s in %s; the Judge has rebase Job %s, the approval waits for its decision\n", ship, c.Branch, c.Target, strings.Join(c.Files, ", "), rebase)
+		return true
 	}
 	fmt.Fprintf(env.Stderr, "land: %s: %s conflicts with %s in %s; rebase Job %s posted, the approval stands\n", ship, c.Branch, c.Target, strings.Join(c.Files, ", "), rebase)
 	return true
 }
 
+// rebaseJudged reports whether the Judge's decision path owns the closed rebase Job
+// head: it was rejected, or it was cancelled after it ran, after a review of it or with a
+// decision Job raised for it. The Judge continues that chain with a rework or ends it, so
+// the land posts nothing on top of it; a Job cancelled before it ran, with no review and
+// no decision, is not the Judge's (rebaseStep retries it), and an open or accepted one is
+// not closed in the Judge's hands.
+func rebaseJudged(snap orchestrator.Snapshot, head string) bool {
+	st := snap.State.Jobs[head]
+	if st == nil {
+		return false
+	}
+	switch st.Status {
+	case contract.Rejected:
+		return true
+	case contract.Cancelled:
+		return len(st.Results) > 0 || len(rebaseReviews(snap, head)) > 0 || rebaseDecided(snap, head)
+	}
+	return false
+}
+
+// rebaseDecided reports whether a decision Job ("Decide how ... continues", the Judge's
+// judge.Person) was raised from the rebase Job head or from a review of it.
+func rebaseDecided(snap orchestrator.Snapshot, head string) bool {
+	from := append([]string{head}, rebaseReviews(snap, head)...)
+	return slices.ContainsFunc(snap.Items, func(it job.Job) bool {
+		return it.DiscoveredFrom != nil && slices.Contains(from, *it.DiscoveredFrom) && strings.HasPrefix(strings.TrimSpace(it.Title), "Decide how ")
+	})
+}
+
 // rebaseStep is a pass over a ship Job whose approval waits for its rebase Job. It
 // reports true when the pass is over: the rebase is still out, or it failed and the
 // land is armed to run again (land.Store.Retry), which finds the conflict again and
-// posts a rework of the failed Job or a new try; the person is not asked. It reports
-// false when the rebase Job is accepted and task.md names its branch, so land runs
-// again on the approval.
+// posts a rework of the failed Job; the person is not asked. Retry is only for a Job
+// cancelled before it ran: one the Judge owns (rebaseJudged) is left to its decision
+// path, and the approval waits until the target moves, when it reports false so the land
+// runs and posts a fresh rebase Job. It reports false too when the rebase Job is accepted
+// and task.md names its branch, so land runs again on the approval.
 func rebaseStep(env Env, store land.Store, who contract.Author, dir, proj, id, ship string, snap orchestrator.Snapshot) bool {
 	fail := func(text string) bool {
 		fmt.Fprintf(env.Stderr, "land: %s: %s; the land runs again on the next pass\n", ship, text)
@@ -301,10 +356,13 @@ func rebaseStep(env Env, store land.Store, who contract.Author, dir, proj, id, s
 	}
 	switch st.Status {
 	case contract.Accepted:
-	case contract.Cancelled:
-		return fail(fmt.Sprintf("rebasing the delivered branch failed: the rebase Job %s was cancelled", head))
-	case contract.Rejected:
-		return fail(fmt.Sprintf("rebasing the delivered branch failed: the rebase Job %s was rejected and no rework follows", head))
+	case contract.Cancelled, contract.Rejected:
+		if !rebaseJudged(snap, head) {
+			return fail(fmt.Sprintf("rebasing the delivered branch failed: the rebase Job %s was cancelled", head))
+		}
+		_, tip, _ := store.RebaseTip(env.Cwd, id, ship)
+		now, err := taskTargetTip(env, proj, id)
+		return err != nil || tip == "" || strings.HasPrefix(now, tip)
 	default:
 		return true
 	}
@@ -324,6 +382,28 @@ func rebaseStep(env Env, store land.Store, who contract.Author, dir, proj, id, s
 		return true
 	}
 	return false
+}
+
+// taskTargetTip is the commit the branch the task's delivered branch lands on points at
+// now, found as taskMerge finds it.
+func taskTargetTip(env Env, proj, id string) (string, error) {
+	res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: id, Project: proj})
+	if err != nil {
+		return "", err
+	}
+	branch, base, err := taskMergeKeys(res.TaskPath)
+	if err != nil {
+		return "", err
+	}
+	repo, err := taskMergeRepo(res, branch)
+	if err != nil {
+		return "", err
+	}
+	target := taskMergeTarget(repo, base)
+	if target == "" {
+		return "", fmt.Errorf("no base branch for %s in %s", branch, repo)
+	}
+	return taskMergeGit(repo, "rev-parse", "refs/heads/"+target)
 }
 
 // rebasedBranch is the branch the worker made for the rebase Job head of the task:
