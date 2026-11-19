@@ -2,9 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,10 +15,13 @@ import (
 	"strings"
 
 	"github.com/gridconsole/grid-plugins/internal/contract"
+	"github.com/gridconsole/grid-plugins/internal/feed"
 	"github.com/gridconsole/grid-plugins/internal/gridhome"
 	"github.com/gridconsole/grid-plugins/internal/mdfile"
 	"github.com/gridconsole/grid-plugins/internal/migrate"
+	"github.com/gridconsole/grid-plugins/internal/orchestrator"
 	"github.com/gridconsole/grid-plugins/internal/plan"
+	"github.com/gridconsole/grid-plugins/internal/runner"
 	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
@@ -156,6 +161,20 @@ type mergeConflictError struct {
 	TargetSHA      string   // the commit Target pointed at when the merge stopped, "" when unread
 	Files          []string // the files that conflict
 	Changed        []string // every file the branch changed since it left Target, conflicting or not
+	Repo           string   // the repo a Job names for the checkout, "" in a project of one repo
+}
+
+// jobRepo is the repo a Job names for the checkout repo: its path in the project's
+// folder, and "" when the project has one repo, which a Job leaves out.
+func jobRepo(res where.Result, repo string) string {
+	if len(res.Repos) < 2 || res.Folder == "" {
+		return ""
+	}
+	rel, err := filepath.Rel(res.Folder, repo)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return ""
+	}
+	return filepath.ToSlash(rel)
 }
 
 func (e *mergeConflictError) Error() string {
@@ -186,37 +205,259 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	if n := taskMergeID.FindString(name); n != "" {
 		name = n
 	}
-	branch, base, err := taskMergeKeys(res.TaskPath)
+	branch, base, head, err := taskMergeHead(res.TaskPath)
 	if err != nil {
 		return "", err
 	}
-	if branch == "" {
-		return "", fmt.Errorf("task %s has no branch in task.md; run grid deliver in the task's checkout to record it, then run grid task merge again", name)
+	var missing *branchMissingError
+	var repoErr error
+	if branch != "" {
+		_, repoErr = taskMergeRepo(res, branch)
 	}
+	// The work is on task.md's branch, landed first when a repo here holds it, and on the
+	// branches of the task's accepted builder Jobs, landed after it in Feed order: a
+	// builder branch task.md's branch holds is in the base by then and lands nothing. A
+	// rebased branch of one of them lands with the rest, in its original's place.
+	present := branch != "" && !errors.As(repoErr, &missing)
+	built, rebased, noWrite, err := builderBranches(res.TaskPath)
+	if err != nil {
+		return "", err
+	}
+	merged := ""
+	if present {
+		if merged, _, err = taskMergeOne(res, name, branch, base); err != nil {
+			return "", err
+		}
+	}
+	// A builder Job with files to write made work this machine cannot land: the task waits.
+	writes := slices.ContainsFunc(built, func(b string) bool { return !slices.Contains(noWrite, b) })
+	if !present && writes && !hasCheckout(res) {
+		if res.Folder != "" {
+			return "", fmt.Errorf("project %s has no git repo on this machine; run grid task merge on the machine that has its checkout", res.Project)
+		}
+		return "", noFolderError(res.Project)
+	}
+	// A project with no git checkout here has no branch to land, as before builder branches.
+	if !present && (len(built) == 0 || branch == "" && !hasCheckout(res)) {
+		if branch == "" {
+			return "", noTaskBranchError(name)
+		}
+		return "", repoErr
+	}
+	// A branch no repo holds is passed over only when it is the branch of an accepted Job
+	// with no files to write, delivered with head at its base: any other may hold commits
+	// of its own.
+	if !present && branch != "" && (!slices.Contains(noWrite, branch) || head == "" || head != base) {
+		return "", repoErr
+	}
+	var skipped []string
+	for _, b := range built {
+		sha, landed, err := taskMergeOne(res, name, b, base)
+		var conflict *mergeConflictError
+		if errors.As(err, &conflict) {
+			if r := rebasedOf(res, b, rebased); r != "" {
+				sha, landed, err = taskMergeOne(res, name, r, base)
+			}
+		}
+		if noWork(err, b, noWrite) {
+			fmt.Fprintf(env.Stderr, "grid task merge: skipped %s: no repo of project %s holds it, and the accepted builder Job has no files to write, so it has nothing to land\n", b, res.Project)
+			skipped = append(skipped, b)
+			continue
+		}
+		// A builder Job with files to write whose branch is not here may hold work no other branch has: the task waits.
+		if errors.As(err, &missing) {
+			return "", fmt.Errorf("%w; it is the branch of builder Job %s, which has files to write, so the task waits until that branch is here", err, branchJob(b))
+		}
+		if err != nil {
+			return "", err
+		}
+		if landed {
+			merged = sha
+		}
+	}
+	// task.md names a branch no repo holds and no builder branch stands in for it.
+	if !present && branch != "" && len(skipped) == len(built) {
+		return "", repoErr
+	}
+	var notes []string
+	for _, b := range skipped {
+		notes = append(notes, fmt.Sprintf("grid task merge skipped %s: no repo of project %s holds it and its builder Job has no files to write", b, res.Project))
+	}
+	if !present && branch != "" {
+		fmt.Fprintf(env.Stderr, "grid task merge: passed over %s, the branch task.md names: no repo of project %s holds it, and its Job has no files to write, so it has nothing to land\n", branch, res.Project)
+		notes = append(notes, fmt.Sprintf("grid task merge passed over %s, the branch task.md names: no repo of project %s holds it and its Job has no files to write", branch, res.Project))
+	}
+	// The branches are landed by now, so a history line that fails is told on stderr only.
+	for _, line := range notes {
+		if err := noteOnce(env, res, name, line); err != nil {
+			fmt.Fprintf(env.Stderr, "grid task merge: %q is not in the task's history: %s\n", line, oneLineErr(err))
+		}
+	}
+	return merged, nil
+}
+
+// noteOnce writes line to the task's history unless an earlier merge of the task wrote it.
+func noteOnce(env Env, res where.Result, name, line string) error {
+	history, err := os.ReadFile(filepath.Join(res.TaskPath, "history.md"))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	// Each history line holds its note JSON-encoded.
+	if quoted, _ := json.Marshal(line); bytes.Contains(history, quoted[1:len(quoted)-1]) {
+		return nil
+	}
+	tasks := taskWriter(env)
+	tasks.Project = res.Project
+	_, err = tasks.Note(writeOptions(env, name, "note", line))
+	return err
+}
+
+// noFolderError is a project with no checkout on this machine to land in.
+func noFolderError(proj string) error {
+	return fmt.Errorf("project %s has no folder on this machine; run grid task merge on the machine that has its checkout", proj)
+}
+
+// rebasedOf is the newest accepted rebase branch in the repo of branch that holds
+// branch, as a rebase Job merges its delivered branch in; "" when none does.
+func rebasedOf(res where.Result, branch string, rebased []string) string {
 	repo, err := taskMergeRepo(res, branch)
 	if err != nil {
-		return "", err
+		return ""
 	}
-	if st, err := taskMergeGit(repo, "status", "--porcelain"); err != nil {
-		return "", err
-	} else if st != "" {
-		return "", fmt.Errorf("the checkout %s has uncommitted changes; commit or stash them, then run grid task merge again", repo)
+	for i := len(rebased) - 1; i >= 0; i-- {
+		if r, err := taskMergeRepo(res, rebased[i]); err == nil && r == repo {
+			if _, err := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/heads/"+rebased[i]); err == nil {
+				return rebased[i]
+			}
+		}
+	}
+	return ""
+}
+
+// firstUnlanded is the first builder branch of the task, in Feed order, that is not
+// in its target yet, by itself or by its rebased branch, and the repo that holds it:
+// the branch a land stops on.
+func firstUnlanded(res where.Result, base string, built, rebased, noWrite []string) (repo, branch string, err error) {
+	in := func(repo, b, target string) bool {
+		_, err := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+b, "refs/heads/"+target)
+		return err == nil
+	}
+	for _, b := range built {
+		repo, err := taskMergeRepo(res, b)
+		if noWork(err, b, noWrite) {
+			continue // as taskMerge skips it
+		}
+		if err != nil {
+			return "", "", err
+		}
+		target := taskMergeTarget(repo, base)
+		if target == "" || in(repo, b, target) {
+			continue
+		}
+		if r := rebasedOf(res, b, rebased); r != "" && in(repo, r, target) {
+			continue
+		}
+		return repo, b, nil
+	}
+	return "", "", errAllLanded
+}
+
+// branchJobID is the Job id in a branch the worker names grid-<feed id>-<job>-a<n>.
+var branchJobID = regexp.MustCompile(`-(J-[1-9][0-9]*(?:\.[1-9][0-9]*)*)-a[1-9][0-9]*$`)
+
+// branchJob is the Job whose attempt made branch, or the branch itself when it is not named so.
+func branchJob(branch string) string {
+	if m := branchJobID.FindStringSubmatch(branch); m != nil {
+		return m[1]
+	}
+	return branch
+}
+
+// errAllLanded is a task whose every builder branch is in its target already.
+var errAllLanded = errors.New("every builder branch of the task is in its target")
+
+// noTaskBranchError is a task with no branch in task.md and no accepted builder Job:
+// grid task merge has nothing to merge, and a land has nothing to land.
+type noTaskBranchError string
+
+func (e noTaskBranchError) Error() string {
+	return fmt.Sprintf("task %s has no branch in task.md; run grid deliver in the task's checkout to record it, then run grid task merge again", string(e))
+}
+
+// noWork reports whether err says builder branch b is in no repo and its Job has an
+// empty write list (noWrite holds those branches, as builderBranches reads them): a Job
+// that only wrote brain proposals made no branch and has nothing to land. A Job that was
+// to write files and has no branch lost its work, so that stays an error.
+func noWork(err error, b string, noWrite []string) bool {
+	var missing *branchMissingError
+	return errors.As(err, &missing) && slices.Contains(noWrite, b)
+}
+
+// builderBranches is the branch of each accepted builder Job of the task, in Feed
+// order, named as the worker names an attempt's branch; rebased is the branches of
+// its accepted rebase Jobs, which stand in for the branch they rebased, and noWrite
+// the branches of its accepted Jobs of any role whose write list is empty. Only builder
+// Jobs commit to their branch: an orchestrator's or researcher's write list names task
+// files (plan.md, research.md), not repo code, so their branches are not landed.
+func builderBranches(taskPath string) (built, rebased, noWrite []string, err error) {
+	fid, _, err := task.FeedIdentity(taskPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	snap, err := orchestrator.Load(feed.Store{TaskDir: taskPath, TaskID: fid, Warn: io.Discard})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, it := range byJobNumber(snap.Items) {
+		j := snap.State.Jobs[it.ID]
+		if j == nil || j.Status != contract.Accepted {
+			continue
+		}
+		b := runner.Branch(runner.Spawn{Task: fid, ID: it.ID, Attempt: max(j.Attempt, 1)})
+		if len(it.Write) == 0 {
+			noWrite = append(noWrite, b)
+		}
+		if contract.NormalizeRole(j.Role) != "builder" {
+			continue
+		}
+		if isRebaseJob(it) {
+			rebased = append(rebased, b)
+		} else {
+			built = append(built, b)
+		}
+	}
+	return built, rebased, noWrite, nil
+}
+
+// taskMergeOne merges branch into its base in the repo that holds it and answers the
+// commit the base points at after; landed is false when the base already held it.
+func taskMergeOne(res where.Result, name, branch, base string) (string, bool, error) {
+	repo, err := taskMergeRepo(res, branch)
+	if err != nil {
+		return "", false, err
 	}
 	target := taskMergeTarget(repo, base)
 	if target == "" {
-		return "", fmt.Errorf("no base branch for %s in %s: base %q is not a branch there and neither main nor master exists; record the base with grid deliver --base <branch>, then run grid task merge again", branch, repo, base)
+		return "", false, fmt.Errorf("no base branch for %s in %s: base %q is not a branch there and neither main nor master exists; record the base with grid deliver --base <branch>, then run grid task merge again", branch, repo, base)
 	}
 	if target == branch {
-		return "", fmt.Errorf("the task's branch %s is its base branch; nothing to merge", branch)
+		return "", false, fmt.Errorf("the task's branch %s is its base branch; nothing to merge", branch)
 	}
 	// A branch already in the base needs no commit; the base's tip holds it.
 	if _, err := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/heads/"+target); err == nil {
-		return taskMergeGit(repo, "rev-parse", "refs/heads/"+target)
+		tip, err := taskMergeGit(repo, "rev-parse", "refs/heads/"+target)
+		return tip, false, err
+	}
+	// Untracked files do not stop a merge: git merge refuses by itself one that would overwrite them.
+	if st, err := taskMergeGit(repo, "status", "--porcelain", "--untracked-files=no"); err != nil {
+		return "", false, err
+	} else if st != "" {
+		return "", false, fmt.Errorf("the checkout %s has uncommitted changes; commit or stash them, then run grid task merge again", repo)
 	}
 	start, err := taskMergeGit(repo, "symbolic-ref", "--short", "-q", "HEAD")
 	if err != nil || start == "" {
 		if start, err = taskMergeGit(repo, "rev-parse", "HEAD"); err != nil {
-			return "", err
+			return "", false, err
 		}
 	}
 	back := func() error {
@@ -228,7 +469,7 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	}
 	if start != target {
 		if _, err := taskMergeGit(repo, "checkout", "-q", target); err != nil {
-			return "", fmt.Errorf("cannot check out %s in %s (%v); the checkout is as it was", target, repo, err)
+			return "", false, fmt.Errorf("cannot check out %s in %s (%v); the checkout is as it was", target, repo, err)
 		}
 	}
 	msg := fmt.Sprintf("Merge branch '%s' (%s)", branch, name)
@@ -236,54 +477,86 @@ func taskMerge(env Env, id, proj string) (string, error) {
 		conflicts, _ := taskMergeGit(repo, "diff", "--name-only", "--diff-filter=U")
 		if _, err := taskMergeGit(repo, "rev-parse", "-q", "--verify", "MERGE_HEAD"); err == nil {
 			if _, err := taskMergeGit(repo, "merge", "--abort"); err != nil {
-				return "", fmt.Errorf("merging %s into %s failed and the merge could not be aborted (%v); run git merge --abort in %s", branch, target, err, repo)
+				return "", false, fmt.Errorf("merging %s into %s failed and the merge could not be aborted (%v); run git merge --abort in %s", branch, target, err, repo)
 			}
 		}
 		if err := back(); err != nil {
-			return "", fmt.Errorf("merging %s into %s failed and %s is still checked out (%v); run git checkout %s in %s", branch, target, target, err, start, repo)
+			return "", false, fmt.Errorf("merging %s into %s failed and %s is still checked out (%v); run git checkout %s in %s", branch, target, target, err, start, repo)
 		}
 		if conflicts != "" {
 			changed, _ := taskMergeGit(repo, "diff", "--name-only", target+"..."+branch)
 			tip, _ := taskMergeGit(repo, "rev-parse", "refs/heads/"+target)
-			return "", &mergeConflictError{Branch: branch, Target: target, TargetSHA: tip, Files: strings.Fields(conflicts), Changed: strings.Fields(changed)}
+			return "", false, &mergeConflictError{Branch: branch, Target: target, TargetSHA: tip, Files: strings.Fields(conflicts), Changed: strings.Fields(changed), Repo: jobRepo(res, repo)}
 		}
-		return "", fmt.Errorf("merging %s into %s failed (%v); the checkout is as it was; fix that, then run grid task merge again", branch, target, mergeErr)
+		return "", false, fmt.Errorf("merging %s into %s failed (%v); the checkout is as it was; fix that, then run grid task merge again", branch, target, mergeErr)
 	}
 	merged, err := taskMergeGit(repo, "rev-parse", "HEAD")
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	if err := back(); err != nil {
-		return "", fmt.Errorf("merged %s into %s as %s, but %s is still checked out (%v); run git checkout %s in %s", branch, target, merged, target, err, start, repo)
+		return "", false, fmt.Errorf("merged %s into %s as %s, but %s is still checked out (%v); run git checkout %s in %s", branch, target, merged, target, err, start, repo)
 	}
-	return merged, nil
+	return merged, true, nil
 }
 
 // taskMergeKeys reads the branch: and base: keys grid deliver wrote to task.md.
 func taskMergeKeys(taskPath string) (branch, base string, err error) {
+	branch, base, _, err = taskMergeHead(taskPath)
+	return branch, base, err
+}
+
+// taskMergeHead reads the branch:, base: and head: keys grid deliver wrote to task.md.
+func taskMergeHead(taskPath string) (branch, base, head string, err error) {
 	data, err := os.ReadFile(filepath.Join(taskPath, "task.md"))
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	front, _, err := mdfile.Split(data)
 	if err != nil {
-		return "", "", fmt.Errorf("task.md: %w", err)
+		return "", "", "", fmt.Errorf("task.md: %w", err)
 	}
 	var keys struct {
 		Branch string `yaml:"branch"`
 		Base   string `yaml:"base"`
+		Head   string `yaml:"head"`
 	}
 	if err := mdfile.Load(front, &keys, false); err != nil {
-		return "", "", fmt.Errorf("task.md: %w", err)
+		return "", "", "", fmt.Errorf("task.md: %w", err)
 	}
-	return strings.TrimSpace(keys.Branch), strings.TrimSpace(keys.Base), nil
+	return strings.TrimSpace(keys.Branch), strings.TrimSpace(keys.Base), strings.TrimSpace(keys.Head), nil
 }
 
 // taskMergeRepo is the checkout that holds the task's branch: the project's
 // folder on this machine, or the one of its repos that has the branch.
 func taskMergeRepo(res where.Result, branch string) (string, error) {
 	if res.Folder == "" {
-		return "", fmt.Errorf("project %s has no folder on this machine; run grid task merge on the machine that has its checkout", res.Project)
+		return "", noFolderError(res.Project)
+	}
+	dirs := taskMergeDirs(res)
+	var found []string
+	for _, dir := range dirs {
+		root, err := taskMergeGit(dir, "rev-parse", "--show-toplevel")
+		if err != nil || root == "" {
+			continue
+		}
+		if localBranch(root, branch) && !slices.Contains(found, root) {
+			found = append(found, root)
+		}
+	}
+	switch len(found) {
+	case 1:
+		return found[0], nil
+	case 0:
+		return "", &branchMissingError{fmt.Sprintf("branch %s is not in the checkout of project %s (%s); run grid task merge where the branch was made, or record it with grid deliver --branch <name>", branch, res.Project, strings.Join(dirs, ", "))}
+	}
+	return "", fmt.Errorf("branch %s is in more than one repo of project %s (%s); merge it there with git", branch, res.Project, strings.Join(found, ", "))
+}
+
+// taskMergeDirs is the project's folder on this machine and the folders of its repos.
+func taskMergeDirs(res where.Result) []string {
+	if res.Folder == "" {
+		return nil
 	}
 	dirs := []string{res.Folder}
 	for _, r := range res.Repos {
@@ -294,35 +567,45 @@ func taskMergeRepo(res where.Result, branch string) (string, error) {
 			dirs = append(dirs, r)
 		}
 	}
-	var found []string
-	for _, dir := range dirs {
-		root, err := taskMergeGit(dir, "rev-parse", "--show-toplevel")
-		if err != nil || root == "" {
-			continue
-		}
-		if _, err := taskMergeGit(root, "rev-parse", "-q", "--verify", "refs/heads/"+branch); err == nil && !slices.Contains(found, root) {
-			found = append(found, root)
-		}
-	}
-	switch len(found) {
-	case 1:
-		return found[0], nil
-	case 0:
-		return "", fmt.Errorf("branch %s is not in the checkout of project %s (%s); run grid task merge where the branch was made, or record it with grid deliver --branch <name>", branch, res.Project, strings.Join(dirs, ", "))
-	}
-	return "", fmt.Errorf("branch %s is in more than one repo of project %s (%s); merge it there with git", branch, res.Project, strings.Join(found, ", "))
+	return dirs
 }
+
+// hasCheckout reports whether the project has a git checkout on this machine.
+func hasCheckout(res where.Result) bool {
+	for _, dir := range taskMergeDirs(res) {
+		if root, err := taskMergeGit(dir, "rev-parse", "--show-toplevel"); err == nil && root != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// localBranch reports whether name, from task data, is a branch name and a local
+// branch of repo: rev-parse --verify would also take refs/heads/main~1.
+func localBranch(repo, name string) bool {
+	if name == "" {
+		return false
+	}
+	if _, err := taskMergeGit(repo, "check-ref-format", "--branch", name); err != nil {
+		return false
+	}
+	_, err := taskMergeGit(repo, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
+	return err == nil
+}
+
+// branchMissingError is a branch that no checkout of the project holds.
+type branchMissingError struct{ text string }
+
+func (e *branchMissingError) Error() string { return e.text }
 
 // taskMergeTarget is the branch the task's branch goes into: task.md's base when
 // it names a branch of the checkout, else the first of main and master there.
 func taskMergeTarget(repo, base string) string {
-	if base != "" {
-		if _, err := taskMergeGit(repo, "rev-parse", "-q", "--verify", "refs/heads/"+base); err == nil {
-			return base
-		}
+	if localBranch(repo, base) {
+		return base
 	}
 	for _, name := range taskMergeBases {
-		if _, err := taskMergeGit(repo, "rev-parse", "-q", "--verify", "refs/heads/"+name); err == nil {
+		if localBranch(repo, name) {
 			return name
 		}
 	}

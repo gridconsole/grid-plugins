@@ -478,6 +478,13 @@ func (r Resolver) fromRecord(rec project.Record, rule Rule, folder string) Resul
 	res.ID = rec.ID
 	res.Record = true
 	res.Keys = append(res.Keys, rec.KeysOn(r.Machine)...)
+	for _, repo := range rec.Repos {
+		if p := filepath.FromSlash(repo.Path); filepath.IsAbs(p) {
+			res.Repos = append(res.Repos, p)
+		} else if folder != "" {
+			res.Repos = append(res.Repos, filepath.Join(folder, p))
+		}
+	}
 	return res
 }
 

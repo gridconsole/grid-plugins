@@ -239,13 +239,18 @@ func reacceptShipJob(env Env, fs feed.Store, w feed.Writer, store land.Store, id
 
 // landMergeBranch is what a ship answer does on a project with no deploy topic:
 // grid task merge for the task id in project proj, so the delivered branch lands on
-// its base. A task with no branch in task.md has nothing to merge and answers "".
+// its base. A task with no branch in task.md and no accepted builder Job has nothing
+// to merge and answers "".
 func landMergeBranch(env Env, dir, proj, id string) (string, error) {
-	branch, _, err := taskMergeKeys(dir)
-	if err != nil || branch == "" {
+	if _, _, err := taskMergeKeys(dir); err != nil {
 		return "", err
 	}
-	return taskMerge(env, id, proj)
+	merged, err := taskMerge(env, id, proj)
+	var none noTaskBranchError
+	if errors.As(err, &none) {
+		return "", nil
+	}
+	return merged, err
 }
 
 // reopenShipJob puts the ship Job job back with its person after a failed land:

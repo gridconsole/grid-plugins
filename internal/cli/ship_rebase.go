@@ -100,7 +100,7 @@ func rebaseCount(items []job.Job) int {
 func rebaseVerify(items []job.Job, c *mergeConflictError) map[string]any {
 	found := map[string]any{"kind": "file-exists", "path": c.Files[0]}
 	for _, it := range items {
-		if strings.EqualFold(strings.TrimSpace(it.Role), "builder") && strings.TrimSpace(it.Verify.Command) != "" && it.Verify.MinTests > 0 {
+		if contract.NormalizeRole(it.Role) == "builder" && strings.TrimSpace(it.Verify.Command) != "" && it.Verify.MinTests > 0 {
 			found = map[string]any{"command": it.Verify.Command, "min_tests": it.Verify.MinTests}
 		}
 	}
@@ -123,7 +123,7 @@ func rebaseJobBody(id string, c *mergeConflictError, verify map[string]any) map[
 		}
 	}
 	pointer := "intent.md#request" // task.md has no Outcome heading until delivery
-	return map[string]any{
+	body := map[string]any{
 		"id": id, "item": 1, "role": "builder",
 		"title":  fmt.Sprintf("%s%s and resolve the conflicts in %s", rebaseTitle, c.Target, files),
 		"skills": []any{}, "risk": []any{},
@@ -140,6 +140,10 @@ func rebaseJobBody(id string, c *mergeConflictError, verify map[string]any) map[
 		"attempt": 1, "continues": nil, "discovered_from": nil, "close_reason": nil, "checkpoint": nil,
 		"review_rounds": 0, "level_raised": nil, "worktree": nil, "posts_back": []any{"result", "question"},
 	}
+	if c.Repo != "" {
+		body["repo"] = c.Repo
+	}
+	return body
 }
 
 // postRebaseJob posts the rebase Job of the conflict c as the task writer w and
@@ -444,6 +448,10 @@ func rebaseStep(env Env, fs feed.Store, w feed.Writer, store land.Store, who con
 		fmt.Fprintf(env.Stderr, "land: %s: %s; rebase Job %s is left to its decision Job, the approval waits for it\n", ship, oneLineErr(err), head)
 		return true
 	}
+	// task.md naming no branch here lands the builder branches, the rebased one in its original's place.
+	if staleBranchKey(env, proj, id) {
+		return false
+	}
 	// The task's project decides which T-NN this is, as it does for land.
 	tasks := taskWriter(env)
 	tasks.Project = proj
@@ -461,7 +469,26 @@ func rebaseStep(env Env, fs feed.Store, w feed.Writer, store land.Store, who con
 func rebaseMoved(env Env, store land.Store, proj, id, ship string) (target string, moved bool) {
 	_, tip, _ := store.RebaseTip(env.Cwd, id, ship)
 	target, now, err := taskTargetTip(env, proj, id)
-	return target, tip == "" || err == nil && !strings.HasPrefix(now, tip)
+	// Every builder branch in its target, as a person's hand merge leaves it, counts as moved.
+	return target, tip == "" || errors.Is(err, errAllLanded) || err == nil && !strings.HasPrefix(now, tip)
+}
+
+// staleBranchKey reports whether task.md names no branch or one no repo of the project holds.
+func staleBranchKey(env Env, proj, id string) bool {
+	res, err := resolver(env).Resolve(where.Query{Cwd: env.Cwd, Task: id, Project: proj})
+	if err != nil {
+		return false
+	}
+	branch, _, err := taskMergeKeys(res.TaskPath)
+	if err != nil {
+		return false
+	}
+	if branch == "" {
+		return true
+	}
+	var missing *branchMissingError
+	_, err = taskMergeRepo(res, branch)
+	return errors.As(err, &missing)
 }
 
 // taskTargetTip is the branch the task's delivered branch lands on and the commit it
@@ -476,6 +503,27 @@ func taskTargetTip(env Env, proj, id string) (target, tip string, err error) {
 		return "", "", err
 	}
 	repo, err := taskMergeRepo(res, branch)
+	var missing *branchMissingError
+	stale := branch == "" || errors.As(err, &missing)
+	// task.md's branch already in its target: the land goes on with the builder branches after it.
+	landed := false
+	if !stale && err == nil {
+		if t := taskMergeTarget(repo, base); t != "" {
+			_, aerr := taskMergeGit(repo, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/heads/"+t)
+			landed = aerr == nil
+		}
+	}
+	if stale || landed {
+		// A branch no repo holds: the land waits on the first builder branch not in.
+		built, rebased, noWrite, berr := builderBranches(res.TaskPath)
+		if berr != nil {
+			return "", "", berr
+		}
+		r, b, ferr := firstUnlanded(res, base, built, rebased, noWrite)
+		if stale || !errors.Is(ferr, errAllLanded) {
+			repo, branch, err = r, b, ferr
+		}
+	}
 	if err != nil {
 		return "", "", err
 	}

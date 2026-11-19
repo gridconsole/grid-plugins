@@ -389,7 +389,11 @@ func (s Store) register(r where.Result, now time.Time) error {
 	for _, key := range r.Keys {
 		addKey(&rec, project.NewKey(s.Resolver.Machine, key))
 	}
-	repos := append([]string{}, r.Repos...)
+	// A record's own repos are what grid project repo recorded; the checkouts here do not rewrite them.
+	var repos []string
+	if !r.Record {
+		repos = append(repos, r.Repos...)
+	}
 	if r.Folder != "" && gitx.IsRepoRoot(r.Folder) {
 		repos = append(repos, r.Folder)
 	}
