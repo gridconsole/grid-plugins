@@ -115,7 +115,27 @@ func claudeProjectsAnchor(home, gridHome, projects string) (string, error) {
 // only by exact match.
 // Setup and the session start remove them from the settings file and the setup
 // record; the app reads that record for the rules it adds to a launched agent.
+//
+// A person who set GRID_PROJECTS after an earlier setup left the rules of the default
+// projects folder behind, so a custom folder retires both forms.
 func claudeRetired(home, gridHome, projects string) ([]ClaudeRule, error) {
+	rules, err := claudeRetiredFor(home, gridHome, projects)
+	if err != nil || projects == "" {
+		return rules, err
+	}
+	more, err := claudeRetiredFor(home, gridHome, "")
+	if err != nil {
+		return nil, err
+	}
+	for _, rule := range more {
+		if !slices.Contains(rules, rule) {
+			rules = append(rules, rule)
+		}
+	}
+	return rules, nil
+}
+
+func claudeRetiredFor(home, gridHome, projects string) ([]ClaudeRule, error) {
 	_, anchor, err := claudeAllowRules(home, gridHome)
 	if err != nil {
 		return nil, err
@@ -365,11 +385,8 @@ func RetireClaudeRules(o ClaudeSetupOptions) error {
 	var errs []error
 	for _, home := range retireHomes(o) {
 		run := o
+		// A projects folder outside the Grid home is the same text in every home's record.
 		run.GridHome = home
-		if home != o.GridHome {
-			// GRID_PROJECTS names the session home's projects folder only.
-			run.Projects = ""
-		}
 		_, err := runClaudeSetup(run)
 		var invalid claudeInvalid
 		if errors.Is(err, errClaudeChanged) || errors.As(err, &invalid) {

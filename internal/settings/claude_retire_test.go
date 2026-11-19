@@ -375,3 +375,46 @@ func TestRetireClaudeRulesLeavesAnUnrelatedHomesRecord(t *testing.T) {
 		t.Fatal("a session outside the data folder changed the settings of a record it does not own")
 	}
 }
+
+// GRID_PROJECTS names a folder for the whole machine, so the rules setup wrote for a
+// projects folder outside the Grid home are the same text in every home's record. A
+// session whose own home holds no record still retires them from the record of
+// another home.
+func TestRetireClaudeRulesRetiresACustomProjectsFolderOfAnotherHome(t *testing.T) {
+	f := newClaudeFixture(t)
+	handleHome, handleRecord, mine := f.seedTwoHomes()
+	if err := os.Remove(handleRecord); err != nil {
+		t.Fatal(err)
+	}
+	projects := filepath.Join(f.o.Home, "work")
+	custom, err := claudeRetired(f.o.Home, f.o.GridHome, projects)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var forms []string
+	for _, rule := range custom {
+		if strings.Contains(rule.Value, "(~/work/") {
+			forms = append(forms, rule.Value)
+		}
+	}
+	if len(forms) == 0 {
+		t.Fatal("no retired rule is anchored on the projects folder")
+	}
+	denies, err := json.Marshal(slices.Concat(mine, forms))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.write(f.path, `{"permissions":{"deny":`+string(denies)+`}}`)
+	record, err := json.Marshal(claudeRecord{Path: f.path, Rules: denyRules(forms)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.write(f.record, string(record))
+	f.o.GridHome, f.o.Projects = handleHome, projects
+	if err := RetireClaudeRules(f.o); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.denies(); !reflect.DeepEqual(got, mine) {
+		t.Fatalf("denies %v, want %v", got, mine)
+	}
+}
