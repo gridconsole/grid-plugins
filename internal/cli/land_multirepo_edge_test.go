@@ -1,11 +1,36 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gridconsole/grid-plugins/internal/job"
+	"github.com/gridconsole/grid-plugins/internal/project"
+	"github.com/gridconsole/grid-plugins/internal/task"
 	"github.com/gridconsole/grid-plugins/internal/where"
 )
+
+// A project with no git repo here, a task.md with no branch and an accepted builder
+// Job: there is nothing to land, so approve closes the task as it did before.
+func TestApproveOnAProjectWithNoRepoLandsNothing(t *testing.T) {
+	m := multiRepoFixture(t)
+	m.builder(t, m.plugin, "main", "p1.txt")
+	if err := project.Write(m.env.GridHome, project.Record{Name: "sample", ID: "example",
+		Folders: []project.Folder{{Machine: m.env.Machine, Path: m.env.Cwd}}}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(m.dir, "task.md"))
+	text := strings.Replace(string(b), "branch: grid-"+m.fid+"-J-9-a1\n", "", 1)
+	if err := os.WriteFile(filepath.Join(m.dir, "task.md"), []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m.approve(t)
+	if rec, err := task.Read(m.dir); err != nil || rec.State != "closed" {
+		t.Fatalf("task state %q %v after approve, want closed; stderr %s; history:\n%s", rec.State, err, m.stderr, shipHistory(t, m.dir))
+	}
+}
 
 // Branch and base names from task data are branch names only: main~1 is no branch,
 // so it is not a target and no repo holds it as a branch.

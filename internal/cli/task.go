@@ -224,7 +224,8 @@ func taskMerge(env Env, id, proj string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(built) == 0 {
+	// A project with no git checkout here has no branch to land, as before builder branches.
+	if len(built) == 0 || branch == "" && !hasCheckout(res) {
 		if branch == "" {
 			return "", noTaskBranchError(name)
 		}
@@ -457,6 +458,16 @@ func taskMergeDirs(res where.Result) []string {
 		}
 	}
 	return dirs
+}
+
+// hasCheckout reports whether the project has a git checkout on this machine.
+func hasCheckout(res where.Result) bool {
+	for _, dir := range taskMergeDirs(res) {
+		if root, err := taskMergeGit(dir, "rev-parse", "--show-toplevel"); err == nil && root != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // localBranch reports whether name, from task data, is a branch name and a local
