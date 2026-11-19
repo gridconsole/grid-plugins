@@ -55,6 +55,30 @@ func TestApproveStillMergesABranchWithAnUnpickedCommit(t *testing.T) {
 	}
 }
 
+// git cherry skips merge commits, so a branch whose only unpicked commit is a merge that
+// carries a change of its own (an evil merge, here a refresh merge of main plus a file)
+// looks landed once its other commit is picked: it still merges, or that file is dropped.
+func TestApproveStillMergesAnEvilMergeBranchWhenItsCommitWasCherryPicked(t *testing.T) {
+	m := multiRepoFixture(t)
+	built := m.builder(t, m.app, "main", "a1.txt")
+	multiRepoCommit(t, m.app, "refresh.txt", "main moves before the refresh")
+	shipGit(t, m.app, "checkout", "-q", built)
+	shipGit(t, m.app, "merge", "-q", "--no-ff", "--no-commit", "main")
+	if err := os.WriteFile(filepath.Join(m.app, "evil.txt"), []byte("in the merge only\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	shipGit(t, m.app, "add", "evil.txt")
+	shipGit(t, m.app, "commit", "-q", "-m", "refresh with main")
+	shipGit(t, m.app, "checkout", "-q", "main")
+	pickIntoMain(t, m.app, built+"^1")
+	tip := shipGit(t, m.app, "rev-parse", "main")
+	m.approve(t)
+	m.closedWith(t, map[string][]string{m.app: {"a1.txt", "evil.txt"}})
+	if parents := strings.Fields(shipGit(t, m.app, "rev-list", "--parents", "-n", "1", "main")); len(parents) != 3 || parents[1] != tip || parents[2] != shipGit(t, m.app, "rev-parse", built) {
+		t.Fatalf("main is %v, want one merge of %s on %s", parents, built, tip)
+	}
+}
+
 // task.md's branch is here and was cherry-picked into main: it counts as landed, so no
 // merge of it, and the builder branch of plugin after it still lands.
 func TestApproveClosesWithATaskBranchCherryPickedIntoMain(t *testing.T) {
