@@ -83,7 +83,7 @@ func TestRenderLintShow(t *testing.T) {
 		t.Fatal("missing plain status")
 	}
 }
-// An invalid Job no longer refuses at render: TestRenderFollowsTheJobLintLevel
+// An invalid Job no longer refuses at render: TestRenderSaysLintFindingsAndRenders
 // covers the finding said on stderr and the render going on.
 func TestRenderReusesAnUnchangedJobBundle(t *testing.T) {
 	e, out, errs := fixture(t)
