@@ -318,12 +318,14 @@ func DoneReason(target string, status contract.Status) string {
 // review accepted after; a review accepted while the build is still submitted
 // would make the edge met on an unaccepted build. s5_children_done_open_target_test.go
 // pins it. An open target with a child numbered under another Job (a rework's
-// review, person or decision Job) waits for its own accept.
+// review, person or decision Job) waits for its own accept, and so does one whose
+// review was lost and decided (lostDecided): the decision settles the review, not
+// the target, which its answer (orchestrator yvPamControl) or its decision Job closes.
 func (g *Graph) childrenDone(s Snapshot, target string) (bool, string) {
 	status := s.Jobs[target].Status
 	if !closed(status) {
 		for _, child := range g.children[target] {
-			if !strings.HasPrefix(child, target+".") {
+			if !strings.HasPrefix(child, target+".") || s.Jobs[child].Status == contract.Cancelled && g.lostDecided(s, child) {
 				return false, DoneReason(target, status)
 			}
 		}
