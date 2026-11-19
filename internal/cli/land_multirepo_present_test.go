@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gridconsole/grid-plugins/internal/contract"
 	"github.com/gridconsole/grid-plugins/internal/task"
 )
 
@@ -86,5 +87,38 @@ func TestApproveSaysItPassedOverABuilderBranchNotHere(t *testing.T) {
 	}
 	if h := shipHistory(t, m.dir); strings.Count(h, want) != 1 {
 		t.Errorf("history says %q %d times, want once:\n%s", want, strings.Count(h, want), h)
+	}
+}
+
+// task.md's branch is here and a builder branch after it conflicts: once the rebase Job
+// of that branch is accepted, the land goes on with the rebased branch in its place and
+// the branches after it, and only then is the task closed.
+func TestApproveLandsPastAConflictAfterTheTaskBranchHere(t *testing.T) {
+	m := multiRepoFixture(t)
+	shipGit(t, m.app, "branch", "grid-"+m.fid+"-J-9-a1", "main")
+	m.builder(t, m.plugin, "main", "p1.txt", "c.txt")
+	second := m.builder(t, m.plugin, "main", "c.txt")
+	m.builder(t, m.app, "main", "a3.txt")
+	m.approve(t)
+	if rec, _ := task.Read(m.dir); rec.State == "closed" {
+		t.Fatalf("task closed on a conflict; history:\n%s", shipHistory(t, m.dir))
+	}
+	rebases, _ := rebaseJobs(t, m.store)
+	if len(rebases) != 1 {
+		t.Fatalf("%d rebase Jobs, want 1; stderr %s", len(rebases), m.stderr)
+	}
+	rebased := "grid-" + m.fid + "-" + rebases[0].ID + "-a1"
+	shipGit(t, m.plugin, "checkout", "-q", "-b", rebased, "main")
+	shipGit(t, m.plugin, "merge", "-q", "-s", "ours", "--no-edit", second)
+	if err := os.WriteFile(filepath.Join(m.plugin, "c.txt"), []byte("J-1 c.txt\nJ-2 c.txt\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	shipGit(t, m.plugin, "commit", "-q", "-am", "resolve c.txt keeping both changes")
+	shipGit(t, m.plugin, "checkout", "-q", "main")
+	setJobStatus(t, m.env, m.store, rebases[0].ID, contract.Accepted, "the conflicts are resolved")
+	landAfterShip(m.env, m.dir, contract.Author{ID: "local", Role: "owner"})
+	m.closedWith(t, map[string][]string{m.plugin: {"p1.txt"}, m.app: {"a3.txt"}})
+	if got := shipGit(t, m.plugin, "show", "main:c.txt"); got != "J-1 c.txt\nJ-2 c.txt" {
+		t.Fatalf("plugin main:c.txt is %q, want both changes", got)
 	}
 }
