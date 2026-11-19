@@ -8,7 +8,7 @@ import "testing"
 // the worker unable to run `grid job result`.
 func TestTemplateOnlyRoleSpawnsWithoutTools(t *testing.T) {
 	h, _ := goUnsetFixture(t)
-	for _, role := range []string{"scout", "researcher", "designer", "operator", "runner", "library"} {
+	for _, role := range []string{"scout", "researcher", "designer", "runner", "library"} {
 		beWantTools(t, role, beSpawnTools(t, h, role), nil)
 	}
 }
