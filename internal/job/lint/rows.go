@@ -22,7 +22,10 @@ var rowPath = regexp.MustCompile(`(?:^|[\s(\x60"'])([A-Za-z0-9_.*-]+(?:/[A-Za-z0
 //
 // An orchestrator Job is exempt: its rows name the Jobs it plans or re-plans, which
 // it reads and does not wait for.
-func (c *checker) afterMissing(j job.Job) {
+//
+// intentText is the text the intent pointers resolve to; the pointers themselves
+// name no Job, so they are not scanned.
+func (c *checker) afterMissing(j job.Job, intentText string) {
 	if contract.NormalizeRole(j.Role) == "orchestrator" {
 		return
 	}
@@ -35,7 +38,7 @@ func (c *checker) afterMissing(j job.Job) {
 			known[*p] = true
 		}
 	}
-	text := j.Intent.Owner + " " + j.Intent.Item + " " + j.Intent.Goal
+	text := intentText
 	for _, a := range j.Acceptance {
 		text += " " + a.Text
 	}
