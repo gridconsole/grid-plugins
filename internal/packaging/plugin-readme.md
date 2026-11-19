@@ -15,8 +15,9 @@ The plugin ships the agents, skills and hooks, plus a prebuilt `grid` binary for
 
 Run `grid setup` once. It asks before it writes, and adds these entries to your Claude Code settings:
 
-- an allow rule for `grid` commands and for reading and editing the Grid home;
-- deny rules for your own approval identity (`~/.grid-person`) and a project's held setup answers, so a command Grid would run waits for your approval. Agents write task folders, the brain and project files freely. Setup (and every session start) takes out the broader deny rules an earlier version wrote.
+- an allow rule for `grid` commands and for reading and editing the Grid home.
+
+It adds no deny rules: agents write task folders, the brain, project files, a project's held setup answers and your approval identity (`~/.grid-person`) freely. Setup (and every session start) takes out the deny rules an earlier version wrote.
 
 `grid setup --sandbox` also switches on Claude Code's own sandbox for your user. `grid setup --remove` takes out only what setup wrote. `grid doctor` checks the home, git, the launcher and these settings.
 
