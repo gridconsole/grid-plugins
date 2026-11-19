@@ -83,31 +83,13 @@ func TestRenderLintShow(t *testing.T) {
 		t.Fatal("missing plain status")
 	}
 }
-func TestRenderRefusesInvalidAndChangedJobs(t *testing.T) {
+// An invalid Job no longer refuses at render: TestRenderFollowsTheJobLintLevel
+// covers the finding said on stderr and the render going on.
+func TestRenderReusesAnUnchangedJobBundle(t *testing.T) {
 	e, out, errs := fixture(t)
-	plan := filepath.Join(e.Cwd, "T-01", "plan.md")
-	original, err := os.ReadFile(plan)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bad := strings.Replace(string(original), "on_blocked: ask-and-continue", "on_blocked: wait", 1)
-	if err = os.WriteFile(plan, []byte(bad), 0644); err != nil {
-		t.Fatal(err)
-	}
 	h := jobtest.Home{GridHome: e.GridHome, Task: filepath.Join(e.Cwd, "T-01")}
 	h.Approve(t)
-	r := call(t, e, out, errs, 1, "render", "T-01", "1", "--json")
-	if len(r.Findings) == 0 {
-		t.Fatal("missing findings")
-	}
-	if _, err = os.Stat(filepath.Join(e.Cwd, "T-01", "jobs")); !os.IsNotExist(err) {
-		t.Fatal("invalid render created artifacts")
-	}
-	if err = os.WriteFile(plan, original, 0644); err != nil {
-		t.Fatal(err)
-	}
-	h.Approve(t)
-	r = call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
+	r := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
 	before, err := os.ReadFile(r.Path)
 	if err != nil {
 		t.Fatal(err)

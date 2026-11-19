@@ -69,7 +69,7 @@ var hookInfos = []hookInfo{
 	{"history-log", []HookEvent{{"PreToolUse", ""}, {"PostToolUse", ""}, {"SubagentStop", ""}}, "Writes file edits, Bash commands, finished subagents and brain reads to the task history.", false},
 	{"home-allow", []HookEvent{{"PermissionRequest", ""}, {"PreToolUse", ""}}, "Allows a tool call inside the Grid home so the person is not asked.", true},
 	{"host-guard", []HookEvent{}, "Retired: no hook runs it, so its level changes nothing.", true},
-	{"job-lint", []HookEvent{}, "Checks a Job when grid job render builds it; block refuses a Job with lint errors.", true},
+	{"job-lint", []HookEvent{}, "Checks a Job when grid job render builds it; lint errors are said on stderr and the Job still renders; off skips the check.", true},
 	{"needs-you", []HookEvent{}, "No hook runs it yet, so its level changes nothing.", false},
 	{"only-writer", []HookEvent{}, "Retired: no hook runs it, so its level changes nothing.", true},
 	{"plan-guard", []HookEvent{{"PreToolUse", ""}, {"PermissionRequest", ""}}, "Keeps a reviewer or checker from writing outside its task folder; block refuses it, warn says it.", true},
@@ -160,7 +160,7 @@ func validateAgent(a Agent) error {
 }
 func defaultLevel(name string) string {
 	switch name {
-	case "job-lint", "stop-check":
+	case "stop-check":
 		return "block"
 	}
 	return "warn"

@@ -9,10 +9,11 @@ import (
 	"github.com/gridconsole/grid-plugins/internal/job/jobtest"
 )
 
-// A render that fails lint exits 1 with its findings and writes no jobs/ folder.
+// A render whose lint fails exits 0 with its findings and writes the jobs/ folder:
+// lint never refuses at render (TestRenderSaysLintFindingsAndRenders).
 // Jobs render without an approved plan (TestJobsRenderWithoutApprovedPlan), so an
 // approval finding has no exit code of its own.
-func TestRenderLintErrorExitsOne(t *testing.T) {
+func TestRenderLintErrorStillRenders(t *testing.T) {
 	e, out, errs := fixture(t)
 	plan := filepath.Join(e.Cwd, "T-01", "plan.md")
 	original, err := os.ReadFile(plan)
@@ -28,7 +29,7 @@ func TestRenderLintErrorExitsOne(t *testing.T) {
 	}
 	h := jobtest.Home{GridHome: e.GridHome, Task: filepath.Join(e.Cwd, "T-01")}
 	h.Approve(t)
-	r := call(t, e, out, errs, 1, "render", "T-01", "1", "--json")
+	r := call(t, e, out, errs, 0, "render", "T-01", "1", "--json")
 	if len(r.Findings) == 0 {
 		t.Fatal("missing findings")
 	}
@@ -37,7 +38,7 @@ func TestRenderLintErrorExitsOne(t *testing.T) {
 			t.Fatalf("finding rule %q want job.on-blocked: %+v", finding.Rule, finding)
 		}
 	}
-	if _, err = os.Stat(filepath.Join(e.Cwd, "T-01", "jobs")); !os.IsNotExist(err) {
-		t.Fatal("invalid render created artifacts")
+	if _, err = os.Stat(filepath.Join(e.Cwd, "T-01", "jobs")); err != nil {
+		t.Fatalf("render wrote no artifacts: %v", err)
 	}
 }

@@ -14,7 +14,7 @@ func TestHookLevelsWithoutDetailIsUnchanged(t *testing.T) {
 	if code := h.run(h.home, "hook", "levels", "--json"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.errb)
 	}
-	want := `{"history-log":"warn","home-allow":"warn","host-guard":"warn","job-lint":"block","needs-you":"warn","only-writer":"warn","plan-guard":"warn","session-check":"warn","session-end":"warn","session-start":"warn","stop-check":"block","usage-log":"warn"}` + "\n"
+	want := `{"history-log":"warn","home-allow":"warn","host-guard":"warn","job-lint":"warn","needs-you":"warn","only-writer":"warn","plan-guard":"warn","session-check":"warn","session-end":"warn","session-start":"warn","stop-check":"block","usage-log":"warn"}` + "\n"
 	if h.out.String() != want {
 		t.Errorf("hook levels --json:\n got %s\nwant %s", h.out.String(), want)
 	}
