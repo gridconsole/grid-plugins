@@ -125,7 +125,7 @@ func (s Store) Tick() (out Output, err error) {
 		if e != nil {
 			return e
 		}
-		if e := s.jhAskOwnerHeld(snap); e != nil {
+		if e := s.jhAskOwnerHeld(snap, &m); e != nil {
 			return e
 		}
 		snap, e = Load(s.Feed)

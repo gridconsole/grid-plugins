@@ -181,9 +181,10 @@ func TestHoldBlockedPermissionJobKeepsItsWaitThroughTheTick(t *testing.T) {
 }
 
 // grid job tree shows a held Job as held, with each wait and whether it is met,
-// and reports no orphan for a landed wait: not never_picked_up, not dead_wait,
-// even when the Job it waits on was rejected (a dead job wait is
-// TestHoldTreeShowsDeadWait).
+// and reports no orphan for a landed wait that can still be met: not
+// never_picked_up, not dead_wait. A landed wait on a rejected or cancelled Job
+// that never landed is dead_wait, as a dead job wait is
+// (TestHoldTreeShowsDeadWait).
 func TestHoldTreeShowsHeldOnItsWaitWithNoOrphan(t *testing.T) {
 	f := jhHeldFixture(t)
 	wait := contract.HeldWait{Row: "A2", Kind: contract.WaitLanded, Ref: "J-1"}
@@ -192,6 +193,17 @@ func TestHoldTreeShowsHeldOnItsWaitWithNoOrphan(t *testing.T) {
 		snap := jhSnapshot(t, f, contract.Held, wait)
 		if target != "" {
 			snap.State.Jobs["J-1"].Status = target
+			var row TreeJob
+			for _, r := range TreeAt(snap, later) {
+				if r.ID == "J-2" {
+					row = r
+				}
+			}
+			if row.Orphan == nil || row.Orphan.Kind != OrphanDeadWait {
+				t.Fatalf("%s that never landed: orphan %+v, want dead_wait", name, row.Orphan)
+			}
+			// A target that landed meets the wait (TestHoldLandedWaitOnACancelledJobThatLandedIsMet).
+			continue
 		}
 		var row TreeJob
 		for _, r := range TreeAt(snap, later) {

@@ -169,8 +169,8 @@ const (
 	OrphanNeverAcked    = "never_acked"
 	OrphanNoExit        = "no_exit"
 	// OrphanDeadWait is a Posted or Ready Job that waits through a done edge on a
-	// Job that was rejected or cancelled, or a Held Job whose job wait can no longer
-	// be met (heldDeadWaits): it is never released by itself.
+	// Job that was rejected or cancelled, or a Held Job whose job or landed wait can
+	// no longer be met (heldDeadWaits): it is never released by itself.
 	OrphanDeadWait = "dead_wait"
 	// OrphanNeverJudged is a Submitted Job past its lease that no Judge has taken:
 	// the wake of its latest result is not acknowledged and no review or person
@@ -356,28 +356,28 @@ func deadDoneWait(s Snapshot, w jobgraph.Wait) bool {
 	return w.Reason == jobgraph.DoneReason(w.Target, target.Status)
 }
 
-// deadWait is a job wait of a Held Job that can no longer be met, with end the
-// last Job of the chain it waits on.
+// deadWait is a job or landed wait of a Held Job that can no longer be met, with
+// end the last Job of the chain it waits on.
 type deadWait struct {
 	contract.HeldWait
 	end string
 }
 
-// heldDeadWaits lists the job waits of the Held Job j that can no longer be met:
-// every Job of the chain, the Job waited on and the Jobs that continue it (a
-// rework, not a child), was rejected or cancelled. A wait on a Job not on the
-// Feed, a chain with a live or accepted Job, and a wait of another kind are not
-// dead: a job wait is the done edge of a Held Job, and a landed edge is not dead.
+// heldDeadWaits lists the job and landed waits of the Held Job j that can no
+// longer be met: every Job of the chain, the Job waited on and the Jobs that
+// continue it (a rework, not a child), was rejected or cancelled, and for a
+// landed wait none of them landed. A wait on a Job not on the Feed, a chain with
+// a live or accepted Job, and a question or permission wait are not dead.
 func heldDeadWaits(s Snapshot, j *contract.Job) []deadWait {
 	if j == nil || j.Status != contract.Held {
 		return nil
 	}
 	var out []deadWait
 	for _, w := range j.WaitsOn {
-		if w.Kind != contract.WaitJob {
+		if w.Kind != contract.WaitJob && w.Kind != contract.WaitLanded {
 			continue
 		}
-		if end, dead := deadChainEnd(s, w.Ref, map[string]bool{}); dead {
+		if end, dead := deadChainEnd(s, w.Ref, w.Kind == contract.WaitLanded, map[string]bool{}); dead {
 			out = append(out, deadWait{w, end})
 		}
 	}
@@ -385,17 +385,19 @@ func heldDeadWaits(s Snapshot, j *contract.Job) []deadWait {
 }
 
 // deadChainEnd reports whether id and every Job that continues it were rejected or
-// cancelled, and names the last Job of that chain. seen ends a loop of continues.
-func deadChainEnd(s Snapshot, id string, seen map[string]bool) (string, bool) {
+// cancelled, and, with landing, that none of them landed (jobgraph meets a landed
+// wait on any Job of the chain, whatever its status). It names the last Job of
+// that chain. seen ends a loop of continues.
+func deadChainEnd(s Snapshot, id string, landing bool, seen map[string]bool) (string, bool) {
 	j := s.State.Jobs[id]
-	if j == nil || seen[id] || j.Status != contract.Rejected && j.Status != contract.Cancelled {
+	if j == nil || seen[id] || j.Status != contract.Rejected && j.Status != contract.Cancelled || landing && s.Landed[id] {
 		return "", false
 	}
 	seen[id] = true
 	end := id
 	for _, it := range s.Items {
 		if c := it.Continues; c != nil && *c == id && !strings.HasPrefix(it.ID, id+".") {
-			e, dead := deadChainEnd(s, it.ID, seen)
+			e, dead := deadChainEnd(s, it.ID, landing, seen)
 			if !dead {
 				return "", false
 			}

@@ -105,6 +105,9 @@ type jobMemory struct {
 	// RetryAt is when the next attempt after a failed one may start; no attempt of the Job is
 	// assigned before it.
 	RetryAt time.Time `json:"retry_at,omitempty"`
+	// HeldAskDue is set by the tick that first sees this accepted re-plan of a held
+	// Job's dead wait; a later tick asks the owner (jhAskOwnerHeld).
+	HeldAskDue bool `json:"held_ask_due,omitempty"`
 }
 type progressFile struct {
 	Size  int64  `json:"size"`

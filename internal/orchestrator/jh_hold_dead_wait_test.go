@@ -64,7 +64,7 @@ func jhWantHeldReplans(t *testing.T, f *fixture, ends map[string]string) {
 				continue
 			}
 			found = true
-			if text := jhA1(body); !strings.Contains(text, "J-1 is held on "+wait) || !strings.Contains(text, end) {
+			if text := jhA1(body); !strings.Contains(text, "J-1 is held waiting for "+wait) || !strings.Contains(text, end) {
 				t.Fatalf("re-plan of J-1's wait on %s reads %q, want J-1, %s and %s named", wait, text, wait, end)
 			}
 			if body["discovered_from"] != nil {
@@ -230,6 +230,9 @@ func TestHoldLandedWaitOnACancelledJobThatLandedIsMet(t *testing.T) {
 				if got := f.state(t); got.Status != contract.Held {
 					t.Fatalf("J-1 = %s before the landing, want held", got.Status)
 				}
+				// Cancelled with nothing landed, the wait was dead until now and was re-planned.
+				jhWantHeldReplans(t, f, map[string]string{"J-2": "J-2"})
+				jobs = jhPosts(t, f, "job")
 				landed()
 			}
 			if out := f.tick(t); out.Assigned != 1 {
@@ -237,6 +240,105 @@ func TestHoldLandedWaitOnACancelledJobThatLandedIsMet(t *testing.T) {
 			}
 			jhReleasedAttempt(t, f, jobs)
 		})
+	}
+}
+
+// A chain that comes back and dies again at a new last Job gets a new re-plan,
+// one for each dead end: J-2 cancelled, then J-4 reworking J-2 cancelled. A chain
+// that stays dead gets no more, however many ticks follow.
+func TestHoldDeadWaitIsReplannedAgainAtANewDeadEnd(t *testing.T) {
+	f := jhHeldOnJ2(t)
+	guDpClose(t, f, "J-2", contract.Cancelled)
+	f.tick(t)
+	m1Job(t, f, "J-4", "builder", "J-2", "J-2", nil)
+	f.tick(t)
+	guDpClose(t, f, "J-4", contract.Cancelled)
+	for range 3 {
+		f.tick(t)
+	}
+	jobs := jhOrchestratorJobs(t, f)
+	ends := map[string]bool{}
+	for _, body := range jobs {
+		switch text := jhA1(body); {
+		case strings.Contains(text, "the last, J-4, was cancelled"):
+			ends["J-4"] = true
+		case strings.Contains(text, "J-2 was cancelled with no Job continuing it"):
+			ends["J-2"] = true
+		}
+	}
+	if len(jobs) != 2 || !ends["J-2"] || !ends["J-4"] {
+		t.Fatalf("orchestrator Jobs = %v, want two re-plans of J-1's wait on J-2: one dead at J-2, one dead at J-4", jobs)
+	}
+}
+
+// When the re-plan of a held Job's dead wait ends accepted and the Job is still
+// held on that same dead wait, the owner is asked once, one tick after the tick
+// that sees the acceptance, so the re-plan's own posts can end the hold first.
+func TestHoldAcceptedReplanStillHeldAsksTheOwnerAfterATick(t *testing.T) {
+	f := jhHeldOnJ2(t)
+	guDpClose(t, f, "J-2", contract.Cancelled)
+	f.tick(t)
+	var replan string
+	for id := range jhOrchestratorJobs(t, f) {
+		replan = id
+	}
+	if replan == "" {
+		t.Fatal("no re-plan of J-1 to accept")
+	}
+	guDpClose(t, f, replan, contract.Accepted)
+	f.tick(t)
+	if people, _ := guDpPeople(t, f); len(people) != 0 {
+		t.Fatalf("person Jobs = %v on the tick that sees the acceptance, want none yet", people)
+	}
+	for range 3 {
+		f.tick(t)
+	}
+	people, _ := guDpPeople(t, f)
+	if len(people) != 1 {
+		t.Fatalf("person Jobs = %v after the accepted re-plan left J-1 held, want one for the owner", people)
+	}
+	for _, body := range people {
+		if text := jhA1(body); body["discovered_from"] != replan || !strings.Contains(text, "J-1") || !strings.Contains(text, "J-2") {
+			t.Fatalf("person Job discovered_from %v reads %q, want from %s naming J-1 and J-2", body["discovered_from"], text, replan)
+		}
+	}
+}
+
+// An accepted re-plan that ended the hold itself (J-1 cancelled) asks no one.
+func TestHoldAcceptedReplanThatEndedTheHoldAsksNoOne(t *testing.T) {
+	f := jhHeldOnJ2(t)
+	guDpClose(t, f, "J-2", contract.Cancelled)
+	f.tick(t)
+	var replan string
+	for id := range jhOrchestratorJobs(t, f) {
+		replan = id
+	}
+	guDpClose(t, f, "J-1", contract.Cancelled)
+	guDpClose(t, f, replan, contract.Accepted)
+	for range 3 {
+		f.tick(t)
+	}
+	if people, _ := guDpPeople(t, f); len(people) != 0 {
+		t.Fatalf("person Jobs = %v, want none: J-1 is no longer held", people)
+	}
+}
+
+// A landed wait whose chain is dead and never landed can no longer be met
+// either: it is re-planned as a dead job wait is, once.
+func TestHoldLandedWaitOnADeadChainThatNeverLandedIsReplanned(t *testing.T) {
+	f := b2Started(t)
+	f.job(t, "J-2", nil)
+	jhFinished(t, f, contract.HeldWait{Row: "A1", Kind: contract.WaitLanded, Ref: "J-2"})
+	f.tick(t)
+	guDpClose(t, f, "J-2", contract.Cancelled)
+	for range 3 {
+		f.tick(t)
+	}
+	jhWantHeldReplans(t, f, map[string]string{"J-2": "J-2"})
+	for _, body := range jhOrchestratorJobs(t, f) {
+		if text := jhA1(body); !strings.Contains(text, "J-2 to land") {
+			t.Fatalf("re-plan reads %q, want the landed wait named as J-2 to land", text)
+		}
 	}
 }
 

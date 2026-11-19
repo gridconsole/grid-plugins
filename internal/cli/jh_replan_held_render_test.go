@@ -28,7 +28,7 @@ func TestJhReplanHeldBodyPassesRenderLint(t *testing.T) {
 			t.Fatalf("jobs/%s exists: the test needs a Job that never rendered", name)
 		}
 	}
-	body := orchestrator.ReplanHeldJobBody("J-7", "J-6", "J-2", "A1", "J-4", contract.Cancelled)
+	body := orchestrator.ReplanHeldJobBody("J-7", "J-6", contract.HeldWait{Row: "A1", Kind: contract.WaitLanded, Ref: "J-2"}, "J-4", contract.Cancelled)
 	findings, err := postFindings(h.env, path, body)
 	if err != nil {
 		t.Fatalf("the lint options could not be built: %v", err)
