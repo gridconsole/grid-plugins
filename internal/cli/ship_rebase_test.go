@@ -155,15 +155,10 @@ func TestShipConflictPostsRebaseJobThenLandsTheRebasedBranch(t *testing.T) {
 			t.Fatalf("history has no %q:\n%s", want, history)
 		}
 	}
-	// The rebase Job is a Job a worker can start: render's lint refuses nothing. The
-	// Outcome heading is what a delivered task.md has and the Job's intent points at.
-	if f, err := os.OpenFile(filepath.Join(dir, "task.md"), os.O_APPEND|os.O_WRONLY, 0o600); err != nil {
+	// The rebase Job is a Job a worker can start: its intent points at the task's request in
+	// intent.md, which a task has from the start, not at an Outcome task.md lacks until delivery.
+	if err := os.WriteFile(filepath.Join(dir, "intent.md"), []byte(task.IntentHead+"Do it.\n"), 0o600); err != nil {
 		t.Fatal(err)
-	} else {
-		_, werr := f.WriteString("\n## Outcome\n\nThe delivered change.\n")
-		if cerr := f.Close(); werr != nil || cerr != nil {
-			t.Fatal(werr, cerr)
-		}
 	}
 	findings, err := postFindings(env, dir, snap.Bodies[rebase.ID])
 	if err != nil {
