@@ -26,10 +26,10 @@ Checks the orchestrator runs on each Job before posting it (the rules of 10 Nov)
 
 Four more checks, so a Job waits on what it depends on instead of failing. A Job that fails one is rewritten, not posted:
 
-9. Waits on its dependencies: when a Job's acceptance relies on another Job's change (its files, its output, a test that only passes with it), the Job lists that Job in `after` with a why. Lint refuses it with `job.after-missing` when it does not.
-10. Live UI check is its own Job: a check on the live dev UI is never a row of a build Job. It is a `grid-checker` Job of its own, posted after the merge and install of the builder's change: its `after` names the build Job with kind `landed` (met only by a counted landed post, `internal/jobgraph/graph.go:23-25`; an accept is not a landing). Lint refuses a UI row in a build Job with `job.live-ui-row`.
+9. Waits on its dependencies: when a Job's acceptance relies on another Job's change (its files, its output, a test that only passes with it), the Job lists that Job in `after` with a why. When it does not, lint reports the error `job.after-missing`; `grid job post` prints the finding and refuses nothing.
+10. Live UI check is its own Job: a check on the live dev UI is never a row of a build Job. It is a `grid-checker` Job of its own, posted after the merge and install of the builder's change: its `after` names the build Job with kind `landed` (met only by a counted landed post, `internal/jobgraph/graph.go:23-25`; an accept is not a landing). Lint warns on a UI row in a build Job with `job.live-ui-row`.
 11. Decisions first: an open owner decision (a contract or data shape the owner's words leave open) is asked as a question before the build Job is posted (see the `questions` skill), and the build Job waits on it with `gate:Q-n` in `after`. A decision the owner's words already settle is not asked.
-12. Rows inside write: each acceptance row must be reachable within the Job's `write` list. A row that needs a file outside `write` goes to another Job or the file joins `write`. `grid job post` refuses it with `job.row-outside-write`.
+12. Rows inside write: each acceptance row must be reachable within the Job's `write` list. A row that needs a file outside `write` goes to another Job or the file joins `write`. Lint reports the error `job.row-outside-write`; `grid job post` prints the finding and refuses nothing.
 
 ## Bash
 
