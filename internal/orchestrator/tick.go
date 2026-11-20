@@ -355,16 +355,16 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 		if j.Reason == "usage_limit" && !s.now().Before(m.RetryAt) && s.yaUsageReady(snap, j) {
 			return s.control(j, contract.Ready, "usage capacity restored", j.Exited)
 		}
-		if j.Reason == "needs_person" {
-			for id, q := range snap.State.Questions {
-				r := snap.Records[id]
-				if r.Job == nil || *r.Job != j.ID || r.Wake == nil || *r.Wake != m.Failure+"/1" || q.Applied == nil {
-					continue
-				}
-				if snap.Records[*q.Applied].Body["answer"] == "Retry" {
-					m.Failures, m.RetryAt = nil, time.Time{}
-					return s.control(j, contract.Ready, ownerRetryReason, *q.Applied)
-				}
+		// The park question is found by its wake, not by j.Reason: a later control with no status
+		// (the judge's "nothing to judge") replaces the reason while the Job stays parked.
+		for id, q := range snap.State.Questions {
+			r := snap.Records[id]
+			if r.Job == nil || *r.Job != j.ID || r.Wake == nil || *r.Wake != m.Failure+"/1" || q.Applied == nil {
+				continue
+			}
+			if snap.Records[*q.Applied].Body["answer"] == "Retry" && !retried(snap, j, *q.Applied) {
+				m.Failures, m.RetryAt = nil, time.Time{}
+				return s.control(j, contract.Ready, ownerRetryReason, *q.Applied)
 			}
 		}
 		return nil
@@ -457,6 +457,18 @@ func (s Store) advance(snap Snapshot, j *contract.Job, m *jobMemory, all *memory
 	}
 	s.backOff(m, len(m.Failures))
 	return s.control(j, contract.Ready, "retry after failed attempt", failure)
+}
+
+// retried says the Job already went ready on the owner's answer, so it does not wake a later
+// park (a usage_limit one keeps the failure the question waits on) a second time.
+func retried(snap Snapshot, j *contract.Job, answer string) bool {
+	for _, id := range j.History {
+		r := snap.Records[id]
+		if r.Type == "control" && r.Re != nil && *r.Re == answer && r.Body["status"] == string(contract.Ready) {
+			return true
+		}
+	}
+	return false
 }
 
 // hold is why the tick does not assign the ready Job id to the worker to: the worker's host is
