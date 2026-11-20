@@ -213,15 +213,11 @@ func workerStream(env Env, member, machine, role string, pid int, start string, 
 		},
 		// An approved delivery whose land has not run, or stopped on a conflict, stays in the pass with no open Job.
 		LandPending: func(dir string) bool { return landArmed(env, dir) },
-		// A task waiting only on a person shows waiting; an agent Job ready again shows running.
-		PersonWait: func(dir string, onPerson bool) error {
+		// A task waiting only on a person shows waiting; otherwise running, with the real wait as the note.
+		PersonWait: func(dir string, onPerson bool, note string) error {
 			resolved, err := resolveTaskOperand(env, dir)
 			if err != nil {
 				return err
-			}
-			note := "an agent Job is open again"
-			if onPerson {
-				note = "open Jobs wait on a person"
 			}
 			_, _, err = taskWriter(env).SyncPersonWait(taskstore.WriteOptions{
 				Cwd: env.Cwd, ID: resolved.ID, Note: note,

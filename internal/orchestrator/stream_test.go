@@ -446,7 +446,7 @@ func TestStreamPersonWaitReportsPersonOnlyJobs(t *testing.T) {
 	}
 	got := map[string]bool{}
 	s := h.stream(4242, nil)
-	s.PersonWait = func(dir string, onPerson bool) error { got[dir] = onPerson; return nil }
+	s.PersonWait = func(dir string, onPerson bool, _ string) error { got[dir] = onPerson; return nil }
 	h.pass(s)
 	if len(got) != 2 || got[h.dirs[0]] || !got[h.dirs[1]] {
 		t.Fatalf("want agent task false and person-only task true, got %v", got)
