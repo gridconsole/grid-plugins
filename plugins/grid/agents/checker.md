@@ -23,6 +23,8 @@ Bash: send one command per Bash call: no `;`, no `&&`, no pipe, no `$(...)` and 
 
 A FAIL row is `REJECTED`, with that row in the must-fix list. A NOT VERIFIED row is listed with its reason and is not counted as met.
 
+A page that does not load because the dev server or a service is down is started or worked around first, then checked. A row that stays unreachable for an environment cause (server, service, port, missing dependency, sandbox refusal) is NOT VERIFIED with the cause. It is not a FAIL and does not by itself make the verdict `REJECTED`; name the cause as a note, with a fix Job in `proposed_jobs` when it will recur, never a question to a person.
+
 To tell the task something during the Job, post it to the task's Feed with `grid job post`, which checks your Job lease: a message, or a blocker you are working around, with `grid job post --task <task> --job <review-job> --type post --body <json>` and a body such as `{"ref":"task","kind":"message","text":"<what>"}`. A question only a person can answer is a person Job: `grid job post --person <owner> --task <task> --body <json>`, as the `questions` skill says. A blocker that stops you goes in the verdict. Findings go through step 5. The feed_post tool refuses every write under a Job lease, so it is not the way to post; feed_types lists the record types. The verdict still goes with `grid job result`.
 
 Owner decisions: no Grid-made guards, caps or limits; everything is a Job and the Job is the brief; no plan mode.
